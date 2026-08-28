@@ -1094,6 +1094,29 @@ namespace EmEn::Graphics::Material
 		 */
 		bool setSpecularComponent (float factor, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
 
+		/**
+		 * @brief Sets the specular FACTOR from a texture (KHR_materials_specular specularTexture).
+		 * @warning This function is available before creation time.
+		 * @note glTF stores that value in the texture's **A channel** and MULTIPLIES it by the
+		 * scalar factor, so the factor stays meaningful and is folded into the sampled variable by
+		 * the component codegen — never re-apply it downstream.
+		 * @param texture A reference to a texture resource smart pointer.
+		 * @param factor The specular factor the texel is multiplied by. Default 1.0.
+		 * @return bool
+		 */
+		bool setSpecularComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor = DefaultSpecularFactor) noexcept;
+
+		/**
+		 * @brief Sets the specular COLOUR from a texture (KHR_materials_specular specularColorTexture).
+		 * @warning This function is available before creation time.
+		 * @note A SECOND map, independent of the factor one: glTF's `specularColorTexture` carries
+		 * the F0 tint in its RGB and is **sRGB-encoded**, and it MULTIPLIES `specularColorFactor`.
+		 * @param texture A reference to a texture resource smart pointer.
+		 * @param color The specular colour the texel is multiplied by. Default white (no tint).
+		 * @return bool
+		 */
+		bool setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
+
 		/* ==================== Specular Dynamic Property Setters (Post-creation) ==================== */
 
 		/**

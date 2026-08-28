@@ -709,6 +709,10 @@ namespace EmEn::Saphir
 			constexpr auto MetalnessSampler{"uMetalnessSampler"};
 			constexpr auto AmbientOcclusionSampler{"uAmbientOcclusionSampler"};
 			constexpr auto ReflectivityMapSampler{"uReflectivityMapSampler"};
+			/* KHR_materials_specular declares TWO textures: the scalar factor in the A channel of
+			 * `specularTexture` (uSpecularSampler, shared with the legacy Phong specular map) and
+			 * the F0 tint in the RGB of `specularColorTexture` (this one). */
+			constexpr auto SpecularColorSampler{"uSpecularColorSampler"};
 			constexpr auto ClearCoatSampler{"uClearCoatSampler"};
 			constexpr auto ClearCoatRoughnessSampler{"uClearCoatRoughnessSampler"};
 			constexpr auto ClearCoatNormalSampler{"uClearCoatNormalSampler"};

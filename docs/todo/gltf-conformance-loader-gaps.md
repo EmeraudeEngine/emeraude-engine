@@ -138,14 +138,15 @@ the FBX path whose keys changed identically.
   monotone** (diamond darkest, air brightest). Zero VUID. Details and traps in
   [`docs/caution-points.md`](../caution-points.md) § *An IDENTITY default makes an unwired feature
   indistinguishable from a disabled one*.
-  - [ ] **Remaining: the two specular TEXTURES** — `specularTexture` (**A** channel, scales the
-    factor) and `specularColorTexture` (**RGB**, tints F0). They are logged and ignored today.
-    Blocking design point: the material has a single `ComponentType::Specular` slot and glTF needs
-    two, so a new `ComponentType` must be added (plus its `to_cstring`/`to_ComponentType` entries),
-    two texture overloads on `StandardResource`, and a conditional in
-    `declareSurfaceKHRSpecular()` following the established
-    `componentIt != cend() ? variableName() : MaterialUB(...)` pattern used by Transmission.
-    These are `SpecularTest`'s remaining 3 rows out of 7 (15 spheres of 35).
+  - [x] **The two specular TEXTURES — DONE the same day.** `ComponentType::SpecularColor` added
+    (glTF declares two maps for one extension, the material had one slot); `specularTexture` →
+    `ComponentType::Specular`, **A channel**; `specularColorTexture` → `ComponentType::SpecularColor`,
+    RGB, sRGB-decoded. Measured: the three texture rows go from flat (0.10 / 0.10 / 0.25) to
+    monotone (3.12 / 3.60 / 2.41), the four factor rows **bit-identical** (control), the two paths
+    agreeing to within **0.33 / 255** (ratio 1.05‥1.11). Controls `MetalRoughSpheres` delta 1,
+    `WaterBottle` delta 0, zero VUID.
+  - [ ] `KHR_texture_transform` on either specular map is dropped with a warning — no UV transform
+    slot in the material UBO for those component types. No conformance asset needs it.
   - [ ] **`FBXLoader` reads neither, on purpose.** ufbx's `pbr.specular_factor`/`specular_color`
     mean the dielectric specular weight on an OpenPBR/Standard-Surface material but the **Phong**
     specular on a legacy `FbxSurfacePhong`, and the engine's legacy specular is a glossiness path.

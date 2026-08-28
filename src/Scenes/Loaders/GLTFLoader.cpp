@@ -1134,10 +1134,27 @@ namespace EmEn::Scenes::Loaders
 					1.0F
 				};
 
-				if ( glTFMaterial.specular->specularTexture.has_value() || glTFMaterial.specular->specularColorTexture.has_value() )
-				{
-					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_materials_specular textures are not supported yet (factors applied), ignored.";
-				}
+			}
+
+			/* The two specular maps. ⚠️ `specularTexture` carries its value in the **A channel**
+			 * and is LINEAR; `specularColorTexture` carries the F0 tint in RGB and is **sRGB** —
+			 * hence the `true` on the second `resolveTexture()` and not on the first. Both
+			 * MULTIPLY their respective factor, which the material's component codegen folds in. */
+			auto specularTex = ( glTFMaterial.specular != nullptr && glTFMaterial.specular->specularTexture.has_value() )
+				? resolveTexture(glTFMaterial.specular->specularTexture->textureIndex) : nullptr;
+
+			auto specularColorTex = ( glTFMaterial.specular != nullptr && glTFMaterial.specular->specularColorTexture.has_value() )
+				? resolveTexture(glTFMaterial.specular->specularColorTexture->textureIndex, true) : nullptr;
+
+			/* ⚠️ Neither map gets a KHR_texture_transform slot: the material UBO carries six UV
+			 * transforms (albedo, roughness, metalness, normal, AO, emissive) and the specular
+			 * component types are not among them, so `transformedTexCoords()` falls back to the
+			 * plain coordinates. An asset that transforms its specular UVs is silently untransformed
+			 * — none in the conformance bench does. Read before assuming it is supported. */
+			if ( ( specularTex != nullptr && readUVTransform(glTFMaterial.specular->specularTexture).present )
+			  || ( specularColorTex != nullptr && readUVTransform(glTFMaterial.specular->specularColorTexture).present ) )
+			{
+				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_specular texture is not supported (no UV transform slot), ignored.";
 			}
 
 			/* IOR (KHR_materials_ior) — drives the dielectric F0 itself:
@@ -1174,6 +1191,7 @@ namespace EmEn::Scenes::Loaders
 					transmissionFactor,
 					iridescenceFactor,
 					specularFactor, specularColor, materialIOR,
+					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex),
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
 				] (auto & materialResource) {
@@ -1307,7 +1325,24 @@ namespace EmEn::Scenes::Loaders
 					 * the identity (factor 1, white, IOR 1.5 == glTF's own default). Gating them
 					 * would leave a material that deliberately declares the default carrying
 					 * whatever the resource was constructed with. */
-					materialResource.setSpecularComponent(specularFactor, specularColor);
+					if ( specularTex != nullptr )
+					{
+						materialResource.setSpecularComponent(specularTex, specularFactor);
+					}
+					else
+					{
+						materialResource.setSpecularFactor(specularFactor);
+					}
+
+					if ( specularColorTex != nullptr )
+					{
+						materialResource.setSpecularColorComponent(specularColorTex, specularColor);
+					}
+					else
+					{
+						materialResource.setSpecularColor(specularColor);
+					}
+
 					materialResource.setIOR(materialIOR);
 
 					/* Alpha blending (glTF alphaMode: BLEND). */

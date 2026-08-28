@@ -475,6 +475,21 @@ in an 80-float array (320 bytes, std140):
 
 The GLSL struct is generated to match this layout exactly.
 
+> [!NOTE]
+> **Slots 7, 8 and 44-47 were dead until 2026-08-28.** The layout, the codegen and the BRDF term
+> (`LightGenerator.PBR.cpp`: `dielectricF0 = ((ior-1)/(ior+1))²`, then
+> `F0 = mix(min(dielectricF0 · specularColor · specularFactor, 1), albedo, metalness)`) were all in
+> place and spec-exact, but **no loader ever wrote them**, so every asset got the identity. Because
+> the identity IS the default, there was no symptom. `GLTFLoader` now fills all three (factors and
+> both textures — see [`Scenes/Loaders/AGENTS.md`](../Scenes/Loaders/AGENTS.md) § *Known gaps*);
+> `FBXLoader` deliberately does not, the ufbx semantics being ambiguous between OpenPBR and legacy
+> Phong. ⚠️ A UBO slot that a shader reads is NOT evidence anything writes it — check both ends.
+> Recorded as a trap in [`../../docs/caution-points.md`](../../docs/caution-points.md) § *An
+> IDENTITY default makes an unwired feature indistinguishable from a disabled one*.
+>
+> ⚠️ There are **six** UV transform slots and they do not cover the specular maps: a
+> `KHR_texture_transform` on `specularTexture` / `specularColorTexture` is logged and dropped.
+
 ### Material Opacity and GrabPass
 
 `Material::Interface` provides two key query methods used by the rendering pipeline for render list dispatch:

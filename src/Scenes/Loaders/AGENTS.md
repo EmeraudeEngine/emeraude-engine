@@ -523,8 +523,30 @@ rows go from flat (axis spread ≤ 0.17 / 255) to monotone (2.36 to 3.35), the s
 **bit-identical**, which is the built-in control. On `TransmissionRoughnessTest` the IOR axis goes
 from **1.46** (noise) to **4.24 / 255 and monotone** in the right direction (diamond darkest, air
 brightest: more F0 means more reflection and less of the bright backdrop transmitted).
-⚠️ The two textures (`specularTexture` **A** channel, `specularColorTexture` **RGB**) are logged and
-ignored: the material has a single `ComponentType::Specular` slot and the two glTF maps need two.
+**Both TEXTURES wired too (same day).** `ComponentType::SpecularColor` was added — glTF declares
+**two** maps for that one extension and the material had one slot. `specularTexture` goes to
+`ComponentType::Specular` reading its **A channel** (the only scalar map in this material that is
+not red — the extension says so) and `specularColorTexture` to `ComponentType::SpecularColor`
+reading RGB. Each half independently falls back to its UBO scalar when its map is absent, on the
+established `componentIt != cend() ? variableName() : MaterialUB(...)` pattern.
+⚠️ **The sRGB split is carried by the VARIABLE NAME**, and it happens to be exactly right:
+`Component::Texture` enables sRGB when the variable name ends with `Color`, so `SurfaceSpecularColor`
+is decoded (glTF declares `specularColorTexture` sRGB-encoded) while `SurfaceSpecularFactor` stays
+linear (the A-channel factor map must). Do not rename either without re-reading that rule.
+Measured: the three *texture* rows of `SpecularTest` go from flat (0.10 / 0.10 / 0.25) to monotone
+ramps (3.12 / 3.60 / 2.41), and the four *factor* rows come out **bit-identical** — the control. The
+two paths agree to within **0.33 / 255** with a ratio of 1.05‥1.11 (8-bit quantisation and texture
+filtering across the sphere), which is what the test exists to check: each texture row must
+reproduce the factor row above it.
+⚠️ **`SpecularTest` still LOOKS black, and that is no longer a loader defect.** Its spheres declare
+`baseColorFactor [0,0,0,1]`, `metallicFactor 0`, `roughnessFactor 0`: a mirror-smooth dielectric
+whose F0 never exceeds 0.04, in a viewer whose lower hemisphere is dark forest. Khronos shoots it on
+a bright studio environment that fills the sphere. Judge it on the RATIOS — same caveat as
+`EmissiveStrengthTest`, inverted.
+⚠️ Neither specular map gets a **`KHR_texture_transform`** slot: the material UBO carries six UV
+transforms (albedo, roughness, metalness, normal, AO, emissive) and the specular component types are
+not among them, so `transformedTexCoords()` falls back to plain coordinates. A transformed specular
+UV is logged and dropped; no conformance asset uses one.
 ⚠️ `setIOR()` clamps to [1.0, 3.0]; that spans the whole glTF range and happens to render the spec's
 `ior = 0` special case correctly (0 clamps to 1, and ((1−1)/(1+1))² is 0 = the F0 = 0 it asks for).
 ⚠️ **`FBXLoader` reads neither**, deliberately: ufbx's `pbr.specular_factor`/`specular_color` mean

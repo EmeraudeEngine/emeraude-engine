@@ -480,6 +480,9 @@ namespace EmEn::Graphics
 			case ComponentType::ReflectivityMap :
 				return ReflectivityMapString;
 
+			case ComponentType::SpecularColor :
+				return SpecularColorString;
+
 			case ComponentType::Invalid :
 				return InvalidString;
 		}
@@ -598,6 +601,11 @@ namespace EmEn::Graphics
 		if ( value == ClearCoatNormalString )
 		{
 			return ComponentType::ClearCoatNormal;
+		}
+
+		if ( value == SpecularColorString )
+		{
+			return ComponentType::SpecularColor;
 		}
 
 		if ( value == ReflectivityMapString )

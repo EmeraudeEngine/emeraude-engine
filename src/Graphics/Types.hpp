@@ -419,6 +419,10 @@ namespace EmEn::Graphics
 		Iridescence = 20,
 		ClearCoatNormal = 21,
 		ReflectivityMap = 22,
+		/** @brief KHR_materials_specular's specularColorTexture — the RGB tint of the dielectric
+		 * F0, a SEPARATE map from `Specular` (which carries the scalar factor in its A channel).
+		 * glTF declares two textures for that one extension, so the material needs two slots. */
+		SpecularColor = 23,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -453,6 +457,7 @@ namespace EmEn::Graphics
 	constexpr auto FogResponseString{"FogResponse"};
 	constexpr auto DoFMaskString{"DoFMask"};
 	constexpr auto SpecularKHRString{"Specular"};
+	constexpr auto SpecularColorString{"SpecularColor"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.

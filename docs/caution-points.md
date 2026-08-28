@@ -1353,6 +1353,28 @@ formula" are each worth nothing alone. Check the full path — asset → loader 
 implementation" for this one; nobody had verified the GPU end, so the estimate could have been off
 by a full BRDF.
 
+### A material component's sRGB decoding is decided by its VARIABLE NAME (Aug 2026)
+
+> [!CAUTION]
+> `Component::Texture`'s constructor does
+> `m_textureResource->enableSRGB(m_variableName.ends_with("Color"))`. The colour space of a
+> material texture is therefore chosen by **string suffix**, not by an argument — so renaming a
+> `Surface*` key, or picking a new one, silently changes how its texture is decoded.
+
+It lines up correctly for `KHR_materials_specular`, which needs both behaviours from one extension:
+`specularColorTexture` is sRGB-encoded per spec and lands on `SurfaceSpecularColor` (decoded);
+`specularTexture` carries a linear factor in its **A** channel and lands on `SurfaceSpecularFactor`
+(not decoded). That is luck reinforced by convention, not a mechanism anyone declared — treat the
+suffix as load-bearing and re-read this rule before renaming either key.
+
+⚠️ Related, and also decided elsewhere than where you would look: `Component::Texture::isOpaque()`
+returns `!alphaEnabled()`, but **no material consults it** — `Material::Interface::isOpaque()` only
+checks `requiresGrabPass()` and the `BlendingEnabled` flag. So passing `enableAlpha = true` to read
+a data channel out of a texture's alpha (which `specularTexture` requires) cannot accidentally turn
+the material translucent. `alphaEnabled()` is read nowhere outside the component today, and its
+documented promise to "request a 4-channel texture" is **not implemented** — the sampled `.a` is
+whatever the loaded image happens to carry (1.0 when it has no alpha, which is the identity here).
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)

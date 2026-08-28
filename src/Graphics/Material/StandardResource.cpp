@@ -2176,11 +2176,20 @@ namespace EmEn::Graphics::Material
 		/* Material IOR - affects dielectric F0 computation: F0 = ((ior-1)/(ior+1))^2 (KHR_materials_ior). */
 		lightGenerator.declareSurfaceMaterialIOR(MaterialUB(UniformBlock::Component::RefractionIOR));
 
-		/* KHR_materials_specular - scales and tints dielectric F0. */
-		lightGenerator.declareSurfaceKHRSpecular(
-			MaterialUB(UniformBlock::Component::SpecularFactor),
-			MaterialUB(UniformBlock::Component::SpecularColorFactor)
-		);
+		/* KHR_materials_specular - scales and tints dielectric F0.
+		 * Each half independently comes from its texture when one is declared, otherwise from the
+		 * UBO scalar. ⚠️ The component variable ALREADY carries the product with the factor (the
+		 * component codegen folds it, same contract as roughness and albedo) — never multiply the
+		 * factor in again here. */
+		{
+			const auto specularIt = m_components.find(ComponentType::Specular);
+			const auto specularColorIt = m_components.find(ComponentType::SpecularColor);
+
+			lightGenerator.declareSurfaceKHRSpecular(
+				specularIt != m_components.cend() ? specularIt->second->variableName() : MaterialUB(UniformBlock::Component::SpecularFactor),
+				specularColorIt != m_components.cend() ? specularColorIt->second->variableName() : MaterialUB(UniformBlock::Component::SpecularColorFactor)
+			);
+		}
 
 		/* IBL Intensity - controls the contribution of environment cubemaps (reflection/refraction). */
 		lightGenerator.declareSurfaceIBLIntensity(MaterialUB(UniformBlock::Component::IBLIntensity));
@@ -3262,6 +3271,39 @@ namespace EmEn::Graphics::Material
 		}, fragmentShader, materialSet) )
 		{
 			TraceError{ClassId} << "Unable to generate fragment code for the metalness component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Specular FACTOR component (KHR_materials_specular specularTexture).
+		 * ⚠️ The value lives in the texel's A CHANNEL, not in red — the extension says so, and
+		 * that is the only scalar map in this material that does. The source channel is carried
+		 * by the component, so the swizzle comes from there rather than being hardcoded here.
+		 * The scalar factor MULTIPLIES the texel ('specularFactor * texture.a'), and the neutral
+		 * factor is 1.0, so the product is unconditional — same program-cache contract as albedo
+		 * and roughness: values go through the UBO, never as GLSL literals. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Specular, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Specular, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::SpecularFactor) << ";";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the specular factor component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Specular COLOUR component (KHR_materials_specular specularColorTexture).
+		 * A second, independent map: the F0 tint, sRGB-encoded, in RGB. It multiplies
+		 * `specularColorFactor` exactly as the albedo texture multiplies its colour factor.
+		 * Kept a vec4 because the BRDF reads `.rgb` off this variable. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::SpecularColor, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::SpecularColor, component) << ") * " << MaterialUB(UniformBlock::Component::SpecularColorFactor) << ";";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the specular colour component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -5156,6 +5198,87 @@ namespace EmEn::Graphics::Material
 		}
 
 		this->setSpecularFactor(factor);
+		this->setSpecularColor(color);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setSpecularComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the specular component.";
+
+			return false;
+		}
+
+		/* ⚠️ The A CHANNEL, per KHR_materials_specular — not red like every other scalar map in
+		 * this engine. `enableAlpha` is passed so the intent is recorded on the component; it is
+		 * inert plumbing today (nothing reads it, and the material's opacity is decided by the
+		 * blending flag, never by a component), so it cannot make the material translucent. */
+		auto component = std::make_unique< Texture >(Uniform::SpecularSampler, SurfaceSpecularFactor, texture, 0, Base::Math::Vector< 3, float >{1.0F, 1.0F, 1.0F}, true);
+		component->setSourceChannel(Base::PixelFactory::Channel::Alpha);
+
+		const auto result = m_components.emplace(ComponentType::Specular, std::move(component));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for specular component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setSpecularFactor(factor);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const PixelFactory::Color< float > & color) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the specular colour component.";
+
+			return false;
+		}
+
+		/* ⚠️ The variable name ends with "Color", which is what makes `Component::Texture` enable
+		 * sRGB on the resource — and that is exactly right here: KHR_materials_specular declares
+		 * `specularColorTexture` as sRGB-encoded. The factor map above must NOT be sRGB, and its
+		 * `SurfaceSpecularFactor` name keeps it linear by the same rule. */
+		auto component = std::make_unique< Texture >(Uniform::SpecularColorSampler, SurfaceSpecularColor, texture);
+
+		const auto result = m_components.emplace(ComponentType::SpecularColor, std::move(component));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for specular colour component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
 		this->setSpecularColor(color);
 
 		return true;
