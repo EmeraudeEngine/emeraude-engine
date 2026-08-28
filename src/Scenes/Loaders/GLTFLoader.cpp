@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <limits>
+#include <numbers>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
@@ -1163,12 +1164,68 @@ namespace EmEn::Scenes::Loaders
 				}
 			}
 
-			/* Iridescence (KHR_materials_iridescence). */
+			/* Iridescence (KHR_materials_iridescence) — a thin-film interference layer.
+			 *
+			 * ⚠️ Only `iridescenceFactor` was read until 2026-08-28, and the other three values were
+			 * left at the material's defaults — which is why both Khronos iridescence grids failed:
+			 * the IOR and the film thickness are the two axes those models SWEEP. The shader has
+			 * carried a complete `evalIridescence()` thin-film function all along, and
+			 * `setIridescenceComponent()` already took all four values; the loader simply passed one.
+			 * ⚠️ Units agree on both sides — the thicknesses are NANOMETRES in glTF and in the
+			 * material UBO — so nothing is converted here. Do not "helpfully" scale them. */
 			float iridescenceFactor = 0.0F;
+			auto iridescenceIOR = 1.3F;
+			auto iridescenceThicknessMin = 100.0F;
+			auto iridescenceThicknessMax = 400.0F;
+			std::shared_ptr< TextureResource::Texture2D > iridescenceTex;
 
-			if ( glTFMaterial.iridescence != nullptr && glTFMaterial.iridescence->iridescenceFactor > 0.0F )
+			if ( glTFMaterial.iridescence != nullptr )
 			{
 				iridescenceFactor = static_cast< float >(glTFMaterial.iridescence->iridescenceFactor);
+				iridescenceIOR = static_cast< float >(glTFMaterial.iridescence->iridescenceIor);
+				iridescenceThicknessMin = static_cast< float >(glTFMaterial.iridescence->iridescenceThicknessMinimum);
+				iridescenceThicknessMax = static_cast< float >(glTFMaterial.iridescence->iridescenceThicknessMaximum);
+
+				/* The per-pixel iridescence FACTOR map is supported (ComponentType::Iridescence). */
+				if ( glTFMaterial.iridescence->iridescenceTexture.has_value() )
+				{
+					iridescenceTex = resolveTexture(glTFMaterial.iridescence->iridescenceTexture->textureIndex);
+				}
+
+				/* ⚠️ The THICKNESS map (G channel) is a different map and has no ComponentType, so it
+				 * needs a new one exactly as the two specular maps did. Per spec its absence means
+				 * the thickness is the MAXIMUM, which is what the shader now uses. */
+				if ( glTFMaterial.iridescence->iridescenceThicknessTexture.has_value() )
+				{
+					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_materials_iridescence thicknessTexture is not supported yet (the maximum thickness is used), ignored.";
+				}
+			}
+
+			/* Anisotropy (KHR_materials_anisotropy) — a directional specular lobe.
+			 *
+			 * ⚠️⚠️ The extension was declared on the parser and NEVER READ, while the shader already
+			 * carries an anisotropic GGX distribution, an anisotropic Smith-GGX visibility term and
+			 * the tangent-frame construction. Only this read was missing.
+			 * ⚠️⚠️ UNITS DIFFER AND THE MISMATCH IS SILENT. glTF's `anisotropyRotation` is in
+			 * RADIANS; the engine's is in TURNS, because the shader computes
+			 * `rotation * 2.0 * PI` — and `setAnisotropyRotation()` CLAMPS TO [0,1]. Passing radians
+			 * straight through would be wrong by 2π AND clamped flat for anything above 1 rad, i.e.
+			 * a plausible-looking wrong direction. Hence the division. */
+			float anisotropyStrength = 0.0F;
+			float anisotropyRotationTurns = 0.0F;
+			std::shared_ptr< TextureResource::Texture2D > anisotropyTex;
+
+			if ( glTFMaterial.anisotropy != nullptr )
+			{
+				anisotropyStrength = static_cast< float >(glTFMaterial.anisotropy->anisotropyStrength);
+				anisotropyRotationTurns = static_cast< float >(glTFMaterial.anisotropy->anisotropyRotation) / (2.0F * std::numbers::pi_v< float >);
+
+				/* RG carries the per-pixel direction and B the strength — the shader reads exactly
+				 * that from the component (`m_surfaceAnisotropyDirection`). */
+				if ( glTFMaterial.anisotropy->anisotropyTexture.has_value() )
+				{
+					anisotropyTex = resolveTexture(glTFMaterial.anisotropy->anisotropyTexture->textureIndex);
+				}
 			}
 
 			/* Specular (KHR_materials_specular) — scales and TINTS the dielectric F0.
@@ -1263,7 +1320,9 @@ namespace EmEn::Scenes::Loaders
 					clearcoatFactor, clearcoatRoughness,
 					sheenColor, sheenRoughness,
 					transmissionFactor,
-					iridescenceFactor,
+					iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax,
+					iridescenceTex = std::move(iridescenceTex),
+					anisotropyStrength, anisotropyRotationTurns, anisotropyTex = std::move(anisotropyTex),
 					specularFactor, specularColor, materialIOR,
 					volumeThicknessFactor, volumeAttenuationDistance, volumeAttenuationColor,
 					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex),
@@ -1399,10 +1458,33 @@ namespace EmEn::Scenes::Loaders
 					materialResource.setAttenuationDistance(volumeAttenuationDistance);
 					materialResource.setAttenuationColor(volumeAttenuationColor);
 
-					/* Iridescence (KHR_materials_iridescence). */
+					/* Iridescence (KHR_materials_iridescence). Gated on the factor, which is what the
+					 * extension itself uses to mean "no iridescence" (default 0). */
 					if ( iridescenceFactor > 0.0F )
 					{
-						materialResource.setIridescenceComponent(iridescenceFactor);
+						if ( iridescenceTex != nullptr )
+						{
+							materialResource.setIridescenceComponent(iridescenceTex, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax);
+						}
+						else
+						{
+							materialResource.setIridescenceComponent(iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax);
+						}
+					}
+
+					/* Anisotropy (KHR_materials_anisotropy). Gated on the strength, the extension's
+					 * own "off" value (default 0) — an isotropic lobe is not a special case, it is
+					 * the absence of this one. */
+					if ( anisotropyStrength > 0.0F )
+					{
+						if ( anisotropyTex != nullptr )
+						{
+							materialResource.setAnisotropyComponent(anisotropyTex, anisotropyStrength, anisotropyRotationTurns);
+						}
+						else
+						{
+							materialResource.setAnisotropyComponent(anisotropyStrength, anisotropyRotationTurns);
+						}
 					}
 
 					/* Specular (KHR_materials_specular) and IOR (KHR_materials_ior).

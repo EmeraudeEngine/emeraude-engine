@@ -502,11 +502,49 @@ Not a wish list — these are silent today, so a diagnosis that assumes them pre
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) except its `texCoord` override, which is the multi-UV gap;
-**`KHR_materials_anisotropy` is enabled on the parser and never read**, which makes
-the code look supportive of it; the clearcoat, sheen, transmission and iridescence extensions
+every extension in the parser mask is now read; the clearcoat, sheen, transmission and iridescence extensions
 read only their scalar factors, never their textures; animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
 impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**`KHR_materials_iridescence` is READ IN FULL and `KHR_materials_anisotropy` is READ since
+2026-08-28.** Both were estimated as "a BRDF to write" and both were pure wiring — an estimate made
+by reading only the loader, which is wrong in the expensive direction whenever the shading layer is
+ahead of it.
+- **Iridescence** was passing ONE of the four values `setIridescenceComponent()` accepts and letting
+  the IOR and both film thicknesses default — while the IOR and the thickness are the two axes both
+  test models SWEEP. `evalIridescence()`, a complete thin-film function, had been in
+  `LightGenerator.PBR.cpp` all along. ⚠️ Thicknesses are NANOMETRES on both sides: no conversion.
+  The per-pixel iridescence FACTOR map is supported (`ComponentType::Iridescence`); the THICKNESS map
+  is logged and ignored, needing its own `ComponentType` as the specular maps did.
+- ⚠️⚠️ **A shader defect found while wiring it**: the film thickness read
+  `mix(min, max, 0.5)` — the MIDPOINT. The extension says the thickness comes from the thickness
+  texture's G channel and that **without that texture it is the MAXIMUM**. A midpoint is a different
+  colour at every angle and can never match a reference. Now `mix(min, max, 1.0)`, and that 1.0
+  becomes the G channel when the map gains a component.
+- **Anisotropy** appeared in the loader exactly once, in the parser mask. The shader already had an
+  anisotropic GGX distribution, an anisotropic Smith-GGX visibility term and the tangent-frame
+  construction with rotation. ⚠️⚠️ **UNITS DIFFER AND SILENTLY: glTF's `anisotropyRotation` is in
+  RADIANS, the engine's is in TURNS** (the shader computes `rotation * 2π`) and
+  `setAnisotropyRotation()` **clamps to [0,1]** — so passing radians through would be wrong by 2π AND
+  flattened for anything above 1 rad, a plausible-looking wrong direction. Divided by 2π here.
+  The `anisotropyTexture` (RG = direction, B = strength) is supported, the shader reading exactly
+  those semantics.
+
+Measured by a partitioned pixel diff: the three models that declare these extensions changed by
+**6.6 % to 9.6 % of pixels with deltas up to 239**, while `MetalRoughSpheres` came out at **exactly
+0** and `WaterBottle` at delta 1. Visually both are correct in kind — the anisotropic highlight
+stretches from a round blob at strength 0 into thin bands at 1, and the iridescent spheres gain a
+golden rim with a violet body and magenta/cyan fringes where they were plain blue-grey metal.
+⚠️ **What is NOT established is a numeric conformance criterion for either test**, and four attempts
+each came out confounded: a principal-axis aspect ratio cannot measure a curved arc; a percentile
+threshold cannot survive the brightness change anisotropy itself causes; a saturation average over a
+crop that contains lawn measures the lawn. **The 2026-08-27 anisotropy figures in the bench item came
+from the first of those metrics and must not be trusted either.** These two tests need a measurement
+method, not more rendering work.
+⚠️ The bench's view plan for the two iridescence grids gained a **three-quarter** view: they are 3-D
+grids and a dead-on `front` collapses them into overlapping rows, which is how their failure went
+unattributed for three runs.
 
 **`KHR_materials_volume` is READ since 2026-08-28** — the absorption inside a transmissive surface,
 which is what turns clear glass into coloured or thick glass. The shader already implemented the

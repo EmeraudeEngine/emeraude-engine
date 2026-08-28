@@ -1487,6 +1487,44 @@ engine change it was supposed to police. So it had nothing left to catch, and th
 two silently empty captures instead of a warning. **Keep a guard absolute until the change it guards
 is measured**, then relax it.
 
+### A UNIT that differs silently: glTF anisotropy rotation is radians, the engine's is turns (Aug 2026)
+
+> [!CAUTION]
+> `KHR_materials_anisotropy`'s `anisotropyRotation` is in **RADIANS**. The engine's is in **TURNS** —
+> the shader computes `rotation * 2.0 * PI` — and `StandardResource::setAnisotropyRotation()`
+> **clamps to [0, 1]**. Passing the glTF value straight through is therefore wrong by 2π *and*
+> flattened to 1.0 for anything above one radian. Both failures are silent and produce a rotation of
+> a plausible magnitude in the wrong direction, which is the hardest kind of defect to see.
+
+The same shape appeared twice more the same week and is worth generalising: **a scalar crossing a
+format boundary needs its unit checked, not its type.** `KHR_materials_iridescence`'s film
+thicknesses happen to be nanometres on both sides — so they must NOT be converted, and "helpfully"
+scaling them would break what currently works. The only way to know which case you are in is to read
+both ends.
+
+⚠️ **A spec default that was a placeholder.** While wiring iridescence, the film thickness in
+`LightGenerator.PBR.cpp` read `mix(min, max, 0.5)` — the midpoint. The extension says the thickness
+comes from the thickness texture's G channel and that **without that texture it is the MAXIMUM**. A
+midpoint is a different interference colour at every angle and can never match a reference.
+
+### ⚠️ Four metrics in a row can be confounded — say so instead of shipping the fourth (Aug 2026)
+
+Wiring anisotropy and iridescence changed 6.6 % to 9.6 % of the pixels of the three models that
+declare them, with clean controls at delta 0. What could NOT be produced was a numeric conformance
+criterion, and each attempt failed differently:
+
+- a **principal-axis aspect ratio** of the bright set cannot measure elongation when the highlight is
+  a curved arc — a wrapped arc reads as compact;
+- a **percentile threshold** (top 5 %) cannot survive the brightness change anisotropy itself causes:
+  on a dark sphere the top 5 % is a large dim region, on a bright one a tight highlight;
+- a **saturation average** over a crop that includes lawn measures the lawn.
+
+⚠️⚠️ The 2026-08-27 anisotropy figures recorded in the bench item came from the first of those and are
+**not trustworthy either** — a number in a document is not a measurement unless its metric was
+validated against a case where the answer is known. When four attempts are confounded, the honest
+deliverable is "the feature demonstrably acts, by this diff and this control; the criterion is still
+missing", not the fourth number.
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)

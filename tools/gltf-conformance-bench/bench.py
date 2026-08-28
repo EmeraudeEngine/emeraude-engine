@@ -106,8 +106,12 @@ MODELS = {
     "AnisotropyStrengthTest":       ["front", "back"],
     "ClearCoatTest":                ["front", "back"],
     "EmissiveStrengthTest":         ["front", "back"],
-    "IridescenceDielectricSpheres": ["front", "back"],
-    "IridescenceMetallicSpheres":   ["front", "back"],
+    # ⚠️ These two are 3-D GRIDS of spheres: a dead-on `front` view collapses them into
+    # overlapping rows and reads nothing, which is how their failure went unattributed for three
+    # runs. A three-quarter view is what their own references use, and what makes the IOR and
+    # thickness axes separable.
+    "IridescenceDielectricSpheres": ["three-qtr", "front", "back"],
+    "IridescenceMetallicSpheres":   ["three-qtr", "front", "back"],
     "MetalRoughSpheres":            ["front", "back"],
     "MetalRoughSpheresNoTextures":  ["front", "back"],
     "SpecularTest":                 ["front", "back"],

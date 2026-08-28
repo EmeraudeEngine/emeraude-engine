@@ -614,7 +614,13 @@ namespace EmEn::Saphir
 				"const float iridescenceIOR = " << m_surfaceIridescenceIOR << ";" << Line::End <<
 				"const float iridescenceThicknessMin = " << m_surfaceIridescenceThicknessMin << ";" << Line::End <<
 				"const float iridescenceThicknessMax = " << m_surfaceIridescenceThicknessMax << ";" << Line::End <<
-				"const float iridescenceThickness = mix(iridescenceThicknessMin, iridescenceThicknessMax, 0.5);" << Line::Blank;
+				/* ⚠️ SPEC, not a placeholder: KHR_materials_iridescence says the film thickness comes
+				 * from the thickness texture's G channel as `mix(min, max, texture.g)`, and that
+				 * WITHOUT that texture the thickness is the MAXIMUM. This used to read
+				 * `mix(min, max, 0.5)` — the midpoint — which is a different colour at every angle
+				 * and cannot match a reference. When the thickness map gains a ComponentType, the
+				 * 1.0 below becomes its G channel. */
+				"const float iridescenceThickness = mix(iridescenceThicknessMin, iridescenceThicknessMax, 1.0);" << Line::Blank;
 		}
 
 		if ( m_useAnisotropy )
