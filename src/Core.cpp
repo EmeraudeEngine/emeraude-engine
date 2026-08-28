@@ -65,6 +65,7 @@
 #include "Input/Types.hpp"
 #include "IO/IO.hpp"
 #include "Locale.hpp"
+#include "Net/APIClient.hpp"
 #include "Net/Manager.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Time/Time.hpp"
@@ -822,6 +823,10 @@ namespace EmEn
 			m_primaryServices.fileSystem().registerToObject(*this);
 			m_primaryServices.settings().registerToObject(*this);
 			m_primaryServices.netManager().registerToObject(*this);
+			/* ⚠️ Registered to the console but deliberately NOT observed by Core: unlike a download,
+			 * an API response is the business of whoever asked for it, and Core waking on every one
+			 * of them would be pure overhead. Consumers observe Net::APIClient themselves. */
+			m_primaryServices.apiClient().registerToObject(*this);
 
 			this->observe(&m_consoleController);
 		}
@@ -1416,6 +1421,10 @@ namespace EmEn
 
 		/* Emit the download lifecycle notifications on this thread, whatever thread finished the transfers. */
 		m_primaryServices.netManager().dispatchCompleted();
+
+		/* Same contract for the API client: the observers run HERE, on the main thread, whatever
+		 * worker completed the exchange. */
+		m_primaryServices.apiClient().dispatchCompleted();
 
 		/* NOTE: External cycle-scheduling contract (scheduleMainLoopCycle()): the cycle
 		 * about to run satisfies a due request. CAS — if a fresher request landed

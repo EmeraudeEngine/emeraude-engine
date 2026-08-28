@@ -304,6 +304,51 @@ Viewer policy: a regular active scene is **never disturbed** (notification `A sc
 the file was ignored.`); an active `+ImageViewer`/`+ModelViewer` is **replaced** by the new drop.
 In the viewers: left-drag orbits around the content, mouse wheel dollies in/out.
 
+### Calling a web API (`Core.NetAPIClientService.*`)
+
+The engine talks to HTTPS APIs at C++ level, **without CEF**, through `Net::APIClient`. Every call
+is asynchronous and addressed by a **ticket**; the response comes back on the main thread.
+
+```bash
+python3 tools/remote-console.py 'Core.NetAPIClientService.isEnabled()'
+python3 tools/remote-console.py 'Core.NetAPIClientService.setHeader(Authorization, Bearer xxxxx)'
+python3 tools/remote-console.py 'Core.NetAPIClientService.get(https://api.github.com/repos/EmeraudeEngine/emeraude-base)'
+python3 tools/remote-console.py 'Core.NetAPIClientService.status(1)'      # status, httpStatus, body
+python3 tools/remote-console.py 'Core.NetAPIClientService.release(1)'     # ⚠️ frees the response
+```
+
+| Command | What it does |
+|---|---|
+| `isEnabled()` | Whether calls are performed, and the ticket accounting |
+| `request(METHOD, url[, body[, contentType]])` | Any method — `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, … |
+| `get(url)` / `post(url, body[, contentType])` | Shorthands; `contentType` defaults to `application/json` |
+| `status(ticket)` | JSON: status, HTTP status, content type, whether the body parsed as JSON, and **the body itself** |
+| `header(ticket, Name)` | One response header (pagination cursor, rate-limit budget) |
+| `list()` | Every held ticket |
+| `release(ticket)` | **Drops the response.** Do it once read |
+| `cancel(ticket)` | Abandons a ticket — see the warning below |
+| `setHeader(Name, value)` / `removeHeader(Name)` / `headers()` | The default headers sent with every call (where an `Authorization` belongs) |
+
+⚠️ **A ticket status of `Done` does NOT mean the API accepted the call.** `Done` means a response
+arrived; a 404 or a 422 is `Done`. Read `httpStatus`. Only a call that never completed is `Error`,
+and then `reason` names the cause (`TLSFailure`, `Unreachable`, `Timeout`, `BadRequest`, …).
+
+⚠️ **`cancel()` does not interrupt anything on the wire.** The HTTPS client is synchronous and has
+no cancellation point: a call already in flight runs to completion on its worker and its response
+is thrown away. `cancel()` frees the caller, not the socket.
+
+⚠️ **Responses are held in RAM and are NOT kept forever.** `Core/Net/API/MaxRetainedTickets`
+(default 64) drops the **oldest terminal** tickets when nobody releases them — possibly one whose
+response was never read. Call `release(ticket)`.
+
+⚠️ **`headers()` prints values in clear, bearer token included** — owner decision of 2026-08-28,
+taken knowingly over the redacting alternative. What contains it is that this console is closed by
+default and binds `127.0.0.1`.
+
+This is NOT the download manager: `Core.NetManagerService.*` fetches files into a disk cache,
+deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
+[`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
+
 ---
 
 ## 4. Scene Creation via JSON

@@ -42,6 +42,7 @@
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
 #include "Identification.hpp"
+#include "Net/APIClient.hpp"
 #include "Net/Manager.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
@@ -88,6 +89,7 @@ namespace EmEn
 			PlatformSpecific::SystemInfo m_systemInfo{m_arguments, m_settings};
 			std::shared_ptr< Base::ThreadPool > m_threadPool;
 			Net::Manager m_networkManager{m_fileSystem, m_settings, m_threadPool};
+			Net::APIClient m_apiClient{m_settings, m_threadPool};
 			std::vector< ServiceInterface * > m_servicesEnabled;
 			bool m_childProcess{false};
 			bool m_showInformation{false};
@@ -308,6 +310,17 @@ namespace EmEn
 			m_threadPool = std::make_shared< ThreadPool >(std::thread::hardware_concurrency());
 		}
 
+		if ( m_apiClient.initialize(m_servicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_apiClient.name() << " primary service up! [" << m_processName << "]";
+		}
+		else
+		{
+			TraceFatal{ClassId} << m_apiClient.name() << " primary service failed to execute! [" << m_processName << "!";
+
+			return false;
+		}
+
 		if ( m_networkManager.initialize(m_servicesEnabled) )
 		{
 			TraceSuccess{ClassId} << m_networkManager.name() << " primary service up! [" << m_processName << "]";
@@ -426,6 +439,18 @@ namespace EmEn
 	PrimaryServices::netManager () const noexcept
 	{
 		return m_impl->m_networkManager;
+	}
+
+	Net::APIClient &
+	PrimaryServices::apiClient () noexcept
+	{
+		return m_impl->m_apiClient;
+	}
+
+	const Net::APIClient &
+	PrimaryServices::apiClient () const noexcept
+	{
+		return m_impl->m_apiClient;
 	}
 
 	std::string

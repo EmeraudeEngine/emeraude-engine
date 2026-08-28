@@ -82,9 +82,28 @@ namespace EmEn
 		/* Total budget of one download, in seconds, including every redirect hop. */
 		constexpr auto NetDownloadTimeoutKey{"Core/Net/DownloadTimeoutSeconds"};
 		constexpr auto DefaultNetDownloadTimeout{120U};
-		/* Optional PEM bundle added to the system trust store (corporate / private CA). Empty = none. */
+		/* Optional PEM bundle added to the system trust store (corporate / private CA). Empty = none.
+		 * Shared by Net::Manager and Net::APIClient: a corporate CA is a property of the machine. */
 		constexpr auto NetCABundleFileKey{"Core/Net/CABundleFile"};
 		constexpr auto DefaultNetCABundleFile{""};
+
+		/* Net / API (Net::APIClient — web APIs, distinct from the download manager) */
+		/* Whether Net::APIClient may perform API calls (https only). */
+		constexpr auto NetAPIEnabledKey{"Core/Net/API/Enabled"};
+		constexpr auto DefaultNetAPIEnabled{true};
+		/* Total budget of one API call, in seconds, including every redirect hop. Much shorter than
+		 * a download's: an API that has not answered in half a minute is not going to. */
+		constexpr auto NetAPITimeoutKey{"Core/Net/API/TimeoutSeconds"};
+		constexpr auto DefaultNetAPITimeout{30U};
+		/* How many terminal tickets are kept before the OLDEST are dropped. ⚠️ Unlike a download,
+		 * an API response is held in memory, so a caller that never calls release() would grow the
+		 * process without bound. 0 disables the ceiling — only for a caller that always releases. */
+		constexpr auto NetAPIMaxRetainedTicketsKey{"Core/Net/API/MaxRetainedTickets"};
+		constexpr auto DefaultNetAPIMaxRetainedTickets{64U};
+		/* Ceiling of ONE response body, in bytes. It is held whole in memory: without this, a
+		 * hostile or runaway endpoint grows the process until the OS kills it. */
+		constexpr auto NetAPIMaxResponseBytesKey{"Core/Net/API/MaxResponseBytes"};
+		constexpr auto DefaultNetAPIMaxResponseBytes{static_cast< uint64_t >(16ULL * 1024 * 1024)};
 
 		/* Console */
 		/* Whether the remote console (TCP, AI runtime control) is started at all. Default FALSE:

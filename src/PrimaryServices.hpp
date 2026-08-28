@@ -44,6 +44,7 @@ namespace EmEn
 
 	namespace Net
 	{
+		class APIClient;
 		class Manager;
 	}
 
@@ -236,6 +237,22 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			const Net::Manager & netManager () const noexcept;
+
+			/**
+			 * @brief Returns the web API client service.
+			 * @note Distinct from netManager(): that one caches files on disk, this one performs
+			 * arbitrary HTTPS exchanges and hands the response back in memory.
+			 * @return Net::APIClient &
+			 */
+			[[nodiscard]]
+			Net::APIClient & apiClient () noexcept;
+
+			/**
+			 * @brief Returns the web API client service.
+			 * @return const Net::APIClient &
+			 */
+			[[nodiscard]]
+			const Net::APIClient & apiClient () const noexcept;
 
 			/**
 			 * @brief Returns general information about the primary services.

@@ -1,6 +1,8 @@
 # Base files
 set(EMERAUDE_HEADER_FILES
     # Net
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/APIClient.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/APIRequestItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/DownloadItem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/NetworkInterfaces.hpp
@@ -34,6 +36,8 @@ set(EMERAUDE_HEADER_FILES
 
 set(EMERAUDE_SOURCE_FILES
     # Net
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/APIClient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/APIClient.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/NetworkInterfaces.cpp

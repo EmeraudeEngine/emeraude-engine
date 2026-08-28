@@ -2313,6 +2313,28 @@ dereference what a resource accessor returns without checking it.**
 > way that reads like a corrupted tree, which is why it is written here. Paid during the
 > `PBRResource.cpp` → `StandardResource.cpp` rename of the material merge (Aug 2026).
 
+### ⚠️⚠️ Half the engine is NOT globbed — a new file under `src/Net/` (and friends) must be ADDED BY HAND
+
+> **Symptom:** the new `.cpp` compiles nowhere, the build looks clean for a while, then the LINK
+> fails with `undefined reference to EmEn::Net::Whatever::method()` coming from
+> `libEmeraude.so` — *not* with anything naming the file you added. Reconfiguring does not help,
+> and neither does a clean rebuild.
+>
+> **Root cause:** `cmake/PrepareEngineSourceFiles.cmake` uses **two** mechanisms, and the entry
+> above (`GLOB_RECURSE`) only describes one of them:
+> - **Globbed** (reconfigure is enough): `src/Animations`, `src/Audio`, `src/Console`,
+>   `src/Graphics`, `src/Input`, `src/Overlay`, `src/Physics`, `src/Resources`, `src/Saphir`,
+>   `src/Scenes`, `src/Tool`, `src/Vulkan`.
+> - **Explicit lists** (the file must be typed into the CMake): `src/Net`, `src/Help`,
+>   `src/PlatformSpecific`, and everything else at the top of that file.
+>
+> **Fix:** add the header to `EMERAUDE_HEADER_FILES` and the source to `EMERAUDE_SOURCE_FILES` in
+> `cmake/PrepareEngineSourceFiles.cmake`, then reconfigure.
+>
+> ⚠️ The reflex "a link error means a missing library" sends you looking in entirely the wrong
+> place. Read WHICH symbol is undefined: if it is one you just wrote, the file never got compiled.
+> Paid while adding `Net::APIClient` (Aug 2026).
+
 ### PCH shifts GCC's inlining context → `-Wstringop-overread` false positives
 
 With the shared STL precompiled header enabled (`EMERAUDE_ENABLE_PCH=ON`, applied to the engine

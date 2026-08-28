@@ -68,4 +68,45 @@ namespace EmEn::Net
 
 		return "Unknown";
 	}
+
+	/** @brief Lifecycle of one API call held by Net::APIClient. */
+	enum class APIRequestStatus : uint8_t
+	{
+		Pending,	/* Accepted, not yet picked by a worker. */
+		InFlight,	/* A worker is performing the exchange. */
+		Error,		/* Terminal: refused, or the exchange never completed — there is no response. */
+		Done,		/* Terminal: a response arrived. ⚠️ Says NOTHING about the HTTP status: a 404 is Done. */
+		Cancelled	/* Terminal: the caller stopped caring; the response, if any, was dropped. */
+	};
+
+	/**
+	 * @brief Returns the textual name of an API request status.
+	 * @param status The status.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	constexpr
+	const char *
+	to_cstring (APIRequestStatus status) noexcept
+	{
+		switch ( status )
+		{
+			case APIRequestStatus::Pending :
+				return "Pending";
+
+			case APIRequestStatus::InFlight :
+				return "InFlight";
+
+			case APIRequestStatus::Error :
+				return "Error";
+
+			case APIRequestStatus::Done :
+				return "Done";
+
+			case APIRequestStatus::Cancelled :
+				return "Cancelled";
+		}
+
+		return "Unknown";
+	}
 }
