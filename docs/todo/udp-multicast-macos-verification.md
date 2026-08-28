@@ -104,57 +104,46 @@ implementation detail and each platform keeps the type its own manual specifies.
 > § *Full re-test run-list*. The runtime harness is now in the tree at
 > [`tools/net-check/`](../../tools/net-check/README.md) — one compiler command per OS, no engine build.
 
-- [x] ⚠️⚠️ **A SIGNED AND PACKAGED binary on macOS — MEASURED 2026-08-28, AND IT FAILS.** The field
-  report is reproduced, and the answer is worse than "it needs a permission": **macOS never asks.**
+- [x] ⚠️ **A SIGNED AND PACKAGED binary on macOS — MEASURED 2026-08-28. It needs the *Local Network*
+  authorisation, and with it granted it works completely.**
 
   **What was built.** A genuine Developer-ID-signed bundle: `codesign --verify --deep --strict` →
   *valid on disk*, *satisfies its Designated Requirement*; `flags=0x10000(runtime)` (hardened
   runtime), `Identifier=co.lychee.lycheeslicer`, `TeamIdentifier=QEHS3E9BP6`, Info.plist **bound**,
-  1675 files sealed, `NSLocalNetworkUsageDescription` present, no quarantine attribute. Not
-  notarized (no credentials on the machine) — irrelevant here, notarization is Gatekeeper, not TCC.
+  1675 files sealed, `NSLocalNetworkUsageDescription` present, no quarantine. Not notarized (no
+  credentials on the machine) — irrelevant here: notarization is Gatekeeper, not TCC.
 
-  **What happens.** Launched through **LaunchServices** (`open`), the bundle:
-  - **binds** `0.0.0.0:5353` beside `mDNSResponder`, sets TTL 255 + loopback, and **joins**
-    `224.0.0.251` on both real NICs — every one of those reports success;
-  - **receives** multicast normally (6 datagrams of ambient LAN mDNS traffic);
-  - has **every outbound send refused** — multicast *and* plain LAN unicast alike (`sendto()` → -1);
-  - and **shows no authorisation prompt at all**, so there is nothing for a user to accept.
+  **Denied (the state it starts in).** Launched through **LaunchServices**, the bundle binds
+  `0.0.0.0:5353` beside `mDNSResponder`, sets TTL 255 + loopback and **joins** `224.0.0.251` on both
+  real NICs — every one of those reports success — **receives** multicast normally, and has **every
+  outbound send refused**, multicast *and* plain LAN unicast alike (`sendto()` → -1).
+  ⚠️ **Learn that failure shape**: joins succeed, inbound works, only egress dies. Nothing in the
+  socket API says "permission".
 
-  **The differentiator is the launch path, not the signature.** The *same* signed binary launched
-  from a terminal works completely (DNS-SD answered by 7 LAN hosts): a terminal-launched process
-  inherits Terminal's own Local Network grant. That is precisely why every earlier run in this file
-  proved nothing, and it is now demonstrated rather than suspected.
+  **Granted.** The machine's owner authorised *Local Network* for the app; the **same** bundle,
+  relaunched the same way, then completed the full round trip — DNS-SD query sent (46 bytes) and
+  **6 LAN hosts answering**. So packaging and signing are not the problem, and there is no multicast
+  entitlement to chase: it is the ordinary Local Network privacy gate.
 
-  **Ruled out by measurement, not by reasoning:**
-  - `NSLocalNetworkUsageDescription` in the **main** plist — present throughout, necessary but not
-    sufficient;
-  - the same key added to **all five helper plists** (`co.lychee.lycheeslicer.helper*`, including
-    `.renderer` where the UDP WebModule actually runs) — **no change**. This was the standing
-    hypothesis recorded here; it is wrong, or at least not the whole story;
-  - running from **`/Applications`** instead of an arbitrary directory — **no change**;
-  - the code path itself — raw sockets, the `dgram` shim and the native binding all behave
-    identically, and all work from a terminal.
+  **The corollary this item always suspected, now demonstrated both ways:** a terminal run proves
+  nothing. The same signed binary launched from a terminal worked *while the app was still denied*,
+  because a terminal-launched process inherits Terminal's own grant.
 
-  **Still unknown, and it needs the machine's owner** (an AI cannot read `TCC.db`, SIP-protected,
-  nor click the settings pane): whether macOS has **cached a denial** for `co.lychee.lycheeslicer`
-  from the very first attempt, or never intends to prompt. *System Settings → Privacy & Security →
-  Local Network* answers it in ten seconds — is `LycheeSlicer` listed, and is its switch off?
-  If it is listed and off, this is a cached deny and the prompt logic is fine; if it is absent, the
-  app is being refused without ever being offered, and the next avenue is Apple's multicast
-  entitlement (`com.apple.developer.networking.multicast`, request-only) — noting that **LAN
-  unicast fails too**, which points at the broader Local Network gate rather than multicast alone.
+  **Ruled out by measurement**, none of them being the cause: the key in the **main** plist alone
+  (necessary, and it is what makes the app eligible at all), the same key added to **all five helper
+  plists** (no effect — this was the standing hypothesis here, and it is wrong), and running from
+  **`/Applications`** rather than an arbitrary directory (no effect).
 
-  ⚠️ **Treat this as a shipping blocker for printer discovery on macOS**, not a validation detail.
-
-  **One defect fixed on the way, and it is platform-neutral.** app_system's `UDPModule` reported a
-  refused send as a **success**: `sendData()`/`sendBuffer()` wrote the engine's raw byte count into
-  the task and called `finish()`, so the OS refusal arrived in JavaScript as
-  `{error:false, success:true, bytesSent:-1}`. The JS layer then lost it twice — `udp.Socket.send()`
-  resolved that `-1` as the byte count, and the `dgram` shim guarded only on `bytesSent < 0`, which
-  silently stops working once the native side aborts instead (an aborted task carries no
-  `bytesSent`, and `undefined < 0` is false). Without that fix this whole investigation reads as
-  "sends succeed but nothing arrives". Now all three paths surface
-  `UDP send refused by the system (host '…', port …)`. Success path re-verified unchanged.
+  ⚠️ **Still not established, and it is the shipping-relevant half**: whether macOS **prompts
+  spontaneously** on first use. No prompt was observed during any of the runs above — the grant was
+  applied by the machine's owner. So the first-run experience of a real user is unverified, and two
+  product consequences follow either way:
+  1. The app must behave sanely **while denied**. Today printer discovery would simply find nothing,
+     with joins reporting success — see the failure shape above. app_system's `UDPModule` at least
+     no longer reports the refused send as a success (fixed the same day).
+  2. If macOS does *not* prompt by itself, the app has to bring the user to
+     *System Settings → Privacy & Security → Local Network* deliberately, which is UI work, not
+     packaging work.
 - [x] **The app's own JS path on macOS — done 2026-08-28** (`--mode=test`, dev-check mDNS card
   driven over CDP, exactly as Windows was, so the two runs compare). Bind `0.0.0.0:5353` beside the
   system `mDNSResponder`, TTL 255 + loopback, join `224.0.0.251` on **both** real NICs
