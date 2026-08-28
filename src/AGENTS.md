@@ -450,6 +450,22 @@ Arguments > Settings > Default values
 
 **Integration**: Used by Settings and Resources to locate files
 
+> [!CAUTION]
+> ⚠️⚠️ **A directory forced from the command line is external UTF-8 — build it with
+> `IO::u8path()`, never by conversion.** `Arguments::get()` hands back a `std::string`, and
+> `registerDirectory()` takes a `const std::filesystem::path &`: passing one to the other looks
+> harmless and **is the ANSI bug**, because the conversion happens *at the parameter* before any
+> function body runs. Same for `std::filesystem::path{someString}` and
+> `vector<path>::emplace_back(someString)` — the spelling changes, the defect does not.
+>
+> Four sites carried it until 2026-08-28 (`--config-directory`, `--cache-directory`,
+> `--data-directory`, `--add-data-directory`) and all four now go through `IO::u8path()`. Measured
+> on Windows: with the entry point already fixed to hand us clean UTF-8 argv, a
+> `--cache-directory=…\Кэш-漢字` pointing at an **existing** directory was still refused — the value
+> survived argv and died one layer down, here. Linux and macOS convert without loss, so the whole
+> path is a no-op there: **this cannot be caught by running it on POSIX**, only by reading, and a
+> green Linux run of the same flag proves only that nothing regressed.
+
 ### ServiceInterface - Common Service Interface
 **Files**: `ServiceInterface.hpp` (4KB)
 
