@@ -26,9 +26,27 @@
 
 #include "ViewMatricesInterface.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 namespace EmEn::Graphics
 {
 	using namespace Base::Math;
+
+	float
+	ViewMatricesInterface::computeNearPlane (float nearestObjectDistance, float fov, float aspectRatio) noexcept
+	{
+		/* nearPlane = nearestObjectDistance / sqrt(1 + tan(fov/2)² · (aspectRatio² + 1))
+		 *
+		 * ⚠️ An aspectRatio of 1 reduces the bracket to 2, which is exactly what the cube-face and
+		 * spot-light call sites used to write by hand — so passing 1 reproduces them bit for bit.
+		 * This function replaced four copies of this expression; do not inline it again. */
+		const auto tanHalfFov = std::tan(Radian(fov) * 0.5F);
+		const auto tanSquared = tanHalfFov * tanHalfFov;
+		const auto aspectTerm = (aspectRatio * aspectRatio) + 1.0F;
+
+		return nearestObjectDistance / std::sqrt(1.0F + tanSquared * aspectTerm);
+	}
 
 	std::array< Vector< 3, float >, 8 >
 	ViewMatricesInterface::computeFrustumCornersWorld (const Matrix< 4, float > & inverseViewProjection) noexcept

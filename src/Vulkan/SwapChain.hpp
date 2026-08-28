@@ -149,6 +149,9 @@ namespace EmEn::Vulkan
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() noexcept */
 			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateNearestObjectDistance() */
+			void updateNearestObjectDistance (float distance) noexcept override;
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() const noexcept */
 			[[nodiscard]]
 			float

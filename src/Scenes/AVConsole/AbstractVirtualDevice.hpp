@@ -317,6 +317,32 @@ namespace EmEn::Scenes::AVConsole
 			}
 
 			/**
+			 * @brief Tells the device how close the nearest object it must not clip is, in metres.
+			 * @note A SEPARATE hook rather than a fourth parameter on updateVideoDeviceProperties():
+			 * that signature already overloads its two arguments by projection mode, only the
+			 * perspective path has any use for this, and a defaulted no-op here leaves the five other
+			 * video devices and every audio device untouched.
+			 * @warning ⚠️⚠️ IT IS THE SWAP CHAIN THAT A SCENE CAMERA CONNECTS TO, so ignoring this is
+			 * NOT a safe default for it — an earlier version of this comment claimed the opposite and
+			 * the two smallest conformance models rendered entirely empty as a result. The view
+			 * matrices live in FIVE separate owners (SwapChain, SceneRenderTarget, View, Texture,
+			 * ShadowMap) with no common holder, and each one that carries a perspective projection
+			 * must forward this. Only ShadowMap legitimately ignores it: a light's frustum has no
+			 * "subject". What is NEVER correct is assuming a scale: see
+			 * Graphics::ViewMatricesInterface::setNearestObjectDistance() for what the hard-coded
+			 * 0.1 m cost — a millimetric subject rendering nothing at all, and a kilometric scene
+			 * spending its depth precision in the first ten centimetres.
+			 * @param distance The distance in metres.
+			 * @return void
+			 */
+			virtual
+			void
+			updateNearestObjectDistance ([[maybe_unused]] float distance) noexcept
+			{
+				/* NOTE: a device that has no projection of its own simply has nothing to do here. */
+			}
+
+			/**
 			 * @brief Returns the world coordinates of this device.
 			 * @return Base::Math::CartesianFrame< float >
 			 */

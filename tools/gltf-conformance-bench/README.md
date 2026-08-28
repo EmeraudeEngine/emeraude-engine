@@ -132,10 +132,16 @@ The failure images name the defect, which is what turns a capture into a fix.
   ticks — measure the alpha ramp.
 - **The screenshot filename is a one-second timestamp.** Two captures inside the same second
   collide, so every capture is copied out immediately from the reported path.
-- **The near plane is hard-coded** at `0.1 / sqrt(1 + tan²(fov/2)·(aspect²+1))` ≈ 0.089 m
-  whatever the scene scale (`ViewMatrices2DUBO.cpp`). Sub-decimetre assets sit inside it at their
-  computed framing distance and render nothing; the bench pushes the camera out and reports the
-  frame coverage it loses rather than saving an empty capture.
+- **The near plane WAS hard-coded** at `0.1 / sqrt(1 + tan²(fov/2)·(aspect²+1))` ≈ 0.089 m whatever
+  the scene scale, in four copies. Sub-decimetre assets sat inside it and rendered nothing; the bench
+  pushed the camera out and reported the frame coverage it lost rather than saving an empty capture —
+  `MetalRoughSpheresNoTextures` capped at **5.5 %** of frame height, `BoomBox` at **14.1 %**. Since
+  2026-08-28 the engine derives it from the subject and both plan at the nominal **38.9 %**.
+  ⚠️ The clamp in `clamp_distance()` is KEPT as a guard and made subject-relative: a `*` in the plan
+  output now means the engine's rule and this script have drifted apart, not that an asset is small.
+  ⚠️ And the near plane alone was not enough — `+ModelViewer` held two more decimetre floors (the
+  framing radius, and the orbit controller's lower distance limit, which `setDistance()` clamps
+  against). **One scale floor is never alone.**
 
 ## Files
 

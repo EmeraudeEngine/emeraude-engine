@@ -26,6 +26,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <limits>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -205,7 +206,13 @@ namespace EmEn::Scenes::Viewers
 		if ( modelBox.isValid() )
 		{
 			target = modelBox.centroid();
-			radius = std::max(0.5F * modelBox.highestLength(), 0.01F);
+			/* ⚠️ The floor used to be 0.01F — one CENTIMETRE — which silently re-framed every
+			 * sub-centimetre asset as if it were a centimetre across. The Khronos
+			 * MetalRoughSpheresNoTextures has a radius of 0.00035 m: it was framed 28 times too
+			 * far away before anything else clipped it. The floor exists only to keep a degenerate
+			 * (zero-extent) box from producing a zero distance, so it belongs at the smallest
+			 * positive value, not at a scale. */
+			radius = std::max(0.5F * modelBox.highestLength(), std::numeric_limits< float >::min());
 		}
 		else
 		{
@@ -245,8 +252,27 @@ namespace EmEn::Scenes::Viewers
 		const auto fieldOfView = Radian(camera->fieldOfView());
 		const auto framingDistance = FramingMargin * radius / std::sin(0.5F * fieldOfView);
 
+		/* ⚠️⚠️ THE NEAR PLANE IS DERIVED FROM THIS, and it used to be a constant 0.1 m for every
+		 * scene — so a subject smaller than a decimetre sat inside the near plane and rendered
+		 * NOTHING.
+		 *
+		 * One PERCENT of the radius, and not the framing distance minus the radius, because the
+		 * orbit controller's lower limit lets the user dolly to 5 % of the radius — i.e. INSIDE the
+		 * subject, deliberately. There is no positive "nearest surface point" at that distance, so
+		 * the only sane rule is a small positive fraction of the subject's own scale: it clips
+		 * nothing the user can reach, and it scales with the asset instead of assuming a decimetre.
+		 * The far side of the same coin: telling the camera the true scale also stops a large scene
+		 * spending its depth precision in the first ten centimetres (conventional Z, no
+		 * reversed-Z). */
+		camera->setNearestObjectDistance(radius * 0.01F);
+
 		auto & orbitController = scene->orbitController();
-		orbitController.setDistanceLimits(std::max(radius * 0.05F, 0.01F), std::min(radius * 20.0F, SceneBoundary * 0.9F));
+		/* ⚠️ The lower limit was `max(radius * 0.05F, 0.01F)` — the same centimetre assumption, and
+		 * `OrbitController::setDistance()` CLAMPS to these limits, so a millimetric subject could
+		 * never be approached at all. The relative term is the intended behaviour (dolly to 5 % of
+		 * the radius, inside the subject if the user insists); the absolute one was a scale-blind
+		 * guard, and the controller already floors the minimum at float epsilon on its own. */
+		orbitController.setDistanceLimits(radius * 0.05F, std::min(radius * 20.0F, SceneBoundary * 0.9F));
 		orbitController.setTarget(target);
 		orbitController.setOrientation(0.785F, 0.3F);
 		orbitController.setDistance(framingDistance);

@@ -300,6 +300,9 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override;
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateNearestObjectDistance() */
+			void updateNearestObjectDistance (float distance) noexcept override;
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
 			[[nodiscard]]
 			Base::Math::CartesianFrame< float > getWorldCoordinates () const noexcept override;

@@ -5,7 +5,7 @@ status: open
 priority: high
 scope: Scenes/Loaders/GLTF
 opened: 2026-08-25
-blocked-by: [hardcoded-near-plane]
+blocked-by: []
 tags: [gltf, material, measured]
 ---
 
@@ -41,11 +41,13 @@ in the whole bench, so that is the full extent of the change.
 VertexColorTest, SpecularTest, ClearCoatTest, TransmissionTest, TransmissionRoughnessTest,
 Iridescence ×2, AnisotropyStrengthTest.
 
-**Undecided (2)**: `MetalRoughSpheresNoTextures` (5.5 % of frame height, blocked by
-`hardcoded-near-plane`), `SheenCloth` (the viewer's daylight sky cannot isolate a sheen rim —
-Khronos shoots it on black). ⚠️ `MetalRoughSpheresNoTextures` was undecided for TWO independent
-reasons and only one of them was known: the framing, and the fact that its 98 spheres were one
-sphere. The second is fixed (see the 2026-08-28 section); the framing still stands.
+**Undecided (2)**: `MetalRoughSpheresNoTextures` and `SheenCloth`. ⚠️ Both of
+`MetalRoughSpheresNoTextures`' blockers are now GONE: its 98 spheres were one sphere (resource-key
+collapse, fixed) and it was capped at 5.5 % of frame height by the hard-coded near plane — also
+fixed, and it now fills the frame with its whole 7×7 grid, labels readable. `BoomBox` likewise went
+from 14.1 % to the nominal 38.9 %. It is judgeable now and simply has not been judged.
+`SheenCloth` is still blocked by the lighting (the viewer's daylight sky cannot isolate a sheen rim —
+Khronos shoots it on black), which is what the viewer-environment work is for.
 
 > [!CAUTION]
 > **2026-08-28 — FIVE OF THOSE VERDICTS ARE VOID, and one of the undecided with them.** The root
@@ -105,7 +107,9 @@ if an asset has duplicate names AND the aliased materials actually differ.
   (116.3 → 127.2 → 140.9 → 155.8 → 169.9 → 177.4 → 189.2). Before, all 49 sampled cells read
   180 ± 1. The roughness axis peaks at column 5 and falls — physically expected (a smooth metal
   mirrors the dark forest, a rough one scatters the bright sky, then the lobe widens past it), not
-  a defect. ⚠️ Still only **5.5 % of frame height** (`hardcoded-near-plane`), so per-cell
+  a defect. ⚠️ At the time of that measurement it was only **5.5 % of frame height**, the hard-coded
+  near plane since fixed (2026-08-28) — it now fills the frame, so those per-cell numbers deserve
+  re-taking at the new framing, where per-cell
   photometry stays coarse; the axis monotonicity is what carries the verdict.
 - `SpecularTest`: **capture bit-identical, 0.000 % of pixels changed.** Its 24 materials all
   declare `baseColorFactor [0,0,0,1]`, `metallicFactor 0`, `roughnessFactor 0` and differ ONLY in

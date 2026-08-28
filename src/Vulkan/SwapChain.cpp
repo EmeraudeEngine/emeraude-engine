@@ -1599,6 +1599,20 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	SwapChain::updateNearestObjectDistance (float distance) noexcept
+	{
+		/* ⚠️⚠️ THE SWAP CHAIN IS THE TARGET A SCENE CAMERA IS ACTUALLY CONNECTED TO — it is not an
+		 * exotic case. Implementing this on SceneRenderTarget alone left the near plane at its
+		 * default while the caller believed it was proportional, and the two small conformance
+		 * models rendered ENTIRELY EMPTY. The view matrices live in FIVE separate owners
+		 * (SwapChain, SceneRenderTarget, View, Texture, ShadowMap) with no common holder, so a
+		 * property that belongs to a projection has to be forwarded by each of them. */
+		m_viewMatrices.setNearestObjectDistance(distance);
+
+		this->updateViewProperties();
+	}
+
+	void
 	SwapChain::updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept
 	{
 		m_fovOrNear = fovOrNear;

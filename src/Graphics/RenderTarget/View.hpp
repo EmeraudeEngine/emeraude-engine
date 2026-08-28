@@ -130,6 +130,13 @@ namespace EmEn::Graphics::RenderTarget
 				return m_viewMatrices.farPlane();
 			}
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateNearestObjectDistance() */
+			void
+			updateNearestObjectDistance (float distance) noexcept override
+			{
+				m_viewMatrices.setNearestObjectDistance(distance);
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
 			void
 			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override

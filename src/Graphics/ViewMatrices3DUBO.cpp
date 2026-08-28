@@ -234,12 +234,12 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const auto powA = std::pow(std::tan(Radian(QuartRevolution< float >) * 0.5F), 2.0F);
-
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
 		m_logicState.bufferData[FarPlaneOffset] = distance;
-		m_logicState.bufferData[NearPlaneOffset] = 0.1F / std::sqrt(1.0F + powA * 2.0F);
+		/* A cube face is square: aspectRatio 1 makes the bracket 2, which is what the hand-written
+		 * `powA * 2.0F` was. */
+		m_logicState.bufferData[NearPlaneOffset] = ViewMatricesInterface::computeNearPlane(m_nearestObjectDistance, QuartRevolution< float >, 1.0F);
 
 		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]);
 

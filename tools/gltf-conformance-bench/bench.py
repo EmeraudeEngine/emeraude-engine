@@ -52,14 +52,26 @@ FRAMING_MARGIN = 1.2                            # ModelViewer::FramingMargin.
 FIELD_OF_VIEW = 2.0 * math.atan(SENSOR_HEIGHT_MM / (2.0 * FOCAL_LENGTH_MM))
 DISTANCE_FACTOR = FRAMING_MARGIN / math.sin(0.5 * FIELD_OF_VIEW)
 
-# ⚠️ The near plane is HARD-CODED in ViewMatrices2DUBO::updatePerspectiveViewProperties() as
-# `0.1 / sqrt(1 + tan²(fov/2)·(aspect²+1))` — about 0.089 m WHATEVER the scene scale, with no
-# link to the camera or the content. Sub-decimetre assets (BoomBox r=0.010 m,
-# MetalRoughSpheresNoTextures r=0.0038 m, authentically authored in millimetres) sit entirely
-# inside it at their computed framing distance and render NOTHING. The bench pushes the camera
-# out until the bounding sphere clears the plane and REPORTS the frame coverage it loses, rather
-# than hiding a capture that is quietly empty.
-NEAR_PLANE_M = 0.0886
+# The near plane, and the history that makes this constant look strange.
+#
+# It USED to be hard-coded in ViewMatrices2DUBO as `0.1 / sqrt(1 + tan²(fov/2)·(aspect²+1))` —
+# about 0.089 m WHATEVER the scene scale. Sub-decimetre assets (BoomBox r=0.010 m,
+# MetalRoughSpheresNoTextures r=0.0038 m, authentically authored in millimetres) sat entirely
+# inside it at their computed framing distance and rendered NOTHING, so the bench pushed the
+# camera out until the bounding sphere cleared the plane and reported the frame coverage it lost
+# rather than hiding a capture that was quietly empty.
+#
+# Since 2026-08-28 the engine derives it from the subject: `+ModelViewer` tells the camera that
+# the nearest object is 1 % of the subject's radius, so the near plane is now PROPORTIONAL and
+# the clamp below can essentially never bite — a framing distance of DISTANCE_FACTOR × radius
+# clears radius × (1 + 0.01 × clearance) by a wide margin for any DISTANCE_FACTOR > 1.02.
+#
+# ⚠️ The guard is KEPT, and expressed relatively rather than deleted: it is what turned an empty
+# capture into a reported number once, and if the viewer's rule ever changes it must complain
+# again instead of silently producing black frames. If `near_plane_clamped` starts coming back
+# true, the engine and this file have drifted apart — read ModelViewer's
+# `setNearestObjectDistance()` call before touching anything here.
+NEAR_PLANE_SUBJECT_FRACTION = 0.01   # mirrors ModelViewer: nearestObject = radius * 0.01
 NEAR_CLEARANCE = 1.5
 
 # --- Timings ----------------------------------------------------------------------------------
@@ -164,8 +176,14 @@ def pick_asset(assets: Path, model: str) -> Path:
 
 
 def clamp_distance(distance: float, radius: float) -> tuple:
-    """Pushes the camera out until the bounding sphere clears the fixed near plane."""
-    minimum = NEAR_PLANE_M * NEAR_CLEARANCE + radius
+    """
+    Pushes the camera out until the bounding sphere clears the near plane.
+
+    The near plane is now proportional to the subject (see the constants above), so this is a
+    guard rather than the workaround it used to be. It returns the flag as well as the distance
+    because a clamp that fires is a finding — it means the engine's rule and this file disagree.
+    """
+    minimum = radius * (1.0 + NEAR_PLANE_SUBJECT_FRACTION * NEAR_CLEARANCE)
 
     return (max(distance, minimum), distance < minimum)
 
@@ -350,7 +368,9 @@ def print_plan(plan: list) -> None:
               f"{entry['frame_coverage'] * 100:>8.1f}%{flag}{', '.join(v['name'] for v in entry['views'])}")
 
     if any(entry["near_plane_clamped"] for entry in plan):
-        print("\n* pushed back to clear the fixed ~0.089 m near plane; the coverage shown is what is left.")
+        print("\n* pushed back to clear the near plane; the coverage shown is what is left.\n"
+              "  ⚠️ Since the engine derives the near plane from the subject (2026-08-28) this should\n"
+              "  never happen: a star here means ModelViewer's rule and this script have drifted.")
 
 
 def main() -> int:

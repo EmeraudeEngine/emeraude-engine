@@ -206,6 +206,20 @@ namespace EmEn::Graphics
 		this->updateViewRangesProperties(fovOrNear, distanceOrFar);
 	}
 
+	void
+	SceneRenderTarget::updateNearestObjectDistance (float distance) noexcept
+	{
+		m_viewMatrices.setNearestObjectDistance(distance);
+
+		/* The near plane is derived on every projection update, so the new distance only takes
+		 * effect once one happens — force it now rather than leave the view a frame behind, and
+		 * only for a perspective projection, the orthographic one carrying an explicit near. */
+		if ( !this->isOrthographicProjection() )
+		{
+			this->setViewDistance(m_viewMatrices.farPlane());
+		}
+	}
+
 	Base::Math::CartesianFrame< float >
 	SceneRenderTarget::getWorldCoordinates () const noexcept
 	{

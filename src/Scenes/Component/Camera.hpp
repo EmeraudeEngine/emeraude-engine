@@ -44,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/DirectPostProcessEffect.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Scenes/AVConsole/Types.hpp"
 #include "SettingKeys.hpp"
 
@@ -243,6 +244,32 @@ namespace EmEn::Scenes::Component
 			 * @return void
 			 */
 			void setDistance (float distance) noexcept;
+
+			/**
+			 * @brief Sets how close the nearest object the camera must not clip is, in metres.
+			 * @warning ⚠️⚠️ A CAMERA PROPERTY THAT USED TO BE A CONSTANT buried in the view
+			 * matrices. The near plane is derived from it, and 0.1 m was assumed for every scene:
+			 * a millimetric subject sits entirely inside the near plane and renders NOTHING
+			 * (measured on the Khronos MetalRoughSpheresNoTextures, radius 0.00035 m), while a
+			 * kilometric scene spends its depth precision in the first ten centimetres — the depth
+			 * test being conventional, with no reversed-Z. Anything that knows the scale of what it
+			 * is looking at should say so; anything that does not keeps the default and behaves
+			 * exactly as before.
+			 * @param distance The distance in metres. Values <= 0 are ignored.
+			 * @return void
+			 */
+			void setNearestObjectDistance (float distance) noexcept;
+
+			/**
+			 * @brief Returns how close the nearest object the camera must not clip is, in metres.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			nearestObjectDistance () const noexcept
+			{
+				return m_nearestObjectDistance;
+			}
 
 			/**
 			 * @brief Returns the maximal distance of the view.
@@ -879,6 +906,7 @@ namespace EmEn::Scenes::Component
 			/** @brief Immutable lens-effect snapshot; nullptr = no lens effect. */
 			std::shared_ptr< const Graphics::DirectEffectList > m_lensEffects;
 			float m_distance{DefaultGraphicsViewDistance};
+			float m_nearestObjectDistance{Graphics::ViewMatricesInterface::DefaultNearestObjectDistance};
 			float m_near{0.0F};
 			float m_far{DefaultGraphicsViewDistance};
 			/* Physical camera options (photographic model, consumed by the post-process

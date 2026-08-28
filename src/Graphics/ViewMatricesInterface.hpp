@@ -414,6 +414,64 @@ namespace EmEn::Graphics
 			virtual void destroy () noexcept = 0;
 
 			/**
+			 * @brief The nearest-object distance a view assumes until told otherwise, in metres.
+			 * @note 0.1 m is what the four near-plane computations hard-coded before 2026-08-28, so
+			 * this default keeps every existing view bit-identical.
+			 */
+			static constexpr auto DefaultNearestObjectDistance{0.1F};
+
+			/**
+			 * @brief Derives the near plane from the distance of the nearest object that must not clip.
+			 * @note `nearPlane = nearestObjectDistance / sqrt(1 + tan(fov/2)² · (aspectRatio² + 1))`.
+			 * The division pulls the plane back so that a frustum CORNER at `nearestObjectDistance`
+			 * is not cut: the near plane is a plane, the nearest visible point is not on it.
+			 * @warning ⚠️ This existed in FOUR hand-maintained copies (the 2D, 3D and cascaded view
+			 * matrices, plus SpotLight, whose comment said "consistently with ViewMatrices2DUBO" —
+			 * a coupling kept by hand). Use this function; do not write the formula again.
+			 * @param nearestObjectDistance Distance of the nearest object that must stay unclipped, in metres.
+			 * @param fov The vertical field of view, in degrees.
+			 * @param aspectRatio The view aspect ratio. Pass 1 for a cube face or a spot light.
+			 * @return float
+			 */
+			[[nodiscard]]
+			static float computeNearPlane (float nearestObjectDistance, float fov, float aspectRatio) noexcept;
+
+			/**
+			 * @brief Sets the distance of the nearest object that must not be clipped, in metres.
+			 * @warning ⚠️⚠️ THIS IS A SCENE-SCALE PROPERTY AND IT WAS A CONSTANT. A view that keeps
+			 * the 0.1 m default is wrong in BOTH directions on a scene that is not decimetre-scaled:
+			 * a millimetric subject sits entirely INSIDE the near plane and renders nothing (measured
+			 * on the Khronos `MetalRoughSpheresNoTextures`, radius 0.00035 m — 89 times inside it,
+			 * capped at 5.5 % of frame height), while a kilometre-scale scene spends its depth
+			 * precision in the first ten centimetres. The depth test is conventional
+			 * (`VK_COMPARE_OP_LESS_OR_EQUAL`, `D32_SFLOAT`, no reversed-Z anywhere), so a float
+			 * exponent's precision concentrates near the near plane, where a large scene needs it
+			 * least. Anything that knows its subject's scale should say so.
+			 * @note Takes effect on the next projection update.
+			 * @param distance The distance in metres. Values <= 0 are ignored.
+			 * @return void
+			 */
+			void
+			setNearestObjectDistance (float distance) noexcept
+			{
+				if ( distance > 0.0F )
+				{
+					m_nearestObjectDistance = distance;
+				}
+			}
+
+			/**
+			 * @brief Returns the distance of the nearest object that must not be clipped, in metres.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			nearestObjectDistance () const noexcept
+			{
+				return m_nearestObjectDistance;
+			}
+
+			/**
 			 * @brief Computes the 8 corners of a frustum in world space.
 			 * @note The corners are computed by transforming NDC cube corners through the inverse view-projection matrix.
 			 * @param inverseViewProjection The inverse of the view-projection matrix.
@@ -442,5 +500,10 @@ namespace EmEn::Graphics
 			 * @brief Constructs a view matrices interface.
 			 */
 			ViewMatricesInterface () noexcept = default;
+
+			/* The only state this base carries, and it is shared on purpose: all three
+			 * implementations derive their near plane from the same quantity, with the same
+			 * meaning. Keeping it here is what stops the formula drifting apart again. */
+			float m_nearestObjectDistance{DefaultNearestObjectDistance};
 	};
 }

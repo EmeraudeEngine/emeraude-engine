@@ -1434,6 +1434,59 @@ vertex indexes — a face-varying attribute, which OBJ and FBX genuinely need �
 triangle with colour 0, which renders as a plausible flat tint rather than as an error. Formats whose
 colours share the position indexing (glTF) must still set them, to the same values.
 
+### Fixed: the near plane was a CONSTANT, in four copies, and wrong in both directions (Aug 2026)
+
+> [!CAUTION]
+> `nearPlane = nearestObjectDistance / sqrt(1 + tan²(fov/2) · (aspectRatio² + 1))`. The formula is
+> right; `nearestObjectDistance` was the **literal `0.1F`**, in **four hand-maintained copies** —
+> `ViewMatrices2DUBO`, `ViewMatrices3DUBO`, `ViewMatricesCascadedUBO`, `SpotLight`. The last one
+> even carried a comment claiming consistency with the first. Every scene got a near plane sized
+> for a decimetre subject, ≈ 0.089 m, with no link to the camera or the content.
+
+**Both directions are broken, and the one nobody looks at is the large end.**
+
+- **Small subjects render NOTHING.** They sit inside the near plane. Measured: the Khronos
+  `MetalRoughSpheresNoTextures` has a radius of 0.00035 m — **89 times inside it** — and the glTF
+  bench could only get it to 5.5 % of frame height by pushing the camera away; `BoomBox` 14.1 %.
+- **Large scenes lose depth precision.** The depth test is conventional
+  (`VK_COMPARE_OP_LESS_OR_EQUAL`, `D32_SFLOAT`, **no reversed-Z anywhere**), so a float depth buffer
+  spends its precision near the near plane. 0.089 m against a kilometre-scale far throws that
+  precision into the first ten centimetres. **Distant z-fighting should be investigated here
+  first** — this was never a "small assets" bug, it was a scale-blindness bug.
+
+The derivation is now one function, `ViewMatricesInterface::computeNearPlane()`, and the distance is
+a camera property pushed through a defaulted `AbstractVirtualDevice::updateNearestObjectDistance()`
+hook. Anything that says nothing keeps 0.1 m and is unchanged.
+
+⚠️⚠️ **THE LESSON IS THAT ONE SCALE FLOOR IS NEVER ALONE.** Fixing the near plane did NOT fix
+`+ModelViewer`, which held two more decimetre assumptions: the framing radius floored at `0.01F`
+(re-framing every sub-centimetre asset as if it were a centimetre across — 28× too far for the model
+above) and the orbit controller's lower distance limit at `max(radius * 0.05F, 0.01F)`, which
+`OrbitController::setDistance()` clamps against. A magic 0.01 or 0.1 in a viewer, a controller or a
+projection is a scale assumption; grep for the others before declaring a scale bug fixed.
+
+⚠️⚠️ **THE VIEW MATRICES HAVE FIVE OWNERS AND NO COMMON HOLDER** — `Vulkan::SwapChain`,
+`Graphics::SceneRenderTarget`, and the templated `RenderTarget::View`, `Texture` and `ShadowMap` each
+hold their own `ViewMatrices2DUBO`. A property that belongs to a projection has to be forwarded by
+every one of them that carries a perspective. **And the one a scene camera actually connects to is
+the SWAP CHAIN**, not `SceneRenderTarget`: implementing the forward on the latter alone left the near
+plane at its default while the caller believed it proportional, and the two small conformance models
+rendered ENTIRELY EMPTY. Only `ShadowMap` legitimately ignores it — a light's frustum has no subject.
+
+⚠️⚠️ **`Camera::onOutputDeviceConnected()` IS THE FIRST PUSH A TARGET EVER RECEIVES.** Every camera
+setter is guarded by `hasOutputConnected()`, and a viewer sets its camera up while building the
+scene, i.e. while nothing is connected — so a value that is not also pushed from
+`onOutputDeviceConnected()` is stored and never sent. That was the second cause of the same empty
+frames, found only after instrumenting the near-plane computation and reading `nearestObject=0.1`
+straight out of the log.
+
+⚠️⚠️⚠️ **AND THE METHOD MISTAKE THAT LET BOTH THROUGH: a safety net was loosened in the same change
+that needed it.** The glTF bench's `clamp_distance()` existed precisely to turn "this model would
+render nothing" into a reported number — and it was made subject-relative in the SAME commit as the
+engine change it was supposed to police. So it had nothing left to catch, and the failure arrived as
+two silently empty captures instead of a warning. **Keep a guard absolute until the change it guards
+is measured**, then relax it.
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)

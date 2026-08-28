@@ -209,13 +209,11 @@ namespace EmEn::Graphics
 		m_logicState.bufferData[ViewHeightOffset] = height;
 		m_logicState.bufferData[FarPlaneOffset] = distance;
 
-		/* Formula : nearPlane = nearestObject / sqrt(1 + tan(fov/2)² · (aspectRatio² + 1)) */
-		{
-			const auto powA = std::pow(std::tan(Radian(fov) * 0.5F), 2.0F);
-			const auto powB = std::pow(aspectRatio, 2.0F) + 1.0F;
-
-			m_logicState.bufferData[NearPlaneOffset] = 0.1F / std::sqrt(1.0F + powA * powB);
-		}
+		/* ⚠️ The nearest-object distance used to be the literal 0.1F here, so every scene got a
+		 * near plane sized for a decimetre subject. It is a property now — see
+		 * ViewMatricesInterface::setNearestObjectDistance() for why that was wrong in BOTH
+		 * directions. */
+		m_logicState.bufferData[NearPlaneOffset] = ViewMatricesInterface::computeNearPlane(m_nearestObjectDistance, fov, aspectRatio);
 
 		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(fov, aspectRatio, m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]);
 

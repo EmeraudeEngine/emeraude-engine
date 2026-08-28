@@ -59,6 +59,13 @@ namespace EmEn::Scenes::Component
 		/* When a new render target is connected, we initialize it with coordinates and camera properties. */
 		if ( this->isPerspectiveProjection() )
 		{
+			/* ⚠️⚠️ THE NEAREST-OBJECT DISTANCE MUST BE PUSHED HERE TOO, and first. This is the
+			 * FIRST push a target ever receives: every setter below is guarded by
+			 * hasOutputConnected(), so a value set while nothing is connected — which is exactly
+			 * what a viewer does while building its scene — is stored and never sent. Forgetting
+			 * this line left the near plane at its 0.1 m default while the caller believed it was
+			 * proportional, and the two small conformance models rendered ENTIRELY EMPTY. */
+			targetDevice.updateNearestObjectDistance(m_nearestObjectDistance);
 			targetDevice.updateVideoDeviceProperties(this->fieldOfView(), m_distance, false);
 		}
 		else
@@ -75,6 +82,10 @@ namespace EmEn::Scenes::Component
 		if ( this->isPerspectiveProjection() )
 		{
 			this->forEachOutputs([&] (const auto & output) {
+				/* ⚠️ The nearest-object distance goes FIRST: the properties update below derives the
+				 * near plane from it, so pushing it afterwards would leave the projection one update
+				 * behind. */
+				output->updateNearestObjectDistance(m_nearestObjectDistance);
 				output->updateVideoDeviceProperties(this->fieldOfView(), m_distance, false);
 			});
 		}
@@ -156,6 +167,20 @@ namespace EmEn::Scenes::Component
 		 * source of truth still holds; the format is locked from here on so nothing can reframe it
 		 * behind the caller's back. 90 degrees on a 24 mm-high sensor is exactly 12 mm. */
 		m_focalLength = this->sensorHeight() / (2.0F * std::tan(Radian(clamped) * 0.5F));
+
+		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
+	}
+
+	void
+	Camera::setNearestObjectDistance (float distance) noexcept
+	{
+		if ( distance > 0.0F )
+		{
+			m_nearestObjectDistance = distance;
+		}
 
 		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
 		{

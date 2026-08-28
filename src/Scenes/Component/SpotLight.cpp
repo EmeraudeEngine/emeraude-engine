@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Space3D/Collisions/PointSphere.hpp"
 #include "Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "Resources/ResourceTrait.hpp"
@@ -453,10 +454,12 @@ namespace EmEn::Scenes::Component
 
 		const auto viewMatrix = worldCoordinates.getViewMatrix();
 
-		/* Compute near plane consistently with ViewMatrices2DUBO (1:1 aspect ratio). */
+		/* Near plane through the shared derivation, 1:1 aspect ratio for a spot's square shadow map.
+		 * ⚠️ This used to be a hand-written copy of the formula whose comment claimed consistency
+		 * with ViewMatrices2DUBO — a coupling maintained by hope. A spot light has no "subject", so
+		 * it keeps the default nearest-object distance rather than deriving one. */
 		const auto fov = this->getFovOrNear();
-		const auto tanHalfFov = std::tan(Radian(fov) * 0.5F);
-		const auto nearPlane = 0.1F / std::sqrt(1.0F + (tanHalfFov * tanHalfFov * 2.0F));
+		const auto nearPlane = Graphics::ViewMatricesInterface::computeNearPlane(Graphics::ViewMatricesInterface::DefaultNearestObjectDistance, fov, 1.0F);
 
 		const auto projMatrix = Matrix< 4, float >::perspectiveProjection(fov, 1.0F, nearPlane, this->getDistanceOrFar());
 
