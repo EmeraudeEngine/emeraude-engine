@@ -863,8 +863,12 @@ namespace EmEn::Net
   `operation_aborted` forever — a server that is up and can never take a client. `close()` now
   drains, and `accept()` treats `operation_aborted` as "no peer this round" (`timedOut`) rather than
   an error, since that code is *always* the completion of a cancel the class issued itself and is
-  never the caller's business. ⚠️ A polling consumer must therefore key on `timedOut` /
-  `notListening`, never on "an error appeared".
+  never the caller's business. ⚠️ **The rule this implies, stated exhaustively — an earlier
+  wording of it ("key on `timedOut`/`notListening`, never on an error") had a hole a consumer could
+  fall through: continue ONLY on `timedOut`. Stop on a peer, stop on `notListening`, stop on an
+  error, and stop on anything you do not recognise.** Four separate silent spins in this cascade all
+  had the same shape — the consumer re-armed on an outcome it had not matched — so the loop must be
+  exhaustive by construction rather than gain one more branch per defect found.
 
 **Expected usage pattern**:
 ```cpp
