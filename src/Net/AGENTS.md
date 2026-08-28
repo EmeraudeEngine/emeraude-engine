@@ -333,8 +333,10 @@ never run**. What it contributed to this directory:
   none. `joinMulticastGroup()` correctly returns `false`; it is the **consumer** that must treat
   that as "skip this interface", never "abort discovery". Enumerating on
   `family == IPv4 && !internal` does **not** exclude them — APIPA is not flagged internal.
-- Still open on Windows: the `ExternalData` resource chain, and `TCPServer` binding `"::"`, which
-  opens a v6-only socket there so IPv4 peers are silently refused (long-standing trap, unfixed).
+- Still open on Windows: the `ExternalData` resource chain. The other long-standing Windows trap,
+  `TCPServer` binding `"::"` opening a v6-only socket, is **fixed since 2026-08-28** (see the
+  dual-stack note under § TCP Server) but **not yet measured there** — the fix was written and
+  compiled on macOS, whose kernel never exhibited the symptom.
 
 > [!NOTE]
 > The bug the Windows run actually surfaced first was **not in this directory**: app_system's
@@ -790,6 +792,14 @@ namespace EmEn::Net
 - `accept(timeoutMs)` uses `async_accept` + `run_for(timeout)` and returns `std::nullopt` on timeout/error.
 - On a successful accept, the underlying socket is **detached** from the server's io_context (`socket.release()`) and **migrated** onto a fresh io_context owned by the returned `TCPClient` (`socket.assign()`). This decouples the lifetimes — destroying the server does not affect already-accepted clients.
 - `SO_REUSEADDR` is enabled on a best-effort basis.
+- ⚠️ **Binding `"::"` asks for a dual-stack socket EXPLICITLY** (`IPV6_V6ONLY` off), since
+  2026-08-28. Whether IPv4 peers reach an IPv6 any-address listener is a **kernel policy, not a
+  contract**: Windows defaults to v6-only and refuses them *silently*, while Linux (`bindv6only`)
+  and macOS (`net.inet6.ip6.v6only`, measured at 0 on macOS 26 — a tunable, not a guarantee) both
+  accept them. This is the same shape as the multicast option widths: a default read as a promise.
+  Unlike `SO_REUSEADDR` this one is **not** best-effort — a stack that refuses the option fails the
+  `listen()`, because a socket that is up while invisible to half the network is precisely the bug
+  being prevented. Bind `"0.0.0.0"` for a deliberate IPv4-only listen.
 
 **Expected usage pattern**:
 ```cpp

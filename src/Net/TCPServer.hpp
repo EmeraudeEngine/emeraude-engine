@@ -88,6 +88,12 @@ namespace EmEn::Net
 			 * @param address The local address to bind to (empty or "0.0.0.0"
 			 * for any interface, IPv4). Pass an explicit IPv6 address
 			 * (e.g. "::") to listen in IPv6.
+			 * @note Binding the IPv6 any-address ("::") requests a DUAL-STACK
+			 * socket explicitly (IPV6_V6ONLY off), so IPv4 peers are accepted
+			 * on every platform rather than only on those whose kernel happens
+			 * to default that way. If the stack refuses, the listen FAILS
+			 * instead of coming up IPv6-only and silently refusing half the
+			 * network; bind "0.0.0.0" for a deliberate IPv4-only listen.
 			 * @return bool True if the server is listening.
 			 */
 			bool listen (uint16_t port, int backlog = DefaultBacklog, const std::string & address = {}) noexcept;

@@ -110,6 +110,17 @@ implementation detail and each platform keeps the type its own manual specifies.
   field reports describe multicast working from a terminal and failing from a double-clicked
   bundle. No permission prompt appeared during this run — Terminal is already authorised on this
   machine, which is precisely why it proves nothing.
+  ⚠️ **2026-08-28: the key was simply not there.** `app_system/resources/mac/Info.plist` declared
+  no `NSLocalNetworkUsageDescription` at all, so the system had nothing to show and the bundle case
+  could only ever have failed. Added; the built bundle now carries it. Two questions are left for
+  the actual run, and both are deliberately left as measurements rather than pre-emptive changes:
+  1. The multicast happens in the **renderer helper**, a separate bundle with its own identifier.
+     The key is in the **main** plist only. If no prompt appears, adding it to
+     `resources/mac/helper-Info.plist` is the next hypothesis — but adding it now would have made
+     the result unattributable.
+  2. The local build is **ad-hoc / linker-signed** (`Info.plist=not bound`, `Sealed Resources=none`).
+     TCC identity on such a bundle is not a shipped bundle's identity; a real Developer ID signature
+     is part of what "packaged" means here.
 - [ ] The app's own JS path on macOS (`--mode=test` → the dev-check mDNS card). Only the engine
   layer was exercised.
 - [x] ⚠️ **Linux, a RE-RUN — done 2026-08-28**, `tools/net-check`: **48 pass / 0 fail / 1 warn**,

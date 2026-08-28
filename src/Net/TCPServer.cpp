@@ -133,6 +133,33 @@ namespace EmEn::Net
 			return false;
 		}
 
+		/* Binding the IPv6 any-address must ask EXPLICITLY for a dual-stack
+		 * socket. Whether IPv4 peers are accepted through it is a kernel
+		 * policy, not a contract: Windows defaults to v6-only and refuses
+		 * them SILENTLY, while Linux and macOS accept them (both default
+		 * net.inet6.ip6.v6only / bindv6only to 0 - measured on macOS 26,
+		 * and it is a tunable sysctl there, not a guarantee). Same trap as
+		 * the multicast option widths: never read a default as a promise.
+		 * Failing the listen here is deliberate - a socket that is up but
+		 * invisible to half the network is exactly the bug being prevented,
+		 * so a stack refusing the option must say so instead of silently
+		 * reproducing it. Bind "0.0.0.0" to listen on IPv4 only. */
+		if ( endpoint.address().is_v6() && endpoint.address().is_unspecified() )
+		{
+			acceptor->set_option(asio::ip::v6_only(false), ec);
+
+			if ( ec )
+			{
+				m_lastError = ec;
+
+				asio::error_code closeEc;
+				acceptor->close(closeEc);
+				acceptor.reset();
+
+				return false;
+			}
+		}
+
 		/* Best-effort: SO_REUSEADDR. Failure is non-fatal — the kernel may
 		 * still bind, and the option is irrelevant on a clean port. */
 		asio::error_code reuseEc;
