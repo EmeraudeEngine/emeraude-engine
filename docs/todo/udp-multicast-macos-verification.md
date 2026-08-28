@@ -104,23 +104,57 @@ implementation detail and each platform keeps the type its own manual specifies.
 > § *Full re-test run-list*. The runtime harness is now in the tree at
 > [`tools/net-check/`](../../tools/net-check/README.md) — one compiler command per OS, no engine build.
 
-- [ ] ⚠️ **A SIGNED AND PACKAGED binary on macOS.** Everything above ran from the Terminal, which
-  the original scope already flagged as proving nothing: since macOS 15 (Sequoia) multicast needs
-  the **"Local Network" authorisation** (`NSLocalNetworkUsageDescription` + a Privacy entry), and
-  field reports describe multicast working from a terminal and failing from a double-clicked
-  bundle. No permission prompt appeared during this run — Terminal is already authorised on this
-  machine, which is precisely why it proves nothing.
-  ⚠️ **2026-08-28: the key was simply not there.** `app_system/resources/mac/Info.plist` declared
-  no `NSLocalNetworkUsageDescription` at all, so the system had nothing to show and the bundle case
-  could only ever have failed. Added; the built bundle now carries it. Two questions are left for
-  the actual run, and both are deliberately left as measurements rather than pre-emptive changes:
-  1. The multicast happens in the **renderer helper**, a separate bundle with its own identifier.
-     The key is in the **main** plist only. If no prompt appears, adding it to
-     `resources/mac/helper-Info.plist` is the next hypothesis — but adding it now would have made
-     the result unattributable.
-  2. The local build is **ad-hoc / linker-signed** (`Info.plist=not bound`, `Sealed Resources=none`).
-     TCC identity on such a bundle is not a shipped bundle's identity; a real Developer ID signature
-     is part of what "packaged" means here.
+- [x] ⚠️⚠️ **A SIGNED AND PACKAGED binary on macOS — MEASURED 2026-08-28, AND IT FAILS.** The field
+  report is reproduced, and the answer is worse than "it needs a permission": **macOS never asks.**
+
+  **What was built.** A genuine Developer-ID-signed bundle: `codesign --verify --deep --strict` →
+  *valid on disk*, *satisfies its Designated Requirement*; `flags=0x10000(runtime)` (hardened
+  runtime), `Identifier=co.lychee.lycheeslicer`, `TeamIdentifier=QEHS3E9BP6`, Info.plist **bound**,
+  1675 files sealed, `NSLocalNetworkUsageDescription` present, no quarantine attribute. Not
+  notarized (no credentials on the machine) — irrelevant here, notarization is Gatekeeper, not TCC.
+
+  **What happens.** Launched through **LaunchServices** (`open`), the bundle:
+  - **binds** `0.0.0.0:5353` beside `mDNSResponder`, sets TTL 255 + loopback, and **joins**
+    `224.0.0.251` on both real NICs — every one of those reports success;
+  - **receives** multicast normally (6 datagrams of ambient LAN mDNS traffic);
+  - has **every outbound send refused** — multicast *and* plain LAN unicast alike (`sendto()` → -1);
+  - and **shows no authorisation prompt at all**, so there is nothing for a user to accept.
+
+  **The differentiator is the launch path, not the signature.** The *same* signed binary launched
+  from a terminal works completely (DNS-SD answered by 7 LAN hosts): a terminal-launched process
+  inherits Terminal's own Local Network grant. That is precisely why every earlier run in this file
+  proved nothing, and it is now demonstrated rather than suspected.
+
+  **Ruled out by measurement, not by reasoning:**
+  - `NSLocalNetworkUsageDescription` in the **main** plist — present throughout, necessary but not
+    sufficient;
+  - the same key added to **all five helper plists** (`co.lychee.lycheeslicer.helper*`, including
+    `.renderer` where the UDP WebModule actually runs) — **no change**. This was the standing
+    hypothesis recorded here; it is wrong, or at least not the whole story;
+  - running from **`/Applications`** instead of an arbitrary directory — **no change**;
+  - the code path itself — raw sockets, the `dgram` shim and the native binding all behave
+    identically, and all work from a terminal.
+
+  **Still unknown, and it needs the machine's owner** (an AI cannot read `TCC.db`, SIP-protected,
+  nor click the settings pane): whether macOS has **cached a denial** for `co.lychee.lycheeslicer`
+  from the very first attempt, or never intends to prompt. *System Settings → Privacy & Security →
+  Local Network* answers it in ten seconds — is `LycheeSlicer` listed, and is its switch off?
+  If it is listed and off, this is a cached deny and the prompt logic is fine; if it is absent, the
+  app is being refused without ever being offered, and the next avenue is Apple's multicast
+  entitlement (`com.apple.developer.networking.multicast`, request-only) — noting that **LAN
+  unicast fails too**, which points at the broader Local Network gate rather than multicast alone.
+
+  ⚠️ **Treat this as a shipping blocker for printer discovery on macOS**, not a validation detail.
+
+  **One defect fixed on the way, and it is platform-neutral.** app_system's `UDPModule` reported a
+  refused send as a **success**: `sendData()`/`sendBuffer()` wrote the engine's raw byte count into
+  the task and called `finish()`, so the OS refusal arrived in JavaScript as
+  `{error:false, success:true, bytesSent:-1}`. The JS layer then lost it twice — `udp.Socket.send()`
+  resolved that `-1` as the byte count, and the `dgram` shim guarded only on `bytesSent < 0`, which
+  silently stops working once the native side aborts instead (an aborted task carries no
+  `bytesSent`, and `undefined < 0` is false). Without that fix this whole investigation reads as
+  "sends succeed but nothing arrives". Now all three paths surface
+  `UDP send refused by the system (host '…', port …)`. Success path re-verified unchanged.
 - [x] **The app's own JS path on macOS — done 2026-08-28** (`--mode=test`, dev-check mDNS card
   driven over CDP, exactly as Windows was, so the two runs compare). Bind `0.0.0.0:5353` beside the
   system `mDNSResponder`, TTL 255 + loopback, join `224.0.0.251` on **both** real NICs
