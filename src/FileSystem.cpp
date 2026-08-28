@@ -202,7 +202,13 @@ namespace EmEn
 		/* Check for a forced config directory from command line arguments. */
 		if ( const auto forcedPath = m_arguments.get("--config-directory") )
 		{
-			return registerDirectory(forcedPath.value(), false, true, m_configDirectory);
+		/* ⚠️ IO::u8path() and NOT the implicit conversion: an argument value is a UTF-8
+		 * std::string, and building a std::filesystem::path from it goes through the ANSI
+		 * code page on Windows - the corruption happens AT THE PARAMETER, before the callee
+		 * runs. Measured on Windows 2026-08-28: with argv already fixed to be UTF-8 at the
+		 * entry point, '--cache-directory=...\Кэш-漢字' was still refused on an existing
+		 * directory, because the value died here instead. */
+			return registerDirectory(IO::u8path(forcedPath.value()), false, true, m_configDirectory);
 		}
 
 		/* Check next to binary. */
@@ -268,7 +274,8 @@ namespace EmEn
 		/* Check for a forced cache directory from command line arguments. */
 		if ( const auto forcedPath = m_arguments.get("--cache-directory") )
 		{
-			return registerDirectory(forcedPath.value(), false, true, m_cacheDirectory);
+			/* Same ANSI-at-the-parameter trap as --config-directory above. */
+			return registerDirectory(IO::u8path(forcedPath.value()), false, true, m_cacheDirectory);
 		}
 
 		/* Check next to binary. */
@@ -334,7 +341,9 @@ namespace EmEn
 		/* Check for a forced data directory from command line arguments. */
 		if ( const auto forcedPath = m_arguments.get("--data-directory") )
 		{
-			const std::filesystem::path tempDirectory{forcedPath.value()};
+			/* Brace-initialising a path from a std::string is the very conversion to avoid;
+			 * being explicit about the construction does not make it UTF-8 aware. */
+			const auto tempDirectory = IO::u8path(forcedPath.value());
 
 			if ( !this->checkDirectoryRequirements(tempDirectory, false, false) )
 			{
@@ -351,7 +360,8 @@ namespace EmEn
 		/* Check for a custom data directory from command line arguments. */
 		if ( const auto customDirectory = m_arguments.get("--add-data-directory") )
 		{
-			paths.emplace_back(customDirectory.value());
+			/* emplace_back constructs the path from the string in place - same conversion. */
+			paths.emplace_back(IO::u8path(customDirectory.value()));
 		}
 
 		/* Check next to binary [FORCED]. */
