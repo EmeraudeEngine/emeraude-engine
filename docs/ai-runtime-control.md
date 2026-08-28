@@ -304,6 +304,38 @@ Viewer policy: a regular active scene is **never disturbed** (notification `A sc
 the file was ignored.`); an active `+ImageViewer`/`+ModelViewer` is **replaced** by the new drop.
 In the viewers: left-drag orbits around the content, mouse wheel dollies in/out.
 
+#### `+ModelViewer` environment — three settings, and two of them are INDEPENDENT axes
+
+| setting | default | what it decides |
+|---|---|---|
+| `Core/Viewers/Background` | `GreenLandscape` | what is **behind** the subject. **Empty = no backdrop at all**, which renders a bit-exact black |
+| `Core/Viewers/EnvironmentCubemap` | *(empty)* | what the subject **reflects**. Empty = whatever the background installed |
+| `Core/Viewers/AmbientIntensity` | `200.0` | the flat ambient illuminance floor, in lux |
+
+> [!IMPORTANT]
+> **The backdrop and the reflected environment are NOT the same axis**, and the engine already
+> separates them (`Scene::setBackground()` vs `Scene::setEnvironmentCubemap()`, the latter documented
+> as replacing whatever a background installed). Keeping them apart is what makes the configuration
+> the Khronos conformance references actually use expressible: **a black backdrop with a bright
+> studio reflection**. A single "environment" preset could not express it.
+> ⚠️ The override is applied AFTER the background, necessarily — a background installs its own
+> cubemap as the scene's environment, so an explicit choice has to come second.
+
+**Why the ambient is a setting.** 200 lux of flat ambient is enough to wash out a sheen rim or an
+iridescence fringe, which is exactly what the tests Khronos shoots on black are measuring. Measured
+on `SheenCloth`: with the defaults the backdrop reads sRGB (23.4, 28.2, 19.7) with a maximum of 44,
+and the rim-to-backdrop contrast is **8.1×**; with `Background = ""` and `AmbientIntensity = 0` the
+backdrop is **exactly (0, 0, 0)**, maximum 0, and the contrast is **390×** — a **48× gain on the
+discriminating figure**, and a backdrop that is a measurement surface rather than a picture.
+
+⚠️ Both new keys default to the previous behaviour, so an existing session is unchanged. They
+self-register into `settings.json` on first launch.
+
+⚠️⚠️ **A black backdrop is NOT the universal answer.** `SpecularTest`'s spheres declare
+`baseColorFactor [0,0,0,1]`, `metallicFactor 0` and `roughnessFactor 0`: their only light is a mirror
+reflection at F0 ≤ 0.04, so they are too DARK, not washed out, and they need a bright *reflected*
+environment — the other axis. Read what a test declares before choosing its environment.
+
 ### Calling a web API (`Core.NetAPIClientService.*`)
 
 The engine talks to HTTPS APIs at C++ level, **without CEF**, through `Net::APIClient`. Every call

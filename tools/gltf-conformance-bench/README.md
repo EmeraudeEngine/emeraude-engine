@@ -114,6 +114,19 @@ The failure images name the defect, which is what turns a capture into a fix.
   IBL and the exposure are not the cause. That is *all* it says. It carries a **single** material,
   so two bench runs used it to close questions it cannot answer — per-material data reaching the
   shader among them. Read what a control declares before letting it clear anything.
+- **⚠️ The viewer's environment is CONFIGURABLE, and five of these tests need it changed.** Khronos
+  shoots `SheenCloth`, `AnisotropyStrengthTest` and both iridescence grids on black, and
+  `SpecularTest` against a bright environment; `+ModelViewer` meters a daylight sky at sunny-sixteen.
+  Three settings, and the first two are **independent axes** — what is behind the subject, and what
+  the subject reflects:
+  `Core/Viewers/Background` (empty = a bit-exact black backdrop), `Core/Viewers/EnvironmentCubemap`
+  (empty = whatever the background installed) and `Core/Viewers/AmbientIntensity` (200 lux by
+  default, and 200 lux of flat ambient washes out a sheen rim).
+  Measured on `SheenCloth`: rim-to-backdrop contrast **8.1× with the defaults, 390× with
+  `Background = ""` and `AmbientIntensity = 0`** — a 48× gain, backdrop exactly (0,0,0).
+  ⚠️ **Black is not the universal answer**: `SpecularTest` is too DARK, not washed out (F0 ≤ 0.04 on
+  a black dielectric), and needs a bright *reflected* environment instead. Read what a test declares
+  before choosing its environment.
 - **A reference screenshot shot in a dark studio is not a criterion.** `EmissiveStrengthTest` looks
   like a failure next to its reference — none of the cubes glows — purely because `+ModelViewer`
   meters a daylight sky at sunny-sixteen. On the RATIOS between cubes it passes cleanly (2.21,

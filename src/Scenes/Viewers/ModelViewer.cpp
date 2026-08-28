@@ -151,13 +151,22 @@ namespace EmEn::Scenes::Viewers
 		 * background feeds the reflections, not the key light. */
 		this->installBackground(*scene);
 
+		/* ⚠️ AFTER the background, and that order is the whole point: a background installs its own
+		 * cubemap as the scene's environment, so an explicit override has to come second. Two
+		 * independent axes — what is BEHIND the subject and what the subject REFLECTS — which is
+		 * what lets a session reproduce the Khronos references' black backdrop with a bright studio
+		 * reflection. */
+		this->installEnvironmentCubemap(*scene);
+
 		/* NOTE: Neutral lighting recipe : a soft ambient and one warm key light.
 		 * The flat ambient is a floor for the case where no background resource is available; the
-		 * sky irradiance dominates it by two orders of magnitude when one is. */
+		 * sky irradiance dominates it by two orders of magnitude when one is.
+		 * ⚠️ It is a SETTING because 200 lux of flat ambient washes out a sheen rim or an
+		 * iridescence fringe — exactly what the tests Khronos shoots on black are measuring. */
 		auto & lightSet = scene->lightSet();
 		lightSet.enable();
 		lightSet.setAmbientLightColor({0.4F, 0.4F, 0.45F, 1.0F});
-		lightSet.setAmbientLightIntensity(200.0F);
+		lightSet.setAmbientLightIntensity(m_settings.getOrSetDefault< float >(ViewerAmbientIntensityKey, DefaultViewerAmbientIntensity));
 
 		Toolkit toolkit{m_settings, m_resourceManager, scene};
 		toolkit.setCursor(600.0F, 1000.0F, 600.0F);
@@ -313,6 +322,42 @@ namespace EmEn::Scenes::Viewers
 		}
 
 		scene.setBackground(skyBox);
+	}
+
+	void
+	ModelViewer::installEnvironmentCubemap (Scene & scene) noexcept
+	{
+		const auto cubemapName = m_settings.getOrSetDefault< std::string >(ViewerEnvironmentCubemapKey, DefaultViewerEnvironmentCubemap);
+
+		/* Empty is the default and means "keep whatever the background installed" — the behaviour
+		 * every session had before this setting existed. */
+		if ( cubemapName.empty() )
+		{
+			return;
+		}
+
+		auto * cubemaps = m_resourceManager.container< TextureResource::TextureCubemap >();
+
+		if ( cubemaps == nullptr )
+		{
+			return;
+		}
+
+		const auto cubemap = cubemaps->getResource(cubemapName);
+
+		/* NOTE: Same contract as the background: the resource belongs to the consumer's data store,
+		 * so an unknown name is a configuration matter and never a viewer failure. The subject keeps
+		 * reflecting whatever the background installed. */
+		if ( cubemap == nullptr )
+		{
+			TraceWarning{ClassId} <<
+				"No cubemap resource named '" << cubemapName << "' (setting '" << ViewerEnvironmentCubemapKey << "'). "
+				"The subject keeps reflecting the background's environment.";
+
+			return;
+		}
+
+		scene.setEnvironmentCubemap(cubemap);
 	}
 
 	bool

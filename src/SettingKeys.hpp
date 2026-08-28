@@ -890,6 +890,30 @@ namespace EmEn
 		constexpr auto ViewerBackgroundKey{"Core/Viewers/Background"};
 		constexpr auto DefaultViewerBackground{"GreenLandscape"};
 
+		/* The environment cubemap the SUBJECT REFLECTS, independently of the backdrop behind it.
+		 *
+		 * ⚠️⚠️ THESE ARE TWO DIFFERENT AXES and the engine already separates them: `Scene` has both
+		 * `setBackground()` and `setEnvironmentCubemap()`, and the latter's own documentation says it
+		 * replaces whatever a background installed. Conflating them into one "environment" preset
+		 * would make the configuration the Khronos conformance references actually use —
+		 * a BLACK BACKDROP with a bright STUDIO reflection — inexpressible.
+		 *
+		 * Empty string = leave whatever the background installed (the previous behaviour). A name
+		 * overrides it, and is applied AFTER the background for exactly that reason. An unknown name
+		 * is traced and ignored, never a failure. */
+		constexpr auto ViewerEnvironmentCubemapKey{"Core/Viewers/EnvironmentCubemap"};
+		constexpr auto DefaultViewerEnvironmentCubemap{""};
+
+		/* The viewer's flat ambient illuminance, in lux.
+		 *
+		 * ⚠️ It exists as a FLOOR for the case where no background resource is available, and the sky
+		 * irradiance dominates it by two orders of magnitude when one is. But 200 lux of flat ambient
+		 * is enough to WASH OUT a sheen rim or an iridescence fringe, which is precisely what the
+		 * tests Khronos shoots on black are measuring. Dropping it to 0 is how those become
+		 * judgeable; leaving the default keeps every existing viewer session identical. */
+		constexpr auto ViewerAmbientIntensityKey{"Core/Viewers/AmbientIntensity"};
+		constexpr auto DefaultViewerAmbientIntensity{200.0F};
+
 		/* Physics */
 		/* Enable the spatial acceleration structure for physics. */
 		constexpr auto EnablePhysicsAccelerationKey{"Core/Physics/EnableAcceleration"};

@@ -46,8 +46,14 @@ Iridescence ×2, AnisotropyStrengthTest.
 collapse, fixed) and it was capped at 5.5 % of frame height by the hard-coded near plane — also
 fixed, and it now fills the frame with its whole 7×7 grid, labels readable. `BoomBox` likewise went
 from 14.1 % to the nominal 38.9 %. It is judgeable now and simply has not been judged.
-`SheenCloth` is still blocked by the lighting (the viewer's daylight sky cannot isolate a sheen rim —
-Khronos shoots it on black), which is what the viewer-environment work is for.
+`SheenCloth` was blocked by the lighting, and that is now UNBLOCKED too: `+ModelViewer` gained three
+environment settings (2026-08-28) and with `Core/Viewers/Background = ""` plus
+`Core/Viewers/AmbientIntensity = 0` its rim-to-backdrop contrast goes from **8.1× to 390×** against a
+bit-exact black backdrop — the Khronos framing. Like the other two, it is judgeable now and simply has
+not been judged.
+⚠️ **Black is NOT the universal answer.** `SpecularTest` and `AnisotropyStrengthTest` are too DARK,
+not washed out, and need a bright *reflected* environment (`Core/Viewers/EnvironmentCubemap`) —
+the other axis. Choose per test, from what the test declares.
 
 > [!CAUTION]
 > **2026-08-28 — FIVE OF THOSE VERDICTS ARE VOID, and one of the undecided with them.** The root

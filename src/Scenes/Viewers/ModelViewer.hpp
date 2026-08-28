@@ -121,6 +121,19 @@ namespace EmEn::Scenes::Viewers
 			void installBackground (Scene & scene) noexcept;
 
 			/**
+			 * @brief Overrides the environment cubemap the subject reflects, from the settings.
+			 * @note ⚠️ Two INDEPENDENT axes: `installBackground()` decides what is behind the
+			 * subject, this decides what the subject REFLECTS. The engine separates them
+			 * (`Scene::setBackground()` vs `Scene::setEnvironmentCubemap()`), and this must run
+			 * AFTER the background because a background installs its own cubemap as the scene's
+			 * environment. Keeping them apart is what makes the Khronos references' configuration —
+			 * a black backdrop with a bright studio reflection — expressible at all.
+			 * @param scene A reference to the scene.
+			 * @return void
+			 */
+			void installEnvironmentCubemap (Scene & scene) noexcept;
+
+			/**
 			 * @brief Imports a raw geometry file as a single mesh wearing a neutral clay material.
 			 * @param filepath A reference to a filesystem path.
 			 * @param scene A reference to the viewer scene.
