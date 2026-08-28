@@ -94,7 +94,7 @@ namespace EmEn::Net
 
 		if ( !IO::isDirectoryUsable(m_cacheDirectory) )
 		{
-			TraceError{ClassId} << "The download cache directory '" << m_cacheDirectory << "' is not usable, downloads disabled.";
+			TraceError{ClassId} << "The download cache directory '" << IO::toU8String(m_cacheDirectory) << "' is not usable, downloads disabled.";
 
 			m_disabledReason = "the download cache directory is not usable";
 
@@ -451,7 +451,7 @@ namespace EmEn::Net
 
 			if ( error )
 			{
-				TraceError{ClassId} << "Unable to remove the cached file '" << entry.path() << "': " << error.message();
+				TraceError{ClassId} << "Unable to remove the cached file '" << IO::toU8String(entry.path()) << "': " << error.message();
 
 				error.clear();
 				success = false;
@@ -707,7 +707,7 @@ namespace EmEn::Net
 
 			if ( error )
 			{
-				TraceError{ClassId} << "Unable to install '" << partialFilepath << "' as '" << filepath << "': " << error.message();
+				TraceError{ClassId} << "Unable to install '" << IO::toU8String(partialFilepath) << "' as '" << IO::toU8String(filepath) << "': " << error.message();
 
 				std::filesystem::remove(partialFilepath, error);
 
@@ -733,7 +733,7 @@ namespace EmEn::Net
 
 				this->enforceCacheBudget();
 
-				TraceSuccess{ClassId} << "'" << url << "' downloaded (" << bytes << " bytes) into '" << filepath << "'.";
+				TraceSuccess{ClassId} << "'" << url << "' downloaded (" << bytes << " bytes) into '" << IO::toU8String(filepath) << "'.";
 			}
 			else
 			{
