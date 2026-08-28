@@ -1474,10 +1474,33 @@ namespace EmEn::Scenes::Loaders
 				}
 			}
 
-			/* ⚠️ The axis flip is baked into the VERTEX DATA here — positions and normals alike.
-			 * A normal needs no special case: the inverse-transpose of a diagonal ±1 matrix is the
-			 * matrix itself. Tangents are not read from the asset (the shape generator derives them
-			 * from the mirrored positions and UVs), so they follow for free. */
+			/* Authored tangents (glTF `TANGENT`, a vec4 whose W is the bitangent handedness).
+			 *
+			 * ⚠️ This is ALL-OR-NOTHING per mesh, and deliberately so: the tangent computation
+			 * below runs over the whole shape and would OVERWRITE the authored tangents of the
+			 * primitives that did supply them. A mesh where only some primitives carry TANGENT
+			 * therefore falls back to computing every one, and says so — silently keeping half
+			 * the authored tangents and recomputing the other half is the worse outcome, because
+			 * the two halves would disagree at the seam. */
+			bool allPrimitivesHaveTangents = !glTFMesh.primitives.empty();
+			bool somePrimitivesHaveTangents = false;
+
+			for ( const auto & primitive : glTFMesh.primitives )
+			{
+				if ( primitive.findAttribute("TANGENT") != primitive.attributes.end() )
+				{
+					somePrimitivesHaveTangents = true;
+				}
+				else
+				{
+					allPrimitivesHaveTangents = false;
+				}
+			}
+
+			if ( somePrimitivesHaveTangents && !allPrimitivesHaveTangents )
+			{
+				TraceWarning{ClassId} << "Mesh '" << glTFMesh.name << "': only some primitives declare TANGENT — recomputing tangents for the whole mesh, the authored ones are discarded.";
+			}
 
 			/* Second pass: fill vertices and triangles directly into pre-allocated vectors. */
 			const bool buildSuccess = shape->build([&] (auto & groups, auto & vertices, auto & triangles) {
@@ -1534,6 +1557,31 @@ namespace EmEn::Scenes::Loaders
 							vertices[globalVertexOffset + index].setNormal(Vector< 3, float >{v.x(), v.y(), v.z()});
 							index++;
 						}, adapter);
+					}
+
+					/* Read authored tangents directly into vertex array.
+					 *
+					 * ⚠️⚠️ `TANGENT` is a **vec4**, and its W is the BITANGENT HANDEDNESS (±1),
+					 * not a homogeneous coordinate. It is the only thing that distinguishes a
+					 * mirrored UV island from a plain one: the bitangent is
+					 * `cross(normal, tangent) * w`. Dropping W — which is what happened until
+					 * 2026-08-28, when the accessor was not read at all — lights the normal map
+					 * BACKWARDS on every mirrored island. `ShapeVertex::setTangent(Vector<4>)`
+					 * stores the handedness and `biNormal()` applies it. */
+					if ( allPrimitivesHaveTangents )
+					{
+						const auto * const tangentIt = glTFPrimitive.findAttribute("TANGENT");
+
+						if ( tangentIt != glTFPrimitive.attributes.end() )
+						{
+							const auto & tangentAccessor = asset.accessors[tangentIt->accessorIndex];
+							size_t index = 0;
+
+							fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, tangentAccessor, [&] (const fastgltf::math::fvec4 & v) {
+								vertices[globalVertexOffset + index].setTangent(Vector< 4, float >{v.x(), v.y(), v.z(), v.w()});
+								index++;
+							}, adapter);
+						}
 					}
 
 					/* Read texture coordinates directly into vertex array. */
@@ -1660,11 +1708,19 @@ namespace EmEn::Scenes::Loaders
 				geometryFlags |= EnableInfluence | EnableWeight;
 			}
 
-			/* Phase 2: Tangent computation + GPU upload on thread pool. */
+			/* Phase 2: Tangent computation + GPU upload on thread pool.
+			 *
+			 * ⚠️ The computation is SKIPPED when the asset authored its tangents — glTF requires
+			 * the authored ones to be used, and the engine's derivation loses the handedness (it
+			 * only computes the tangent, leaving `biNormal()` to assume a +1 sign). Recomputing
+			 * over authored data is not a harmless refresh: it discards the mirroring. */
 			auto geometry = m_resources.container< IndexedVertexResource >()
-				->getOrCreateResource(geoName, [shape] (auto & geometryResource) {
-					shape->computeTriangleTangent();
-					shape->computeVertexTangent();
+				->getOrCreateResource(geoName, [shape, allPrimitivesHaveTangents] (auto & geometryResource) {
+					if ( !allPrimitivesHaveTangents )
+					{
+						shape->computeTriangleTangent();
+						shape->computeVertexTangent();
+					}
 
 					return geometryResource.load(*shape);
 				}, geometryFlags);

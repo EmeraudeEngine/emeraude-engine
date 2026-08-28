@@ -170,10 +170,23 @@ the FBX path whose keys changed identically.
   now the SOLE remaining cause of this model's failure. The loader logs it and drops it
   (`GLTFLoader.cpp:997`); the asset declares 0.39270 rad and the arrow lands on the yellow
   "not applied" marker instead of the green one.
-- [ ] Supplied tangents ignored (`NormalTangentMirrorTest`). Measured: the `Geometry` and `Normal`
-  columns hold a level horizon (means 91.3° and 94.4°, spreads 12.8° and 17.1° over five
-  roughnesses), while `V Mirror` and `U Mirror` scatter over **263.8°** and **274.1°**. The
-  reflection is rotated, not merely flipped.
+- [x] **Supplied tangents — READ 2026-08-28** (`NormalTangentMirrorTest`). The accessor was not
+  read at all, and the bitangent handedness did not exist anywhere in the cascade:
+  `ShapeVertex::biNormal()` was a bare `cross(normal, tangent)`, so mirrored UV islands got a
+  flipped bitangent. `ShapeVertex` gained a signed handedness member (neutral +1 ⇒ bit-exact no-op
+  for every other loader and every generated shape), `setTangent(Vector<4>)` stops dropping W, and
+  the loader skips its own tangent computation when the asset authored them.
+  Measured (highlight angle per column, five roughnesses): the two mirrored columns go from a
+  circular spread of **107.7°** and **102.9°** (deviating −115.3° / −110.8° from `Geometry`) to
+  **1.8°** and **1.3°** at −7.8° / −12.1°, the same family as the already-passing `Normal` column
+  (−6.3°). Controls: `Geometry` and `Normal` **identical to the decimal**, `NormalTangentTest`
+  **bit-identical on all three views**, `MetalRoughSpheres` delta 1. `BoomBox` reads visibly
+  crisper; `WaterBottle` and `SheenCloth` differ in micro-detail only. Zero VUID.
+  ⚠️ Side effects to know: it is **all-or-nothing per mesh** (a mixed mesh recomputes everything and
+  logs it), and `sizeof(ShapeVertex)` 80 → 84 forced the **native format version to 2** with no v1
+  read path — `FileFormatNative` writes vertices as a raw blob, so a size change with an unchanged
+  version is silent corruption. New base tests: `test_VertexFactoryShapeVertex.cpp` (6 cases,
+  including a `sizeof` pin) + a v1-rejection case; base suite 2029 → **2036**.
 - [ ] `COLOR_0` not multiplied: zero occurrences in the loader, and the capture shows the README's
   literal failure signature — a cyan X on the red check, magenta on the green, yellow on the blue.
 - [ ] **Full conformance re-judgement against each model's README is NOT done.** The 2026-08-28

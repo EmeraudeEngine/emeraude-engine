@@ -498,8 +498,7 @@ but it forfeits the entire benefit — this is a safety net, not a supported tar
 #### Known gaps (glTF 2.0)
 
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
-`TRIANGLES` is the only primitive mode read; authored `TANGENT` is ignored and always recomputed
-(the bitangent `w` is lost); no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
+`TRIANGLES` is the only primitive mode read; no `TEXCOORD_1+` (no multi-UV), no `COLOR_0`, no `JOINTS_1/WEIGHTS_1`
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
 filters are not, nor is the per-`TextureInfo` `texCoord` index; `KHR_texture_transform`'s
 **rotation** is parsed and dropped with a warning (offset and scale are applied);
@@ -508,6 +507,32 @@ the code look supportive of them; the clearcoat, sheen, transmission and iridesc
 read only their scalar factors, never their textures; animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
 impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**Authored `TANGENT` is READ since 2026-08-28** (it was ignored and always recomputed, and the
+bitangent handedness did not exist). glTF's `TANGENT` is a **vec4** whose W is the bitangent
+handedness (±1): the bitangent is `cross(normal, tangent) * w`, and that sign is the ONLY thing
+distinguishing a mirrored UV island. `ShapeVertex` gained a handedness member in emeraude-base
+(neutral +1, so every other loader and every generated shape is a **bit-exact no-op**), and the
+loader now skips its own tangent computation when the asset authored them — recomputing over
+authored data discards the mirroring, since the engine's derivation produces only the tangent and
+leaves `biNormal()` assuming +1.
+⚠️ **It is ALL-OR-NOTHING per mesh**, deliberately: the computation runs over the whole shape and
+would overwrite the authored tangents of the primitives that did supply them. A mesh where only
+some primitives carry `TANGENT` recomputes every one and logs it — keeping half authored and half
+computed makes the two disagree at the seam.
+⚠️⚠️ **`sizeof(ShapeVertex)` went 80 → 84 and `FileFormatNative` writes vertices as a RAW BLOB**,
+so the native format version was bumped to 2 with no v1 read path (the format had no users; owner
+decision 2026-08-28). A size change with an unchanged version is silent corruption.
+Measured on `NormalTangentMirrorTest`, highlight angle per column over five roughnesses: the two
+mirrored columns go from a circular spread of **107.7°** and **102.9°** — deviating −115.3° and
+−110.8° from the `Geometry` reference — to **1.8°** and **1.3°**, sitting at −7.8° and −12.1°, the
+same family as the already-passing `Normal` column (−6.3°). The `Geometry` and `Normal` columns
+come out **identical to the decimal**, which is the control: they carry no mirrored UVs and must
+not move. `NormalTangentTest` (no `TANGENT` in the asset) is **bit-identical on all three views**.
+The three other assets that author tangents changed and did not regress: `BoomBox` (delta 97) reads
+visibly crisper — speaker grilles, button rims, label text — because the normal map finally matches
+the frame it was authored against; `WaterBottle` (delta 30-54) and `SheenCloth` (delta 3-4) differ
+only in micro-detail.
 
 **`KHR_materials_specular` + `KHR_materials_ior` — FACTORS WIRED 2026-08-28, textures still not.**
 ⚠️⚠️ Their **GPU side was already complete and spec-exact**, and had been for an unknown number of

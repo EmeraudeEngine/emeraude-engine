@@ -1375,6 +1375,46 @@ the material translucent. `alphaEnabled()` is read nowhere outside the component
 documented promise to "request a 4-channel texture" is **not implemented** — the sampled `.a` is
 whatever the loaded image happens to carry (1.0 when it has no alpha, which is the identity here).
 
+### Fixed: the bitangent handedness did not exist, so mirrored UVs lit backwards (Aug 2026)
+
+> [!CRITICAL]
+> `ShapeVertex::biNormal()` was a bare `cross(normal, tangent)`, and
+> `setTangent(Vector<4>)` **silently dropped its W**. That W is the **bitangent handedness** (±1),
+> not a homogeneous coordinate: the bitangent is `cross(normal, tangent) * w`, and the sign is the
+> only thing that distinguishes a **mirrored UV island** from a plain one. Every mirrored island in
+> every asset therefore lit its normal map backwards. `GLTFLoader` compounded it by never reading
+> the `TANGENT` accessor at all and always recomputing.
+
+**Why it is so easy to miss.** Mirroring is invisible on the half of a model that is not mirrored,
+and the defect never produces an error, a black frame or a validation warning — it produces a
+*plausible* shading that is wrong only where the UVs fold. Mirrored UVs are ubiquitous in
+production art (any symmetric character, vehicle or prop), so the blast radius is large and the
+symptom is diffuse.
+
+**Measured** on the Khronos `NormalTangentMirrorTest`, highlight angle per column over five
+roughnesses: the two mirrored columns had a circular spread of **107.7°** and **102.9°**, deviating
+−115.3° and −110.8° from the `Geometry` reference column (spread 0.3°). After reading the accessor
+and carrying the handedness: spread **1.8°** and **1.3°**, at −7.8° and −12.1° — the same family as
+the `Normal` column (−6.3°) that already passed.
+
+**The controls that make it a proof, not a change:** the `Geometry` and `Normal` columns come out
+**identical to the decimal** (they carry no mirrored UVs and must not move); `NormalTangentTest`,
+whose asset declares no `TANGENT`, is **bit-identical on all three views**; the handedness defaults
+to **+1**, so every other loader and every generated shape is a bit-exact no-op. On the three other
+tangent-authoring assets there was no regression — `BoomBox` reads visibly crisper, its normal map
+finally matching the frame it was authored against.
+
+⚠️ **Two side effects worth knowing.**
+- The read is **all-or-nothing per mesh**: the tangent computation runs over the whole shape, so a
+  mesh where only some primitives declare `TANGENT` recomputes every one and logs it. Half authored
+  and half computed would disagree at the seam.
+- `sizeof(ShapeVertex)` went **80 → 84**, and `FileFormatNative` writes vertices as a **raw blob**
+  of that size, so the native format version was bumped to 2 with no version-1 read path (the
+  format had no users yet — owner decision). ⚠️⚠️ **A size change to `ShapeVertex` or
+  `ShapeTriangle` with an unchanged format version is silent data corruption**: the reader's count
+  validation can pass on a wrong stride. The size is pinned by a unit test so the failure is a red
+  test rather than a corrupt file.
+
 ## Scene Rendering
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)
