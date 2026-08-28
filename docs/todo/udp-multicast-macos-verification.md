@@ -121,8 +121,26 @@ implementation detail and each platform keeps the type its own manual specifies.
   2. The local build is **ad-hoc / linker-signed** (`Info.plist=not bound`, `Sealed Resources=none`).
      TCC identity on such a bundle is not a shipped bundle's identity; a real Developer ID signature
      is part of what "packaged" means here.
-- [ ] The app's own JS path on macOS (`--mode=test` → the dev-check mDNS card). Only the engine
-  layer was exercised.
+- [x] **The app's own JS path on macOS — done 2026-08-28** (`--mode=test`, dev-check mDNS card
+  driven over CDP, exactly as Windows was, so the two runs compare). Bind `0.0.0.0:5353` beside the
+  system `mDNSResponder`, TTL 255 + loopback, join `224.0.0.251` on **both** real NICs
+  (`192.168.1.61`, `192.168.1.26`) with **zero failures** — the APIPA trap that bites Windows has no
+  equivalent here — DNS-SD service enumeration answered by **5 LAN hosts** plus our own query back
+  through the loopback, idempotent re-join accepted, `dropMembership` on a never-joined group
+  tolerated, `close(cb)` + `"close"` event both fired.
+  It also produced **the macOS half of the `close()` measurement**, which this item had only for
+  Windows: with a `receive()` parked on **3000 ms**, `close()` returns in **20.0 ms**; on 1000 ms,
+  **14.7 ms** — bounded by the poll slice and independent of the receive timeout, the same contract
+  Windows shows at 62 ms. Through the `dgram` shim's drain loop it is 24.9 ms. So the fix is now
+  measured, not inferred, on the platform where the bug was found.
+  Same sitting, same JS path: the native `TCP.server`/`TCP.client` bindings and the `net` wrapper's
+  full loopback demo (connect, data both ways, `peerClosed`, server stop) also pass, and the
+  `TCPServer` `"::"` dual-stack fix was confirmed end to end — an **IPv4** peer connecting to a
+  `"::"` listener is accepted. ⚠️ macOS never exhibited that symptom (`net.inet6.ip6.v6only = 0`),
+  so this confirms the fix does no harm; **Windows still owns the confirmation that it helps.**
+  ⚠️ No *Local Network* permission prompt appeared — expected, and it still proves nothing: this ran
+  from an already-authorised Terminal on an ad-hoc-signed bundle. The packaged case below is
+  untouched by this run.
 - [x] ⚠️ **Linux, a RE-RUN — done 2026-08-28**, `tools/net-check`: **48 pass / 0 fail / 1 warn**,
   identical under `-fsanitize=address,undefined`. The `int` width is accepted and the TTL reads
   back as **255** through it; this kernel accepts **both** widths, like macOS 26. The replay also
@@ -137,11 +155,17 @@ implementation detail and each platform keeps the type its own manual specifies.
   On a machine with no link that list came back **empty**, silently disabling every discovery loop
   built on it. Fixed the same day, `#if defined(__linux__)`-scoped, with the harness assertion
   aligned (hence 48 and no longer 47). See `src/Net/AGENTS.md § Network Interfaces`.
-- [ ] ❓ **Windows, one datum left on this subject**: does `enumerateMulticastCapable()` keep the
-  loopback pseudo-interface there, and can `127.0.0.1` actually be joined? The Linux fix was
-  deliberately **not** extended to Windows without that measurement — an entry that cannot be
-  joined is exactly the dead-interface trap recorded below. The `[ OK ]/[FAIL] loopback is kept`
-  line of `net_check.exe` answers it in one run.
+- [x] ✅ **Windows, the last datum on this subject — answered 2026-08-28** by the Windows run
+  (`net_check.exe`, 47/0/2, exit 0). `loopback is kept (single-machine multicast)` → **OK**:
+  `enumerateMulticastCapable()` returns two entries there, `Ethernet 192.168.1.58` **and**
+  `Loopback Pseudo-Interface 1 127.0.0.1`, and the mDNS join succeeds on the latter
+  (`joined 224.0.0.251 on Loopback Pseudo-Interface 1 (127.0.0.1)`) — so `127.0.0.1` really is
+  joinable in multicast on Windows, not a dead entry.
+  **Windows sets the multicast flag on its own loopback** (`enumerate()` reports
+  `up loopback multicast`), so the Linux `IFF_MULTICAST` exemption is **not needed** there, merely
+  harmless. Keeping that fix Linux-scoped is therefore right, and for the stated reason: the
+  exemption exists because Linux lies about the flag, and Windows does not.
+  **The multicast subject is closed on the data side.**
 - [x] **Windows — done 2026-08-28**, through app_system's JS path (`--mode=test`, dev-check mDNS
   fixture over CDP): bind `0.0.0.0:5353`, TTL 255 + loopback, join on the real NIC, DNS-SD
   enumeration answered by **6 LAN hosts**, idempotent re-join, tolerant drop, `close(cb)` +
