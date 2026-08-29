@@ -3117,6 +3117,27 @@ namespace EmEn::Graphics::Material
 			/* Declaration may fail if already declared — this is acceptable. */
 		}
 
+		/* ⚠️ FROSTED GLASS: a rough transmissive surface must read a BLURRED copy of the scene
+		 * behind it, which is a LOD away now that the colour grab pass carries a mip chain
+		 * (Graphics/GrabPass.cpp). The mapping is the Khronos reference's, verbatim:
+		 *
+		 *   applyIorToRoughness(r, ior) = r * clamp(ior * 2 - 2, 0, 1)
+		 *   lod                         = log2(framebufferWidth) * applyIorToRoughness(...)
+		 *
+		 * The IOR term is what keeps an ior of 1 (air) perfectly sharp however rough the
+		 * surface claims to be: with no refractive interface there is nothing to scatter.
+		 *
+		 * ⚠️ The roughness comes from the TEXTURE variable when a map drives it — the UBO
+		 * scalar is only the FACTOR in that case — exactly as the cubemap transmission path
+		 * resolves it. Reading the UBO unconditionally would blur a rough-mapped surface
+		 * uniformly. */
+		const auto roughnessComponent = m_components.find(ComponentType::Roughness);
+		const auto blurRoughness = roughnessComponent != m_components.cend()
+			? roughnessComponent->second->variableName()
+			: std::string{MaterialUB(UniformBlock::Component::Roughness)};
+
+		const auto grabPassSampler = std::string{Bindless::Textures2D} + "[" + GLSL::Functions::NonUniformEXT + "(" + std::to_string(BindlessTextureManager::GrabPassSlot) + ")]";
+
 		if ( generator.highQualityEnabled() )
 		{
 			/* High quality: use reflectionNormal and reflectionI for accurate per-pixel refraction. */
@@ -3216,7 +3237,9 @@ namespace EmEn::Graphics::Material
 			{
 				/* Chromatic dispersion: 3 GrabPass samples with different IOR offsets per channel. */
 				Code(fragmentShader, Location::Top) <<
-					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << grabPassSampler << ", 0));" << Line::End <<
+					"/* Frosted glass: roughness -> mip level of the grab pass. */" << Line::End <<
+					"float gpBlurLod = log2(float(textureSize(" << grabPassSampler << ", 0).x)) * clamp(" << blurRoughness << " * clamp(" << MaterialUB(UniformBlock::Component::RefractionIOR) << " * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);" << Line::End <<
 					"float baseIOR = " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 					"float gpSpread = (baseIOR - 1.0) * " << MaterialUB(UniformBlock::Component::Dispersion) << " / 20.0;" << Line::End <<
 					"float gpEtaR = 1.0 / (baseIOR - gpSpread * 0.5);" << Line::End <<
@@ -3233,16 +3256,18 @@ namespace EmEn::Graphics::Material
 						: std::string{"vec2 gpOffsetR = vec2(0.0);\n"
 						  "vec2 gpOffsetG = vec2(0.0);\n"
 						  "vec2 gpOffsetB = vec2(0.0);\n"}) <<
-					"float convergR = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetR, vec2(0.001), vec2(0.999))).r;" << Line::End <<
-					"float convergG = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetG, vec2(0.001), vec2(0.999))).g;" << Line::End <<
-					"float convergB = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetB, vec2(0.001), vec2(0.999))).b;" << Line::End <<
+					"float convergR = textureLod(" << grabPassSampler << ", clamp(gpScreenUV + gpOffsetR, vec2(0.001), vec2(0.999)), gpBlurLod).r;" << Line::End <<
+					"float convergG = textureLod(" << grabPassSampler << ", clamp(gpScreenUV + gpOffsetG, vec2(0.001), vec2(0.999)), gpBlurLod).g;" << Line::End <<
+					"float convergB = textureLod(" << grabPassSampler << ", clamp(gpScreenUV + gpOffsetB, vec2(0.001), vec2(0.999)), gpBlurLod).b;" << Line::End <<
 					"const vec3 " << SurfaceTransmissionColor << " = vec3(convergR, convergG, convergB);";
 			}
 			else
 			{
 				/* Standard GrabPass refraction without dispersion. */
 				Code(fragmentShader, Location::Top) <<
-					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << grabPassSampler << ", 0));" << Line::End <<
+					"/* Frosted glass: roughness -> mip level of the grab pass. */" << Line::End <<
+					"float gpBlurLod = log2(float(textureSize(" << grabPassSampler << ", 0).x)) * clamp(" << blurRoughness << " * clamp(" << MaterialUB(UniformBlock::Component::RefractionIOR) << " * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);" << Line::End <<
 					"float gpEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 					(projectedRayAvailable
 						? "vec3 gpRefractDir = refract(gpIncidentView, gpNormalView, gpEta);\n"
@@ -3250,17 +3275,20 @@ namespace EmEn::Graphics::Material
 						  "vec2 gpOffset = grabPassRefractionOffset(gpRefractDir, gpRayScale, gpClipHere, gpProjection);\n"
 						: std::string{"vec2 gpOffset = vec2(0.0);\n"}) <<
 					"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
-					"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
+					"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << grabPassSampler << ", gpRefractedUV, gpBlurLod).rgb;";
 			}
 		}
 		else
 		{
-			/* Low quality: use a simple offset based on the normal world space and gl_FragCoord. */
+			/* Low quality: a crude offset from the world normal — this tier has no per-pixel
+			 * refraction basis. The roughness blur still applies: it costs one textureLod and it
+			 * is the cheap tier's best approximation of frosted glass. */
 			Code(fragmentShader, Location::Top) <<
-				"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+				"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << grabPassSampler << ", 0));" << Line::End <<
+				"float gpBlurLod = log2(float(textureSize(" << grabPassSampler << ", 0).x)) * clamp(" << blurRoughness << " * clamp(" << MaterialUB(UniformBlock::Component::RefractionIOR) << " * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);" << Line::End <<
 				"vec2 gpOffset = " << ShaderVariable::NormalWorldSpace << ".xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.03;" << Line::End <<
 				"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
-				"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << grabPassSampler << ", gpRefractedUV, gpBlurLod).rgb;";
 		}
 
 		/* Depth-based opacity: sample the grab pass depth buffer to compute water column thickness. */

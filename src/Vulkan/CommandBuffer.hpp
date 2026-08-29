@@ -352,6 +352,21 @@ namespace EmEn::Vulkan
 			void blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkFilter filter = VK_FILTER_LINEAR) const noexcept;
 
 			/**
+			 * @brief Blits an explicit region from a source image to a destination image.
+			 * @note Same contract as the whole-image overload, but the caller fully controls the
+			 * subresources and offsets — mip-chain generation blits an image onto itself, level
+			 * N-1 to level N, which the whole-image overload cannot express.
+			 * @param src A reference to the source image.
+			 * @param srcLayout The current layout of the source image subresource.
+			 * @param dst A reference to the destination image.
+			 * @param dstLayout The current layout of the destination image subresource.
+			 * @param region A reference to the blit region.
+			 * @param filter The filter to apply during the blit. Default linear.
+			 * @return void
+			 */
+			void blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, const VkImageBlit & region, VkFilter filter = VK_FILTER_LINEAR) const noexcept;
+
+			/**
 			 * @brief Copies a region from a source image to a destination image.
 			 * @note Unlike blitImage, this performs an exact pixel copy (no filtering/scaling).
 			 * Supports depth formats that may not have blit support.

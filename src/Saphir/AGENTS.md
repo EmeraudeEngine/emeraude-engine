@@ -578,6 +578,24 @@ as a **flat** output — it is a per-draw/per-instance constant, never per-verte
 
   The residue at 1.00 is the silhouette, where `dot(N, I) > 0` and the identity no longer holds.
 
+**Frosted glass — roughness drives the LOD.** The colour grab pass carries a mip chain
+(`src/Graphics/AGENTS.md` § 15c-bis), so a rough transmissive surface reads a blurred copy of the
+scene behind it. The mapping is the Khronos reference's, verbatim:
+
+```glsl
+lod = log2(float(textureSize(grabPass, 0).x)) * clamp(roughness * clamp(ior * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);
+```
+
+⚠️ The **IOR term is not decoration**: it keeps `ior = 1` (air) perfectly sharp however rough the
+surface claims to be — with no refractive interface there is nothing to scatter. That gives the
+second free criterion on `TransmissionRoughnessTest`, measured as mean gradient per grid cell:
+sharpness collapses along the roughness columns (10-14 down to 0.06) on every IOR row **except**
+`1.00`, which stays at 10-13 across all nine columns.
+
+⚠️ The roughness is read from the **texture variable** when a map drives it — the UBO scalar is only
+the FACTOR in that case, exactly as the cubemap transmission path resolves it. Reading the UBO
+unconditionally would blur a rough-mapped surface uniformly.
+
 ⚠️ Total internal reflection makes `refract()` return the **zero vector**; normalising it is a NaN
 that poisons the whole sample. `grabPassRefractionOffset()` returns no displacement instead, and
 also bails when either clip `w` is ≤ 0 (behind the eye), where the perspective divide is meaningless.

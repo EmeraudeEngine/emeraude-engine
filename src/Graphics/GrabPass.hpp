@@ -436,6 +436,7 @@ namespace EmEn::Graphics
 
 			/* Color grab pass resources. */
 			std::shared_ptr< Vulkan::Image > m_image;
+			uint32_t m_colorMipLevels{1}; /* ⚠️ COLOR only: the depth/normals/matprops grabs stay single-level, they are read as exact per-pixel values. */
 			std::shared_ptr< Vulkan::ImageView > m_imageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
 

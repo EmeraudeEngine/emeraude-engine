@@ -549,6 +549,28 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, const VkImageBlit & region, VkFilter filter) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !src.isCreated() || !dst.isCreated() || !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The source image, the destination image or the command buffer is not created.");
+
+				return;
+			}
+		}
+
+		vkCmdBlitImage(
+			m_handle,
+			src.handle(), srcLayout,
+			dst.handle(), dstLayout,
+			1, &region,
+			filter
+		);
+	}
+
+	void
 	CommandBuffer::copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkImageAspectFlags aspectMask) const noexcept
 	{
 		if constexpr ( IsDebug )
