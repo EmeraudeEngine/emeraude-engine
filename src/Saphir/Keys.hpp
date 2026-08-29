@@ -728,6 +728,7 @@ namespace EmEn::Saphir
 			/* Material specific (PBR Iridescence) */
 			constexpr auto IridescenceSampler{"uIridescenceSampler"};
 			constexpr auto IridescenceThicknessSampler{"uIridescenceThicknessSampler"};
+			constexpr auto VolumeThicknessSampler{"uVolumeThicknessSampler"};
 			/* Material specific (Height/Parallax) */
 			constexpr auto HeightSampler{"uHeightSampler"};
 			/* Lighting specific */

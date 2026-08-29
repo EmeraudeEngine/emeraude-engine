@@ -486,6 +486,9 @@ namespace EmEn::Graphics
 			case ComponentType::IridescenceThickness :
 				return IridescenceThicknessString;
 
+			case ComponentType::VolumeThickness :
+				return VolumeThicknessString;
+
 			case ComponentType::Invalid :
 				return InvalidString;
 		}
@@ -609,6 +612,11 @@ namespace EmEn::Graphics
 		if ( value == IridescenceThicknessString )
 		{
 			return ComponentType::IridescenceThickness;
+		}
+
+		if ( value == VolumeThicknessString )
+		{
+			return ComponentType::VolumeThickness;
 		}
 
 		if ( value == SpecularColorString )

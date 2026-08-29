@@ -118,6 +118,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceTransmissionColor{"SurfaceTransmissionColor"};
 			static constexpr auto SurfaceIridescenceFactor{"SurfaceIridescenceFactor"};
 			static constexpr auto SurfaceIridescenceThickness{"SurfaceIridescenceThickness"};
+			static constexpr auto SurfaceVolumeThickness{"SurfaceVolumeThickness"};
 			static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
 			static constexpr auto SurfaceSpecularFactor{"SurfaceSpecularFactor"};
 			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
@@ -994,6 +995,30 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setTransmissionComponentFromGrabPass (float factor = DefaultTransmissionFactor, const Base::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
+
+		/**
+		 * @brief Sets the volume THICKNESS map (KHR_materials_volume).
+		 * @warning This function is available before creation time.
+		 * @note Its **G** channel MULTIPLIES `thicknessFactor`, giving a per-pixel volume depth. It
+		 * feeds BOTH consumers of the thickness: Beer's law absorption and the LENGTH of the
+		 * refraction ray whose exit point the screen-space refraction projects. It is DATA, never
+		 * sRGB. Without it the factor applies uniformly.
+		 * @param texture A reference to a texture smart pointer for the thickness map.
+		 * @return bool
+		 */
+		bool setVolumeThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+
+		/**
+		 * @brief Returns the GLSL expression giving the volume thickness at this fragment.
+		 * @note ⚠️ THE single place the thickness is resolved. It has TWO consumers that must never
+		 * disagree — Beer's law absorption in the light generator, and the LENGTH of the refraction
+		 * ray whose exit point the screen-space refraction projects (three sites: standard,
+		 * dispersion, low quality). KHR_materials_volume's thicknessTexture MULTIPLIES the factor,
+		 * it does not replace it.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string volumeThicknessExpression () const noexcept;
 
 			/**
 			 * @brief Enables or disables depth-based opacity for GrabPass transmission.

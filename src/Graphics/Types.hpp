@@ -428,6 +428,10 @@ namespace EmEn::Graphics
 		 * A SEPARATE map from `Iridescence` (which carries the factor in its R channel): glTF
 		 * declares two textures for that one extension, so the material needs two slots. */
 		IridescenceThickness = 24,
+		/** @brief KHR_materials_volume's thicknessTexture — the volume thickness in its **G**
+		 * channel, MULTIPLYING thicknessFactor. It is what makes a moulded glass refract unevenly:
+		 * thick at the base, thin at the rim. */
+		VolumeThickness = 25,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -464,6 +468,7 @@ namespace EmEn::Graphics
 	constexpr auto SpecularKHRString{"Specular"};
 	constexpr auto SpecularColorString{"SpecularColor"};
 	constexpr auto IridescenceThicknessString{"IridescenceThickness"};
+	constexpr auto VolumeThicknessString{"VolumeThickness"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.

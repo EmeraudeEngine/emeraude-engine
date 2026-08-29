@@ -605,6 +605,46 @@ exit point's, rather than using the projected exit point outright the way the Kh
 That makes it immune to the TAA sub-pixel jitter — a constant NDC translation carried by both terms,
 so it cancels exactly — whereas `gl_FragCoord` already carries the jitter.
 
+### One ambient Fresnel for every branch — `ambientFresnelDeclaration()` (Aug 2026)
+
+The ambient pass has **four** branches that split light with a Fresnel term: refraction,
+reflection+transmission, reflection-only, and thin-surface transmission. They had drifted apart on
+two axes at once:
+
+- only the **reflection-only** branch knew about iridescence, so a surface that was both iridescent
+  and transmissive rendered iridescent in the 26 light passes and plainly dielectric in the ambient
+  one — measured on `IridescentDishWithOlives.glb`: 26 light-pass shaders carried
+  `evalIridescence`, **zero** ambient shaders did;
+- two of them hardcoded `F0 = 0.04` and ignored `KHR_materials_ior` outright, so a glass authored at
+  ior 1.7 reflected like ior 1.5.
+
+`LightGenerator::ambientFresnelDeclaration(name, F0Expression, NdotVExpression)` is now the only
+place a Schlick term is written, and `dielectricF0Expression()` the only place F0 is derived from the
+IOR (weighted by `KHR_materials_specular`'s factor when present). **Never write a Fresnel inline in
+an ambient branch again.**
+
+⚠️ **Iridescence REPLACES the Fresnel term, it is not layered on top** — the thin film *is* the
+reflectance of the interface. Hence `mix(schlick, evalIridescence(...), iridescenceFactor)`.
+
+⚠️ The term is now a **vec3** everywhere (a film is per-wavelength), so the complements are
+`vec3(1.0) - F`, not `1.0 - F`. `mix(vec3, vec3, vec3)` is valid GLSL and carries the film per
+channel.
+
+⚠️ The reflection-only branch keeps computing **its own F0**, because it is the metal-aware one —
+F0 is mixed toward the albedo by the metalness, which the dielectric-only sites have no use for.
+Only the *composition* is shared. That split is deliberate; do not "unify" it further.
+
+### One volume thickness for both consumers — `volumeThicknessExpression()` (Aug 2026)
+
+`KHR_materials_volume`'s `thicknessTexture` (G channel) **multiplies** `thicknessFactor`, and the
+result has **two** consumers that must never disagree: Beer's law absorption in the light generator,
+and the LENGTH of the refraction ray whose exit point the screen-space refraction projects (three
+sites — standard, dispersion, low quality). `StandardResource::volumeThicknessExpression()` resolves
+it once.
+
+⚠️ **Depth-based opacity overrides it** with the measured water column from the depth grab — a
+different physical quantity. The map has no say there, by design.
+
 ### One thin-film thickness for every pass — `iridescenceThicknessExpression()` (Aug 2026)
 
 `KHR_materials_iridescence` sets the film thickness as `mix(thicknessMin, thicknessMax, texel.g)`

@@ -803,9 +803,9 @@ namespace EmEn::Saphir
 			 * environment luminance, a render-target source (probe/mirror) is already an
 			 * absolute luminance and only takes the artistic weight. */
 			Code{fragmentShader, Location::Output} <<
-				"/* PBR Glass IBL - Fresnel-Schlick approximation. */" "\n"
-				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
-				"const float fresnelFactor = 0.04 + (1.0 - 0.04) * pow(1.0 - NdotV, 5.0);" "\n"
+				"/* PBR Glass IBL - Fresnel split (iridescent when the material declares a film). */" "\n"
+				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
+				this->ambientFresnelDeclaration("fresnelFactor", "vec3(" + this->dielectricF0Expression() + ")", "NdotV") <<
 				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 				"vec3 refractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * " << this->refractionIntensity() << ";" "\n";
 
@@ -866,24 +866,15 @@ namespace EmEn::Saphir
 			Code{fragmentShader, Location::Output} <<
 				"/* PBR Reflection + Transmission - energy-conserving Fresnel blend. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
-				(m_useMaterialIOR
-					? (m_useKHRSpecular
-						? "/* Dielectric F0 from material IOR + KHR_materials_specular. */\n"
-						  "const float materialF0raw = pow((" + m_surfaceMaterialIOR + " - 1.0) / (" + m_surfaceMaterialIOR + " + 1.0), 2.0);\n"
-						  "const float materialF0 = min(materialF0raw * " + m_surfaceKHRSpecularFactor + ", 1.0);\n"
-						  "const float fresnelDielectric = materialF0 + (1.0 - materialF0) * pow(1.0 - NdotV, 5.0);\n"
-						: "/* Dielectric F0 from material IOR (KHR_materials_ior). */\n"
-						  "const float materialF0 = pow((" + m_surfaceMaterialIOR + " - 1.0) / (" + m_surfaceMaterialIOR + " + 1.0), 2.0);\n"
-						  "const float fresnelDielectric = materialF0 + (1.0 - materialF0) * pow(1.0 - NdotV, 5.0);\n")
-					: "/* Dielectric F0=0.04 for accurate glass Fresnel split. */\n"
-					  "const float fresnelDielectric = 0.04 + 0.96 * pow(1.0 - NdotV, 5.0);\n") <<
+				"/* Dielectric F0 from the material IOR, replaced by the thin film when the material declares one. */" "\n" <<
+				this->ambientFresnelDeclaration("fresnelDielectric", "vec3(" + this->dielectricF0Expression() + ")", "NdotV") <<
 				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 				"/* Beer's law absorption for transmission. */" "\n"
 				"const vec3 transAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
 				"const vec3 transmittedLight = " << m_surfaceTransmissionColor << " * transAbsorption * " << this->albedoShaderExpression() << ".rgb;" "\n"
 				"/* F = reflection, (1-F)*transmissionFactor = transmission. */" "\n" <<
 				m_fragmentColor << ".rgb += reflectedColor * fresnelDielectric;" "\n" <<
-				m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (1.0 - fresnelDielectric)" << transmissionScale << ";";
+				m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (vec3(1.0) - fresnelDielectric)" << transmissionScale << ";";
 
 			/* Clear coat IBL on transmissive glass. */
 			if ( m_useClearCoat )
@@ -932,17 +923,15 @@ namespace EmEn::Saphir
 
 			if ( m_useIridescence )
 			{
+				/* ⚠️ This branch keeps its own F0 because it is the METAL-aware one — F0 is mixed
+				 * toward the albedo by the metalness, which the dielectric-only sites have no use
+				 * for. Only the Fresnel COMPOSITION is shared, through ambientFresnelDeclaration(),
+				 * so the film cannot be applied differently here than in the other three. */
 				Code{fragmentShader, Location::Output} <<
 					"/* PBR IBL - Fresnel-Schlick with iridescence. */" "\n" <<
 					iblF0Computation << "\n"
-					"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
-					"const vec3 fresnelIBL_base = iblF0 + (1.0 - iblF0) * pow(1.0 - NdotV, 5.0);" "\n"
-					/* ⚠️ Shared with the light passes: this used to be `mix(min, max, 0.5)` while
-					 * they used 1.0, so one surface carried TWO different films depending on the
-					 * pass. Both now go through iridescenceThicknessExpression(). */
-					"const float iridescenceThickness = " << this->iridescenceThicknessExpression() << ";" "\n"
-					"const vec3 fresnelIBL_iridescence = evalIridescence(1.0, " << m_surfaceIridescenceIOR << ", NdotV, iridescenceThickness, iblF0);" "\n"
-					"const vec3 fresnelIBL = mix(fresnelIBL_base, fresnelIBL_iridescence, " << m_surfaceIridescenceFactor << ");" "\n"
+					"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
+					this->ambientFresnelDeclaration("fresnelIBL", "iblF0", "NdotV") <<
 					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 					"/* IBL contribution modulated by Fresnel and IBL intensity. */" "\n" <<
 					m_fragmentColor << ".rgb += reflectedColor * fresnelIBL;";
@@ -1250,9 +1239,9 @@ namespace EmEn::Saphir
 					"/* Tinted by the base colour (KHR_materials_transmission). */" "\n"
 					"transmittedLight *= " << this->albedoShaderExpression() << ".rgb;" "\n"
 					"/* Fresnel gate: reflected light can't be transmitted. */" "\n"
-					"const float transNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
-					"const float fresnelT = 0.04 + 0.96 * pow(1.0 - transNdotV, 5.0);" "\n" <<
-					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (1.0 - fresnelT) * " << iblIntensity << ";";
+					"const float transNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
+					this->ambientFresnelDeclaration("fresnelT", "vec3(" + this->dielectricF0Expression() + ")", "transNdotV") <<
+					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (vec3(1.0) - fresnelT) * " << iblIntensity << ";";
 			}
 			else
 			{

@@ -2407,7 +2407,10 @@ namespace EmEn::Graphics::Material
 					std::string{SurfaceTransmissionColor},
 					MaterialUB(UniformBlock::Component::AttenuationColor),
 					MaterialUB(UniformBlock::Component::AttenuationDistance),
-					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : MaterialUB(UniformBlock::Component::ThicknessFactor),
+					/* ⚠️ Depth-based opacity OVERRIDES the material thickness with the measured
+					 * water column — a different physical quantity, computed from the depth grab.
+					 * The volume thickness map has no say there, by design. */
+					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : this->volumeThicknessExpression(),
 					/* The grab pass hands over the rendered scene in nits; the environment cubemap
 					 * hands over a normalized [0,1] texel. Only the latter needs to be scaled by
 					 * the sky luminance downstream. */
@@ -3256,7 +3259,7 @@ namespace EmEn::Graphics::Material
 						? "vec3 gpRefractDirR = refract(gpIncidentView, gpNormalView, gpEtaR);\n"
 						  "vec3 gpRefractDirG = refract(gpIncidentView, gpNormalView, gpEtaG);\n"
 						  "vec3 gpRefractDirB = refract(gpIncidentView, gpNormalView, gpEtaB);\n"
-						  "vec3 gpRayScale = " + std::string{MaterialUB(UniformBlock::Component::ThicknessFactor)} + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
+						  "vec3 gpRayScale = " + this->volumeThicknessExpression() + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
 						  "vec2 gpOffsetR = grabPassRefractionOffset(gpRefractDirR, gpRayScale, gpClipHere, gpProjection);\n"
 						  "vec2 gpOffsetG = grabPassRefractionOffset(gpRefractDirG, gpRayScale, gpClipHere, gpProjection);\n"
 						  "vec2 gpOffsetB = grabPassRefractionOffset(gpRefractDirB, gpRayScale, gpClipHere, gpProjection);\n"
@@ -3278,7 +3281,7 @@ namespace EmEn::Graphics::Material
 					"float gpEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 					(projectedRayAvailable
 						? "vec3 gpRefractDir = refract(gpIncidentView, gpNormalView, gpEta);\n"
-						  "vec3 gpRayScale = " + std::string{MaterialUB(UniformBlock::Component::ThicknessFactor)} + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
+						  "vec3 gpRayScale = " + this->volumeThicknessExpression() + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
 						  "vec2 gpOffset = grabPassRefractionOffset(gpRefractDir, gpRayScale, gpClipHere, gpProjection);\n"
 						: std::string{"vec2 gpOffset = vec2(0.0);\n"}) <<
 					"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
@@ -3293,7 +3296,7 @@ namespace EmEn::Graphics::Material
 			Code(fragmentShader, Location::Top) <<
 				"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << grabPassSampler << ", 0));" << Line::End <<
 				"float gpBlurLod = log2(float(textureSize(" << grabPassSampler << ", 0).x)) * clamp(" << blurRoughness << " * clamp(" << MaterialUB(UniformBlock::Component::RefractionIOR) << " * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);" << Line::End <<
-				"vec2 gpOffset = " << ShaderVariable::NormalWorldSpace << ".xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.03;" << Line::End <<
+				"vec2 gpOffset = " << ShaderVariable::NormalWorldSpace << ".xy * " << this->volumeThicknessExpression() << " * 0.03;" << Line::End <<
 				"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
 				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << grabPassSampler << ", gpRefractedUV, gpBlurLod).rgb;";
 		}
@@ -3791,6 +3794,25 @@ namespace EmEn::Graphics::Material
 		}, fragmentShader, materialSet) )
 		{
 			TraceError{ClassId} << "Unable to generate fragment code for the anisotropy component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Volume THICKNESS component (texture-based).
+		 * ⚠️ KHR_materials_volume puts the thickness in the **G** channel, and it MULTIPLIES the
+		 * factor rather than replacing it.
+		 *
+		 * ⚠️⚠️ THIS MUST STAY ABOVE THE TRANSMISSION BLOCK. Both emit at Location::Top, where the
+		 * order is the EMISSION order, and the grab-pass code below consumes this variable in its
+		 * ray length. Generated after, it produced `'SurfaceVolumeThickness' : undeclared
+		 * identifier` at runtime — the C++ compiles either way, only the launched engine says so. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::VolumeThickness, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").g;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the volume thickness component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -5336,6 +5358,51 @@ namespace EmEn::Graphics::Material
 		this->setIridescenceIOR(ior);
 		this->setIridescenceThicknessMin(thicknessMin);
 		this->setIridescenceThicknessMax(thicknessMax);
+
+		return true;
+	}
+
+	std::string
+	StandardResource::volumeThicknessExpression () const noexcept
+	{
+		const auto componentIt = m_components.find(ComponentType::VolumeThickness);
+
+		if ( componentIt == m_components.cend() )
+		{
+			return MaterialUB(UniformBlock::Component::ThicknessFactor);
+		}
+
+		return "(" + componentIt->second->variableName() + " * " + std::string{MaterialUB(UniformBlock::Component::ThicknessFactor)} + ")";
+	}
+
+	bool
+	StandardResource::setVolumeThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the volume thickness component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::VolumeThickness, std::make_unique< Texture >(Uniform::VolumeThicknessSampler, SurfaceVolumeThickness, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for volume thickness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
 	}

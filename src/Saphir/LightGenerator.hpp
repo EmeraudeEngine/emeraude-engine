@@ -654,6 +654,71 @@ namespace EmEn::Saphir
 			 * light passes, which gave the same surface two different films depending on the pass.
 			 * @return std::string
 			 */
+			/**
+			 * @brief Returns the GLSL expression for the DIELECTRIC F0, as a scalar.
+			 * @note Derived from KHR_materials_ior when the material carries one, and further
+			 * weighted by KHR_materials_specular's factor when present. Falls back to the 0.04 of
+			 * a common dielectric.
+			 * @warning ⚠️ Three ambient branches used to hardcode 0.04 and ignore the material IOR
+			 * outright — a glass authored at ior 1.7 reflected like ior 1.5. Use this, never a
+			 * literal.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			dielectricF0Expression () const noexcept
+			{
+				if ( !m_useMaterialIOR )
+				{
+					return "0.04";
+				}
+
+				const auto base = "pow((" + m_surfaceMaterialIOR + " - 1.0) / (" + m_surfaceMaterialIOR + " + 1.0), 2.0)";
+
+				if ( m_useKHRSpecular )
+				{
+					return "min(" + base + " * " + m_surfaceKHRSpecularFactor + ", 1.0)";
+				}
+
+				return base;
+			}
+
+			/**
+			 * @brief Emits the GLSL declaring an ambient-pass Fresnel term as a vec3.
+			 * @note ⚠️⚠️ THE single place where iridescence enters an ambient Fresnel. Four ambient
+			 * branches compute a Fresnel split — refraction, reflection+transmission, reflection
+			 * only, thin-surface transmission — and only ONE of them used to know about
+			 * iridescence, so a surface that was both iridescent and transmissive rendered
+			 * iridescent in the light passes and plainly dielectric in the ambient one. Route every
+			 * split through here; never write a Schlick term inline again.
+			 * @note KHR_materials_iridescence REPLACES the Fresnel term, it is not layered on top:
+			 * the thin film IS the reflectance of the interface.
+			 * @param variableName The name of the vec3 to declare.
+			 * @param F0Expression The GLSL expression giving F0, as a vec3.
+			 * @param NdotVExpression The GLSL expression giving the cosine of the view angle.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			ambientFresnelDeclaration (const std::string & variableName, const std::string & F0Expression, const std::string & NdotVExpression) const noexcept
+			{
+				const auto F0 = variableName + "F0";
+
+				std::string code{"const vec3 " + F0 + " = " + F0Expression + ";\n"};
+
+				const auto schlick = F0 + " + (vec3(1.0) - " + F0 + ") * pow(1.0 - " + NdotVExpression + ", 5.0)";
+
+				if ( !m_useIridescence )
+				{
+					return code + "const vec3 " + variableName + " = " + schlick + ";\n";
+				}
+
+				return code +
+					"const vec3 " + variableName + " = mix(" + schlick + ", evalIridescence(1.0, " +
+					m_surfaceIridescenceIOR + ", " + NdotVExpression + ", " + this->iridescenceThicknessExpression() + ", " + F0 + "), " +
+					m_surfaceIridescenceFactor + ");\n";
+			}
+
 			[[nodiscard]]
 			std::string
 			iridescenceThicknessExpression () const noexcept

@@ -1139,6 +1139,7 @@ namespace EmEn::Scenes::Loaders
 			float volumeThicknessFactor = 0.0F;
 			auto volumeAttenuationDistance = std::numeric_limits< float >::infinity();
 			Color< float > volumeAttenuationColor{1.0F, 1.0F, 1.0F, 1.0F};
+			std::shared_ptr< TextureResource::Texture2D > volumeThicknessTex;
 
 			if ( glTFMaterial.volume != nullptr )
 			{
@@ -1154,13 +1155,15 @@ namespace EmEn::Scenes::Loaders
 					1.0F
 				};
 
-				/* ⚠️ The thickness MAP (G channel, multiplying the factor) is not read: the material
-				 * has no `ComponentType` for a volume thickness — `SubsurfaceThickness` exists but
-				 * means something else — so it would need a new one, exactly as the two specular maps
-				 * did. One asset in the collection uses it (IridescentDishWithOlives' glassCover). */
+				/* The thickness MAP (G channel) MULTIPLIES the factor, giving a per-pixel volume
+				 * depth: thick at a moulded base, thin at a rim.
+				 * ⚠️ It is DATA, never sRGB. ⚠️ `SubsurfaceThickness` is a DIFFERENT quantity and is
+				 * NOT reused here. ⚠️ It feeds BOTH consumers of the thickness — Beer's law and the
+				 * refraction ray's length — through StandardResource::volumeThicknessExpression().
+				 */
 				if ( glTFMaterial.volume->thicknessTexture.has_value() )
 				{
-					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_materials_volume thicknessTexture is not supported yet (the factor is applied), ignored.";
+					volumeThicknessTex = resolveTexture(glTFMaterial.volume->thicknessTexture->textureIndex, false);
 				}
 			}
 
@@ -1331,6 +1334,7 @@ namespace EmEn::Scenes::Loaders
 					anisotropyStrength, anisotropyRotationTurns, anisotropyTex = std::move(anisotropyTex),
 					specularFactor, specularColor, materialIOR,
 					volumeThicknessFactor, volumeAttenuationDistance, volumeAttenuationColor,
+					volumeThicknessTex = std::move(volumeThicknessTex),
 					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex),
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
@@ -1463,6 +1467,13 @@ namespace EmEn::Scenes::Loaders
 					materialResource.setThicknessFactor(volumeThicknessFactor);
 					materialResource.setAttenuationDistance(volumeAttenuationDistance);
 					materialResource.setAttenuationColor(volumeAttenuationColor);
+
+					/* ⚠️ The thickness MAP multiplies the factor set just above, so it goes after
+					 * it for the same reason the factor goes after setTransmissionComponent*(). */
+					if ( volumeThicknessTex != nullptr )
+					{
+						materialResource.setVolumeThicknessComponent(volumeThicknessTex);
+					}
 
 					/* Iridescence (KHR_materials_iridescence). Gated on the factor, which is what the
 					 * extension itself uses to mean "no iridescence" (default 0). */

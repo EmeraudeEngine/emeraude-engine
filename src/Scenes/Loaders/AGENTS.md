@@ -571,8 +571,22 @@ extension's Beer-Lambert formula verbatim (`LightGenerator.PBR.cpp`:
 > engine-side defaults are left alone because they belong to the JSON material format, but they
 > diverge, and anything reading `DefaultAttenuationDistance` should know it is not glTF's.
 
+**Its `thicknessTexture` is READ since 2026-08-29** (`ComponentType::VolumeThickness`, **G**
+channel, DATA never sRGB). It **multiplies** `thicknessFactor` rather than replacing it, and the
+result reaches BOTH consumers through `StandardResource::volumeThicknessExpression()`: Beer's law,
+and the LENGTH of the refraction ray whose exit point the screen-space refraction projects. That
+second consumer is why it now matters visibly — a moulded glass refracts unevenly, thick at the
+base and thin at the rim.
+⚠️ `SubsurfaceThickness` is a DIFFERENT quantity and is not reused for it.
+⚠️ Depth-based opacity OVERRIDES the whole expression with the measured water column from the depth
+grab; the map has no say there, by design.
+⚠️⚠️ The component's generation must stay **above** the transmission block: both emit at
+`Location::Top`, where the order is the EMISSION order, and generating it after produced
+`'SurfaceVolumeThickness' : undeclared identifier` **at runtime** — the C++ compiles either way.
+
 ⚠️ Order matters: `setTransmissionComponentFromGrabPass()` also writes those three slots from its own
-defaults, so the volume must be applied **after** it or it is overwritten.
+defaults, so the volume must be applied **after** it or it is overwritten. The thickness MAP goes
+after the factor for the same reason.
 ⚠️ **Infinity travels through on purpose.** `setAttenuationDistance()` clamps with
 `max(0.0001, value)`, which leaves `+inf` intact, and the shader's `log(colour) / inf` is 0 — no
 absorption. `attenuationColor` is clamped away from zero in the shader so `log()` never returns

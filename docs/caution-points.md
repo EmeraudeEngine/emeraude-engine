@@ -2163,6 +2163,23 @@ variable whenever a feature is "implemented" but invisible.
 ⚠️ Do not expect a warning from anywhere: the GLSL compiler dead-strips a pure texture fetch in
 silence, glslang emits nothing, and the validation layers see a perfectly legal pipeline.
 
+### `Location::Top` orders by EMISSION, so a generator that CONSUMES must run after the one that DECLARES (Aug 2026)
+
+Two blocks of `StandardResource::generatePBRFragmentShader()` both emit at `Location::Top`, and the
+order there is simply the order the C++ ran. Wiring `KHR_materials_volume`'s thickness map into the
+grab-pass ray length put the consumer (the transmission block) **above** the producer (the texture
+component block) and produced, at runtime:
+
+```
+ERROR: 0:132: 'SurfaceVolumeThickness' : undeclared identifier
+```
+
+⚠️ **The C++ compiles either way.** Nothing in the build, and nothing in the generator, notices that
+a texture component is read before it is declared — only the launched engine says so, and only
+because it prints the erroneous GLSL in full. Whenever a component's variable is consumed by another
+generation block, check which of the two runs first, and leave a comment at the site saying so;
+`ComponentType::VolumeThickness` now carries one.
+
 ### The fragment stage has NO view matrix — plan the space you work in before writing the maths (Aug 2026)
 
 Writing a screen-space refraction in world space compiles fine in C++ and dies at GLSL compile time
