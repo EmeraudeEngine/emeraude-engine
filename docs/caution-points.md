@@ -810,7 +810,9 @@ if ( materialType == StandardResource::ClassId )
 > - RTR's SHADOW ray (and both RTGI rays) used `gl_RayFlagsOpaqueEXT`, which accepts every
 >   triangle of a cutout instance whole — a leaf shadowed as a solid quad. Every scene ray now
 >   applies the ONE shared alpha-test rule of `Effects/Framebuffer/RTAlphaTestGLSL.hpp`.
->   RTAO and ContactShadows still take the shortcut (`docs/todo/rtao-contact-shadows-alpha-test.md`).
+>   RTAO and ContactShadows apply it too — ⚠️ at a price that scales with the ray count: RTAO at
+>   full resolution × 8 spp doubled (12.3 → 26.3 ms on Sponza's ivy), at half resolution it costs
+>   7.2 ms, i.e. less than the uncorrected full-res effect. The resolution is the owner's setting.
 
 ### Fixed: removeStaticEntity() forgot the entity BEFORE unlinking its components — ghost lights, pure virtual crash (Jul 2026)
 

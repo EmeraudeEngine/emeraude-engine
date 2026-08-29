@@ -27,6 +27,9 @@
 #include "RTAO.hpp"
 
 /* Local inclusions. */
+#include "RTAlphaTestGLSL.hpp"
+
+/* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -55,12 +58,17 @@ namespace
 	static constexpr auto RTAOTraceFragmentShader = R"GLSL(
 #version 460
 #extension GL_EXT_ray_query : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec2 outAO; /* R = AO, G = depth (for bilateral blur). */
 
-/* RT data (set 0). */
+/* RT data (set 0): the TLAS, and the mesh/material SSBOs the alpha-test rule reads. */
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+)GLSL" EMEN_RT_SCENE_DATA_GLSL(2) EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
 
 /* Input textures (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
@@ -174,15 +182,23 @@ void main()
 		 * than it — at wall/floor creases this erased the occlusion entirely and drew a
 		 * bright line exactly where the AO must be darkest (worse with distance/grazing,
 		 * the adaptive bias can exceed a metre). */
+		/* ⚠️ NOT gl_RayFlagsOpaqueEXT: a cutout instance (foliage) hands its triangles over as
+		 * candidates and the opaque flag accepted them whole — a leaf occluded as a solid quad,
+		 * and the ground under a tree was darkened by the card, not by the leaves. The shared
+		 * alpha-test rule judges each candidate (RTAlphaTestGLSL.hpp); TerminateOnFirstHit
+		 * still ends the traversal at the first CONFIRMED one. */
 		rayQueryEXT rayQuery;
 		rayQueryInitializeEXT(
 			rayQuery, topLevelAS,
-			gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+			gl_RayFlagsTerminateOnFirstHitEXT,
 			0xFF,
 			rayOrigin, 0.001, sampleDir, maxDistance
 		);
 
-		while (rayQueryProceedEXT(rayQuery)) {}
+		while (rayQueryProceedEXT(rayQuery))
+		{
+)GLSL" EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(rayQuery) R"GLSL(
+		}
 
 		/* If the ray hit something, this sample is occluded. */
 		if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
@@ -276,12 +292,24 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* Bindless texture descriptor set layout (set 2) — from BindlessTextureManager. The
+		 * alpha-test rule samples the opacity/albedo texture of a cutout candidate. */
+		auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
+
+		if ( bindlessLayout == nullptr )
+		{
+			TraceError{ClassId} << "Bindless texture descriptor set layout not available !";
+
+			return false;
+		}
+
 		/* ---- Pipeline layouts ---- */
 		{
-			/* Trace: set 0 = RT data (TLAS only), set 1 = depth + normals. */
+			/* Trace: set 0 = RT data (TLAS + SSBOs), set 1 = depth + normals, set 2 = bindless textures. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
+			sets.emplace_back(bindlessLayout);
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
@@ -431,6 +459,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 			/* Bind set 1: Input textures (depth + normals). */
 			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
+
+			/* Bind set 2: Bindless textures (the alpha-test rule samples cutout textures). */
+			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
+			{
+				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
+			}
 
 			commandBuffer.draw(3, 1);
 

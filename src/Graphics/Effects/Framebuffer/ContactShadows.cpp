@@ -26,6 +26,9 @@
 
 #include "ContactShadows.hpp"
 
+/* Local inclusions. */
+#include "RTAlphaTestGLSL.hpp"
+
 /* STL inclusions. */
 #include <cstring>
 
@@ -34,7 +37,6 @@
 #include "Saphir/ShaderManager.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -54,13 +56,22 @@ namespace
 #version 460
 
 #extension GL_EXT_ray_query : require
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 0) uniform sampler2D depthTex;
-layout(set = 0, binding = 1) uniform sampler2D normalTex;
-layout(set = 0, binding = 2) uniform accelerationStructureEXT topLevelAS;
+/* RT data (set 0, the Renderer's set): the TLAS, and the mesh/material SSBOs the alpha-test
+ * rule reads. */
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+)GLSL" EMEN_RT_SCENE_DATA_GLSL(2) EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
+
+/* Input textures (set 1). */
+layout(set = 1, binding = 0) uniform sampler2D depthTex;
+layout(set = 1, binding = 1) uniform sampler2D normalTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -113,10 +124,14 @@ void main()
 
 	/* Initialize and execute the ray query. */
 	rayQueryEXT rayQuery;
+	/* ⚠️ NOT gl_RayFlagsOpaqueEXT: a cutout instance (foliage) hands its triangles over as
+	 * candidates and the opaque flag accepted them whole — a leaf cast a contact shadow as a
+	 * solid quad. The shared alpha-test rule judges each candidate (RTAlphaTestGLSL.hpp);
+	 * TerminateOnFirstHit still ends the traversal at the first CONFIRMED one. */
 	rayQueryInitializeEXT(
 		rayQuery,
 		topLevelAS,
-		gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+		gl_RayFlagsTerminateOnFirstHitEXT,
 		0xFF,
 		worldPos,
 		adaptiveBias,
@@ -126,7 +141,7 @@ void main()
 
 	while (rayQueryProceedEXT(rayQuery))
 	{
-		/* No custom intersection handling needed for opaque geometry. */
+)GLSL" EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(rayQuery) R"GLSL(
 	}
 
 	float shadow = 1.0;
@@ -195,28 +210,35 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* ---- Descriptor set layouts ---- */
-		/* RT shadow pass layout: depth (binding 0) + normals (binding 1) + TLAS (binding 2). */
+		/* ---- Descriptor set layouts ----
+		 * Set 0 = the Renderer's RT set (TLAS + mesh/material SSBOs), set 1 = depth + normals,
+		 * set 2 = the bindless textures. The shadow ray judges its alpha-tested candidates with the
+		 * shared rule (RTAlphaTestGLSL.hpp), which reads the material SSBO and samples cutout
+		 * textures — the effect used to carry a private set with its own TLAS binding and could
+		 * reach neither. */
+		auto rtLayout = renderer.rtDescriptorSetLayout();
+
+		if ( rtLayout == nullptr )
 		{
-			const auto & device = renderer.device();
+			TraceError{TracerTag} << "RT descriptor set layout not available !";
 
-			m_shadowDescLayout = std::make_shared< DescriptorSetLayout >(device, "CS_RTShadow_DSL");
+			return false;
+		}
 
-			if ( !m_shadowDescLayout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT) ||
-				!m_shadowDescLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT) ||
-				!m_shadowDescLayout->declareAccelerationStructureKHR(2, VK_SHADER_STAGE_FRAGMENT_BIT) )
-			{
-				TraceError{TracerTag} << "Failed to declare RT shadow descriptor set layout !";
+		m_shadowInputLayout = this->getInputLayout(2);
 
-				return false;
-			}
+		if ( m_shadowInputLayout == nullptr )
+		{
+			return false;
+		}
 
-			if ( !m_shadowDescLayout->createOnHardware() )
-			{
-				TraceError{TracerTag} << "Failed to create RT shadow descriptor set layout !";
+		auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
 
-				return false;
-			}
+		if ( bindlessLayout == nullptr )
+		{
+			TraceError{TracerTag} << "Bindless texture descriptor set layout not available !";
+
+			return false;
 		}
 
 		/* ---- Pipeline layouts ---- */
@@ -228,7 +250,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(m_shadowDescLayout);
+			sets.emplace_back(rtLayout);
+			sets.emplace_back(m_shadowInputLayout);
+			sets.emplace_back(bindlessLayout);
 			m_shadowLayout = layoutManager.getPipelineLayout(sets, ranges);
 		}
 
@@ -269,8 +293,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* ---- Create descriptor sets ---- */
 
-		/* RT shadow pass: reads depth (binding 0) + normals (binding 1) + TLAS (binding 2). */
-		m_shadowPerFrame = this->createPerFrameDescriptorSets(m_shadowDescLayout, ClassId, "CS_RTShadow_DescSet");
+		/* RT shadow pass, set 1: depth (binding 0) + normals (binding 1). The TLAS comes with
+		 * the Renderer's set 0, bound at record time. */
+		m_shadowPerFrame = this->createPerFrameDescriptorSets(m_shadowInputLayout, ClassId, "CS_RTShadow_DescSet");
 
 		if ( m_shadowPerFrame.empty() )
 		{
@@ -287,7 +312,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_shadowPipeline.reset();
 		m_shadowLayout.reset();
-		m_shadowDescLayout.reset();
+		m_shadowInputLayout.reset();
 
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
@@ -314,7 +339,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		const auto viewProjMat = projMat * viewMat;
 		const auto invViewProjMat = viewProjMat.inverse();
 
-		/* 2. Update per-frame RT shadow descriptor with depth (binding 0), normals (binding 1), and TLAS (binding 2). */
+		/* 2. Update the per-frame input set (set 1): depth (binding 0), normals (binding 1). */
 		if ( inputDepth != nullptr )
 		{
 			static_cast< void >(m_shadowPerFrame[frameIndex]->writeCombinedImageSampler(0, *inputDepth));
@@ -323,14 +348,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( inputNormals != nullptr )
 		{
 			static_cast< void >(m_shadowPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
-		}
-
-		/* Bind the current TLAS for ray queries. */
-		const auto * TLAS = this->renderer().currentTLAS();
-
-		if ( TLAS != nullptr && TLAS->isCreated() )
-		{
-			static_cast< void >(m_shadowPerFrame[frameIndex]->writeAccelerationStructure(2, TLAS->handle()));
 		}
 
 		/* Extract camera position from inverse view matrix. */
@@ -350,15 +367,56 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		shadowPC.viewPosY = inv[13];
 		shadowPC.viewPosZ = inv[14];
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_shadowTarget,
-			*m_shadowPipeline,
-			*m_shadowLayout,
-			*m_shadowPerFrame[frameIndex],
-			&shadowPC,
-			sizeof(ShadowPushConstants)
+		/* Custom recording: THREE sets — the shared fullscreen recorder binds one (plus an
+		 * optional bindless set at index 1), and this pass needs the Renderer's RT set at 0, its
+		 * own inputs at 1 and the bindless textures at 2. */
+		m_shadowTarget.beginRenderPass(commandBuffer);
+
+		commandBuffer.bind(*m_shadowPipeline);
+
+		const VkViewport viewport{
+			.x = 0.0F,
+			.y = 0.0F,
+			.width = static_cast< float >(m_shadowTarget.width()),
+			.height = static_cast< float >(m_shadowTarget.height()),
+			.minDepth = 0.0F,
+			.maxDepth = 1.0F
+		};
+		vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+
+		const VkRect2D scissor{
+			.offset = {0, 0},
+			.extent = {m_shadowTarget.width(), m_shadowTarget.height()}
+		};
+		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
+
+		vkCmdPushConstants(
+			commandBuffer.handle(),
+			m_shadowLayout->handle(),
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			0,
+			sizeof(ShadowPushConstants),
+			&shadowPC
 		);
+
+		/* Set 0: the Renderer's RT set (TLAS + scene SSBOs). */
+		if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
+		{
+			commandBuffer.bind(*rtDescSet, *m_shadowLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
+		}
+
+		/* Set 1: depth + normals. */
+		commandBuffer.bind(*m_shadowPerFrame[frameIndex], *m_shadowLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
+
+		/* Set 2: bindless textures (the alpha-test rule samples cutout textures). */
+		if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
+		{
+			commandBuffer.bind(*bindlessDescSet, *m_shadowLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
+		}
+
+		commandBuffer.draw(3, 1);
+
+		m_shadowTarget.endRenderPass(commandBuffer);
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution

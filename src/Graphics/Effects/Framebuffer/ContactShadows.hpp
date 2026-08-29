@@ -234,7 +234,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_shadowLayout;
 			/* Descriptor set layouts. */
-			std::shared_ptr< Vulkan::DescriptorSetLayout > m_shadowDescLayout;
+			/** @brief Set 1 of the shadow pass: depth + normals. Set 0 is the Renderer's RT set
+			 * (TLAS + scene SSBOs), set 2 the bindless textures — both owned elsewhere. */
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_shadowInputLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_shadowPerFrame;
 	};
