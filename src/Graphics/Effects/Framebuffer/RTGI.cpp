@@ -154,6 +154,12 @@ const float PI = 3.14159265;
 
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture = 1u;
+const uint HasMetalnessTexture = 1u << 3;
+
+/* Packed texel channel index (0:R, 1:G, 2:B, 3:A) — matches
+ * GPURTMaterialData::MetalnessChannelShift. */
+const uint MetalnessChannelShift = 18u;
+const uint ChannelMask = 3u;
 
 /* Light type constants. */
 const float LIGHT_DIRECTIONAL = 0.0;
@@ -562,6 +568,29 @@ void main()
 				}
 			}
 
+			/* A bounce is a DIFFUSE event, so the base color must become the DIFFUSE albedo: a
+			 * metal has no diffuse lobe (its base color is the F0 of its specular one), and
+			 * shading one as a Lambertian sheet re-emits energy it never scatters that way —
+			 * gold (baseColor 1.00/0.72/0.32, metalness 1) bounced 72% of the light back into
+			 * the scene. Same convention as the receiver side (the albedo G-buffer carries the
+			 * diffuse albedo too) and as NVIDIA MathLib: baseColor * saturate(1 - metalness).
+			 * ⚠️ It also damps the multi-bounce series through the SAME albedo product, which is
+			 * what keeps that geometric series convergent. */
+			float hitMetalness = materialSSBO.materials[matBase + 1u].y;
+
+			if ((flags & HasMetalnessTexture) != 0u)
+			{
+				int metalTexIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].w);
+
+				if (metalTexIndex >= 0)
+				{
+					vec2 metalUV = getHitUV(mesh, barycentrics);
+					hitMetalness *= texture(textures2D[nonuniformEXT(metalTexIndex)], metalUV)[(flags >> MetalnessChannelShift) & ChannelMask];
+				}
+			}
+
+			albedo *= 1.0 - clamp(hitMetalness, 0.0, 1.0);
+
 			/* Compute world-space hit position and geometric normal. */
 			vec3 hitPos = rayOrigin + sampleDir * hitT;
 
@@ -907,6 +936,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		 * The combine consumes the denoiser output (the raw trace when the temporal
 		 * chain is off — diagnostic mode, no spatial filter without its variance guide). */
 		m_combineSource = m_denoiser.recordResolve(commandBuffer, m_traceTarget, context);
+	}
+
+	bool
+	RTGI::providesIndirectDiffuse () const noexcept
+	{
+		const auto & renderer = this->renderer();
+
+		/* ⚠️ The SAME gate the post-process executor skips this effect on (PostProcessor.cpp):
+		 * hardware, user setting, and a TLAS that can actually be consumed this frame. Claiming
+		 * the indirect diffuse while the trace cannot run would leave the frame with NO diffuse
+		 * sky at all — the scene hands its own IBL leg over to an effect that draws nothing. */
+		return renderer.device()->rayTracingEnabled() && renderer.isRayTracingSettingEnabled() && renderer.isRayTracingReady();
 	}
 
 	IndirectPostProcessEffect::CombineContribution

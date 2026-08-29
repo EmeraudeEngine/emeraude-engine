@@ -66,6 +66,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RTREffect"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note Reflections come after everything that lights what they reflect. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::Reflections;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *

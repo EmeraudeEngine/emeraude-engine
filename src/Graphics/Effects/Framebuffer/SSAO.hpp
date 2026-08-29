@@ -55,6 +55,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SSAOEffect"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note The screen-space alternative of the same concept. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::AmbientOcclusion;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *

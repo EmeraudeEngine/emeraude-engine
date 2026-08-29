@@ -388,6 +388,10 @@ namespace EmEn::Scenes
 		 * changed the description; idle cost is one mutex lock + a pointer compare). */
 		this->updateEnvironmentIBL();
 
+		/* ... and the ambient pass' diffuse IBL leg follows whoever owns the indirect diffuse
+		 * this frame (an enabled RTGI gathers the same sky itself). */
+		this->updateIBLDiffuseOwnership();
+
 		m_nodeController.update();
 
 		/* Update scene static entities logics. */

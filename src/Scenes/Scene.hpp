@@ -2310,6 +2310,19 @@ namespace EmEn::Scenes
 			void updateEnvironmentIBL () noexcept;
 
 			/**
+			 * @brief Hands the ambient pass' DIFFUSE IBL leg over to an indirect-diffuse
+			 * provider, or takes it back.
+			 * @note ⚠️ INDIRECT-DIFFUSE OWNERSHIP. RTGI integrates the very same sky irradiance
+			 * the ambient pass adds, with the visibility its rays measure. Adding both counts
+			 * the sky TWICE on every diffuse surface. Polled every logic tick rather than
+			 * pushed on a signal, because ownership follows the effects' ENABLED state, which
+			 * a demo or the console flips at any moment with no notification; the idle cost is
+			 * one virtual call per effect and a float compare.
+			 * @return void
+			 */
+			void updateIBLDiffuseOwnership () noexcept;
+
+			/**
 			 * @brief Check if a renderable instance is ready for shadow casting.
 			 * @param renderTarget A reference to the render target smart-pointer.
 			 * @param renderableInstance A reference to the renderable instance smart-pointer.
@@ -2779,6 +2792,11 @@ namespace EmEn::Scenes
 			 * irradiance is published and the scalar ambient pushed to the view UBOs is
 			 * zeroed (see refreshAmbientLightProperties / updateEnvironmentIBL). */
 			bool m_IBLAmbientEnabled{false};
+			/** @brief Weight of the ambient pass' diffuse IBL leg, pushed to the view UBOs:
+			 * 1 while the raster owns the indirect diffuse, 0 while a provider (RTGI) does.
+			 * ⚠️ NOT a bool: it is a continuous knob, and a scene may later want a partial
+			 * hand-over. See updateIBLDiffuseOwnership(). */
+			float m_IBLDiffuseWeight{1.0F};
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
 	};

@@ -340,9 +340,16 @@ namespace EmEn::Graphics
 			 * @param intensity The ambient illuminance, in lux.
 			 * @param environmentLuminance The luminance of the environment cubemap (the sky), in
 			 * candela per square meter (nits), scaling every IBL contribution. 1.0 is neutral.
+			 * @param IBLDiffuseWeight The weight of the ambient pass' DIFFUSE IBL leg, in [0;1].
+			 * ⚠️ The INDIRECT-DIFFUSE OWNERSHIP contract: an enabled indirect-diffuse provider
+			 * (RTGI) gathers the very same sky irradiance with visibility, so the scene drops
+			 * this weight to 0 and the raster stops adding its own — otherwise the sky is
+			 * counted twice on every diffuse surface. It scales the DIFFUSE leg alone: the
+			 * specular IBL (prefiltered reflections, multi-scatter compensation) and the
+			 * scene's scalar ambient are untouched. See Scene::updateIBLDiffuseOwnership().
 			 * @return void
 			 */
-			virtual void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept = 0;
+			virtual void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance, float IBLDiffuseWeight) noexcept = 0;
 
 			/**
 			 * @brief Creates a buffer in the video memory.

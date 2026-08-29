@@ -26,6 +26,9 @@
 
 #include "IndirectPostProcessEffect.hpp"
 
+/* Local inclusions. */
+#include "PostProcessStack.hpp"
+
 /* STL inclusions. */
 #include <cstring>
 #include <string>
@@ -50,6 +53,29 @@ static constexpr auto TracerTag{"IndirectPostProcessEffect"};
 
 namespace EmEn::Graphics
 {
+	void
+	IndirectPostProcessEffect::setOwnerStack (PostProcessStack * stack) noexcept
+	{
+		m_ownerStack = stack;
+	}
+
+	void
+	IndirectPostProcessEffect::enable (bool state) noexcept
+	{
+		this->setEnabledFlag(state);
+
+		/* ⚠️ THE EXCLUSIVITY OF A CONCEPT IS ENFORCED HERE, not by the callers. A slot holds as
+		 * many alternatives as an application cares to build — several RTGI and several SSGI
+		 * with different Parameters, all alive at once so a runtime A/B compares them on the
+		 * very same framing — but at most ONE of them may run: two indirect-diffuse effects
+		 * both adding their estimate would count the same light twice. Enabling one is
+		 * therefore SELECTING it. */
+		if ( state && m_ownerStack != nullptr )
+		{
+			m_ownerStack->disableSlotSiblings(*this);
+		}
+	}
+
 	using namespace Vulkan;
 
 	/* ---- Default execute (overlay effects only) ---- */

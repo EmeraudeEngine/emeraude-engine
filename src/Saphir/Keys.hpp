@@ -779,6 +779,7 @@ namespace EmEn::Saphir
 				constexpr auto AmbientLightColor{"ambientLightColor"};
 				constexpr auto AmbientLightIntensity{"ambientLightIntensity"};
 				constexpr auto EnvironmentLuminance{"environmentLuminance"};
+				constexpr auto IBLDiffuseWeight{"iblDiffuseWeight"};
 				/* Material specific (Phong) */
 				constexpr auto AmbientColor{"ambientColor"};
 				constexpr auto DiffuseColor{"diffuseColor"};

@@ -59,6 +59,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SSGIEffect"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note The screen-space alternative of the same concept — never live at the same time as RTGI, which the slot now enforces. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::IndirectDiffuse;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *

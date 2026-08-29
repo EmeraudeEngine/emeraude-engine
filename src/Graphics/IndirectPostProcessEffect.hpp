@@ -39,6 +39,9 @@
 #include "PostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "EffectSlot.hpp"
+
+/* Local inclusions for usages. */
 #include "Math/Vector.hpp"
 #include "PostProcessor.hpp"
 #include "StaticVector.hpp"
@@ -85,6 +88,8 @@ namespace EmEn::Graphics
 	 * pass recording, vertex shader, descriptor set layouts) to eliminate duplication.
 	 * @extends EmEn::Graphics::PostProcessEffect This is a post-process effect.
 	 */
+	class PostProcessStack;
+
 	class EMEN_API IndirectPostProcessEffect : public PostProcessEffect
 	{
 		public:
@@ -276,8 +281,34 @@ namespace EmEn::Graphics
 			bool
 			runsAfterToneMapping () const noexcept
 			{
-				return false;
+				return this->slot() == EffectSlot::PostToneMapping;
 			}
+
+			/**
+			 * @brief Returns the CONCEPT this effect implements, hence its place in the chain.
+			 * @note ⚠️ PURE VIRTUAL on purpose: an effect that does not state where it belongs
+			 * has no defensible place in a chain whose order is a correctness property (an
+			 * ambient occlusion applied before the indirect diffuse occludes the wrong term, a
+			 * reflection sampled before it reflects an unlit world). An application effect the
+			 * engine has no concept for answers EffectSlot::Custom.
+			 * @return EffectSlot
+			 */
+			[[nodiscard]]
+			virtual EffectSlot slot () const noexcept = 0;
+
+			/** @copydoc EmEn::Graphics::PostProcessEffect::enable() */
+			void enable (bool state) noexcept override;
+
+			/**
+			 * @brief Called by PostProcessStack when the effect enters or leaves a stack.
+			 * @warning ⚠️ INTERNAL — the stack is the only caller. A RAW pointer, cleared by the
+			 * stack on removal and in its destructor while it still holds the effect alive: an
+			 * effect may outlive its stack (a demo keeps shared_ptr copies to toggle it), so it
+			 * must never be left pointing at a dead one.
+			 * @param stack A pointer to the owning stack, nullptr on removal.
+			 * @return void
+			 */
+			void setOwnerStack (PostProcessStack * stack) noexcept;
 
 			/**
 			 * @brief Per-frame context shared by the whole effect chain.
@@ -661,5 +692,11 @@ void main()
 		private:
 
 			Renderer & m_renderer;
+			/** @brief The stack holding this effect, nullptr while it belongs to none.
+			 * @note ⚠️ RAW, and safe because of who clears it: PostProcessStack clears it on
+			 * removal and in its own destructor, at a point where it still owns a shared_ptr to
+			 * this effect. An effect outliving its stack (a demo keeping copies to toggle it)
+			 * therefore never holds a dangling one. */
+			PostProcessStack * m_ownerStack{nullptr};
 	};
 }

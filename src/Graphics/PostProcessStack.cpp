@@ -45,35 +45,179 @@ namespace EmEn::Graphics
 	PostProcessStack::~PostProcessStack () noexcept
 	{
 		this->destroyAll();
+
+		/* ⚠️ The effects may outlive this stack — an application keeps shared_ptr copies to
+		 * toggle them — so their back-pointer must die WITH the stack, not after it. */
+		for ( auto & slot : m_slots )
+		{
+			for ( const auto & effect : slot )
+			{
+				if ( effect != nullptr )
+				{
+					effect->setOwnerStack(nullptr);
+				}
+			}
+		}
 	}
 
 	void
 	PostProcessStack::addEffect (std::shared_ptr< IndirectPostProcessEffect > effect) noexcept
 	{
-		if ( effect != nullptr )
+		if ( effect == nullptr )
 		{
-			m_effects.emplace_back(std::move(effect));
+			return;
 		}
+
+		const auto slot = effect->slot();
+
+		/* The photographic chain belongs to the camera: syncCameraEffects() materializes those
+		 * four effects from the camera's own switches and owns their lifetime. An application
+		 * adding one by hand would have it destroyed under its feet at the next camera change. */
+		if ( !isChainSlot(slot) )
+		{
+			TraceError{ClassId} <<
+				"The effect '" << effect->label() << "' declares EffectSlot::Internal: it is a "
+				"component owned by an effect, it does not belong to a chain !";
+
+			return;
+		}
+
+		if ( isCameraEffectSlot(slot) )
+		{
+			TraceError{ClassId} <<
+				"The '" << to_cstring(slot) << "' slot belongs to the active camera: "
+				"declare it on the camera (enableDepthOfField(), enableHDR(), ...), never on the stack !";
+
+			return;
+		}
+
+		auto & occupants = m_slots[static_cast< size_t >(slot)];
+
+		if ( std::ranges::find(occupants, effect) != occupants.end() )
+		{
+			return;
+		}
+
+		effect->setOwnerStack(this);
+
+		occupants.emplace_back(effect);
+
+		/* Several occupants are LEGAL and are how a runtime A/B works — but only one of a
+		 * concept may run. Every effect is enabled at construction, so the newcomer selects
+		 * itself, exactly as a later enable() would. */
+		if ( effect->isEnabled() && !isMultiOccupantSlot(slot) )
+		{
+			this->disableSlotSiblings(*effect);
+		}
+
+		this->rebuildOrderedEffects();
 	}
 
 	void
 	PostProcessStack::removeEffect (const std::shared_ptr< IndirectPostProcessEffect > & effect) noexcept
 	{
-		std::erase(m_effects, effect);
+		if ( effect == nullptr )
+		{
+			return;
+		}
+
+		auto & occupants = m_slots[static_cast< size_t >(effect->slot())];
+
+		if ( std::erase(occupants, effect) > 0 )
+		{
+			effect->setOwnerStack(nullptr);
+
+			this->rebuildOrderedEffects();
+		}
 	}
 
 	void
 	PostProcessStack::clearEffects () noexcept
 	{
-		m_effects.clear();
+		for ( auto & slot : m_slots )
+		{
+			for ( const auto & effect : slot )
+			{
+				if ( effect != nullptr )
+				{
+					effect->setOwnerStack(nullptr);
+				}
+			}
+
+			slot.clear();
+		}
+
 		m_displayEffects.clear();
+
+		this->rebuildOrderedEffects();
+	}
+
+	void
+	PostProcessStack::disableSlotSiblings (const IndirectPostProcessEffect & effect) noexcept
+	{
+		const auto slot = effect.slot();
+
+		if ( isMultiOccupantSlot(slot) )
+		{
+			return;
+		}
+
+		for ( const auto & occupant : m_slots[static_cast< size_t >(slot)] )
+		{
+			if ( occupant != nullptr && occupant.get() != &effect )
+			{
+				/* ⚠️ The FLAG, not enable(): going through enable() would ask this very method
+				 * to disable the siblings of the effect being disabled — infinite recursion. */
+				occupant->setEnabledFlag(false);
+			}
+		}
+	}
+
+	std::shared_ptr< IndirectPostProcessEffect >
+	PostProcessStack::enabledEffect (EffectSlot slot) const noexcept
+	{
+		for ( const auto & occupant : m_slots[static_cast< size_t >(slot)] )
+		{
+			if ( occupant != nullptr && occupant->isEnabled() )
+			{
+				return occupant;
+			}
+		}
+
+		return nullptr;
+	}
+
+	void
+	PostProcessStack::rebuildOrderedEffects () noexcept
+	{
+		m_orderedEffects.clear();
+
+		/* THE chain order: the slot table flattened in EffectSlot declaration order. */
+		for ( const auto & slot : m_slots )
+		{
+			for ( const auto & effect : slot )
+			{
+				if ( effect != nullptr )
+				{
+					m_orderedEffects.emplace_back(effect);
+				}
+			}
+		}
 	}
 
 	bool
 	PostProcessStack::hasEnabledReflectionProvider () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
 			return effect != nullptr && effect->isEnabled() && effect->providesReflections();
+		});
+	}
+
+	bool
+	PostProcessStack::hasEnabledIndirectDiffuseProvider () const noexcept
+	{
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->providesIndirectDiffuse();
 		});
 	}
 
@@ -104,28 +248,12 @@ namespace EmEn::Graphics
 
 		const auto & extent = mainRenderTarget->extent();
 
-		/* Detach the current camera effects: they are re-appended below in canonical
-		 * order (DepthOfField, MotionBlur, Bloom, then ToneMapping LAST — the HDR resolve closes
-		 * the chain: optics, then exposure duration, then glare, then the sensor response). */
-		if ( m_cameraDepthOfField != nullptr )
-		{
-			std::erase(m_effects, m_cameraDepthOfField);
-		}
-
-		if ( m_cameraMotionBlur != nullptr )
-		{
-			std::erase(m_effects, m_cameraMotionBlur);
-		}
-
-		if ( m_cameraBloom != nullptr )
-		{
-			std::erase(m_effects, m_cameraBloom);
-		}
-
-		if ( m_cameraToneMapping != nullptr )
-		{
-			std::erase(m_effects, m_cameraToneMapping);
-		}
+		/* NOTE: nothing to detach any more. The four photographic effects OWN their slots
+		 * (DepthOfField, MotionBlur, Glare, ToneMapping, in that order by construction — optics,
+		 * then exposure duration, then the glare scattered in the lens, then the sensor
+		 * response), and the assignment at the end of this method is the whole placement. The
+		 * erase-then-find_if-then-insert dance this replaced existed only because the chain was
+		 * a flat vector in which their position had to be recomputed from the neighbours. */
 
 		/* Depth of field materialization. */
 		if ( wantDepthOfField && m_cameraDepthOfField == nullptr )
@@ -251,32 +379,36 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Re-insert the surviving camera effects after the scene (HDR) effects but BEFORE
-		 * the first post-tonemap (LDR) effect: antialiasing/sharpening operate on
-		 * display-referred values and misbehave on linear HDR input. */
-		auto insertIt = std::find_if(m_effects.begin(), m_effects.end(), [] (const auto & effect) {
-			return effect != nullptr && effect->runsAfterToneMapping();
-		});
+		/* Publish the surviving photographic effects into their own slots. Their place in the
+		 * chain — after every scene effect, before anything display-referred — is the slot
+		 * order itself, so there is no position left to compute. */
+		const auto publish = [this] (EffectSlot slot, const std::shared_ptr< IndirectPostProcessEffect > & effect) {
+			auto & occupants = m_slots[static_cast< size_t >(slot)];
 
-		if ( m_cameraDepthOfField != nullptr )
-		{
-			insertIt = std::next(m_effects.insert(insertIt, m_cameraDepthOfField));
-		}
+			for ( const auto & previous : occupants )
+			{
+				if ( previous != nullptr && previous != effect )
+				{
+					previous->setOwnerStack(nullptr);
+				}
+			}
 
-		if ( m_cameraMotionBlur != nullptr )
-		{
-			insertIt = std::next(m_effects.insert(insertIt, m_cameraMotionBlur));
-		}
+			occupants.clear();
 
-		if ( m_cameraBloom != nullptr )
-		{
-			insertIt = std::next(m_effects.insert(insertIt, m_cameraBloom));
-		}
+			if ( effect != nullptr )
+			{
+				effect->setOwnerStack(this);
 
-		if ( m_cameraToneMapping != nullptr )
-		{
-			m_effects.insert(insertIt, m_cameraToneMapping);
-		}
+				occupants.emplace_back(effect);
+			}
+		};
+
+		publish(EffectSlot::DepthOfField, m_cameraDepthOfField);
+		publish(EffectSlot::MotionBlur, m_cameraMotionBlur);
+		publish(EffectSlot::Glare, m_cameraBloom);
+		publish(EffectSlot::ToneMapping, m_cameraToneMapping);
+
+		this->rebuildOrderedEffects();
 
 		return true;
 	}
@@ -298,7 +430,7 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::createAll (uint32_t width, uint32_t height) const noexcept
 	{
-		for ( const auto & effect : m_effects )
+		for ( const auto & effect : m_orderedEffects )
 		{
 			if ( effect == nullptr )
 			{
@@ -319,7 +451,7 @@ namespace EmEn::Graphics
 	void
 	PostProcessStack::destroyAll () const noexcept
 	{
-		for ( auto & effect : m_effects )
+		for ( const auto & effect : m_orderedEffects )
 		{
 			if ( effect != nullptr )
 			{
@@ -331,7 +463,7 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::resizeAll (uint32_t width, uint32_t height) const noexcept
 	{
-		for ( const auto & effect : m_effects )
+		for ( const auto & effect : m_orderedEffects )
 		{
 			if ( effect == nullptr )
 			{
@@ -352,64 +484,64 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::requiresHDR () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresHDR();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresHDR();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresDepth () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresDepth();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresDepth();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresNormals () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresNormals();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresNormals();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresMaterialProperties () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresMaterialProperties();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresMaterialProperties();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresAlbedo () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresAlbedo();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresAlbedo();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresVelocity () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresVelocity();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresVelocity();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresLightSet () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresLightSet();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresLightSet();
 		});
 	}
 
 	bool
 	PostProcessStack::requiresJitter () const noexcept
 	{
-		return std::ranges::any_of(m_effects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->requiresJitter();
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->requiresJitter();
 		});
 	}
 }

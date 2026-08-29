@@ -58,6 +58,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"AtmosphericFogEffect"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note The participating medium, applied to the fully lit scene. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::Fog;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *

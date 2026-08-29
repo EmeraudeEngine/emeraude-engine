@@ -65,6 +65,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"DepthOfFieldEffect"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note Camera slot: materialized by PostProcessStack::syncCameraEffects() from the camera's own switch, never added by an application. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::DepthOfField;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *

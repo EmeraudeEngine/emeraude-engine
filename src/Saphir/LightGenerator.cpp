@@ -87,6 +87,27 @@ namespace EmEn::Saphir
 	}
 
 	std::string
+	LightGenerator::diffuseAlbedoShaderExpression () const noexcept
+	{
+		std::string expression{"(" + this->albedoShaderExpression() + ").rgb"};
+
+		/* A metal has no diffuse lobe: its base color is the Fresnel F0 of the specular one. */
+		if ( !m_surfaceMetalness.empty() )
+		{
+			expression += " * (1.0 - " + m_surfaceMetalness + ")";
+		}
+
+		/* What penetrates a transmissive surface is transmitted, not diffusely re-emitted
+		 * (KHR_materials_transmission mixes the two legs, it never adds them). */
+		if ( m_useTransmission && !m_surfaceTransmissionFactor.empty() )
+		{
+			expression += " * (1.0 - " + m_surfaceTransmissionFactor + ")";
+		}
+
+		return expression;
+	}
+
+	std::string
 	LightGenerator::finalNormalViewSpaceExpression () const noexcept
 	{
 		/* When normal mapping is active, the PBR lighting code declares
@@ -766,7 +787,13 @@ namespace EmEn::Saphir
 			 * The world is Y-UP: the world normal samples the cubemap as-is (the former (D.x, -D.y, D.z) compensation is gone). */
 			Code{fragmentShader} <<
 				"const vec3 iblAmbientNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], iblAmbientNormal).rgb;";
+				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], iblAmbientNormal).rgb;" << Line::End <<
+				"/* INDIRECT-DIFFUSE OWNERSHIP: an enabled provider (RTGI) gathers this very irradiance"
+				" with visibility, so the scene drops the weight to 0 and the raster stops adding its"
+				" own - the sky must not be counted twice. The DIFFUSE legs read this one; the specular"
+				" legs (prefiltered reflection, multi-scatter compensation) keep the raw irradiance,"
+				" which no post-process replaces. */" << Line::End <<
+				"const vec3 iblDiffuseIrradiance = iblIrradiance * " << ViewUB(Keys::UniformBlock::Component::IBLDiffuseWeight, false) << ";";
 		}
 
 		/* The tint of the IBL diffuse irradiance term is ALWAYS the raw base color
@@ -942,7 +969,7 @@ namespace EmEn::Saphir
 				{
 					Code{fragmentShader, Location::Output} <<
 						"/* IBL diffuse irradiance (iridescence: energy left by the Fresnel). */" "\n" <<
-						m_fragmentColor << ".rgb += " << albedo << " * (1.0 - " << metalness << ") * (vec3(1.0) - fresnelIBL) * iblIrradiance * " << iblIntensity << aoFactor << ";";
+						m_fragmentColor << ".rgb += " << albedo << " * (1.0 - " << metalness << ") * (vec3(1.0) - fresnelIBL) * iblDiffuseIrradiance * " << iblIntensity << aoFactor << ";";
 				}
 			}
 			else if ( useIBL )
@@ -965,7 +992,8 @@ namespace EmEn::Saphir
 					"const vec3 iblFmsEms = iblEms * iblFssEss * iblFavg / (vec3(1.0) - iblFavg * iblEms);" "\n"
 					"const vec3 iblKD = " << albedo << " * (1.0 - " << metalness << ") * max(vec3(1.0) - iblFssEss - iblFmsEms, vec3(0.0));" "\n" <<
 					m_fragmentColor << ".rgb += iblFssEss * reflectedColor;" "\n" <<
-					m_fragmentColor << ".rgb += (iblFmsEms + iblKD" << aoFactor << ") * iblIrradiance * " << iblIntensity << ";";
+					m_fragmentColor << ".rgb += iblFmsEms * iblIrradiance * " << iblIntensity << ";" "\n" <<
+					m_fragmentColor << ".rgb += iblKD" << aoFactor << " * iblDiffuseIrradiance * " << iblIntensity << ";";
 			}
 			else
 			{
@@ -1034,7 +1062,7 @@ namespace EmEn::Saphir
 			{
 				Code{fragmentShader, Location::Output} <<
 					"/* IBL diffuse irradiance (LQ). */" "\n" <<
-					m_fragmentColor << ".rgb += " << albedo << " * (1.0 - " << metalness << ") * (vec3(1.0) - lqF0) * iblIrradiance * " << iblIntensity << aoFactor << ";";
+					m_fragmentColor << ".rgb += " << albedo << " * (1.0 - " << metalness << ") * (vec3(1.0) - lqF0) * iblDiffuseIrradiance * " << iblIntensity << aoFactor << ";";
 			}
 
 			/* Clear coat IBL - simplified constant attenuation (LQ, no reflectionNormal available). */
@@ -1092,11 +1120,11 @@ namespace EmEn::Saphir
 				{
 					/* Render-target reflection: already an absolute luminance — only the
 					 * sky-derived diffuse leg takes the environment luminance. */
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ");";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ");";
 				}
 				else
 				{
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
 				}
 			}
 		}
@@ -1110,11 +1138,11 @@ namespace EmEn::Saphir
 				{
 					/* Render-target refraction: already an absolute luminance — only the
 					 * sky-derived diffuse leg takes the environment luminance. */
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ");";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ");";
 				}
 				else
 				{
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblIrradiance" << aoFactor << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
 				}
 			}
 		}
@@ -1129,7 +1157,7 @@ namespace EmEn::Saphir
 			 * drives the ambient (see Scene::refreshAmbientLightProperties). */
 			if ( useIBL )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << ";";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblDiffuseIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << ";";
 			}
 		}
 

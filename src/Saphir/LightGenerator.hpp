@@ -804,6 +804,29 @@ namespace EmEn::Saphir
 			std::string albedoShaderExpression () const noexcept;
 
 			/**
+			 * @brief Returns a GLSL vec3 expression for the surface DIFFUSE albedo.
+			 * @note ⚠️ This is what the albedo G-buffer attachment carries, and it is NOT the
+			 * base color: it is the base color times the energy the diffuse lobe actually gets,
+			 * `baseColor * (1 - metalness) * (1 - transmission)`. The attachment exists for ONE
+			 * job — re-modulating a demodulated indirect-diffuse signal (SSGI, RTGI) at full
+			 * resolution — and that signal is irradiance: multiplying it by the base color lights
+			 * a metal, which has no diffuse lobe, and a transmissive surface, whose penetrating
+			 * light leaves through the other side. Same convention as NVIDIA NRD (its
+			 * demodulation albedo is `baseColor * saturate(1 - metalness)`) and as the glTF
+			 * dielectric BRDF, which mixes the diffuse lobe INTO the transmission by the
+			 * transmission factor rather than adding to it.
+			 * @note Measured: a `KHR_materials_transmission` glass, whose default base color is
+			 * WHITE and which overwrites the G-buffer of everything behind it, turned into an
+			 * opaque milky plate under RTGI — it was receiving the full sky irradiance as if it
+			 * were a Lambertian sheet of paper.
+			 * @note A material declaring neither metalness nor transmission generates the very
+			 * same expression as before, hence a bit-identical shader.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string diffuseAlbedoShaderExpression () const noexcept;
+
+			/**
 			 * @brief Returns a GLSL vec4 expression for the material properties G-buffer output.
 			 * @note Encodes reflectivity, AO response, emissive mask and other properties
 			 * as nibble-packed values based on the declared surface properties.

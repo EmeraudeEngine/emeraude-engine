@@ -81,6 +81,15 @@ namespace EmEn::Graphics
 			 */
 			~CombinePass () override;
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note An INTERNAL component: owned by the effect that uses it (its pipeline helpers come from this base), never filed into a chain — PostProcessStack::addEffect() refuses this slot. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::Internal;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
 			[[nodiscard]]
 			bool create (uint32_t width, uint32_t height) noexcept override;

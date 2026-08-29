@@ -63,6 +63,15 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"GIDenoiser"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note An INTERNAL component: owned by the effect that uses it (its pipeline helpers come from this base), never filed into a chain — PostProcessStack::addEffect() refuses this slot. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::Internal;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *

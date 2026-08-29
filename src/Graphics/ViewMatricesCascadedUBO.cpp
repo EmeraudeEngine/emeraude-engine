@@ -281,7 +281,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	ViewMatricesCascadedUBO::updateAmbientLightProperties (const PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept
+	ViewMatricesCascadedUBO::updateAmbientLightProperties (const PixelFactory::Color< float > & color, float intensity, float environmentLuminance, float IBLDiffuseWeight) noexcept
 	{
 		m_logicState.bufferData[AmbientLightColorOffset + 0] = color.red();
 		m_logicState.bufferData[AmbientLightColorOffset + 1] = color.green();
@@ -290,6 +290,7 @@ namespace EmEn::Graphics
 
 		m_logicState.bufferData[AmbientLightIntensityOffset] = intensity;
 		m_logicState.bufferData[EnvironmentLuminanceOffset] = environmentLuminance;
+		m_logicState.bufferData[IBLDiffuseWeightOffset] = IBLDiffuseWeight;
 	}
 
 	void

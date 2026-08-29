@@ -74,11 +74,29 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Enables or disables this effect.
+			 * @note ⚠️ VIRTUAL because a framebuffer effect answers to its stack: enabling one
+			 * alternative of a CONCEPT (RTGI over SSGI, RTR over SSR) must disable its siblings,
+			 * and the stack is the only object that knows them. Overridden by
+			 * IndirectPostProcessEffect; the base behaviour is the plain flag.
+			 * @param state The desired enabled state.
+			 * @return void
+			 */
+			virtual
+			void
+			enable (bool state) noexcept
+			{
+				m_enabled = state;
+			}
+
+			/**
+			 * @brief Sets the enabled flag WITHOUT any stack notification.
+			 * @note For the stack itself, when it disables the siblings of the effect being
+			 * enabled: going through enable() there would recurse.
 			 * @param state The desired enabled state.
 			 * @return void
 			 */
 			void
-			enable (bool state) noexcept
+			setEnabledFlag (bool state) noexcept
 			{
 				m_enabled = state;
 			}
@@ -120,6 +138,31 @@ namespace EmEn::Graphics
 			virtual
 			bool
 			providesReflections () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Returns whether this effect OWNS the indirect DIFFUSE light of the frame.
+			 * @note ⚠️ INDIRECT-DIFFUSE OWNERSHIP. An effect that gathers the environment itself
+			 * — RTGI, whose miss branch integrates the sky cubemap with real visibility — computes
+			 * the very same quantity the raster ambient pass adds as its diffuse IBL leg. Both at
+			 * once counts the sky TWICE on every diffuse surface (measured on the asset-loader
+			 * watch under a 31800-nit sky: the whole frame washed out). While such a provider is
+			 * enabled AND able to run, the scene zeroes the ambient pass' diffuse IBL weight and
+			 * the effect owns that term. Same shape as the reflection cost ladder above.
+			 * @note This is about the SKY-DERIVED irradiance only: a scene's own scalar ambient
+			 * stays untouched — it is the owner's deliberate residual (the "skylight leaking"
+			 * knob of the reference implementations), not a computed term.
+			 * @warning A provider MUST gather the environment for every direction its rays miss,
+			 * or the scenes lit by a sky go dark. A screen-space effect can NEVER be one: SSGI
+			 * has no sky term because an off-screen direction carries no information.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			providesIndirectDiffuse () const noexcept
 			{
 				return false;
 			}

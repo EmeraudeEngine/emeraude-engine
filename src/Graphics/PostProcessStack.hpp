@@ -30,12 +30,14 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
 
 /* Local inclusions for usages. */
 #include "DirectPostProcessEffect.hpp"
+#include "EffectSlot.hpp"
 
 namespace EmEn::Graphics
 {
@@ -57,7 +59,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief Ordered container of multi-pass post-process effects with GPU lifecycle management.
+	 * @brief The frame's post-process chain, as a fixed sequence of CONCEPTS rather than a list.
+	 * @note ⚠️⚠️ THE CHAIN ORDER IS A PROPERTY OF THIS CLASS, NOT OF THE CALL SEQUENCE. Effects
+	 * are filed into the slot they declare (`IndirectPostProcessEffect::slot()`) and the chain is
+	 * walked in `EffectSlot` order, so an application may add its effects in any order at all and
+	 * still get the canonical one. This replaced an insertion-ordered vector in which twelve
+	 * scenes each restated the order by hand — three of them differently, and a wrong order was
+	 * silent: an ambient occlusion added before the indirect diffuse occluded the direct light
+	 * and left the GI untouched, and a screen-space reflection added first reflected a world
+	 * with no indirect light in it at all.
+	 * @note A slot holds AS MANY alternatives as the application builds — several RTGI and
+	 * several SSGI with different Parameters, all resident so a runtime switch can compare them
+	 * on the very same framing — of which the stack keeps AT MOST ONE ENABLED. Enabling one is
+	 * selecting it; its siblings are disabled mechanically (see disableSlotSiblings()).
 	 * @note Owned by a Scene to provide per-scene post-processing configuration.
 	 */
 	class EMEN_API PostProcessStack final
@@ -81,11 +95,47 @@ namespace EmEn::Graphics
 			PostProcessStack & operator= (PostProcessStack &&) noexcept = default;
 
 			/**
-			 * @brief Appends an effect to the chain.
+			 * @brief Files an effect into the slot it declares.
+			 * @note ⚠️ The ORDER OF THE CALLS IS IRRELEVANT — the effect's own `slot()` decides
+			 * where it runs. Adding several occupants to one slot is legal and is how a runtime
+			 * A/B works (all resident, one enabled); the newcomer becomes the enabled one if it
+			 * is enabled, which every effect is at construction.
+			 * @warning A camera slot (DepthOfField, MotionBlur, Glare, ToneMapping) is REFUSED
+			 * with a trace error: those belong to syncCameraEffects(), which owns their lifetime.
 			 * @param effect A shared pointer to the effect.
 			 * @return void
 			 */
 			void addEffect (std::shared_ptr< IndirectPostProcessEffect > effect) noexcept;
+
+			/**
+			 * @brief Disables every OTHER occupant of an effect's slot.
+			 * @warning ⚠️ INTERNAL — called by IndirectPostProcessEffect::enable() to make the
+			 * exclusivity of a concept mechanical. Never call it directly: enable the effect you
+			 * want and the siblings follow.
+			 * @param effect A reference to the effect being enabled.
+			 * @return void
+			 */
+			void disableSlotSiblings (const IndirectPostProcessEffect & effect) noexcept;
+
+			/**
+			 * @brief Returns the occupants of a slot, in their order of addition.
+			 * @param slot The slot.
+			 * @return const std::vector< std::shared_ptr< IndirectPostProcessEffect > > &
+			 */
+			[[nodiscard]]
+			const std::vector< std::shared_ptr< IndirectPostProcessEffect > > &
+			slotEffects (EffectSlot slot) const noexcept
+			{
+				return m_slots[static_cast< size_t >(slot)];
+			}
+
+			/**
+			 * @brief Returns the ENABLED occupant of a slot, or nullptr.
+			 * @param slot The slot.
+			 * @return std::shared_ptr< IndirectPostProcessEffect >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< IndirectPostProcessEffect > enabledEffect (EffectSlot slot) const noexcept;
 
 			/**
 			 * @brief Removes an effect from the chain.
@@ -183,7 +233,7 @@ namespace EmEn::Graphics
 			const std::vector< std::shared_ptr< IndirectPostProcessEffect > > &
 			effects () const noexcept
 			{
-				return m_effects;
+				return m_orderedEffects;
 			}
 
 			/**
@@ -194,7 +244,7 @@ namespace EmEn::Graphics
 			bool
 			hasEffects () const noexcept
 			{
-				return !m_effects.empty();
+				return !m_orderedEffects.empty();
 			}
 
 			/**
@@ -206,6 +256,15 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool hasEnabledReflectionProvider () const noexcept;
+
+			/**
+			 * @brief Returns whether an ENABLED indirect-diffuse provider (RTGI) is in the chain.
+			 * @note Read by the scene to hand the diffuse IBL leg over to that effect — see
+			 * PostProcessEffect::providesIndirectDiffuse() for the ownership contract.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasEnabledIndirectDiffuseProvider () const noexcept;
 
 			/**
 			 * @brief Creates GPU resources for all effects.
@@ -292,7 +351,18 @@ namespace EmEn::Graphics
 
 		private:
 
-			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_effects;
+			/**
+			 * @brief Rebuilds the flat, slot-ordered view the chain executor walks.
+			 * @note Rebuilt on every mutation rather than assembled on demand: it is read once
+			 * per frame and mutated a handful of times per scene.
+			 * @return void
+			 */
+			void rebuildOrderedEffects () noexcept;
+
+			/** @brief The occupants of each concept, indexed by EffectSlot. */
+			std::array< std::vector< std::shared_ptr< IndirectPostProcessEffect > >, EffectSlotCount > m_slots;
+			/** @brief The slot table flattened in EffectSlot order — THE chain order. */
+			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_orderedEffects;
 			/* Display effects (AA, sharpening): no GPU resources of their own, they are
 			 * compiled into the final fullscreen pass shader before the camera lens effects. */
 			DirectEffectList m_displayEffects;

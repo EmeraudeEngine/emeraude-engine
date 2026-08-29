@@ -566,6 +566,7 @@ namespace EmEn::Saphir::Generator
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
+			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLDiffuseWeight);
 
 			return shader.declare(uniformBlock);
 		}
@@ -592,6 +593,7 @@ namespace EmEn::Saphir::Generator
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
+			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLDiffuseWeight);
 
 			return shader.declare(uniformBlock);
 		}
@@ -604,6 +606,7 @@ namespace EmEn::Saphir::Generator
 		uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
 		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
+		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLDiffuseWeight);
 
 		return shader.declare(uniformBlock);
 	}

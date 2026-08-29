@@ -158,7 +158,7 @@ namespace EmEn::Graphics
 			void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateAmbientLightProperties() */
-			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance) noexcept override;
+			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance, float IBLDiffuseWeight) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
 			bool create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept override;
@@ -212,6 +212,8 @@ namespace EmEn::Graphics
 			static constexpr auto AmbientLightIntensityOffset{ViewMatricesJumpOffset + 32UL};
 			/** @brief Offset of the environment luminance (nits) in the buffer. */
 			static constexpr auto EnvironmentLuminanceOffset{ViewMatricesJumpOffset + 33UL};
+			/** @brief Offset of the IBL diffuse weight in the buffer. */
+			static constexpr auto IBLDiffuseWeightOffset{ViewMatricesJumpOffset + 34UL};
 
 			/** @brief Orientation matrices for the 6 faces of a standard cubemap. */
 			static const std::array< Base::Math::Matrix< 4, float >, CubemapFaceCount > CubemapOrientation;
@@ -270,8 +272,10 @@ namespace EmEn::Graphics
 					1.0F, 1.0F, 1.0F, 1.0F,
 					/* Light ambient color. */
 					0.0F, 0.0F, 0.0F, 1.0F,
-					/* Light ambient intensity. */
-					0.00F, 0.0F, 0.0F, 0.0F
+					/* Light ambient intensity, environment luminance, IBL diffuse weight, unused.
+					 * ⚠️ The IBL diffuse weight defaults to 1 (the raster owns the diffuse IBL);
+					 * a zero default would black out every ambient pass until a scene pushes one. */
+					0.0F, 0.0F, 1.0F, 0.0F
 				};
 			};
 

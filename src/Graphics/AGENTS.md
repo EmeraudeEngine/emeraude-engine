@@ -2070,6 +2070,94 @@ the wind-animated ivy and on silhouette edges under the TAA jitter — the first
 visualisation of the "jitter is the vibrator" mechanism, and the zone the stage-2 spatial
 variance fallback must cover.
 
+### Indirect-diffuse OWNERSHIP — who computes the sky, the raster or the effect (Aug 2026)
+
+> [!CAUTION]
+> **A sky-lit scene has TWO subsystems able to compute the same diffuse irradiance, and adding
+> both counts the sky twice.** The raster ambient pass adds
+> `albedo * (1 - metal) * (1 - F) * iblIrradiance * environmentLuminance` (the baked irradiance
+> cubemap, reserved bindless cube slot 1). RTGI's miss branch adds
+> `cubemap(dir) * FrameContext::skyLuminance` for every ray that escapes the TLAS — the SAME
+> integral, from the SAME cubemap, with the SAME luminance (`background->luminance()`), only with
+> real visibility. **Measured** on `asset-loader --demo-options 11,0,1,0,0,0` under
+> AutumnFieldPureSky (31 800 nits): the watch read 159/255 with both, 116/255 with SSGI (which has
+> no sky term), 109/255 once the ownership contract landed — the 43-point gap WAS the double count.
+>
+> **The contract.** `PostProcessEffect::providesIndirectDiffuse()` (default `false`) declares an
+> effect as the OWNER of the frame's indirect diffuse. `PostProcessStack::hasEnabledIndirectDiffuseProvider()`
+> aggregates it, `Scene::updateIBLDiffuseOwnership()` polls that every logic tick and pushes a
+> `iblDiffuseWeight` of **0** (an owner is active) or **1** (the raster owns it) into the view UBO;
+> the ambient pass declares `iblDiffuseIrradiance = iblIrradiance * iblDiffuseWeight` and every
+> DIFFUSE leg reads that one. Same shape as the reflection cost ladder
+> (`hasEnabledReflectionProvider()` → the Renderer suspends the continuous probes).
+>
+> - ⚠️ **The weight scales the DIFFUSE leg ONLY.** The specular IBL — prefiltered reflections and
+>   the Fdez-Agüera multi-scatter compensation `iblFmsEms` — keeps the RAW `iblIrradiance`: no
+>   post-process replaces it, and zeroing it would darken rough metals. That is why the split-sum
+>   branch emits TWO additions where it used to emit one.
+> - ⚠️ **The scene's SCALAR ambient is untouched.** A hand-lit scene's `setAmbientLightIntensity()`
+>   (Sponza's 200 lx) is the owner's deliberate residual — the "skylight leaking" knob of the
+>   reference implementations — not a computed term. Only the sky-derived irradiance changes hands.
+> - ⚠️⚠️ **A screen-space effect can NEVER be an owner.** SSGI has no sky term at all (a miss in
+>   screen space means "no occluder found in the depth buffer", not "open sky" — implemented,
+>   measured and reverted in Jul 2026: mean 96.2 / median 96.0, i.e. zero spatial variation, which
+>   is exactly the flat ambient it was meant to replace). SSGI's contribution and the raster's
+>   ambient are DISJOINT, so they are legitimately added. `providesIndirectDiffuse()` returning
+>   `false` for SSGI is a consequence of what it can measure, not a policy choice.
+> - ⚠️⚠️ **The provider must be gated on its ability to RUN.** `RTGI::providesIndirectDiffuse()`
+>   repeats the exact gate `PostProcessor` skips the effect on (hardware, `isRayTracingSettingEnabled()`,
+>   `isRayTracingReady()`). Claiming ownership while the TLAS is still building would hand the diffuse
+>   to an effect that draws nothing — a black flash over the first frames of every scene.
+> - ⚠️ **Known limitation until the frame is reordered**: the indirect effects run AFTER the
+>   TranslucentGB pass, so a surface seen THROUGH a transmissive material gets no indirect at all
+>   (the raster leg is off, and the G-buffer at that pixel belongs to the glass). Item
+>   `docs/todo/indirect-diffuse-before-translucency.md`.
+>
+> **State of the art**: UE5 Lumen — *"Sky lighting is solved as part of Lumen's Final Gather
+> process. It includes sky shadowing"*; Unity HDRP — *"SSGI and RTGI replace all lightmap and Light
+> Probe data […] Light Probes and the ambient probe stop contributing"* (and its `LightLoop.hlsl`
+> applies that replacement to non-transparent surfaces only). Both REPLACE, neither adds.
+>
+> **Files**: `Graphics/PostProcessEffect.hpp` (the virtual), `Graphics/PostProcessStack.{hpp,cpp}`,
+> `Graphics/Effects/Framebuffer/RTGI.{hpp,cpp}`, `Scenes/Scene.lighting.cpp`
+> (`updateIBLDiffuseOwnership`, `refreshAmbientLightProperties`), `Scenes/Scene.cpp` (the poll),
+> `Saphir/LightGenerator.cpp` (`iblDiffuseIrradiance`), `Saphir/Generator/Abstract.cpp` +
+> `Graphics/ViewMatrices{2D,3D,Cascaded}UBO.*` (the UBO lane — it fits in the EXISTING padding
+> after `environmentLuminance`, so the UBO size did not move).
+
+### The albedo G-buffer carries the DIFFUSE albedo, never the base colour (Aug 2026)
+
+> [!CAUTION]
+> **Attachment 3 exists for ONE job — re-modulating a demodulated indirect-diffuse signal (SSGI,
+> RTGI) at full resolution — so it must carry the energy the DIFFUSE lobe actually receives:**
+> `baseColor * (1 - metalness) * (1 - transmissionFactor)`
+> (`LightGenerator::diffuseAlbedoShaderExpression()`, written by `Saphir/Generator/SceneRendering.cpp`).
+> It used to carry the raw base colour, and the two materials that have no diffuse lobe were lit as
+> if they were sheets of paper:
+> - a **metal** (gold: baseColor 1.00/0.72/0.32, metalness 1) re-emitted 72 % of the incoming
+>   irradiance as diffuse light;
+> - a **`KHR_materials_transmission` glass**, whose default base colour is WHITE and which
+>   overwrites the G-buffer of everything behind it (translucent materials get `blendEnable = FALSE`
+>   on the G-buffer attachments — the "flat water reflections" fix), turned into an opaque milky
+>   plate: the watch dial under it was unreadable.
+>
+> Same convention as NVIDIA NRD (its demodulation albedo is `baseColor * saturate(1 - metalness)`,
+> `MathLib::ConvertBaseColorMetalnessToAlbedoRf0`) and as the glTF dielectric BRDF, which MIXES the
+> diffuse lobe into the transmission by the transmission factor rather than adding to it.
+>
+> - ⚠️ **The only consumers are the SSGI and RTGI combines** (`gi *= texture(emAlbedo, vUV).rgb`) —
+>   verified by grep before changing the semantics. Nothing else reads attachment 3.
+> - ⚠️ A material declaring neither metalness nor transmission generates a **bit-identical** shader:
+>   the factors are appended only when the surface declares them.
+> - ⚠️ The transmission factor is published NOWHERE ELSE in the G-buffer (matprops has no
+>   transmission nibble, the normals alpha packs only roughness+metalness), and the reflectivity
+>   nibble is a PARTICIPATION mask `max(metalness, 1 - roughness)` — a smooth dielectric publishes
+>   ~1.0 exactly like a metal, so it can never stand in for metalness. Folding both factors into
+>   the albedo at write time is what makes the information reach the combine at all.
+> - ⚠️ The RTGI trace applies the SAME rule at BOUNCE HITS (`albedo *= 1 - metalness`, metalness
+>   texture included, mirroring RTR): a bounce is a diffuse event, and the multi-bounce feedback is
+>   damped by that same albedo product — which is what keeps its geometric series convergent.
+
 ### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 
 One traced diffuse bounce per frame, temporally accumulated, with a multi-bounce feedback
@@ -2562,6 +2650,79 @@ invisible under photometric exposure. Reference values and the full failure mode
 Applied by `Material::Interface::emissionMultiplier()` — see `src/Saphir/AGENTS.md` § "Emission on
 the UNLIT path", including why it multiplies here and adds on the lit path, and why it must never
 reach the albedo attachment.
+
+### The chain order is a STRUCTURE, not a call sequence — `EffectSlot` (Aug 2026)
+
+> [!CAUTION]
+> **`PostProcessStack` is no longer an insertion-ordered vector.** It is a fixed table of
+> CONCEPTS — `Graphics/EffectSlot.hpp` — walked in enum declaration order, and every framebuffer
+> effect declares the concept it implements (`IndirectPostProcessEffect::slot()`, **pure
+> virtual**). `addEffect()` files the effect into its slot; **the order of the calls has no
+> effect whatsoever**. Twelve scenes used to restate the order by hand, three of them
+> differently, and a wrong order was silent.
+>
+> **The canonical order (this IS the enum):**
+> ```
+> IndirectDiffuse → Reflections → AmbientOcclusion → ContactShadows → Fog
+>   → VolumetricLight → LensFlare → Custom → TemporalAA
+>   → [camera: DepthOfField → MotionBlur → Glare → ToneMapping] → PostToneMapping
+> ```
+>
+> ⚠️⚠️ **This order CHANGED with the redesign, and the change is a correctness fix.** It used to
+> be `Reflections → AmbientOcclusion → IndirectDiffuse`, which broke one thing:
+> - **SSR reflected an unlit world.** `SSR` samples the chain colour to fetch what a reflected
+>   ray sees (`reflColor = texture(colorTex, traceData.xy).rgb`) and declares
+>   `readsChainColorUpstream()` PRECISELY so the pending combine group is flushed before it — but
+>   placed first, it had nothing to flush. Since the indirect-diffuse OWNERSHIP contract, an
+>   enabled RTGI also switches the raster's ambient IBL leg off, so those reflections carried no
+>   sky light at all. `RTR` is immune: it shades its own hits and never reads the chain.
+>
+> ⚠️⚠️ **THE AMBIENT OCCLUSION IS LAST OF THE THREE, and both neighbours are load-bearing.** The
+> members of a combine group emit their snippets into ONE generated pass in slot order, and AO's
+> is a GLOBAL MULTIPLY (`em_Color.rgb *= ao;`) while GI's and the reflections' are adds:
+> **everything emitted BEFORE the AO is attenuated, everything after is not.**
+> - Placed FIRST (the historical order) it multiplied the direct lighting and left the indirect
+>   diffuse it exists to occlude untouched.
+> - Placed between the GI and the reflections — which is where the redesign put it for a few
+>   hours — it stopped attenuating the reflections, and traced reflections came out at FULL
+>   strength inside creases and occluded corners. **Owner-reported the same day**: "la réflexion
+>   éjecte des gros pâtés lumineux partout". Measured on Sponza at the spawn pose, moving it back
+>   after the reflections darkens **8.72 % of the frame by more than 10/255** (2.99 % by more than
+>   30, max 204) while the frame mean moves by 0.48 — i.e. it does not darken the image, it
+>   restores occlusion where it was missing. The difference map is concentrated on the FOLIAGE and
+>   on the arch edges.
+> - ⚠️ A global multiply is not the physically right instrument (an occlusion for the diffuse and
+>   a specular occlusion for the reflections are different terms) — it is the same simplification
+>   UE4 makes. The slot order is the best available placement for it, not a proof that the term
+>   is correct.
+>
+> **A slot holds as many occupants as the application builds** — several RTGI and several SSGI
+> with different `Parameters`, all resident so a runtime switch compares them on the very same
+> framing — **of which AT MOST ONE IS ENABLED**. That exclusivity is mechanical, not a convention:
+> `PostProcessEffect::enable()` is virtual, `IndirectPostProcessEffect` overrides it, and enabling
+> an effect asks its stack to `disableSlotSiblings()`. **Enabling one is SELECTING it.**
+> `EffectSlot::Custom` is the single multi-occupant slot, the extension point for an application
+> effect the engine has no concept for.
+>
+> - ⚠️ **The requirement aggregation ignores `isEnabled()`** (`requiresAlbedo()`, `requiresHDR()`,
+>   …): the attachment snapshot the Renderer takes on the frame the scene target is created must
+>   cover EVERY alternative, or selecting a disabled one later would find no attachment. Concrete
+>   case: `SSGI` declares `requiresHDR()`, `RTGI` does not. The cost is the attachments of an
+>   alternative that never runs — the price of the runtime A/B, and it is what the old
+>   "create everything enabled, select after a 200 ms timer" trick was paying blindly.
+>   `hasEnabledReflectionProvider()` / `hasEnabledIndirectDiffuseProvider()` keep filtering on
+>   `isEnabled()`: they are about what RUNS, not about what is allocated.
+> - ⚠️ **The four camera slots are REFUSED to `addEffect()`** with a trace error. `DepthOfField`,
+>   `MotionBlur`, `Glare` and `ToneMapping` are materialized by `syncCameraEffects()` from the
+>   camera's own switches, which owns their lifetime — an application-added one would be
+>   destroyed under its feet at the next camera change. That method lost its
+>   erase → `find_if(runsAfterToneMapping)` → insert dance: it assigns four slots.
+> - ⚠️ `runsAfterToneMapping()` is now DERIVED (`slot() == EffectSlot::PostToneMapping`) instead
+>   of being an independent virtual that could disagree with the effect's position.
+> - ⚠️ The back-pointer an effect keeps to its stack is RAW, and safe by who clears it: the stack
+>   clears it on removal, in `clearEffects()` and in its own destructor, always while it still
+>   holds a `shared_ptr` to the effect. An effect DOES outlive its stack — a demo keeps copies to
+>   toggle it.
 
 ### Effect Chain Order & Phase Contract (Jul 2026)
 

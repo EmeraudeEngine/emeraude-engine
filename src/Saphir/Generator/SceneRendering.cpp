@@ -604,12 +604,15 @@ namespace EmEn::Saphir::Generator
 
 			if ( m_hasAlbedoAttachment )
 			{
-				/* Write the surface base color to MRT attachment 3 for indirect-light modulation
-				 * (SSGI). Only the ambient/simple pass writes it; light passes have their write
-				 * mask zeroed on the G-buffer attachments (see onGraphicsPipelineConfiguration). */
+				/* Write the surface DIFFUSE albedo to MRT attachment 3 for indirect-light
+				 * modulation (SSGI, RTGI). ⚠️ NOT the base color: the attachment re-modulates a
+				 * demodulated IRRADIANCE, so it carries the energy the diffuse lobe actually
+				 * receives — see LightGenerator::diffuseAlbedoShaderExpression(). Only the
+				 * ambient/simple pass writes it; light passes have their write mask zeroed on
+				 * the G-buffer attachments (see onGraphicsPipelineConfiguration). */
 				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
 				{
-					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << m_lightGenerator.albedoShaderExpression() << ").rgb, 1.0);";
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4(" << m_lightGenerator.diffuseAlbedoShaderExpression() << ", 1.0);";
 				}
 				else
 				{

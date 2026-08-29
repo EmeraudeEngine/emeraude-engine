@@ -61,6 +61,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RTGIEffect"};
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note RTGI owns the indirect diffuse: it must be composited before the reflection slot samples the chain colour, and before the AO that attenuates it. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::IndirectDiffuse;
+			}
+
 			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
 			[[nodiscard]]
 			const char *
@@ -211,6 +220,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			{
 				return true;
 			}
+
+			/** @copydoc EmEn::Graphics::PostProcessEffect::providesIndirectDiffuse()
+			 * @note RTGI owns the indirect diffuse: its miss branch integrates the scene's
+			 * environment cubemap scaled by FrameContext::skyLuminance, with the visibility the
+			 * rays actually measure. The raster ambient pass must therefore stop adding its own
+			 * diffuse IBL leg (Scene::updateIBLDiffuseOwnership()).
+			 * @warning ⚠️ Gated by the SAME condition the executor skips on (hardware, setting,
+			 * TLAS consumable). Claiming ownership while the effect cannot draw would leave the
+			 * frame with NO indirect diffuse at all — a black flash over the first frames of
+			 * every scene, while the TLAS builds asynchronously. */
+			[[nodiscard]]
+			bool providesIndirectDiffuse () const noexcept override;
 
 			/**
 			 * @brief Sets the RTGI parameters.

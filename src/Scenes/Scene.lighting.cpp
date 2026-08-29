@@ -27,6 +27,9 @@
 #include "Scene.hpp"
 
 /* Local inclusions. */
+#include "BaseUtility.hpp"
+
+/* Local inclusions. */
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/IBLTexture.hpp"
 
@@ -173,13 +176,16 @@ namespace EmEn::Scenes
 		/* NOTE: 1.0 is the neutral IBL scale when no background declares a luminance. */
 		const auto environmentLuminance = m_backgroundResource != nullptr ? m_backgroundResource->luminance() : 1.0F;
 
+		/* The diffuse IBL leg belongs to whoever computes it — see updateIBLDiffuseOwnership(). */
+		const auto IBLDiffuseWeight = m_IBLDiffuseWeight;
+
 		if ( const auto renderTarget = m_AVConsoleManager.graphicsRenderer().mainRenderTarget(); renderTarget != nullptr )
 		{
-			renderTarget->viewMatrices().updateAmbientLightProperties(color, intensity, environmentLuminance);
+			renderTarget->viewMatrices().updateAmbientLightProperties(color, intensity, environmentLuminance, IBLDiffuseWeight);
 		}
 
-		const auto updateTarget = [&color, intensity, environmentLuminance] (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) {
-			renderTarget->viewMatrices().updateAmbientLightProperties(color, intensity, environmentLuminance);
+		const auto updateTarget = [&color, intensity, environmentLuminance, IBLDiffuseWeight] (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) {
+			renderTarget->viewMatrices().updateAmbientLightProperties(color, intensity, environmentLuminance, IBLDiffuseWeight);
 		};
 
 		this->forEachRenderToView(updateTarget);
@@ -217,6 +223,27 @@ namespace EmEn::Scenes
 				light->updateCascades(frustumCorners, nearPlane, farPlane);
 			}
 		});
+	}
+
+	void
+	Scene::updateIBLDiffuseOwnership () noexcept
+	{
+		/* ⚠️ Benign read race on the effects' enabled flags (the logic thread toggles them, the
+		 * render thread reads them) — the same class as the reflection cost ladder and as the
+		 * executor's own isEnabled() skip. The worst case is one frame of the previous weight. */
+		const auto owned = m_postProcessStack != nullptr && m_postProcessStack->hasEnabledIndirectDiffuseProvider();
+		const auto wanted = owned ? 0.0F : 1.0F;
+
+		if ( Base::Utility::isZero(wanted - m_IBLDiffuseWeight) )
+		{
+			return;
+		}
+
+		m_IBLDiffuseWeight = wanted;
+
+		this->refreshAmbientLightProperties();
+
+		TraceInfo{ClassId} << "The indirect diffuse is now owned by " << (owned ? "the post-process provider (RTGI): the ambient pass' diffuse IBL leg is OFF." : "the raster: the ambient pass' diffuse IBL leg is ON.");
 	}
 
 	void
