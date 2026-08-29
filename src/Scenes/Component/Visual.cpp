@@ -82,8 +82,11 @@ namespace EmEn::Scenes::Component
 						m_skeletalAnimator->addClip(clip);
 					}
 
-					/* Auto-play the first available clip. */
-					if ( !skeletalData->animationClips().empty() )
+					/* Auto-play the first available clip, unless the content asked for the bind
+					 * pose. ⚠️ The opt-out exists because this runs LAZILY, long after the scene
+					 * is built: a consumer cannot stop an animator that does not exist yet, so
+					 * without the flag "no animation" was simply not a reachable state. */
+					if ( !skeletalData->animationClips().empty() && skeletalData->isAutoPlayingFirstClip() )
 					{
 						m_skeletalAnimator->play(skeletalData->animationClips()[0]->clip().name());
 					}

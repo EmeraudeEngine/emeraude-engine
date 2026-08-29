@@ -158,6 +158,33 @@ namespace EmEn::Graphics::Renderable
 				m_animationClips = std::move(clips);
 			}
 
+			/**
+			 * @brief Returns whether the first clip must start playing by itself.
+			 * @note ⚠️ Default TRUE, which is the historical behaviour: Component::Visual plays
+			 * clip 0 when it lazily creates its animator. A consumer that wants the BIND POSE
+			 * on screen had no way to say so — the animator does not exist yet when the scene is
+			 * built, so calling stop() early is a no-op and the model starts moving regardless.
+			 * The asset-loader demo needs "no animation" to be a reachable state.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAutoPlayingFirstClip () const noexcept
+			{
+				return m_autoPlayFirstClip;
+			}
+
+			/**
+			 * @brief Sets whether the first clip starts playing by itself.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableAutoPlayFirstClip (bool state) noexcept
+			{
+				m_autoPlayFirstClip = state;
+			}
+
 		protected:
 
 			SkeletalDataTrait () noexcept = default;
@@ -168,10 +195,12 @@ namespace EmEn::Graphics::Renderable
 			SkeletalDataTrait & operator= (const SkeletalDataTrait &) = default;
 			SkeletalDataTrait & operator= (SkeletalDataTrait &&) = default;
 
+
 		private:
 
 			std::shared_ptr< Animations::SkeletonResource > m_skeleton;
 			Base::Animation::Skin< float > m_skin;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
+			bool m_autoPlayFirstClip{true};
 	};
 }
