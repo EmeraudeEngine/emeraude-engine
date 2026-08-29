@@ -536,6 +536,57 @@ Applying it in both would double-count. ⚠️ And it is deliberately **NOT** ap
 G-buffer attachment written from the same `fragmentColor()` expression: albedo is a reflectance in
 [0,1], and pushing 8000 nits into it poisons every consumer that reads it — RTGI first.
 
+### Screen-space refraction is done in VIEW space, and `svModelScale` is why (Aug 2026)
+
+`KHR_materials_volume` gives the refraction ray its LENGTH (`thicknessFactor`) and the material's
+IOR gives its DIRECTION. The screen displacement is then the **projection of the ray's exit point**,
+never a world direction reinterpreted as a UV.
+
+**Why view space and not world space.** Projecting an exit point needs a world→clip matrix, and the
+fragment stage does not have one:
+
+- `Generator::Abstract::declareViewUniformBlock()` puts `projectionMatrix` in the regular View UBO
+  but **no view matrix** — the view matrix travels as a push constant for regular rendering.
+- That matrices push constant is declared **`VK_SHADER_STAGE_VERTEX_BIT | GEOMETRY`** only
+  (`RenderableInstance::Abstract`), so a fragment shader cannot read it either.
+- The cubemap View UBO *does* carry a view matrix, but inside a per-face `instance[]` array indexed
+  by `gl_ViewIndex` — a **vertex** input.
+
+View space needs none of that: the camera is the origin, so the incident direction is simply
+`normalize(positionViewSpace)`, and `projectionMatrix` alone closes the computation. The view
+transform is rigid, so a world-space ray LENGTH carries over untouched.
+
+**`ShaderVariable::ModelScale` (`svModelScale`)** is the new synthesizable vertex variable this
+needs: glTF authors `thicknessFactor` in MESH space, so it must be scaled to world units.
+`VertexShader::synthesizeModelScale()` emits `vec3(length(M[0].xyz), length(M[1].xyz), length(M[2].xyz))`
+as a **flat** output — it is a per-draw/per-instance constant, never per-vertex. ⚠️ Its four branches
+(MDI / instancing attribute / instance-transforms SSBO / push constant) **mirror
+`synthesizeVertexPositionInWorldSpace()`**; a fifth model-matrix path must teach BOTH.
+
+**Two properties worth keeping as tests**, both verified:
+
+- A **thin-walled** material (`thicknessFactor` 0, i.e. no `KHR_materials_volume`) must be a
+  **bit-exact no-op** — the ray has zero length. `TransmissionTest` measured max diff **0.0**.
+- **IOR 1.0 must not displace anything.** At `eta = 1`, `refract()` returns the incident direction
+  unchanged, the exit point lies on the camera ray, and a perspective projection maps every point of
+  a camera ray to the same pixel. `TransmissionRoughnessTest` sweeps the IOR by ROW (2.42 / 1.76 /
+  1.50 / 1.33 / 1.00) at constant thickness and gives a monotone ladder ending in a 7× collapse:
+
+  | IOR | 2.42 | 1.76 | 1.50 | 1.33 | **1.00** |
+  |---|---|---|---|---|---|
+  | changed pixels | 12964 | 12659 | 11981 | 10487 | **1615** |
+
+  The residue at 1.00 is the silhouette, where `dot(N, I) > 0` and the identity no longer holds.
+
+⚠️ Total internal reflection makes `refract()` return the **zero vector**; normalising it is a NaN
+that poisons the whole sample. `grabPassRefractionOffset()` returns no displacement instead, and
+also bails when either clip `w` is ≤ 0 (behind the eye), where the perspective divide is meaningless.
+
+⚠️ The offset is taken as the **screen DELTA** between the fragment's own projected position and the
+exit point's, rather than using the projected exit point outright the way the Khronos reference does.
+That makes it immune to the TAA sub-pixel jitter — a constant NDC translation carried by both terms,
+so it cancels exactly — whereas `gl_FragCoord` already carries the jitter.
+
 ### Transmission belongs to the AMBIENT pass — and it is TINTED BY THE BASE COLOUR
 
 Two rules, both measured on `IridescentDishWithOlives.glb` and `TransmissionTest` (Aug 2026).

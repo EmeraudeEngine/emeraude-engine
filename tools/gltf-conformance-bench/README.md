@@ -76,6 +76,21 @@ The failure images name the defect, which is what turns a capture into a fix.
   `KHR_materials_*`. When a whole grid renders as one cell, dump the asset's names before touching
   a shader: `python3 -c "import json;a=json.load(open(f));print([m.get('name') for m in a['meshes']])"`.
   Fixed in the engine (`Scenes::Loaders::buildResourceKey()`); the assets did not change.
+- **⚠️ `TransmissionRoughnessTest` is the refraction criterion — read it by ROW, not by column.**
+  It is a GRID: the **IOR varies by row** (2.42 Diamond / 1.76 Sapphire / 1.50 Glass / 1.33 Water /
+  1.00 Air, top to bottom, labelled on the asset itself) and the roughness by column. Fitting runs
+  to a diff mask finds the nine ROUGHNESS columns and tells you nothing about refraction — partition
+  by row instead, from the label geometry.
+  Its value is that **IOR 1.0 is a physical zero**: at `eta = 1` a refracted ray is unbent, it stays
+  on the camera ray, and a perspective projection maps every point of a camera ray to the same pixel,
+  so the screen displacement is exactly nought. A correct screen-space refraction therefore produces
+  a monotone ladder ending in a collapse — measured after the Aug 2026 rewrite, changed pixels per
+  row: **12964 / 12659 / 11981 / 10487 / 1615**. The residue on the last row is the silhouette, where
+  `dot(N, I) > 0`. A criterion that does NOT collapse on the bottom row means the displacement no
+  longer follows the IOR.
+  Its companion control is `TransmissionTest`, whose spheres are **thin-walled** (no
+  `KHR_materials_volume`, so `thicknessFactor` 0): any change to the refraction ray must leave it
+  **bit-exact**, and it did (max diff 0.0).
 - **⚠️ `VolumeAbsorptionProbe` is OURS, not Khronos'**, and it is the only asset here that
   exercises `KHR_materials_volume` at all. Of the 60 glTF files in reach, 15 materials declare the
   extension, 2 declare an `attenuationColor` and **zero** declare an `attenuationDistance` — whose

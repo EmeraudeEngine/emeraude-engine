@@ -2639,6 +2639,34 @@ namespace EmEn::Graphics::Material
 
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace);
 
+				/* NOTE: The grab-pass refraction walks a ray whose LENGTH is KHR_materials_volume's
+				 * thicknessFactor, authored in MESH space — the model scale converts it to world
+				 * units — and it projects the ray's exit point.
+				 *
+				 * ⚠️ That projection is done in VIEW space, not world space, and the reason is a
+				 * hard constraint: the fragment-stage View UBO carries `projectionMatrix` but NO
+				 * view matrix (see Generator::Abstract::declareViewUniformBlock()), and the
+				 * matrices push constant is declared VERTEX|GEOMETRY only. View space needs
+				 * nothing else — the camera sits at the origin there, so the incident direction is
+				 * just normalize(positionViewSpace), and the view transform is rigid so a world
+				 * length carries over unchanged.
+				 *
+				 * Only this path needs these — do not hoist the requests. */
+				if ( m_isUsingGrabPassForTransmission )
+				{
+					vertexShader.requestSynthesizeInstruction(ShaderVariable::ModelScale);
+					vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionViewSpace);
+
+					if ( this->isComponentPresent(ComponentType::Normal) )
+					{
+						vertexShader.requestSynthesizeInstruction(ShaderVariable::ViewTBNMatrix);
+					}
+					else
+					{
+						vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalViewSpace);
+					}
+				}
+
 				if ( this->isComponentPresent(ComponentType::Normal) )
 				{
 					vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
@@ -3109,6 +3137,81 @@ namespace EmEn::Graphics::Material
 				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
 			}
 
+			/* ⚠️⚠️ The screen-space displacement is the PROJECTION of the refraction ray's exit
+			 * point, never a world direction used as a UV.
+			 *
+			 * KHR_materials_volume gives the ray its LENGTH: thicknessFactor, authored in mesh
+			 * space, hence the model scale. The exit point is projected with the view-projection
+			 * and the SCREEN DELTA against the fragment's own projected position is what offsets
+			 * the sample. Taking the delta rather than the projected point outright (which is what
+			 * the Khronos reference does) makes the result immune to the TAA sub-pixel jitter: the
+			 * jitter is a constant NDC translation and cancels exactly in a difference, whereas
+			 * gl_FragCoord already carries it.
+			 *
+			 * ⚠️ This replaced `gpRefractDir.xy * thicknessFactor * 0.05`, wrong twice over: it
+			 * used WORLD x/y as if they were SCREEN x/y (only true for a camera looking down -Z
+			 * unrotated), and the magic 0.05 was calibrated when thicknessFactor was pinned to the
+			 * engine default 1.0. Real assets supply real thicknesses — 0.01 and 0.1 on
+			 * IridescentDishWithOlives.glb — which collapsed the displacement to 0.05 % of the
+			 * screen and made glass look flat. Do NOT "fix" a flat look by forcing the thickness
+			 * back to 1.0: measured A/B, that makes the cover MORE opaque, not less.
+			 *
+			 * ⚠️ Everything here is in VIEW space: the fragment-stage View UBO carries
+			 * `projectionMatrix` but no view matrix, and the matrices push constant is
+			 * VERTEX|GEOMETRY only. In view space the camera is the origin, so the incident
+			 * direction is normalize(positionViewSpace) and the projection alone closes the
+			 * computation. The view transform is rigid, so the ray LENGTH — a world quantity —
+			 * carries over untouched.
+			 *
+			 * ⚠️ Cubemap render targets take the no-displacement path: their View UBO is a
+			 * different block, indexed per face by gl_ViewIndex, a VERTEX input. No grab pass is
+			 * ever filled for a cubemap target anyway — the blit reads the swap chain — so the
+			 * sample would be stale regardless. */
+			const auto projectedRayAvailable = !generator.renderTarget()->isCubemap();
+
+			if ( projectedRayAvailable )
+			{
+				static_cast< void >(generator.declareViewUniformBlock(fragmentShader));
+
+				Declaration::Function grabPassRefractionOffset{"grabPassRefractionOffset", GLSL::FloatVector2};
+				grabPassRefractionOffset.addInParameter(GLSL::FloatVector3, "refractDirView");
+				grabPassRefractionOffset.addInParameter(GLSL::FloatVector3, "rayScale");
+				grabPassRefractionOffset.addInParameter(GLSL::FloatVector4, "clipHere");
+				grabPassRefractionOffset.addInParameter(GLSL::Matrix4, "projection");
+				Code{grabPassRefractionOffset, Location::Output} <<
+					"/* Total internal reflection: refract() returns the zero vector, and normalizing"
+					" it is a NaN that would poison the whole sample. No displacement instead. */" << Line::End <<
+					"const float lengthSq = dot(refractDirView, refractDirView);" << Line::End <<
+					"if ( lengthSq <= 0.0 ) { return vec2(0.0); }" << Line::End <<
+					"/* The view transform is rigid, so the ray length is the world one. */" << Line::End <<
+					"const vec3 exitOffset = (refractDirView * inversesqrt(lengthSq)) * rayScale;" << Line::End <<
+					"const vec4 clipExit = clipHere + projection * vec4(exitOffset, 0.0);" << Line::End <<
+					"/* Behind the eye, or on it: the perspective divide is meaningless there. */" << Line::End <<
+					"if ( clipExit.w <= 0.0 || clipHere.w <= 0.0 ) { return vec2(0.0); }" << Line::End <<
+					"/* NDC delta, halved because the NDC -> UV map is x * 0.5 + 0.5 and the"
+					" constant cancels. The TAA jitter cancels here too — it is a constant NDC"
+					" translation carried by both terms. */" << Line::End <<
+					"return (clipExit.xy / clipExit.w - clipHere.xy / clipHere.w) * 0.5;";
+
+				fragmentShader.declare(grabPassRefractionOffset);
+
+				/* The perturbed normal in VIEW space. ViewTBNMatrix maps view -> tangent (it is
+				 * built as transpose(mat3(viewT, viewB, viewN))), so its transpose brings the
+				 * tangent-space normal back to view space — the same expression LightGenerator
+				 * uses for its own "N". */
+				const auto viewNormal = this->isComponentPresent(ComponentType::Normal)
+					? "normalize(transpose(" + std::string{ShaderVariable::ViewTBNMatrix} + ") * " + std::string{SurfaceNormalVector} + ")"
+					: "normalize(" + std::string{ShaderVariable::NormalViewSpace} + ")";
+
+				Code(fragmentShader, Location::Top) <<
+					"const mat4 gpProjection = " << ViewUB(UniformBlock::Component::ProjectionMatrix, false) << ";" << Line::End <<
+					"const vec3 gpPosView = " << ShaderVariable::PositionViewSpace << ".xyz;" << Line::End <<
+					"/* The camera IS the origin in view space. */" << Line::End <<
+					"const vec3 gpIncidentView = normalize(gpPosView);" << Line::End <<
+					"const vec3 gpNormalView = " << viewNormal << ";" << Line::End <<
+					"const vec4 gpClipHere = gpProjection * vec4(gpPosView, 1.0);";
+			}
+
 			if ( m_materialProperties[DispersionOffset] > 0.0F )
 			{
 				/* Chromatic dispersion: 3 GrabPass samples with different IOR offsets per channel. */
@@ -3119,13 +3222,17 @@ namespace EmEn::Graphics::Material
 					"float gpEtaR = 1.0 / (baseIOR - gpSpread * 0.5);" << Line::End <<
 					"float gpEtaG = 1.0 / baseIOR;" << Line::End <<
 					"float gpEtaB = 1.0 / (baseIOR + gpSpread * 0.5);" << Line::End <<
-					"vec3 gpRefractDirR = refract(reflectionI, reflectionNormal, gpEtaR);" << Line::End <<
-					"vec3 gpRefractDirG = refract(reflectionI, reflectionNormal, gpEtaG);" << Line::End <<
-					"vec3 gpRefractDirB = refract(reflectionI, reflectionNormal, gpEtaB);" << Line::End <<
-					"float gpThickness = " << MaterialUB(UniformBlock::Component::ThicknessFactor) << ";" << Line::End <<
-					"vec2 gpOffsetR = gpRefractDirR.xy * gpThickness * 0.05;" << Line::End <<
-					"vec2 gpOffsetG = gpRefractDirG.xy * gpThickness * 0.05;" << Line::End <<
-					"vec2 gpOffsetB = gpRefractDirB.xy * gpThickness * 0.05;" << Line::End <<
+					(projectedRayAvailable
+						? "vec3 gpRefractDirR = refract(gpIncidentView, gpNormalView, gpEtaR);\n"
+						  "vec3 gpRefractDirG = refract(gpIncidentView, gpNormalView, gpEtaG);\n"
+						  "vec3 gpRefractDirB = refract(gpIncidentView, gpNormalView, gpEtaB);\n"
+						  "vec3 gpRayScale = " + std::string{MaterialUB(UniformBlock::Component::ThicknessFactor)} + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
+						  "vec2 gpOffsetR = grabPassRefractionOffset(gpRefractDirR, gpRayScale, gpClipHere, gpProjection);\n"
+						  "vec2 gpOffsetG = grabPassRefractionOffset(gpRefractDirG, gpRayScale, gpClipHere, gpProjection);\n"
+						  "vec2 gpOffsetB = grabPassRefractionOffset(gpRefractDirB, gpRayScale, gpClipHere, gpProjection);\n"
+						: std::string{"vec2 gpOffsetR = vec2(0.0);\n"
+						  "vec2 gpOffsetG = vec2(0.0);\n"
+						  "vec2 gpOffsetB = vec2(0.0);\n"}) <<
 					"float convergR = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetR, vec2(0.001), vec2(0.999))).r;" << Line::End <<
 					"float convergG = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetG, vec2(0.001), vec2(0.999))).g;" << Line::End <<
 					"float convergB = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetB, vec2(0.001), vec2(0.999))).b;" << Line::End <<
@@ -3136,10 +3243,12 @@ namespace EmEn::Graphics::Material
 				/* Standard GrabPass refraction without dispersion. */
 				Code(fragmentShader, Location::Top) <<
 					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
-					"vec3 gpViewDir = reflectionI;" << Line::End <<
 					"float gpEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
-					"vec3 gpRefractDir = refract(gpViewDir, reflectionNormal, gpEta);" << Line::End <<
-					"vec2 gpOffset = gpRefractDir.xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.05;" << Line::End <<
+					(projectedRayAvailable
+						? "vec3 gpRefractDir = refract(gpIncidentView, gpNormalView, gpEta);\n"
+						  "vec3 gpRayScale = " + std::string{MaterialUB(UniformBlock::Component::ThicknessFactor)} + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
+						  "vec2 gpOffset = grabPassRefractionOffset(gpRefractDir, gpRayScale, gpClipHere, gpProjection);\n"
+						: std::string{"vec2 gpOffset = vec2(0.0);\n"}) <<
 					"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
 					"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
 			}

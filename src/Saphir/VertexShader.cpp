@@ -817,6 +817,64 @@ namespace EmEn::Saphir
 	}
 
 	bool
+	VertexShader::synthesizeModelScale (Generator::Abstract & generator, std::string & outputInstructions) noexcept
+	{
+		/* NOTE: The four branches MIRROR synthesizeVertexPositionInWorldSpace() — same paths, same
+		 * order, same prepare*() calls. They are duplicated rather than factored because the
+		 * position path also weaves in skinning and the gl_Position variant; if a fifth model
+		 * matrix path ever appears, BOTH have to learn it. */
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::ModelScale, GLSL::Flat}) )
+		{
+			return false;
+		}
+
+		std::string matrixExpression{};
+
+		if ( this->isMDIEnabled() )
+		{
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			matrixExpression = ShaderVariable::MDIModelMatrix;
+		}
+		else if ( this->isInstancingEnabled() )
+		{
+			if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
+			{
+				return false;
+			}
+
+			matrixExpression = Attribute::ModelMatrix;
+		}
+		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
+		{
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			matrixExpression = ShaderVariable::InstanceModelMatrix;
+		}
+		else
+		{
+			matrixExpression = MatrixPC(PushConstant::Component::ModelMatrix);
+		}
+
+		std::stringstream code{};
+
+		code << '\t' << ShaderVariable::ModelScale << " = vec3("
+			"length(" << matrixExpression << "[0].xyz), "
+			"length(" << matrixExpression << "[1].xyz), "
+			"length(" << matrixExpression << "[2].xyz));" "\n";
+
+		outputInstructions.append(code.str());
+
+		return true;
+	}
+
+	bool
 	VertexShader::synthesizeVertexPositionInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
@@ -1445,6 +1503,16 @@ namespace EmEn::Saphir
 				continue;
 			}
 
+			if ( std::strcmp(variableType, ShaderVariable::ModelScale) == 0 )
+			{
+				if ( !this->synthesizeModelScale(generator, outputInstructions) )
+				{
+					return false;
+				}
+
+				continue;
+			}
+
 			if ( std::strcmp(variableType, ShaderVariable::PositionViewSpace) == 0 )
 			{
 				if ( !this->synthesizeVertexPositionInViewSpace(generator, topInstructions, outputInstructions, variableScope) )
@@ -1630,7 +1698,7 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::isSyntheticVariableAllowed (const char * variableName) noexcept
 	{
-		constexpr std::array< const char *, 19 > variables{
+		constexpr std::array< const char *, 20 > variables{
 			ShaderVariable::PositionScreenSpace,
 			ShaderVariable::PositionWorldSpace,
 			ShaderVariable::GLPositionWorldSpace,
@@ -1647,6 +1715,7 @@ namespace EmEn::Saphir
 			ShaderVariable::BinormalViewSpace,
 			ShaderVariable::NormalWorldSpace,
 			ShaderVariable::NormalViewSpace,
+			ShaderVariable::ModelScale,
 			ShaderVariable::WorldTBNMatrix,
 			ShaderVariable::ViewTBNMatrix,
 			ShaderVariable::TangentToWorldMatrix

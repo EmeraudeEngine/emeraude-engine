@@ -534,6 +534,20 @@ namespace EmEn::Saphir
 			bool synthesizeVertexPositionInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope, bool asGLStandardPosition = false) noexcept;
 
 			/**
+			 * @brief Synthesizes the model matrix SCALE as a flat vec3 output.
+			 * @note glTF authors some quantities in MESH space — KHR_materials_volume's
+			 * thicknessFactor above all — while the shading that consumes them works in world
+			 * space. This carries the per-axis scale of whichever model matrix the current path
+			 * uses (MDI, instancing attribute, instance-transforms SSBO or the push constant), so
+			 * a fragment shader can convert without knowing which path produced the vertex.
+			 * @warning Flat-interpolated: it is a per-draw/per-instance constant, never per-vertex.
+			 * @param generator A reference to the shader generator.
+			 * @param outputInstructions Every instruction that should be at the end of the main() function.
+			 * @return bool
+			 */
+			bool synthesizeModelScale (Generator::Abstract & generator, std::string & outputInstructions) noexcept;
+
+			/**
 			 * @brief Synthesizes the vertex position in view space in the vertex shader.
 			 * @note gl_Position = gl_modelViewMatrix * gl_Vertex;
 			 * @param generator A reference to the shader generator.

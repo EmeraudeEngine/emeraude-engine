@@ -928,6 +928,7 @@ namespace EmEn::Saphir
 			constexpr auto BinormalViewSpace{"svBinormalViewSpace"};
 			constexpr auto NormalWorldSpace{"svNormalWorldSpace"};
 			constexpr auto NormalViewSpace{"svNormalViewSpace"};
+			constexpr auto ModelScale{"svModelScale"};
 			constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
 			constexpr auto MDIModelMatrix{"svMDIModelMatrix"};
 			constexpr auto InstanceModelMatrix{"svInstanceModelMatrix"};

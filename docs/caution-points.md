@@ -2163,6 +2163,30 @@ variable whenever a feature is "implemented" but invisible.
 ⚠️ Do not expect a warning from anywhere: the GLSL compiler dead-strips a pure texture fetch in
 silence, glslang emits nothing, and the validation layers see a perfectly legal pipeline.
 
+### The fragment stage has NO view matrix — plan the space you work in before writing the maths (Aug 2026)
+
+Writing a screen-space refraction in world space compiles fine in C++ and dies at GLSL compile time
+with `'viewMatrix' : no such field in structure 'ubView'`. Three facts, all of them easy to assume
+away:
+
+- The regular View UBO (`Generator::Abstract::declareViewUniformBlock()`) carries
+  **`projectionMatrix` but no view matrix**. For regular rendering the view matrix is a push
+  constant.
+- That matrices push constant is declared **`VK_SHADER_STAGE_VERTEX_BIT | GEOMETRY`** only.
+  A fragment shader cannot read it.
+- The **cubemap** View UBO does carry view matrices, but inside a per-face `instance[]` array indexed
+  by `gl_ViewIndex`, a **vertex** input — so `ViewUB(..., true)` is a vertex-stage-only expression.
+
+⚠️ The failure surfaces as a **runtime shader-compile error**, not a build error: the generator emits
+the text happily. It is caught only by launching and reading the log — one more reason the engine
+prints the erroneous GLSL in full.
+
+The way out is usually to change space rather than to widen a push-constant range or grow the UBO
+(both have engine-wide blast radius): **view space costs nothing extra** — the camera is the origin,
+so the incident direction is `normalize(positionViewSpace)`, `projectionMatrix` alone finishes the
+job, and the transform is rigid so world-space LENGTHS carry over untouched. See
+`src/Saphir/AGENTS.md` § "Screen-space refraction is done in VIEW space".
+
 ### ⚠️⚠️ A test can lose its discriminating power when you remove the defect it was measuring through
 
 `VolumeAbsorptionProbe` (bench asset, three glass spheres: no volume / attenuation colour without

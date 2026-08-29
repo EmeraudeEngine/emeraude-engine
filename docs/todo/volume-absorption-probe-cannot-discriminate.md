@@ -39,6 +39,10 @@ so absorbing 99 % of almost nothing is invisible.
   incidence — see the unit-asymmetry note below; it may be swamping transmission on every
   reflective+transmissive material, not just here.
 
+⚠️ Meanwhile the bench is **not** without a transmission criterion: `TransmissionRoughnessTest`'s
+IOR sweep discriminates refraction cleanly (see the bench README), and `TransmissionTest` is a
+bit-exact thin-walled control. What is missing here is specifically an **absorption** criterion.
+
 ## ⚠️ Traps
 
 - ⚠️⚠️ **A control that discriminates through a defect stops discriminating when the defect is
