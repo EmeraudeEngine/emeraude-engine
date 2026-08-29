@@ -102,12 +102,18 @@ The failure images name the defect, which is what turns a capture into a fix.
   *without* a distance must NOT tint, and that is the rule a well-meaning fix would break.
   Regenerate with `./make-volume-probe.py`; never hand-drop a binary nobody can rebuild.
   ⚠️⚠️ **Those three numbers are STALE since Aug 2026 and the probe currently discriminates
-  NOTHING** — the three balls now measure identical to within 0.5 of a code value. It was reading
+  NOTHING** — the three balls measure identical to within 0.5 of a code value. It had been reading
   the absorption *through* the additive light-pass transmission term, and that term was a defect,
-  now removed. The probe needs a bright opaque backdrop before it can be a criterion again:
-  absorption is a multiplication and these balls float against near-black trees. Do not read the
-  three percentages above as a live baseline, and do not treat the flat result as a regression —
-  see `docs/todo/volume-absorption-probe-cannot-discriminate.md`.
+  now removed. Do not read the three percentages above as a live baseline, and do not treat the flat
+  result as a regression.
+  The asset has since been given what it needs — a **white opaque backdrop** behind the balls
+  (absorption is a multiplication; it needs something bright to multiply), deliberately UNIFORM
+  rather than a checker so that the refraction displacement is not a confound, and a
+  thickness/distance pair rebalanced to 0.2 / 0.05 so the refracted sample stays on that backdrop.
+  ⚠️⚠️ It still reads flat, and the cause is NOT in the bench: with a panel measuring (201, 200, 196)
+  behind them the ball centres are unchanged from when dark trees were behind, so the grab-pass
+  transmission is not reaching them at all. See
+  `docs/todo/grab-pass-transmission-not-reaching-opaque-glass.md` — the probe item is blocked on it.
 - **⚠️ Verify a loader-wide change with a PIXEL DIFF against the previous run, partitioned by the
   property you changed.** The captures of a previous pass are kept under
   `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-<date>/`, and the framing is

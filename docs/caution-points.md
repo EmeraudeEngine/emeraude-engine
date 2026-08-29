@@ -2204,6 +2204,19 @@ so the incident direction is `normalize(positionViewSpace)`, `projectionMatrix` 
 job, and the transform is rigid so world-space LENGTHS carry over untouched. See
 `src/Saphir/AGENTS.md` § "Screen-space refraction is done in VIEW space".
 
+### ⚠️⚠️ Editing an asset while the engine is running gives you the OLD one, silently (Aug 2026)
+
+`Core.openFiles()` goes through the resource manager, which serves a **cached** material and
+geometry for an asset it has already loaded this process. Regenerating
+`VolumeAbsorptionProbe.glb` with a five-fold different thickness and re-capturing produced a
+**byte-identical** image — max diff 0 — and the natural reading of that is "the change did nothing",
+which sent the diagnosis down a wrong path.
+
+**Restart the engine after touching a `.glb`**, and make the first check a diff against the previous
+capture: if it is exactly zero, suspect the cache before suspecting the change. A real no-op is
+usually zero for a *structural* reason you can state in advance (a material that does not declare
+the feature, a factor of zero); a zero you cannot explain that way is a stale load.
+
 ### ⚠️⚠️ A test can lose its discriminating power when you remove the defect it was measuring through
 
 `VolumeAbsorptionProbe` (bench asset, three glass spheres: no volume / attenuation colour without

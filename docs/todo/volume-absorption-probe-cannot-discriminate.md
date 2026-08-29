@@ -1,7 +1,7 @@
 ---
 id: volume-absorption-probe-cannot-discriminate
 title: VolumeAbsorptionProbe no longer separates its three spheres — it needs a bright background
-status: open
+status: blocked
 priority: medium
 scope: tools/gltf-conformance-bench
 opened: 2026-08-29
@@ -28,9 +28,28 @@ pixel is dominated by `reflectedColor * fresnelDielectric`, and the transmitted 
 supposed to read is sampled from a **near-black background**: the spheres float against dark trees,
 so absorbing 99 % of almost nothing is invisible.
 
+## Status, 2026-08-29
+
+The backdrop is **done** and so is the thickness/distance rebalance (see below); the probe still
+does not discriminate, and the cause is now located UPSTREAM of the bench:
+`grab-pass-transmission-not-reaching-opaque-glass`. With a white panel measuring (201, 200, 196)
+behind them, the ball centres are unchanged from when dark trees were behind — the transmission term
+contributes nothing at all, so there is no absorption to read. **This item is blocked on that one**,
+and it needs no further asset work until it is answered.
+
+⚠️ `thicknessFactor` is now **0.2** with `attenuationDistance` **0.05** instead of 1.0 / 0.25. Only
+their RATIO sets the absorption, so the medium is unchanged — but thickness is ALSO the refraction
+ray's length since the screen-space refraction was rewritten, and at 1.0 (the ball's own diameter)
+the refracted sample landed a world unit away, off the backdrop. ⚠️ Change one without the other and
+you change the medium.
+
 ## What remains
 
-- [ ] Give the probe a **bright, opaque backdrop** behind the spheres — the way `TransmissionTest`
+- [x] ~~Give the probe a bright, opaque backdrop behind the spheres.~~ **DONE** — white, opaque,
+  fully rough, deliberately UNIFORM rather than a checker: this probe measures ABSORPTION, and a flat
+  field removes the refraction displacement as a confound. It sits at NEGATIVE Z because the bench's
+  `front` view puts the camera at +Z.
+- [ ] ~~Give the probe a bright, opaque backdrop behind the spheres~~ — the way `TransmissionTest`
   puts a lit checkered cloth behind its own. Absorption is a multiplication; it needs something to
   multiply. Generate it in `make-volume-probe.py` so the asset stays deterministic.
 - [ ] Re-derive a numeric criterion once the backdrop exists: the third sphere's G/R ratio against
