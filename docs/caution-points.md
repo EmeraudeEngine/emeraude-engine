@@ -7,6 +7,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 - [Graphics/Material System](#graphicsmaterial-system)
 - [Ray Tracing / Acceleration Structures](#ray-tracing--acceleration-structures)
 - [Resources / Loaders](#resources--loaders)
+- [Animation](#animation)
 - [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
 - [Build / Compiler](#build--compiler)
@@ -1524,6 +1525,84 @@ criterion, and each attempt failed differently:
 validated against a case where the answer is known. When four attempts are confounded, the honest
 deliverable is "the feature demonstrably acts, by this diff and this control; the criterion is still
 missing", not the fourth number.
+
+## Animation
+
+### Fixed: `play()` keys on the CLIP name, the loaders hand out RESOURCE names — a silent, total no-op (Aug 2026)
+
+**Symptom.** The `asset-loader` demo's KeyPad2 cycled its animation index, printed the clip name it
+believed it was starting, and **nothing moved**. No error, no warning, no log line.
+
+**Cause.** `SkeletalAnimator::addClip()` indexes on the clip's own name:
+
+```cpp
+m_clips[clip->clip().name()] = clip;          // "walk_2"
+```
+
+while the caller collected `clip->name()` — the **resource** name, which every loader prefixes:
+
+| Loader | Resource key | Clip's own name |
+|---|---|---|
+| FBX (sibling clips) | `FBX:walk_2/Animation/walk_2` | `walk_2` |
+| FBX (embedded stack) | `<prefix>Animation/<stack>` | `<stack>` |
+| glTF | `<prefix>/animation/<name>` | `<name>` |
+
+`play()` looked up a key that never existed and **returned `false`** — which the caller discarded.
+
+**The rule.** `play()` takes `clip->clip().name()`, never `clip->name()`, and **its bool is never
+discarded**. ⚠️ The two names are equal often enough (a clip whose loader adds no prefix) that a
+spot-check on one asset proves nothing.
+
+### Fixed: `stop()` cleared the pose instead of restoring it — the model froze mid-animation (Aug 2026)
+
+`SkeletalAnimator::stop()` did `m_skinningMatrices.clear()`, so `hasPose()` went false,
+`Component::Visual` stopped calling `updateSkinningMatrices()` — and the `RenderableInstance`'s
+**staging buffer still held the last animated pose**, which `flushSkinningMatrices()` kept uploading
+every frame. "No animation" rendered as "frozen on the last frame".
+
+⚠️ **A stop that stops WRITING is not a stop.** Wherever a consumer pushes state only while a
+producer reports having some, stopping the producer freezes the last value. `stop()` now *evaluates*
+the bind pose; `Scenes::Component::NodeAnimation::stop()` writes back each target's captured rest
+frame. (The skinning SSBO is separately initialised to identity at creation, so an asset that never
+animated at all was correct — the defect only bit assets that had animated at least once.)
+
+### The animator does not exist yet when the scene is built — say it on the CONTENT (Aug 2026)
+
+`Component::Visual` creates its `SkeletalAnimator` **lazily**, on its first logic cycle, and
+auto-plays clip 0. A consumer building a scene has nothing to call `play()` or `stop()` on, so:
+
+- `SkeletalDataTrait::enableAutoPlayFirstClip(false)` → the asset appears in its bind pose;
+- `SkeletalDataTrait::setAutoPlayClipName(name)` → the asset appears already playing that clip.
+
+⚠️ Both mutate a **cached resource** — the setting outlives the instance that asked for it.
+
+⚠️ A corollary for diagnostics: right after a load, `visual->skeletalAnimator()` is legitimately
+`nullptr`. Code warning on "nothing answered" must distinguish *nothing was asked* (no animator yet,
+correct) from *everything refused* (a real miss) — `AssetLoader::applyAnimation()` counts both.
+
+### A glTF animation is not necessarily skeletal — and may be BOTH (Aug 2026)
+
+glTF drives skin joints and plain nodes through the same construct. Measured on the bench:
+`ChronographWatch.glb` and `IridescentDishWithOlives.glb` each declare **1 animation and 0 skins**;
+`Dragon.glb` declares **27 animations, 1 skin**. The loader used to `continue` on any channel whose
+target node was not a skin joint, so a 0-skin asset produced **zero clips** and read as "carries no
+animation".
+
+Channels are now sorted into `SceneData::animationClips` (joints) and
+`SceneData::nodeAnimationClips` (nodes), evaluated by `SkeletalAnimator` and
+`Scenes::Component::NodeAnimation` respectively. An animation touching both comes out **split into
+two clips sharing one name**, in two resource key spaces. See
+[`src/Animations/AGENTS.md`](../src/Animations/AGENTS.md).
+
+⚠️ **An animated node must be exempted from hierarchy flattening.** `SceneDataConsumer` drops a node
+with no mesh and an identity transform — exactly the shape of a pivot waiting to be rotated. Kept
+flattened, the clip drives the PARENT and swings the whole asset.
+
+### An anonymous clip's fallback name must reach the CLIP, not just its resource key (Aug 2026)
+
+`GLTFLoader` built `"clip_N"` for an unnamed animation but constructed the `AnimationClip` with the
+raw (empty) name. Two anonymous animations therefore collapsed onto the empty key inside every
+animator's clip map, and only one stayed reachable. `CesiumMan.glb` is the asset that exhibits it.
 
 ## Scene Rendering
 

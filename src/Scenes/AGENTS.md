@@ -31,7 +31,16 @@ See @docs/scene-graph-architecture.md for complete details.
 **Lights:** DirectionalLight, PointLight, SpotLight
 **Audio:** SoundEmitter, Microphone
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
+**Animation:** NodeAnimation
 **Utilities:** Camera, ParticlesEmitter
+
+> `NodeAnimation` plays the clips that move a **node hierarchy** rather than a skeleton — glTF TRS
+> tracks on plain nodes (a rotating bezel, a swinging door). `SceneDataConsumer` installs ONE on the
+> **root** of an imported hierarchy and binds `weak_ptr` targets, because a single clip drives many
+> nodes. Its playback surface mirrors `Animations::SkeletalAnimator` on purpose.
+> ⚠️ **Node mode only** — a `StaticEntity` bakes its world frame at build time and has no local frame
+> left to animate; the consumer warns instead of silently dropping the animation.
+> ⚠️ **An animated node is exempt from flattening** — see [`Animations/AGENTS.md`](../Animations/AGENTS.md).
 
 ### Editor Subsystem
 

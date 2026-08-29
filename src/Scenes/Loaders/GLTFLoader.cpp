@@ -611,6 +611,7 @@ namespace EmEn::Scenes::Loaders
 		/* Populate output with loaded resources. */
 		output.skeletons = m_skeletons;
 		output.animationClips = m_animationClips;
+		output.nodeAnimationClips = m_nodeAnimationClips;
 		output.skinJointNodeIndices = m_skinJointNodeIndices;
 
 		/* Inventory of what the asset actually declared. Without it, "the scene is not lit" is
@@ -621,7 +622,8 @@ namespace EmEn::Scenes::Loaders
 			output.nodes.size() << " nodes, " <<
 			output.meshes.size() << " meshes, " <<
 			output.skeletons.size() << " skeletons, " <<
-			output.animationClips.size() << " clips, " <<
+			output.animationClips.size() << " skeletal clips, " <<
+			output.nodeAnimationClips.size() << " node clips, " <<
 			output.lights.size() << " lights, " <<
 			output.cameras.size() << " cameras.";
 
@@ -2346,11 +2348,26 @@ namespace EmEn::Scenes::Loaders
 		}
 
 		m_animationClips.reserve(asset.animations.size());
+		m_nodeAnimationClips.reserve(asset.animations.size());
+
+		size_t animationIndex = 0;
 
 		for ( const auto & glTFAnim : asset.animations )
 		{
+			/* ⚠️ ONE glTF animation may drive skin joints AND plain nodes through the very same
+			 * construct — a character whose sword swings on a non-skinned node is the ordinary
+			 * case. The two need different evaluators, so the channels are SORTED here and the
+			 * animation comes out as up to two clips sharing one name. */
 			std::vector< AnimationChannel< float > > channels;
 			channels.reserve(glTFAnim.channels.size());
+
+			std::vector< AnimationChannel< float > > nodeChannels;
+
+			const auto clipName = glTFAnim.name.empty()
+				? "clip_" + std::to_string(animationIndex)
+				: std::string{glTFAnim.name};
+
+			animationIndex++;
 
 			for ( const auto & glTFChannel : glTFAnim.channels )
 			{
@@ -2365,16 +2382,18 @@ namespace EmEn::Scenes::Loaders
 					continue;
 				}
 
-				/* Map GLTF node index to joint index in the skeleton. */
+				/* Map the glTF node index to a joint index in the skeleton. A node that is NOT a
+				 * skin joint is animated as ITSELF: its target index is the node index, which the
+				 * loader keeps 1:1 with SceneData::nodes (buildNodeDescriptors resizes the array
+				 * to asset.nodes.size() and writes it in place). */
 				const auto nodeIdx = glTFChannel.nodeIndex.value();
 				const auto it = nodeToJointIndex.find(nodeIdx);
+				const bool isJointChannel = it != nodeToJointIndex.end();
 
-				if ( it == nodeToJointIndex.end() )
-				{
-					continue;
-				}
+				const auto targetIndex = isJointChannel
+					? it->second
+					: static_cast< int32_t >(nodeIdx);
 
-				const auto jointIndex = it->second;
 				const auto & glTFSampler = glTFAnim.samplers[glTFChannel.samplerIndex];
 
 				/* Read keyframe timestamps. */
@@ -2404,7 +2423,7 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				AnimationChannel< float > channel;
-				channel.jointIndex = jointIndex;
+				channel.targetIndex = targetIndex;
 				channel.interpolation = interp;
 
 				const auto & outputAccessor = asset.accessors[glTFSampler.outputAccessor];
@@ -2509,32 +2528,56 @@ namespace EmEn::Scenes::Loaders
 					default :
 						continue;
 				}
-				channels.push_back(std::move(channel));
+
+				if ( isJointChannel )
+				{
+					channels.push_back(std::move(channel));
+				}
+				else
+				{
+					nodeChannels.push_back(std::move(channel));
+				}
 			}
 
+			/* ⚠️ The fallback name belongs to the CLIP, not only to its resource key: the animator
+			 * indexes its clips on the clip's own name, so two anonymous animations used to
+			 * collapse onto the empty key and only one of them stayed reachable. */
 			if ( !channels.empty() )
 			{
-				AnimationClip< float > clip{std::string{glTFAnim.name}, std::move(channels)};
+				this->registerClip(clipName, "/animation/", std::move(channels), m_animationClips);
+			}
 
-				const auto clipName = glTFAnim.name.empty()
-					? "clip_" + std::to_string(m_animationClips.size())
-					: std::string{glTFAnim.name};
-
-				auto clipResource = m_resources.container< Animations::AnimationClipResource >()
-					->getOrCreateResourceSync(
-						m_resourcePrefix + std::string{} + "/animation/" + clipName,
-						[&clip] (auto & resource) {
-							return resource.load(std::move(clip));
-						}
-					);
-
-				m_animationClips.push_back(std::move(clipResource));
+			if ( !nodeChannels.empty() )
+			{
+				this->registerClip(clipName, "/node-animation/", std::move(nodeChannels), m_nodeAnimationClips);
 			}
 		}
 
-		if ( !m_animationClips.empty() )
+		if ( !m_animationClips.empty() || !m_nodeAnimationClips.empty() )
 		{
-			TraceDebug{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
+			TraceDebug{ClassId} << "Loaded " << m_animationClips.size() << " skeletal clip(s) and "
+				<< m_nodeAnimationClips.size() << " node clip(s).";
+		}
+	}
+
+	void
+	GLTFLoader::registerClip (const std::string & clipName, const std::string & keySpace, std::vector< AnimationChannel< float > > channels, std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output) const noexcept
+	{
+		AnimationClip< float > clip{clipName, std::move(channels)};
+
+		/* ⚠️ The key space separates the two halves of a SPLIT animation: both carry the same
+		 * name, and a single key would serve the skeletal half where the node half was asked for. */
+		auto clipResource = m_resources.container< Animations::AnimationClipResource >()
+			->getOrCreateResourceSync(
+				m_resourcePrefix + keySpace + clipName,
+				[&clip] (auto & resource) {
+					return resource.load(std::move(clip));
+				}
+			);
+
+		if ( clipResource != nullptr )
+		{
+			output.push_back(std::move(clipResource));
 		}
 	}
 

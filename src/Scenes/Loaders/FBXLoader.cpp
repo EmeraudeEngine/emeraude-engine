@@ -1464,19 +1464,19 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			AnimationChannel< float > translation;
-			translation.jointIndex = static_cast< int32_t >(ji);
+			translation.targetIndex = static_cast< int32_t >(ji);
 			translation.target = ChannelTarget::Translation;
 			translation.interpolation = ChannelInterpolation::Linear;
 			translation.vectorKeyFrames.reserve(numFrames);
 
 			AnimationChannel< float > rotation;
-			rotation.jointIndex = static_cast< int32_t >(ji);
+			rotation.targetIndex = static_cast< int32_t >(ji);
 			rotation.target = ChannelTarget::Rotation;
 			rotation.interpolation = ChannelInterpolation::Linear;
 			rotation.quaternionKeyFrames.reserve(numFrames);
 
 			AnimationChannel< float > scaleChannel;
-			scaleChannel.jointIndex = static_cast< int32_t >(ji);
+			scaleChannel.targetIndex = static_cast< int32_t >(ji);
 			scaleChannel.target = ChannelTarget::Scale;
 			scaleChannel.interpolation = ChannelInterpolation::Linear;
 			scaleChannel.vectorKeyFrames.reserve(numFrames);
@@ -1665,7 +1665,7 @@ namespace EmEn::Scenes::Loaders
 
 					const auto isRoot = std::ranges::find(
 						rootJointIndices,
-						static_cast< size_t >(channel.jointIndex)
+						static_cast< size_t >(channel.targetIndex)
 					) != rootJointIndices.end();
 
 					if ( !isRoot )

@@ -31,6 +31,7 @@
 #include "Constants.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Scenes/Scene.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -82,13 +83,23 @@ namespace EmEn::Scenes::Component
 						m_skeletalAnimator->addClip(clip);
 					}
 
-					/* Auto-play the first available clip, unless the content asked for the bind
-					 * pose. ⚠️ The opt-out exists because this runs LAZILY, long after the scene
-					 * is built: a consumer cannot stop an animator that does not exist yet, so
-					 * without the flag "no animation" was simply not a reachable state. */
+					/* Auto-play the clip the content asked for, or the first available one, unless
+					 * it asked for the bind pose. ⚠️ Both opt-outs exist because this runs LAZILY,
+					 * long after the scene is built: a consumer cannot play or stop an animator
+					 * that does not exist yet, so neither "no animation" nor "start on THIS clip"
+					 * was a reachable state without the content saying so. */
 					if ( !skeletalData->animationClips().empty() && skeletalData->isAutoPlayingFirstClip() )
 					{
-						m_skeletalAnimator->play(skeletalData->animationClips()[0]->clip().name());
+						const auto & requestedClipName = skeletalData->autoPlayClipName();
+
+						if ( requestedClipName.empty() )
+						{
+							m_skeletalAnimator->play(skeletalData->animationClips()[0]->clip().name());
+						}
+						else if ( !m_skeletalAnimator->play(requestedClipName) )
+						{
+							TraceWarning{ClassId} << "The content asked to start on the clip '" << requestedClipName << "', which this renderable does not carry.";
+						}
 					}
 
 					/* NOTE: The skinning GPU resources are NOT created here. They belong to the

@@ -32,7 +32,9 @@
 #include "Graphics/Renderable/Abstract.hpp"
 #include "InstanceCluster.hpp"
 #include "Loaders/SceneData.hpp"
+#include "Animations/AnimationClipResource.hpp"
 #include "Component/DirectionalLight.hpp"
+#include "Component/NodeAnimation.hpp"
 #include "Component/PointLight.hpp"
 #include "Component/SpotLight.hpp"
 #include "Component/Visual.hpp"
@@ -72,6 +74,8 @@ namespace EmEn::Scenes
 
 			return true;
 		}
+
+		this->collectAnimatedNodeIndices(sceneData);
 
 		const bool useStaticEntities = parentNode == nullptr;
 
@@ -139,6 +143,15 @@ namespace EmEn::Scenes
 					this->processNodeAsNode(sceneData, nodeIndex, parentNode);
 				}
 			}
+		}
+
+		if ( !useStaticEntities )
+		{
+			this->attachNodeAnimations(sceneData, parentNode);
+		}
+		else if ( !sceneData.nodeAnimationClips.empty() )
+		{
+			Tracer::warning(ClassId, "The asset carries node animations, which STATIC mode cannot play: a static entity bakes its world frame at build time. Pass a parent node to keep them.");
 		}
 
 		this->buildInstanceSets(sceneData, scene, importFrame);
@@ -403,6 +416,11 @@ namespace EmEn::Scenes
 		const bool hasMesh = nodeDesc.meshIndex.has_value();
 		/* A light-only node must survive flattening: dropping it would drop the emitter with it. */
 		const bool hasLight = m_createLights && nodeDesc.lightIndex.has_value();
+		/* ⚠️ Same reasoning for an ANIMATED node, and it is the easier one to miss: a pivot that a
+		 * clip rotates typically carries no mesh and an identity rest transform — precisely what
+		 * the flattening rule discards. Flattened, the clip would drive the PARENT and swing the
+		 * whole asset instead of the part. */
+		const bool isAnimated = m_animatedNodeIndices.contains(nodeIndex);
 
 		/* Flatten the hierarchy when possible:
 		 * - Identity transform + no mesh → skip this node, pass parent through.
@@ -411,12 +429,12 @@ namespace EmEn::Scenes
 		 *   Otherwise, create a child node. */
 		std::shared_ptr< Node > targetNode;
 
-		if ( !hasMesh && !hasLight && !hasTransform )
+		if ( !hasMesh && !hasLight && !hasTransform && !isAnimated )
 		{
 			/* Identity, no mesh, no light: flatten — skip this node entirely. */
 			targetNode = engineParent;
 		}
-		else if ( hasMesh && !hasLight && !hasTransform && !engineParent->hasComponent() )
+		else if ( hasMesh && !hasLight && !hasTransform && !isAnimated && !engineParent->hasComponent() )
 		{
 			/* First mesh with identity transform: attach directly to the parent node. */
 			const auto meshIndex = nodeDesc.meshIndex.value();
@@ -456,10 +474,83 @@ namespace EmEn::Scenes
 		 * node was known to carry no light. */
 		this->attachLight(sceneData, nodeDesc, *targetNode);
 
+		if ( isAnimated )
+		{
+			m_animatedNodes[nodeIndex] = targetNode;
+		}
+
 		/* Recurse into children. */
 		for ( const auto childIndex : nodeDesc.childIndices )
 		{
 			this->processNodeAsNode(sceneData, childIndex, targetNode);
 		}
+	}
+
+	void
+	SceneDataConsumer::collectAnimatedNodeIndices (const Scenes::Loaders::SceneData & sceneData) noexcept
+	{
+		m_animatedNodeIndices.clear();
+		m_animatedNodes.clear();
+
+		for ( const auto & clipResource : sceneData.nodeAnimationClips )
+		{
+			if ( clipResource == nullptr )
+			{
+				continue;
+			}
+
+			const auto & clip = clipResource->clip();
+
+			for ( size_t index = 0; index < clip.channelCount(); ++index )
+			{
+				const auto targetIndex = clip.channel(index).targetIndex;
+
+				if ( targetIndex >= 0 && static_cast< size_t >(targetIndex) < sceneData.nodes.size() )
+				{
+					m_animatedNodeIndices.insert(static_cast< size_t >(targetIndex));
+				}
+			}
+		}
+	}
+
+	void
+	SceneDataConsumer::attachNodeAnimations (const Scenes::Loaders::SceneData & sceneData, const std::shared_ptr< Node > & parentNode) noexcept
+	{
+		if ( sceneData.nodeAnimationClips.empty() || parentNode == nullptr )
+		{
+			return;
+		}
+
+		if ( m_animatedNodes.empty() )
+		{
+			Tracer::warning(ClassId, "The asset declares node animations but not one of their target nodes was built: nothing to drive.");
+
+			return;
+		}
+
+		/* ⚠️ ONE component for the whole hierarchy, on its root: a clip addresses many nodes at
+		 * once, so a per-node component could never play one. Bound by weak reference, so a
+		 * destroyed child simply stops being driven. */
+		const auto component = parentNode->componentBuilder< Component::NodeAnimation >(parentNode->name() + "/NodeAnimation").build();
+
+		if ( component == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to create the node animation component !");
+
+			return;
+		}
+
+		for ( const auto & [nodeIndex, node] : m_animatedNodes )
+		{
+			component->bindTarget(static_cast< int32_t >(nodeIndex), node);
+		}
+
+		for ( const auto & clip : sceneData.nodeAnimationClips )
+		{
+			component->addClip(clip);
+		}
+
+		TraceInfo{ClassId} << sceneData.nodeAnimationClips.size() << " node animation clip(s) attached, driving "
+			<< m_animatedNodes.size() << " node(s).";
 	}
 }

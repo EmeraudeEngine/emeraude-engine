@@ -29,3 +29,18 @@ on a **timeline**, set values on their animatable elements, and drive the whole 
 
 `animatable-properties-coverage.md`: a channel can only address a property an entity actually
 exposes.
+
+## ⚠️ Traps
+
+**`Scenes::Component::NodeAnimation` (Aug 2026) does NOT solve this, and is not a starting point
+for it.** It plays the TRS clips an IMPORTED ASSET ships with — a glTF rotating a bezel — over the
+node hierarchy the loader built, addressing its targets by the clip's own `targetIndex`. It is
+asset playback, not scene authoring: no timeline, no seek, no arbitrary property, no cross-entity
+channels. Treat it as a second consumer of `Base::Animation::AnimationClip`, alongside
+`SkeletalAnimator`, and nothing more.
+
+⚠️ It deliberately bypasses `Animations::AnimatableInterface` — that map is keyed by animation ID
+(one animation per object, no clip selection) while one imported clip drives many nodes. **The
+sequencer will need `AnimatableInterface`'s successor to carry a clip/channel identity**, which is
+precisely what `animatable-properties-coverage.md` has to establish first. Do not conclude from
+`NodeAnimation` that the interface is unnecessary.

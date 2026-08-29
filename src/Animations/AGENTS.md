@@ -22,7 +22,7 @@ The animation system is split into three layers:
 |------|------|---------|
 | `Joint` | `Base/Animation/Joint.hpp` | Joint struct: name, parentIndex, local T/R/S, inverseBindMatrix |
 | `Skeleton` | `Base/Animation/Skeleton.hpp` | Ordered joint collection, name lookup, hierarchy validation |
-| `AnimationChannel` | `Base/Animation/AnimationChannel.hpp` | Per-joint keyframes (VectorKeyFrame for T/S, QuaternionKeyFrame for R), 3 interpolation modes (Step, Linear, CubicSpline) |
+| `AnimationChannel` | `Base/Animation/AnimationChannel.hpp` | Keyframes for ONE target (VectorKeyFrame for T/S, QuaternionKeyFrame for R), 3 interpolation modes (Step, Linear, CubicSpline), and the sampling itself: `sampleVector(t)` / `sampleQuaternion(t)` |
 | `AnimationClip` | `Base/Animation/AnimationClip.hpp` | Named channel collection, duration auto-computed, skeleton-independent |
 | `Skin` | `Base/Animation/Skin.hpp` | Mesh-to-skeleton binding: joint index remapping, inverse bind matrices, GLTF JOINTS_0 indirection |
 
@@ -36,6 +36,8 @@ The animation system is split into three layers:
 | Type | File | Purpose |
 |------|------|---------|
 | `SkeletalAnimator` | `SkeletalAnimator.hpp/.cpp` | Per-instance evaluator: keyframe sampling, FK, skinning matrix computation |
+| `PlaybackWrap` | `PlaybackWrap.hpp` | The wrap enum (Once/Loop/PingPong), SHARED by both clip evaluators |
+| `Scenes::Component::NodeAnimation` | `Scenes/Component/NodeAnimation.hpp/.cpp` | The **second** clip evaluator: moves NODES, not joints (see below) |
 
 **Property animation (existing, separate):**
 | Type | File | Purpose |
@@ -115,6 +117,62 @@ Both modes produce the same output: `skinningMatrices[]` ready for GPU upload.
 
 **Playback modes**: `PlaybackWrap::Once`, `Loop`, `PingPong`
 
+### ⚠️ TWO clip evaluators — a clip's target is NOT always a joint
+
+An `AnimationClip` is **target-agnostic**: `AnimationChannel::targetIndex` (renamed from
+`jointIndex`, Aug 2026) names *the animated thing inside the structure the clip belongs to*.
+Which structure that is depends on the evaluator:
+
+| Evaluator | Reads | `targetIndex` indexes | Writes |
+|---|---|---|---|
+| `Animations::SkeletalAnimator` | `SceneData::animationClips` | the skeleton's joint array | skinning matrices → SSBO |
+| `Scenes::Component::NodeAnimation` | `SceneData::nodeAnimationClips` | `SceneData::nodes` | each node's local `CartesianFrame` |
+
+**Why the second one exists**: glTF animates skin joints and plain nodes through the very same
+construct. A rotating glass cover, a swinging door, a turning wheel are TRS tracks on nodes with no
+skeleton anywhere — `ChronographWatch.glb` and `IridescentDishWithOlives.glb` are exactly that
+(1 animation, **0 skins** each). The skeletal animator has nothing to do with them.
+
+⚠️ **The two lists are kept apart at the CONTRACT** (`Scenes::Loaders::SceneData`), never sorted out
+downstream by looking at indices: a node clip fed to the skeletal animator poses the wrong joints in
+silence. A glTF animation touching both kinds is **SPLIT by the loader into two clips sharing one
+name**, in two resource key spaces (`…/animation/<name>` and `…/node-animation/<name>`) so the cache
+cannot serve one half where the other was asked for.
+
+⚠️ `NodeAnimation` deliberately does **NOT** go through `Animations::AnimatableInterface`: that map
+is keyed by animation ID — one animation per node, no clip selection — while one clip drives many
+nodes. The component sits on the **root** of the imported hierarchy and holds `weak_ptr` targets.
+
+⚠️ **An animated node must never be flattened.** `SceneDataConsumer` drops a node carrying no mesh
+and an identity transform — which is precisely the shape of a pivot waiting to be rotated. Flattened,
+the clip would drive the PARENT and swing the whole asset. The consumer collects the animated node
+indices *before* walking and exempts them.
+
+### ⚠️ "No animation" and "start on THIS clip" are stated on the CONTENT, not called on the animator
+
+`Component::Visual` creates its `SkeletalAnimator` **lazily**, on its first logic cycle — long after
+the scene was built. A caller building a scene therefore has *nothing to call `play()` or `stop()`
+on*, and the historical default (auto-play clip 0) was unreachable to override. Both intents live on
+`Graphics::Renderable::SkeletalDataTrait`:
+
+- `enableAutoPlayFirstClip(false)` — the asset appears in its **bind pose**.
+- `setAutoPlayClipName("Walk")` — the asset appears **already playing** that clip (implies auto-play on).
+
+⚠️ These mutate a **cached resource**: the flag survives for every later instance of the same asset.
+
+### ⚠️ `stop()` RESTORES a pose, it does not drop one
+
+Both evaluators had, or would have had, the same defect: the consumer only pushes a pose while the
+evaluator reports one, and **nothing rewrites what was already staged**. Clearing left the last
+animated frame frozen on screen.
+
+- `SkeletalAnimator::stop()` **evaluates the bind pose** (`sampleBindPose()` + FK + skinning) so the
+  GPU staging is overwritten with it.
+- `NodeAnimation::stop()` writes every target's captured **rest frame** back.
+
+Measured on `asset-loader`: the Paladin returns to an exact, motion-blur-free T-pose after cycling
+through all 49 clips, and the watch's second hand snaps back to 12.
+
 ### Loader Integration
 
 **Shape no longer carries skeletal data.** The `ShapeLoadResult<V,I>` struct bundles `Shape` + `optional<Skeleton>` + `optional<Skin>`. All file format interfaces (`FileFormatInterface::readStream()`) use this struct.
@@ -174,9 +232,9 @@ Both `SkeletonResource` and `AnimationClipResource` are managed resources:
 - `setSkeletalData(skel, skin)` — sets skel + skin only, leaves clips untouched
 - `addAnimationClips(clips)` — **appends** to the existing clip list (use for incremental loading from multiple sources, but mind the **order**: the runtime auto-plays index 0 at lazy init, see `Scenes::Component::Visual`)
 - `setAnimationClips(clips)` — **replaces** the clip list (use when an external clip set should fully supersede whatever the loader attached, e.g. discarding a bind-pose clip embedded in the rig file in favor of split-animation clips)
+- `enableAutoPlayFirstClip(bool)` / `setAutoPlayClipName(name)` / `isAutoPlayingFirstClip()` / `autoPlayClipName()` — what the asset shows when it appears; see the lazy-init section above
 
 ### Remaining Work
-- CubicSpline keyframe interpolation (data parsed from glTF but falls back to linear)
 - Animation blending (crossfade, layered, additive)
 - Animation state machine / controller
 - Timeline system (multi-track orchestration for cutscenes)
@@ -195,6 +253,8 @@ ctest -R MathTransformConversions
 - `SkeletonResource.hpp/.cpp` — Managed resource wrapping `Skeleton<float>`
 - `AnimationClipResource.hpp/.cpp` — Managed resource wrapping `AnimationClip<float>`
 - `SkeletalAnimator.hpp/.cpp` — Per-instance evaluator (sampling, FK, skinning matrices)
+- `PlaybackWrap.hpp` — The wrap enum, shared by both evaluators
+- `Scenes/Component/NodeAnimation.hpp/.cpp` — The node-hierarchy evaluator
 
 ### Data Types (Libs/Animation/)
 - `Base/Animation/Joint.hpp` — Joint struct
@@ -264,7 +324,19 @@ The `SkeletalAnimator` provides runtime clip management:
 - `stop()` / `pause()` / `resume()` — Playback control
 - `setSpeed(float)` — Playback speed multiplier
 
-Code references: `Animations/SkeletalAnimator.hpp/.cpp`
+⚠️⚠️ **`play()` takes the CLIP's own name (`clip->clip().name()`), never the RESOURCE name.** The
+loaders prefix their resource keys — `"FBX:<stem>/Animation/<clip>"`, `"<prefix>/animation/<clip>"` —
+and `addClip()` indexes on `clip->clip().name()`. Passing a resource name looks up a key that never
+existed, `play()` returns **false**, and a caller ignoring that bool sees *nothing happen, silently*.
+That was the whole reason the `asset-loader` demo's animation cycling did nothing (Aug 2026).
+**Always read the return value.**
+
+`Scenes::Component::NodeAnimation` exposes the SAME surface (`play`/`stop`/`isPlaying`/`clipNames`/
+`activeClipName`/`setSpeed`) on purpose: a caller cycling an asset's animations must not have to know
+which evaluator the asset happens to need — see `Builtin/AssetLoader.cpp::applyAnimation()`, which
+drives whichever answers and warns when none does.
+
+Code references: `Animations/SkeletalAnimator.hpp/.cpp`, `Scenes/Component/NodeAnimation.hpp/.cpp`
 
 ## Detailed Documentation
 

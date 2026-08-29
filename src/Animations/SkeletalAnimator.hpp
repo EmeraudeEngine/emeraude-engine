@@ -42,6 +42,7 @@
 #include "Math/Quaternion.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "Math/Vector.hpp"
+#include "PlaybackWrap.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Animations
@@ -52,16 +53,6 @@ namespace EmEn::Animations
 
 namespace EmEn::Animations
 {
-	/**
-	 * @brief Playback mode for wrap behavior when time exceeds clip duration.
-	 */
-	enum class EMEN_API PlaybackWrap : uint8_t
-	{
-		Once,	/**< Play once and stop at the last frame. */
-		Loop,	/**< Loop back to the beginning. */
-		PingPong /**< Alternate forward/backward. */
-	};
-
 	/**
 	 * @brief Per-instance skeletal animation evaluator.
 	 *
@@ -114,6 +105,10 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Stops playback and resets to bind pose.
+			 * @note ⚠️ The bind pose is EVALUATED, never merely dropped: the consumer stages the
+			 * matrices toward the GPU and nothing rewrites that staging on its own. Clearing the
+			 * pose here left the last animated frame frozen on screen — "no animation" has to be
+			 * an actual pose to be a reachable state.
 			 */
 			void stop () noexcept;
 
@@ -250,6 +245,11 @@ namespace EmEn::Animations
 			 * @param timeSeconds The time to evaluate at.
 			 */
 			void evaluateAtTime (float timeSeconds) noexcept;
+
+			/**
+			 * @brief Fills m_localPoses with the skeleton's own bind transforms.
+			 */
+			void sampleBindPose () noexcept;
 
 			/**
 			 * @brief Samples all channels of the active clip into m_localPoses.

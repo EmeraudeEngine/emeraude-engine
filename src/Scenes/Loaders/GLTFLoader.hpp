@@ -42,6 +42,7 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "Animation/AnimationChannel.hpp"
 #include "Animation/Skin.hpp"
 #include "VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
@@ -146,6 +147,17 @@ namespace EmEn::Scenes::Loaders
 			void loadAnimations (const fastgltf::Asset & asset, SceneData & output) noexcept;
 
 			/**
+			 * @brief Turns a finished channel set into a clip resource and appends it to a list.
+			 * @param clipName The clip's own name, which the animators index on.
+			 * @param keySpace The resource key space telling the two halves of a split animation
+			 * apart ("/animation/" for the skeletal half, "/node-animation/" for the node half).
+			 * @param channels The channels, consumed.
+			 * @param output A reference to the list to append to.
+			 * @return void
+			 */
+			void registerClip (const std::string & clipName, const std::string & keySpace, std::vector< Base::Animation::AnimationChannel< float > > channels, std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output) const noexcept;
+
+			/**
 			 * @brief Collects the punctual lights declared by the asset, in photometric units.
 			 * @note Must run BEFORE buildNodeDescriptors(), which indexes into output.lights.
 			 * @param asset A reference to the parsed glTF asset.
@@ -196,6 +208,7 @@ namespace EmEn::Scenes::Loaders
 			std::vector< Base::Animation::Skin< float > > m_skins;
 			std::unordered_map< size_t, size_t > m_meshToSkinIndex;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
+			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_nodeAnimationClips;
 			std::unordered_set< size_t > m_skinJointNodeIndices;
 	};
 }

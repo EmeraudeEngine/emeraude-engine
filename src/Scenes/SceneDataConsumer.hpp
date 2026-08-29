@@ -30,7 +30,10 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
@@ -149,6 +152,34 @@ namespace EmEn::Scenes
 			 * @return size_t The number of cells created, all sets together.
 			 */
 			size_t buildInstanceSets (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const Base::Math::CartesianFrame< float > & rootFrame) const noexcept;
+
+			/**
+			 * @brief Installs the node-animation component on the hierarchy root.
+			 * @note ⚠️ Node mode ONLY: a static entity bakes its world frame at build time and has
+			 * no local frame left to animate. The component is placed on the ROOT because one clip
+			 * drives many nodes — see Component::NodeAnimation.
+			 * @param sceneData A reference to the loaded data.
+			 * @param parentNode A reference to the hierarchy root.
+			 * @return void
+			 */
+			void attachNodeAnimations (const Scenes::Loaders::SceneData & sceneData, const std::shared_ptr< Node > & parentNode) noexcept;
+
+			/**
+			 * @brief Collects every node index the node-animation clips address.
+			 * @param sceneData A reference to the loaded data.
+			 * @return void
+			 */
+			void collectAnimatedNodeIndices (const Scenes::Loaders::SceneData & sceneData) noexcept;
+
+			/**
+			 * @brief The node indices a node clip drives, and the engine nodes they became.
+			 * @note ⚠️ An animated node must NEVER be flattened away: the flattening rule drops a
+			 * node that carries no mesh and an identity transform, which is exactly the shape of a
+			 * pivot waiting to be rotated — the clip would then drive its PARENT and swing the
+			 * whole asset instead of the part.
+			 */
+			std::unordered_set< size_t > m_animatedNodeIndices;
+			std::unordered_map< size_t, std::shared_ptr< Node > > m_animatedNodes;
 
 			size_t m_instanceTargetPerCell{1024};
 			bool m_flattenHierarchy{false};

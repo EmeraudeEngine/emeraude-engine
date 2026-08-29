@@ -31,6 +31,8 @@
 
 /* STL inclusions. */
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for usages. */
@@ -185,6 +187,35 @@ namespace EmEn::Graphics::Renderable
 				m_autoPlayFirstClip = state;
 			}
 
+			/**
+			 * @brief Returns the clip the animator must start on, when the content named one.
+			 * @note Empty means "whichever comes first", the historical behaviour. Only consulted
+			 * when isAutoPlayingFirstClip() is true.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			autoPlayClipName () const noexcept
+			{
+				return m_autoPlayClipName;
+			}
+
+			/**
+			 * @brief Names the clip the animator must start on, and enables auto-play.
+			 * @note ⚠️ This is the ONLY way to have an asset appear playing a CHOSEN clip: the
+			 * animator is created lazily, on the component's first logic cycle, so a caller
+			 * building the scene has nothing to call play() on yet. Stating the intent on the
+			 * content is what survives that gap.
+			 * @param clipName The clip's own name — the same key play() takes.
+			 * @return void
+			 */
+			void
+			setAutoPlayClipName (std::string clipName) noexcept
+			{
+				m_autoPlayClipName = std::move(clipName);
+				m_autoPlayFirstClip = true;
+			}
+
 		protected:
 
 			SkeletalDataTrait () noexcept = default;
@@ -201,6 +232,7 @@ namespace EmEn::Graphics::Renderable
 			std::shared_ptr< Animations::SkeletonResource > m_skeleton;
 			Base::Animation::Skin< float > m_skin;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
+			std::string m_autoPlayClipName;
 			bool m_autoPlayFirstClip{true};
 	};
 }

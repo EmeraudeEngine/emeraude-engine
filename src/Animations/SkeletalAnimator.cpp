@@ -42,137 +42,6 @@ namespace EmEn::Animations
 	using namespace Base::Animation;
 	using namespace Base::Math;
 
-	/* ---- Keyframe sampling helpers ---- */
-
-	/**
-	 * @brief Finds the index of the last keyframe at or before the given time.
-	 * @return The index, or 0 if time is before all keyframes.
-	 */
-	template< typename KeyFrameType >
-	static
-	size_t
-	findKeyFrameIndex (const std::vector< KeyFrameType > & keyFrames, float time) noexcept
-	{
-		if ( keyFrames.size() <= 1 )
-		{
-			return 0;
-		}
-
-		/* Binary search for the last keyframe with time <= given time. */
-		size_t low = 0;
-		size_t high = keyFrames.size() - 1;
-
-		while ( low < high - 1 )
-		{
-			const auto mid = (low + high) / 2;
-
-			if ( keyFrames[mid].time <= time )
-			{
-				low = mid;
-			}
-			else
-			{
-				high = mid;
-			}
-		}
-
-		return low;
-	}
-
-	static
-	Vector< 3, float >
-	sampleVectorChannel (const AnimationChannel< float > & channel, float time) noexcept
-	{
-		const auto & kf = channel.vectorKeyFrames;
-
-		if ( kf.empty() )
-		{
-			return {};
-		}
-
-		if ( kf.size() == 1 || time <= kf.front().time )
-		{
-			return kf.front().value;
-		}
-
-		if ( time >= kf.back().time )
-		{
-			return kf.back().value;
-		}
-
-		const auto idx = findKeyFrameIndex(kf, time);
-		const auto & a = kf[idx];
-		const auto & b = kf[idx + 1];
-
-		if ( channel.interpolation == ChannelInterpolation::Step )
-		{
-			return a.value;
-		}
-
-		const auto span = b.time - a.time;
-		const auto t = (span > 0.0F) ? (time - a.time) / span : 0.0F;
-
-		/* GLTF cubic: the tangents are scaled by the segment duration inside the evaluator. */
-		if ( channel.interpolation == ChannelInterpolation::CubicSpline )
-		{
-			return cubicSplineInterpolation(a.value, a.outTangent, b.value, b.inTangent, span, t);
-		}
-
-		/* Linear interpolation. */
-		return Vector< 3, float >{
-			a.value[0] + (b.value[0] - a.value[0]) * t,
-			a.value[1] + (b.value[1] - a.value[1]) * t,
-			a.value[2] + (b.value[2] - a.value[2]) * t
-		};
-	}
-
-	static
-	Quaternion< float >
-	sampleQuaternionChannel (const AnimationChannel< float > & channel, float time) noexcept
-	{
-		const auto & kf = channel.quaternionKeyFrames;
-
-		if ( kf.empty() )
-		{
-			return {};
-		}
-
-		if ( kf.size() == 1 || time <= kf.front().time )
-		{
-			return kf.front().value;
-		}
-
-		if ( time >= kf.back().time )
-		{
-			return kf.back().value;
-		}
-
-		const auto idx = findKeyFrameIndex(kf, time);
-		const auto & a = kf[idx];
-		const auto & b = kf[idx + 1];
-
-		if ( channel.interpolation == ChannelInterpolation::Step )
-		{
-			return a.value;
-		}
-
-		const auto span = b.time - a.time;
-		const auto t = (span > 0.0F) ? (time - a.time) / span : 0.0F;
-
-		/* GLTF cubic on a rotation is evaluated component-wise, so the result is NOT unit
-		 * length and must be normalized before it reaches the joint matrix. */
-		if ( channel.interpolation == ChannelInterpolation::CubicSpline )
-		{
-			auto result = cubicSplineInterpolation(a.value, a.outTangent, b.value, b.inTangent, span, t);
-			result.normalize();
-
-			return result;
-		}
-
-		/* Spherical linear interpolation. */
-		return Quaternion< float >::slerp(a.value, b.value, t, 0.05F);
-	}
-
 	/* ---- Setup ---- */
 
 	void
@@ -244,7 +113,20 @@ namespace EmEn::Animations
 		m_paused = false;
 		m_currentTime = 0.0F;
 		m_activeClip = nullptr;
-		m_skinningMatrices.clear();
+
+		/* ⚠️ EVALUATE the bind pose rather than dropping the matrices: the consumer only stages
+		 * a pose when hasPose() is true, and the render side keeps uploading whatever it staged
+		 * last. Clearing froze the model on its last animated frame. */
+		if ( m_skeleton == nullptr )
+		{
+			m_skinningMatrices.clear();
+
+			return;
+		}
+
+		this->sampleBindPose();
+		this->computeWorldMatrices();
+		this->computeSkinningMatrices();
 	}
 
 	void
@@ -303,12 +185,11 @@ namespace EmEn::Animations
 	}
 
 	void
-	SkeletalAnimator::sampleClip (float timeSeconds) noexcept
+	SkeletalAnimator::sampleBindPose () noexcept
 	{
 		const auto & skeleton = m_skeleton->skeleton();
 		const auto jointCount = skeleton.jointCount();
 
-		/* Start with bind pose for all joints. */
 		for ( size_t i = 0; i < jointCount; ++i )
 		{
 			const auto & joint = skeleton.joint(i);
@@ -317,6 +198,16 @@ namespace EmEn::Animations
 			m_localPoses[i].rotation = joint.rotation;
 			m_localPoses[i].scale = joint.scale;
 		}
+	}
+
+	void
+	SkeletalAnimator::sampleClip (float timeSeconds) noexcept
+	{
+		const auto & skeleton = m_skeleton->skeleton();
+		const auto jointCount = skeleton.jointCount();
+
+		/* Start with bind pose for all joints. */
+		this->sampleBindPose();
 
 		/* Override with sampled keyframes from the active clip. */
 		const auto & clip = m_activeClip->clip();
@@ -325,25 +216,25 @@ namespace EmEn::Animations
 		{
 			const auto & channel = clip.channel(c);
 
-			if ( channel.jointIndex < 0 || static_cast< size_t >(channel.jointIndex) >= jointCount )
+			if ( channel.targetIndex < 0 || static_cast< size_t >(channel.targetIndex) >= jointCount )
 			{
 				continue;
 			}
 
-			auto & pose = m_localPoses[static_cast< size_t >(channel.jointIndex)];
+			auto & pose = m_localPoses[static_cast< size_t >(channel.targetIndex)];
 
 			switch ( channel.target )
 			{
 				case ChannelTarget::Translation :
-					pose.translation = sampleVectorChannel(channel, timeSeconds);
+					pose.translation = channel.sampleVector(timeSeconds);
 					break;
 
 				case ChannelTarget::Rotation :
-					pose.rotation = sampleQuaternionChannel(channel, timeSeconds);
+					pose.rotation = channel.sampleQuaternion(timeSeconds);
 					break;
 
 				case ChannelTarget::Scale :
-					pose.scale = sampleVectorChannel(channel, timeSeconds);
+					pose.scale = channel.sampleVector(timeSeconds);
 					break;
 			}
 		}

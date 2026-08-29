@@ -235,7 +235,19 @@ namespace EmEn::Scenes::Loaders
 		/* Resources (already in engine containers). */
 		std::vector< MeshDescriptor > meshes;
 		std::vector< std::shared_ptr< Animations::SkeletonResource > > skeletons;
+		/**
+		 * @brief Clips that deform a SKELETON: their channels index a skeleton's joint array.
+		 */
 		std::vector< std::shared_ptr< Animations::AnimationClipResource > > animationClips;
+		/**
+		 * @brief Clips that move the NODE HIERARCHY itself: their channels index @a nodes.
+		 * @note ⚠️ Kept apart from @a animationClips at the CONTRACT, never left for the consumer
+		 * to sort out: a format carries both kinds through the same construct (one glTF animation
+		 * may drive skin joints AND plain nodes at once) and the two evaluators are different —
+		 * a node clip fed to the skeletal animator poses the wrong joints in silence. A clip
+		 * carrying both kinds of target is SPLIT by the loader, keeping the same name on each half.
+		 */
+		std::vector< std::shared_ptr< Animations::AnimationClipResource > > nodeAnimationClips;
 
 		/* Scene description carried by the format, referenced by NodeDescriptor indices.
 		 * Empty when the format cannot carry them, or when the loader does not read them —
