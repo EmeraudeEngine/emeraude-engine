@@ -2616,7 +2616,7 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Saphir::ShaderManager::ShaderCompilationSucceed :
-					this->notifyUser(BlobTrait{} << "Shader '" << std::any_cast< std::string >(data) << "' compilation succeeded!");
+					TraceDebug{ClassId}  << "Shader '" << std::any_cast< std::string >(data) << "' compilation succeeded!";
 					break;
 
 				case Saphir::ShaderManager::ShaderCompilationFailed :
