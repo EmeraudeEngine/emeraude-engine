@@ -713,6 +713,79 @@ namespace EmEn::Graphics
 	/* GPU execution — multi-pass scene effects. */
 
 	void
+	PostProcessor::recordWriteBack (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & chainOutput) const noexcept
+	{
+		const auto dstColorImage = m_renderer.currentSceneColorImage();
+		const auto srcImage = chainOutput.image();
+
+		if ( dstColorImage == nullptr || srcImage == nullptr )
+		{
+			return;
+		}
+
+		/* ⚠️ Internal scene target ONLY: the swap-chain path never hosts a pre-translucency effect
+		 * (the indirect diffuse needs the G-buffer, which forces the internal target), and its
+		 * colour image would sit in PRESENT_SRC_KHR, not in COLOR_ATTACHMENT_OPTIMAL. */
+		if ( m_renderer.sceneTarget() == nullptr )
+		{
+			TraceError{ClassId} << "The pre-translucency write-back needs the internal scene target !";
+
+			return;
+		}
+
+		/* Same two-barrier discipline as recordBlit(): the chain output (an intermediate target,
+		 * left in SHADER_READ_ONLY by its render pass) becomes a transfer source, the scene colour
+		 * (COLOR_ATTACHMENT_OPTIMAL, as recordBlit restored it) a transfer destination. */
+		std::array< VkImageMemoryBarrier, 2 > barriers{
+			Vulkan::Sync::ImageMemoryBarrier{
+				*srcImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get(),
+			Vulkan::Sync::ImageMemoryBarrier{
+				*dstColorImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			}.get()
+		};
+
+		commandBuffer.pipelineBarrier({}, {}, barriers, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		/* A blit rather than a copy: it tolerates a format difference between the chain target
+		 * and the scene colour (both are the HDR format today, so it is an exact 1:1 transfer). */
+		commandBuffer.blitImage(
+			*srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			*dstColorImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_FILTER_NEAREST
+		);
+
+		/* Restore: the chain target back to sample-able (the closing half may reuse it), the
+		 * scene colour back to attachment layout for the grab pass and the TranslucentGB pass. */
+		barriers = {
+			Vulkan::Sync::ImageMemoryBarrier{
+				*srcImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get(),
+			Vulkan::Sync::ImageMemoryBarrier{
+				*dstColorImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get()
+		};
+
+		commandBuffer.pipelineBarrier({}, {}, barriers, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT);
+	}
+
+	void
 	PostProcessor::recordBlit (const Vulkan::CommandBuffer & commandBuffer) const noexcept
 	{
 		if ( m_grabPass == nullptr || !m_grabPass->isCreated() )
@@ -1084,12 +1157,17 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, ChainPhase phase) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
 			return false;
 		}
+
+		/* The phase that CLOSES the frame: it owns the frame timing and the final descriptor.
+		 * The pre-translucency half is an intermediate step whose output goes back into the
+		 * scene colour, so it must touch neither. */
+		const bool closesFrame = phase != ChainPhase::PreTranslucency;
 
 		/* Build push constants for the effect chain. */
 		static const auto startTime = std::chrono::steady_clock::now();
@@ -1107,7 +1185,12 @@ namespace EmEn::Graphics
 			MinDeltaTime :
 			std::clamp(std::chrono::duration< float >(now - m_lastChainFrameTime).count(), MinDeltaTime, MaxDeltaTime);
 
-		m_lastChainFrameTime = now;
+		/* ⚠️ Once per FRAME, not per call: the two halves of a cut frame run milliseconds apart,
+		 * and a motion blur reading that gap as the frame duration would smear nothing. */
+		if ( closesFrame )
+		{
+			m_lastChainFrameTime = now;
+		}
 
 		const auto mainRT = m_renderer.mainRenderTarget();
 		const auto & extent = mainRT->extent();
@@ -1316,6 +1399,13 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* The phase filter: a cut frame runs the pre-translucency slots first, everything
+			 * else after the TranslucentGB pass. An uncut frame runs them all. */
+			if ( phase != ChainPhase::Whole && isPreTranslucencySlot(effect->slot()) != (phase == ChainPhase::PreTranslucency) )
+			{
+				continue;
+			}
+
 			/* ⚠️⚠️ An effect that does not hold its GPU resources is NOT recordable, and this gate
 			 * is what turns a lifecycle mistake into a missing effect instead of a segfault: the
 			 * recording code indexes per-frame containers that a failed or absent creation leaves
@@ -1405,6 +1495,21 @@ namespace EmEn::Graphics
 		}
 
 		flushCombineGroup();
+
+		/* Pre-translucency half: the composited result goes BACK INTO THE SCENE COLOUR, so the
+		 * material grab pass that follows captures a scene lit by its indirect diffuse, and the
+		 * TranslucentGB pass draws over it. Nothing else of this call leaves a trace: the final
+		 * descriptor keeps pointing wherever the previous frame left it until the closing half
+		 * sets it. */
+		if ( phase == ChainPhase::PreTranslucency )
+		{
+			if ( currentTexture != m_grabPass.get() && currentTexture != nullptr )
+			{
+				this->recordWriteBack(commandBuffer, *currentTexture);
+			}
+
+			return true;
+		}
 
 		/* Update only the current frame's descriptor set to point to the effect chain output
 		 * instead of the raw grab pass, so the single-pass render uses the processed texture.

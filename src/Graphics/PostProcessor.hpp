@@ -89,8 +89,31 @@ namespace EmEn
 	}
 }
 
+namespace EmEn::Vulkan
+{
+	class TextureInterface;
+}
+
 namespace EmEn::Graphics
 {
+	/**
+	 * @brief Which part of the indirect effect chain a call executes.
+	 * @note ⚠️ The frame is cut in two around the TranslucentGB pass when it contains grab-pass
+	 * objects AND the stack holds an enabled pre-translucency effect (EffectSlot::
+	 * isPreTranslucencySlot). The pre-translucency half composites its result back INTO the scene
+	 * colour, so the material grab pass carries the indirect diffuse and a glass transmits it; the
+	 * post-translucency half is the chain as it always ran. A frame with nothing to cut runs
+	 * `Whole`, exactly as before.
+	 */
+	enum class ChainPhase : uint8_t
+	{
+		/** @brief Every effect, one pass, the output feeds the final composite. */
+		Whole,
+		/** @brief Only the pre-translucency slots; the output is written back into the scene colour. */
+		PreTranslucency,
+		/** @brief Every other slot; the output feeds the final composite. */
+		PostTranslucency
+	};
 	/**
 	 * @brief The post-processor service — a pure GPU executor for fullscreen effects.
 	 * @note Effects are owned by Scene (PostProcessStack for multi-pass) and Camera
@@ -344,9 +367,22 @@ namespace EmEn::Graphics
 			 * @param ambientIlluminance The ambient illuminance the shading actually uses, in lux
 			 * (Scene::effectiveAmbientIlluminance() — zero when the sky drives the ambient).
 			 * @param medium The scene's participating medium, nullptr when it declares none.
+			 * @param phase Which half of the chain runs (ChainPhase). Default: the whole chain.
 			 * @return bool
 			 */
-			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, ChainPhase phase = ChainPhase::Whole) const noexcept;
+
+			/**
+			 * @brief Writes a chain output back into the internal scene colour image.
+			 * @note The pre-translucency half of a cut frame ends here: its composited colour
+			 * replaces the scene colour so the material grab pass and the TranslucentGB pass see
+			 * the indirect diffuse. Barrier discipline mirrors recordBlit(); the scene colour is
+			 * left in COLOR_ATTACHMENT_OPTIMAL, the chain target back in SHADER_READ_ONLY.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param chainOutput The texture holding the composited chain colour.
+			 * @return void
+			 */
+			void recordWriteBack (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & chainOutput) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.

@@ -599,6 +599,15 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingGIMultiBounceClampKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Clamp"};
 			constexpr auto DefaultGraphicsRayTracingGIMultiBounceClamp{4.0F};
 
+			/* Post-processing > frame cut around the translucent pass. When the frame contains
+			 * grab-pass (transmissive) objects and an enabled indirect-diffuse effect, the chain is
+			 * run in two halves: the indirect diffuse first, composited back into the scene colour so
+			 * a glass TRANSMITS it, then everything else after the translucent pass. OFF runs the whole
+			 * chain after the translucent pass, as before Aug 2026 — an A/B switch for measurement,
+			 * not a quality knob: with it off, nothing seen through a glass receives indirect light. */
+			constexpr auto GraphicsPostProcessingCutFrameAroundTranslucencyKey{"Core/Graphics/PostProcessing/CutFrameAroundTranslucency"};
+			constexpr auto DefaultGraphicsPostProcessingCutFrameAroundTranslucency{true};
+
 			/* Anti-Aliasing > Temporal (TAA). HDR resolve BEFORE DoF/tone mapping (the only
 			 * AA effect not bound by the runsAfterToneMapping contract — the Karis luminance
 			 * weighting below is what makes HDR accumulation safe). Requires the velocity

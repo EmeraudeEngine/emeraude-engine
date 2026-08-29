@@ -793,7 +793,14 @@ namespace EmEn::Saphir
 				" own - the sky must not be counted twice. The DIFFUSE legs read this one; the specular"
 				" legs (prefiltered reflection, multi-scatter compensation) keep the raw irradiance,"
 				" which no post-process replaces. */" << Line::End <<
-				"const vec3 iblDiffuseIrradiance = iblIrradiance * " << ViewUB(Keys::UniformBlock::Component::IBLDiffuseWeight, false) << ";";
+				"const vec3 iblDiffuseIrradiance = iblIrradiance" << (m_transmissionIsSceneRadiance ? "" : " * " + ViewUB(Keys::UniformBlock::Component::IBLDiffuseWeight, false)) << ";";
+
+			/* ⚠️ A grab-pass (TranslucentGB) material is EXEMPT from the ownership weight, and the
+			 * decision is made HERE, at generation, at zero runtime cost: since the frame is cut in
+			 * two around the TranslucentGB pass (Aug 2026), the indirect diffuse is composited BEFORE
+			 * that pass and can never reach a surface drawn by it. Its own diffuse leg — a frosted
+			 * glass, a tinted water — keeps the raster irradiance the opaque world gave up. The
+			 * transmission-as-scene-radiance flag is exactly the grab-pass marker. */
 		}
 
 		/* The tint of the IBL diffuse irradiance term is ALWAYS the raw base color

@@ -78,7 +78,11 @@ namespace EmEn::Graphics
 
 		for ( size_t index = 0; index < m_targets.size(); ++index )
 		{
-			if ( !m_targets[index].create(renderer, width, height, format, "CombineGroup" + std::to_string(index)) )
+			/* TRANSFER_SRC: the pre-translucency half of a cut frame blits the LAST combine output
+			 * back into the scene colour (PostProcessor::recordWriteBack). Without the flag the
+			 * barrier to TRANSFER_SRC_OPTIMAL is rejected and the blit runs against a stale layout
+			 * — four VUIDs a frame pointing at the blit, not at this line. */
+			if ( !m_targets[index].create(renderer, width, height, format, "CombineGroup" + std::to_string(index), VK_IMAGE_USAGE_TRANSFER_SRC_BIT) )
 			{
 				TraceError{TracerTag} << "Failed to create the combine target #" << index << " !";
 

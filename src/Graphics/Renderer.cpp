@@ -495,6 +495,7 @@ namespace EmEn::Graphics
 		}
 
 		m_rayTracingSettingEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsRayTracingEnabledKey, DefaultGraphicsRayTracingEnabled);
+		m_cutFrameAroundTranslucency = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPostProcessingCutFrameAroundTranslucencyKey, DefaultGraphicsPostProcessingCutFrameAroundTranslucency);
 		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
 		m_MDIEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsMDIEnabledKey, DefaultGraphicsMDIEnabled);
 
@@ -2127,6 +2128,43 @@ namespace EmEn::Graphics
 			profiler->endScope(*commandBuffer);
 		}
 
+		/* Set the current TLAS and update RT descriptor set for post-process effects.
+		 * Capture the read state index so post-process effects (RTR) use view matrices
+		 * consistent with the depth buffer rendered this frame.
+		 * ⚠️ BEFORE the pre-translucency half below: RTGI traces there. */
+		if ( scenePtr != nullptr )
+		{
+			m_currentTLAS = scenePtr->TLAS();
+			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
+
+			if ( m_currentTLAS != nullptr )
+			{
+				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
+			}
+		}
+		else
+		{
+			m_currentTLAS = nullptr;
+		}
+
+		/* ⚠️ THE FRAME IS CUT IN TWO around the TranslucentGB pass when it contains grab-pass
+		 * objects and the stack holds an enabled pre-translucency effect (the indirect diffuse).
+		 * That half runs NOW, on the opaque G-buffer, and writes its result back into the scene
+		 * colour — so the material grab pass below captures a scene lit by its indirect diffuse
+		 * and a glass TRANSMITS it. Before Aug 2026 the whole chain ran after the translucent
+		 * pass: a surface seen through a glass never received any indirect light, and once the
+		 * ownership contract switched the raster's own IBL leg off under RTGI it received none at
+		 * all (measured on the watch dial). An uncut frame pays nothing new. */
+		const bool cutFrame = m_cutFrameAroundTranslucency && sceneHasContent && scenePtr->hasTranslucentGBObjects() && m_postProcessingActive && scenePtr->hasPostProcessStack() && scenePtr->postProcessStack()->hasEnabledPreTranslucencyEffect();
+
+		if ( cutFrame )
+		{
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain/PreTranslucency"};
+
+			m_postProcessor.recordBlit(*commandBuffer);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), ChainPhase::PreTranslucency);
+		}
+
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
 		 * The internal target's color image is in COLOR_ATTACHMENT_OPTIMAL (matching GrabPass expectations).
 		 * NEED-DRIVEN (see the swap-chain path): armed by the frame's TranslucentGB content,
@@ -2207,31 +2245,14 @@ namespace EmEn::Graphics
 		 * The internal target's color is in COLOR_ATTACHMENT_OPTIMAL. */
 		m_postProcessor.recordBlit(*commandBuffer);
 
-		/* Set the current TLAS and update RT descriptor set for post-process effects.
-		 * Capture the read state index so post-process effects (RTR) use view matrices
-		 * consistent with the depth buffer rendered this frame. */
-		if ( scenePtr != nullptr )
-		{
-			m_currentTLAS = scenePtr->TLAS();
-			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
-
-			if ( m_currentTLAS != nullptr )
-			{
-				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
-			}
-		}
-		else
-		{
-			m_currentTLAS = nullptr;
-		}
-
 		/* Process scene effects (multi-pass). The active camera provides the photographic
-		 * context (physical camera model: optics, exposure) to the effect chain. */
+		 * context (physical camera model: optics, exposure) to the effect chain. On a cut frame
+		 * this is the CLOSING half: every slot the pre-translucency half did not run. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr));
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen

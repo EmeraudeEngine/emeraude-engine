@@ -1694,6 +1694,8 @@ namespace EmEn::Graphics
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_rayTracingSettingEnabled{true};
+			/** @brief Settings: cut the frame around the translucent pass so a glass transmits the indirect diffuse (see EffectSlot::isPreTranslucencySlot). An A/B switch, default true. */
+			bool m_cutFrameAroundTranslucency{true};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
 			bool m_TBNSpaceRenderingEnabled{false};

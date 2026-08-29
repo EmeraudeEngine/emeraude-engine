@@ -267,6 +267,16 @@ namespace EmEn::Graphics
 			bool hasEnabledIndirectDiffuseProvider () const noexcept;
 
 			/**
+			 * @brief Returns whether an ENABLED effect sits in a pre-translucency slot.
+			 * @note Read by the Renderer to decide whether the frame is cut in two around the
+			 * TranslucentGB pass (see EffectSlot::isPreTranslucencySlot()). A frame with no such
+			 * effect, or no translucent grab-pass object, runs the whole chain once, as before.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasEnabledPreTranslucencyEffect () const noexcept;
+
+			/**
 			 * @brief Creates GPU resources for all effects.
 			 * @param width The framebuffer width.
 			 * @param height The framebuffer height.

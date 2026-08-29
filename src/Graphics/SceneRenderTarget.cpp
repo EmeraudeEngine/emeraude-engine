@@ -635,7 +635,12 @@ namespace EmEn::Graphics
 			VK_IMAGE_TYPE_2D,
 			m_colorFormat,
 			this->extent(),
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			/* TRANSFER_DST (Aug 2026): the pre-translucency half of a cut frame blits the
+			 * indirect-diffuse composite BACK INTO this image before the material grab pass reads
+			 * it (PostProcessor::recordWriteBack). A blit destination must declare the flag, or the
+			 * barrier to TRANSFER_DST_OPTIMAL is rejected and the blit runs against a stale tracked
+			 * layout — four VUIDs a frame pointing at the blit, not at this line. Colour ONLY. */
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 		);
 		m_colorImage->setIdentifier(ClassId, this->id(), "ColorImage");
 

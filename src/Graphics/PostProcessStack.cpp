@@ -214,6 +214,14 @@ namespace EmEn::Graphics
 	}
 
 	bool
+	PostProcessStack::hasEnabledPreTranslucencyEffect () const noexcept
+	{
+		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && isPreTranslucencySlot(effect->slot());
+		});
+	}
+
+	bool
 	PostProcessStack::hasEnabledIndirectDiffuseProvider () const noexcept
 	{
 		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {

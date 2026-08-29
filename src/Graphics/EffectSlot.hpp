@@ -158,6 +158,28 @@ namespace EmEn::Graphics
 	constexpr auto EffectSlotCount{static_cast< size_t >(EffectSlot::PostToneMapping) + 1UL};
 
 	/**
+	 * @brief Returns whether a slot runs BEFORE the translucent grab-pass objects are drawn.
+	 * @note ⚠️ THE FRAME IS CUT IN TWO around the TranslucentGB pass when the frame contains such
+	 * objects (Renderer::renderFrameWithInternal). The indirect DIFFUSE must be composited into
+	 * the scene colour BEFORE the material grab pass copies it, or nothing seen THROUGH a glass
+	 * ever receives it — and since the indirect-diffuse ownership contract switched the raster's
+	 * own IBL leg off under RTGI, "nothing" meant nothing at all (measured on the watch dial,
+	 * Aug 2026). ONLY the indirect diffuse moves forward: the ambient occlusion must stay after
+	 * the reflections (its snippet is a global multiply — placed before them it stopped
+	 * attenuating them, the owner-reported bright patches), and the reflections stay after the
+	 * translucent pass so a water surface keeps its SSR/RTR through its G-buffer footprint.
+	 * @param slot The slot.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	isPreTranslucencySlot (EffectSlot slot) noexcept
+	{
+		return slot == EffectSlot::IndirectDiffuse;
+	}
+
+	/**
 	 * @brief Returns whether a slot may be filed into a stack at all.
 	 * @param slot The slot.
 	 * @return bool
