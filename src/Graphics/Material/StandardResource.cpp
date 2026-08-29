@@ -28,10 +28,12 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <ranges>
 #include <sstream>
+#include <tuple>
 
 /* Local inclusions. */
 #include "Component/Color.hpp"
@@ -809,19 +811,10 @@ namespace EmEn::Graphics::Material
 				this->setClearCoatFactor(FastJSON::getValue< float >(data[ClearCoatString], JKValue).value_or(1.0F));
 				this->setClearCoatRoughness(FastJSON::getValue< float >(data[ClearCoatString], JKRoughness).value_or(DefaultClearCoatRoughness));
 
-				/* Check for separate ClearCoatRoughness texture. */
-				FillingType ccRoughnessFillingType{};
-				Json::Value ccRoughnessData{};
-
-				if ( parseComponentBase(data, ClearCoatRoughnessString, ccRoughnessFillingType, ccRoughnessData, true) && ccRoughnessFillingType != FillingType::None )
-				{
-					const auto roughnessResult = m_components.emplace(ComponentType::ClearCoatRoughness, std::make_unique< Texture >(Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness, ccRoughnessData, ccRoughnessFillingType, serviceProvider));
-
-					if ( !roughnessResult.second || roughnessResult.first->second == nullptr )
-					{
-						return false;
-					}
-				}
+				/* NOTE: ClearCoatRoughness and ClearCoatNormal are companion MAPS and are read
+				 * uniformly with every other one — see parseTextureMapComponent(). They used to be
+				 * parsed HERE, inside this Texture branch only, so a clear coat declared as a
+				 * scalar Value silently dropped its roughness map. */
 			}
 				return true;
 
@@ -1266,6 +1259,50 @@ namespace EmEn::Graphics::Material
 			TraceError{ClassId} << "Error while parsing the specular component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
+		}
+
+		/* ============================================================================
+		 * COMPANION TEXTURE MAPS — one uniform pass, one rule.
+		 *
+		 * ⚠️ A feature's maps are TOP-LEVEL components named after their `ComponentType`, read
+		 * here unconditionally. They are never nested inside the feature's own block and never
+		 * conditional on how that block was filled. Before 2026-08-29 the format did neither
+		 * consistently: `ClearCoatRoughness` was read only when `ClearCoat` itself happened to be
+		 * a texture, and `ClearCoatNormal`, `SpecularColor`, `IridescenceThickness` and
+		 * `VolumeThickness` had no JSON path at all — they existed only as C++ setters.
+		 *
+		 * ⚠️ Adding a map means adding ONE line here. Do not grow a bespoke branch inside a
+		 * feature parser again.
+		 * ============================================================================ */
+		{
+			const std::array< std::tuple< const char *, ComponentType, const char *, const char * >, 5 > textureMaps{{
+				{ClearCoatRoughnessString, ComponentType::ClearCoatRoughness, Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness},
+				{ClearCoatNormalString, ComponentType::ClearCoatNormal, Uniform::ClearCoatNormalSampler, SurfaceClearCoatNormal},
+				{SpecularColorString, ComponentType::SpecularColor, Uniform::SpecularColorSampler, SurfaceSpecularColor},
+				{IridescenceThicknessString, ComponentType::IridescenceThickness, Uniform::IridescenceThicknessSampler, SurfaceIridescenceThickness},
+				{VolumeThicknessString, ComponentType::VolumeThickness, Uniform::VolumeThicknessSampler, SurfaceVolumeThickness}
+			}};
+
+			for ( const auto & [componentName, componentType, samplerName, variableName] : textureMaps )
+			{
+				if ( !this->parseTextureMapComponent(data, componentName, componentType, samplerName, variableName, serviceProvider) )
+				{
+					TraceError{ClassId} << "Error while parsing the '" << componentName << "' texture map for PBR material '" << this->name() << "' resource from JSON file !";
+
+					return this->setLoadSuccess(false);
+				}
+			}
+		}
+
+		/* Material index of refraction (KHR_materials_ior), at the TOP LEVEL.
+		 * ⚠️ It used to be reachable ONLY from inside the `Refraction` block, so a transmissive
+		 * glass that wanted an IOR without a cubemap refraction could not declare one at all. The
+		 * IOR belongs to the MATERIAL — since Aug 2026 it drives the dielectric F0 in all four
+		 * ambient Fresnel branches, not just refraction. The `Refraction` block still sets it when
+		 * present, and runs first, so this key has the last word when both appear. */
+		if ( data.isMember(JKIOR) )
+		{
+			this->setIOR(FastJSON::getValue< float >(data, JKIOR).value_or(DefaultIOR));
 		}
 
 		/* Parse optional emissive strength value (KHR_materials_emissive_strength). */
@@ -5628,6 +5665,38 @@ namespace EmEn::Graphics::Material
 	}
 
 	/* ==================== Specular JSON Parsing ==================== */
+
+	bool
+	StandardResource::parseTextureMapComponent (const Json::Value & data, const char * componentName, ComponentType componentType, const char * samplerName, const char * variableName, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		/* Absent is not an error: parseComponentBase() returns true with FillingType::None. */
+		if ( !parseComponentBase(data, componentName, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		if ( fillingType == FillingType::None )
+		{
+			return true;
+		}
+
+		const auto result = m_components.emplace(componentType, std::make_unique< Texture >(samplerName, variableName, componentData, fillingType, serviceProvider));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the '" << componentName << "' texture map of material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		return true;
+	}
 
 	bool
 	StandardResource::parseSpecularComponent (const Json::Value & data) noexcept

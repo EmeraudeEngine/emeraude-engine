@@ -996,29 +996,29 @@ namespace EmEn::Graphics::Material
 			 */
 			bool setTransmissionComponentFromGrabPass (float factor = DefaultTransmissionFactor, const Base::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
 
-		/**
-		 * @brief Sets the volume THICKNESS map (KHR_materials_volume).
-		 * @warning This function is available before creation time.
-		 * @note Its **G** channel MULTIPLIES `thicknessFactor`, giving a per-pixel volume depth. It
-		 * feeds BOTH consumers of the thickness: Beer's law absorption and the LENGTH of the
-		 * refraction ray whose exit point the screen-space refraction projects. It is DATA, never
-		 * sRGB. Without it the factor applies uniformly.
-		 * @param texture A reference to a texture smart pointer for the thickness map.
-		 * @return bool
-		 */
-		bool setVolumeThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+			/**
+			 * @brief Sets the volume THICKNESS map (KHR_materials_volume).
+			 * @warning This function is available before creation time.
+			 * @note Its **G** channel MULTIPLIES `thicknessFactor`, giving a per-pixel volume depth. It
+			 * feeds BOTH consumers of the thickness: Beer's law absorption and the LENGTH of the
+			 * refraction ray whose exit point the screen-space refraction projects. It is DATA, never
+			 * sRGB. Without it the factor applies uniformly.
+			 * @param texture A reference to a texture smart pointer for the thickness map.
+			 * @return bool
+			 */
+			bool setVolumeThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
 
-		/**
-		 * @brief Returns the GLSL expression giving the volume thickness at this fragment.
-		 * @note ⚠️ THE single place the thickness is resolved. It has TWO consumers that must never
-		 * disagree — Beer's law absorption in the light generator, and the LENGTH of the refraction
-		 * ray whose exit point the screen-space refraction projects (three sites: standard,
-		 * dispersion, low quality). KHR_materials_volume's thicknessTexture MULTIPLIES the factor,
-		 * it does not replace it.
-		 * @return std::string
-		 */
-		[[nodiscard]]
-		std::string volumeThicknessExpression () const noexcept;
+			/**
+			 * @brief Returns the GLSL expression giving the volume thickness at this fragment.
+			 * @note ⚠️ THE single place the thickness is resolved. It has TWO consumers that must never
+			 * disagree — Beer's law absorption in the light generator, and the LENGTH of the refraction
+			 * ray whose exit point the screen-space refraction projects (three sites: standard,
+			 * dispersion, low quality). KHR_materials_volume's thicknessTexture MULTIPLIES the factor,
+			 * it does not replace it.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string volumeThicknessExpression () const noexcept;
 
 			/**
 			 * @brief Enables or disables depth-based opacity for GrabPass transmission.
@@ -1071,15 +1071,15 @@ namespace EmEn::Graphics::Material
 
 			/* ==================== Dispersion Component Setters (Pre-creation) ==================== */
 
-		/**
-		 * @brief Sets the chromatic dispersion component (KHR_materials_dispersion).
-		 * @warning This function is available before creation time.
-		 * @param dispersion The dispersion value (0.0 = off). Typical: diamond 0.362, emerald 0.53.
-		 * @return bool
-		 */
-		bool setDispersionComponent (float dispersion) noexcept;
+			/**
+			 * @brief Sets the chromatic dispersion component (KHR_materials_dispersion).
+			 * @warning This function is available before creation time.
+			 * @param dispersion The dispersion value (0.0 = off). Typical: diamond 0.362, emerald 0.53.
+			 * @return bool
+			 */
+			bool setDispersionComponent (float dispersion) noexcept;
 
-		/* ==================== Iridescence Dynamic Property Setters (Post-creation) ==================== */
+			/* ==================== Iridescence Dynamic Property Setters (Post-creation) ==================== */
 
 			/**
 			 * @brief Changes the iridescence factor.
@@ -1115,85 +1115,85 @@ namespace EmEn::Graphics::Material
 
 			/* ==================== Dispersion Dynamic Property Setters (Post-creation) ==================== */
 
-		/**
-		 * @brief Changes the chromatic dispersion value.
-		 * @note This is a dynamic property.
-		 * @param value The dispersion value (0.0 = off).
-		 * @return void
-		 */
-		void setDispersion (float value) noexcept;
+			/**
+			 * @brief Changes the chromatic dispersion value.
+			 * @note This is a dynamic property.
+			 * @param value The dispersion value (0.0 = off).
+			 * @return void
+			 */
+			void setDispersion (float value) noexcept;
 
-		/* ==================== Specular Component Setters (KHR_materials_specular) ==================== */
+			/* ==================== Specular Component Setters (KHR_materials_specular) ==================== */
 
-		/**
-		 * @brief Sets the specular component (KHR_materials_specular).
-		 * @warning This function is available before creation time.
-		 * @param factor The specular factor that scales dielectric F0 (0.0=no specular, 1.0=default). Default 1.0.
-		 * @param color The specular color that tints dielectric F0. Default white (no tint).
-		 * @return bool
-		 */
-		bool setSpecularComponent (float factor, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
+			/**
+			 * @brief Sets the specular component (KHR_materials_specular).
+			 * @warning This function is available before creation time.
+			 * @param factor The specular factor that scales dielectric F0 (0.0=no specular, 1.0=default). Default 1.0.
+			 * @param color The specular color that tints dielectric F0. Default white (no tint).
+			 * @return bool
+			 */
+			bool setSpecularComponent (float factor, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
 
-		/**
-		 * @brief Sets the specular FACTOR from a texture (KHR_materials_specular specularTexture).
-		 * @warning This function is available before creation time.
-		 * @note glTF stores that value in the texture's **A channel** and MULTIPLIES it by the
-		 * scalar factor, so the factor stays meaningful and is folded into the sampled variable by
-		 * the component codegen — never re-apply it downstream.
-		 * @param texture A reference to a texture resource smart pointer.
-		 * @param factor The specular factor the texel is multiplied by. Default 1.0.
-		 * @return bool
-		 */
-		bool setSpecularComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor = DefaultSpecularFactor) noexcept;
+			/**
+			 * @brief Sets the specular FACTOR from a texture (KHR_materials_specular specularTexture).
+			 * @warning This function is available before creation time.
+			 * @note glTF stores that value in the texture's **A channel** and MULTIPLIES it by the
+			 * scalar factor, so the factor stays meaningful and is folded into the sampled variable by
+			 * the component codegen — never re-apply it downstream.
+			 * @param texture A reference to a texture resource smart pointer.
+			 * @param factor The specular factor the texel is multiplied by. Default 1.0.
+			 * @return bool
+			 */
+			bool setSpecularComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor = DefaultSpecularFactor) noexcept;
 
-		/**
-		 * @brief Sets the specular COLOUR from a texture (KHR_materials_specular specularColorTexture).
-		 * @warning This function is available before creation time.
-		 * @note A SECOND map, independent of the factor one: glTF's `specularColorTexture` carries
-		 * the F0 tint in its RGB and is **sRGB-encoded**, and it MULTIPLIES `specularColorFactor`.
-		 * @param texture A reference to a texture resource smart pointer.
-		 * @param color The specular colour the texel is multiplied by. Default white (no tint).
-		 * @return bool
-		 */
-		bool setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
+			/**
+			 * @brief Sets the specular COLOUR from a texture (KHR_materials_specular specularColorTexture).
+			 * @warning This function is available before creation time.
+			 * @note A SECOND map, independent of the factor one: glTF's `specularColorTexture` carries
+			 * the F0 tint in its RGB and is **sRGB-encoded**, and it MULTIPLIES `specularColorFactor`.
+			 * @param texture A reference to a texture resource smart pointer.
+			 * @param color The specular colour the texel is multiplied by. Default white (no tint).
+			 * @return bool
+			 */
+			bool setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
 
-		/* ==================== Specular Dynamic Property Setters (Post-creation) ==================== */
+			/* ==================== Specular Dynamic Property Setters (Post-creation) ==================== */
 
-		/**
-		 * @brief Changes the specular factor (KHR_materials_specular).
-		 * @note This is a dynamic property.
-		 * @param value The specular factor (0.0 = no specular highlight, 1.0 = default).
-		 * @return void
-		 */
-		void setSpecularFactor (float value) noexcept;
+			/**
+			 * @brief Changes the specular factor (KHR_materials_specular).
+			 * @note This is a dynamic property.
+			 * @param value The specular factor (0.0 = no specular highlight, 1.0 = default).
+			 * @return void
+			 */
+			void setSpecularFactor (float value) noexcept;
 
-		/**
-		 * @brief Changes the specular color (KHR_materials_specular).
-		 * @note This is a dynamic property.
-		 * @param color A reference to the specular color tint.
-		 * @return void
-		 */
-		void setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept;
+			/**
+			 * @brief Changes the specular color (KHR_materials_specular).
+			 * @note This is a dynamic property.
+			 * @param color A reference to the specular color tint.
+			 * @return void
+			 */
+			void setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
-		/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */
+			/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */
 
-		/**
-		 * @brief Sets the emissive strength HDR multiplier (KHR_materials_emissive_strength).
-		 * @warning This function is available before creation time.
-		 * @param strength The emissive strength multiplier (>= 0.0, default 1.0). Values > 1.0 enable HDR bloom.
-		 * @return bool
-		 */
-		bool setEmissiveStrength (float strength) noexcept;
+			/**
+			 * @brief Sets the emissive strength HDR multiplier (KHR_materials_emissive_strength).
+			 * @warning This function is available before creation time.
+			 * @param strength The emissive strength multiplier (>= 0.0, default 1.0). Values > 1.0 enable HDR bloom.
+			 * @return bool
+			 */
+			bool setEmissiveStrength (float strength) noexcept;
 
-		/**
-		 * @brief Changes the emissive strength HDR multiplier (KHR_materials_emissive_strength).
-		 * @note This is a dynamic property.
-		 * @param value The emissive strength multiplier (>= 0.0).
-		 * @return void
-		 */
-		void setEmissiveStrengthValue (float value) noexcept;
+			/**
+			 * @brief Changes the emissive strength HDR multiplier (KHR_materials_emissive_strength).
+			 * @note This is a dynamic property.
+			 * @param value The emissive strength multiplier (>= 0.0).
+			 * @return void
+			 */
+			void setEmissiveStrengthValue (float value) noexcept;
 
-		/* ==================== Transmission Dynamic Property Setters (Post-creation) ==================== */
+			/* ==================== Transmission Dynamic Property Setters (Post-creation) ==================== */
 
 			/**
 			 * @brief Changes the transmission factor.
@@ -1414,6 +1414,29 @@ namespace EmEn::Graphics::Material
 			 */
 			[[nodiscard]]
 			bool parseSpecularComponent (const Json::Value & data) noexcept;
+
+			/**
+			 * @brief Parses one optional companion TEXTURE MAP, declared as a TOP-LEVEL component.
+			 * @note ⚠️ THE single place a companion map is read, and the rule the JSON material
+			 * format follows: a feature's maps are top-level components named after their
+			 * `ComponentType`, never nested inside another block and never conditional on how that
+			 * block was filled. Before 2026-08-29 `ClearCoatRoughness` was read only when
+			 * `ClearCoat` itself happened to be a texture — so a scalar clear coat silently dropped
+			 * its roughness map — while `ClearCoatNormal`, `SpecularColor`, `IridescenceThickness`
+			 * and `VolumeThickness` had no JSON path at all.
+			 * @note ⚠️ sRGB is decided by the VARIABLE NAME: `Component::Texture` enables it when the
+			 * name ends with "Color". That is why `SurfaceSpecularColor` is sRGB (glTF declares
+			 * `specularColorTexture` as such) while the thickness maps stay linear. Renaming one of
+			 * these variables silently changes its colour space.
+			 * @param data A reference to the material JSON value.
+			 * @param componentName The top-level key to look for. Absent is not an error.
+			 * @param componentType The component slot to fill.
+			 * @param samplerName The GLSL sampler name.
+			 * @param variableName The GLSL surface variable name.
+			 * @param serviceProvider A reference to the service provider.
+			 * @return bool
+			 */
+			bool parseTextureMapComponent (const Json::Value & data, const char * componentName, ComponentType componentType, const char * samplerName, const char * variableName, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Updates the UBO with material properties.
