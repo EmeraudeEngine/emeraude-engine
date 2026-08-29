@@ -300,6 +300,38 @@ namespace EmEn::Graphics
 			void enable (bool state) noexcept override;
 
 			/**
+			 * @brief Returns whether this effect holds the GPU resources it needs to record.
+			 * @note ⚠️ AN EFFECT THAT IS NOT CREATED MUST NEVER BE RECORDED. Its render targets,
+			 * pipelines and per-frame descriptor sets are empty containers, and the recording code
+			 * indexes them without checking — RTGI's `m_tracePerFrame[frameIndex]` on an EMPTY
+			 * vector is an out-of-bounds read, not a null dereference a test would have caught, and
+			 * it segfaults on the first rendered frame. It happened twice for two different reasons:
+			 * a stack installed without `createAll()` (a demo wiring mistake), and a `resize()`
+			 * whose `create()` half failed after the `destroy()` half had already run.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept
+			{
+				return m_created;
+			}
+
+			/**
+			 * @brief Records whether the last create/resize attempt succeeded.
+			 * @warning ⚠️ INTERNAL — PostProcessStack is the only caller, because it is the only
+			 * object that drives the whole lifecycle (createAll, resizeAll, destroyAll, and the
+			 * photographic effects it materializes itself).
+			 * @param state The new state.
+			 * @return void
+			 */
+			void
+			setCreatedFlag (bool state) noexcept
+			{
+				m_created = state;
+			}
+
+			/**
 			 * @brief Called by PostProcessStack when the effect enters or leaves a stack.
 			 * @warning ⚠️ INTERNAL — the stack is the only caller. A RAW pointer, cleared by the
 			 * stack on removal and in its destructor while it still holds the effect alive: an
@@ -698,5 +730,7 @@ void main()
 			 * this effect. An effect outliving its stack (a demo keeping copies to toggle it)
 			 * therefore never holds a dangling one. */
 			PostProcessStack * m_ownerStack{nullptr};
+			/** @brief Whether the last create/resize attempt succeeded — see isCreated(). */
+			bool m_created{false};
 	};
 }

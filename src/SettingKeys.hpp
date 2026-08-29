@@ -426,12 +426,9 @@ namespace EmEn
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 
 			/* Ray Tracing > Reflection */
-			constexpr auto GraphicsRayTracingReflectionEnabledKey{"Core/Graphics/RayTracing/Reflection/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingReflectionEnabled{true};
 			/* Compute reflections at half resolution (pixel doubling) to save performance. */
 			constexpr auto GraphicsRayTracingReflectionPixelDoublingKey{"Core/Graphics/RayTracing/Reflection/PixelDoubling"};
 			constexpr auto DefaultGraphicsRayTracingReflectionPixelDoubling{true};
-
 			/* Ray Tracing > Reflection > Glossy cone (pre-convolved reflection pyramid lookup).
 			 * The v1 cone is UNIFORM in screen space: it assumes a representative hit distance
 			 * and ignores surface curvature, so a curved mirror (sphere) is over-blurred by an
@@ -465,8 +462,6 @@ namespace EmEn
 			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeMaxLod{8.0F};
 
 			/* Ray Tracing > Ambient Occlusion */
-			constexpr auto GraphicsRayTracingAOEnabledKey{"Core/Graphics/RayTracing/AmbientOcclusion/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingAOEnabled{true};
 			/* Samples per pixel for ray-traced ambient occlusion. */
 			constexpr auto GraphicsRayTracingAOSampleCountKey{"Core/Graphics/RayTracing/AmbientOcclusion/SampleCount"};
 			constexpr auto DefaultGraphicsRayTracingAOSampleCount{8U};
@@ -489,13 +484,7 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingAONormalSigmaKey{"Core/Graphics/RayTracing/AmbientOcclusion/NormalSigma"};
 			constexpr auto DefaultGraphicsRayTracingAONormalSigma{0.5F};
 
-			/* Ray Tracing > Contact Shadows */
-			constexpr auto GraphicsRayTracingContactShadowsEnabledKey{"Core/Graphics/RayTracing/ContactShadows/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingContactShadowsEnabled{true};
-
 			/* Ray Tracing > Global Illumination */
-			constexpr auto GraphicsRayTracingGIEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingGIEnabled{true};
 			/* Samples per pixel for ray-traced global illumination.
 			 * Measured 2026-07-05 (Sponza+extras, RTX 3070 Ti @ 3840x1990): 8 spp is
 			 * visually equivalent to 16 after the bilateral blur and ~16 ms/frame cheaper. */

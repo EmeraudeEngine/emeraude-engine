@@ -260,7 +260,14 @@ namespace EmEn::Graphics
 		{
 			auto effect = std::make_shared< Effects::Framebuffer::DepthOfField >(renderer);
 
-			if ( effect->create(extent.width, extent.height) )
+			const auto created = effect->create(extent.width, extent.height);
+
+			/* ⚠️ The photographic effects are created HERE, never by createAll(): their flag has
+			 * to be raised on this path too, or the executor's "is it created" gate would skip
+			 * the tone mapping and leave the frame in linear HDR. */
+			effect->setCreatedFlag(created);
+
+			if ( created )
 			{
 				m_cameraDepthOfField = std::move(effect);
 			}
@@ -288,7 +295,14 @@ namespace EmEn::Graphics
 		{
 			auto effect = std::make_shared< Effects::Framebuffer::MotionBlur >(renderer);
 
-			if ( effect->create(extent.width, extent.height) )
+			const auto created = effect->create(extent.width, extent.height);
+
+			/* ⚠️ The photographic effects are created HERE, never by createAll(): their flag has
+			 * to be raised on this path too, or the executor's "is it created" gate would skip
+			 * the tone mapping and leave the frame in linear HDR. */
+			effect->setCreatedFlag(created);
+
+			if ( created )
 			{
 				m_cameraMotionBlur = std::move(effect);
 			}
@@ -315,7 +329,14 @@ namespace EmEn::Graphics
 				.intensity = camera->bloomIntensity()
 			});
 
-			if ( effect->create(extent.width, extent.height) )
+			const auto created = effect->create(extent.width, extent.height);
+
+			/* ⚠️ The photographic effects are created HERE, never by createAll(): their flag has
+			 * to be raised on this path too, or the executor's "is it created" gate would skip
+			 * the tone mapping and leave the frame in linear HDR. */
+			effect->setCreatedFlag(created);
+
+			if ( created )
 			{
 				m_cameraBloom = std::move(effect);
 			}
@@ -369,7 +390,14 @@ namespace EmEn::Graphics
 				bloom->setCompositeBypassed(true);
 			}
 
-			if ( effect->create(extent.width, extent.height) )
+			const auto created = effect->create(extent.width, extent.height);
+
+			/* ⚠️ The photographic effects are created HERE, never by createAll(): their flag has
+			 * to be raised on this path too, or the executor's "is it created" gate would skip
+			 * the tone mapping and leave the frame in linear HDR. */
+			effect->setCreatedFlag(created);
+
+			if ( created )
 			{
 				m_cameraToneMapping = std::move(effect);
 			}
@@ -430,6 +458,8 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::createAll (uint32_t width, uint32_t height) const noexcept
 	{
+		auto success = true;
+
 		for ( const auto & effect : m_orderedEffects )
 		{
 			if ( effect == nullptr )
@@ -437,15 +467,22 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			if ( !effect->create(width, height) )
-			{
-				TraceError{ClassId} << "Failed to create effect in the post-process stack !";
+			const auto created = effect->create(width, height);
 
-				return false;
+			/* ⚠️ The flag is what keeps a failed effect OUT of the recording. The loop no longer
+			 * returns on the first failure either: stopping there left the untouched effects
+			 * un-created too, and they were recorded exactly like the one that failed. */
+			effect->setCreatedFlag(created);
+
+			if ( !created )
+			{
+				TraceError{ClassId} << "Failed to create the '" << effect->label() << "' effect of the post-process stack !";
+
+				success = false;
 			}
 		}
 
-		return true;
+		return success;
 	}
 
 	void
@@ -456,6 +493,7 @@ namespace EmEn::Graphics
 			if ( effect != nullptr )
 			{
 				effect->destroy();
+				effect->setCreatedFlag(false);
 			}
 		}
 	}
@@ -463,6 +501,8 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::resizeAll (uint32_t width, uint32_t height) const noexcept
 	{
+		auto success = true;
+
 		for ( const auto & effect : m_orderedEffects )
 		{
 			if ( effect == nullptr )
@@ -470,15 +510,22 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			if ( !effect->resize(width, height) )
-			{
-				TraceError{ClassId} << "Failed to resize effect in the post-process stack !";
+			/* ⚠️ resize() DESTROYS then creates: a failure here leaves the effect in the chain
+			 * with its resources already gone, which is the second way an un-created effect used
+			 * to reach the recording. */
+			const auto resized = effect->resize(width, height);
 
-				return false;
+			effect->setCreatedFlag(resized);
+
+			if ( !resized )
+			{
+				TraceError{ClassId} << "Failed to resize the '" << effect->label() << "' effect of the post-process stack !";
+
+				success = false;
 			}
 		}
 
-		return true;
+		return success;
 	}
 
 	bool

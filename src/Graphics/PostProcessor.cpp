@@ -1315,6 +1315,18 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* ⚠️⚠️ An effect that does not hold its GPU resources is NOT recordable, and this gate
+			 * is what turns a lifecycle mistake into a missing effect instead of a segfault: the
+			 * recording code indexes per-frame containers that a failed or absent creation leaves
+			 * EMPTY (RTGI's m_tracePerFrame[frameIndex] — an out-of-bounds read, not a null a test
+			 * would catch). Silent on purpose: the failure is already traced loudly where it
+			 * happens, by PostProcessStack::createAll()/resizeAll(); repeating it here would spam
+			 * one line per effect per frame. */
+			if ( !effect->isCreated() )
+			{
+				continue;
+			}
+
 			/* Skip depth-requiring effects if no depth is available. */
 			if ( effect->requiresDepth() && depthTexture == nullptr )
 			{
