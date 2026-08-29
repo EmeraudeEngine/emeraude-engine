@@ -27,6 +27,9 @@
 #include "RTGI.hpp"
 
 /* Local inclusions. */
+#include "RTAlphaTestGLSL.hpp"
+
+/* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -155,6 +158,8 @@ const float PI = 3.14159265;
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture = 1u;
 const uint HasMetalnessTexture = 1u << 3;
+const uint HasOpacityTexture = 1u << 7;
+const uint IsAlphaTest = 1u << 8;
 
 /* Packed texel channel index (0:R, 1:G, 2:B, 3:A) — matches
  * GPURTMaterialData::MetalnessChannelShift. */
@@ -301,18 +306,25 @@ vec3 historyFeedback (vec3 hitPos)
 	return min(history.rgb, vec3(bounceParams.y)) * bounceParams.x;
 }
 
+)GLSL" EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
 /* Shadow ray: returns 1.0 when the path from the surface toward the light is unoccluded,
- * 0.0 otherwise. TerminateOnFirstHit: any-hit is enough for a visibility test. */
+ * 0.0 otherwise. TerminateOnFirstHit: the first CONFIRMED candidate ends the traversal.
+ * ⚠️ NOT gl_RayFlagsOpaqueEXT: that flag accepts every triangle of an alpha-tested instance
+ * whole, and the ivy of Sponza cast a SOLID shadow at every bounce hit while the raster drew
+ * leaves. The candidates are judged by the shared alpha-test rule (RTAlphaTestGLSL.hpp). */
 float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 {
 	rayQueryEXT shadowQuery;
 	rayQueryInitializeEXT(
 		shadowQuery, topLevelAS,
-		gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF,
+		gl_RayFlagsTerminateOnFirstHitEXT, 0xFF,
 		origin, 0.0, direction, maxT
 	);
 
-	while (rayQueryProceedEXT(shadowQuery)) {}
+	while (rayQueryProceedEXT(shadowQuery))
+	{
+)GLSL" EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(shadowQuery) R"GLSL(
+	}
 
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
@@ -508,13 +520,19 @@ void main()
 		 * tMin is a tiny CONSTANT, decoupled from the adaptive origin offset (same fix as
 		 * RTAO): a tMin equal to the adaptive bias skips real geometry closer than it and
 		 * leaks light at wall/floor creases. */
+		/* ⚠️ NOT gl_RayFlagsOpaqueEXT: a cutout instance (foliage, fences) is FORCE_NO_OPAQUE and
+		 * hands its triangles over as candidates for the shader to judge — the opaque flag
+		 * overrode that and a leaf blocked the sky as a solid quad. Same rule as RTR. */
 		rayQueryEXT rayQuery;
 		rayQueryInitializeEXT(
-			rayQuery, topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF,
+			rayQuery, topLevelAS, gl_RayFlagsNoneEXT, 0xFF,
 			rayOrigin, 0.001, sampleDir, skyDistance
 		);
 
-		while (rayQueryProceedEXT(rayQuery)) {}
+	while (rayQueryProceedEXT(rayQuery))
+	{
+)GLSL" EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(rayQuery) R"GLSL(
+	}
 
 		if (rayQueryGetIntersectionTypeEXT(rayQuery, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
 		{
@@ -544,13 +562,8 @@ void main()
 			/* Unpack mesh data. */
 			MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
 
-			/* Look up material per sub-geometry via geometryIndex from the ray query.
-			 * Clamp to subGeometryCount to handle BLAS with more sub-geometries than the
-			 * renderable has material slots (e.g. animated sprite frame groups). */
-			uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
-			uint subGeoCount = meshSSBO.meshEntries[instanceIndex * 3u + 1u].w;
-			uint effectiveGeomIdx = (geomIdx < subGeoCount) ? geomIdx : 0u;
-			uint materialIndex = meshSSBO.meshEntries[instanceIndex * 3u + 2u][effectiveGeomIdx];
+			/* Material per sub-geometry, clamped to the renderable's slots (shared RT rule). */
+			uint materialIndex = rtHitMaterialIndex(instanceIndex, rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true));
 			uint matBase = materialIndex * 7u;
 
 			vec3 albedo = materialSSBO.materials[matBase].rgb;

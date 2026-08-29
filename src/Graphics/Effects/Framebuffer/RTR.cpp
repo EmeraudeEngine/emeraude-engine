@@ -26,6 +26,9 @@
 
 #include "RTR.hpp"
 
+/* Local inclusions. */
+#include "RTAlphaTestGLSL.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <bit>
@@ -251,13 +254,6 @@ MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
  * creates one group per animation frame slot, even when only a few frames are
  * actually used. In that case subGeometryCount (meta1.w) is 1 and we clamp the
  * BLAS-side geomIdx to 0 so we always read the renderable's only material. */
-uint getHitMaterialIndex (uint instanceIndex, uint geomIdx)
-{
-	uint subGeoCount = meshSSBO.meshEntries[instanceIndex * 3u + 1u].w;
-	uint effectiveIdx = (geomIdx < subGeoCount) ? geomIdx : 0u;
-	return meshSSBO.meshEntries[instanceIndex * 3u + 2u][effectiveIdx];
-}
-
 /* Interpolate a vec3 vertex attribute at the hit point (barycentric). */
 vec3 getHitAttributeVec3 (MeshAccessor m, vec2 bary, uint offsetFloats)
 {
@@ -284,19 +280,25 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 	return uv0 * (1.0 - bary.x - bary.y) + uv1 * bary.x + uv2 * bary.y;
 }
 
-/* Compute direct lighting at hit point (simple Lambert diffuse). */
+)GLSL" EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
 /* Shadow ray: returns 1.0 when the path from the surface toward the light is unoccluded,
- * 0.0 otherwise. TerminateOnFirstHit: any-hit is enough for a visibility test. */
+ * 0.0 otherwise. TerminateOnFirstHit: the first CONFIRMED candidate ends the traversal.
+ * ⚠️ NOT gl_RayFlagsOpaqueEXT: the reflection ray below judged its alpha-tested candidates
+ * while this one accepted them whole — a leaf shadowed a reflected surface as a solid quad.
+ * Both rays now apply the ONE shared rule (RTAlphaTestGLSL.hpp). */
 float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 {
 	rayQueryEXT shadowQuery;
 	rayQueryInitializeEXT(
 		shadowQuery, topLevelAS,
-		gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF,
+		gl_RayFlagsTerminateOnFirstHitEXT, 0xFF,
 		origin, 0.0, direction, maxT
 	);
 
-	while (rayQueryProceedEXT(shadowQuery)) {}
+	while (rayQueryProceedEXT(shadowQuery))
+	{
+)GLSL" EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(shadowQuery) R"GLSL(
+	}
 
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
@@ -492,61 +494,7 @@ void main()
 
 	while (rayQueryProceedEXT(rayQuery))
 	{
-		/* Only triangle candidates need our handling. */
-		if (rayQueryGetIntersectionTypeEXT(rayQuery, false) != gl_RayQueryCandidateIntersectionTriangleEXT)
-		{
-			continue;
-		}
-
-		uint candidateInstanceIndex  = rayQueryGetIntersectionInstanceCustomIndexEXT(rayQuery, false);
-		uint candidateGeomIdx		= rayQueryGetIntersectionGeometryIndexEXT(rayQuery, false);
-		uint candidateMaterialIndex  = getHitMaterialIndex(candidateInstanceIndex, candidateGeomIdx);
-		uint candidateMatBase		= candidateMaterialIndex * 7u;
-		uint candidateFlags		  = floatBitsToUint(materialSSBO.materials[candidateMatBase + 4u].w);
-
-		/* Non-alpha-test materials: confirm immediately (BLAS-default behaviour). */
-		if ((candidateFlags & IsAlphaTest) == 0u)
-		{
-			rayQueryConfirmIntersectionEXT(rayQuery);
-			continue;
-		}
-
-		/* Alpha-test path: sample the opacity (or albedo alpha) at the hit UV. */
-		uint candidatePrimitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, false);
-		vec2 candidateBary		   = rayQueryGetIntersectionBarycentricsEXT(rayQuery, false);
-		MeshAccessor candidateMesh   = getMeshAccessor(candidateInstanceIndex, candidatePrimitiveIndex);
-		vec2 candidateUV			 = getHitUV(candidateMesh, candidateBary);
-		float candidateAlpha		 = 1.0;
-
-		if ((candidateFlags & HasOpacityTexture) != 0u)
-		{
-			int opacityIdx = floatBitsToInt(materialSSBO.materials[candidateMatBase + 6u].y);
-			if (opacityIdx >= 0)
-			{
-				candidateAlpha = texture(textures2D[nonuniformEXT(opacityIdx)], candidateUV).r;
-			}
-		}
-		else if ((candidateFlags & HasAlbedoTexture) != 0u)
-		{
-			int albedoIdx = floatBitsToInt(materialSSBO.materials[candidateMatBase + 5u].x);
-			if (albedoIdx >= 0)
-			{
-				candidateAlpha = texture(textures2D[nonuniformEXT(albedoIdx)], candidateUV).a;
-			}
-		}
-		else
-		{
-			/* No texture to sample — fall back to scalar albedo alpha. */
-			candidateAlpha = materialSSBO.materials[candidateMatBase].a;
-		}
-
-		float cutoff = materialSSBO.materials[candidateMatBase + 6u].z;
-
-		if (candidateAlpha >= cutoff)
-		{
-			rayQueryConfirmIntersectionEXT(rayQuery);
-		}
-		/* else: do not confirm — ray continues past this triangle. */
+)GLSL" EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(rayQuery) R"GLSL(
 	}
 
 	if (rayQueryGetIntersectionTypeEXT(rayQuery, true) == gl_RayQueryCommittedIntersectionTriangleEXT)
@@ -563,7 +511,7 @@ void main()
 		 * with distinct materials (e.g. palm trunk + alpha-test leaves) and we pick the
 		 * one matching the actual hit triangle's sub-geometry. */
 		uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
-		uint materialIndex = getHitMaterialIndex(instanceIndex, geomIdx);
+		uint materialIndex = rtHitMaterialIndex(instanceIndex, geomIdx);
 		uint matBase = materialIndex * 7u;
 
 		vec3 albedo = materialSSBO.materials[matBase].rgb;
@@ -1252,9 +1200,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const auto * inv = invView.data();
 
 			/* Scene ambient (color × intensity), matching what the raster surfaces receive.
+			 * ⚠️ The intensity is the EFFECTIVE one (FrameContext::ambientIlluminance), never
+			 * LightSet::ambientLightIntensity(): when the sky drives the ambient the raster reads
+			 * the irradiance cubemap and its scalar is ZERO, while the LightSet still holds the
+			 * manifest's 17 000 lx. Reading the LightSet here added that flat ambient to every
+			 * hit point ON TOP of the IBL below — the reflected world was brighter than the world
+			 * it reflected, which breaks the "the reflection matches the raster" contract.
 			 * Falls back to the previous neutral 0.15 grey when no light set is available. */
 			const auto ambientColor = lightSet != nullptr ? lightSet->ambientLightColor() : Base::PixelFactory::Color< float >{0.15F, 0.15F, 0.15F, 1.0F};
-			const auto ambientIntensity = lightSet != nullptr ? lightSet->ambientLightIntensity() : 1.0F;
+			const auto ambientIntensity = lightSet != nullptr ? context.ambientIlluminance : 1.0F;
 
 			const TracePushConstants pc{
 				.invViewProj = {

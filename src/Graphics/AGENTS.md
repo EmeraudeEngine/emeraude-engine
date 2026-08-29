@@ -2651,6 +2651,55 @@ Applied by `Material::Interface::emissionMultiplier()` — see `src/Saphir/AGENT
 the UNLIT path", including why it multiplies here and adds on the lit path, and why it must never
 reach the albedo attachment.
 
+### Every ray query judges its alpha-tested candidates — `RTAlphaTestGLSL.hpp` (Aug 2026)
+
+> [!CAUTION]
+> **A cutout is a TLAS instance flagged `FORCE_NO_OPAQUE`; a ray launched with
+> `gl_RayFlagsOpaqueEXT` overrides that flag and accepts every triangle whole.** A leaf becomes a
+> solid quad, a fence a wall. RTGI did it on BOTH its rays (bounce + shadow) and RTR on its
+> shadow ray: Sponza's ivy blocked the sky for the GI and cast a solid shadow at every bounce hit
+> while the raster drew leaves. Only RTR's reflection ray judged its candidates — with a 60-line
+> hand-written loop no other effect had copied.
+>
+> **The rule now lives in ONE place**: `Effects/Framebuffer/RTAlphaTestGLSL.hpp`, two macros
+> holding GLSL string literals (a `constexpr const char *` cannot be spliced into the effects'
+> `constexpr` shader literals — a macro can):
+> - `EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS` — `rtHitMaterialIndex()` and `rtCandidateIsSolid()`,
+>   the latter sampling the opacity texture, else the albedo alpha, else the scalar alpha, at the
+>   candidate's UV, against the material's own `alphaCutoff` (raster parity);
+> - `EMEN_RT_CONFIRM_ALPHA_TESTED_CANDIDATE(query)` — the body of a `while (rayQueryProceedEXT)`
+>   loop.
+>
+> Usage: `gl_RayFlagsNoneEXT` (or `TerminateOnFirstHitEXT` alone for a shadow ray — it composes,
+> the traversal ends at the first CONFIRMED candidate), then the loop macro. **Never
+> `gl_RayFlagsOpaqueEXT` on a scene ray again.**
+>
+> - ⚠️ The macros rely on names the host shader must declare — `meshSSBO`, `materialSSBO`,
+>   `textures2D`, `getMeshAccessor()`, `getHitUV()`, `IsAlphaTest`, `HasOpacityTexture`,
+>   `HasAlbedoTexture`. A missing one is a GLSL error at RUNTIME, not at build time.
+> - ⚠️ **RTAO and ContactShadows still take the shortcut** — they bind neither the material SSBO
+>   nor the bindless textures, so they cannot host the rule yet:
+>   `docs/todo/rtao-contact-shadows-alpha-test.md`.
+> - ⚠️ A candidate-judging ray costs more than an opaque one (it returns to the shader for every
+>   cutout triangle it crosses). RTR paid it from the start; RTGI pays it now.
+
+### RTR shades its hits with the EFFECTIVE ambient, not the LightSet value (Aug 2026)
+
+> [!CAUTION]
+> **`LightSet::ambientLightIntensity()` is NOT what the raster shades with.** When the sky drives
+> the ambient (`applyAmbient`), the ambient pass reads the baked irradiance cubemap and the scalar
+> pushed to the view UBOs is ZERO — the LightSet keeps the manifest's value (17 000 lx for a
+> daylight sky) for whoever reads the sky's photometry. RTR shaded its hit points with the
+> LightSet value, so under a sky-driven scene every reflection carried a flat 17 000 lx ambient
+> ON TOP of its IBL term — the reflected world was brighter than the world it reflected, which
+> breaks the "the reflection matches the raster" contract.
+>
+> `Scene::effectiveAmbientIlluminance()` is the single site of the rule (the UBO refresh reads it
+> too), and it reaches the effects as `FrameContext::ambientIlluminance`. **Anything that SHADES
+> its own hit points must read that field, never the LightSet.** RTR's IBL term at hits stays: it
+> is its estimate of the indirect light at points RTGI cannot reach, and removing it would make
+> the reflections too dark instead of too bright.
+
 ### An effect that is not CREATED is never recorded (Aug 2026)
 
 > [!CAUTION]

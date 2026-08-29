@@ -365,6 +365,13 @@ namespace EmEn::Graphics
 				 * reserved slot — so this scalar also acts as the "there is a sky" flag, since
 				 * that slot falls back to the engine default cubemap. */
 				float skyLuminance{0.0F};
+				/* The ambient illuminance the SHADING uses, in lux — Scene::effectiveAmbientIlluminance().
+				 * ⚠️ NOT LightSet::ambientLightIntensity(): when the sky drives the ambient the
+				 * raster reads the irradiance cubemap and pushes a ZERO scalar, while the LightSet
+				 * keeps the manifest value (17 000 lx for a daylight sky). An effect that shades its
+				 * own hit points (RTR) must add what the raster adds, or the reflected world
+				 * carries an ambient the world it reflects never received. */
+				float ambientIlluminance{0.0F};
 				/* The scene's participating medium — the ONE atmosphere every volumetric consumer
 				 * integrates. A POINTER, not a value: this header forward-declares its Scenes
 				 * neighbours and includes no Scenes header, and a value would drag one in through

@@ -168,10 +168,8 @@ namespace EmEn::Scenes
 	Scene::refreshAmbientLightProperties () const noexcept
 	{
 		const auto & color = m_lightSet.ambientLightColor();
-		/* When the sky drives the ambient (applyAmbient), the ambient pass reads the baked
-		 * irradiance cubemap instead — push a zero scalar so the two never double-count.
-		 * The LightSet keeps the photometric values for the effects reading it directly. */
-		const auto intensity = m_IBLAmbientEnabled ? 0.0F : m_lightSet.ambientLightIntensity();
+		/* ⚠️ THE single site of the rule — see effectiveAmbientIlluminance(). */
+		const auto intensity = this->effectiveAmbientIlluminance();
 
 		/* NOTE: 1.0 is the neutral IBL scale when no background declares a luminance. */
 		const auto environmentLuminance = m_backgroundResource != nullptr ? m_backgroundResource->luminance() : 1.0F;
@@ -223,6 +221,15 @@ namespace EmEn::Scenes
 				light->updateCascades(frustumCorners, nearPlane, farPlane);
 			}
 		});
+	}
+
+	float
+	Scene::effectiveAmbientIlluminance () const noexcept
+	{
+		/* When the sky drives the ambient (applyAmbient), the ambient pass reads the baked
+		 * irradiance cubemap instead, so the scalar term must be ZERO or the same sky is counted
+		 * twice. The LightSet keeps the manifest value for whoever reads the sky's photometry. */
+		return m_IBLAmbientEnabled ? 0.0F : m_lightSet.ambientLightIntensity();
 	}
 
 	void

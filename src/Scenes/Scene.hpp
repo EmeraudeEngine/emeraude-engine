@@ -2322,6 +2322,25 @@ namespace EmEn::Scenes
 			 */
 			void updateIBLDiffuseOwnership () noexcept;
 
+		public:
+
+			/**
+			 * @brief Returns the ambient illuminance the SHADING actually uses, in lux.
+			 * @note ⚠️ NOT `LightSet::ambientLightIntensity()`, and the difference is a defect
+			 * waiting to happen: when the sky drives the ambient, the ambient pass reads the baked
+			 * irradiance cubemap instead and the scalar term is pushed to the view UBOs as ZERO —
+			 * the LightSet keeps the manifest value (17 000 lx for a daylight sky) for whoever
+			 * wants to read the sky's photometry. Anything that SHADES — the ray-traced
+			 * reflections shading their own hit points, for one — must use this, or it adds a flat
+			 * ambient the raster does not have. RTR did exactly that until Aug 2026: every
+			 * reflection carried 17 000 lx of ambient the reflected world never received.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float effectiveAmbientIlluminance () const noexcept;
+
+		private:
+
 			/**
 			 * @brief Check if a renderable instance is ready for shadow casting.
 			 * @param renderTarget A reference to the render target smart-pointer.

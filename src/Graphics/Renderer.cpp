@@ -2002,7 +2002,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr));
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2231,7 +2231,7 @@ namespace EmEn::Graphics
 		{
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr));
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr));
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen

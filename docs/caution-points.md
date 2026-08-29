@@ -801,6 +801,17 @@ if ( materialType == StandardResource::ClassId )
 > **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
 > (shadowRayVisibility + gating + ambient push constants), `RTGI.cpp` (gating).
 
+> **Addendum (Aug 2026) — two more ways the reflection diverged from the raster, both fixed:**
+> - RTR shaded its hit points with `LightSet::ambientLightIntensity()`, which is NOT what the
+>   raster shades with: under a sky-driven scene the raster's scalar ambient is ZERO (the
+>   irradiance cubemap replaces it) while the LightSet keeps the manifest's 17 000 lx. Every
+>   reflection carried that flat ambient on top of its IBL. `Scene::effectiveAmbientIlluminance()`
+>   is now the single rule, delivered as `FrameContext::ambientIlluminance`.
+> - RTR's SHADOW ray (and both RTGI rays) used `gl_RayFlagsOpaqueEXT`, which accepts every
+>   triangle of a cutout instance whole — a leaf shadowed as a solid quad. Every scene ray now
+>   applies the ONE shared alpha-test rule of `Effects/Framebuffer/RTAlphaTestGLSL.hpp`.
+>   RTAO and ContactShadows still take the shortcut (`docs/todo/rtao-contact-shadows-alpha-test.md`).
+
 ### Fixed: removeStaticEntity() forgot the entity BEFORE unlinking its components — ghost lights, pure virtual crash (Jul 2026)
 
 > [!WARNING]

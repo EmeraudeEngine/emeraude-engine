@@ -1084,7 +1084,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, const Scenes::ParticipatingMedium * medium) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -1169,6 +1169,7 @@ namespace EmEn::Graphics
 			.lightSet = lightSet,
 			.camera = activeCamera,
 			.skyLuminance = skyLuminance,
+			.ambientIlluminance = ambientIlluminance,
 			.medium = medium,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.constants = PushConstants{

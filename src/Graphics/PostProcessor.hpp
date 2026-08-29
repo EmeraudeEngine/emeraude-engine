@@ -341,9 +341,12 @@ namespace EmEn::Graphics
 			 * @param activeCamera The scene's active camera (photographic authority).
 			 * @param skyLuminance The scene background's luminance in nits, 0 when there is no
 			 * background: the sky is a LIGHT SOURCE for the ray-traced GI, not just a backdrop.
+			 * @param ambientIlluminance The ambient illuminance the shading actually uses, in lux
+			 * (Scene::effectiveAmbientIlluminance() — zero when the sky drives the ambient).
+			 * @param medium The scene's participating medium, nullptr when it declares none.
 			 * @return bool
 			 */
-			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, const Scenes::ParticipatingMedium * medium) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.
