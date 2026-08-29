@@ -2234,8 +2234,51 @@ almost nothing is invisible.
 
 ⚠️ The lesson generalises past this probe: **a control that discriminates through the defect stops
 discriminating when the defect is fixed, and its silence then reads as a regression.** Before
-declaring one, check what the criterion was actually measuring. This probe needs a bright background
-behind the subject — see `docs/todo/volume-absorption-probe-cannot-discriminate.md`.
+declaring one, check what the criterion was actually measuring.
+
+**Resolved 2026-08-29, and the second cause was in the asset, not the engine** — see the next entry.
+The probe got the bright backdrop it needed AND a winding fix, and now reads
+G/R = 0.993 / 0.993 / 14.717.
+
+### ⚠️⚠️ Inverted triangle winding is INVISIBLE on a closed mesh — it shows up as Fresnel = 1 (Aug 2026)
+
+`VolumeAbsorptionProbe`'s generated spheres had their two triangles wound the wrong way round. A
+closed convex mesh looks **exactly the same**: back-face culling keeps the far side instead of the
+near one, and a sphere is a sphere either way. Nothing in the geometry, the validation layers or the
+log says a word.
+
+What betrays it is the **shading**: the outward normal then points away from the camera, so
+
+```glsl
+NdotV = max(dot(reflectionNormal, -reflectionI), 0.0)   // clamps to 0 everywhere
+F     = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0)          // = 1 everywhere
+```
+
+A Fresnel term pinned at 1 means **total reflection and zero transmission**: the glass renders as a
+dark mirror and no amount of work on the transmission path changes anything. Three separate
+hypotheses were burned on the engine before the geometry was suspected — the grab pass, the render
+lists, the composition — and all three were wrong.
+
+⚠️ **Suspect the winding whenever a transmissive or refractive surface refuses to transmit while its
+grab-pass sample is provably correct.** The check is one line: output `1.0 - F` and see whether it is
+zero.
+
+**The method that found it, worth reusing.** Bisect the shading expression by writing intermediate
+factors straight to the fragment colour, packed three at a time into R/G/B and scaled into the
+tone-mapper's range (`* 20000.0` here, since these are linear radiance values and an un-scaled
+[0,1] factor tone-maps to black):
+
+1. the raw sample — `fragmentColor.rgb = SurfaceTransmissionColor;` → read the panel exactly, so the
+   grab pass was innocent;
+2. the whole term — `transmittedLight * transmissionFactor * (1 - F)` → exactly 0;
+3. its factors — `vec3(transmissionFactor, albedo.g, absorption.g) * 20000.0` → all non-zero, and the
+   absorption already discriminated correctly;
+4. what was left — `vec3(1.0 - F, ior / 3.0, F0) * 20000.0` → `1 - F` **zero** with a small F0, which
+   is only possible if `NdotV` is zero.
+
+Four builds, each answering one question. Guessing at the engine cost more than that.
+
+
 
 
 ### Push Constants: the 128-Byte Minimum Guarantee (Jul 2026)

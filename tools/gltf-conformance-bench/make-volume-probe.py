@@ -26,21 +26,26 @@ attenuation colour tints the glass; per spec it does NOT, because the distance d
 exactly what a well-meaning "fix" would break, and it is why the neutral middle ball must
 stay neutral.
 
-⚠️⚠️ THE PROBE HAS NO LIVE BASELINE (Aug 2026). It used to read 0.0 % / 0.0 % / 34.2 % green
-pixels, but it was measuring absorption THROUGH the additive light-pass transmission term, and that
-term was a defect that has since been removed. The three balls now come out identical.
+Expected reading (measured 2026-08-29, at the bench's own framing). The backdrop reads
+(201, 200, 196); the criterion is the G/R ratio at each ball's centre:
 
-The asset has been given everything it needs to work again — the backdrop below, and a
-thickness/distance pair small enough to keep the refracted sample on it — and it STILL reads flat,
-because the grab-pass transmission is not reaching these balls at all: with the panel measuring
-(201, 200, 196) behind them, the ball centres are unchanged from when dark trees were behind. That
-is an engine question, not an asset one:
-docs/todo/grab-pass-transmission-not-reaching-opaque-glass.md.
+  ball                 centre RGB               G/R
+  NoVolume             (198.5, 197.1, 194.0)    0.993
+  ColourNoDistance     (198.5, 197.1, 194.0)    0.993
+  ColourAndDistance    (  4.6,  67.7,   7.5)   14.717
 
-⚠️ So do NOT re-derive a criterion from a capture yet, and do NOT read the flat result as a
-regression in the absorption. The numeric reading to restore, once the balls transmit, is the share
-of disc pixels where green exceeds red by more than 25/255 — binary rather than a ratio to argue
-about — expected 0.0 % / 0.0 % / clearly non-zero, left to right.
+The two neutral balls transmit the panel essentially intact and are IDENTICAL to each other; the
+third keeps ~13 % of the green and almost none of the red or blue, which is 0.6^4 — exactly what the
+medium prescribes. A regression shows as the third ratio collapsing toward 1, or as the middle ball
+drifting away from the first.
+
+⚠️⚠️ THE SPHERE WINDING IS LOAD-BEARING. These triangles were wound the wrong way round until
+2026-08-29 and the asset looked PERFECTLY NORMAL: a closed convex mesh is identical under a winding
+flip, back-face culling simply keeps the far side. What it broke was the shading — the outward normal
+faced away from the camera, NdotV clamped to 0, and the Fresnel term pinned at 1: total reflection,
+zero transmission, no matter what the transmission path did. Three engine hypotheses were burned
+before the geometry was suspected. If these balls ever go dark again, output `1.0 - F` before
+touching the engine.
 
 ⚠️ Restart the engine after regenerating this file. The resource manager serves a CACHED material
 for an asset already loaded in the process, and a recapture then comes back byte-identical, which
@@ -113,7 +118,8 @@ def uv_sphere():
         for sector in range(SECTORS):
             a = ring * (SECTORS + 1) + sector
             b = a + SECTORS + 1
-            indices += [a, b, a + 1, a + 1, b, b + 1]
+            # ⚠️ Winding matters and is invisible: see the module docstring.
+            indices += [a, a + 1, b, a + 1, b + 1, b]
 
     return positions, normals, indices
 

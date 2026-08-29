@@ -101,19 +101,26 @@ The failure images name the defect, which is what turns a capture into a fix.
   **0.0 % / 0.0 % / 34.2 %** left to right. ⚠️ The MIDDLE ball being 0.0 % is the point — a colour
   *without* a distance must NOT tint, and that is the rule a well-meaning fix would break.
   Regenerate with `./make-volume-probe.py`; never hand-drop a binary nobody can rebuild.
-  ⚠️⚠️ **Those three numbers are STALE since Aug 2026 and the probe currently discriminates
-  NOTHING** — the three balls measure identical to within 0.5 of a code value. It had been reading
-  the absorption *through* the additive light-pass transmission term, and that term was a defect,
-  now removed. Do not read the three percentages above as a live baseline, and do not treat the flat
-  result as a regression.
-  The asset has since been given what it needs — a **white opaque backdrop** behind the balls
-  (absorption is a multiplication; it needs something bright to multiply), deliberately UNIFORM
-  rather than a checker so that the refraction displacement is not a confound, and a
-  thickness/distance pair rebalanced to 0.2 / 0.05 so the refracted sample stays on that backdrop.
-  ⚠️⚠️ It still reads flat, and the cause is NOT in the bench: with a panel measuring (201, 200, 196)
-  behind them the ball centres are unchanged from when dark trees were behind, so the grab-pass
-  transmission is not reaching them at all. See
-  `docs/todo/grab-pass-transmission-not-reaching-opaque-glass.md` — the probe item is blocked on it.
+  ⚠️ Those percentages are the OLD reading and no longer apply. **The live criterion since
+  2026-08-29 is the G/R ratio at each ball's centre, against the backdrop the asset now carries:**
+
+  | ball | centre RGB | G/R |
+  |---|---|---|
+  | `NoVolume` | (198.5, 197.1, 194.0) | **0.993** |
+  | `ColourNoDistance` | (198.5, 197.1, 194.0) | **0.993** |
+  | `ColourAndDistance` | (4.6, 67.7, 7.5) | **14.717** |
+
+  The backdrop reads (201, 200, 196), so the two neutral balls transmit it essentially intact and are
+  **identical to each other** — that middle ball staying neutral is still the point of the asset. The
+  third keeps ~13 % of the green and almost none of the red or blue, which is `0.6^4` as the medium
+  prescribes. A regression shows as the third ball's ratio collapsing toward 1, or — worse — as the
+  middle ball drifting away from the first.
+
+  ⚠️⚠️ Getting there took two fixes, and the second was in the ASSET: its generated spheres were
+  wound the wrong way round. A closed convex mesh looks identical either way, but the outward normal
+  then faces away from the camera, `NdotV` clamps to 0 and the Fresnel term pins at 1 — total
+  reflection, zero transmission, whatever the transmission path does. See `docs/caution-points.md`
+  § "Inverted triangle winding is INVISIBLE on a closed mesh".
 - **⚠️ Verify a loader-wide change with a PIXEL DIFF against the previous run, partitioned by the
   property you changed.** The captures of a previous pass are kept under
   `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-<date>/`, and the framing is
