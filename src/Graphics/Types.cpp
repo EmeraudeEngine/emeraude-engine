@@ -483,6 +483,9 @@ namespace EmEn::Graphics
 			case ComponentType::SpecularColor :
 				return SpecularColorString;
 
+			case ComponentType::IridescenceThickness :
+				return IridescenceThicknessString;
+
 			case ComponentType::Invalid :
 				return InvalidString;
 		}
@@ -601,6 +604,11 @@ namespace EmEn::Graphics
 		if ( value == ClearCoatNormalString )
 		{
 			return ComponentType::ClearCoatNormal;
+		}
+
+		if ( value == IridescenceThicknessString )
+		{
+			return ComponentType::IridescenceThickness;
 		}
 
 		if ( value == SpecularColorString )

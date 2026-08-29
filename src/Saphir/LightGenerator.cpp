@@ -937,7 +937,10 @@ namespace EmEn::Saphir
 					iblF0Computation << "\n"
 					"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 fresnelIBL_base = iblF0 + (1.0 - iblF0) * pow(1.0 - NdotV, 5.0);" "\n"
-					"const float iridescenceThickness = mix(" << m_surfaceIridescenceThicknessMin << ", " << m_surfaceIridescenceThicknessMax << ", 0.5);" "\n"
+					/* ⚠️ Shared with the light passes: this used to be `mix(min, max, 0.5)` while
+					 * they used 1.0, so one surface carried TWO different films depending on the
+					 * pass. Both now go through iridescenceThicknessExpression(). */
+					"const float iridescenceThickness = " << this->iridescenceThicknessExpression() << ";" "\n"
 					"const vec3 fresnelIBL_iridescence = evalIridescence(1.0, " << m_surfaceIridescenceIOR << ", NdotV, iridescenceThickness, iblF0);" "\n"
 					"const vec3 fresnelIBL = mix(fresnelIBL_base, fresnelIBL_iridescence, " << m_surfaceIridescenceFactor << ");" "\n"
 					"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"

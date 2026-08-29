@@ -423,6 +423,11 @@ namespace EmEn::Graphics
 		 * F0, a SEPARATE map from `Specular` (which carries the scalar factor in its A channel).
 		 * glTF declares two textures for that one extension, so the material needs two slots. */
 		SpecularColor = 23,
+		/** @brief KHR_materials_iridescence's iridescenceThicknessTexture — the film thickness in
+		 * its **G** channel, placing each texel between thicknessMinimum and thicknessMaximum.
+		 * A SEPARATE map from `Iridescence` (which carries the factor in its R channel): glTF
+		 * declares two textures for that one extension, so the material needs two slots. */
+		IridescenceThickness = 24,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -458,6 +463,7 @@ namespace EmEn::Graphics
 	constexpr auto DoFMaskString{"DoFMask"};
 	constexpr auto SpecularKHRString{"Specular"};
 	constexpr auto SpecularColorString{"SpecularColor"};
+	constexpr auto IridescenceThicknessString{"IridescenceThickness"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.

@@ -605,6 +605,23 @@ exit point's, rather than using the projected exit point outright the way the Kh
 That makes it immune to the TAA sub-pixel jitter — a constant NDC translation carried by both terms,
 so it cancels exactly — whereas `gl_FragCoord` already carries the jitter.
 
+### One thin-film thickness for every pass — `iridescenceThicknessExpression()` (Aug 2026)
+
+`KHR_materials_iridescence` sets the film thickness as `mix(thicknessMin, thicknessMax, texel.g)`
+from the thickness map, and **the MAXIMUM when there is no map** — the spec's fallback, not the
+midpoint.
+
+⚠️⚠️ The two passes disagreed: the ambient pass emitted `mix(min, max, 0.5)` while the light passes
+emitted `mix(min, max, 1.0)`, so **one surface carried two different films depending on which pass
+shaded it**. Both now go through `LightGenerator::iridescenceThicknessExpression()`, which is also
+where the map's G channel enters. Never inline the mix again.
+
+⚠️ The map name being **empty is meaningful** — it selects the spec's maximum-thickness fallback. It
+is not a neutral value to be defaulted away.
+
+The generated shaders are the check, and a cheap one: every scene shader must show exactly **one
+distinct** `iridescenceThickness = ...` line, with no hardcoded `0.5` or `1.0` weight anywhere.
+
 ### Transmission belongs to the AMBIENT pass — and it is TINTED BY THE BASE COLOUR
 
 Two rules, both measured on `IridescentDishWithOlives.glb` and `TransmissionTest` (Aug 2026).

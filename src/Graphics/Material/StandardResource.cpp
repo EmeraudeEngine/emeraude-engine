@@ -2422,11 +2422,18 @@ namespace EmEn::Graphics::Material
 
 			if ( componentIt != m_components.cend() || m_materialProperties[IridescenceFactorOffset] > 0.0F )
 			{
+				/* ⚠️ The thickness MAP is independent of the factor map: a material can declare
+				 * either, both or neither. Its absence is not a neutral value but the spec's
+				 * fallback — the thickness is then the MAXIMUM — which the light generator
+				 * expresses by leaving this name empty. */
+				const auto thicknessMapIt = m_components.find(ComponentType::IridescenceThickness);
+
 				lightGenerator.declareSurfaceIridescence(
 					componentIt != m_components.cend() ? componentIt->second->variableName() : MaterialUB(UniformBlock::Component::IridescenceFactor),
 					MaterialUB(UniformBlock::Component::IridescenceIOR),
 					MaterialUB(UniformBlock::Component::IridescenceThicknessMin),
-					MaterialUB(UniformBlock::Component::IridescenceThicknessMax)
+					MaterialUB(UniformBlock::Component::IridescenceThicknessMax),
+					thicknessMapIt != m_components.cend() ? thicknessMapIt->second->variableName() : std::string{}
 				);
 			}
 		}
@@ -3834,6 +3841,21 @@ namespace EmEn::Graphics::Material
 		}, fragmentShader, materialSet) )
 		{
 			TraceError{ClassId} << "Unable to generate fragment code for the iridescence component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Iridescence THICKNESS component (texture-based).
+		 * ⚠️ KHR_materials_iridescence puts the thickness in the **G** channel — the R channel of
+		 * this very texture is often the factor map packed alongside. Reading .r here would work
+		 * on a single-purpose map and silently produce the wrong film on a packed one. */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::IridescenceThickness, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").g;";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the iridescence thickness component of PBR material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -5312,6 +5334,41 @@ namespace EmEn::Graphics::Material
 
 		this->setIridescenceFactor(1.0F);
 		this->setIridescenceIOR(ior);
+		this->setIridescenceThicknessMin(thicknessMin);
+		this->setIridescenceThicknessMax(thicknessMax);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setIridescenceThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float thicknessMin, float thicknessMax) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the iridescence thickness component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::IridescenceThickness, std::make_unique< Texture >(Uniform::IridescenceThicknessSampler, SurfaceIridescenceThickness, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for iridescence thickness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
 		this->setIridescenceThicknessMin(thicknessMin);
 		this->setIridescenceThicknessMax(thicknessMax);
 

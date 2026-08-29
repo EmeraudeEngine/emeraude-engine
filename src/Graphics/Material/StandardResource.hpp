@@ -117,6 +117,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceTransmissionFactor{"SurfaceTransmissionFactor"};
 			static constexpr auto SurfaceTransmissionColor{"SurfaceTransmissionColor"};
 			static constexpr auto SurfaceIridescenceFactor{"SurfaceIridescenceFactor"};
+			static constexpr auto SurfaceIridescenceThickness{"SurfaceIridescenceThickness"};
 			static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
 			static constexpr auto SurfaceSpecularFactor{"SurfaceSpecularFactor"};
 			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
@@ -1028,6 +1029,20 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setIridescenceComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior = DefaultIridescenceIOR, float thicknessMin = DefaultIridescenceThicknessMin, float thicknessMax = DefaultIridescenceThicknessMax) noexcept;
+
+			/**
+			 * @brief Sets the iridescence THICKNESS map (KHR_materials_iridescence).
+			 * @warning This function is available before creation time.
+			 * @note A SECOND map, independent of the factor one. Its **G** channel places each texel
+			 * between thicknessMinimum and thicknessMaximum: `mix(min, max, texel.g)`. It is DATA,
+			 * never sRGB. Without it the film thickness is the MAXIMUM — the spec's fallback, not
+			 * the midpoint.
+			 * @param texture A reference to a texture smart pointer for the thickness map.
+			 * @param thicknessMin The minimum thin film thickness in nm. Default 100.
+			 * @param thicknessMax The maximum thin film thickness in nm. Default 400.
+			 * @return bool
+			 */
+			bool setIridescenceThicknessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float thicknessMin = DefaultIridescenceThicknessMin, float thicknessMax = DefaultIridescenceThicknessMax) noexcept;
 
 			/* ==================== Dispersion Component Setters (Pre-creation) ==================== */
 

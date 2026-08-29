@@ -1178,6 +1178,7 @@ namespace EmEn::Scenes::Loaders
 			auto iridescenceThicknessMin = 100.0F;
 			auto iridescenceThicknessMax = 400.0F;
 			std::shared_ptr< TextureResource::Texture2D > iridescenceTex;
+			std::shared_ptr< TextureResource::Texture2D > iridescenceThicknessTex;
 
 			if ( glTFMaterial.iridescence != nullptr )
 			{
@@ -1192,12 +1193,16 @@ namespace EmEn::Scenes::Loaders
 					iridescenceTex = resolveTexture(glTFMaterial.iridescence->iridescenceTexture->textureIndex);
 				}
 
-				/* ⚠️ The THICKNESS map (G channel) is a different map and has no ComponentType, so it
-				 * needs a new one exactly as the two specular maps did. Per spec its absence means
-				 * the thickness is the MAXIMUM, which is what the shader now uses. */
+				/* The per-pixel THICKNESS map is a SECOND, independent texture
+				 * (ComponentType::IridescenceThickness). Its G channel places each texel between
+				 * the two thicknesses: mix(min, max, texel.g).
+				 * ⚠️ It is DATA, never sRGB — resolveTexture() is asked for the linear slot, as the
+				 * roughness/metalness maps are. A material may declare it WITHOUT the factor map,
+				 * or the factor map without it; per spec its absence means the thickness is the
+				 * MAXIMUM, not the midpoint. */
 				if ( glTFMaterial.iridescence->iridescenceThicknessTexture.has_value() )
 				{
-					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_materials_iridescence thicknessTexture is not supported yet (the maximum thickness is used), ignored.";
+					iridescenceThicknessTex = resolveTexture(glTFMaterial.iridescence->iridescenceThicknessTexture->textureIndex, false);
 				}
 			}
 
@@ -1322,6 +1327,7 @@ namespace EmEn::Scenes::Loaders
 					transmissionFactor,
 					iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax,
 					iridescenceTex = std::move(iridescenceTex),
+					iridescenceThicknessTex = std::move(iridescenceThicknessTex),
 					anisotropyStrength, anisotropyRotationTurns, anisotropyTex = std::move(anisotropyTex),
 					specularFactor, specularColor, materialIOR,
 					volumeThicknessFactor, volumeAttenuationDistance, volumeAttenuationColor,
@@ -1469,6 +1475,16 @@ namespace EmEn::Scenes::Loaders
 						else
 						{
 							materialResource.setIridescenceComponent(iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax);
+						}
+
+						/* ⚠️ Applied AFTER the factor: both setters write the two thickness slots
+						 * from their own arguments, and this one must have the last word. The map
+						 * is what turns a uniform film colour into the reference's varying one —
+						 * IridescentDishWithOlives.glb sweeps a 50 nm band (500..550) entirely
+						 * through this texture. */
+						if ( iridescenceThicknessTex != nullptr )
+						{
+							materialResource.setIridescenceThicknessComponent(iridescenceThicknessTex, iridescenceThicknessMin, iridescenceThicknessMax);
 						}
 					}
 

@@ -630,16 +630,39 @@ namespace EmEn::Saphir
 			 * @param iorVariableName A reference to a string for GLSL variable holding the thin film IOR.
 			 * @param thicknessMinVariableName A reference to a string for GLSL variable holding the minimum film thickness (nm).
 			 * @param thicknessMaxVariableName A reference to a string for GLSL variable holding the maximum film thickness (nm).
+			 * @param thicknessMapVariableName A reference to a string for the GLSL variable holding the
+			 * thickness map's G channel, already resolved to [0,1]. Leave EMPTY when the material
+			 * declares no thickness map: the spec's fallback is then the MAXIMUM thickness, which is
+			 * what iridescenceThicknessExpression() returns.
 			 * @return void
 			 */
 			void
-			declareSurfaceIridescence (const std::string & factorVariableName, const std::string & iorVariableName, const std::string & thicknessMinVariableName, const std::string & thicknessMaxVariableName) noexcept
+			declareSurfaceIridescence (const std::string & factorVariableName, const std::string & iorVariableName, const std::string & thicknessMinVariableName, const std::string & thicknessMaxVariableName, const std::string & thicknessMapVariableName = {}) noexcept
 			{
 				m_surfaceIridescenceFactor = factorVariableName;
 				m_surfaceIridescenceIOR = iorVariableName;
 				m_surfaceIridescenceThicknessMin = thicknessMinVariableName;
 				m_surfaceIridescenceThicknessMax = thicknessMaxVariableName;
+				m_surfaceIridescenceThicknessMap = thicknessMapVariableName;
 				m_useIridescence = true;
+			}
+
+			/**
+			 * @brief Returns the GLSL expression giving the thin film thickness in nanometres.
+			 * @note ⚠️ Both the ambient pass and the light passes MUST use this — they used to
+			 * disagree, `mix(min, max, 0.5)` in the ambient against `mix(min, max, 1.0)` in the
+			 * light passes, which gave the same surface two different films depending on the pass.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			iridescenceThicknessExpression () const noexcept
+			{
+				/* ⚠️ SPEC, not a placeholder: without a thickness map KHR_materials_iridescence
+				 * says the film thickness is the MAXIMUM, never the midpoint. */
+				const auto weight = m_surfaceIridescenceThicknessMap.empty() ? std::string{"1.0"} : m_surfaceIridescenceThicknessMap;
+
+				return "mix(" + m_surfaceIridescenceThicknessMin + ", " + m_surfaceIridescenceThicknessMax + ", " + weight + ")";
 			}
 
 			/**
@@ -1093,6 +1116,7 @@ namespace EmEn::Saphir
 			std::string m_surfaceIridescenceIOR;
 			std::string m_surfaceIridescenceThicknessMin;
 			std::string m_surfaceIridescenceThicknessMax;
+			std::string m_surfaceIridescenceThicknessMap; /* ⚠️ EMPTY = no map = the film thickness is the MAXIMUM (spec fallback), not a neutral value. */
 			/* KHR_materials_specular variables. */
 			std::string m_surfaceKHRSpecularFactor;
 			std::string m_surfaceKHRSpecularColor;

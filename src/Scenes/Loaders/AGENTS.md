@@ -515,13 +515,22 @@ ahead of it.
   the IOR and both film thicknesses default — while the IOR and the thickness are the two axes both
   test models SWEEP. `evalIridescence()`, a complete thin-film function, had been in
   `LightGenerator.PBR.cpp` all along. ⚠️ Thicknesses are NANOMETRES on both sides: no conversion.
-  The per-pixel iridescence FACTOR map is supported (`ComponentType::Iridescence`); the THICKNESS map
-  is logged and ignored, needing its own `ComponentType` as the specular maps did.
+  **BOTH maps are read since 2026-08-29**: the per-pixel FACTOR map (`ComponentType::Iridescence`,
+  R channel) and the THICKNESS map (`ComponentType::IridescenceThickness`, **G** channel), which got
+  its own component exactly as the two specular maps did. ⚠️ Reading `.r` on the thickness map would
+  work on a single-purpose texture and silently produce the wrong film on a packed one — the factor
+  is often the R channel of that very image. ⚠️ It is DATA, never sRGB. ⚠️ The two maps are
+  INDEPENDENT: a material may declare either, both or neither, so the thickness setter is called
+  after the factor one and has the last word on the two thickness slots (both setters write them).
 - ⚠️⚠️ **A shader defect found while wiring it**: the film thickness read
   `mix(min, max, 0.5)` — the MIDPOINT. The extension says the thickness comes from the thickness
   texture's G channel and that **without that texture it is the MAXIMUM**. A midpoint is a different
-  colour at every angle and can never match a reference. Now `mix(min, max, 1.0)`, and that 1.0
-  becomes the G channel when the map gains a component.
+  colour at every angle and can never match a reference.
+- ⚠️⚠️ **And a second one, worse, found the same way**: the ambient pass used `mix(min, max, 0.5)`
+  while the light passes used `mix(min, max, 1.0)` — **one surface carried two different films
+  depending on which pass shaded it**. Both now call `LightGenerator::iridescenceThicknessExpression()`,
+  a single accessor, so they cannot drift apart again. The generated shaders are the check: one
+  distinct expression across every scene shader, and no hardcoded weight left anywhere.
 - **Anisotropy** appeared in the loader exactly once, in the parser mask. The shader already had an
   anisotropic GGX distribution, an anisotropic Smith-GGX visibility term and the tangent-frame
   construction with rotation. ⚠️⚠️ **UNITS DIFFER AND SILENTLY: glTF's `anisotropyRotation` is in
