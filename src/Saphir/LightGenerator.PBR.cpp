@@ -721,11 +721,20 @@ namespace EmEn::Saphir
 				"const vec3 specular = numerator / denominator;" << Line::Blank;
 		}
 
-		/* Compute the diffuse contribution with energy conservation. */
+		/* Compute the diffuse contribution with energy conservation.
+		 * ⚠️ KHR_materials_transmission composes the two lobes as
+		 * mix(diffuse_brdf, specular_btdf, transmissionFactor): what the surface lets THROUGH is
+		 * not also diffusely reflected. The diffuse lobe of every light pass is therefore reduced
+		 * by the transmission factor here. The transmitted half belongs to the AMBIENT pass alone
+		 * — see the note where the back-lit term used to be, further down. */
+		const auto transmissionEnergySplit = m_useTransmission
+			? " * (1.0 - " + m_surfaceTransmissionFactor + ")"
+			: std::string{};
+
 		Code{fragmentShader} <<
 			"/* Energy conservation: kD + kS = 1.0, metals have no diffuse. */" << Line::End <<
 			"const vec3 kS = F;" << Line::End <<
-			"const vec3 kD = (vec3(1.0) - kS) * (1.0 - " << metalness << ");" << Line::Blank;
+			"const vec3 kD = (vec3(1.0) - kS) * (1.0 - " << metalness << ")" << transmissionEnergySplit << ";" << Line::Blank;
 
 		/* Compute the final lighting. */
 		Code{fragmentShader} <<
@@ -925,20 +934,25 @@ namespace EmEn::Saphir
 				m_fragmentColor << ".rgb = " << m_fragmentColor << ".rgb * sheenScaling + sheenSpec * radiance * NdotL;";
 		}
 
-		/* Transmission back-lit (light passes through thin/translucent surfaces from behind).
-		 * Beer's law provides wavelength-dependent absorption for colored glass. */
-		if ( m_useTransmission )
-		{
-			/* NOTE: 'albedo' was already computed above (same m_surfaceAlbedo, unchanged since).
-			 * NOTE: NdotLBack may already be declared by SSS. Use a different name to avoid redeclaration. */
-			Code{fragmentShader} <<
-				Line::Blank <<
-				"/* Transmission back-lit - light passing through the surface. */" << Line::End <<
-				"const float transNdotLBack = max(dot(-N, L), 0.0);" << Line::End <<
-				"const vec3 transBackAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" << Line::End <<
-				"const vec3 transmitted = " << albedo << " * transBackAbsorption * transNdotLBack * " << m_surfaceTransmissionFactor << ";" << Line::End <<
-				m_fragmentColor << ".rgb += transmitted * radiance;";
-		}
+		/* ⚠⚠ NO transmission term in a light pass — deliberately, and it is NOT an omission.
+		 *
+		 * Transmission is what the viewer sees THROUGH the surface. That is a view-dependent
+		 * lookup of the scene behind the fragment (grab pass, or the environment cubemap when the
+		 * grab pass is unavailable), and the AMBIENT pass owns it: it is the pass that declares
+		 * SurfaceTransmissionColor and composes it against the reflection with a Fresnel split.
+		 * A punctual light contributes nothing to it — it cannot see what is behind the glass.
+		 *
+		 * This block used to add 'albedo * beerAbsorption * max(dot(-N, L), 0.0) * transmissionFactor
+		 * * radiance' on top of an undiminished diffuse BRDF. Two defects in one term: it was an
+		 * ADDITION where the spec asks for a mix, and it used the ALBEDO where the transmitted
+		 * colour is the scene behind. With a key light in the 100 000 lux range it swamped the
+		 * ambient pass's correct result and turned every transmissive material milky white
+		 * (IridescentDishWithOlives.glb, 2026-08-28). The diffuse reduction that replaces it is
+		 * applied to kD above.
+		 *
+		 * If a back-lit look is ever wanted for thin translucent materials — leaves, paper, skin —
+		 * that is SUBSURFACE SCATTERING, which has its own term a few lines above and its own
+		 * material component. Do not reintroduce it here. */
 
 		/* NOTE: IBL (reflection/refraction from environment cubemap) is handled ONLY in the ambient pass.
 		 * This prevents IBL accumulation when multiple lights are present.

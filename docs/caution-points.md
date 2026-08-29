@@ -2133,6 +2133,57 @@ node-attached visuals. Full contract: [`src/Scenes/AGENTS.md`](../src/Scenes/AGE
 
 ## Shader/GLSL Pitfalls
 
+### Read the GENERATED GLSL — a variable computed and never used is two subsystems never connected (Aug 2026)
+
+The engine writes its shaders. When a rendering feature looks half-present, the fastest instrument
+is the generated source, not the C++ that emits it:
+
+```jsonc
+// ~/.config/LNIsle/projet-alpha/settings.json
+"Core/Graphics/Shader/EnableSourceCodeDump": true,
+"Core/Graphics/Shader/EnableBinaryCache":    false,   // ⚠️ MANDATORY
+"Core/Graphics/Shader/EnablePipelineCache":  false    // ⚠️ MANDATORY
+```
+
+⚠️ **Both caches must be off.** A cache hit skips generation entirely, so the dump directory stays
+empty or stale and you conclude the feature was never generated. The GLSL lands in
+`~/.cache/LNIsle/projet-alpha/generated-shaders/<domain>/`. Restore the three keys afterwards.
+
+**What it caught.** Transmissive glass rendered milky white. The tier was the obvious suspect —
+grab pass or cubemap fallback? The dump answered in one grep: **28** scene-rendering shaders
+contained `gpRefractedUV`, so the high-quality grab pass was running everywhere. But
+`SurfaceTransmissionColor` was *used* in only **2** of them — the ambient passes. The other 26
+sampled the grab pass, assigned the result to a `const`, and never read it again, adding an
+albedo-based term instead. A dangling computation of that size is not a micro-optimisation
+oversight: it is the signature of **two subsystems written against each other and never wired
+together** — here the grab-pass generation in `Graphics/Material/StandardResource.cpp` and the
+lighting composition in `Saphir/LightGenerator.PBR.cpp`. Grep the dump for a declared-but-unread
+variable whenever a feature is "implemented" but invisible.
+
+⚠️ Do not expect a warning from anywhere: the GLSL compiler dead-strips a pure texture fetch in
+silence, glslang emits nothing, and the validation layers see a perfectly legal pipeline.
+
+### ⚠️⚠️ A test can lose its discriminating power when you remove the defect it was measuring through
+
+`VolumeAbsorptionProbe` (bench asset, three glass spheres: no volume / attenuation colour without
+distance / colour **and** distance) used to separate its third sphere cleanly — green cap, measured
+`(161,175,155)` against `(219,220,220)` for the two controls. After the transmission composition was
+corrected the three came out **identical to within 0.5 of a code value**, and the probe now proves
+nothing.
+
+That is not necessarily a regression in the absorption. The green came from the *additive light-pass
+term* — `albedo × beerAbsorption × radiance`, driven by a 100 000 lux key light — which is precisely
+the defect that was removed. With it gone, the pixel is dominated by
+`reflectedColor * fresnelDielectric`, and the transmitted term it should be discriminating is
+sampled from a **near-black background** (the probe floats against dark trees), so absorbing 99 % of
+almost nothing is invisible.
+
+⚠️ The lesson generalises past this probe: **a control that discriminates through the defect stops
+discriminating when the defect is fixed, and its silence then reads as a regression.** Before
+declaring one, check what the criterion was actually measuring. This probe needs a bright background
+behind the subject — see `docs/todo/volume-absorption-probe-cannot-discriminate.md`.
+
+
 ### Push Constants: the 128-Byte Minimum Guarantee (Jul 2026)
 
 > [!CRITICAL]

@@ -857,6 +857,12 @@ namespace EmEn::Saphir
 				? std::string{}
 				: " * " + iblIntensity;
 
+			/* ⚠️ The transmitted light is TINTED BY THE BASE COLOUR. KHR_materials_transmission
+			 * composes it as (1 - F) * attenuatedColor * baseColor — see the Khronos reference
+			 * implementation, getIBLVolumeRefraction() in the glTF Sample Viewer. Without this
+			 * factor a coloured glass transmits WHITE: TransmissionTest's yellow, green, orange
+			 * and blue spheres all came out as colourless ghosts. Beer's law is NOT a substitute —
+			 * it needs KHR_materials_volume, which those materials do not declare. */
 			Code{fragmentShader, Location::Output} <<
 				"/* PBR Reflection + Transmission - energy-conserving Fresnel blend. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
@@ -874,7 +880,7 @@ namespace EmEn::Saphir
 				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
 				"/* Beer's law absorption for transmission. */" "\n"
 				"const vec3 transAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
-				"const vec3 transmittedLight = " << m_surfaceTransmissionColor << " * transAbsorption;" "\n"
+				"const vec3 transmittedLight = " << m_surfaceTransmissionColor << " * transAbsorption * " << this->albedoShaderExpression() << ".rgb;" "\n"
 				"/* F = reflection, (1-F)*transmissionFactor = transmission. */" "\n" <<
 				m_fragmentColor << ".rgb += reflectedColor * fresnelDielectric;" "\n" <<
 				m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (1.0 - fresnelDielectric)" << transmissionScale << ";";
@@ -1211,6 +1217,13 @@ namespace EmEn::Saphir
 		 * Gated by inverse Fresnel: reflected light can't also be transmitted. */
 		if ( m_useTransmission && !m_useRefraction && !m_useReflection )
 		{
+			/* ⚠️ The transmitted light is TINTED BY THE BASE COLOUR. KHR_materials_transmission
+			 * composes it as (1 - F) * attenuatedColor * baseColor — see the Khronos reference
+			 * implementation, getIBLVolumeRefraction() in the glTF Sample Viewer. Without this
+			 * factor a coloured glass transmits WHITE: TransmissionTest's yellow, green, orange
+			 * and blue spheres all came out as colourless ghosts. Beer's law is NOT a substitute —
+			 * it needs KHR_materials_volume, which those materials do not declare. */
+
 			/* Scaled by the environment luminance: the cubemap is a normalized [0,1] source, so
 			 * without this the reflections contribute a fraction of a nit to a scene lit in
 			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
@@ -1231,6 +1244,8 @@ namespace EmEn::Saphir
 					"/* Beer's law absorption. */" "\n"
 					"const vec3 transAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
 					"transmittedLight *= transAbsorption;" "\n"
+					"/* Tinted by the base colour (KHR_materials_transmission). */" "\n"
+					"transmittedLight *= " << this->albedoShaderExpression() << ".rgb;" "\n"
 					"/* Fresnel gate: reflected light can't be transmitted. */" "\n"
 					"const float transNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 					"const float fresnelT = 0.04 + 0.96 * pow(1.0 - transNdotV, 5.0);" "\n" <<
@@ -1244,7 +1259,9 @@ namespace EmEn::Saphir
 					"/* Thin-surface transmission (LQ) - Beer's law absorption. */" "\n"
 					"vec3 transmittedLight = " << m_surfaceTransmissionColor << ";" "\n"
 					"const vec3 transAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
-					"transmittedLight *= transAbsorption;" "\n" <<
+					"transmittedLight *= transAbsorption;" "\n"
+					"/* Tinted by the base colour (KHR_materials_transmission). */" "\n"
+					"transmittedLight *= " << this->albedoShaderExpression() << ".rgb;" "\n" <<
 					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * 0.96 * " << iblIntensity << ";";
 			}
 		}

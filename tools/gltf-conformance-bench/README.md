@@ -86,6 +86,13 @@ The failure images name the defect, which is what turns a capture into a fix.
   **0.0 % / 0.0 % / 34.2 %** left to right. ⚠️ The MIDDLE ball being 0.0 % is the point — a colour
   *without* a distance must NOT tint, and that is the rule a well-meaning fix would break.
   Regenerate with `./make-volume-probe.py`; never hand-drop a binary nobody can rebuild.
+  ⚠️⚠️ **Those three numbers are STALE since Aug 2026 and the probe currently discriminates
+  NOTHING** — the three balls now measure identical to within 0.5 of a code value. It was reading
+  the absorption *through* the additive light-pass transmission term, and that term was a defect,
+  now removed. The probe needs a bright opaque backdrop before it can be a criterion again:
+  absorption is a multiplication and these balls float against near-black trees. Do not read the
+  three percentages above as a live baseline, and do not treat the flat result as a regression —
+  see `docs/todo/volume-absorption-probe-cannot-discriminate.md`.
 - **⚠️ Verify a loader-wide change with a PIXEL DIFF against the previous run, partitioned by the
   property you changed.** The captures of a previous pass are kept under
   `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-<date>/`, and the framing is

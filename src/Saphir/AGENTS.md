@@ -536,6 +536,43 @@ Applying it in both would double-count. ⚠️ And it is deliberately **NOT** ap
 G-buffer attachment written from the same `fragmentColor()` expression: albedo is a reflectance in
 [0,1], and pushing 8000 nits into it poisons every consumer that reads it — RTGI first.
 
+### Transmission belongs to the AMBIENT pass — and it is TINTED BY THE BASE COLOUR
+
+Two rules, both measured on `IridescentDishWithOlives.glb` and `TransmissionTest` (Aug 2026).
+
+**Rule 1 — only the ambient pass composes transmission.** What a viewer sees *through* a surface is
+a view-dependent lookup of the scene behind the fragment: the grab pass, or the environment cubemap
+in the fallback tier. `generateAmbientFragmentShader()` owns it — it is the pass that declares
+`SurfaceTransmissionColor` and splits it against the reflection with a Fresnel term. A punctual
+light contributes **nothing** to it; it cannot see what is behind the glass. `LightGenerator.PBR.cpp`
+therefore emits **no** transmission term at all, and instead reduces the diffuse lobe:
+
+```glsl
+const vec3 kD = (vec3(1.0) - kS) * (1.0 - metalness) * (1.0 - transmissionFactor);
+```
+
+That factor is `KHR_materials_transmission`'s `mix(diffuse_brdf, specular_btdf, transmissionFactor)`
+seen from the diffuse side. ⚠️ The light passes used to ADD
+`albedo * beerAbsorption * max(dot(-N, L), 0) * transmissionFactor * radiance` on top of an
+**undiminished** diffuse — an addition where the spec asks for a mix, using the albedo where the
+transmitted colour is the scene behind. Under the model viewer's 100 000 lux key it swamped the
+ambient pass's correct result and made every transmissive material milky white. Do not reintroduce
+it: a back-lit look for leaves, paper or skin is **subsurface scattering**, which has its own term
+and its own material component.
+
+**Rule 2 — the transmitted light is multiplied by the base colour.** The Khronos reference
+(`getIBLVolumeRefraction()` in the glTF Sample Viewer) composes
+`(1 - F) * attenuatedColor * baseColor`. All three ambient transmission sites in
+`LightGenerator.cpp` apply `albedoShaderExpression()`.
+
+⚠️⚠️ **Beer's law is not a substitute for that tint, and assuming it was hid the gap for months.**
+Beer needs `KHR_materials_volume`; a material that declares only `KHR_materials_transmission` has
+`attenuationDistance = +INFINITY`, so `exp(log(colour)/inf)` is exactly 1 and the absorption is a
+no-op. Every `TransmissionTest` sphere is such a material: with rule 1 applied but not rule 2 they
+rendered as colourless ghosts — the yellow, green, red and blue came back only with the base-colour
+factor. Before rule 1, the tint arrived **by accident** through the additive albedo term, which is
+why the gap was invisible.
+
 ### MRT normal output — the `N` declaration contract
 
 `SceneRendering` writes the view-space perturbed normal to the G-buffer normal
