@@ -1537,7 +1537,7 @@ removed it (see [`docs/todo/photometry-phase-2-relight-demos.md`](../../docs/tod
 | **RTAO** | `Effects/Framebuffer/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
 | **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR |
 | **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals |
-| **LensFlare** | `Effects/Framebuffer/LensFlare.hpp/cpp` | Multi-pass | Depth, HDR |
+| **LensFlare** | `Effects/Framebuffer/LensFlare.hpp/cpp` | Multi-pass | Depth (the source occlusion probe), HDR, LightSet |
 | **FogEnvironment** | `Effects/Framebuffer/FogEnvironment.hpp/cpp` | 1-pass | Depth |
 
 ### SSR (Screen-Space Reflections)
@@ -2734,6 +2734,30 @@ base) capped the blur at σ ≈ 76 px where the roughness asked for 93-277.
   compare against no reflections, leave the `Reflections` slot EMPTY in a test stack. Disabling ray
   tracing does not remove the reflections: the demos fall back to SSR, which shimmers (half-res,
   2-texel blur, rays leaving the screen) — compare RTR against RTR, never against the fallback.
+
+### LensFlare — the source is probed in the depth buffer (Aug 2026)
+
+The flare knew only whether the main directional light was INSIDE the frustum (`lightOnScreen`,
+CPU side, with an edge fade): a sun behind a wall, but in the field of view, produced its ghosts
+and halo as if it were visible — owner report on Sponza, "il passe à travers la géométrie".
+
+- **The probe**: the ghost + halo pass (binding 1 of its own 2-sampler layout, per-frame set) reads
+  the scene depth on a 16-tap Vogel disk around the projected light — radius
+  `Parameters::occlusionRadius` 0.012 of the screen HEIGHT, scaled per axis so the disk is round —
+  and counts the taps that read the far plane (`>= 0.99999`). A directional source is at
+  infinity: anything written in the depth buffer there hides it. Fixed rotation (no shimmer); the
+  result multiplies the whole flare; `requiresDepth()` is true so the depth is always bound.
+- **Verified on the bench** (`post-processor-effect-debug`, bench 1: white open-roof room, the
+  "AutumnFieldPureSky" sun created by hand on its manifest direction, the fixed camera aimed 15°
+  below it, a 1 m cube on the line of sight on option): a diagnostic tint of the visibility read
+  **+21/255 on the neutral walls with the sun uncovered, 0.00 with the cube** — the probe sees the
+  occluder. A skybox is NOT geometry here (the sky region reads the far plane).
+- ⚠️ **The flare's own stimulus is still open**: `Parameters::threshold` is 0.8 — a leftover of the
+  display-referred era. In a photometric chain the input is in NITS, so every lit texel passes the
+  threshold pass and the "ghosts" are copies of the whole scene, not of the light. Todo
+  `lens-flare-threshold-unit.md`.
+- ⚠️ A modeled sun DISC (an emissive quad) is geometry: the probe would call it an occluder. A
+  directional light's disc belongs in the sky cubemap.
 
 ### Every ray query judges its alpha-tested candidates — `RTAlphaTestGLSL.hpp` (Aug 2026)
 

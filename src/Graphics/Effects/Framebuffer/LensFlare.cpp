@@ -101,6 +101,7 @@ layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D thresholdTex;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -112,7 +113,28 @@ layout(push_constant) uniform PushConstants
 	float chromaticDistortion;
 	float intensity;
 	int ghostCount;
+	float occlusionRadiusX;
+	float occlusionRadiusY;
 };
+
+/* Source visibility: the fraction of a 16-tap disk around the projected light that reads the far
+ * plane (a directional source is at infinity — anything written in the depth buffer there hides
+ * it). A Vogel spiral, fixed rotation: the same probe every frame, no shimmer. */
+float sourceVisibility (vec2 lightPos)
+{
+	float visible = 0.0;
+
+	for (int i = 0; i < 16; ++i)
+	{
+		float r = sqrt((float(i) + 0.5) / 16.0);
+		float a = float(i) * 2.39996323;
+		vec2 p = lightPos + vec2(cos(a) * occlusionRadiusX, sin(a) * occlusionRadiusY) * r;
+		p = clamp(p, vec2(0.0), vec2(1.0));
+		visible += texture(depthTex, p).r >= 0.99999 ? 1.0 : 0.0;
+	}
+
+	return visible / 16.0;
+}
 
 /* Sample with chromatic distortion along a radial direction. */
 vec3 chromaticSample(sampler2D tex, vec2 uv, vec2 direction, float distortion)
@@ -126,7 +148,16 @@ vec3 chromaticSample(sampler2D tex, vec2 uv, vec2 direction, float distortion)
 
 void main()
 {
-	vec2 lightPos = vec2(lightScreenX, lightScreenY);
+		vec2 lightPos = vec2(lightScreenX, lightScreenY);
+
+	/* A source the geometry hides produces no flare at all. */
+	float visibility = sourceVisibility(lightPos);
+
+	if (visibility <= 0.0)
+	{
+		outColor = vec4(0.0);
+		return;
+	}
 
 	/* Ghost direction: from light position toward the current pixel.
 	 * Ghosts are placed at increasing offsets along this axis. */
@@ -188,7 +219,7 @@ void main()
 		}
 	}
 
-	outColor = vec4(result * intensity, 1.0);
+	outColor = vec4(result * intensity * visibility, 1.0);
 }
 )GLSL";
 
@@ -231,10 +262,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Single input layout (1 combined image sampler). */
+				/* Single input layout (1 combined image sampler): the threshold pass. */
 		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( singleInputLayout == nullptr )
+		{
+			return false;
+		}
+
+		/* Dual input layout: the ghost + halo pass reads the threshold target AND the scene depth
+		 * (the source occlusion probe). */
+		auto dualInputLayout = this->getInputLayout(2);
+
+		if ( dualInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -249,9 +289,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			});
 		}
 
-		{
+				{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(singleInputLayout);
+			sets.emplace_back(dualInputLayout);
 
 			m_ghostHaloLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GhostHaloPushConstants)}
@@ -313,20 +353,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		/* Ghost+Halo: reads threshold target (fixed, single set). */
-		const auto & pool = renderer.descriptorPool();
+		/* Ghost+Halo: binding 0 = threshold target (fixed), binding 1 = scene depth (per frame). */
+		m_ghostHaloPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "LF_GhostHalo_DescSet");
 
-		m_ghostHaloDescSet = std::make_unique< DescriptorSet >(pool, singleInputLayout);
-		m_ghostHaloDescSet->setIdentifier(ClassId, "GhostHalo_DescSet", "DescriptorSet");
-
-		if ( !m_ghostHaloDescSet->create() )
+		if ( m_ghostHaloPerFrame.empty() )
 		{
 			return false;
 		}
 
-		if ( !m_ghostHaloDescSet->writeCombinedImageSampler(0, m_thresholdTarget) )
+		for ( const auto & descriptorSet : m_ghostHaloPerFrame )
 		{
-			return false;
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_thresholdTarget) )
+			{
+				return false;
+			}
 		}
 
 		return true;
@@ -335,7 +375,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	void
 	LensFlare::destroy () noexcept
 	{
-		m_ghostHaloDescSet.reset();
+		m_ghostHaloPerFrame.clear();
 		m_thresholdPerFrame.clear();
 
 		m_ghostHaloPipeline.reset();
@@ -417,7 +457,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sizeof(ThresholdPushConstants)
 		);
 
-		/* 4. Pass 2: Ghost generation + Halo (half-res). */
+				/* 4. Pass 2: Ghost generation + Halo (half-res), with the source occlusion probe: binding 1
+		 * is the scene depth of THIS frame (requiresDepth() guarantees it); the probe radius is a
+		 * fraction of the screen height, scaled per axis so the disk stays round on screen. */
+		static_cast< void >(m_ghostHaloPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
+
+		const auto aspect = static_cast< float >(m_ghostHaloTarget.height()) / static_cast< float >(std::max(1U, m_ghostHaloTarget.width()));
+
 		const GhostHaloPushConstants ghostHaloPC{
 			.lightScreenX = screenX,
 			.lightScreenY = screenY,
@@ -426,15 +472,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.haloThickness = m_parameters.haloThickness,
 			.chromaticDistortion = m_parameters.chromaticDistortion,
 			.intensity = m_parameters.intensity,
-			.ghostCount = m_parameters.ghostCount
+			.ghostCount = m_parameters.ghostCount,
+			.occlusionRadiusX = m_parameters.occlusionRadius * aspect,
+			.occlusionRadiusY = m_parameters.occlusionRadius
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(
 			commandBuffer,
 			m_ghostHaloTarget,
-			*m_ghostHaloPipeline,
+						*m_ghostHaloPipeline,
 			*m_ghostHaloLayout,
-			*m_ghostHaloDescSet,
+			*m_ghostHaloPerFrame[frameIndex],
 			&ghostHaloPC,
 			sizeof(GhostHaloPushConstants)
 		);

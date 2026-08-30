@@ -48,6 +48,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	 * ghost copies along the light-to-center axis with chromatic distortion,
 	 * adds a halo ring around the light position, and composites additively
 	 * with the scene.
+	 * @note The source's VISIBILITY is probed in the depth buffer (Aug 2026): 16 taps on a small
+	 * disk around the projected light; a tap that does not read the far plane is geometry hiding
+	 * the source. Until then the flare only knew whether the light was inside the frustum and shone
+	 * through every wall (owner report on Sponza: "il passe à travers la géométrie").
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
 	class EMEN_API LensFlare final : public IndirectPostProcessEffect
@@ -87,6 +91,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float haloThickness{0.1F};
 				float chromaticDistortion{0.02F};
 				float intensity{1.0F};
+				/**
+				 * @brief Radius, as a fraction of the screen HEIGHT, of the depth-buffer disk probed
+				 * around the light's projected position to decide how much of it the geometry hides.
+				 * @note 16 taps; the fraction of taps that read the far plane is the visibility. A
+				 * source behind a wall produces NO flare; a source half behind an edge, half of it.
+				 */
+				float occlusionRadius{0.012F};
 			};
 
 			/**
@@ -113,6 +124,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float chromaticDistortion;
 				float intensity;
 				int32_t ghostCount;
+				/* Occlusion probe radius in UV, per axis (the screen is not square). */
+				float occlusionRadiusX;
+				float occlusionRadiusY;
 			};
 
 			/**
@@ -170,9 +184,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresHDR() */
-			[[nodiscard]]
+						[[nodiscard]]
 			bool
 			requiresHDR () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth()
+			 * @note The ghost + halo pass probes the scene depth around the projected light: the source occlusion. */
+			[[nodiscard]]
+			bool
+			requiresDepth () const noexcept override
 			{
 				return true;
 			}
@@ -222,7 +245,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_ghostHaloLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_thresholdPerFrame;
-			std::unique_ptr< Vulkan::DescriptorSet > m_ghostHaloDescSet;
+			/* Ghost + halo: binding 0 = threshold target (fixed), binding 1 = scene depth (per frame,
+			 * the occlusion probe). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_ghostHaloPerFrame;
 			/* Light visibility factor computed by recordOverlayPasses(), consumed by
 			 * combineContribution() as the flare modulation (dynamics0.x). */
 			float m_lastLightOnScreen{0.0F};

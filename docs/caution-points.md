@@ -3826,6 +3826,33 @@ BLEND too); the opacity-weighted blend keeps both right.
 the whole decal quad); their normals/material-properties lanes are still replaced over the whole
 quad (reflectivity nibble → reflections on transparent texels once RTR is back).
 
+### Fixed: the lens flare shone through walls — the source's visibility was a frustum test, not a depth test (Aug 2026)
+
+**Symptom.** Sponza: ghosts and halo with the sun behind the arcade ("il passe à travers la
+géométrie", the owner disabled the effect).
+
+**Cause.** `LensFlare::recordOverlayPasses()` derived `lightOnScreen` from the light's projected
+position alone (in the frustum → 1, with an edge fade). Nothing ever asked the depth buffer whether
+geometry stood in front of the source.
+
+**Fix.** The ghost + halo pass probes the depth around the projected light (16-tap disk, 1.2 % of
+the screen height) and scales the flare by the fraction of taps at the far plane. Details:
+`src/Graphics/AGENTS.md` § "LensFlare — the source is probed in the depth buffer".
+
+**Lessons — three traps met while proving it on the bench.**
+- ⚠️⚠️ `Component::DirectionalLight::direction()` returns the light's **UBO lane**, filled on the
+  first update: read right after creation (a demo's `onBuilding()`/`onEnabled()`) it says (0, 1, 0).
+  Own the direction you created the light with, or read the entity's frame.
+- ⚠️ `deriveLightingFromSky()` is ASYNCHRONOUS (it waits for the cubemap): at `onBuilding()` and
+  `onEnabled()` the LightSet has no sun yet. A demo that needs the sun there creates it by hand on
+  the manifest's direction (Sponza does), as the bench does.
+- ⚠️ A sky manifest's `Stars[].Direction` may not point at the disc painted in its cubemap
+  ("AutumnFieldPureSky": no disc at the manifest's direction on screen; "Forrest": the sun behind
+  trees). A flare stimulus needs a disc AT the light's direction — measure, never assume the data.
+- ⚠️ The flare's ghosts are copies of the THRESHOLD texture at displaced positions and its halo is
+  a 0.6-frame ring around the light: a light at the frame centre puts the ring outside the frame and
+  the ghosts over uniform sky, i.e. an invisible flare — aim off-centre to see anything.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context
