@@ -882,6 +882,11 @@ namespace EmEn::Vulkan
 		requirements.featuresVK10().multiDrawIndirect = VK_TRUE; // Required for vkCmdDrawIndexedIndirect with drawCount > 1
 		requirements.featuresVK10().drawIndirectFirstInstance = VK_TRUE; // Required for firstInstance in indirect commands
 		requirements.featuresVK10().shaderInt64 = VK_TRUE; // Required for uint64_t in shaders (BDA address reconstruction)
+		/* Required for imageStore() from a FRAGMENT shader: the RTR trace writes its per-pixel glossy
+		 * cone width map (a storage image) next to its colour attachment. Without the feature the SPIR-V
+		 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to
+		 * create. Universally supported on desktop GPUs; the physical-device probe above warns when absent. */
+		requirements.featuresVK10().fragmentStoresAndAtomics = VK_TRUE;
 		requirements.featuresVK11().shaderDrawParameters = VK_TRUE; // Required for gl_DrawID in vertex shaders
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 

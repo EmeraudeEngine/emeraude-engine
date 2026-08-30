@@ -648,6 +648,7 @@ an acquire barrier (`VK_QUEUE_FAMILY_EXTERNAL` → graphics queue family) before
 The command buffer supports `drawIndexedIndirect()` for GPU-driven rendering. Device features enabled in `Instance.cpp`:
 - `multiDrawIndirect`, `drawIndirectFirstInstance` (VK 1.0)
 - `shaderInt64` (VK 1.0) — `uint64_t` for BDA address reconstruction
+- `fragmentStoresAndAtomics` (VK 1.0, Aug 2026) — `imageStore()` from a FRAGMENT shader: the RTR trace writes its per-pixel glossy-cone width map (storage image) beside its colour attachment. ⚠️ Without it the SPIR-V validation rejects the pipeline (`VUID-RuntimeSpirv-NonWritable-06340`) and the effect silently fails to create — the demo then loads no scene.
 - `shaderDrawParameters` (VK 1.1) — `gl_DrawID` in vertex shaders
 
 **Buffer types for MDI:**

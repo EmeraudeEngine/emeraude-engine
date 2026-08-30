@@ -3760,6 +3760,35 @@ whenever the scene already had both devices — every scene with a player. It no
   give a bit-identical frame; injected keys (`Core.InputManagerService.keyPress(87, 0)` …) must not
   change it; a console `setPosition/lookAt` round trip must return to it bit-exactly.
 
+### Fixed: the RTR glossy cone was a mip lookup — a kernel that is a texel is a kernel that depends on where the feature falls (Aug 2026)
+
+**Symptom.** "Gros pâtés lumineux" on Sponza's rough surfaces; on the bench, the SAME roughness gave
+a reflected band 164 px wide at row 775 and 135 px at row 792 — the band straddled a mip texel
+boundary in one case and sat inside a texel in the other. The far/near comparison inverted for that
+reason alone. And beyond roughness 0.3 the blur stopped growing: the pyramid had no coarser mip.
+
+**Cause.** `textureLod(pyramid, uv, log2(width))` — the mip whose texel IS the kernel. A box the size
+of the kernel, aligned to a grid, is shift-variant with the period of the grid; at LOD 4-5 that is
+64-128 px. The uniform (screen-space) cone width of v1 hid this behind a second defect: it ignored
+the hit distance, 2-3× too sharp for distant hits and blurring contact reflections that must stay
+sharp.
+
+**Fix.** Two steps, each measured on `post-processor-effect-debug`: the cone width per pixel from the
+hit distance (v2 — formula right, pyramid now the limit), then a 24-tap Gaussian disk gather on a mip
+2× finer than the kernel (v3 — kernel within 10 % of GGX up to r = 0.4, far/near 1.28-1.35 as
+physics says, grain 1.5/255, +0.16 ms). Details: `src/Graphics/AGENTS.md` § "RTR glossy cone".
+
+**Lessons.**
+- ⚠️⚠️ **A prefiltered-mip lookup is not a filter of the requested width**: sample a mip FINER than
+  the kernel and integrate over the kernel yourself. Measure any blur against the SAME feature at two
+  grid positions before calling its width a property of the roughness.
+- ⚠️ When a gather renormalizes by a gathered weight (confidence), the FINAL blend must use the
+  pixel's OWN weight — otherwise every pixel whose kernel overlaps a "no data" neighbour dims.
+- ⚠️ A truncated Gaussian is not the Gaussian: cut at 2 σ it loses 12 % of its second moment. Either
+  cut wider or say what width you actually mean (FWHM here).
+- ⚠️ The measurement instrument has limits too: the panel must be taller than ~4 σ of the widest
+  kernel it is meant to read, and the differential LDR protocol runs out of levels on broad low hills.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

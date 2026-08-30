@@ -117,6 +117,9 @@ layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
 layout(set = 1, binding = 2) uniform samplerCube envCubemap;
 layout(set = 1, binding = 3) uniform sampler2D albedoTex;
+/* Glossy cone width map, written per trace pixel (see the hit branch): the combine sizes its
+ * pyramid lookup from it instead of a screen-uniform guess. */
+layout(set = 1, binding = 4, r16f) uniform writeonly image2D coneImage;
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cube array
  * (reserved slots: 1 = scene irradiance E/pi, 2 = GGX-prefiltered environment). */
@@ -134,6 +137,7 @@ layout(push_constant) uniform PushConstants
 	float fadeScreenEdge;
 	uint lightCount;
 	vec4 ambientLight;
+	float coneScale;
 };
 
 /* Material flag bits (must match GPURTMaterialData). */
@@ -412,6 +416,9 @@ void main()
 	/* Use texelFetch (no bilinear filtering) to avoid interpolating
 	 * depth/normals across geometric edges at half-resolution. */
 	ivec2 fullResCoord = ivec2(vUV * vec2(textureSize(depthTex, 0)));
+	/* Cone width defaults to 0 (sharp): every early return below and the miss branch keep it. */
+	ivec2 coneCoord = ivec2(gl_FragCoord.xy);
+	imageStore(coneImage, coneCoord, vec4(0.0));
 	float depth = texelFetch(depthTex, fullResCoord, 0).r;
 
 	/* Skip far-plane fragments. */
@@ -656,6 +663,25 @@ void main()
 
 		float confidence = distFade * fresnel * roughnessFade;
 
+		/* GLOSSY CONE v2 — the width of the pyramid lookup, per pixel, in TRACE texels.
+		 * GGX with alpha = roughness²: the half-vector distribution falls to half its peak at
+		 * tan(thetaH) = 0.6436 alpha, and the REFLECTED direction deviates by 2 thetaH, so the lobe
+		 * is tan(2 thetaH) wide (half-width) around the mirror direction. That lobe paints a
+		 * footprint hitT * tan(theta) on what it hits; seen through the reflector from a camera at
+		 * distance dCam, the footprint shrinks by dCam / (dCam + hitT) on the reflector and projects
+		 * to coneScale / dCam texels per metre — hence tan(theta) * hitT * coneScale / (dCam + hitT).
+		 * A contact reflection (hitT -> 0) stays sharp; a distant one tends to the lobe's own
+		 * angular size. The v1 cone was screen-uniform (2 x 0.15 x traceHeight x roughness²) and
+		 * measured 2-3x too sharp for hits 6-16 m away while blurring contacts that must stay sharp
+		 * (projet-alpha post-processor-effect-debug bench, 2026-08-30). Flat reflector assumed: a
+		 * curved one compresses the image and would want the normal's screen-space derivative. */
+		float coneAlpha = roughness * roughness;
+		float coneTanHalf = 0.6436 * coneAlpha;
+		float coneTan = 2.0 * coneTanHalf / max(1.0 - coneTanHalf * coneTanHalf, 1e-3);
+		float coneDistCam = length(worldPos - cameraPos);
+		float coneWidth = 2.0 * coneTan * hitT * coneScale / max(coneDistCam + hitT, 1e-3);
+		imageStore(coneImage, coneCoord, vec4(coneWidth));
+
 		outReflection = vec4(litColor * fresnelTint * confidence, confidence);
 	}
 	else
@@ -726,6 +752,10 @@ void main()
 }
 )GLSL";
 
+	/* The trace input descriptor set layout (set 1) is the effect's own: 4 samplers + the cone map. */
+	constexpr auto TraceInputLayoutId{"RTR_TraceInput"};
+	constexpr uint32_t ConeImageBinding{4U};
+
 	/* Push constants of the pyramid build dispatches. */
 	struct PyramidPushConstants
 	{
@@ -759,7 +789,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Glossy cone controls (bench knobs — see SettingKeys.hpp for the full rationale). */
 		m_coneEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingReflectionGlossyConeEnabledKey, DefaultGraphicsRayTracingReflectionGlossyConeEnabled);
-		m_coneHitFraction = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeHitFractionKey, DefaultGraphicsRayTracingReflectionGlossyConeHitFraction));
 		m_coneBlendStart = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeBlendStartKey, DefaultGraphicsRayTracingReflectionGlossyConeBlendStart));
 		m_coneBlendFull = std::max(m_coneBlendStart, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeBlendFullKey, DefaultGraphicsRayTracingReflectionGlossyConeBlendFull));
 		m_coneMaxLod = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeMaxLodKey, DefaultGraphicsRayTracingReflectionGlossyConeMaxLod));
@@ -773,6 +802,70 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		}
 
 		/* Blur targets (half-res, RGBA16F). */
+		/* ---- Glossy cone width map: one R16F texel per trace pixel, written by the trace fragment
+		 * shader (storage image), sampled by the combine. Same lifecycle as the pyramid. ---- */
+		{
+			m_coneImage = std::make_shared< Image >(
+				renderer.device(),
+				VK_IMAGE_TYPE_2D,
+				VK_FORMAT_R16_SFLOAT,
+				VkExtent3D{
+					.width = halfW,
+					.height = halfH,
+					.depth = 1U
+				},
+				VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				0,
+				1U
+			);
+			m_coneImage->setIdentifier(ClassId, "GlossyConeWidth", "Image");
+
+			if ( !m_coneImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Failed to create the glossy cone width image !";
+
+				return false;
+			}
+
+			/* Declared in the layout the combine samples it in; each frame moves it UNDEFINED ->
+			 * GENERAL before the trace and GENERAL -> SHADER_READ_ONLY after (see recordPreDenoisePasses). */
+			m_coneImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			m_coneView = std::make_shared< ImageView >(
+				m_coneImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0U,
+					.levelCount = 1U,
+					.baseArrayLayer = 0U,
+					.layerCount = 1U
+				}
+			);
+			m_coneView->setIdentifier(ClassId, "GlossyConeWidth", "ImageView");
+
+			if ( !m_coneView->createOnHardware() )
+			{
+				return false;
+			}
+
+			m_coneSampler = renderer.getSampler("RTRConeWidth", [] (Settings &, VkSamplerCreateInfo & samplerCreateInfo) {
+				samplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+				samplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+				samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				samplerCreateInfo.anisotropyEnable = VK_FALSE;
+				samplerCreateInfo.maxLod = 0.0F;
+			});
+
+			if ( m_coneSampler == nullptr )
+			{
+				return false;
+			}
+		}
+
 		if ( !m_blurHTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_BlurH") )
 		{
 			TraceError{ClassId} << "Failed to create RTR blur H target !";
@@ -790,12 +883,36 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (set 1): depth + normals + environment cubemap + albedo — 4 combined image samplers. */
-		auto traceInputLayout = this->getInputLayout(4);
+		/* Trace input (set 1): depth + normals + environment cubemap + albedo — 4 combined image
+		 * samplers — plus the glossy cone width map the trace WRITES (binding 4, storage image).
+		 * Own layout, shared through the layout manager under its own identifier. */
+		auto traceInputLayout = layoutManager.getDescriptorSetLayout(TraceInputLayoutId);
 
 		if ( traceInputLayout == nullptr )
 		{
-			return false;
+			traceInputLayout = layoutManager.prepareNewDescriptorSetLayout(TraceInputLayoutId);
+			traceInputLayout->setIdentifier(ClassId, TraceInputLayoutId, "DescriptorSetLayout");
+
+			for ( uint32_t bindingIndex = 0; bindingIndex < 4; ++bindingIndex )
+			{
+				traceInputLayout->declareCombinedImageSampler(bindingIndex, VK_SHADER_STAGE_FRAGMENT_BIT);
+			}
+
+			{
+				VkDescriptorSetLayoutBinding binding{};
+				binding.binding = ConeImageBinding;
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				binding.descriptorCount = 1;
+				binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+				traceInputLayout->declare(binding);
+			}
+
+			if ( !layoutManager.createDescriptorSetLayout(traceInputLayout) )
+			{
+				TraceError{ClassId} << "Unable to create the trace input descriptor set layout !";
+
+				return false;
+			}
 		}
 
 		/* RT descriptor set layout (set 0) — from the Renderer. */
@@ -869,6 +986,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		if ( m_tracePerFrame.empty() )
 		{
 			return false;
+		}
+
+		/* Binding 4: the glossy cone width map, written by the trace (storage image, GENERAL). */
+		{
+			VkDescriptorImageInfo coneInfo{};
+			coneInfo.sampler = VK_NULL_HANDLE;
+			coneInfo.imageView = m_coneView->handle();
+			coneInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+			for ( const auto & descriptorSet : m_tracePerFrame )
+			{
+				VkWriteDescriptorSet write{};
+				write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write.dstSet = descriptorSet->handle();
+				write.dstBinding = ConeImageBinding;
+				write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				write.descriptorCount = 1;
+				write.pImageInfo = &coneInfo;
+
+				vkUpdateDescriptorSets(renderer.device()->handle(), 1, &write, 0, nullptr);
+			}
 		}
 
 		/* Binding 2: environment cubemap for ray misses (fixed).
@@ -1137,6 +1275,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_pyramidFullView.reset();
 		m_pyramidMipViews.clear();
 		m_pyramidImage.reset();
+		m_coneSampler.reset();
+		m_coneView.reset();
+		m_coneImage.reset();
 
 		m_tracePerFrame.clear();
 
@@ -1232,8 +1373,22 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				.ambientR = ambientColor.red() * ambientIntensity,
 				.ambientG = ambientColor.green() * ambientIntensity,
 				.ambientB = ambientColor.blue() * ambientIntensity,
-				.skyLuminance = context.skyLuminance
+				.skyLuminance = context.skyLuminance,
+				/* |P[1][1]| = 1 / tan(vFOV / 2) (column-major, element 5): focal length in trace texels. */
+				.coneScale = std::abs(projMat.data()[5]) * 0.5F * static_cast< float >(m_traceTarget.height())
 			};
+
+			/* Cone width map: UNDEFINED -> GENERAL for the trace's storage writes (content rewritten). */
+			{
+				const Sync::ImageMemoryBarrier barrier{
+					*m_coneImage,
+					0,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_GENERAL
+				};
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			}
 
 			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures) per-frame. */
 			m_traceTarget.beginRenderPass(commandBuffer);
@@ -1291,6 +1446,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			commandBuffer.draw(3, 1);
 
 			m_traceTarget.endRenderPass(commandBuffer);
+
+			/* Cone width map written -> sampled by the combine fragment shader. */
+			{
+				const Sync::ImageMemoryBarrier barrier{
+					*m_coneImage,
+					VK_ACCESS_SHADER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+				commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			}
 		}
 
 		/* ---- Pass 1b: pre-convolved reflection pyramid build (glossy cone source) ---- */
@@ -1443,10 +1610,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	IndirectPostProcessEffect::CombineContribution
 	RTR::combineContribution (const FrameContext & /*context*/) const noexcept
 	{
-		/* Cone width per unit of GGX alpha: 2 x assumed hit fraction of the trace
-		 * height. v1 — no per-pixel hit distance available. A zeroed scale disables
-		 * the pyramid lookup altogether (raw traced reflection, sharpness reference). */
-		const float coneWidthScale = m_coneEnabled ? 2.0F * m_coneHitFraction * static_cast< float >(m_traceTarget.height()) : 0.0F;
+		/* The cone width comes per pixel from the trace (cone width map, TRACE texels — hit
+		 * distance, roughness and camera distance folded in, see the trace shader). The scale is
+		 * 1, or 0 to disable the pyramid lookup altogether (raw traced reflection, the sharpness
+		 * reference of the bench). */
+		const float coneWidthScale = m_coneEnabled ? 1.0F : 0.0F;
 		const float pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_pyramidImage != nullptr ? m_pyramidImage->createInfo().extent.width : m_traceTarget.width())));
 		const float pyramidMaxLod = std::min(m_coneMaxLod, static_cast< float >(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U));
 
@@ -1454,17 +1622,28 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		contribution.prefix = "rtr";
 		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
 		contribution.samplers.emplace_back(CombineSamplerInput{"Pyramid", &m_pyramidTexture});
+		contribution.samplers.emplace_back(CombineSamplerInput{"Cone", &m_coneTexture});
 		contribution.needsDepth = true;
 		contribution.needsNormals = true;
 		contribution.needsMaterialProperties = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, coneWidthScale, pyramidLodOffset, pyramidMaxLod});
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_coneBlendStart, m_coneBlendFull, 0.0F, 0.0F});
 
-		/* Same math as the retired RTR_Composite_FS pass: depth-aware upsample of the
-		 * half-res reflection (4 taps, depth-similarity weights — plain bilinear bleeds
-		 * across discontinuities), glossy cone cross-fade toward the pre-convolved pyramid
-		 * (pure trace under blendStart, pure pyramid from blendFull), then the
-		 * reflectivity-modulated, confidence-renormalized application. */
+		/* Depth-aware upsample of the half-res reflection (4 taps, depth-similarity weights —
+		 * plain bilinear bleeds across discontinuities), then the GLOSSY CONE: a DISK GATHER over
+		 * the pre-convolved pyramid whose radius is the per-pixel cone width (v3, Aug 2026) —
+		 * 16 taps on a Vogel spiral rotated per pixel (interleaved gradient noise, Jimenez 2014),
+		 * Gaussian weights with FWHM = cone width, the disk cut at 2.5 σ (a 2 σ cut lost 12 % of the
+		 * second moment, measured), sampled on the mip ~2x FINER than the kernel (log2(radius) - 1:
+		 * 4x finer left a visible grain, σ 4.4/255 on the bench; each tap must integrate its share).
+		 * The premultiplied (color·confidence, confidence) sums keep the
+		 * confidence renormalization below exact. The v2 single textureLod at log2(width) picked
+		 * a mip whose texel WAS the kernel: a 64-128 px block whose width depended on where the
+		 * reflected feature fell in the texel grid (±30 %, measured on the bench), and the pyramid's
+		 * last mip capped the blur at σ ≈ 76 px where the roughness asked for 93-277. The cross-fade
+		 * (pure trace under blendStart, pure gather from blendFull) is unchanged, then the
+		 * reflectivity-modulated, confidence-renormalized application. Per-pixel rotation only —
+		 * no frame term — so a static frame is deterministic (the bench relies on it). */
 		contribution.code =
 			"\tvec2 rtrHalfTexel = 1.0 / vec2(textureSize(rtrTex, 0));\n"
 			"\tfloat rtrCenterDepth = texture(emDepth, vUV).r;\n"
@@ -1480,21 +1659,41 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			"\t\trtrTotalWeight += rtrW;\n"
 			"\t}\n"
 			"\trtrData /= rtrTotalWeight;\n"
-			"\tfloat rtrPackedRM = texture(emNormals, vUV).a;\n"
-			"\tfloat rtrRoughness = rtrPackedRM >= 2.0 ? rtrPackedRM - 2.0 : rtrPackedRM;\n"
-			"\tfloat rtrConeWidthTexels = emDyn.rtrDynamics0.y * rtrRoughness * rtrRoughness;\n"
+			"\t/* The pixel's OWN trace confidence drives the final blend: a gathered (mean) confidence\n"
+			"\t * would dim every reflection whose kernel overlaps a non-reflective neighbour. */\n"
+			"\tfloat rtrOwnConfidence = rtrData.a;\n"
+			"\tfloat rtrConeWidthTexels = texture(rtrCone, vUV).r * emDyn.rtrDynamics0.y;\n"
 			"\tif (rtrConeWidthTexels > emDyn.rtrDynamics1.x)\n"
 			"\t{\n"
-			"\t\tfloat rtrConeLOD = clamp(log2(rtrConeWidthTexels) + emDyn.rtrDynamics0.z, 0.0, emDyn.rtrDynamics0.w);\n"
-			"\t\tvec4 rtrConeData = textureLod(rtrPyramid, vUV, rtrConeLOD);\n"
-			"\t\tfloat rtrConeWeight = clamp((rtrConeWidthTexels - emDyn.rtrDynamics1.x) / max(emDyn.rtrDynamics1.y - emDyn.rtrDynamics1.x, 1e-3), 0.0, 1.0);\n"
-			"\t\trtrData = mix(rtrData, rtrConeData, rtrConeWeight);\n"
+			"\t\t/* Disk gather: FWHM = cone width, on a mip ~2x finer than the kernel, disk cut at 2.5 sigma. */\n"
+			"\t\tfloat rtrRadiusP = 0.5 * rtrConeWidthTexels * exp2(emDyn.rtrDynamics0.z);\n"
+			"\t\tfloat rtrSigmaP = rtrRadiusP * 0.8493;\n"
+			"\t\tfloat rtrConeLOD = clamp(log2(max(rtrRadiusP, 1.0)) - 1.0, 0.0, emDyn.rtrDynamics0.w);\n"
+			"\t\tvec2 rtrPyramidTexel = 1.0 / vec2(textureSize(rtrPyramid, 0));\n"
+			"\t\tfloat rtrAngle = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));\n"
+			"\t\tfloat rtrDiskRadius = 2.5 * rtrSigmaP;\n"
+			"\t\tfloat rtrInvTwoSigma2 = 0.5 / max(rtrSigmaP * rtrSigmaP, 1e-4);\n"
+			"\t\tconst int rtrConeTaps = 24;\n"
+			"\t\tvec4 rtrConeData = vec4(0.0);\n"
+			"\t\tfloat rtrConeWeightSum = 0.0;\n"
+			"\t\tfor (int rtrI = 0; rtrI < rtrConeTaps; rtrI++)\n"
+			"\t\t{\n"
+			"\t\t\tfloat rtrR = sqrt((float(rtrI) + 0.5) / float(rtrConeTaps)) * rtrDiskRadius;\n"
+			"\t\t\tfloat rtrA = rtrAngle + float(rtrI) * 2.39996323;\n"
+			"\t\t\tvec2 rtrOff = vec2(cos(rtrA), sin(rtrA)) * rtrR;\n"
+			"\t\t\tfloat rtrW = exp(-dot(rtrOff, rtrOff) * rtrInvTwoSigma2);\n"
+			"\t\t\trtrConeData += textureLod(rtrPyramid, vUV + rtrOff * rtrPyramidTexel, rtrConeLOD) * rtrW;\n"
+			"\t\t\trtrConeWeightSum += rtrW;\n"
+			"\t\t}\n"
+			"\t\trtrConeData /= max(rtrConeWeightSum, 1e-4);\n"
+			"\t\tfloat rtrConeBlend = clamp((rtrConeWidthTexels - emDyn.rtrDynamics1.x) / max(emDyn.rtrDynamics1.y - emDyn.rtrDynamics1.x, 1e-3), 0.0, 1.0);\n"
+			"\t\trtrData = mix(rtrData, rtrConeData, rtrConeBlend);\n"
 			"\t}\n"
 			"\tfloat rtrReflectivity = float(uint(texture(emMaterialProps, vUV).r * 255.0) >> 4u) / 15.0;\n"
-			"\tfloat rtrConfidence = rtrData.a;\n"
-			"\tif (rtrConfidence > 0.001 && rtrReflectivity > 0.0)\n"
+			"\tif (rtrOwnConfidence > 0.001 && rtrReflectivity > 0.0)\n"
 			"\t{\n"
-			"\t\tem_Color.rgb = mix(em_Color.rgb, rtrData.rgb / max(rtrConfidence, 0.001), rtrConfidence * emDyn.rtrDynamics0.x * rtrReflectivity);\n"
+			"\t\t/* Colour renormalized by the (possibly gathered) confidence it was premultiplied with. */\n"
+			"\t\tem_Color.rgb = mix(em_Color.rgb, rtrData.rgb / max(rtrData.a, 0.001), rtrOwnConfidence * emDyn.rtrDynamics0.x * rtrReflectivity);\n"
 			"\t}\n";
 
 		return contribution;

@@ -123,6 +123,11 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/** @brief Sky luminance (nits): scales the NORMALIZED bindless environment
 				 * sources sampled at hit/miss (irradiance, prefiltered) into absolute light. */
 				float skyLuminance;
+				/**
+				 * @brief Focal length in TRACE texels (|P[1][1]| x traceHeight / 2): the glossy cone
+				 * width the trace writes per pixel is an angular footprint projected to the screen.
+				 */
+				float coneScale;
 			};
 
 			/**
@@ -268,19 +273,19 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		private:
 
 			/**
-			 * @brief Lightweight adapter exposing the reflection pyramid (custom mip-chain
-			 * view over m_pyramidImage) as a TextureInterface for the combine pass.
-			 * @note The pyramid is not an IntermediateRenderTarget — its full-chain view and
-			 * trilinear sampler live as raw Vulkan objects; the CombineSamplerInput contract
-			 * requires a TextureInterface (same pattern as the GrabPass adapters).
+			 * @brief Exposes one of the effect's own images (a view and its sampler) as a TextureInterface
+			 * for the combine pass: the pre-convolved reflection pyramid and the glossy-cone width map.
+			 * @note Holds REFERENCES to the effect's shared pointers, so it follows create()/destroy()
+			 * with no bookkeeping — which is why it must be declared after the members it refers to.
 			 */
-			class PyramidTextureAdapter final : public Vulkan::TextureInterface
+			class ImageTextureAdapter final : public Vulkan::TextureInterface
 			{
 				public:
 
-					explicit
-					PyramidTextureAdapter (const RTR & effect) noexcept
-						: m_effect{effect}
+					ImageTextureAdapter (const std::shared_ptr< Vulkan::Image > & image, const std::shared_ptr< Vulkan::ImageView > & imageView, const std::shared_ptr< Vulkan::Sampler > & sampler) noexcept
+						: m_image{image},
+						m_imageView{imageView},
+						m_sampler{sampler}
 					{
 
 					}
@@ -289,7 +294,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					bool
 					isCreated () const noexcept override
 					{
-						return m_effect.m_pyramidImage != nullptr && m_effect.m_pyramidImage->isCreated();
+						return m_image != nullptr && m_image->isCreated();
 					}
 
 					[[nodiscard]]
@@ -317,21 +322,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 					std::shared_ptr< Vulkan::Image >
 					image () const noexcept override
 					{
-						return m_effect.m_pyramidImage;
+						return m_image;
 					}
 
 					[[nodiscard]]
 					std::shared_ptr< Vulkan::ImageView >
 					imageView () const noexcept override
 					{
-						return m_effect.m_pyramidFullView;
+						return m_imageView;
 					}
 
 					[[nodiscard]]
 					std::shared_ptr< Vulkan::Sampler >
 					sampler () const noexcept override
 					{
-						return m_effect.m_pyramidSampler;
+						return m_sampler;
 					}
 
 					[[nodiscard]]
@@ -343,7 +348,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 				private:
 
-					const RTR & m_effect;
+					const std::shared_ptr< Vulkan::Image > & m_image;
+					const std::shared_ptr< Vulkan::ImageView > & m_imageView;
+					const std::shared_ptr< Vulkan::Sampler > & m_sampler;
 			};
 
 			Parameters m_parameters;
@@ -374,15 +381,20 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Fixed sets: trace target -> mip 0, then mip k-1 -> mip k. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_pyramidSets;
 			uint32_t m_pyramidMipCount{0U};
-			/* The pyramid exposed as a TextureInterface for the combine contribution. */
-			PyramidTextureAdapter m_pyramidTexture{*this};
+			/* Glossy cone width map (R16F, trace resolution): written by the trace pass per pixel from
+			 * the hit distance, the roughness and the camera distance; read by the combine pass. */
+			std::shared_ptr< Vulkan::Image > m_coneImage;
+			std::shared_ptr< Vulkan::ImageView > m_coneView;
+			std::shared_ptr< Vulkan::Sampler > m_coneSampler;
+			/* The pyramid and the cone width map exposed as TextureInterfaces for the combine contribution. */
+			ImageTextureAdapter m_pyramidTexture{m_pyramidImage, m_pyramidFullView, m_pyramidSampler};
+			ImageTextureAdapter m_coneTexture{m_coneImage, m_coneView, m_coneSampler};
 			/* Glossy cone controls, read from the settings ONCE at create() (a change takes
-			 * effect on the next stack creation — relaunch or swap-chain recreation). The
-			 * defaults reproduce the v1 heuristic except for the cross-fade, which replaces
-			 * the former hard takeover at 2 texels. See SettingKeys.hpp for the arithmetic. */
-			float m_coneHitFraction{0.15F};
+			 * effect on the next stack creation — relaunch or swap-chain recreation). The cone
+			 * WIDTH is per pixel since v2 (hit distance); these shape the sharp/pyramid cross-fade
+			 * and cap the LOD. See SettingKeys.hpp. */
 			float m_coneBlendStart{2.0F};
-			float m_coneBlendFull{24.0F};
+			float m_coneBlendFull{6.0F};
 			float m_coneMaxLod{8.0F};
 			bool m_coneEnabled{true};
 	};
