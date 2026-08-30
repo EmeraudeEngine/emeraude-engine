@@ -594,7 +594,21 @@ namespace EmEn::Saphir::Generator
 				 * material modulation in every lit pixel. */
 				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
 				{
-					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = " << m_lightGenerator.materialPropertiesExpression() << ";";
+					if ( m_lightGenerator.useOpacity() )
+					{
+						/* A BLENDED material writes its packed nibbles only where it is at least half
+						 * opaque: the alpha lane (otherwise always 1, read by nobody) becomes a SELECT bit
+						 * and the attachment blends by SRC_ALPHA (onGraphicsPipelineConfiguration) — an
+						 * exact per-fragment replace-or-keep, no interpolation of packed data, no
+						 * discard (the colour attachment keeps blending). Sponza's 35 %-opaque dirt
+						 * decals, metal by glTF default, used to REPLACE the wall's reflectivity nibble
+						 * over their whole extent: RTR rendered every stain as a blurred mirror. */
+						Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4((" << m_lightGenerator.materialPropertiesExpression() << ").rgb, step(0.5, " << m_lightGenerator.fragmentColor() << ".a));";
+					}
+					else
+					{
+						Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = " << m_lightGenerator.materialPropertiesExpression() << ";";
+					}
 				}
 				else
 				{
@@ -830,7 +844,25 @@ namespace EmEn::Saphir::Generator
 
 			if ( m_hasMaterialPropertiesAttachment )
 			{
-				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+				/* Material properties of a BLENDED material: the shader's alpha lane is a SELECT bit
+				 * (opacity >= 0.5), so SRC_ALPHA / ONE_MINUS_SRC_ALPHA is an exact replace-or-keep of the
+				 * packed nibbles (never an interpolation), and the lane itself stays 1 either way
+				 * (a + dst.a * (1 - a)). Normals keep REPLACE: their alpha lane is packed roughness +
+				 * metalness, and the top-most surface's normal is the one the reflections want (water). */
+				auto materialPropertiesState = gBufferState;
+
+				if ( graphicsPipeline.colorBlendAttachments()[0].blendEnable == VK_TRUE )
+				{
+					materialPropertiesState.blendEnable = VK_TRUE;
+					materialPropertiesState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+					materialPropertiesState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+					materialPropertiesState.colorBlendOp = VK_BLEND_OP_ADD;
+					materialPropertiesState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+					materialPropertiesState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+					materialPropertiesState.alphaBlendOp = VK_BLEND_OP_ADD;
+				}
+
+				graphicsPipeline.appendColorBlendAttachment(materialPropertiesState);
 			}
 
 			if ( m_hasAlbedoAttachment )

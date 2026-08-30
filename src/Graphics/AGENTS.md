@@ -2175,8 +2175,16 @@ variance fallback must cover.
   writes `a = diffuseWeight · opacity` and the albedo attachment is alpha-BLENDED by that lane
   (`rgb = src·a + dst·(1−a)`, `a = a + dst.a·(1−a)`, `SceneRendering::onGraphicsPipelineConfiguration`).
   A transparent texel leaves the surface below untouched; a 35 %-opaque metal decal weighs it to
-  0.65; an opaque leaf owns it. Normals / material properties keep the REPLACE policy (their alpha
-  lanes are packed data, not an opacity — the flat-water fix). ⚠️ Until then a blended quad
+  0.65; an opaque leaf owns it. **Material properties**: the packed nibbles cannot be interpolated,
+  so a blended material writes `a = step(0.5, opacity)` and the attachment blends by `SRC_ALPHA` —
+  an exact per-fragment replace-or-keep (the lane itself stays 1). **Normals keep REPLACE**: their
+  alpha lane is packed roughness + metalness, and the top-most surface's normal is what the
+  reflections want (the flat-water fix; a coplanar decal has the wall's normal anyway). Measured on
+  Sponza with the reflectivity nibble displayed as the frame: the dirt decals — metal by glTF
+  default — read 0.74 (display) over their whole quads before, 0.60 after (only their ≥ 50 %-opaque
+  texels still say metal, which is the asset's word); the share of the frame above 0.7 halved
+  (26.9 → 13.2 %). Those quads, rendered by RTR as blurred mirrors over matte stone, were the
+  owner's "gros pâtés flous partout". ⚠️ Until then a blended quad
   REPLACED the lanes over its whole extent, transparent texels included: Sponza's `dirt_decal`
   (BLEND, opacity 0.35, glTF-default `metallicFactor` 1 = metal, weight 0) zeroed the RTGI under
   every decal quad — the "gros carrés sombres" — and its ivy (`LeafSpring`, BLEND) painted leaf

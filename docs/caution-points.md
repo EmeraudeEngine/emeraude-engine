@@ -3822,9 +3822,20 @@ BLEND too); the opacity-weighted blend keeps both right.
 - ⚠️ Displaying a G-buffer lane as the frame colour is the cheapest instrument there is; it settled
   in one capture what three A/Bs were circling.
 
-**Open (todo items)**: blended materials are OPAQUE instances in the TLAS (GI/AO/shadow rays hit
-the whole decal quad); their normals/material-properties lanes are still replaced over the whole
-quad (reflectivity nibble → reflections on transparent texels once RTR is back).
+**Same root, second face — the "gros pâtés flous partout" of the RTR report.** The decal quads
+also REPLACED the wall's material-properties nibbles: reflectivity `max(metalness, 1 − roughness)`
+= 1 over every dirt stain (metal by glTF default), and RTR rendered each stain as a blurred mirror
+of the courtyard on matte stone. Fixed the same day: a blended material writes `a = step(0.5,
+opacity)` into the (otherwise unused, always 1) alpha lane of the material-properties attachment
+and that attachment blends by `SRC_ALPHA` — an exact per-fragment replace-or-keep of packed data,
+no interpolation, no `discard`. Measured with the nibble displayed as the frame: 0.74 → 0.60 under
+the decals, frame share above 0.7 halved (26.9 → 13.2 %); what stays is the asset's metal where
+the stain is ≥ 50 % opaque. Normals keep REPLACE by design (top-most surface). Lesson: **a packed
+lane cannot be blended, but it can be SELECTED — a binary alpha turns the blend unit into a
+per-fragment write mask.**
+
+**Open (todo item)**: blended materials are OPAQUE instances in the TLAS (GI/AO/shadow rays hit
+the whole decal quad).
 
 ### Fixed: the lens flare shone through walls — the source's visibility was a frustum test, not a depth test (Aug 2026)
 
