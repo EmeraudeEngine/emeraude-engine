@@ -760,27 +760,44 @@ namespace EmEn::Scenes
 		auto hasCamera = false;
 		auto hasMicrophone = false;
 
+		const auto inspect = [&hasCamera, &hasMicrophone] (const Component::Abstract & component) {
+			if ( component.isComponent(Component::Camera::ClassId) )
+			{
+				hasCamera = true;
+			}
+			else if ( component.isComponent(Component::Microphone::ClassId) )
+			{
+				hasMicrophone = true;
+			}
+		};
+
+		/* The node tree first ... */
 		{
 			NodeCrawler< const Node > crawler{m_rootNode};
 
-			while ( crawler.fetchNextNode() )
+			while ( !(hasCamera && hasMicrophone) && crawler.fetchNextNode() )
 			{
-				crawler.currentNode()->forEachComponent([&hasCamera, &hasMicrophone] (const Component::Abstract & component) {
-					if ( component.isComponent(Component::Camera::ClassId) )
-					{
-						hasCamera = true;
-					}
-					else if ( component.isComponent(Component::Microphone::ClassId) )
-					{
-						hasMicrophone = true;
-					}
-				});
+				crawler.currentNode()->forEachComponent(inspect);
+			}
+		}
 
-				/* Stop looking in the node tree if at least
-				 * one camera and one microphone are found. */
+		/* ... then the static entities. ⚠️ A camera or a microphone lives on EITHER kind of entity
+		 * (a fixed camera is a static entity carrying the primary camera — Toolkit::
+		 * generatePerspectiveCamera< StaticEntity >()); until Aug 2026 only the node tree was
+		 * inspected, so such a scene got a "DefaultCamera" created on the root node, declared
+		 * primary AFTER the real one — and the default camera took the video output: identity
+		 * pose at the origin, no HDR, a white-over-black frame. */
+		if ( !(hasCamera && hasMicrophone) )
+		{
+			const std::scoped_lock lock{m_staticEntitiesAccess};
+
+			for ( const auto & staticEntity : m_staticEntities | std::views::values )
+			{
+				staticEntity->forEachComponent(inspect);
+
 				if ( hasCamera && hasMicrophone )
 				{
-					return true;
+					break;
 				}
 			}
 		}
@@ -815,7 +832,10 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Set audio properties for this scene. */
+		/* Set audio properties for this scene.
+		 * NOTE: Until Aug 2026 an early `return true` inside the node crawl skipped this call
+		 * whenever the scene already had both devices — i.e. in every scene with a player. It
+		 * now runs unconditionally, as its comment always said it should. */
 		m_AVConsoleManager.audioManager().setEnvironmentSoundProperties(m_environmentPhysicalProperties);
 
 		return true;

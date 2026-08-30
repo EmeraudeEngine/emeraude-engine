@@ -304,7 +304,7 @@ The Scene class is split into multiple implementation files by concept for easie
 | Concept | Description |
 |---------|-------------|
 | Observer | onNotification, checkRootNodeNotification, checkEntityNotification |
-| Core/Lifecycle | initializeBaseComponents, suspendAllEntities, wakeupAllEntities |
+| Core/Lifecycle | initializeBaseComponents (⚠️ inspects nodes AND static entities for the camera/microphone — a fixed camera is a static entity; Aug 2026), suspendAllEntities, wakeupAllEntities |
 | Entities | checkEntityLocationInOctrees |
 | Rendering | Render list population, shadow casting, visual component iteration |
 | Physics | sectorCollisionTest, leafSectorCollisionTest, boundary clipping |

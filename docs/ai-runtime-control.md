@@ -272,7 +272,7 @@ Use `listResources(MeshResource)` to discover available meshes.
 
 ### Critical rules for scene creation
 
-1. **Camera is created BEFORE `enableScene()`** -- this prevents the engine from creating a default camera that overrides yours
+1. **Camera is created BEFORE `enableScene()`** -- this prevents the engine from creating a default camera that overrides yours (on a node OR a static entity — since Aug 2026 the check sees both; before, a camera on a static entity was overridden)
 2. **Camera Y=-2 is the verification position** -- below ground, you see the grey ground above you
 3. **Camera Y=0 won't see the ground** -- same level as ground plane
 4. **Lighting is automatic** -- `createScene` adds a neutral photometric ambient (5000 lx)

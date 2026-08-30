@@ -3732,6 +3732,34 @@ ALPHA".
 - ⚠️ "Verified by grep" in a doc is a claim about the grep PATTERN. Record the pattern, or the
   list of readers, not the conclusion.
 
+### Fixed: a primary camera on a STATIC ENTITY was overridden by the scene's default camera (Aug 2026)
+
+**Symptom.** A demo declaring a fixed camera (`AbstractDemo::enableFixedCamera()` → `Toolkit::
+generatePerspectiveCamera< StaticEntity >(..., primaryDevice = true)`) rendered a white-over-black
+frame: the log said `New virtual video device 'FixedCamera_…' available` then `There is no camera
+in the scene ! Creating a default camera ...` and connected `DefaultCamera_…` to the swap chain,
+leaving `FixedCamera_… -> [NOT_CONNECTED]`. The default camera sits at the origin with the identity
+orientation and no HDR: half the frustum inside the floor (black), the rest raw radiance (white).
+
+**Cause.** `Scene::initializeBaseComponents()` decided whether the scene had a camera/microphone by
+crawling the NODE TREE only. A component on a static entity was invisible to it, so it created a
+`DefaultCamera` — `asPrimary()`, i.e. `PrimaryCameraCreated` fired AFTER the real one and the last
+primary wins the video output.
+
+**Fix.** The check inspects the static entities too (under `m_staticEntitiesAccess`). Side fix in the
+same function: an early `return true` inside the crawl skipped `setEnvironmentSoundProperties()`
+whenever the scene already had both devices — every scene with a player. It now runs unconditionally.
+
+**Lessons.**
+- ⚠️ A scene has TWO entity families (nodes, static entities); every scene-wide inspection must
+  walk both. `Scene::onNotification` already dispatched both to `checkEntityNotification()` — the
+  camera was correctly registered as a video device, then superseded.
+- ⚠️ `PrimaryCameraCreated` = "the LAST primary wins". Anything that creates a primary device late
+  (a default, a fallback) silently steals the output from what the demo authored.
+- ⚠️ The three-frame test that found it: the fixed camera at the ethereal player's exact pose must
+  give a bit-identical frame; injected keys (`Core.InputManagerService.keyPress(87, 0)` …) must not
+  change it; a console `setPosition/lookAt` round trip must return to it bit-exactly.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context
