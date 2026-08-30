@@ -614,11 +614,24 @@ namespace EmEn::Saphir::Generator
 				 *    (LightGenerator::diffuseWeightShaderExpression()).
 				 * ⚠️ Folding the weight INTO the rgb lanes (Aug 2026, one day) zeroed the F0 of
 				 * every metal and killed their reflections in both RTR and SSR.
+				 * A BLENDED material (opacity) writes `a = weight * opacity` and its albedo attachment
+				 * is alpha-BLENDED by that lane (onGraphicsPipelineConfiguration): a layer contributes
+				 * its diffuse albedo in proportion to how much of the pixel it covers. Sponza's dirt
+				 * decals — BLEND quads, opacity 0.35, glTF-default metallicFactor 1 — used to REPLACE
+				 * the wall's lanes over their whole quad, transparent texels included, with
+				 * "metal, weight 0": the RTGI under every decal was zero (big dark squares, Aug 2026).
 				 * Only the ambient/simple pass writes it; light passes have their write mask
 				 * zeroed on the G-buffer attachments (see onGraphicsPipelineConfiguration). */
 				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
 				{
-					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << m_lightGenerator.albedoShaderExpression() << ").rgb, " << m_lightGenerator.diffuseWeightShaderExpression() << ");";
+					if ( m_lightGenerator.useOpacity() )
+					{
+						Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << m_lightGenerator.albedoShaderExpression() << ").rgb, (" << m_lightGenerator.diffuseWeightShaderExpression() << ") * " << m_lightGenerator.fragmentColor() << ".a);";
+					}
+					else
+					{
+						Code{*fragmentShader, Location::Output} << ShaderVariable::OutputAlbedo << " = vec4((" << m_lightGenerator.albedoShaderExpression() << ").rgb, " << m_lightGenerator.diffuseWeightShaderExpression() << ");";
+					}
 				}
 				else
 				{
@@ -822,7 +835,26 @@ namespace EmEn::Saphir::Generator
 
 			if ( m_hasAlbedoAttachment )
 			{
-				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+				/* The albedo attachment of a BLENDED material is alpha-blended by its own alpha lane,
+				 * which the shader sets to `diffuseWeight * opacity`: colour = src * a + dst * (1 - a),
+				 * lane a = a + dst.a * (1 - a). A transparent texel leaves the surface below untouched, a
+				 * 35 %-opaque metal decal weighs it to 0.65, an opaque leaf owns it. Normals and material
+				 * properties keep the REPLACE policy above (their alpha lanes are packed data, not an
+				 * opacity — the flat-water fix). See Graphics/AGENTS.md § "The albedo G-buffer". */
+				auto albedoState = gBufferState;
+
+				if ( graphicsPipeline.colorBlendAttachments()[0].blendEnable == VK_TRUE )
+				{
+					albedoState.blendEnable = VK_TRUE;
+					albedoState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+					albedoState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+					albedoState.colorBlendOp = VK_BLEND_OP_ADD;
+					albedoState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+					albedoState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+					albedoState.alphaBlendOp = VK_BLEND_OP_ADD;
+				}
+
+				graphicsPipeline.appendColorBlendAttachment(albedoState);
 			}
 
 			if ( m_hasVelocityAttachment )

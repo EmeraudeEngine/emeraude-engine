@@ -3789,6 +3789,43 @@ physics says, grain 1.5/255, +0.16 ms). Details: `src/Graphics/AGENTS.md` § "RT
 - ⚠️ The measurement instrument has limits too: the panel must be taller than ~4 σ of the widest
   kernel it is meant to read, and the differential LDR protocol runs out of levels on broad low hills.
 
+### Fixed: big dark squares under Sponza's decals with RTGI — a blended quad owned the whole G-buffer albedo (Aug 2026)
+
+**Symptom.** With RTGI on, Sponza's shadowed walls carried large dark rectangles; the ivy read as
+a whitish haze. Owner report: "le RTGI seul défonce la scène avec des gros carrés sombres".
+Reproduced at the default pose; `--load-demo sponza`, RTGI on/off A/B.
+
+**Cause, three layers.** (1) `dirt_decal` is `alphaMode BLEND`, `baseColorFactor.a 0.35`, and
+OMITS `metallicFactor` → glTF default **1.0**: the asset declares its dirt METAL. (2) The two-lane
+albedo attachment (`.a` = diffuse weight `1−metalness`) made that a weight of **0**. (3) Translucent
+materials wrote every G-buffer attachment with blending DISABLED (the flat-water fix, which the
+normals need): the decal quad REPLACED the wall's albedo lanes over its whole extent, transparent
+texels included → RTGI × 0 under every quad. The albedo lane was displayed on screen to prove it
+(a temporary `em_Color = vec3(albedo.a)`): black rectangles exactly where the decals are.
+
+**Fix.** A blended material writes `a = weight · opacity` and its albedo attachment is
+alpha-blended by that lane; normals/matprops keep REPLACE. Two candidates were measured first:
+write-mask 0 for blended materials killed the squares but took the ivy's GI away (its leaves are
+BLEND too); the opacity-weighted blend keeps both right.
+
+**Lessons.**
+- ⚠️⚠️ **glTF defaults are data**: a material that omits `metallicFactor` IS metal (1.0). An asset
+  that "looked fine" only did so because nothing honoured its metalness; the moment a path does
+  (the diffuse weight), the asset's truth shows. Do not fix it in the loader (the import is the
+  identity) — fix the asset, or accept what it says.
+- ⚠️⚠️ **A per-attachment write policy is per SEMANTICS, not per pass**: normals want the top-most
+  surface (replace), the diffuse albedo wants coverage (blend by opacity). One rule for all MRT
+  attachments was wrong twice (alpha-weighted normals = flat water; replaced albedo = dark squares).
+- ⚠️ When a value lane doubles as a blend factor (`SRC_ALPHA` reads the attachment's OWN source
+  alpha), fold the factor INTO the lane (`weight · opacity`) — the blend then does the right thing
+  for both readers.
+- ⚠️ Displaying a G-buffer lane as the frame colour is the cheapest instrument there is; it settled
+  in one capture what three A/Bs were circling.
+
+**Open (todo items)**: blended materials are OPAQUE instances in the TLAS (GI/AO/shadow rays hit
+the whole decal quad); their normals/material-properties lanes are still replaced over the whole
+quad (reflectivity nibble → reflections on transparent texels once RTR is back).
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

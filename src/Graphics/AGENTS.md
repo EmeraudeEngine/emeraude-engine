@@ -2142,8 +2142,9 @@ variance fallback must cover.
 > - a **metal** (gold: baseColor 1.00/0.72/0.32, metalness 1) re-emitted 72 % of the incoming
 >   irradiance as diffuse light;
 > - a **`KHR_materials_transmission` glass**, whose default base colour is WHITE and which
->   overwrites the G-buffer of everything behind it (translucent materials get `blendEnable = FALSE`
->   on the G-buffer attachments — the "flat water reflections" fix), turned into an opaque milky
+>   overwrites the G-buffer of everything behind it (translucent materials REPLACED every G-buffer
+>   attachment — the "flat water reflections" fix; since Aug 2026 the ALBEDO attachment is
+>   opacity-blended instead, see the blended-material bullet below), turned into an opaque milky
 >   plate: the watch dial under it was unreadable.
 >
 > Same convention as NVIDIA NRD (its demodulation albedo is `baseColor * saturate(1 - metalness)`,
@@ -2170,6 +2171,18 @@ variance fallback must cover.
 >   damped by that same albedo product — which is what keeps its geometric series convergent.
 > - The unlit path writes `vec4(displayedColour, 1.0)`, the no-material path `vec4(1.0)`; the light
 >   passes write nothing (zeroed write mask), the attachment is `LOAD_OP_LOAD` on their pass.
+- **A BLENDED material (opacity) contributes in proportion to its coverage** (Aug 2026): the shader
+  writes `a = diffuseWeight · opacity` and the albedo attachment is alpha-BLENDED by that lane
+  (`rgb = src·a + dst·(1−a)`, `a = a + dst.a·(1−a)`, `SceneRendering::onGraphicsPipelineConfiguration`).
+  A transparent texel leaves the surface below untouched; a 35 %-opaque metal decal weighs it to
+  0.65; an opaque leaf owns it. Normals / material properties keep the REPLACE policy (their alpha
+  lanes are packed data, not an opacity — the flat-water fix). ⚠️ Until then a blended quad
+  REPLACED the lanes over its whole extent, transparent texels included: Sponza's `dirt_decal`
+  (BLEND, opacity 0.35, glTF-default `metallicFactor` 1 = metal, weight 0) zeroed the RTGI under
+  every decal quad — the "gros carrés sombres" — and its ivy (`LeafSpring`, BLEND) painted leaf
+  albedo over the background behind its transparent texels, a white haze around the foliage.
+  Measured on Sponza: under-decal / elsewhere luminance in shadow 0.17 → 1.47 (the remaining
+  excess is the asset's metal decal reflecting the sky IBL, unoccluded), foliage haze gone.
 
 ### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 

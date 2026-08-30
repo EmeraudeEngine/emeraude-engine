@@ -837,6 +837,18 @@ namespace EmEn::Saphir
 			std::string materialPropertiesExpression () const noexcept;
 
 			/**
+			 * @brief Returns whether the surface carries an opacity (a BLENDED material): its fragment
+			 * colour alpha is the opacity, and the albedo G-buffer write weighs the diffuse lane by it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			useOpacity () const noexcept
+			{
+				return m_useOpacity;
+			}
+
+			/**
 			 * @brief Returns the variable name of the produced fragment color.
 			 * @return const std::string &
 			 */
