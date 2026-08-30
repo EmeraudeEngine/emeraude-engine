@@ -1161,8 +1161,11 @@ namespace EmEn::Graphics
 			? VK_FORMAT_R8G8B8A8_UNORM
 			: VK_FORMAT_UNDEFINED;
 
-		/* Albedo buffer format for MRT: surface base color for indirect-light modulation (SSGI).
-		 * sRGB: written linear by the fragment shader, encoded on store, decoded on sample. */
+		/* Albedo buffer format for MRT. RGB = the surface BASE colour (sRGB: written linear by the
+		 * fragment shader, encoded on store, decoded on sample) — the metal F0 the reflections tint
+		 * by; A = the DIFFUSE WEIGHT (1 - metalness)(1 - transmission), linear, that the
+		 * indirect-diffuse combines apply. Contract: Graphics/AGENTS.md § "The albedo G-buffer:
+		 * BASE colour in RGB, DIFFUSE WEIGHT in ALPHA". */
 		const auto albedoFormat = needsAlbedo
 			? VK_FORMAT_R8G8B8A8_SRGB
 			: VK_FORMAT_UNDEFINED;

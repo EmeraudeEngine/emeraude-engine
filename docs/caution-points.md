@@ -3699,6 +3699,39 @@ rewritten direct download path; `Core.RendererService.screenshot()` unaffected.
 
 ---
 
+### Fixed: the albedo attachment had TWO consumer families and one was forgotten — every metal lost its reflections (Aug 2026)
+
+**Symptom.** Six white metal panels (roughness 0.1 → 0.6) facing an 8000-nit emissive band, RTR
+alone in the stack: flat `95/95/95` on every panel, no reflected band at all — while the emitter
+itself rendered at 217/255. Same on SSR. Nobody had reported it: on Sponza and the watch the metals
+are small and the loss read as "a bit dull".
+
+**Cause.** Commit `7bbb3cd7` (2026-08-29) made the albedo G-buffer attachment carry the DIFFUSE
+albedo `baseColor·(1−metalness)·(1−transmission)` so the SSGI/RTGI combines would stop lighting
+metals and glass as Lambertian sheets — a correct goal. Its author (this AI) grepped for the GI
+combines' identifier (`emAlbedo`), found the two, and wrote "the only consumers are SSGI and RTGI".
+The reflections read the SAME attachment under another name (`albedoTex`) as the metal Fresnel F0:
+`F0 = mix(0.04, albedo, metalness)`. A metal now read `albedo = 0` → `F0 = 0` → Schlick ≈ 0
+head-on → no reflection, on every metal, in every scene, for one day.
+
+**Fix.** Two lanes for two readers: `.rgb` = the BASE colour again (exactly what RTR/SSR always
+expected), `.a` = the diffuse weight `(1−metalness)·(1−transmission)` (the lane was written `1.0`
+and read by nobody — zero cost, 8-bit linear); the GI combines apply `rgb * a`. Exact for both
+families, including a FRACTIONAL metalness (the normals MRT only carries `round(metalness)`).
+Contract: `src/Graphics/AGENTS.md` § "The albedo G-buffer: BASE colour in RGB, DIFFUSE WEIGHT in
+ALPHA".
+
+**Lessons.**
+- ⚠️⚠️ **Before changing what an attachment CARRIES, enumerate its readers by the ATTACHMENT** —
+  the binding (`context.albedo`, `requiresAlbedo()`, `needsAlbedo`, the sampler in every effect's
+  descriptor layout) — **never by one consumer's variable name.** Two effects reading one image
+  under two names is the normal case, not the exception.
+- ⚠️ A regression of this kind is invisible on a showcase scene and obvious on a calibration
+  scene: the `post-processor-effect-debug` bench (projet-alpha) found it on its FIRST capture.
+  Run the bench after any change to a G-buffer contract.
+- ⚠️ "Verified by grep" in a doc is a claim about the grep PATTERN. Record the pattern, or the
+  list of readers, not the conclusion.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

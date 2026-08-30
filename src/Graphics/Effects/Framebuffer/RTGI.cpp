@@ -980,14 +980,17 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		contribution.needsAlbedo = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 
-		/* The traced signal is DEMODULATED irradiance: the receiver albedo is re-applied
-		 * HERE, at full resolution, so the half-res trace + bilateral blur + temporal chain
-		 * never touch the texture detail (albedo demodulation, as in SVGF / NVIDIA NRD —
-		 * same convention as SSGI). Emissive surfaces reject GI (they emit their own
-		 * light), then the user intensity scales the additive blend. */
+		/* The traced signal is DEMODULATED irradiance: the receiver DIFFUSE albedo — albedo
+		 * G-buffer `rgb * a`, the base colour times the diffuse weight
+		 * (1 - metalness)(1 - transmission) — is re-applied HERE, at full resolution, so the
+		 * half-res trace + bilateral blur + temporal chain never touch the texture detail
+		 * (albedo demodulation, as in SVGF / NVIDIA NRD — same convention as SSGI). Emissive
+		 * surfaces reject GI (they emit their own light), then the user intensity scales the
+		 * additive blend. */
 		contribution.code =
 			"\tvec3 rtgiGI = texture(rtgiTex, vUV).rgb;\n"
-			"\trtgiGI *= texture(emAlbedo, vUV).rgb;\n"
+			"\tvec4 rtgiAlbedo = texture(emAlbedo, vUV);\n"
+			"\trtgiGI *= rtgiAlbedo.rgb * rtgiAlbedo.a;\n"
 			"\tvec4 rtgiMp = texture(emMaterialProps, vUV);\n"
 			"\tfloat rtgiEmissive = float(uint(rtgiMp.b * 255.0) & 0xFu) / 15.0;\n"
 			"\trtgiGI *= (1.0 - rtgiEmissive);\n"

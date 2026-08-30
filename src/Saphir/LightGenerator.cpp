@@ -87,24 +87,29 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::diffuseAlbedoShaderExpression () const noexcept
+	LightGenerator::diffuseWeightShaderExpression () const noexcept
 	{
-		std::string expression{"(" + this->albedoShaderExpression() + ").rgb"};
+		std::string expression;
 
 		/* A metal has no diffuse lobe: its base color is the Fresnel F0 of the specular one. */
 		if ( !m_surfaceMetalness.empty() )
 		{
-			expression += " * (1.0 - " + m_surfaceMetalness + ")";
+			expression = "(1.0 - " + m_surfaceMetalness + ")";
 		}
 
 		/* What penetrates a transmissive surface is transmitted, not diffusely re-emitted
 		 * (KHR_materials_transmission mixes the two legs, it never adds them). */
 		if ( m_useTransmission && !m_surfaceTransmissionFactor.empty() )
 		{
-			expression += " * (1.0 - " + m_surfaceTransmissionFactor + ")";
+			if ( !expression.empty() )
+			{
+				expression += " * ";
+			}
+
+			expression += "(1.0 - " + m_surfaceTransmissionFactor + ")";
 		}
 
-		return expression;
+		return expression.empty() ? "1.0" : expression;
 	}
 
 	std::string

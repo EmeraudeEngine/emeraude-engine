@@ -493,7 +493,9 @@ layout(set = 0, binding = 2) uniform sampler2D depthTex;
 layout(set = 0, binding = 3) uniform sampler2D normalTex;
 /* Pre-convolved color pyramid (half-res base): the cone lookup source. */
 layout(set = 0, binding = 4) uniform sampler2D pyramidTex;
-/* Scene albedo: the primary-surface Fresnel COLOR tints the resolved reflection. */
+/* Scene albedo: the primary-surface Fresnel COLOR tints the resolved reflection.
+ * ⚠️ Read .rgb only — the BASE colour; .a is the diffuse weight the GI combines apply. A diffuse
+ * albedo in the rgb lanes would read 0 for every metal and kill its reflection. */
 layout(set = 0, binding = 5) uniform sampler2D albedoTex;
 
 /* Bindless textures (set 1): the reserved cube slot 2 holds the ACTIVE SCENE's

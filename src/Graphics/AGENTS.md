@@ -2125,15 +2125,20 @@ variance fallback must cover.
 > `Graphics/ViewMatrices{2D,3D,Cascaded}UBO.*` (the UBO lane — it fits in the EXISTING padding
 > after `environmentLuminance`, so the UBO size did not move).
 
-### The albedo G-buffer carries the DIFFUSE albedo, never the base colour (Aug 2026)
+### The albedo G-buffer: BASE colour in RGB, DIFFUSE WEIGHT in ALPHA (Aug 2026)
 
 > [!CAUTION]
-> **Attachment 3 exists for ONE job — re-modulating a demodulated indirect-diffuse signal (SSGI,
-> RTGI) at full resolution — so it must carry the energy the DIFFUSE lobe actually receives:**
-> `baseColor * (1 - metalness) * (1 - transmissionFactor)`
-> (`LightGenerator::diffuseAlbedoShaderExpression()`, written by `Saphir/Generator/SceneRendering.cpp`).
-> It used to carry the raw base colour, and the two materials that have no diffuse lobe were lit as
-> if they were sheets of paper:
+> **Attachment 3 (`VK_FORMAT_R8G8B8A8_SRGB`) has TWO families of reader, and the two lanes serve
+> them apart** (written by `Saphir/Generator/SceneRendering.cpp`, ambient/simple pass only):
+>
+> | Lane | Content | Readers |
+> |------|---------|---------|
+> | `.rgb` | the surface **BASE colour** (sRGB-encoded) | **RTR** (`RTR.cpp`, `F0 = mix(0.04, albedo, metalness)`) and **SSR** (`SSR.cpp`, same model) — a metal's reflection carries its own colour |
+> | `.a` | the **DIFFUSE WEIGHT** `(1 - metalness) * (1 - transmissionFactor)`, linear (`LightGenerator::diffuseWeightShaderExpression()`) | **SSGI** and **RTGI** combines: `gi *= albedo.rgb * albedo.a` — the energy the diffuse lobe actually receives |
+>
+> Why the weight exists at all: the GI combines re-modulate a demodulated IRRADIANCE, and the two
+> materials that have no diffuse lobe were lit as if they were sheets of paper when the base colour
+> alone was applied —
 > - a **metal** (gold: baseColor 1.00/0.72/0.32, metalness 1) re-emitted 72 % of the incoming
 >   irradiance as diffuse light;
 > - a **`KHR_materials_transmission` glass**, whose default base colour is WHITE and which
@@ -2145,18 +2150,26 @@ variance fallback must cover.
 > `MathLib::ConvertBaseColorMetalnessToAlbedoRf0`) and as the glTF dielectric BRDF, which MIXES the
 > diffuse lobe into the transmission by the transmission factor rather than adding to it.
 >
-> - ⚠️ **The only consumers are the SSGI and RTGI combines** (`gi *= texture(emAlbedo, vUV).rgb`) —
->   verified by grep before changing the semantics. Nothing else reads attachment 3.
-> - ⚠️ A material declaring neither metalness nor transmission generates a **bit-identical** shader:
->   the factors are appended only when the surface declares them.
+> - ⚠️⚠️ **The one-day regression (2026-08-29 → 30) that dictated the two-lane layout:** the first
+>   fix wrote the diffuse albedo INTO the rgb lanes, after a grep for the GI combines' identifier
+>   concluded "the only consumers are SSGI and RTGI". The reflections read the same attachment
+>   under another name (`albedoTex`): every metal's F0 became 0 and **RTR and SSR stopped
+>   reflecting anything on any metal**, in every scene. Found by the first capture of the
+>   `post-processor-effect-debug` bench (six white metal panels: flat 95/95/95, no band). **Before
+>   changing what an attachment carries, grep for the ATTACHMENT — its binding, `context.albedo`,
+>   `requiresAlbedo()`/`needsAlbedo` — never for one consumer's variable name.**
+> - ⚠️ A material declaring neither metalness nor transmission writes `a = 1.0`: its GI
+>   re-modulation is bit-identical to the pre-Aug 2026 one.
 > - ⚠️ The transmission factor is published NOWHERE ELSE in the G-buffer (matprops has no
->   transmission nibble, the normals alpha packs only roughness+metalness), and the reflectivity
->   nibble is a PARTICIPATION mask `max(metalness, 1 - roughness)` — a smooth dielectric publishes
->   ~1.0 exactly like a metal, so it can never stand in for metalness. Folding both factors into
->   the albedo at write time is what makes the information reach the combine at all.
+>   transmission nibble, the normals alpha packs only roughness + a BINARY `round(metalness)`), and
+>   the reflectivity nibble is a PARTICIPATION mask `max(metalness, 1 - roughness)` — a smooth
+>   dielectric publishes ~1.0 exactly like a metal, so it can never stand in for metalness. The
+>   alpha lane is what makes the weight reach the combine at all, with a FRACTIONAL metalness.
 > - ⚠️ The RTGI trace applies the SAME rule at BOUNCE HITS (`albedo *= 1 - metalness`, metalness
 >   texture included, mirroring RTR): a bounce is a diffuse event, and the multi-bounce feedback is
 >   damped by that same albedo product — which is what keeps its geometric series convergent.
+> - The unlit path writes `vec4(displayedColour, 1.0)`, the no-material path `vec4(1.0)`; the light
+>   passes write nothing (zeroed write mask), the attachment is `LOAD_OP_LOAD` on their pass.
 
 ### RTGI (Ray-Traced Global Illumination) — Temporal + Multi-Bounce (Jul 2026)
 
@@ -2181,9 +2194,9 @@ temporal integration of the RAW trace first, variance-guided à-trous after:
    retained for the next frame's validation.
 5. **À-trous** (half-res, GIDenoiser, `Denoiser/Iterations` passes): variance-guided
    edge-avoiding wavelet filter — see the GIDenoiser section.
-6. **Apply** (full-res): multiplies by the receiver albedo (albedo G-buffer, `emAlbedo`,
-   `CombineContribution::needsAlbedo`) at FULL resolution, then additive blend,
-   emissive-masked via material properties G-buffer.
+6. **Apply** (full-res): multiplies by the receiver DIFFUSE albedo (albedo G-buffer
+   `emAlbedo.rgb * emAlbedo.a`, `CombineContribution::needsAlbedo`) at FULL resolution, then
+   additive blend, emissive-masked via material properties G-buffer.
 
 **Albedo demodulation (Aug 2026):** the denoise/temporal chain carries **irradiance only**
 (`E/π`); the receiver albedo is re-applied at full resolution in the combine pass — the

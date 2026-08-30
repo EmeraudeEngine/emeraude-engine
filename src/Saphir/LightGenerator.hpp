@@ -804,27 +804,27 @@ namespace EmEn::Saphir
 			std::string albedoShaderExpression () const noexcept;
 
 			/**
-			 * @brief Returns a GLSL vec3 expression for the surface DIFFUSE albedo.
-			 * @note ⚠️ This is what the albedo G-buffer attachment carries, and it is NOT the
-			 * base color: it is the base color times the energy the diffuse lobe actually gets,
-			 * `baseColor * (1 - metalness) * (1 - transmission)`. The attachment exists for ONE
-			 * job — re-modulating a demodulated indirect-diffuse signal (SSGI, RTGI) at full
-			 * resolution — and that signal is irradiance: multiplying it by the base color lights
-			 * a metal, which has no diffuse lobe, and a transmissive surface, whose penetrating
-			 * light leaves through the other side. Same convention as NVIDIA NRD (its
-			 * demodulation albedo is `baseColor * saturate(1 - metalness)`) and as the glTF
-			 * dielectric BRDF, which mixes the diffuse lobe INTO the transmission by the
-			 * transmission factor rather than adding to it.
+			 * @brief Returns a GLSL float expression for the surface DIFFUSE WEIGHT: the share of the
+			 * incoming irradiance the diffuse lobe actually receives, `(1 - metalness) * (1 - transmission)`.
+			 * @note ⚠️ This is the ALPHA lane of the albedo G-buffer attachment, whose RGB lanes carry
+			 * the BASE colour. The attachment has two kinds of reader and the two lanes serve them
+			 * apart: the indirect-diffuse combines (SSGI, RTGI) re-modulate their demodulated
+			 * irradiance by `rgb * a` — multiplying by the base colour alone lights a metal, which has
+			 * no diffuse lobe, and a transmissive surface, whose penetrating light leaves through the
+			 * other side — while the reflections (RTR, SSR) read `rgb` as the Fresnel F0 of a metal.
+			 * Folding the weight INTO the rgb lanes (Aug 2026, for one day) zeroed that F0 and killed
+			 * every metal's reflection in both effects. Same demodulation convention as NVIDIA NRD
+			 * (`baseColor * saturate(1 - metalness)`) and as the glTF dielectric BRDF, which mixes the
+			 * diffuse lobe INTO the transmission by the transmission factor rather than adding to it.
 			 * @note Measured: a `KHR_materials_transmission` glass, whose default base color is
 			 * WHITE and which overwrites the G-buffer of everything behind it, turned into an
 			 * opaque milky plate under RTGI — it was receiving the full sky irradiance as if it
 			 * were a Lambertian sheet of paper.
-			 * @note A material declaring neither metalness nor transmission generates the very
-			 * same expression as before, hence a bit-identical shader.
+			 * @note A material declaring neither metalness nor transmission yields the literal "1.0".
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string diffuseAlbedoShaderExpression () const noexcept;
+			std::string diffuseWeightShaderExpression () const noexcept;
 
 			/**
 			 * @brief Returns a GLSL vec4 expression for the material properties G-buffer output.

@@ -470,6 +470,8 @@ void main()
 	 * The scalar lobe weight keeps feeding the premultiplied confidence pipeline; the
 	 * NORMALIZED tint rides on the traced color instead.
 	 * Computed before the trace: it applies to both hit and environment-miss paths. */
+	/* ⚠️ .rgb of the albedo attachment is the BASE colour (its .a is the diffuse weight the GI
+	 * combines apply): a diffuse albedo here reads 0 for every metal and kills its reflection. */
 	vec3 originAlbedo = texelFetch(albedoTex, fullResCoord, 0).rgb;
 	vec3 F0 = mix(vec3(0.04), originAlbedo, originMetalness);
 	float NdotV = max(dot(worldNormal, -viewDir), 0.0);

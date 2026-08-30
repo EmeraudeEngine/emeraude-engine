@@ -544,15 +544,18 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		/* Same math as the retired SSGI_Apply_FS pass: emissive surfaces reject GI
 		 * (they emit their own light), the indirect diffuse is modulated by the
-		 * receiver's albedo (albedo * irradiance — without it a coloured surface lit
-		 * only by indirect light shows the raw incoming grey light), then the user
+		 * receiver's DIFFUSE albedo = albedo G-buffer `rgb * a` (base colour times the
+		 * diffuse weight (1 - metalness)(1 - transmission) — the base colour alone would
+		 * light a metal, which has no diffuse lobe; without any albedo a coloured surface
+		 * lit only by indirect light shows the raw incoming grey light), then the user
 		 * intensity scales the additive blend. */
 		contribution.code =
 			"\tvec3 ssgiGI = texture(ssgiTex, vUV).rgb;\n"
 			"\tvec4 ssgiMp = texture(emMaterialProps, vUV);\n"
 			"\tfloat ssgiEmissive = float(uint(ssgiMp.b * 255.0) & 0xFu) / 15.0;\n"
 			"\tssgiGI *= (1.0 - ssgiEmissive);\n"
-			"\tssgiGI *= texture(emAlbedo, vUV).rgb;\n"
+			"\tvec4 ssgiAlbedo = texture(emAlbedo, vUV);\n"
+			"\tssgiGI *= ssgiAlbedo.rgb * ssgiAlbedo.a;\n"
 			"\tem_Color.rgb += ssgiGI * emDyn.ssgiDynamics0.x;\n";
 
 		return contribution;
