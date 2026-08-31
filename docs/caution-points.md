@@ -2831,6 +2831,38 @@ dereference what a resource accessor returns without checking it.**
 > place. Read WHICH symbol is undefined: if it is one you just wrote, the file never got compiled.
 > Paid while adding `Net::APIClient` (Aug 2026).
 
+### ⚠️ A third-party archive linked by RAW PATH propagates nothing — the order of `include(Setup*)` IS the link order
+
+> **Symptom:** the engine's own `.so` links fine, then the **first executable** to consume it fails
+> with `undefined reference to` symbols of a library nobody in the project calls — e.g.
+> `simdjson::internal::to_chars(...)` referenced by `libEmeraude.so`, while no engine source
+> includes simdjson at all. On projet-alpha the casualty is `projet-alpha-helper` (the CEF helper
+> process), which is linked *before* the main executable — so the build dies at 88% on the target
+> that has the least to do with the change.
+>
+> **Root cause:** most `Setup<Lib>.cmake` scripts in emeraude-base link an archive as a **raw file
+> path** (`target_link_libraries(... "${EMERAUDE_EXT_LIBS_PATH}/lib/libfastgltf.a")`), not as an
+> imported target. CMake then knows nothing about that archive's own dependencies and cannot order
+> them: the static link order is simply **the order in which the `include(Setup*)` lines appear**.
+> When an upstream bump moves a bundled dependency out into its own archive — fastgltf 1.x
+> externalising simdjson (Aug 2026) — nothing in CMake notices, and the archive is never passed to
+> any link.
+>
+> ⚠️ **The `--exclude-libs` list is NOT evidence that an archive is linked.** It is a generated
+> inventory of every archive in the ext-deps directory (`HideThirdPartyExports.cmake`); seeing
+> `libsimdjson.a` in it while the symbol is undefined is exactly the trap. Check the link line's
+> **inputs**, not the flags.
+>
+> **Fix:** add the dependency's own `Setup<Dep>.cmake` and `include()` it **after** the library that
+> needs it. Done for simdjson: `cmake/SetupSimdjson.cmake` in emeraude-base (it owns every Setup
+> script, even for libraries it does not use itself), included right after `include(SetupFastGLTF)`
+> in the engine's `CMakeLists.txt`. simdjson ships a real CONFIG package, so the imported target
+> `simdjson::simdjson` also carries `SIMDJSON_EXCEPTIONS=0` — consistent with the project's
+> `-fno-exceptions` — for free.
+>
+> ⚠️ Adding a Setup script changes the compile definitions of the whole engine target, so the next
+> build recompiles everything. That is normal, not a symptom.
+
 ### PCH shifts GCC's inlining context → `-Wstringop-overread` false positives
 
 With the shared STL precompiled header enabled (`EMERAUDE_ENABLE_PCH=ON`, applied to the engine

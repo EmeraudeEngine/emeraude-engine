@@ -168,7 +168,7 @@ endif ()
 include(InstallEmeraudeBase)
 
 # emeraude-base owns the Setup*.cmake for every ext-deps-generator library (incl. ones only
-# the engine uses: ufbx, fastgltf, taglib, bc7enc, cpu_features, hwloc, libvpx). Add its
+# the engine uses: ufbx, fastgltf, simdjson, taglib, bc7enc, cpu_features, hwloc, libvpx). Add its
 # cmake/ dir so the engine can include(Setup<Lib>) from there.
 list(APPEND CMAKE_MODULE_PATH ${EMERAUDE_BASE_CMAKE_DIR})
 
@@ -384,6 +384,8 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupReproc) # Using add_subdirectory()
 
 	include(SetupFastGLTF)
+
+	include(SetupSimdjson) # JSON parsing — fastgltf's backend, MUST come after SetupFastGLTF (static link order)
 
 	include(SetupUFBX) # FBX parsing library
 
