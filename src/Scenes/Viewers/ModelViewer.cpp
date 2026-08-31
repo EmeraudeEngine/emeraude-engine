@@ -31,18 +31,24 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <ranges>
 #include <string>
 #include <thread>
 
 /* Local inclusions. */
+#include "Animations/AnimationClipResource.hpp"
+#include "Animations/SkeletalAnimator.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "IO/IO.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/NodeAnimation.hpp"
 #include "Scenes/Component/Visual.hpp"
 #include "Scenes/Loaders/Interface.hpp"
 #include "Scenes/Loaders/LoaderOptions.hpp"
@@ -61,6 +67,49 @@ namespace EmEn::Scenes::Viewers
 	using namespace Base;
 	using namespace Base::Math;
 	using namespace Graphics;
+
+	namespace
+	{
+		/**
+		 * @brief Visits every component of a viewer scene, static entities and node hierarchy alike.
+		 * @warning The walk holds each entity's component mutex, which is NOT recursive: a visitor
+		 * must never call back into the entity's component API. Driving an animator is safe, adding
+		 * or enabling a component is not.
+		 */
+		void
+		forEachSceneComponent (const Scene & scene, const std::function< void (Component::Abstract &) > & visit) noexcept
+		{
+			scene.forEachStaticEntities([&visit] (const StaticEntity & entity) {
+				const_cast< StaticEntity & >(entity).forEachComponent([&visit] (Component::Abstract & component) {
+					visit(component);
+
+					return true;
+				});
+
+				return true;
+			});
+
+			const std::function< void (const std::shared_ptr< Node > &) > walk = [&visit, &walk] (const std::shared_ptr< Node > & node) {
+				if ( node == nullptr )
+				{
+					return;
+				}
+
+				node->forEachComponent([&visit] (Component::Abstract & component) {
+					visit(component);
+
+					return true;
+				});
+
+				for ( const auto & child : node->children() | std::views::values )
+				{
+					walk(child);
+				}
+			};
+
+			walk(scene.root());
+		}
+	}
 
 	bool
 	ModelViewer::handlesFile (const Manager & sceneManager, const std::filesystem::path & filepath) noexcept
@@ -119,6 +168,46 @@ namespace EmEn::Scenes::Viewers
 
 				return nullptr;
 			}
+
+			/* ⚠️ The state the asset APPEARS in is decided HERE and nowhere else. A skeletal animator is
+			 * created LAZILY, on the Visual component's first logic cycle, so nothing built at scene time
+			 * can stop one that does not exist yet — the intent has to be stated on the RENDERABLE. The
+			 * viewer shows the asset at rest and lets the user walk the clips from there.
+			 * ⚠️ This mutates a CACHED resource: the flag survives for every later instance of the same
+			 * asset in this session, viewer or not. */
+			for ( const auto & meshDescriptor : sceneData.meshes )
+			{
+				if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(meshDescriptor.renderable.get()) )
+				{
+					skeletalData->enableAutoPlayFirstClip(false);
+				}
+			}
+
+			/* ⚠️ Both lists are read and DEDUPLICATED by name: one glTF animation driving skin joints AND
+			 * plain nodes comes out of the loader SPLIT into two clips sharing a name, and the user must
+			 * see a single entry for it — applyAnimation() then drives whichever evaluators answer.
+			 * ⚠️ What is kept is the CLIP's own name, never the resource key: the loaders prefix their
+			 * keys ("FBX:<stem>/Animation/<clip>") while both animators index on clip().name(). Feeding a
+			 * resource key to play() looks up something that never existed and returns false, silently. */
+			const auto collectNames = [this] (const auto & clips) {
+				for ( const auto & clip : clips )
+				{
+					if ( clip == nullptr )
+					{
+						continue;
+					}
+
+					const auto & clipName = clip->clip().name();
+
+					if ( std::ranges::find(m_clipNames, clipName) == m_clipNames.end() )
+					{
+						m_clipNames.push_back(clipName);
+					}
+				}
+			};
+
+			collectNames(sceneData.animationClips);
+			collectNames(sceneData.nodeAnimationClips);
 
 			SceneDataConsumer consumer;
 
@@ -358,6 +447,72 @@ namespace EmEn::Scenes::Viewers
 		}
 
 		scene.setEnvironmentCubemap(cubemap);
+	}
+
+
+	void
+	ModelViewer::applyAnimation (Scene & scene, const std::vector< std::string > & clipNames, size_t animationIndex) noexcept
+	{
+		/* ⚠️ Index 0 is NO animation — the rest pose — and a cycle wraps back to it. */
+		const auto stopping = animationIndex == 0 || clipNames.empty();
+		const auto clipName =
+			stopping ?
+			std::string{} :
+			clipNames[(animationIndex - 1) % clipNames.size()];
+
+		/* An asset may need EITHER evaluator, or BOTH at once. Counting what was ASKED against what
+		 * ANSWERED is what turns a silent no-op into a diagnosable one.
+		 * ⚠️ The two counters are NOT redundant: a Visual has no animator until its first logic cycle,
+		 * so nothing being asked is legitimate right after a load — warning on `answered == 0` alone
+		 * would cry wolf every time. */
+		size_t asked = 0;
+		size_t answered = 0;
+
+		forEachSceneComponent(scene, [&clipName, stopping, &asked, &answered] (Component::Abstract & component) {
+			if ( auto * visual = dynamic_cast< Component::Visual * >(&component) )
+			{
+				/* ⚠️ May legitimately be null — see above. Index 0 needs no animator anyway: the
+				 * renderable's auto-play flag already leaves a fresh asset at rest. */
+				if ( auto * animator = visual->skeletalAnimator() )
+				{
+					asked++;
+
+					if ( stopping )
+					{
+						animator->stop();
+
+						answered++;
+					}
+					else if ( animator->play(clipName) )
+					{
+						answered++;
+					}
+				}
+
+				return;
+			}
+
+			if ( auto * nodeAnimation = dynamic_cast< Component::NodeAnimation * >(&component) )
+			{
+				asked++;
+
+				if ( stopping )
+				{
+					nodeAnimation->stop();
+
+					answered++;
+				}
+				else if ( nodeAnimation->play(clipName) )
+				{
+					answered++;
+				}
+			}
+		});
+
+		if ( !stopping && asked > 0 && answered == 0 )
+		{
+			TraceWarning{ClassId} << "None of the " << asked << " evaluator(s) reached knows the clip '" << clipName << "' !";
+		}
 	}
 
 	bool

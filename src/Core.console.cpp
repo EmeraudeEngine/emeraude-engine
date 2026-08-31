@@ -162,6 +162,23 @@ namespace EmEn
 			return true;
 		}, "Opens files as if they were dropped onto the window. Usage: openFiles(filepath[, filepath, ...])");
 
+		this->bindCommand("cycleAnimation", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* NOTE: The remote counterpart of the space bar, calling the very same code. It exists
+			 * because a keyboard event injected through Input::Manager walks the keyboard-listener
+			 * list and never reaches a Core-level binding — without this, the cycle would be
+			 * unreachable from the console and therefore untestable remotely. */
+			if ( !this->cycleViewerAnimation() )
+			{
+				outputs.emplace_back(Severity::Error, "Nothing to cycle: the model viewer must be the active scene and its asset must carry animations.");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, "Animation cycled.");
+
+			return true;
+		}, "Walks the animations of the model shown by the viewer: OFF -> clip 1 -> ... -> OFF (same as the space bar).");
+
 		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");
 

@@ -304,6 +304,33 @@ Viewer policy: a regular active scene is **never disturbed** (notification `A sc
 the file was ignored.`); an active `+ImageViewer`/`+ModelViewer` is **replaced** by the new drop.
 In the viewers: left-drag orbits around the content, mouse wheel dollies in/out.
 
+#### `+ModelViewer` animations — OFF on arrival, space bar walks them (Aug 2026)
+
+An animated asset opens **at rest**, never playing: `ModelViewer::createScene()` clears
+`enableAutoPlayFirstClip()` on every renderable carrying skeletal data, and collects the clip
+names. The **space bar** then walks the cycle `OFF -> clip 1 -> ... -> clip N -> OFF`, so a full
+turn always returns to the rest pose. `Core.cycleAnimation()` is the remote equivalent, calling
+the very same `Core::cycleViewerAnimation()`.
+
+⚠️ **The console command is not a convenience, it is the only remote way in.** A keyboard event
+injected through `Input::Manager::injectKeyEvent()` walks the keyboard-listener list and **never
+reaches a Core-level binding**, so `keyPress(32, 0)` executes and cycles nothing, silently.
+
+⚠️ **`enableAutoPlayFirstClip(false)` mutates a CACHED resource**: the flag survives for every
+later instance of the same asset in the session, viewer or not. An asset opened in the viewer and
+then loaded by a demo appears in its bind pose.
+
+⚠️ The space bar sits in Core's **default** key behaviors, after `onCoreKeyRelease()`: an
+application or demo binding the space bar keeps it, and the cycle is a no-op unless
+`+ModelViewer` is the active scene. Note that Core already owns **Shift**+KeyPad1/2/3 (gamma
+presets 0.8/1.0/1.2) — those are unrelated and unmodified.
+
+⚠️ Measuring "is it animating?" on raw pixels **does not discriminate**: the viewer camera runs
+automatic exposure and a temporal chain, so two consecutive frames always differ (measured: 10.65 %
+of pixels change with the animation OFF). Compare **heavily downsampled** frames instead — the
+sensor noise is high-frequency and global, a moving limb is low-frequency and local. On a 96x54
+reduction the noise floor was 144/5184 cells against 736/5184 for a playing clip.
+
 #### `+ModelViewer` environment — three settings, and two of them are INDEPENDENT axes
 
 | setting | default | what it decides |

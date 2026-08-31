@@ -416,6 +416,17 @@ namespace EmEn
 			void openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
 
 			/**
+			 * @brief Walks the animation clips of the asset shown by the model viewer.
+			 * @details The cycle is OFF -> clip 1 -> ... -> clip N -> OFF, so a full turn always comes
+			 * back to the rest pose. Bound to the space bar, and exposed to the console under the same
+			 * name so the path can be exercised remotely — keyboard events injected through
+			 * Input::Manager never reach a Core-level binding.
+			 * @note Does nothing unless the model viewer scene is the active one.
+			 * @return bool True when the cycle moved, false when there is nothing to cycle.
+			 */
+			bool cycleViewerAnimation () noexcept;
+
+			/**
 			 * @brief Suspends engine execution to run an external system command.
 			 * @details Pauses all engine processing, executes the specified command through
 			 * the system shell, then resumes engine operation. Useful for launching external
@@ -1743,6 +1754,8 @@ namespace EmEn
 			bool m_resetSettingsOnNewVersion{false}; ///< Reset settings when the file was written by an older engine version. @see resetSettingsIfOutdated()
 			bool m_pausable{false}; ///< Whether pause is currently allowed.
 			bool m_showHelp{false}; ///< Help display requested via --help.
+			std::vector< std::string > m_viewerClipNames; ///< Clips of the asset in the model viewer, empty otherwise.
+			size_t m_viewerAnimationIndex{0}; ///< Position in the viewer animation cycle, 0 being the rest pose.
 			bool m_preventDefaultKeyBehaviors{false}; ///< Disable Core's default key handling.
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.

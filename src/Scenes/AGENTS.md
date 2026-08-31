@@ -251,7 +251,14 @@ ctest -R Scenes
 - `NodeController.cpp/.hpp` - Keyboard/gamepad debug node manipulator (value member of Scene)
 - `OrbitController.cpp/.hpp` - Pointer-driven camera orbit around a fixed target (value member of Scene). See "Controllers"
 - `Viewers/ImageViewer.cpp/.hpp` - Builds the `+ImageViewer` scene (unlit picture quad). See "Viewer Scenes"
-- `Viewers/ModelViewer.cpp/.hpp` - Builds the `+ModelViewer` scene (composite asset showcase). See "Viewer Scenes"
+- `Viewers/ModelViewer.cpp/.hpp` - Builds the `+ModelViewer` scene (composite asset showcase). See "Viewer Scenes".
+  Also owns the viewer's animation contract: the asset opens **at rest** (`enableAutoPlayFirstClip(false)`
+  on every skeletal renderable), `clipNames()` hands the deduplicated clip list to `Core`, and the static
+  `applyAnimation(scene, clipNames, index)` drives **whichever evaluator answers** — index 0 being the rest
+  pose. ⚠️ The names collected are the CLIPS' own names (`clip().name()`), never the loaders' prefixed
+  resource keys: feeding a key to `play()` looks up something that never existed and returns false, silently.
+  ⚠️ Both `animationClips` and `nodeAnimationClips` are read and deduplicated by name — one glTF animation
+  driving skin joints AND plain nodes comes out of the loader SPLIT into two clips sharing a name
 - `Node.cpp/.hpp` - Hierarchical dynamic entity (tree)
 - `NodeCrawler.hpp` - Header-only tree iterator. ⚠️ **Never yields the base node** — see "Node Tree Iteration — NodeCrawler Contract"
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)

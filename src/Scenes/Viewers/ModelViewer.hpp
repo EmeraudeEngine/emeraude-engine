@@ -30,6 +30,8 @@
 /* STL inclusions. */
 #include <filesystem>
 #include <memory>
+#include <string>
+#include <vector>
 
 /* Forward declarations. */
 namespace EmEn
@@ -105,6 +107,33 @@ namespace EmEn::Scenes::Viewers
 			[[nodiscard]]
 			std::shared_ptr< Scene > createScene (const std::filesystem::path & filepath) noexcept;
 
+			/**
+			 * @brief Returns the animation clip names carried by the asset of the last createScene().
+			 * @details Deduplicated by name across both clip lists, in load order. An empty list means
+			 * the asset carries no animation at all.
+			 * @note The names are the CLIPS' own names, ready to be fed to applyAnimation().
+			 * @return const std::vector< std::string > &
+			 */
+			[[nodiscard]]
+			const std::vector< std::string > &
+			clipNames () const noexcept
+			{
+				return m_clipNames;
+			}
+
+			/**
+			 * @brief Applies an animation index to an already built viewer scene.
+			 * @details Index 0 is NO animation — the rest pose — so a cycle walks 0..N and wraps back
+			 * to 0. Any other index selects clipNames[index - 1].
+			 * @note An asset may need EITHER evaluator, or BOTH at once when one glTF animation drives
+			 * skin joints and plain nodes together, so every component that answers is driven.
+			 * @param scene A reference to the viewer scene.
+			 * @param clipNames A reference to the clip names collected at import time.
+			 * @param animationIndex The index to apply, 0 being the rest pose.
+			 * @return void
+			 */
+			static void applyAnimation (Scene & scene, const std::vector< std::string > & clipNames, size_t animationIndex) noexcept;
+
 		private:
 
 			/**
@@ -158,5 +187,6 @@ namespace EmEn::Scenes::Viewers
 			Resources::Manager & m_resourceManager;
 			Manager & m_sceneManager;
 			Settings & m_settings;
+			std::vector< std::string > m_clipNames;
 	};
 }

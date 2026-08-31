@@ -1899,7 +1899,60 @@ namespace EmEn
 			return true;
 		}
 
-		this->notifyUser(BlobTrait{} << "Viewing '" << IO::toU8String(filepath.filename()) << "'.");
+		/* NOTE: The asset was imported at rest (ModelViewer disables the auto-play), so the cycle
+		 * starts on its OFF position and the space bar walks from there. */
+		m_viewerClipNames = viewer.clipNames();
+		m_viewerAnimationIndex = 0;
+
+		BlobTrait notice;
+		notice << "Viewing '" << IO::toU8String(filepath.filename()) << "'";
+
+		if ( m_viewerClipNames.empty() )
+		{
+			notice << '.';
+		}
+		else
+		{
+			notice << " (" << m_viewerClipNames.size() << " animation(s), space bar to cycle).";
+		}
+
+		this->notifyUser(notice);
+
+		return true;
+	}
+
+	bool
+	Core::cycleViewerAnimation () noexcept
+	{
+		std::shared_ptr< Scenes::Scene > viewerScene;
+
+		m_sceneManager.withSharedActiveScene([&viewerScene] (const std::shared_ptr< Scenes::Scene > & scene) {
+			if ( scene->name() == Viewers::ModelViewer::SceneName )
+			{
+				viewerScene = scene;
+			}
+		}, true);
+
+		if ( viewerScene == nullptr )
+		{
+			return false;
+		}
+
+		if ( m_viewerClipNames.empty() )
+		{
+			this->notifyUser("This model carries no animation.");
+
+			return false;
+		}
+
+		/* NOTE: 0 is the rest pose, so the cycle walks 0..N and wraps back to 0. */
+		m_viewerAnimationIndex = (m_viewerAnimationIndex + 1) % (m_viewerClipNames.size() + 1);
+
+		Viewers::ModelViewer::applyAnimation(*viewerScene, m_viewerClipNames, m_viewerAnimationIndex);
+
+		this->notifyUser(m_viewerAnimationIndex == 0 ?
+			std::string{"Animation: none (rest pose)"} :
+			"Animation " + std::to_string(m_viewerAnimationIndex) + '/' + std::to_string(m_viewerClipNames.size()) + ": " + m_viewerClipNames[m_viewerAnimationIndex - 1]);
 
 		return true;
 	}
@@ -2160,6 +2213,11 @@ namespace EmEn
 					this->stop();
 
 					return true;
+
+				/* NOTE: Reached only when the application consumed nothing, so a demo binding the space
+				 * bar keeps it. The cycle itself is a no-op unless the model viewer is the active scene. */
+				case KeySpace :
+					return this->cycleViewerAnimation();
 
 				default:
 					return false;
