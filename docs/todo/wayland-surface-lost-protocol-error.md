@@ -34,7 +34,7 @@ The protocol rule (`linux-drm-syncobj-v1`): a client must set the acquire and re
 and only if a non-null buffer is attached in the SAME surface commit**. So the violation is an
 EXTRA `wl_surface_commit()` carrying the driver's pending sync-point state but no buffer — i.e. it
 comes from whoever else commits that surface. That is **GLFW**: its Wayland backend
-(3.4-108-g4263be2a here) calls `wl_surface_commit` at 11 sites and drives libdecor through 74 call
+(3.4-108-g4263be2a at the time of that measurement — the pin has since moved, see below) calls `wl_surface_commit` at 11 sites and drives libdecor through 74 call
 sites (resize, fractional scale, opaque region, decoration updates), which is exactly why the
 failure is intermittent.
 
@@ -61,3 +61,12 @@ that reading next to the error through `vkResultDiagnosticHint()`.
   says the FREQUENCY is unchanged, and that A/B is what settles it.
 - [ ] **(3) Only then** consider a GLFW-side fix/update; a vendored-submodule bug is fixed
   upstream, never worked around here.
+  ⚠️ **The GLFW pin MOVED on 2026-08-31**, independently of this item: 3.4-108-g4263be2a →
+  **3.5.1** + the custom patch (`f4360311`, see [`../glfw-fork.md`](../glfw-fork.md)). Two upstream
+  commits in that delta touch code, and one of them is in this item's own code path:
+  `b7ef2919` *"Wayland: Fix rounding of fractional scale sizes"* makes `resizeFramebuffer()` round
+  the fractional-scale framebuffer size (`(w * num + 60) / 120`) instead of truncating it
+  (upstream #2713 / #2810). **This is NOT a fix for this defect** — the protocol violation is an
+  extra buffer-less commit, not a wrong size — but it does mean **every measurement above was taken
+  on a different GLFW**, and the 1-in-8 frequency has to be re-established on the new pin before it
+  is compared to anything. Step (1) is still the next action.

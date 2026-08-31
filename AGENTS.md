@@ -373,6 +373,7 @@ how to add new commands.
 -   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
 -   **Scene Loaders & OpenUSD:** [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) (**design; USD not yet implemented** — the `SceneData` extension to lights/cameras/instancers, tinyusdz, and the **absorption rule**: nothing USD survives `load()`, a missing capability is added to `Scenes`. Also defines the Intel Jungle Ruins scene as the engine's **GOLD GOAL** — the owner's *Saint Graal*, the scene whose completion says the runtime has arrived, and the benchmark it is measured against until then. Read before touching any loader or `SceneData`).
 -   **Windows Export API:** [`docs/windows-export-api.md`](docs/windows-export-api.md) (`EMEN_LEAN_API` / `EMEN_API` — required on MSVC; **read § 2 before annotating**: which of the two macros a class gets decides whether a consumer links on Windows).
+-   **GLFW Fork:** [`docs/glfw-fork.md`](docs/glfw-fork.md) (`dependencies/glfw` is the fork **EmeraudeEngine/glfw**, not upstream — one patch (`glfwGetKeyboardState()` / `glfwGetMouseButtonState()`, consumed behind `GLFW_EM_CUSTOM_VERSION`) and the `update-glfw.py` procedure that carries it forward. ⚠️ An unpatched GLFW still compiles through the `#else` fallback, so **a successful build is not proof the patch survived** — compare patch-ids, never SHAs).
 
 > [!CRITICAL]
 > **Maintenance:** AI documentation is **MORE IMPORTANT than the code itself.** A code change
@@ -520,3 +521,4 @@ All outbound references from this file, grouped by type.
 | Toolkit System | [`docs/toolkit-system.md`](docs/toolkit-system.md) |
 | Scene Loaders & OpenUSD | [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) |
 | Windows Export API | [`docs/windows-export-api.md`](docs/windows-export-api.md) |
+| GLFW Fork | [`docs/glfw-fork.md`](docs/glfw-fork.md) |
