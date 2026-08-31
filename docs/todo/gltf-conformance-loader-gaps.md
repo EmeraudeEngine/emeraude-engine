@@ -11,10 +11,14 @@ tags: [gltf, material, measured]
 
 # glTF conformance — the loader gaps the bench located
 
+> ⚠️ **Location changed 2026-08-31**: `glTF-Sample-Assets` is now a **submodule of projet-alpha**
+> (`projet-alpha/dependencies/glTF-Sample-Assets`), not a directory under the engine's. Test data
+> belongs with the testbed. It is a **partial clone** (`blob:none`, 201 MB against 1.7 GB upstream)
+> — do not re-clone it plainly.
+
 ## Why
 
-Bench re-run on **2026-08-27** against `glTF-Sample-Assets` @ `2bac6f8` (19 models, vendored in
-`dependencies/`), 44 captures, **zero VUID and zero `VK_ERROR`** with the Khronos validation layer
+Bench re-run on **2026-08-27** against `glTF-Sample-Assets` @ `2bac6f8` (19 models), 44 captures, **zero VUID and zero `VK_ERROR`** with the Khronos validation layer
 active: **7 PASS / 10 FAIL / 2 undecided** — the same headline as the 2026-08-25 run, but one gap
 is closed and two failures are now attributed to a cause that is not this loader.
 

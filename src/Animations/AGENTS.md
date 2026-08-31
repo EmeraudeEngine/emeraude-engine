@@ -155,7 +155,9 @@ the scene was built. A caller building a scene therefore has *nothing to call `p
 on*, and the historical default (auto-play clip 0) was unreachable to override. Both intents live on
 `Graphics::Renderable::SkeletalDataTrait`:
 
-- `enableAutoPlayFirstClip(false)` — the asset appears in its **bind pose**.
+- `enableAutoPlayFirstClip(false)` — the asset appears in its **bind pose**. This is what
+  `Scenes::Viewers::ModelViewer` sets on every skeletal renderable it imports, so a dropped model
+  opens at rest and the space bar walks its clips (engine `docs/ai-runtime-control.md` § 3).
 - `setAutoPlayClipName("Walk")` — the asset appears **already playing** that clip (implies auto-play on).
 
 ⚠️ These mutate a **cached resource**: the flag survives for every later instance of the same asset.
@@ -235,6 +237,16 @@ Both `SkeletonResource` and `AnimationClipResource` are managed resources:
 - `enableAutoPlayFirstClip(bool)` / `setAutoPlayClipName(name)` / `isAutoPlayingFirstClip()` / `autoPlayClipName()` — what the asset shows when it appears; see the lazy-init section above
 
 ### Remaining Work
+- **Retargeting** — playing a clip authored for ANOTHER skeleton. Absent today, which locks the
+  engine out of every mocap library and every AI motion source. The mathematics, a measured worked
+  example (Kimodo SOMA-30 onto the Mixamo Paladin) and the traps are in
+  [`docs/animation-retargeting.md`](../../docs/animation-retargeting.md); the open work is
+  [`docs/todo/skeletal-animation-retargeting.md`](../../docs/todo/skeletal-animation-retargeting.md).
+  ⚠️ `LeftLeg` denotes the THIGH in one common skeleton and the SHIN in another — a by-name joint
+  mapping, which `FBXLoader::loadAnimationClipsOnly()` already performs elsewhere, breaks the legs
+  in silence.
+- **Clip serialization** — `AnimationClipResource` loads from a path, a JSON value or memory, but
+  nothing writes one back: a clip built at runtime does not survive the session.
 - Animation blending (crossfade, layered, additive)
 - Animation state machine / controller
 - Timeline system (multi-track orchestration for cutscenes)

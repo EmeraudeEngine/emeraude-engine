@@ -367,6 +367,8 @@ how to add new commands.
 -   **Reflection Pipeline:** [`docs/reflection-pipeline.md`](docs/reflection-pipeline.md) (**the seven reflection paths and how they arbitrate** — reflectivity nibble, normals-buffer alpha packing, `mix()` composite, skinned-geometry BLAS refit. Read before touching SSR/RTR/IBL, any `Reflection` material component, or anything skinned that must appear in ray-traced effects).
 -   **Post-Processing Pipeline:** [`docs/post-processing-pipeline.md`](docs/post-processing-pipeline.md) (frame structure, per-effect pass counts, grab-pass batched-barrier contract, the three swap-chain render passes, the owner-approved pass-merging roadmap. Read before touching `PostProcessor`, `GrabPass`, any `Effects/Framebuffer/*` effect or the swap-chain passes).
 -   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
+-   **Animation Retargeting:** [`docs/animation-retargeting.md`](docs/animation-retargeting.md) (playing a clip authored for ANOTHER skeleton — the mathematics, a measured worked example, and the naming traps that break legs in silence. **The engine cannot do this today.** Read before touching any cross-skeleton animation or mocap import).
+-   **Text-to-Motion (Kimodo):** [`docs/text-to-motion-kimodo.md`](docs/text-to-motion-kimodo.md) (evaluation of an AI motion source: licences, measured cost, and what it cannot do).
 -   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
 -   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
 -   **Scene Loaders & OpenUSD:** [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) (**design; USD not yet implemented** — the `SceneData` extension to lights/cameras/instancers, tinyusdz, and the **absorption rule**: nothing USD survives `load()`, a missing capability is added to `Scenes`. Also defines the Intel Jungle Ruins scene as the engine's **GOLD GOAL** — the owner's *Saint Graal*, the scene whose completion says the runtime has arrived, and the benchmark it is measured against until then. Read before touching any loader or `SceneData`).
@@ -503,6 +505,8 @@ All outbound references from this file, grouped by type.
 | Tracer System | [`docs/tracer-system.md`](docs/tracer-system.md) |
 | C++ Conventions | [`docs/cpp-conventions.md`](docs/cpp-conventions.md) |
 | Coordinate System | [`docs/coordinate-system.md`](docs/coordinate-system.md) |
+| Animation Retargeting | [`docs/animation-retargeting.md`](docs/animation-retargeting.md) |
+| Text-to-Motion (Kimodo) | [`docs/text-to-motion-kimodo.md`](docs/text-to-motion-kimodo.md) |
 | Graphics System | [`docs/graphics-system.md`](docs/graphics-system.md) |
 | Scene Graph Architecture | [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) |
 | Multi-Scene Resource Ownership | [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) |
