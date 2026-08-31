@@ -41,11 +41,15 @@ It splits into two very different builds:
 only, and its output is 16 KB and reusable forever.
 
 ⚠️⚠️ **This constrains [`skeletal-animation-retargeting.md`](skeletal-animation-retargeting.md),
-which is built first.** Under A the retargeter can be a tool — allocate freely, take its time.
-Under B the motion arrives during play and the retargeting runs with it: hot code, allocation
-budget, a ground-contact pass that fits in a frame. Those are different classes of code, and
-writing the tool then discovering the runtime need is a rewrite, not an adaptation. **Undecided as
-of 2026-08-31.**
+which is built first.** Under A the retargeter can be a tool. Under B the motion arrives during
+play and the retargeting runs with it — callable off the main loop, allocation-disciplined. Writing
+the tool then discovering the runtime need is a rewrite, not an adaptation.
+
+**Settled 2026-08-31: the owner wants B**, so the retargeter is written to runtime constraints. B
+is measured as viable: 1.6 s for 4 s of motion at 20 diffusion steps, cost strictly linear in the
+step count, encoder entirely out of the runtime (a 16 KB embedding per prompt). Numbers and the two
+caveats — unmeasured quality at 20 steps, and 83 % GPU contention with the renderer — are in
+[`../text-to-motion-kimodo.md`](../text-to-motion-kimodo.md) § 3.
 
 ## Blocked on
 
@@ -56,7 +60,19 @@ retargeting there is nothing to play the motion on. The cost split is roughly **
 
 ## What remains
 
-- [ ] Optional CMake dependency on kimodo.cpp, defaulted **off**, dev builds only.
+- [ ] Optional CMake dependency on kimodo.cpp, defaulted **off**.
+- [ ] **A CEF dev-mode authoring tool in projet-alpha** (owner request, 2026-08-31): prompt →
+      motion → the character, driven from the web UI rather than a console command. ⚠️ Prerequisite
+      on this workstation: `chrome-sandbox` is **not SUID**, so CEF has never run here — every
+      session so far used `--disable-cef`. Fix with
+      `sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox` in the build's
+      `Release/` directory. The UI contract lives in projet-alpha, `docs/cef-integration.md` and
+      `docs/ui-web-template.md` — named rather than linked, because this repository is clonable on
+      its own and a cross-repository relative path would dangle.
+- [ ] **Judge quality against step count** — generate one prompt at 100 / 50 / 20 steps and compare.
+      Time is measured, quality is not, and it decides whether the cheap end of the dial is usable.
+- [ ] Work around the dead `kimodo_runtime_options` (§ 6.3): device selection currently goes
+      through the `KIMODO_BACKEND` environment variable only.
 - [ ] Console command generating a clip and injecting it through the resource manager.
 - [ ] Decide how the 15 GB text encoder is provisioned on a developer machine (it is **not** a
       submodule-sized dependency; the 1.13 GB motion denoiser is).

@@ -24,6 +24,17 @@ list, which mentions blending, a state machine and a timeline.
 **Owner decision (2026-08-30): a chantier of its own, generic and measured first**, not a
 by-product of any particular motion source. It pays for itself independently of what feeds it.
 
+**Owner direction (2026-08-31): write it to RUNTIME constraints.** The stated ambition is an engine
+that generates animation during play, so the retargeter must be callable while the game runs.
+
+⚠️ **"Runtime" here does NOT mean per-frame, and the distinction sets the bar.** One generation
+produces a whole clip — seconds of motion at once — so retargeting runs **once per clip, on a
+background thread**, then the result is played like any other animation. The requirement is
+therefore *callable during play without stalling the loop*: allocation discipline, thread safety,
+no hidden blocking. It is not extreme micro-optimisation. Measured context: generating 4 s of
+motion costs 1.6 s at 20 diffusion steps (see [`../text-to-motion-kimodo.md`](../text-to-motion-kimodo.md)),
+so the retarget is a small fraction of a cost that is already asynchronous.
+
 ## What remains
 
 A prototype in Python proved the whole thing end to end and produced every number the C++ needs.

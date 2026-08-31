@@ -65,7 +65,48 @@ naive reading — "an 8 Md parameter model needs 16 GB of VRAM" — is wrong her
 premature "CPU mandatory" conclusion during this evaluation.
 
 The encoder is an **encoder**: one forward pass and a mean pooling, not autoregressive generation.
-Its cost is dominated by reading 15 GB from disk, not by compute.
+Its cost is dominated by reading 15 GB from disk, not by compute. Measured on its own with
+`kmd-encode`: **4.88 s**, producing exactly 16384 bytes — 4096 floats, per the API contract.
+
+### Denoiser only — the number that decides runtime generation (measured 2026-08-31)
+
+Strip the encoder (`kimodo_generate_embedding`, upstream's documented integration boundary) and
+only the ~1.1 GB motion denoiser runs. For **120 frames × 30 joints** — four seconds of motion —
+on an RTX 3070 Ti:
+
+| DDIM steps | denoiser time | per step |
+|---|---|---|
+| 100 | **9.7 s** | 96 ms |
+| 50 | **4.7 s** | 93 ms |
+| 20 | **1.6 s** | 77 ms |
+
+**The cost is strictly linear in the step count**, so the step count is a dial, not a fate. CPU
+instead of Vulkan costs 633 ms/step — **3.4× slower**.
+
+**Verdict for generating during play: viable if asynchronous.** At 20 steps, 1.6 s buys 4 s of
+motion — generate on a background thread at spawn behind a fallback animation, or pre-fill a pool
+at scene load. It is not instantaneous and never will be; it does not have to be.
+
+⚠️ **Two things this measurement does NOT say.**
+1. **How 20 steps looks.** Time was measured, quality was not. That is a visual judgement, unmade.
+2. **It was measured on an idle GPU.** In game, the same card is drawing the scene, and generation
+   takes **83 % of it** (2911 MiB). It will cost frames. A loading screen, or spreading the work,
+   is likely required.
+
+### ⚠️⚠️ Measurement trap: read the backend capability line, every time
+
+A hand-linked benchmark binary reported **188 ms/step**; the project's own CMake-built binary does
+the same work at **95 ms/step**. The tell was in ggml's own banner:
+
+```
+hand-linked  : RTX 3070 Ti | fp16: 0 | matrix cores: none
+kmd-generate : RTX 3070 Ti | fp16: 1 | matrix cores: NV_coopmat2
+```
+
+Same GPU, same library file, **half the throughput** — the manual link lost fp16 and the
+cooperative-matrix path. A 2× pessimistic figure was one step away from being reported as fact.
+**Any GPU timing must be accompanied by the backend's capability line**, or it measures an unknown
+configuration.
 
 ## 4. Motion quality, measured
 
@@ -107,6 +148,13 @@ upstream:
 2. **`CMakeLists.txt`** defines `KIMODO_HAVE_GGML_VULKAN=1` **unconditionally** on `kmd-encode`,
    `kmd-sample-fixture` and the parity targets. Worked around by building only the needed targets.
 
+3. **`kimodo_model_load()` ignores every field of `kimodo_runtime_options`.** It validates
+   `options->size` and then passes only the two model paths through: `device`, `threads` and
+   `backend_dir` are declared in the public C API and **dead** (`src/capi.cpp:26-36`). A caller
+   asking for `KIMODO_DEVICE_CPU` gets Vulkan anyway. The only real backend lever is the
+   `KIMODO_BACKEND` environment variable, read by a helper deep in the library. **This is the one
+   that matters for engine integration**: a host cannot choose its device programmatically.
+
 Building with Vulkan additionally needs `glslc` (Debian: `glslc`) and a `SPIRV-Headers` CMake
 package. The latter is already produced by this workstation's `ext-deps-generator`; point CMake at
 it with `-DCMAKE_PREFIX_PATH=<prefix> -DCMAKE_CXX_FLAGS=-I<prefix>/include` — the config file alone
@@ -129,7 +177,16 @@ mannequins/            the produced glTF
 ```
 tools/                 the retargeting prototype and its README
 tools/0001-guard-vulkan-calls-in-the-text-encoder.patch
+tools/kmd-bench-embedding.c   the denoiser-only benchmark (exercises the C ABI)
 ```
+
+`kmd-bench-embedding.c` is the only thing here that goes through `libkimodo`'s C API rather than
+the CLI. Its build line is in its own header comment. ⚠️ Built that way it loses fp16/coopmat2 —
+see the measurement trap above — so **cross-check its absolute numbers against `kmd-generate`**;
+its value is the per-step *shape*, not the per-step *value*.
+
+⚠️ `strtok` is not reentrant and something inside the generation path calls it: parsing a list with
+it around a `kimodo_generate_*` call silently truncates the loop to one entry.
 
 ⚠️ **The tracked tree is kept pristine on upstream.** The Vulkan-guard fix of § 6 is NOT applied in
 place — it sits beside the tools as a patch, to be applied before a CPU-only build (a Vulkan build
