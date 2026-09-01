@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -41,7 +42,6 @@
 
 namespace EmEn
 {
-	class Settings;
 	class Window;
 }
 
@@ -50,11 +50,19 @@ namespace EmEn
 	/** @brief Alias for notification icon from PlatformSpecific::Desktop. */
 	using NotificationIcon = PlatformSpecific::Desktop::NotificationIcon;
 
+	/** @brief The OS-level notification authorization status. */
+	enum class NotificationPermission : uint8_t
+	{
+		NotDetermined,
+		Granted,
+		Denied
+	};
+
 	/**
 	 * @brief The system notification service.
 	 * @note This service provides cross-platform OS-level notifications (system tray notifications).
 	 * @note Uses portable-file-dialogs library for cross-platform support.
-	 * @note Permission is managed via Settings with key "Notifications/Permission".
+	 * @note Permission is asked to the operating system, never persisted.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
 	class EMEN_LEAN_API SystemNotification final : public ServiceInterface
@@ -66,13 +74,11 @@ namespace EmEn
 
 			/**
 			 * @brief Constructs the system notification service.
-			 * @param settings A reference to the application settings.
 			 * @param window A reference to the parent window.
 			 */
 			explicit
-			SystemNotification (Settings & settings, Window & window) noexcept
+			SystemNotification (Window & window) noexcept
 				: ServiceInterface{ClassId},
-				m_settings{settings},
 				m_window{window}
 			{
 
@@ -80,8 +86,7 @@ namespace EmEn
 
 			/**
 			 * @brief Shows a system notification.
-			 * @note If permission is "ask", shows a permission dialog first.
-			 * @note If permission is "deny", does nothing and returns false.
+			 * @note Returns false unless the OS already authorized notifications; never asks for it.
 			 * @param title The notification title.
 			 * @param message The notification message body.
 			 * @param icon The notification icon type. Default none (no icon).
@@ -91,13 +96,18 @@ namespace EmEn
 			bool show (const std::string & title, const std::string & message, std::optional< NotificationIcon > icon = std::nullopt) const noexcept;
 
 			/**
-			 * @brief Requests notification permission from the user.
-			 * @note If permission is already "allow" or "deny", does nothing.
-			 * @note If permission is "ask", shows the permission dialog and updates settings.
-			 * @return bool True if permission was granted (or already granted).
+			 * @brief Asks the operating system for the current notification authorization.
+			 * @return NotificationPermission
 			 */
 			[[nodiscard]]
-			bool requestPermission () const noexcept;
+			NotificationPermission permissionStatus () const noexcept;
+
+			/**
+			 * @brief Asks the operating system to authorize notifications for this application.
+			 * @return NotificationPermission The authorization resulting from the request.
+			 */
+			[[nodiscard]]
+			NotificationPermission requestPermission () const noexcept;
 
 		private:
 
@@ -107,7 +117,6 @@ namespace EmEn
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			Settings & m_settings; ///< Reference to application settings.
 			Window & m_window; ///< Reference to the parent window.
 	};
 }

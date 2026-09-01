@@ -50,9 +50,6 @@ namespace EmEn
 #elif IS_MACOS
 	constexpr auto DefaultTextEditor{"TextEdit"};
 #endif
-	/* System notification permission policy. Values: "allow", "deny", "ask" (default). */
-	constexpr auto CorePermissionsNotificationsKey{"Core/Permissions/Notifications"};
-	constexpr auto DefaultCorePermissionsNotifications{"ask"};
 
 		/* Tracer */
 		/* Restrict console tracing to errors and fatal messages only. */

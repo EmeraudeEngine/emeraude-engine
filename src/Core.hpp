@@ -1703,7 +1703,7 @@ namespace EmEn
 			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager};	   ///< OpenAL audio system.
 			Overlay::Manager m_overlayManager{m_primaryServices, m_resourceManager}; ///< ImGui overlay system.
 			Notifier m_notifier{m_overlayManager};				  ///< On-screen notifications.
-			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
+			SystemNotification m_systemNotification{m_window};	  ///< OS-level system notifications.
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_notifier}; ///< Scene graph management.
 			/* Reusable capture buffer for screenshots. */
 			std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};

@@ -27,10 +27,7 @@
 #include "SystemNotification.hpp"
 
 /* Local inclusions. */
-#include "PlatformSpecific/Desktop/Dialog/Message.hpp"
 #include "PlatformSpecific/Desktop/Notification.hpp"
-#include "SettingKeys.hpp"
-#include "Settings.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn
@@ -51,59 +48,33 @@ namespace EmEn
 		return true;
 	}
 
-	bool
+	NotificationPermission
+	SystemNotification::permissionStatus () const noexcept
+	{
+		if ( !this->usable() )
+		{
+			Tracer::warning(ClassId, "Cannot read the permission: service not initialized.");
+
+			return NotificationPermission::Denied;
+		}
+
+		/* TODO: macOS, query UNUserNotificationCenter. No other OS gates notifications. */
+		return NotificationPermission::Granted;
+	}
+
+	NotificationPermission
 	SystemNotification::requestPermission () const noexcept
 	{
-		using namespace PlatformSpecific::Desktop;
-
 		if ( !this->usable() )
 		{
 			Tracer::warning(ClassId, "Cannot request permission: service not initialized.");
 
-			return false;
+			return NotificationPermission::Denied;
 		}
 
-		/* Read current permission. */
-		const auto permission = m_settings.get< std::string >(CorePermissionsNotificationsKey, DefaultCorePermissionsNotifications);
-
-		/* Already granted. */
-		if ( permission == "allow" )
-		{
-			return true;
-		}
-
-		/* Already denied. */
-		if ( permission == "deny" )
-		{
-			return false;
-		}
-
-		/* Permission is "ask" - show dialog. */
-		Tracer::info(ClassId, "Showing notification permission dialog...");
-
-		Dialog::Message dialog{
-			"Notification Permission",
-			"This application wants to show desktop notifications.\n\nDo you want to allow notifications?",
-			Dialog::ButtonLayout::YesNo,
-			Dialog::MessageType::Question
-		};
-
-		dialog.execute(m_window, false);
-
-		if ( dialog.getUserAnswer() == Dialog::Answer::Yes )
-		{
-			m_settings.set< std::string >(CorePermissionsNotificationsKey, "allow");
-
-			Tracer::info(ClassId, "User granted notification permission.");
-
-			return true;
-		}
-
-		m_settings.set< std::string >(CorePermissionsNotificationsKey, "deny");
-
-		Tracer::info(ClassId, "User denied notification permission.");
-
-		return false;
+		/* TODO: macOS, request through UNUserNotificationCenter. No other OS gates notifications. */
+		/* NOTE: requestAuthorization() answers later, so this signature will need a callback. */
+		return NotificationPermission::Granted;
 	}
 
 	bool
@@ -116,7 +87,6 @@ namespace EmEn
 			return false;
 		}
 
-		/* Validate input parameters. */
 		if ( title.empty() )
 		{
 			Tracer::warning(ClassId, "Cannot show notification: title is empty.");
@@ -124,29 +94,14 @@ namespace EmEn
 			return false;
 		}
 
-		/* Check/request permission. */
-		const auto permission = m_settings.get< std::string >(CorePermissionsNotificationsKey, DefaultCorePermissionsNotifications);
-
-		if ( permission == "deny" )
+		if ( this->permissionStatus() != NotificationPermission::Granted )
 		{
-			Tracer::info(ClassId, "Notification blocked: permission denied.");
+			Tracer::info(ClassId, "Notification blocked: not authorized by the operating system.");
 
 			return false;
 		}
 
-		if ( permission == "ask" )
-		{
-			/* Request permission first. */
-			if ( !this->requestPermission() )
-			{
-				/* User denied permission. */
-				return false;
-			}
-		}
-
-		/* Permission is "allow" - show notification. */
 		PlatformSpecific::Desktop::Notification notification{&m_window, title, message, icon};
-
 		return notification.show();
 	}
 }
