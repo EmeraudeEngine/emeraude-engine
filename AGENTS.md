@@ -189,7 +189,22 @@ and the AI executes, measures, and iterates at industrial speed.
 > ```
 > Then **read the PNG file** to see the rendering output. You have eyes. Use them.
 >
-> **When you need to verify a rendering change** → screenshot before and after.
+> **When you need to verify a rendering change** → screenshot before and after — but ⚠️ **a raw
+> `screenshot()` after a fixed `sleep` is NOT comparable between two runs.** A freshly loaded
+> scene keeps moving for tens of seconds (exposure adaptation, TAA/SVGF accumulation, animation
+> start-up), so two scripts whose delays differ compare two different moments and the gap reads
+> exactly like a regression. Use the bench, which waits for the image to CONVERGE first:
+> ```bash
+> python3 tools/demo-capture-bench.py --exe ./projet-alpha --demo reflexion-debug \
+>     --demo-options 0,6,0 --camera 0,1.6,4 --look-at 0,1,0 \
+>     --crop 300,200,1700,1400 --out /tmp/after.png --control /tmp/after-control.png
+> ```
+> Measured on `reflexion-debug`: two runs agree to **0.229** mean luminance when matched by
+> convergence, against **7.171** when one captures at t~4s and the other at t~8s.
+> `--control` takes a second capture of the SAME run: its difference to `--out` is the noise
+> floor of any pixel diff you draw from that scene. **Shoot it before reading a diff** — on a
+> scene with an animated subject the floor can reach 59 % of pixels, and without it that noise
+> reads as a broken render.
 >
 > **When you need to understand the scene** → query it:
 > ```bash

@@ -3264,6 +3264,53 @@ first — same root cause, same VUID cascade off a stale tracked layout):
 
 ---
 
+### A screenshot after a fixed `sleep` is not comparable between runs (Sep 2026)
+
+**A freshly loaded scene keeps moving for tens of seconds.** Exposure adaptation, temporal
+accumulation (TAA, SVGF) and animation start-up all drift the image well after the first frame.
+Measured on `reflexion-debug --demo-options=0,6,0`, mean luminance of one crop:
+
+| capture instant | t~4s | t~8s | t~12s | t~16s | t~20s |
+|---|---|---|---|---|---|
+| mean luminance | 136.5 | 129.8 | 126.8 | 125.9 | 125.7 |
+
+> [!CAUTION]
+> ⚠️⚠️ **Two scripts whose delays differ compare two different moments of the scene.** A bench
+> capturing at t~4s against a reference captured at t~8s shows a **uniform +7 offset over the
+> whole frame** — which reads exactly like a rendering regression. That happened during the RTR
+> UBO port: the "regression" was a capture-timing artefact of the measuring script, and the two
+> renders were in fact identical. The reverse mistake is just as available: matching sleeps by
+> luck and calling it a verified null result.
+>
+> **Use `tools/demo-capture-bench.py`**: it probes the image until the peak-to-peak spread of the
+> last N probes falls under a threshold, then captures. Two runs then agree to **0.229** mean
+> luminance instead of 7.171 — and by construction, not by having copied the same `sleep`.
+>
+> ⚠️ **Shoot the same-run control before reading any pixel diff** (`--control`). On a scene with
+> an animated subject the noise floor is enormous: two captures of the SAME run of `reflexion-debug`
+> already differ on **59.3 %** of pixels (mean 1.873). Without that control the noise reads as a
+> broken render. Conversely, keep a known-different pair around to prove the metric still
+> discriminates — a diff that cannot detect a real change is not evidence of "no change".
+
+**Two traps inside the measurement loop itself:**
+
+> [!CAUTION]
+> ⚠️⚠️ **The engine names a capture with a unix timestamp in SECONDS**
+> (`~/.local/share/LNIsle/<app>/captures/1788369068.png`). Two screenshots taken within the same
+> second write the **same file**, the second silently overwriting the first. Code that identifies
+> a capture by its path alone then reports "no capture produced" while the engine did write one —
+> measured, and it aborted a bench run. Compare `(path, st_mtime_ns, st_size)`.
+>
+> ⚠️⚠️ **A convergence test on consecutive deltas latches onto false plateaus.** Exposure
+> adaptation moves in steps: the luminance sits perfectly still for one probe, then jumps again.
+> A pairwise criterion converged two runs of the SAME binary at 128.40 and 127.19 (a 1.2 gap)
+> because one run saw `delta 0.000` followed by `delta 0.483`. Test the **peak-to-peak spread of
+> a window** of at least 3 probes instead.
+
+**Files:** `tools/demo-capture-bench.py`, `AGENTS.md` § "When you need to verify a rendering change"
+
+---
+
 ### Fixed: RTR was dead on min-spec — 148-byte push constant range (Sep 2026)
 
 `RTR::TracePushConstants` was **148 bytes**, above the 128-byte Vulkan minimum guarantee for
