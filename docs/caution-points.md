@@ -3264,6 +3264,48 @@ first — same root cause, same VUID cascade off a stale tracked layout):
 
 ---
 
+### Fixed: RTR was dead on min-spec — 148-byte push constant range (Sep 2026)
+
+`RTR::TracePushConstants` was **148 bytes**, above the 128-byte Vulkan minimum guarantee for
+`maxPushConstantsSize` and the only block in the engine over the floor. On a device exposing
+exactly 128 — part of the AMD/Intel fleet — `PipelineLayout::create()` returned `false`, so
+**RTR was never created and every scene declaring it silently lost its reflections**. It read
+144 bytes before `b32f22d8` added `coneScale`, so it had been over the floor for longer than that.
+
+The engine had been printing it all along, on every RTR pipeline layout build:
+
+> `A push constant range ends at 148 bytes, above the 128-byte Vulkan minimum guarantee ! This pipeline layout will fail to create on min-spec devices.`
+
+**Fix:** the trace pass reads `TraceFrameUBOData` from a per-frame UBO at set 1 binding 5, with
+the **member list and order unchanged** — the std140 offsets coincide exactly with the C++ ones,
+verified member by member against the emitted SPIR-V, and pinned by 13 `static_assert`s. Not one
+line of the shader body changed. Details and the offset table:
+`src/Graphics/AGENTS.md` § *RTR followed, for a defect that was already live*.
+
+> [!CAUTION]
+> ⚠️⚠️ **The failure is invisible on this workstation and on every NVIDIA GPU.** NVIDIA exposes
+> 256 bytes, so both of the owner's machines took the `TraceWarning` path and RTR worked. Only a
+> min-spec device takes the `TraceError` + failed-layout path. **Verifying this class of fix here
+> means reading the ABSENCE of the warning in the log, not looking at the render.**
+>
+> ⚠️⚠️ **`reflexion-debug` cannot be read with a pixel diff.** It carries an ANIMATED dragon, so
+> two runs of the SAME binary already differ on **59.3 %** of pixels (max 221, mean 1.873). The
+> pre/post-port delta measured 84.6 % / mean 1.150 — *below* the same-binary control. Shoot the
+> control first, or the noise reads as a regression.
+>
+> ⚠️ **A UBO here costs nothing measurable.** `vkCmdPushConstants` ran once per draw, not per
+> pixel, and the values are uniform across the pass, so both forms land in scalar registers.
+> `RTREffect/trace` cumulative average over ~2500 frames: 0.521 ms before, 0.519 / 0.522 ms after.
+> Untouched passes drifted more between runs (`ScenePass` 1.544 / 1.473 / 1.483). Do not use "it
+> would be slower" as a reason to keep a block over the floor.
+
+**Verified:** projet-alpha cascade builds, the 128-byte warning is gone, 0 VUID (RTX 3070 Ti),
+emeraude-base 2045/2045.
+
+**Files:** `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
+
+---
+
 ### Fixed: ContactShadows drew a FACETED shadow terminator — tMin used as a normal bias (Sep 2026)
 
 **Symptom (owner report):** an "ugly shadowed staircase" across the top of the DamagedHelmet

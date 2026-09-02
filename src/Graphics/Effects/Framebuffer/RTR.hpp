@@ -30,6 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -48,6 +50,7 @@
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/TextureInterface.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -102,7 +105,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/**
 			 * @brief Push constants for the RTR trace pass.
 			 */
-			struct EMEN_API TracePushConstants
+			struct EMEN_API TraceFrameUBOData
 			{
 				std::array< float, 16 > invViewProj;
 				std::array< float, 3 > invViewCol0;
@@ -129,6 +132,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				 */
 				float coneScale;
 			};
+
+			/* ⚠️ The GLSL block is std140 and keeps THESE members in THIS order, so every offset
+			 * below must hold. It is a pure coincidence worth pinning: std140 gives a vec3 a base
+			 * alignment of 16 and a size of 12, so each `vec3 + float` pair packs into 16 bytes
+			 * exactly like the C++ `float[3] + float`, and `vec4 ambientLight` lands on 128 on
+			 * its own. Change a member and the shader reads garbage with NO compile error --
+			 * these assertions are the only guard. */
+			static_assert(sizeof(TraceFrameUBOData) == 148, "The RTR trace UBO must stay 148 bytes.");
+			static_assert(offsetof(TraceFrameUBOData, invViewProj) == 0, "std140: mat4 at 0.");
+			static_assert(offsetof(TraceFrameUBOData, invViewCol0) == 64, "std140: vec3 aligned on 16.");
+			static_assert(offsetof(TraceFrameUBOData, viewPosX) == 76, "std140: float in the vec3 tail.");
+			static_assert(offsetof(TraceFrameUBOData, invViewCol1) == 80, "std140: vec3 aligned on 16.");
+			static_assert(offsetof(TraceFrameUBOData, viewPosY) == 92, "std140: float in the vec3 tail.");
+			static_assert(offsetof(TraceFrameUBOData, invViewCol2) == 96, "std140: vec3 aligned on 16.");
+			static_assert(offsetof(TraceFrameUBOData, viewPosZ) == 108, "std140: float in the vec3 tail.");
+			static_assert(offsetof(TraceFrameUBOData, maxDistance) == 112, "std140: scalar run.");
+			static_assert(offsetof(TraceFrameUBOData, intensity) == 116, "std140: scalar run.");
+			static_assert(offsetof(TraceFrameUBOData, fadeScreenEdge) == 120, "std140: scalar run.");
+			static_assert(offsetof(TraceFrameUBOData, lightCount) == 124, "std140: scalar run.");
+			static_assert(offsetof(TraceFrameUBOData, ambientR) == 128, "std140: vec4 ambientLight aligned on 16.");
+			static_assert(offsetof(TraceFrameUBOData, coneScale) == 144, "std140: trailing scalar.");
 
 			/**
 			 * @brief Constructs a ray-tracing reflexion effect.
@@ -365,6 +389,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			/** @brief Per-frame trace parameters (set 1, binding 5). */
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_traceFrameUBOs;
 			/* Pre-convolved REFLECTION pyramid (glossy cone approximation): half-res base,
 			 * tent-downsampled chain of the PREMULTIPLIED trace output rebuilt every frame.
 			 * The composite reads it at the roughness²-driven LOD (the /confidence division

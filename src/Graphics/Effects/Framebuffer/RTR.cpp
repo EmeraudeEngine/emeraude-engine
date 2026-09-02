@@ -126,7 +126,15 @@ layout(set = 1, binding = 4, r16f) uniform writeonly image2D coneImage;
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
 layout(set = 2, binding = 3) uniform samplerCube texturesCube[];
 
-layout(push_constant) uniform PushConstants
+/* Per-frame parameters (set 1, binding 5). A UBO and NOT push constants: this block is 148
+ * bytes, above the 128-byte Vulkan minimum guarantee for maxPushConstantsSize, so the pipeline
+ * layout failed to create on any device exposing exactly 128 (part of the AMD/Intel fleet) and
+ * RTR was never created there -- the scene silently lost its reflections.
+ * ⚠️ The member list and its order are UNCHANGED on purpose: in std140 a vec3 has a base
+ * alignment of 16 and a size of 12, so every `vec3 + float` pair packs into 16 bytes exactly
+ * like the C++ `float[3] + float` it mirrors. The offsets are pinned by static_assert in
+ * RTR.hpp -- a mismatch here reads garbage with no compile error. */
+layout(set = 1, binding = 5, std140) uniform TraceParams
 {
 	mat4 invViewProj;
 	vec3 invViewCol0; float viewPosX;
@@ -755,6 +763,7 @@ void main()
 	/* The trace input descriptor set layout (set 1) is the effect's own: 4 samplers + the cone map. */
 	constexpr auto TraceInputLayoutId{"RTR_TraceInput"};
 	constexpr uint32_t ConeImageBinding{4U};
+	constexpr uint32_t TraceParamsBinding{5U};
 
 	/* Push constants of the pyramid build dispatches. */
 	struct PyramidPushConstants
@@ -907,6 +916,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				traceInputLayout->declare(binding);
 			}
 
+			/* The per-frame trace parameters (binding 5): a UBO, because the block is 148 bytes
+			 * and push constants only guarantee 128. */
+			traceInputLayout->declareUniformBuffer(TraceParamsBinding, VK_SHADER_STAGE_FRAGMENT_BIT);
+
 			if ( !layoutManager.createDescriptorSetLayout(traceInputLayout) )
 			{
 				TraceError{ClassId} << "Unable to create the trace input descriptor set layout !";
@@ -943,13 +956,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
 
-			m_traceLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{
-					.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-					.offset  =0,
-					.size = sizeof(TracePushConstants)
-				}
-			});
+			/* No push constant range: the trace parameters live in the set 1 UBO above. */
+			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
 		if ( m_traceLayout == nullptr )
@@ -1006,6 +1014,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				write.pImageInfo = &coneInfo;
 
 				vkUpdateDescriptorSets(renderer.device()->handle(), 1, &write, 0, nullptr);
+			}
+		}
+
+		/* Binding 5: the per-frame trace parameters. The image bindings are rewritten every
+		 * frame, this one only once: the buffer handle never changes, only its content. */
+		m_traceFrameUBOs = this->createPerFrameUniformBuffers(sizeof(TraceFrameUBOData), ClassId, "RTR_Trace_Frame_UBO");
+
+		if ( m_traceFrameUBOs.size() != m_tracePerFrame.size() )
+		{
+			TraceError{ClassId} << "Failed to create the per-frame trace parameter buffers !";
+
+			return false;
+		}
+
+		for ( size_t frameIndex = 0; frameIndex < m_tracePerFrame.size(); ++frameIndex )
+		{
+			if ( !m_tracePerFrame[frameIndex]->writeUniformBufferObject(TraceParamsBinding, *m_traceFrameUBOs[frameIndex]) )
+			{
+				TraceError{ClassId} << "Failed to bind the trace parameter buffer for frame " << frameIndex << " !";
+
+				return false;
 			}
 		}
 
@@ -1281,6 +1310,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		m_tracePerFrame.clear();
 
+		m_traceFrameUBOs.clear();
 		m_tracePipeline.reset();
 		m_traceLayout.reset();
 
@@ -1353,7 +1383,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			const auto ambientColor = lightSet != nullptr ? lightSet->ambientLightColor() : Base::PixelFactory::Color< float >{0.15F, 0.15F, 0.15F, 1.0F};
 			const auto ambientIntensity = lightSet != nullptr ? context.ambientIlluminance : 1.0F;
 
-			const TracePushConstants pc{
+			const TraceFrameUBOData traceData{
 				.invViewProj = {
 					ivp[0], ivp[1], ivp[2], ivp[3],
 					ivp[4], ivp[5], ivp[6], ivp[7],
@@ -1377,6 +1407,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				/* |P[1][1]| = 1 / tan(vFOV / 2) (column-major, element 5): focal length in trace texels. */
 				.coneScale = std::abs(projMat.data()[5]) * 0.5F * static_cast< float >(m_traceTarget.height())
 			};
+
+			if ( !updateUniformBufferData(*m_traceFrameUBOs[frameIndex], &traceData, sizeof(traceData)) )
+			{
+				TraceError{ClassId} << "Failed to update the trace parameter buffer !";
+
+				return;
+			}
 
 			/* Cone width map: UNDEFINED -> GENERAL for the trace's storage writes (content rewritten). */
 			{
@@ -1418,15 +1455,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
-
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				m_traceLayout->handle(),
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				sizeof(TracePushConstants),
-				&pc
-			);
 
 			/* Bind set 0: RT descriptor set (TLAS + SSBOs). */
 			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
