@@ -3264,6 +3264,71 @@ first — same root cause, same VUID cascade off a stale tracked layout):
 
 ---
 
+### Fixed: ContactShadows drew a FACETED shadow terminator — tMin used as a normal bias (Sep 2026)
+
+**Symptom (owner report):** an "ugly shadowed staircase" across the top of the DamagedHelmet
+dome — large, axis-aligned, right-angled steps, not noise. Reproduce with
+`--load-demo=asset-loader --demo-options=7,0,1,0,0,0`.
+
+**Attribution, measured — three effects share that stack (RTGI, RTAO, ContactShadows), so it
+was A/B'd, not assumed:** removing `ContactShadows` from the stack removes the staircase
+entirely and nothing else changes. Then, term by term:
+
+1. **Not the denoiser.** Its PCSS-lite blur radius scales with the hit distance
+   (`cshdwRadius = maxBlurRadius * hitDist`) and early-outs below half a texel, so it is a
+   pass-through on exactly the shadowed pixels. Forcing the radius to 0 left the staircase
+   **unchanged** — the artefact is in the MASK.
+2. **Not a screen-space grid.** The mask, visualised directly (`em_Color.rgb = vec3(shadow)`
+   in the combine snippet), showed steps of 30–70 px where a half-res texel is 2 px.
+3. **Self-intersection with the helmet's own triangles.** Raising the bias ×10 collapsed the
+   staircase to a smooth curve.
+
+**Root cause:** the bias was handed to `rayQueryInitializeEXT` as **`tMin`** — a distance along
+the LIGHT direction — while the effect's own parameter was named `normalBias`. `normalTex` was
+declared in the GLSL, bound by the renderer, written to the descriptor every frame, and
+**never sampled**: the normal-offset machinery was never wired. At a terminator the light is
+grazing by definition, so advancing along it never leaves the surface and the ray re-hits the
+neighbouring facets — the terminator follows the MESH, which is what the staircase is.
+
+Secondary, same pass: the depth was read with `texture()` at half resolution, where `vUV` lands
+exactly on the corner of a 2×2 full-res block, so **every** pixel reconstructed its origin from
+the average of four non-linear depths — a surface that does not exist.
+
+**Fix (`Graphics/Effects/Framebuffer/ContactShadows.{hpp,cpp}`), aligned on RTAO:**
+`texelFetch` for depth AND normals; world position reconstructed from the FETCHED texel's centre
+(not `vUV` — half a full-res texel apart); view→world normal via the inverse view rotation;
+`rayOrigin = worldPos + worldNormal * adaptiveBias` with `tMin` a constant 0.001; adaptive bias
+gaining RTAO's grazing term `min(1 / NdotV, 10)`.
+
+**Numbers** (axis-aligned steps ≥ 4 px along the mask terminator, same camera pose):
+
+| Variant | Steps ≥ 4 px | Flat boundary |
+|---|---|---|
+| before (tMin = bias 0.01) | **19** | 72.3 % |
+| tMin raised ×10 — the trap | 2 | 47.8 % |
+| **after (normal offset, bias 0.01)** | **0** | 47.9 % |
+
+> [!CAUTION]
+> ⚠️⚠️ **Raising `tMin` is not the fix, it is the trap.** It hides the staircase by skipping
+> everything within the bias distance — including the near occluders a contact shadow exists to
+> draw (peter-panning). The middle row above looks like a fix and costs the effect its purpose.
+>
+> ⚠️⚠️ **A binding that is declared, bound and written is NOT a binding that is read.** Every
+> external sign said the normals were wired. Only grepping for the READ (`normalTex` appears
+> once in the file, in its own declaration) showed the two halves were never connected. Compare
+> against the sibling that works: `RTAO.cpp` samples it at line ~120.
+>
+> ⚠️ The push constants could not hold the inverse view rotation (132 bytes > the 128-byte
+> minimum guarantee), so the pass moved to a per-frame UBO at set 1 binding 2. See
+> `src/Graphics/AGENTS.md` § "ContactShadows reads its per-frame data from a UBO".
+
+**Verified:** projet-alpha cascade builds, 0 VUID with the validation layers on, RTX 3070 Ti;
+emeraude-base 2045/2045.
+
+**Files:** `Graphics/Effects/Framebuffer/ContactShadows.{hpp,cpp}`
+
+---
+
 ### Fixed: RT post-process effects drew before the TLAS existed (Aug 2026)
 
 During the first frames of a scene (the TLAS is built asynchronously) — or in a scene with no

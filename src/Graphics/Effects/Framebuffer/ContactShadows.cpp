@@ -73,17 +73,16 @@ layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
 
-layout(push_constant) uniform PushConstants
+/* Per-frame parameters (set 1, binding 2). A UBO and not push constants: with the inverse
+ * view rotation the block is 132 bytes, above the 128-byte push constant minimum guarantee. */
+layout(set = 1, binding = 2, std140) uniform ShadowParams
 {
 	mat4 inverseProjViewMatrix;
-	float lightDirWorldX;
-	float lightDirWorldY;
-	float lightDirWorldZ;
-	float maxDistance;
-	float normalBias;
-	float viewPosX;
-	float viewPosY;
-	float viewPosZ;
+	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
+	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
+	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
+	vec4 lightParameters;	/* xyz = light EMISSION direction (world), w = maxDistance. */
+	vec4 shadowParameters;	/* x = normalBias, yzw = unused. */
 };
 
 vec3 reconstructWorldPosition(vec2 uv, float depth)
@@ -97,7 +96,17 @@ vec3 reconstructWorldPosition(vec2 uv, float depth)
 
 void main()
 {
-	float rawDepth = texture(depthTex, vUV).r;
+	const float maxDistance = lightParameters.w;
+	const float normalBias = shadowParameters.x;
+
+	/* ⚠️ texelFetch, NOT texture(): the pass runs at HALF resolution, so vUV lands exactly on
+	 * the corner of a 2x2 full-res block and a filtered read returns the average of four
+	 * depths every single pixel. Depth is non-linear, so that average is the depth of no real
+	 * surface and the reconstructed ray origin floats off the geometry — worst where the depth
+	 * gradient is steepest, which is precisely a curved silhouette. Same rule as RTAO. */
+	const ivec2 depthSize = textureSize(depthTex, 0);
+	const ivec2 fullResCoord = ivec2(vUV * vec2(depthSize));
+	float rawDepth = texelFetch(depthTex, fullResCoord, 0).r;
 
 	/* Skip sky pixels (depth at far plane). */
 	if (rawDepth >= 0.9999)
@@ -106,13 +115,38 @@ void main()
 		return;
 	}
 
-	/* Reconstruct world-space position directly from depth + inverse VP. */
-	vec3 worldPos = reconstructWorldPosition(vUV, rawDepth);
+	/* View-space normal from the G-buffer. The effect declares requiresNormals() and the
+	 * renderer binds this attachment; the shader USED TO DECLARE IT AND NEVER READ IT, which
+	 * is what left the ray origin without a normal offset (see below). */
+	vec4 normalData = texelFetch(normalTex, fullResCoord, 0);
+	vec3 rawN = normalData.rgb;
 
-	/* Adaptive bias: scale with camera distance to prevent self-intersection
-	 * at distance where pixel footprint is large. */
-	float cameraDist = length(worldPos - vec3(viewPosX, viewPosY, viewPosZ));
-	float adaptiveBias = normalBias * max(1.0, cameraDist);
+	if (dot(rawN, rawN) < 0.0001)
+	{
+		outColor = vec4(1.0);
+		return;
+	}
+
+	/* Reconstruct the world position of the texel that was actually FETCHED, not of vUV: at
+	 * half resolution the two differ by half a full-res texel, and the ray origin must sit on
+	 * the surface the depth belongs to. */
+	vec2 depthTexelUV = (vec2(fullResCoord) + 0.5) / vec2(depthSize);
+	vec3 worldPos = reconstructWorldPosition(depthTexelUV, rawDepth);
+
+	/* View-space normal to world space. */
+	mat3 invViewRotation = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
+	vec3 worldNormal = normalize(invViewRotation * normalize(rawN));
+
+	vec3 viewPosition = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
+	vec3 viewDir = normalize(worldPos - viewPosition);
+	float cameraDist = length(worldPos - viewPosition);
+
+	/* Adaptive bias: scale with camera distance (the pixel footprint grows) AND with the
+	 * grazing angle (a ray leaving a nearly edge-on surface clips its own facets). Same rule
+	 * as RTAO. */
+	float NdotV = max(abs(dot(worldNormal, -viewDir)), 0.001);
+	float grazingFactor = 1.0 / NdotV;
+	float adaptiveBias = normalBias * max(1.0, cameraDist) * min(grazingFactor, 10.0);
 
 	/* Distance fade: contact shadows are a near-field effect.
 	 * Fade to 1.0 (no shadow) beyond maxDistance * 10 from camera. */
@@ -120,7 +154,17 @@ void main()
 	float shadowFade = clamp(cameraDist / shadowFadeRange, 0.0, 1.0);
 
 	/* Light direction in world space (negate emission direction to get toward-light). */
-	vec3 lightDir = normalize(vec3(-lightDirWorldX, -lightDirWorldY, -lightDirWorldZ));
+	vec3 lightDir = normalize(-lightParameters.xyz);
+
+	/* ⚠️⚠️ Offset the ray ORIGIN along the surface normal, and keep tMin a tiny CONSTANT.
+	 * The bias used to be handed to rayQueryInitializeEXT as tMin, i.e. as a distance along
+	 * the LIGHT direction: at the shadow terminator the light is grazing, so advancing along
+	 * it never leaves the surface and the ray re-hit the neighbouring triangles. The terminator
+	 * then came out FACETED — measured on the DamagedHelmet dome (asset-loader, options
+	 * 7,0,1,0,0,0): 19 axis-aligned steps of >= 4px, 72.3% of the boundary perfectly flat.
+	 * Raising tMin hides it but skips genuine near occluders (peter-panning), which is exactly
+	 * what a contact shadow exists to draw. Same rule as RTAO. */
+	vec3 rayOrigin = worldPos + worldNormal * adaptiveBias;
 
 	/* Initialize and execute the ray query. */
 	rayQueryEXT rayQuery;
@@ -133,8 +177,8 @@ void main()
 		topLevelAS,
 		gl_RayFlagsTerminateOnFirstHitEXT,
 		0xFF,
-		worldPos,
-		adaptiveBias,
+		rayOrigin,
+		0.001,
 		lightDir,
 		maxDistance
 	);
@@ -225,7 +269,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
-		m_shadowInputLayout = this->getInputLayout(2);
+		/* Set 1: depth (0), normals (1), per-frame parameters (2). */
+		m_shadowInputLayout = this->getInputLayout(2, 1);
 
 		if ( m_shadowInputLayout == nullptr )
 		{
@@ -245,15 +290,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			const StaticVector< VkPushConstantRange, 4 > ranges{
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ShadowPushConstants)}
-			};
-
+			/* No push constant range: the per-frame data lives in a UBO (set 1, binding 2)
+			 * because it exceeds the 128-byte minimum guarantee. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(m_shadowInputLayout);
 			sets.emplace_back(bindlessLayout);
-			m_shadowLayout = layoutManager.getPipelineLayout(sets, ranges);
+			m_shadowLayout = layoutManager.getPipelineLayout(sets, {});
 		}
 
 		if ( m_shadowLayout == nullptr )
@@ -302,12 +345,34 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			return false;
 		}
 
+		/* Per-frame parameter buffers (set 1, binding 2). The image bindings are rewritten
+		 * every frame, the buffer binding only once: the buffer handle never changes. */
+		m_shadowFrameUBOs = this->createPerFrameUniformBuffers(sizeof(ShadowFrameUBOData), ClassId, "CS_RTShadow_Frame_UBO");
+
+		if ( m_shadowFrameUBOs.size() != m_shadowPerFrame.size() )
+		{
+			TraceError{TracerTag} << "Failed to create the per-frame shadow parameter buffers !";
+
+			return false;
+		}
+
+		for ( size_t frameIndex = 0; frameIndex < m_shadowPerFrame.size(); ++frameIndex )
+		{
+			if ( !m_shadowPerFrame[frameIndex]->writeUniformBufferObject(2, *m_shadowFrameUBOs[frameIndex]) )
+			{
+				TraceError{TracerTag} << "Failed to bind the shadow parameter buffer for frame " << frameIndex << " !";
+
+				return false;
+			}
+		}
+
 		return true;
 	}
 
 	void
 	ContactShadows::destroy () noexcept
 	{
+		m_shadowFrameUBOs.clear();
 		m_shadowPerFrame.clear();
 
 		m_shadowPipeline.reset();
@@ -350,22 +415,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_shadowPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
 		}
 
-		/* Extract camera position from inverse view matrix. */
+		/* Inverse view matrix: columns 0-2 carry the rotation that brings the view-space
+		 * G-buffer normal back to world space, column 3 the camera world position. */
 		const auto invView = viewMat.inverse();
 		const auto * inv = invView.data();
 
 		/* 3. Pass 1: RT shadow query (half-res). */
-		ShadowPushConstants shadowPC{};
-		std::memcpy(shadowPC.inverseProjViewMatrix, invViewProjMat.data(), sizeof(shadowPC.inverseProjViewMatrix));
+		ShadowFrameUBOData shadowData{};
+		std::memcpy(shadowData.inverseProjViewMatrix.data(), invViewProjMat.data(), shadowData.inverseProjViewMatrix.size() * sizeof(float));
+		shadowData.invViewCol0 = {inv[0], inv[1], inv[2], inv[12]};
+		shadowData.invViewCol1 = {inv[4], inv[5], inv[6], inv[13]};
+		shadowData.invViewCol2 = {inv[8], inv[9], inv[10], inv[14]};
 		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
-		shadowPC.lightDirWorldX = lightDirection.x();
-		shadowPC.lightDirWorldY = lightDirection.y();
-		shadowPC.lightDirWorldZ = lightDirection.z();
-		shadowPC.maxDistance = m_parameters.maxDistance;
-		shadowPC.normalBias = m_parameters.normalBias;
-		shadowPC.viewPosX = inv[12];
-		shadowPC.viewPosY = inv[13];
-		shadowPC.viewPosZ = inv[14];
+		shadowData.lightParameters = {lightDirection.x(), lightDirection.y(), lightDirection.z(), m_parameters.maxDistance};
+		shadowData.shadowParameters = {m_parameters.normalBias, 0.0F, 0.0F, 0.0F};
+
+		if ( !updateUniformBufferData(*m_shadowFrameUBOs[frameIndex], &shadowData, sizeof(shadowData)) )
+		{
+			TraceError{TracerTag} << "Failed to update the shadow parameter buffer !";
+
+			return;
+		}
 
 		/* Custom recording: THREE sets — the shared fullscreen recorder binds one (plus an
 		 * optional bindless set at index 1), and this pass needs the Renderer's RT set at 0, its
@@ -389,15 +459,6 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.extent = {m_shadowTarget.width(), m_shadowTarget.height()}
 		};
 		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
-
-		vkCmdPushConstants(
-			commandBuffer.handle(),
-			m_shadowLayout->handle(),
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-			0,
-			sizeof(ShadowPushConstants),
-			&shadowPC
-		);
 
 		/* Set 0: the Renderer's RT set (TLAS + scene SSBOs). */
 		if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )

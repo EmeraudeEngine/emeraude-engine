@@ -173,8 +173,12 @@ Worst realistic chain (RT + TAA + player DoF/MotionBlur):
 RTR → RTAO → RTGI → ContactShadows → VolumetricLight → TAA → DoF → MotionBlur → Bloom
 → ToneMapping → Sharpen ≈ **58 passes** (SSR variant ≈ 64).
 
-ContactShadows is the only mask effect working in **full resolution** (4× RGBA16F) —
-a known anomaly to revisit.
+> [!NOTE]
+> This table's ContactShadows row used to be followed by "the only mask effect working in
+> **full resolution** (4× RGBA16F) — a known anomaly to revisit". **Phase E closed that
+> anomaly** (§3c and the phase list below): ContactShadows shares RTAO's
+> pixel-doubling-gated half resolution. The sentence was left behind and contradicted §3c
+> for two releases — removed Sep 2026.
 
 ## 5. Optimization roadmap (owner-approved, 2026-08)
 

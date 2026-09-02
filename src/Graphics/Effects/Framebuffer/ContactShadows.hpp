@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -39,6 +40,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics::Effects::Framebuffer
 {
@@ -86,19 +88,27 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			};
 
 			/**
-			 * @brief Push constants for the RT shadow pass.
+			 * @brief Per-frame data for the RT shadow pass.
+			 * @note A UBO, not push constants: the pass needs the inverse view ROTATION on top
+			 * of the inverse view-projection (it offsets the ray origin along the G-buffer
+			 * normal, which is view-space), and that totals 132 bytes — above the 128-byte
+			 * Vulkan push constant minimum guarantee (maxPushConstantsSize). Layout is
+			 * std140-compatible: mat4 and vec4 members only, scalars packed in the w slots.
 			 */
-			struct EMEN_API ShadowPushConstants
+			struct EMEN_API ShadowFrameUBOData
 			{
-				float inverseProjViewMatrix[16];
-				float lightDirWorldX;
-				float lightDirWorldY;
-				float lightDirWorldZ;
-				float maxDistance;
-				float normalBias;
-				float viewPosX;
-				float viewPosY;
-				float viewPosZ;
+				/** @brief Inverse view-projection matrix, for world position reconstruction. */
+				std::array< float, 16 > inverseProjViewMatrix;
+				/** @brief xyz = inverse view rotation column 0, w = camera world position X. */
+				std::array< float, 4 > invViewCol0;
+				/** @brief xyz = inverse view rotation column 1, w = camera world position Y. */
+				std::array< float, 4 > invViewCol1;
+				/** @brief xyz = inverse view rotation column 2, w = camera world position Z. */
+				std::array< float, 4 > invViewCol2;
+				/** @brief xyz = the directional light EMISSION direction (world), w = maxDistance. */
+				std::array< float, 4 > lightParameters;
+				/** @brief x = normalBias, yzw = unused (std140 padding). */
+				std::array< float, 4 > shadowParameters;
 			};
 
 			/**
@@ -239,5 +249,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_shadowInputLayout;
 			/* Descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_shadowPerFrame;
+			/** @brief Per-frame shadow parameters (set 1, binding 2). */
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_shadowFrameUBOs;
 	};
 }
