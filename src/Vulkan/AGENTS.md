@@ -455,6 +455,31 @@ image must be read back, **add the flag where it is created**; do not reintroduc
 See `docs/caution-points.md` § Vulkan Validation for the three logged occurrences and the VUID
 cascade a missing flag produces (only the FIRST VUID names the real fault).
 
+#### Partial image upload: `transferRegion()`, and why it needs its own path
+
+`Image::writeDataRegion()` → `TransferManager::uploadImageRegion()` →
+`ImageTransferOperation::transferRegion()` updates a **sub-region** of an image already resident on
+the GPU, leaving every pixel outside it untouched. Reference consumer: the overlay `Surface`, which
+uploads only the rows a CEF paint actually changed.
+
+> [!CAUTION]
+> ⚠️⚠️ **Do NOT implement a partial upload by reusing `transfer()` or `transferCompressed()` with a
+> smaller region.** Both barrier from **`VK_IMAGE_LAYOUT_UNDEFINED`**, and `UNDEFINED` explicitly
+> permits the driver to **discard the existing contents**. For a full-image upload that is correct
+> and even optimal — nothing is preserved because everything is rewritten. For a partial one it is
+> undefined behaviour: the rows you did not copy may come back as garbage.
+>
+> The trap is that most drivers do not actually discard, so the mistake **works on the machine you
+> test it on** and corrupts the display somewhere else. `transferRegion()` therefore barriers from
+> `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` instead, and **refuses** any image not currently in
+> that layout rather than guessing.
+>
+> ⚠️ That refusal is also the *feature*: an image only reaches `SHADER_READ_ONLY_OPTIMAL` after a
+> complete upload, so the layout check **is** the "has been fully uploaded at least once" predicate.
+> A fresh image, a recreated one (resize, DPI change) is `UNDEFINED` and gets a full upload, which
+> re-arms the partial path for the frames after it. No caller-side flag to keep in sync, so none to
+> get wrong. A caller must still handle `false` by falling back to a full `writeData()`.
+
 ## Queue Family Ownership Transfer (buffer uploads)
 
 Buffers are created `VK_SHARING_MODE_EXCLUSIVE`. When the transfer queue and the graphics

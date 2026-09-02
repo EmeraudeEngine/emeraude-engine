@@ -373,7 +373,34 @@ screen->useBGRAFormat(true);          // CEF provides BGRA pixels
    - Better performance, requires `enableMapping()` in constructor
    - Handle `rowPitch` differences between CEF (width*4) and GPU tiling
 
-**Dirty rects support:** Both paths support partial updates via CEF's `dirtyRects` parameter for optimal performance.
+### Dirty rects reach the GPU — the row-band upload
+
+`processUpdates()` uploads **only the rows the provider actually changed**, read from
+`Pixmap::updatedRegion()` and sent through `Image::writeDataRegion()`. Everything outside that band
+is preserved on the GPU. It falls back to a full-image upload whenever a partial one is not provably
+safe: no valid touched region, an image that never received a complete upload, a size mismatch, more
+than one array layer or mip level, a band covering every row, or a failed partial transfer.
+
+> [!CAUTION]
+> ⚠️⚠️ **The upload used to be full-frame, and this section used to claim otherwise.** It read *"both
+> paths support partial updates via CEF's `dirtyRects` parameter for optimal performance"* — true of
+> the **blit into the pixmap**, false of everything after it. The upload submitted
+> `MemoryRegion{pixmap.data().data(), pixmap.bytes()}`, `Buffer::writeData()` memcpy'd and flushed
+> all of it, and `ImageTransferOperation` issued **one** `vkCmdCopyBufferToImage` at the full image
+> extent. A single hovered button cost the same GPU upload as a full-page repaint.
+>
+> The band is full-width on purpose: the staging buffer layout is the linear image, so a range of
+> rows is contiguous in both and needs no stride arithmetic and no row-by-row copy. A tight 2D
+> sub-rectangle would move fewer bytes and costs exactly that.
+
+> [!CAUTION]
+> ⚠️ **`processUpdates()` CONSUMES the pixmap's updated-region marker** (`resetUpdatedRegionMarker()`
+> after each successful upload). Before this, `Pixmap::updatedRegion()` was **write-only telemetry**:
+> `Processor::blit()` maintained it on every blit and nothing in the engine, emeraude-base or a
+> consuming application read it, so it accumulated the union of every blit since the surface was
+> created. Consuming it is what makes the region mean "changed since the last upload" — i.e. what
+> makes the row band correct. **A second consumer would now share this reset**: coordinate the
+> ownership rather than adding another one.
 
 ## Development Commands
 

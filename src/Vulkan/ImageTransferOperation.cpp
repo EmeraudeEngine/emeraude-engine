@@ -451,4 +451,117 @@ namespace EmEn::Vulkan
 
 		return true;
 	}
+
+	bool
+	ImageTransferOperation::transferRegion (const std::shared_ptr< Device > & device, Image & dstImage, const VkBufferImageCopy & region) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !m_transferCommandBuffer->isCreated() )
+			{
+				Tracer::error(ClassId, "The transfer command buffer is not created!");
+
+				return false;
+			}
+		}
+
+		/* NOTE: Preserving the pixels outside the region is only meaningful when there are pixels to
+		 * preserve. Any other layout means the image has never been fully uploaded, so barriering
+		 * from SHADER_READ_ONLY_OPTIMAL would be a lie to the driver. Refuse instead of guessing. */
+		if ( dstImage.currentImageLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL )
+		{
+			Tracer::error(ClassId, "A partial image transfer requires a fully uploaded image (SHADER_READ_ONLY_OPTIMAL) !");
+
+			return false;
+		}
+
+		/* Step 1: Copy the region into the image, keeping everything else. */
+		if ( !m_transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			return false;
+		}
+
+		{
+			Sync::ImageMemoryBarrier barrier{
+				dstImage,
+				VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			};
+			barrier.setIdentifier(ClassId, "PartialPreTransfer", "ImageMemoryBarrier");
+
+			m_transferCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		}
+
+		vkCmdCopyBufferToImage(
+			m_transferCommandBuffer->handle(),
+			m_stagingBuffer->handle(),
+			dstImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &region
+		);
+
+		if ( m_transferCommandBuffer->end() )
+		{
+			const auto * queue = device->getGraphicsTransferQueue(QueuePriority::High);
+
+			VkSemaphore semaphoreHandle = m_semaphore->handle();
+
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+			{
+				Tracer::error(ClassId, "Unable to transfer an image region (1/2) !");
+
+				return false;
+			}
+		}
+		else
+		{
+			Tracer::error(ClassId, "Unable to finish the command buffer for a partial image transfer !");
+
+			return false;
+		}
+
+		/* Step 2: Give the image back to the fragment shader. */
+		if ( !m_graphicsCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			return false;
+		}
+
+		{
+			Sync::ImageMemoryBarrier barrier{
+				dstImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			};
+			barrier.setIdentifier(ClassId, "PartialFinalImage", "ImageMemoryBarrier");
+
+			m_graphicsCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+		}
+
+		if ( m_graphicsCommandBuffer->end() )
+		{
+			auto * queue = device->getGraphicsQueue(QueuePriority::High);
+
+			VkSemaphore semaphoreHandle = m_semaphore->handle();
+			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle())) )
+			{
+				Tracer::error(ClassId, "Unable to transfer an image region (2/2) !");
+
+				return false;
+			}
+
+			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
+		else
+		{
+			Tracer::error(ClassId, "Unable to finish the command buffer for a partial image finalization !");
+
+			return false;
+		}
+
+		return true;
+	}
+
 }

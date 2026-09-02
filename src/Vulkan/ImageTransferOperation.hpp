@@ -127,6 +127,24 @@ namespace EmEn::Vulkan
 			bool transferCompressed (const std::shared_ptr< Device > & device, Image & dstImage, const std::vector< VkBufferImageCopy > & mipRegions) const noexcept;
 
 			/**
+			 * @brief Transfers a sub-region of an image, PRESERVING the pixels outside it.
+			 * @note This is what separates it from transfer() and transferCompressed(): both barrier
+			 * from VK_IMAGE_LAYOUT_UNDEFINED, which permits the driver to DISCARD the existing
+			 * contents - correct and optimal for a full-image upload, and silent corruption for a
+			 * partial one. This one barriers from SHADER_READ_ONLY_OPTIMAL instead, which is also
+			 * why the image must already hold a complete upload.
+			 * @warning The destination image MUST currently be in VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			 * (i.e. it has been fully uploaded at least once). The method refuses anything else rather
+			 * than producing an undefined result - the caller falls back to a full upload.
+			 * @param device A reference to the device smart-pointer.
+			 * @param dstImage A reference to the destination image (GPU side).
+			 * @param region The buffer-to-image copy region to update.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool transferRegion (const std::shared_ptr< Device > & device, Image & dstImage, const VkBufferImageCopy & region) const noexcept;
+
+			/**
 			 * @brief Returns whether the image transfer operation is valid for usage.
 			 * @return bool
 			 */

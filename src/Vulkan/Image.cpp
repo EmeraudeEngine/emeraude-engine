@@ -770,6 +770,21 @@ namespace EmEn::Vulkan
 		});
 	}
 
+	bool
+	Image::writeDataRegion (TransferManager & transferManager, const MemoryRegion & memoryRegion, const VkBufferImageCopy & region) noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The image is not created ! Use one of the Image::create() methods first.");
+
+			return false;
+		}
+
+		return transferManager.uploadImageRegion(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
+			return stagingBuffer.writeData(memoryRegion);
+		}, region);
+	}
+
 	void *
 	Image::mapMemory () const noexcept
 	{

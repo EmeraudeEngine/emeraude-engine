@@ -26,6 +26,9 @@
 
 #include "Surface.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "PixelFactory/Processor.hpp"
@@ -260,6 +263,81 @@ namespace EmEn::Overlay
 	}
 
 	bool
+	Surface::uploadActiveBuffer (Renderer & renderer, const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion) noexcept
+	{
+		auto & pixmap = m_activeBuffer.pixmap;
+		auto & image = *m_activeBuffer.image;
+
+		const auto pixmapBytes = static_cast< uint64_t >(pixmap.bytes());
+
+		const auto fullUpload = [&] () {
+			return image.writeData(renderer.transferManager(), MemoryRegion{pixmap.data().data(), pixmap.bytes()});
+		};
+
+		/* NOTE: Every condition below is a reason the partial path cannot be PROVEN safe, so the
+		 * full upload stays the default. In particular the layout check is what guarantees the image
+		 * already holds a complete frame - a fresh or recreated image is UNDEFINED and gets a full
+		 * upload, which is also what re-arms the partial path for the frames after it. */
+		const auto & createInfo = image.createInfo();
+
+		if (
+			!touchedRegion.isValid() ||
+			image.currentImageLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
+			createInfo.arrayLayers != 1 ||
+			createInfo.mipLevels != 1 ||
+			createInfo.extent.width != pixmap.width() ||
+			createInfo.extent.height != pixmap.height() ||
+			pixmap.width() == 0 || pixmap.height() == 0
+		)
+		{
+			return fullUpload();
+		}
+
+		/* NOTE: Full-width row band. The staging buffer layout is the linear image, so a band of
+		 * rows is contiguous in both - which is the whole reason this shape was chosen over a tight
+		 * 2D sub-rectangle: no row-by-row copy, no stride arithmetic. */
+		const auto bandTop = std::min(touchedRegion.top(), pixmap.height() - 1);
+		const auto bandHeight = std::min(touchedRegion.height(), pixmap.height() - bandTop);
+
+		if ( bandHeight == 0 || bandHeight >= pixmap.height() )
+		{
+			/* NOTE: A band covering every row IS the full image - going through the partial path
+			 * would only add two barriers for nothing. */
+			return fullUpload();
+		}
+
+		const auto bytesPerPixel = pixmapBytes / (static_cast< uint64_t >(pixmap.width()) * pixmap.height());
+		const auto rowBytes = static_cast< uint64_t >(pixmap.width()) * bytesPerPixel;
+		const auto bandBytes = rowBytes * bandHeight;
+
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+		region.imageOffset.x = 0;
+		region.imageOffset.y = static_cast< int32_t >(bandTop);
+		region.imageOffset.z = 0;
+		region.imageExtent.width = pixmap.width();
+		region.imageExtent.height = bandHeight;
+		region.imageExtent.depth = 1;
+
+		const MemoryRegion bandMemory{pixmap.data().data() + (bandTop * rowBytes), bandBytes};
+
+		if ( !image.writeDataRegion(renderer.transferManager(), bandMemory, region) )
+		{
+			TraceWarning{ClassId} << "Partial upload failed for surface '" << this->name() << "', falling back to a full one.";
+
+			return fullUpload();
+		}
+
+		return true;
+	}
+
+	bool
 	Surface::processUpdates (Renderer & renderer) noexcept
 	{
 		if ( !m_framebufferAccess.try_lock() )
@@ -315,12 +393,13 @@ namespace EmEn::Overlay
 		 * step. Same for the accelerated source: there is no CPU pixmap to upload. */
 		if ( !m_memoryMappingEnabled && !m_acceleratedSourceEnabled && m_activeBuffer.image != nullptr && !this->isVideoMemoryUpToDate() )
 		{
-			const MemoryRegion memoryRegion{
-				m_activeBuffer.pixmap.data().data(),
-				m_activeBuffer.pixmap.bytes()
-			};
+			auto & pixmap = m_activeBuffer.pixmap;
 
-			if ( !m_activeBuffer.image->writeData(renderer.transferManager(), memoryRegion) )
+			/* NOTE: The touched region must be read BEFORE the upload, since the marker is consumed
+			 * right after it. */
+			const auto touchedRegion = pixmap.updatedRegion();
+
+			if ( !this->uploadActiveBuffer(renderer, touchedRegion) )
 			{
 				TraceError{ClassId} << "Unable to update the content of surface '" << this->name() << "' !";
 
@@ -328,6 +407,12 @@ namespace EmEn::Overlay
 
 				return false;
 			}
+
+			/* NOTE: Consume the marker so the next upload measures its own delta and not the union
+			 * since the surface was created. Behaviour-neutral today - nothing else in the engine or
+			 * in a consuming application reads updatedRegion(), it was pure write-only telemetry -
+			 * and a prerequisite of any sub-region upload. */
+			pixmap.resetUpdatedRegionMarker();
 
 			m_videoMemoryUpToDate = true;
 

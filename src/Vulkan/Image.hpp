@@ -467,6 +467,19 @@ namespace EmEn::Vulkan
 			bool writeData (TransferManager & transferManager, const MemoryRegion & memoryRegion) noexcept;
 
 			/**
+			 * @brief Writes data into a SUB-REGION of the image, preserving the pixels outside it.
+			 * @note The memory region describes the source bytes (they are written at offset 0 of the
+			 * staging buffer); the copy region says where they land in the image.
+			 * @warning Requires a fully uploaded image (VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) -
+			 * returns false otherwise so the caller can fall back to a full writeData().
+			 * @param transferManager A reference to the transfer manager.
+			 * @param memoryRegion A reference to the source memory region.
+			 * @param region The buffer-to-image copy region to update.
+			 * @return bool
+			 */
+			bool writeDataRegion (TransferManager & transferManager, const MemoryRegion & memoryRegion, const VkBufferImageCopy & region) noexcept;
+
+			/**
 			 * @brief Returns whether the image memory is host visible.
 			 * @return bool
 			 */

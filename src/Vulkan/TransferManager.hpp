@@ -247,6 +247,58 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Transfer data to a SUB-REGION of an image already living in GPU memory.
+			 * @note Unlike uploadImage(), the pixels outside the region are preserved. Use it to
+			 * refresh only the part of an image that actually changed.
+			 * @warning The target image must already hold a complete upload (it must be in
+			 * VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL). The call fails otherwise, and the caller is
+			 * expected to fall back to a full uploadImage().
+			 * @tparam function_t The type of lambda to describe the data to write. Signature: bool (const Buffer &).
+			 * @param targetImage A writable reference to the destination image.
+			 * @param requiredBytes The amount of data to write in bytes (the region, not the image).
+			 * @param writeData A reference to a function to write data into the staging buffer.
+			 * @param region The buffer-to-image copy region to update.
+			 * @return bool
+			 */
+			template< typename function_t >
+			bool
+			uploadImageRegion (Image & targetImage, size_t requiredBytes, function_t && writeData, const VkBufferImageCopy & region) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
+			{
+				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
+				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+
+				if ( !this->usable() )
+				{
+					TraceError{ClassId} << "The transfer manager is not usable !";
+
+					return false;
+				}
+
+				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+
+				if ( transferOperation == nullptr )
+				{
+					return false;
+				}
+
+				auto * stagingBuffer = transferOperation->stagingBuffer();
+
+				if ( stagingBuffer == nullptr )
+				{
+					return false;
+				}
+
+				if ( !writeData(*stagingBuffer) )
+				{
+					TraceError{ClassId} << "Unable to write " << requiredBytes << " bytes of data in the staging buffer (Image region) !";
+
+					return false;
+				}
+
+				return transferOperation->transferRegion(m_device, targetImage, region);
+			}
+
+			/**
 			 * @brief Transitions the layout of a Vulkan image.
 			 * @param image A reference to an image.
 			 * @param aspectMask The type of image.

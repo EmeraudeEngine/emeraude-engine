@@ -101,6 +101,7 @@ namespace EmEn::Overlay
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"OverlaySurface"};
 
+
 			/**
 			 * @brief Constructs a surface.
 			 * @note The stack ordering (rendering order, input dispatch priority) is owned by
@@ -1225,6 +1226,18 @@ namespace EmEn::Overlay
 			}
 
 		private:
+
+			/**
+			 * @brief Uploads the active pixmap to the GPU, only the touched rows when possible.
+			 * @details Falls back to a full-image upload whenever a partial one is not provably safe:
+			 * no valid touched region, an image that never received a complete upload, a size
+			 * mismatch, more than one array layer, or a failed partial transfer.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param touchedRegion The pixmap region written since the previous upload.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool uploadActiveBuffer (Graphics::Renderer & renderer, const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion) noexcept;
 
 			/* NOTE: UIScreen owns the stack ordering. It is the only entity allowed to
 			 * assign the internal depth value used for the model matrix Z translation
