@@ -60,6 +60,7 @@
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/OverlayRendering.hpp"
 #include "Settings.hpp"
+#include "SettingKeys.hpp"
 #include "UIScreen.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -181,6 +182,15 @@ namespace EmEn::Overlay
 			return false;
 		}
 #endif
+
+		/* NOTE: Diagnostic, read once. @see Surface::UploadStatistics */
+		m_uploadStatisticsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(OverlayUploadStatisticsKey, DefaultOverlayUploadStatistics);
+		m_lastUploadStatisticsDump = std::chrono::steady_clock::now();
+
+		if ( m_uploadStatisticsEnabled )
+		{
+			TraceInfo{ClassId} << "Overlay GPU upload statistics enabled (" << OverlayUploadStatisticsKey << ").";
+		}
 
 		return true;
 	}
@@ -504,6 +514,68 @@ namespace EmEn::Overlay
 			if ( !screen->processSurfaceUpdates(false) )
 			{
 				TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
+			}
+		}
+
+		this->dumpUploadStatistics();
+	}
+
+	void
+	Manager::dumpUploadStatistics () noexcept
+	{
+		if ( !m_uploadStatisticsEnabled )
+		{
+			return;
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(now - m_lastUploadStatisticsDump);
+
+		if ( elapsed < std::chrono::seconds{1} )
+		{
+			return;
+		}
+
+		m_lastUploadStatisticsDump = now;
+
+		const auto elapsedSeconds = static_cast< double >(elapsed.count()) / 1000.0;
+
+		for ( const auto & screen : m_screens | std::views::values )
+		{
+			for ( const auto & surface : screen->surfaces() )
+			{
+				const auto stats = surface->uploadStatistics();
+
+				surface->resetUploadStatistics();
+
+				if ( stats.uploadCount == 0 )
+				{
+					continue;
+				}
+
+				constexpr auto MiB{1024.0 * 1024.0};
+
+				const auto movedMiB = static_cast< double >(stats.uploadedBytes) / MiB;
+				const auto fullMiB = static_cast< double >(stats.fullBytes) / MiB;
+				const auto bandMiB = static_cast< double >(stats.bandBytes) / MiB;
+				const auto regionMiB = static_cast< double >(stats.regionBytes) / MiB;
+				const auto writeMS = static_cast< double >(stats.writeDurationUS) / 1000.0;
+
+				/* NOTE: 'realised' is what the row-band upload actually saved against the former
+				 * full-image behaviour; 'ceiling' is what a tight bounding-box upload would reach.
+				 * Both are >= 1.0; a realised gain of 1.0 means every upload took the full path. */
+				const auto realisedGain = stats.uploadedBytes > 0 ? static_cast< double >(stats.fullBytes) / static_cast< double >(stats.uploadedBytes) : 1.0;
+				const auto ceilingGain = stats.regionBytes > 0 ? static_cast< double >(stats.fullBytes) / static_cast< double >(stats.regionBytes) : 1.0;
+
+				TraceInfo{ClassId} <<
+					"[UPLOAD-STATS] '" << surface->name() << "' over " << elapsedSeconds << " s : " <<
+					stats.uploadCount << " uploads (" << static_cast< double >(stats.uploadCount) / elapsedSeconds << "/s), " <<
+					stats.partialCount << " partial ; " <<
+					"moved " << movedMiB << " MiB (" << movedMiB / elapsedSeconds << " MiB/s) where a full upload was " << fullMiB << " MiB "
+					"=> REALISED GAIN x" << realisedGain << " ; " <<
+					"upload " << writeMS << " ms (" << writeMS / elapsedSeconds << " ms/s) ; "
+					"row-band reference " << bandMiB << " MiB, bounding-box " << regionMiB << " MiB (ceiling x" << ceilingGain << ") ; " <<
+					stats.saturatedCount << " full-surface, " << stats.unknownRegionCount << " region-less.";
 			}
 		}
 	}

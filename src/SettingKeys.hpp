@@ -336,6 +336,11 @@ namespace EmEn
 			constexpr auto OverlayScaleXKey{"Core/Video/Overlay/ScaleX"};
 			constexpr auto OverlayScaleYKey{"Core/Video/Overlay/ScaleY"};
 			constexpr auto DefaultOverlayScale{1.0F};
+			/* Measurement only: dump per-surface GPU upload statistics to the tracer once per second.
+			 * Answers "how much of the pixmap does a paint actually touch?" - see
+			 * EmEn::Overlay::Surface::UploadStatistics. Off by default: it is a diagnostic, not a feature. */
+			constexpr auto OverlayUploadStatisticsKey{"Core/Video/Overlay/EnableUploadStatistics"};
+			constexpr auto DefaultOverlayUploadStatistics{false};
 
 			/* Framebuffer */
 			/* Red channel bit depth of the framebuffer. */

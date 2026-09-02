@@ -34,6 +34,7 @@
 #include <string>
 #include <concepts>
 #include <functional>
+#include <chrono>
 
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
@@ -101,6 +102,39 @@ namespace EmEn::Overlay
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"OverlaySurface"};
 
+			/**
+			 * @brief GPU upload accounting for one measurement window (diagnostic only).
+			 * @details Every entry is accumulated by processUpdates() on the render thread. The
+			 * three byte counters answer the same question three ways, which is the whole point:
+			 *  - uploadedBytes: what the upload costs TODAY (the whole pixmap, every time),
+			 *  - regionBytes: what a tight bounding-box upload of the touched area would cost,
+			 *  - bandBytes: what a full-width row-band upload (the simplest sub-region copy that
+			 *    keeps the staging buffer layout linear) would cost.
+			 * uploadedBytes / bandBytes is therefore the achievable gain factor, and
+			 * uploadedBytes / regionBytes the theoretical ceiling above it.
+			 * @note Not thread-safe by design: written and read on the render thread only.
+			 */
+			struct UploadStatistics
+			{
+				/** @brief Number of GPU uploads performed. */
+				uint64_t uploadCount{0};
+				/** @brief Bytes ACTUALLY moved to the GPU. */
+				uint64_t uploadedBytes{0};
+				/** @brief Bytes a full-image upload would have moved - the baseline to compare against. */
+				uint64_t fullBytes{0};
+				/** @brief Bytes a tight bounding-box upload would have moved - the ceiling. */
+				uint64_t regionBytes{0};
+				/** @brief Bytes a full-width row-band upload would have moved - what the current strategy targets. */
+				uint64_t bandBytes{0};
+				/** @brief Cumulated upload duration, in microseconds. */
+				uint64_t writeDurationUS{0};
+				/** @brief Uploads that took the partial (row-band) path. */
+				uint64_t partialCount{0};
+				/** @brief Uploads whose touched region already covered the whole pixmap (nothing to win). */
+				uint64_t saturatedCount{0};
+				/** @brief Uploads carrying no valid touched region (upload forced without a blit). */
+				uint64_t unknownRegionCount{0};
+			};
 
 			/**
 			 * @brief Constructs a surface.
@@ -956,6 +990,29 @@ namespace EmEn::Overlay
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool True if update succeeded, false on failure.
 			 */
+			/**
+			 * @brief Returns the GPU upload statistics accumulated since the last reset.
+			 * @note Render thread only. @see UploadStatistics
+			 * @return const UploadStatistics &
+			 */
+			[[nodiscard]]
+			const UploadStatistics &
+			uploadStatistics () const noexcept
+			{
+				return m_uploadStatistics;
+			}
+
+			/**
+			 * @brief Clears the GPU upload statistics, starting a new measurement window.
+			 * @note Render thread only.
+			 * @return void
+			 */
+			void
+			resetUploadStatistics () noexcept
+			{
+				m_uploadStatistics = {};
+			}
+
 			[[nodiscard]]
 			bool processUpdates (Graphics::Renderer & renderer) noexcept;
 
@@ -1227,17 +1284,31 @@ namespace EmEn::Overlay
 
 		private:
 
+			/* NOTE: Diagnostic accounting, render thread only. @see UploadStatistics */
+			UploadStatistics m_uploadStatistics{};
+
+			/**
+			 * @brief Accumulates one GPU upload into the diagnostic statistics.
+			 * @note Render thread only, called from processUpdates() under m_framebufferAccess.
+			 * @param touchedRegion The pixmap region actually written since the previous upload.
+			 * @param writeDuration The duration of the Image::writeData() call.
+			 * @return void
+			 */
+			void accountUpload (const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion, uint64_t uploadedBytes, bool partial, std::chrono::steady_clock::duration writeDuration) noexcept;
+
 			/**
 			 * @brief Uploads the active pixmap to the GPU, only the touched rows when possible.
 			 * @details Falls back to a full-image upload whenever a partial one is not provably safe:
 			 * no valid touched region, an image that never received a complete upload, a size
-			 * mismatch, more than one array layer, or a failed partial transfer.
+			 * mismatch, more than one array layer, or a failed partial transfer. @see UploadStatistics
 			 * @param renderer A reference to the graphics renderer.
 			 * @param touchedRegion The pixmap region written since the previous upload.
+			 * @param uploadedBytes A writable reference receiving the bytes actually moved.
+			 * @param partial A writable reference telling whether the partial path was taken.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool uploadActiveBuffer (Graphics::Renderer & renderer, const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion) noexcept;
+			bool uploadActiveBuffer (Graphics::Renderer & renderer, const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion, uint64_t & uploadedBytes, bool & partial) noexcept;
 
 			/* NOTE: UIScreen owns the stack ordering. It is the only entity allowed to
 			 * assign the internal depth value used for the model matrix Z translation

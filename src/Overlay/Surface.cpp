@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <chrono>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -262,13 +263,62 @@ namespace EmEn::Overlay
 		return true;
 	}
 
+	void
+	Surface::accountUpload (const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion, uint64_t uploadedBytes, bool partial, std::chrono::steady_clock::duration writeDuration) noexcept
+	{
+		const auto & pixmap = m_activeBuffer.pixmap;
+		const auto pixmapBytes = static_cast< uint64_t >(pixmap.bytes());
+
+		m_uploadStatistics.uploadCount++;
+		m_uploadStatistics.uploadedBytes += uploadedBytes;
+		m_uploadStatistics.fullBytes += pixmapBytes;
+		m_uploadStatistics.writeDurationUS += static_cast< uint64_t >(std::chrono::duration_cast< std::chrono::microseconds >(writeDuration).count());
+
+		if ( partial )
+		{
+			m_uploadStatistics.partialCount++;
+		}
+
+		const auto pixmapWidth = static_cast< uint64_t >(pixmap.width());
+		const auto pixmapHeight = static_cast< uint64_t >(pixmap.height());
+
+		/* NOTE: An upload without a valid touched region means the pixmap was filled by something
+		 * that does not go through Processor (or the marker was disabled): nothing can be won there,
+		 * so it is charged at full price rather than silently ignored. */
+		if ( !touchedRegion.isValid() || pixmapWidth == 0 || pixmapHeight == 0 )
+		{
+			m_uploadStatistics.unknownRegionCount++;
+			m_uploadStatistics.regionBytes += pixmapBytes;
+			m_uploadStatistics.bandBytes += pixmapBytes;
+
+			return;
+		}
+
+		/* NOTE: Clamped defensively - the accounting must never over-report a gain because a region
+		 * leaked outside the pixmap. */
+		const auto regionWidth = std::min(static_cast< uint64_t >(touchedRegion.width()), pixmapWidth);
+		const auto regionHeight = std::min(static_cast< uint64_t >(touchedRegion.height()), pixmapHeight);
+		const auto bytesPerPixel = pixmapBytes / (pixmapWidth * pixmapHeight);
+
+		m_uploadStatistics.regionBytes += regionWidth * regionHeight * bytesPerPixel;
+		m_uploadStatistics.bandBytes += pixmapWidth * regionHeight * bytesPerPixel;
+
+		if ( regionWidth >= pixmapWidth && regionHeight >= pixmapHeight )
+		{
+			m_uploadStatistics.saturatedCount++;
+		}
+	}
+
 	bool
-	Surface::uploadActiveBuffer (Renderer & renderer, const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion) noexcept
+	Surface::uploadActiveBuffer (Renderer & renderer, const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion, uint64_t & uploadedBytes, bool & partial) noexcept
 	{
 		auto & pixmap = m_activeBuffer.pixmap;
 		auto & image = *m_activeBuffer.image;
 
 		const auto pixmapBytes = static_cast< uint64_t >(pixmap.bytes());
+
+		partial = false;
+		uploadedBytes = pixmapBytes;
 
 		const auto fullUpload = [&] () {
 			return image.writeData(renderer.transferManager(), MemoryRegion{pixmap.data().data(), pixmap.bytes()});
@@ -334,6 +384,9 @@ namespace EmEn::Overlay
 			return fullUpload();
 		}
 
+		partial = true;
+		uploadedBytes = bandBytes;
+
 		return true;
 	}
 
@@ -395,11 +448,15 @@ namespace EmEn::Overlay
 		{
 			auto & pixmap = m_activeBuffer.pixmap;
 
-			/* NOTE: The touched region must be read BEFORE the upload, since the marker is consumed
-			 * right after it. */
+			/* NOTE: The touched region drives BOTH the upload and its accounting, and must be read
+			 * BEFORE the upload since the marker is consumed right after it. */
 			const auto touchedRegion = pixmap.updatedRegion();
+			const auto uploadStart = std::chrono::steady_clock::now();
 
-			if ( !this->uploadActiveBuffer(renderer, touchedRegion) )
+			uint64_t uploadedBytes = 0;
+			bool partialUpload = false;
+
+			if ( !this->uploadActiveBuffer(renderer, touchedRegion, uploadedBytes, partialUpload) )
 			{
 				TraceError{ClassId} << "Unable to update the content of surface '" << this->name() << "' !";
 
@@ -407,6 +464,8 @@ namespace EmEn::Overlay
 
 				return false;
 			}
+
+			this->accountUpload(touchedRegion, uploadedBytes, partialUpload, std::chrono::steady_clock::now() - uploadStart);
 
 			/* NOTE: Consume the marker so the next upload measures its own delta and not the union
 			 * since the surface was created. Behaviour-neutral today - nothing else in the engine or

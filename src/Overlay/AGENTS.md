@@ -402,6 +402,42 @@ than one array layer or mip level, a band covering every row, or a failed partia
 > makes the row band correct. **A second consumer would now share this reset**: coordinate the
 > ownership rather than adding another one.
 
+### GPU upload statistics (diagnostic)
+
+`Surface::UploadStatistics` accounts every GPU upload of a measurement window, and
+`Manager::dumpUploadStatistics()` emits one `[UPLOAD-STATS]` tracer line per painted surface — at
+most once per second — then clears the counters. Enable with
+**`Core/Video/Overlay/EnableUploadStatistics`** (default `false`, read once at `Manager`
+initialization).
+
+| Counter | Meaning |
+|---|---|
+| `uploadCount` / `partialCount` | uploads performed, and how many took the row-band path |
+| `uploadedBytes` | what was **actually** moved |
+| `fullBytes` | what a full-image upload would have moved — the baseline the realised gain is computed against |
+| `regionBytes` | what a tight bounding-box upload would move — the ceiling above the row band |
+| `bandBytes` | what the current strategy targets |
+| `writeDurationUS` | time spent in the upload, on the render thread |
+| `saturatedCount` | uploads whose touched region already covered the whole pixmap |
+| `unknownRegionCount` | uploads with no valid region — charged at full price, never ignored |
+
+It answers three questions the row-band upload cannot answer about itself: whether the gain holds on
+another machine, whether a rising `saturatedCount` means something started forcing full-frame
+repaints again, and whether the gap between `bandBytes` and `regionBytes` justifies moving to a true
+2D sub-rectangle.
+
+> [!IMPORTANT]
+> **Silence is a result, not a failure.** The dump rides `Manager::updateVideoMemory()`, which only
+> runs when a frame is rendered, so an idle application produces **no line at all**. Each window's
+> elapsed time is measured and divided out, so the rates stay correct however irregular the cadence.
+>
+> ⚠️ **Render thread only.** The counters are plain integers with no synchronisation: written by
+> `processUpdates()`, read by `dumpUploadStatistics()`, both on the render thread.
+>
+> ⚠️ The **dump** is gated by the setting; the **accounting** is not. It costs a handful of integer
+> additions and two clock reads per upload, at most once per painted frame — negligible, but not
+> literally zero.
+
 ## Development Commands
 
 ```bash

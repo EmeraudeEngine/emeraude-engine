@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <any>
+#include <chrono>
 #include <array>
 #include <memory>
 #include <string>
@@ -512,5 +513,17 @@ namespace EmEn::Overlay
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
 			mutable std::mutex m_screensAccess;
 			bool m_enabled{false};
+
+			/* NOTE: Diagnostic only, render thread. @see Surface::UploadStatistics and the setting
+			 * Core/Video/Overlay/EnableUploadStatistics (read once at initialization). */
+			bool m_uploadStatisticsEnabled{false};
+			std::chrono::steady_clock::time_point m_lastUploadStatisticsDump{};
+
+			/**
+			 * @brief Dumps and clears the per-surface GPU upload statistics, at most once per second.
+			 * @note Render thread only, called at the end of updateVideoMemory().
+			 * @return void
+			 */
+			void dumpUploadStatistics () noexcept;
 	};
 }
