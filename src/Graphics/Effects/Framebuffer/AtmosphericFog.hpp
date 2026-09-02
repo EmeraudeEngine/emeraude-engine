@@ -140,6 +140,15 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				float skyFogEnabled;
 			};
 
+			/* The Vulkan spec only guarantees 128 bytes for maxPushConstantsSize, and part of the
+			 * AMD/Intel fleet exposes exactly that. A block over the floor makes PipelineLayout::create()
+			 * FAIL on those devices, so the effect is never created and its contribution silently
+			 * disappears -- invisible on NVIDIA, which exposes 256. That is exactly how RTR was dead on
+			 * min-spec until ae61e368. Over the floor, move the block to a per-frame UBO (RTR and
+			 * ContactShadows are the ported references), never trim it to squeeze back under.
+			 * 116 bytes: 12 bytes (3 floats) of headroom left. */
+			static_assert(sizeof(FogPushConstants) <= 128, "Push constant block over the 128-byte Vulkan minimum guarantee: move it to a per-frame UBO.");
+
 			/**
 			 * @brief Constructs an atmospheric fog effect.
 			 * @param renderer A reference to the graphics renderer.

@@ -106,6 +106,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				uint32_t sampleCount;
 			};
 
+			/* The Vulkan spec only guarantees 128 bytes for maxPushConstantsSize, and part of the
+			 * AMD/Intel fleet exposes exactly that. A block over the floor makes PipelineLayout::create()
+			 * FAIL on those devices, so the effect is never created and its contribution silently
+			 * disappears -- invisible on NVIDIA, which exposes 256. That is exactly how RTR was dead on
+			 * min-spec until ae61e368. Over the floor, move the block to a per-frame UBO (RTR and
+			 * ContactShadows are the ported references), never trim it to squeeze back under.
+			 * ⚠️⚠️ EXACTLY 128 bytes: there is NO ROOM for one more field. Adding any member here
+			 * must move the whole block to a UBO. */
+			static_assert(sizeof(TracePushConstants) <= 128, "Push constant block over the 128-byte Vulkan minimum guarantee: move it to a per-frame UBO.");
+
 			/**
 			 * @brief Constructs a ray-tracing ambient occlusion effect.
 			 * @param renderer A reference to the graphics renderer.

@@ -208,6 +208,15 @@ void main()
 		float pad1;
 	};
 
+	/* The Vulkan spec only guarantees 128 bytes for maxPushConstantsSize, and part of the
+	 * AMD/Intel fleet exposes exactly that. A block over the floor makes PipelineLayout::create()
+	 * FAIL on those devices, so the effect is never created and its contribution silently
+	 * disappears -- invisible on NVIDIA, which exposes 256. That is exactly how RTR was dead on
+	 * min-spec until ae61e368. Over the floor, move the block to a per-frame UBO (RTR and
+	 * ContactShadows are the ported references), never trim it to squeeze back under.
+	 * 96 bytes: 32 bytes (8 floats) of headroom left. */
+	static_assert(sizeof(PushConstants) <= 128, "Push constant block over the 128-byte Vulkan minimum guarantee: move it to a per-frame UBO.");
+
 	static constexpr uint32_t GPUGridRes = 128;
 
 	/* ---- Implementation ---- */
