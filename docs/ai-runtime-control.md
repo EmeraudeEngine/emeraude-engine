@@ -573,7 +573,7 @@ echo "Core.RendererService.screenshot()" | nc -q 2 localhost 7777
 # Response: Screenshot saved: "/path/to/captures/<timestamp>.png"
 ```
 
-Screenshots are saved to: `~/.local/share/LNIsle/<app-name>/captures/`
+Screenshots are saved to `fileSystem().userDataDirectory("captures")`, i.e. **`<user data dir>/captures/`** — on Linux `~/.local/share/<org>/<app-name>/captures/` (projet-alpha: `LNIsle/projet-alpha`, LycheeSlicer: `Lychee/LycheeSlicer`); macOS and Windows follow the same `<org>/<app-name>` resolution under their user-data root (`src/FileSystem.cpp`). The Unix-timestamp file names make before/after diffs free.
 
 ### Dumping a render-to-texture target (probe diagnostics)
 
@@ -632,7 +632,7 @@ echo "Core.RendererService.triggerRenderDocCapture(5)" | nc -q 2 localhost 7777 
   ```bash
   /opt/renderdoc_<ver>/bin/renderdoccmd capture --wait-for-exit ./<app> --load-demo <demo> --disable-cef
   ```
-- The command sets the capture output path to `~/.local/share/LNIsle/<app-name>/RenderDoc/` before
+- The command sets the capture output path to `<user data dir>/RenderDoc/` (same `<org>/<app-name>` resolution as the screenshots above) before
   triggering (RenderDoc is otherwise never told where to write).
 - Captures are then analysed with the RenderDoc Python module (see the project's RenderDoc notes).
 
