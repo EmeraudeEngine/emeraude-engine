@@ -3828,6 +3828,28 @@ meter a black scene and pin the exposure to the ISO ceiling.
 
 ---
 
+### Fixed: skinned meshes collapsed on ~1/3 of the frames on MoltenVK — the skinning SSBO shared a VMA block (Sep 2026)
+
+> [!CRITICAL]
+> **On MoltenVK, a descriptor-referenced host-visible buffer must not share its VkDeviceMemory.**
+> A VMA block is one `MTLBuffer`; MoltenVK tracks the Metal argument-buffer residency
+> (`useResource:stages:`) per `MTLBuffer` from the stage flags of the LAST descriptor binding that
+> referenced it (KhronosGroup/MoltenVK#1870, open). The skinning SSBO (VERTEX|COMPUTE) sharing a
+> block with the instance-transforms SSBO (VERTEX) and the RT SSBOs (FRAGMENT) was left
+> non-resident for the vertex stage on a random ~1/3 of the frames: every bone read zero, the
+> whole Paladin — four Visuals and its cast shadow — collapsed to its origin, and the frame after
+> it was fine again. The rate was decided at launch by memory placement (identical launches: 33 %,
+> 25 %, 0 %, 17 %), which is why the Fox next to it never showed it and why Linux/Windows never did.
+>
+> **Fix:** `Buffer::setDedicatedMemory(true)` on the skinning SSBO when the device advertises
+> `VK_KHR_portability_subset` (`RenderableInstance::Abstract::createSkinningResources()`): 0 % on
+> 4/4 launches against ~2/3 of 22 launches without. **Two rules survive it:** (1) any macOS
+> flicker bench needs SEVERAL launches — one clean run is a coin toss; (2) the discriminating
+> experiment was `VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT` on every host-visible buffer, NOT
+> the driver version (1.4.2 reproduced it), NOT a host/GPU race (`vkDeviceWaitIdle()` before the
+> write still reproduced it), NOT the section index. Full story in
+> [`docs/troubleshooting.md`](troubleshooting.md) → macOS / MoltenVK.
+
 ### Fixed: chained post-process passes relied on EXTERNAL subpass dependencies alone — a race on MoltenVK (Aug 2026)
 
 > [!CRITICAL]

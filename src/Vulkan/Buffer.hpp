@@ -176,6 +176,34 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Requests a dedicated device memory allocation for this buffer (its own VkDeviceMemory).
+			 * @note Must be called before createOnHardware(). With VMA this sets
+			 * VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT; the non-VMA path is always dedicated.
+			 * Use it for a buffer that must not share its device memory with other buffers, e.g. a
+			 * descriptor-referenced host-visible buffer on MoltenVK, where a shared VMA block is one
+			 * MTLBuffer whose argument-buffer residency is tracked per buffer (see
+			 * RenderableInstance::Abstract::createSkinningResources()).
+			 * @param dedicated True to allocate the buffer in its own device memory.
+			 * @return void
+			 */
+			void
+			setDedicatedMemory (bool dedicated) noexcept
+			{
+				m_dedicatedMemory = dedicated;
+			}
+
+			/**
+			 * @brief Returns whether the buffer was requested in its own device memory allocation.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDedicatedMemory () const noexcept
+			{
+				return m_dedicatedMemory;
+			}
+
+			/**
 			 * @brief Returns the buffer vulkan handle.
 			 * @return VkBuffer
 			 */
@@ -390,5 +418,6 @@ namespace EmEn::Vulkan
 			mutable std::mutex m_hostMemoryAccess;
 			bool m_hostVisible{false};
 			bool m_hostReadable{false};
+			bool m_dedicatedMemory{false};
 	};
 }

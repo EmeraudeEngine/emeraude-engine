@@ -148,6 +148,20 @@ namespace EmEn::Graphics::RenderableInstance
 		m_skinningSSBO = std::make_unique< ShaderStorageBufferObject >(device, bufferSize, true);
 		m_skinningSSBO->setIdentifier(TracerTag, "SkinningMatrices", "SSBO");
 
+		/* ⚠️ MoltenVK (VK_KHR_portability_subset): this SSBO must own its device memory. A VMA block
+		 * is ONE MTLBuffer shared by every sub-allocated VkBuffer, and MoltenVK tracks the Metal
+		 * argument-buffer residency (useResource:stages:) PER MTLBuffer from the stage flags of
+		 * whichever descriptor set referenced it last. Sharing a block with buffers bound through
+		 * sets of other stage flags (instance transforms VERTEX-only, RT SSBOs FRAGMENT) left the
+		 * block non-resident for the vertex stage on a random ~1/3 of the frames: every bone read
+		 * zero and the whole skinned mesh collapsed (KhronosGroup/MoltenVK#1870). Measured Sep 2026
+		 * on Apple M2: 0/4 launches with a dedicated allocation against ~2/3 of 22 launches without.
+		 * Tested on the EXTENSION, never on the platform: other drivers need no residency. */
+		if ( device->physicalDevice()->hasPortabilitySubset() )
+		{
+			m_skinningSSBO->setDedicatedMemory(true);
+		}
+
 		if ( !m_skinningSSBO->createOnHardware() )
 		{
 			Tracer::error(TracerTag, "Unable to create skinning SSBO !");

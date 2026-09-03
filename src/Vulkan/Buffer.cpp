@@ -48,7 +48,9 @@ namespace EmEn::Vulkan
 		m_createInfo{other.m_createInfo},
 		m_deviceMemory{std::move(other.m_deviceMemory)},
 		m_memoryAllocation{other.m_memoryAllocation},
-		m_hostVisible{other.m_hostVisible}
+		m_hostVisible{other.m_hostVisible},
+		m_hostReadable{other.m_hostReadable},
+		m_dedicatedMemory{other.m_dedicatedMemory}
 	{
 		other.m_handle = VK_NULL_HANDLE;
 
@@ -73,6 +75,8 @@ namespace EmEn::Vulkan
 			m_deviceMemory = std::move(other.m_deviceMemory);
 			m_memoryAllocation = other.m_memoryAllocation;
 			m_hostVisible = other.m_hostVisible;
+			m_hostReadable = other.m_hostReadable;
+			m_dedicatedMemory = other.m_dedicatedMemory;
 
 			other.m_handle = VK_NULL_HANDLE;
 
@@ -223,6 +227,13 @@ namespace EmEn::Vulkan
 				VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 		}
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+		/* NOTE: A dedicated allocation gives the buffer its own VkDeviceMemory instead of a slice of a
+		 * shared block (see Buffer::setDedicatedMemory()). */
+		if ( m_dedicatedMemory )
+		{
+			allocInfo.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+		}
 		//allocInfo.requiredFlags = 0;
 		//allocInfo.preferredFlags = 0;
 		//allocInfo.memoryTypeBits = 0;

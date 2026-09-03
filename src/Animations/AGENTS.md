@@ -95,6 +95,8 @@ Component::Visual
   ├── Detects SkeletalDataTrait on renderable (lazy init)
   ├── Creates SkeletalAnimator (setSkeleton, setSkin, addClip)
   ├── Creates skinning SSBO + descriptor set on RenderableInstance
+  │   (one aligned section per frame in flight; DEDICATED device memory on portability-subset
+  │    devices — MoltenVK residency, see Vulkan/AGENTS.md § Dedicated Device Memory)
   │
   ▼ Each frame
   ├── SkeletalAnimator.update(dt) → skinningMatrices[]

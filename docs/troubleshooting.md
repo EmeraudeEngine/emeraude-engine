@@ -11,6 +11,7 @@ Solutions for common engine-level issues in Emeraude Engine development.
 - [macOS / MoltenVK Issues](#macos--moltenvk-issues)
   - [Uniform grey/white framebuffer after un-ticking an effect](#uniform-greywhite-framebuffer-after-un-ticking-a-photographic-effect-fixed-aug-2026)
   - [Blocky corruption on macOS — the two known classes](#blocky-corruption-on-macos--the-two-known-classes)
+  - [Skinned meshes collapse on a random ~1/3 of the frames — shared VMA block](#skinned-meshes-collapse-on-a-random-13-of-the-frames--the-skinning-ssbo-shared-a-vma-block-fixed-sep-2026)
   - [Tone mapping blows out to white / auto-ISO shows nothing](#tone-mapping-blows-out-to-white-and-never-recovers--auto-iso-shows-nothing-mitigated-aug-2026)
 - [Debug Display Issues](#debug-display-issues)
   - [A debug helper is dark, washed out, or invisible — the exposure ate it](#a-debug-helper-is-dark-washed-out-or-invisible--the-exposure-ate-it-fixed-aug-2026)
@@ -417,6 +418,37 @@ the tool: emit the suspect condition as the resolved colour and `return` early �
 draws its own silhouette. See
 [`docs/temporal-stability-measurement.md`](../../../docs/temporal-stability-measurement.md) §4 in
 projet-alpha.
+
+### Skinned meshes collapse on a random ~1/3 of the frames — the skinning SSBO shared a VMA block (fixed Sep 2026)
+
+**Symptoms (macOS only, Linux/Windows clean):** a skinned actor "flickers": on a random fraction
+of the frames (25–50 %) the WHOLE mesh vanishes — every skinned Visual of the actor, its cast
+shadow included — leaving a few pieces (bones whose matrices still read valid data). Owner report
+on the Paladin in `animation-debug`; the Fox next to it never vanished. Core validation clean,
+Synchronization Validation clean, Metal API Validation silent. The rate is decided **at launch**:
+four identical launches gave 33 %, 25 %, 0 %, 17 %.
+
+**Root cause:** MoltenVK binds descriptor sets through Metal3 argument buffers and must make every
+referenced `MTLBuffer` resident (`useResource:usage:stages:`). A VMA block is ONE `MTLBuffer`
+shared by many `VkBuffer`s, and MoltenVK records the residency stages PER `MTLBuffer` from the
+stage flags of the descriptor bindings that reference it (skinning VERTEX|COMPUTE, instance
+transforms VERTEX only, RT SSBOs FRAGMENT, UBOs VERTEX|FRAGMENT). When the skinning SSBO's block
+was left resident for another stage, the vertex fetch of every bone read zero and the vertices
+collapsed to the actor origin. Upstream: [KhronosGroup/MoltenVK#1870](https://github.com/KhronosGroup/MoltenVK/issues/1870)
+(open). Per-launch randomness = which block the SSBOs land in; per-frame randomness = which other
+sets reference that block in the encoder.
+
+**Fix:** the skinning SSBO owns its device memory on portability-subset devices
+(`Buffer::setDedicatedMemory(true)` → `VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT`, in
+`RenderableInstance::Abstract::createSkinningResources()`). Tested on the extension, never on the
+platform. Measured: 0 % on 4/4 launches with the fix against ~2/3 of 22 launches without.
+
+**How to bench it — several launches, always.** A single clean launch proves nothing (7 of 22
+broken-build launches were clean). Metric: over 12–15 captures 1 s apart, count the non-white
+pixels of the region holding the actor and its shadow; a vanished frame reads ~6 000 against
+~43 000. Forcing one section for every frame, `vkDeviceWaitIdle()` before the host write, four
+sections instead of three, MoltenVK 1.4.2, the argument-buffer mode: all measured, none of them
+is the variable.
 
 ---
 
