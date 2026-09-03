@@ -30,8 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -44,7 +44,6 @@
 /* Local inclusions for usages. */
 #include "Animation/AnimationChannel.hpp"
 #include "Animation/Skin.hpp"
-#include "Math/CartesianFrame.hpp"
 #include "VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
 
@@ -129,11 +128,7 @@ namespace EmEn::Scenes::Loaders
 
 			/** @copydoc EmEn::Scenes::Loaders::Interface::loadAnimationClipsOnly() */
 			[[nodiscard]]
-			bool loadAnimationClipsOnly (
-				const std::filesystem::path & filepath,
-				const Animations::SkeletonResource & targetSkeleton,
-				std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output
-			) noexcept override;
+			bool loadAnimationClipsOnly (const std::filesystem::path & filepath, const Animations::SkeletonResource & targetSkeleton, std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output) noexcept override;
 
 		private:
 

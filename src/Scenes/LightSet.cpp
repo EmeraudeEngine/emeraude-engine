@@ -238,7 +238,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			TraceInfo{ClassId} << "RT light SSBO created (" << bufferSize << " bytes, max " << MaxRTLights << " lights).";
+			TraceDebug{ClassId} << "RT light SSBO created (" << bufferSize << " bytes, max " << MaxRTLights << " lights).";
 		}
 
 		m_initialized = true;

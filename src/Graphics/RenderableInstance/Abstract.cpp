@@ -293,7 +293,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Abstract::createRTSkinnedGeometryResources (Vulkan::AccelerationStructureBuilder & builder, const Geometry::Interface & geometry) noexcept
+	Abstract::createRTSkinnedGeometryResources (AccelerationStructureBuilder & builder, const Geometry::Interface & geometry) noexcept
 	{
 		/* Idempotent: resources already exist. */
 		if ( m_rtSkinnedBLAS != nullptr )
@@ -331,7 +331,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto floatsPerVertex = vbo->vertexElementCount();
 		const auto mirrorSize = static_cast< VkDeviceSize >(vbo->vertexCount()) * floatsPerVertex * sizeof(float);
 
-		m_rtSkinnedMirrorBuffer = std::make_unique< Vulkan::Buffer >(
+		m_rtSkinnedMirrorBuffer = std::make_unique< Buffer >(
 			device, 0, mirrorSize,
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 			false
@@ -349,7 +349,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		/* Refit inputs: same sub-geometry partition as the static BLAS path
 		 * (Geometry::Interface::buildAccelerationStructure), vertex data = mirror. */
-		Vulkan::BLASGeometryInput sharedHeader{};
+		BLASGeometryInput sharedHeader{};
 		sharedHeader.vertexBuffer = m_rtSkinnedMirrorBuffer->handle();
 		sharedHeader.vertexCount = vbo->vertexCount();
 		sharedHeader.vertexStride = floatsPerVertex * static_cast< uint32_t >(sizeof(float));
@@ -366,7 +366,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		if ( const auto subGeoCount = geometry.subGeometryCount(); subGeoCount <= 1 )
 		{
-			Vulkan::BLASGeometryInput single = sharedHeader;
+			BLASGeometryInput single = sharedHeader;
 			single.firstIndex = 0;
 			single.indexCount = totalIndexCount;
 			m_rtRefitInputs.emplace_back(single);
@@ -378,7 +378,7 @@ namespace EmEn::Graphics::RenderableInstance
 			for ( uint32_t subGeoIndex = 0; subGeoIndex < subGeoCount; ++subGeoIndex )
 			{
 				const auto range = geometry.subGeometryRange(subGeoIndex); /* {firstIndex, indexCount} */
-				Vulkan::BLASGeometryInput sub = sharedHeader;
+				BLASGeometryInput sub = sharedHeader;
 				sub.firstIndex = range[0];
 				sub.indexCount = range[1];
 				m_rtRefitInputs.emplace_back(sub);
@@ -410,7 +410,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Update scratch buffer (over-allocated for alignment, like the builder's own). */
 		constexpr VkDeviceSize ScratchAlignment = 256;
 
-		m_rtRefitScratchBuffer = std::make_unique< Vulkan::Buffer >(
+		m_rtRefitScratchBuffer = std::make_unique< Buffer >(
 			device, 0, m_rtSkinnedBLAS->updateScratchSize() + ScratchAlignment,
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 			false
@@ -437,10 +437,10 @@ namespace EmEn::Graphics::RenderableInstance
 		m_rtSkinningPushConstants.dstAddress = builder.getBufferDeviceAddress(m_rtSkinnedMirrorBuffer->handle());
 		m_rtSkinningPushConstants.vertexCount = vbo->vertexCount();
 		m_rtSkinningPushConstants.floatsPerVertex = floatsPerVertex;
-		m_rtSkinningPushConstants.tbnMode = geometry.tangentSpaceEnabled() ? 2U : (geometry.normalEnabled() ? 1U : 0U);
+		m_rtSkinningPushConstants.tbnMode = geometry.tangentSpaceEnabled() ? 2U : geometry.normalEnabled() ? 1U : 0U;
 		m_rtSkinningPushConstants.influenceOffset = floatsPerVertex - 8U;
 
-		TraceInfo{TracerTag} <<
+		TraceDebug{TracerTag} <<
 			"RT skinned geometry resources created for '" << geometry.name() << "': " <<
 			vbo->vertexCount() << " vertices, " << m_rtRefitInputs.size() << " sub-geometries, "
 			"mirror " << mirrorSize << " bytes, update scratch " << m_rtSkinnedBLAS->updateScratchSize() << " bytes.";

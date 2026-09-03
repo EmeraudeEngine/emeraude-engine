@@ -890,13 +890,13 @@ void main ()
 		irradiance.image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		prefiltered.image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-		TraceInfo{ClassId} <<
+#ifdef EMERAUDE_DEBUG_IBL_FACES
+		TraceDebug{ClassId} <<
 			"Environment IBL baked from a " << sourceSize << "px² source: prefiltered " <<
 			IBLTexture::PrefilteredSize << "px²x" << prefilteredMipLevels << " mips (" << PrefilterBaseSampleCount <<
 			"+ samples/texel), irradiance " << IBLTexture::IrradianceSize << "px² (" << IrradianceSampleCount <<
 			" samples/texel) in " << durationUS << " us (submit+wait).";
 
-#ifdef EMERAUDE_DEBUG_IBL_FACES
 		this->dumpTextureFaces(irradiance, "irradiance");
 		this->dumpTextureFaces(prefiltered, "prefiltered");
 #endif

@@ -190,7 +190,7 @@ namespace EmEn::Overlay
 					break;
 			}
 
-			TraceInfo{ClassId} <<
+			TraceDebug{ClassId} <<
 				"Surface '" << this->name() << "' memory mapping " << ( m_memoryMappingEnabled ? "ENABLED (direct CPU write)" : "DISABLED (staging upload)" ) << " "
 				"[mode=" << magic_enum::enum_name(m_memoryMappingMode) << ", "
 				"deviceLocalMappable=" << ( mappableDeviceLocal ? "yes" : "no" ) << ", "

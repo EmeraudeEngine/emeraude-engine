@@ -167,7 +167,8 @@ namespace EmEn::Net
 
 		m_enabled = true;
 
-		TraceInfo{ClassId} << "API calls enabled (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates, "
+		TraceSuccess{ClassId} <<
+			"API calls enabled (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates, "
 			"response ceiling " << m_maxResponseBytes << " bytes, keeping " << m_retentionCeiling << " terminal ticket(s)).";
 
 		return true;

@@ -92,8 +92,11 @@ namespace EmEn::Scenes::Loaders
 			USDZArchive () noexcept = default;
 
 			USDZArchive (const USDZArchive &) = delete;
+
 			USDZArchive (USDZArchive &&) = delete;
+
 			USDZArchive & operator= (const USDZArchive &) = delete;
+
 			USDZArchive & operator= (USDZArchive &&) = delete;
 
 			~USDZArchive ()
@@ -131,7 +134,7 @@ namespace EmEn::Scenes::Loaders
 				/* ⚠️ `assetOnMemory` = true: the table keeps a POINTER into our mapping instead of
 				 * copying the whole archive into `USDZAsset::data`. That is the difference between
 				 * 21 MB and 1.6 GB resident before a single prim is read. */
-				if ( !tinyusdz::ReadUSDZAssetInfoFromMemory(reinterpret_cast< const uint8_t * >(m_handle.addr), static_cast< size_t >(m_handle.size), true, &m_asset, &warning, &error) )
+				if ( !tinyusdz::ReadUSDZAssetInfoFromMemory(m_handle.addr, static_cast< size_t >(m_handle.size), true, &m_asset, &warning, &error) )
 				{
 					TraceError{USDLoader::ClassId} << "Unable to read the asset table of '" << filepath.filename().string() << "' : " << error;
 

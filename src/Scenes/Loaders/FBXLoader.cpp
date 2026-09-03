@@ -27,6 +27,7 @@
 #include "FBXLoader.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -67,18 +68,14 @@
 #include "VertexFactory/Shape.hpp"
 #include "Tracer.hpp"
 
-namespace EmEn::Scenes::Loaders
+namespace
 {
-	using namespace Base::Animation;
-	using namespace Base::Math;
-	using namespace Base::PixelFactory;
-	using namespace Base::VertexFactory;
-	using namespace Graphics;
-	using namespace Graphics::Geometry;
+	using namespace EmEn;
+	using namespace EmEn::Base::Math;
+	using namespace EmEn::Base::PixelFactory;
 
 	/* Convert a ufbx 3x4 affine matrix (column-major) into the engine's
-	 * 4x4 column-major Matrix. The implicit last row is (0, 0, 0, 1). */
-	static
+     * 4x4 column-major Matrix. The implicit last row is (0, 0, 0, 1). */
 	Matrix< 4, float >
 	convertUfbxMatrix (const ufbx_matrix & m) noexcept
 	{
@@ -110,7 +107,6 @@ namespace EmEn::Scenes::Loaders
 	/* Detect a pixmap format from a texture filename. ufbx doesn't provide a MIME
 	 * type like glTF does, so we dispatch on the file extension. Supports the same
 	 * formats as the engine's PixelFactory (Targa, PNG, JPEG). */
-	static
 	Pixmap< uint8_t >::Format
 	filenameToPixmapFormat (std::string_view filename) noexcept
 	{
@@ -162,7 +158,6 @@ namespace EmEn::Scenes::Loaders
 	 * ufbx already applied target_axes / target_unit_meters conversions when
 	 * the scene was loaded, so the local_transform is expressed in engine
 	 * conventions (right-handed Y-up, meters). */
-	static
 	CartesianFrame< float >
 	extractFrameFromNode (const ufbx_node & node) noexcept
 	{
@@ -185,17 +180,17 @@ namespace EmEn::Scenes::Loaders
 		const auto wz = qw * qz;
 
 		Matrix< 4, float > rotMatrix;
-		rotMatrix[0]  = 1.0F - 2.0F * (yy + zz);
+		rotMatrix[0]  = 1.0F - (2.0F * (yy + zz));
 		rotMatrix[1]  = 2.0F * (xy + wz);
 		rotMatrix[2]  = 2.0F * (xz - wy);
 		rotMatrix[3]  = 0.0F;
 		rotMatrix[4]  = 2.0F * (xy - wz);
-		rotMatrix[5]  = 1.0F - 2.0F * (xx + zz);
+		rotMatrix[5]  = 1.0F - (2.0F * (xx + zz));
 		rotMatrix[6]  = 2.0F * (yz + wx);
 		rotMatrix[7]  = 0.0F;
 		rotMatrix[8]  = 2.0F * (xz + wy);
 		rotMatrix[9]  = 2.0F * (yz - wx);
-		rotMatrix[10] = 1.0F - 2.0F * (xx + yy);
+		rotMatrix[10] = 1.0F - (2.0F * (xx + yy));
 		rotMatrix[11] = 0.0F;
 		rotMatrix[12] = 0.0F;
 		rotMatrix[13] = 0.0F;
@@ -214,19 +209,10 @@ namespace EmEn::Scenes::Loaders
 			static_cast< float >(trs.translation.z)
 		});
 
-		/* ⚠️ CONJUGATED (M·T·M), not merely mirrored: a hierarchy of conjugated transforms
-		 * telescopes into one mirror at the root, which keeps every node a PROPER rotation while
-		 * the mirror itself lives in the vertex data. */
-		if ( true )
-		{
-			return frame;
-		}
-
 		return frame;
 	}
 
 	/* Helper: build a sanitized node name with fallback to the node's element id. */
-	static
 	std::string
 	buildNodeName (const std::string & prefix, const ufbx_node & node) noexcept
 	{
@@ -246,6 +232,16 @@ namespace EmEn::Scenes::Loaders
 
 		return name;
 	}
+}
+
+namespace EmEn::Scenes::Loaders
+{
+	using namespace Base::Animation;
+	using namespace Base::Math;
+	using namespace Base::PixelFactory;
+	using namespace Base::VertexFactory;
+	using namespace Graphics;
+	using namespace Graphics::Geometry;
 
 	bool
 	FBXLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
@@ -295,10 +291,10 @@ namespace EmEn::Scenes::Loaders
 
 		if ( scene == nullptr )
 		{
-			char buffer[512];
-			ufbx_format_error(buffer, sizeof(buffer), &error);
+			std::array< char, 512 > buffer{};
+			ufbx_format_error(buffer.data(), sizeof(buffer), &error);
 
-			TraceError{ClassId} << "Failed to parse '" << filepath << "' :\n" << buffer;
+			TraceError{ClassId} << "Failed to parse '" << filepath << "' :\n" << buffer.data();
 
 			return false;
 		}
@@ -309,24 +305,18 @@ namespace EmEn::Scenes::Loaders
 		const auto parentPath = filepath.parent_path();
 
 		/* Loading pipeline: Images → Materials → Meshes → Skins → Animations → Node descriptors.
-		 * Étape 1 scope: meshes + node descriptors only. Images, materials, skins
+		 * Step 1 scope: meshes + node descriptors only. Images, materials, skins
 		 * and animations are stubbed — meshes get the default PBR material. */
-
-		TraceInfo{ClassId} << "Phase 1: Loading " << scene->textures.count << " textures...";
 
 		if ( !this->loadImages(*scene, parentPath) )
 		{
 			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
 		}
 
-		TraceInfo{ClassId} << "Phase 2: Loading " << scene->materials.count << " materials...";
-
 		if ( !this->loadMaterials(*scene) )
 		{
 			Tracer::warning(ClassId, "Some materials failed to load, continuing with defaults.");
 		}
-
-		TraceInfo{ClassId} << "Phase 3: Loading " << scene->meshes.count << " meshes...";
 
 		if ( !this->loadMeshes(*scene, output) )
 		{
@@ -339,15 +329,11 @@ namespace EmEn::Scenes::Loaders
 		{
 			if ( scene->skin_deformers.count > 0 )
 			{
-				TraceInfo{ClassId} << "Phase 4: Loading " << scene->skin_deformers.count << " skins...";
-
 				this->loadSkins(*scene, output);
 			}
 
 			if ( scene->anim_stacks.count > 0 )
 			{
-				TraceInfo{ClassId} << "Phase 5: Loading " << scene->anim_stacks.count << " animations...";
-
 				this->loadAnimations(*scene, output);
 			}
 
@@ -372,22 +358,15 @@ namespace EmEn::Scenes::Loaders
 				if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(meshIt->second.get()) )
 				{
 					skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
-
-					TraceInfo{ClassId} << "Attached skeletal data (" << m_skeletons[skinIdx]->name()
-						<< ") to mesh element " << meshElementId << ".";
 				}
 			}
 		}
-
-		TraceInfo{ClassId} << "Phase 6: Building node descriptors...";
 
 		this->buildNodeDescriptors(*scene, output);
 
 		output.skeletons = m_skeletons;
 		output.animationClips = m_animationClips;
 		output.skinJointNodeIndices = m_skinJointNodeIndices;
-
-		TraceInfo{ClassId} << "Loading complete.";
 
 		return true;
 	}
@@ -852,7 +831,7 @@ namespace EmEn::Scenes::Loaders
 
 				for ( size_t partIdx = 0; partIdx < partCount; ++partIdx )
 				{
-					const uint32_t groupTriangleStart = static_cast< uint32_t >(triangles.size());
+					const auto groupTriangleStart = static_cast< uint32_t >(triangles.size());
 
 					/* Each material part after the first starts a new sub-geometry group. */
 					if ( hasMaterialSplit && partIdx > 0 )
@@ -896,15 +875,15 @@ namespace EmEn::Scenes::Loaders
 							face
 						);
 
-						for ( uint32_t triIdx = 0; triIdx < numTris; ++triIdx )
+						for ( uint32_t triangleIndex = 0; triangleIndex < numTris; ++triangleIndex )
 						{
-							const uint32_t c0 = triangulationBuffer[triIdx * 3 + 0];
-							const uint32_t c1 = triangulationBuffer[triIdx * 3 + 1];
-							const uint32_t c2 = triangulationBuffer[triIdx * 3 + 2];
+							const uint32_t c0 = triangulationBuffer[(triangleIndex * 3) + 0];
+							const uint32_t c1 = triangulationBuffer[(triangleIndex * 3) + 1];
+							const uint32_t c2 = triangulationBuffer[(triangleIndex * 3) + 2];
 
-							const uint32_t cornerIndices[3] = {c0, c1, c2};
+							std::array< uint32_t, 3 > cornerIndices{c0, c1, c2};
 
-							for ( int k = 0; k < 3; ++k )
+							for ( auto k = 0U; k < 3U; ++k )
 							{
 								const uint32_t corner = cornerIndices[k];
 								const auto pos = ufbx_get_vertex_vec3(&mesh.vertex_position, corner);
@@ -923,6 +902,7 @@ namespace EmEn::Scenes::Loaders
 									 * The engine and Vulkan use V=0 at the top, matching glTF. Flip V
 									 * here so embedded textures sample the correct region. */
 									const auto uv = ufbx_get_vertex_vec2(&mesh.vertex_uv, corner);
+
 									vertices[globalVertexOffset + k].setTextureCoordinates(Vector< 3, float >{
 										static_cast< float >(uv.x),
 										1.0F - static_cast< float >(uv.y),
@@ -940,8 +920,8 @@ namespace EmEn::Scenes::Loaders
 									const uint32_t uniqueVertex = mesh.vertex_indices.data[corner];
 									const ufbx_skin_vertex & sv = skin->vertices.data[uniqueVertex];
 
-									int32_t joints[4] = {-1, -1, -1, -1};
-									float weights[4] = {0.0F, 0.0F, 0.0F, 0.0F};
+									std::array< int32_t, 4 > joints{-1, -1, -1, -1};
+									std::array< float, 4 > weights{0.0F, 0.0F, 0.0F, 0.0F};
 
 									const size_t take = (sv.num_weights < 4U) ? sv.num_weights : 4U;
 
@@ -1397,9 +1377,10 @@ namespace EmEn::Scenes::Loaders
 				continue;
 			}
 
-			const std::string clipName = (stack.name.length == 0)
-				? ("clip_" + std::to_string(si))
-				: std::string{stack.name.data, stack.name.length};
+			const std::string clipName =
+				stack.name.length == 0 ?
+				"clip_" + std::to_string(si) :
+				std::string{stack.name.data, stack.name.length};
 
 			AnimationClip< float > clip{clipName, std::move(channels)};
 
@@ -1419,7 +1400,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( !m_animationClips.empty() )
 		{
-			TraceInfo{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
+			TraceDebug{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
 		}
 	}
 
@@ -1483,34 +1464,44 @@ namespace EmEn::Scenes::Loaders
 
 			for ( size_t f = 0; f < numFrames; ++f )
 			{
-				double t = t0 + static_cast< double >(f) * sampleStep;
+				double t = t0 + (static_cast< double >(f) * sampleStep);
 
-				if ( t > t1 )
-				{
-					t = t1;
-				}
+				t = std::min(t, t1);
 
 				const ufbx_transform xf = ufbx_evaluate_transform(stack.anim, bone, t);
 
-				const float relTime = static_cast< float >(t - t0);
+				const auto relTime = static_cast< float >(t - t0);
 
 				/* ⚠️ A translation is mirrored, a rotation is CONJUGATED (with its det(M) angle
 				 * inversion), a scale is invariant. A clip mirrored inconsistently with the bind
 				 * pose it drives makes the rig snap on the first animated frame. */
-				translation.vectorKeyFrames.push_back({relTime, Vector< 3, float >{static_cast< float >(xf.translation.x) * uniformScale, static_cast< float >(xf.translation.y) * uniformScale, static_cast< float >(xf.translation.z) * uniformScale}});
+				translation.vectorKeyFrames.push_back({
+					.time = relTime,
+					.value = Vector< 3, float >{
+						static_cast< float >(xf.translation.x) * uniformScale,
+						static_cast< float >(xf.translation.y) * uniformScale,
+						static_cast< float >(xf.translation.z) * uniformScale
+					}
+				});
 
-				rotation.quaternionKeyFrames.push_back({relTime, Quaternion< float >{
-					static_cast< float >(xf.rotation.x),
-					static_cast< float >(xf.rotation.y),
-					static_cast< float >(xf.rotation.z),
-					static_cast< float >(xf.rotation.w)
-				}});
+				rotation.quaternionKeyFrames.push_back({
+					.time = relTime,
+					.value = Quaternion< float >{
+						static_cast< float >(xf.rotation.x),
+						static_cast< float >(xf.rotation.y),
+						static_cast< float >(xf.rotation.z),
+						static_cast< float >(xf.rotation.w)
+					}
+				});
 
-				scaleChannel.vectorKeyFrames.push_back({relTime, Vector< 3, float >{
-					static_cast< float >(xf.scale.x),
-					static_cast< float >(xf.scale.y),
-					static_cast< float >(xf.scale.z)
-				}});
+				scaleChannel.vectorKeyFrames.push_back({
+					.time = relTime,
+					.value = Vector< 3, float >{
+						static_cast< float >(xf.scale.x),
+						static_cast< float >(xf.scale.y),
+						static_cast< float >(xf.scale.z)
+					}
+				});
 			}
 
 			channels.push_back(std::move(translation));
@@ -1522,18 +1513,13 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	bool
-	FBXLoader::loadAnimationClipsOnly (
-		const std::filesystem::path & filepath,
-		const Animations::SkeletonResource & targetSkeleton,
-		std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output
-	) noexcept
+	FBXLoader::loadAnimationClipsOnly (const std::filesystem::path & filepath, const Animations::SkeletonResource & targetSkeleton, std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output) noexcept
 	{
 		const auto & skeleton = targetSkeleton.skeleton();
 
 		if ( skeleton.empty() )
 		{
-			TraceError{ClassId} << "Cannot load animation clips: target skeleton '"
-				<< targetSkeleton.name() << "' is empty.";
+			TraceError{ClassId} << "Cannot load animation clips: target skeleton '" << targetSkeleton.name() << "' is empty.";
 
 			return false;
 		}
@@ -1553,10 +1539,10 @@ namespace EmEn::Scenes::Loaders
 
 		if ( scene == nullptr )
 		{
-			char buffer[512];
-			ufbx_format_error(buffer, sizeof(buffer), &error);
+			std::array< char, 512 > buffer{};
+			ufbx_format_error(buffer.data(), sizeof(buffer), &error);
 
-			TraceError{ClassId} << "Failed to parse animation file '" << filepath << "' :\n" << buffer;
+			TraceError{ClassId} << "Failed to parse animation file '" << filepath << "' :\n" << buffer.data();
 
 			return false;
 		}
@@ -1586,7 +1572,7 @@ namespace EmEn::Scenes::Loaders
 				continue;
 			}
 
-			ufbx_node * node = ufbx_find_node_len(scene, jointName.data(), jointName.length());
+			const ufbx_node * node = ufbx_find_node_len(scene, jointName.data(), jointName.length());
 
 			if ( node != nullptr )
 			{
@@ -1683,9 +1669,7 @@ namespace EmEn::Scenes::Loaders
 
 			/* Mixamo names every stack `mixamo.com` (or similar) — useless. The
 			 * filename is the actual semantic name in this multi-file workflow. */
-			const std::string clipName = (scene->anim_stacks.count == 1)
-				? fileStem
-				: fileStem + "_" + std::to_string(si);
+			const std::string clipName = scene->anim_stacks.count == 1 ? fileStem : fileStem + "_" + std::to_string(si);
 
 			AnimationClip< float > clip{clipName, std::move(channels)};
 
@@ -1703,16 +1687,12 @@ namespace EmEn::Scenes::Loaders
 			}
 		}
 
-		const size_t produced = output.size() - producedBefore;
-
-		if ( produced == 0 )
+		if ( output.size() - producedBefore == 0 )
 		{
 			TraceWarning{ClassId} << "Animation file '" << filepath << "' produced no clips.";
 
 			return false;
 		}
-
-		TraceInfo{ClassId} << "Loaded " << produced << " animation clip(s) from '" << filepath << "'.";
 
 		return true;
 	}
@@ -1732,9 +1712,9 @@ namespace EmEn::Scenes::Loaders
 		std::unordered_map< uint32_t, size_t > meshElementToIndex;
 		meshElementToIndex.reserve(scene.meshes.count);
 
-		for ( size_t i = 0; i < scene.meshes.count; ++i )
+		for ( size_t index = 0; index < scene.meshes.count; ++index )
 		{
-			meshElementToIndex[static_cast< uint32_t >(scene.meshes.data[i]->element_id)] = i;
+			meshElementToIndex[scene.meshes.data[index]->element_id] = index;
 		}
 
 		/* Exclusion helper: a node is filtered out if its own name or any
@@ -1750,7 +1730,7 @@ namespace EmEn::Scenes::Loaders
 			{
 				if ( node->name.length > 0 )
 				{
-					std::string name{node->name.data, node->name.length};
+					const std::string name{node->name.data, node->name.length};
 
 					if ( m_options.excludedNodeNames.contains(name) )
 					{
@@ -1766,9 +1746,9 @@ namespace EmEn::Scenes::Loaders
 
 		/* First pass: allocate a NodeDescriptor slot for every ufbx node (skipping the
 		 * root node itself, whose transform is identity by ufbx convention). */
-		for ( size_t i = 0; i < scene.nodes.count; ++i )
+		for ( size_t index = 0; index < scene.nodes.count; ++index )
 		{
-			const ufbx_node * node = scene.nodes.data[i];
+			const ufbx_node * node = scene.nodes.data[index];
 
 			if ( node == nullptr || node->is_root )
 			{
@@ -1799,7 +1779,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( node->mesh != nullptr )
 			{
-				const auto it = meshElementToIndex.find(static_cast< uint32_t >(node->mesh->element_id));
+				const auto it = meshElementToIndex.find(node->mesh->element_id);
 
 				if ( it != meshElementToIndex.end() )
 				{

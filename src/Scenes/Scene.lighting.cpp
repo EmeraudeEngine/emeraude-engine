@@ -260,7 +260,7 @@ namespace EmEn::Scenes
 
 		this->refreshAmbientLightProperties();
 
-		TraceInfo{ClassId} << "The indirect diffuse is now owned by " << (owned ? "the post-process provider (RTGI): the ambient pass' diffuse IBL leg is OFF." : "the raster: the ambient pass' diffuse IBL leg is ON.");
+		TraceDebug{ClassId} << "The indirect diffuse is now owned by " << (owned ? "the post-process provider (RTGI): the ambient pass' diffuse IBL leg is OFF." : "the raster: the ambient pass' diffuse IBL leg is ON.");
 	}
 
 	void

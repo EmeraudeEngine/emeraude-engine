@@ -72,26 +72,22 @@
 #include "VertexFactory/Shape.hpp"
 #include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
-#include "Settings.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 
-namespace EmEn::Scenes::Loaders
+namespace
 {
-	using namespace Graphics;
-	using namespace Graphics::Geometry;
-	using namespace Base::Animation;
-	using namespace Base::Math;
-	using namespace Base::VertexFactory;
-	using namespace Base::PixelFactory;
+	using namespace EmEn;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Base::Math;
+	using namespace EmEn::Base::PixelFactory;
 
 	/* The byte span type fastgltf hands to accessor readers. */
 	using ByteSpan = decltype(fastgltf::DefaultBufferDataAdapter{}(std::declval< const fastgltf::Asset & >(), std::size_t{}));
 
 	/* Translates a glTF sampler wrap mode. The three values are the whole of what glTF can
 	 * express (GL_REPEAT, GL_MIRRORED_REPEAT, GL_CLAMP_TO_EDGE), so this conversion is total. */
-	static
 	constexpr
 	TextureResource::WrapMode
 	toWrapMode (fastgltf::Wrap wrap) noexcept
@@ -114,7 +110,6 @@ namespace EmEn::Scenes::Loaders
 	/* Returns the whole payload of a glTF buffer. Mirrors what DefaultBufferDataAdapter does for
 	 * a buffer *view*, except EXT_meshopt_compression addresses its compressed source directly in
 	 * the buffer, outside of any view. */
-	static
 	ByteSpan
 	bufferBytes (const fastgltf::Asset & asset, size_t bufferIndex) noexcept
 	{
@@ -138,6 +133,108 @@ namespace EmEn::Scenes::Loaders
 			}
 		}, asset.buffers[bufferIndex].data);
 	}
+
+	/* Detect image format from MIME type. */
+	Pixmap< uint8_t >::Format
+	mimeToPixmapFormat (fastgltf::MimeType mime) noexcept
+	{
+		switch ( mime )
+		{
+			case fastgltf::MimeType::JPEG :
+				return Pixmap< uint8_t >::Format::Jpeg;
+
+			case fastgltf::MimeType::PNG :
+				return Pixmap< uint8_t >::Format::PNG;
+
+			default :
+				return Pixmap< uint8_t >::Format::None;
+		}
+	}
+
+	/* Helper: Extract a CartesianFrame from a glTF node's TRS transform.
+	 * ⚠️ The frame is CONJUGATED by the axis flip (M·T·M), never merely mirrored: a hierarchy of
+	 * conjugated transforms telescopes into a single mirror at the root, which is what lets every
+	 * node keep a PROPER rotation while the mirror lives in the vertex data. */
+	CartesianFrame< float >
+	extractFrameFromNode (const fastgltf::Node & glTFNode) noexcept
+	{
+		CartesianFrame< float > frame;
+
+		if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
+		{
+			/* Rotation: quaternion (x, y, z, w) → rotation matrix. */
+			const auto qx = trs->rotation.x();
+			const auto qy = trs->rotation.y();
+			const auto qz = trs->rotation.z();
+			const auto qw = trs->rotation.w();
+
+			const auto xx = qx * qx;
+			const auto yy = qy * qy;
+			const auto zz = qz * qz;
+			const auto xy = qx * qy;
+			const auto xz = qx * qz;
+			const auto yz = qy * qz;
+			const auto wx = qw * qx;
+			const auto wy = qw * qy;
+			const auto wz = qw * qz;
+
+			/* 4x4 rotation matrix (column-major). */
+			Matrix< 4, float > rotMatrix;
+			rotMatrix[0]  = 1.0F - (2.0F * (yy + zz));
+			rotMatrix[1]  = 2.0F * (xy + wz);
+			rotMatrix[2]  = 2.0F * (xz - wy);
+			rotMatrix[3]  = 0.0F;
+			rotMatrix[4]  = 2.0F * (xy - wz);
+			rotMatrix[5]  = 1.0F - (2.0F * (xx + zz));
+			rotMatrix[6]  = 2.0F * (yz + wx);
+			rotMatrix[7]  = 0.0F;
+			rotMatrix[8]  = 2.0F * (xz + wy);
+			rotMatrix[9]  = 2.0F * (yz - wx);
+			rotMatrix[10] = 1.0F - (2.0F * (xx + yy));
+			rotMatrix[11] = 0.0F;
+			rotMatrix[12] = 0.0F;
+			rotMatrix[13] = 0.0F;
+			rotMatrix[14] = 0.0F;
+			rotMatrix[15] = 1.0F;
+
+			/* Build frame from rotation matrix + scale, then set position. */
+			frame = CartesianFrame< float >(rotMatrix, {trs->scale.x(), trs->scale.y(), trs->scale.z()});
+			frame.setPosition({trs->translation.x(), trs->translation.y(), trs->translation.z()});
+		}
+
+		return frame;
+	}
+
+	/* Helper: Build a node name from the glTF node. */
+	std::string
+	buildNodeName (const std::string & prefix, const fastgltf::Node & glTFNode, size_t nodeIndex) noexcept
+	{
+		std::string name;
+		name.reserve(prefix.size() + 6 + glTFNode.name.size());
+		name = prefix;
+		name += "Node/";
+
+		if ( glTFNode.name.empty() )
+		{
+			name += std::to_string(nodeIndex);
+		}
+		else
+		{
+			name.append(glTFNode.name.data(), glTFNode.name.size());
+		}
+
+		return name;
+	}
+}
+
+namespace EmEn::Scenes::Loaders
+{
+	using namespace Graphics;
+	using namespace Graphics::Geometry;
+	using namespace Base::Animation;
+	using namespace Base::Math;
+	using namespace Base::VertexFactory;
+	using namespace Base::PixelFactory;
 
 	/**
 	 * @brief Decodes EXT_meshopt_compression buffer views on demand and keeps the result.
@@ -214,7 +311,7 @@ namespace EmEn::Scenes::Loaders
 			{
 				size_t bytes = 0;
 
-				for ( const auto & [index, buffer] : m_decoded )
+				for ( const auto & buffer : m_decoded | std::views::values )
 				{
 					bytes += buffer.size();
 				}
@@ -340,106 +437,6 @@ namespace EmEn::Scenes::Loaders
 			return cache->view(asset, bufferViewIndex);
 		}
 	};
-
-	/* Detect image format from MIME type. */
-	static
-	Pixmap< uint8_t >::Format
-	mimeToPixmapFormat (fastgltf::MimeType mime) noexcept
-	{
-		switch ( mime )
-		{
-			case fastgltf::MimeType::JPEG :
-				return Pixmap< uint8_t >::Format::Jpeg;
-
-			case fastgltf::MimeType::PNG :
-				return Pixmap< uint8_t >::Format::PNG;
-
-			default :
-				return Pixmap< uint8_t >::Format::None;
-		}
-	}
-
-	/* Helper: Extract a CartesianFrame from a glTF node's TRS transform.
-	 * ⚠️ The frame is CONJUGATED by the axis flip (M·T·M), never merely mirrored: a hierarchy of
-	 * conjugated transforms telescopes into a single mirror at the root, which is what lets every
-	 * node keep a PROPER rotation while the mirror lives in the vertex data. */
-	static
-	CartesianFrame< float >
-	extractFrameFromNode (const fastgltf::Node & glTFNode) noexcept
-	{
-		CartesianFrame< float > frame;
-
-		if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
-		{
-			/* Rotation: quaternion (x, y, z, w) → rotation matrix. */
-			const auto qx = trs->rotation.x();
-			const auto qy = trs->rotation.y();
-			const auto qz = trs->rotation.z();
-			const auto qw = trs->rotation.w();
-
-			const auto xx = qx * qx;
-			const auto yy = qy * qy;
-			const auto zz = qz * qz;
-			const auto xy = qx * qy;
-			const auto xz = qx * qz;
-			const auto yz = qy * qz;
-			const auto wx = qw * qx;
-			const auto wy = qw * qy;
-			const auto wz = qw * qz;
-
-			/* 4x4 rotation matrix (column-major). */
-			Matrix< 4, float > rotMatrix;
-			rotMatrix[0]  = 1.0F - (2.0F * (yy + zz));
-			rotMatrix[1]  = 2.0F * (xy + wz);
-			rotMatrix[2]  = 2.0F * (xz - wy);
-			rotMatrix[3]  = 0.0F;
-			rotMatrix[4]  = 2.0F * (xy - wz);
-			rotMatrix[5]  = 1.0F - (2.0F * (xx + zz));
-			rotMatrix[6]  = 2.0F * (yz + wx);
-			rotMatrix[7]  = 0.0F;
-			rotMatrix[8]  = 2.0F * (xz + wy);
-			rotMatrix[9]  = 2.0F * (yz - wx);
-			rotMatrix[10] = 1.0F - (2.0F * (xx + yy));
-			rotMatrix[11] = 0.0F;
-			rotMatrix[12] = 0.0F;
-			rotMatrix[13] = 0.0F;
-			rotMatrix[14] = 0.0F;
-			rotMatrix[15] = 1.0F;
-
-			/* Build frame from rotation matrix + scale, then set position. */
-			frame = CartesianFrame< float >(rotMatrix, {trs->scale.x(), trs->scale.y(), trs->scale.z()});
-			frame.setPosition({trs->translation.x(), trs->translation.y(), trs->translation.z()});
-		}
-
-		if ( true )
-		{
-			return frame;
-		}
-
-		return frame;
-	}
-
-	/* Helper: Build a node name from the glTF node. */
-	static
-	std::string
-	buildNodeName (const std::string & prefix, const fastgltf::Node & glTFNode, size_t nodeIndex) noexcept
-	{
-		std::string name;
-		name.reserve(prefix.size() + 6 + glTFNode.name.size());
-		name = prefix;
-		name += "Node/";
-
-		if ( glTFNode.name.empty() )
-		{
-			name += std::to_string(nodeIndex);
-		}
-		else
-		{
-			name.append(glTFNode.name.data(), glTFNode.name.size());
-		}
-
-		return name;
-	}
 
 	GLTFLoader::GLTFLoader (Resources::Manager & resources) noexcept
 		: m_resources{resources}
@@ -617,7 +614,7 @@ namespace EmEn::Scenes::Loaders
 		/* Inventory of what the asset actually declared. Without it, "the scene is not lit" is
 		 * indistinguishable from "the asset declares no light", and every diagnosis starts blind
 		 * — the Sponza glTF, for one, declares 24 lights whose intensity is all zero. */
-		TraceInfo{ClassId} <<
+		TraceDebug{ClassId} <<
 			filepath.filename().string() << " loaded: " <<
 			output.nodes.size() << " nodes, " <<
 			output.meshes.size() << " meshes, " <<
@@ -2456,9 +2453,7 @@ namespace EmEn::Scenes::Loaders
 						values.reserve(timestamps.size() * valuesPerKeyFrame);
 
 						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, outputAccessor, [&] (const fastgltf::math::fvec3 & v) {
-							const Vector< 3, float > scaled{v.x() * valueScale, v.y() * valueScale, v.z() * valueScale};
-
-							values.push_back(isTranslation ? scaled : scaled);
+							values.emplace_back(v.x() * valueScale, v.y() * valueScale, v.z() * valueScale);
 						}, adapter);
 
 						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);
@@ -2497,7 +2492,7 @@ namespace EmEn::Scenes::Loaders
 						 * carries the det(M) angle inversion, without which the bind pose would look
 						 * right while the animation played backwards. */
 						fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, outputAccessor, [&] (const fastgltf::math::fvec4 & v) {
-							values.push_back(Quaternion< float >{v.x(), v.y(), v.z(), v.w()});
+							values.emplace_back(v.x(), v.y(), v.z(), v.w());
 						}, adapter);
 
 						const auto keyFrameCount = std::min(timestamps.size(), values.size() / valuesPerKeyFrame);

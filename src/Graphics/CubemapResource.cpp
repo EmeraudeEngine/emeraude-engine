@@ -904,9 +904,7 @@ namespace EmEn::Graphics
 
 		m_hemisphereIlluminanceFactor = std::max(1e-4F, static_cast< float >(illuminance));
 
-		TraceInfo{ClassId} <<
-			"Cubemap '" << this->name() << "' measured hemisphere illuminance factor: " <<
-			m_hemisphereIlluminanceFactor << " (uniform dome = " << pi << ").";
+		TraceDebug{ClassId} << "Cubemap '" << this->name() << "' measured hemisphere illuminance factor: " << m_hemisphereIlluminanceFactor << " (uniform dome = " << pi << ").";
 
 		return m_hemisphereIlluminanceFactor;
 	}

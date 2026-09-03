@@ -131,7 +131,7 @@ namespace EmEn::Graphics
 
 			const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - startTime).count();
 
-			TraceInfo{TextureCompressor::ClassId} << "Compressed " << width << "x" << height << " mip level (" << totalBlocks << " blocks) in " << elapsed << " ms.";
+			TraceDebug{TextureCompressor::ClassId} << "Compressed " << width << "x" << height << " mip level (" << totalBlocks << " blocks) in " << elapsed << " ms.";
 
 			return result;
 		}

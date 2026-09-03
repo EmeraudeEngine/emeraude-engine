@@ -142,7 +142,7 @@ namespace EmEn::Net
 
 		m_downloadEnabled = true;
 
-		TraceInfo{ClassId} << "Downloads enabled, " << m_cache.size() << " file(s) in cache (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates).";
+		TraceSuccess{ClassId} << "Downloads enabled, " << m_cache.size() << " file(s) in cache (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates).";
 
 		return true;
 	}

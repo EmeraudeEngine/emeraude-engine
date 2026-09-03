@@ -30,8 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -102,6 +102,32 @@ namespace EmEn::Scenes::Loaders
 			 * @param resources A reference to the engine resource manager.
 			 */
 			explicit GLTFLoader (Resources::Manager & resources) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			GLTFLoader (const GLTFLoader & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			GLTFLoader (GLTFLoader && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return GLTFLoader &
+			 */
+			GLTFLoader & operator= (const GLTFLoader & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return GLTFLoader &
+			 */
+			GLTFLoader & operator= (GLTFLoader && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the loader.
