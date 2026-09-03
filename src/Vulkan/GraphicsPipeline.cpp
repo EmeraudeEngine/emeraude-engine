@@ -736,15 +736,12 @@ namespace EmEn::Vulkan
 								m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
 								break;
 
-							case BlendingMode::Screen:
-								m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-								m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-								m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
-
-								m_colorBlendAttachments[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-								m_colorBlendAttachments[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
-								m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
-								break;
+							/* NOTE: There is deliberately no 'Screen' case. That operator needs
+							 * dstColorBlendFactor = ONE_MINUS_SRC_COLOR, and Vulkan does not clamp
+							 * blend factors on a floating-point attachment: the scene target is an
+							 * unclamped R16G16B16A16_SFLOAT in nits, so a source above one nit
+							 * makes the factor NEGATIVE and the destination is subtracted. See
+							 * BlendingMode in Graphics/Types.hpp. */
 
 							/* Simple alpha blending. */
 							case BlendingMode::Normal:

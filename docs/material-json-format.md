@@ -125,6 +125,39 @@ variables silently changes its colour space.
 `EmissiveStrength`, `FogResponse`, `DoFMask`, `BlendingMode`, `Shininess` (legacy) — plain values at
 the top level.
 
+#### `BlendingMode` — three modes, and one that was deleted
+
+| Value | Blend factors (src, dst) | Use |
+|---|---|---|
+| `"Normal"` | `SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA` | genuine translucency (glass, a faded decal) |
+| `"Add"` | `ONE`, `ONE` | **anything self-illuminated** — flames, explosions, sparks, neon |
+| `"Multiply"` | `ZERO`, `SRC_COLOR` | darkening overlays |
+| `"None"` | blending off | the default; a sprite additionally gets a 0.5 alpha cutout |
+
+> [!CAUTION]
+> **`"Screen"` was REMOVED (Sep 2026) and must never come back.** A manifest that still carries it
+> keeps loading — it is read as `"Add"` and logs a warning — but the value is obsolete.
+>
+> The screen operator is `1 - (1 - src)(1 - dst)`, i.e. `src + dst·(1 - src)`, and it is **only
+> defined for a source inside [0,1]**. Expressed with fixed-function blending it needs
+> `dstColorBlendFactor = ONE_MINUS_SRC_COLOR`, and **Vulkan does not clamp blend factors on a
+> floating-point attachment**. The scene target is an unclamped `R16G16B16A16_SFLOAT` holding
+> ABSOLUTE LUMINANCE IN NITS, so `EmissiveStrength: 320` made that factor **-319**: the background
+> was *subtracted*, per channel, instead of screened.
+>
+> Because the factor is per channel, the failure is **coloured**, which is what makes it hard to
+> recognise. An orange flame has no blue, so its blue factor stayed near `+1` while red and green
+> went deeply negative: over a bright surface the red channel was annihilated and only the
+> background's green and blue survived. Measured in `game-logic`: 2031 pixels at
+> **R=11, G=164, B=167** in the flame — a *cyan* flame — with 52.9 % of its body crushed to black.
+> After the migration to `"Add"`: 2 such pixels left in the frame (and both belong to a genuinely
+> blue material elsewhere), 0 % black, red back to 230.
+>
+> **The general rule: an operator defined over an SDR ratio domain has no meaning in a nits
+> buffer.** `"Multiply"` is the same family — `dst·src` with `src` in the hundreds blows the
+> destination up rather than darkening it — so it belongs on an LDR overlay, not on an emissive
+> surface. Emissive surfaces composite additively, because light adds.
+
 ## Adding a component
 
 - A **feature**: write its `parse<Name>Component()` and call it from the dispatcher.

@@ -363,9 +363,6 @@ namespace EmEn::Graphics
 			case BlendingMode::Multiply :
 				return MultiplyBlendingString;
 
-			case BlendingMode::Screen :
-				return ScreenBlendingString;
-
 			case BlendingMode::None :
 				return NoneString;
 		}
@@ -391,9 +388,15 @@ namespace EmEn::Graphics
 			return BlendingMode::Multiply;
 		}
 
+		/* LEGACY: 'Screen' was removed because the operator it needs
+		 * (dstColorBlendFactor = ONE_MINUS_SRC_COLOR) goes NEGATIVE on the unclamped
+		 * floating-point scene attachment as soon as the source exceeds one nit, which
+		 * subtracts the background instead of screening it. Emissive surfaces add. */
 		if ( value == ScreenBlendingString )
 		{
-			return BlendingMode::Screen;
+			std::cerr << "to_BlendingMode() : '" << value << "' blending is undefined in an HDR (nits) target ! Returning 'Add'.\n";
+
+			return BlendingMode::Add;
 		}
 
 		if ( value == NoneString )

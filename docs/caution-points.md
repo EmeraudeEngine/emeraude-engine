@@ -4129,6 +4129,69 @@ the screen height) and scales the flare by the fraction of taps at the far plane
   a 0.6-frame ring around the light: a light at the frame centre puts the ring outside the frame and
   the ghosts over uniform sky, i.e. an invisible flare — aim off-centre to see anything.
 
+### Fixed: `Screen` blending SUBTRACTED the background — an SDR operator on an unclamped HDR buffer (Sep 2026)
+
+**Symptom.** In `game-logic`, the fire sprite rendered as a **black hole with cyan fringes**, but
+only over the bright porcelain poussin behind it. A metre lower, over the dark ground, the very same
+sprite rendered a correct orange flame. The boundary followed the *background's* silhouette, not the
+sprite's — the tell that the destination, not the source, drove the failure.
+
+**Root cause.** `BlendingMode::Screen` installed
+`srcColorBlendFactor = ONE` / `dstColorBlendFactor = ONE_MINUS_SRC_COLOR`, i.e.
+`result = src + dst·(1 - src)`. That is the SDR screen operator and it is **only defined for a
+source inside [0,1]**. The scene attachment is an unclamped `VK_FORMAT_R16G16B16A16_SFLOAT` holding
+absolute luminance in nits, and **Vulkan does not clamp blend factors on a floating-point
+attachment** (it clamps them only for normalized formats). The sprite declared
+`EmissiveStrength: 320`, so the factor became **-319** and the background was subtracted.
+
+**Why it read as a COLOUR bug rather than a black one.** The factor is per channel. Measured on the
+sprite's own 4-bit palette, linearised, times 320:
+
+| Palette entry | sRGB | `src` (nits) | `1 - src` |
+|---|---|---|---|
+| flame edge | (117, 0, 0) | (55.9, 0, 0) | **(-54.9, +1, +1)** |
+| flame body | (251, 100, 48) | (309, 41, 9.5) | (-308, -40, -8.5) |
+
+An orange flame has **no blue**, so its blue factor stayed at `+1` while red and green went deeply
+negative. Over a bright surface the red channel was annihilated and the background's own green and
+blue passed through untouched: 2031 pixels measured at **R=11.4, G=164.2, B=167.2** — a *cyan*
+flame — and 52.9 % of the flame body crushed to black. Over a dark background `dst ≈ 0`, the
+negative term weighed nothing and the flame looked perfect, which is why this survived for so long.
+
+**The fix.** `BlendingMode::Screen` is **deleted** — from the enum, `to_cstring()`, the
+`GraphicsPipeline` switch and the JSON validator. `to_BlendingMode()` maps the legacy `"Screen"`
+string to `Add` and `getBlendingModeFromJSON()` warns, so old manifests keep loading while telling
+the author to fix them. The five affected sprites (`fire001`, `fire002`, `fireball001`,
+`explosion002`, `nuke`) moved to `"Add"`. After: **2** such pixels left in the frame — both on a
+genuinely blue material elsewhere — 0 % black, red back to 230, 0 VUID.
+
+> [!CAUTION]
+> ⚠️⚠️ **An operator defined over an SDR ratio domain has NO meaning in a nits buffer.** This is
+> the general trap, and `Screen` was only its first instance. Audit any blend factor that reads the
+> SOURCE COLOUR (`ONE_MINUS_SRC_COLOR`, `SRC_COLOR`, `ONE_MINUS_DST_COLOR`, `DST_COLOR`): those are
+> ratios by construction, and this renderer feeds them luminances. `Multiply` (`ZERO`, `SRC_COLOR`)
+> is the same family and is still present — it does not flip sign, but `dst·320` blows the
+> destination up instead of darkening it, so it belongs on an LDR overlay, never on an emissive
+> surface. Factors that read only ALPHA (`SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA`) are safe: alpha stays
+> in [0,1].
+>
+> ⚠️ **Only 2 of the 5 assets using `Screen` were actually broken**, and that is exactly why the
+> mode looked healthy. `fireball001`, `fire002` and `nuke` declare no `EmissiveStrength` (so 1.0),
+> stayed inside [0,1], and rendered correctly. A mode whose correctness depends on an unrelated
+> scalar in the same manifest is not a mode, it is a trap. **"Other assets using it look fine" is
+> not evidence that a mode is sound** — check the domain, not the sample.
+>
+> ⚠️ The three healthy sprites did change appearance slightly on migration: with `src` in [0,1],
+> `Screen` is a touch darker than `Add` (`dst·(1-src)` vs `dst`). That is expected, not a
+> regression.
+
+**How it was localised without a GPU capture.** The whole diagnosis came from arithmetic on the
+asset — `magick identify -verbose` prints a colour-mapped PNG's palette, so `src` was computable
+exactly — and the pixel proof was a channel test on a screenshot: `B > R + 30 && G > R + 30`
+counted the defective pixels and gave their bounding box. **No orange source and no additive or
+alpha blend can produce a pixel at R=11 / B=167.** When a symptom is a colour, one channel
+inequality over the frame is a sharper instrument than looking at it.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

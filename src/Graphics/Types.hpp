@@ -349,19 +349,30 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	EMEN_API FillingType to_FillingType (const std::string & value) noexcept;
 
-	/** @brief Defines a blending operation mode. */
+	/**
+	 * @brief Defines a blending operation mode.
+	 * @note There is deliberately NO 'Screen' mode. The screen operator '1 - (1 - src)(1 - dst)'
+	 * is only defined for source values inside [0,1]; the scene colour attachment is an
+	 * unclamped VK_FORMAT_R16G16B16A16_SFLOAT holding ABSOLUTE LUMINANCE IN NITS, so a
+	 * self-illuminated surface feeds it values far above one. Expressed with fixed-function
+	 * blending that operator needs dstColorBlendFactor = ONE_MINUS_SRC_COLOR, which Vulkan does
+	 * not clamp on a floating-point attachment: an emissive sprite at 320 nits turned the factor
+	 * into -319 and SUBTRACTED the background instead of screening it. Emissive surfaces
+	 * composite with 'Add' — light adds. See ScreenBlendingString for the migration path.
+	 */
 	enum class EMEN_API BlendingMode : uint32_t
 	{
 		Normal = 0,
 		Add = 1,
 		Multiply = 2,
-		Screen = 3,
 		None = std::numeric_limits< uint32_t >::max()
 	};
 
 	constexpr auto NormalBlendingString{"Normal"};
 	constexpr auto AddBlendingString{"Add"};
 	constexpr auto MultiplyBlendingString{"Multiply"};
+	/** @brief LEGACY authoring value, kept ONLY so existing manifests keep loading: it maps to
+	 * BlendingMode::Add with a warning. Never reintroduce it as a mode. */
 	constexpr auto ScreenBlendingString{"Screen"};
 
 	/**

@@ -84,7 +84,14 @@ namespace EmEn::Graphics::Material
 	{
 		if ( data.isMember(JKBlendingMode) && data[JKBlendingMode].isString() )
 		{
-			constexpr std::array< const char *, 5 > fillingTypes{
+			/* NOTE: ScreenBlendingString is still ACCEPTED, but it is a legacy authoring
+			 * value: to_BlendingMode() maps it to BlendingMode::Add. The screen operator is
+			 * only defined for a source inside [0,1] and this renderer composites in absolute
+			 * luminance (nits) on an unclamped floating-point attachment, where the
+			 * ONE_MINUS_SRC_COLOR factor it requires turns negative and subtracts the
+			 * background. Warn here rather than in the converter, because this is the path an
+			 * ASSET takes and the manifest is what needs fixing. */
+			constexpr std::array< const char *, 5 > blendingModes{
 				NormalBlendingString,
 				AddBlendingString,
 				MultiplyBlendingString,
@@ -94,10 +101,18 @@ namespace EmEn::Graphics::Material
 
 			const auto foundValue = data[JKBlendingMode].asString();
 
-			for ( const auto & value : fillingTypes )
+			for ( const auto & value : blendingModes )
 			{
 				if ( foundValue == value )
 				{
+					if ( foundValue == ScreenBlendingString )
+					{
+						TraceWarning{TracerTag} <<
+							"The '" << JKBlendingMode << "' value '" << ScreenBlendingString << "' is obsolete: that operator is "
+							"undefined in an HDR (nits) target and subtracts the background instead of screening it. "
+							"Loading it as '" << AddBlendingString << "'. Update the material manifest.";
+					}
+
 					return to_BlendingMode(foundValue);
 				}
 			}

@@ -565,6 +565,25 @@ what used to force a cutout out of the opaque list: the only way to obtain a dis
 Depth write is untouched by the flag: a cutout writes depth like any other opaque surface (depth write
 is decided by the `RenderableInstance`, never by the material's transparency mode).
 
+**`blendingMode()` offers exactly three modes** — `Normal` (`SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA`),
+`Add` (`ONE`, `ONE`) and `Multiply` (`ZERO`, `SRC_COLOR`) — plus `None`.
+
+> [!CAUTION]
+> **There is deliberately no `Screen`, and it must never be reintroduced** (deleted Sep 2026). It
+> required `dstColorBlendFactor = ONE_MINUS_SRC_COLOR`, and **Vulkan does not clamp blend factors on
+> a floating-point attachment**: the scene target is an unclamped `R16G16B16A16_SFLOAT` in NITS, so a
+> sprite at `EmissiveStrength: 320` turned that factor into **-319** and subtracted the background
+> per channel. Because an orange flame carries no blue, red and green were annihilated while blue
+> passed at `+1` — a *cyan* flame, but only over bright surfaces. Measured, fixed and explained in
+> [`docs/caution-points.md`](../../docs/caution-points.md) § *`Screen` blending SUBTRACTED the
+> background*; the authoring table lives in
+> [`docs/material-json-format.md`](../../docs/material-json-format.md) § `BlendingMode`.
+>
+> The rule that generalises: **a blend factor reading the SOURCE or DESTINATION COLOUR is a ratio by
+> construction and has no meaning in a luminance buffer.** `Multiply` survives only because it does
+> not flip sign; it still belongs on an LDR overlay, never on an emissive surface. Alpha-reading
+> factors are safe — alpha stays in [0,1].
+
 > [!WARNING]
 > **`isOpaque()` must NOT be taught about `AlphaTestEnabled`, and must stay that way — an alpha-tested
 > material IS opaque.** Returning `false` there does two damaging things at once:
