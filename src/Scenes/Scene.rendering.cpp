@@ -409,6 +409,11 @@ namespace EmEn::Scenes
 
 		m_instanceTransforms.beginFrame(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
 
+		/* Lights removed by the logic thread are RETIRED, not destroyed: the frames that snapshotted
+		 * them (renderLightedSelection()) may still be recorded or in flight. This runs behind the
+		 * in-flight fence, so it is the one place where a retired light's hardware can go. */
+		m_lightSet.destroyRetiredLights(*this, m_AVConsoleManager.graphicsRenderer().framesInFlight());
+
 		/* ⚠️⚠️ [ONE FRAME, ONE TRUTH] The frame latches the published state ONCE, here, and every
 		 * consumer below reads the latch. It used to be loaded independently at four sites spread
 		 * across the frame — the UBO upload, the shadow pass, the main pass and the TBN debug pass —
@@ -1464,11 +1469,28 @@ namespace EmEn::Scenes
 		/* NOTE: Check global shadow mapping setting from the renderer. */
 		const bool shadowMapsEnabled = m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled();
 
-		/* For all objects. */
-		for ( const auto & renderBatch : renderBatches | std::views::values )
+		/* Snapshot the light lists ONCE per call. The light-set mutex guards the CONTAINERS
+		 * (LightSet::add()/remove() from another thread), not the lights: a light's frame state
+		 * arrives through the two-state contract, and a shared_ptr copy keeps it alive for the
+		 * whole recording. ⚠️ This used to lock PER RENDER BATCH around the ambient and every
+		 * light pass, i.e. the mutex was held while command buffers were recorded (with the
+		 * validation layers on, most of the frame) — and the logic thread, which takes the same
+		 * mutex every tick, waited behind it. Never hold a shared mutex while recording. */
+		std::vector< std::shared_ptr< Component::DirectionalLight > > directionalLights;
+		std::vector< std::shared_ptr< Component::PointLight > > pointLights;
+		std::vector< std::shared_ptr< Component::SpotLight > > spotLights;
+
 		{
 			const std::scoped_lock lock{m_lightSet.mutex()};
 
+			directionalLights.assign(m_lightSet.directionalLights().begin(), m_lightSet.directionalLights().end());
+			pointLights.assign(m_lightSet.pointLights().begin(), m_lightSet.pointLights().end());
+			spotLights.assign(m_lightSet.spotLights().begin(), m_lightSet.spotLights().end());
+		}
+
+		/* For all objects. */
+		for ( const auto & renderBatch : renderBatches | std::views::values )
+		{
 			/* Ambient pass. */
 			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 
@@ -1490,7 +1512,7 @@ namespace EmEn::Scenes
 			}
 
 			/* Loop through all directional lights. */
-			for ( const auto & light : m_lightSet.directionalLights() )
+			for ( const auto & light : directionalLights )
 			{
 				if ( !light->isEnabled() )
 				{
@@ -1534,7 +1556,7 @@ namespace EmEn::Scenes
 			}
 
 			/* Loop through all point lights. */
-			for ( const auto & light : m_lightSet.pointLights() )
+			for ( const auto & light : pointLights )
 			{
 				if ( !light->isEnabled() )
 				{
@@ -1545,7 +1567,7 @@ namespace EmEn::Scenes
 
 				/* NOTE: If a light distance check is needed. Test against the instance
 				 * world bounding sphere (sphere-vs-sphere), not just its center point. */
-				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere) )
+				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere, readStateIndex) )
 				{
 					continue;
 				}
@@ -1577,7 +1599,7 @@ namespace EmEn::Scenes
 			}
 
 			/* Loop through all spotlights. */
-			for ( const auto & light : m_lightSet.spotLights() )
+			for ( const auto & light : spotLights )
 			{
 				if ( !light->isEnabled() )
 				{
@@ -1588,7 +1610,7 @@ namespace EmEn::Scenes
 
 				/* NOTE: If a light distance check is needed. Test against the instance
 				 * world bounding sphere (sphere-vs-sphere), not just its center point. */
-				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere) )
+				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere, readStateIndex) )
 				{
 					continue;
 				}

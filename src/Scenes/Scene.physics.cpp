@@ -29,6 +29,9 @@
 /* Local inclusions. */
 #include "Physics/CollisionDetection.hpp"
 
+/* STL inclusions. */
+#include <span>
+
 namespace EmEn::Scenes
 {
 	using namespace Base;
@@ -101,15 +104,21 @@ namespace EmEn::Scenes
 		 * - Use dominant collision (deepest penetration) for velocity bounce
 		 * ============================================================ */
 
-		/* ⚠️ An element straddling a sector boundary lives on an inner node, and is therefore
-		 * proposed as a candidate to EVERY leaf below it. Correcting it once per leaf would
-		 * multiply its correction by the size of that subtree. */
-		std::unordered_set< const AbstractEntity * > correctedEntities;
+		/* Each movable is handled ONCE, at the single sector that OWNS it (forEachSector() visits
+		 * inner nodes too, which is where anything straddling a boundary lives). The statics it can
+		 * touch are the inherited ones (ancestors) plus those of its own sector's subtree, reached
+		 * through the subtree query in accumulateStaticEntityCorrections(). ⚠️ The former leaf-only
+		 * walk corrected a straddling body in the FIRST leaf that met it, against that leaf's
+		 * candidates only — the statics owned by the sibling leaves it also straddled were never
+		 * tested. */
+		m_physicsOctree->forEachSector([this] (const OctreeSector< AbstractEntity, true > & sector, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
+			/* An element the sector OWNS is fully inside it, so the sector's border flag settles
+			 * the boundary question for every element below. */
+			const bool entityAtBorder = sector.isTouchingRootBorder();
 
-		m_physicsOctree->forLeafSectors([this, &correctedEntities] (const OctreeSector< AbstractEntity, true > & leafSector, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
-			const bool sectorAtBorder = leafSector.isTouchingRootBorder();
+			const std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates{candidates.data(), ownedOffset};
 
-			for ( size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex )
+			for ( size_t candidateIndex = ownedOffset; candidateIndex < candidates.size(); ++candidateIndex )
 			{
 				const auto & entity = candidates[candidateIndex];
 
@@ -118,18 +127,6 @@ namespace EmEn::Scenes
 				{
 					continue;
 				}
-
-				/* The first leaf that meets the entity is the one that corrects it. */
-				if ( !correctedEntities.insert(entity.get()).second )
-				{
-					continue;
-				}
-
-				/* An element the leaf OWNS is fully inside it, so the leaf's border flag settles
-				 * the question. An INHERITED one may straddle the world edge while being met, for
-				 * the first time, in a leaf that does not touch it — there, only the test itself
-				 * can decide. */
-				const bool entityAtBorder = candidateIndex < ownedOffset ? true : sectorAtBorder;
 
 				auto * movable = entity->getMovableTrait();
 
@@ -186,7 +183,7 @@ namespace EmEn::Scenes
 				{
 					const float prevMax = maxPenetration;
 					const MovableTrait * collidedEntity = nullptr;
-					this->accumulateStaticEntityCorrections(entity, candidates, positionCorrection, dominantNormal, maxPenetration, collidedEntity);
+					this->accumulateStaticEntityCorrections(entity, sector, inheritedCandidates, positionCorrection, dominantNormal, maxPenetration, collidedEntity);
 
 					if ( maxPenetration > prevMax )
 					{
@@ -236,15 +233,36 @@ namespace EmEn::Scenes
 		 * ============================================================ */
 
 		std::vector< ContactManifold > dynamicManifolds;
-		std::unordered_set< uint64_t > testedEntityPairs;
 		std::vector< std::shared_ptr< AbstractEntity > > involvedEntities;
 
-		/* The pair set already deduplicates, which is what makes an inherited candidate — offered
-		 * to every leaf below its sector — cost only the first encounter. */
-		m_physicsOctree->forLeafSectors([&dynamicManifolds, &testedEntityPairs, &involvedEntities] (const OctreeSector< AbstractEntity, true > & /*leafSector*/, const std::vector< std::shared_ptr< AbstractEntity > > & elements, size_t /*ownedOffset*/) {
-			for ( auto elementIt = elements.begin(); elementIt != elements.end(); ++elementIt )
+		/* Pairing contract of OctreeSector::forEachSector(): at each sector, test owned × owned and
+		 * owned × inherited, nothing else. Every pair whose bounds can overlap is produced exactly
+		 * once — two elements of disjoint subtrees have disjoint bounds by the storage invariant —
+		 * so there is NO cross-sector deduplication, and none must come back. ⚠️ The former version
+		 * paired ALL candidates in EVERY leaf and deduplicated with a hash set: every inherited ×
+		 * inherited pair was re-hashed once per leaf below it. Measured on game-logic (121 nodes):
+		 * 99 % of the logic thread, 23 ms per tick. */
+		const auto testPair = [&dynamicManifolds, &involvedEntities] (const std::shared_ptr< AbstractEntity > & entityA, bool entityAPaused, const std::shared_ptr< AbstractEntity > & entityB) {
+			/* Skip non-movable entities, or pairs where both are paused
+			 * (two sleeping bodies don't need collision testing).
+			 * An active entity must still collide with paused ones. */
+			if ( !entityB->hasMovableAbility() || (entityAPaused && entityB->isSimulationPaused()) )
 			{
-				const auto & entityA = *elementIt;
+				return;
+			}
+
+			/* Detect and collect collision manifold. */
+			if ( detectCollisionMovableToMovable(*entityA, *entityB, dynamicManifolds) )
+			{
+				involvedEntities.push_back(entityA);
+				involvedEntities.push_back(entityB);
+			}
+		};
+
+		m_physicsOctree->forEachSector([&testPair] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
+			for ( size_t indexA = ownedOffset; indexA < candidates.size(); ++indexA )
+			{
+				const auto & entityA = candidates[indexA];
 
 				/* Skip non-movable entities. */
 				if ( !entityA->hasMovableAbility() )
@@ -254,32 +272,16 @@ namespace EmEn::Scenes
 
 				const bool entityAPaused = entityA->isSimulationPaused();
 
-				auto elementItCopy = elementIt;
-
-				for ( ++elementItCopy; elementItCopy != elements.end(); ++elementItCopy )
+				/* Owned × owned: the elements this sector owns after A. */
+				for ( size_t indexB = indexA + 1; indexB < candidates.size(); ++indexB )
 				{
-					const auto & entityB = *elementItCopy;
+					testPair(entityA, entityAPaused, candidates[indexB]);
+				}
 
-					/* Skip non-movable entities, or pairs where both are paused
-					 * (two sleeping bodies don't need collision testing).
-					 * An active entity must still collide with paused ones. */
-					if ( !entityB->hasMovableAbility() || (entityAPaused && entityB->isSimulationPaused()) )
-					{
-						continue;
-					}
-
-					/* Avoid duplicate pair testing across sectors. */
-					if ( !testedEntityPairs.insert(createEntityPairKey(entityA, entityB)).second )
-					{
-						continue;
-					}
-
-					/* Detect and collect collision manifold. */
-					if ( detectCollisionMovableToMovable(*entityA, *entityB, dynamicManifolds) )
-					{
-						involvedEntities.push_back(entityA);
-						involvedEntities.push_back(entityB);
-					}
+				/* Owned × inherited: everything the ancestors own. */
+				for ( size_t indexB = 0; indexB < ownedOffset; ++indexB )
+				{
+					testPair(entityA, entityAPaused, candidates[indexB]);
 				}
 			}
 		});
@@ -294,104 +296,6 @@ namespace EmEn::Scenes
 			for ( const auto & entity : involvedEntities )
 			{
 				this->clipInsideBoundaries(entity);
-			}
-		}
-	}
-
-	uint64_t
-	Scene::createEntityPairKey (const std::shared_ptr< AbstractEntity > & entityA, const std::shared_ptr< AbstractEntity > & entityB) noexcept
-	{
-		const auto ptrA = reinterpret_cast< uintptr_t >(entityA.get());
-		const auto ptrB = reinterpret_cast< uintptr_t >(entityB.get());
-
-		return ptrA < ptrB
-			? (static_cast< uint64_t >(ptrA) << 32) | static_cast< uint64_t >(ptrB & 0xFFFFFFFF)
-			: (static_cast< uint64_t >(ptrB) << 32) | static_cast< uint64_t >(ptrA & 0xFFFFFFFF);
-	}
-
-	void
-	Scene::detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, const std::vector< std::shared_ptr< AbstractEntity > > & elements, std::unordered_set< uint64_t > & testedEntityPairs, std::vector< ContactManifold > & manifolds) const noexcept
-	{
-		const bool sectorAtBorder = sector.isTouchingRootBorder();
-
-		for ( const auto & entity : elements )
-		{
-			/* Skip entities that are not movable or have simulation paused. */
-			if ( !entity->hasMovableAbility() || entity->isSimulationPaused() )
-			{
-				continue;
-			}
-
-			/* 1.1.1 - Boundary collision (only for sectors at the world border). */
-			if ( sectorAtBorder )
-			{
-				this->detectBoundaryCollision(entity, manifolds);
-			}
-
-			/* 1.1.2 - Ground collision. */
-			this->detectGroundCollision(entity, manifolds);
-		}
-
-		/* 1.1.3 - Entity-Entity collisions within this sector. */
-		for ( auto elementIt = elements.begin(); elementIt != elements.end(); ++elementIt )
-		{
-			/* NOTE: The entity A can be a node or a static entity. */
-			const auto & entityA = *elementIt;
-			const bool entityAHasMovableAbility = entityA->hasMovableAbility();
-
-			/* Copy the iterator to iterate through the next elements with it without modify the initial one. */
-			auto elementItCopy = elementIt;
-
-			for ( ++elementItCopy; elementItCopy != elements.end(); ++elementItCopy )
-			{
-				/* NOTE: The entity B can also be a node or a static entity. */
-				const auto & entityB = *elementItCopy;
-				const bool entityBHasMovableAbility = entityB->hasMovableAbility();
-
-				/* Both entities are static or both entities are paused. */
-				if ( (!entityAHasMovableAbility && !entityBHasMovableAbility) || (entityA->isSimulationPaused() && entityB->isSimulationPaused()) )
-				{
-					continue;
-				}
-
-				/* Check for cross-sector collision duplicates using global set.
-				 * O(1) lookup instead of O(n) linear search in hasCollisionWith(). */
-				if ( !testedEntityPairs.insert(createEntityPairKey(entityA, entityB)).second )
-				{
-					/* Pair already tested in another sector, skip. */
-					continue;
-				}
-
-				if ( entityAHasMovableAbility )
-				{
-					/* NOTE: Here the entity A is movable.
-					 * We will check the collision from entity A. */
-					if ( entityBHasMovableAbility )
-					{
-						/* Generate contact manifolds for impulse-based resolution. */
-						detectCollisionMovableToMovable(*entityA, *entityB, manifolds);
-					}
-					else
-					{
-						if ( entityA->isSimulationPaused() )
-						{
-							continue;
-						}
-
-						detectCollisionMovableToStatic(*entityA, *entityB, manifolds);
-					}
-				}
-				else
-				{
-					if ( entityB->isSimulationPaused() )
-					{
-						continue;
-					}
-
-					/* NOTE: Here the entity A is static, and B cannot be static.
-					 * We will check the collision from entity B. */
-					detectCollisionMovableToStatic(*entityB, *entityA, manifolds);
-				}
 			}
 		}
 	}
@@ -1218,7 +1122,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) const noexcept
+	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) const noexcept
 	{
 		/* No collision model means no collision simulation. */
 		if ( !entity->hasCollisionModel() )
@@ -1229,38 +1133,34 @@ namespace EmEn::Scenes
 		const auto * entityModel = entity->collisionModel();
 		const auto entityWorldCoords = entity->getWorldCoordinates();
 
-		/* Iterate through the sector's candidate set looking for static entities. It includes the
-		 * elements of every ancestor sector, which is where anything straddling a boundary lives —
-		 * a ground plane straddles them all and sits at the root. */
-		for ( const auto & otherEntity : candidates )
-		{
+		const auto accumulate = [&] (const AbstractEntity & otherEntity) {
 			/* Skip self. */
-			if ( entity.get() == otherEntity.get() )
+			if ( entity.get() == &otherEntity )
 			{
-				continue;
+				return;
 			}
 
 			/* Skip if the other entity is movable (we only want static entities here). */
-			if ( otherEntity->hasMovableAbility() )
+			if ( otherEntity.hasMovableAbility() )
 			{
-				continue;
+				return;
 			}
 
 			/* Skip if the other entity has no collision model. */
-			if ( !otherEntity->hasCollisionModel() )
+			if ( !otherEntity.hasCollisionModel() )
 			{
-				continue;
+				return;
 			}
 
-			const auto * otherModel = otherEntity->collisionModel();
+			const auto * otherModel = otherEntity.collisionModel();
 
 			/* Static entities with Point model are ignored (no volume). */
 			if ( otherModel->modelType() == CollisionModelType::Point )
 			{
-				continue;
+				return;
 			}
 
-			const auto otherWorldCoords = otherEntity->getWorldCoordinates();
+			const auto otherWorldCoords = otherEntity.getWorldCoordinates();
 
 			/* Use the collision model interface for collision detection.
 			 * This handles all combinations through double dispatch. */
@@ -1278,9 +1178,26 @@ namespace EmEn::Scenes
 					/* Normal points INTO the static entity (for bounce calculation). */
 					dominantNormal = -results.m_impactNormal;
 					/* Track the entity we collided with (for grounded source). */
-					collidedEntity = otherEntity->getMovableTrait();
+					collidedEntity = otherEntity.getMovableTrait();
 				}
 			}
+		};
+
+		/* Statics owned by the ancestors of the entity's sector: anything straddling a boundary
+		 * above it lives there — a ground plane straddles them all and sits at the root. */
+		for ( const auto & otherEntity : inheritedCandidates )
+		{
+			accumulate(*otherEntity);
 		}
+
+		/* Statics owned by the entity's own sector and by its subtree, bounded by the entity's
+		 * AABB: a body straddling the boundary between two child sectors must meet the small
+		 * statics of BOTH, which no single leaf's candidate set could offer. */
+		sector.forTouchedSector(entityModel->getAABB(entityWorldCoords), [&accumulate] (const OctreeSector< AbstractEntity, true > & touchedSector) {
+			for ( const auto & otherEntity : touchedSector.elements() )
+			{
+				accumulate(*otherEntity);
+			}
+		});
 	}
 }

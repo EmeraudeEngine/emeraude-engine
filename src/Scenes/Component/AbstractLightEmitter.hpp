@@ -43,6 +43,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderTarget/ShadowMap.hpp"
+#include "Math/Space3D/Sphere.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Scenes/AVConsole/Types.hpp"
 
@@ -382,6 +383,23 @@ namespace EmEn::Scenes::Component
 			virtual bool touch (const Base::Math::Vector< 3, float > & position) const noexcept = 0;
 
 			/**
+			 * @brief Returns whether the light reaches a world bounding sphere, read from the PUBLISHED state.
+			 * @note ⚠️ This is the RENDER-THREAD overload, used for the per-instance light culling.
+			 * It reads the light position from the published uniform block of the slot the frame
+			 * latched — never from the parent entity. The render thread iterates a SNAPSHOT of the
+			 * light set, and a light can outlive its entity there: LightSet::remove() retires a
+			 * light instead of destroying it, so the frames that snapshotted it stay valid, while
+			 * the entity that carried it may already be gone. Reading the parent from here was a
+			 * pure-virtual call on a destroyed node, measured on game-logic the moment a barrel
+			 * exploded.
+			 * @param target A reference to the target world bounding sphere.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool touch (const Base::Math::Space3D::Sphere< float > & target, uint32_t readStateIndex) const noexcept = 0;
+
+			/**
 			 * @brief Creates the light on the GPU with the shadow map if requested.
 			 * @param scene A reference to the scene.
 			 * @return bool
@@ -545,6 +563,21 @@ namespace EmEn::Scenes::Component
 			}
 
 		protected:
+
+			/**
+			 * @brief Returns the published uniform block of a render state slot.
+			 * @note Render-thread read; the slot must be the one latched by the frame. This is the
+			 * ONLY light state the render thread may read for a geometric decision — the logic-side
+			 * members (`m_buffer`, the parent entity) belong to the logic thread.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return const std::array< float, MaxUniformBlockElementCount > &
+			 */
+			[[nodiscard]]
+			const std::array< float, MaxUniformBlockElementCount > &
+			publishedBlock (uint32_t readStateIndex) const noexcept
+			{
+				return m_publishedBlocks[readStateIndex];
+			}
 
 			/**
 			 * @brief Constructs an abstract light emitter.

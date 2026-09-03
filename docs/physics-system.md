@@ -125,15 +125,28 @@ if (penetrationDepth > 0.0F) {
 
 The physics system executes in two phases per fixed timestep. See `Scene.physics.cpp:simulatePhysics()`.
 
+Both phases walk the physics octree with `OctreeSector::forEachSector()`, which visits every
+sector owning at least one element — inner nodes included, since an element lives in the deepest
+sector that fully contains it and anything straddling a boundary therefore sits on an inner node —
+and hands the callback the inherited candidates (ancestors) plus the sector's own elements.
+**Pairing contract:** at each sector, `owned × owned` and `owned × inherited`, nothing else; every
+pair whose bounds can overlap is produced exactly once, so there is no deduplication anywhere.
+See `src/Scenes/AGENTS.md` § "Octree storage and traversal" for the proof and the measurement that
+motivated it (a leaf-only walk with a pair hash set: 23 ms per tick on 121 nodes, 2026-09-03).
+
 ### Phase 1: Static Collisions (Per-Entity Accumulation)
 
-For each movable entity in the physics octree:
+For each movable entity, once, at the sector that OWNS it:
 
 ```
 1. Accumulate corrections from all static sources:
-   a. Boundary corrections (if sector touches world border)
+   a. Boundary corrections (if the owning sector touches the world border)
    b. Ground corrections (track separately for grounded state)
-   c. StaticEntity corrections (track dominant collision entity)
+   c. StaticEntity corrections (track dominant collision entity):
+      → the statics inherited from the ancestor sectors
+      → the statics of the sector's subtree that intersect the movable's AABB
+        (OctreeSector::forTouchedSector) — a body straddling two child sectors
+        must meet the small statics of BOTH
 
 2. Track dominant collision source:
    → Which source had deepest penetration?
@@ -151,7 +164,8 @@ For each movable entity in the physics octree:
 ### Phase 2: Dynamic Collisions (Node ↔ Node)
 
 ```
-1. Iterate octree leaf sectors
+1. Iterate every octree sector owning elements (forEachSector)
+   → Pair each owned movable with the owned elements after it and with the inherited ones
    → Skip non-movable entities
    → Skip pairs where BOTH entities are simulation-paused (sleep optimization)
    → Active-vs-paused pairs ARE tested (paused nodes are still solid)
@@ -206,7 +220,9 @@ See: `Physics/AGENTS.md` → "Critical: Collision Normal Convention" for bug pat
 
 ### Key Implementation Details
 
-- **Pair deduplication:** `createEntityPairKey()` prevents testing same pair twice across sectors
+- **No pair deduplication:** the per-sector pairing rule of `forEachSector()` produces each pair
+  once by construction. The former `createEntityPairKey()` + `unordered_set` re-hashed every
+  inherited pair once per leaf and saturated the logic thread — do not reintroduce a dedup set.
 - **Grounded marking:** Only mark grounded if collision normal is ~vertical (Y > 0.7 threshold)
 - **Static-only grounding:** ConstraintSolver only grounds against non-movable bodies
 - **Boundary re-clip:** Critical to prevent impulse resolution pushing entities out of world

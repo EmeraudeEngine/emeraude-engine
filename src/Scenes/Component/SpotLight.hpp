@@ -147,15 +147,13 @@ namespace EmEn::Scenes::Component
 			bool touch (const Base::Math::Vector< 3, float > & position) const noexcept override;
 
 			/**
-			 * @brief Returns whether the light reaches a bounding sphere (sphere-vs-sphere).
-			 * @note Used for the render-time light culling of an instance: testing against
-			 * the instance world bounding sphere — NOT just its center point — so a large
-			 * instance (e.g. a ground) is correctly lit by any light whose range overlaps it.
-			 * @param target A reference to the target world bounding sphere.
-			 * @return bool
+			 * @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch(const Base::Math::Space3D::Sphere< float > &, uint32_t) const
+			 * @note Sphere-vs-sphere against the instance world bounding sphere — NOT just its
+			 * center point — so a large instance (e.g. a ground) is correctly lit by any light
+			 * whose range overlaps it. Position AND radius come from the published block.
 			 */
 			[[nodiscard]]
-			bool touch (const Base::Math::Space3D::Sphere< float > & target) const noexcept;
+			bool touch (const Base::Math::Space3D::Sphere< float > & target, uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]

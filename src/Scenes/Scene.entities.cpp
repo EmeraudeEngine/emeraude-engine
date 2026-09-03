@@ -187,18 +187,25 @@ namespace EmEn::Scenes
 
 		this->forget(staticEntity.get());
 
-		if ( m_renderingOctree != nullptr && staticEntity->isRenderable() )
+		/* An entity is in an octree only if checkEntityLocationInOctrees() put it there — renderable
+		 * for the rendering one, collidable WITH a collision model and a valid AABB for the physics
+		 * one — and those predicates may have changed since. So: erase from BOTH, unconditionally
+		 * (a stale membership would keep the entity alive through the octree's shared_ptr), and
+		 * WITHOUT the "not part of the octree" warning, which is only meaningful for a caller that
+		 * asserts membership. ⚠️ The unconditional physics erase used to warn on every entity that
+		 * never had a collision model — every explosion and fire of game-logic. */
+		if ( m_renderingOctree != nullptr )
 		{
 			const std::scoped_lock lock{m_renderingOctreeAccess};
 
-			m_renderingOctree->erase(staticEntity);
+			m_renderingOctree->erase(staticEntity, false);
 		}
 
 		if ( m_physicsOctree != nullptr )
 		{
 			const std::scoped_lock lock{m_physicsOctreeAccess};
 
-			m_physicsOctree->erase(staticEntity);
+			m_physicsOctree->erase(staticEntity, false);
 		}
 
 		staticEntity->clearComponents();
@@ -410,18 +417,22 @@ namespace EmEn::Scenes
 					m_nodeController.releaseNode();
 				}
 
-				if ( m_renderingOctree != nullptr && node->isRenderable() )
+				/* Same contract as removeStaticEntity(): membership is decided by
+				 * checkEntityLocationInOctrees() and may have changed since, so erase from both
+				 * octrees, silently — absence is legitimate (an explosion or a fire never had a
+				 * collision model, and was never in the physics octree). */
+				if ( m_renderingOctree != nullptr )
 				{
 					const std::scoped_lock lock{m_renderingOctreeAccess};
 
-					m_renderingOctree->erase(node);
+					m_renderingOctree->erase(node, false);
 				}
 
 				if ( m_physicsOctree != nullptr )
 				{
 					const std::scoped_lock lock{m_physicsOctreeAccess};
 
-					m_physicsOctree->erase(node);
+					m_physicsOctree->erase(node, false);
 				}
 			}
 				return true;

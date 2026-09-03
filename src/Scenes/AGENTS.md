@@ -1145,6 +1145,31 @@ is now strictly UNLIT (light set disabled or instance lighting disabled). The `L
 aggregator: lights + photometric ambient (`setAmbientLightColor()` sRGB +
 `setAmbientLightIntensity()` in LUX).
 
+**Light lifetime across the two threads (2026-09-03).** The light-set mutex guards the
+CONTAINERS, nothing else. The render thread (`renderLightedSelection()`) takes it ONCE per call to
+SNAPSHOT the three light lists, then records with the copies; the logic thread
+(`updateCSMCascades()`) takes it once per tick to copy the CSM lights, then refits the cascades
+outside it. ⚠️⚠️ It used to be taken **per render batch**, around the ambient and every light pass
+— held while command buffers were recorded (most of the frame with the validation layers on) —
+while the logic thread took the same mutex every tick: measured as one futex block per tick of the
+logic thread on `game-logic`. **Never hold a shared mutex while recording.** Two consequences the
+snapshot forces, both of which crashed the first attempt (`pure virtual method called` on the
+render thread the moment a barrel exploded):
+
+- **A light can outlive its entity on the render thread.** `Node::destroyTree()` →
+  `clearComponents()` → `LightSet::remove()` runs on the logic thread while a frame still holds the
+  snapshot; the node is then destroyed and the component's `m_parentEntity` dangles. Hence
+  `AbstractLightEmitter::touch(sphere, readStateIndex)`: the render-thread culling reads position
+  AND radius from the **published block** of the latched slot (`publishedBlock()`), never from the
+  parent entity. **No render-thread code may reach a light's parent entity.**
+- **`LightSet::remove()` RETIRES, it does not destroy.** The light is erased from the sets and
+  pushed to `m_retiredLights` stamped with the render frame counter; `destroyRetiredLights()`, called
+  from `Scene::beginRenderFrame()` **behind the in-flight fence**, destroys the hardware of lights
+  retired more than `framesInFlight()` frames ago, on the render thread. This also closed a defect
+  older than the snapshot: `destroyFromHardware()` used to run synchronously on the LOGIC thread,
+  resetting a shadow descriptor set and freeing a shared UBO element that frames in flight were
+  still reading. `removeAllLights()` (scene teardown) drops the retired list with the others.
+
 **Sky → LightSet bridge (OPT-IN)**: `Scene::applyBackgroundLighting(BackgroundLightingOptions)`
 derives the scene lighting from the background photometric manifest — ambient = average color ×
 ambient illuminance, plus one `StaticEntity` + `DirectionalLight` per declared celestial body
@@ -1562,26 +1587,51 @@ the cause of the 104 GB above.
 > of which shipped as bugs before being caught:
 >
 > 1. **Reading `sector.elements()` of leaves only misses everything large.** The physics broad
->    phase did exactly that (`forLeafSectors` + `elements()`), so no body was ever offered the
+>    phase did exactly that (the former leaf-only traversal + `elements()`), so no body was ever offered the
 >    ground as a collider — **you fall through the floor**, with no error anywhere.
 > 2. **`m_elements.empty()` no longer proves an empty subtree.** An inner node can hold nothing
 >    while its children are full, so the old early-exit prunes populated branches.
 >
-> **Contract:** the candidate set of a leaf is `leaf.elements() ∪ elements of ALL its ancestors`.
-> `forLeafSectors()` accumulates that chain on the way down into a single reused buffer and hands
-> it to the callback as `(leaf, candidates, ownedOffset)`. Never call `elements()` on a sector to
-> build a query result.
+> **Contract (rewritten 2026-09-03):** `forEachSector()` visits EVERY sector that owns at least one
+> element — inner nodes included, that is where every straddling element lives — and hands the
+> callback `(sector, candidates, ownedOffset)`, where `candidates` is `elements of ALL ancestors ∪
+> sector.elements()` accumulated on the way down into a single reused buffer. Never call
+> `elements()` on a sector to build a query result.
+>
+> **The pairing rule — and the ONLY rule.** A caller that tests pairs tests, at each sector,
+> `owned × owned` and `owned × inherited`, nothing else. Every pair whose bounds can overlap is then
+> produced **exactly once**: two elements owned by the same sector meet there; an element owned by
+> a descendant meets an element owned by an ancestor at the DESCENDANT, where the latter is
+> inherited; two elements owned by disjoint subtrees have disjoint bounds by the storage invariant.
+> **No cross-sector deduplication exists, and none must come back.** A caller acting per element
+> acts on the OWNED range `[ownedOffset, size)` only — each element is owned by exactly one
+> sector — and reaches the subtree of that sector with `forTouchedSector(aabb)`.
+>
+> ⚠️⚠️ **What the previous contract cost — measured (2026-09-03, projet-alpha `game-logic`, 121
+> nodes, 138 static entities, RTX 3500 Ada, validation layers ON).** The former `forLeafSectors()`
+> visited leaves only, so the physics phase 2 paired ALL candidates in EVERY leaf and deduplicated
+> with a `std::unordered_set< uint64_t >` of pair keys. Every inherited × inherited pair — the
+> player, the walls, the crate at the origin, anything straddling a split plane — was re-hashed
+> once per leaf below it. The logic thread was **CPU-saturated at 22.8 ms per tick (p50; p90
+> 28.2 ms)**, every cycle over the 16.7 ms budget, **99 % of it in `resolveCollisions()`** (hash
+> insert ≈ 57 %, `createEntityPairKey` ≈ 8.5 %). The owner attributed the slowdown to the Aug 26
+> two-state synchronisation commits; the measurement said otherwise — `publishStateForRendering()`
+> and the node logic were under 1 % combined. After the rewrite the same thread spends
+> **≈ 1.2 s of CPU over 15 s (≈ 1.3 ms per tick, 12× less)**, all of it in the narrow phase
+> (`OrientedCuboid::set`, `detectCollisionMovableToMovable`), zero warnings, zero VUID.
+> **Rule:** a "dedup set" that grows with the number of sectors is not an optimisation, it is the
+> symptom of a traversal that produces duplicates. Fix the traversal.
 >
 > ⚠️ `ownedOffset` is not decoration. Candidates before it are INHERITED, and any per-sector
 > predicate is unsound for them — `isTouchingRootBorder()` in particular: an inherited element may
-> straddle the world edge while first being met in a leaf that does not touch it. Only elements
-> the leaf OWNS are fully inside it.
+> straddle the world edge while being met in a sector that does not touch it. Only elements the
+> sector OWNS are fully inside it.
 >
-> ⚠️ An element held by an ancestor is offered to EVERY leaf below it. A caller acting **per pair**
-> is usually already safe (`testedEntityPairs`). A caller acting **per element** must deduplicate —
-> `resolveCollisions()` phase 1 keeps a `correctedEntities` set, without which a straddling body
-> receives its position correction once per leaf of the subtree. *(This also fixes a pre-existing
-> defect: under all-levels storage the same body was corrected once per leaf it touched.)*
+> ⚠️ The leaf-only version also had a **correctness hole**: `resolveCollisions()` phase 1 corrected
+> a straddling body in the FIRST leaf that met it, against that leaf's candidates only — the statics
+> owned by the sibling leaves it also straddled were never tested. Phase 1 now runs each movable
+> once, at its owning sector, against the inherited statics plus `forTouchedSector(aabb)` over the
+> sector's subtree (`Scene::accumulateStaticEntityCorrections()`).
 
 **Rendering is not concerned — and that is itself worth knowing.** `Scene.rendering.cpp` never
 queries the rendering octree: it iterates the entities and tests `distance > viewDistance ||

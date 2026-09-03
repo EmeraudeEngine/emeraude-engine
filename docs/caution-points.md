@@ -2223,6 +2223,85 @@ the player, which carries no visible mesh. Any future regression check needs a d
 node-attached visuals. Full contract: [`src/Scenes/AGENTS.md`](../src/Scenes/AGENTS.md)
 § "Node Tree Iteration — NodeCrawler Contract".
 
+### Fixed: the physics broad phase re-hashed every inherited pair once per leaf — 23 ms logic tick on 121 nodes (Sep 2026)
+
+**Symptom:** `logicsTask : 22.8 ms` printed on virtually every cycle of projet-alpha `game-logic`
+(121 nodes, 138 static entities). The owner attributed it to the Aug 26 two-state synchronisation
+commits. `perf` said otherwise: the logic thread was CPU-saturated, **99 % in
+`Scene::resolveCollisions()` phase 2**, `unordered_set< uint64_t >::insert` alone ≈ 57 %;
+`publishStateForRendering()`, the node logic and the actors were under 1 % together.
+
+**Cause:** since the one-sector storage invariant (`9a95a50f`, Aug 2026), `forLeafSectors()` handed
+each LEAF the full ancestor chain, and phase 2 paired ALL candidates in EVERY leaf, relying on a
+pair hash set to deduplicate. An inherited × inherited pair (anything straddling a split plane:
+player, walls, crate at the origin) was re-hashed once per leaf below it — 7 260 unique pairs at
+most, an estimated ~200 000 hash inserts per tick.
+
+**Fix:** `OctreeSector::forEachSector()` visits every sector that OWNS elements (inner nodes too)
+and the callers apply the pairing contract — `owned × owned`, `owned × inherited`, nothing else —
+which produces each geometrically possible pair exactly once. The hash set, `createEntityPairKey()`
+and the never-called `detectCollisionInSector()` are gone. Phase 1 handles each movable once at its
+owning sector and reaches the subtree statics with `forTouchedSector(aabb)`, closing a hole where a
+body straddling two leaves ignored the statics of the second one. **After:** ≈ 1.3 ms of CPU per
+tick (12× less), zero warnings, zero VUID, base suite 2045/2045.
+
+⚠️ **Traps for the next profiler:** on a hybrid CPU (P-cores + E-cores) `perf report` percentages
+are weighted by *cycles* across two PMUs and misled here (they showed the render thread at 40 % and
+the saturated logic thread at 7 %) — count **samples per thread** (`perf script --tid` folded), a
+thread at 999 Hz × 15 s = 15 000 samples is saturated. `perf report --children` on a DWARF capture
+of a 170 MB binary takes >10 min; `perf script --tid <tid> -F ip,sym,dso` folded with a 20-line
+script is the fast path. `perf_event_paranoid` is 3 on this workstation by default (the owner
+lowers it to 1 on request).
+
+### Fixed: `[Warning][OctreeSector] Element 'ACTOR_…' is not part of the octree !` on every explosion (Sep 2026)
+
+**Symptom:** the warning on every runtime-created actor that died (explosions, fires) on
+`game-logic` — 60 to 90 per run. Visually everything was correct: the actors appeared, lived and
+left the scene. The message names the actor's BASE NODE (it carries the actor's `ACTOR_…` name), not
+the actor itself: the warning never came from the `Act` actor octree, whose add/remove traces all
+found their element (measured by instrumentation before touching anything).
+
+**Cause:** `Scene::onNotification(SubNodeDeleting)` and `Scene::removeStaticEntity()` erased the
+dying entity from the PHYSICS octree unconditionally, while `checkEntityLocationInOctrees()` only
+inserts an entity there when it is collidable WITH a collision model and a valid AABB. An explosion
+or a fire has no collision model — never inserted, hence "not part of the octree" at removal.
+`OctreeSector::erase()` warns by default when the root finds nothing.
+
+**Fix:** both removal paths erase from BOTH octrees unconditionally (a membership predicate can have
+changed since insertion, and a stale membership keeps the entity alive through the octree's
+`shared_ptr`) and pass `warnWhenMissing = false`: absence is legitimate there. The warning stays
+where the caller asserts membership (`Act::removeActor()`).
+
+⚠️ **Method trap:** two octrees print the same `[OctreeSector]` tag and the element names collide
+(actor ↔ its base node). Before reasoning about a "double removal", instrument the SUSPECTED path
+and check the warned id appears in its traces — here it never did, which pointed at the other octree
+in one run.
+
+### Fixed: a removed light destroyed its hardware on the logic thread while the render thread iterated the set (Sep 2026)
+
+**Symptom (of the fix in progress):** `pure virtual method called` on the render thread,
+`renderLightedSelection()` → `PointLight::touch()` → `Component::Abstract::getWorldCoordinates()`,
+the moment a barrel exploded on `game-logic`.
+
+**Cause:** `renderLightedSelection()` locked the light-set mutex **per render batch**, around the
+ambient and every light pass — i.e. while recording command buffers — and the logic thread took
+the same mutex every tick in `updateCSMCascades()` (one futex block per tick, measured). Replacing
+the per-batch lock by a once-per-call SNAPSHOT exposed what the lock had been hiding by accident:
+`Node::destroyTree()` → `LightSet::remove()` → `destroyFromHardware()` ran synchronously on the
+LOGIC thread, so a frame holding the snapshot dereferenced a light whose node was destroyed, and
+whose shadow descriptor set and shared-UBO element were freed while frames in flight still read
+them — that second half predates the snapshot and was never protected by the lock.
+
+**Fix:** (1) `AbstractLightEmitter::touch(sphere, readStateIndex)` reads position and radius from
+the published block of the latched slot — the render thread never reaches a light's parent entity.
+(2) `LightSet::remove()` RETIRES the light (erased from the sets, stamped with the render frame
+counter); `destroyRetiredLights()` runs from `Scene::beginRenderFrame()` behind the in-flight fence
+and destroys, on the render thread, the lights retired more than `framesInFlight()` frames ago.
+(3) `updateCSMCascades()` copies the CSM lights under the mutex and refits outside it.
+**Rules:** never hold a shared mutex while recording; a snapshot keeps a COMPONENT alive, not its
+entity; GPU resources die behind the fence, on the render thread. Full contract:
+[`src/Scenes/AGENTS.md`](../src/Scenes/AGENTS.md) § "LightSet & Background-Derived Lighting".
+
 ## Shader/GLSL Pitfalls
 
 ### Read the GENERATED GLSL — a variable computed and never used is two subsystems never connected (Aug 2026)

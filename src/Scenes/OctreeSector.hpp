@@ -973,11 +973,16 @@ namespace EmEn::Scenes
 			 * the element reduces the sector's element count below the collapse threshold.
 			 *
 			 * @param element Shared pointer to the element to remove.
+			 * @param warnWhenMissing Whether the root logs a warning when the element is absent. Default true.
 			 *
 			 * @return True if the element was found and removed, false if it wasn't present in
 			 *		 this sector.
 			 *
-			 * @note When called on root, logs a warning if the element isn't in the octree.
+			 * @note When called on root with @p warnWhenMissing, logs a warning if the element isn't
+			 * in the octree. Pass false from a removal path where absence is legitimate — the scene
+			 * erases every dying entity from both its octrees although membership depends on
+			 * predicates (renderable, collidable with a valid AABB) evaluated at insertion. Keep the
+			 * warning only where the caller ASSERTS membership (the actor octree of an Act).
 			 * @note This method automatically triggers collapse if autoCollapseEnabled and element
 			 *	   count drops below maxElementPerSector / 2.
 			 * @note Safe to call even if element is not present (idempotent operation).
@@ -1222,7 +1227,7 @@ namespace EmEn::Scenes
 			 * @note Only leaf sectors invoke the callback - intermediate nodes are just traversed.
 			 * @note Common usage: Frustum culling for rendering, range queries for AI, broad-phase collision.
 			 *
-			 * @see forLeafSectors()
+			 * @see forEachSector()
 			 * @see isCollidingWith()
 			 */
 			template< typename primitive_t, typename function_t >
@@ -1259,40 +1264,51 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Executes a callback on every leaf sector, with its full candidate set.
+			 * @brief Executes a callback on every sector that OWNS at least one element, with the
+			 * elements inherited from its ancestors.
 			 *
-			 * Recursively traverses the octree rooted at this sector and invokes the callback on
-			 * every leaf whose candidate set is not empty.
+			 * Recursively traverses the octree rooted at this sector — inner nodes AND leaves — and
+			 * invokes the callback on every sector whose own element set is not empty.
 			 *
-			 * ⚠️ The candidate set of a leaf is the leaf's own elements UNION those of ALL its
-			 * ancestors, and that union is the whole point of this method. An element lives in
-			 * exactly ONE sector — the deepest that fully contains it — so anything straddling a
-			 * boundary sits on an inner node. A ground plane straddles every boundary there is and
-			 * therefore sits at the ROOT: a traversal reading only `elements()` of each leaf would
-			 * never propose it as a collider, and bodies would fall through it.
+			 * ⚠️ An element lives in exactly ONE sector: the deepest that fully contains it. Anything
+			 * straddling a boundary therefore sits on an INNER node, and a ground plane, which straddles
+			 * every boundary there is, sits at the ROOT. The candidate set handed to the callback is the
+			 * sector's own elements PLUS those of ALL its ancestors, so a straddling collider is always
+			 * proposed to the sectors below it.
 			 *
-			 * ⚠️ There is no early-exit on an empty sector either. An inner node can hold nothing
-			 * while its children are full, so `m_elements.empty()` no longer proves an empty
-			 * subtree — it used to, back when every level held a copy of every element it touched.
+			 * **The pairing contract — why inner nodes are visited.** A caller that tests pairs must, at
+			 * each sector, test `owned × owned` and `owned × inherited`, and NOTHING else. Every pair of
+			 * elements whose bounds can overlap is then produced exactly once: two elements owned by the
+			 * same sector meet there; an element owned by a descendant meets an element owned by an
+			 * ancestor at the DESCENDANT, where the latter is inherited; and two elements owned by
+			 * disjoint subtrees have disjoint bounds by the storage invariant, so their pair is never
+			 * produced. No cross-sector deduplication is needed — and none must be added: the previous
+			 * leaf-only traversal paired ALL candidates in EVERY leaf and deduplicated with a hash set,
+			 * which re-hashed every inherited × inherited pair once per leaf below it. Measured on a
+			 * 121-node scene: 99 % of the logic thread, 23 ms per tick.
 			 *
-			 * The ancestor contribution is accumulated ON THE WAY DOWN into a single buffer reused
-			 * for the whole walk: entering a sector appends its elements, leaving it truncates
-			 * back. The per-leaf cost is therefore the leaf's own elements, not the depth.
+			 * A caller that acts per element must act on the OWNED elements only (`[ownedOffset, size)`):
+			 * each element is owned by exactly one sector, so it is met as owned exactly once. Whatever
+			 * lies in the subtree of that sector is reached with forTouchedSector() from there.
+			 *
+			 * ⚠️ There is no early-exit on an empty sector. An inner node can hold nothing while its
+			 * children are full, so `m_elements.empty()` does not prove an empty subtree — the callback
+			 * is simply skipped for that node and the walk continues below.
+			 *
+			 * The ancestor contribution is accumulated ON THE WAY DOWN into a single buffer reused for
+			 * the whole walk: entering a sector appends its elements, leaving it truncates back. The
+			 * per-sector cost is therefore the sector's own elements, not the depth.
 			 *
 			 * @tparam function_t The callable type (automatically deduced). Must be invocable with
 			 *					signature: void(const OctreeSector &, const std::vector< std::shared_ptr< element_t > > &, size_t).
-			 * @param function The callable to execute on each leaf. It receives the leaf sector,
-			 * the candidate set, and the offset at which the leaf's OWN elements start: candidates
-			 * before that offset are inherited from ancestors.
+			 * @param function The callable to execute on each sector. It receives the sector, the
+			 * candidate set, and the offset at which the sector's OWN elements start: candidates before
+			 * that offset are inherited from ancestors.
 			 *
 			 * @note The offset matters for any per-sector predicate. `isTouchingRootBorder()`, for
-			 * instance, is only sound for the elements the leaf owns — those are fully inside it.
-			 * An inherited candidate may straddle the world edge while being met, for the first
-			 * time, in a leaf that does not touch it.
-			 *
-			 * @note An element held by an ancestor is proposed to EVERY leaf below it. A caller
-			 * that acts per element (rather than per pair) must deduplicate; a caller that acts
-			 * per pair usually already does, to handle elements shared across sectors.
+			 * instance, is only sound for the elements the sector owns — those are fully inside it.
+			 * An inherited candidate may straddle the world edge while being met in a sector that does
+			 * not touch it.
 			 *
 			 * @note Zero-overhead callbacks: template type avoids std::function allocation.
 			 *
@@ -1300,11 +1316,11 @@ namespace EmEn::Scenes
 			 */
 			template< typename function_t >
 			void
-			forLeafSectors (function_t && function) const noexcept
+			forEachSector (function_t && function) const noexcept
 			{
 				std::vector< std::shared_ptr< element_t > > candidates;
 
-				this->walkLeafSectors(function, candidates);
+				this->walkSectors(function, candidates);
 			}
 
 			/**
@@ -1544,38 +1560,37 @@ namespace EmEn::Scenes
 		private:
 
 			/**
-			 * @brief Carries the ancestor elements down the tree for forLeafSectors().
+			 * @brief Carries the ancestor elements down the tree for forEachSector().
 			 *
 			 * @tparam function_t The callable type (automatically deduced).
-			 * @param function A reference to the callable to execute on each leaf.
+			 * @param function A reference to the callable to execute on each sector owning elements.
 			 * @param candidates A reference to the buffer accumulating the ancestor chain. It is
-			 * created once by forLeafSectors() and reused for the whole walk.
+			 * created once by forEachSector() and reused for the whole walk.
 			 *
-			 * @note The truncation on the way out is what makes the buffer reusable: a sibling
-			 * visited next must see the ancestors' contribution, and nothing of this sector.
+			 * @note The callback runs BEFORE the descent, so the owned elements it sees are exactly
+			 * `[inheritedCount, size)`; the truncation on the way out is what makes the buffer reusable —
+			 * a sibling visited next must see the ancestors' contribution, and nothing of this sector.
 			 *
-			 * @see forLeafSectors()
+			 * @see forEachSector()
 			 */
 			template< typename function_t >
 			void
-			walkLeafSectors (function_t & function, std::vector< std::shared_ptr< element_t > > & candidates) const noexcept
+			walkSectors (function_t & function, std::vector< std::shared_ptr< element_t > > & candidates) const noexcept
 			{
 				const auto inheritedCount = candidates.size();
 
-				candidates.insert(candidates.end(), m_elements.begin(), m_elements.end());
-
-				if ( this->isLeaf() )
+				if ( !m_elements.empty() )
 				{
-					if ( !candidates.empty() )
-					{
-						function(*this, candidates, inheritedCount);
-					}
+					candidates.insert(candidates.end(), m_elements.begin(), m_elements.end());
+
+					function(*this, candidates, inheritedCount);
 				}
-				else
+
+				if ( !this->isLeaf() )
 				{
 					for ( const auto & subSector : m_subSectors )
 					{
-						subSector->walkLeafSectors(function, candidates);
+						subSector->walkSectors(function, candidates);
 					}
 				}
 

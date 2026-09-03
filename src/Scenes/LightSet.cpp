@@ -385,9 +385,11 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
-		/* ⚠️ [LOCKING] destroyFromHardware() is a full Vulkan teardown; it ran UNDER m_lightsAccess,
-		 * which also serialised it against every other light operation in the engine. Both it and
-		 * the notification belong outside the guard — see the add() overloads above. */
+		/* ⚠️ [LOCKING] The notification belongs outside the guard — see the add() overloads above.
+		 * ⚠️ [LIFETIME] No destroyFromHardware() here: the render thread iterates a SNAPSHOT of these
+		 * sets, so the frame being recorded — and up to framesInFlight() submitted ones — may still
+		 * reference this light. It is retired, and destroyed by destroyRetiredLights() on the render
+		 * thread once the in-flight fence proves nothing references it any more. */
 		{
 			const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
@@ -397,7 +399,7 @@ namespace EmEn::Scenes
 
 		this->notify(DirectionalLightRemoved, light);
 
-		light->destroyFromHardware(scene);
+		this->retireLight(light);
 	}
 
 	void
@@ -413,7 +415,7 @@ namespace EmEn::Scenes
 
 		this->notify(PointLightRemoved, light);
 
-		light->destroyFromHardware(scene);
+		this->retireLight(light);
 	}
 
 	void
@@ -429,7 +431,47 @@ namespace EmEn::Scenes
 
 		this->notify(SpotLightRemoved, light);
 
-		light->destroyFromHardware(scene);
+		this->retireLight(light);
+	}
+
+	void
+	LightSet::retireLight (const std::shared_ptr< Component::AbstractLightEmitter > & light) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+		m_retiredLights.emplace_back(light, m_renderFrameCounter);
+	}
+
+	void
+	LightSet::destroyRetiredLights (Scene & scene, uint32_t framesInFlight) noexcept
+	{
+		std::vector< std::shared_ptr< Component::AbstractLightEmitter > > expiredLights;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+			m_renderFrameCounter++;
+
+			/* A light retired while frame N was current (stamp N) may be referenced by frame N and by
+			 * frame N-1, whichever was being recorded. Frame N is proven complete by the fence waited
+			 * before the drain of frame N + framesInFlight; strictly greater buys one frame of margin. */
+			std::erase_if(m_retiredLights, [this, framesInFlight, &expiredLights] (auto & entry) {
+				if ( m_renderFrameCounter - entry.second > framesInFlight )
+				{
+					expiredLights.emplace_back(std::move(entry.first));
+
+					return true;
+				}
+
+				return false;
+			});
+		}
+
+		/* ⚠️ [LOCKING] destroyFromHardware() is a full Vulkan teardown, outside the guard. */
+		for ( const auto & light : expiredLights )
+		{
+			light->destroyFromHardware(scene);
+		}
 	}
 
 	void
@@ -441,6 +483,8 @@ namespace EmEn::Scenes
 		m_directionalLights.clear();
 		m_pointLights.clear();
 		m_spotLights.clear();
+		/* Scene teardown: nothing renders any more, the retired lights follow the others. */
+		m_retiredLights.clear();
 		m_ambientLightColor = Black;
 		m_lightPercentToAmbient = DefaultLightPercentToAmbient;
 	}

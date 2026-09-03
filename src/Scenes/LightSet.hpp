@@ -37,6 +37,7 @@
 #include <set>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ObservableTrait.hpp"
@@ -375,6 +376,8 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Removes a directional light from the light set of the scene.
+			 * @note ⚠️ The light is RETIRED, not destroyed: the render thread iterates a snapshot of the
+			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene directional light.
 			 * @return void
@@ -383,6 +386,8 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Removes a point light from the light set of the scene.
+			 * @note ⚠️ The light is RETIRED, not destroyed: the render thread iterates a snapshot of the
+			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene point light.
 			 * @return void
@@ -391,6 +396,8 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Removes a spotlight from the light set of the scene.
+			 * @note ⚠️ The light is RETIRED, not destroyed: the render thread iterates a snapshot of the
+			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene spotlight.
 			 * @return void
@@ -521,6 +528,26 @@ namespace EmEn::Scenes
 			void removeAllLights () noexcept;
 
 			/**
+			 * @brief Destroys the hardware of the lights retired long enough ago, and advances the render frame counter.
+			 *
+			 * remove() does not destroy a light: it RETIRES it, stamped with the current render frame,
+			 * because the render thread iterates a snapshot of the light set and the frames that took
+			 * that snapshot may still be recorded or executing on the GPU. This method runs on the
+			 * RENDER thread, behind the in-flight fence (Scene::beginRenderFrame()), and destroys the
+			 * lights whose stamp is more than @p framesInFlight frames old — the fence just waited
+			 * proves every command buffer that could reference them has completed.
+			 *
+			 * ⚠️ It also closes a defect older than the snapshot: destroyFromHardware() used to run
+			 * synchronously on the LOGIC thread from remove(), resetting a shadow descriptor set and
+			 * freeing a shared UBO element that frames in flight were still reading.
+			 *
+			 * @param scene A reference to the scene, for the hardware teardown.
+			 * @param framesInFlight The renderer's frames-in-flight count.
+			 * @return void
+			 */
+			void destroyRetiredLights (Scene & scene, uint32_t framesInFlight) noexcept;
+
+			/**
 			 * @brief Uploads every light's PUBLISHED uniform block to the GPU.
 			 * @param readStateIndex The render state-valid index to read data.
 			 * @param frameIndex The frame-in-flight region to write.
@@ -587,6 +614,13 @@ namespace EmEn::Scenes
 			 */
 			friend EMEN_API std::ostream & operator<< (std::ostream & out, const LightSet & obj);
 
+			/**
+			 * @brief Retires a light removed from the sets until destroyRetiredLights() proves it unreferenced.
+			 * @param light A smart pointer to the light.
+			 * @return void
+			 */
+			void retireLight (const std::shared_ptr< Component::AbstractLightEmitter > & light) noexcept;
+
 			std::set< std::shared_ptr< Component::AbstractLightEmitter > > m_lights;
 			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
@@ -598,6 +632,10 @@ namespace EmEn::Scenes
 			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTLightSSBO;
 			mutable uint32_t m_RTLightCount{0};
 			mutable std::mutex m_lightsAccess;
+			/** @brief Lights removed from the sets, each stamped with the render frame counter at removal. Guarded by m_lightsAccess. */
+			std::vector< std::pair< std::shared_ptr< Component::AbstractLightEmitter >, uint64_t > > m_retiredLights;
+			/** @brief Render frames drained so far (destroyRetiredLights() calls). Guarded by m_lightsAccess. */
+			uint64_t m_renderFrameCounter{0};
 			Base::PixelFactory::Color< float > m_ambientLightColor{Base::PixelFactory::Black};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};

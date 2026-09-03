@@ -40,6 +40,7 @@
 #include <set>
 #include <string>
 #include <unordered_set>
+#include <span>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -2465,37 +2466,15 @@ namespace EmEn::Scenes
 			 * ============================================================ */
 
 			/**
-			 * @brief Creates a unique pair key using ordered pointers.
-			 * Order pointers to ensure (A,B) and (B,A) produce the same key.
-			 * @note Uses a combined 64-bit key from two 32-bit pointer hashes to identify unique pairs.
-			 * @param entityA A reference to an entity smart pointer.
-			 * @param entityB A reference to an entity smart pointer.
-			 * @return uint64_t
-			 */
-			[[nodiscard]]
-			static uint64_t createEntityPairKey (const std::shared_ptr< AbstractEntity > & entityA, const std::shared_ptr< AbstractEntity > & entityB) noexcept;
-
-			/**
-			 * @brief Executes collision tests within an octree sector.
+			 * @brief Runs the physics collision step on the physics octree.
 			 *
-			 * Performs narrow-phase collision detection between all entities
-			 * in the sector and recursively processes subsectors.
-			 *
-			 * @note This is a recursive method that descends into subsectors.
+			 * Phase 1 corrects every movable against the boundaries, the ground and the static
+			 * entities; phase 2 detects movable-to-movable contacts and hands them to the
+			 * constraint solver. Both phases walk the octree with OctreeSector::forEachSector()
+			 * and follow its pairing contract: at each sector, owned × owned and owned × inherited,
+			 * nothing else, so no cross-sector deduplication exists.
 			 */
 			void resolveCollisions () const noexcept;
-
-			/**
-			 * @brief Performs collision tests within a single sector.
-			 * @param sector A reference to a sector, for its position in the world only.
-			 * @param elements The candidate set of that sector, as delivered by
-			 * OctreeSector::forLeafSectors() — the sector's own elements PLUS those of every
-			 * ancestor. Never pass `sector.elements()`: an element lives in a single sector, so
-			 * every straddling collider would be missing.
-			 * @param testedEntityPairs A reference to a set of already tested entity pairs (avoids cross-sector duplicates).
-			 * @param manifolds A reference to a vector of contact manifolds.
-			 */
-			void detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, const std::vector< std::shared_ptr< AbstractEntity > > & elements, std::unordered_set< uint64_t > & testedEntityPairs, std::vector< Physics::ContactManifold > & manifolds) const noexcept;
 
 			/**
 			 * @brief Detects collision between an entity and the world boundaries.
@@ -2589,24 +2568,23 @@ namespace EmEn::Scenes
 			void accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, Base::Math::Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept;
 
 			/**
-			 * @brief Accumulates position corrections from static entity collisions.
+			 * @brief Accumulates the corrections of a movable against every static entity it can touch.
 			 *
-			 * Detects collisions with static entities among the candidates and accumulates
-			 * corrections. Also tracks the dominant collision (deepest penetration) for velocity
-			 * bounce.
+			 * Detects collisions with the static entities among the inherited candidates (owned by the
+			 * ancestors of the movable's sector) and among the elements of the sector's subtree that
+			 * intersect the movable's AABB (OctreeSector::forTouchedSector()), and accumulates the
+			 * minimum translation vectors while tracking the deepest penetration.
 			 *
-			 * @param entity The movable entity to test.
-			 * @param candidates The candidate set of the sector, as delivered by
-			 * OctreeSector::forLeafSectors() — the leaf's elements PLUS those of every ancestor.
-			 * Taking the leaf's own elements alone would miss every straddling collider, the
-			 * ground first among them.
-			 * @param positionCorrection [out] Accumulated position correction vector.
-			 * @param dominantNormal [out] Normal of the deepest penetration collision.
-			 * @param maxPenetration [out] Deepest penetration depth found.
-			 * @param collidedEntity [out] Pointer to the static entity with the deepest penetration.
-			 * @version 0.8.40
+			 * @param entity The movable entity, owned by @p sector.
+			 * @param sector The octree sector that OWNS the entity — the deepest that fully contains it.
+			 * @param inheritedCandidates The candidates inherited from the ancestors of @p sector, as
+			 * delivered by OctreeSector::forEachSector() before the owned offset.
+			 * @param positionCorrection Accumulated correction vector (in/out).
+			 * @param dominantNormal Normal of the deepest penetration (in/out).
+			 * @param maxPenetration Deepest penetration so far (in/out).
+			 * @param collidedEntity The movable trait of the deepest-penetration entity, when it has one (in/out).
 			 */
-			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
+			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]

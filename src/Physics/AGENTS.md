@@ -55,15 +55,22 @@ The Node is the active subject; other entities are parameters influencing the co
 
 ### Physics Execution Pipeline (`Scene.physics.cpp:simulatePhysics()`)
 
-**Phase 1: Static Collisions** (per-entity accumulation)
-1. Accumulate boundary corrections (if sector at border)
+Both phases walk the physics octree with `OctreeSector::forEachSector()` — every sector that owns
+elements, inner nodes included — and follow its pairing contract (`src/Scenes/AGENTS.md` § Octree
+storage and traversal): at each sector, `owned × owned` and `owned × inherited`, nothing else. ⚠️ No
+pair hash set, no "corrected" set: the traversal produces every geometrically possible pair exactly
+once. The leaf-only walk with a dedup set cost 23 ms per tick on 121 nodes (2026-09-03).
+
+**Phase 1: Static Collisions** (per-movable accumulation, at the sector that OWNS the movable)
+1. Accumulate boundary corrections (if the owning sector touches the world border)
 2. Accumulate ground corrections (track separately for grounded state)
-3. Accumulate StaticEntity corrections
+3. Accumulate StaticEntity corrections: inherited statics + `forTouchedSector(aabb)` over the
+   sector's subtree (a body straddling two child sectors meets the statics of BOTH)
 4. Apply combined position correction
 5. Apply velocity bounce + set grounded state with source
 
 **Phase 2: Dynamic Collisions** (Node ↔ Node)
-1. Iterate octree leaf sectors
+1. Iterate every octree sector owning elements; pair owned × owned-after and owned × inherited
 2. Skip non-movable entities; skip pairs where **both** are simulation-paused
 3. Test movable pairs via `detectCollisionMovableToMovable()`
 4. Collect ContactManifolds

@@ -196,6 +196,14 @@ namespace EmEn::Scenes::Component
 				return true;
 			}
 
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch(const Base::Math::Space3D::Sphere< float > &, uint32_t) const */
+			[[nodiscard]]
+			bool
+			touch (const Base::Math::Space3D::Sphere< float > & /*target*/, uint32_t /*readStateIndex*/) const noexcept override
+			{
+				return true;
+			}
+
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]
 			bool createOnHardware (Scene & scene) noexcept override;

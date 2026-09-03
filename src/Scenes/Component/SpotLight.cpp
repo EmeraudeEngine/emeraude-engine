@@ -155,16 +155,20 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	SpotLight::touch (const Space3D::Sphere< float > & target) const noexcept
+	SpotLight::touch (const Space3D::Sphere< float > & target, uint32_t readStateIndex) const noexcept
 	{
+		/* ⚠️ Render thread: everything comes from the published block of the latched slot, the
+		 * parent entity may no longer exist (retired light). */
+		const auto & block = this->publishedBlock(readStateIndex);
+
 		/* A null radius means unbounded reach — see the overload above for what answering
 		 * "false" here costs. This is the overload the render loop actually calls. */
-		if ( m_radius <= 0.0F )
+		if ( block[RadiusOffset] <= 0.0F )
 		{
 			return true;
 		}
 
-		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
+		const Space3D::Sphere< float > boundingSphere{block[RadiusOffset], Vector< 3, float >{block[PositionOffset + 0], block[PositionOffset + 1], block[PositionOffset + 2]}};
 
 		/* TODO: Check for the cone ! */
 

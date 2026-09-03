@@ -212,15 +212,25 @@ namespace EmEn::Scenes
 
 		/* Update all CSM-enabled directional lights with the camera frustum.
 		 * NOTE: We iterate through lights because they know their direction.
-		 * ⚠️ Through forEachDirectionalLight(), NOT directionalLights(): this runs on the LOGIC thread
-		 * every tick while LightSet::add()/remove() may mutate that std::set from another thread. The
-		 * raw accessor walked it with no guard at all. */
-		m_lightSet.forEachDirectionalLight([&frustumCorners, nearPlane, farPlane] (const auto & light) {
+		 * ⚠️ The light-set mutex guards the CONTAINER, so it is held for the copy only — never for
+		 * updateCascades(). This runs on the LOGIC thread every tick while the render thread takes
+		 * the same mutex to snapshot the light lists (renderLightedSelection()); refitting the
+		 * cascades under it made the logic cycle wait behind the render thread, measured as one
+		 * futex block per tick on game-logic. The cascade matrices themselves reach the render
+		 * thread through the two-state contract (publishStateForRendering()), not through this lock. */
+		std::vector< std::shared_ptr< Component::DirectionalLight > > cascadedLights;
+
+		m_lightSet.forEachDirectionalLight([&cascadedLights] (const auto & light) {
 			if ( light->usesCSM() && light->isShadowCastingEnabled() )
 			{
-				light->updateCascades(frustumCorners, nearPlane, farPlane);
+				cascadedLights.push_back(light);
 			}
 		});
+
+		for ( const auto & light : cascadedLights )
+		{
+			light->updateCascades(frustumCorners, nearPlane, farPlane);
+		}
 	}
 
 	float
