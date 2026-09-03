@@ -97,6 +97,6 @@ int main(int argc, char* argv[]) {
 To be created if Tool system becomes actively used.
 
 Systems usable by Tools:
-- @src/Libs/AGENTS.md - Foundational libraries
-- @src/Graphics/AGENTS.md - For graphics tools
-- @src/Resources/AGENTS.md - Resource loading
+- [`../../dependencies/emeraude-base/src/AGENTS.md`](../../dependencies/emeraude-base/src/AGENTS.md) - Foundational libraries
+- [`../Graphics/AGENTS.md`](../Graphics/AGENTS.md) - For graphics tools
+- [`../Resources/AGENTS.md`](../Resources/AGENTS.md) - Resource loading

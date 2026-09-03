@@ -1296,14 +1296,14 @@ See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow
 ## Detailed Documentation
 
 For complete Saphir system architecture:
-- @docs/saphir-shader-system.md - Parametric generation, compatibility, cache
-- @docs/shadow-mapping.md - Shadow mapping, PCF methods, global controls, color projection
+- [`../../docs/saphir-shader-system.md`](../../docs/saphir-shader-system.md) - Parametric generation, compatibility, cache
+- [`../../docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - Shadow mapping, PCF methods, global controls, color projection
 
 Related systems:
-- @src/Graphics/AGENTS.md - Material and Geometry for 3D generation
-- @src/Overlay/AGENTS.md - 2D pipeline via OverlayGenerator
-- @src/Resources/AGENTS.md - Generation during onDependenciesLoaded()
-- @src/Vulkan/AGENTS.md - SPIR-V compilation and pipelines
+- [`../Graphics/AGENTS.md`](../Graphics/AGENTS.md) - Material and Geometry for 3D generation
+- [`../Overlay/AGENTS.md`](../Overlay/AGENTS.md) - 2D pipeline via OverlayGenerator
+- [`../Resources/AGENTS.md`](../Resources/AGENTS.md) - Generation during onDependenciesLoaded()
+- [`../Vulkan/AGENTS.md`](../Vulkan/AGENTS.md) - SPIR-V compilation and pipelines
 
 ## clang-tidy — the six warnings that are LEFT ON PURPOSE
 

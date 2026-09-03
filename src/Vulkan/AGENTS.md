@@ -709,10 +709,10 @@ For Vulkan platform:
 - Official Vulkan documentation - Complete API specifications
 
 Related systems:
-- @docs/coordinate-system.md - Y-up configuration for Vulkan
-- @src/Graphics/AGENTS.md - Uses Vulkan abstractions (Buffer, Image, Pipeline)
-- @src/Saphir/AGENTS.md - Generates SPIR-V for Vulkan pipelines
-- @src/Resources/AGENTS.md - GPU upload via TransferManager
+- [`../../docs/coordinate-system.md`](../../docs/coordinate-system.md) - Y-up configuration for Vulkan
+- [`../Graphics/AGENTS.md`](../Graphics/AGENTS.md) - Uses Vulkan abstractions (Buffer, Image, Pipeline)
+- [`../Saphir/AGENTS.md`](../Saphir/AGENTS.md) - Generates SPIR-V for Vulkan pipelines
+- [`../Resources/AGENTS.md`](../Resources/AGENTS.md) - GPU upload via TransferManager
 
 ## VkPipelineCache — the driver cache the engine now owns (Aug 2026)
 

@@ -19,7 +19,7 @@ Scene graph system based on composition architecture (Entity-Component) with two
 **Node (Dynamic)**: Hierarchical tree with physics, parent-relative transforms
 **StaticEntity (Static)**: Optimized flat map, no physics, absolute transforms
 
-See @docs/scene-graph-architecture.md for complete details.
+See [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architecture.md) for complete details.
 
 ### Coordinate Convention
 - **Y-UP mandatory** in CartesianFrame — `localYAxis()` is `m_upward`, and `downwardVector()` is its INVERSE (they are opposites, not aliases)
@@ -1451,8 +1451,8 @@ Textures are created **on-demand during material loading** with the correct sRGB
 ## Detailed Documentation
 
 For complete architecture, diagrams, and advanced patterns:
-- @docs/scene-graph-architecture.md
-- @docs/shadow-mapping.md - Shadow mapping, PCF, global controls, color projection
+- [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architecture.md)
+- [`../../docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - Shadow mapping, PCF, global controls, color projection
 
 ## Bounding volumes — render vs collision (2026-08-09)
 

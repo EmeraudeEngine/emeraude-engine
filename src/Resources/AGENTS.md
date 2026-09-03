@@ -397,15 +397,15 @@ auto material = container->getOrCreateResource(name, [
 | **Progressive loading** | High | High | Low |
 | LOD for textures, streaming for open-world | | | |
 
-See @docs/resource-management.md section "Future Improvements" for implementation details.
+See [`../../docs/resource-management.md`](../../docs/resource-management.md) section "Future Improvements" for implementation details.
 
 ## Detailed Documentation
 
 For complete resources system architecture:
-- @docs/resource-management.md - Fail-safe, dependencies, detailed lifecycle, thread safety, future suggestions
+- [`../../docs/resource-management.md`](../../docs/resource-management.md) - Fail-safe, dependencies, detailed lifecycle, thread safety, future suggestions
 
 Related systems:
-- @src/Net/AGENTS.md - Resource download from URLs (`"Source": "ExternalData"`): the manager's contract, the `FileDownloaded`-on-main-thread rule, the console check of the whole chain
-- @src/Graphics/AGENTS.md - Geometry, Material, Texture as resources
-- @src/Audio/AGENTS.md - SoundResource, MusicResource
-- @src/Libs/AGENTS.md - Observer/Observable pattern
+- [`../Net/AGENTS.md`](../Net/AGENTS.md) - Resource download from URLs (`"Source": "ExternalData"`): the manager's contract, the `FileDownloaded`-on-main-thread rule, the console check of the whole chain
+- [`../Graphics/AGENTS.md`](../Graphics/AGENTS.md) - Geometry, Material, Texture as resources
+- [`../Audio/AGENTS.md`](../Audio/AGENTS.md) - SoundResource, MusicResource
+- [`../../dependencies/emeraude-base/src/AGENTS.md`](../../dependencies/emeraude-base/src/AGENTS.md) - Observer/Observable pattern

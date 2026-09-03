@@ -709,18 +709,18 @@ Core
 ## Additional Documentation
 
 Subsystems orchestrated by Core:
-- @src/Graphics/AGENTS.md - High-level graphics system
-- @src/Vulkan/AGENTS.md - Low-level Vulkan backend
-- @src/Physics/AGENTS.md - Jolt physics engine
-- @src/Audio/AGENTS.md - OpenAL spatial 3D audio
-- @src/Scenes/AGENTS.md - Hierarchical scene graph
-- @src/Resources/AGENTS.md - Fail-safe resource loading
-- @src/Input/AGENTS.md - GLFW input management
-- @src/Overlay/AGENTS.md - 2D overlay interface
+- [`Graphics/AGENTS.md`](Graphics/AGENTS.md) - High-level graphics system
+- [`Vulkan/AGENTS.md`](Vulkan/AGENTS.md) - Low-level Vulkan backend
+- [`Physics/AGENTS.md`](Physics/AGENTS.md) - Jolt physics engine
+- [`Audio/AGENTS.md`](Audio/AGENTS.md) - OpenAL spatial 3D audio
+- [`Scenes/AGENTS.md`](Scenes/AGENTS.md) - Hierarchical scene graph
+- [`Resources/AGENTS.md`](Resources/AGENTS.md) - Fail-safe resource loading
+- [`Input/AGENTS.md`](Input/AGENTS.md) - GLFW input management
+- [`Overlay/AGENTS.md`](Overlay/AGENTS.md) - 2D overlay interface
 
 Related concepts:
-- @docs/coordinate-system.md - Y-up convention (CRITICAL)
-- @docs/resource-management.md - Fail-safe loading
+- [`../docs/coordinate-system.md`](../docs/coordinate-system.md) - Y-up convention (CRITICAL)
+- [`../docs/resource-management.md`](../docs/resource-management.md) - Fail-safe loading
 
 Platform-specific:
-- @src/PlatformSpecific/AGENTS.md - OS-specialized code
+- [`PlatformSpecific/AGENTS.md`](PlatformSpecific/AGENTS.md) - OS-specialized code

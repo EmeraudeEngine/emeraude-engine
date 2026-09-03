@@ -237,7 +237,7 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
 ## Detailed Documentation
 
 Related systems:
-- @src/Overlay/AGENTS.md - Major Input system client
-- @src/Scenes/Editor/AGENTS.md - Editor uses input injection for remote testing
-- @src/Console/AGENTS.md - Console ControllableTrait for remote commands
+- [`../Overlay/AGENTS.md`](../Overlay/AGENTS.md) - Major Input system client
+- [`../Scenes/Editor/AGENTS.md`](../Scenes/Editor/AGENTS.md) - Editor uses input injection for remote testing
+- [`../Console/AGENTS.md`](../Console/AGENTS.md) - Console ControllableTrait for remote commands
 - GLFW documentation - For supported device details

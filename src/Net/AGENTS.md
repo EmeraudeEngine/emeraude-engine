@@ -1101,8 +1101,8 @@ backslash, every field shifted left, and a text field reached `std::stoi` — `s
 ## Detailed Documentation
 
 Related systems:
-- @src/Resources/AGENTS.md - Fail-safe loading system, `ExternalData` source type, the `ServiceAccess` firewall
-- @docs/resource-management.md - Resources architecture
+- [`../Resources/AGENTS.md`](../Resources/AGENTS.md) - Fail-safe loading system, `ExternalData` source type, the `ServiceAccess` firewall
+- [`../../docs/resource-management.md`](../../docs/resource-management.md) - Resources architecture
 - emeraude-base `src/Network/` (`HTTPSClient`, `TLSConnection`, `TrustStore`, `URI`) - the HTTPS stack the manager runs on
 - emeraude-base `src/Network/HTTPSClient.hpp` `DownloadProgress` - the hook behind the Progress notification
 - emeraude-base `src/Network/HTTPSClient.hpp` `HTTPRequestOptions` / `request()` / `isRequestHeaderAcceptable()` - the API-traffic entry point `Net::APIClient` runs on

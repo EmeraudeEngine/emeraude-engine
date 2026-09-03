@@ -676,6 +676,6 @@ class CustomSurface : public Surface {
 ## Detailed Documentation
 
 Related systems:
-- @docs/saphir-shader-system.md - OverlayGenerator (2D pipeline)
-- @src/Input/AGENTS.md - Input system (polling + events)
-- @src/Graphics/AGENTS.md - Renderer and pipelines
+- [`../../docs/saphir-shader-system.md`](../../docs/saphir-shader-system.md) - OverlayGenerator (2D pipeline)
+- [`../Input/AGENTS.md`](../Input/AGENTS.md) - Input system (polling + events)
+- [`../Graphics/AGENTS.md`](../Graphics/AGENTS.md) - Renderer and pipelines

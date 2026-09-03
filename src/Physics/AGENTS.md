@@ -394,9 +394,9 @@ See: `Particle.cpp:updateSimulation()`, `@src/Scenes/AGENTS.md` → "Modifier Sy
 ## Detailed Documentation
 
 For complete physics system architecture:
-- @docs/physics-system.md - Detailed 4-entity architecture
+- [`../../docs/physics-system.md`](../../docs/physics-system.md) - Detailed 4-entity architecture
 
 Related systems:
-- @docs/coordinate-system.md - Y-UP convention (CRITICAL)
-- @src/Scenes/AGENTS.md - Nodes with MovableTrait for physics, Modifier system
-- @src/Libs/AGENTS.md - Math (Vector, Matrix, collision primitives including Capsule)
+- [`../../docs/coordinate-system.md`](../../docs/coordinate-system.md) - Y-UP convention (CRITICAL)
+- [`../Scenes/AGENTS.md`](../Scenes/AGENTS.md) - Nodes with MovableTrait for physics, Modifier system
+- [`../../dependencies/emeraude-base/src/AGENTS.md`](../../dependencies/emeraude-base/src/AGENTS.md) - Math (Vector, Matrix, collision primitives including Capsule)

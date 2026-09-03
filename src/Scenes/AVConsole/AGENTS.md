@@ -151,7 +151,7 @@ auto listener = playerNode->newMicrophone("player_ears");
 ## Detailed Documentation
 
 Related systems:
-- @src/Scenes/AGENTS.md - Scene graph and components
-- @src/Audio/AGENTS.md - 3D audio system
-- @src/Graphics/AGENTS.md - Render-targets and rendering
-- @docs/scene-graph-architecture.md - Complete Scenes architecture
+- [`../AGENTS.md`](../AGENTS.md) - Scene graph and components
+- [`../../Audio/AGENTS.md`](../../Audio/AGENTS.md) - 3D audio system
+- [`../../Graphics/AGENTS.md`](../../Graphics/AGENTS.md) - Render-targets and rendering
+- [`../../../docs/scene-graph-architecture.md`](../../../docs/scene-graph-architecture.md) - Complete Scenes architecture
