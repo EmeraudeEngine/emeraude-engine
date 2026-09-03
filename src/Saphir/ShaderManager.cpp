@@ -520,7 +520,7 @@ namespace EmEn::Saphir
 
 		if ( rejected )
 		{
-			TraceInfo{ClassId} << "The cached binary of shader '" << shader.name() << "' is stale or corrupt ! Recompiling.";
+			TraceDebug{ClassId} << "The cached binary of shader '" << shader.name() << "' is stale or corrupt ! Recompiling.";
 
 			IO::eraseFile(binaryIt->second);
 

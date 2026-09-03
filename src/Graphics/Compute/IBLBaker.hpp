@@ -108,7 +108,7 @@ namespace EmEn::Graphics::Compute
 			 * @return bool True on success.
 			 */
 			[[nodiscard]]
-			bool generateBRDFLut (IBLTexture & lut) const noexcept;
+			bool generateBRDFLut (const IBLTexture & lut) const;
 
 			/**
 			 * @brief Bakes the per-environment IBL assets from a source environment cubemap
@@ -145,7 +145,7 @@ namespace EmEn::Graphics::Compute
 			 * @return bool True when everything is ready.
 			 */
 			[[nodiscard]]
-			bool ensureEnvironmentPipelines () noexcept;
+			bool ensureEnvironmentPipelines ();
 
 			/**
 			 * @brief Returns the environment descriptor set layout (source cube + dest faces), or nullptr.

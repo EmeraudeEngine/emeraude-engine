@@ -385,7 +385,7 @@ void main ()
 
 	/* NOTE: The push constant block lives in the header (IBLBaker::EnvironmentPushConstants)
 	 * so the probe convolver can push the same block on the borrowed prefilter pipeline. */
-	using EnvironmentPushConstants = IBLBaker::EnvironmentPushConstants;
+	//using EnvironmentPushConstants = IBLBaker::EnvironmentPushConstants;
 
 	/* Per-texel sample counts (FIS makes these enough — see class note). The prefilter
 	 * count grows with the mip level: the GGX lobe widens with roughness and the texel
@@ -404,7 +404,7 @@ void main ()
 	IBLBaker::~IBLBaker () = default;
 
 	bool
-	IBLBaker::generateBRDFLut (IBLTexture & lut) const noexcept
+	IBLBaker::generateBRDFLut (const IBLTexture & lut) const
 	{
 		if ( !lut.isCreated() || lut.role() != IBLTexture::Role::BRDFLut )
 		{
@@ -468,7 +468,10 @@ void main ()
 
 		/* Step 4: Descriptor pool and set. */
 		const std::vector< VkDescriptorPoolSize > poolSizes{
-			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}
+			{
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorCount = 1
+			}
 		};
 
 		/* ⚠️ FREE_DESCRIPTOR_SET_BIT is mandatory: Vulkan::DescriptorSet frees its set
@@ -532,7 +535,7 @@ void main ()
 
 		/* UNDEFINED -> GENERAL for the compute write. */
 		{
-			Vulkan::Sync::ImageMemoryBarrier barrier{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				image,
 				0,
 				VK_ACCESS_SHADER_WRITE_BIT,
@@ -546,12 +549,12 @@ void main ()
 		commandBuffer->bind(*computePipeline);
 		commandBuffer->bind(*descriptorSet, *pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 
-		const uint32_t groupCount = (IBLTexture::BRDFLutSize + 7) / 8;
+		constexpr uint32_t groupCount = (IBLTexture::BRDFLutSize + 7) / 8;
 		commandBuffer->dispatch(groupCount, groupCount, 1);
 
 		/* GENERAL -> SHADER_READ_ONLY for fragment sampling. */
 		{
-			Vulkan::Sync::ImageMemoryBarrier barrier{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				image,
 				VK_ACCESS_SHADER_WRITE_BIT,
 				VK_ACCESS_SHADER_READ_BIT,
@@ -586,7 +589,7 @@ void main ()
 	}
 
 	bool
-	IBLBaker::ensureEnvironmentPipelines () noexcept
+	IBLBaker::ensureEnvironmentPipelines ()
 	{
 		if ( m_prefilterPipeline != nullptr && m_irradiancePipeline != nullptr )
 		{
@@ -719,8 +722,14 @@ void main ()
 		/* Transient descriptor pool + sets: one set per dispatch (6 prefilter mips + 1
 		 * irradiance). Rebuilt at every bake — the pool is tiny and a sky change is rare. */
 		const std::vector< VkDescriptorPoolSize > poolSizes{
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, dispatchCount},
-			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, dispatchCount}
+			{
+				.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = dispatchCount
+			},
+			{
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorCount = dispatchCount
+			}
 		};
 
 		/* ⚠️ FREE_DESCRIPTOR_SET_BIT: same contract as above — the sets are freed one by one
@@ -799,7 +808,7 @@ void main ()
 		 * ping-pong pair never republishes an old bake). */
 		for ( const auto * texture : {&prefiltered, &irradiance} )
 		{
-			Vulkan::Sync::ImageMemoryBarrier barrier{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*texture->image(),
 				0,
 				VK_ACCESS_SHADER_WRITE_BIT,
@@ -820,7 +829,7 @@ void main ()
 			EnvironmentPushConstants pushConstants{};
 			pushConstants.sourceSize = sourceSize;
 			pushConstants.destSize = destSize;
-			pushConstants.sampleCount = PrefilterBaseSampleCount + PrefilterSampleCountPerMip * mipLevel;
+			pushConstants.sampleCount = PrefilterBaseSampleCount + (PrefilterSampleCountPerMip * mipLevel);
 			pushConstants.roughness = static_cast< float >(mipLevel) / static_cast< float >(prefilteredMipLevels - 1);
 
 			m_commandBuffer->bind(*descriptorSets[mipLevel], *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
@@ -828,6 +837,7 @@ void main ()
 			vkCmdPushConstants(m_commandBuffer->handle(), m_environmentPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(EnvironmentPushConstants), &pushConstants);
 
 			const uint32_t groupCount = (destSize + 7) / 8;
+
 			m_commandBuffer->dispatch(groupCount, groupCount, 6);
 		}
 
@@ -845,14 +855,15 @@ void main ()
 
 			vkCmdPushConstants(m_commandBuffer->handle(), m_environmentPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(EnvironmentPushConstants), &pushConstants);
 
-			const uint32_t groupCount = (IBLTexture::IrradianceSize + 7) / 8;
+			constexpr uint32_t groupCount = (IBLTexture::IrradianceSize + 7) / 8;
+
 			m_commandBuffer->dispatch(groupCount, groupCount, 6);
 		}
 
 		/* Both destinations: GENERAL -> SHADER_READ_ONLY for fragment sampling. */
 		for ( const auto * texture : {&prefiltered, &irradiance} )
 		{
-			Vulkan::Sync::ImageMemoryBarrier barrier{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*texture->image(),
 				VK_ACCESS_SHADER_WRITE_BIT,
 				VK_ACCESS_SHADER_READ_BIT,
@@ -870,9 +881,11 @@ void main ()
 			return false;
 		}
 
+#ifdef EMERAUDE_DEBUG_IBL_FACES
 		/* Blocking submit (v1). Upgrade path when a per-frame dynamic sky lands: submit
 		 * with a fence, poll it from the logic thread, publish on completion. */
 		const auto start = std::chrono::steady_clock::now();
+#endif
 
 		auto * queue = m_device->getGraphicsQueue(Vulkan::QueuePriority::High);
 
@@ -883,7 +896,9 @@ void main ()
 			return false;
 		}
 
+#ifdef EMERAUDE_DEBUG_IBL_FACES
 		const auto durationUS = std::chrono::duration_cast< std::chrono::microseconds >(std::chrono::steady_clock::now() - start).count();
+#endif
 
 		static_cast< void >(m_commandBuffer->reset());
 
