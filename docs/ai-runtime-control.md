@@ -628,7 +628,8 @@ echo "Core.RendererService.triggerRenderDocCapture(5)" | nc -q 2 localhost 7777 
   frame **past the first** is how per-frame / state-tracking bugs are caught.
 - **Requires the app to be launched under RenderDoc** so the in-application API is injected, and a
   build with `EMERAUDE_ENABLE_RENDERDOC=ON` (otherwise the call reports "RenderDoc is not
-  available" and is a no-op):
+  available" and is a no-op). The option is self-sufficient — it fetches the RenderDoc sources
+  itself (`cmake/SetupRenderDoc.cmake`); there is no submodule to initialise since Sep 2026:
   ```bash
   /opt/renderdoc_<ver>/bin/renderdoccmd capture --wait-for-exit ./<app> --load-demo <demo> --disable-cef
   ```

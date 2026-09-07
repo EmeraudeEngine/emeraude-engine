@@ -87,7 +87,7 @@ option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console fr
 option(EMERAUDE_DEBUG_POINTER_HEAVY_INPUT "Enable printing of events to the console from pointer heavy (move/wheel) inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
-option(EMERAUDE_ENABLE_RENDERDOC "Enable RenderDoc in-application API for GPU frame capture [FETCHED] (Default Off)." Off)
+option(EMERAUDE_ENABLE_RENDERDOC "Enable RenderDoc in-application API for GPU frame capture. The RenderDoc sources (~219 MB) are fetched by cmake/SetupRenderDoc.cmake ONLY when this is On [FETCHED] (Default Off)." Off)
 
 # Create constant variable for dependency inclusions
 get_filename_component(TEMP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src ABSOLUTE)

@@ -3039,6 +3039,35 @@ misleading.
   the other RTR shaders (`RTRBlurFragmentShader`, `RTRCompositeFragmentShader`) are still small but any
   shader that keeps growing will re-trigger this on the next Windows build.
 
+### ⚠️⚠️ `FetchContent`: a `SOURCE_DIR` you point at an existing checkout gets ERASED — and `MakeAvailable` builds the fetched project unless you tell it not to (Sep 2026)
+
+> **Context:** RenderDoc stopped being a submodule (Sep 2026) — 219 MB of sources cloned by everyone
+> for a debug option that is `Off` by default. `cmake/SetupRenderDoc.cmake` now fetches them with
+> `FetchContent`, and only when `EMERAUDE_ENABLE_RENDERDOC=ON`. Two traps were paid on the way.
+>
+> **Trap 1 — reusing a local checkout.** Making FetchContent reuse a tree already on disk *looks*
+> like `FetchContent_Declare(... SOURCE_DIR <path>)`. It is not: `SOURCE_DIR` hands the directory to
+> the underlying ExternalProject **git-clone step, which deletes its source directory whenever the
+> stamp file is missing** — that is, from every freshly created build directory. Here it would have
+> taken `dependencies/renderdoc/build/` with it (240 MB, several minutes of compilation, the Python
+> analysis module `renderdoc.so`). The correct mechanism is the cache variable
+> **`FETCHCONTENT_SOURCE_DIR_<UPPERCASE NAME>`**, the only one that makes FetchContent *skip the
+> download step altogether*, and the one CMake documents for exactly this use.
+>
+> **Trap 2 — fetching sources without building them.** `FetchContent_MakeAvailable()` calls
+> `add_subdirectory()` on what it populated. For RenderDoc that means building the capture library
+> and `qrenderdoc` inside our build tree, when all the engine needs is one header
+> (`renderdoc/api/app/renderdoc_app.h`, MIT). The documented download-only idiom is to point
+> **`SOURCE_SUBDIR` at a directory that holds no `CMakeLists.txt`**; `MakeAvailable` then populates
+> the sources and skips `add_subdirectory()`. Verified with a throwaway repository whose top-level
+> `CMakeLists.txt` was nothing but a `message(FATAL_ERROR)`: it never fired.
+>
+> **Where things are now:** the revision is pinned once in `cmake/RenderDocPin.cmake` (v1.45) and
+> read by both consumers — `SetupRenderDoc.cmake` (the header the engine compiles against) and
+> `BuildRenderDocPython.cmake` (which clones the same revision on demand to build `renderdoc.so`).
+> A checkout at `dependencies/renderdoc` is picked up automatically; `-DRENDERDOC_GIT_TAG=<tag>`
+> overrides the pin. Nothing at all is downloaded while the option stays `Off`.
+
 ## Platform-Specific
 
 ### String Conversions on Windows

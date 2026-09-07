@@ -131,11 +131,16 @@ Cloned with `--recurse-submodules` and compiled with the engine:
 | **magic_enum** | 0.9.8 (`1384769c66bd16ec9bb1353f45fe8ec8ccc12dbd`)  | [Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
 | **Vulkan Memory Allocator** | 3.4.0 (`3aa921224c154a0d2c43912bc88e1c42ce1f7607`)       | [GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
 | **SDL_GameControllerDB** | unversioned (`92580540a27913da37a34cfcc006f973d471c081`) | [gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB) |
-| **RenderDoc** | v1.45 (branch `v1.x`)                                    | [baldurk/renderdoc](https://github.com/baldurk/renderdoc) — optional, GPU debug tooling |
 
 Everything else — prebuilt static libraries, `Setup*.cmake` scripts, compile policy — comes from
 [emeraude-base](https://github.com/EmeraudeEngine/emeraude-base/blob/main/README.md#external-dependencies)
 and is resolved automatically at configure time.
+
+**RenderDoc is deliberately NOT a submodule** (2026-09-07): its ~219 MB of sources serve one
+optional debug feature that is `Off` by default, so nothing is cloned until you ask for it.
+`cmake/SetupRenderDoc.cmake` fetches them (`FetchContent`, pinned in `cmake/RenderDocPin.cmake`
+— currently **v1.45**) only when `EMERAUDE_ENABLE_RENDERDOC=ON`, and reuses any checkout already
+sitting at `dependencies/renderdoc` rather than downloading again.
 
 ## Building from source
 
@@ -311,14 +316,21 @@ sudo tar xzf renderdoc_1.43.tar.gz -C /opt/
 > EOF
 > ```
 
-**Build with capture support** (the MIT-licensed `renderdoc_app.h` header is used from the
-submodule; no linking — the library is detected at runtime through the layer):
+**Build with capture support.** The engine consumes exactly one file, the MIT-licensed
+`renderdoc_app.h` in-application API header; there is nothing to link, the RenderDoc library is
+detected at run time through the Vulkan layer. The option alone pulls the sources — no submodule,
+no manual step:
 
 ```bash
-git submodule update --init dependencies/renderdoc
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_RENDERDOC=ON
 cmake --build build --config Debug -j$(nproc)
 ```
+
+The first configure with the option ON clones RenderDoc **v1.45** (~219 MB, shallow) into
+`build/_deps/renderdoc-src`. To share one checkout between several build directories, or to reuse
+the one `BuildRenderDocPython.cmake` created, put it at `dependencies/renderdoc` (picked up
+automatically) or pass `-DFETCHCONTENT_SOURCE_DIR_RENDERDOC=<path>`. The revision is pinned in
+`cmake/RenderDocPin.cmake` and overridable with `-DRENDERDOC_GIT_TAG=<tag>`.
 
 **Capture:** launch under `renderdoccmd capture --wait-for-exit ./your-app`, or from
 `qrenderdoc` (*File > Launch Application*). Press **F12** (RenderDoc) or **Shift+C** (engine
@@ -329,6 +341,9 @@ buffer of the frame.
 
 **Python analysis module** — for programmatic inspection of `.rdc` captures (draw-call counting,
 pipeline state, texture/buffer enumeration):
+
+The script clones the pinned RenderDoc revision into `dependencies/renderdoc` if no sources are
+there yet (the full tree is required — the header alone cannot build the module), then builds:
 
 ```bash
 cmake -P cmake/BuildRenderDocPython.cmake   # builds dependencies/renderdoc/build/lib/renderdoc.so

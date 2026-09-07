@@ -1,6 +1,8 @@
 # cmake/BuildRenderDocPython.cmake
 #
-# Builds the RenderDoc Python module (renderdoc.so) from the submodule.
+# Builds the RenderDoc Python module (renderdoc.so) from the RenderDoc sources.
+# RenderDoc is NOT a submodule (2026-09-07): the sources are cloned on demand, here, at the
+# revision pinned by RenderDocPin.cmake — the same one SetupRenderDoc.cmake compiles against.
 # This enables programmatic analysis of .rdc GPU captures via:
 #   import renderdoc as rd
 #
@@ -12,6 +14,8 @@
 cmake_minimum_required(VERSION 3.20)
 
 # --- Paths ---
+
+include(${CMAKE_CURRENT_LIST_DIR}/RenderDocPin.cmake)
 
 if ( NOT DEFINED RENDERDOC_SOURCE_DIR )
 	get_filename_component(RENDERDOC_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../dependencies/renderdoc" ABSOLUTE)
@@ -30,10 +34,31 @@ if ( EXISTS "${RENDERDOC_PYTHON_MODULE}" )
 	return()
 endif ()
 
-# --- Guard: submodule present ---
+# --- Sources: reused if already on disk, cloned on demand otherwise ---
 
+# The clone lands at the former submodule path on purpose: SetupRenderDoc.cmake picks that
+# checkout up automatically (FETCHCONTENT_SOURCE_DIR_RENDERDOC), so enabling the engine option
+# afterwards downloads nothing, and the Python module built below stays next to the very
+# sources the engine header comes from.
 if ( NOT EXISTS "${RENDERDOC_SOURCE_DIR}/CMakeLists.txt" )
-	message(FATAL_ERROR "[RenderDoc] Submodule not found at ${RENDERDOC_SOURCE_DIR}. Run: git submodule update --init dependencies/renderdoc")
+	find_package(Git QUIET)
+
+	if ( NOT Git_FOUND )
+		message(FATAL_ERROR "[RenderDoc] No sources at ${RENDERDOC_SOURCE_DIR} and git is not available to clone them.")
+	endif ()
+
+	message(STATUS "[RenderDoc] No sources at ${RENDERDOC_SOURCE_DIR}. Cloning ${RENDERDOC_GIT_REPOSITORY} @ ${RENDERDOC_GIT_TAG} (~219 MB, shallow) ...")
+
+	execute_process(
+		COMMAND ${GIT_EXECUTABLE} clone --depth 1 --branch ${RENDERDOC_GIT_TAG} ${RENDERDOC_GIT_REPOSITORY} ${RENDERDOC_SOURCE_DIR}
+		RESULT_VARIABLE _result
+	)
+
+	if ( NOT _result EQUAL 0 )
+		message(FATAL_ERROR "[RenderDoc] Clone failed (exit ${_result}). A non-empty ${RENDERDOC_SOURCE_DIR} is the usual cause: remove it, or pass -DRENDERDOC_SOURCE_DIR=<path> to an existing checkout.")
+	endif ()
+
+	message(STATUS "[RenderDoc] Sources cloned at ${RENDERDOC_SOURCE_DIR}.")
 endif ()
 
 # --- Guard: Linux only ---

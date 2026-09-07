@@ -13,7 +13,3 @@
 [submodule "dependencies/VulkanMemoryAllocator"]
 	path = dependencies/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-[submodule "dependencies/renderdoc"]
-	path = dependencies/renderdoc
-	url = https://github.com/baldurk/renderdoc.git
-	branch = v1.x
