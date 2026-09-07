@@ -27,12 +27,11 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
-#include <exception>
+#include <cerrno>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <optional>
-#include <stdexcept>
-#include <thread>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -43,6 +42,7 @@
 #endif
 #include <Windows.h>
 #include <objbase.h>
+#include <process.h>
 #include <psapi.h>
 #include <tlhelp32.h>
 
@@ -54,8 +54,8 @@ namespace EmEn::PlatformSpecific
 {
 	constexpr auto TracerTag{"Helpers"};
 
-	std::wstring
-	getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue)
+	std::optional< std::wstring >
+	getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue) noexcept
 	{
 		size_t bufferSize = 0xFFF; // If too small, will be resized down below.
 		std::wstring valueBuf;
@@ -102,7 +102,11 @@ namespace EmEn::PlatformSpecific
 
 		if ( rc != ERROR_SUCCESS )
 		{
-			throw std::runtime_error("Windows system error code: " + std::to_string(rc));
+			/* NOTE: std::cerr on purpose — this helper serves SystemInfo, whose diagnostics all go to the
+			 * error stream (bootstrap service). */
+			std::cerr << "RegGetValueW(HKLM\\" << convertWideToUTF8(regSubKey) << ", " << convertWideToUTF8(regValue) << ") failed : Windows system error code " << rc << std::endl;
+
+			return std::nullopt;
 		}
 
 		cbData /= sizeof(wchar_t);
@@ -454,28 +458,41 @@ namespace EmEn::PlatformSpecific
 		 * full perf rationale. The DPI awareness is replicated on the worker ONLY; setting it on the
 		 * caller thread would permanently mutate the main thread's context.
 		 *
-		 * Only the thread CONSTRUCTION is guarded: it is the sole realistic failure (std::thread
-		 * throws std::system_error on OS resource exhaustion). join() on a freshly joinable thread
-		 * does not throw, so it stays outside the try. */
-		std::optional< std::thread > worker;
-
-		try
+		 * ⚠️ The engine is built without exceptions (/EHs- /EHc-), and the only realistic failure here
+		 * is the thread creation itself (OS resource exhaustion) — which std::thread reports by
+		 * THROWING std::system_error from inside the CRT. That throw would cross our frames without
+		 * unwind semantics and terminate the process. _beginthreadex() reports the very same failure
+		 * as a return value (0, errno set), while still initialising the CRT per-thread state the
+		 * dialog body relies on. The worker context outlives the worker: this function never returns
+		 * before the thread has been waited out (see below). */
+		struct WorkerContext
 		{
-			worker.emplace([&runDialog, &result, dpiContext] () {
-				if ( dpiContext != nullptr )
-				{
-					SetThreadDpiAwarenessContext(dpiContext);
-				}
+			const decltype(runDialog) * runDialog;
+			bool * result;
+			DPI_AWARENESS_CONTEXT dpiContext;
+		};
 
-				result = runDialog();
-			});
-		}
-		catch ( const std::exception & error )
+		WorkerContext workerContext{&runDialog, &result, dpiContext};
+
+		const uintptr_t workerThread = _beginthreadex(nullptr, 0, [] (void * param) -> unsigned {
+			auto * context = static_cast< WorkerContext * >(param);
+
+			if ( context->dpiContext != nullptr )
+			{
+				SetThreadDpiAwarenessContext(context->dpiContext);
+			}
+
+			*context->result = (*context->runDialog)();
+
+			return 0;
+		}, &workerContext, 0, nullptr);
+
+		if ( workerThread == 0 )
 		{
 			/* Spawning the dedicated thread failed. Fall back to running the dialog on the caller
 			 * thread: slower on cloud-redirected-known-folder machines (the original symptom), but
 			 * functional. No DPI mutation here — the caller thread already owns the window. */
-			TraceWarning{FileDialogClassId} << "Unable to spawn the dedicated dialog thread (" << error.what() << "); running the dialog inline.";
+			TraceWarning{FileDialogClassId} << "Unable to spawn the dedicated dialog thread (errno " << errno << "); running the dialog inline.";
 
 			return runDialog();
 		}
@@ -494,7 +511,7 @@ namespace EmEn::PlatformSpecific
 		 * This does NOT reintroduce the shell-pane perf storm: that was the DIALOG's modal loop pumping
 		 * heavy traffic. The dialog's loop runs on the worker; this pump only services the main thread's
 		 * own messages (paint, CEF, DWM pings). */
-		const HANDLE workerHandle = static_cast< HANDLE >(worker->native_handle());
+		const HANDLE workerHandle = reinterpret_cast< HANDLE >(workerThread);
 
 		for ( ;; )
 		{
@@ -548,7 +565,10 @@ namespace EmEn::PlatformSpecific
 			}
 		}
 
-		worker->join();
+		/* Reap the worker (the equivalent of join(); a no-op wait when it already finished above),
+		 * then release the handle _beginthreadex() handed us. */
+		WaitForSingleObject(workerHandle, INFINITE);
+		CloseHandle(workerHandle);
 
 		return result;
 	}

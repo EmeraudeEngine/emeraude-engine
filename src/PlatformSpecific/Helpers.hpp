@@ -34,6 +34,7 @@
 #if IS_WINDOWS
 	#include <functional>
 	#include <map>
+	#include <optional>
 #endif
 #include <functional>
 #include <string>
@@ -65,13 +66,15 @@ namespace EmEn::PlatformSpecific
 {
 #if IS_WINDOWS
 	/**
-	 * @brief Returns a value in a wide string from the Windows register.
-	 * @param regSubKey A reference to a wide string.
-	 * @param regValue A reference to a wide string.
-	 * @return std::wstring
+	 * @brief Returns a REG_SZ value from the Windows registry, under HKEY_LOCAL_MACHINE.
+	 * @note The engine is built without exceptions: a missing key or an access failure is reported
+	 * as an empty optional (the Windows error code is printed on the error stream), never thrown.
+	 * @param regSubKey The sub-key path below HKLM.
+	 * @param regValue The value name inside that key.
+	 * @return std::optional< std::wstring > The value, or std::nullopt on failure.
 	 */
 	[[nodiscard]]
-	EMEN_API std::wstring getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue);
+	EMEN_API std::optional< std::wstring > getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue) noexcept;
 
 	/**
 	 * @brief Converts a wide string to an ASCII string.

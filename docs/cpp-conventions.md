@@ -248,6 +248,26 @@ void destroy() noexcept;
 const char* deviceName() const noexcept;
 ```
 
+### No Exceptions — Anywhere, On Every Platform
+
+The whole cascade is built **without exceptions** (`EMERAUDE_DISABLE_EXCEPTIONS=On` in
+emeraude-base: `-fno-exceptions` on GCC/Clang, `/EHs- /EHc-` on MSVC). A `throw` that reaches one
+of our frames does not unwind, it terminates the process. Therefore:
+
+- **No `try`, `catch` or `throw` in engine code**, not even in a platform-specific file. A failure is
+  a value: `bool`, or `std::optional< T >`, with the reason on the diagnostics channel (Tracer, or
+  `std::cerr` for bootstrap services). The full contract is emeraude-base's
+  [`docs/error-handling.md`](../dependencies/emeraude-base/docs/error-handling.md).
+- ⚠️ **Standard-library calls that report failure by throwing are forbidden too**, and Windows is the
+  usual trap: `std::thread`'s constructor throws `std::system_error` from inside the CRT when the OS
+  refuses a thread. Use the API that returns the failure instead (`_beginthreadex()` returns `0`,
+  `errno` set — see `runFileDialogOnDedicatedThread()` in `Helpers.windows.cpp`; on POSIX the
+  Linux helper validates `joinable()` after construction). Same family: `.at()`, `std::stoi`,
+  `std::stoul`, `std::regex` — validate first, then use the non-throwing form (`operator[]` after a
+  bounds check, `std::from_chars`).
+- MSVC warning **C4530** ("exception handler used, but unwind semantics are not enabled") is the
+  compiler telling you a `try` slipped into a `/EHs-` build. It is a defect report, not noise.
+
 ### Use `const` Correctly
 
 - Mark methods `const` when they don't modify the object

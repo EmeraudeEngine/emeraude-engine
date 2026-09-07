@@ -52,19 +52,21 @@ namespace EmEn::PlatformSpecific
 	bool
 	SystemInfo::fetchOSInformation () noexcept
 	{
-		try
 		{
-			const std::wstring systemName = getStringValueFromHKLM(L"SOFTWARE\\MICROSOFT\\windows nt\\currentversion", L"ProductName");
-			const std::wstring systemVersion = getStringValueFromHKLM(L"SOFTWARE\\MICROSOFT\\windows nt\\currentversion", L"CurrentBuildNumber");
+			/* NOTE: The registry helper reports a failure as an empty optional (and prints the Windows
+			 * error code itself) — no exceptions in the engine. */
+			const auto systemName = getStringValueFromHKLM(L"SOFTWARE\\MICROSOFT\\windows nt\\currentversion", L"ProductName");
+			const auto systemVersion = getStringValueFromHKLM(L"SOFTWARE\\MICROSOFT\\windows nt\\currentversion", L"CurrentBuildNumber");
 
-			m_OSInformation.systemName = convertWideToUTF8(systemName);
-			m_OSInformation.systemVersion = convertWideToUTF8(systemVersion);
-		}
-		catch ( std::exception & e )
-		{
-			std::cerr << e.what();
+			if ( !systemName.has_value() || !systemVersion.has_value() )
+			{
+				std::cerr << "Unable to read the OS product name/build number from the registry !" << std::endl;
 
-			return false;
+				return false;
+			}
+
+			m_OSInformation.systemName = convertWideToUTF8(systemName.value());
+			m_OSInformation.systemVersion = convertWideToUTF8(systemVersion.value());
 		}
 
 		/* NOTE: Get the DNS host name (matches Node.js os.hostname() on Windows). */

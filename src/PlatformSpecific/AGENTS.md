@@ -321,7 +321,7 @@ const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
 | `convertANSIToWide(str)` | ANSI `std::string` → `std::wstring` |
 | `convertWideToANSI(wstr)` | `std::wstring` → ANSI `std::string` |
 | `createExtensionFilter(...)` | Builds `COMDLG_FILTERSPEC` array |
-| `getStringValueFromHKLM(...)` | Reads Windows registry |
+| `getStringValueFromHKLM(...)` | Reads a `REG_SZ` value under HKLM. Returns `std::optional< std::wstring >`, `noexcept` — a failure is an empty optional plus the Windows error code on `std::cerr`, never a throw (the engine is built `/EHs- /EHc-`; it used to `throw std::runtime_error`, caught in `SystemInfo::fetchOSInformation()`, until 2026-09-08) |
 | `createConsole(title)` | Creates debug console window |
 | `attachToParentConsole()` | Attaches to parent console |
 
