@@ -28,6 +28,20 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > + `cmake/EnablePrecompiledHeaders.cmake`). The engine inherits all of it via `emeraude::base`
 > and adds `EMERAUDE_BASE_CMAKE_DIR` to its module path.
 >
+> **A `Setup<Lib>.cmake` links the TOP of the dependency chain, never the whole chain.** The
+> ext-deps-generator packages ship real CMake config packages, so a wrapper already carries its
+> core through `$<LINK_ONLY:…>` in its exported `INTERFACE_LINK_LIBRARIES`. Naming both in
+> `target_link_libraries()` — and, worse, naming the core *first* — conflicts with the ordering
+> static linking requires: CMake honours the requested position **and** re-emits the entry at the
+> end of the link line, so the archive appears twice. On Apple's linker that surfaces as
+> `ld: warning: ignoring duplicate libraries: '…/libfoo.a'` (harmless, but it hides real ones).
+> Reference case: `cmake/SetupReproc.cmake` linked `reproc reproc++` while the sources only use
+> `reproc++/run.hpp`; fixed 2026-09-07 by linking `reproc++` alone. ⚠️ The `find_package()` for the
+> core must **stay**: `reproc++-config.cmake` does call `find_dependency(reproc)`, but without
+> `PATHS ${EMERAUDE_EXT_LIBS_PATH} NO_DEFAULT_PATH` it cannot reach the ext-deps prefix — the
+> explicit call is what makes the target exist, and `find_dependency()` then sees it as found.
+> To audit a link line: `sed -n '<line>p' build.ninja | tr ' ' '\n' | grep '\.a$' | sort | uniq -c | awk '$1>1'`.
+>
 > **Precompiled header:** the engine target applies base's shared STL PCH via
 > `emeraude_base_target_enable_pch(${PROJECT_NAME} "${EMERAUDE_BASE_STL_PCH_HEADERS}")`, like every
 > other target in the cascade — the header list is always passed explicitly, as a CMake list.
