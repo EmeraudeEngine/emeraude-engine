@@ -96,6 +96,12 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > **Rule:** a bug or a missing feature in the foundation layer (math, factories, I/O,
 > threading, …) is fixed **in emeraude-base**, never worked around in the engine — the same
 > co-development discipline the engine applies to itself vs projet-alpha.
+>
+> **The Tracy profiler client also comes from there** (`EMERAUDE_ENABLE_TRACY`, default `Off`).
+> Its headers are on the include path either way, so engine instrumentation carries no `#if`
+> guard: `Core::run()`, `Core::logicsTask()` and `Core::renderingTask()` name their threads and
+> the rendering loop closes each iteration with `FrameMark`. Contract and limits:
+> [`dependencies/emeraude-base/docs/tracy-profiler.md`](dependencies/emeraude-base/docs/tracy-profiler.md).
 
 ## 1b. Vision
 

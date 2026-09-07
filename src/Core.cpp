@@ -41,6 +41,7 @@
 #include <thread>
 
 /* Third-party inclusions. */
+#include <tracy/Tracy.hpp>
 #include "GLFW/glfw3.h"
 #ifdef IMGUI_ENABLED
 #include "imgui.h"
@@ -146,6 +147,8 @@ namespace EmEn
 	void
 	Core::logicsTask () noexcept
 	{
+		tracy::SetThreadName("EmEn::Logics");
+
 		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{WorldPhysicsUpdateCycleDurationUS< uint64_t >};
 
 		while ( m_isLogicsLoopRunning )
@@ -224,6 +227,8 @@ namespace EmEn
 	void
 	Core::renderingTask () noexcept
 	{
+		tracy::SetThreadName("EmEn::Rendering");
+
 		uint64_t frames = 0;
 
 		/* NOTE: On-demand safety re-check period (one 60 FPS frame). On timeout the thread merely
@@ -322,6 +327,8 @@ namespace EmEn
 			}
 
 			frames++;
+
+			FrameMark;
 		}
 
 		/* NOTE: Wait until the device has finished all his pending work. */
@@ -397,6 +404,8 @@ namespace EmEn
 	int
 	Core::run () noexcept
 	{
+		tracy::SetThreadName("EmEn::Main");
+
 		switch ( m_startupMode )
 		{
 			case StartupMode::Error :
