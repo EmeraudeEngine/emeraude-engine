@@ -32,7 +32,6 @@
 #include <sstream>
 
 /* Third-party inclusions. */
-#define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */

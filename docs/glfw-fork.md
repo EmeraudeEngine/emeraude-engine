@@ -111,8 +111,35 @@ Other guarantees, each exercised on a disposable bench (two local remotes, no ne
 
 `cmake/SetupGLFW.cmake` adds the submodule with `add_subdirectory(... EXCLUDE_FROM_ALL)`, forces
 `GLFW_BUILD_EXAMPLES/TESTS/DOCS` and `GLFW_INSTALL` off, exposes the include directory as `SYSTEM`,
-and defines `GLFW_INCLUDE_VULKAN` **publicly** so every TU pulling `<GLFW/glfw3.h>` sees the Vulkan
-entry points.
+and defines `GLFW_INCLUDE_VULKAN GLFW_INCLUDE_NONE` **publicly** so every TU pulling
+`<GLFW/glfw3.h>` sees the Vulkan entry points — and nothing else.
+
+### ⚠️ `GLFW_INCLUDE_VULKAN` does NOT suppress the OpenGL headers — `GLFW_INCLUDE_NONE` does
+
+In `glfw3.h` the two inclusions are **independent blocks**:
+
+| Block | Guard |
+|---|---|
+| `#include <vulkan/vulkan.h>` (~line 110) | `defined(GLFW_INCLUDE_VULKAN)` |
+| `#include <GL/gl.h>` (~line 215) | `!defined(GLFW_INCLUDE_NONE)` — the **only** suppressor |
+
+So `GLFW_INCLUDE_VULKAN` alone leaves every TU including `<GLFW/glfw3.h>` requiring `<GL/gl.h>`,
+i.e. a build dependency on the OpenGL development headers that this Vulkan-only engine never uses
+(no source references a single GL symbol). Both defines together is the canonical GLFW+Vulkan
+setup — the same pair `dependencies/imgui/examples/example_glfw_vulkan/main.cpp` uses.
+
+**How it surfaced** (2026-09-07, app_system Linux CI): the runner's apt list was trimmed to the real
+build requirements, dropping the `libgtk-3-dev` umbrella — which had been pulling `libgl-dev`
+transitively. Every TU reaching `Window.hpp` then died on
+`glfw3.h:241: fatal error: GL/gl.h: No such file or directory`, while every developer machine kept
+building (GL headers are always installed there). The `#define GLFW_INCLUDE_NONE` scattered in
+`Input/*`, `Vulkan/Instance.cpp` and app_system's `UI/WebView.cpp` protected only *those* files.
+
+⚠️ **Do not re-add a local `#define GLFW_INCLUDE_NONE` before an `#include "GLFW/glfw3.h"`.** Now
+that the define comes from the command line (`-DGLFW_INCLUDE_NONE`, value `1`), a source-level
+`#define GLFW_INCLUDE_NONE` (empty body) is a *different* definition and GCC/Clang emit
+`warning: "GLFW_INCLUDE_NONE" redefined` on every such TU. The 8 pre-existing ones were removed with
+the CMake change.
 
 Nothing in the engine's own CMake lists GLFW sources, so a GLFW file rename is handled by GLFW's own
 CMakeLists — 3.5 renamed `src/cocoa_time.c/.h` → `src/macos_time.c/.h` and deleted
