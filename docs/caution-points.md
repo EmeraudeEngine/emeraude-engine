@@ -3062,11 +3062,47 @@ misleading.
 > the sources and skips `add_subdirectory()`. Verified with a throwaway repository whose top-level
 > `CMakeLists.txt` was nothing but a `message(FATAL_ERROR)`: it never fired.
 >
-> **Where things are now:** the revision is pinned once in `cmake/RenderDocPin.cmake` (v1.45) and
+> **Where things are now:** the revision is pinned once in `cmake/RenderDocPin.cmake` (v1.46) and
 > read by both consumers — `SetupRenderDoc.cmake` (the header the engine compiles against) and
 > `BuildRenderDocPython.cmake` (which clones the same revision on demand to build `renderdoc.so`).
 > A checkout at `dependencies/renderdoc` is picked up automatically; `-DRENDERDOC_GIT_TAG=<tag>`
 > overrides the pin. Nothing at all is downloaded while the option stays `Off`.
+
+### ⚠️⚠️ A RenderDoc capture NEEDS the validation layers OFF (and X11) — with both layers loaded, nothing is ever presented (Sep 2026)
+
+> **Symptom:** `Core.RendererService.triggerRenderDocCapture()` answers *"frame capture triggered
+> (captured on the next present)"*, the app runs, and **no `.rdc` file is ever written**. Reported
+> as an unexplained capture-workflow problem since Jun 2026; here is the measurement.
+>
+> **Two independent causes, both mandatory to fix, measured on RenderDoc 1.43 AND 1.46 (identical):**
+>
+> 1. **RenderDoc has no Wayland support.** `renderdoccmd version` prints *"Windowing systems
+>    supported at compile-time: xlib, XCB, Vulkan KHR_display"*. Under Wayland its layer does not
+>    expose `VK_KHR_wayland_surface`; GLFW then reports *"Vulkan: Window surface creation extensions
+>    not found"* and `WindowService` dies on `VK_ERROR_EXTENSION_NOT_PRESENT` before frame one.
+>    Fix: `Core/Video/Window/GLFW/UsePlatform` = `"X11"` (XWayland).
+> 2. **The Khronos validation layer and the RenderDoc layer are mutually exclusive in practice.**
+>    Loaded together, every present is rejected: `VUID-vkCmdDraw-None-09600` (a descriptor's image
+>    sits in `PRESENT_SRC_KHR` where the descriptor was written expecting `GENERAL`), then
+>    `VUID-vkQueuePresentKHR-pWaitSemaphores-03268`, `VUID-VkPresentInfoKHR-pImageIndices-01430`,
+>    and `[VulkanQueue] Unable to present an image : VK_ERROR_VALIDATION_FAILED_EXT`. RenderDoc
+>    wraps the swapchain with its own usage flags and layouts; validation tracks what it saw.
+>    No present ⇒ no capture, silently. Fix: `Core/Video/VulkanInstance/EnableDebug` = `false` for
+>    the capture run only.
+>
+> **Term isolation (same binary, same X11 platform), the reason this entry is trustworthy:**
+> | Layers loaded | Result |
+> |---|---|
+> | validation only | 0 error, frame presented, screenshot fine |
+> | RenderDoc only | `.rdc` written (549 MB), 0 error, replayed: 90 draw calls, 18 dispatches, 55 render passes |
+> | both | 6 validation errors, `VK_ERROR_VALIDATION_FAILED_EXT`, nothing presented, no capture |
+>
+> ⚠️ This is the **documented exception** to the project rule *"validation layers ON for any
+> rendering verification"*: for a capture run RenderDoc IS the instrumentation, and the `.rdc`
+> replays the commands actually submitted. Turn validation back on for every other verification.
+>
+> ⚠️ Do not conclude "the engine has a layout bug" from those VUIDs without redoing the isolation:
+> the same code presents cleanly when the RenderDoc layer is absent.
 
 ## Platform-Specific
 

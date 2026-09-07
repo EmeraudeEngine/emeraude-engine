@@ -139,7 +139,7 @@ and is resolved automatically at configure time.
 **RenderDoc is deliberately NOT a submodule** (2026-09-07): its ~219 MB of sources serve one
 optional debug feature that is `Off` by default, so nothing is cloned until you ask for it.
 `cmake/SetupRenderDoc.cmake` fetches them (`FetchContent`, pinned in `cmake/RenderDocPin.cmake`
-— currently **v1.45**) only when `EMERAUDE_ENABLE_RENDERDOC=ON`, and reuses any checkout already
+— currently **v1.46**) only when `EMERAUDE_ENABLE_RENDERDOC=ON`, and reuses any checkout already
 sitting at `dependencies/renderdoc` rather than downloading again.
 
 ## Building from source
@@ -278,14 +278,38 @@ Built-in support for [RenderDoc](https://renderdoc.org/) frame capture through t
 in-application API. When `EMERAUDE_ENABLE_RENDERDOC=OFF` (the default), all of it compiles to
 zero-cost no-ops.
 
+> [!WARNING]
+> **Two conditions must be met on Linux, and neither is optional.** Measured Sep 2026 on a Wayland
+> session, RTX 3070 Ti, RenderDoc 1.43 *and* 1.46 (identical results):
+>
+> 1. **RenderDoc has no Wayland support** — `renderdoccmd version` says so itself: *"Windowing
+>    systems supported at compile-time: xlib, XCB, Vulkan KHR_display"*. Under Wayland the injected
+>    layer does not expose `VK_KHR_wayland_surface`, GLFW reports *"Vulkan: Window surface creation
+>    extensions not found"* and the engine dies on `VK_ERROR_EXTENSION_NOT_PRESENT` before the first
+>    frame. Force XWayland with `Core/Video/Window/GLFW/UsePlatform` = `"X11"`.
+> 2. **The Khronos validation layer and the RenderDoc layer cannot be loaded together.** With both,
+>    every present is rejected — `VUID-vkCmdDraw-None-09600` (a descriptor's image is in
+>    `PRESENT_SRC_KHR` where the descriptor was written expecting `GENERAL`), then
+>    `VUID-vkQueuePresentKHR-pWaitSemaphores-03268` and `VUID-VkPresentInfoKHR-pImageIndices-01430`,
+>    ending on `VK_ERROR_VALIDATION_FAILED_EXT`. RenderDoc wraps the swapchain (its own usage flags
+>    and layouts) and validation tracks what it saw: a capture triggered from the console is
+>    accepted ("captured on the next present") and **no `.rdc` is ever written, because no present
+>    succeeds**. Set `Core/Video/VulkanInstance/EnableDebug` to `false` for the capture run.
+>
+> Term isolation, same binary, same X11 platform: RenderDoc layer alone → capture written, 0
+> validation error, 90 draw calls / 18 dispatches / 55 render passes replayed. Validation alone →
+> 0 error, frame presented, screenshot fine. Both → nothing is ever presented. ⚠️ This is the
+> documented exception to *"validation layers ON for any rendering verification"*: RenderDoc IS the
+> instrumentation for that run, and the capture replays the real submitted commands.
+
 **Prerequisites:**
 
 ```bash
 sudo apt install python3-dev swig bison libxcb-keysyms1-dev
 
 # RenderDoc runtime (renderdoccmd, qrenderdoc):
-wget https://renderdoc.org/stable/1.43/renderdoc_1.43.tar.gz
-sudo tar xzf renderdoc_1.43.tar.gz -C /opt/
+wget https://renderdoc.org/stable/1.46/renderdoc_1.46.tar.gz
+sudo tar xzf renderdoc_1.46.tar.gz -C /opt/
 ```
 
 > [!IMPORTANT]
@@ -300,9 +324,9 @@ sudo tar xzf renderdoc_1.43.tar.gz -C /opt/
 >   "layer" : {
 >     "name": "VK_LAYER_RENDERDOC_Capture",
 >     "type": "GLOBAL",
->     "library_path": "/opt/renderdoc_1.43/lib/librenderdoc.so",
+>     "library_path": "/opt/renderdoc_1.46/lib/librenderdoc.so",
 >     "api_version": "1.4.324",
->     "implementation_version": "43",
+>     "implementation_version": "46",
 >     "description": "Debugging capture layer for RenderDoc",
 >     "functions": {
 >       "vkGetInstanceProcAddr": "VK_LAYER_RENDERDOC_CaptureGetInstanceProcAddr",
@@ -310,7 +334,7 @@ sudo tar xzf renderdoc_1.43.tar.gz -C /opt/
 >       "vkNegotiateLoaderLayerInterfaceVersion": "VK_LAYER_RENDERDOC_CaptureNegotiateLoaderLayerInterfaceVersion"
 >     },
 >     "enable_environment": { "ENABLE_VULKAN_RENDERDOC_CAPTURE": "1" },
->     "disable_environment": { "DISABLE_VULKAN_RENDERDOC_CAPTURE_1_43": "1" }
+>     "disable_environment": { "DISABLE_VULKAN_RENDERDOC_CAPTURE_1_46": "1" }
 >   }
 > }
 > EOF
@@ -326,7 +350,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_RENDERDOC=ON
 cmake --build build --config Debug -j$(nproc)
 ```
 
-The first configure with the option ON clones RenderDoc **v1.45** (~219 MB, shallow) into
+The first configure with the option ON clones RenderDoc **v1.46** (~219 MB, shallow) into
 `build/_deps/renderdoc-src`. To share one checkout between several build directories, or to reuse
 the one `BuildRenderDocPython.cmake` created, put it at `dependencies/renderdoc` (picked up
 automatically) or pass `-DFETCHCONTENT_SOURCE_DIR_RENDERDOC=<path>`. The revision is pinned in

@@ -21,14 +21,14 @@ get_filename_component(RENDERDOC_LOCAL_CHECKOUT "${CMAKE_CURRENT_LIST_DIR}/../de
 # instead hand the directory to the ExternalProject git-clone step, which ERASES its source
 # directory whenever the stamp file is missing — that is, from every freshly created build
 # directory. It would take the RenderDoc build/ directory (240 MB, minutes of compilation) with it.
-if ( DEFINED FETCHCONTENT_SOURCE_DIR_RENDERDOC AND NOT EXISTS "${FETCHCONTENT_SOURCE_DIR_RENDERDOC}/renderdoc/api/app/renderdoc_app.h" )
+if ( FETCHCONTENT_SOURCE_DIR_RENDERDOC AND NOT EXISTS "${FETCHCONTENT_SOURCE_DIR_RENDERDOC}/renderdoc/api/app/renderdoc_app.h" )
 	message("[EmeraudeEngine] RenderDoc: '${FETCHCONTENT_SOURCE_DIR_RENDERDOC}' no longer holds the sources, falling back to the download.")
 
 	unset(FETCHCONTENT_SOURCE_DIR_RENDERDOC CACHE)
 	unset(FETCHCONTENT_SOURCE_DIR_RENDERDOC)
 endif ()
 
-if ( NOT DEFINED FETCHCONTENT_SOURCE_DIR_RENDERDOC AND EXISTS "${RENDERDOC_LOCAL_CHECKOUT}/renderdoc/api/app/renderdoc_app.h" )
+if ( NOT FETCHCONTENT_SOURCE_DIR_RENDERDOC AND EXISTS "${RENDERDOC_LOCAL_CHECKOUT}/renderdoc/api/app/renderdoc_app.h" )
 	set(FETCHCONTENT_SOURCE_DIR_RENDERDOC "${RENDERDOC_LOCAL_CHECKOUT}" CACHE PATH "Existing RenderDoc checkout to use instead of downloading the sources.")
 endif ()
 
