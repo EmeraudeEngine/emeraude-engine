@@ -53,6 +53,7 @@
 #include <utility>
 
 /* Third-party inclusions. */
+#include <tracy/Tracy.hpp>
 #include "GLFW/glfw3.h"
 #include "json/json.h"
 #include "volk.h"
@@ -195,6 +196,8 @@ namespace EmEn
 	void
 	Core::logicsTask (const std::stop_token & stopToken) noexcept
 	{
+		tracy::SetThreadName("EmEn::Logics");
+
 		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{WorldPhysicsUpdateCycleDurationUS< uint64_t >};
 		/* NOTE: The logic may fall behind (a long cycle, a stalled system) and then runs its missed cycles back to stay on the wall clock;
 		 * past this debt it gives the missed time up instead of a long burst. */
@@ -326,6 +329,8 @@ namespace EmEn
 	void
 	Core::renderingTask (const std::stop_token & stopToken) noexcept
 	{
+		tracy::SetThreadName("EmEn::Rendering");
+
 		/* NOTE: A released CPU copy is never reloaded by blocking the frame (docs/subsystems/resources/03 § CPU Copies). */
 		Resources::ResourceTrait::forbidBlockingLocalDataReload();
 
@@ -468,6 +473,8 @@ namespace EmEn
 			}
 
 			frames++;
+
+			FrameMark;
 
 			/* NOTE: Without an active scene, a Continuous loop draws the overlay only and nothing paces it (a mailbox
 			 * present never blocks): an absolute deadline per period (updateNoScenePacing()), never an accumulated
@@ -633,6 +640,8 @@ namespace EmEn
 	int
 	Core::run () noexcept
 	{
+		tracy::SetThreadName("EmEn::Main");
+
 		switch ( m_startupMode )
 		{
 			case StartupMode::Error :
