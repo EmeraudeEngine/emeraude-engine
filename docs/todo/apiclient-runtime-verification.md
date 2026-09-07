@@ -40,7 +40,7 @@ Blocked on two things only a human can do:
    `~/.config/LNIsle/projet-alpha/settings.json` — it therefore defaults to `false` and the remote
    console does not open. The owner adds the key (or presses **Shift+F10** in the window to open it
    for the session). ⚠️ The AI does not edit that file.
-2. Launching the application on the owner's screen needs the owner's go-ahead.
+2. ~~Launching the application on the owner's screen needs the owner's go-ahead.~~ **Lifted 2026-09-07** (owner decision): launching projet-alpha is allowed, just say which demo is being launched. Only blocker 1 remains.
 
 Then, from the console:
 

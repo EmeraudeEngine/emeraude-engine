@@ -216,7 +216,15 @@ if ( MSVC )
 	endif ()
 endif ()
 
-target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
+if ( APPLE )
+	# CMake (since 3.23) rejects a HEADERS file set on a FRAMEWORK target — it cannot place the
+	# headers inside the bundle's Headers/ structure. The macOS packaging needs the framework
+	# (app_system symlinks Emeraude.framework into the CEF helper bundles), so propagate the
+	# include path directly instead; consumers read the headers from the source tree anyway.
+	target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+else ()
+	target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
+endif ()
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${EMERAUDE_EXT_LIBS_LIB_DIR})
 
