@@ -103,6 +103,13 @@ industry reached froxels after per-pixel marching, and so should this.
 
 ## Open questions for the owner
 
-- [ ] Does the concurrent shadow-map work have further chantiers in view? This pass depends on the
-  CSM closely.
+- [x] **Does the concurrent shadow-map work have further chantiers in view? ANSWERED 2026-09-08 —
+  no blocking one.** The CSM rework was verified done against the code and retired: all four root
+  causes are fixed and pushed (`c7eef938`, `8c6417f0`, `882e5f29`, `864e6582`), and so are texel
+  snapping, the rotation-invariant fit, inter-cascade blending and the shader-derived per-cascade
+  bias. **This pass is therefore UNBLOCKED.** One shadow item remains —
+  [`light-space-transform-single-source.md`](light-space-transform-single-source.md) — but it
+  touches the CLASSIC map's light-space recipe, not the cascade matrices this pass consumes, so it
+  does not gate the march. ⚠️ It does own the *"outside the map = lit"* convention, so agree on that
+  convention with it rather than open-coding a fifth copy here.
 - [ ] New effect in the engine from the start, or prototyped first to judge the cost?
