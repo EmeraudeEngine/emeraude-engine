@@ -157,6 +157,23 @@ void main()
 		marchLength = min(length(worldPosition - cameraPosition), mediumMaxDistance);
 	}
 
+	/* ⚠️⚠️ Cap the march by the medium's OPTICAL reach, never by its maxDistance alone. The step
+	 * size is marchLength / steps, and for a sky pixel marchLength IS maxDistance — 10 km on the
+	 * reference scene. At 32 steps that is 312 m per step against a medium whose transmittance
+	 * falls to 1/e in 67 m: the entire visible contribution lands inside the FIRST step, and the
+	 * origin dither (a fraction of one step, by design) then scatters that single sample anywhere
+	 * over 312 m per pixel. The result is full-amplitude per-pixel speckle — reported from the
+	 * screen as "a pattern of black dots everywhere in the fog", and it is undersampling, not noise.
+	 * Six extinction lengths leave 0.25 % of the light unaccounted for, which is far below what the
+	 * tone mapper can show, and they bring the step back to a sane size (~15 m at the reference
+	 * density) without touching the sample count. */
+	float referenceDensity = mediumDensity * exp(-mediumHeightFalloff * (cameraPosY - mediumBaseHeight));
+
+	if ( referenceDensity > 1.0e-6 )
+	{
+		marchLength = min(marchLength, 6.0 / referenceDensity);
+	}
+
 	int steps = int(max(sampleCount, 1.0));
 	float stepLength = marchLength / float(steps);
 

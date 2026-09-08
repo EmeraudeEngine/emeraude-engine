@@ -111,6 +111,32 @@ were extracted rather than re-typed a fifth time:
   (AtmosphericFog has its own `inscatterExponent`). Its 0.0 default is ISOTROPIC, which a physical
   integrator renders as a uniform glow with no shaft at all. The scene now declares 0.7.
 
+## ✅ Acceptance test PASSED (2026-09-08) — and two more traps it paid for
+
+Pose `setPosition(-8, 1, -9)` / `lookAt(18.7, 14.3, 17.7)`, which puts the palm's canopy exactly on
+the camera→sun line (sun direction is `-normalize(0.5, 0.25, 0.5)`; the item's original pose
+`(0, 2, 8)` → `(63, 34, 71)` looks AWAY from the palm at `(0, 0, -1)` and cannot show it). With the
+legacy god rays and the lens flare disabled — the march alone, zero VUID — **the palm's fronds cut a
+dark silhouette INTO the haze above the trunk**, and the cube, the sphere and the sprite each cast
+their own dark lane through the volume. Binary criterion met. The height profile reads correctly
+too: a bright band near the ground, a dark sky above, as `densityAt()` predicts.
+
+- ⚠️⚠️ **Cap the march by the medium's OPTICAL reach, never by `maxDistance` alone.** The step is
+  `marchLength / steps`, and for a sky pixel `marchLength` IS `maxDistance` — 10 km on this scene. At
+  32 steps that is **312 m per step** against a transmittance that falls to 1/e in 67 m: the whole
+  contribution lands inside the first step and the origin dither (a fraction of one step, by
+  design) scatters that single sample anywhere over 312 m per pixel. Owner saw it as *"a pattern of
+  black dots everywhere in the fog"*. It is **undersampling, not noise** — no denoiser fixes it.
+  Now capped at six extinction lengths of the density at the camera (T = 0.25 %). Measured on the
+  haze region, |Δ| between neighbours **2.50 → 0.73** at unchanged luminance (162.6 → 165.5).
+- ⚠️⚠️ **The two slots DOUBLE-COUNT the sun's in-scattering.** `EffectSlot::Fog` (this march) and
+  `EffectSlot::VolumetricLight` (the legacy god rays) are different slots, so the slot exclusivity
+  does NOT protect, and both add scattering from the same sun. Measured at the acceptance pose:
+  frame mean **143.91 with both, 42.51 with the march alone** — the white-out the owner reported on
+  the sun-facing pose was mostly the LEGACY effect stacked on top. **Owner decision pending**: a demo
+  that takes the march should drop the god rays (the eight-demo migration this item planned), or
+  the two slots need a mechanical exclusion the table does not express today.
+
 ## What remains — Lot 1, the pass itself, on ONE scene
 
 - [ ] **A NEW effect beside `VolumetricLight`, not a replacement.** Keeps the A/B alive and lets
