@@ -245,6 +245,31 @@ second lit material to stay generic against any more, so a loader may call the P
 > loader translating a source format's "ambient colour" has nothing to map it onto; drop it rather
 > than folding it into the albedo, which would double-count the lighting.
 
+### Emissive is a LUMINANCE IN NITS, settled by the spec — anchor no constant
+
+**Owner decision (2026-07-26), do not re-litigate.** glTF 2.0 `Specification.adoc` line 2118: the
+product of the emissive texture and the emissive factor is in **cd/m² (nits)**, and
+`KHR_materials_emissive_strength` is a unitless multiplier that explicitly "does not alter the
+physical units". So:
+
+```
+emissiveFactor × emissiveTexture × emissiveStrength  IS  a luminance in nits
+```
+
+Follow it to the letter. **Invent no convention and anchor no constant.**
+
+⚠️ **An asset authored "artistically"** — emissive in [0,1], no extension — is worth ~1 nit and
+therefore renders **black** under photometric exposure. **Owner: we follow the spec, NO patch.** If
+an emissive goes black, the fix is in the asset, not in the importer. (Measured before the decision:
+1 asset file uses emissive, 0 use the extension, 4 `setEmissiveStrength` call sites outside the
+loaders.)
+
+⚠️⚠️ **Do not compensate an exporter bug.** Khronos glTF-Blender-IO **#1766**: Blender's watt-based
+emission needs `× 683 / (2π)` to come out in conformant nits. That is the *exporter's* job.
+Compensating engine-side would **double-correct** every properly exported asset — and the symptom
+that tempts you into it (a dark emissive from Blender) is indistinguishable from the legitimate
+artistic-authoring case above.
+
 ### Roughness/metalness — source CHANNEL and factor SEMANTICS per format (fixed Aug 2026)
 
 The material scalar-component contract (see `Graphics/AGENTS.md` § Scalar components): the

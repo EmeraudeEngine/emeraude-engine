@@ -919,8 +919,12 @@ untinted, and the factor's **alpha went with it**. They now set the tint through
 > a multiplicative factor on the textured path, so its neutral value MUST be the multiplicative
 > identity. Leaving it grey would have darkened **every** textured material in the engine by half.
 > Only a material that configures no colour at all sees any change, and white is the correct
-> neutral there too. ⚠️ `BasicResource` tints the same way but kept `DefaultDiffuseColor{Grey}` —
-> the cheap tier is not covered by this reasoning.
+> neutral there too. ⚠️ The exception this note used to carry is **gone**: `BasicResource` kept
+> `DefaultDiffuseColor{Grey}` and was the one tier outside the reasoning, but the class was removed
+> (`a16195166`) and `StandardResource` is the only concrete material left — the reasoning now covers
+> everything. Its `DynamicColorEnabled` gate was deliberately **not** ported for exactly this
+> reason: the gate existed only to avoid multiplying by a grey default, so with a white default the
+> unconditional multiply IS the contract.
 
 > [!WARNING]
 > **The multiplication is UNCONDITIONAL, and must stay that way.** The shader program cache keys
