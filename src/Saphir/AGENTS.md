@@ -206,7 +206,17 @@ When disabled:
 
 ### POM Iterations Setting
 
-`POMIterationsKey` (`Core/Graphics/Shader/POMIterations`, default: 16) controls POM ray-marching quality.
+`GraphicsTexturePOMIterationsKey` (`Core/Graphics/Texture/POMIterations`, **default: 0** —
+i.e. POM ships DISABLED) controls POM ray-marching quality.
+
+> [!WARNING]
+> **This line said `Core/Graphics/Shader/POMIterations`, default 16, until 2026-09-08.** The key
+> MOVED to the `Texture/` subtree and the default became 0 (`SettingKeys.hpp:406`), and this doc
+> never followed. Consequence measured on the owner's machine: a hand-tuned
+> `Core/Graphics/Shader/POMIterations = 16` sat in `settings.json` and was read by **nothing**.
+> ⚠️⚠️ And the setting does not enter `computeProgramCacheKey()`, so changing it can be served a
+> cached shader built for the previous value — any A/B on it is invalid until that is fixed. See
+> [`../../docs/todo/pom-setting-outside-program-cache-key.md`](../../docs/todo/pom-setting-outside-program-cache-key.md).
 
 **Quality cascade** (centralized in `SceneRendering` constructor):
 ```cpp
