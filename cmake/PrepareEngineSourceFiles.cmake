@@ -29,6 +29,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ServiceInterface.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SettingKeys.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SettingsKeyRestoration.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemNotification.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Tracer.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/User.hpp
@@ -56,6 +57,7 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PrimaryServices.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.console.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SettingsKeyRestoration.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemNotification.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Tracer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/User.cpp

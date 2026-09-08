@@ -87,11 +87,12 @@ namespace EmEn
 	using namespace Input;
 	using namespace Resources;
 
-	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain, bool resetSettingsOnNewVersion) noexcept
+	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain, bool resetSettingsOnNewVersion, SettingsKeyRestoration settingsKeyRestoration) noexcept
 		: KeyboardListenerInterface{false, false},
 		ControllableTrait{ClassId},
 		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
 		m_primaryServices{argc, argv, m_identification},
+		m_settingsKeyRestoration{std::move(settingsKeyRestoration)},
 		m_resetSettingsOnNewVersion{resetSettingsOnNewVersion}
 	{
 		if ( !this->initializeBaseLevel() )
@@ -105,11 +106,12 @@ namespace EmEn
 	}
 
 #if IS_WINDOWS
-	Core::Core (int argc, wchar_t * * wargv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain, bool resetSettingsOnNewVersion) noexcept
+	Core::Core (int argc, wchar_t * * wargv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain, bool resetSettingsOnNewVersion, SettingsKeyRestoration settingsKeyRestoration) noexcept
 		: KeyboardListenerInterface{false, false},
 		ControllableTrait{ClassId},
 		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
 		m_primaryServices{argc, wargv, m_identification},
+		m_settingsKeyRestoration{std::move(settingsKeyRestoration)},
 		m_resetSettingsOnNewVersion{resetSettingsOnNewVersion}
 	{
 		if ( !this->initializeBaseLevel() )
@@ -701,7 +703,7 @@ namespace EmEn
 		 * change it — CEF is initialised AFTER the engine and Chromium does call
 		 * setlocale(LC_ALL, ""), so an application embedding such a library must re-assert it at
 		 * that point. */
-		if ( Base::Locale::enforceNumericC() )
+		if ( Locale::enforceNumericC() )
 		{
 			TraceWarning{ClassId} << "The C numeric locale was not 'C' when the engine started: something already called setlocale() in this process. Restored, but any float parsed or written before this point may have used a comma as decimal separator.";
 		}
@@ -2983,6 +2985,40 @@ namespace EmEn
 			return;
 		}
 
+		/* Carry the declared entries over: the store is cleared, the entries are read back from the
+		 * backup, and when at least one was found a minimal file holding them (plus the current version
+		 * stamps) is written now — the service refuses to save at exit under --reset-settings. */
+		auto & settings = m_primaryServices.settings();
+
+		settings.clear();
+
+		SettingsKeyRestoration::Report report;
+
+		if ( !m_settingsKeyRestoration.restore(backupPath, settings, report) )
+		{
+			TraceError{ClassId} << "Settings reset: unable to read the entries to keep back from the backup. Fresh settings will be generated on the next launch.";
+		}
+
+		std::string restorationOutcome;
+
+		if ( !report.restored.empty() )
+		{
+			if ( settings.save() )
+			{
+				restorationOutcome = "A minimal settings file has been written holding these kept entries:" "\n" + Core::formatRestorationReport(report);
+			}
+			else
+			{
+				TraceError{ClassId} << "Settings reset: unable to write the minimal settings file with the kept entries.";
+
+				restorationOutcome = "The kept entries could not be written; fresh settings will be generated on the next launch.";
+			}
+		}
+		else
+		{
+			restorationOutcome = "No declared entry was found in the backup." "\n" + Core::formatRestorationReport(report);
+		}
+
 		TraceWarning trace{ClassId};
 		trace <<
 			"\n"
@@ -2992,9 +3028,29 @@ namespace EmEn
 			"Settings file backed up to:" "\n"
 			"  " << backupPath.string() <<
 			"\n"
+			"----------------------------------------------------------------------" "\n" <<
+			restorationOutcome <<
 			"----------------------------------------------------------------------" "\n"
-			"Restart the application without --reset-settings to generate fresh settings." "\n"
+			"Restart the application without --reset-settings." "\n"
 			"======================================================================";
+	}
+
+	std::string
+	Core::formatRestorationReport (const SettingsKeyRestoration::Report & report) noexcept
+	{
+		std::string output;
+
+		for ( const auto & entry : report.restored )
+		{
+			output += "  [KEPT]   " + entry + "\n";
+		}
+
+		for ( const auto & entry : report.absent )
+		{
+			output += "  [ABSENT] " + entry + "\n";
+		}
+
+		return output;
 	}
 
 	void
@@ -3058,6 +3114,16 @@ namespace EmEn
 		 * current version. */
 		settings.clear();
 
+		/* Read the declared entries back from the backup into the fresh store. A backup that cannot be
+		 * re-parsed is reported and the reset stands: it was parsed a moment ago, and the entries are a
+		 * convenience on top of a reset that has already happened on disk. */
+		SettingsKeyRestoration::Report report;
+
+		if ( !m_settingsKeyRestoration.restore(backupPath, settings, report) )
+		{
+			TraceError{ClassId} << "Settings version guard: unable to read the entries to keep back from the backup. The application starts on fully fresh settings.";
+		}
+
 		TraceWarning{ClassId} <<
 			"\n"
 			"======================================================================" "\n"
@@ -3066,7 +3132,8 @@ namespace EmEn
 			"Reset reason: " << reason << "." "\n"
 			"The settings file has been backed up to:" "\n"
 			"  " << backupPath.string() << "\n"
-			"The application starts on fresh settings." "\n"
+			"The application starts on fresh settings, except the entries kept from the backup:" "\n" <<
+			Core::formatRestorationReport(report) <<
 			"======================================================================";
 	}
 }

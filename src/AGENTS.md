@@ -92,6 +92,54 @@ Contrast with `--reset-settings` (the `ResetSettingsArg` flag), which backs up t
 (`willNotRun()`). This feature backs up and **keeps running**. Consumers (e.g. a CEF-based application) pass
 `true`; the default keeps existing behaviour unchanged.
 
+#### What survives a reset — `SettingsKeyRestoration` (2026-09-08)
+
+A reset is not a blank slate any more: the entries declared in a `SettingsKeyRestoration`
+(`src/SettingsKeyRestoration.hpp`) are **read back from the backup file that was just written** and
+re-injected into the fresh store, with the type the file gives them. The class is the second, optional
+`Core` constructor argument after the flag — and the two are deliberately **separate concepts**
+(owner decision, 2026-09-08): the `bool` is the **per-release switch** ("this release deserves a
+clean `settings.json`"), the restoration is the **stable list of what is kept**, and flipping one
+never touches the other.
+
+- **Additive across the cascade.** A default-constructed instance already carries the **engine base**
+  `SettingsKeyRestoration::EngineKeys`: `Core/Permissions/Notifications` (a permission the user
+  answered once), `Core/Console/EnableRemoteListener`, `Core/Console/RemoteListenerAddress` (a
+  closed-by-default door the user opened on purpose), `Core/Video/Window/Width`,
+  `Core/Video/Window/Height`. The application adds its own on top,
+  `forget(path)` withdraws an engine entry a product does not want, `SettingsKeyRestoration::blank()`
+  starts without the base. A consumer that passes only the flag (app_system) therefore gets the engine
+  base restored **without any code change**.
+- **Two granularities.** `keep("A/B/Key")` = one variable **or one array** (an array is restored
+  whole: the target array is cleared first). `keepStore("A/B")` = the whole sub-tree below the path
+  (`Settings::importJSON()`). The report prints a store as `A/B/*`.
+- **Declaration pattern**: constant data above the constructor, not an inline list in the initializer
+  (owner decision) — see § Creating an Application below. `std::array< std::string_view, N >`
+  converts to the `std::span` the constructor takes.
+- **Refused, with a warning**: the empty path, the root store (`keepStore("")`) and the three header
+  stamps `WrittenByEngineVersion` / `WrittenByApplicationVersion` / `WrittenAtDate` — restoring a
+  stamp would defeat the version guard. A `keep()` on a path the backup holds as an **object** is
+  reported `[ABSENT]` with a hint to use `keepStore()`.
+- **Both reset paths use it.** The version guard: clear → restore → keep running; the banner lists
+  `[KEPT]` / `[ABSENT]` entries. `--reset-settings`: backup → clear → restore → when at least one entry
+  was found, **a minimal `settings.json` holding only those entries plus the current stamps is written
+  immediately** (`Settings::save()`, because `onTerminate()` refuses to save under that flag) → exit.
+  Nothing found → no file, fresh defaults on the next launch as before.
+- **Failure policy.** A backup that cannot be re-parsed is traced as an error and the reset **stands**
+  (the file was parsed a moment earlier; restoration is a convenience on top of a reset already done on
+  disk). Same unchanged rule upstream: a **rename** failure aborts the reset and keeps the settings.
+- **Settings API added for it** (`Settings.hpp`): `setValue(path, SettingValue)` /
+  `setValueInArray(path, SettingValue)` (variant-level setters), `importJSON(node, keyPrefix)`
+  (public, locking entry over `readLevel()`), `static jsonToSettingValue(Json::Value)` — the single
+  JSON→`SettingValue` conversion site, extracted from the former lambda inside `readLevel()`.
+
+⚠️ **Measured 2026-09-08** on a scratch file (`--settings-filepath`) stamped `0.1.0`: both paths
+restored the 6 declared entries (engine base of the time + projet-alpha's Vulkan validation pair), the stale
+`Core/Video/Window/XPosition` did **not** survive, and the remote console came up from the restored
+gate — the shutdown of the test instance went through TCP 7777. The first launch after enabling the
+switch on an existing installation **does reset the user's file** (only the declared entries
+survive): say so before flipping the flag on a project.
+
 ### Core - External Main-Loop Cycle Scheduling
 
 `onCoreMainLoopCycle()` runs at the loop's own cadence (100 Hz ceiling when active, **only on OS
@@ -252,7 +300,11 @@ Wipes volatile local data (cache + user data directories) while preserving setti
 Backs up the current settings file and exits, forcing fresh settings on next launch.
 
 - Renames `settings.json` → `settings.json.<unix_timestamp>-bck`
-- Disables `Settings::saveAtExit()` to prevent the service from re-creating the file at shutdown
+- `Settings::onTerminate()` refuses to save under this flag, so the service never re-creates the file at shutdown
+- **Since 2026-09-08**: the entries declared in the `Core` constructor's `SettingsKeyRestoration` are read
+  back from the backup; when at least one is found, a **minimal `settings.json`** holding only them plus
+  the current version stamps is written before exiting (see § Core - Automatic Settings Reset, *What
+  survives a reset*). Nothing found → no file, as before.
 - If no settings file exists, informs the user and exits
 
 **Code references:**
@@ -558,10 +610,20 @@ Arguments > Settings > Default values
 ```cpp
 #include <EmEn/Core.hpp>
 
+/* Settings entries kept across a settings reset, on top of the engine base
+ * (SettingsKeyRestoration::EngineKeys). Constant data above the constructor:
+ * the list grows without bloating the initializer, and it is independent of
+ * the per-release reset switch. */
+constexpr std::array< std::string_view, 2 > RestoredSettingsKeys{
+    EmEn::VkInstanceEnableDebugKey,
+    EmEn::VkInstanceRequestedValidationLayersKey
+};
+
 class MyGame : public EmEn::Core {
 public:
     MyGame(int argc, char** argv) noexcept
-        : Core{argc, argv, "MyGame", {1, 0, 0}, "MyOrg", "example.com"} {}
+        : Core{argc, argv, "MyGame", {1, 0, 0}, "MyOrg", "example.com",
+               /* resetSettingsOnNewVersion */ true, EmEn::SettingsKeyRestoration{RestoredSettingsKeys}} {}
 
 private:
     // Required: Called when engine is fully initialized

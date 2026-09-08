@@ -160,48 +160,83 @@ namespace EmEn
 		return {settingPath.substr(0, lastSlash), settingPath.substr(lastSlash + 1)};
 	}
 
+	std::optional< SettingValue >
+	Settings::jsonToSettingValue (const Json::Value & item) noexcept
+	{
+		if ( item.isBool() )
+		{
+			return item.asBool();
+		}
+
+		if ( item.isInt() )
+		{
+			return item.asInt();
+		}
+
+		if ( item.isUInt() )
+		{
+			return item.asUInt();
+		}
+
+		if ( item.isInt64() )
+		{
+			return item.asInt64();
+		}
+
+		if ( item.isUInt64() )
+		{
+			return item.asUInt64();
+		}
+
+		if ( item.isDouble() )
+		{
+			return item.asDouble();
+		}
+
+		if ( item.isString() )
+		{
+			return item.asString();
+		}
+
+		return std::nullopt;
+	}
+
+	void
+	Settings::setValue (std::string_view settingPath, const SettingValue & value) noexcept
+	{
+		const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
+
+		m_stores[std::string{key}].setVariable(std::string{variableName}, value);
+	}
+
+	void
+	Settings::setValueInArray (std::string_view settingPath, const SettingValue & value) noexcept
+	{
+		const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
+
+		m_stores[std::string{key}].setVariableInArray(std::string{variableName}, value);
+	}
+
+	bool
+	Settings::importJSON (const Json::Value & object, const std::string & keyPrefix) noexcept
+	{
+		if ( !object.isObject() )
+		{
+			return false;
+		}
+
+		const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+		return this->readLevel(object, keyPrefix);
+	}
+
 	bool
 	Settings::readLevel (const Json::Value & data, const std::string & key) noexcept
 	{
-		const auto toSettingValue = [] (const Json::Value & item) -> std::optional< SettingValue > {
-			if ( item.isBool() )
-			{
-				return item.asBool();
-			}
-
-			if ( item.isInt() )
-			{
-				return item.asInt();
-			}
-
-			if ( item.isUInt() )
-			{
-				return item.asUInt();
-			}
-
-			if ( item.isInt64() )
-			{
-				return item.asInt64();
-			}
-
-			if ( item.isUInt64() )
-			{
-				return item.asUInt64();
-			}
-
-			if ( item.isDouble() )
-			{
-				return item.asDouble();
-			}
-
-			if ( item.isString() )
-			{
-				return item.asString();
-			}
-
-			return std::nullopt;
-		};
-
 		for ( const auto & name : data.getMemberNames() )
 		{
 			if ( const auto & items = data[name]; items.isObject() )
@@ -226,7 +261,7 @@ namespace EmEn
 			{
 				for ( const auto & item : items )
 				{
-					if ( auto val = toSettingValue(item) )
+					if ( auto val = Settings::jsonToSettingValue(item) )
 					{
 						m_stores[key].setVariableInArray(name, *val);
 					}
@@ -234,7 +269,7 @@ namespace EmEn
 			}
 			else
 			{
-				if ( auto val = toSettingValue(items) )
+				if ( auto val = Settings::jsonToSettingValue(items) )
 				{
 					m_stores[key].setVariable(name, *val);
 				}

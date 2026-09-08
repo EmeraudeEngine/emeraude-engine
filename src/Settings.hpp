@@ -835,6 +835,61 @@ namespace EmEn
 			[[nodiscard]]
 			std::string toJsonString () const noexcept;
 
+			/**
+			 * @brief Stores an already-typed @ref SettingValue at the given settings path.
+			 *
+			 * Variant-level counterpart of the templated @ref set() overload, for callers that
+			 * carry values whose type was decided at parse time (the settings key restoration
+			 * re-injecting entries read from a backup file, for instance). The store is created
+			 * implicitly; an existing entry is overwritten. Acquires an exclusive lock.
+			 *
+			 * @param settingPath Slash-delimited path, e.g. @c "Core/Console/EnableRemoteListener".
+			 * @param value The value to store, whatever its active alternative.
+			 */
+			void setValue (std::string_view settingPath, const SettingValue & value) noexcept;
+
+			/**
+			 * @brief Appends an already-typed @ref SettingValue to the array at the given settings path.
+			 *
+			 * Variant-level counterpart of the templated @ref setInArray() overload.
+			 * Acquires an exclusive lock.
+			 *
+			 * @param settingPath Slash-delimited path to the array variable.
+			 * @param value The value to append, whatever its active alternative.
+			 */
+			void setValueInArray (std::string_view settingPath, const SettingValue & value) noexcept;
+
+			/**
+			 * @brief Imports a JSON object node into the store map under a key prefix.
+			 *
+			 * Public, locking entry point over the recursive file parser (@ref readLevel()):
+			 * every scalar member of @p object becomes a variable, every array member an array,
+			 * every object member a nested store, all of them keyed below @p keyPrefix exactly as
+			 * if the node had been read from the settings file at that position. Existing entries
+			 * with the same paths are overwritten; nothing else is touched.
+			 *
+			 * @param object A JSON object node (an object, not a scalar nor an array).
+			 * @param keyPrefix The slash-delimited store key the node maps to, e.g. @c "Core/Video/Window".
+			 * An empty prefix targets the root store.
+			 * @return @c true on success, @c false when @p object is not an object node.
+			 */
+			[[nodiscard]]
+			bool importJSON (const Json::Value & object, const std::string & keyPrefix) noexcept;
+
+			/**
+			 * @brief Converts a JSON scalar node to a @ref SettingValue.
+			 *
+			 * Single conversion site for everything the settings read from JSON (the settings
+			 * file itself and the key restoration reading a backup). JSON booleans, integers
+			 * (narrowest fitting JsonCpp width first), doubles and strings are mapped to their
+			 * variant alternative; objects, arrays and @c null yield @c std::nullopt.
+			 *
+			 * @param item The JSON node to convert.
+			 * @return The converted value, or @c std::nullopt when the node is not a scalar.
+			 */
+			[[nodiscard]]
+			static std::optional< SettingValue > jsonToSettingValue (const Json::Value & item) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

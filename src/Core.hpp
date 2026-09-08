@@ -150,6 +150,7 @@
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Manager.hpp"
+#include "SettingsKeyRestoration.hpp"
 #include "SystemNotification.hpp"
 #include "User.hpp"
 #include "Vulkan/Instance.hpp"
@@ -1015,12 +1016,18 @@ namespace EmEn
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "localhost".
 			 * @param resetSettingsOnNewVersion When true, the settings file is backed up and reset if it
-			 * was written by an older engine version than the current one (the @c WrittenByAppVersion key,
-			 * which records the engine @c VersionString). Done early, so the application starts on a clean
-			 * settings base without needing a restart. Default false (per-project opt-in).
-			 * @see Identification
+			 * predates the current build (either version stamp missing, or the stored engine/application
+			 * version older than the current one — see resetSettingsIfOutdated()). Done early, so the
+			 * application starts on a clean settings base without needing a restart. Default false
+			 * (per-project opt-in). This is the per-release switch: flip it when a release deserves a
+			 * clean settings.json, without touching the restoration list.
+			 * @param settingsKeyRestoration The entries carried over from the backup into the fresh store
+			 * on any reset (the version guard above and @c --reset-settings alike). Default: the engine base
+			 * (SettingsKeyRestoration::EngineKeys); an application adds its own keys on top, typically from
+			 * a constexpr array declared above its constructor. Independent of the switch.
+			 * @see Identification, SettingsKeyRestoration
 			 */
-			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost", bool resetSettingsOnNewVersion = false) noexcept;
+			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost", bool resetSettingsOnNewVersion = false, SettingsKeyRestoration settingsKeyRestoration = {}) noexcept;
 
 #if IS_WINDOWS
 			/**
@@ -1034,10 +1041,24 @@ namespace EmEn
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "unknown.org".
 			 * @param resetSettingsOnNewVersion When true, the settings file is backed up and reset if it
-			 * was written by an older engine version than the current one. Default false (per-project opt-in).
+			 * predates the current build. Default false (per-project opt-in). See the narrow-character overload.
+			 * @param settingsKeyRestoration The entries carried over on any reset. Default: the engine base.
+			 * See the narrow-character overload.
 			 */
-			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org", bool resetSettingsOnNewVersion = false) noexcept;
+			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Base::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org", bool resetSettingsOnNewVersion = false, SettingsKeyRestoration settingsKeyRestoration = {}) noexcept;
 #endif
+
+			/**
+			 * @brief Returns the settings entries carried over across a settings reset.
+			 * @details Fixed at construction; the engine base plus what the application declared.
+			 * @return const SettingsKeyRestoration &
+			 */
+			[[nodiscard]]
+			const SettingsKeyRestoration &
+			settingsKeyRestoration () const noexcept
+			{
+				return m_settingsKeyRestoration;
+			}
 
 			/**
 			 * @brief Disables default keyboard handling by the Core.
@@ -1369,7 +1390,10 @@ namespace EmEn
 
 			/**
 			 * @brief Backs up the settings file and exits.
-			 * @details Renames settings.json to settings.json.[timestamp]-bck.
+			 * @details Renames settings.json to settings.json.[timestamp]-bck. When the restoration list
+			 * (@ref settingsKeyRestoration()) finds entries in that backup, a minimal settings.json holding
+			 * only those entries and the current version stamps is written before exiting, so they survive
+			 * the manual reset exactly as they survive the version guard.
 			 */
 			void executeResetSettings () noexcept;
 
@@ -1384,13 +1408,22 @@ namespace EmEn
 			 *  -# the engine version increased (stored @c WrittenByEngineVersion < @c Identification::EngineVersion);
 			 *  -# the application version increased (stored @c WrittenByApplicationVersion < the
 			 *     @c applicationVersion passed to the @c Core constructor).
-			 * On a hit the file is renamed to settings.json.[timestamp]-bck (like @ref executeResetSettings())
-			 * and the in-memory store is cleared. An exact match or a downgrade keeps the settings. Does
-			 * nothing if no settings file exists (fresh install). On a backup failure it leaves the settings
-			 * untouched (no data loss, no reset).
+			 * On a hit the file is renamed to settings.json.[timestamp]-bck (like @ref executeResetSettings()),
+			 * the in-memory store is cleared, then the entries declared in @ref settingsKeyRestoration() are
+			 * read back from that backup into the fresh store. An exact match or a downgrade keeps the
+			 * settings. Does nothing if no settings file exists (fresh install). On a backup failure it
+			 * leaves the settings untouched (no data loss, no reset).
 			 * @return void
 			 */
 			void resetSettingsIfOutdated () noexcept;
+
+			/**
+			 * @brief Formats a restoration report as banner lines, one entry per line.
+			 * @param report The outcome of SettingsKeyRestoration::restore().
+			 * @return std::string Empty when nothing was declared.
+			 */
+			[[nodiscard]]
+			static std::string formatRestorationReport (const SettingsKeyRestoration::Report & report) noexcept;
 
 			/**
 			 * @brief Processes and displays queued core messages.
@@ -1750,6 +1783,7 @@ namespace EmEn
 			std::atomic< bool > m_isRenderingLoopRunning{true}; ///< Render thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_paused{false}; ///< Current pause state (atomic for thread-safe access).
 			std::atomic< bool > m_physicalSimulationEnabled{true}; ///< Whether Scene::processLogics() runs resolveCollisions(). Debug affordance, written from the console thread and read by the logic thread, hence atomic. @see enablePhysicalSimulation()
+			SettingsKeyRestoration m_settingsKeyRestoration; ///< Settings entries read back from the backup on a reset. @see resetSettingsIfOutdated(), executeResetSettings()
 			bool m_willNotRun{false};
 			bool m_resetSettingsOnNewVersion{false}; ///< Reset settings when the file was written by an older engine version. @see resetSettingsIfOutdated()
 			bool m_pausable{false}; ///< Whether pause is currently allowed.
