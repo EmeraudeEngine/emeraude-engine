@@ -40,8 +40,9 @@ with both shader caches set to false.
 ## ⚠️ Traps
 
 - ⚠️ Do NOT read the black sphere of that scene as a POM symptom. It is a **separate, unattributed**
-  observation (a geodesic sphere at quality 4 carrying `Walls/Bricks001` renders near-black, mean
-  32/255, and it was already dark before POM was ever enabled). Whether the two share a cause is
+  observation (a geodesic sphere at quality 4 carrying `Grounds/Pavement002` — not `Walls/Bricks001`,
+  which is the cube's — renders near-black, mean 32/255, and it was already dark before POM was
+  ever enabled; its cause is tracked in emeraude-base's `geodesic-sphere-uv-convention-transposed`). Whether the two share a cause is
   unknown; measuring them together is how a wrong attribution gets made.
 - ⚠️ `Core/Graphics/Texture/POMIterations` is clamped to [4, 64] or the special 0
   (`Generator/Abstract.hpp:setPOMIterations()`): an authored 1 or 2 is not what runs.
