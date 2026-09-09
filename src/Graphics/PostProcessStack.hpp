@@ -105,7 +105,7 @@ namespace EmEn::Graphics
 			 * @param effect A shared pointer to the effect.
 			 * @return void
 			 */
-			void addEffect (std::shared_ptr< IndirectPostProcessEffect > effect) noexcept;
+			void addEffect (const std::shared_ptr< IndirectPostProcessEffect >& effect) noexcept;
 
 			/**
 			 * @brief Disables every OTHER occupant of an effect's slot.
@@ -115,7 +115,7 @@ namespace EmEn::Graphics
 			 * @param effect A reference to the effect being enabled.
 			 * @return void
 			 */
-			void disableSlotSiblings (const IndirectPostProcessEffect & effect) noexcept;
+			void disableSlotSiblings (const IndirectPostProcessEffect & effect) const noexcept;
 
 			/**
 			 * @brief Returns the occupants of a slot, in their order of addition.
@@ -179,7 +179,7 @@ namespace EmEn::Graphics
 			 * tone mapping's pipeline variant at create() time rather than refreshed per frame.
 			 * @return void
 			 */
-			void syncSlotPairings () noexcept;
+			void syncSlotPairings () const noexcept;
 
 			/**
 			 * @brief Returns the camera-materialized tone mapping effect, or nullptr.

@@ -61,7 +61,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessStack::addEffect (std::shared_ptr< IndirectPostProcessEffect > effect) noexcept
+	PostProcessStack::addEffect (const std::shared_ptr< IndirectPostProcessEffect > & effect) noexcept
 	{
 		if ( effect == nullptr )
 		{
@@ -153,7 +153,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessStack::disableSlotSiblings (const IndirectPostProcessEffect & effect) noexcept
+	PostProcessStack::disableSlotSiblings (const IndirectPostProcessEffect & effect) const noexcept
 	{
 		const auto slot = effect.slot();
 
@@ -230,7 +230,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessStack::syncSlotPairings () noexcept
+	PostProcessStack::syncSlotPairings () const noexcept
 	{
 		/* ---- The ambient-occlusion lane ----
 		 * The producer is the enabled indirect-diffuse occupant, IF it can publish a lane; the
@@ -328,7 +328,7 @@ namespace EmEn::Graphics
 		else if ( !wantDepthOfField && m_cameraDepthOfField != nullptr )
 		{
 			/* Retire GPU resources once every in-flight frame is done with them. */
-			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraDepthOfField)] () {
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraDepthOfField)] {
 				effect->destroy();
 			});
 
@@ -362,7 +362,7 @@ namespace EmEn::Graphics
 		}
 		else if ( !wantMotionBlur && m_cameraMotionBlur != nullptr )
 		{
-			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraMotionBlur)] () {
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraMotionBlur)] {
 				effect->destroy();
 			});
 
@@ -396,7 +396,7 @@ namespace EmEn::Graphics
 		}
 		else if ( !wantBloom && m_cameraGlare != nullptr )
 		{
-			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraGlare)] () {
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraGlare)] {
 				effect->destroy();
 			});
 
@@ -412,7 +412,7 @@ namespace EmEn::Graphics
 
 		if ( m_cameraToneMapping != nullptr && ( !wantHDR || bloomPresenceChanged ) )
 		{
-			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraToneMapping)] () {
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraToneMapping)] {
 				effect->destroy();
 			});
 
