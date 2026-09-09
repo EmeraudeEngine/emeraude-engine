@@ -165,7 +165,7 @@ namespace EmEn::Graphics
 		 */
 		LensFlare,
 
-		/** @brief Veiling glare scattered INSIDE the lens (Bloom), before the sensor responds. */
+		/** @brief Veiling glare scattered INSIDE the lens (VeilingGlare), before the sensor responds. */
 		Glare,
 
 		/** @brief The sensor response, HDR to display-referred (ToneMapping). Closes the chain. */

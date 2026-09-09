@@ -976,7 +976,7 @@ const float SurfaceMetalness = texture(MetalnessSampler, uv).b * MaterialUB(Meta
 - **RT parity**: `RTTextureSlot` carries the channel; `SceneMetaData` packs it into the RT
   material `flags` as 2-bit indices (`RoughnessChannelShift`/`MetalnessChannelShift`), plus
   `RoughnessTexInverted` for gloss sources. The RTR hit shading applies channel, inversion and
-  factor exactly like the raster (see `Effects/Framebuffer/RTR.cpp`) — keep both sides in sync.
+  factor exactly like the raster (see `Effects/Lighting/RTR.cpp`) — keep both sides in sync.
 
 ### Per-component UV transform — UBO values, never literals (Aug 2026)
 
@@ -1517,16 +1517,51 @@ removed it (see [`docs/todo/photometry-phase-2-relight-demos.md`](../../docs/tod
 - `execute(commandBuffer, inputColor, inputDepth, inputNormals, constants)` — Run effect
 - `requiresDepth()` / `requiresNormals()` / `requiresHDR()` — Declare input dependencies
 
+### The directory is the DOMAIN, the base class is the MECHANISM (Sep 2026)
+
+`Graphics/Effects/` used to be split by execution mechanism — `Display/` and `Lens/` for the
+direct effects, `Framebuffer/` for the indirect ones. That said nothing the base class did not
+already say, and it forced the ray-traced light transport, the participating medium, the image
+resolve and the whole photographic chain into ONE `Framebuffer/` bag of 16. It is now split by
+**domain of application**, which makes the directory a readable map of `EffectSlot`:
+
+| Folder / namespace | Domain | Members |
+|---|---|---|
+| `Effects/Lighting/` | Light transport off surfaces, from the G-buffer | RTGI, SSGI, RTR, SSR, RTAO, SSAO, ContactShadows |
+| `Effects/Atmosphere/` | Participating medium | AtmosphericFog, VolumetricLight, VolumetricScattering |
+| `Effects/Resolve/` | Resolution of the sampled image — adds NO light | TAA, FXAA, FXAASharpen, Sharpen |
+| `Effects/Camera/` | The physical imaging chain | DepthOfField, MotionBlur, LensFlare, VeilingGlare, ToneMapping |
+| `Effects/Style/` | The look — non-physical | the 18 former `Lens/` effects |
+| `Effects/Shared/` | GLSL snippet libraries, NOT effects | CSMSamplingGLSL, MarchDitherGLSL, RTAlphaTestGLSL |
+
+> [!CAUTION]
+> **Never read the folder to know how an effect executes.** `Resolve/` holds both mechanisms —
+> TAA is an `IndirectPostProcessEffect`, FXAA/Sharpen/FXAASharpen are `DirectPostProcessEffect`s
+> folded into the final swap-chain shader. That mix is the deliberate price of ordering by
+> concept. The base class is the single answer to "how does this run", `EffectSlot::slot()` to
+> "when", and the folder to "on what".
+
+> [!NOTE]
+> **Two renames landed with the reshuffle.** `Effects::Framebuffer::Bloom` is
+> `Effects::Camera::VeilingGlare` (aligned on its `EffectSlot::Glare`, and no longer one letter
+> away from `Effects::Style::PhosphorBloom` — a different effect entirely); its `ClassId` and
+> tracer tag are now `"VeilingGlareEffect"`, which is the name the GPU profiler and RenderDoc
+> emit. `ToneMapping::setBloomSource()` is `setGlareSource()`.
+> ⚠️ The CAMERA's switch keeps the photographer's word — `Camera::enableBloom()`,
+> `bloomThreshold()`, `bloomIntensity()` — because it is the user-facing API and it names the
+> *intent*, not the class. `Scenes::EffectsToolkit::LensPresets` became `StylePresets` in the
+> same pass, since it composes `Effects::Style::*`.
+
 ### Available Effects
 
 | Effect | File | Passes | Dependencies |
 |--------|------|--------|-------------|
-| **SSAO** | `Effects/Framebuffer/SSAO.hpp/cpp` | Multi-pass | Depth, Normals |
-| **SSR** | `Effects/Framebuffer/SSR.hpp/cpp` | 5-pass (Trace→Resolve→BlurH→BlurV→Composite) | Depth, Normals, HDR |
-| **Bloom** | `Effects/Framebuffer/Bloom.hpp/cpp` | Multi-pass | HDR |
-| **DepthOfField** | `Effects/Framebuffer/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
-| **ToneMapping** | `Effects/Framebuffer/ToneMapping.hpp/cpp` | Multi-pass (auto-exposure chain) | HDR, **camera-materialized** |
-| **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | 2-pass (Occlusion+EMA ping-pong → RadialBlur); IGN-dithered march, jitter-compensated mask, `temporalAlpha` 0.2 (sub-pixel sources rasterize jitter-unstable — caution-points § dash train) | Depth, HDR |
+| **SSAO** | `Effects/Lighting/SSAO.hpp/cpp` | Multi-pass | Depth, Normals |
+| **SSR** | `Effects/Lighting/SSR.hpp/cpp` | 5-pass (Trace→Resolve→BlurH→BlurV→Composite) | Depth, Normals, HDR |
+| **VeilingGlare** (ex-Bloom) | `Effects/Camera/VeilingGlare.hpp/cpp` | Multi-pass | HDR |
+| **DepthOfField** | `Effects/Camera/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
+| **ToneMapping** | `Effects/Camera/ToneMapping.hpp/cpp` | Multi-pass (auto-exposure chain) | HDR, **camera-materialized** |
+| **VolumetricLight** | `Effects/Atmosphere/VolumetricLight.hpp/cpp` | 2-pass (Occlusion+EMA ping-pong → RadialBlur); IGN-dithered march, jitter-compensated mask, `temporalAlpha` 0.2 (sub-pixel sources rasterize jitter-unstable — caution-points § dash train) | Depth, HDR |
 
 > [!CAUTION]
 > **`VolumetricLight` is NOT a volumetric effect, and its settings keys are an OVERRIDE, not a
@@ -1554,14 +1589,14 @@ removed it (see [`docs/todo/photometry-phase-2-relight-demos.md`](../../docs/tod
 > eight demos used it, and the world-space single-scattering pass meant to replace it needs an A/B
 > that does not require a rebuild. Every one of these knobs becomes meaningless the day the medium
 > is real.
-| **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
-| **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
-| **RTGI** | `Effects/Framebuffer/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
-| **RTAO** | `Effects/Framebuffer/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
-| **SSGI** | `Effects/Framebuffer/SSGI.hpp/cpp` | SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR |
-| **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals (READ since Sep 2026 — the ray origin's normal offset), MaterialProps, LightSet, RT (TLAS+SSBOs) |
-| **LensFlare** | `Effects/Framebuffer/LensFlare.hpp/cpp` | Multi-pass | Depth (the source occlusion probe), HDR, LightSet |
-| **FogEnvironment** | `Effects/Framebuffer/FogEnvironment.hpp/cpp` | 1-pass | Depth |
+| **AtmosphericFog** | `Effects/Atmosphere/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
+| **RTR** | `Effects/Lighting/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
+| **RTGI** | `Effects/Lighting/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
+| **RTAO** | `Effects/Lighting/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
+| **SSGI** | `Effects/Lighting/SSGI.hpp/cpp` | SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR |
+| **ContactShadows** | `Effects/Lighting/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals (READ since Sep 2026 — the ray origin's normal offset), MaterialProps, LightSet, RT (TLAS+SSBOs) |
+| **LensFlare** | `Effects/Camera/LensFlare.hpp/cpp` | Multi-pass | Depth (the source occlusion probe), HDR, LightSet |
+| **FogEnvironment** | `Effects/Atmosphere/FogEnvironment.hpp/cpp` | 1-pass | Depth |
 
 ### SSR (Screen-Space Reflections)
 
@@ -1660,7 +1695,7 @@ removed it (see [`docs/todo/photometry-phase-2-relight-demos.md`](../../docs/tod
 >   and read `emMaterialProps` in their combine snippet. `CombinePass` emits the sampler, hashes
 >   it into the pipeline variant key, and binds `context.materialProperties` — aborting the whole
 >   combine group with a `TraceError` if it is null. This allocates nothing.
-> - **Direct effects** (`AtmosphericFog`, `Bloom`, `DepthOfField`) declare their own
+> - **Direct effects** (`AtmosphericFog`, `VeilingGlare`, `DepthOfField`) declare their own
 >   `materialPropsTex` in `set = 0` at the last binding of `getInputLayout(N)`, and hand-write
 >   `context.materialProperties` into their per-frame set inside `execute()`.
 >
@@ -1825,8 +1860,8 @@ DIELECTRIC (glass: metalness 0 → mask 0 → no traced reflection at all). The 
 belongs to the effects' per-pixel Fresnel + roughness fade, never to the mask.
 
 **Code references:**
-- `Effects/Framebuffer/SSR.hpp` — Parameters, ResolvePushConstants, setEnvironmentCubemap()
-- `Effects/Framebuffer/SSR.cpp` — Shader source, descriptor layouts ("SSRResolveInput"), pipeline creation
+- `Effects/Lighting/SSR.hpp` — Parameters, ResolvePushConstants, setEnvironmentCubemap()
+- `Effects/Lighting/SSR.cpp` — Shader source, descriptor layouts ("SSRResolveInput"), pipeline creation
 - `PostProcessEffect.hpp` — Base interface
 - `PostProcessor.hpp/cpp` — Chain management, push constants. `configure()` retires its previous grab pass + per-frame descriptor sets through `Renderer::deferredDestructor()` (frames-in-flight safety, no mid-frame `waitIdle`) — see `src/Vulkan/AGENTS.md`, "Deferred destruction contract". `recordBlit()` (and `GrabPass::recordBlit()`) follow the **batched barrier contract**: exactly two batched `pipelineBarrier()` calls around the back-to-back copies, never one barrier per transition — see [`docs/post-processing-pipeline.md`](../../docs/post-processing-pipeline.md) § 3 before touching either.
 
@@ -1924,8 +1959,8 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 See `docs/caution-points.md` for the Y-reconstruction pitfall.
 
 **Code references:**
-- `Effects/Framebuffer/AtmosphericFog.hpp` — Parameters, FogPushConstants, API
-- `Effects/Framebuffer/AtmosphericFog.cpp` — GLSL shaders, pipeline setup, camera extraction
+- `Effects/Atmosphere/AtmosphericFog.hpp` — Parameters, FogPushConstants, API
+- `Effects/Atmosphere/AtmosphericFog.cpp` — GLSL shaders, pipeline setup, camera extraction
 
 ### RTR (Ray-Traced Reflections)
 
@@ -1978,8 +2013,8 @@ from reflecting themselves (e.g. floor reflecting floor).
 2. View matrices must use **`readStateIndex`** overloads (see Scenes/AGENTS.md)
 
 **Code references:**
-- `Effects/Framebuffer/RTR.hpp` — Parameters, API
-- `Effects/Framebuffer/RTR.cpp` — GLSL shaders (inline), descriptor layouts, pipeline creation
+- `Effects/Lighting/RTR.hpp` — Parameters, API
+- `Effects/Lighting/RTR.cpp` — GLSL shaders (inline), descriptor layouts, pipeline creation
 - `Scenes/SceneMetaData.hpp` — TLAS, mesh metadata, material data management
 - `Scenes/GPUMeshMetaData.hpp` — GPU-side mesh metadata struct layout
 
@@ -2142,7 +2177,7 @@ variance fallback must cover.
 > applies that replacement to non-transparent surfaces only). Both REPLACE, neither adds.
 >
 > **Files**: `Graphics/PostProcessEffect.hpp` (the virtual), `Graphics/PostProcessStack.{hpp,cpp}`,
-> `Graphics/Effects/Framebuffer/RTGI.{hpp,cpp}`, `Scenes/Scene.lighting.cpp`
+> `Graphics/Effects/Lighting/RTGI.{hpp,cpp}`, `Scenes/Scene.lighting.cpp`
 > (`updateIBLDiffuseOwnership`, `refreshAmbientLightProperties`), `Scenes/Scene.cpp` (the poll),
 > `Saphir/LightGenerator.cpp` (`iblDiffuseIrradiance`), `Saphir/Generator/Abstract.cpp` +
 > `Graphics/ViewMatrices{2D,3D,Cascaded}UBO.*` (the UBO lane — it fits in the EXISTING padding
@@ -2311,8 +2346,8 @@ DepthTolerance|NormalThreshold|NeighborhoodClamp`, `MultiBounce/Enabled|Strength
 temporal chain entirely (no history VRAM, apply reads blur V — the pre-Jul-2026 flow).
 
 **Code references:**
-- `Effects/Framebuffer/RTGI.hpp` — Parameters, owned `GIDenoiser` instance
-- `Effects/Framebuffer/RTGI.cpp` — trace GLSL shader (inline), blur snippet, combine snippet
+- `Effects/Lighting/RTGI.hpp` — Parameters, owned `GIDenoiser` instance
+- `Effects/Lighting/RTGI.cpp` — trace GLSL shader (inline), blur snippet, combine snippet
 - `Graphics/GIDenoiser.{hpp,cpp}` — `FrameUBOData` (std140), temporal/normal-copy shaders,
   history ping-pong recording
 - `Graphics/ViewMatricesInterface.hpp` — frame-history contract (previous view/projection)
@@ -2461,7 +2496,7 @@ the scale is right, but their satin roughness is still worth reviewing surface b
 **Camera presets** (`Scenes/EffectsToolkit/CameraPresets.{hpp,cpp}`): full photographic
 packages — optics + exposure + DoF/HDR materialization + lens effects in one call.
 `Neutral` (reset), `HighQuality` (f/2.8 full frame, clean), `HumanEye` (f/8, soft peripheral
-vignette), `VintageBlackAndWhite` (f/5.6 Super 35 + LensPresets::Hitchcock60s stack),
+vignette), `VintageBlackAndWhite` (f/5.6 Super 35 + StylePresets::Hitchcock60s stack),
 `Super8` (f/1.9 Super 8 gate, +0.3 EV, coarse grain/jitter/flicker/dust). Applying a preset
 REPLACES the camera's photographic setup; two cameras can carry different presets
 (active-camera switch = full look switch). Validated on Sponza (Jul 2026).
@@ -2494,7 +2529,7 @@ normalizes their input.
 
 **Preset TOKEN at creation** (owner-decided idiom): the preset is part of the camera
 DEFINITION — `enum class EffectsToolkit::CameraPreset` (13 values: Normal, HighQuality,
-HumanEye, VintageBlackAndWhite, Super8, plus the PROMOTED LensPresets catalog —
+HumanEye, VintageBlackAndWhite, Super8, plus the PROMOTED StylePresets catalog —
 Analog80s, VHSAnalog80s, SatelliteAnalog80s, VHSPureSignal, SatellitePureSignal,
 GoldenHour, BlueHour, Retro8Bits — each with era-consistent optics: video/broadcast =
 deep focus, cinema grades = photographic DoF, Retro8Bits = no photometry). Taken by
@@ -2502,12 +2537,12 @@ deep focus, cinema grades = photographic DoF, Retro8Bits = no photometry). Taken
 only: the thin-lens DoF model is meaningless under orthographic projection; cubemap
 capture cameras are never graded). Runtime re-application goes through
 `CameraPresets::Apply(camera, token)` — demo cycle order IS the enum order.
-LensPresets:: functions remain the lens-stack building blocks.
+StylePresets:: functions remain the lens-stack building blocks.
 
 **Camera API** (all no-op when the matching effect is absent — the options are retained):
 - `enableDepthOfField(bool)` / `enableMotionBlur(bool)` / `enableBloom(bool)` / `enableHDR(bool)`
-  — MATERIALIZE the DepthOfField / MotionBlur / Bloom / ToneMapping effect in the scene chain (and
-  remove it when disabled). ⚠️ **Canonical order: DepthOfField → MotionBlur → Bloom → ToneMapping**,
+  — MATERIALIZE the DepthOfField / MotionBlur / VeilingGlare / ToneMapping effect in the scene chain (and
+  remove it when disabled). ⚠️ **Canonical order: DepthOfField → MotionBlur → VeilingGlare → ToneMapping**,
   which is the physical order of events: the optics form the image, the motion smears during the
   exposure, the glass scatters what was formed, the sensor responds. All four insert themselves
   ahead of the first `runsAfterToneMapping()` effect.
@@ -2800,7 +2835,7 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
 > while the raster drew leaves. Only RTR's reflection ray judged its candidates — with a 60-line
 > hand-written loop no other effect had copied.
 >
-> **The rule now lives in ONE place**: `Effects/Framebuffer/RTAlphaTestGLSL.hpp`, two macros
+> **The rule now lives in ONE place**: `Effects/Shared/RTAlphaTestGLSL.hpp`, two macros
 > holding GLSL string literals (a `constexpr const char *` cannot be spliced into the effects'
 > `constexpr` shader literals — a macro can):
 > - `EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS` — `rtHitMaterialIndex()` and `rtCandidateIsSolid()`,
@@ -3104,7 +3139,7 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
 > The sensor order would be optics → glare → shutter integration → response, so the glare
 > "should" precede the motion blur. It must not, because the glare is **paired** with the tone
 > mapping (`syncCameraEffects()`: `setBloomSource()` + `setCompositeBypassed(true)`): at its own
-> slot the Bloom only BUILDS its pyramid and returns its input unchanged (`Bloom.cpp:735-737`),
+> slot the VeilingGlare only BUILDS its pyramid and returns its input unchanged (`VeilingGlare.cpp:735-737`),
 > and the ToneMapping APPLIES it at the very end. Moved earlier, the pyramid would be built from
 > the un-blurred image and still applied after the blur — a sharp halo over a smeared source.
 > Reordering the slot would require un-bypassing the composite first, which costs a full-res
@@ -3284,11 +3319,11 @@ global multiply — not a proof that the term is right. **OPEN**, and unmeasured
 > [!CAUTION]
 > **This list is the one the scenes build; the previous revision matched NO scene and carried a
 > rationale the code does not implement.** It read `RTR → SSR → ContactShadows → SSAO →
-> AtmosphericFog → VolumetricLight → LensFlare → Bloom`, which differed on three counts, all
+> AtmosphericFog → VolumetricLight → LensFlare → VeilingGlare`, which differed on three counts, all
 > verified against `Sponza`, `Citadel`, `WaterWorld` and `LightAndShadowDebug`:
 > - it put **ContactShadows before AO**; every scene puts AO first;
 > - it **omitted GI entirely** (`RTGI|SSGI`), which every scene inserts after AO;
-> - it ended the SCENE stack with **Bloom**, which is not a scene effect: veiling glare is a LENS
+> - it ended the SCENE stack with **VeilingGlare** (then named `Bloom`), which is not a scene effect: veiling glare is a LENS
 >   phenomenon carried by the active camera (`enableHDR`/glare threshold), and adding it to the
 >   scene stack would run it before the defocus.
 >
@@ -3475,7 +3510,7 @@ struct FogPushConstants {
 .lightDirX = lightDir.x(),
 ```
 
-**Reference implementation:** `Effects/Framebuffer/AtmosphericFog.hpp/cpp`
+**Reference implementation:** `Effects/Atmosphere/AtmosphericFog.hpp/cpp`
 
 ## 13. Geometry ResourceGenerator: Gem Methods
 
@@ -3530,7 +3565,7 @@ See: `Graphics/Geometry/ResourceGenerator.hpp`, `Graphics/Geometry/ResourceGener
 > targets and execution order — see
 > [`docs/post-processing-pipeline.md`](../../docs/post-processing-pipeline.md) § 5.
 > Phases D, B, C, A and E are DONE: batched grab-pass barriers + `offscreenComposite`
-> swap-chain pass (D); `Effects::Display::*` folded into the final shader (B);
+> swap-chain pass (D); the direct `Effects::Resolve::*` folded into the final shader (B);
 > ToneMapping applies the bloom itself (C); the nine overlay effects apply through the
 > shared generated `CombinePass` (A) and the seven separable-blur effects run their
 > blurs through the shared MRT `DenoisePass` (E) — their own apply/composite AND blur
@@ -3544,7 +3579,7 @@ See: `Graphics/Geometry/ResourceGenerator.hpp`, `Graphics/Geometry/ResourceGener
 |--------|----------------|----------------|
 | G-buffer | Multi-subpass, 4 draws/object | Single-pass MRT, 1 draw/object |
 | Post-process | 42 separate render passes | Fused passes + compute shaders |
-| Blur (Bloom, SSAO, DoF) | Fragment shader per pass | Compute shader with shared memory |
+| Blur (VeilingGlare, SSAO, DoF) | Fragment shader per pass | Compute shader with shared memory |
 | Culling | CPU-side | GPU-driven (compute) |
 | Mesh detail | Fixed resolution | Nanite (virtualized geometry) |
 
@@ -3956,7 +3991,7 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 -   **Material JSON format**: See `docs/development-patterns.md#material-json-format-unified`
 -   **Shadow Mapping**: [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - PCF, global control, per-light settings
 -   **Animated Cubemaps**: See [Section 11](#11-animated-texture-cubemap-system) - CubemapMovieResource + AnimatedTextureCubemap
--   **Post-Processing**: See [Section 12](#12-post-processing-effects) - RTR, SSR, ContactShadows, SSAO, Bloom, DoF, AtmosphericFog, VolumetricLight, LensFlare, ToneMapping
+-   **Post-Processing**: See [Section 12](#12-post-processing-effects) - RTR, SSR, ContactShadows, SSAO, VeilingGlare, DoF, AtmosphericFog, VolumetricLight, LensFlare, ToneMapping
 -   **Instance Program Cache**: See [Section 15](#15-instance-local-program-cache-renderableinstance) - Per-instance resolved program cache
 -   **Frame Sync**: See [Section 16](#16-frame-synchronization--double-buffering) - Per-frame buffers, view matrix state index
 -   **Compute Shaders**: See below - GPU compute pipeline for non-rendering workloads

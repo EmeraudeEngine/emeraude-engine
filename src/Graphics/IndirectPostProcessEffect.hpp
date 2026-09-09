@@ -507,7 +507,7 @@ namespace EmEn::Graphics
 
 			/* ---- Ambient-occlusion LANE protocol (Sep 2026) ----
 			 * A PRODUCER/CONSUMER pairing between two slots, wired once per frame by
-			 * `PostProcessStack::syncSlotPairings()` — the same shape as the Bloom → ToneMapping
+			 * `PostProcessStack::syncSlotPairings()` — the same shape as the VeilingGlare → ToneMapping
 			 * pairing, and for the same reason: two concepts that stay separate effects while
 			 * one feeds the other.
 			 *

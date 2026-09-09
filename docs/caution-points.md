@@ -300,7 +300,7 @@ if ( materialType == StandardResource::ClassId )
 > all reflections off parallel surfaces at a distance (cube tops, ceilings,
 > stacked horizontal walls reflected in the floor).**
 >
-> **Old check** (`Graphics/Effects/Framebuffer/RTR.cpp` ~line 372):
+> **Old check** (`Graphics/Effects/Lighting/RTR.cpp` ~line 372):
 > ```glsl
 > if (dot(hitNormal, worldNormal) > 0.9) { outReflection = vec4(0.0); return; }
 > ```
@@ -322,7 +322,7 @@ if ( materialType == StandardResource::ClassId )
 > SSR is tuned.
 >
 > **Files involved:**
-> - `Graphics/Effects/Framebuffer/RTR.cpp` — trace shader self-rejection check
+> - `Graphics/Effects/Lighting/RTR.cpp` — trace shader self-rejection check
 
 ### Fixed: RT TLAS Collection Hardcoded to Layer 0 (May 2026)
 
@@ -423,7 +423,7 @@ if ( materialType == StandardResource::ClassId )
 >   adds one TLAS instance per renderable, FORCE_NO_OPAQUE if any sub-geo is
 >   alpha-test
 > - `Scenes/Scene.rendering.cpp` — one RT batch per renderable (was per layer)
-> - `Graphics/Effects/Framebuffer/RTR.cpp`, `RTGI.cpp` — `getHitMaterialIndex`
+> - `Graphics/Effects/Lighting/RTR.cpp`, `RTGI.cpp` — `getHitMaterialIndex`
 >   uses `rayQueryGetIntersectionGeometryIndexEXT` + clamp on `subGeometryCount`
 
 ### Fixed: Sprite RT Pipeline — Per-Frame Bindless + CPU Billboard (May 2026)
@@ -573,7 +573,7 @@ if ( materialType == StandardResource::ClassId )
 > (validate against a reflection-heavy demo before/after).
 >
 > **Files involved:**
-> - `Graphics/Effects/Framebuffer/RTGI.cpp` — `shadowRayVisibility()` + gated
+> - `Graphics/Effects/Lighting/RTGI.cpp` — `shadowRayVisibility()` + gated
 >   contribution in `computeDirectLighting()` (trace shader)
 
 ### Fixed: SSGI Indirect Light Ignored Receiver Albedo — New Albedo G-Buffer Attachment (Jul 2026)
@@ -613,7 +613,7 @@ if ( materialType == StandardResource::ClassId )
 > **Files involved:** `Graphics/{Renderer,SceneRenderTarget,GrabPass,PostProcessor,PostProcessStack}.{hpp,cpp}`,
 > `Graphics/IndirectPostProcessEffect.hpp`, `Saphir/Keys.hpp` (`OutputAlbedo`),
 > `Saphir/LightGenerator.{hpp,cpp}` (`albedoShaderExpression()`),
-> `Saphir/Generator/SceneRendering.{hpp,cpp}`, `Graphics/Effects/Framebuffer/*.{hpp,cpp}`
+> `Saphir/Generator/SceneRendering.{hpp,cpp}`, `Graphics/Effects/*/*.{hpp,cpp}`
 > (signature), `SSGI.{hpp,cpp}` (consumer).
 >
 > **Update (Aug 2026):** RTGI now follows the SAME convention as SSGI — see the next section.
@@ -642,7 +642,7 @@ if ( materialType == StandardResource::ClassId )
 > floor texture gradient ×1.64; Cornell GI demo — uniform ≤2% run-to-run drift, colour
 > bleed hue preserved, no runaway.
 >
-> **Files:** `Graphics/Effects/Framebuffer/RTGI.{hpp,cpp}` (trace shader, descriptor set 1
+> **Files:** `Graphics/Effects/Lighting/RTGI.{hpp,cpp}` (trace shader, descriptor set 1
 > renumbered — albedo binding removed, history=2, frame UBO=3; `combineContribution()`;
 > `readsChainColorUpstream()` now `false`).
 
@@ -798,7 +798,7 @@ if ( materialType == StandardResource::ClassId )
 > - The reflection hit lighting includes the ACTUAL scene ambient
 >   (`LightSet::ambientLightColor() × ambientLightIntensity()`, via RTR push constants).
 >
-> **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
+> **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Lighting/RTR.{hpp,cpp}`
 > (shadowRayVisibility + gating + ambient push constants), `RTGI.cpp` (gating).
 
 > **Addendum (Aug 2026) — two more ways the reflection diverged from the raster, both fixed:**
@@ -809,7 +809,7 @@ if ( materialType == StandardResource::ClassId )
 >   is now the single rule, delivered as `FrameContext::ambientIlluminance`.
 > - RTR's SHADOW ray (and both RTGI rays) used `gl_RayFlagsOpaqueEXT`, which accepts every
 >   triangle of a cutout instance whole — a leaf shadowed as a solid quad. Every scene ray now
->   applies the ONE shared alpha-test rule of `Effects/Framebuffer/RTAlphaTestGLSL.hpp`.
+>   applies the ONE shared alpha-test rule of `Effects/Shared/RTAlphaTestGLSL.hpp`.
 >   RTAO and ContactShadows apply it too — ⚠️ at a price that scales with the ray count: RTAO at
 >   full resolution × 8 spp doubled (12.3 → 26.3 ms on Sponza's ivy), at half resolution it costs
 >   7.2 ms, i.e. less than the uncorrected full-res effect. The resolution is the owner's setting.
@@ -2532,7 +2532,7 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 > cancels out. Only effects that need **absolute world-space height** (like atmospheric
 > fog) expose this bug.
 >
-> **Code reference:** `Effects/Framebuffer/AtmosphericFog.cpp` — shader `cameraUp` computation
+> **Code reference:** `Effects/Atmosphere/AtmosphericFog.cpp` — shader `cameraUp` computation
 
 ### Critical: Inscattering Light Direction Convention
 
@@ -2548,7 +2548,7 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 > **Fix:** Use `dot(rayDir, -lightDir)` so the glow appears around the sun, not
 > at the anti-solar point.
 >
-> **Code reference:** `Effects/Framebuffer/AtmosphericFog.cpp` — shader inscattering section
+> **Code reference:** `Effects/Atmosphere/AtmosphericFog.cpp` — shader inscattering section
 
 ### Critical: Environment Cubemap Sampling Convention (RAW direction since Y-up)
 
@@ -3017,8 +3017,8 @@ misleading.
   *« chaîne trop grande, caractères de fin tronqués »*). The reported line is where the byte counter
   overflows mid-literal, **not** where the code is actually wrong — do not go looking for a bug there.
 - **Seen in:**
-  - `Graphics/Effects/Framebuffer/RTR.cpp` — `RTRTraceFragmentShader` grew to ~18 KB (fixed Jul 2026).
-  - `Graphics/Effects/Framebuffer/RTGI.cpp` — `RTGITraceFragmentShader` grew to ~16.6 KB, split at the
+  - `Graphics/Effects/Lighting/RTR.cpp` — `RTRTraceFragmentShader` grew to ~18 KB (fixed Jul 2026).
+  - `Graphics/Effects/Lighting/RTGI.cpp` — `RTGITraceFragmentShader` grew to ~16.6 KB, split at the
     `computeDirectLighting()` / `main()` boundary into ~10 KB + ~6.7 KB halves (fixed Jul 2026).
 - **Wrong fixes:** there is no warning to silence — C2026 is a hard **error**, and the project never
   disables diagnostics anyway. Do **not** move the shader to an external file just to dodge this
@@ -3357,7 +3357,7 @@ cascaded off a stale layout:
 > expect the exposure of an HDR camera to differ from (and be correct, unlike) the old one.
 
 **Files:** `Graphics/IntermediateRenderTarget.{hpp,cpp}`,
-`Graphics/Effects/Framebuffer/ToneMapping.cpp:createEffect()`
+`Graphics/Effects/Camera/ToneMapping.cpp:createEffect()`
 
 ---
 
@@ -3404,7 +3404,7 @@ first — same root cause, same VUID cascade off a stale tracked layout):
 > creation, out-of-render-pass barriers around the copy, restore barrier to the layout the next
 > consumer expects.
 
-**Files:** `Graphics/SceneRenderTarget.cpp`, `Graphics/Effects/Framebuffer/DepthOfField.cpp`
+**Files:** `Graphics/SceneRenderTarget.cpp`, `Graphics/Effects/Camera/DepthOfField.cpp`
 
 ---
 
@@ -3493,7 +3493,7 @@ line of the shader body changed. Details and the offset table:
 **Verified:** projet-alpha cascade builds, the 128-byte warning is gone, 0 VUID (RTX 3070 Ti),
 emeraude-base 2045/2045.
 
-**Files:** `Graphics/Effects/Framebuffer/RTR.{hpp,cpp}`
+**Files:** `Graphics/Effects/Lighting/RTR.{hpp,cpp}`
 
 ---
 
@@ -3527,7 +3527,7 @@ Secondary, same pass: the depth was read with `texture()` at half resolution, wh
 exactly on the corner of a 2×2 full-res block, so **every** pixel reconstructed its origin from
 the average of four non-linear depths — a surface that does not exist.
 
-**Fix (`Graphics/Effects/Framebuffer/ContactShadows.{hpp,cpp}`), aligned on RTAO:**
+**Fix (`Graphics/Effects/Lighting/ContactShadows.{hpp,cpp}`), aligned on RTAO:**
 `texelFetch` for depth AND normals; world position reconstructed from the FETCHED texel's centre
 (not `vUV` — half a full-res texel apart); view→world normal via the inverse view rotation;
 `rayOrigin = worldPos + worldNormal * adaptiveBias` with `tMin` a constant 0.001; adaptive bias
@@ -3558,7 +3558,7 @@ gaining RTAO's grazing term `min(1 / NdotV, 10)`.
 **Verified:** projet-alpha cascade builds, 0 VUID with the validation layers on, RTX 3070 Ti;
 emeraude-base 2045/2045.
 
-**Files:** `Graphics/Effects/Framebuffer/ContactShadows.{hpp,cpp}`
+**Files:** `Graphics/Effects/Lighting/ContactShadows.{hpp,cpp}`
 
 ---
 
@@ -3746,7 +3746,7 @@ indefinitely. Core validation and **Synchronization Validation are both clean**.
    ISO **ceiling** — the brightest possible exposure — which is what actually painted the frame
    white. The failure direction was the worst possible one.
 
-**Fixes (`Graphics/Effects/Framebuffer/ToneMapping.cpp`):**
+**Fixes (`Graphics/Effects/Camera/ToneMapping.cpp`):**
 
 - The adaptation pass validates its measurement against a physical log-luminance window and,
   when it fails, **HOLDS the previous adapted value** instead of mixing it in. The exposure now
@@ -3804,7 +3804,7 @@ indefinitely. Core validation and **Synchronization Validation are both clean**.
 frame with no ISO readout to a correctly exposed one reporting `metered: ISO 199 | scene avg
 1902.2 nits`, with `5 metered frame(s) rejected as implausible - held` counted rather than fatal.
 
-**Files:** `Graphics/Effects/Framebuffer/ToneMapping.{hpp,cpp}`, `Core.cpp` (panel readout)
+**Files:** `Graphics/Effects/Camera/ToneMapping.{hpp,cpp}`, `Core.cpp` (panel readout)
 
 ---
 
@@ -3820,7 +3820,7 @@ aggregate requirement rather than one effect's bug.
 requirement (`Renderer::recreateSceneTarget()` via `PostProcessor::cachedRequiresHDR()`), and that
 requirement is re-evaluated every time the camera materializes or retires an effect
 (`PostProcessStack::syncCameraEffects()`). `ToneMapping` inherited `requiresHDR() == false`, so the
-HDR buffer was only ever held up by whichever OTHER effect was enabled — `Bloom`, `MotionBlur`,
+HDR buffer was only ever held up by whichever OTHER effect was enabled — `VeilingGlare`, `MotionBlur`,
 `TAA`, `SSR`, `SSGI`, `RTR`, `AtmosphericFog`, `LensFlare` or `VolumetricLight` all declare it.
 Turn the last of them off and the scene target drops to the 8-bit swap-chain format underneath a
 still-active tone mapper: photometric radiance of a few thousand nits clamps to 1.0 everywhere.
@@ -3842,7 +3842,7 @@ display-referred image IS what the effect does, so it must pin the requirement i
 `Scene render target created (2560x1440, format: R16G16B16A16_SFLOAT)` and the frame is correctly
 exposed, where it was a flat grey before.
 
-**File:** `Graphics/Effects/Framebuffer/ToneMapping.hpp`
+**File:** `Graphics/Effects/Camera/ToneMapping.hpp`
 
 ---
 
@@ -3876,7 +3876,7 @@ not be written yet when it is read. All four dependencies (both directions, both
 
 ### Reduction passes must sample with an explicit LOD (Aug 2026)
 
-Generalised from the tone-mapping fix above and now applied to `Bloom` as well (all 26 sample
+Generalised from the tone-mapping fix above and now applied to `VeilingGlare` as well (all 26 sample
 sites: the 13-tap downsample, the 9-tap upsample tent, the material-properties fetch and the
 composite).
 
@@ -3889,7 +3889,7 @@ meter a black scene and pin the exposure to the ISO ceiling.
 **Use `textureLod(tex, uv, 0.0)` (or `texelFetch`) in any downsample/upsample/gather pass.** Plain
 `texture()` is only appropriate where the read is genuinely 1:1 with the target.
 
-**Files:** `Graphics/Effects/Framebuffer/Bloom.cpp`, `Graphics/Effects/Framebuffer/ToneMapping.cpp`
+**Files:** `Graphics/Effects/Camera/VeilingGlare.cpp`, `Graphics/Effects/Camera/ToneMapping.cpp`
 
 ---
 

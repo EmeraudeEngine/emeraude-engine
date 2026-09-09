@@ -3,7 +3,7 @@ id: rt-reflections-curved-reflector
 title: RTR glossy cone — account for the reflector's curvature
 status: open
 priority: unranked
-scope: Graphics/Effects/Framebuffer/RTR
+scope: Graphics/Effects/Lighting/RTR
 opened: 2026-08-30
 tags: [ray-tracing, reflections, measurement]
 ---
@@ -30,5 +30,5 @@ over-blurs it (the v1 comment already noted "a sphere over-blurred by an order o
 
 ## References
 
-- `src/Graphics/Effects/Framebuffer/RTR.cpp` — the trace's cone width block.
+- `src/Graphics/Effects/Lighting/RTR.cpp` — the trace's cone width block.
 - projet-alpha `src/Builtin/PostProcessorEffectDebug.AGENTS.md` — the bench and its protocol.

@@ -253,7 +253,7 @@ delta per TU, and that part is reliable: it is how the 2026-07 pass found `Graph
 > ```cpp
 > const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 > ```
-> `Graphics/Effects/Framebuffer/RTAO.cpp` broke exactly this way on `ViewMatricesInterface`
+> `Graphics/Effects/Lighting/RTAO.cpp` broke exactly this way on `ViewMatricesInterface`
 > (reached through `Vulkan/SwapChain.hpp` → `ViewMatrices{2D,3D}UBO.hpp`) and no name-based
 > filter could have seen it. Same trap for `Manager`/`Abstract`/`Interface`/`Surface`: the names
 > are ambiguous across namespaces, so a symbol grep produces both false negatives and a flood of

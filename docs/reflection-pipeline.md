@@ -32,8 +32,8 @@ Ordered from the crudest simulation to the most exact evaluation.
 | 1 | **Static cubemap + Fresnel** | `StandardResource::setReflectionComponent(texture)` (+ `setReflectionAmount`) | Fresnel-Schlick only, perfect mirror (**mip 0**) | 1 fetch |
 | 2 | **IBL split-sum** | `StandardResource::setReflectionComponentFromEnvironmentCubemap(IBLIntensity)` | correct in roughness, **energy conserving** | 2 fetches |
 | 3 | **Dynamic cubemap probe** | `Scene::createRenderToCubemap` + `set*ComponentFromRenderTarget` | GGX-prefiltered mip chain, roughness-driven LOD | 6 full scene passes / frame + convolution |
-| 4 | **SSR** | `Effects::Framebuffer::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
-| 5 | **RTR** | `Effects::Framebuffer::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance — over-blurs curved reflectors, § 3.2.1), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
+| 4 | **SSR** | `Effects::Lighting::SSR` in the post-process stack | **cone-traced glossy** (color pyramid LOD), fade over `roughness ∈ [0.55, 0.85]` | 5 passes + color pyramid |
+| 5 | **RTR** | `Effects::Lighting::RTR` in the post-process stack | **glossy via reflection pyramid** (roughness² LOD, assumed hit distance — over-blurs curved reflectors, § 3.2.1), fade over `roughness ∈ [0.6, 0.9]` | 4 passes + reflection pyramid |
 | 6 | **Grab-pass transmission** | `StandardResource::setTransmissionComponent` | refraction side of the same Fresnel split | grab pass |
 
 Paths 1-3 are **material** features, resolved in the object's ambient pass. Paths 4-5 are
@@ -644,7 +644,7 @@ Stated explicitly so nobody looks for it:
 | Normals/matProps MRT writes | `src/Saphir/Generator/SceneRendering.cpp` |
 | Material reflection components | `src/Graphics/Material/StandardResource.cpp` |
 | IBL baked textures | `src/Graphics/IBLTexture.{hpp,cpp}`, `src/Graphics/Compute/IBLBaker.*` |
-| SSR / RTR | `src/Graphics/Effects/Framebuffer/{SSR,RTR}.cpp` |
+| SSR / RTR | `src/Graphics/Effects/Lighting/{SSR,RTR}.cpp` |
 | Dynamic probe | `src/Scenes/Scene.rendering.cpp`, `src/Scenes/Toolkit.hpp` |
 | Validation scene | projet-alpha `src/Builtin/ReflexionDebug.cpp` |
 </content>

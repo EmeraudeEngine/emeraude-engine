@@ -3,7 +3,7 @@ id: rt-blended-materials-in-tlas
 title: Blended (alphaMode BLEND) materials enter the TLAS as opaque instances
 status: open
 priority: unranked
-scope: Scenes/SceneMetaData, Graphics/Effects/Framebuffer (RTGI, RTAO, RTR, ContactShadows)
+scope: Scenes/SceneMetaData, Graphics/Effects/Lighting (RTGI, RTAO, RTR, ContactShadows)
 opened: 2026-08-30
 tags: [ray-tracing, transparency, measurement]
 ---
@@ -31,5 +31,5 @@ the RTGI bounce shades the hit with the decal's material (glTF-default metal →
 
 ## References
 
-- `src/Scenes/SceneMetaData.cpp` (instance flags), `src/Graphics/Effects/Framebuffer/RTAlphaTestGLSL.hpp`.
+- `src/Scenes/SceneMetaData.cpp` (instance flags), `src/Graphics/Effects/Shared/RTAlphaTestGLSL.hpp`.
 - `docs/caution-points.md` § "big dark squares under Sponza's decals".

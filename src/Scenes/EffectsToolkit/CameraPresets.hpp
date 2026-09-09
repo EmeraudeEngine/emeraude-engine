@@ -196,7 +196,7 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 
 	/**
 	 * @brief Vintage 1960s black & white film camera.
-	 * @note Reuses the LensPresets::Hitchcock60s() lens stack (grain, high-contrast B&W,
+	 * @note Reuses the StylePresets::Hitchcock60s() style stack (grain, high-contrast B&W,
 	 * projector artifacts) over f/5.6 full-frame optics with depth of field and HDR.
 	 * @param camera A reference to the camera to configure.
 	 * @return void
@@ -213,7 +213,7 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 */
 	EMEN_API void Super8 (Component::Camera & camera) noexcept;
 
-	/* NOTE: The presets below promote the LensPresets catalog to full camera presets
+	/* NOTE: The presets below promote the StylePresets catalog to full camera presets
 	 * (owner-decided merge): era-consistent optics + exposure over the lens stacks.
 	 * Video/broadcast cameras have small sensors → deep focus (no DoF); the cinematic
 	 * grades keep the photographic DoF; Retro8Bits disables the photometry entirely. */

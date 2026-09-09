@@ -1,0 +1,221 @@
+/*
+ * src/Graphics/Effects/Lighting/SSAO.hpp
+ * This file is part of Emeraude-Engine
+ *
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ *
+ * Emeraude-Engine is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Emeraude-Engine is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Emeraude-Engine; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * Complete project and additional information can be found at :
+ * https://github.com/EmeraudeEngine/emeraude-engine
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
+
+#pragma once
+
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+/* Local inclusions for inheritances. */
+#include "Graphics/IndirectPostProcessEffect.hpp"
+
+/* Local inclusions for usages. */
+#include "Graphics/IntermediateRenderTarget.hpp"
+
+namespace EmEn::Graphics::Effects::Lighting
+{
+	/**
+	 * @brief Screen-Space Ambient Occlusion (SSAO) post-processing effect.
+	 * @note Computes ambient occlusion from the depth buffer using a hemisphere sampling approach,
+	 * applies bilateral blur to reduce noise, then multiplies AO with the scene color.
+	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
+	 */
+	class EMEN_API SSAO final : public IndirectPostProcessEffect
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"SSAOEffect"};
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note The screen-space alternative of the same concept. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::AmbientOcclusion;
+			}
+
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
+			/**
+			 * @brief User-facing SSAO parameters.
+			 */
+			struct EMEN_API Parameters
+			{
+				float radius{0.5F};
+				float intensity{1.0F};
+				float bias{0.025F};
+				uint32_t sampleCount{32};
+			};
+
+			/**
+			 * @brief Push constants for the SSAO computation pass.
+			 */
+			struct EMEN_API SSAOPushConstants
+			{
+				float texelSizeX;
+				float texelSizeY;
+				float radius;
+				float intensity;
+				float bias;
+				float nearPlane;
+				float farPlane;
+				float tanHalfFovY;
+				float aspectRatio;
+				uint32_t sampleCount;
+			};
+
+			/**
+			 * @brief Constructs a screen-space ambient occlusion effect.
+			 * @param renderer A reference to the graphics renderer.
+			 */
+			explicit
+			SSAO (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a screen-space ambient occlusion effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			SSAO (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
+			[[nodiscard]]
+			bool create (uint32_t width, uint32_t height) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
+			void destroy () noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
+			[[nodiscard]]
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */
+			[[nodiscard]]
+			bool
+			usesSharedDenoise () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
+			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
+			[[nodiscard]]
+			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
+			[[nodiscard]]
+			bool
+			requiresDepth () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresNormals() */
+			[[nodiscard]]
+			bool
+			requiresNormals () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
+			[[nodiscard]]
+			bool
+			requiresMaterialProperties () const noexcept override
+			{
+				return true;
+			}
+
+			/**
+			 * @brief Sets the SSAO parameters.
+			 * @param parameters The new parameters.
+			 * @return void
+			 */
+			void
+			setParameters (const Parameters & parameters) noexcept
+			{
+				m_parameters = parameters;
+			}
+
+			/**
+			 * @brief Returns the current SSAO parameters.
+			 * @return const Parameters &
+			 */
+			[[nodiscard]]
+			const Parameters &
+			parameters () const noexcept
+			{
+				return m_parameters;
+			}
+
+		private:
+
+			Parameters m_parameters;
+			/* IRTs: AO computation (half-res), blur H (half-res), blur V (half-res), apply (full-res). */
+			IntermediateRenderTarget m_aoTarget;
+			IntermediateRenderTarget m_blurHTarget;
+			IntermediateRenderTarget m_blurVTarget;
+			/* Pipelines. */
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_aoPipeline;
+			/* Pipeline layouts. */
+			std::shared_ptr< Vulkan::PipelineLayout > m_aoLayout;
+			/* Descriptor sets (fixed -- never updated after creation). */
+			/* Per-frame-in-flight descriptor sets (updated every frame). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_aoPerFrame;
+	};
+}

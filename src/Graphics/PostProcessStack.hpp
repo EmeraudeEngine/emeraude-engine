@@ -50,7 +50,7 @@ namespace EmEn::Scenes::Component
 	class Camera;
 }
 
-namespace EmEn::Graphics::Effects::Framebuffer
+namespace EmEn::Graphics::Effects::Camera
 {
 	class DepthOfField;
 	class ToneMapping;
@@ -148,7 +148,7 @@ namespace EmEn::Graphics
 			 * @brief Synchronizes the CAMERA-DRIVEN photographic effects with the active camera.
 			 * @note Physical camera contract: the camera declares its photographic behaviour
 			 * (enableDepthOfField()/enableHDR()); this call (de)materializes the matching effects
-			 * at the END of the chain, in canonical order (DepthOfField, then Bloom, then ToneMapping last).
+			 * at the END of the chain, in canonical order (DepthOfField, then VeilingGlare, then ToneMapping last).
 			 * Scene effects (GI, AO, fog...) added by the application are left untouched.
 			 * Called by the Renderer once per frame, on the render thread; removed effects are
 			 * retired through the deferred destructor (frames-in-flight safety).
@@ -174,7 +174,7 @@ namespace EmEn::Graphics
 			 * what keeps the consumer's standalone path alive and forbids a stale lane pointer
 			 * from outliving a frame.
 			 *
-			 * ⚠️ The Bloom → ToneMapping pairing does NOT live here: those two are camera-owned,
+			 * ⚠️ The VeilingGlare → ToneMapping pairing does NOT live here: those two are camera-owned,
 			 * materialized together by syncCameraEffects(), and their pairing is baked into the
 			 * tone mapping's pipeline variant at create() time rather than refreshed per frame.
 			 * @return void
@@ -186,19 +186,19 @@ namespace EmEn::Graphics
 			 * @note For readers of its metered values (the overlay panel): RENDER THREAD only,
 			 * inside the frame scope — the instance is (de)materialized by syncCameraEffects()
 			 * on that same thread, once per frame.
-			 * @return std::shared_ptr< Effects::Framebuffer::ToneMapping >
+			 * @return std::shared_ptr< Effects::Camera::ToneMapping >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Effects::Framebuffer::ToneMapping > cameraToneMapping () const noexcept;
+			std::shared_ptr< Effects::Camera::ToneMapping > cameraToneMapping () const noexcept;
 
 			/**
 			 * @brief Returns the camera-materialized depth of field effect, or nullptr.
 			 * @note Same RENDER THREAD / frame scope contract as cameraToneMapping(); the panel
 			 * reads its metered focus distance through this.
-			 * @return std::shared_ptr< Effects::Framebuffer::DepthOfField >
+			 * @return std::shared_ptr< Effects::Camera::DepthOfField >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Effects::Framebuffer::DepthOfField > cameraDepthOfField () const noexcept;
+			std::shared_ptr< Effects::Camera::DepthOfField > cameraDepthOfField () const noexcept;
 
 			/**
 			 * @brief Appends a DISPLAY effect, compiled into the final fullscreen pass.
@@ -402,7 +402,7 @@ namespace EmEn::Graphics
 			 * distinguish them from the application/scene effects inside m_effects. */
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraDepthOfField;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraMotionBlur;
-			std::shared_ptr< IndirectPostProcessEffect > m_cameraBloom;
+			std::shared_ptr< IndirectPostProcessEffect > m_cameraGlare;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
 	};
 }

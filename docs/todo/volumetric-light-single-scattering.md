@@ -55,7 +55,7 @@ not-sky and nothing about what occludes the volume. That is the test below.
 
 ## Built 2026-09-08 — the pass exists, and the owner decisions behind it
 
-`Graphics::Effects::Framebuffer::VolumetricScattering` (+ its two shared GLSL rule headers) is in
+`Graphics::Effects::Atmosphere::VolumetricScattering` (+ its two shared GLSL rule headers) is in
 the engine and runs on `light-and-shadow-debug`: the world-space march executes, samples the
 cascaded shadow map per step, Vulkan validation is silent (**zero VUID**, layers active), and the
 hand-authored GLSL — both spliced macros included — compiles at RUNTIME, which the C++ build cannot
@@ -82,12 +82,12 @@ prove.
 **Reuse, per the owner's standing rule that reuse is what grows the base class** — two conventions
 were extracted rather than re-typed a fifth time:
 
-- [`../../src/Graphics/Effects/Framebuffer/CSMSamplingGLSL.hpp`](../../src/Graphics/Effects/Framebuffer/CSMSamplingGLSL.hpp)
+- [`../../src/Graphics/Effects/Shared/CSMSamplingGLSL.hpp`](../../src/Graphics/Effects/Shared/CSMSamplingGLSL.hpp)
   — THE cascaded-shadow-map sampling rule for post-process effects, and the home of the
   **"outside the map = lit"** convention this item asked to keep in one place. It carries the C++
   `CSMCascadeBlock` in the same file as the GLSL that reads it, so the std140 layout cannot drift
   from its reader.
-- [`../../src/Graphics/Effects/Framebuffer/MarchDitherGLSL.hpp`](../../src/Graphics/Effects/Framebuffer/MarchDitherGLSL.hpp)
+- [`../../src/Graphics/Effects/Shared/MarchDitherGLSL.hpp`](../../src/Graphics/Effects/Shared/MarchDitherGLSL.hpp)
   — THE march-origin dither. Four effects still open-code the identical expression;
   migrating them is [`march-dither-single-source.md`](march-dither-single-source.md).
 

@@ -3,7 +3,7 @@ id: rt-reflections-depth-discontinuity
 title: RTR glossy cone — one hit distance per pixel over-blurs a near feature in front of a far one
 status: open
 priority: unranked
-scope: Graphics/Effects/Framebuffer/RTR
+scope: Graphics/Effects/Lighting/RTR
 opened: 2026-08-30
 tags: [ray-tracing, reflections, measurement]
 ---

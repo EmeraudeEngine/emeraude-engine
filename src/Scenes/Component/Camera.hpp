@@ -330,7 +330,7 @@ namespace EmEn::Scenes::Component
 			 * The camera is the single source of truth for the photographic behaviour of the
 			 * rendered image, like a real camera body: optics (aperture, focal length, focus)
 			 * and exposure, plus the shutter speed that drives the motion blur length. The engine
-			 * materializes the matching post-process effects — DepthOfField, MotionBlur, Bloom and
+			 * materializes the matching post-process effects — DepthOfField, MotionBlur, VeilingGlare and
 			 * ToneMapping, in that canonical (physical) order — in the scene chain when enabled
 			 * here; when disabled, these options are retained but have no effect (no-op contract).
 			 * Every property is readable by the effects each frame: changes apply immediately, no
@@ -367,7 +367,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Enables the lens glare (bloom) for this camera.
-			 * @note Materializes the Bloom effect in the scene post-process chain, between the
+			 * @note Materializes the VeilingGlare effect in the scene post-process chain, between the
 			 * depth of field and the tone mapping. Veiling glare is scattering INSIDE the lens:
 			 * it applies to the image the optics have already formed, so it belongs after the
 			 * defocus and the motion smear and before the sensor — which is exactly what that

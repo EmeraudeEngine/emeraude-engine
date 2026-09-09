@@ -1,0 +1,284 @@
+/*
+ * src/Graphics/Effects/Lighting/RTAO.hpp
+ * This file is part of Emeraude-Engine
+ *
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ *
+ * Emeraude-Engine is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Emeraude-Engine is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Emeraude-Engine; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * Complete project and additional information can be found at :
+ * https://github.com/EmeraudeEngine/emeraude-engine
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
+
+#pragma once
+
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <vector>
+
+/* Local inclusions for inheritances. */
+#include "Graphics/IndirectPostProcessEffect.hpp"
+
+/* Local inclusions for usages. */
+#include "Graphics/IntermediateRenderTarget.hpp"
+
+namespace EmEn::Graphics::Effects::Lighting
+{
+	/**
+	 * @brief Ray-Traced Ambient Occlusion (RTAO) post-processing effect.
+	 * @note Uses VK_KHR_ray_query / GL_EXT_ray_query in a fragment shader to cast
+	 * short hemisphere rays against the TLAS for accurate ambient occlusion.
+	 * Unlike SSAO, RTAO correctly handles off-screen occluders and has no
+	 * screen-space artifacts. Falls back to SSAO when ray tracing hardware
+	 * is not available (separate effect in the stack, not automatic fallback).
+	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
+	 */
+	class EMEN_API RTAO final : public IndirectPostProcessEffect
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"RTAOEffect"};
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
+			 * @note Occlusion attenuates INDIRECT light first: it runs after the indirect diffuse it is meant to occlude. */
+			[[nodiscard]]
+			EffectSlot
+			slot () const noexcept override
+			{
+				return EffectSlot::AmbientOcclusion;
+			}
+
+			/** @copydoc EmEn::Graphics::PostProcessEffect::label() */
+			[[nodiscard]]
+			const char *
+			label () const noexcept override
+			{
+				return ClassId;
+			}
+
+			/**
+			 * @brief User-facing RTAO parameters.
+			 */
+			struct EMEN_API Parameters
+			{
+				float maxDistance{2.0F};
+				float intensity{1.0F};
+				float bias{0.005F};
+				uint32_t sampleCount{8};
+				uint32_t blurRadius{4};
+				float normalSigma{0.5F};
+			};
+
+			/**
+			 * @brief Push constants for the RTAO ray trace pass.
+			 */
+			struct EMEN_API TracePushConstants
+			{
+				float invViewProj[16];
+				float invViewCol0[3];
+				float viewPosX;
+				float invViewCol1[3];
+				float viewPosY;
+				float invViewCol2[3];
+				float viewPosZ;
+				float maxDistance;
+				float intensity;
+				float bias;
+				uint32_t sampleCount;
+			};
+
+			/* The Vulkan spec only guarantees 128 bytes for maxPushConstantsSize, and part of the
+			 * AMD/Intel fleet exposes exactly that. A block over the floor makes PipelineLayout::create()
+			 * FAIL on those devices, so the effect is never created and its contribution silently
+			 * disappears -- invisible on NVIDIA, which exposes 256. That is exactly how RTR was dead on
+			 * min-spec until ae61e368. Over the floor, move the block to a per-frame UBO (RTR and
+			 * ContactShadows are the ported references), never trim it to squeeze back under.
+			 * ⚠️⚠️ EXACTLY 128 bytes: there is NO ROOM for one more field. Adding any member here
+			 * must move the whole block to a UBO. */
+			static_assert(sizeof(TracePushConstants) <= 128, "Push constant block over the 128-byte Vulkan minimum guarantee: move it to a per-frame UBO.");
+
+			/**
+			 * @brief Constructs a ray-tracing ambient occlusion effect.
+			 * @param renderer A reference to the graphics renderer.
+			 */
+			explicit
+			RTAO (Renderer & renderer) noexcept
+				: IndirectPostProcessEffect{renderer}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a ray-tracing ambient occlusion effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param parameters The initial parameters.
+			 */
+			RTAO (Renderer & renderer, const Parameters & parameters) noexcept
+				: IndirectPostProcessEffect{renderer},
+				m_parameters{parameters}
+			{
+
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::create() */
+			[[nodiscard]]
+			bool create (uint32_t width, uint32_t height) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
+			void destroy () noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
+			[[nodiscard]]
+			bool
+			producesOverlay () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::usesSharedDenoise() */
+			[[nodiscard]]
+			bool
+			usesSharedDenoise () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::consumesOcclusionLane()
+			 * @note When an indirect-diffuse producer publishes a lane, this effect READS its
+			 * occlusion instead of tracing it: the producer's rays already sample the same
+			 * cosine hemisphere at the same working resolution and already carry their hit
+			 * distance. Measured on `sponza` (2026-09-09): the trace this replaces costs
+			 * 7.2 ms, 10.4 % of the frame. The traced path stays fully functional and is what
+			 * runs whenever no lane is offered — no producer, a disabled one, or a sibling that
+			 * publishes none (SSGI). */
+			[[nodiscard]]
+			bool
+			consumesOcclusionLane () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::occlusionMaxDistance()
+			 * @note The producer reduces the occlusion against THIS range, so the derived term
+			 * keeps obeying the ambient-occlusion settings rather than the GI ones.
+			 * ⚠️ `SampleCount` is the exception: a derived term is reduced over the PRODUCER's
+			 * sample count, so `Core/Graphics/RayTracing/AmbientOcclusion/SampleCount` is inert
+			 * while the pairing holds. */
+			[[nodiscard]]
+			float
+			occlusionMaxDistance () const noexcept override
+			{
+				return m_parameters.maxDistance;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::setOcclusionLaneSource() */
+			void
+			setOcclusionLaneSource (const Vulkan::TextureInterface * laneTexture) noexcept override
+			{
+				m_occlusionLaneSource = laneTexture;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
+			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
+			[[nodiscard]]
+			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
+			[[nodiscard]]
+			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
+			[[nodiscard]]
+			bool
+			requiresDepth () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresNormals() */
+			[[nodiscard]]
+			bool
+			requiresNormals () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresRayTracing() */
+			[[nodiscard]]
+			bool
+			requiresRayTracing () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
+			[[nodiscard]]
+			bool
+			requiresMaterialProperties () const noexcept override
+			{
+				return true;
+			}
+
+			/**
+			 * @brief Sets the RTAO parameters.
+			 * @param parameters The new parameters.
+			 * @return void
+			 */
+			void
+			setParameters (const Parameters & parameters) noexcept
+			{
+				m_parameters = parameters;
+			}
+
+			/**
+			 * @brief Returns the current RTAO parameters.
+			 * @return const Parameters &
+			 */
+			[[nodiscard]]
+			const Parameters &
+			parameters () const noexcept
+			{
+				return m_parameters;
+			}
+
+		private:
+
+			Parameters m_parameters;
+			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
+			IntermediateRenderTarget m_traceTarget;
+			IntermediateRenderTarget m_blurHTarget;
+			IntermediateRenderTarget m_blurVTarget;
+			/* Pipelines: the two interchangeable variants of the occlusion pass. */
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_derivedPipeline;
+			/* Pipeline layouts. */
+			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
+			/* Per-frame descriptor sets. */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			/* The producer's lane, BORROWED for one frame: the stack's slot pairing sets it —
+			 * and clears it — before every recording, so it can never outlive its owner. Its
+			 * presence is what selects the derived variant. */
+			const Vulkan::TextureInterface * m_occlusionLaneSource{nullptr};
+	};
+}

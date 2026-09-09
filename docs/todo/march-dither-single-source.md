@@ -3,7 +3,7 @@ id: march-dither-single-source
 title: Four effects open-code the march-origin dither — migrate them onto the shared rule
 status: open
 priority: low
-scope: Graphics/Effects/Framebuffer (MotionBlur, VolumetricLight, RTR, SSR)
+scope: Graphics/Effects (MotionBlur, VolumetricLight, RTR, SSR)
 opened: 2026-09-08
 tags: [shaders, reuse, post-processing]
 ---
@@ -13,7 +13,7 @@ tags: [shaders, reuse, post-processing]
 ## Why
 
 `EMEN_MARCH_DITHER_GLSL`
-([`../../src/Graphics/Effects/Framebuffer/MarchDitherGLSL.hpp`](../../src/Graphics/Effects/Framebuffer/MarchDitherGLSL.hpp))
+([`../../src/Graphics/Effects/Shared/MarchDitherGLSL.hpp`](../../src/Graphics/Effects/Shared/MarchDitherGLSL.hpp))
 now holds the engine's one march-origin dither, and `VolumetricScattering` consumes it. Four older
 effects still carry their own copy of the same expression:
 

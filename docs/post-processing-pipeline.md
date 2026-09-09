@@ -2,31 +2,57 @@
 
 How a frame flows through the post-processor, what each pass costs, and the contracts
 that keep the chain correct. Read this before touching `PostProcessor`, `GrabPass`,
-`PostProcessStack`, any `Effects/Framebuffer/*` effect, or the swap-chain render passes.
+`PostProcessStack`, any `Effects/*/*` effect, or the swap-chain render passes.
 
-## 1. Two effect families — only one is multi-pass
+## 1. Where an effect LIVES, and how it RUNS — two independent questions
+
+Since Sep 2026 the folder answers the FIRST question only. `Graphics/Effects/` is split by
+**domain of application**, so the directory is a map of `EffectSlot`; the execution mechanism
+is stated by the **base class**, where a reader already has to look.
+
+| Folder / namespace | Domain | Members | Slots it fills |
+|---|---|---|---|
+| `Effects/Lighting/` | Light transport off surfaces, reconstructed from the G-buffer | RTGI, SSGI, RTR, SSR, RTAO, SSAO, ContactShadows | `ContactShadows`, `IndirectDiffuse`, `Reflections`, `AmbientOcclusion` |
+| `Effects/Atmosphere/` | Participating medium | AtmosphericFog, VolumetricLight, VolumetricScattering | `VolumetricLight`, `Fog` |
+| `Effects/Resolve/` | Resolution of the sampled image — **adds no light** | TAA, FXAA, FXAASharpen, Sharpen | `TemporalAA`, plus the direct display list |
+| `Effects/Camera/` | The physical imaging chain, materialized by the ACTIVE CAMERA | DepthOfField, MotionBlur, LensFlare, VeilingGlare, ToneMapping | `DepthOfField`, `MotionBlur`, `LensFlare`, `Glare`, `ToneMapping` |
+| `Effects/Style/` | The LOOK — non-physical, deliberately anachronistic | 18 effects, BlackAndWhite → Vignetting | the camera's direct lens list |
+| `Effects/Shared/` | GLSL snippet libraries, **not effects** | CSMSamplingGLSL, MarchDitherGLSL, RTAlphaTestGLSL | — |
+
+> ⚠️ **`Resolve/` is the one folder with a mixed mechanism** — TAA is indirect, FXAA/Sharpen/
+> FXAASharpen are direct. That is the deliberate cost of ordering by concept: the three former
+> folders (`Display/`, `Framebuffer/`, `Lens/`) named the mechanism and therefore had to scatter
+> the ray-traced light transport, the medium, the imaging chain and the resolve across a single
+> `Framebuffer/` bag. Read the base class, never the folder, to know how an effect executes.
+
+### The two execution mechanisms
 
 | Family | Base class | Execution | Cost model |
 |--------|-----------|-----------|------------|
-| **Lens (direct)** | `DirectPostProcessEffect` | The Saphir `PostProcessing` generator compiles the stack's DISPLAY effects + the camera's lens list into **ONE fragment shader**, drawn as a fullscreen quad in the final swap-chain pass. | One pass total, whatever the list size. |
-| **Display (direct)** | `DirectPostProcessEffect`, added via `PostProcessStack::addDisplayEffect()` | `Effects::Display::{Sharpen, FXAA, FXAASharpen}` — display-referred single-pass effects folded into the final pass, BEFORE the camera lens effects (grain/scanlines must not be sharpened). At most ONE fetch-overriding effect (FXAA*) per stack. | Zero passes, zero render targets (phase B — they replaced the retired single-pass `Framebuffer` versions). |
-| **Framebuffer (indirect)** | `IndirectPostProcessEffect` | Each effect owns its render targets, render passes and pipelines. The chain executes sequentially through `PostProcessor::executeIndirectPostProcessEffects()`. OVERLAY effects (see §3b) skip their own apply pass. | 1 to ~22 GPU passes **per effect** (see §4). This is where frame time goes. |
+| **Direct** | `DirectPostProcessEffect` | The Saphir `PostProcessing` generator compiles the stack's DISPLAY effects (`Effects::Resolve::{Sharpen, FXAA, FXAASharpen}`) + the camera's style list (`Effects::Style::*`) into **ONE fragment shader**, drawn as a fullscreen quad in the final swap-chain pass. Display effects are folded in FIRST — grain and scanlines must not be sharpened — and at most ONE fetch-overriding effect (FXAA*) may be live per stack. | One pass total, whatever the list size. |
+| **Indirect** | `IndirectPostProcessEffect` | Each effect owns its render targets, render passes and pipelines. The chain executes sequentially through `PostProcessor::executeIndirectPostProcessEffects()`. OVERLAY effects (see §3b) skip their own apply pass. | 1 to ~22 GPU passes **per effect** (see §4). This is where frame time goes. |
 
 Ownership: the Scene owns the `PostProcessStack` (indirect chain + display list); the
-Camera owns the lens list and *declares* the photographic effects (`enableHDR`/
+Camera owns the style list and *declares* the photographic effects (`enableHDR`/
 `enableBloom`/`enableDepthOfField`/`enableMotionBlur`) that
 `PostProcessStack::syncCameraEffects()` materializes each frame in canonical order
-(DoF → MotionBlur → Bloom → ToneMapping), inserted before the first
-`runsAfterToneMapping()` effect. `syncCameraEffects()` also PAIRS the camera Bloom with
-the camera ToneMapping (phase C): the tone mapping samples `Bloom::bloomTexture()` and
-adds the glare in its own pass (`setBloomSource()`, EM_BLOOM shader variant baked at
-create), while the bloom bypasses its full-res composite (`setCompositeBypassed()`) —
-a standalone Bloom without tone mapping downstream keeps compositing itself. A bloom
-(de)materialization rebuilds the tone mapping (pipeline variant change).
+(DoF → MotionBlur → VeilingGlare → ToneMapping), inserted before the first
+`runsAfterToneMapping()` effect. `syncCameraEffects()` also PAIRS the camera VeilingGlare
+with the camera ToneMapping (phase C): the tone mapping samples `VeilingGlare::bloomTexture()`
+and adds the glare in its own pass (`setGlareSource()`, EM_BLOOM shader variant baked at
+create), while the veiling glare bypasses its full-res composite
+(`setCompositeBypassed()`) — a standalone VeilingGlare without tone mapping downstream keeps
+compositing itself. A (de)materialization rebuilds the tone mapping (pipeline variant change).
+
+> ⚠️ The camera's own switch is still called **bloom** (`Camera::enableBloom()`,
+> `bloomThreshold()`, `bloomIntensity()`, the `Core` panel checkbox): that is the
+> photographer's word and it is the user-facing API. The engine class that implements it is
+> `Effects::Camera::VeilingGlare`, named after what it simulates and after its
+> `EffectSlot::Glare`. Do not "fix" one to match the other — they name different things.
 
 > A camera with `enableHDR`+`enableBloom` (the `Player` baseline in consuming projects)
 > forces a stack even on a scene that declares none: the runtime floor is
-> **Bloom + ToneMapping ≈ 18 passes**.
+> **VeilingGlare + ToneMapping ≈ 18 passes**.
 
 ## 2. Frame structure (internal-target path)
 
@@ -211,7 +237,7 @@ Measured from the `execute()` implementations (render passes + compute dispatche
 | Effect | Passes/frame | Notes |
 |--------|-------------|-------|
 | SSR | ~22 | Hi-Z pyramid (~11 dispatches) + pre-convolved color pyramid (~8) + trace/resolve/blur H/V/composite |
-| Bloom | 10 (fixed) | 5 down + 4 up + composite; `MipLevels = 5` constexpr |
+| VeilingGlare | 10 (fixed) | 5 down + 4 up + composite; `MipLevels = 5` constexpr |
 | RTR | ~10 | trace + compute pyramid (~6 mips) + blur H/V + composite |
 | ToneMapping (auto-exposure) | ~8 + CPU readback | log-luminance chain to 1×1 + adaptation + tonemap; 1 pass in manual mode |
 | DepthOfField | 4–7 + CPU readback | autofocus 1×1 + CoC setup + optional near-field dilate/gather + far gather + composite |
@@ -221,7 +247,7 @@ Measured from the `execute()` implementations (render passes + compute dispatche
 | TAA / FXAA / Sharpen / FXAASharpen / AtmosphericFog | 1 each | |
 
 Worst realistic chain (RT + TAA + player DoF/MotionBlur):
-RTR → RTAO → RTGI → ContactShadows → VolumetricLight → TAA → DoF → MotionBlur → Bloom
+RTR → RTAO → RTGI → ContactShadows → VolumetricLight → TAA → DoF → MotionBlur → VeilingGlare
 → ToneMapping → Sharpen ≈ **58 passes** (SSR variant ≈ 64).
 
 > [!NOTE]
@@ -257,7 +283,7 @@ LensFlare + TAA + Sharpen, camera HDR/Glare/DoF/MotionBlur. Captured through
 | ↳ `SharedDenoise` + `Combine` (phases A+E) | 0.69 + 0.66 | 2.1 % |
 | ↳ `VolumetricLightEffect` / `LensFlareEffect` | 0.47 / 0.09 | 0.8 % |
 | ↳ `TAAEffect` | 0.31 | 0.4 % |
-| ↳ `BloomEffect` / `ToneMappingEffect` | 0.17 / 0.15 | 0.5 % |
+| ↳ `VeilingGlareEffect` / `ToneMappingEffect` | 0.17 / 0.15 | 0.5 % |
 | ↳ `AtmosphericFogEffect` | **0.00** | — (no-op, see below) |
 | FinalComposite (PP quad + display + lens + overlay) | 0.08 | 0.1 % |
 | *unaccounted = the un-scoped `PostProcessor::recordBlit`* | **0.52** | 0.8 % |
@@ -389,10 +415,10 @@ before the next:
 - **Phase D (done)** — batched grab-pass barriers (§3) + offscreen-composite pass (§2).
   Removes ~28 redundant barrier calls and one full swap-chain clear pass per frame.
 - **Phase B (done)** — the post-tonemap LDR effects became DISPLAY effects
-  (`Effects::Display::*`, §1) compiled into the final pass: −1 to −2 full-res passes
+  (the direct `Effects::Resolve::*`, §1) compiled into the final pass: −1 to −2 full-res passes
   and render targets per frame. The single-pass `Framebuffer` versions were retired.
 - **Phase C (done)** — the camera ToneMapping applies the bloom itself (§1 pairing):
-  −1 full-res pass on EVERY scene, including the Bloom+ToneMapping floor.
+  −1 full-res pass on EVERY scene, including the VeilingGlare+ToneMapping floor.
 - **Phase A (done)** — the overlay protocol + combine pass (§3b): the nine overlay
   effects lost their apply/composite passes; worst realistic chains save 3-4 full-res
   passes and ~15 full-res RGBA16F render targets.

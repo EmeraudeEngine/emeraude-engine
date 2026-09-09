@@ -30,20 +30,20 @@
 #include <cmath>
 
 /* Local inclusions. */
-#include "Graphics/Effects/Lens/ColorGrading.hpp"
-#include "Graphics/Effects/Lens/DustAndHair.hpp"
-#include "Graphics/Effects/Lens/FilmGrain.hpp"
-#include "Graphics/Effects/Lens/Flicker.hpp"
-#include "Graphics/Effects/Lens/FrameMasking.hpp"
-#include "Graphics/Effects/Lens/VerticalJitter.hpp"
-#include "Graphics/Effects/Lens/Vignetting.hpp"
-#include "LensPresets.hpp"
+#include "Graphics/Effects/Style/ColorGrading.hpp"
+#include "Graphics/Effects/Style/DustAndHair.hpp"
+#include "Graphics/Effects/Style/FilmGrain.hpp"
+#include "Graphics/Effects/Style/Flicker.hpp"
+#include "Graphics/Effects/Style/FrameMasking.hpp"
+#include "Graphics/Effects/Style/VerticalJitter.hpp"
+#include "Graphics/Effects/Style/Vignetting.hpp"
+#include "StylePresets.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 {
-	using namespace Graphics::Effects::Lens;
+	using namespace Graphics::Effects::Style;
 
 	/**
 	 * @brief Sensor/gate WIDTHS in millimeters — the formats the styles emulate.
@@ -378,7 +378,7 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 
 		/* Reuse the validated Hitchcock 60s lens stack (grain, high-contrast B&W,
 		 * projector artifacts, vignette, gate mask). */
-		for ( const auto & effect : LensPresets::Hitchcock60s() )
+		for ( const auto & effect : StylePresets::Hitchcock60s() )
 		{
 			camera.addLensEffect(effect);
 		}
@@ -388,53 +388,53 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	Analog80s (Component::Camera & camera) noexcept
 	{
 		/* Studio broadcast camera: deep focus video optics over the clean CRT stack. */
-		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, LensPresets::Analog80s());
+		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, StylePresets::Analog80s());
 	}
 
 	void
 	VHSAnalog80s (Component::Camera & camera) noexcept
 	{
 		/* VHS camcorder (small sensor, no bokeh, video overexposure) on a CRT. */
-		configureCamera(camera, 1.8F, CamcorderFormat, 0.2F, false, true, LensPresets::VHSToAnalog80s());
+		configureCamera(camera, 1.8F, CamcorderFormat, 0.2F, false, true, StylePresets::VHSToAnalog80s());
 	}
 
 	void
 	SatelliteAnalog80s (Component::Camera & camera) noexcept
 	{
-		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, LensPresets::SatelliteToAnalog80s());
+		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, StylePresets::SatelliteToAnalog80s());
 	}
 
 	void
 	VHSPureSignal (Component::Camera & camera) noexcept
 	{
-		configureCamera(camera, 1.8F, CamcorderFormat, 0.2F, false, true, LensPresets::VHSToPureSignal());
+		configureCamera(camera, 1.8F, CamcorderFormat, 0.2F, false, true, StylePresets::VHSToPureSignal());
 	}
 
 	void
 	SatellitePureSignal (Component::Camera & camera) noexcept
 	{
-		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, LensPresets::SatelliteToPureSignal());
+		configureCamera(camera, 4.0F, BroadcastFormat, 0.0F, false, true, StylePresets::SatelliteToPureSignal());
 	}
 
 	void
 	GoldenHour (Component::Camera & camera) noexcept
 	{
 		/* Warm anamorphic cinema: photographic DoF, overexposed toward the sun. */
-		configureCamera(camera, 2.8F, FullFrameFormat, 0.3F, true, true, LensPresets::GoldenHour());
+		configureCamera(camera, 2.8F, FullFrameFormat, 0.3F, true, true, StylePresets::GoldenHour());
 	}
 
 	void
 	BlueHour (Component::Camera & camera) noexcept
 	{
 		/* Cool cinematic twilight: photographic DoF, underexposed. */
-		configureCamera(camera, 2.8F, FullFrameFormat, -0.4F, true, true, LensPresets::BlueHour());
+		configureCamera(camera, 2.8F, FullFrameFormat, -0.4F, true, true, StylePresets::BlueHour());
 	}
 
 	void
 	Retro8Bits (Component::Camera & camera) noexcept
 	{
 		/* Pixel-art display: raw palette, NO photometry (no DoF, no HDR). */
-		configureCamera(camera, 2.8F, FullFrameFormat, 0.0F, false, false, LensPresets::Retro8Bits());
+		configureCamera(camera, 2.8F, FullFrameFormat, 0.0F, false, false, StylePresets::Retro8Bits());
 	}
 
 	void

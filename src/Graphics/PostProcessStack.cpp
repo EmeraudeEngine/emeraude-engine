@@ -30,10 +30,10 @@
 #include <algorithm>
 
 /* Local inclusions. */
-#include "Effects/Framebuffer/Bloom.hpp"
-#include "Effects/Framebuffer/DepthOfField.hpp"
-#include "Effects/Framebuffer/MotionBlur.hpp"
-#include "Effects/Framebuffer/ToneMapping.hpp"
+#include "Effects/Camera/VeilingGlare.hpp"
+#include "Effects/Camera/DepthOfField.hpp"
+#include "Effects/Camera/MotionBlur.hpp"
+#include "Effects/Camera/ToneMapping.hpp"
 #include "IndirectPostProcessEffect.hpp"
 #include "Renderer.hpp"
 #include "Scenes/Component/Camera.hpp"
@@ -280,7 +280,7 @@ namespace EmEn::Graphics
 
 		const bool hasDepthOfField = m_cameraDepthOfField != nullptr;
 		const bool hasMotionBlur = m_cameraMotionBlur != nullptr;
-		const bool hasBloom = m_cameraBloom != nullptr;
+		const bool hasBloom = m_cameraGlare != nullptr;
 		const bool hasHDR = m_cameraToneMapping != nullptr;
 
 		if ( wantDepthOfField == hasDepthOfField && wantMotionBlur == hasMotionBlur && wantBloom == hasBloom && wantHDR == hasHDR )
@@ -307,7 +307,7 @@ namespace EmEn::Graphics
 		/* Depth of field materialization. */
 		if ( wantDepthOfField && m_cameraDepthOfField == nullptr )
 		{
-			auto effect = std::make_shared< Effects::Framebuffer::DepthOfField >(renderer);
+			auto effect = std::make_shared< Effects::Camera::DepthOfField >(renderer);
 
 			const auto created = effect->create(extent.width, extent.height);
 
@@ -342,7 +342,7 @@ namespace EmEn::Graphics
 		 * effect itself. */
 		if ( wantMotionBlur && m_cameraMotionBlur == nullptr )
 		{
-			auto effect = std::make_shared< Effects::Framebuffer::MotionBlur >(renderer);
+			auto effect = std::make_shared< Effects::Camera::MotionBlur >(renderer);
 
 			const auto created = effect->create(extent.width, extent.height);
 
@@ -371,9 +371,9 @@ namespace EmEn::Graphics
 
 		/* Lens glare materialization. Veiling glare is scattering INSIDE the lens, so it applies
 		 * to the image the optics have already formed — after the defocus, before the sensor. */
-		if ( wantBloom && m_cameraBloom == nullptr )
+		if ( wantBloom && m_cameraGlare == nullptr )
 		{
-			auto effect = std::make_shared< Effects::Framebuffer::Bloom >(renderer, Effects::Framebuffer::Bloom::Parameters{
+			auto effect = std::make_shared< Effects::Camera::VeilingGlare >(renderer, Effects::Camera::VeilingGlare::Parameters{
 				.threshold = camera->bloomThreshold(),
 				.intensity = camera->bloomIntensity()
 			});
@@ -387,20 +387,20 @@ namespace EmEn::Graphics
 
 			if ( created )
 			{
-				m_cameraBloom = std::move(effect);
+				m_cameraGlare = std::move(effect);
 			}
 			else
 			{
 				TraceError{ClassId} << "Failed to materialize the camera bloom effect !";
 			}
 		}
-		else if ( !wantBloom && m_cameraBloom != nullptr )
+		else if ( !wantBloom && m_cameraGlare != nullptr )
 		{
-			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraBloom)] () {
+			renderer.deferredDestructor().retireAction([effect = std::move(m_cameraGlare)] () {
 				effect->destroy();
 			});
 
-			m_cameraBloom.reset();
+			m_cameraGlare.reset();
 		}
 
 		/* HDR (tone mapping) materialization. The tone mapping OWNS the bloom application
@@ -419,23 +419,23 @@ namespace EmEn::Graphics
 			m_cameraToneMapping.reset();
 
 			/* The glare loses its consumer: restore the bloom's own composite pass. */
-			if ( !wantHDR && m_cameraBloom != nullptr )
+			if ( !wantHDR && m_cameraGlare != nullptr )
 			{
-				std::static_pointer_cast< Effects::Framebuffer::Bloom >(m_cameraBloom)->setCompositeBypassed(false);
+				std::static_pointer_cast< Effects::Camera::VeilingGlare >(m_cameraGlare)->setCompositeBypassed(false);
 			}
 		}
 
 		if ( wantHDR && m_cameraToneMapping == nullptr )
 		{
-			auto effect = std::make_shared< Effects::Framebuffer::ToneMapping >(renderer);
+			auto effect = std::make_shared< Effects::Camera::ToneMapping >(renderer);
 
 			/* Pair the camera glare with its consumer: the tone mapping samples the bloom
 			 * chain directly and the bloom skips its own full-res composite pass. */
-			if ( m_cameraBloom != nullptr )
+			if ( m_cameraGlare != nullptr )
 			{
-				auto bloom = std::static_pointer_cast< Effects::Framebuffer::Bloom >(m_cameraBloom);
+				auto bloom = std::static_pointer_cast< Effects::Camera::VeilingGlare >(m_cameraGlare);
 
-				effect->setBloomSource(bloom);
+				effect->setGlareSource(bloom);
 				bloom->setCompositeBypassed(true);
 			}
 
@@ -482,7 +482,7 @@ namespace EmEn::Graphics
 
 		publish(EffectSlot::DepthOfField, m_cameraDepthOfField);
 		publish(EffectSlot::MotionBlur, m_cameraMotionBlur);
-		publish(EffectSlot::Glare, m_cameraBloom);
+		publish(EffectSlot::Glare, m_cameraGlare);
 		publish(EffectSlot::ToneMapping, m_cameraToneMapping);
 
 		this->rebuildOrderedEffects();
@@ -490,18 +490,18 @@ namespace EmEn::Graphics
 		return true;
 	}
 
-	std::shared_ptr< Effects::Framebuffer::ToneMapping >
+	std::shared_ptr< Effects::Camera::ToneMapping >
 	PostProcessStack::cameraToneMapping () const noexcept
 	{
 		/* NOTE: m_cameraToneMapping is only ever assigned a ToneMapping (materialized above). */
-		return std::static_pointer_cast< Effects::Framebuffer::ToneMapping >(m_cameraToneMapping);
+		return std::static_pointer_cast< Effects::Camera::ToneMapping >(m_cameraToneMapping);
 	}
 
-	std::shared_ptr< Effects::Framebuffer::DepthOfField >
+	std::shared_ptr< Effects::Camera::DepthOfField >
 	PostProcessStack::cameraDepthOfField () const noexcept
 	{
 		/* NOTE: m_cameraDepthOfField is only ever assigned a DepthOfField (materialized above). */
-		return std::static_pointer_cast< Effects::Framebuffer::DepthOfField >(m_cameraDepthOfField);
+		return std::static_pointer_cast< Effects::Camera::DepthOfField >(m_cameraDepthOfField);
 	}
 
 	bool

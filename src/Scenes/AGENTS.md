@@ -897,7 +897,7 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 **Code references:**
 - `Renderer.hpp:currentReadStateIndex()` — Getter for the stable read state index
 - `Renderer.cpp:renderFrameWithPostProcessing()` — Captures `scene->preparedReadStateIndex()` before post-processing
-- `Effects/Framebuffer/RTR.cpp:execute()` — Uses `readStateIndex` for NDC → world reconstruction
+- `Effects/Lighting/RTR.cpp:execute()` — Uses `readStateIndex` for NDC → world reconstruction
 - `ViewMatrices3DUBO.cpp:viewMatrix()` — Two overloads: `m_logicState` vs `m_renderState[idx]`
 
 ## Instance Transforms (SceneInstanceTransforms)
