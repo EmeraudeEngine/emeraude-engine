@@ -1790,6 +1790,18 @@ namespace EmEn::Graphics
 				});
 			}
 
+			/* Producer/consumer pairings BETWEEN slots, refreshed every frame on this thread.
+			 * ⚠️ AFTER syncCameraEffects(): that call materializes and destroys effects, so a
+			 * pairing wired before it could hand out a pointer into a retired effect. And
+			 * BEFORE any recording: the chain reads what this wires.
+			 * Unconditional and idempotent by design — the state it mirrors (which occupant of
+			 * a slot is enabled, whether it is created) changes without going through
+			 * addEffect()/removeEffect(), so there is no change event to hang it on. */
+			if ( stack != nullptr )
+			{
+				scene->postProcessStack()->syncSlotPairings();
+			}
+
 			/* The master switch says the user ALLOWS post-processing; this says there is
 			 * something to run. A scene with an empty chain and a bare camera stays on the
 			 * direct path and pays nothing — which is why the switch can default to ON and

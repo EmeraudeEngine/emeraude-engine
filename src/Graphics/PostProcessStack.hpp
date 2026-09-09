@@ -160,6 +160,28 @@ namespace EmEn::Graphics
 			bool syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Wires the producer/consumer pairings BETWEEN slots, once per frame.
+			 * @note RENDER THREAD, before the chain is recorded. Idempotent and cheap (two slot
+			 * lookups): it is called unconditionally rather than on a change, because the state
+			 * it mirrors — which occupant of a slot is enabled, and whether it is created —
+			 * changes without going through `addEffect()`/`removeEffect()`.
+			 *
+			 * Today it wires ONE pairing, the ambient-occlusion lane
+			 * (@ref IndirectPostProcessEffect::providesOcclusionLane): the enabled
+			 * `IndirectDiffuse` occupant reduces the occlusion in its own trace loop, for free,
+			 * and the enabled `AmbientOcclusion` occupant reads it instead of re-casting the
+			 * same rays. ⚠️ It also DISARMS both sides when the pairing is not possible, which is
+			 * what keeps the consumer's standalone path alive and forbids a stale lane pointer
+			 * from outliving a frame.
+			 *
+			 * ⚠️ The Bloom → ToneMapping pairing does NOT live here: those two are camera-owned,
+			 * materialized together by syncCameraEffects(), and their pairing is baked into the
+			 * tone mapping's pipeline variant at create() time rather than refreshed per frame.
+			 * @return void
+			 */
+			void syncSlotPairings () noexcept;
+
+			/**
 			 * @brief Returns the camera-materialized tone mapping effect, or nullptr.
 			 * @note For readers of its metered values (the overlay panel): RENDER THREAD only,
 			 * inside the frame scope — the instance is (de)materialized by syncCameraEffects()

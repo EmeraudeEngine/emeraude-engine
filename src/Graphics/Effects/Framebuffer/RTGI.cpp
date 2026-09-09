@@ -37,6 +37,7 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
@@ -116,7 +117,7 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
-	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z/w = unused. */
+	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = unused. */
 };
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cubemap array whose
@@ -421,10 +422,14 @@ void main()
 {
 	float depth = texture(depthTex, vUV).r;
 
-	/* Skip far-plane fragments. */
+	/* Skip far-plane fragments.
+	 * ⚠️ ALPHA IS 1.0, not 0: it carries the ambient-occlusion lane (see the loop below), where
+	 * 1 means UNOCCLUDED. Writing 0 here painted the sky and every normal-less fragment with
+	 * full occlusion — the alpha of this target was dead until Sep 2026 and both early-outs
+	 * cleared it to zero. */
 	if (depth >= 1.0)
 	{
-		outIndirect = vec4(0.0);
+		outIndirect = vec4(0.0, 0.0, 0.0, 1.0);
 		return;
 	}
 
@@ -434,7 +439,7 @@ void main()
 
 	if (dot(rawN, rawN) < 0.0001)
 	{
-		outIndirect = vec4(0.0);
+		outIndirect = vec4(0.0, 0.0, 0.0, 1.0);
 		return;
 	}
 
@@ -499,6 +504,16 @@ void main()
 	/* Accumulate indirect radiance. */
 	vec3 indirectLight = vec3(0.0);
 
+	/* AMBIENT-OCCLUSION LANE (Sep 2026). The consumer's range, 0 = disarmed. The rays below are
+	 * already cast for the indirect diffuse and already carry their hit distance, so the
+	 * occlusion costs an add and a multiply per sample — no extra ray, no extra pass. The
+	 * estimator is transcribed from the RTAO trace it replaces (distance-weighted, closer hits
+	 * occlude more), and it is strictly BETTER here: RTAO traces with TerminateOnFirstHit, so its
+	 * hit distance is *a* hit within its range, while this ray commits the CLOSEST hit over the
+	 * whole sky distance. Same occlusion set, exact distance weight. */
+	float aoMaxDistance = skyParams.z;
+	float aoOcclusion = 0.0;
+
 	for (uint i = 0u; i < sampleCount; ++i)
 	{
 		vec3 sampleDir = TBN * hemispherePoint(i, sampleCount, noiseVec);
@@ -546,6 +561,15 @@ void main()
 
 		{
 			float hitT = rayQueryGetIntersectionTEXT(rayQuery, true);
+
+			/* ⚠️ The occlusion is accumulated HERE, before the bounce-range rejection below: the
+			 * two ranges are independent (the AO range is a near field, ~2 m; the bounce range is
+			 * ~8 m), so a hit rejected as "too far to bounce" can still be well inside the AO
+			 * range — and one rejected for the AO can still carry a bounce. */
+			if (aoMaxDistance > 0.0 && hitT < aoMaxDistance)
+			{
+				aoOcclusion += 1.0 - clamp(hitT / aoMaxDistance, 0.0, 1.0);
+			}
 
 			/* Geometry occludes the sky but sits outside the bounce range: it contributes no
 			 * light, and that ABSENCE is the shadowing — this is what carves the vertical
@@ -642,7 +666,20 @@ void main()
 	 * as in SVGF (Schied et al. 2017, HPG) and NVIDIA NRD. */
 	indirectLight = indirectLight / float(sampleCount);
 
-	outIndirect = vec4(indirectLight, 1.0);
+	/* Publish the occlusion lane. Same reduction and same camera-distance fadeout as the RTAO
+	 * trace: the AO is a NEAR-FIELD effect and fades to 1 (unoccluded) beyond 20x its range, so
+	 * a distant wall does not carry a half-resolution occlusion nobody can read. A disarmed lane
+	 * publishes 1.0, which is the neutral value of the consumer's multiply. */
+	float ao = 1.0;
+
+	if (aoMaxDistance > 0.0)
+	{
+		float aoFade = clamp(cameraDist / (aoMaxDistance * 20.0), 0.0, 1.0);
+
+		ao = mix(clamp(1.0 - aoOcclusion / float(sampleCount), 0.0, 1.0), 1.0, aoFade);
+	}
+
+	outIndirect = vec4(indirectLight, ao);
 }
 )GLSL";
 
@@ -892,11 +929,21 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			.bounceStrength = m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
 			.bounceClamp = m_parameters.multiBounceClamp,
 			.skyLuminance = context.skyLuminance,
-			.skyDistance = context.constants.farPlane
+			.skyDistance = context.constants.farPlane,
+			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
+			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
+			.occlusionMaxDistance = m_occlusionLaneRange
 		}));
 
 		/* ---- Pass 1: Ray Trace GI ---- */
 		{
+			/* ⚠️ The whole effect used to be ONE opaque `RTGIEffect/internal` scope, and it is
+			 * ~70 % of the frame: the most expensive thing the engine does had no internal
+			 * attribution at all, so nobody could tell the trace from the denoiser without an
+			 * A/B of settings. The sub-scopes nest under it (the profiler tracks depth) and cost
+			 * nothing when the profiler is off — ScopedZone on a null profiler is a no-op. */
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{this->renderer().gpuProfiler(), commandBuffer, ClassId, "trace"};
+
 			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures + UBO) per-frame. */
 			m_traceTarget.beginRenderPass(commandBuffer);
 

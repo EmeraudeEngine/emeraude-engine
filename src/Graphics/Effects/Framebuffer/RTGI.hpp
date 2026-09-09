@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -233,6 +234,39 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			[[nodiscard]]
 			bool providesIndirectDiffuse () const noexcept override;
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::providesOcclusionLane()
+			 * @note The trace already casts a cosine-weighted hemisphere and already commits a
+			 * hit distance, so the ambient occlusion is a reduction of data it holds: it costs
+			 * an add per sample and rides in the ALPHA lane of the trace target, which nothing
+			 * else reads (the GIDenoiser samples `.rgb` only). Measured on `sponza`: it replaces
+			 * a 7.2 ms RTAO trace. */
+			[[nodiscard]]
+			bool
+			providesOcclusionLane () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::setOcclusionLaneEnabled() */
+			void
+			setOcclusionLaneEnabled (bool enabled, float maxDistance) noexcept override
+			{
+				/* ONE value carries both: the shader reads a range of 0 as "disarmed" and
+				 * publishes the neutral 1.0, so there is no second state to keep consistent. */
+				m_occlusionLaneRange = enabled ? std::max(0.0F, maxDistance) : 0.0F;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::occlusionLaneTexture()
+			 * @note The RAW trace, deliberately: the consumer owns the filtering of its own
+			 * term, exactly as it did with its own trace. The denoiser output would be an
+			 * irradiance-tuned filtering of a visibility mask. */
+			[[nodiscard]]
+			const Vulkan::TextureInterface *
+			occlusionLaneTexture () const noexcept override
+			{
+				return m_traceTarget.isCreated() ? &m_traceTarget : nullptr;
+			}
+
 			/**
 			 * @brief Sets the RTGI parameters.
 			 * @param parameters The new parameters.
@@ -273,5 +307,8 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			 * the temporal chain is active, the raw trace otherwise. Set by
 			 * recordOverlayPasses() every frame. */
 			const Vulkan::TextureInterface * m_combineSource{nullptr};
+			/* Ambient-occlusion lane range in world units, 0 = disarmed. Written by the stack's
+			 * slot pairing every frame, read into the trace UBO. */
+			float m_occlusionLaneRange{0.0F};
 	};
 }

@@ -3070,10 +3070,45 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
 >
 > **The canonical order (this IS the enum):**
 > ```
-> IndirectDiffuse → Reflections → AmbientOcclusion → ContactShadows → Fog
->   → VolumetricLight → LensFlare → Custom → TemporalAA
->   → [camera: DepthOfField → MotionBlur → Glare → ToneMapping] → PostToneMapping
+> ContactShadows → IndirectDiffuse → Reflections → AmbientOcclusion
+>   → VolumetricLight → Fog → Custom → TemporalAA
+>   → [camera: DepthOfField → MotionBlur] → LensFlare → [camera: Glare → ToneMapping]
+>   → PostToneMapping
 > ```
+>
+> ⚠️ **Three slots moved in Sep 2026, and none of the three costs anything** (measured on
+> `sponza`, same pose, GPU profiler: frame 63.75/64.29 ms before, 63.94 ms after — inside the
+> run-to-run envelope). They are ordering-LOGIC fixes, not optimizations:
+> - **`ContactShadows` went FIRST**, ahead of the three indirect terms. Its snippet is a multiply
+>   and a contact shadow occludes the DIRECT light (its ray marches the depth buffer toward the
+>   light), so it must land while `em_Color` still holds the raster output alone. Last of the
+>   group, it also darkened the indirect diffuse and the reflections, which no light transport
+>   justifies — a surface in contact shadow still receives bounced light. Measured effect on the
+>   bench: frame mean luminance 85.95 → 87.71. It also had to join `isPreTranslucencySlot()`:
+>   the two halves of a cut frame are two separate walks of the table, so the enum position
+>   alone would have left it running after the indirect diffuse on every scene with glass.
+> - **`VolumetricLight` went BEFORE `Fog`.** The fog is a `mix()` toward the medium colour, i.e.
+>   an extinction; the shafts are a pure add. Added after the fog they escaped the very medium
+>   that scatters them. ⚠️ This buys them the transmittance of the SCENE DEPTH, which is an upper
+>   bound on the true one (a shaft scattered close to the camera is now over-attenuated). Feeding
+>   the transmittance into the shaft march is still the correct fix and stays **OPEN**.
+> - **`LensFlare` LEFT the scene phase** for between `MotionBlur` and `Glare`. A flare is formed
+>   in the optics and locked to the SCREEN, not to the world: sitting before `TemporalAA` it was
+>   reprojected along the scene's motion vectors and smeared whenever the camera moved. It now
+>   also feeds the glare. ⚠️ This is what forced `isCameraEffectSlot()` to become an explicit
+>   SET: as a RANGE (`>= DepthOfField && <= ToneMapping`) it captured the newcomer, and
+>   `addEffect()` refuses a camera-owned slot — every scene building a LensFlare would have lost
+>   it, with a trace error and no flare.
+>
+> ⚠️⚠️ **`Glare` STAYS after `MotionBlur`, and the physical argument for moving it is a trap.**
+> The sensor order would be optics → glare → shutter integration → response, so the glare
+> "should" precede the motion blur. It must not, because the glare is **paired** with the tone
+> mapping (`syncCameraEffects()`: `setBloomSource()` + `setCompositeBypassed(true)`): at its own
+> slot the Bloom only BUILDS its pyramid and returns its input unchanged (`Bloom.cpp:735-737`),
+> and the ToneMapping APPLIES it at the very end. Moved earlier, the pyramid would be built from
+> the un-blurred image and still applied after the blur — a sharp halo over a smeared source.
+> Reordering the slot would require un-bypassing the composite first, which costs a full-res
+> pass. **The pairing owns this order, not the enum.**
 >
 > ⚠️⚠️ **This order CHANGED with the redesign, and the change is a correctness fix.** It used to
 > be `Reflections → AmbientOcclusion → IndirectDiffuse`, which broke one thing:
@@ -3131,15 +3166,94 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
 >   holds a `shared_ptr` to the effect. An effect DOES outlive its stack — a demo keeps copies to
 >   toggle it.
 
+### The ambient-occlusion LANE — one trace, two concepts (Sep 2026)
+
+> [!CAUTION]
+> **RTAO no longer casts rays when an indirect-diffuse producer is enabled: it READS the
+> occlusion the producer reduced in its own ray loop.** Measured on `sponza` (2880×1620,
+> RTX 3070 Ti, validation ON, 0 VUID): `RTAOEffect/trace` **7.22 → 0.06 ms** (×118),
+> `RTGIEffect/internal` 43.45 → 43.77 ms — inside the 43.45–43.96 envelope of five runs, so the
+> lane costs **nothing measurable** — and the whole frame **69.14 → 62.77 ms, −9.2 %**.
+
+**Why it is free.** Both effects sample a **cosine-weighted hemisphere** at the **same** working
+resolution with the same sample count, and the GI ray already commits a hit distance
+(`RTGI.cpp`, `rayQueryGetIntersectionTEXT`). The occlusion is therefore a reduction of data the
+producer already holds: one add and one clamp per sample, written into the **ALPHA lane** of its
+half-res RGBA16F trace target.
+
+⚠️ **That lane was verified free, not assumed free.** The producer used to write a constant `1.0`
+there, which proves nothing about readers. Every consumer of that target was read: `GIDenoiser`
+samples `giTex`/`rawTex` as `.rgb` only. The `.a` uses inside the denoiser belong to the HISTORY
+and MOMENTS textures (reprojection distance, variance), not to the trace.
+
+**The derived term is the MORE accurate of the two.** RTAO traces with
+`gl_RayFlagsTerminateOnFirstHitEXT`, so its hit distance is *a* hit inside its range; the GI ray
+commits the **closest** hit over the whole sky distance. Same occlusion set (`closest < D` ⟺
+`∃ hit < D`), exact distance weight. Measured direction: the derived AO is darker on 35.9 % of
+pixels, brighter on 13.1 % (signed mean −0.68/255) — slightly MORE occlusion, which is what a
+larger distance weight gives.
+
+**The protocol** (`IndirectPostProcessEffect`, six virtuals) is a **producer/consumer pairing
+between slots**, wired by `PostProcessStack::syncSlotPairings()` — called from `Renderer` every
+frame, right after `syncCameraEffects()`:
+
+| Side | Members |
+|---|---|
+| Producer | `providesOcclusionLane()`, `setOcclusionLaneEnabled(bool, float)`, `occlusionLaneTexture()` |
+| Consumer | `consumesOcclusionLane()`, `occlusionMaxDistance()`, `setOcclusionLaneSource(const TextureInterface *)` |
+
+- **Bidirectional on purpose**: the producer cannot reduce an occlusion without the consumer's
+  range, so the stack reads `occlusionMaxDistance()` off the consumer and pushes it into the
+  producer. ONE value carries the whole state — a range of `0` means *disarmed*, and the shader
+  then publishes the neutral `1.0`. There is no second flag to keep consistent.
+- **The pairing runs unconditionally, every frame, and DISARMS both sides when it cannot hold.**
+  Not on a change event: what it mirrors (which occupant of a slot is enabled, whether it is
+  created) changes without passing through `addEffect()`/`removeEffect()`. ⚠️ The disarm is the
+  load-bearing half — it is what forbids the consumer's borrowed texture pointer from outliving
+  the producer that owns it.
+- **The consumer keeps a fully working standalone path**, selected by `m_occlusionLaneSource ==
+  nullptr`: no producer, a disabled one, an un-created one, or a sibling that publishes no lane
+  (SSGI has no closest-hit distance to offer). **Verified by measurement**, not by reading: with
+  the pairing forced to fail, `RTAOEffect/trace` returns to 7.37 ms and the run stays at 0 VUID.
+- **Two pipelines, ONE layout and ONE per-frame descriptor set.** The traced and derived fragment
+  shaders write the same `vec2(ao, depth)` into the same target, so the bilateral kernel, the
+  blur targets and the combine snippet downstream are **untouched** and a variant switch is a
+  pipeline bind and nothing else. The lane binding (set 1, binding 2) exists in both and is
+  written every frame — with the depth texture standing in when there is no lane — so the set is
+  never left with an unwritten binding; the traced shader does not declare that sampler.
+- **The consumer resamples on NORMALIZED uv**, never `texelFetch` on `gl_FragCoord`: the
+  producer's working resolution comes from ITS own pixel-doubling setting and is not required to
+  match. Equal extents (the default) make the linear filter return the exact texel; unequal
+  extents degrade to a bilinear resample instead of reading the wrong pixel.
+
+⚠️ **Two behaviour deltas to know about:**
+- **`Core/Graphics/RayTracing/AmbientOcclusion/SampleCount` is INERT while the pairing holds** —
+  the derived term is reduced over the PRODUCER's sample count. `MaxDistance`, `Intensity`,
+  `BlurRadius`, `NormalSigma` and the material `aoResponse` nibble all keep working.
+- **The origin offset becomes the producer's** (GI bias 0.02 against AO bias 0.005), so very
+  tight creases are marginally less occluded. Not separately measurable on `sponza` above the
+  scene's own noise floor.
+
+⚠️ **On a CUT frame the lane describes the OPAQUE G-buffer only.** The indirect diffuse is a
+pre-translucency slot and the ambient occlusion is not, so on a scene holding grab-pass
+materials the producer runs in the first half and the consumer in the second: the derived
+occlusion is the one measured before the TranslucentGB pass rewrote the G-buffer under the
+glass. The traced path had the post-translucency depth. Not exercised by `sponza` (no
+TranslucentGB object). **OPEN**, and the reason `isPreTranslucencySlot()` is worth re-reading
+before adding a second consumer.
+
 ### Effect Chain Order & Phase Contract (Jul 2026)
 
 The chain has THREE phases, enforced structurally:
 
-1. **Scene effects (HDR, linear)** — declared by the application/demo stack: GI, AO,
-   reflections, fog, volumetric light, bloom...
+1. **Scene effects (HDR, linear)** — declared by the application/demo stack: contact shadows,
+   GI, reflections, AO, volumetric light, fog, then the temporal resolve.
 2. **Photographic effects (HDR resolve)** — materialized by the ACTIVE CAMERA
    (`enableDepthOfField()`/`enableHDR()`, see "Physical Camera" below): DepthOfField,
-   then ToneMapping (HDR→LDR).
+   MotionBlur, Glare, then ToneMapping (HDR→LDR). ⚠️ Since Sep 2026 `LensFlare` sits INSIDE
+   this phase (between MotionBlur and Glare) while remaining APPLICATION-owned — a phase is a
+   region of the chain, not a statement about who creates the effect. `isCameraEffectSlot()`
+   names the four camera slots explicitly for exactly that reason.
 3. **Post-tonemap effects (LDR, display-referred)** — effects overriding
    `IndirectPostProcessEffect::runsAfterToneMapping()` (FXAA, FXAASharpen, Sharpen).
 
@@ -3149,17 +3263,23 @@ The chain has THREE phases, enforced structurally:
 > posterization and halo streaks (observed live on Sponza, Jul 2026) — any new LDR effect
 > MUST override `runsAfterToneMapping()`.
 
-Scene-effect order, as every scene actually builds it:
-```
-RTR|SSR → RTAO|SSAO → RTGI|SSGI → ContactShadows → AtmosphericFog → VolumetricLight → LensFlare
-[camera: DoF → glare/Bloom → ToneMapping] [LDR: FXAASharpen]
-```
+**The order lives in ONE place: the `EffectSlot` enum** (§ "The chain order is a STRUCTURE",
+above). ⚠️⚠️ This section used to restate it as a list — `RTR|SSR → RTAO|SSAO → RTGI|SSGI →
+ContactShadows → AtmosphericFog → VolumetricLight → LensFlare` — and that list had been **wrong
+since the Aug 2026 redesign**: it put the reflections before the indirect diffuse and the AO
+before both, i.e. the exact arrangement the redesign fixed as a correctness bug, and it survived
+two more revisions because nothing links the two sections. **Do not restore a second ordering
+here.** A scene no longer declares an order at all: `addEffect()` files into a slot and the call
+sequence has no effect.
 
-**Rationale:** RTR first (hardware ray tracing, highest quality reflections), SSR as the fallback
-where RTR is unavailable — the two are alternatives, never both. AO next, then GI. ContactShadows
-adds fine-detail shadowing from depth. AO darkening the image globally including reflections is
-acceptable and matches UE4's approach, where AO is a global multiplier applied after reflection
-composition. LensFlare last, from bright light sources.
+**Rationale, per slot**, is documented on the enum members themselves, next to the code that
+enforces it. The one claim worth repeating because it is a KNOWN simplification: the AO snippet
+is a global multiply, so it attenuates the direct light as well as the two indirect terms. ⚠️ The
+earlier revision justified that with *"matches UE4's approach"* — **that attribution is wrong**:
+UE4/UE5 apply SSAO/GTAO to the INDIRECT lighting (`r.AmbientOcclusionStaticFraction` only widens
+it to the baked term), not to dynamic direct lighting. Separating the terms needs an ambient lane
+the single HDR colour buffer does not have, so the current placement is the best available for a
+global multiply — not a proof that the term is right. **OPEN**, and unmeasured on this codebase.
 
 > [!CAUTION]
 > **This list is the one the scenes build; the previous revision matched NO scene and carried a
@@ -3176,10 +3296,14 @@ composition. LensFlare last, from bright light sources.
 > shafts cannot be attenuated by an effect placed before them: `VolumetricLight::producesOverlay()`
 > is true, its combine snippet is a pure add (`em_Color.rgb += texture(vlightTex, vUV).rgb`), and
 > `recordOverlayPasses()` takes its `inputColor` **unnamed and unused** — the shafts are built from
-> the depth occlusion mask and the light colour/intensity alone and never see the chain. Placing the
-> fog first buys nothing the reverse order would not. If shafts SHOULD extinguish in fog, that is a
-> feature to implement (feed the fog's transmittance into the shaft integration), not a line in an
-> ordering rationale. **OPEN.**
+> the depth occlusion mask and the light colour/intensity alone and never see the chain.
+>
+> **Acted on in Sep 2026, in the OTHER direction: `VolumetricLight` now precedes `Fog`**, so the
+> fog's `mix()` finally applies an extinction to the shafts instead of leaving them on top of a
+> fogged background. ⚠️ What that buys is the transmittance of the SCENE DEPTH — an upper bound on
+> the true one, so a shaft scattered close to the camera is now over-attenuated. Feeding the fog's
+> transmittance into the shaft integration remains the correct fix and stays **OPEN**; the reorder
+> is a bounded, free improvement over no extinction at all, not that feature.
 >
 > ⚠️ An effect that overrides `readsChainColorUpstream()` — `LensFlare` does, for its bright pass —
 > IS genuinely sensitive to what precedes it: `PostProcessor` flushes the pending combine group so

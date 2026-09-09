@@ -34,6 +34,7 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
@@ -913,7 +914,7 @@ namespace EmEn::Graphics
 			},
 			/* THE SKY IS A LIGHT SOURCE — the scalars come straight from the producer
 			 * (0 = no sky term for the screen-space producers). */
-			.skyParams = {inputs.skyLuminance, inputs.skyDistance, 0.0F, 0.0F}
+			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, 0.0F}
 		};
 
 		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));
@@ -1006,37 +1007,55 @@ namespace EmEn::Graphics
 			static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(5, *context.velocity));
 		}
 
-		/* ---- Temporal resolve + moments accumulation + normal history ---- */
+		/* ---- Temporal resolve + moments accumulation + normal history ----
+		 * ⚠️ One profiling scope PER PASS, and they nest under the owner's scope (the profiler
+		 * tracks depth). This component is the second half of the most expensive effect in the
+		 * frame, and until Sep 2026 the whole thing reported as ONE opaque number: the only way
+		 * to tell the trace from the denoiser was an A/B on `Denoiser/Iterations`. A ScopedZone
+		 * on a null profiler is a no-op, so these cost nothing when the profiler is off. */
+		auto * const profiler = this->renderer().gpuProfiler();
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_historyTargets[writeIdx],
-			*m_temporalPipeline,
-			*m_temporalLayout,
-			*m_temporalPerFrame[frameIndex],
-			nullptr,
-			0
-		);
+		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, ClassId, "temporal"};
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_momentsTargets[writeIdx],
-			*m_momentsPipeline,
-			*m_momentsLayout,
-			*m_momentsPerFrame[frameIndex],
-			nullptr,
-			0
-		);
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_historyTargets[writeIdx],
+				*m_temporalPipeline,
+				*m_temporalLayout,
+				*m_temporalPerFrame[frameIndex],
+				nullptr,
+				0
+			);
+		}
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_normalHistoryTargets[writeIdx],
-			*m_normalCopyPipeline,
-			*m_normalCopyLayout,
-			*m_normalCopyPerFrame[frameIndex],
-			nullptr,
-			0
-		);
+		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, ClassId, "moments"};
+
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_momentsTargets[writeIdx],
+				*m_momentsPipeline,
+				*m_momentsLayout,
+				*m_momentsPerFrame[frameIndex],
+				nullptr,
+				0
+			);
+		}
+
+		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, ClassId, "normalHistory"};
+
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_normalHistoryTargets[writeIdx],
+				*m_normalCopyPipeline,
+				*m_normalCopyLayout,
+				*m_normalCopyPerFrame[frameIndex],
+				nullptr,
+				0
+			);
+		}
 
 		/* ---- À-trous iterations (variance-guided, footprint doubling) ---- */
 
@@ -1044,6 +1063,12 @@ namespace EmEn::Graphics
 
 		if ( m_parameters.atrousIterations > 0 && m_atrousPipeline != nullptr )
 		{
+			/* The whole loop as ONE scope, not one per iteration: the iterations are identical
+			 * in shape and only their step size differs, so a per-iteration split would add
+			 * `atrousIterations` scopes to every frame to report the same number divided. The
+			 * iteration COUNT is a setting (`Denoiser/Iterations`); divide if you need it. */
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, ClassId, "atrous"};
+
 			/* The first iteration reads the freshly resolved history, whose parity flips
 			 * every frame — rewrite its input binding; the guides too. */
 			static_cast< void >(m_atrousPerFrame[0][frameIndex]->writeCombinedImageSampler(0, m_historyTargets[writeIdx]));

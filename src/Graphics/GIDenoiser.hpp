@@ -164,6 +164,11 @@ namespace EmEn::Graphics
 				/* Sky luminance in nits (0 = no sky term) and sky ray distance. */
 				float skyLuminance{0.0F};
 				float skyDistance{0.0F};
+				/* Ambient-occlusion LANE: the consumer's occlusion range, in world units
+				 * (0 = the lane is disarmed and the producer writes 1.0). Set by the stack's
+				 * slot pairing, not by the producer — see
+				 * IndirectPostProcessEffect::providesOcclusionLane(). */
+				float occlusionMaxDistance{0.0F};
 			};
 
 			/**

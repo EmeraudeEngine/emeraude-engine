@@ -229,6 +229,47 @@ namespace EmEn::Graphics
 		});
 	}
 
+	void
+	PostProcessStack::syncSlotPairings () noexcept
+	{
+		/* ---- The ambient-occlusion lane ----
+		 * The producer is the enabled indirect-diffuse occupant, IF it can publish a lane; the
+		 * consumer is the enabled ambient-occlusion occupant, IF it can read one. Both must hold
+		 * their GPU resources: an un-created producer has no lane texture, and an un-created
+		 * consumer is not recorded at all. */
+		const auto producer = this->enabledEffect(EffectSlot::IndirectDiffuse);
+		const auto consumer = this->enabledEffect(EffectSlot::AmbientOcclusion);
+
+		const bool pairable =
+			producer != nullptr && producer->isCreated() && producer->providesOcclusionLane() &&
+			consumer != nullptr && consumer->isCreated() && consumer->consumesOcclusionLane();
+
+		if ( pairable )
+		{
+			/* Bidirectional: the producer cannot reduce an occlusion without the consumer's
+			 * range, and the consumer cannot read a lane it has not been handed. */
+			producer->setOcclusionLaneEnabled(true, consumer->occlusionMaxDistance());
+
+			/* ⚠️ Asked AFTER arming: an implementation may only expose its lane once armed. */
+			consumer->setOcclusionLaneSource(producer->occlusionLaneTexture());
+
+			return;
+		}
+
+		/* Not pairable: disarm BOTH sides every frame. The producer stops paying for a lane
+		 * nobody reads, and — the load-bearing half — the consumer drops a pointer that would
+		 * otherwise survive the removal of the producer that owns the texture. */
+		if ( producer != nullptr && producer->providesOcclusionLane() )
+		{
+			producer->setOcclusionLaneEnabled(false, 0.0F);
+		}
+
+		if ( consumer != nullptr && consumer->consumesOcclusionLane() )
+		{
+			consumer->setOcclusionLaneSource(nullptr);
+		}
+	}
+
 	bool
 	PostProcessStack::syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept
 	{

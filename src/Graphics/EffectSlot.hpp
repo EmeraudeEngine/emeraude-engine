@@ -59,6 +59,23 @@ namespace EmEn::Graphics
 		/* ---- Scene effects (linear HDR), declared by the application ---- */
 
 		/**
+		 * @brief Fine-detail depth-derived shadowing (ContactShadows).
+		 * @note FIRST of the scene phase (moved here Sep 2026), for the mirror of the reason the
+		 * ambient occlusion is last: a combine group applies its members onto ONE running
+		 * `em_Color` in slot order, so the position decides WHICH light term a multiply reaches.
+		 * A contact shadow is an occlusion of the DIRECT light — its ray marches the depth buffer
+		 * toward the light source — so it must land while `em_Color` still holds the raster output
+		 * alone. Sitting after the three indirect terms, its snippet (`em_Color.rgb *= shadow`)
+		 * also darkened the indirect diffuse and the reflections, which no light transport
+		 * justifies: a surface in contact shadow still receives bounced light.
+		 * @note It is a PRE-TRANSLUCENCY slot for the same reason (@ref isPreTranslucencySlot):
+		 * on a cut frame the indirect diffuse runs BEFORE the TranslucentGB pass, so anything that
+		 * must precede it has to run in that half too — declared earlier in this enum but left out
+		 * of the pre-translucency set, it would still have run after it on every scene with glass.
+		 */
+		ContactShadows,
+
+		/**
 		 * @brief Indirect diffuse light: RTGI or SSGI.
 		 * @note FIRST, and this is a correctness requirement rather than a preference: the
 		 * reflection slot below SAMPLES THE CHAIN COLOUR to fetch what a reflected ray sees
@@ -91,22 +108,21 @@ namespace EmEn::Graphics
 		 */
 		AmbientOcclusion,
 
-		/** @brief Fine-detail depth-derived shadowing (ContactShadows). */
-		ContactShadows,
-
-		/** @brief Participating medium (AtmosphericFog). */
-		Fog,
-
 		/**
 		 * @brief Light shafts (VolumetricLight).
-		 * @note Order-insensitive by construction: its combine snippet is a pure add and its
-		 * passes never sample the chain — the shafts are built from the depth occlusion mask and
-		 * the light alone. Its place here is a convention, not a constraint.
+		 * @note BEFORE the fog (moved Sep 2026). Its combine snippet is a pure add and its passes
+		 * never sample the chain, so it is order-insensitive against the other OVERLAY effects —
+		 * but not against the fog, which is a `mix()` toward the medium colour, i.e. an extinction.
+		 * Added after it, a shaft escaped the very medium it is scattered by and came out at full
+		 * intensity over a fogged background. Added before it, the fog attenuates it like anything
+		 * else at that depth.
+		 * @note Free side effect: being contiguous with the indirect terms it now joins THEIR
+		 * combine group instead of forming one of its own — one less generated full-res pass.
 		 */
 		VolumetricLight,
 
-		/** @brief Lens flare from bright sources. Reads the chain colour for its bright pass. */
-		LensFlare,
+		/** @brief Participating medium (AtmosphericFog). */
+		Fog,
 
 		/**
 		 * @brief Application-defined effects with no engine concept.
@@ -135,6 +151,19 @@ namespace EmEn::Graphics
 
 		/** @brief The smear of the exposure duration (MotionBlur), on the image the optics formed. */
 		MotionBlur,
+
+		/**
+		 * @brief Ghosts reflected BETWEEN the lens elements (LensFlare). Reads the chain colour.
+		 * @note Moved out of the scene phase (Sep 2026). A flare is formed in the OPTICS, not in
+		 * the scene, and it is locked to the SCREEN, not to the world: sitting before the temporal
+		 * anti-aliasing it was reprojected along the scene's motion vectors like scene content and
+		 * smeared as soon as the camera moved. Here it is produced after the resolve, so nothing
+		 * accumulates it, and it feeds the glare below — a bright ghost veils the lens like any
+		 * other bright thing.
+		 * @warning It is NOT a camera-owned slot (@ref isCameraEffectSlot): the application still
+		 * adds it with `addEffect()`. That predicate is an explicit set for exactly this reason.
+		 */
+		LensFlare,
 
 		/** @brief Veiling glare scattered INSIDE the lens (Bloom), before the sensor responds. */
 		Glare,
@@ -168,6 +197,11 @@ namespace EmEn::Graphics
 	 * the reflections (its snippet is a global multiply — placed before them it stopped
 	 * attenuating them, the owner-reported bright patches), and the reflections stay after the
 	 * translucent pass so a water surface keeps its SSR/RTR through its G-buffer footprint.
+	 * @note ContactShadows joined the set in Sep 2026, not because a glass needs them, but
+	 * because the SLOT ORDER alone does not survive the cut: declared before the indirect
+	 * diffuse yet left out of this set, it would still have been recorded AFTER it on every
+	 * scene holding a grab-pass material — the two halves are two separate walks of the
+	 * table, and this predicate is what assigns a slot to a half.
 	 * @param slot The slot.
 	 * @return bool
 	 */
@@ -176,7 +210,7 @@ namespace EmEn::Graphics
 	bool
 	isPreTranslucencySlot (EffectSlot slot) noexcept
 	{
-		return slot == EffectSlot::IndirectDiffuse;
+		return slot == EffectSlot::ContactShadows || slot == EffectSlot::IndirectDiffuse;
 	}
 
 	/**
@@ -203,7 +237,22 @@ namespace EmEn::Graphics
 	bool
 	isCameraEffectSlot (EffectSlot slot) noexcept
 	{
-		return slot >= EffectSlot::DepthOfField && slot <= EffectSlot::ToneMapping;
+		/* ⚠️ An explicit SET, never a range. The four photographic slots are no longer
+		 * contiguous — LensFlare sits between MotionBlur and Glare and is added by the
+		 * APPLICATION — and the range form silently turned any slot declared between them into
+		 * a camera-owned one, which `PostProcessStack::addEffect()` refuses outright. The
+		 * predicate must state the four, so that moving a slot can never capture it. */
+		switch ( slot )
+		{
+			case EffectSlot::DepthOfField :
+			case EffectSlot::MotionBlur :
+			case EffectSlot::Glare :
+			case EffectSlot::ToneMapping :
+				return true;
+
+			default :
+				return false;
+		}
 	}
 
 	/**

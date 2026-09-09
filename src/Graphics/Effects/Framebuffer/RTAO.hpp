@@ -162,6 +162,41 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::consumesOcclusionLane()
+			 * @note When an indirect-diffuse producer publishes a lane, this effect READS its
+			 * occlusion instead of tracing it: the producer's rays already sample the same
+			 * cosine hemisphere at the same working resolution and already carry their hit
+			 * distance. Measured on `sponza` (2026-09-09): the trace this replaces costs
+			 * 7.2 ms, 10.4 % of the frame. The traced path stays fully functional and is what
+			 * runs whenever no lane is offered — no producer, a disabled one, or a sibling that
+			 * publishes none (SSGI). */
+			[[nodiscard]]
+			bool
+			consumesOcclusionLane () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::occlusionMaxDistance()
+			 * @note The producer reduces the occlusion against THIS range, so the derived term
+			 * keeps obeying the ambient-occlusion settings rather than the GI ones.
+			 * ⚠️ `SampleCount` is the exception: a derived term is reduced over the PRODUCER's
+			 * sample count, so `Core/Graphics/RayTracing/AmbientOcclusion/SampleCount` is inert
+			 * while the pairing holds. */
+			[[nodiscard]]
+			float
+			occlusionMaxDistance () const noexcept override
+			{
+				return m_parameters.maxDistance;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::setOcclusionLaneSource() */
+			void
+			setOcclusionLaneSource (const Vulkan::TextureInterface * laneTexture) noexcept override
+			{
+				m_occlusionLaneSource = laneTexture;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
 			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 
@@ -234,11 +269,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;
 			IntermediateRenderTarget m_blurVTarget;
-			/* Pipelines. */
+			/* Pipelines: the two interchangeable variants of the occlusion pass. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_derivedPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			/* The producer's lane, BORROWED for one frame: the stack's slot pairing sets it —
+			 * and clears it — before every recording, so it can never outlive its owner. Its
+			 * presence is what selects the derived variant. */
+			const Vulkan::TextureInterface * m_occlusionLaneSource{nullptr};
 	};
 }

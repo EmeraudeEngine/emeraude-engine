@@ -219,6 +219,40 @@ void main()
 }
 )GLSL";
 
+	/* DERIVED variant (Sep 2026): the occlusion is READ from the indirect-diffuse producer's
+	 * lane instead of being traced. Same output as the traced variant above — `vec2(ao, depth)`
+	 * in the same target, same format — so the bilateral kernel, the blur targets and the
+	 * combine snippet downstream are untouched, and the two variants are interchangeable per
+	 * frame. The producer reduced the occlusion in ITS ray loop with the range this effect
+	 * published (IndirectPostProcessEffect::occlusionMaxDistance()), including the same
+	 * distance weighting and the same camera-distance fadeout as the traced variant.
+	 *
+	 * ⚠️ `texture()` on the NORMALIZED uv, not texelFetch on gl_FragCoord: the producer's
+	 * working resolution comes from ITS OWN pixel-doubling setting and is not required to match
+	 * this effect's. When they do match (the default), a fragment centre lands exactly on a
+	 * texel centre and the linear filter returns that texel unmodified; when they do not, this
+	 * degrades to a bilinear resample instead of reading the wrong pixel. */
+	constexpr auto RTAODerivedFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec2 outAO;
+
+layout(set = 1, binding = 0) uniform sampler2D depthTex;
+layout(set = 1, binding = 2) uniform sampler2D occlusionLaneTex;
+
+void main()
+{
+	/* Same point fetch as the traced variant: the G lane feeds the bilateral kernel's depth
+	 * edge-stopping, and interpolating depth across a geometric edge is exactly what it must
+	 * not do. */
+	ivec2 fullResCoord = ivec2(vUV * vec2(textureSize(depthTex, 0)));
+	float depth = texelFetch(depthTex, fullResCoord, 0).r;
+
+	outAO = vec2(texture(occlusionLaneTex, vUV).a, depth);
+}
+)GLSL";
+
 }
 
 namespace EmEn::Graphics::Effects::Framebuffer
@@ -274,8 +308,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (set 1): depth + normals — 2 combined image samplers. */
-		auto traceInputLayout = this->getInputLayout(2);
+		/* Trace input (set 1): depth + normals + the producer's occlusion lane — 3 combined
+		 * image samplers. ⚠️ The lane binding exists in BOTH variants' set and is written every
+		 * frame even when it is not sampled (the traced variant ignores it): one layout and one
+		 * per-frame set serve the two pipelines, so a variant switch is a pipeline bind and
+		 * nothing else. */
+		auto traceInputLayout = this->getInputLayout(3);
 
 		if ( traceInputLayout == nullptr )
 		{
@@ -327,8 +365,9 @@ namespace EmEn::Graphics::Effects::Framebuffer
 
 		auto vertexModule = this->getFullscreenVertexShader();
 		auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Trace_FS", ShaderType::FragmentShader, RTAOTraceFragmentShader);
+		auto derivedFragment = shaderManager.getShaderModuleFromSourceCode(device, "RTAO_Derived_FS", ShaderType::FragmentShader, RTAODerivedFragmentShader);
 
-		if ( vertexModule == nullptr || traceFragment == nullptr )
+		if ( vertexModule == nullptr || traceFragment == nullptr || derivedFragment == nullptr )
 		{
 			TraceError{ClassId} << "Failed to compile RTAO shaders !";
 
@@ -339,6 +378,16 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTAO_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 
 		if ( m_tracePipeline == nullptr )
+		{
+			return false;
+		}
+
+		/* Both variants share the pipeline LAYOUT, so they share the push-constant range and
+		 * the three descriptor sets; the derived fragment shader simply declares neither the
+		 * push constants nor the sets it does not read. */
+		m_derivedPipeline = this->createFullscreenPipeline(ClassId, "RTAO_Derived", vertexModule, derivedFragment, m_traceLayout, m_traceTarget);
+
+		if ( m_derivedPipeline == nullptr )
 		{
 			return false;
 		}
@@ -361,7 +410,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 		m_tracePerFrame.clear();
 
 		m_tracePipeline.reset();
+		m_derivedPipeline.reset();
 		m_traceLayout.reset();
+
+		/* ⚠️ The lane belongs to another effect: drop the borrowed pointer here too, not only in
+		 * the stack's pairing. destroy() runs on a scene teardown, where the producer may go
+		 * first. */
+		m_occlusionLaneSource = nullptr;
 
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
@@ -388,7 +443,25 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
 		}
 
-		/* ---- Pass 1: Ray Trace AO ---- */
+		/* The occlusion lane of the indirect-diffuse producer, when the stack paired us this
+		 * frame (PostProcessStack::syncSlotPairings). Deriving replaces this effect's own ray
+		 * trace — 7.2 ms measured on `sponza` — with a read of rays the producer has already
+		 * cast into the same cosine hemisphere at the same resolution.
+		 * ⚠️ Binding 2 is written UNCONDITIONALLY: when there is no lane, the depth texture
+		 * stands in so the set is never left with an unwritten binding, and the traced variant
+		 * (the one selected in that case) does not declare that sampler at all. */
+		const bool derived = m_occlusionLaneSource != nullptr;
+
+		{
+			const auto * laneTexture = derived ? m_occlusionLaneSource : inputDepth;
+
+			if ( laneTexture != nullptr )
+			{
+				static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, *laneTexture));
+			}
+		}
+
+		/* ---- Pass 1: the occlusion, traced or derived ---- */
 		{
 			/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
 			const auto readStateIndex = this->renderer().currentReadStateIndex();
@@ -424,7 +497,7 @@ namespace EmEn::Graphics::Effects::Framebuffer
 			/* Custom recording: bind set 0 (RT) from Renderer, set 1 (input textures) per-frame. */
 			m_traceTarget.beginRenderPass(commandBuffer);
 
-			commandBuffer.bind(*m_tracePipeline);
+			commandBuffer.bind(derived ? *m_derivedPipeline : *m_tracePipeline);
 
 			const VkViewport viewport{
 				.x = 0.0F,

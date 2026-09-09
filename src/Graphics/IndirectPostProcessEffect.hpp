@@ -505,6 +505,106 @@ namespace EmEn::Graphics
 				return {};
 			}
 
+			/* ---- Ambient-occlusion LANE protocol (Sep 2026) ----
+			 * A PRODUCER/CONSUMER pairing between two slots, wired once per frame by
+			 * `PostProcessStack::syncSlotPairings()` — the same shape as the Bloom → ToneMapping
+			 * pairing, and for the same reason: two concepts that stay separate effects while
+			 * one feeds the other.
+			 *
+			 * ⚠️⚠️ WHY IT EXISTS: measured on `sponza` (2026-09-09, 2880×1620), the RTGI trace
+			 * costs 43.5 ms and the RTAO trace 7.2 ms — and the second one re-casts rays the
+			 * first has ALREADY cast. Both sample a cosine-weighted hemisphere at the same half
+			 * resolution with the same sample count, and the GI ray already computes its hit
+			 * distance. The occlusion is therefore free: the producer reduces it in the same
+			 * loop, into the ALPHA lane of its trace target, which nothing else reads (the
+			 * GIDenoiser samples `.rgb` only — verified, not assumed).
+			 *
+			 * ⚠️ The producer needs the CONSUMER's maxDistance to do the reduction, so the
+			 * pairing is bidirectional: the stack reads it off the consumer and pushes it into
+			 * the producer. A producer with `occlusionMaxDistance == 0` writes 1.0 (no
+			 * occlusion) and costs nothing.
+			 *
+			 * ⚠️ The consumer MUST keep a working standalone path: the producer may be absent
+			 * (no chain), disabled, or replaced by a sibling that provides no lane (SSGI). The
+			 * pairing runs every frame and clears the source, so a stale pointer cannot survive
+			 * a frame boundary. */
+
+			/**
+			 * @brief Returns whether this effect can publish an ambient-occlusion lane.
+			 * @note The producer side. It publishes only when the stack has asked for it with
+			 * setOcclusionLaneEnabled(): answering true here is a capability, not a state.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			providesOcclusionLane () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Arms or disarms the occlusion lane, and sets the distance of its reduction.
+			 * @param enabled Whether the lane must be written at all.
+			 * @param maxDistance The consumer's occlusion range, in world units.
+			 * @return void
+			 */
+			virtual
+			void
+			setOcclusionLaneEnabled (bool /*enabled*/, float /*maxDistance*/) noexcept
+			{
+
+			}
+
+			/**
+			 * @brief Returns the texture whose ALPHA lane carries the occlusion, or nullptr.
+			 * @return const Vulkan::TextureInterface *
+			 */
+			[[nodiscard]]
+			virtual
+			const Vulkan::TextureInterface *
+			occlusionLaneTexture () const noexcept
+			{
+				return nullptr;
+			}
+
+			/**
+			 * @brief Returns whether this effect can read its occlusion from a producer's lane.
+			 * @note The consumer side.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			consumesOcclusionLane () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Returns the occlusion range the producer must reduce against, in world units.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual
+			float
+			occlusionMaxDistance () const noexcept
+			{
+				return 0.0F;
+			}
+
+			/**
+			 * @brief Hands the consumer the producer's lane texture, or nullptr to fall back to its own trace.
+			 * @param laneTexture The producer's lane texture, valid for this frame only.
+			 * @return void
+			 */
+			virtual
+			void
+			setOcclusionLaneSource (const Vulkan::TextureInterface * /*laneTexture*/) noexcept
+			{
+
+			}
+
 			/* ---- Shared denoise protocol (phase E) ----
 			 * An overlay effect whose working chain is "trace → separable blur H → blur V"
 			 * can delegate the blur pair to the PostProcessor's shared DenoisePass: the
