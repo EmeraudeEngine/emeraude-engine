@@ -242,6 +242,21 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether the stack holds ANY effect, indirect or direct.
+			 * @note The question an owner asks before creating and installing a stack: an empty
+			 * one is not worth a render target, and a stack holding only DISPLAY effects is not
+			 * empty — those are folded into the final swap-chain shader and would be dropped by
+			 * the narrower @ref hasEffects().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasAnyEffect () const noexcept
+			{
+				return this->hasEffects() || this->hasDisplayEffects();
+			}
+
+			/**
 			 * @brief Clears the entire effect chain.
 			 * @return void
 			 */
