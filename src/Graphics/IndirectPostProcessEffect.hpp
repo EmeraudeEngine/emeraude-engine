@@ -332,6 +332,49 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether a creation attempt has already FAILED on this effect.
+			 * @note ⚠️ This is a LATCH, and it exists because the lazy residency turned creation
+			 * into a per-frame decision. PostProcessStack::syncSlotSelection() materializes the
+			 * occupant it selects on the render thread; without this latch an effect whose
+			 * create() fails would be retried on EVERY frame — an allocation storm and one trace
+			 * line per frame, for something that will not start working on its own.
+			 * @note It also feeds the sibling fallback: an effect that cannot be created is an
+			 * effect that cannot run, so the slot moves on to its alternative (a failing RTGI
+			 * hands the indirect diffuse to SSGI) instead of going dark.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasCreationFailed () const noexcept
+			{
+				return m_creationFailed;
+			}
+
+			/**
+			 * @brief Latches the fact that a creation attempt failed.
+			 * @warning ⚠️ INTERNAL — PostProcessStack only, like setCreatedFlag().
+			 * @note Cleared by clearCreationFailure() alone: a resize must give a failed effect a
+			 * fresh chance, since the failure may have been about the size it was asked for.
+			 * @return void
+			 */
+			void
+			setCreationFailedFlag () noexcept
+			{
+				m_creationFailed = true;
+			}
+
+			/**
+			 * @brief Clears the creation-failure latch.
+			 * @warning ⚠️ INTERNAL — PostProcessStack only.
+			 * @return void
+			 */
+			void
+			clearCreationFailure () noexcept
+			{
+				m_creationFailed = false;
+			}
+
+			/**
 			 * @brief Called by PostProcessStack when the effect enters or leaves a stack.
 			 * @warning ⚠️ INTERNAL — the stack is the only caller. A RAW pointer, cleared by the
 			 * stack on removal and in its destructor while it still holds the effect alive: an
@@ -839,5 +882,7 @@ void main()
 			PostProcessStack * m_ownerStack{nullptr};
 			/** @brief Whether the last create/resize attempt succeeded — see isCreated(). */
 			bool m_created{false};
+			/** @brief Whether a creation attempt has already failed — see hasCreationFailed(). */
+			bool m_creationFailed{false};
 	};
 }

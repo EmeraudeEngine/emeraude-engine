@@ -764,12 +764,12 @@ if ( materialType == StandardResource::ClassId )
 > visibility; owner decision — raise via settings if a stronger look is wanted).
 >
 > **New settings keys (override the Parameters structs in `create()`, like the GI group):**
-> - `Core/Graphics/RayTracing/AmbientOcclusion/` gained `Intensity` (1.0), `Bias` (0.005),
+> - `Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/` gained `Intensity` (1.0), `Bias` (0.005),
 >   `MaxDistance` (2.0), `BlurRadius` (4), `NormalSigma` (0.5).
-> - **First screen-space group** `Core/Graphics/ScreenSpace/AmbientOcclusion/`:
+> - **First screen-space group** `Core/Graphics/PostProcessing/AmbientOcclusion/ScreenSpace/`:
 >   `Radius` (0.5), `Intensity` (1.0), `Bias` (0.025), `SampleCount` (32) — read by
 >   `SSAO::create()` (which previously read no settings at all).
-> - `Core/Graphics/ScreenSpace/GlobalIllumination/` (same day): `MaxDistance` (5.0),
+> - `Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/` (same day): `MaxDistance` (5.0),
 >   `Intensity` (0.8), `Thickness` (0.5), `SampleCount` (8), `StepCount` (16),
 >   `BlurRadius` (4), `DepthSigma` (1.0), `NormalSigma` (0.5) — read by `SSGI::create()`;
 >   demos construct SSGI bare. The `ScreenSpace/` group mirroring `RayTracing/` is the
@@ -2302,6 +2302,105 @@ and destroys, on the render thread, the lights retired more than `framesInFlight
 entity; GPU resources die behind the fence, on the render thread. Full contract:
 [`src/Scenes/AGENTS.md`](../src/Scenes/AGENTS.md) § "LightSet & Background-Derived Lighting".
 
+### A lazily-created resource MATERIALIZES ITSELF at the first resize (Sep 2026)
+
+> [!CAUTION]
+> **Symptom:** the post-process stack keeps both lighting lanes resident but creates only the
+> selected one. It works — until the window is resized, after which every alternative reports
+> `created` and the memory saving is gone. Nothing in the resize path mentions laziness.
+>
+> **Cause:** `PostProcessStack::resizeAll()` iterated every resident effect and did
+> `effect->setCreatedFlag(effect->resize(w, h))`. `resize()` **destroys then creates**, so calling
+> it on a never-created effect *is* a creation, and the line right after raises its flag. The
+> laziness evaporated on a gesture that has nothing to do with it.
+>
+> **Rule:** any per-object lifecycle sweep — resize, reload, revalidate — must skip what was never
+> created, and the "created" flag must be the one thing that decides. Fixed by an
+> `if ( !effect->isCreated() ) { continue; }` guard, with the symmetrical fixes in `createAll()`
+> (creates only what is selected) and `destroyAll()` (destroys only what exists — `destroy()` on
+> an effect that never ran `create()` releases members it never assigned).
+
+### An automatic fallback on a WARM-UP condition defeats the laziness it was paired with (Sep 2026)
+
+> [!CAUTION]
+> **Symptom:** the ray-traced lane runs, exactly as selected — and yet all three screen-space
+> effects report `created`. Measured on Sponza the day the lazy residency landed.
+>
+> **Cause:** `Renderer::isRayTracingReady()` is false for the first frames of **every** scene (the
+> TLAS is built asynchronously) and it **cannot distinguish "not yet" from "never"** — it is a
+> null/created test on the current TLAS plus a non-empty descriptor-set check, nothing more. A
+> fallback that fires on the first stalled frame therefore materialized the whole alternative lane
+> on every single launch, seconds before the traced one took over.
+>
+> **Rule:** a fallback keyed on a condition that is *transiently* false at startup needs a grace
+> period, not a debounce — `PostProcessStack::FallbackGraceFrames` (120, ~2 s) — chosen long enough
+> that a warm-up never trips it and short enough that a scene genuinely without ray-traced geometry
+> still recovers. And ⚠️ **verify it by reading the state, not the picture**: the frame looked
+> perfect in both cases, because the correct lane *was* the one running. Only `listEffects()`
+> showed the wasted allocation.
+
+### A "nothing changed" early-out that also skips the REPORTING makes a correct system look broken (Sep 2026)
+
+> [!CAUTION]
+> **Symptom:** `listEffects()` marked TAA as selected but not running, on a frame that was visibly
+> anti-aliased; `getStatus()` printed `ToneMapping: off` on a visibly tone-mapped frame.
+>
+> **Cause, twice over.** (1) `syncSlotSelection()` recorded the effective occupant *after* its
+> `if ( effective == enabledEffect(slot) ) continue;` early-out, so a slot whose selection was
+> already correct on the very first frame never reached the store and reported "nothing here" for
+> the whole session. (2) The four camera-owned slots carry no selection at all — the camera
+> materializes them — and reading them from the selection indices reported them off.
+>
+> **Rule:** state an observation on **every** path, including the one where nothing changed; and
+> when a subsystem has two ownership regimes, the reporting needs two readers, not one. A report
+> that contradicts the image is worse than no report — it is the thing a future session will trust
+> over its own eyes.
+
+### A setting that another setting DOMINATES should not exist — and until it goes, default to "Auto" and speak (Sep 2026)
+
+> [!CAUTION]
+> **Symptom:** the settings file reads
+> `Core/Graphics/PostProcessing/LightingLane: "RayTracing"` and the frame is rendered in screen
+> space. Nothing in the log, nothing on screen. Owner report, 2026-09-10, on the first settings
+> reset after the post-processing tree was reorganised.
+>
+> **Cause:** `Core/Graphics/RayTracing/Enabled` — a *different* key, in a *different* section
+> (since **deleted**, see the epilogue) — defaulted to `false` and dominated the lane choice: with
+> it off the ray-traced lane was never made resident, so `installLightingFamily()` started on
+> screen space. A settings reset took it back to `false` while the post-processing key kept saying
+> `RayTracing`, so **a freshly written file was self-contradictory out of the box**.
+>
+> **Two rules, both learned here:**
+> 1. **A key that another key can override must not default to a concrete value.** Default it to
+>    `"Auto"` — resolve against what the machine actually offers — so a generated file can never
+>    contradict itself on any machine. A fixed default is a claim about a state you do not control.
+> 2. **An EXPLICIT request that cannot be honoured must be traced**, naming the dominating key and
+>    its current value. And only an explicit one: `"Auto"` is a policy, not a request, and warning
+>    on the default trains the reader to ignore the warning.
+>
+> ⚠️ Naming the key well is not a substitute for either. This key was *deliberately* named
+> `LightingLane` rather than `EnableRayTracing` precisely to avoid being confused with the device
+> switch — the confusion happened anyway, on the very next reset, because the failure was silent.
+> A good name helps someone who is already looking; a trace is what makes them look.
+>
+> **Epilogue, same day: the dominating key was DELETED** (owner decision). Two settings that
+> express the same intent, one silently overruling the other, is a defect of the *schema*, and the
+> two rules above are only the mitigation. What made deletion possible was checking what the key
+> actually gated:
+> - ⚠️⚠️ **The documentation of it — written the same morning, by the same hands — was wrong.** It
+>   claimed the key gated the `SHADER_DEVICE_ADDRESS | ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY`
+>   usage flags on every VBO/IBO, `createRTDescriptorSet()` and the descriptor-pool AS entry. All
+>   three are gated on `Device::rayTracingEnabled()` — **pure hardware**, since the RT extensions
+>   are requested from `physicalDevice->supportsRayTracing()` without consulting any setting
+>   (`Instance.cpp`). That false claim was then used to argue against changing the key's default.
+>   **Grep the consumers of the accessor before describing what a setting controls**; a settings
+>   key and a capability query that AND together at every call site look identical from the call
+>   site and are not.
+> - Its one real job — creating the `AccelerationStructureBuilder` — moved onto the key that was
+>   already expressing the intent. ⚠️ That makes the lane a **launch** decision: a BLAS is built
+>   when a geometry loads and cannot be added later, so a runtime switch to the traced lane is
+>   refused rather than silently rendering nothing.
+
 ## Shader/GLSL Pitfalls
 
 ### Read the GENERATED GLSL — a variable computed and never used is two subsystems never connected (Aug 2026)
@@ -3527,7 +3626,7 @@ Secondary, same pass: the depth was read with `texture()` at half resolution, wh
 exactly on the corner of a 2×2 full-res block, so **every** pixel reconstructed its origin from
 the average of four non-linear depths — a surface that does not exist.
 
-**Fix (`Graphics/Effects/Lighting/ContactShadows.{hpp,cpp}`), aligned on RTAO:**
+**Fix (`Graphics/Effects/Lighting/RTContactShadows.{hpp,cpp}`), aligned on RTAO:**
 `texelFetch` for depth AND normals; world position reconstructed from the FETCHED texel's centre
 (not `vUV` — half a full-res texel apart); view→world normal via the inverse view rotation;
 `rayOrigin = worldPos + worldNormal * adaptiveBias` with `tMin` a constant 0.001; adaptive bias
@@ -3558,7 +3657,7 @@ gaining RTAO's grazing term `min(1 / NdotV, 10)`.
 **Verified:** projet-alpha cascade builds, 0 VUID with the validation layers on, RTX 3070 Ti;
 emeraude-base 2045/2045.
 
-**Files:** `Graphics/Effects/Lighting/ContactShadows.{hpp,cpp}`
+**Files:** `Graphics/Effects/Lighting/RTContactShadows.{hpp,cpp}`
 
 ---
 

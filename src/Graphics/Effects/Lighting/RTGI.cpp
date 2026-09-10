@@ -699,33 +699,33 @@ namespace EmEn::Graphics::Effects::Lighting
 		auto & settings = renderer.primaryServices().settings();
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
-		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingGIPixelDoublingKey, DefaultGraphicsRayTracingGIPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTPixelDoublingKey, DefaultGraphicsPPIndirectDiffuseRTPixelDoubling);
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsRayTracingGIMaxDistanceKey, DefaultGraphicsRayTracingGIMaxDistance);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsRayTracingGIIntensityKey, DefaultGraphicsRayTracingGIIntensity);
-		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsRayTracingGIBiasKey, DefaultGraphicsRayTracingGIBias);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGISampleCountKey, DefaultGraphicsRayTracingGISampleCount);
-		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDepthSigmaKey, DefaultGraphicsRayTracingGIDepthSigma);
-		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGINormalSigmaKey, DefaultGraphicsRayTracingGINormalSigma);
-		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsRayTracingGIDenoiserLuminanceSigmaKey, DefaultGraphicsRayTracingGIDenoiserLuminanceSigma);
-		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserIterationsKey, DefaultGraphicsRayTracingGIDenoiserIterations);
-		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserMaxAccumulationKey, DefaultGraphicsRayTracingGIDenoiserMaxAccumulation);
-		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsRayTracingGIDenoiserAccumulationCounterKey, DefaultGraphicsRayTracingGIDenoiserAccumulationCounter);
-		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalAlphaKey, DefaultGraphicsRayTracingGITemporalAlpha);
-		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalDepthToleranceKey, DefaultGraphicsRayTracingGITemporalDepthTolerance);
-		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalNormalThresholdKey, DefaultGraphicsRayTracingGITemporalNormalThreshold);
-		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsRayTracingGITemporalVarianceGammaKey, DefaultGraphicsRayTracingGITemporalVarianceGamma);
-		m_parameters.multiBounceStrength = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceStrengthKey, DefaultGraphicsRayTracingGIMultiBounceStrength);
-		m_parameters.multiBounceClamp = settings.getOrSetDefault< float >(GraphicsRayTracingGIMultiBounceClampKey, DefaultGraphicsRayTracingGIMultiBounceClamp);
-		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingGIDenoiserDebugViewKey, DefaultGraphicsRayTracingGIDenoiserDebugView);
-		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalEnabledKey, DefaultGraphicsRayTracingGITemporalEnabled);
-		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalNeighborhoodClampKey, DefaultGraphicsRayTracingGITemporalNeighborhoodClamp);
-		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsRayTracingGITemporalAnimatedNoiseKey, DefaultGraphicsRayTracingGITemporalAnimatedNoise);
-		m_parameters.multiBounceEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingGIMultiBounceEnabledKey, DefaultGraphicsRayTracingGIMultiBounceEnabled);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseRTMaxDistance);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTIntensityKey, DefaultGraphicsPPIndirectDiffuseRTIntensity);
+		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTBiasKey, DefaultGraphicsPPIndirectDiffuseRTBias);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTSampleCountKey, DefaultGraphicsPPIndirectDiffuseRTSampleCount);
+		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseRTDepthSigma);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseRTNormalSigma);
+		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserLuminanceSigma);
+		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserIterations);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserMaxAccumulation);
+		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserAccumulationCounter);
+		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseRTTemporalAlpha);
+		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseRTTemporalDepthTolerance);
+		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseRTTemporalNormalThreshold);
+		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseRTTemporalVarianceGamma);
+		m_parameters.multiBounceStrength = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTMultiBounceStrengthKey, DefaultGraphicsPPIndirectDiffuseRTMultiBounceStrength);
+		m_parameters.multiBounceClamp = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTMultiBounceClampKey, DefaultGraphicsPPIndirectDiffuseRTMultiBounceClamp);
+		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserDebugView);
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseRTTemporalEnabled);
+		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseRTTemporalNeighborhoodClamp);
+		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseRTTemporalAnimatedNoise);
+		m_parameters.multiBounceEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTMultiBounceEnabledKey, DefaultGraphicsPPIndirectDiffuseRTMultiBounceEnabled);
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTGI_Trace") )
@@ -1007,7 +1007,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * hardware, user setting, and a TLAS that can actually be consumed this frame. Claiming
 		 * the indirect diffuse while the trace cannot run would leave the frame with NO diffuse
 		 * sky at all — the scene hands its own IBL leg over to an effect that draws nothing. */
-		return renderer.device()->rayTracingEnabled() && renderer.isRayTracingSettingEnabled() && renderer.isRayTracingReady();
+		return renderer.device()->rayTracingEnabled() && renderer.isRayTracingReady();
 	}
 
 	IndirectPostProcessEffect::CombineContribution

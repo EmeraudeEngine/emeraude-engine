@@ -80,7 +80,7 @@ namespace EmEn::Graphics::Effects::Resolve
 
 			/**
 			 * @brief User-facing TAA parameters.
-			 * @note Overridden by the Core/Graphics/AntiAliasing/Temporal settings keys at create().
+			 * @note Overridden by the Core/Graphics/PostProcessing/TemporalAA settings keys at create().
 			 */
 			struct EMEN_API Parameters
 			{

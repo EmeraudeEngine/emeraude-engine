@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Effects/Lighting/ContactShadows.cpp
+ * src/Graphics/Effects/Lighting/RTContactShadows.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "ContactShadows.hpp"
+#include "RTContactShadows.hpp"
 
 /* Local inclusions. */
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
@@ -36,6 +36,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Scenes/LightSet.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -43,7 +44,7 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
-static constexpr auto TracerTag{"ContactShadowsEffect"};
+static constexpr auto TracerTag{"RTContactShadowsEffect"};
 /* NOLINTEND(cert-err58-cpp) */
 
 namespace
@@ -217,16 +218,24 @@ namespace EmEn::Graphics::Effects::Lighting
 	/* ---- Lifecycle ---- */
 
 	bool
-	ContactShadows::create (uint32_t width, uint32_t height) noexcept
+	RTContactShadows::create (uint32_t width, uint32_t height) noexcept
 	{
 		auto & renderer = this->renderer();
 
 		auto & settings = renderer.primaryServices().settings();
 
+		/* ⚠️ These four keys are the SAME quantities, in the same units, as the screen-space
+		 * lane's (SSContactShadows) — a lane A/B is only honest at equal settings. The concept
+		 * had no settings key at all in either lane until Sep 2026. */
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTMaxDistanceKey, DefaultGraphicsPPContactShadowsRTMaxDistance);
+		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTNormalBiasKey, DefaultGraphicsPPContactShadowsRTNormalBias);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTIntensityKey, DefaultGraphicsPPContactShadowsRTIntensity);
+		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsRTMaxBlurRadius);
+
 		/* Pixel doubling: half-res for performance (default), full-res for quality.
 		 * SAME key and rule as RTAO — the shared denoise pass blurs the whole group in
 		 * one multi-target pass, so every member's blur targets must share one extent. */
-		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingAOPixelDoublingKey, DefaultGraphicsRayTracingAOPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPAmbientOcclusionRTPixelDoublingKey, DefaultGraphicsPPAmbientOcclusionRTPixelDoubling);
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 
@@ -370,7 +379,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	void
-	ContactShadows::destroy () noexcept
+	RTContactShadows::destroy () noexcept
 	{
 		m_shadowFrameUBOs.clear();
 		m_shadowPerFrame.clear();
@@ -385,7 +394,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	void
-	ContactShadows::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
+	RTContactShadows::recordPreDenoisePasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
@@ -481,7 +490,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	ContactShadows::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	RTContactShadows::denoiseContribution (const FrameContext & /*context*/) const noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "cshdw";
@@ -517,7 +526,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::CombineContribution
-	ContactShadows::combineContribution (const FrameContext & /*context*/) const noexcept
+	RTContactShadows::combineContribution (const FrameContext & /*context*/) const noexcept
 	{
 		CombineContribution contribution;
 		contribution.prefix = "cshdw";

@@ -63,9 +63,15 @@ namespace EmEn::Graphics
 		 * @note FIRST of the scene phase (moved here Sep 2026), for the mirror of the reason the
 		 * ambient occlusion is last: a combine group applies its members onto ONE running
 		 * `em_Color` in slot order, so the position decides WHICH light term a multiply reaches.
-		 * A contact shadow is an occlusion of the DIRECT light — its ray marches the depth buffer
-		 * toward the light source — so it must land while `em_Color` still holds the raster output
-		 * alone. Sitting after the three indirect terms, its snippet (`em_Color.rgb *= shadow`)
+		 * A contact shadow is an occlusion of the DIRECT light — its ray is cast toward the light
+		 * source — so it must land while `em_Color` still holds the raster output alone.
+		 * ⚠️ This paragraph claimed until Sep 2026 that the ray "marches the depth buffer". It does
+		 * not: `ContactShadows` is a `rayQueryEXT` against the TLAS, hence its
+		 * `requiresRayTracing()`. The conclusion above survives the correction — it holds for any
+		 * occlusion of the direct light, however the ray is cast — but the mechanism stated was
+		 * false, and a false premise in a justification is what the next reader builds on. The
+		 * genuinely depth-marching sibling is `SSContactShadows` (Sep 2026), a separate effect
+		 * filling the same slot in the screen-space lane. Sitting after the three indirect terms, its snippet (`em_Color.rgb *= shadow`)
 		 * also darkened the indirect diffuse and the reflections, which no light transport
 		 * justifies: a surface in contact shadow still receives bounced light.
 		 * @note It is a PRE-TRANSLUCENCY slot for the same reason (@ref isPreTranslucencySlot):
@@ -248,6 +254,34 @@ namespace EmEn::Graphics
 			case EffectSlot::MotionBlur :
 			case EffectSlot::Glare :
 			case EffectSlot::ToneMapping :
+				return true;
+
+			default :
+				return false;
+		}
+	}
+
+	/**
+	 * @brief Returns whether a slot belongs to the LIGHTING family.
+	 * @note The four concepts that exist in two implementation lanes — a screen-space one and a
+	 * ray-traced one — and that `PostProcessStack::selectLightingLane()` switches together.
+	 * ⚠️ An explicit SET, never a range, for the reason @ref isCameraEffectSlot() states: these
+	 * four happen to be contiguous today, and a range would silently capture the next slot
+	 * declared among them.
+	 * @param slot The slot.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	isLightingSlot (EffectSlot slot) noexcept
+	{
+		switch ( slot )
+		{
+			case EffectSlot::ContactShadows :
+			case EffectSlot::IndirectDiffuse :
+			case EffectSlot::Reflections :
+			case EffectSlot::AmbientOcclusion :
 				return true;
 
 			default :

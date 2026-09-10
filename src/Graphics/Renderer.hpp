@@ -671,15 +671,30 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns whether ray tracing is enabled via settings.
-			 * @note This is the user-level master switch. Hardware support is checked separately.
+			 * @brief Returns whether the user ALLOWS the camera's depth of field.
+			 * @note ⚠️ Not to be confused with Camera::isDepthOfFieldEnabled(), which is the
+			 * scene's REQUEST. This is the user's answer to it, and it wins:
+			 * PostProcessStack::syncCameraEffects() will not materialize the effect when this is
+			 * false, so a demo enabling it for style is simply ignored.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isRayTracingSettingEnabled () const noexcept
+			isDepthOfFieldAllowed () const noexcept
 			{
-				return m_rayTracingSettingEnabled;
+				return m_depthOfFieldAllowed;
+			}
+
+			/**
+			 * @brief Returns whether the user ALLOWS the camera's motion blur.
+			 * @note Same contract as @ref isDepthOfFieldAllowed().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMotionBlurAllowed () const noexcept
+			{
+				return m_motionBlurAllowed;
 			}
 
 			/**
@@ -1693,9 +1708,13 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::GPUProfiler > m_GPUProfiler;
 			bool m_debugMode{false};
 			bool m_windowLess{false};
-			bool m_rayTracingSettingEnabled{true};
 			/** @brief Settings: cut the frame around the translucent pass so a glass transmits the indirect diffuse (see EffectSlot::isPreTranslucencySlot). An A/B switch, default true. */
 			bool m_cutFrameAroundTranslucency{true};
+			/** @brief Settings: may the ACTIVE CAMERA materialize its depth of field / motion blur?
+			 * @note A user-level refusal of two expensive, intrusive photographic effects. It
+			 * OVERRIDES the camera, which only ever requests them. */
+			bool m_depthOfFieldAllowed{true};
+			bool m_motionBlurAllowed{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
 			bool m_TBNSpaceRenderingEnabled{false};

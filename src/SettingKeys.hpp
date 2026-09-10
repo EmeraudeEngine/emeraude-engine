@@ -420,20 +420,29 @@ namespace EmEn
 			constexpr auto GraphicsGPUProfilerEnabledKey{"Core/Graphics/GPUProfiler/Enabled"};
 			constexpr auto DefaultGraphicsGPUProfilerEnabled{false};
 
-			/* Ray Tracing.
-			 * The root group holds the master switch and the acceleration-structure
-			 * (BLAS/TLAS) options; each ray-traced effect has its own sub-group. */
-			/* Master switch for hardware ray tracing. */
-			constexpr auto GraphicsRayTracingEnabledKey{"Core/Graphics/RayTracing/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingEnabled{false};
+			/* Ray Tracing — everything about ray tracing that is NOT a post-process effect:
+			 * the acceleration structures themselves and their geometry. The effects that CONSUME
+			 * them live under Core/Graphics/PostProcessing/, by concept then by lane.
+			 * ⚠️ There is NO master switch here any more (`Enabled`, removed 2026-09-10, owner
+			 * decision). Two reasons, and the second is the one that settles it:
+			 *  - It said the same thing as Core/Graphics/PostProcessing/LightingLane while
+			 *    silently DOMINATING it — a settings file could read "RayTracing" and render in
+			 *    screen space with nothing to explain why (owner report, same day).
+			 *  - It cannot coexist with the runtime lane switch at all. Selecting the ray-traced
+			 *    lane at runtime needs a BLAS on every geometry that is ALREADY LOADED, and a
+			 *    geometry cannot gain one after the fact. So the acceleration structures must
+			 *    exist whenever the device can build them; whether anything READS them is what
+			 *    the post-processing tree decides.
+			 * Consequently `Vulkan::Device::rayTracingEnabled()` — pure hardware detection — is
+			 * now the single answer to "can this machine trace?". */
 			/* Max distance for the top-level acceleration structure, in world units. */
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 
 			/* Ray Tracing > Reflection */
 			/* Compute reflections at half resolution (pixel doubling) to save performance. */
-			constexpr auto GraphicsRayTracingReflectionPixelDoublingKey{"Core/Graphics/RayTracing/Reflection/PixelDoubling"};
-			constexpr auto DefaultGraphicsRayTracingReflectionPixelDoubling{true};
+			constexpr auto GraphicsPPReflectionsRTPixelDoublingKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/PixelDoubling"};
+			constexpr auto DefaultGraphicsPPReflectionsRTPixelDoubling{true};
 			/* Ray Tracing > Reflection > Glossy cone (pre-convolved reflection pyramid lookup).
 			 * v2 (Aug 2026): the cone width is computed PER PIXEL by the trace from the hit distance,
 			 * the roughness (GGX alpha = roughness²) and the camera distance — a contact reflection
@@ -444,90 +453,90 @@ namespace EmEn
 			 * reflector is still assumed (a sphere compresses its reflected image). */
 			/* Master switch for the cone lookup: false = the pyramid is never read, the composite
 			 * shows the RAW traced reflection at its full trace resolution (sharpness reference). */
-			constexpr auto GraphicsRayTracingReflectionGlossyConeEnabledKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeEnabled{true};
+			constexpr auto GraphicsPPReflectionsRTGlossyConeEnabledKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/GlossyCone/Enabled"};
+			constexpr auto DefaultGraphicsPPReflectionsRTGlossyConeEnabled{true};
 			/* Cone width (in trace texels) below which the reflection stays PURELY the sharp
 			 * traced buffer: under one texel of spread there is nothing to convolve. */
-			constexpr auto GraphicsRayTracingReflectionGlossyConeBlendStartKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/BlendStartTexels"};
-			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeBlendStart{2.0F};
+			constexpr auto GraphicsPPReflectionsRTGlossyConeBlendStartKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/GlossyCone/BlendStartTexels"};
+			constexpr auto DefaultGraphicsPPReflectionsRTGlossyConeBlendStart{2.0F};
 			/* Cone width (in trace texels) at which the reflection comes ENTIRELY from the
 			 * pyramid gather. Between start and full the two are cross-faded linearly, so a
 			 * near-mirror keeps its full-resolution traced reflection. 24 until Aug 2026: with the
 			 * per-pixel cone a roughness-0.1 metal asks for a 7-texel kernel and the fade kept 78 %
 			 * of the sharp trace there (kernel σ 2.4 px measured against 6 expected); 6 hands the
 			 * gather over as soon as it has a real kernel to apply. */
-			constexpr auto GraphicsRayTracingReflectionGlossyConeBlendFullKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/BlendFullTexels"};
-			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeBlendFull{6.0F};
+			constexpr auto GraphicsPPReflectionsRTGlossyConeBlendFullKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/GlossyCone/BlendFullTexels"};
+			constexpr auto DefaultGraphicsPPReflectionsRTGlossyConeBlendFull{6.0F};
 			/* Hard ceiling on the pyramid LOD the cone may reach, on top of the mip count: caps
 			 * how coarse a rough surface is allowed to get (each LOD halves the resolution). */
-			constexpr auto GraphicsRayTracingReflectionGlossyConeMaxLodKey{"Core/Graphics/RayTracing/Reflection/GlossyCone/MaxLod"};
-			constexpr auto DefaultGraphicsRayTracingReflectionGlossyConeMaxLod{8.0F};
+			constexpr auto GraphicsPPReflectionsRTGlossyConeMaxLodKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/GlossyCone/MaxLod"};
+			constexpr auto DefaultGraphicsPPReflectionsRTGlossyConeMaxLod{8.0F};
 
 			/* Ray Tracing > Ambient Occlusion */
 			/* Samples per pixel for ray-traced ambient occlusion. */
-			constexpr auto GraphicsRayTracingAOSampleCountKey{"Core/Graphics/RayTracing/AmbientOcclusion/SampleCount"};
-			constexpr auto DefaultGraphicsRayTracingAOSampleCount{8U};
+			constexpr auto GraphicsPPAmbientOcclusionRTSampleCountKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/SampleCount"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTSampleCount{8U};
 			/* Compute ambient occlusion at half resolution (pixel doubling) to save performance. */
-			constexpr auto GraphicsRayTracingAOPixelDoublingKey{"Core/Graphics/RayTracing/AmbientOcclusion/PixelDoubling"};
-			constexpr auto DefaultGraphicsRayTracingAOPixelDoubling{true};
+			constexpr auto GraphicsPPAmbientOcclusionRTPixelDoublingKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/PixelDoubling"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTPixelDoubling{true};
 			/* AO darkening intensity multiplier (applied once, clamped; 1.0 = pure visibility term). */
-			constexpr auto GraphicsRayTracingAOIntensityKey{"Core/Graphics/RayTracing/AmbientOcclusion/Intensity"};
-			constexpr auto DefaultGraphicsRayTracingAOIntensity{1.0F};
+			constexpr auto GraphicsPPAmbientOcclusionRTIntensityKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/Intensity"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTIntensity{1.0F};
 			/* AO ray origin offset to prevent self-intersection, in world units. */
-			constexpr auto GraphicsRayTracingAOBiasKey{"Core/Graphics/RayTracing/AmbientOcclusion/Bias"};
-			constexpr auto DefaultGraphicsRayTracingAOBias{0.005F};
+			constexpr auto GraphicsPPAmbientOcclusionRTBiasKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/Bias"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTBias{0.005F};
 			/* Maximum AO occluder search distance, in world units (near-field effect). */
-			constexpr auto GraphicsRayTracingAOMaxDistanceKey{"Core/Graphics/RayTracing/AmbientOcclusion/MaxDistance"};
-			constexpr auto DefaultGraphicsRayTracingAOMaxDistance{2.0F};
+			constexpr auto GraphicsPPAmbientOcclusionRTMaxDistanceKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/MaxDistance"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTMaxDistance{2.0F};
 			/* Bilateral denoising blur radius for AO, in pixels. */
-			constexpr auto GraphicsRayTracingAOBlurRadiusKey{"Core/Graphics/RayTracing/AmbientOcclusion/BlurRadius"};
-			constexpr auto DefaultGraphicsRayTracingAOBlurRadius{4U};
+			constexpr auto GraphicsPPAmbientOcclusionRTBlurRadiusKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/BlurRadius"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTBlurRadius{4U};
 			/* Normal edge-stopping sigma for the AO bilateral blur. */
-			constexpr auto GraphicsRayTracingAONormalSigmaKey{"Core/Graphics/RayTracing/AmbientOcclusion/NormalSigma"};
-			constexpr auto DefaultGraphicsRayTracingAONormalSigma{0.5F};
+			constexpr auto GraphicsPPAmbientOcclusionRTNormalSigmaKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/NormalSigma"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionRTNormalSigma{0.5F};
 
 			/* Ray Tracing > Global Illumination */
 			/* Samples per pixel for ray-traced global illumination.
 			 * Measured 2026-07-05 (Sponza+extras, RTX 3070 Ti @ 3840x1990): 8 spp is
 			 * visually equivalent to 16 after the bilateral blur and ~16 ms/frame cheaper. */
-			constexpr auto GraphicsRayTracingGISampleCountKey{"Core/Graphics/RayTracing/GlobalIllumination/SampleCount"};
-			constexpr auto DefaultGraphicsRayTracingGISampleCount{8U};
+			constexpr auto GraphicsPPIndirectDiffuseRTSampleCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/SampleCount"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTSampleCount{8U};
 			/* Compute GI at half resolution (pixel doubling) to save performance. */
-			constexpr auto GraphicsRayTracingGIPixelDoublingKey{"Core/Graphics/RayTracing/GlobalIllumination/PixelDoubling"};
-			constexpr auto DefaultGraphicsRayTracingGIPixelDoubling{true};
+			constexpr auto GraphicsPPIndirectDiffuseRTPixelDoublingKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/PixelDoubling"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTPixelDoubling{true};
 			/* Maximum GI bounce ray distance, in world units. */
-			constexpr auto GraphicsRayTracingGIMaxDistanceKey{"Core/Graphics/RayTracing/GlobalIllumination/MaxDistance"};
-			constexpr auto DefaultGraphicsRayTracingGIMaxDistance{8.0F};
+			constexpr auto GraphicsPPIndirectDiffuseRTMaxDistanceKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/MaxDistance"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTMaxDistance{8.0F};
 			/* Indirect lighting intensity multiplier. */
-			constexpr auto GraphicsRayTracingGIIntensityKey{"Core/Graphics/RayTracing/GlobalIllumination/Intensity"};
-			constexpr auto DefaultGraphicsRayTracingGIIntensity{0.8F};
+			constexpr auto GraphicsPPIndirectDiffuseRTIntensityKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Intensity"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTIntensity{0.8F};
 			/* GI ray origin offset to prevent self-intersection, in world units. */
-			constexpr auto GraphicsRayTracingGIBiasKey{"Core/Graphics/RayTracing/GlobalIllumination/Bias"};
-			constexpr auto DefaultGraphicsRayTracingGIBias{0.02F};
+			constexpr auto GraphicsPPIndirectDiffuseRTBiasKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Bias"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTBias{0.02F};
 			/* Bilateral denoising blur radius for GI, in pixels. */
-			constexpr auto GraphicsRayTracingGIBlurRadiusKey{"Core/Graphics/RayTracing/GlobalIllumination/BlurRadius"};
-			constexpr auto DefaultGraphicsRayTracingGIBlurRadius{4U};
+			constexpr auto GraphicsPPIndirectDiffuseRTBlurRadiusKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/BlurRadius"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTBlurRadius{4U};
 			/* Depth edge-stopping sigma for the GI bilateral blur. */
-			constexpr auto GraphicsRayTracingGIDepthSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/DepthSigma"};
-			constexpr auto DefaultGraphicsRayTracingGIDepthSigma{1.0F};
+			constexpr auto GraphicsPPIndirectDiffuseRTDepthSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/DepthSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTDepthSigma{1.0F};
 			/* Normal edge-stopping sigma for the GI bilateral blur. */
-			constexpr auto GraphicsRayTracingGINormalSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/NormalSigma"};
-			constexpr auto DefaultGraphicsRayTracingGINormalSigma{0.5F};
+			constexpr auto GraphicsPPIndirectDiffuseRTNormalSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/NormalSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTNormalSigma{0.5F};
 
 			/* Ray Tracing > Global Illumination > Temporal accumulation.
 			 * Exponential moving average over reprojected history: effective sample count
 			 * becomes SampleCount / Alpha (8 spp @ 0.1 ≈ 80 effective samples). */
-			constexpr auto GraphicsRayTracingGITemporalEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalEnabled{true};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalEnabledKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/Enabled"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalEnabled{true};
 			/* Blend weight of the CURRENT frame (lower = smoother, more history lag). */
-			constexpr auto GraphicsRayTracingGITemporalAlphaKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/Alpha"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalAlpha{0.1F};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalAlphaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/Alpha"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalAlpha{0.1F};
 			/* Relative camera-distance tolerance for history rejection (disocclusion test). */
-			constexpr auto GraphicsRayTracingGITemporalDepthToleranceKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/DepthTolerance"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalDepthTolerance{0.05F};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalDepthToleranceKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/DepthTolerance"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalDepthTolerance{0.05F};
 			/* Minimum cosine between current and history normals to accept history. */
-			constexpr auto GraphicsRayTracingGITemporalNormalThresholdKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NormalThreshold"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalNormalThreshold{0.8F};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalNormalThresholdKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/NormalThreshold"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalNormalThreshold{0.8F};
 			/* Rectify the reprojected history against the current 3x3 neighbourhood statistics
 			 * (anti-ghosting). Since 2026-08: VARIANCE CLIPPING (mean ± gamma * sigma, Salvi
 			 * GDC 2016 — same technique as the TAA), no longer a min/max clamp.
@@ -536,12 +545,12 @@ namespace EmEn
 			 * statistics pulls the history toward the noisy local distribution — about 5% of
 			 * GI energy lost on the Sponza corridor bench, no peak-to-peak gain. SVGF relies
 			 * on the double disocclusion validation alone; the key remains for A/B. */
-			constexpr auto GraphicsRayTracingGITemporalNeighborhoodClampKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/NeighborhoodClamp"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalNeighborhoodClamp{false};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalNeighborhoodClampKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/NeighborhoodClamp"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalNeighborhoodClamp{false};
 			/* Width of the variance-clipping bound, in standard deviations (gamma). Smaller =
 			 * tighter anti-ghosting but slower convergence; larger = smoother accumulation. */
-			constexpr auto GraphicsRayTracingGITemporalVarianceGammaKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/VarianceGamma"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalVarianceGamma{1.0F};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalVarianceGammaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/VarianceGamma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalVarianceGamma{1.0F};
 			/* Advance the per-pixel noise every frame along the R2 low-discrepancy sequence so
 			 * the temporal accumulation averages the sampling error instead of freezing it as a
 			 * static pattern. Only effective when the temporal chain is enabled — animated noise
@@ -553,53 +562,53 @@ namespace EmEn
 			 * peak-to-peak 0.55 vs the 0.67-0.83 marbled baseline. History (2026-08-05): with
 			 * the FIXED-alpha EMA alone this regressed x2.4 — never enable it without the
 			 * spatial filter ahead of the resolve. */
-			constexpr auto GraphicsRayTracingGITemporalAnimatedNoiseKey{"Core/Graphics/RayTracing/GlobalIllumination/Temporal/AnimatedNoise"};
-			constexpr auto DefaultGraphicsRayTracingGITemporalAnimatedNoise{true};
+			constexpr auto GraphicsPPIndirectDiffuseRTTemporalAnimatedNoiseKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Temporal/AnimatedNoise"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTTemporalAnimatedNoise{true};
 
 			/* Ray Tracing > Global Illumination > Denoiser (shared GIDenoiser component, SVGF).
 			 * À-trous iterations over the temporally integrated irradiance (5x5 kernel,
 			 * footprint doubles each pass: 1, 2, 4, 8, 16 texels). 0 disables the spatial
 			 * filter entirely (temporal resolve only — the A/B lever). Replaces the former
 			 * shared bilateral blur H/V (the BlurRadius key is inert for RTGI since then). */
-			constexpr auto GraphicsRayTracingGIDenoiserIterationsKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/Iterations"};
-			constexpr auto DefaultGraphicsRayTracingGIDenoiserIterations{4U};
+			constexpr auto GraphicsPPIndirectDiffuseRTDenoiserIterationsKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Denoiser/Iterations"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTDenoiserIterations{4U};
 			/* Luminance edge-stopping sigma, normalised by the LOCAL standard deviation
 			 * (SVGF auto-dosage: noisy → smooth hard, converged → preserve detail).
 			 * Larger = closer to a plain depth/normal bilateral (guidance off). */
-			constexpr auto GraphicsRayTracingGIDenoiserLuminanceSigmaKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/LuminanceSigma"};
-			constexpr auto DefaultGraphicsRayTracingGIDenoiserLuminanceSigma{4.0F};
+			constexpr auto GraphicsPPIndirectDiffuseRTDenoiserLuminanceSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Denoiser/LuminanceSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTDenoiserLuminanceSigma{4.0F};
 			/* Per-pixel 1/N accumulation counter (SVGF): the temporal blend weight is
 			 * max(1/(age+1), 1/MaxAccumulation) instead of the fixed Temporal/Alpha — fast
 			 * convergence after a disocclusion (alpha 1, 1/2, 1/3...), tiny steady-state
 			 * variance leak (about 0.8% at N=64 versus about 23% at fixed alpha 0.1, the
 			 * factor that sank the first animated-noise attempt). Temporal/Alpha only rules
 			 * when this is off (A/B lever). */
-			constexpr auto GraphicsRayTracingGIDenoiserAccumulationCounterKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/AccumulationCounter"};
-			constexpr auto DefaultGraphicsRayTracingGIDenoiserAccumulationCounter{true};
+			constexpr auto GraphicsPPIndirectDiffuseRTDenoiserAccumulationCounterKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Denoiser/AccumulationCounter"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTDenoiserAccumulationCounter{true};
 			/* Accumulation cap N (the steady-state blend weight floor is 1/N). Larger =
 			 * smoother but slower to react to lighting changes. */
-			constexpr auto GraphicsRayTracingGIDenoiserMaxAccumulationKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/MaxAccumulation"};
-			constexpr auto DefaultGraphicsRayTracingGIDenoiserMaxAccumulation{64U};
+			constexpr auto GraphicsPPIndirectDiffuseRTDenoiserMaxAccumulationKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Denoiser/MaxAccumulation"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTDenoiserMaxAccumulation{64U};
 			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age
 			 * (white = young/disoccluded). Diagnostic only, costs nothing at 0. */
-			constexpr auto GraphicsRayTracingGIDenoiserDebugViewKey{"Core/Graphics/RayTracing/GlobalIllumination/Denoiser/DebugView"};
-			constexpr auto DefaultGraphicsRayTracingGIDenoiserDebugView{0U};
+			constexpr auto GraphicsPPIndirectDiffuseRTDenoiserDebugViewKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/Denoiser/DebugView"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTDenoiserDebugView{0U};
 
 			/* Ray Tracing > Global Illumination > Multi-bounce feedback.
 			 * Bounce rays landing on a surface visible last frame pick up its accumulated
 			 * indirect radiance: the geometric series converges to the multi-bounce solution
 			 * (one traced bounce per frame, energy 1/(1-albedo*strength) at steady state).
 			 * Requires the temporal accumulation to be enabled. */
-			constexpr auto GraphicsRayTracingGIMultiBounceEnabledKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Enabled"};
-			constexpr auto DefaultGraphicsRayTracingGIMultiBounceEnabled{true};
+			constexpr auto GraphicsPPIndirectDiffuseRTMultiBounceEnabledKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/MultiBounce/Enabled"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTMultiBounceEnabled{true};
 			/* Damping of the feedback series: 0 = single bounce, 1 = full geometric series. */
-			constexpr auto GraphicsRayTracingGIMultiBounceStrengthKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Strength"};
-			constexpr auto DefaultGraphicsRayTracingGIMultiBounceStrength{1.0F};
+			constexpr auto GraphicsPPIndirectDiffuseRTMultiBounceStrengthKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/MultiBounce/Strength"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTMultiBounceStrength{1.0F};
 			/* Upper bound on the radiance re-injected per bounce (anti-firefly, divergence guard). */
-			constexpr auto GraphicsRayTracingGIMultiBounceClampKey{"Core/Graphics/RayTracing/GlobalIllumination/MultiBounce/Clamp"};
-			constexpr auto DefaultGraphicsRayTracingGIMultiBounceClamp{4.0F};
+			constexpr auto GraphicsPPIndirectDiffuseRTMultiBounceClampKey{"Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/MultiBounce/Clamp"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseRTMultiBounceClamp{4.0F};
 
 			/* Post-processing > frame cut around the translucent pass. When the frame contains
 			 * grab-pass (transmissive) objects and an enabled indirect-diffuse effect, the chain is
@@ -607,38 +616,137 @@ namespace EmEn
 			 * a glass TRANSMITS it, then everything else after the translucent pass. OFF runs the whole
 			 * chain after the translucent pass, as before Aug 2026 — an A/B switch for measurement,
 			 * not a quality knob: with it off, nothing seen through a glass receives indirect light. */
-			constexpr auto GraphicsPostProcessingCutFrameAroundTranslucencyKey{"Core/Graphics/PostProcessing/CutFrameAroundTranslucency"};
-			constexpr auto DefaultGraphicsPostProcessingCutFrameAroundTranslucency{true};
+			constexpr auto GraphicsPPCutFrameAroundTranslucencyKey{"Core/Graphics/PostProcessing/CutFrameAroundTranslucency"};
+			constexpr auto DefaultGraphicsPPCutFrameAroundTranslucency{true};
+
+			/* Post-processing > which LANE the lighting family starts on: "Auto" (the best lane
+			 * this machine can actually run), "RayTracing", "ScreenSpace", or "None" for no
+			 * indirect lighting at all. Every lighting concept exists in both lanes and both stay
+			 * resident, so this only decides the SELECTION at scene build; the runtime switch
+			 * (Core.SceneManagerService.PostProcess.setLightingMode, KeyPad9) is unaffected and
+			 * overrides it for the session.
+			 * ⚠️⚠️ IT ALSO DECIDES WHETHER THE ACCELERATION STRUCTURES ARE BUILT AT ALL. The
+			 * Renderer creates its AccelerationStructureBuilder only for "Auto" and "RayTracing"
+			 * (and only on a capable device), and a BLAS is built when a geometry LOADS — a
+			 * geometry cannot gain one afterwards. So with "ScreenSpace" or "None" there is
+			 * nothing to trace against for the whole session, `installLightingFamily()` does not
+			 * even file the traced lane, and `setLightingMode("RayTracing")` from the console is
+			 * REFUSED rather than silently rendering nothing. Changing lane to a traced one is a
+			 * relaunch, by design.
+			 * ⚠️ "Auto" is the DEFAULT because a fixed default makes a freshly written file
+			 * CONTRADICT ITSELF on a machine that cannot honour it (owner report, 2026-09-10 —
+			 * "la clé est RayTracing alors que je vois le mode en ScreenSpace", back then caused
+			 * by a second key that silently dominated this one; that key is now gone). "Auto"
+			 * resolves against what the machine offers and can never be wrong.
+			 * ⚠️ Naming a lane EXPLICITLY is therefore a REQUEST, and an unhonoured request is
+			 * traced as a warning at startup — "Auto" is not a request and stays silent.
+			 * ⚠️ Named after what it SELECTS rather than after a mechanism: a boolean called
+			 * "EnableRayTracing" would read like a hardware switch, which this is not. */
+			constexpr auto GraphicsPPLightingLaneKey{"Core/Graphics/PostProcessing/LightingLane"};
+			/* The two values that are NOT a LightingLane: "Auto" is a resolution policy, "None"
+			 * switches the whole family off. The two real lanes come from to_cstring(LightingLane). */
+			constexpr auto GraphicsPPLightingLaneAuto{"Auto"};
+			constexpr auto GraphicsPPLightingLaneNone{"None"};
+			constexpr auto DefaultGraphicsPPLightingLane{GraphicsPPLightingLaneAuto};
+
+			/* Post-processing > per-CONCEPT switch of the lighting family. Turning one off selects
+			 * NO occupant for that slot, whichever lane is active — it is the concept that is
+			 * switched off, not one of its implementations. */
+			constexpr auto GraphicsPPContactShadowsEnabledKey{"Core/Graphics/PostProcessing/ContactShadows/Enabled"};
+			constexpr auto DefaultGraphicsPPContactShadowsEnabled{true};
+			constexpr auto GraphicsPPIndirectDiffuseEnabledKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Enabled"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseEnabled{true};
+			constexpr auto GraphicsPPReflectionsEnabledKey{"Core/Graphics/PostProcessing/Reflections/Enabled"};
+			constexpr auto DefaultGraphicsPPReflectionsEnabled{true};
+			constexpr auto GraphicsPPAmbientOcclusionEnabledKey{"Core/Graphics/PostProcessing/AmbientOcclusion/Enabled"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionEnabled{true};
+
+			/* Post-processing > the two PHOTOGRAPHIC effects a user may refuse outright: they are
+			 * expensive (DepthOfField is a 7-pass chain, MotionBlur a 4-pass one) and they are the
+			 * two that people find intrusive.
+			 * ⚠️⚠️ These OVERRIDE the scene. The camera is the photographic authority
+			 * (Camera::enableDepthOfField() / enableMotionBlur()) but it only makes a REQUEST;
+			 * PostProcessStack::syncCameraEffects() refuses to materialize the effect when the key
+			 * says no, so a demo that turns it on for style is simply ignored. That is the whole
+			 * point — until Sep 2026 the motion-blur key was consulted by the APPLICATION alone
+			 * (projet-alpha's Player, at spawn time), so any demo calling enableMotionBlur() on
+			 * the camera bypassed it completely.
+			 * ⚠️ `Glare` and `ToneMapping` get no such key on purpose: the tone mapping is not an
+			 * option but the sensor response, and refusing it sends raw photometric radiance to an
+			 * LDR swap chain — measured as a white screen in daylight and a black one at night.
+			 * ⚠️ The defaults are ASYMMETRIC, and deliberately: motion blur was already off by
+			 * default before this key existed, depth of field was always honoured. Both defaults
+			 * preserve the behaviour their effect had. */
+			/* Post-processing > ContactShadows, both lanes. The concept had NO settings key at all
+			 * until Sep 2026, in either lane, which meant tuning it required a rebuild — for an
+			 * effect whose whole quality question is "what value do these knobs want".
+			 * ⚠️ `MaxDistance`, `NormalBias`, `Intensity` and `MaxBlurRadius` exist in BOTH lanes
+			 * and mean the SAME THING in the same units (metres for the first, world units for the
+			 * bias). That is deliberate and it is what makes a lane A/B honest: the two occupants
+			 * of a slot must be comparable at equal settings, or the comparison measures the
+			 * settings instead of the techniques. Only the screen-space lane's last two are its
+			 * own, because they describe its mechanism and the traced one has no equivalent. */
+			constexpr auto GraphicsPPContactShadowsRTMaxDistanceKey{"Core/Graphics/PostProcessing/ContactShadows/RayTracing/MaxDistance"};
+			constexpr auto DefaultGraphicsPPContactShadowsRTMaxDistance{2.0F};
+			constexpr auto GraphicsPPContactShadowsRTNormalBiasKey{"Core/Graphics/PostProcessing/ContactShadows/RayTracing/NormalBias"};
+			constexpr auto DefaultGraphicsPPContactShadowsRTNormalBias{0.01F};
+			constexpr auto GraphicsPPContactShadowsRTIntensityKey{"Core/Graphics/PostProcessing/ContactShadows/RayTracing/Intensity"};
+			constexpr auto DefaultGraphicsPPContactShadowsRTIntensity{0.8F};
+			constexpr auto GraphicsPPContactShadowsRTMaxBlurRadiusKey{"Core/Graphics/PostProcessing/ContactShadows/RayTracing/MaxBlurRadius"};
+			constexpr auto DefaultGraphicsPPContactShadowsRTMaxBlurRadius{10.0F};
+
+			constexpr auto GraphicsPPContactShadowsSSMaxDistanceKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/MaxDistance"};
+			constexpr auto DefaultGraphicsPPContactShadowsSSMaxDistance{2.0F};
+			constexpr auto GraphicsPPContactShadowsSSNormalBiasKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/NormalBias"};
+			constexpr auto DefaultGraphicsPPContactShadowsSSNormalBias{0.01F};
+			constexpr auto GraphicsPPContactShadowsSSIntensityKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/Intensity"};
+			constexpr auto DefaultGraphicsPPContactShadowsSSIntensity{0.8F};
+			constexpr auto GraphicsPPContactShadowsSSMaxBlurRadiusKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/MaxBlurRadius"};
+			constexpr auto DefaultGraphicsPPContactShadowsSSMaxBlurRadius{10.0F};
+			/* ⚠️ THE knob of the screen-space lane. The depth buffer is a heightfield with no
+			 * thickness, so an occluder is only recognised when the ray passes BEHIND a sample by
+			 * less than this, in metres. Too thin and light leaks through thin geometry; too thick
+			 * and a shadow halo trails behind every occluder. It has no ray-traced equivalent:
+			 * a TLAS knows what is solid. */
+			constexpr auto GraphicsPPContactShadowsSSThicknessKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/Thickness"};
+			constexpr auto DefaultGraphicsPPContactShadowsSSThickness{0.25F};
+			/* Steps along the march. The step length is MaxDistance / StepCount, in metres, so
+			 * raising the distance without raising this thins the sampling. */
+			constexpr auto GraphicsPPContactShadowsSSStepCountKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/StepCount"};
+			constexpr auto DefaultGraphicsPPContactShadowsSSStepCount{16U};
+
+			constexpr auto GraphicsPPDepthOfFieldEnabledKey{"Core/Graphics/PostProcessing/DepthOfField/Enabled"};
+			constexpr auto DefaultGraphicsPPDepthOfFieldEnabled{true};
+			constexpr auto GraphicsPPMotionBlurEnabledKey{"Core/Graphics/PostProcessing/MotionBlur/Enabled"};
+			constexpr auto DefaultGraphicsPPMotionBlurEnabled{false};
 
 			/* Anti-Aliasing > Temporal (TAA). HDR resolve BEFORE DoF/tone mapping (the only
 			 * AA effect not bound by the runsAfterToneMapping contract — the Karis luminance
 			 * weighting below is what makes HDR accumulation safe). Requires the velocity
 			 * G-buffer and drives the Halton (2,3) projection jitter (requiresJitter). */
-			constexpr auto GraphicsTAAEnabledKey{"Core/Graphics/AntiAliasing/Temporal/Enabled"};
-			constexpr auto DefaultGraphicsTAAEnabled{false};
+			constexpr auto GraphicsPPTemporalAAEnabledKey{"Core/Graphics/PostProcessing/TemporalAA/Enabled"};
+			constexpr auto DefaultGraphicsPPTemporalAAEnabled{false};
 			/* Blend weight of the CURRENT frame (0.1 = 90% history: strong AA, slower response). */
-			constexpr auto GraphicsTAAAlphaKey{"Core/Graphics/AntiAliasing/Temporal/Alpha"};
-			constexpr auto DefaultGraphicsTAAAlpha{0.1F};
+			constexpr auto GraphicsPPTemporalAAAlphaKey{"Core/Graphics/PostProcessing/TemporalAA/Alpha"};
+			constexpr auto DefaultGraphicsPPTemporalAAAlpha{0.1F};
 			/* Variance clipping gamma: half-size of the YCoCg statistical AABB in standard
 			 * deviations (lower = less ghosting, more flicker). */
-			constexpr auto GraphicsTAAVarianceGammaKey{"Core/Graphics/AntiAliasing/Temporal/VarianceGamma"};
-			constexpr auto DefaultGraphicsTAAVarianceGamma{1.0F};
+			constexpr auto GraphicsPPTemporalAAVarianceGammaKey{"Core/Graphics/PostProcessing/TemporalAA/VarianceGamma"};
+			constexpr auto DefaultGraphicsPPTemporalAAVarianceGamma{1.0F};
 			/* Karis inverse-luminance blend weighting (HDR anti-firefly / anti-flicker). */
-			constexpr auto GraphicsTAALumaWeightingKey{"Core/Graphics/AntiAliasing/Temporal/LumaWeighting"};
-			constexpr auto DefaultGraphicsTAALumaWeighting{true};
+			constexpr auto GraphicsPPTemporalAALumaWeightingKey{"Core/Graphics/PostProcessing/TemporalAA/LumaWeighting"};
+			constexpr auto DefaultGraphicsPPTemporalAALumaWeighting{true};
 
 			/* Motion Blur — effect QUALITY knobs only. The blur LENGTH is photographic and
 			 * belongs to the active camera: shutter speed / frame duration = shutter angle
 			 * (Scenes::Component::Camera::setShutterSpeed()). Requires the velocity G-buffer;
 			 * runs in HDR, after the temporal resolve and before the photographic effects. */
-			constexpr auto GraphicsMotionBlurEnabledKey{"Core/Graphics/MotionBlur/Enabled"};
-			constexpr auto DefaultGraphicsMotionBlurEnabled{false};
 			/* Samples walked along the dominant velocity (odd: one lands on the pixel centre). */
-			constexpr auto GraphicsMotionBlurSampleCountKey{"Core/Graphics/MotionBlur/SampleCount"};
-			constexpr auto DefaultGraphicsMotionBlurSampleCount{24U};
+			constexpr auto GraphicsPPMotionBlurSampleCountKey{"Core/Graphics/PostProcessing/MotionBlur/SampleCount"};
+			constexpr auto DefaultGraphicsPPMotionBlurSampleCount{24U};
 			/* Depth interval, in meters, softening the foreground/background classification. */
-			constexpr auto GraphicsMotionBlurSoftDepthExtentKey{"Core/Graphics/MotionBlur/SoftDepthExtent"};
-			constexpr auto DefaultGraphicsMotionBlurSoftDepthExtent{0.05F};
+			constexpr auto GraphicsPPMotionBlurSoftDepthExtentKey{"Core/Graphics/PostProcessing/MotionBlur/SoftDepthExtent"};
+			constexpr auto DefaultGraphicsPPMotionBlurSoftDepthExtent{0.05F};
 
 			/* Volumetric light — the SCREEN-SPACE radial-blur god rays (Mitchell, GPU Gems 3).
 			 * ⚠️ These are radial-blur tuning knobs, NOT a participating medium: 'density' is a
@@ -647,17 +755,17 @@ namespace EmEn
 			 * atmosphere's medium would make all of them meaningless — they are exposed so the two
 			 * implementations can be compared at runtime without a rebuild, which is the only
 			 * reason this effect had no settings key for so long. */
-			constexpr auto GraphicsVolumetricLightDensityKey{"Core/Graphics/VolumetricLight/Density"};
-			constexpr auto DefaultGraphicsVolumetricLightDensity{1.0F};
-			constexpr auto GraphicsVolumetricLightDecayKey{"Core/Graphics/VolumetricLight/Decay"};
-			constexpr auto DefaultGraphicsVolumetricLightDecay{0.975F};
-			constexpr auto GraphicsVolumetricLightExposureKey{"Core/Graphics/VolumetricLight/Exposure"};
-			constexpr auto DefaultGraphicsVolumetricLightExposure{0.25F};
-			constexpr auto GraphicsVolumetricLightSampleCountKey{"Core/Graphics/VolumetricLight/SampleCount"};
-			constexpr auto DefaultGraphicsVolumetricLightSampleCount{64U};
+			constexpr auto GraphicsPPVolumetricLightDensityKey{"Core/Graphics/PostProcessing/VolumetricLight/Density"};
+			constexpr auto DefaultGraphicsPPVolumetricLightDensity{1.0F};
+			constexpr auto GraphicsPPVolumetricLightDecayKey{"Core/Graphics/PostProcessing/VolumetricLight/Decay"};
+			constexpr auto DefaultGraphicsPPVolumetricLightDecay{0.975F};
+			constexpr auto GraphicsPPVolumetricLightExposureKey{"Core/Graphics/PostProcessing/VolumetricLight/Exposure"};
+			constexpr auto DefaultGraphicsPPVolumetricLightExposure{0.25F};
+			constexpr auto GraphicsPPVolumetricLightSampleCountKey{"Core/Graphics/PostProcessing/VolumetricLight/SampleCount"};
+			constexpr auto DefaultGraphicsPPVolumetricLightSampleCount{64U};
 			/* EMA weight of the occlusion mask: 1 = no accumulation, 0.2 ~= 8 frames. */
-			constexpr auto GraphicsVolumetricLightTemporalAlphaKey{"Core/Graphics/VolumetricLight/TemporalAlpha"};
-			constexpr auto DefaultGraphicsVolumetricLightTemporalAlpha{0.2F};
+			constexpr auto GraphicsPPVolumetricLightTemporalAlphaKey{"Core/Graphics/PostProcessing/VolumetricLight/TemporalAlpha"};
+			constexpr auto DefaultGraphicsPPVolumetricLightTemporalAlpha{0.2F};
 
 			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
 			 * focal length, focus) belong to the active camera (physical camera model,
@@ -666,104 +774,104 @@ namespace EmEn
 			 * clamp — the blur AMOUNT is the thin-lens circle of confusion, converted to pixels
 			 * from the sensor fraction (no scale factor). 32 half-res = ~64 full-res pixels of
 			 * diameter, past which 48 spiral taps would start to ring. */
-			constexpr auto GraphicsDepthOfFieldMaxRadiusKey{"Core/Graphics/DepthOfField/MaxRadius"};
-			constexpr auto DefaultGraphicsDepthOfFieldMaxRadius{32.0F};
+			constexpr auto GraphicsPPDepthOfFieldMaxRadiusKey{"Core/Graphics/PostProcessing/DepthOfField/MaxRadius"};
+			constexpr auto DefaultGraphicsPPDepthOfFieldMaxRadius{32.0F};
 			/* Golden-spiral gather taps per pixel (bokeh quality). */
-			constexpr auto GraphicsDepthOfFieldSampleCountKey{"Core/Graphics/DepthOfField/SampleCount"};
-			constexpr auto DefaultGraphicsDepthOfFieldSampleCount{48U};
+			constexpr auto GraphicsPPDepthOfFieldSampleCountKey{"Core/Graphics/PostProcessing/DepthOfField/SampleCount"};
+			constexpr auto DefaultGraphicsPPDepthOfFieldSampleCount{48U};
 			/* Auto-focus adaptation speed (rack focus), in 1/seconds. */
-			constexpr auto GraphicsDepthOfFieldAutoFocusSpeedKey{"Core/Graphics/DepthOfField/AutoFocusSpeed"};
-			constexpr auto DefaultGraphicsDepthOfFieldAutoFocusSpeed{3.0F};
+			constexpr auto GraphicsPPDepthOfFieldAutoFocusSpeedKey{"Core/Graphics/PostProcessing/DepthOfField/AutoFocusSpeed"};
+			constexpr auto DefaultGraphicsPPDepthOfFieldAutoFocusSpeed{3.0F};
 			/* Near-field (foreground) blur with silhouette bleeding. */
-			constexpr auto GraphicsDepthOfFieldNearFieldKey{"Core/Graphics/DepthOfField/NearField"};
-			constexpr auto DefaultGraphicsDepthOfFieldNearField{true};
+			constexpr auto GraphicsPPDepthOfFieldNearFieldKey{"Core/Graphics/PostProcessing/DepthOfField/NearField"};
+			constexpr auto DefaultGraphicsPPDepthOfFieldNearField{true};
 
 			/* Screen Space > Ambient Occlusion (first screen-space effect group — SSGI keys will join it). */
 			/* Hemisphere sampling radius, in world units. */
-			constexpr auto GraphicsScreenSpaceAORadiusKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Radius"};
-			constexpr auto DefaultGraphicsScreenSpaceAORadius{0.5F};
+			constexpr auto GraphicsPPAmbientOcclusionSSRadiusKey{"Core/Graphics/PostProcessing/AmbientOcclusion/ScreenSpace/Radius"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionSSRadius{0.5F};
 			/* AO darkening intensity multiplier (applied once, clamped; 1.0 = pure visibility term). */
-			constexpr auto GraphicsScreenSpaceAOIntensityKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Intensity"};
-			constexpr auto DefaultGraphicsScreenSpaceAOIntensity{1.0F};
+			constexpr auto GraphicsPPAmbientOcclusionSSIntensityKey{"Core/Graphics/PostProcessing/AmbientOcclusion/ScreenSpace/Intensity"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionSSIntensity{1.0F};
 			/* Depth comparison bias to prevent self-occlusion, in view-space units. */
-			constexpr auto GraphicsScreenSpaceAOBiasKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/Bias"};
-			constexpr auto DefaultGraphicsScreenSpaceAOBias{0.025F};
+			constexpr auto GraphicsPPAmbientOcclusionSSBiasKey{"Core/Graphics/PostProcessing/AmbientOcclusion/ScreenSpace/Bias"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionSSBias{0.025F};
 			/* Samples per pixel for screen-space ambient occlusion. */
-			constexpr auto GraphicsScreenSpaceAOSampleCountKey{"Core/Graphics/ScreenSpace/AmbientOcclusion/SampleCount"};
-			constexpr auto DefaultGraphicsScreenSpaceAOSampleCount{32U};
+			constexpr auto GraphicsPPAmbientOcclusionSSSampleCountKey{"Core/Graphics/PostProcessing/AmbientOcclusion/ScreenSpace/SampleCount"};
+			constexpr auto DefaultGraphicsPPAmbientOcclusionSSSampleCount{32U};
 
 			/* Screen Space > Global Illumination */
 			/* Maximum GI ray-march distance, in world units. */
-			constexpr auto GraphicsScreenSpaceGIMaxDistanceKey{"Core/Graphics/ScreenSpace/GlobalIllumination/MaxDistance"};
-			constexpr auto DefaultGraphicsScreenSpaceGIMaxDistance{5.0F};
+			constexpr auto GraphicsPPIndirectDiffuseSSMaxDistanceKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/MaxDistance"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSMaxDistance{5.0F};
 			/* Indirect lighting intensity multiplier. */
-			constexpr auto GraphicsScreenSpaceGIIntensityKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Intensity"};
-			constexpr auto DefaultGraphicsScreenSpaceGIIntensity{0.8F};
+			constexpr auto GraphicsPPIndirectDiffuseSSIntensityKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Intensity"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSIntensity{0.8F};
 			/* Depth thickness assumed behind each depth sample, in view-space units. */
-			constexpr auto GraphicsScreenSpaceGIThicknessKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Thickness"};
-			constexpr auto DefaultGraphicsScreenSpaceGIThickness{0.5F};
+			constexpr auto GraphicsPPIndirectDiffuseSSThicknessKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Thickness"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSThickness{0.5F};
 			/* Rays per pixel for screen-space global illumination. */
-			constexpr auto GraphicsScreenSpaceGISampleCountKey{"Core/Graphics/ScreenSpace/GlobalIllumination/SampleCount"};
-			constexpr auto DefaultGraphicsScreenSpaceGISampleCount{8U};
+			constexpr auto GraphicsPPIndirectDiffuseSSSampleCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SampleCount"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSampleCount{8U};
 			/* Ray-march steps per ray. */
-			constexpr auto GraphicsScreenSpaceGIStepCountKey{"Core/Graphics/ScreenSpace/GlobalIllumination/StepCount"};
-			constexpr auto DefaultGraphicsScreenSpaceGIStepCount{16U};
+			constexpr auto GraphicsPPIndirectDiffuseSSStepCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/StepCount"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSStepCount{16U};
 			/* Bilateral denoising blur radius for GI, in pixels. */
-			constexpr auto GraphicsScreenSpaceGIBlurRadiusKey{"Core/Graphics/ScreenSpace/GlobalIllumination/BlurRadius"};
-			constexpr auto DefaultGraphicsScreenSpaceGIBlurRadius{4U};
+			constexpr auto GraphicsPPIndirectDiffuseSSBlurRadiusKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/BlurRadius"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSBlurRadius{4U};
 			/* Depth edge-stopping sigma for the GI bilateral blur. */
-			constexpr auto GraphicsScreenSpaceGIDepthSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/DepthSigma"};
-			constexpr auto DefaultGraphicsScreenSpaceGIDepthSigma{1.0F};
+			constexpr auto GraphicsPPIndirectDiffuseSSDepthSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/DepthSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSDepthSigma{1.0F};
 			/* Normal edge-stopping sigma for the GI bilateral blur. */
-			constexpr auto GraphicsScreenSpaceGINormalSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/NormalSigma"};
-			constexpr auto DefaultGraphicsScreenSpaceGINormalSigma{0.5F};
+			constexpr auto GraphicsPPIndirectDiffuseSSNormalSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/NormalSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSNormalSigma{0.5F};
 
 			/* Screen Space > Global Illumination > Temporal (GIDenoiser resolve — SSGI's
 			 * first temporal accumulation; mirrors the RayTracing group, same semantics). */
-			constexpr auto GraphicsScreenSpaceGITemporalEnabledKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/Enabled"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalEnabled{true};
-			constexpr auto GraphicsScreenSpaceGITemporalAlphaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/Alpha"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalAlpha{0.1F};
-			constexpr auto GraphicsScreenSpaceGITemporalDepthToleranceKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/DepthTolerance"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalDepthTolerance{0.05F};
-			constexpr auto GraphicsScreenSpaceGITemporalNormalThresholdKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/NormalThreshold"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalNormalThreshold{0.8F};
-			constexpr auto GraphicsScreenSpaceGITemporalVarianceGammaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/VarianceGamma"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalVarianceGamma{1.0F};
-			constexpr auto GraphicsScreenSpaceGITemporalNeighborhoodClampKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/NeighborhoodClamp"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalNeighborhoodClamp{false};
-			constexpr auto GraphicsScreenSpaceGITemporalAnimatedNoiseKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Temporal/AnimatedNoise"};
-			constexpr auto DefaultGraphicsScreenSpaceGITemporalAnimatedNoise{true};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalEnabledKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/Enabled"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalEnabled{true};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalAlphaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/Alpha"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalAlpha{0.1F};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalDepthToleranceKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/DepthTolerance"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalDepthTolerance{0.05F};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalNormalThresholdKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/NormalThreshold"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalNormalThreshold{0.8F};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalVarianceGammaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/VarianceGamma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalVarianceGamma{1.0F};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalNeighborhoodClampKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/NeighborhoodClamp"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalNeighborhoodClamp{false};
+			constexpr auto GraphicsPPIndirectDiffuseSSTemporalAnimatedNoiseKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Temporal/AnimatedNoise"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSTemporalAnimatedNoise{true};
 
 			/* Screen Space > Global Illumination > Denoiser (shared GIDenoiser component —
 			 * mirrors the RayTracing group, same semantics and defaults). */
-			constexpr auto GraphicsScreenSpaceGIDenoiserIterationsKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/Iterations"};
-			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserIterations{4U};
-			constexpr auto GraphicsScreenSpaceGIDenoiserLuminanceSigmaKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/LuminanceSigma"};
-			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserLuminanceSigma{4.0F};
-			constexpr auto GraphicsScreenSpaceGIDenoiserAccumulationCounterKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/AccumulationCounter"};
-			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserAccumulationCounter{true};
-			constexpr auto GraphicsScreenSpaceGIDenoiserMaxAccumulationKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/MaxAccumulation"};
-			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserMaxAccumulation{64U};
-			constexpr auto GraphicsScreenSpaceGIDenoiserDebugViewKey{"Core/Graphics/ScreenSpace/GlobalIllumination/Denoiser/DebugView"};
-			constexpr auto DefaultGraphicsScreenSpaceGIDenoiserDebugView{0U};
+			constexpr auto GraphicsPPIndirectDiffuseSSDenoiserIterationsKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Denoiser/Iterations"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSDenoiserIterations{4U};
+			constexpr auto GraphicsPPIndirectDiffuseSSDenoiserLuminanceSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Denoiser/LuminanceSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSDenoiserLuminanceSigma{4.0F};
+			constexpr auto GraphicsPPIndirectDiffuseSSDenoiserAccumulationCounterKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Denoiser/AccumulationCounter"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSDenoiserAccumulationCounter{true};
+			constexpr auto GraphicsPPIndirectDiffuseSSDenoiserMaxAccumulationKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Denoiser/MaxAccumulation"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSDenoiserMaxAccumulation{64U};
+			constexpr auto GraphicsPPIndirectDiffuseSSDenoiserDebugViewKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/Denoiser/DebugView"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSDenoiserDebugView{0U};
 
 			/* Screen-space reflections (SSR). */
 			/* Compute reflections at half resolution (pixel doubling) to save performance.
 			 * Default FALSE (owner decision): screen-space effects run full-res by default —
 			 * they are the cheap tier of the reflection ladder, quality is their selling point. */
-			constexpr auto GraphicsScreenSpaceReflectionPixelDoublingKey{"Core/Graphics/ScreenSpace/Reflection/PixelDoubling"};
-			constexpr auto DefaultGraphicsScreenSpaceReflectionPixelDoubling{false};
+			constexpr auto GraphicsPPReflectionsSSPixelDoublingKey{"Core/Graphics/PostProcessing/Reflections/ScreenSpace/PixelDoubling"};
+			constexpr auto DefaultGraphicsPPReflectionsSSPixelDoubling{false};
 			/* Bilateral blur radius, in pixels — scaled per-pixel by the surface roughness
 			 * (a polished surface keeps a mirror-sharp reflection). */
-			constexpr auto GraphicsScreenSpaceReflectionBlurRadiusKey{"Core/Graphics/ScreenSpace/Reflection/BlurRadius"};
-			constexpr auto DefaultGraphicsScreenSpaceReflectionBlurRadius{2U};
+			constexpr auto GraphicsPPReflectionsSSBlurRadiusKey{"Core/Graphics/PostProcessing/Reflections/ScreenSpace/BlurRadius"};
+			constexpr auto DefaultGraphicsPPReflectionsSSBlurRadius{2U};
 			/* Depth edge-stopping sigma for the reflection bilateral blur. */
-			constexpr auto GraphicsScreenSpaceReflectionDepthSigmaKey{"Core/Graphics/ScreenSpace/Reflection/DepthSigma"};
-			constexpr auto DefaultGraphicsScreenSpaceReflectionDepthSigma{0.5F};
+			constexpr auto GraphicsPPReflectionsSSDepthSigmaKey{"Core/Graphics/PostProcessing/Reflections/ScreenSpace/DepthSigma"};
+			constexpr auto DefaultGraphicsPPReflectionsSSDepthSigma{0.5F};
 			/* Normal edge-stopping sigma for the reflection bilateral blur. */
-			constexpr auto GraphicsScreenSpaceReflectionNormalSigmaKey{"Core/Graphics/ScreenSpace/Reflection/NormalSigma"};
-			constexpr auto DefaultGraphicsScreenSpaceReflectionNormalSigma{0.3F};
+			constexpr auto GraphicsPPReflectionsSSNormalSigmaKey{"Core/Graphics/PostProcessing/Reflections/ScreenSpace/NormalSigma"};
+			constexpr auto DefaultGraphicsPPReflectionsSSNormalSigma{0.3F};
 
 			/* Level of Detail */
 			/* Automatically generate levels of detail for meshes. */

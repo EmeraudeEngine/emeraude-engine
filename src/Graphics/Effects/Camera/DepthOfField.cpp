@@ -431,10 +431,10 @@ namespace EmEn::Graphics::Effects::Camera
 
 		/* Effect-quality knobs, engine-wide and persisted in the settings file.
 		 * The OPTICAL parameters are NOT settings: they belong to the active camera. */
-		m_parameters.maxCoCRadius = settings.getOrSetDefault< float >(GraphicsDepthOfFieldMaxRadiusKey, DefaultGraphicsDepthOfFieldMaxRadius);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsDepthOfFieldSampleCountKey, DefaultGraphicsDepthOfFieldSampleCount);
-		m_parameters.autoFocusSpeed = settings.getOrSetDefault< float >(GraphicsDepthOfFieldAutoFocusSpeedKey, DefaultGraphicsDepthOfFieldAutoFocusSpeed);
-		m_parameters.nearFieldEnabled = settings.getOrSetDefault< bool >(GraphicsDepthOfFieldNearFieldKey, DefaultGraphicsDepthOfFieldNearField);
+		m_parameters.maxCoCRadius = settings.getOrSetDefault< float >(GraphicsPPDepthOfFieldMaxRadiusKey, DefaultGraphicsPPDepthOfFieldMaxRadius);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPDepthOfFieldSampleCountKey, DefaultGraphicsPPDepthOfFieldSampleCount);
+		m_parameters.autoFocusSpeed = settings.getOrSetDefault< float >(GraphicsPPDepthOfFieldAutoFocusSpeedKey, DefaultGraphicsPPDepthOfFieldAutoFocusSpeed);
+		m_parameters.nearFieldEnabled = settings.getOrSetDefault< bool >(GraphicsPPDepthOfFieldNearFieldKey, DefaultGraphicsPPDepthOfFieldNearField);
 
 		m_focusValid = false;
 		m_focusWriteIndex = 0;

@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Effects/Lighting/ContactShadows.hpp
+ * src/Graphics/Effects/Lighting/RTContactShadows.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -52,12 +52,12 @@ namespace EmEn::Graphics::Effects::Lighting
 	 * Requires hardware ray tracing support (automatically skipped when unavailable).
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
-	class EMEN_API ContactShadows final : public IndirectPostProcessEffect
+	class EMEN_API RTContactShadows final : public IndirectPostProcessEffect
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"ContactShadowsEffect"};
+			static constexpr auto ClassId{"RTContactShadowsEffect"};
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
 			 * @note Fine-detail depth-derived shadowing, after the indirect terms it darkens. */
@@ -116,7 +116,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param renderer A reference to the graphics renderer.
 			 */
 			explicit
-			ContactShadows (Renderer & renderer) noexcept
+			RTContactShadows (Renderer & renderer) noexcept
 				: IndirectPostProcessEffect{renderer}
 			{
 
@@ -127,7 +127,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param renderer A reference to the graphics renderer.
 			 * @param parameters The initial parameters.
 			 */
-			ContactShadows (Renderer & renderer, const Parameters & parameters) noexcept
+			RTContactShadows (Renderer & renderer, const Parameters & parameters) noexcept
 				: IndirectPostProcessEffect{renderer},
 				m_parameters{parameters}
 			{

@@ -1457,7 +1457,7 @@ namespace EmEn::Graphics
 			/* Skip ray tracing effects if RT is not available, disabled via settings, or the
 			 * TLAS is not consumable yet (async build during the first frames, scene without
 			 * RT geometry): drawing would use an unbound/never-written TLAS descriptor. */
-			if ( effect->requiresRayTracing() && (!m_renderer.device()->rayTracingEnabled() || !m_renderer.isRayTracingSettingEnabled() || !m_renderer.isRayTracingReady()) )
+			if ( effect->requiresRayTracing() && (!m_renderer.device()->rayTracingEnabled() || !m_renderer.isRayTracingReady()) )
 			{
 				continue;
 			}

@@ -335,7 +335,7 @@ configurations here. ⚠️ Prefer GPU timestamps over pixel statistics for anyt
 ### The cost is ray throughput, and nothing else
 
 `RTGIEffect/internal` is **linear in the sample count**, measured by settings A/B
-(`Core/Graphics/RayTracing/GlobalIllumination/SampleCount`). ⚠️ This sweep was run on the same
+(`Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/SampleCount`). ⚠️ This sweep was run on the same
 scene and pose but on the chain **before RTR was enabled**; RTGI itself is unaffected by that
 (43.96 there against 43.53 in the table above, within 1 %), only the frame totals shift:
 

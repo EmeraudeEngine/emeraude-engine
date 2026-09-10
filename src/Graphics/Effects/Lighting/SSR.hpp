@@ -300,7 +300,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_resolveLayout;
-			/* Quality knobs, read from the Core/Graphics/ScreenSpace/Reflection/? settings at create(). */
+			/* Quality knobs, read from the Core/Graphics/PostProcessing/Reflections/ScreenSpace/? settings at create(). */
 			uint32_t m_blurRadius{2U};
 			float m_depthSigma{0.5F};
 			float m_normalSigma{0.3F};

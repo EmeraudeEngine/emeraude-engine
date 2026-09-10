@@ -1552,6 +1552,196 @@ resolve and the whole photographic chain into ONE `Framebuffer/` bag of 16. It i
 > *intent*, not the class. `Scenes::EffectsToolkit::LensPresets` became `StylePresets` in the
 > same pass, since it composes `Effects::Style::*`.
 
+### Two LANES per lighting concept — resident, lazy, selectable at runtime (Sep 2026)
+
+Each of the four lighting concepts exists in two implementations: a **screen-space lane** and a
+**ray-traced lane**. `PostProcessStack::installLightingFamily(renderer)` files **both** into their
+slots and selects one; an application never names an effect.
+
+| Slot | ScreenSpace lane | RayTracing lane |
+|---|---|---|
+| `ContactShadows` | `SSContactShadows` | `RTContactShadows` |
+| `IndirectDiffuse` | `SSGI` | `RTGI` |
+| `Reflections` | `SSR` | `RTR` |
+| `AmbientOcclusion` | `SSAO` | `RTAO` |
+
+**A lane is not a taxonomy.** An effect is ray-traced **iff** `requiresRayTracing()` is true.
+Nothing else says so, and nothing else may — a second way of asking is a second way of getting a
+different answer.
+
+**Residency vs. creation vs. selection**, three distinct things that used to be one:
+
+- **Resident** — filed into a slot. The screen-space lane always is; the ray-traced lane is only
+  when the two *session-constant* conditions hold (`device()->rayTracingEnabled()` **and**
+  `Renderer::isRayTracingSettingEnabled()`). ⚠️ `isRayTracingReady()` is deliberately **not**
+  consulted here: it answers a question about *this frame*.
+- **Selected** — what the owner wants, one index per slot, written from the **main thread**
+  (console, an input handler) and read by the render thread. Written *only* through
+  `selectOccupant()` / `selectNoOccupant()` / `selectLightingLane()`.
+- **Created** — holds GPU resources. **Lazy**: an occupant nobody selected allocates nothing.
+  `PostProcessStack::syncSlotSelection()` materializes the one it is about to enable.
+
+**`syncSlotSelection()` is the SINGLE site where a chain effect is enabled or disabled.** It runs
+on the render thread, once per frame, between `syncCameraEffects()` and `syncSlotPairings()`. That
+split — intent on one thread, application on the other — is what makes a runtime switch safe.
+Calling `enable()` from a key handler or a console command races the chain walk.
+
+**Automatic fallback.** When the selected occupant cannot run, the slot falls back to the first
+sibling that can, and recovers on its own when the selected one becomes runnable again. The
+predicate is `canOccupantRun()`, which carries **the same three ray-tracing conditions the
+executor skips on** — they must stay identical, or the fallback and the recorder disagree.
+
+> [!CAUTION]
+> **The fallback and the lazy residency will eat each other without a grace period.**
+> `isRayTracingReady()` is false for the first frames of *every* scene (async TLAS build) and
+> cannot distinguish "not yet" from "never" — it is a null/created test on the current TLAS.
+> Falling back on the first stalled frame therefore materialized the **entire screen-space lane on
+> every launch** of a ray-traced scene, seconds before the traced one took over: measured on
+> Sponza, all three screen-space effects reported `created` while the traced lane was the one
+> running. `FallbackGraceFrames` (120) is what buys the warm-up out, while still rescuing a scene
+> that genuinely holds no ray-traced geometry.
+
+> [!CAUTION]
+> **A lane switch costs no reconfiguration, and that is a property of `requiresXXX()`.** The
+> stack aggregates its G-buffer requirements over **every resident** effect, selected or not, so
+> the scene target always carries the union of what both lanes need. Break that — gate any
+> `requires*()` on `isEnabled()` — and every switch starts recreating the scene target under the
+> render thread.
+
+> [!CAUTION]
+> **`resizeAll()` must skip an occupant that was never created.** `resize()` destroys *then*
+> creates and the caller raises the created flag on its result, so a resident alternative nobody
+> selected would **materialize itself at the first window resize** — the laziness evaporating on a
+> gesture that has nothing to do with it. Same reason `createAll()` creates only what is selected
+> and `destroyAll()` only destroys what exists.
+
+**Console** — the stack is a `Console::ControllableTrait` registered by `Scenes::Manager` on scene
+activation, so the active scene's chain is addressable as `Core.SceneManagerService.PostProcess.*`:
+`listEffects()`, `getStatus()`, `select(slot, effect)`, `disable(slot)`,
+`setLightingMode("ScreenSpace"|"RayTracing")`. A selection is applied on the next frame, never
+immediately. ⚠️ A stack the renderer materializes on its own (`Scene::requirePostProcessStack()`,
+the camera-only path) is **not** registered — that call runs on the render thread and mutating the
+console tree from there would race the main thread reading it.
+
+⚠️ The four camera-owned slots carry **no selection** (`syncSlotSelection()` skips them, the camera
+owns their lifetime). The console reports them from the effect's own state and labels them
+`camera-owned`; reading them from the selection indices made it print `ToneMapping: off` on a
+visibly tone-mapped frame.
+
+### The post-processing settings tree — by CONCEPT, then by lane (Sep 2026)
+
+Every post-processing setting lives under `Core/Graphics/PostProcessing/`, ordered the same way the
+code is: **concept first, mechanism second**.
+
+```
+Core/Graphics/PostProcessing/
+├── LightingLane                       "Auto" (default) | "RayTracing" | "ScreenSpace" | "None"
+├── CutFrameAroundTranslucency
+├── <Concept>/Enabled                  ContactShadows, IndirectDiffuse, Reflections, AmbientOcclusion
+├── <Concept>/RayTracing/<param>       the ray-traced lane's own knobs
+├── <Concept>/ScreenSpace/<param>      the screen-space lane's own knobs
+├── DepthOfField/Enabled               user refusal of the two expensive photographic effects;
+├── MotionBlur/Enabled                 it OVERRIDES the camera (see below)
+└── <Effect>/<param>                   single-lane effects: TemporalAA, VolumetricLight,
+                                       DepthOfField, MotionBlur
+```
+
+This replaced a tree split **by mechanism at the top level** (`Core/Graphics/RayTracing/…` vs
+`Core/Graphics/ScreenSpace/…`) — the very organisation this engine already rejected for the code in
+Sep 2026 when `Effects/Display|Lens|Framebuffer/` became `Effects/Lighting|Atmosphere|Resolve|Camera|Style/`.
+The settings were the last place still thinking the old way, and it showed: one concept appeared
+under two unrelated roots with key sets that had silently diverged (`RayTracing/AmbientOcclusion/`
+carried 7 keys, `ScreenSpace/AmbientOcclusion/` carried 4, and nothing in the tree said they were
+two implementations of one thing). Post-processing was also spread over **six** roots —
+`RayTracing/`, `ScreenSpace/`, `MotionBlur/`, `DepthOfField/`, `VolumetricLight/`,
+`AntiAliasing/Temporal/` — plus one key already sitting at `PostProcessing/`.
+
+**Vocabulary rules, so the settings file and the console never need translating:**
+
+- Section names are `EffectSlot` names. Hence `IndirectDiffuse` (not `GlobalIllumination`, which
+  also covers the specular this effect does not do) and `Reflections` (not `Reflection`). The
+  console prints those same words in `getStatus()` and takes them in `select(<slot>, <effect>)`.
+- Lanes are spelled `RayTracing` / `ScreenSpace` in full — the words `LightingLane`, `to_cstring()`
+  and `setLightingMode()` already use. Never `RT` / `SS` in a key. (C++ *symbols* do abbreviate the
+  lane — `GraphicsPPIndirectDiffuseRTIntensityKey` — because they are not user-facing and the file
+  already abbreviated; the string never does.)
+
+> [!CAUTION]
+> **`LightingLane` decides whether the acceleration structures exist AT ALL — it is a launch
+> decision, not a starting preference.** `Renderer::onInitialize()` creates the
+> `AccelerationStructureBuilder` only when the device is capable **and** the lane is `"Auto"` or
+> `"RayTracing"` (owner decision, 2026-09-10). A BLAS is built when a geometry **loads**
+> (`Geometry::Interface::onDependenciesLoaded()`, which skips when the builder is null) and a
+> geometry cannot gain one afterwards. Consequences, all deliberate:
+> - With `"ScreenSpace"` or `"None"`, nothing can be traced for the whole session.
+> - `installLightingFamily()` therefore asks **`renderer.accelerationStructureBuilder() != nullptr`**,
+>   not `device()->rayTracingEnabled()`, to decide residency — one pointer, one truth. The traced
+>   lane is simply not filed, so `listEffects()` shows it absent instead of offering a lie.
+> - `setLightingMode("RayTracing")` is **refused**, atomically, with an error naming the key.
+>   ⚠️ It used to switch the whole lighting family OFF and answer "selected": `selectLightingLane()`
+>   applied slot by slot and discovered there was nothing to select on the way. It now resolves
+>   every slot first and returns `false` without touching anything.
+> - Going to a traced lane is a **relaunch**. By design.
+>
+> **The key this replaced.** `Core/Graphics/RayTracing/Enabled` was deleted (2026-09-10, owner
+> decision): it said the same thing as `LightingLane` while silently **dominating** it, and the
+> owner hit it on the first settings reset — *"la clé est RayTracing alors que je vois le mode en
+> ScreenSpace"*. ⚠️ Its documentation here also **overstated** what it gated: the
+> `SHADER_DEVICE_ADDRESS | ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY` usage flags
+> (`VertexBufferObject.cpp`), `createRTDescriptorSet()` and the descriptor-pool AS entry were, and
+> still are, gated on **`Device::rayTracingEnabled()` alone** — pure hardware detection, since the
+> RT extensions are requested from `physicalDevice->supportsRayTracing()` without consulting any
+> setting (`Instance.cpp`). The key's only unique job was the builder, which is what moved.
+> `Core/Graphics/RayTracing/` survives for ray tracing that is **not** an effect — `TLASDistance`.
+>
+> **Two rules the episode leaves behind**, beyond this key:
+> - **`LightingLane` defaults to `"Auto"`**, never to a lane. Any fixed default makes a freshly
+>   written file contradict itself on a machine that cannot honour it.
+> - **An explicit request that cannot be honoured is TRACED** at startup, naming the reason.
+>   `"Auto"` is a policy, not a request, and stays silent — warning on the default would train the
+>   reader to ignore the warning. `getStatus()` carries the same information on its first line.
+> ⚠️ Naming the key well was **not** a substitute for either: it was deliberately called
+> `LightingLane` rather than `EnableRayTracing` precisely to avoid the confusion, and the confusion
+> happened anyway, because the failure was silent.
+
+> [!CAUTION]
+> **A lane-wide section must never duplicate a per-effect key.** `PixelDoubling` exists four times
+> today (IndirectDiffuse/RayTracing, AmbientOcclusion/RayTracing, Reflections/RayTracing,
+> Reflections/ScreenSpace) — and with **different defaults**: `true` for the three ray-traced ones,
+> `false` for the screen-space reflection. Hoisting it into a `PostProcessing/RayTracing/` group
+> while leaving the per-effect copies would need a precedence rule, and an invisible precedence
+> rule is the trap already recorded for `VolumetricLight` (§ Available Effects: an engine-wide
+> default would have silently doubled five demos' god rays). A key lives at **exactly one level**.
+> Consequently `PostProcessing/RayTracing/` and `PostProcessing/ScreenSpace/` do **not exist yet**:
+> nothing today is genuinely lane-wide and nothing else, and an empty section in a settings file is
+> a promise nobody keeps. Create them with their first real occupant.
+
+> [!CAUTION]
+> **The camera REQUESTS its photographic effects; two settings keys DISPOSE.**
+> `PostProcessing/DepthOfField/Enabled` and `PostProcessing/MotionBlur/Enabled` override
+> `Camera::enableDepthOfField()` / `enableMotionBlur()`: `syncCameraEffects()` will not materialize
+> the effect when the key says no, so a demo turning it on for style is simply ignored. Those two
+> are the expensive (7-pass and 4-pass) and intrusive ones — that is the whole reason they, and
+> only they, get a switch.
+> - ⚠️ Enforced in `syncCameraEffects()` because that is the **only** place either effect comes
+>   into existence. The motion-blur refusal used to live in projet-alpha's `Player` at spawn time
+>   and covered the player's own request alone: any demo calling `Camera::enableMotionBlur()`
+>   directly walked straight past it. (The key was briefly named `MotionBlur/UserAllowed`, Sep 2026,
+>   on the since-abandoned premise that a camera slot could not have a real `Enabled`.)
+> - ⚠️ **`Glare` and `ToneMapping` get no such key, and must not.** Tone mapping is not an option
+>   but the sensor response; refusing it sends raw photometric radiance to an LDR swap chain —
+>   measured as a white screen in daylight and a black one at night.
+> - ⚠️ The two defaults are **asymmetric on purpose**: `DepthOfField` `true`, `MotionBlur` `false`.
+>   Each preserves the behaviour its effect already had, so the keys changed what is *possible*,
+>   not what is *rendered*.
+
+**Switching lanes changes what the frame MEANS**, not merely how fast it was obtained. Verified on
+Sponza (2880×1620, zero VUIDs): the two captures differ on 99.7 % of pixels, mean |Δ| 20/255, while
+the mean luminance is unchanged (84.96 vs 84.97 — the auto-exposure absorbs it, so **a luminance
+comparison cannot detect this switch**). The visible difference is the shadowed arcade: RTGI owns
+the indirect diffuse and integrates the sky with real visibility, so it stays lit; SSGI has no sky
+term at all and it crushes to black. See § "Indirect-diffuse OWNERSHIP".
+
 ### Available Effects
 
 | Effect | File | Passes | Dependencies |
@@ -1572,7 +1762,7 @@ resolve and the whole photographic chain into ONE `Framebuffer/` bag of 16. It i
 > buffer. **There is no participating medium anywhere in it**: no scattering coefficient, no phase
 > function, no height profile, and nothing shared with `AtmosphericFog`'s.
 >
-> ⚠️ Its keys (`Core/Graphics/VolumetricLight/{Density,Decay,Exposure,SampleCount,TemporalAlpha}`)
+> ⚠️ Its keys (`Core/Graphics/PostProcessing/VolumetricLight/{Density,Decay,Exposure,SampleCount,TemporalAlpha}`)
 > are read with `settings.get(key, m_parameters.x)` — **`get()`, not `getOrSetDefault()`, and the
 > CURRENT parameter as the fallback**. This deliberately breaks the TAA/MotionBlur contract, where a
 > setting overrides the constructor and registers itself in the file. Five demos pass deliberately
@@ -1594,15 +1784,72 @@ resolve and the whole photographic chain into ONE `Framebuffer/` bag of 16. It i
 | **RTGI** | `Effects/Lighting/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
 | **RTAO** | `Effects/Lighting/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
 | **SSGI** | `Effects/Lighting/SSGI.hpp/cpp` | SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR |
-| **ContactShadows** | `Effects/Lighting/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals (READ since Sep 2026 — the ray origin's normal offset), MaterialProps, LightSet, RT (TLAS+SSBOs) |
+| **RTContactShadows** | `Effects/Lighting/RTContactShadows.hpp/cpp` | Multi-pass, HALF-res | Depth, Normals (READ since Sep 2026 — the ray origin's normal offset), MaterialProps, LightSet, RT (TLAS+SSBOs) |
+| **SSContactShadows** | `Effects/Lighting/SSContactShadows.hpp/cpp` | Multi-pass, FULL-res | Depth, Normals, MaterialProps (combine only), LightSet |
 | **LensFlare** | `Effects/Camera/LensFlare.hpp/cpp` | Multi-pass | Depth (the source occlusion probe), HDR, LightSet |
 | **FogEnvironment** | `Effects/Atmosphere/FogEnvironment.hpp/cpp` | 1-pass | Depth |
+
+### SSContactShadows — the screen-space lane of the contact shadow (Sep 2026)
+
+The depth buffer marched toward the light: for each pixel a ray steps in **view space** by a fixed
+**world-space** length (`maxDistance / stepCount`, metres), each step projected back to the screen
+to read the depth buffer. The pixel is shadowed when the ray passes behind a depth sample by less
+than `thickness`. This is the original technique — UE (`r.ContactShadows`), Unity HDRP, Frostbite —
+and the ray-queried `RTContactShadows` is the newer of the two.
+
+**Why a world-space step and not a pixel-uniform one.** The two occupants of a slot exist to be
+compared on the same framing, and that requires `maxDistance` to mean the same thing in both. A
+pixel-uniform DDA is cheaper and never misses a thin occluder, but its "length" would vary with
+depth and the A/B would compare two different distances. A world step **clamped** to a screen-space
+range (what UE does) is the documented refinement — after this version has been measured, never
+before.
+
+**Full resolution**, unlike its half-res sibling: a contact shadow exists for the fine detail at
+the point of contact, which is exactly what a half-res march destroys; the sibling halves it to
+amortise ray traversal, which a depth march does not pay. The shared denoise pass partitions its
+group by extent, so cohabiting with a half-res SSGI/SSAO is already handled.
+
+Both occupants emit the **same signal** — R = shadow factor, G = normalized contact distance — the
+same PCSS-lite denoise kernel and the same combine snippet. That is a requirement, not a
+coincidence: the chain must not know which occupant of a slot produced its input.
+
+**Measured on Sponza** (2880×1620, zero VUID), against the same frame with the concept disabled and
+with the auto-exposure shift cancelled:
+
+| | pixels darkened | mean darkening (sum RGB) |
+|---|---|---|
+| `SSContactShadows` | 570 742 | 23.35 |
+| `RTContactShadows` | 1 474 150 | 21.37 |
+
+**Correlation of the two darkening maps: +0.302** — positive, so the screen-space lane shadows the
+*same places* as the traced ground truth (this is the check that would have caught a view-space
+sign error, which is the failure this effect is most exposed to). It finds **~39 % as many**
+shadowed pixels, which is the structural ceiling, not a tuning problem, and the darkening it does
+produce is of the right magnitude.
+
+> [!CAUTION]
+> **Three traps, all inherent.**
+> - **An occluder that is not on screen casts nothing.** Same ceiling as SSR, where 43.3 % of the
+>   rays were measured leaving the screen and `maxSteps` bought nothing. Do not try to buy the
+>   missing 61 % back with more steps.
+> - **The depth buffer is a heightfield with no thickness.** `thickness` is the assumption that
+>   fills that in and it is THE knob: too thin leaks light through thin geometry, too thick trails
+>   a halo behind every occluder.
+> - ⚠️⚠️ **The view-space forward sign is read from the DATA, not assumed** (`forwardSign` in the
+>   shader): the shaded pixel is in front of the camera by construction, so the sign of its
+>   view-space z *is* the convention. Guessing it would invert every depth comparison and shadow
+>   exactly the pixels that should stay lit — a failure that reads as a tuning problem, not as a
+>   sign error, which is why the correlation check above is part of the verification and not a
+>   nicety.
+> - ⚠️ The bias is an offset on the **normal**, never a raised start distance. Same lesson as the
+>   sibling's faceted terminator: at the terminator the light is grazing, so advancing along it
+>   never leaves the surface, and raising the start skips the near occluders the effect exists for.
 
 ### SSR (Screen-Space Reflections)
 
 > [!CAUTION]
 > **The Hi-Z pyramid's mip 0 is a DOWNSAMPLE, not a copy — and it must be a MIN.** With pixel
-> doubling on (`Core/Graphics/ScreenSpace/Reflection/PixelDoubling`), the trace target is half-res
+> doubling on (`Core/Graphics/PostProcessing/Reflections/ScreenSpace/PixelDoubling`), the trace target is half-res
 > while the scene depth stays full-res. `SSRHiZCopyComputeShader` used to do
 > `texelFetch(srcDepth, p)` with `p` the DESTINATION texel, which copied the source's **top-left
 > corner** 1:1 into the whole pyramid — `sourceMaxX/Y` only ever clamped, they never scaled. The
@@ -2340,7 +2587,7 @@ objects (bounded by history validation + neighborhood clamp). Per-object motion 
 (5th MRT attachment) are a planned follow-up; they require moving scene-pass transforms
 out of push constants first (see `docs/caution-points.md`, 128-byte entry).
 
-**Settings** (`Core/Graphics/RayTracing/GlobalIllumination/`): `Temporal/Enabled|Alpha|
+**Settings** (`Core/Graphics/PostProcessing/IndirectDiffuse/RayTracing/`): `Temporal/Enabled|Alpha|
 DepthTolerance|NormalThreshold|NeighborhoodClamp`, `MultiBounce/Enabled|Strength|Clamp`
 (see `SettingKeys.hpp` for defaults and rationale). `Temporal/Enabled=false` skips the
 temporal chain entirely (no history VRAM, apply reads blur V — the pre-Jul-2026 flow).
@@ -2551,7 +2798,7 @@ StylePresets:: functions remain the lens-stack building blocks.
   collected (1/48 s at 24 fps is the cinematic 180-degree rule). That is what makes it
   framerate-independent, and it means the exposure time is a SHARED control: it sets the blur AND
   one third of the exposure triad. A demo no longer adds `MotionBlur` to its stack; the quality
-  knobs (`Core/Graphics/MotionBlur/SampleCount`, `SoftDepthExtent`) are read by the effect itself,
+  knobs (`Core/Graphics/PostProcessing/MotionBlur/SampleCount`, `SoftDepthExtent`) are read by the effect itself,
   like the depth of field's.
 - Optics: `setAperture(fStop)`, `setFocalLength(mm)`, `setFocusDistance(m)` (implies
   manual focus, like tapping to focus), `setAutoFocus(bool)`.
@@ -3262,7 +3509,7 @@ frame, right after `syncCameraEffects()`:
   extents degrade to a bilinear resample instead of reading the wrong pixel.
 
 ⚠️ **Two behaviour deltas to know about:**
-- **`Core/Graphics/RayTracing/AmbientOcclusion/SampleCount` is INERT while the pairing holds** —
+- **`Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/SampleCount` is INERT while the pairing holds** —
   the derived term is reduced over the PRODUCER's sample count. `MaxDistance`, `Intensity`,
   `BlurRadius`, `NormalSigma` and the material `aoResponse` nibble all keep working.
 - **The origin offset becomes the producer's** (GI bias 0.02 against AO bias 0.005), so very
@@ -3386,7 +3633,7 @@ in COD:AW", SIGGRAPH 2014):
    modulated by the per-pixel material DoF mask (matprops A low nibble, HUD exemption).
 
 Optics come from the ACTIVE CAMERA (`FrameContext::camera`); quality knobs from
-`Core/Graphics/DepthOfField/` settings (`MaxRadius`, `SampleCount`, `AutoFocusSpeed`,
+`Core/Graphics/PostProcessing/DepthOfField/` settings (`MaxRadius`, `SampleCount`, `AutoFocusSpeed`,
 `NearField`). `MaxRadius` (default 32, half-res pixels) is a pure performance/quality
 ceiling — the blur AMOUNT is the thin-lens CoC alone, there is no scale factor
 (`CoCScale` was removed 2026-07-26; a stale persisted key is ignored, but a persisted

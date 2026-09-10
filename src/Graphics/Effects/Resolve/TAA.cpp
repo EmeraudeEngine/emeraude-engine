@@ -360,9 +360,9 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
 		auto & settings = renderer.primaryServices().settings();
-		m_parameters.alpha = settings.getOrSetDefault< float >(GraphicsTAAAlphaKey, DefaultGraphicsTAAAlpha);
-		m_parameters.varianceGamma = settings.getOrSetDefault< float >(GraphicsTAAVarianceGammaKey, DefaultGraphicsTAAVarianceGamma);
-		m_parameters.lumaWeighting = settings.getOrSetDefault< bool >(GraphicsTAALumaWeightingKey, DefaultGraphicsTAALumaWeighting);
+		m_parameters.alpha = settings.getOrSetDefault< float >(GraphicsPPTemporalAAAlphaKey, DefaultGraphicsPPTemporalAAAlpha);
+		m_parameters.varianceGamma = settings.getOrSetDefault< float >(GraphicsPPTemporalAAVarianceGammaKey, DefaultGraphicsPPTemporalAAVarianceGamma);
+		m_parameters.lumaWeighting = settings.getOrSetDefault< bool >(GraphicsPPTemporalAALumaWeightingKey, DefaultGraphicsPPTemporalAALumaWeighting);
 
 		/* History starts invalid: the first frame after (re)creation must not read the
 		 * uninitialized ping-pong images (alpha forced to 1). The default resize()

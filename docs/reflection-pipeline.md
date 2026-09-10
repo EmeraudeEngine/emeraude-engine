@@ -275,8 +275,8 @@ Nothing in the engine forbids adding both; nothing hybridises them either.
 | 3-4 Blur | — | separable **bilateral** (depth/normal-aware), radius scaled per-pixel by roughness — a polished surface stays mirror-sharp |
 | 5 Composite | full-res | see section 4.3 |
 
-Working resolution is FULL-RES by default (owner decision) — `Core/Graphics/ScreenSpace/
-Reflection/PixelDoubling` (false), `BlurRadius`, `DepthSigma`, `NormalSigma` drive the quality.
+Working resolution is FULL-RES by default (owner decision) — `Core/Graphics/PostProcessing/Reflections/
+ScreenSpace/PixelDoubling` (false), `BlurRadius`, `DepthSigma`, `NormalSigma` drive the quality.
 The remaining `thickness` parameter only CLASSIFIES behind-vs-contact at the final hit — it no
 longer drives the march. Confidence = `distFade · edgeFade · facingFade · roughnessFade`, with
 `roughnessFade = 1 - smoothstep(0.55, 0.85, roughness)` and an early-out at `roughness > 0.85`.
@@ -416,7 +416,7 @@ Two compounding causes:
 Bench knobs — read **once at `create()`**, so a change needs a relaunch (or any swap-chain
 recreation), consistent with `PixelDoubling`:
 
-| Setting key (under `Core/Graphics/RayTracing/Reflection/GlossyCone/`) | Default | Effect |
+| Setting key (under `Core/Graphics/PostProcessing/Reflections/RayTracing/GlossyCone/`) | Default | Effect |
 |---|---|---|
 | `Enabled` | `true` | `false` zeroes `coneWidthScale`: the pyramid is never read, the composite shows the RAW traced reflection at full trace resolution — **the sharpness reference** |
 | `HitFraction` | `0.15` | assumed hit distance as a fraction of screen height; `coneWidthScale = 2 × this × traceHeight` |

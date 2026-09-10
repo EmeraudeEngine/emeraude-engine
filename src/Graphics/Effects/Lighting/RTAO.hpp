@@ -181,7 +181,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @note The producer reduces the occlusion against THIS range, so the derived term
 			 * keeps obeying the ambient-occlusion settings rather than the GI ones.
 			 * ⚠️ `SampleCount` is the exception: a derived term is reduced over the PRODUCER's
-			 * sample count, so `Core/Graphics/RayTracing/AmbientOcclusion/SampleCount` is inert
+			 * sample count, so `Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/SampleCount` is inert
 			 * while the pairing holds. */
 			[[nodiscard]]
 			float

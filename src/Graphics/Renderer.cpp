@@ -494,8 +494,9 @@ namespace EmEn::Graphics
 			TraceInfo{ClassId} << "Frame rate limiter enabled: " << m_frameRateLimit << " FPS (frame duration: " << static_cast< double >(m_frameDuration.count()) / 1'000'000.0 << " ms)";
 		}
 
-		m_rayTracingSettingEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsRayTracingEnabledKey, DefaultGraphicsRayTracingEnabled);
-		m_cutFrameAroundTranslucency = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPostProcessingCutFrameAroundTranslucencyKey, DefaultGraphicsPostProcessingCutFrameAroundTranslucency);
+		m_cutFrameAroundTranslucency = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPCutFrameAroundTranslucencyKey, DefaultGraphicsPPCutFrameAroundTranslucency);
+		m_depthOfFieldAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPDepthOfFieldEnabledKey, DefaultGraphicsPPDepthOfFieldEnabled);
+		m_motionBlurAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPMotionBlurEnabledKey, DefaultGraphicsPPMotionBlurEnabled);
 		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
 		m_MDIEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsMDIEnabledKey, DefaultGraphicsMDIEnabled);
 
@@ -710,7 +711,22 @@ namespace EmEn::Graphics
 		 * geometry (BLAS, for SHARED geometries that outlive any scene) and every scene (TLAS).
 		 * It must NOT be owned per-scene: deleting a scene would otherwise destroy the builder the
 		 * active scene still needs and leave geometries unable to build their BLAS. */
-		if ( m_device->rayTracingEnabled() && this->isRayTracingSettingEnabled() )
+		/* Acceleration structures are built when the device can AND the requested lighting lane
+		 * may need them — "Auto" or "RayTracing" (owner decision, 2026-09-10). The settings master
+		 * switch that used to gate this (`Core/Graphics/RayTracing/Enabled`) is gone: it said the
+		 * same thing as the lane key while silently dominating it.
+		 * ⚠️⚠️ THIS DECIDES THE WHOLE SESSION, not the starting frame. A BLAS is built when a
+		 * geometry loads (`Geometry::Interface::onDependenciesLoaded()`, which skips when this
+		 * builder is null) and a geometry cannot gain one afterwards — so with the lane set to
+		 * "ScreenSpace" or "None" there is nothing to trace against, and
+		 * `setLightingMode("RayTracing")` from the console CANNOT bring ray tracing back before a
+		 * relaunch. `PostProcessStack::installLightingFamily()` reads this very pointer to decide
+		 * whether the traced lane is resident at all, so the console reports the truth instead of
+		 * offering a switch that would quietly do nothing. */
+		const auto requestedLane = m_primaryServices.settings().getOrSetDefault< std::string >(GraphicsPPLightingLaneKey, DefaultGraphicsPPLightingLane);
+		const auto laneMayTrace = requestedLane == GraphicsPPLightingLaneAuto || requestedLane == "RayTracing";
+
+		if ( m_device->rayTracingEnabled() && laneMayTrace )
 		{
 			m_accelerationStructureBuilder = std::make_unique< AccelerationStructureBuilder >(m_device);
 
@@ -1788,6 +1804,19 @@ namespace EmEn::Graphics
 				m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 					target->destroyRenderTarget();
 				});
+			}
+
+			/* The owner's SELECTION, applied here and nowhere else.
+			 * ⚠️ This is the single site where a chain effect is enabled or disabled, and that
+			 * is what makes the console switch safe: the console records an intent on the MAIN
+			 * thread, this thread applies it at a frame boundary. Enabling an effect from the
+			 * main thread — a key handler, a console command — races the chain walk below.
+			 * ⚠️ AFTER syncCameraEffects() and BEFORE syncSlotPairings(): it may materialize an
+			 * occupant and change which one is enabled, which is precisely what the pairings
+			 * mirror. */
+			if ( stack != nullptr )
+			{
+				scene->postProcessStack()->syncSlotSelection(*this, &scene->lightSet());
 			}
 
 			/* Producer/consumer pairings BETWEEN slots, refreshed every frame on this thread.

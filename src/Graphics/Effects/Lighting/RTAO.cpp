@@ -270,15 +270,15 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingAOSampleCountKey, DefaultGraphicsRayTracingAOSampleCount);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsRayTracingAOIntensityKey, DefaultGraphicsRayTracingAOIntensity);
-		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsRayTracingAOBiasKey, DefaultGraphicsRayTracingAOBias);
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsRayTracingAOMaxDistanceKey, DefaultGraphicsRayTracingAOMaxDistance);
-		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingAOBlurRadiusKey, DefaultGraphicsRayTracingAOBlurRadius);
-		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsRayTracingAONormalSigmaKey, DefaultGraphicsRayTracingAONormalSigma);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionRTSampleCountKey, DefaultGraphicsPPAmbientOcclusionRTSampleCount);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTIntensityKey, DefaultGraphicsPPAmbientOcclusionRTIntensity);
+		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTBiasKey, DefaultGraphicsPPAmbientOcclusionRTBias);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTMaxDistanceKey, DefaultGraphicsPPAmbientOcclusionRTMaxDistance);
+		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionRTBlurRadiusKey, DefaultGraphicsPPAmbientOcclusionRTBlurRadius);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTNormalSigmaKey, DefaultGraphicsPPAmbientOcclusionRTNormalSigma);
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
-		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingAOPixelDoublingKey, DefaultGraphicsRayTracingAOPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPAmbientOcclusionRTPixelDoublingKey, DefaultGraphicsPPAmbientOcclusionRTPixelDoubling);
 		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
 

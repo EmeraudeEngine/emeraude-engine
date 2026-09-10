@@ -12,7 +12,9 @@ tags: [ray-tracing, intermittent, measured]
 
 ## Why
 
-Filed 2026-07-26 at **2/8 runs** with `RayTracing/Enabled` true: `device_fault` reported a
+Filed 2026-07-26 at **2/8 runs** with ray tracing on (the key was `Core/Graphics/RayTracing/Enabled`
+at the time; it is now `Core/Graphics/PostProcessing/LightingLane` = `"Auto"`/`"RayTracing"`, which
+also decides whether the acceleration structures are built): `device_fault` reported a
 `READ_INVALID` at a low address plus an `INSTRUCTION_POINTER_FAULT`, with the last per-queue GPU
 markers a MIX of `AS-build:end` and `transfer:image-layout-transition` — the signature of BLAS
 builds racing uploads across the round-robined transfer queues.

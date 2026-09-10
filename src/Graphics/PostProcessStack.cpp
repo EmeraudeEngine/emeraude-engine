@@ -28,15 +28,29 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
+#include <string>
+#include <utility>
 
 /* Local inclusions. */
 #include "Effects/Camera/VeilingGlare.hpp"
 #include "Effects/Camera/DepthOfField.hpp"
 #include "Effects/Camera/MotionBlur.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
+#include "Effects/Lighting/RTContactShadows.hpp"
+#include "Effects/Lighting/SSContactShadows.hpp"
+#include "Effects/Lighting/RTAO.hpp"
+#include "Effects/Lighting/RTGI.hpp"
+#include "Effects/Lighting/RTR.hpp"
+#include "Effects/Lighting/SSAO.hpp"
+#include "Effects/Lighting/SSGI.hpp"
+#include "Effects/Lighting/SSR.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "PrimaryServices.hpp"
 #include "Renderer.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/LightSet.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/SwapChain.hpp"
 
@@ -108,6 +122,11 @@ namespace EmEn::Graphics
 		if ( effect->isEnabled() && !isMultiOccupantSlot(slot) )
 		{
 			this->disableSlotSiblings(*effect);
+
+			/* The SELECTION follows, and it must: it is what syncSlotSelection() reads every
+			 * frame on the render thread. Left behind, the very next sync would revert this
+			 * effect to whatever was selected before it existed. */
+			m_selectedOccupant[static_cast< size_t >(slot)].store(static_cast< int8_t >(occupants.size() - 1), std::memory_order_relaxed);
 		}
 
 		this->rebuildOrderedEffects();
@@ -121,14 +140,40 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		auto & occupants = m_slots[static_cast< size_t >(effect->slot())];
+		const auto slot = effect->slot();
 
-		if ( std::erase(occupants, effect) > 0 )
+		auto & occupants = m_slots[static_cast< size_t >(slot)];
+
+		const auto removedIt = std::ranges::find(occupants, effect);
+
+		if ( removedIt == occupants.end() )
 		{
-			effect->setOwnerStack(nullptr);
-
-			this->rebuildOrderedEffects();
+			return;
 		}
+
+		const auto removedIndex = static_cast< int8_t >(std::distance(occupants.begin(), removedIt));
+
+		occupants.erase(removedIt);
+
+		effect->setOwnerStack(nullptr);
+
+		/* ⚠️ The selection is an INDEX into this very vector, so an erase invalidates it: the
+		 * indices past the hole all shift down by one, and removing the selected occupant leaves
+		 * the slot selecting a stranger. This is the one place that has to repair it. */
+		auto & selected = m_selectedOccupant[static_cast< size_t >(slot)];
+
+		const auto current = selected.load(std::memory_order_relaxed);
+
+		if ( current == removedIndex )
+		{
+			selected.store(NoOccupant, std::memory_order_relaxed);
+		}
+		else if ( current > removedIndex )
+		{
+			selected.store(static_cast< int8_t >(current - 1), std::memory_order_relaxed);
+		}
+
+		this->rebuildOrderedEffects();
 	}
 
 	void
@@ -148,6 +193,11 @@ namespace EmEn::Graphics
 		}
 
 		m_displayEffects.clear();
+
+		for ( auto & selected : m_selectedOccupant )
+		{
+			selected.store(NoOccupant, std::memory_order_relaxed);
+		}
 
 		this->rebuildOrderedEffects();
 	}
@@ -185,6 +235,459 @@ namespace EmEn::Graphics
 		}
 
 		return nullptr;
+	}
+
+	std::shared_ptr< IndirectPostProcessEffect >
+	PostProcessStack::selectedOccupant (EffectSlot slot) const noexcept
+	{
+		const auto index = m_selectedOccupant[static_cast< size_t >(slot)].load(std::memory_order_relaxed);
+
+		if ( index < 0 )
+		{
+			return nullptr;
+		}
+
+		const auto & occupants = m_slots[static_cast< size_t >(slot)];
+
+		if ( static_cast< size_t >(index) >= occupants.size() )
+		{
+			return nullptr;
+		}
+
+		return occupants[static_cast< size_t >(index)];
+	}
+
+	std::shared_ptr< IndirectPostProcessEffect >
+	PostProcessStack::effectiveOccupant (EffectSlot slot) const noexcept
+	{
+		const auto index = m_effectiveOccupant[static_cast< size_t >(slot)].load(std::memory_order_relaxed);
+
+		if ( index < 0 )
+		{
+			return nullptr;
+		}
+
+		const auto & occupants = m_slots[static_cast< size_t >(slot)];
+
+		if ( static_cast< size_t >(index) >= occupants.size() )
+		{
+			return nullptr;
+		}
+
+		return occupants[static_cast< size_t >(index)];
+	}
+
+	bool
+	PostProcessStack::selectOccupant (EffectSlot slot, std::string_view label) noexcept
+	{
+		if ( !isChainSlot(slot) )
+		{
+			return false;
+		}
+
+		const auto & occupants = m_slots[static_cast< size_t >(slot)];
+
+		for ( size_t index = 0; index < occupants.size(); ++index )
+		{
+			if ( occupants[index] == nullptr || label != occupants[index]->label() )
+			{
+				continue;
+			}
+
+			m_selectedOccupant[static_cast< size_t >(slot)].store(static_cast< int8_t >(index), std::memory_order_relaxed);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	void
+	PostProcessStack::selectNoOccupant (EffectSlot slot) noexcept
+	{
+		if ( !isChainSlot(slot) )
+		{
+			return;
+		}
+
+		m_selectedOccupant[static_cast< size_t >(slot)].store(NoOccupant, std::memory_order_relaxed);
+	}
+
+	bool
+	PostProcessStack::selectLightingLane (LightingLane lane) noexcept
+	{
+		const auto wantRayTracing = lane == LightingLane::RayTracing;
+
+		/* ⚠️ Resolve EVERYTHING before writing anything. A lane that is nowhere resident must
+		 * leave the selection untouched: applying it slot by slot would switch the whole family
+		 * off on the way to discovering there was nothing to select. */
+		std::array< int8_t, EffectSlotCount > resolved{};
+
+		resolved.fill(NoOccupant);
+
+		auto found = false;
+
+		for ( size_t index = 0; index < EffectSlotCount; ++index )
+		{
+			const auto slot = static_cast< EffectSlot >(index);
+
+			if ( !isLightingSlot(slot) )
+			{
+				continue;
+			}
+
+			const auto & occupants = m_slots[index];
+
+			/* ⚠️ A lighting slot with no occupant in the requested lane is left EMPTY, never
+			 * kept on the other one. Asking for the screen-space lane and silently getting a
+			 * ray-traced contact shadow would turn an A/B measurement into a comparison of two
+			 * things that are not what they say they are. */
+			auto selected = NoOccupant;
+
+			for ( size_t occupantIndex = 0; occupantIndex < occupants.size(); ++occupantIndex )
+			{
+				if ( occupants[occupantIndex] == nullptr || occupants[occupantIndex]->requiresRayTracing() != wantRayTracing )
+				{
+					continue;
+				}
+
+				selected = static_cast< int8_t >(occupantIndex);
+
+				break;
+			}
+
+			resolved[index] = selected;
+
+			if ( selected != NoOccupant )
+			{
+				found = true;
+			}
+		}
+
+		if ( !found )
+		{
+			return false;
+		}
+
+		for ( size_t index = 0; index < EffectSlotCount; ++index )
+		{
+			if ( isLightingSlot(static_cast< EffectSlot >(index)) )
+			{
+				m_selectedOccupant[index].store(resolved[index], std::memory_order_relaxed);
+			}
+		}
+
+		return true;
+	}
+
+	void
+	PostProcessStack::installLightingFamily (Renderer & renderer) noexcept
+	{
+		auto & settings = renderer.primaryServices().settings();
+
+		/* The screen-space lane is unconditional: it is what every device can run, and what the
+		 * ray-traced lane falls back to. */
+		this->addEffect(std::make_shared< Effects::Lighting::SSGI >(renderer));
+		this->addEffect(std::make_shared< Effects::Lighting::SSR >(renderer));
+		this->addEffect(std::make_shared< Effects::Lighting::SSAO >(renderer));
+		this->addEffect(std::make_shared< Effects::Lighting::SSContactShadows >(renderer));
+
+		/* ⚠️ The SESSION-CONSTANT condition, and only it. Renderer::isRayTracingReady() has no
+		 * business here: it answers a question about THIS FRAME (the TLAS is built
+		 * asynchronously, and a scene may hold no ray traced geometry), so consulting it at
+		 * install time would refuse a lane that becomes runnable three frames later — and it is
+		 * already consulted, every frame, by canOccupantRun().
+		 * ⚠️⚠️ The question asked is "does an acceleration structure builder EXIST", not "does the
+		 * device support ray tracing". They differ: the Renderer only creates the builder when the
+		 * requested lane may need it ("Auto" or "RayTracing"), and without it no geometry ever
+		 * built a BLAS — so on a perfectly capable device with the lane set to "ScreenSpace" there
+		 * is nothing to trace against, for the whole session. Filing the traced lane anyway would
+		 * offer a `setLightingMode("RayTracing")` that quietly renders nothing. One pointer, one
+		 * truth. */
+		const auto rayTracingLaneAvailable = renderer.accelerationStructureBuilder() != nullptr;
+
+		if ( rayTracingLaneAvailable )
+		{
+			this->addEffect(std::make_shared< Effects::Lighting::RTGI >(renderer));
+			this->addEffect(std::make_shared< Effects::Lighting::RTR >(renderer));
+			this->addEffect(std::make_shared< Effects::Lighting::RTAO >(renderer));
+			this->addEffect(std::make_shared< Effects::Lighting::RTContactShadows >(renderer));
+		}
+
+		/* ⚠️ EXPLICIT, although the call order above would already leave the ray-traced lane
+		 * selected (addEffect() selects the newcomer). "Correct because of the order the calls
+		 * happen to be in" is exactly the property the EffectSlot table was built to destroy for
+		 * the chain order; it has no more business deciding the default lane. */
+		const auto requestedLane = settings.getOrSetDefault< std::string >(GraphicsPPLightingLaneKey, DefaultGraphicsPPLightingLane);
+
+		auto lane = LightingLane::RayTracing;
+		auto wantsNoLane = false;
+
+		/* "Auto" resolves to the ray-traced lane and lets the availability check below quietly
+		 * downgrade it — it is a policy, not a request, so an unavailable lane is not a problem
+		 * worth a warning. Naming a lane explicitly IS a request. */
+		if ( requestedLane == to_cstring(LightingLane::ScreenSpace) )
+		{
+			lane = LightingLane::ScreenSpace;
+		}
+		else if ( requestedLane == GraphicsPPLightingLaneNone )
+		{
+			wantsNoLane = true;
+		}
+		else if ( requestedLane != to_cstring(LightingLane::RayTracing) && requestedLane != GraphicsPPLightingLaneAuto )
+		{
+			TraceWarning{ClassId} <<
+				"'" << GraphicsPPLightingLaneKey << "' holds '" << requestedLane << "', which is not a lighting lane. "
+				"Expected 'Auto', 'RayTracing', 'ScreenSpace' or 'None' — behaving as 'Auto'.";
+		}
+
+		/* ⚠️⚠️ An unavailable lane must SAY SO. This used to fall back to screen space in silence,
+		 * and the owner hit it on the first settings reset (2026-09-10): a second key,
+		 * `Core/Graphics/RayTracing/Enabled`, defaulted to FALSE and silently dominated this one,
+		 * so the file read "RayTracing" and the frame was screen space with nothing to explain it.
+		 * That key is GONE; the only remaining reason is that the device cannot ray trace.
+		 * A silent fallback on an EXPLICIT request is a lie by omission; a fallback on a request
+		 * nobody made ("Auto") is not — which is why this only fires when the file actually names
+		 * the traced lane. */
+		if ( lane == LightingLane::RayTracing && !rayTracingLaneAvailable )
+		{
+			if ( requestedLane == to_cstring(LightingLane::RayTracing) )
+			{
+				TraceWarning{ClassId} <<
+					"'" << GraphicsPPLightingLaneKey << "' asks for the ray-traced lighting lane, but no acceleration structure builder exists: " <<
+					( renderer.device()->rayTracingEnabled()
+						? "the builder was not created at renderer initialization (see Renderer::onInitialize)"
+						: "this device has no ray tracing support (no VK_KHR_acceleration_structure / VK_KHR_ray_query)" ) <<
+					". The lighting family starts on the SCREEN-SPACE lane. Set the key to 'Auto' to follow what this machine can actually do.";
+			}
+
+			lane = LightingLane::ScreenSpace;
+		}
+
+		static_cast< void >(this->selectLightingLane(lane));
+
+		if ( wantsNoLane )
+		{
+			for ( size_t index = 0; index < EffectSlotCount; ++index )
+			{
+				const auto slot = static_cast< EffectSlot >(index);
+
+				if ( isLightingSlot(slot) )
+				{
+					this->selectNoOccupant(slot);
+				}
+			}
+
+			return;
+		}
+
+		/* The per-CONCEPT switches, applied AFTER the lane: turning a concept off must survive
+		 * the lane choice, and a later setLightingMode() from the console deliberately brings it
+		 * back — the settings decide how the scene STARTS, the console owns the session. */
+		const std::array< std::pair< EffectSlot, bool >, 4 > conceptSwitches{{
+			{EffectSlot::ContactShadows, settings.getOrSetDefault< bool >(GraphicsPPContactShadowsEnabledKey, DefaultGraphicsPPContactShadowsEnabled)},
+			{EffectSlot::IndirectDiffuse, settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseEnabledKey, DefaultGraphicsPPIndirectDiffuseEnabled)},
+			{EffectSlot::Reflections, settings.getOrSetDefault< bool >(GraphicsPPReflectionsEnabledKey, DefaultGraphicsPPReflectionsEnabled)},
+			{EffectSlot::AmbientOcclusion, settings.getOrSetDefault< bool >(GraphicsPPAmbientOcclusionEnabledKey, DefaultGraphicsPPAmbientOcclusionEnabled)}
+		}};
+
+		for ( const auto & [slot, enabled] : conceptSwitches )
+		{
+			if ( !enabled )
+			{
+				this->selectNoOccupant(slot);
+			}
+		}
+	}
+
+	bool
+	PostProcessStack::canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet) noexcept
+	{
+		/* An effect whose creation failed will not start working on its own — and the slot has an
+		 * alternative that might. */
+		if ( effect.hasCreationFailed() )
+		{
+			return false;
+		}
+
+		/* ⚠️ THE SAME THREE CONDITIONS the executor skips a ray traced effect on
+		 * (PostProcessor::executeIndirectPostProcessEffects). They must stay identical: a
+		 * fallback that disagrees with the recorder either leaves the slot dark while claiming
+		 * otherwise, or enables two occupants of one concept. */
+		if ( effect.requiresRayTracing() && (!renderer.device()->rayTracingEnabled() || !renderer.isRayTracingReady()) )
+		{
+			return false;
+		}
+
+		if ( effect.requiresLightSet() && (lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr) )
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	PostProcessStack::materializeOccupant (IndirectPostProcessEffect & effect, Renderer & renderer) noexcept
+	{
+		if ( effect.isCreated() )
+		{
+			return true;
+		}
+
+		const auto renderTarget = renderer.mainRenderTarget();
+
+		if ( renderTarget == nullptr )
+		{
+			return false;
+		}
+
+		const auto & extent = renderTarget->extent();
+
+		const auto created = effect.create(extent.width, extent.height);
+
+		effect.setCreatedFlag(created);
+
+		if ( !created )
+		{
+			/* ⚠️ LATCHED. Without it this runs again on the very next frame, and every frame
+			 * after that: an allocation storm plus one trace line per frame, for a failure that
+			 * will not resolve itself. Cleared only by a resize, where the extent — a plausible
+			 * cause of the failure — has actually changed. */
+			effect.setCreationFailedFlag();
+
+			TraceError{ClassId} << "Failed to materialize the '" << effect.label() << "' effect selected for the '" << to_cstring(effect.slot()) << "' slot !";
+		}
+
+		return created;
+	}
+
+	void
+	PostProcessStack::syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet) noexcept
+	{
+		for ( size_t index = 0; index < EffectSlotCount; ++index )
+		{
+			const auto slot = static_cast< EffectSlot >(index);
+
+			/* The Custom slot holds several effects at once, all of them running: there is no
+			 * selection to resolve, and no sibling to fall back to. */
+			if ( !isChainSlot(slot) || isCameraEffectSlot(slot) || isMultiOccupantSlot(slot) )
+			{
+				continue;
+			}
+
+			const auto & occupants = m_slots[index];
+
+			if ( occupants.empty() )
+			{
+				continue;
+			}
+
+			const auto selected = this->selectedOccupant(slot);
+
+			/* The effective occupant: what the owner asked for when it can run, otherwise the
+			 * first sibling that can — the automatic lane fallback. */
+			std::shared_ptr< IndirectPostProcessEffect > effective;
+
+			if ( selected != nullptr && canOccupantRun(*selected, renderer, lightSet) )
+			{
+				effective = selected;
+
+				m_selectionStallFrames[index] = 0;
+			}
+			else if ( selected != nullptr )
+			{
+				/* ⚠️ THE GRACE PERIOD, and it is what keeps the fallback from eating the lazy
+				 * residency alive. The selected occupant being unable to run is the NORMAL state
+				 * for the first frames of a ray-traced scene (the TLAS is built asynchronously),
+				 * so falling back on the first frame materialized the entire screen-space lane on
+				 * every launch — the exact allocation the residency exists to avoid. Below the
+				 * threshold the slot keeps whatever it had, which for a fresh scene is the
+				 * selected occupant sitting enabled-but-skipped: a couple of dark frames, the
+				 * behaviour that predates this whole mechanism. */
+				if ( m_selectionStallFrames[index] < FallbackGraceFrames )
+				{
+					++m_selectionStallFrames[index];
+
+					continue;
+				}
+
+				for ( const auto & occupant : occupants )
+				{
+					if ( occupant != nullptr && occupant != selected && canOccupantRun(*occupant, renderer, lightSet) )
+					{
+						effective = occupant;
+
+						break;
+					}
+				}
+			}
+			else
+			{
+				m_selectionStallFrames[index] = 0;
+			}
+
+			/* What the console will report as "running". ⚠️ It is stored on the UNCHANGED path
+			 * too, not only when the selection moves: recorded after the early-out below, a slot
+			 * whose selection was already correct on the very first frame — TAA, and every slot
+			 * of a scene that never switches lane — reached the store never once and reported
+			 * "nothing runs here" for the whole session while running perfectly. Measured on
+			 * Sponza: listEffects() marked TAA as selected and not running. */
+			const auto recordEffective = [this, index, &occupants] (const std::shared_ptr< IndirectPostProcessEffect > & occupant) {
+				m_effectiveOccupant[index].store(
+					occupant == nullptr ? NoOccupant : static_cast< int8_t >(std::distance(occupants.begin(), std::ranges::find(occupants, occupant))),
+					std::memory_order_relaxed
+				);
+			};
+
+			/* Nothing changes: the common case, every frame, once the scene has settled. */
+			if ( effective == this->enabledEffect(slot) )
+			{
+				recordEffective(effective);
+
+				continue;
+			}
+
+			if ( effective == nullptr )
+			{
+				this->disableSlotOccupants(slot);
+
+				recordEffective(nullptr);
+
+				continue;
+			}
+
+			/* ⚠️ Materialize BEFORE enabling. Enabled and un-created is the one combination the
+			 * executor cannot record — it gates on both, so the slot would simply go dark, and
+			 * the sibling that could have run stays disabled.
+			 * ⚠️ And nothing is recorded on failure: the report must keep saying what the LAST
+			 * good frame ran, not name an occupant that just failed to allocate. The latch
+			 * materializeOccupant() sets makes the next frame fall back to the sibling. */
+			if ( !materializeOccupant(*effective, renderer) )
+			{
+				continue;
+			}
+
+			/* The single site where a chain effect is enabled. enable() disables the siblings on
+			 * its own, so the exclusivity of the concept holds by construction. */
+			effective->enable(true);
+
+			recordEffective(effective);
+		}
+	}
+
+	void
+	PostProcessStack::disableSlotOccupants (EffectSlot slot) const noexcept
+	{
+		for ( const auto & occupant : m_slots[static_cast< size_t >(slot)] )
+		{
+			if ( occupant != nullptr )
+			{
+				/* ⚠️ The FLAG, not enable(false): the same recursion guard disableSlotSiblings()
+				 * documents. */
+				occupant->setEnabledFlag(false);
+			}
+		}
 	}
 
 	void
@@ -273,8 +776,14 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::syncCameraEffects (const Scenes::Component::Camera * camera, Renderer & renderer) noexcept
 	{
-		const bool wantDepthOfField = camera != nullptr && camera->isDepthOfFieldEnabled();
-		const bool wantMotionBlur = camera != nullptr && camera->isMotionBlurEnabled();
+		/* ⚠️ The camera REQUESTS, the user DISPOSES. These two effects are expensive (7 and 4
+		 * passes) and intrusive, so a settings refusal wins over what the scene asked for and the
+		 * effect is never materialized — `Core/Graphics/PostProcessing/{DepthOfField,MotionBlur}/Enabled`.
+		 * Enforced HERE because this is the only place either effect comes into existence: the
+		 * motion-blur refusal used to live in projet-alpha's Player at spawn time, so any demo
+		 * calling Camera::enableMotionBlur() straight on the camera bypassed it entirely. */
+		const bool wantDepthOfField = camera != nullptr && camera->isDepthOfFieldEnabled() && renderer.isDepthOfFieldAllowed();
+		const bool wantMotionBlur = camera != nullptr && camera->isMotionBlurEnabled() && renderer.isMotionBlurAllowed();
 		const bool wantBloom = camera != nullptr && camera->isBloomEnabled();
 		const bool wantHDR = camera != nullptr && camera->isHDREnabled();
 
@@ -509,25 +1018,52 @@ namespace EmEn::Graphics
 	{
 		auto success = true;
 
-		for ( const auto & effect : m_orderedEffects )
+		/* ⚠️ SELECTED occupants only, and this is the whole of the lazy residency: a slot holds
+		 * both lanes of its concept, and the one nobody asked for must not allocate a render
+		 * target, a pipeline or a descriptor set. Creating everything here — which this method
+		 * did until Sep 2026 — defeated the residency at scene load, before a single frame had
+		 * run. The alternative is materialized by syncSlotSelection() the frame it is selected. */
+		for ( size_t index = 0; index < EffectSlotCount; ++index )
 		{
-			if ( effect == nullptr )
+			const auto slot = static_cast< EffectSlot >(index);
+
+			if ( !isChainSlot(slot) )
 			{
 				continue;
 			}
 
-			const auto created = effect->create(width, height);
-
-			/* ⚠️ The flag is what keeps a failed effect OUT of the recording. The loop no longer
-			 * returns on the first failure either: stopping there left the untouched effects
-			 * un-created too, and they were recorded exactly like the one that failed. */
-			effect->setCreatedFlag(created);
-
-			if ( !created )
+			for ( const auto & effect : m_slots[index] )
 			{
-				TraceError{ClassId} << "Failed to create the '" << effect->label() << "' effect of the post-process stack !";
+				if ( effect == nullptr )
+				{
+					continue;
+				}
 
-				success = false;
+				/* The Custom slot is the only multi-occupant one: everything filed there runs,
+				 * so everything filed there is created. */
+				if ( !isMultiOccupantSlot(slot) && effect != this->selectedOccupant(slot) )
+				{
+					continue;
+				}
+
+				const auto created = effect->create(width, height);
+
+				/* ⚠️ The flag is what keeps a failed effect OUT of the recording. The loop no
+				 * longer returns on the first failure either: stopping there left the untouched
+				 * effects un-created too, and they were recorded exactly like the one that
+				 * failed. */
+				effect->setCreatedFlag(created);
+
+				if ( !created )
+				{
+					/* Latched, so the per-frame sync does not retry it forever, and so the slot
+					 * falls back to the sibling lane instead of going dark. */
+					effect->setCreationFailedFlag();
+
+					TraceError{ClassId} << "Failed to create the '" << effect->label() << "' effect of the post-process stack !";
+
+					success = false;
+				}
 			}
 		}
 
@@ -539,7 +1075,10 @@ namespace EmEn::Graphics
 	{
 		for ( const auto & effect : m_orderedEffects )
 		{
-			if ( effect != nullptr )
+			/* ⚠️ isCreated() is not a micro-optimisation here: since the lazy residency a stack
+			 * routinely holds occupants that were NEVER created, and an effect's destroy()
+			 * releases members it only ever assigned in create(). */
+			if ( effect != nullptr && effect->isCreated() )
 			{
 				effect->destroy();
 				effect->setCreatedFlag(false);
@@ -559,6 +1098,20 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* A new extent is new information: a creation that failed at the previous size gets
+			 * a fresh chance, on this occupant and on the alternative nobody has selected yet. */
+			effect->clearCreationFailure();
+
+			/* ⚠️⚠️ An occupant that was never created must NOT be resized, and this is the
+			 * sharpest trap of the lazy residency: resize() DESTROYS then CREATES, and the line
+			 * below raises the created flag on its result — so a resident alternative nobody
+			 * ever selected would quietly MATERIALIZE ITSELF at the first window resize, and the
+			 * whole laziness would evaporate on a gesture that has nothing to do with it. */
+			if ( !effect->isCreated() )
+			{
+				continue;
+			}
+
 			/* ⚠️ resize() DESTROYS then creates: a failure here leaves the effect in the chain
 			 * with its resources already gone, which is the second way an un-created effect used
 			 * to reach the recording. */
@@ -568,6 +1121,10 @@ namespace EmEn::Graphics
 
 			if ( !resized )
 			{
+				/* Latched like a failed creation: the effect has no resources any more, and
+				 * retrying the same size every frame would only repeat the failure. */
+				effect->setCreationFailedFlag();
+
 				TraceError{ClassId} << "Failed to resize the '" << effect->label() << "' effect of the post-process stack !";
 
 				success = false;

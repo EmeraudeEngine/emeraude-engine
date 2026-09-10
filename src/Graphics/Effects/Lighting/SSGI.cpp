@@ -326,25 +326,25 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIMaxDistanceKey, DefaultGraphicsScreenSpaceGIMaxDistance);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIIntensityKey, DefaultGraphicsScreenSpaceGIIntensity);
-		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIThicknessKey, DefaultGraphicsScreenSpaceGIThickness);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGISampleCountKey, DefaultGraphicsScreenSpaceGISampleCount);
-		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIStepCountKey, DefaultGraphicsScreenSpaceGIStepCount);
-		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIDepthSigmaKey, DefaultGraphicsScreenSpaceGIDepthSigma);
-		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGINormalSigmaKey, DefaultGraphicsScreenSpaceGINormalSigma);
-		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGIDenoiserLuminanceSigmaKey, DefaultGraphicsScreenSpaceGIDenoiserLuminanceSigma);
-		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIDenoiserIterationsKey, DefaultGraphicsScreenSpaceGIDenoiserIterations);
-		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalAlphaKey, DefaultGraphicsScreenSpaceGITemporalAlpha);
-		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalDepthToleranceKey, DefaultGraphicsScreenSpaceGITemporalDepthTolerance);
-		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalNormalThresholdKey, DefaultGraphicsScreenSpaceGITemporalNormalThreshold);
-		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsScreenSpaceGITemporalVarianceGammaKey, DefaultGraphicsScreenSpaceGITemporalVarianceGamma);
-		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIDenoiserMaxAccumulationKey, DefaultGraphicsScreenSpaceGIDenoiserMaxAccumulation);
-		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceGIDenoiserDebugViewKey, DefaultGraphicsScreenSpaceGIDenoiserDebugView);
-		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGIDenoiserAccumulationCounterKey, DefaultGraphicsScreenSpaceGIDenoiserAccumulationCounter);
-		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGITemporalEnabledKey, DefaultGraphicsScreenSpaceGITemporalEnabled);
-		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGITemporalNeighborhoodClampKey, DefaultGraphicsScreenSpaceGITemporalNeighborhoodClamp);
-		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsScreenSpaceGITemporalAnimatedNoiseKey, DefaultGraphicsScreenSpaceGITemporalAnimatedNoise);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseSSMaxDistance);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSIntensityKey, DefaultGraphicsPPIndirectDiffuseSSIntensity);
+		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSThicknessKey, DefaultGraphicsPPIndirectDiffuseSSThickness);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSSampleCountKey, DefaultGraphicsPPIndirectDiffuseSSSampleCount);
+		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSStepCountKey, DefaultGraphicsPPIndirectDiffuseSSStepCount);
+		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseSSDepthSigma);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseSSNormalSigma);
+		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserLuminanceSigma);
+		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserIterations);
+		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseSSTemporalAlpha);
+		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseSSTemporalDepthTolerance);
+		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseSSTemporalNormalThreshold);
+		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseSSTemporalVarianceGamma);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserMaxAccumulation);
+		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserDebugView);
+		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserAccumulationCounter);
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseSSTemporalEnabled);
+		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseSSTemporalNeighborhoodClamp);
+		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseSSTemporalAnimatedNoise);
 
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;

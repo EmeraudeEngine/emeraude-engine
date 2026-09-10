@@ -34,7 +34,7 @@ not-sky and nothing about what occludes the volume. That is the test below.
 
 ## Ground already in place (do not re-derive)
 
-- **Runtime override keys** (`7dc859af`): `Core/Graphics/VolumetricLight/{Density,Decay,Exposure,
+- **Runtime override keys** (`7dc859af`): `Core/Graphics/PostProcessing/VolumetricLight/{Density,Decay,Exposure,
   SampleCount,TemporalAlpha}`, read with `settings.get(key, m_parameters.x)` — an override that is
   ABSENT by default, deliberately breaking the TAA/MotionBlur contract because five demos pass
   hand-tuned values an engine-wide default would silently double.

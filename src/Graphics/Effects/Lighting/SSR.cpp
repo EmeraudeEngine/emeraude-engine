@@ -662,14 +662,14 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* Pixel doubling: half-res working targets to save performance. Default FALSE
 		 * (owner decision): screen-space effects run full-res — they are the cheap tier of
 		 * the reflection ladder, definition is their selling point. */
-		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsScreenSpaceReflectionPixelDoublingKey, DefaultGraphicsScreenSpaceReflectionPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPReflectionsSSPixelDoublingKey, DefaultGraphicsPPReflectionsSSPixelDoubling);
 		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
 
 		/* Bilateral blur quality knobs. */
-		m_blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsScreenSpaceReflectionBlurRadiusKey, DefaultGraphicsScreenSpaceReflectionBlurRadius);
-		m_depthSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceReflectionDepthSigmaKey, DefaultGraphicsScreenSpaceReflectionDepthSigma);
-		m_normalSigma = settings.getOrSetDefault< float >(GraphicsScreenSpaceReflectionNormalSigmaKey, DefaultGraphicsScreenSpaceReflectionNormalSigma);
+		m_blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsPPReflectionsSSBlurRadiusKey, DefaultGraphicsPPReflectionsSSBlurRadius);
+		m_depthSigma = settings.getOrSetDefault< float >(GraphicsPPReflectionsSSDepthSigmaKey, DefaultGraphicsPPReflectionsSSDepthSigma);
+		m_normalSigma = settings.getOrSetDefault< float >(GraphicsPPReflectionsSSNormalSigmaKey, DefaultGraphicsPPReflectionsSSNormalSigma);
 
 		/* Trace target (half-res, RGBA16F: hitUV.xy + confidence.z). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "SSR_Trace") )

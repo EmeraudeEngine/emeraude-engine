@@ -77,6 +77,11 @@ Core
 ├── RendererService           — Graphics (screenshot, getStatus)
 ├── ResourcesManagerService   — Resource discovery (listContainers, listResources)
 ├── SceneManagerService       — Scene creation and manipulation (see §5)
+│   └── PostProcess           — The ACTIVE scene's post-process chain (listEffects, getStatus,
+│                               select, disable, setLightingMode). ⚠️ Registered by
+│                               Scenes::Manager on scene activation and unregistered on
+│                               deactivation: the node exists only while a scene that declared
+│                               a stack is active.
 ├── SettingsService           — Configuration (getJson, set, save, print)
 └── WindowService             — Window control (resize, getState)
 ```

@@ -373,6 +373,21 @@ namespace EmEn::Scenes
 
 		m_activeScene = scene;
 
+		/* The active scene's post-process chain becomes addressable as
+		 * `Core.SceneManagerService.PostProcess.*`, and stops being so when the scene is
+		 * disabled: the stack belongs to the scene, so the console node has to follow that
+		 * lifetime rather than outlive it.
+		 * ⚠️ A stack the RENDERER materializes later on its own — Scene::requirePostProcessStack(),
+		 * the path a scene that declared no stack takes when its camera asks for tone mapping —
+		 * is NOT registered here, and deliberately: that call runs on the render thread, and
+		 * mutating the console tree from there would race the main thread reading it. Such a
+		 * stack holds nothing but the camera's photographic effects, which the camera itself
+		 * owns and the console cannot select anyway. */
+		if ( m_activeScene->hasPostProcessStack() )
+		{
+			static_cast< void >(m_activeScene->postProcessStack()->registerToObject(*this));
+		}
+
 		/* Send out a message that the scene has been activated. */
 		this->notify(SceneEnabled, m_activeScene);
 
@@ -405,6 +420,13 @@ namespace EmEn::Scenes
 		m_activeScene->AVConsoleManager().graphicsRenderer().bindlessTextureManager().clearTextureSet(m_activeScene->bindlessTextureSet());
 
 		m_activeScene->disable(m_inputManager);
+
+		/* ⚠️ The console holds a RAW back-pointer to the child object. A scene going away with
+		 * its stack still registered leaves that pointer dangling, and the next `help` walks it. */
+		if ( m_activeScene->hasPostProcessStack() )
+		{
+			m_activeScene->postProcessStack()->unregisterFromParent();
+		}
 
 		/* Send out a message that the scene has been deactivated. */
 		this->notify(SceneDisabled, m_activeScene);

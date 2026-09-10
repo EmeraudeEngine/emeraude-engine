@@ -216,11 +216,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * multiplier and 'exposure' an arbitrary gain turning the light's LUX into the nits buffer.
 		 * They all become meaningless the day the medium is real. */
 		const auto & settings = renderer.primaryServices().settings();
-		m_parameters.density = settings.get< float >(GraphicsVolumetricLightDensityKey, m_parameters.density);
-		m_parameters.decay = settings.get< float >(GraphicsVolumetricLightDecayKey, m_parameters.decay);
-		m_parameters.exposure = settings.get< float >(GraphicsVolumetricLightExposureKey, m_parameters.exposure);
-		m_parameters.numSamples = settings.get< uint32_t >(GraphicsVolumetricLightSampleCountKey, m_parameters.numSamples);
-		m_parameters.temporalAlpha = settings.get< float >(GraphicsVolumetricLightTemporalAlphaKey, m_parameters.temporalAlpha);
+		m_parameters.density = settings.get< float >(GraphicsPPVolumetricLightDensityKey, m_parameters.density);
+		m_parameters.decay = settings.get< float >(GraphicsPPVolumetricLightDecayKey, m_parameters.decay);
+		m_parameters.exposure = settings.get< float >(GraphicsPPVolumetricLightExposureKey, m_parameters.exposure);
+		m_parameters.numSamples = settings.get< uint32_t >(GraphicsPPVolumetricLightSampleCountKey, m_parameters.numSamples);
+		m_parameters.temporalAlpha = settings.get< float >(GraphicsPPVolumetricLightTemporalAlphaKey, m_parameters.temporalAlpha);
 
 		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
 

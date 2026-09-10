@@ -792,15 +792,15 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * NOTE: this alone cannot sharpen the reflection of a glossy surface — the cone width
 		 * below is expressed in TRACE texels and scales with the trace height, so the cone LOD
 		 * exactly cancels the resolution gain. Use the GlossyCone knobs for that. */
-		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsRayTracingReflectionPixelDoublingKey, DefaultGraphicsRayTracingReflectionPixelDoubling);
+		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPReflectionsRTPixelDoublingKey, DefaultGraphicsPPReflectionsRTPixelDoubling);
 		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
 		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
 
 		/* Glossy cone controls (bench knobs — see SettingKeys.hpp for the full rationale). */
-		m_coneEnabled = settings.getOrSetDefault< bool >(GraphicsRayTracingReflectionGlossyConeEnabledKey, DefaultGraphicsRayTracingReflectionGlossyConeEnabled);
-		m_coneBlendStart = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeBlendStartKey, DefaultGraphicsRayTracingReflectionGlossyConeBlendStart));
-		m_coneBlendFull = std::max(m_coneBlendStart, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeBlendFullKey, DefaultGraphicsRayTracingReflectionGlossyConeBlendFull));
-		m_coneMaxLod = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsRayTracingReflectionGlossyConeMaxLodKey, DefaultGraphicsRayTracingReflectionGlossyConeMaxLod));
+		m_coneEnabled = settings.getOrSetDefault< bool >(GraphicsPPReflectionsRTGlossyConeEnabledKey, DefaultGraphicsPPReflectionsRTGlossyConeEnabled);
+		m_coneBlendStart = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTGlossyConeBlendStartKey, DefaultGraphicsPPReflectionsRTGlossyConeBlendStart));
+		m_coneBlendFull = std::max(m_coneBlendStart, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTGlossyConeBlendFullKey, DefaultGraphicsPPReflectionsRTGlossyConeBlendFull));
+		m_coneMaxLod = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTGlossyConeMaxLodKey, DefaultGraphicsPPReflectionsRTGlossyConeMaxLod));
 
 		/* Trace target (half-res by default, RGBA16F: reflected color RGB + confidence A). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Trace") )

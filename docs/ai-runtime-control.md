@@ -408,6 +408,42 @@ This is NOT the download manager: `Core.NetManagerService.*` fetches files into 
 deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
 [`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
 
+### Driving the post-process chain (`Core.SceneManagerService.PostProcess.*`)
+
+The active scene's chain is addressable at runtime. Both lighting lanes are resident in every
+scene, so switching is free of any rebuild and compares two techniques **on the very same
+framing**.
+
+```bash
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.listEffects()'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.getStatus()'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightingMode(ScreenSpace)'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightingMode(RayTracing)'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.select(Reflections, SSREffect)'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.disable(AmbientOcclusion)'
+```
+
+`listEffects()` prints every slot, its occupants, and two marks: `>` is what you selected, `*` is
+what the **last frame actually ran**. They differ exactly when a fallback is active — which is the
+only way to see one, since the fallback is silent by design (a trace would be one line per slot
+per frame).
+
+- Slot names are `EffectSlot`'s own (`IndirectDiffuse`, `Reflections`, `AmbientOcclusion`,
+  `ContactShadows`, `Fog`, `VolumetricLight`, `TemporalAA`, `LensFlare`, `Custom`); effect names
+  are the labels `listEffects()` prints (`RTGIEffect`, `SSGIEffect`, …).
+- `select()` mixes lanes per slot — `RTGI` + `SSR` + `RTAO` is a legal and useful A/B.
+- ⚠️ **A selection is applied on the NEXT frame, never immediately.** The console runs on the main
+  thread and the chain is walked on the render thread; `syncSlotSelection()` applies it at the
+  frame boundary. Take the screenshot after the switch has landed, not in the same breath.
+- Every lighting slot has an occupant in **both** lanes since Sep 2026 (`SSContactShadows`
+  completed the set), so `setLightingMode()` no longer leaves a slot dark. It still warns, per
+  slot, if one ever does.
+- ⚠️ The four camera-owned slots (`DepthOfField`, `MotionBlur`, `Glare`, `ToneMapping`) are
+  reported but **not selectable**: the camera owns them, drive them through the camera.
+- ⚠️⚠️ **A lane switch is invisible to a mean-luminance comparison.** Measured on Sponza: the two
+  frames differ on 99.7 % of pixels (mean |Δ| 20/255) while the mean luminance moves by 0.01 — the
+  auto-exposure absorbs the change. Read the image, or compare per-pixel.
+
 ---
 
 ## 4. Scene Creation via JSON

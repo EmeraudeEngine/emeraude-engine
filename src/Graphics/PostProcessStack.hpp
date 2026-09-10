@@ -31,9 +31,14 @@
 
 /* STL inclusions. */
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <vector>
+
+/* Local inclusions for inheritance. */
+#include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "DirectPostProcessEffect.hpp"
@@ -43,6 +48,11 @@ namespace EmEn::Graphics
 {
 	class IndirectPostProcessEffect;
 	class Renderer;
+}
+
+namespace EmEn::Scenes
+{
+	class LightSet;
 }
 
 namespace EmEn::Scenes::Component
@@ -59,6 +69,38 @@ namespace EmEn::Graphics::Effects::Camera
 namespace EmEn::Graphics
 {
 	/**
+	 * @brief The two implementation LANES of the lighting concepts.
+	 * @note A lane is not a new taxonomy: an effect belongs to the ray-traced lane if and only if
+	 * `IndirectPostProcessEffect::requiresRayTracing()` is true, and to the screen-space lane
+	 * otherwise. Nothing else distinguishes them, and nothing else may — a second way of asking
+	 * the same question is a second way of getting a different answer.
+	 */
+	enum class LightingLane : uint8_t
+	{
+		ScreenSpace,
+		RayTracing
+	};
+
+	/**
+	 * @brief Returns the name of a lighting lane, for the console and the traces.
+	 * @param lane The lane.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	constexpr
+	const char *
+	to_cstring (LightingLane lane) noexcept
+	{
+		switch ( lane )
+		{
+			case LightingLane::ScreenSpace : return "ScreenSpace";
+			case LightingLane::RayTracing : return "RayTracing";
+		}
+
+		return "Unknown";
+	}
+
+	/**
 	 * @brief The frame's post-process chain, as a fixed sequence of CONCEPTS rather than a list.
 	 * @note ⚠️⚠️ THE CHAIN ORDER IS A PROPERTY OF THIS CLASS, NOT OF THE CALL SEQUENCE. Effects
 	 * are filed into the slot they declare (`IndirectPostProcessEffect::slot()`) and the chain is
@@ -74,25 +116,65 @@ namespace EmEn::Graphics
 	 * selecting it; its siblings are disabled mechanically (see disableSlotSiblings()).
 	 * @note Owned by a Scene to provide per-scene post-processing configuration.
 	 */
-	class EMEN_API PostProcessStack final
+	class EMEN_API PostProcessStack final : public Console::ControllableTrait
 	{
 		public:
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"PostProcessStack"};
 
-			PostProcessStack () noexcept = default;
+			/** @brief The console identifier, i.e. the node name under the scene manager. */
+			static constexpr auto ConsoleId{"PostProcess"};
 
-			~PostProcessStack () noexcept;
+			/** @brief The selection index meaning "this concept is switched off". */
+			static constexpr int8_t NoOccupant{-1};
 
-			/* Non-copiable, movable. */
+			/**
+			 * @brief How many consecutive frames a selected occupant must fail to run before its
+			 * slot falls back to the sibling lane.
+			 * @note ⚠️ A grace period, not a debounce, and it exists because the fallback and the
+			 * lazy residency otherwise defeat each other. `Renderer::isRayTracingReady()` is false
+			 * for the first frames of EVERY scene — the TLAS is built asynchronously — and it
+			 * cannot say whether it is "not yet" or "never" (it is a null/created test on the
+			 * current TLAS, nothing more). Falling back immediately therefore materialized the
+			 * WHOLE screen-space lane on every launch of a ray-traced scene, seconds before the
+			 * traced one took over: measured on Sponza, all three screen-space effects came up
+			 * "created" while the traced lane was the one running. Waiting a couple of seconds
+			 * lets a warm-up resolve itself for free, and still rescues a scene that genuinely
+			 * holds no ray traced geometry.
+			 */
+			static constexpr uint16_t FallbackGraceFrames{120};
+
+			PostProcessStack () noexcept
+				: ControllableTrait{ConsoleId}
+			{
+				/* ⚠️ NOT a default member initializer: std::atomic value-initializes to 0 in
+				 * C++20, and 0 is a valid occupant index. Every slot starts with NO selection. */
+				for ( auto & selected : m_selectedOccupant )
+				{
+					selected.store(NoOccupant, std::memory_order_relaxed);
+				}
+
+				for ( auto & effective : m_effectiveOccupant )
+				{
+					effective.store(NoOccupant, std::memory_order_relaxed);
+				}
+			}
+
+			~PostProcessStack () noexcept override;
+
+			/* ⚠️ Non-copiable AND non-movable. It used to be movable, and both reasons it can no
+			 * longer be are structural rather than stylistic: it is a console object, whose
+			 * parent holds a RAW back-pointer to it (moving a registered one dangles that entry),
+			 * and it holds the per-slot selection as std::atomic. Nothing ever moved one — a
+			 * stack lives behind the std::unique_ptr the scene owns. */
 			PostProcessStack (const PostProcessStack &) = delete;
 
 			PostProcessStack & operator= (const PostProcessStack &) = delete;
 
-			PostProcessStack (PostProcessStack &&) noexcept = default;
+			PostProcessStack (PostProcessStack &&) noexcept = delete;
 
-			PostProcessStack & operator= (PostProcessStack &&) noexcept = default;
+			PostProcessStack & operator= (PostProcessStack &&) noexcept = delete;
 
 			/**
 			 * @brief Files an effect into the slot it declares.
@@ -136,6 +218,139 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			std::shared_ptr< IndirectPostProcessEffect > enabledEffect (EffectSlot slot) const noexcept;
+
+			/**
+			 * @brief Installs the complete LIGHTING family: both lanes, one selected.
+			 * @note This is the engine's own policy, and the reason it lives here rather than in
+			 * an application: "which effects implement the indirect diffuse, the reflections, the
+			 * ambient occlusion and the contact shadows, and which of them can this machine run"
+			 * is a question about the engine, not about a game. Every consumer asking it by hand
+			 * would answer it differently — which is the mistake the EffectSlot table already
+			 * fixed for the chain ORDER.
+			 *
+			 * The screen-space lane is ALWAYS resident. The ray-traced lane is resident only when
+			 * the two SESSION-CONSTANT conditions hold: the device supports ray tracing and the
+			 * user setting allows it. ⚠️ Deliberately NOT `Renderer::isRayTracingReady()`, which
+			 * is a per-frame answer (the TLAS is built asynchronously, and a scene may hold no ray
+			 * traced geometry at all): residency is a lifetime decision, readiness is a frame
+			 * decision, and confusing the two would either allocate a lane that can never run or
+			 * refuse one that becomes runnable three frames later.
+			 * @note Residency is not creation. An occupant that is merely resident holds NO GPU
+			 * resources until it is selected — see @ref syncSlotSelection().
+			 * @note ⚠️ The two lanes are NOT interchangeable renderings of one result, and that is
+			 * why both stay resident instead of one being picked once and for all. Taking the
+			 * indirect diffuse as the example: SSGI and RTGI share their whole integration
+			 * contract — same G-buffer inputs, same demodulated signal, same denoiser, same
+			 * additive combine — but not what they can GATHER. RTGI *owns* the indirect diffuse:
+			 * its miss branch integrates the sky cubemap with real visibility, so the raster
+			 * ambient pass drops its own diffuse IBL leg. SSGI has no sky term at all, so it only
+			 * ADDS on-screen bounces to a raster ambient that stays whole. Switching lanes
+			 * therefore changes what the frame MEANS, not merely how fast it was obtained — see
+			 * `Graphics/AGENTS.md` § "Indirect-diffuse OWNERSHIP".
+			 * @param renderer A reference to the graphics renderer.
+			 * @return void
+			 */
+			void installLightingFamily (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Selects the occupant of a slot BY NAME, as an intent.
+			 * @note ⚠️ MAIN THREAD (console). This does NOT touch the chain: it records what the
+			 * owner wants, and @ref syncSlotSelection() applies it on the render thread at the
+			 * next frame boundary. Calling `enable()` from here instead is what the console used
+			 * to have to do, and it was a data race against the chain walk.
+			 * @param slot The slot.
+			 * @param label The occupant's label, as reported by IndirectPostProcessEffect::label().
+			 * @return bool False when the slot holds no occupant carrying that label.
+			 */
+			bool selectOccupant (EffectSlot slot, std::string_view label) noexcept;
+
+			/**
+			 * @brief Selects NO occupant for a slot — the concept is switched off.
+			 * @note ⚠️ MAIN THREAD (console). Same deferred contract as @ref selectOccupant().
+			 * @param slot The slot.
+			 * @return void
+			 */
+			void selectNoOccupant (EffectSlot slot) noexcept;
+
+			/**
+			 * @brief Selects a whole LANE across every lighting slot.
+			 * @note ⚠️ MAIN THREAD (console). Same deferred contract as @ref selectOccupant().
+			 * A lighting slot with no occupant in the requested lane is left EMPTY rather than
+			 * kept on the other lane: asking for the screen-space lane and silently getting a
+			 * ray-traced contact shadow would make an A/B measurement meaningless. Since Sep 2026
+			 * every lighting slot has an occupant in both lanes, so this case no longer arises for
+			 * the family the engine installs — it still can for a slot an application populates
+			 * itself.
+			 * @warning ⚠️ REFUSED, atomically, when the lane has no occupant in ANY lighting slot:
+			 * nothing is changed and false is returned. Applying it would switch the whole
+			 * lighting family OFF while reporting that the lane was selected — which is what it
+			 * did until Sep 2026 on a session started with `LightingLane = "ScreenSpace"` (no
+			 * acceleration structure is built then, so the traced lane is not resident at all).
+			 * A partial lane is still applied: the slots that have an occupant get it, the others
+			 * go off, which is the documented behaviour above.
+			 * @param lane The lane.
+			 * @return bool
+			 */
+			bool selectLightingLane (LightingLane lane) noexcept;
+
+			/**
+			 * @brief Returns the occupant the owner SELECTED for a slot, or nullptr.
+			 * @note This is the INTENT, which is not always what runs: read @ref enabledEffect()
+			 * for what the chain will actually record, and compare the two to see a fallback.
+			 * @param slot The slot.
+			 * @return std::shared_ptr< IndirectPostProcessEffect >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< IndirectPostProcessEffect > selectedOccupant (EffectSlot slot) const noexcept;
+
+			/**
+			 * @brief Returns the occupant the LAST SYNC actually put in the chain, or nullptr.
+			 * @note Recorded by @ref syncSlotSelection() rather than re-derived on the spot, and
+			 * that is the point: it reports what the render thread DID, not what the reader's
+			 * thread would decide now, on a ray-tracing readiness that may already have moved.
+			 * Differing from @ref selectedOccupant() is exactly what a fallback looks like.
+			 * @param slot The slot.
+			 * @return std::shared_ptr< IndirectPostProcessEffect >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< IndirectPostProcessEffect > effectiveOccupant (EffectSlot slot) const noexcept;
+
+			/**
+			 * @brief Returns whether an occupant could be recorded in the frame about to start.
+			 * @note The gates that DISCRIMINATE BETWEEN SIBLINGS of one slot, and only those: ray
+			 * tracing availability, the light set, and the creation-failure latch. The G-buffer
+			 * gates the executor also applies (depth, normals, albedo, ...) are deliberately absent
+			 * because they cannot discriminate: PostProcessStack aggregates its G-buffer
+			 * requirements over EVERY resident effect, selected or not, so the scene target always
+			 * carries the union of what both lanes need. That single fact is what makes a lane
+			 * switch free — no target recreation, no pipeline reconfiguration.
+			 * @param effect A reference to the effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet) noexcept;
+
+			/**
+			 * @brief Applies the pending selection, materializing what it needs.
+			 * @note ⚠️ RENDER THREAD, once per frame, BEFORE syncSlotPairings() and before any
+			 * recording. It is the single place where a chain effect is enabled or disabled, which
+			 * is what makes the console switch safe: the console writes an intent from the main
+			 * thread, this reads it here.
+			 *
+			 * For each slot it resolves the EFFECTIVE occupant — the selected one when it can run,
+			 * otherwise the first sibling that can — creates it if it is not created yet (lazy
+			 * residency: an alternative costs nothing until it is asked for), and enables it, which
+			 * disables its siblings mechanically.
+			 * @warning ⚠️ Do NOT call PostProcessStack::createAll() to cover this. That call creates
+			 * what is selected AT THAT MOMENT; the whole point here is the occupant nobody selected
+			 * yet.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
+			 * @return void
+			 */
+			void syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet) noexcept;
 
 			/**
 			 * @brief Removes an effect from the chain.
@@ -398,6 +613,27 @@ namespace EmEn::Graphics
 
 		private:
 
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
+			void onRegisterToConsole () noexcept override;
+
+			/**
+			 * @brief Materializes an occupant's GPU resources, latching a failure.
+			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only.
+			 * @param effect A reference to the effect.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool materializeOccupant (IndirectPostProcessEffect & effect, Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Disables every occupant of a slot — the concept is switched off.
+			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only.
+			 * @param slot The slot.
+			 * @return void
+			 */
+			void disableSlotOccupants (EffectSlot slot) const noexcept;
+
 			/**
 			 * @brief Rebuilds the flat, slot-ordered view the chain executor walks.
 			 * @note Rebuilt on every mutation rather than assembled on demand: it is read once
@@ -408,6 +644,20 @@ namespace EmEn::Graphics
 
 			/** @brief The occupants of each concept, indexed by EffectSlot. */
 			std::array< std::vector< std::shared_ptr< IndirectPostProcessEffect > >, EffectSlotCount > m_slots;
+			/** @brief The occupant the OWNER selected per slot, as an index into m_slots, -1 for none.
+			 * @note Atomic because the two ends sit on two threads: the console writes it on the
+			 * main thread, syncSlotSelection() reads it on the render thread. An index rather than
+			 * a pointer so the write stays a single lock-free store, and removeEffect() is the one
+			 * place that has to repair it. */
+			std::array< std::atomic< int8_t >, EffectSlotCount > m_selectedOccupant;
+			/** @brief The occupant the last sync actually enabled per slot, -1 for none.
+			 * @note Written by the render thread, read by the console on the main thread — the
+			 * mirror image of m_selectedOccupant, and the only honest way to report a fallback. */
+			std::array< std::atomic< int8_t >, EffectSlotCount > m_effectiveOccupant;
+			/** @brief Consecutive frames the selected occupant of a slot could not run.
+			 * @note RENDER THREAD only — read and written by syncSlotSelection() alone, hence a
+			 * plain integer where its two neighbours are atomic. */
+			std::array< uint16_t, EffectSlotCount > m_selectionStallFrames{};
 			/** @brief The slot table flattened in EffectSlot order — THE chain order. */
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_orderedEffects;
 			/* Display effects (AA, sharpening): no GPU resources of their own, they are
