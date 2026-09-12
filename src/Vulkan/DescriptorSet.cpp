@@ -327,6 +327,99 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	DescriptorSet::writeCombinedImageSampler (uint32_t bindingIndex, const ImageView & imageView, const Sampler & sampler, VkImageLayout imageLayout) const noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The descriptor set is not yet created ! Unable to write into it.");
+
+			return false;
+		}
+
+		if ( !imageView.isCreated() )
+		{
+			Tracer::error(ClassId, "The image view is not created !");
+
+			return false;
+		}
+
+		if ( !sampler.isCreated() )
+		{
+			Tracer::error(ClassId, "The sampler is not created !");
+
+			return false;
+		}
+
+		VkDescriptorImageInfo descriptorInfo{};
+		descriptorInfo.sampler = sampler.handle();
+		descriptorInfo.imageView = imageView.handle();
+		descriptorInfo.imageLayout = imageLayout;
+
+		VkWriteDescriptorSet writeDescriptorSet{};
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.pNext = nullptr;
+		writeDescriptorSet.dstSet = m_handle;
+		writeDescriptorSet.dstBinding = bindingIndex;
+		writeDescriptorSet.dstArrayElement = 0;
+		writeDescriptorSet.descriptorCount = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writeDescriptorSet.pImageInfo = &descriptorInfo;
+		writeDescriptorSet.pBufferInfo = nullptr;
+		writeDescriptorSet.pTexelBufferView = nullptr;
+
+		vkUpdateDescriptorSets(
+			m_descriptorPool->device()->handle(),
+			1, &writeDescriptorSet,
+			0, VK_NULL_HANDLE
+		);
+
+		return true;
+	}
+
+	bool
+	DescriptorSet::writeStorageImage (uint32_t bindingIndex, const ImageView & imageView, VkImageLayout imageLayout) const noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The descriptor set is not yet created ! Unable to write into it.");
+
+			return false;
+		}
+
+		if ( !imageView.isCreated() )
+		{
+			Tracer::error(ClassId, "The image view is not created !");
+
+			return false;
+		}
+
+		VkDescriptorImageInfo descriptorInfo{};
+		descriptorInfo.sampler = VK_NULL_HANDLE;
+		descriptorInfo.imageView = imageView.handle();
+		descriptorInfo.imageLayout = imageLayout;
+
+		VkWriteDescriptorSet writeDescriptorSet{};
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.pNext = nullptr;
+		writeDescriptorSet.dstSet = m_handle;
+		writeDescriptorSet.dstBinding = bindingIndex;
+		writeDescriptorSet.dstArrayElement = 0;
+		writeDescriptorSet.descriptorCount = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		writeDescriptorSet.pImageInfo = &descriptorInfo;
+		writeDescriptorSet.pBufferInfo = nullptr;
+		writeDescriptorSet.pTexelBufferView = nullptr;
+
+		vkUpdateDescriptorSets(
+			m_descriptorPool->device()->handle(),
+			1, &writeDescriptorSet,
+			0, VK_NULL_HANDLE
+		);
+
+		return true;
+	}
+
+	bool
 	DescriptorSet::writeStorageBuffer (uint32_t bindingIndex, const VkDescriptorBufferInfo & descriptorInfo) const noexcept
 	{
 		if ( !this->isCreated() )

@@ -701,6 +701,17 @@ The command buffer supports `drawIndexedIndirect()` for GPU-driven rendering. De
 - `IndirectBuffer.hpp` — Convenience buffer subclass
 - `Instance.cpp` — Feature enablement (MDI + shaderInt64 + shaderDrawParameters)
 
+### `DescriptorSet` write helpers — the layout they write (Sep 2026)
+
+`writeCombinedImageSampler(binding, image, view, sampler)` writes the image's **CURRENT** layout
+(`Image::currentImageLayout()`), which is `UNDEFINED` for an image the GPU has not touched yet —
+measured as `VUID-VkWriteDescriptorSet-descriptorType-04150` on every set of the irradiance probe
+volume, whose atlases are cleared and written only once a frame has been recorded. Two overloads
+exist for images whose layout is a design decision rather than a runtime state:
+`writeCombinedImageSampler(binding, view, sampler, layout)` and `writeStorageImage(binding, view,
+layout = GENERAL)`. ⚠️ The earlier storage-image writes of `RTR` and `IBLBaker` still call
+`vkUpdateDescriptorSets` by hand from `Graphics/` — the helper they lacked now exists.
+
 ## Critical Points
 
 - **Ordered destruction**: Destroy resources in reverse creation order

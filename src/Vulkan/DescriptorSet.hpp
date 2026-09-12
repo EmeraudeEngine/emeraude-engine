@@ -211,6 +211,30 @@ namespace EmEn::Vulkan
 			bool writeCombinedImageSampler (uint32_t bindingIndex, const Image & image, const ImageView & imageView, const Sampler & sampler) const noexcept;
 
 			/**
+			 * @brief Writes a combined image sampler with an EXPLICIT image layout.
+			 * @note The overload above writes the image's CURRENT layout, which is UNDEFINED for an image the
+			 * GPU has not touched yet (VUID-VkWriteDescriptorSet-descriptorType-04150). An image that lives in
+			 * GENERAL for its whole life (a storage atlas sampled by other passes) names its layout here.
+			 * @param bindingIndex The binding index inside the descriptor set layout.
+			 * @param imageView A reference to the image view.
+			 * @param sampler A reference to the sampler.
+			 * @param imageLayout The layout the image will be in when the descriptor is read.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeCombinedImageSampler (uint32_t bindingIndex, const ImageView & imageView, const Sampler & sampler, VkImageLayout imageLayout) const noexcept;
+
+			/**
+			 * @brief Writes a storage image to the descriptor set.
+			 * @param bindingIndex The binding index inside the descriptor set layout.
+			 * @param imageView A reference to the image view (created with the STORAGE usage).
+			 * @param imageLayout The layout the image will be in when accessed. Default GENERAL, the only layout a storage image may be accessed in.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeStorageImage (uint32_t bindingIndex, const ImageView & imageView, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_GENERAL) const noexcept;
+
+			/**
 			 * @brief Writes a storage buffer to the descriptor set.
 			 * @param bindingIndex The binding index of the buffer inside the descriptor set layout.
 			 * @param descriptorInfo A reference to the descriptor buffer info.
