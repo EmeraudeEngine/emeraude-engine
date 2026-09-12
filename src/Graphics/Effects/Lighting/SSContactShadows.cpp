@@ -240,10 +240,10 @@ namespace EmEn::Graphics::Effects::Lighting
 		auto & renderer = this->renderer();
 		auto & settings = renderer.primaryServices().settings();
 
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsSSMaxDistanceKey, DefaultGraphicsPPContactShadowsSSMaxDistance);
-		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsSSNormalBiasKey, DefaultGraphicsPPContactShadowsSSNormalBias);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsSSIntensityKey, DefaultGraphicsPPContactShadowsSSIntensity);
-		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsSSMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsSSMaxBlurRadius);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxDistanceKey, DefaultGraphicsPPContactShadowsMaxDistance);
+		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsNormalBiasKey, DefaultGraphicsPPContactShadowsNormalBias);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsIntensityKey, DefaultGraphicsPPContactShadowsIntensity);
+		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsMaxBlurRadius);
 		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsPPContactShadowsSSThicknessKey, DefaultGraphicsPPContactShadowsSSThickness);
 		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsPPContactShadowsSSStepCountKey, DefaultGraphicsPPContactShadowsSSStepCount);
 

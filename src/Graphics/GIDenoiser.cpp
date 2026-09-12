@@ -82,7 +82,7 @@ layout(set = 0, binding = 7, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise, bit2 1/N counter). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = accumulation cap N. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = accumulation cap N. */
 };
 
 void main()
@@ -251,7 +251,7 @@ layout(set = 0, binding = 7, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise, bit2 1/N counter). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = accumulation cap N. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = accumulation cap N. */
 };
 
 void main()
@@ -544,7 +544,7 @@ layout(set = 0, binding = 1, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = unused. */
 };
 
 void main()
@@ -907,8 +907,10 @@ namespace EmEn::Graphics
 				)
 			},
 			.bounceParams = {
-				historyUsable ? inputs.bounceStrength : 0.0F,
-				inputs.bounceClamp,
+				/* Not gated on the history: the RTGI feedback reads the irradiance probes (Sep 2026). */
+				inputs.bounceStrength,
+				/* Unused: the multi-bounce clamp died with the screen-history feedback (Sep 2026). */
+				0.0F,
 				m_parameters.temporalVarianceGamma,
 				static_cast< float >(m_parameters.maxAccumulation)
 			},

@@ -99,8 +99,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				float temporalDepthTolerance{0.05F};
 				float temporalNormalThreshold{0.8F};
 				float temporalVarianceGamma{1.0F};
+				/* Damping of the multi-bounce feedback read from the irradiance probe volume (0 = single bounce). */
 				float multiBounceStrength{1.0F};
-				float multiBounceClamp{4.0F};
 				/* Denoiser debug view (combine draws it INSTEAD of the GI): 0 = off,
 				 * 1 = temporal variance, 2 = accumulation age. */
 				uint32_t denoiserDebugView{0};

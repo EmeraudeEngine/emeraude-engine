@@ -475,11 +475,19 @@ void main()
 }
 )GLSL";
 
-	/* Resolve pass: reads the trace hit data and the scene color,
-	 * outputs the reflected color weighted by confidence.
-	 * This converts (hitUV, confidence) into (reflectedColor * confidence, confidence)
-	 * so that the subsequent blur operates on colors, not UV coordinates.
-	 * When confidence is zero (SSR miss), falls back to sampling the environment cubemap. */
+	/* Resolve pass: reads the trace hit data and the scene color, and outputs the reflection in
+	 * the SAME premultiplied contract as the RTR trace: (color · fresnelTint · confidence,
+	 * confidence), where the confidence CARRIES the scalar Fresnel lobe weight. The blur then
+	 * filters colors (not UV coordinates) and the combine's division by the filtered confidence
+	 * renormalizes the color while the confidence itself is the mix weight.
+	 * ⚠️ The Fresnel MUST be in the confidence, not only on the color. Until Sep 2026 the color
+	 * carried `× hitFresnel` while the confidence did not, and the output was not premultiplied:
+	 * the combine then removed `confidence · intensity · reflectivity` (≈ 43 % on a roughness-0.5
+	 * dielectric floor) of the pixel's own shading and added only `F · intensity · reflectivity`
+	 * (≈ 2 %) of reflection — every participating dielectric got DARKER under SSR (measured
+	 * −16 % on the global-illumination floor) while RTR, whose confidence had the Fresnel all
+	 * along, moved the same floor by +2 %.
+	 * When the trace has no hit (confidence zero), falls back to the environment cubemap. */
 	constexpr auto SSRResolveFragmentShader = R"GLSL(
 #version 450
 #extension GL_EXT_nonuniform_qualifier : require
@@ -518,6 +526,7 @@ layout(push_constant) uniform PushConstants
 	float intensity;
 	float pyramidLodOffset;
 	float pyramidMaxLod;
+	float skyLuminance;
 };
 
 float linearizeDepth (float depth)
@@ -536,6 +545,66 @@ void main()
 	vec4 traceData = texelFetch(traceTex, ivec2(vUV * vec2(textureSize(traceTex, 0))), 0);
 	float confidence = traceData.z;
 
+	/* ---- The PRIMARY surface, shared by the hit and the environment-miss paths (the RTR
+	 * contract, computed once before branching): view-space position and normal, the packed
+	 * roughness / metalness, and the Fresnel split into a SCALAR lobe weight and a NORMALIZED
+	 * tint. The weight goes into the confidence (it is what the combine mixes by), the tint
+	 * rides on the color (the combine renormalizes the color by the filtered confidence, so a
+	 * weight folded into the color alone would be cancelled — and a weight absent from the
+	 * confidence lets the mix substitute far more of the pixel than the lobe reflects). ---- */
+	float depth = texture(depthTex, vUV).r;
+
+	if (depth >= 1.0)
+	{
+		outResolve = vec4(0.0);
+		return;
+	}
+
+	vec4 normalData = texture(normalTex, vUV);
+	vec3 rawN = normalData.rgb;
+
+	if (dot(rawN, rawN) < 0.001)
+	{
+		outResolve = vec4(0.0);
+		return;
+	}
+
+	/* Alpha encoding: alpha = roughness + metalness * 2.0
+	 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0; */
+	float packedRM = normalData.a;
+	float originMetalness = packedRM >= 2.0 ? 1.0 : 0.0;
+	float roughness = packedRM - originMetalness * 2.0;
+
+	/* The trace retires the diffuse tail (early-out above 0.85, fade from 0.55) and folds that
+	 * fade into its confidence. The environment fallback must obey the SAME fade: a surface the
+	 * trace refused to reflect on must not reflect the cubemap instead. */
+	float roughnessFade = 1.0 - smoothstep(0.55, 0.85, roughness);
+
+	if (roughnessFade <= 0.0)
+	{
+		outResolve = vec4(0.0);
+		return;
+	}
+
+	/* View-space position (standard: Z negative = into screen) and the raw view-space normal. */
+	float linearZ = linearizeDepth(depth);
+	vec2 ndc = vUV * 2.0 - 1.0;
+	vec3 viewPos = vec3(ndc.x * abs(tanHalfFovY) * aspectRatio * linearZ, ndc.y * tanHalfFovY * linearZ, -linearZ);
+	vec3 viewDir = normalize(viewPos);
+	vec3 normal = normalize(rawN);
+	float NdotV = max(dot(normal, -viewDir), 0.0);
+
+	/* Primary-surface Fresnel (Schlick) as a COLOR, same model as RTR: a metal tints its
+	 * reflection by its albedo (gold reflects gold), a dielectric reflects the physical 4 %
+	 * head-on and more at grazing angles.
+	 * ⚠️ .rgb of the albedo attachment is the BASE colour (its .a is the diffuse weight the GI
+	 * combines apply): a diffuse albedo here reads 0 for every metal and kills its reflection. */
+	vec3 albedo = texture(albedoTex, vUV).rgb;
+	vec3 F0 = mix(vec3(0.04), albedo, originMetalness);
+	vec3 fresnelColor = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
+	float fresnel = max(fresnelColor.r, max(fresnelColor.g, fresnelColor.b));
+	vec3 fresnelTint = fresnelColor / max(fresnel, 0.001);
+
 	if (confidence > 0.001)
 	{
 		/* Cone-traced glossy resolve (Uludag, GPU Pro 5 — the second half of the Hi-Z
@@ -543,9 +612,6 @@ void main()
 		 * is the GGX lobe tangent (alpha = roughness²) times the marched screen distance;
 		 * the pre-convolved pyramid is read at the matching LOD. Mirror-sharp rays
 		 * (cone < 1 trace texel) keep the full-res color fetch — zero regression. */
-		float packedRM = texture(normalTex, vUV).a;
-		float originMetalness = packedRM >= 2.0 ? 1.0 : 0.0;
-		float roughness = packedRM - originMetalness * 2.0;
 		float coneTan = roughness * roughness;
 		vec2 deltaTexels = (traceData.xy - vUV) / vec2(texelSizeX, texelSizeY);
 		float coneWidthTexels = 2.0 * coneTan * length(deltaTexels);
@@ -566,77 +632,32 @@ void main()
 			reflColor = mix(sharpColor, coneColor, clamp(coneWidthTexels - 1.0, 0.0, 1.0));
 		}
 
-		/* Primary-surface Fresnel as a COLOR (same model as RTR): a metal tints its
-		 * reflection by its albedo, a dielectric reflects the physical 4% head-on and
-		 * more at grazing angles. ⚠️ It rides on the COLOR, never on the confidence —
-		 * the combine divides by the (blurred) confidence, which cancels any per-pixel
-		 * weight folded into it. */
-		float hitDepth = texture(depthTex, vUV).r;
-		float hitLinearZ = linearizeDepth(hitDepth);
-		vec2 hitNdc = vUV * 2.0 - 1.0;
-		float hitT = tanHalfFovY;
-		vec3 hitViewPos = vec3(hitNdc.x * hitT * aspectRatio * hitLinearZ, hitNdc.y * hitT * hitLinearZ, -hitLinearZ);
-		vec3 hitNormal = normalize(texture(normalTex, vUV).rgb);
-		float hitNdotV = max(dot(hitNormal, -normalize(hitViewPos)), 0.0);
-		vec3 hitAlbedo = texture(albedoTex, vUV).rgb;
-		vec3 hitF0 = mix(vec3(0.04), hitAlbedo, originMetalness);
-		vec3 hitFresnel = hitF0 + (1.0 - hitF0) * pow(1.0 - hitNdotV, 5.0);
+		/* The trace confidence already carries the distance, edge, facing and roughness fades;
+		 * the Fresnel lobe weight completes it. PREMULTIPLIED output. */
+		confidence *= fresnel;
 
-		outResolve = vec4(reflColor * hitFresnel, confidence);
+		outResolve = vec4(reflColor * fresnelTint * confidence, confidence);
 	}
 	else if (envFallbackIntensity > 0.0)
 	{
-		/* No SSR hit: cubemap fallback. */
-		float depth = texture(depthTex, vUV).r;
-
-		if (depth >= 1.0)
-		{
-			outResolve = vec4(0.0);
-			return;
-		}
-
-		/* Read packed roughness+metalness to modulate cubemap fallback.
-		 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0; */
-		float packedRM = texture(normalTex, vUV).a;
-		float originMetalness = packedRM >= 2.0 ? 1.0 : 0.0;
-		float roughness = packedRM - originMetalness * 2.0;
-
-		/* Reconstruct view-space position (standard: Z negative = into screen). */
-		float linearZ = linearizeDepth(depth);
-		vec2 ndc = vUV * 2.0 - 1.0;
-		float t = tanHalfFovY;
-		vec3 viewPos = vec3(ndc.x * abs(t) * aspectRatio * linearZ,
-							ndc.y * t * linearZ, -linearZ);
-
-		/* Read view-space normal from MRT. */
-		vec3 rawN = texture(normalTex, vUV).rgb;
-
-		if (dot(rawN, rawN) < 0.001)
-		{
-			outResolve = vec4(0.0);
-			return;
-		}
-
-		vec3 normal = normalize(rawN);
-
-		/* Reflection in view space, then transform to world space for cubemap lookup. */
-		vec3 reflDir = reflect(normalize(viewPos), normal);
+		/* No SSR hit: cubemap fallback. Reflection in view space, then world space for the
+		 * cubemap lookup. The world is Y-UP: a world direction samples the cubemap as-is (the
+		 * former vec3(D.x, -D.y, D.z) compensation of the Y-DOWN world is deleted). The
+		 * prefiltered chain handles the roughness; mip 0 is an exact environment copy. */
+		vec3 reflDir = reflect(viewDir, normal);
 		mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
 		vec3 worldReflDir = invViewRot * reflDir;
 
-		/* The world is Y-UP: a world direction samples the cubemap as-is. The former
-		 * vec3(D.x, -D.y, D.z) compensation of the Y-DOWN world is deleted.
-		 * The prefiltered chain handles the roughness (the old smoothstep attenuation
-		 * compensated a mirror-only sample); mip 0 is an exact environment copy. */
-		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], worldReflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
+		/* A normalized source becomes nits through the sky luminance — the RTR miss path does the
+		 * same with its `ambientLight.w`. Without it the fallback injected a [0,1] value into a
+		 * chain that lives in nits: invisible under a 17 000 lx sky, a plain constant elsewhere. */
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], worldReflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * skyLuminance;
 
-		/* Same primary-surface Fresnel COLOR as the hit path (see the comment there). */
-		float missNdotV = max(dot(normal, -normalize(viewPos)), 0.0);
-		vec3 missAlbedo = texture(albedoTex, vUV).rgb;
-		vec3 missF0 = mix(vec3(0.04), missAlbedo, originMetalness);
-		vec3 missFresnel = missF0 + (1.0 - missF0) * pow(1.0 - missNdotV, 5.0);
+		/* The trust in a screen-space miss (envFallbackIntensity: a miss means "no information",
+		 * not "sky") times the same lobe weight and roughness fade a hit would carry. */
+		float missConfidence = envFallbackIntensity * fresnel * roughnessFade;
 
-		outResolve = vec4(envColor * missFresnel, envFallbackIntensity);
+		outResolve = vec4(envColor * fresnelTint * missConfidence, missConfidence);
 	}
 	else
 	{
@@ -1571,7 +1592,10 @@ namespace EmEn::Graphics::Effects::Lighting
 				/* Cone width is measured in TRACE texels; the pyramid base is half the
 				 * effect resolution — the offset converts one into the other. */
 				.pyramidLodOffset = -std::log2(static_cast< float >(m_traceTarget.width()) / static_cast< float >(std::max(1U, m_colorPyramidImage != nullptr ? m_colorPyramidImage->createInfo().extent.width : m_traceTarget.width()))),
-				.pyramidMaxLod = static_cast< float >(m_colorPyramidMipCount > 0U ? m_colorPyramidMipCount - 1U : 0U)
+				.pyramidMaxLod = static_cast< float >(m_colorPyramidMipCount > 0U ? m_colorPyramidMipCount - 1U : 0U),
+				/* The environment fallback samples a normalized cubemap: scaled into nits exactly
+				 * as the RTR miss path is (FrameContext::skyLuminance, 0 under a closed scene). */
+				.skyLuminance = context.skyLuminance
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

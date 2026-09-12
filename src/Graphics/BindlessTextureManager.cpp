@@ -234,7 +234,7 @@ namespace EmEn::Graphics
 
 		/* Declare each texture array binding with the appropriate flags. */
 		/* Binding 0: sampler1D array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture1DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures1D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture1DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures1D, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare 1D texture binding !");
 
@@ -242,7 +242,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 1: sampler2D array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture2DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures2D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture2DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures2D, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare 2D texture binding !");
 
@@ -250,7 +250,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 2: sampler3D array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture3DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures3D, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{Texture3DBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures3D, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare 3D texture binding !");
 
@@ -258,7 +258,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 3: samplerCube array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTexturesCube, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTexturesCube, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare cubemap texture binding !");
 
@@ -266,7 +266,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Binding 4: samplerCubeArray array */
-		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeArrayBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTexturesCubeArray, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeArrayBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTexturesCubeArray, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, nullptr}, bindingFlags) )
 		{
 			Tracer::error(ClassId, "Failed to declare cube array texture binding !");
 

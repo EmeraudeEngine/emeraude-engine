@@ -27,6 +27,7 @@
 #include "RTR.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 
 /* STL inclusions. */
@@ -35,6 +36,7 @@
 #include <cmath>
 
 /* Local inclusions. */
+#include "Graphics/IrradianceProbeVolume.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -125,6 +127,10 @@ layout(set = 1, binding = 4, r16f) uniform writeonly image2D coneImage;
  * (reserved slots: 1 = scene irradiance E/pi, 2 = GGX-prefiltered environment). */
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
 layout(set = 2, binding = 3) uniform samplerCube texturesCube[];
+
+/* Irradiance probe volume (set 3): the radiance cache, read at every hit for the indirect diffuse
+ * the reflected surface receives — on screen or not. See Effects/Shared/IrradianceProbesGLSL.hpp. */
+)GLSL" EMEN_IRRADIANCE_PROBES_GLSL(3) R"GLSL(
 
 /* Per-frame parameters (set 1, binding 5). A UBO and NOT push constants: this block is 148
  * bytes, above the 128-byte Vulkan minimum guarantee for maxPushConstantsSize, so the pipeline
@@ -633,19 +639,32 @@ void main()
 		 * (same microfacet family as the raster pass — the reflection matches the image). */
 		vec3 litColor = computeDirectLighting(hitPos, hitNormal, hitV, albedo, hitRoughness, hitMetalness, hitF0);
 
-		/* Ambient at hit: the scene scalar ambient PLUS the sky IBL — diffuse irradiance
-		 * (reserved cube slot 1, stores E/pi) and a prefiltered specular tap (slot 2,
-		 * roughness-driven LOD), both scaled by the sky luminance (normalized sources). */
+		/* Ambient at hit: the scene scalar ambient, the INDIRECT DIFFUSE the hit receives from the
+		 * rest of the scene, and the sky IBL's prefiltered specular tap (slot 2, roughness-driven
+		 * LOD, scaled by the sky luminance — a normalized source).
+		 * The indirect diffuse comes from the irradiance probe volume (Sep 2026): the reflected world
+		 * had NONE before — a GI-lit surface reflected as black in a closed room (measured on
+		 * global-illumination: the green column's face at (0,65,0) in the direct view, 0.07 in the
+		 * mirror). The probes integrate the sky with visibility, so while they run the raster IBL
+		 * diffuse leg (slot 1, unoccluded sky) is theirs — adding both would count the sky twice, the
+		 * same ownership rule RTGI applies to the primary surfaces (iblDiffuseWeight). When the
+		 * volume is disabled the IBL leg is back, exactly as before. */
 		{
-			vec3 irradiance = texture(texturesCube[nonuniformEXT(1)], hitNormal).rgb;
-			vec3 iblDiffuse = albedo * (1.0 - hitMetalness) * irradiance;
-
 			vec3 hitR = reflect(reflDir, hitNormal);
 			vec3 prefiltered = textureLod(texturesCube[nonuniformEXT(2)], hitR, clamp(hitRoughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
 			vec3 iblSpecular = prefiltered * fresnelSchlick(hitNdotV, hitF0);
 
+			/* Coverage: 1 inside the volume, fading to 0 over its last cell, 0 when disabled. Where the
+			 * probes cannot answer (a hit outside the camera-centred volume) the IBL diffuse leg stays,
+			 * as before the volume existed: an unoccluded sky beats black. */
+			float probeCoverage = probeVolume.skyAmbient.y * probeVolumeWeight(hitPos);
+			vec3 diffuseAlbedo = albedo * (1.0 - hitMetalness);
+			/* The query returns energy; the IndirectDiffuse intensity the primary surfaces get is applied here. */
+			vec3 probeDiffuse = diffuseAlbedo * probeIrradiance(hitPos, hitNormal, hitV) * probeVolume.ambientColor.w;
+			vec3 iblDiffuse = diffuseAlbedo * texture(texturesCube[nonuniformEXT(1)], hitNormal).rgb * ambientLight.w * (1.0 - probeCoverage);
+
 			litColor += albedo * ambientLight.rgb;
-			litColor += (iblDiffuse + iblSpecular) * ambientLight.w;
+			litColor += probeDiffuse + iblDiffuse + iblSpecular * ambientLight.w;
 		}
 
 		/* Emission: the material's own light, texture-modulated when present. */
@@ -948,13 +967,26 @@ namespace EmEn::Graphics::Effects::Lighting
 			return false;
 		}
 
+		/* Irradiance probe volume (set 3) — the renderer creates it with the acceleration structure
+		 * builder, so it exists whenever this effect can. The reflected world takes its indirect
+		 * diffuse from it: without it the effect is not created (the stack falls back to SSR). */
+		const auto * probeVolume = renderer.irradianceProbeVolume();
+
+		if ( probeVolume == nullptr || !probeVolume->usable() )
+		{
+			TraceError{ClassId} << "The irradiance probe volume is not available: the ray-traced reflections need it for the indirect diffuse at their hits !";
+
+			return false;
+		}
+
 		/* ---- Pipeline layouts ---- */
 		{
-			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures. */
+			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures, set 3 = probes. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
+			sets.emplace_back(probeVolume->descriptorSetLayout());
 
 			/* No push constant range: the trace parameters live in the set 1 UBO above. */
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
@@ -1469,6 +1501,16 @@ namespace EmEn::Graphics::Effects::Lighting
 			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
 			{
 				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
+			}
+
+			/* Bind set 3: the irradiance probe volume of the frame (refreshed by the renderer before
+			 * this chain runs; its parameters carry the enabled flag the shader consults). */
+			if ( const auto * probeVolume = this->renderer().irradianceProbeVolume(); probeVolume != nullptr )
+			{
+				if ( const auto * probeSet = probeVolume->descriptorSet(frameIndex); probeSet != nullptr )
+				{
+					commandBuffer.bind(*probeSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 3);
+				}
 			}
 
 			commandBuffer.draw(3, 1);

@@ -279,8 +279,14 @@ void main()
 			/* Sample scene color at the hit point (the indirect bounce). */
 			vec3 hitColor = texture(colorTex, hitUV).rgb;
 
-			/* Distance attenuation: closer bounces contribute more. */
-			float distFade = 1.0 - clamp(hitDist / maxDistance, 0.0, 1.0);
+			/* Range fade — the RTGI curve, verbatim (Sep 2026): the transfer is already governed by
+			 * the solid angle, so a fade proportional to the distance is NOT physical. This lane kept
+			 * the linear `1 - hitDist / maxDistance` after RTGI retired it, halving every bounce found
+			 * at mid-range; the two occupants of the IndirectDiffuse slot then differed by their
+			 * attenuation as well as by their technique, and an A/B compared both at once. The fade
+			 * only smooths the LAST FIFTH of the range, whose sole purpose is to keep geometry from
+			 * popping as it crosses the maxDistance boundary. */
+			float distFade = 1.0 - smoothstep(maxDistance * 0.8, maxDistance, hitDist);
 
 			/* Screen edge fade at hit point to avoid artifacts at screen borders. */
 			float edgeFade = screenEdgeFade(hitUV);
@@ -326,25 +332,25 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseSSMaxDistance);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSIntensityKey, DefaultGraphicsPPIndirectDiffuseSSIntensity);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseMaxDistance);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseIntensityKey, DefaultGraphicsPPIndirectDiffuseIntensity);
 		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSThicknessKey, DefaultGraphicsPPIndirectDiffuseSSThickness);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSSampleCountKey, DefaultGraphicsPPIndirectDiffuseSSSampleCount);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSampleCountKey, DefaultGraphicsPPIndirectDiffuseSampleCount);
 		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSStepCountKey, DefaultGraphicsPPIndirectDiffuseSSStepCount);
-		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseSSDepthSigma);
-		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseSSNormalSigma);
-		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserLuminanceSigma);
-		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserIterations);
-		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseSSTemporalAlpha);
-		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseSSTemporalDepthTolerance);
-		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseSSTemporalNormalThreshold);
-		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseSSTemporalVarianceGamma);
-		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserMaxAccumulation);
-		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserDebugView);
-		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseSSDenoiserAccumulationCounter);
-		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseSSTemporalEnabled);
-		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseSSTemporalNeighborhoodClamp);
-		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseSSTemporalAnimatedNoise);
+		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseDepthSigma);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseNormalSigma);
+		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserLuminanceSigma);
+		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations);
+		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseTemporalAlpha);
+		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseTemporalDepthTolerance);
+		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseTemporalNormalThreshold);
+		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseTemporalVarianceGamma);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
+		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseDenoiserDebugView);
+		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseTemporalEnabled);
+		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseTemporalNeighborhoodClamp);
+		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseTemporalAnimatedNoise);
 
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;

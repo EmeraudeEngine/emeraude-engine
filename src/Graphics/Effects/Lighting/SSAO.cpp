@@ -186,7 +186,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
 		m_parameters.radius = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionSSRadiusKey, DefaultGraphicsPPAmbientOcclusionSSRadius);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionSSIntensityKey, DefaultGraphicsPPAmbientOcclusionSSIntensity);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionIntensityKey, DefaultGraphicsPPAmbientOcclusionIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionSSBiasKey, DefaultGraphicsPPAmbientOcclusionSSBias);
 		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionSSSampleCountKey, DefaultGraphicsPPAmbientOcclusionSSSampleCount);
 

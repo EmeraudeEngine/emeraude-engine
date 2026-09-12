@@ -107,6 +107,7 @@ namespace EmEn
 		class GrabPass;
 		class SceneRenderTarget;
 		class SkinnedGeometryProcessor;
+	class IrradianceProbeVolume;
 
 		namespace Compute
 		{
@@ -514,6 +515,21 @@ namespace EmEn::Graphics
 			skinnedGeometryProcessor () const noexcept
 			{
 				return m_skinnedGeometryProcessor.get();
+			}
+
+			/**
+			 * @brief Returns the irradiance probe volume — the radiance cache the traced effects read
+			 * at their hits — or nullptr when ray tracing is unavailable/disabled.
+			 * @note Renderer-owned, next to the acceleration structure builder: it exists exactly when
+			 * the traced lane is resident. Consumers add its descriptor set layout to their pipeline
+			 * layout and bind `descriptorSet(frameIndex)`; see `Effects/Shared/IrradianceProbesGLSL.hpp`.
+			 * @return const IrradianceProbeVolume *
+			 */
+			[[nodiscard]]
+			const IrradianceProbeVolume *
+			irradianceProbeVolume () const noexcept
+			{
+				return m_irradianceProbeVolume.get();
 			}
 
 			/**
@@ -1122,6 +1138,17 @@ namespace EmEn::Graphics
 			void updateRTDescriptorSet (const Scenes::SceneMetaData & sceneMetaData, const Scenes::LightSet & lightSet) noexcept;
 
 			/**
+			 * @brief Records this frame's refresh of the irradiance probe volume (the radiance cache).
+			 * @note Called right after updateRTDescriptorSet() on both frame paths: the trace needs
+			 * the frame's TLAS and RT set, and every traced effect of the frame reads the result.
+			 * No-op without a usable volume or a ready TLAS.
+			 * @param commandBuffer The frame's command buffer.
+			 * @param scene The active scene (its camera, light set and sky feed the update).
+			 * @return void
+			 */
+			void recordIrradianceProbeUpdate (const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer, Scenes::Scene * scene) noexcept;
+
+			/**
 			 * @brief Returns the descriptor pool.
 			 * @return std::shared_ptr< Vulkan::DescriptorPool >
 			 */
@@ -1698,6 +1725,7 @@ namespace EmEn::Graphics
 			/** @brief Single ray-tracing acceleration structure builder, shared by all geometries (BLAS) and scenes (TLAS). Null when RT is off. */
 			std::unique_ptr< Vulkan::AccelerationStructureBuilder > m_accelerationStructureBuilder;
 			std::unique_ptr< SkinnedGeometryProcessor > m_skinnedGeometryProcessor;
+			std::unique_ptr< IrradianceProbeVolume > m_irradianceProbeVolume;
 			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;

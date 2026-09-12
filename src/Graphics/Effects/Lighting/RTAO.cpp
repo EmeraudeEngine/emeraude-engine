@@ -271,7 +271,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
 		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionRTSampleCountKey, DefaultGraphicsPPAmbientOcclusionRTSampleCount);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTIntensityKey, DefaultGraphicsPPAmbientOcclusionRTIntensity);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionIntensityKey, DefaultGraphicsPPAmbientOcclusionIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTBiasKey, DefaultGraphicsPPAmbientOcclusionRTBias);
 		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTMaxDistanceKey, DefaultGraphicsPPAmbientOcclusionRTMaxDistance);
 		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionRTBlurRadiusKey, DefaultGraphicsPPAmbientOcclusionRTBlurRadius);

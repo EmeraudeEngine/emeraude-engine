@@ -125,6 +125,8 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			/**
 			 * @brief Push constants for the resolve pass (cone lookup + cubemap fallback).
+			 * @note 92 bytes, under the 128-byte Vulkan minimum guarantee. Member order is the
+			 * GLSL block order.
 			 */
 			struct EMEN_API ResolvePushConstants
 			{
@@ -143,6 +145,10 @@ namespace EmEn::Graphics::Effects::Lighting
 				 * in TRACE texels onto the color pyramid LOD (the pyramid base is half-res). */
 				float pyramidLodOffset;
 				float pyramidMaxLod;
+				/** @brief Luminance of the environment cubemap in nits (FrameContext::skyLuminance):
+				 * the miss path samples a NORMALIZED source and must scale it into the HDR chain,
+				 * exactly as the RTR miss path does with its `ambientLight.w`. */
+				float skyLuminance;
 			};
 
 			/**

@@ -42,6 +42,7 @@
 #include "GrabPass.hpp"
 #include "IBLTexture.hpp"
 #include "SkinnedGeometryProcessor.hpp"
+#include "IrradianceProbeVolume.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
 #include "MDI/BatchBuilder.hpp"
@@ -750,6 +751,18 @@ namespace EmEn::Graphics
 
 					m_skinnedGeometryProcessor.reset();
 				}
+
+				/* The irradiance probe volume — the radiance cache the traced effects read at their
+				 * hits (Sep 2026). It exists exactly when the traced lane is resident: RTR requires
+				 * it (the reflected world had no indirect light at all before it). */
+				m_irradianceProbeVolume = std::make_unique< IrradianceProbeVolume >();
+
+				if ( !m_irradianceProbeVolume->initialize(*this) )
+				{
+					Tracer::warning(ClassId, "Unable to initialize the irradiance probe volume. The ray-traced reflections will be unavailable.");
+
+					m_irradianceProbeVolume.reset();
+				}
 			}
 		}
 
@@ -876,8 +889,10 @@ namespace EmEn::Graphics
 		 * These textures have VMA allocations that must be freed before the device is destroyed. */
 		this->clearDefaultResources();
 
-		/* NOTE: The skinned geometry processor owns a compute pipeline + layouts: it must be
-		 * released while the device still exists, or its Vulkan objects leak at device destroy. */
+		/* NOTE: The skinned geometry processor and the irradiance probe volume own compute
+		 * pipelines, layouts and images: they must be released while the device still exists, or
+		 * their Vulkan objects leak at device destroy. */
+		m_irradianceProbeVolume.reset();
 		m_skinnedGeometryProcessor.reset();
 
 		m_accelerationStructureBuilder.reset();
@@ -2038,6 +2053,10 @@ namespace EmEn::Graphics
 				{
 					this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
 				}
+
+				/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the
+				 * frame, before any traced effect reads it. */
+				this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
 			}
 			else
 			{
@@ -2185,6 +2204,10 @@ namespace EmEn::Graphics
 			{
 				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
 			}
+
+			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the frame,
+			 * before any traced effect reads it. */
+			this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
 		}
 		else
 		{
@@ -2758,6 +2781,51 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	void
+	Renderer::recordIrradianceProbeUpdate (const std::shared_ptr< CommandBuffer > & commandBuffer, Scenes::Scene * scene) noexcept
+	{
+		if ( m_irradianceProbeVolume == nullptr || !m_irradianceProbeVolume->usable() || scene == nullptr || !this->isRayTracingReady() )
+		{
+			return;
+		}
+
+		const auto * rtDescriptorSet = this->rtDescriptorSet();
+		const auto * bindlessDescriptorSet = m_bindlessTextureManager.descriptorSet();
+
+		if ( rtDescriptorSet == nullptr || bindlessDescriptorSet == nullptr )
+		{
+			return;
+		}
+
+		/* The volume is centred on the camera: its position is the inverse view's translation, at
+		 * the read state the frame was prepared with — the matrices the traced effects use. */
+		const auto renderTarget = this->mainRenderTarget();
+
+		if ( renderTarget == nullptr )
+		{
+			return;
+		}
+
+		const auto invView = renderTarget->viewMatrices().viewMatrix(m_currentReadStateIndex, false, 0).inverse();
+		const auto * inv = invView.data();
+
+		/* The raster's ambient term, as the traced effects add it at their hits: the EFFECTIVE
+		 * illuminance (zero when the sky drives the ambient), never LightSet::ambientLightIntensity(). */
+		const auto ambientColor = scene->lightSet().ambientLightColor();
+		const auto ambientIlluminance = scene->effectiveAmbientIlluminance();
+
+		const IrradianceProbeVolume::FrameInputs inputs{
+			.cameraPosition = {inv[12], inv[13], inv[14]},
+			.ambient = {ambientColor.red() * ambientIlluminance, ambientColor.green() * ambientIlluminance, ambientColor.blue() * ambientIlluminance, 1.0F},
+			.skyLuminance = sceneSkyLuminance(scene),
+			.lightCount = this->rtLightCount()
+		};
+
+		const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "IrradianceProbes"};
+
+		m_irradianceProbeVolume->recordUpdate(*commandBuffer, this->currentFrameIndex(), *rtDescriptorSet, *bindlessDescriptorSet, inputs);
+	}
+
 	bool
 	Renderer::createRTDescriptorSet () noexcept
 	{
@@ -2769,10 +2837,15 @@ namespace EmEn::Graphics
 		 */
 		m_rtDescriptorSetLayout = std::make_shared< DescriptorSetLayout >(m_device, "RTDescriptorSet");
 
-		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, VK_SHADER_STAGE_FRAGMENT_BIT) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(2, VK_SHADER_STAGE_FRAGMENT_BIT) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(3, VK_SHADER_STAGE_FRAGMENT_BIT) )
+		/* FRAGMENT for the post-process effects (fullscreen passes), COMPUTE for the irradiance probe
+		 * volume's trace (Sep 2026): a compute pipeline may only bind a set whose bindings declare
+		 * the compute stage — a fragment-only layout would fail the ray-query compute at bind time. */
+		constexpr VkShaderStageFlags rtStages = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, rtStages) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(1, rtStages) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(2, rtStages) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(3, rtStages) )
 		{
 			TraceError{ClassId} << "Unable to declare RT descriptor set layout bindings!";
 

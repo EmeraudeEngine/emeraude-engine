@@ -632,10 +632,10 @@ if ( materialType == StandardResource::ClassId )
 > `gi *= texture(emAlbedo, vUV).rgb`). Standard practice: SVGF (Schied et al. 2017, HPG),
 > NVIDIA NRD. Both SSGI and RTGI now share this convention.
 >
-> **Energy coupling — multi-bounce feedback:** with a demodulated history, the feedback
-> read at bounce hits is irradiance, NOT outgoing radiance: it MUST be multiplied by the
-> HIT surface's albedo at consumption (`albedo * historyFeedback(hitPos)` in the trace
-> shader). Forgetting that factor makes the geometric series undamped (`1/(1-strength)`,
+> **Energy coupling — multi-bounce feedback:** with a demodulated cache (the screen history until
+> 2026-09-12, the irradiance probe volume since), the feedback read at bounce hits is irradiance,
+> NOT outgoing radiance: it MUST be multiplied by the HIT surface's albedo at consumption
+> (`albedo * probeFeedback(hitPos, hitNormal, sampleDir)` in the trace shader). Forgetting that factor makes the geometric series undamped (`1/(1-strength)`,
 > ×5+ energy runaway on bright walls); double-applying it kills the bounce fill.
 >
 > **Validated A/B (2026-08-05):** Sponza dark corridor — global luminance ratio 0.996,
@@ -4377,6 +4377,176 @@ exactly — and the pixel proof was a channel test on a screenshot: `B > R + 30 
 counted the defective pixels and gave their bounding box. **No orange source and no additive or
 alpha blend can produce a pixel at R=11 / B=167.** When a symptom is a colour, one channel
 inequality over the frame is a sharper instrument than looking at it.
+
+### Fixed: SSR darkened every participating dielectric — the Fresnel was on the colour, not in the composite weight (Sep 2026)
+
+**Symptom.** On `global-illumination`, the screen-space lane made the floor "mirror the room" while
+the ray-traced lane did not, and the owner read it as "the walls reflect the scene in screen-space,
+RT is right, the walls are not reflective". The walls were innocent in both lanes: `GI_White` is
+roughness 1.0, its reflectivity nibble is `max(metalness, 1 - roughness) = 0`, and both combines
+gate on it (measured bit-stable at 191.71 across every screen-space variant). The surface that
+moved was the **floor** — `enableBasicGround()` hands out the DEFAULT `StandardResource`
+(roughness 0.5, metalness 0), nibble 8/15, roughness fade 1 in both lanes: a strong participant of
+both, on a bench described as "white matte floor" (the demo now builds its floor from the walls'
+own `GI_White` through `onSetupGroundLevel()`, same day — projet-alpha `src/Builtin/AGENTS.md` § 11).
+
+**Root cause.** Same `mix(scene, data.rgb / confidence, confidence × intensity × reflectivity)`
+in both combines, different confidences. RTR: `distFade × fresnel × roughnessFade` with the colour
+premultiplied — a dielectric's weight is ≈ 0.04–0.06, so the substitution removes about what the
+lobe reflects. SSR (`529b46c4`, Aug 2026, "smooth dielectrics participate"): the Fresnel multiplied
+the COLOUR only, the confidence had none, and the output was not premultiplied while the combine
+divides by the confidence as if it were. Net per pixel: `(1 - conf·I·R)·diffuse + F·I·R·refl` —
+**≈ 43 % of the shading removed, ≈ 2 % of reflection added** on the roughness-0.5 floor. The
+resolve's own comment defended it: "the Fresnel rides on the COLOR, never on the confidence — the
+division cancels any weight folded into it". The division renormalizes the colour; the mix weight
+IS the confidence. RTR proved the correct split all along.
+
+Measured, same pose, same exposure (left wall as the exposure control), Rec.709 mean over the lit
+floor crop:
+
+| Lane | Reflections on | Reflections off | Δ |
+|---|---|---|---|
+| RayTracing (RTR) | 151.8 | 149.2 | **+2.7** |
+| ScreenSpace (SSR), before | 109.5 | 129.8 | **−20.3 (−16 %)** |
+| ScreenSpace (SSR), after | 131.3 | 129.8 | **+1.5** |
+
+After the fix the SSR footprint over the whole frame is +0.15 of mean luminance with **0.0 %** of
+pixels darkened by more than 5 (12.2 % before); walls, ceiling and mirror column are bit-stable
+across the two builds, and the ray-traced lane is unchanged to the second decimal (its code did
+not move — the regression control).
+
+**The fix.** The SSR resolve computes the primary surface once (depth, normal, packed
+roughness/metalness, view position, `F0 = mix(0.04, albedo, metalness)`, Schlick), splits the
+Fresnel like RTR — `fresnel = max(F.rgb)` into the confidence, `F / fresnel` on the colour — and
+writes the PREMULTIPLIED pair on both paths. The environment miss is now `envFallbackIntensity ×
+fresnel × roughnessFade` and its cubemap sample is scaled by `FrameContext::skyLuminance` (new push
+constant, block at 92 bytes): it used to inject a [0,1] value into a chain in nits, and to skip the
+roughness fade the trace applies — a surface the trace refused to reflect on reflected the sky.
+
+> [!CAUTION]
+> ⚠️⚠️ **Two lanes that composite the same concept must weight the mix IDENTICALLY, or the same
+> surface reads as two materials — and the wrong lane looks like the "reflective" one.** A
+> darkening reads as a reflection when the removed shading is replaced by an image of the room.
+> Any change to one composite goes to the other in the same commit; the bench is the default-
+> material floor of `global-illumination`, RTR is the reference.
+>
+> ⚠️⚠️ **A participation mask change exposes every weighting defect downstream.** Before
+> `529b46c4` a metalness-0 surface published `metalness × (1 - roughness) = 0` and never reached
+> the combine, so the missing Fresnel weight was invisible. Widening who participates is the moment
+> to re-measure how much each participant substitutes.
+>
+> ⚠️ **"The walls reflect" is a pose-dependent human reading — attribute by slot before believing
+> the noun.** The attribution that settled it was cheap: one lane, full chain vs `disable(Reflections)`
+> vs `disable(IndirectDiffuse)`, a signed per-pixel map (red adds, blue removes) and a per-region
+> table with the exposure control included. Walls: zero. Floor: the whole footprint.
+>
+> ⚠️ A normalized cubemap value in the HDR chain is ALWAYS a defect (the AtmosphericFog rule, again):
+> under a 17 000 lx sky the old SSR fallback was ≈ 1 nit, i.e. invisible, so it passed every
+> sky-driven scene and only showed as a flat constant in a closed room.
+
+**Verified:** projet-alpha cascade builds (0 warnings), `global-illumination` re-measured at the
+same pose — see the table in `docs/reflection-pipeline.md` § 4.3 — 0 VUID.
+
+**Files:** `Graphics/Effects/Lighting/SSR.{hpp,cpp}`. Docs: `src/Graphics/AGENTS.md` § SSR,
+`docs/reflection-pipeline.md` § 3.1, 4.3, 4.4, 5.
+
+### Fixed: SSGI kept the linear range fade RTGI had retired, and a 5 m range against 8 (Sep 2026)
+
+**Symptom.** On `global-illumination`, the screen-space lane rendered the shadowed right wall at
+**0.0** and the ceiling at 7.5 where the ray-traced lane read **84** and 28; the `IndirectDiffuse`
+slot added +1.2 of mean luminance in one lane and +34.1 in the other. Read as "SSGI barely works
+indoors".
+
+**Root cause, two halves, neither of them the technique.** The screen-space lane's range default
+(then `IndirectDiffuse/ScreenSpace/MaxDistance`) was **5 m** against 8 m for the ray-traced key —
+in a 6 m corridor the opposite wall was out of range. And `SSGI.cpp` still faded every bounce **linearly from the surface**
+(`1 - hitDist / maxDistance`), halving a bounce found at mid-range, while `RTGI.cpp` had replaced
+that curve by a smoothstep over the **last fifth** only (Jul 2026), with a comment measuring the
+linear fade at about a factor two of lost indirect energy on Sponza. The correction had landed on
+one lane; the A/B then compared two ranges and two attenuations along with two techniques.
+
+**Fix.** Same default (8 m) and the RTGI fade, verbatim, in `SSGI.cpp`. The owner's `settings.json`
+carried the persisted 5 (projet-alpha never resets its settings) and was edited to 8. The same day
+the owner closed the class of defect: every knob common to both lanes became ONE concept-level key
+(`IndirectDiffuse/MaxDistance`, read by SSGI and RTGI alike — `src/Graphics/AGENTS.md` § *The
+post-processing settings tree*), so two defaults can no longer drift.
+
+> [!CAUTION]
+> ⚠️⚠️ **A correction made to one occupant of a slot is a divergence until it reaches the other.**
+> RTGI's fade comment even measured the linear fade *"against the screen-space path"* — the
+> screen-space path was the reference for the gap, and kept the defect. When a slot has two lanes,
+> the fix's checklist has two files.
+>
+> ⚠️ **A key with the same meaning and unit in both lanes carries the same default.** Otherwise the
+> lane switch is not an A/B of techniques; it is an A/B of settings, and the shorter range reads as
+> the weaker technique. (`ContactShadows` already followed this rule; `PixelDoubling` is the
+> legitimate exception — it is not the same trade-off in both lanes.)
+>
+> ⚠️ The residual gap is structural and stays: an off-screen surface carries no light, and SSGI has
+> no sky term on purpose. Do not chase it with a sky term or a longer range.
+
+**Verified:** cascade builds, `global-illumination` re-measured at the same pose (numbers in
+`src/Graphics/AGENTS.md` § *SSGI / RTGI parity*), 0 VUID.
+
+**Files:** `Graphics/Effects/Lighting/SSGI.cpp`, `SettingKeys.hpp`.
+
+### Fixed: the ray-traced reflections showed a world WITHOUT indirect light — the irradiance probe volume (Sep 2026)
+
+**Symptom (owner report).** On `global-illumination`, the lit green column appeared **black** in the
+mirror column under the ray-traced lane, not under the screen-space one. Half of the owner's
+hypothesis was right — the omni sits 0.75 m behind the plane of the face the mirror sees, so no
+direct light reaches it (`N·L < 0` everywhere on it) — and the other half was the defect: that face
+is not black in the direct view, RTGI lights it (RGB (0, 65, 0) with the IndirectDiffuse slot,
+(0, 0, 0) without), while the RTR hit shading had **no indirect term at all**: direct light with
+shadow rays, the scalar ambient (0 in that box), the sky IBL × sky luminance (0, no sky), emission.
+The reflected world was a world without GI; a sky-driven scene hid it behind the IBL term at the hit.
+
+**Fix.** A world-space radiance cache the hits can query wherever they land, on screen or not:
+`Graphics::IrradianceProbeVolume`, a DDGI irradiance probe field (camera-centred scrolling grid,
+octahedral irradiance E/π and distance-moment atlases, Chebyshev visibility, infinite bounce through
+feedback — `src/Graphics/AGENTS.md` § *The irradiance probe volume*). RTR adds
+`diffuseAlbedo × probeIrradiance()` at every hit and drops the raster IBL diffuse leg there while
+the volume runs (the probes integrate the sky with visibility). Measured, same pose, zero VUID: the
+reflected face **0.07 → (0, 214, 0)**, stable over 90 s, the reflected ceiling black → 204; the direct
+view unchanged at (0, 64, 0). Cost 0.27 ms on that scene, 0.69 ms on Sponza.
+
+> [!CAUTION]
+> ⚠️⚠️ **A screen history cannot light a hit behind the camera.** The RTGI multi-bounce used to
+> (`historyFeedback()`, until 2026-09-12) reproject the hit into the previous frame — the face in this
+> report is behind the camera and had no history. Only a world-space representation (probes, a hash
+> cache, a surface cache) answers there, which is why RTGI now reads the same probe volume at every
+> bounce hit (`probeFeedback()`). When a traced effect shades its own hits, ask where its indirect
+> term comes from before trusting the reflection of anything lit by bounce light.
+>
+> ⚠️ **The rule "the reflection must match the raster" has TWO halves**: the shadow rays gave the
+> direct half (Jul 2026), the probes give the indirect half. Sky-driven scenes never showed the
+> missing half because the IBL diffuse at the hit stood in for it — an unoccluded sky, which is
+> also why that leg is now switched off at the hit while the volume runs (it would count the sky
+> twice).
+>
+> ⚠️ Three first-run defects, each with a caution in the AGENTS section: `#version 450` disables
+> `GL_EXT_ray_query` in glslang (`'rayQueryEXT' : undeclared identifier`, pointing at a wrong line);
+> the fragment-only stage flags of the RT and bindless set layouts refuse a compute pipeline; the
+> `writeCombinedImageSampler()` helper writes the image's CURRENT layout (UNDEFINED at creation).
+>
+> ⚠️⚠️ **Two poses are two exposures: compare estimators at a PINNED exposure only**
+> (`Act.setExposure(aperture, shutterSeconds, iso)`). The first reading of this face — "mirror 214 vs
+> direct 64, 107 vs 64 at one bounce, the probes 1.7× RTGI" — came from two auto-exposed frames and
+> its single-bounce half had the wrong SIGN. At f/2.8 · 1/39 s · ISO 100 (2026-09-12, G channel):
+> probe-fed RTGI **135** vs mirror **118**; RTGI single bounce with the probes recursive (the
+> screen-history era, whose feedback added nothing off screen) 38 vs 116; everything single bounce
+> 38 vs 30. RTGI's multi-bounce reads the probes since that day (`probeFeedback()` in place of
+> `historyFeedback()`, `MultiBounce/Clamp` deleted): the 3× gap is closed, the two estimators agree
+> within ~15 % with the traced side brighter (expected — one exact bounce refines an interpolated
+> cache), and the probes sit ~20 % BELOW RTGI at one bounce. Residual ACCEPTED (owner decision
+> 2026-09-12) as the price of a cache: no calibration, never scale either estimator to the other.
+
+**Verified:** cascade builds (0 warnings), `global-illumination` measured at three poses and over 90 s,
+Sponza 0 VUID, emeraude-base 2049/2049, GPU cost in the AGENTS section.
+
+**Files:** `Graphics/IrradianceProbeVolume.{hpp,cpp}`, `Graphics/Effects/Shared/IrradianceProbesGLSL.hpp`,
+`Graphics/Renderer.{hpp,cpp}`, `Graphics/BindlessTextureManager.cpp`, `Graphics/Effects/Lighting/RTR.cpp`,
+`SettingKeys.hpp`.
 
 ## Related Documentation
 

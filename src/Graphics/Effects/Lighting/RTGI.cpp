@@ -27,9 +27,11 @@
 #include "RTGI.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 
 /* Local inclusions. */
+#include "Graphics/IrradianceProbeVolume.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -62,11 +64,15 @@ namespace
 	 * Descriptor set 1 (input textures + frame UBO — per-frame):
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
-	 *   binding 2: GI history texture (previous resolved frame)
+	 *   binding 2: unused since Sep 2026 (held the GI history the multi-bounce feedback read; that
+	 *              feedback now comes from the irradiance probe volume, set 3)
 	 *   binding 3: frame UBO (matrices + parameters — exceeds the 128-byte push constant minimum)
 	 *
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
+	 *
+	 * Descriptor set 3 (irradiance probe volume — Renderer::irradianceProbeVolume()):
+	 *   bindings 3-5: parameters UBO + the two atlases, see Effects/Shared/IrradianceProbesGLSL.hpp
 	 */
 	constexpr auto RTGITraceFragmentShader = R"GLSL(
 #version 460
@@ -104,7 +110,6 @@ layout(set = 0, binding = 3) readonly buffer LightData
 /* Input textures + frame UBO (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
-layout(set = 1, binding = 2) uniform sampler2D historyTex;
 
 layout(set = 1, binding = 3, std140) uniform FrameData
 {
@@ -116,7 +121,7 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = multiBounceClamp, z = variance-clip gamma, w = unused. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = unused (the clamp died with the screen-history feedback), z = variance-clip gamma, w = accumulation cap. */
 	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = unused. */
 };
 
@@ -126,6 +131,9 @@ layout(set = 1, binding = 3, std140) uniform FrameData
  * — hence the luminance guard below rather than a null test). */
 layout(set = 2, binding = 1) uniform sampler2D textures2D[];
 layout(set = 2, binding = 3) uniform samplerCube texturesCube[];
+
+/* Irradiance probe volume (set 3): the radiance cache the multi-bounce feedback reads at every hit. */
+)GLSL" EMEN_IRRADIANCE_PROBES_GLSL(3) R"GLSL(
 
 /* Reserved bindless slot of the scene environment cubemap (BindlessTextureManager). */
 const uint EnvironmentCubemapSlot = 0u;
@@ -265,46 +273,29 @@ vec3 hemispherePoint (uint i, uint sampleCount, vec2 noise)
 	return vec3(cos(angle) * r, sin(angle) * r, z);
 }
 
-/* Multi-bounce feedback: fetch the accumulated indirect irradiance the hit surface had in
- * the previous resolved frame. The history stores DEMODULATED irradiance (E / PI — the
- * receiver albedo is applied at full resolution in the combine pass), so the CALLER must
- * multiply this value by the HIT surface's albedo to turn it into outgoing radiance; the
- * geometric series is damped by that albedo product and converges as long as the albedo is
- * physical (< 1). Validated against the camera distance stored in the history alpha channel
- * (0 = invalid/sky), clamped against fireflies. */
-vec3 historyFeedback (vec3 hitPos)
+/* Multi-bounce feedback: the indirect irradiance the HIT surface receives, read from the
+ * irradiance probe volume (E / PI, the same demodulated convention as this effect's own
+ * history), so the CALLER multiplies it by the HIT surface's albedo to turn it into outgoing
+ * radiance; the geometric series is damped by that albedo product and converges as long as
+ * the albedo is physical (< 1).
+ * ⚠️ Until Sep 2026 this read the previous frame's RESOLVED HISTORY reprojected to the hit — a
+ * screen-space quantity: a hit on a surface that was off screen (or occluded, or disoccluded)
+ * had NO feedback, and the multi-bounce vanished exactly where the bounce light came from
+ * off-screen. Measured on global-illumination: the green column's face lit by bounce light
+ * alone read 64 with the feedback on and 65 with it off, while the same face reflected in a
+ * mirror through the probe-fed RTR read 214. The probes hold that light for the whole
+ * volume, on screen or not, and they are what the reflections already used: ONE estimator of
+ * the multi-bounce for the primary surfaces and the reflected ones. The `bounceParams.y`
+ * clamp (anti-firefly for the noisy per-pixel history) has no purpose on a converged probe
+ * average and is gone. */
+vec3 probeFeedback (vec3 hitPos, vec3 hitNormal, vec3 rayDirection)
 {
 	if (bounceParams.x <= 0.0)
 	{
 		return vec3(0.0);
 	}
 
-	vec4 prevClip = prevViewProj * vec4(hitPos, 1.0);
-
-	if (prevClip.w <= 0.0)
-	{
-		return vec3(0.0);
-	}
-
-	vec2 prevUV = (prevClip.xy / prevClip.w) * 0.5 + 0.5;
-
-	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
-	{
-		return vec3(0.0);
-	}
-
-	vec4 history = texture(historyTex, prevUV);
-
-	/* Disocclusion test: the camera distance is rotation-invariant, so a simple relative
-	 * comparison rejects histories belonging to another surface. */
-	float expectedDistance = length(hitPos - prevCamPos.xyz);
-
-	if (history.a <= 0.0 || abs(history.a - expectedDistance) > temporalParams.y * expectedDistance)
-	{
-		return vec3(0.0);
-	}
-
-	return min(history.rgb, vec3(bounceParams.y)) * bounceParams.x;
+	return probeIrradiance(hitPos, hitNormal, -rayDirection) * bounceParams.x;
 }
 
 )GLSL" EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
@@ -639,11 +630,13 @@ void main()
 			vec3 lighting = computeDirectLighting(hitPos, hitNormal, lightCount);
 
 			/* The indirect radiance is the hit surface's albedo lit by direct light
-			 * (one traced bounce), PLUS the indirect radiance the hit surface itself
-			 * accumulated in the previous resolved frame (multi-bounce feedback).
-			 * The feedback IS multiplied by the hit albedo: the history stores
-			 * DEMODULATED irradiance (receiver albedo deferred to the combine pass),
-			 * so the hit albedo converts it back into outgoing radiance here.
+			 * (one traced bounce), PLUS the indirect irradiance the hit surface receives from
+			 * the irradiance probe volume (multi-bounce feedback, Sep 2026 — the probes hold it
+			 * for the whole volume, on screen or not; the screen history it replaced could not).
+			 * The feedback IS multiplied by the hit albedo: the probes store DEMODULATED
+			 * irradiance (E / PI, receiver albedo deferred), so the hit albedo converts it back
+			 * into outgoing radiance here — exactly the shading the probes apply to their own
+			 * bounce hits, which is what makes the two estimators one.
 			 * Cosine-weighted by the hemisphere sampling (implicit in the distribution).
 			 *
 			 * Range fade: the transfer itself is already governed by the solid angle, so a
@@ -655,7 +648,7 @@ void main()
 			float distFade = 1.0 - smoothstep(maxDistance * 0.8, maxDistance, hitT);
 
 			/* Lambert BRDF energy conservation: divide by PI. */
-			indirectLight += ((albedo / PI) * lighting + albedo * historyFeedback(hitPos)) * distFade;
+			indirectLight += ((albedo / PI) * lighting + albedo * probeFeedback(hitPos, hitNormal, sampleDir)) * distFade;
 		}
 	}
 
@@ -705,26 +698,25 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseRTMaxDistance);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTIntensityKey, DefaultGraphicsPPIndirectDiffuseRTIntensity);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseMaxDistance);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseIntensityKey, DefaultGraphicsPPIndirectDiffuseIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTBiasKey, DefaultGraphicsPPIndirectDiffuseRTBias);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTSampleCountKey, DefaultGraphicsPPIndirectDiffuseRTSampleCount);
-		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseRTDepthSigma);
-		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseRTNormalSigma);
-		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserLuminanceSigma);
-		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserIterations);
-		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserMaxAccumulation);
-		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserAccumulationCounter);
-		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseRTTemporalAlpha);
-		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseRTTemporalDepthTolerance);
-		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseRTTemporalNormalThreshold);
-		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseRTTemporalVarianceGamma);
+		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSampleCountKey, DefaultGraphicsPPIndirectDiffuseSampleCount);
+		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseDepthSigma);
+		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseNormalSigma);
+		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserLuminanceSigma);
+		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
+		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
+		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseTemporalAlpha);
+		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseTemporalDepthTolerance);
+		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseTemporalNormalThreshold);
+		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseTemporalVarianceGamma);
 		m_parameters.multiBounceStrength = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTMultiBounceStrengthKey, DefaultGraphicsPPIndirectDiffuseRTMultiBounceStrength);
-		m_parameters.multiBounceClamp = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTMultiBounceClampKey, DefaultGraphicsPPIndirectDiffuseRTMultiBounceClamp);
-		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseRTDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseRTDenoiserDebugView);
-		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseRTTemporalEnabled);
-		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseRTTemporalNeighborhoodClamp);
-		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseRTTemporalAnimatedNoise);
+		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseDenoiserDebugView);
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseTemporalEnabled);
+		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseTemporalNeighborhoodClamp);
+		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseTemporalAnimatedNoise);
 		m_parameters.multiBounceEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTMultiBounceEnabledKey, DefaultGraphicsPPIndirectDiffuseRTMultiBounceEnabled);
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
@@ -795,14 +787,27 @@ namespace EmEn::Graphics::Effects::Lighting
 			return false;
 		}
 
+		/* Irradiance probe volume (set 3): the multi-bounce feedback reads it at every hit. The
+		 * renderer creates it with the acceleration structure builder, so it exists whenever this
+		 * effect can; without it the effect is not created (the stack falls back to SSGI). */
+		const auto * probeVolume = renderer.irradianceProbeVolume();
+
+		if ( probeVolume == nullptr || !probeVolume->usable() )
+		{
+			TraceError{ClassId} << "The irradiance probe volume is not available: the ray-traced GI needs it for its multi-bounce feedback !";
+
+			return false;
+		}
+
 		/* ---- Pipeline layouts ---- */
 		{
-			/* Trace: set 0 = RT data, set 1 = input textures + frame UBO, set 2 = bindless textures.
-			 * No push constants: the per-frame data lives in the UBO. */
+			/* Trace: set 0 = RT data, set 1 = input textures + frame UBO, set 2 = bindless textures,
+			 * set 3 = irradiance probes. No push constants: the per-frame data lives in the UBO. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 			sets.emplace_back(rtLayout);
 			sets.emplace_back(traceInputLayout);
 			sets.emplace_back(bindlessLayout);
+			sets.emplace_back(probeVolume->descriptorSetLayout());
 
 			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
 		}
@@ -852,16 +857,10 @@ namespace EmEn::Graphics::Effects::Lighting
 				return false;
 			}
 
-			/* The history binding must always hold a VALID descriptor (the shader statically
-			 * uses it even when the feedback is disabled at runtime). When the temporal chain
-			 * is off, bind the trace target as an inert placeholder (strength is 0). */
-			if ( !m_denoiser.temporalActive() )
-			{
-				if ( !m_tracePerFrame[f]->writeCombinedImageSampler(2, m_traceTarget) )
-				{
-					return false;
-				}
-			}
+			/* Binding 2 of the trace input layout (a shared 3-sampler + UBO shape) is no longer read:
+			 * it held the GI history the multi-bounce feedback reprojected until Sep 2026, and the
+			 * feedback now comes from the irradiance probe volume (set 3). An unwritten binding a
+			 * shader does not statically use is valid, so nothing is bound there. */
 		}
 
 		/* Combine source default: the raw trace. recordOverlayPasses() retargets it to the
@@ -908,13 +907,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
 		}
 
-		if ( temporalActive )
-		{
-			/* History ping-pong: this frame reads the denoiser's read texture. The flip only
-			 * happens inside GIDenoiser::recordResolve(), so the binding is stable here. */
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, m_denoiser.historyReadTexture()));
-		}
-
 		/* ---- Frame UBO (assembled by the denoiser: matrices + temporal parameters;
 		 * RTGI only supplies its trace scalars) ----
 		 * THE SKY IS A LIGHT SOURCE. The luminance comes from the scene background
@@ -927,7 +919,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			.traceBias = m_parameters.bias,
 			.traceSampleCount = static_cast< float >(m_parameters.sampleCount),
 			.bounceStrength = m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
-			.bounceClamp = m_parameters.multiBounceClamp,
 			.skyLuminance = context.skyLuminance,
 			.skyDistance = context.constants.farPlane,
 			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
@@ -984,6 +975,16 @@ namespace EmEn::Graphics::Effects::Lighting
 			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
 			{
 				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
+			}
+
+			/* Bind set 3: the irradiance probe volume of the frame (refreshed by the renderer before
+			 * this chain runs). */
+			if ( const auto * probeVolume = this->renderer().irradianceProbeVolume(); probeVolume != nullptr )
+			{
+				if ( const auto * probeSet = probeVolume->descriptorSet(frameIndex); probeSet != nullptr )
+				{
+					commandBuffer.bind(*probeSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 3);
+				}
 			}
 
 			commandBuffer.draw(3, 1);

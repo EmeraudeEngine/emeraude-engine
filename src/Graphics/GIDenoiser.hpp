@@ -158,9 +158,9 @@ namespace EmEn::Graphics
 				float traceMaxDistance{0.0F};
 				float traceBias{0.0F};
 				float traceSampleCount{0.0F};
-				/* Multi-bounce feedback (gated internally on history validity). */
+				/* Multi-bounce feedback weight. Since Sep 2026 the RTGI feedback reads the irradiance probe
+				 * volume, not this denoiser's history, so it is no longer gated on history validity. */
 				float bounceStrength{0.0F};
-				float bounceClamp{0.0F};
 				/* Sky luminance in nits (0 = no sky term) and sky ray distance. */
 				float skyLuminance{0.0F};
 				float skyDistance{0.0F};

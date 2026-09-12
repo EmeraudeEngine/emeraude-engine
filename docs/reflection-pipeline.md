@@ -278,8 +278,15 @@ Nothing in the engine forbids adding both; nothing hybridises them either.
 Working resolution is FULL-RES by default (owner decision) — `Core/Graphics/PostProcessing/Reflections/
 ScreenSpace/PixelDoubling` (false), `BlurRadius`, `DepthSigma`, `NormalSigma` drive the quality.
 The remaining `thickness` parameter only CLASSIFIES behind-vs-contact at the final hit — it no
-longer drives the march. Confidence = `distFade · edgeFade · facingFade · roughnessFade`, with
+longer drives the march. Trace confidence = `distFade · edgeFade · facingFade · roughnessFade`, with
 `roughnessFade = 1 - smoothstep(0.55, 0.85, roughness)` and an early-out at `roughness > 0.85`.
+The **resolve** then completes it with the primary-surface Fresnel, in the RTR contract (Sep 2026):
+`confidence *= fresnel` where `fresnel = max(F.rgb)` and `F = F0 + (1-F0)(1-NdotV)⁵`,
+`F0 = mix(0.04, albedo, metalness)`, and writes the PREMULTIPLIED pair `(color · (F/fresnel) ·
+confidence, confidence)`. A miss writes the prefiltered environment × `skyLuminance` with
+`confidence = envFallbackIntensity · fresnel · roughnessFade`. ⚠️ Before that, the Fresnel was on
+the color only and the pair was not premultiplied — the combine's substitution then removed up to
+43 % of a dielectric's shading and put back 2 %: the § 4.3 defect, at its worst, on one lane only.
 
 **Cone-traced glossy (Aug 2026 — the second half of the Uludag chapter).** The resolve no
 longer fetches the hit color sharp whatever the roughness: a rough surface reflects a CONE,
@@ -328,8 +335,27 @@ The trace pass is the interesting one:
 - **Hit shading is the ENRICHED UBER-SHADER** (Aug 2026): one parametric BRDF, data-driven
   from `GPURTMaterialData` — no program duplication. Per light (shadow-ray gated): Lambert
   diffuse + GGX/Smith/Schlick specular from the hit material's roughness/metalness (scalar or
-  textured). Ambient at hit: scene scalar + sky IBL (irradiance slot 1 diffuse, prefiltered
-  slot 2 specular tap) × sky luminance. Emission honored (color × strength × texture).
+  textured). Ambient at hit: scene scalar + **the indirect diffuse from the irradiance probe
+  volume** (Sep 2026, `Graphics/IrradianceProbeVolume` — the engine's radiance cache, read at set 3
+  through `EMEN_IRRADIANCE_PROBES_GLSL`) + the sky IBL prefiltered specular tap (slot 2) × sky
+  luminance. Emission honored (color × strength × texture).
+  ⚠️ **Before the probes the reflected world had NO indirect diffuse**: a surface lit only by
+  bounce light reflected as black — measured on `global-illumination`, the green column's face at
+  RGB (0, 65, 0) in the direct view and **0.07** in the mirror, while the corridor around it in
+  the same mirror read 95–166. A sky-lit scene hid the gap behind the IBL diffuse term at the hit;
+  a closed room exposed it whole. With the probes the same face reads **(0, 214, 0)** in the mirror,
+  stable over 90 s (no divergence, even at this bench's albedo of exactly 1.0).
+  ⚠️ **Ownership at the hit**: while the volume is enabled the raster IBL diffuse leg (slot 1,
+  unoccluded sky) is NOT added — the probes integrate the sky with visibility, adding both would
+  count it twice (the same `iblDiffuseWeight` rule RTGI applies to the primary surfaces). With
+  `Core/Graphics/RayTracing/IrradianceProbes/Enabled = false` the IBL leg is back, as before.
+  ⚠️ The reflected face used to read brighter than the direct one — 214 against 64 on two
+  AUTO-exposed frames — because RTGI's screen-history multi-bounce added nothing to a face lit from
+  off screen. Since 2026-09-12 RTGI reads the same probe volume at its bounce hits: at a PINNED
+  exposure (f/2.8 · 1/39 s · ISO 100) the face reads 135 direct against 118 in the mirror, and 38
+  against 30 with both at one bounce (the probes ~20 % below RTGI, not 1.7× above — the earlier
+  single-bounce figure was the metering). Residual ACCEPTED by the owner (2026-09-12) as the price
+  of a cache; do not "fix" it by scaling the probes.
 - **Normal mapping at the hit** (Aug 2026): when the material has a normal texture AND the
   mesh carries tangent space, the geometric normal is perturbed before all lighting.
   No `GPUMeshMetaData` extension was needed: the engine vertex layout is
@@ -341,7 +367,10 @@ The trace pass is the interesting one:
   **`normalScale`** — exported to the RT material SSBO in the former std430 padding slot
   (`matBase+6.w`, stride unchanged, RTGI untouched). Validated: specular glints on the
   pavement relief inside the reflection, absent before.
-  **Still missing at the hit**: multi-bounce. The long-term path for full fidelity is a
+  **Multi-bounce at the hit** comes through the irradiance probe volume since Sep 2026 (the
+  probes feed on themselves), and so does RTGI's multi-bounce for the primary surfaces since
+  2026-09-12 — one cache, read by both, which is what makes a reflection and the face it reflects
+  agree. The long-term path for full material fidelity at the hit is a
   Saphir-generated SBT (`VK_KHR_ray_tracing_pipeline`) — the per-material codegen already
   exists for raster.
 
@@ -563,30 +592,49 @@ if (confidence > 0.001 && reflectivity > 0.0)
 > [!CAUTION]
 > **This is a substitution, not an addition.** By the time it runs, the pixel already holds the
 > direct lighting plus the physically-correct split-sum IBL specular from the ambient pass. The
-> `mix()` lerps the WHOLE pixel — diffuse included — toward a Lambert-shaded ray colour. At
-> `reflectivity = 1`, `intensity = 0.8` and a grazing Fresnel, almost nothing of the computed
-> shading survives.
+> `mix()` lerps the WHOLE pixel — diffuse included — toward the reflected colour. What keeps it
+> tolerable is that **the confidence carries the scalar Fresnel in BOTH lanes** (RTR since its
+> colour-F0 rewrite, SSR since Sep 2026): on a dielectric the weight is ≈ 4 % head-on, so the
+> substitution removes about what the lobe reflects. At `reflectivity = 1`, `intensity = 0.8` and
+> a grazing Fresnel (a metal, or any surface seen edge-on) almost nothing of the computed shading
+> survives — that part of the defect stands.
 >
 > An energy-correct composite would **add** the traced specular lobe and **subtract** the
 > corresponding IBL specular term it replaces. That requires the ambient pass to publish its
 > specular contribution separately, which it does not do today.
+>
+> ⚠️ **The two lanes must weight the mix identically, or the same surface reads as two different
+> materials.** Measured Sep 2026 on `global-illumination` (default-material floor, roughness 0.5,
+> mask 8/15; same pose, left wall bit-stable as the exposure control; Rec.709 mean of the lit
+> floor crop, Reflections slot off → on):
+>
+> | Lane | off | on | Δ |
+> |---|---|---|---|
+> | RTR | 149.2 | 151.8 | +2.7 |
+> | SSR, Fresnel on the colour only, not premultiplied | 129.8 | 109.5 | **−20.3** |
+> | SSR, RTR contract (Fresnel in the confidence, premultiplied) | 129.8 | 131.3 | **+1.5** |
+>
+> The screen-space floor "mirrored the room" because 43 % of its shading was replaced by 2 % of
+> reflection — a darkening that reads as a reflection. Walls (mask 0), ceiling and mirror column
+> did not move in either variant. Any future change to one composite goes to the other in the
+> same commit.
 
-Note also that the reflected colour is never tinted by the **reflector's** F0. A gold surface
-reflects in white: the metal's coloured Fresnel is applied to the IBL path (section 2.2) but
-not to the SSR/RTR path.
+The reflected colour IS tinted by the **reflector's** F0 since Aug 2026 (a gold surface reflects
+in gold): both resolve paths carry the normalized Fresnel tint `F / max(F)` on the colour, with
+`F0 = mix(0.04, albedo, metalness)`.
 
 ### 4.4 Non-physical F0 floors
 
-Two places deliberately raise F0 above the physical dielectric value of 0.04, both commented as
-"boosted for visibility":
+One place still raises F0 above the physical dielectric value of 0.04:
 
 | Site | Expression | Physical value |
 |------|------------|----------------|
 | `LightGenerator.cpp`, IBL, no material IOR | `iblF0 = mix(vec3(0.5), albedo, metalness)` | 0.04 |
-| `RTR.cpp`, trace pass | `F0 = mix(0.15, 0.9, originMetalness)` | 0.04 / albedo |
 
 When the material declares an IOR (`KHR_materials_ior`) the IBL path computes the correct
-`((ior-1)/(ior+1))²` instead. RTR never does.
+`((ior-1)/(ior+1))²` instead. **RTR and SSR both use `F0 = mix(vec3(0.04), albedo, metalness)`**
+(RTR's former `mix(0.15, 0.9, metalness)` "floor for visibility" made every metal a white mirror
+and boosted dielectrics 4×; gone Aug 2026). Neither post-process path reads the material IOR.
 
 ---
 
@@ -597,7 +645,9 @@ When the material declares an IOR (`KHR_materials_ior`) the IBL path computes th
 | No reflection at all on a partially-metallic material | § 4.2 — the metalness packing. Check with `metalness` set to exactly 0 or 1 |
 | Reflection strength banded in visible steps along a roughness ramp | § 4.1 — the 4-bit nibble |
 | Diffuse colour washed out on a strong reflector | § 4.3 — the `mix()` substitution |
-| Gold / copper reflects in white | § 4.3 — no F0 tint on the SSR/RTR path |
+| A matte-ish dielectric (floor, wall of the default material) gets DARKER, or "mirrors the room", under ONE lane only | § 4.3 — the two composites weight the mix differently; check that the Fresnel is in the confidence on both (fixed for SSR Sep 2026) |
+| A surface lit only by GI (no direct light, no sky) is BLACK in the ray-traced reflection while the raster shows it lit | § 3.2 — the irradiance probe volume is disabled, not resident (no acceleration structures), or the hit lies outside the camera-centred volume (24 × 12 × 24 m by default: `probeVolumeWeight()` fades to 0 at the boundary) |
+| Gold / copper reflects in white | § 4.3 — the reflector's F0 tint is missing from a resolve path (both carry it since Aug 2026) |
 | Reflection vanishes at the screen border | expected: `fadeScreenEdge`. Confirm with RTR, which does not depend on screen coverage |
 | Reflection shows the sky where geometry should be | the ray escaped: SSR miss → cubemap fallback, or RTR miss → cubemap. Switch to a visually distinctive sky (`reflexion-debug` KeyPad3) to see which source leaks |
 | Reflection too bright, unrelated to the scene | § 2.2 — an `environmentLuminance` multiply applied to something already in absolute luminance |

@@ -227,10 +227,10 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* ⚠️ These four keys are the SAME quantities, in the same units, as the screen-space
 		 * lane's (SSContactShadows) — a lane A/B is only honest at equal settings. The concept
 		 * had no settings key at all in either lane until Sep 2026. */
-		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTMaxDistanceKey, DefaultGraphicsPPContactShadowsRTMaxDistance);
-		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTNormalBiasKey, DefaultGraphicsPPContactShadowsRTNormalBias);
-		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTIntensityKey, DefaultGraphicsPPContactShadowsRTIntensity);
-		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsRTMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsRTMaxBlurRadius);
+		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxDistanceKey, DefaultGraphicsPPContactShadowsMaxDistance);
+		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsNormalBiasKey, DefaultGraphicsPPContactShadowsNormalBias);
+		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsIntensityKey, DefaultGraphicsPPContactShadowsIntensity);
+		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsMaxBlurRadius);
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality.
 		 * SAME key and rule as RTAO — the shared denoise pass blurs the whole group in
