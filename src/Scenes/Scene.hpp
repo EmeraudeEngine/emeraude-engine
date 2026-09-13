@@ -51,12 +51,14 @@
 /* Local inclusions for usages. */
 #include "Audio/Ambience.hpp"
 #include "Component/Visual.hpp"
+#include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/PostProcessStack.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "DirectionalShadowOptions.hpp"
 #include "GroundLevelInterface.hpp"
 #include "Randomizer.hpp"
 #include "BindlessTextureSet.hpp"
@@ -162,33 +164,16 @@ namespace EmEn::Scenes
 	 * and the shadow mapping technique, which is a runtime budget decision.
 	 *
 	 * @see Scene::applyBackgroundLighting()
+	 * @see DirectionalShadowOptions
 	 */
 	struct EMEN_API BackgroundLightingOptions
 	{
-		/** @brief Shadow map resolution for the derived directional lights. 0 = no shadow mapping. */
-		uint32_t shadowMapResolution{0};
-
-		/** @brief Cascade count. 0 = classic shadow map; 1-4 = cascaded shadow mapping (CSM). */
-		uint32_t cascadeCount{0};
-
-		/** @brief Classic shadow map coverage, in world units. Ignored with CSM. */
-		float shadowCoverage{100.0F};
-
-		/** @brief CSM split factor (0 = linear, 1 = logarithmic). Ignored with a classic map. */
-		float cascadeLambda{0.5F};
-
 		/**
-		 * @brief CSM coverage zoom, feeding DirectionalLight's csmScale. Ignored with a classic map.
-		 * @note 1 = the cascades span the WHOLE camera frustum; 4 = a quarter of it, and so on.
-		 * ⚠️ This is the knob that decides whether CSM shadows are VISIBLE at all, and leaving it at
-		 * 1 is almost never right: the covered depth is the camera's view distance divided by this
-		 * value, split across at most 4 cascades. On a 500 m view distance at scale 1 the last
-		 * cascade spans hundreds of metres, so an ordinary caster is sub-texel — the map holds its
-		 * shadow, the screen shows nothing, and the mode looks broken while it is merely
-		 * mis-budgeted. Pick it from the scene: covered depth = viewDistance / cascadeScale should
-		 * be about the distance at which shadows still matter to the eye.
+		 * @brief Shadow policy of the directional lights derived from the celestial bodies.
+		 * @note The SAME type SceneDataConsumer takes for an asset's directional lights — one
+		 * notion, one struct, one dispatch: see DirectionalShadowOptions. Default: no shadow mapping.
 		 */
-		float cascadeScale{1.0F};
+		DirectionalShadowOptions shadows;
 
 		/** @brief Applies the ambient stage (average color + ambient illuminance). */
 		bool applyAmbient{true};
@@ -2311,6 +2296,18 @@ namespace EmEn::Scenes
 			void updateEnvironmentIBL () noexcept;
 
 			/**
+			 * @brief Builds the IBL bake mask from the background's celestial bodies.
+			 * @note A body declared IN the texture ("InTexture") is masked out of the irradiance and
+			 * prefiltered bakes, because its energy reaches the scene through the analytic directional
+			 * light derived from it — WITH shadows. Kept in the bake, the same body would light every
+			 * surface a second time, unshadowed, from the texture. The brightest in-texture body wins;
+			 * the mask is disabled when the background declares none.
+			 * @return Graphics::Compute::IBLBaker::StarMask
+			 */
+			[[nodiscard]]
+			Graphics::Compute::IBLBaker::StarMask environmentStarMask () const noexcept;
+
+			/**
 			 * @brief Hands the ambient pass' DIFFUSE IBL leg over to an indirect-diffuse
 			 * provider, or takes it back.
 			 * @note ⚠️ INDIRECT-DIFFUSE OWNERSHIP. RTGI integrates the very same sky irradiance
@@ -2646,6 +2643,8 @@ namespace EmEn::Scenes
 			std::shared_ptr< Vulkan::TextureInterface > m_IBLPublishedIrradiance;
 			/** @brief Identity of the environment cubemap of the last bake attempt (see updateEnvironmentIBL()). */
 			const Vulkan::TextureInterface * m_IBLBakedSource{nullptr};
+			/** @brief The in-texture celestial body masked out of the last bake attempt (see updateEnvironmentIBL()). */
+			Graphics::Compute::IBLBaker::StarMask m_IBLBakedStarMask;
 			/** @brief Ping-pong write index of the IBL pairs. */
 			size_t m_IBLWriteIndex{0};
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */

@@ -38,6 +38,7 @@
 
 /* Local inclusions. */
 #include "Graphics/IBLTexture.hpp"
+#include "Math/Base.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -199,6 +200,8 @@ layout(push_constant) uniform PushConstants
 	uint destSize;
 	uint sampleCount;
 	float roughness;
+	/* xyz = direction toward the in-texture celestial body, w = cone half-angle (radians, <= 0 = none). */
+	vec4 starMask;
 } pc;
 
 const float PI = 3.14159265359;
@@ -245,6 +248,44 @@ float sourceTexelSolidAngle ()
 {
 	return 4.0 * PI / (6.0 * float(pc.sourceSize * pc.sourceSize));
 }
+
+/* A celestial body declared IN the source texture is read at the rim of its mask cone instead of
+ * inside it: the analytic directional light derived from the manifest carries its energy — with
+ * shadows — and a bake that kept it would light every surface a second time, unshadowed. The cone
+ * is widened by the footprint of the source mip being read: the coarse mips average the body into
+ * their texels, and a rim sample taken there would leak it back in. */
+vec3 maskStar (vec3 L, float mip)
+{
+	if ( pc.starMask.w <= 0.0 )
+	{
+		return L;
+	}
+
+	const vec3 S = pc.starMask.xyz;
+	const float cosAngle = dot(L, S);
+	/* One source texel spans about (PI/2) / sourceSize radians at a face centre, times 2^mip. */
+	const float rim = pc.starMask.w + (1.5707963 * exp2(max(mip, 0.0)) / float(pc.sourceSize));
+
+	if ( cosAngle <= cos(rim) )
+	{
+		return L;
+	}
+
+	vec3 perpendicular = L - S * cosAngle;
+	const float perpendicularLength = length(perpendicular);
+
+	if ( perpendicularLength < 1e-4 )
+	{
+		/* Looking straight at the body: any point of the rim circle will do. */
+		perpendicular = normalize(cross(S, abs(S.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+	}
+	else
+	{
+		perpendicular /= perpendicularLength;
+	}
+
+	return normalize(S * cos(rim) + perpendicular * sin(rim));
+}
 )";
 
 	static const std::string PrefilterShaderSource = "#version 450\n" + EnvironmentCommonGLSL + R"(
@@ -284,7 +325,7 @@ void main ()
 	 * roughness 0 degenerates to exactly this — skip the sampling loop). */
 	if ( pc.roughness <= 0.0 )
 	{
-		imageStore(destFaces, ivec3(texelCoord, int(face)), vec4(textureLod(sourceEnv, N, 0.0).rgb, 1.0));
+		imageStore(destFaces, ivec3(texelCoord, int(face)), vec4(textureLod(sourceEnv, maskStar(N, 0.0), 0.0).rgb, 1.0));
 
 		return;
 	}
@@ -319,7 +360,7 @@ void main ()
 
 			/* Cosine weighting: not in the split-sum derivation, but "achieves better
 			 * results" (Karis, note 1). */
-			accumulated += textureLod(sourceEnv, L, max(mip, 0.0)).rgb * NdotL;
+			accumulated += textureLod(sourceEnv, maskStar(L, mip), max(mip, 0.0)).rgb * NdotL;
 			totalWeight += NdotL;
 		}
 	}
@@ -376,7 +417,7 @@ void main ()
 		const float mip = 0.5 * log2(saSample / saTexel) + 1.0;
 
 		/* The cosine cancels with the pdf: the estimator of E/pi is the plain mean. */
-		accumulated += textureLod(sourceEnv, L, max(mip, 0.0)).rgb;
+		accumulated += textureLod(sourceEnv, maskStar(L, mip), max(mip, 0.0)).rgb;
 	}
 
 	imageStore(destFaces, ivec3(texelCoord, int(face)), vec4(accumulated / float(pc.sampleCount), 1.0));
@@ -687,7 +728,7 @@ void main ()
 	}
 
 	bool
-	IBLBaker::bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered) noexcept
+	IBLBaker::bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered, const StarMask & starMask) noexcept
 	{
 		if ( !source.isCreated() || !source.isCubemapTexture() )
 		{
@@ -831,6 +872,10 @@ void main ()
 			pushConstants.destSize = destSize;
 			pushConstants.sampleCount = PrefilterBaseSampleCount + (PrefilterSampleCountPerMip * mipLevel);
 			pushConstants.roughness = static_cast< float >(mipLevel) / static_cast< float >(prefilteredMipLevels - 1);
+			pushConstants.starMaskX = starMask.direction[0];
+			pushConstants.starMaskY = starMask.direction[1];
+			pushConstants.starMaskZ = starMask.direction[2];
+			pushConstants.starMaskHalfAngle = starMask.halfAngleRadians;
 
 			m_commandBuffer->bind(*descriptorSets[mipLevel], *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 
@@ -850,6 +895,10 @@ void main ()
 			pushConstants.destSize = IBLTexture::IrradianceSize;
 			pushConstants.sampleCount = IrradianceSampleCount;
 			pushConstants.roughness = 1.0F;
+			pushConstants.starMaskX = starMask.direction[0];
+			pushConstants.starMaskY = starMask.direction[1];
+			pushConstants.starMaskZ = starMask.direction[2];
+			pushConstants.starMaskHalfAngle = starMask.halfAngleRadians;
 
 			m_commandBuffer->bind(*descriptorSets[prefilteredMipLevels], *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 
@@ -904,6 +953,14 @@ void main ()
 
 		irradiance.image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		prefiltered.image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		if ( starMask.enabled() )
+		{
+			TraceInfo{ClassId} <<
+				"Environment IBL baked with the in-texture celestial body masked out: cone half-angle " <<
+				Base::Math::Degree(starMask.halfAngleRadians) << " deg toward (" <<
+				starMask.direction[0] << ", " << starMask.direction[1] << ", " << starMask.direction[2] << ").";
+		}
 
 #ifdef EMERAUDE_DEBUG_IBL_FACES
 		TraceDebug{ClassId} <<

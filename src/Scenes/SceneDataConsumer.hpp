@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
+#include "DirectionalShadowOptions.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -95,6 +96,20 @@ namespace EmEn::Scenes
 			setCreateLights (bool create) noexcept
 			{
 				m_createLights = create;
+			}
+
+			/**
+			 * @brief Sets the shadow-mapping policy of the directional lights an asset declares.
+			 * @note A shadow map is a RUNTIME BUDGET decision the asset cannot make (no format
+			 * carries one), so the caller declares it — the same struct Scene::applyBackgroundLighting()
+			 * takes for the celestial bodies of a sky. Default: no shadow mapping. Point and spot
+			 * lights are not concerned. Meaningless while setCreateLights() is false.
+			 * @param options The shadow policy applied to every directional light built.
+			 */
+			void
+			setDirectionalLightShadows (const DirectionalShadowOptions & options) noexcept
+			{
+				m_directionalLightShadows = options;
 			}
 
 			/**
@@ -181,6 +196,7 @@ namespace EmEn::Scenes
 			std::unordered_set< size_t > m_animatedNodeIndices;
 			std::unordered_map< size_t, std::shared_ptr< Node > > m_animatedNodes;
 
+			DirectionalShadowOptions m_directionalLightShadows;
 			size_t m_instanceTargetPerCell{1024};
 			bool m_flattenHierarchy{false};
 			bool m_createLights{false};

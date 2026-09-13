@@ -284,10 +284,17 @@ vec3 getHitAttributeVec3 (MeshAccessor m, vec2 bary, uint offsetFloats)
 	return a0 * (1.0 - bary.x - bary.y) + a1 * bary.x + a2 * bary.y;
 }
 
-/* Interpolate geometric normal at hit point. */
+/* Interpolate the shading normal at the hit point.
+ * ⚠️ Returns vec3(0.0) — never a NaN — when the interpolation degenerates (zero vertex normals,
+ * or a mesh table row not yet filled): normalize(0) is NaN, that NaN became the ORIGIN of the
+ * shadow rays traced from the hit, and a NaN ray query is a DEVICE LOSS on NVIDIA. The caller
+ * resolves a zero normal to a finite fallback (facing the ray). */
 vec3 getHitNormal (MeshAccessor m, vec2 bary)
 {
-	return normalize(getHitAttributeVec3(m, bary, m.normalOffsetFloats));
+	vec3 n = getHitAttributeVec3(m, bary, m.normalOffsetFloats);
+	float lengthSquared = dot(n, n);
+
+	return lengthSquared > 1e-12 ? n * inversesqrt(lengthSquared) : vec3(0.0);
 }
 
 /* Interpolate UV at hit point. */
@@ -346,6 +353,15 @@ float rtTextureLod (int texIndex, float hitLod)
  * Both rays now apply the ONE shared rule (RTAlphaTestGLSL.hpp). */
 float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 {
+	/* ⚠️ The spec forbids a NaN operand (VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351) and
+	 * NVIDIA answers one with a DEVICE LOSS — measured on Sponza under GPU-assisted validation,
+	 * 2026-09-13: a degenerate hit normal made the shadow-ray origin NaN, and 22 point lights
+	 * turned one bad hit into 22 illegal queries. A non-finite ray has no meaningful occluder. */
+	if (any(isnan(origin)) || any(isinf(origin)) || any(isnan(direction)))
+	{
+		return 1.0;
+	}
+
 	rayQueryEXT shadowQuery;
 	rayQueryInitializeEXT(
 		shadowQuery, topLevelAS,
@@ -611,7 +627,11 @@ void main()
 		 * Apply objectToWorld for rotated/scaled instances. */
 		vec3 objectNormal = getHitNormal(mesh, barycentrics);
 		mat4x3 objectToWorld = rayQueryGetIntersectionObjectToWorldEXT(rayQuery, true);
-		vec3 hitNormal = normalize(mat3(objectToWorld) * objectNormal);
+		vec3 worldNormal = mat3(objectToWorld) * objectNormal;
+		float worldNormalLengthSquared = dot(worldNormal, worldNormal);
+		/* A degenerate normal (zero attribute, zero-scale instance) faces the ray: finite, so the
+		 * shadow rays below stay legal (see getHitNormal). */
+		vec3 hitNormal = worldNormalLengthSquared > 1e-12 ? worldNormal * inversesqrt(worldNormalLengthSquared) : -reflDir;
 
 		/* Reject true numerical self-intersection: hit normal nearly identical to origin
 		 * normal AND hitT minuscule (ray hits the same triangle it started from due to

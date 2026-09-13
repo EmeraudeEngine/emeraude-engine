@@ -127,20 +127,9 @@ namespace EmEn::Scenes
 					light.setIlluminance(star.illuminance());
 				};
 
-				std::shared_ptr< Component::DirectionalLight > component;
-
-				if ( options.shadowMapResolution == 0 )
-				{
-					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build();
-				}
-				else if ( options.cascadeCount > 0 )
-				{
-					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build(options.shadowMapResolution, options.cascadeCount, options.cascadeLambda, options.cascadeScale);
-				}
-				else
-				{
-					component = entity->componentBuilder< Component::DirectionalLight >(entityName).setup(setup).build(options.shadowMapResolution, options.shadowCoverage);
-				}
+				/* ONE shadow policy type for every derived directional light — a background star
+				 * here, an asset light in SceneDataConsumer — so the dispatch lives with the options. */
+				const auto component = options.shadows.build(*entity, entityName, setup);
 
 				if ( component == nullptr )
 				{
@@ -272,7 +261,11 @@ namespace EmEn::Scenes
 		 * black cubemap is never baked: the reserved IBL slots already park on it. */
 		const auto source = m_bindlessTextureSet.environmentCubemap();
 
-		if ( source != nullptr && source->isCreated() && source.get() != m_IBLBakedSource
+		/* The in-texture celestial body to keep OUT of the bake is part of the bake identity: the
+		 * same cubemap under a manifest declaring a different body is a different bake. */
+		const auto starMask = this->environmentStarMask();
+
+		if ( source != nullptr && source->isCreated() && ( source.get() != m_IBLBakedSource || starMask != m_IBLBakedStarMask )
 			&& source.get() != static_cast< const Vulkan::TextureInterface * >(m_graphicsRenderer.getDefaultTextureCubemap().get()) )
 		{
 			auto & irradiance = m_IBLIrradiance[m_IBLWriteIndex];
@@ -290,10 +283,11 @@ namespace EmEn::Scenes
 
 			/* NOTE: Whatever happens below, do not retry every logic tick on the same source. */
 			m_IBLBakedSource = source.get();
+			m_IBLBakedStarMask = starMask;
 
 			if ( irradiance->create(m_graphicsRenderer) && prefiltered->create(m_graphicsRenderer) )
 			{
-				if ( m_graphicsRenderer.IBLBaker().bakeEnvironment(*source, *irradiance, *prefiltered) )
+				if ( m_graphicsRenderer.IBLBaker().bakeEnvironment(*source, *irradiance, *prefiltered, starMask) )
 				{
 					/* Publish the prefiltered environment (UPDATE_AFTER_BIND hot-swap at
 					 * the manager's next sync) and flip the pair: frames in flight keep
@@ -332,5 +326,45 @@ namespace EmEn::Scenes
 
 			m_IBLPublishedIrradiance = desiredIrradiance;
 		}
+	}
+
+	Graphics::Compute::IBLBaker::StarMask
+	Scene::environmentStarMask () const noexcept
+	{
+		Graphics::Compute::IBLBaker::StarMask mask;
+
+		if ( m_backgroundResource == nullptr )
+		{
+			return mask;
+		}
+
+		/* The body with the most energy is the one worth a mask: what a mask costs is the sky it
+		 * hides, and a faint moon is not worth a hole in the irradiance. */
+		const CelestialBody * brightest = nullptr;
+
+		for ( const auto & star : m_backgroundResource->stars() )
+		{
+			if ( star.isInTexture() && ( brightest == nullptr || star.illuminance() > brightest->illuminance() ) )
+			{
+				brightest = &star;
+			}
+		}
+
+		if ( brightest == nullptr || brightest->illuminance() <= 0.0F )
+		{
+			return mask;
+		}
+
+		/* CUBEMAP space IS world space since the Y-up flip (the old `(D.x, -D.y, D.z)` compensation
+		 * is gone — docs/caution-points.md), so the manifest direction is taken as-is. The masked
+		 * cone is ONE angular diameter around the centre, i.e. twice the disc radius: measured on
+		 * Kloppenheim 05 (Poly Haven, the Sponza sky), a veiled sun holds 110 % of its excess energy
+		 * within 0.5° and the halo beyond adds 2 % out to 12° — the disc is where the energy is. The
+		 * bake widens the cone by the footprint of the source mip it reads (IBLBaker::maskStar). */
+		const auto & direction = brightest->direction();
+		mask.direction = {direction.x(), direction.y(), direction.z()};
+		mask.halfAngleRadians = Radian(brightest->angularDiameter());
+
+		return mask;
 	}
 }

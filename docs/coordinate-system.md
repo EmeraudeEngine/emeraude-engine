@@ -403,3 +403,25 @@ CLOUD's box by transforming the eight corners of `renderable->boundingBox()` thr
 matrix, and `renderBoundingBox()` — distinct from `localBoundingBox()`, which stays per-instance for
 collision — is what feeds the rendering octree and `isVisibleTo()`. That design was already right; it
 was just being handed a flat quad.
+
+## Tangent space and normal maps — the Khronos (OpenGL, right-handed) convention
+
+The engine reads tangent-space normal maps in the convention glTF mandates: **+X = right (+U),
++Y = UP in the image, +Z = out of the surface**, a right-handed frame `(T, B, N)` with
+`B = cross(N, T) · w` where `w` is the bitangent handedness (`TANGENT.w`, or the sign the tangent
+generator derives from the UV winding). The fragment decode is `normalize(TBN · (texel · 2 − 1))`:
+no channel is negated anywhere.
+
+- This is a property of the **texture**, not of the API. Vulkan's texture origin is top-left like
+  Direct3D's; glTF's UV origin is top-left too, and glTF still mandates +Y up. "OpenGL vs DirectX
+  normal map" names the historical defaults of the baking tools, nothing else.
+- A map baked for the other convention (+Y down — 3ds Max, Unreal, Substance's "DirectX" preset)
+  renders every relief **lit from below**. It is fixed in the **data**: invert the green channel at
+  authoring, or set `"FlipNormalMapY": true` on the material's normal component for a store image
+  (`Material::Component::Texture`, a pixel flip at load). A block-compressed KTX2 cannot be flipped
+  at load: re-encode it. **Never** add a sign to a shader or a loader for one asset.
+- Verified: the Khronos `NormalTangentMirrorTest` (highlight angles within a few degrees of the
+  geometry column, mirrored islands included) and projet-alpha's `normal-map-debug` (the texture on
+  a white quad under an omni of KNOWN side — KeyPad0 cycles centre/top/right/bottom/left; option 4
+  is a Khronos-convention control brick). Reference case: Intel's Sponza 2022 shipped Direct3D-style
+  maps (Babylon.js exporter), re-encoded with the green channel inverted on 2026-09-13.

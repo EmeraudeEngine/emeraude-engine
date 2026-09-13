@@ -254,18 +254,51 @@ namespace EmEn::Scenes
 		const auto & light = sceneData.lights[lightIndex];
 		const auto componentName = nodeDescriptor.name + "/Light";
 
+		/* ⚠️⚠️ A light without energy is NOT instantiated, and exporters do ship them: every one of
+		 * the 24 `KHR_lights_punctual` lights of Intel's Sponza left 3ds Max with `intensity: 0`
+		 * (the exporter never converted the photometric values), and a dome light degrades to a
+		 * null point light on the way out. Built anyway, a 0 cd point light gets a culling radius
+		 * of 0 — UNBOUNDED reach (see AbstractLightEmitter::DefaultRadius) — and is bound to every
+		 * draw of the scene for nothing. The environment type never reaches this switch as a
+		 * punctual light, so the guard costs it nothing. */
+		if ( light.intensity <= 0.0F )
+		{
+			TraceWarning{ClassId} << "The asset light '" << nodeDescriptor.name << "' declares no intensity (0): not instantiated.";
+
+			return;
+		}
+
 		/* The descriptor already carries the engine's own photometric units — lux for a
 		 * directional light, candela for a point or a spot — so each setter takes the value
 		 * as-is. Converting here would mean converting twice. */
 		switch ( light.type )
 		{
 			case Scenes::Loaders::LightType::Directional :
-				entity.template componentBuilder< Component::DirectionalLight >(componentName)
-					.setup([&light] (auto & component) {
-						component.setColor(light.color);
-						component.setIlluminance(light.intensity);
-					})
-					.build();
+				/* ⚠️ A directional light AIMS along its node's local -Z (KHR_lights_punctual and
+				 * UsdLux alike), and the entity frame already carries that orientation — so the
+				 * component must read the frame's FORWARD vector, not its default "from my
+				 * position toward the origin": that default was 7° off on Sponza's sun and is a
+				 * zero vector for a node placed at the origin. The shadow policy is the caller's
+				 * (setDirectionalLightShadows()): a runtime budget, never asset data. */
+				if ( const auto component = m_directionalLightShadows.build(entity, componentName, [&light] (auto & component) {
+					component.useDirectionVector(true);
+					component.setColor(light.color);
+					component.setIlluminance(light.intensity);
+				}); component == nullptr )
+				{
+					TraceError{ClassId} << "Unable to create the directional light '" << componentName << "' (entity full) !";
+				}
+				else
+				{
+					/* The inventory line a bench reads back: the direction the light actually took
+					 * (the frame's forward, i.e. the node's -Z) and its energy. */
+					const auto forward = entity.getWorldCoordinates().forwardVector();
+
+					TraceInfo{ClassId} <<
+						"Asset directional light '" << componentName << "': " << light.intensity << " lux, travelling (" <<
+						forward.x() << ", " << forward.y() << ", " << forward.z() << ")" <<
+						( m_directionalLightShadows.shadowMapResolution > 0 ? ", shadow-mapped." : ", no shadow map." );
+				}
 				break;
 
 			case Scenes::Loaders::LightType::Point :

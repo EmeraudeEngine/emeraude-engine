@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <memory>
 
 namespace EmEn::Vulkan
@@ -65,8 +66,9 @@ namespace EmEn::Graphics::Compute
 	 * fragment shaders on that same queue, which avoids a queue-family ownership transfer
 	 * on an EXCLUSIVE image (graphics queues always support compute dispatches).
 	 * @warning Convention: the baker works entirely in CUBEMAP space (identity face
-	 * mapping, source sampled with cubemap-space directions). Consumers keep applying the
-	 * engine world-to-cubemap convention `vec3(D.x, -D.y, D.z)` — see docs/caution-points.md.
+	 * mapping, source sampled with cubemap-space directions) — which IS world space since the
+	 * Y-up flip: the former world-to-cubemap `vec3(D.x, -D.y, D.z)` compensation is dead, see
+	 * docs/caution-points.md. A StarMask direction is therefore a plain world direction.
 	 */
 	class EMEN_API IBLBaker final
 	{
@@ -111,6 +113,34 @@ namespace EmEn::Graphics::Compute
 			bool generateBRDFLut (const IBLTexture & lut) const;
 
 			/**
+			 * @brief A celestial body to keep OUT of an environment bake.
+			 * @note A body declared IN the source texture (a sky manifest star with "InTexture")
+			 * already lights the scene through the analytic directional light derived from it —
+			 * WITH shadows. Left in the bake, the same body would light every surface a second
+			 * time, unshadowed, from the texture: on Kloppenheim 05 the in-texture sun is 80 % of
+			 * the illuminance the whole sky pours on the ground. The bake reads the sky at the rim
+			 * of the cone instead (see the GLSL `maskStar()`); the visible skybox keeps the body.
+			 * A default-constructed mask is disabled.
+			 */
+			struct EMEN_API StarMask
+			{
+				/** @brief Direction toward the body, cubemap (= world) space, normalized. */
+				std::array< float, 3 > direction{0.0F, 0.0F, 0.0F};
+
+				/** @brief Half-angle of the masked cone, in radians. 0 = no mask. */
+				float halfAngleRadians{0.0F};
+
+				[[nodiscard]]
+				bool
+				enabled () const noexcept
+				{
+					return halfAngleRadians > 0.0F;
+				}
+
+				bool operator== (const StarMask & other) const noexcept = default;
+			};
+
+			/**
 			 * @brief Bakes the per-environment IBL assets from a source environment cubemap
 			 * (blocking: submits on the graphics queue and waits for completion — a few
 			 * hundred microseconds of GPU work, acceptable at the sky-change rate).
@@ -120,10 +150,11 @@ namespace EmEn::Graphics::Compute
 			 * @param source A reference to the source environment cubemap texture.
 			 * @param irradiance A reference to the destination texture (IrradianceCubemap role).
 			 * @param prefiltered A reference to the destination texture (PrefilteredCubemap role).
+			 * @param starMask The in-texture celestial body to keep out of both bakes (a default-constructed mask keeps everything).
 			 * @return bool True on success.
 			 */
 			[[nodiscard]]
-			bool bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered) noexcept;
+			bool bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered, const StarMask & starMask) noexcept;
 
 			/**
 			 * @brief Push constant block of the environment pipelines (prefilter, irradiance).
@@ -136,6 +167,13 @@ namespace EmEn::Graphics::Compute
 				uint32_t destSize;
 				uint32_t sampleCount;
 				float roughness;
+				/* GLSL `vec4 starMask` at offset 16: direction toward the masked body (xyz) and
+				 * the cone half-angle in radians (w, <= 0 = no mask — so a zero-initialized block,
+				 * which is what the probe convolver pushes, masks nothing). */
+				float starMaskX;
+				float starMaskY;
+				float starMaskZ;
+				float starMaskHalfAngle;
 			};
 
 			/**

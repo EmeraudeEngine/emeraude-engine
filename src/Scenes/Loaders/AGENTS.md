@@ -364,6 +364,18 @@ texel. Each loader owns the translation from its format's semantics:
 > Cone angles are stored in **DEGREES** (glTF authors radians — `GLTFLoader` converts).
 > `range` is a **culling bound, never a dimmer**: the falloff is carried by the inverse square.
 > `0.0F` means the asset declared none, and the engine default is left alone.
+>
+> **The node carries the AIM**: a directional or spot light shines along its node's local -Z
+> (`KHR_lights_punctual`, UsdLux). The frame in `NodeDescriptor::localFrame` already holds that
+> orientation; `SceneDataConsumer` reads its forward vector (`useDirectionVector(true)`) — it used
+> to aim every directional light from its position toward the origin (2026-09-13).
+>
+> ⚠️⚠️ **Exporters ship lights WITHOUT energy.** Intel's Sponza 2022 glTF (3ds Max → Babylon.js
+> exporter) declares 24 punctual lights, all with `intensity: 0` — the positions, colours and the
+> sun's orientation are right, the photometry is gone, and neither the USD (no light at all) nor the
+> FBX (`Null` nodes) of the same package carries it. The consumer refuses a light with no energy
+> (one warning per light); the values belong IN the asset: `tools/gltf-lights.py FILE` lists them,
+> `--set SUN=100000 --set 'lamp_light_*=100'` writes them (GLB binary chunk streamed, JSON rewritten).
 
 #### Instance sets — redundancy is a HINT, not a draw order (added 2026-08-09)
 
@@ -685,6 +697,17 @@ The three other assets that author tangents changed and did not regress: `BoomBo
 visibly crisper — speaker grilles, button rims, label text — because the normal map finally matches
 the frame it was authored against; `WaterBottle` (delta 30-54) and `SheenCloth` (delta 3-4) differ
 only in micro-detail.
+
+⚠️⚠️ **The tangent frame can be right and the TEXTURE wrong: a normal map carries no metadata about
+its convention.** glTF mandates +Y = UP in the image (the "OpenGL" sign; the engine decodes exactly
+that, whatever the API's UV origin — Vulkan's is top-left and it changes nothing here). Tools of the
+Direct3D family (3ds Max, Unreal) bake +Y DOWN, and an exporter that does not convert ships a
+spec-violating asset that renders with every relief lit from below. Intel's Sponza 2022 (Babylon.js
+exporter) was one: all 27 normal maps of `Sponza.ktx2.glb` were re-encoded with the green channel
+inverted (2026-09-13). **Detector:** `normal-map-debug` in projet-alpha (the texture on a white quad
+under an omni of known side; option 4 is a Khronos-convention control), or the curl test
+`corr(∂R/∂v, ∂G/∂u)` on the PNG — negative for Khronos, positive for D3D. **Never** compensate in the
+loader or the shader: the fix is the texture.
 
 **`KHR_materials_specular` + `KHR_materials_ior` — FACTORS WIRED 2026-08-28, textures still not.**
 ⚠️⚠️ Their **GPU side was already complete and spec-exact**, and had been for an unknown number of

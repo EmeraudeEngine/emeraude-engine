@@ -122,13 +122,27 @@ vec3 getHitNormal (MeshAccessor m, uint instanceIndex, vec2 bary)
 	vec3 n1 = readVertexVec3(m.vb, m.idx1, m.strideFloats, normalOffsetFloats);
 	vec3 n2 = readVertexVec3(m.vb, m.idx2, m.strideFloats, normalOffsetFloats);
 
-	return normalize(n0 * (1.0 - bary.x - bary.y) + n1 * bary.x + n2 * bary.y);
+	/* ⚠️ vec3(0.0) — never a NaN — on a degenerate interpolation: that NaN became the origin of
+	 * the shadow rays below, and a NaN ray query is a DEVICE LOSS on NVIDIA (same rule as RTGI/RTR). */
+	vec3 n = n0 * (1.0 - bary.x - bary.y) + n1 * bary.x + n2 * bary.y;
+	float lengthSquared = dot(n, n);
+
+	return lengthSquared > 1e-12 ? n * inversesqrt(lengthSquared) : vec3(0.0);
 }
 )GLSL" EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
 /* Shadow ray: 1.0 when the path toward the light is free. Candidates are judged by the shared
  * alpha-test rule, never gl_RayFlagsOpaqueEXT (a leaf would block the light as a solid quad). */
 float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 {
+	/* ⚠️ The spec forbids a NaN operand (VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351) and
+	 * NVIDIA answers one with a DEVICE LOSS — measured on Sponza under GPU-assisted validation,
+	 * 2026-09-13: a degenerate hit normal made the shadow-ray origin NaN, and 22 point lights
+	 * turned one bad hit into 22 illegal queries. A non-finite ray has no meaningful occluder. */
+	if (any(isnan(origin)) || any(isinf(origin)) || any(isnan(direction)))
+	{
+		return 1.0;
+	}
+
 	rayQueryEXT shadowQuery;
 	rayQueryInitializeEXT(shadowQuery, topLevelAS, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, origin, 0.0, direction, maxT);
 
@@ -266,7 +280,10 @@ void main ()
 
 		MeshAccessor mesh = getMeshAccessor(instanceIndex, geomIdx, primitiveIndex);
 		mat4x3 objectToWorld = rayQueryGetIntersectionObjectToWorldEXT(rayQuery, true);
-		vec3 hitNormal = normalize(mat3(objectToWorld) * getHitNormal(mesh, instanceIndex, barycentrics));
+		vec3 worldNormal = mat3(objectToWorld) * getHitNormal(mesh, instanceIndex, barycentrics);
+		float worldNormalLengthSquared = dot(worldNormal, worldNormal);
+		/* A degenerate normal faces the ray: finite, so the shadow rays stay legal. */
+		vec3 hitNormal = worldNormalLengthSquared > 1e-12 ? worldNormal * inversesqrt(worldNormalLengthSquared) : -direction;
 
 		if (dot(hitNormal, direction) > 0.0)
 		{
