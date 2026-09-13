@@ -539,10 +539,35 @@ Not a wish list — these are silent today, so a diagnosis that assumes them pre
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) except its `texCoord` override, which is the multi-UV gap;
-every extension in the parser mask is now read; the clearcoat, sheen, transmission and iridescence extensions
-read only their scalar factors, never their textures; animation channels targeting a node that is
+every extension in the parser mask is now read; **the sheen and transmission extensions still read
+only their scalar factors, never their textures** (clearcoat's three maps are read since 2026-09-14,
+see below); animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
 impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**`KHR_materials_clearcoat`'s THREE MAPS are read since 2026-09-14** — the factor map, the
+roughness map and the coat normal map. Like every extension before it in this file, the GPU side was
+already complete: the three `ComponentType`s (`ClearCoat`, `ClearCoatRoughness`, `ClearCoatNormal`),
+their samplers, their three texture setters and their fragment-generation blocks all existed, and
+only the loader's read was missing. **Fifth occurrence of "GPU ready, loader mute" in this
+workstream** — read the whole path asset → loader → UBO → codegen before estimating any of these.
+- ⚠️⚠️ **The roughness map is the GREEN channel**, not the red one every other scalar map in this
+  engine uses; the extension says so. Its generation block hard-coded `.r` and now reads the
+  component's own `sourceChannelSwizzle()`, with the loader passing `Channel::Green`. Reading red
+  would work on a single-purpose texture and silently produce the wrong roughness on the packed
+  factor+roughness image glTF encourages.
+- ⚠️ Each map **MULTIPLIES** its scalar, which is why the factors are still read when a map is
+  present, and why both generation blocks now fold in `MaterialUB(ClearCoatFactor)` /
+  `MaterialUB(ClearCoatRoughness)`. The two texture setters gained the scalar as a parameter,
+  defaulting to **1.0** so every caller predating the glTF wiring is bit-exact.
+- ⚠️ A `clearcoatFactor` of 0 means **no coat at all**, map or no map — the gate stays on the factor.
+- ⚠️ All three are DATA, never sRGB. And like the two specular maps, none of the clearcoat component
+  types has a UV transform slot in the material UBO, so `KHR_texture_transform` on one of them is
+  logged and dropped.
+- Measured on `ClearCoatTest`: the `Roughness variations` row's `Coated` column changes on
+  **23.78 %** of its pixels (max delta 184) and now carries the coating's stripes, `Partial coating`
+  3.35 %, while the **`Simple coating` row — the one declaring no texture — is bit-exact (0.00 %,
+  delta 0)**, which is the control this change needed.
 
 **`KHR_materials_iridescence` is READ IN FULL and `KHR_materials_anisotropy` is READ since
 2026-08-28.** Both were estimated as "a BRDF to write" and both were pure wiring — an estimate made

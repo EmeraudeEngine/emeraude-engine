@@ -3769,7 +3769,9 @@ namespace EmEn::Graphics::Material
 
 		/* Clear Coat factor component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoat, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			/* ⚠️ KHR_materials_clearcoat: the map MULTIPLIES the factor, and the channel is the
+			 * component's own (Red for glTF, but a packed map may say otherwise). */
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::ClearCoatFactor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3781,7 +3783,9 @@ namespace EmEn::Graphics::Material
 
 		/* Clear Coat roughness component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoatRoughness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			/* ⚠️ glTF packs this one in GREEN, not red: read the component's channel, never a
+			 * hard-coded swizzle. It multiplies the scalar roughness, as the extension requires. */
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::ClearCoatRoughness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4727,7 +4731,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setClearCoatComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness) noexcept
+	StandardResource::setClearCoatComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness, float factor, Base::PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -4738,7 +4742,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::ClearCoat, std::make_unique< Texture >(Uniform::ClearCoatSampler, SurfaceClearCoatFactor, texture));
+		auto component = std::make_unique< Texture >(Uniform::ClearCoatSampler, SurfaceClearCoatFactor, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::ClearCoat, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -4755,14 +4762,14 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
-		this->setClearCoatFactor(1.0F);
+		this->setClearCoatFactor(factor);
 		this->setClearCoatRoughness(roughness);
 
 		return true;
 	}
 
 	bool
-	StandardResource::setClearCoatRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor) noexcept
+	StandardResource::setClearCoatRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor, float roughness, Base::PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -4773,7 +4780,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::ClearCoatRoughness, std::make_unique< Texture >(Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness, texture));
+		auto component = std::make_unique< Texture >(Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::ClearCoatRoughness, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -4791,6 +4801,7 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		this->setClearCoatFactor(factor);
+		this->setClearCoatRoughness(roughness);
 
 		return true;
 	}

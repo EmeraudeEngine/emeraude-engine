@@ -686,20 +686,31 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Sets the clear coat factor component as a texture.
 			 * @warning This function is available before creation time.
+			 * @note The sampled channel MULTIPLIES the scalar factor, as KHR_materials_clearcoat
+			 * requires. The default factor of 1.0 makes the map the whole value, which is what
+			 * every caller predating the glTF wiring expects.
 			 * @param texture A reference to a texture smart pointer for the clear coat factor map.
 			 * @param roughness The clear coat roughness value. Default 0.0.
+			 * @param factor The clear coat factor the map multiplies. Default 1.0.
+			 * @param sourceChannel The texel channel holding the clear coat factor (glTF uses Red). Default Red.
 			 * @return bool
 			 */
-			bool setClearCoatComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness = DefaultClearCoatRoughness) noexcept;
+			bool setClearCoatComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness = DefaultClearCoatRoughness, float factor = 1.0F, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Sets the clear coat roughness component as a texture.
 			 * @warning This function is available before creation time.
+			 * @note ⚠️ glTF packs the clear coat roughness in the **GREEN** channel, not the red one
+			 * every other scalar map in this engine uses — pass it explicitly. The sampled channel
+			 * MULTIPLIES the scalar roughness, whose default of 1.0 here (not DefaultClearCoatRoughness,
+			 * which is 0) keeps a map-only caller behaving as it did before the multiplication existed.
 			 * @param texture A reference to a texture smart pointer for the clear coat roughness map.
 			 * @param factor The clear coat factor value. Default 1.0.
+			 * @param roughness The clear coat roughness the map multiplies. Default 1.0.
+			 * @param sourceChannel The texel channel holding the clear coat roughness (glTF uses Green). Default Red.
 			 * @return bool
 			 */
-			bool setClearCoatRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor = 1.0F) noexcept;
+			bool setClearCoatRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float factor = 1.0F, float roughness = 1.0F, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Sets the clear coat normal component as a texture (KHR_materials_clearcoat).

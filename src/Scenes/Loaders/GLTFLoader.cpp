@@ -1077,14 +1077,45 @@ namespace EmEn::Scenes::Loaders
 				|| glTFMaterial.emissiveFactor[1] > 0.0F
 				|| glTFMaterial.emissiveFactor[2] > 0.0F;
 
-			/* Clear coat (KHR_materials_clearcoat). */
+			/* Clear coat (KHR_materials_clearcoat), factors AND the three maps.
+			 *
+			 * ⚠️ All three are DATA, never sRGB: the factor map carries a coverage in RED, the
+			 * roughness map a roughness in **GREEN** (not red like every other scalar map in this
+			 * engine — the extension says so), and the normal map a tangent-space normal. Each map
+			 * MULTIPLIES its scalar, which is why the factors are read even when a map is present:
+			 * a `clearcoatFactor` of 0 means no coat at all, map or no map. */
 			float clearcoatFactor = 0.0F;
 			float clearcoatRoughness = 0.0F;
+			float clearcoatNormalScale = 1.0F;
 
 			if ( glTFMaterial.clearcoat != nullptr && glTFMaterial.clearcoat->clearcoatFactor > 0.0F )
 			{
 				clearcoatFactor = static_cast< float >(glTFMaterial.clearcoat->clearcoatFactor);
 				clearcoatRoughness = static_cast< float >(glTFMaterial.clearcoat->clearcoatRoughnessFactor);
+			}
+
+			auto clearcoatTex = ( glTFMaterial.clearcoat != nullptr && glTFMaterial.clearcoat->clearcoatTexture.has_value() )
+				? resolveTexture(glTFMaterial.clearcoat->clearcoatTexture->textureIndex) : nullptr;
+
+			auto clearcoatRoughnessTex = ( glTFMaterial.clearcoat != nullptr && glTFMaterial.clearcoat->clearcoatRoughnessTexture.has_value() )
+				? resolveTexture(glTFMaterial.clearcoat->clearcoatRoughnessTexture->textureIndex) : nullptr;
+
+			std::shared_ptr< TextureResource::Texture2D > clearcoatNormalTex{};
+
+			if ( glTFMaterial.clearcoat != nullptr && glTFMaterial.clearcoat->clearcoatNormalTexture.has_value() )
+			{
+				clearcoatNormalTex = resolveTexture(glTFMaterial.clearcoat->clearcoatNormalTexture->textureIndex);
+				clearcoatNormalScale = static_cast< float >(glTFMaterial.clearcoat->clearcoatNormalTexture->scale);
+			}
+
+			/* ⚠️ Same UV-transform hole as the two specular maps: the material UBO carries six UV
+			 * transform slots (albedo, roughness, metalness, normal, AO, emissive) and none of the
+			 * clear coat component types is among them. An asset that transforms its clear coat UVs
+			 * is silently untransformed — none in the conformance bench does. */
+			if ( ( clearcoatTex != nullptr && readUVTransform(glTFMaterial.clearcoat->clearcoatTexture).present )
+			  || ( clearcoatRoughnessTex != nullptr && readUVTransform(glTFMaterial.clearcoat->clearcoatRoughnessTexture).present ) )
+			{
+				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_clearcoat texture is not supported (no UV transform slot), ignored.";
 			}
 
 			/* Sheen (KHR_materials_sheen). */
@@ -1324,7 +1355,10 @@ namespace EmEn::Scenes::Loaders
 					aoTex = std::move(aoTex), aoStrength,
 					albedoUVTransform, metallicRoughnessUVTransform, normalUVTransform, aoUVTransform, emissiveUVTransform,
 					emissiveTex = std::move(emissiveTex), emissiveStrength, emissiveColor, hasEmissiveColor,
-					clearcoatFactor, clearcoatRoughness,
+					clearcoatFactor, clearcoatRoughness, clearcoatNormalScale,
+					clearcoatTex = std::move(clearcoatTex),
+					clearcoatRoughnessTex = std::move(clearcoatRoughnessTex),
+					clearcoatNormalTex = std::move(clearcoatNormalTex),
 					sheenColor, sheenRoughness,
 					transmissionFactor,
 					iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax,
@@ -1433,10 +1467,30 @@ namespace EmEn::Scenes::Loaders
 						materialResource.setAutoIlluminationComponent(emissiveColor, emissiveStrength);
 					}
 
-					/* Clear coat (KHR_materials_clearcoat). */
+					/* Clear coat (KHR_materials_clearcoat), factors then maps.
+					 * ⚠️ Order matters: both texture setters also write the two scalars, so they
+					 * are handed the SAME values the scalar path would have set. The roughness map
+					 * is read from GREEN, per the extension. */
 					if ( clearcoatFactor > 0.0F )
 					{
-						materialResource.setClearCoatComponent(clearcoatFactor, clearcoatRoughness);
+						if ( clearcoatTex != nullptr )
+						{
+							materialResource.setClearCoatComponent(clearcoatTex, clearcoatRoughness, clearcoatFactor, Base::PixelFactory::Channel::Red);
+						}
+						else
+						{
+							materialResource.setClearCoatComponent(clearcoatFactor, clearcoatRoughness);
+						}
+
+						if ( clearcoatRoughnessTex != nullptr )
+						{
+							materialResource.setClearCoatRoughnessComponent(clearcoatRoughnessTex, clearcoatFactor, clearcoatRoughness, Base::PixelFactory::Channel::Green);
+						}
+
+						if ( clearcoatNormalTex != nullptr )
+						{
+							materialResource.setClearCoatNormalComponent(clearcoatNormalTex, clearcoatNormalScale);
+						}
 					}
 
 					/* Sheen (KHR_materials_sheen). */
