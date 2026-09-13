@@ -2734,10 +2734,19 @@ values linearised through the gamma and the ACES fit before any ratio):
 
 | Test | Sky term OFF | Sky term ON | Reading |
 |---|---|---|---|
-| **Open sky** (grass outside, `setPosition(-9, 0, -2.5)` + `lookAt(-9, 1.2, 6)`) | 0.04663 | 0.04663 | **ratio 1.0000, bit-identical over two separate launches** — with V ≈ 1 the sky term IS the raster leg it replaces: no double count, no loss |
-| **On-screen occluder** (the vault above, same pose) | 0.02643 | 0.01170 | ×0.44 — the arches occlude the sky |
-| **Atrium floor** (`setPosition(-9, 5, 0)` + `lookAt(-9, 0, 0.6)`) | 0.1031 | 0.0449 | implied **V = 0.44**, against **0.45 analytic** for a 10 m wide, 10 m high slot of sky (`V = sin(atan(W/2H))`) |
+| **Open sky** (Sponza's ROOF from above, `setPosition(-9, 22, 0)` + `lookAt(-9, 0, 2)`, four tile crops) | raster 0.178-0.243 | SSGI 0.150-0.198 | **0.81-0.90 of the raster leg it replaces**, and RTGI reads 0.78-0.83 on the same crops: with V ≈ 1 the two lanes deliver the same sky, at the `IndirectDiffuse/Intensity` = 0.8 the concept applies to both |
+| **On-screen occluder** (the vault above, `setPosition(-9, 0, -2.5)` + `lookAt(-9, 1.2, 6)`) | 0.02643 | 0.01170 | ×0.44 — the arches occlude the sky |
+| **Arcade floor** (`setPosition(-9, 5, 0)` + `lookAt(-9, 0, 0.6)`, seen from ABOVE) | 0.1031 | 0.0449 | implied V = 0.44 where the surface really sees **V ≥ 0.036** — the occluder is the arcade ceiling, BEHIND the camera. This line is the blind spot, measured; see the warning below |
 | **Upper gallery** (the defect's own pose) | 0.0479 | 0.0212 | the gap to the traced lane falls from **8.4× to 3.7×** (RT 0.0057) |
+
+> [!CAUTION]
+> ⚠️⚠️ **The first published version of this table used Sponza's surrounding GRASS as the open-sky
+> test and reported a bit-identical "ratio 1.0000". Both halves were wrong and the conclusion was
+> unsupported**: that terrain receives **no indirect diffuse at all**, in EITHER lane (sky term ON vs
+> OFF moves it by 0.21/255 while the building in the same frame moves by 17-37 — see
+> `docs/todo/sponza-terrain-receives-no-indirect-diffuse.md`), so the ratio of 1.0000 measured an
+> INSENSITIVE surface and demonstrated nothing. A "no loss" test is only a test on a surface whose
+> value actually moves with the term under test. **Check the sensitivity before reading the ratio.**
 
 **Cost**: `SSGIEffect/internal` 6.02 ms → 7.02 ms average at 2880×1620 (RTX 3070 Ti, GPU profiler,
 same pose sequence) — **≈ 1.0 ms** for 3 slices × 6 steps × 2 sides at half resolution. For scale,
@@ -2756,10 +2765,26 @@ same pose sequence) — **≈ 1.0 ms** for 3 slices × 6 steps × 2 sides at hal
 > ⚠️ **Do NOT "fix" the residual by scaling the lane down.** The missing quantity is a per-pixel
 > visibility, not a level: a flat factor would darken the open bench that is now exactly right.
 >
-> ⚠️ **OPEN QUESTION, owner-gated** (`docs/todo/rt-lane-underlights-enclosed-spaces.md`): on that
-> same atrium floor the traced lane delivers **0.05** of the unoccluded sky where the geometry says
-> 0.45 and the screen-space lane measures 0.44. The residual gap may well be the TRACED lane
-> under-lighting rather than the screen-space one over-lighting. Not investigated here.
+> ⚠️⚠️ **SETTLED, 2026-09-14 — and it went the other way.** This section first read that the traced
+> lane "delivers 0.05 of the unoccluded sky where the geometry says 0.45", and opened an item on the
+> traced lane under-lighting. **The 0.45 was a bad premise**: it assumed that floor sat at the bottom
+> of an open 10 m slot. It does not — it is under the arcade. Attribution, in order:
+> - `RTAO` is NOT the cause: switching the `AmbientOcclusion` concept off moves that floor by **1 %**
+>   (0.00475 → 0.00479). `Reflections` carried 34 % of it, `ContactShadows` nothing. **RTGI alone:
+>   0.00312**, i.e. 3.1 % of the unoccluded sky.
+> - **The true sky visibility of that surface, measured**: put the camera AT the point and look
+>   straight up (`setPosition(-9, 0, 0)` + `lookAt(-9, 10, 0.01)`), then integrate the sky pixels of
+>   the capture weighted by `cos⁴θ` (the cosine-weighted solid angle of a rectilinear image plane).
+>   The frame covers 62 % of the cosine-weighted hemisphere and the sky fills 3.6 % of it:
+>   **V ≥ 0.036**. Six ground points probed the same way across the courtyard read V ≤ 0.054 — the
+>   whole ground floor there is covered.
+> - **Verdict: RTGI (0.031 of the unoccluded sky) matches the measured visibility (≥ 0.036). The
+>   traced lane is right, and the residual gap is the screen-space lane still OVER-estimating** where
+>   the occluder is off screen — exactly the structural limit above, and a 12× over-estimate in that
+>   framing. On an open-sky surface the two lanes agree to ~6 %.
+> - ⚠️ **The method is the transferable part**: a look-up capture measures the visibility of a
+>   surface point directly, in 30 seconds, and settles which estimator is right. Reasoning from a
+>   floor plan ("a courtyard is open") is what produced the false premise.
 
 **Settings** (`Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/`): `SkyVisibilityEnabled`
 (the A/B of the whole defect — off restores the raster's unoccluded leg), `SkyVisibilityRadius`

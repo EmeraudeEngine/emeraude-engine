@@ -840,6 +840,21 @@ if ( materialType == StandardResource::ClassId )
 
 **Three traps this defect and its measurement have already sprung:**
 
+- ⚠️⚠️⚠️ **A "no loss" ratio measured on an INSENSITIVE surface proves nothing, and reads as a
+  perfect result.** The first acceptance table of this fix reported "open sky: ratio 1.0000,
+  bit-identical" — measured on Sponza's surrounding grass, which turns out to receive **no indirect
+  diffuse at all in either lane** (0.21/255 of movement against 17-37 for the building in the same
+  frame, `docs/todo/sponza-terrain-receives-no-indirect-diffuse.md`). A term that is zero on both
+  sides of an A/B gives a perfect ratio. **Check that the surface MOVES with the term under test
+  before reading any ratio off it** — the valid open-sky surface on that scene is the ROOF.
+- ⚠️⚠️⚠️ **Measure a surface's sky visibility, never reason about it from the floor plan.** Put the
+  camera at the point and look straight up (`setPosition(x, y, z)` + `lookAt(x, y+10, z+0.01)`), then
+  integrate the sky pixels of the capture weighted by `cos⁴θ` (the cosine-weighted solid angle of a
+  rectilinear image plane; an 85° vertical FOV covers 62 % of the cosine-weighted hemisphere). It
+  takes 30 seconds and it is exact. Reasoning instead — "a courtyard is open, so `V = sin(atan(W/2H))`
+  ≈ 0.45" — put a 12× error into a published table and opened an item against the wrong lane: that
+  Sponza floor is under the arcade and really sees **V ≥ 0.036**, which is what the traced lane
+  delivers. See `src/Graphics/AGENTS.md` § "The screen-space sky visibility".
 - ⚠️⚠️ **`global-illumination` is NOT a bench for a sky term.** The demo declares no background and
   `setAmbientLightIntensity(0)`, so `FrameContext::skyLuminance` is 0 AND the reserved irradiance
   cube slot holds the engine's default **black** 16² cubemap: every sky term, raster or effect, is
