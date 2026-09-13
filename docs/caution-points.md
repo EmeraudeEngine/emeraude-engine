@@ -840,13 +840,16 @@ if ( materialType == StandardResource::ClassId )
 
 **Three traps this defect and its measurement have already sprung:**
 
-- ⚠️⚠️⚠️ **A "no loss" ratio measured on an INSENSITIVE surface proves nothing, and reads as a
-  perfect result.** The first acceptance table of this fix reported "open sky: ratio 1.0000,
-  bit-identical" — measured on Sponza's surrounding grass, which turns out to receive **no indirect
-  diffuse at all in either lane** (0.21/255 of movement against 17-37 for the building in the same
-  frame, `docs/todo/sponza-terrain-receives-no-indirect-diffuse.md`). A term that is zero on both
-  sides of an A/B gives a perfect ratio. **Check that the surface MOVES with the term under test
-  before reading any ratio off it** — the valid open-sky surface on that scene is the ROOF.
+- ⚠️⚠️⚠️ **Identify WHAT the crop holds before measuring it — geometry, or the background?** The
+  first acceptance table of this fix reported "open sky: ratio 1.0000, bit-identical", measured on
+  "the grass outside Sponza". **That grass is the SKYBOX**: the demo builds no ground (no
+  `enableBasicGround()`) and the Intel asset is the building alone, so everything below the edge of
+  its platform is the Kloppenheim05 cubemap, meadow and rocks and flowers included. A background is
+  drawn unlit, writes no albedo and no material-properties G-buffer: NO lighting term can move it,
+  in any lane, ever — so an A/B on it returns a perfect ratio for every term, and reads as a proof.
+  The valid open-sky surface on that scene is the ROOF (real geometry, V ≈ 1). Two rules, in order:
+  name the surface, then check that it MOVES with the term under test. **A ratio of exactly 1.0000
+  is not a result, it is a warning.**
 - ⚠️⚠️⚠️ **Measure a surface's sky visibility, never reason about it from the floor plan.** Put the
   camera at the point and look straight up (`setPosition(x, y, z)` + `lookAt(x, y+10, z+0.01)`), then
   integrate the sky pixels of the capture weighted by `cos⁴θ` (the cosine-weighted solid angle of a
@@ -860,8 +863,9 @@ if ( materialType == StandardResource::ClassId )
   cube slot holds the engine's default **black** 16² cubemap: every sky term, raster or effect, is
   exactly zero there and an A/B measures nothing. The item's plan named it as the "no double count"
   test; it took a look at `onSetupLighting()` to see it could not be. A sky bench needs a scene with
-  a background — Sponza's own grass apron, seen from `setPosition(-9, 0, -2.5)` +
-  `lookAt(-9, 1.2, 6)`, is an open-sky surface that fills half the frame.
+  a background AND a lit surface that sees the sky — on `sponza` that is the ROOF
+  (`setPosition(-9, 22, 0)` + `lookAt(-9, 0, 2)`), never the meadow under the horizon, which belongs
+  to the cubemap (see the rule above).
 - ⚠️⚠️ **A pinned exposure is pinned to A SCENE.** `f/11 · 1/250 s · ISO 100` is the daylight triad
   the Sponza measurements use; on the (indoor, one-omni) `global-illumination` bench the same triad
   renders a mean of 0.0/255 — a black capture that looks exactly like a broken lane. Bracket the

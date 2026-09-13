@@ -2734,19 +2734,24 @@ values linearised through the gamma and the ACES fit before any ratio):
 
 | Test | Sky term OFF | Sky term ON | Reading |
 |---|---|---|---|
-| **Open sky** (Sponza's ROOF from above, `setPosition(-9, 22, 0)` + `lookAt(-9, 0, 2)`, four tile crops) | raster 0.178-0.243 | SSGI 0.150-0.198 | **0.81-0.90 of the raster leg it replaces**, and RTGI reads 0.78-0.83 on the same crops: with V ≈ 1 the two lanes deliver the same sky, at the `IndirectDiffuse/Intensity` = 0.8 the concept applies to both |
+| **Open sky** (Sponza's ROOF from above, `setPosition(-9, 22, 0)` + `lookAt(-9, 0, 2)`, four tile crops — REAL geometry under an open sky, see the caution below) | raster 0.178-0.243 | SSGI 0.150-0.198 | **0.81-0.90 of the raster leg it replaces**, and RTGI reads 0.78-0.83 on the same crops: with V ≈ 1 the two lanes deliver the same sky, at the `IndirectDiffuse/Intensity` = 0.8 the concept applies to both |
 | **On-screen occluder** (the vault above, `setPosition(-9, 0, -2.5)` + `lookAt(-9, 1.2, 6)`) | 0.02643 | 0.01170 | ×0.44 — the arches occlude the sky |
 | **Arcade floor** (`setPosition(-9, 5, 0)` + `lookAt(-9, 0, 0.6)`, seen from ABOVE) | 0.1031 | 0.0449 | implied V = 0.44 where the surface really sees **V ≥ 0.036** — the occluder is the arcade ceiling, BEHIND the camera. This line is the blind spot, measured; see the warning below |
 | **Upper gallery** (the defect's own pose) | 0.0479 | 0.0212 | the gap to the traced lane falls from **8.4× to 3.7×** (RT 0.0057) |
 
 > [!CAUTION]
-> ⚠️⚠️ **The first published version of this table used Sponza's surrounding GRASS as the open-sky
-> test and reported a bit-identical "ratio 1.0000". Both halves were wrong and the conclusion was
-> unsupported**: that terrain receives **no indirect diffuse at all**, in EITHER lane (sky term ON vs
-> OFF moves it by 0.21/255 while the building in the same frame moves by 17-37 — see
-> `docs/todo/sponza-terrain-receives-no-indirect-diffuse.md`), so the ratio of 1.0000 measured an
-> INSENSITIVE surface and demonstrated nothing. A "no loss" test is only a test on a surface whose
-> value actually moves with the term under test. **Check the sensitivity before reading the ratio.**
+> ⚠️⚠️⚠️ **The first published version of this table used "the grass outside Sponza" as its open-sky
+> test and reported a bit-identical "ratio 1.0000". That grass is the SKYBOX.** The `sponza` demo
+> builds no ground (it never calls `enableBasicGround()`) and the Intel asset is the building alone,
+> so everything below the edge of its stone platform is the Kloppenheim05 cubemap — its own
+> photographed meadow, rocks and flowers included. A background is drawn unlit, writes no albedo and
+> no material-properties G-buffer, and no lighting term of any lane can move it: an A/B taken on it
+> returns a perfect ratio for EVERY term under test, forever. It also explains the 0.21/255 of
+> residual movement that made it look merely "insensitive" — that was the TAA reprojecting an edge,
+> nothing more.
+> **Two rules, in order**: identify WHAT SURFACE the crop holds — geometry or background — then check
+> that it MOVES with the term under test before reading any ratio off it. A ratio of exactly 1.0000
+> is not a result, it is a warning.
 
 **Cost**: `SSGIEffect/internal` 6.02 ms → 7.02 ms average at 2880×1620 (RTX 3070 Ti, GPU profiler,
 same pose sequence) — **≈ 1.0 ms** for 3 slices × 6 steps × 2 sides at half resolution. For scale,
