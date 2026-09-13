@@ -62,6 +62,7 @@ namespace
 	 *   binding 1: RTMeshMetaData SSBO
 	 *   binding 2: RTMaterialData SSBO
 	 *   binding 3: RTLightData SSBO
+	 *   binding 4: RTSubGeometryData SSBO (first index + material, per BLAS geometry)
 	 *
 	 * Descriptor set 1 (input textures — per-frame):
 	 *   binding 0: depth texture
@@ -113,6 +114,8 @@ layout(set = 0, binding = 3) readonly buffer LightData
 {
 	vec4 lights[];
 } lightSSBO;
+
+)GLSL" EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(
 
 /* Input textures (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
@@ -242,9 +245,14 @@ struct MeshAccessor
 /* GPUMeshMetaData layout (3 uvec4 = 48 bytes per instance):
  *   [0] = (vbAddrLo, vbAddrHi, ibAddrLo, ibAddrHi)
  *   [1] = (strideBytes, uvOffsetBytes, normalOffsetBytes, subGeometryCount)
- *   [2] = materialIndices[4]   — one per sub-geometry in the BLAS, looked up via
- *								 rayQueryGetIntersectionGeometryIndexEXT */
-MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
+ *   [2] = (subGeometryTableOffset, reserved x3) — the instance's first row in the
+ *								 sub-geometry table (set 0, binding 4), which a hit
+ *								 addresses with rayQueryGetIntersectionGeometryIndexEXT
+ *
+ * ⚠️ primitiveIndex is relative to the HIT sub-geometry while the index buffer is SHARED by all
+ * of them: rtHitFirstIndex() rebases it. Without that the trunk of the two-layer palm read the
+ * leaves' triangles (see EMEN_RT_SUBGEOMETRY_GLSL). */
+MeshAccessor getMeshAccessor (uint instanceIndex, uint geomIdx, uint primitiveIndex)
 {
 	MeshAccessor m;
 
@@ -257,23 +265,15 @@ MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 	m.uvOffsetFloats = meta1.y / 4u;
 	m.normalOffsetFloats = meta1.z / 4u;
 
-	m.idx0 = m.ib.i[primitiveIndex * 3u];
-	m.idx1 = m.ib.i[primitiveIndex * 3u + 1u];
-	m.idx2 = m.ib.i[primitiveIndex * 3u + 2u];
+	uint base = rtHitFirstIndex(instanceIndex, geomIdx) + primitiveIndex * 3u;
+
+	m.idx0 = m.ib.i[base];
+	m.idx1 = m.ib.i[base + 1u];
+	m.idx2 = m.ib.i[base + 2u];
 
 	return m;
 }
 
-/* Look up the materialIndex for a hit by combining the instance and sub-geometry.
- * For single-sub-geometry BLAS the geomIdx is always 0 (materialIndices[0]).
- * For multi-sub-geometry BLAS (e.g. palm trunk + leaves) each sub-geometry maps to
- * its own material — no more cross-sub-geo material aliasing.
- *
- * Some BLAS may have many more sub-geometries than the renderable has "logical"
- * material slots — typically animated sprites where the procedural quad builder
- * creates one group per animation frame slot, even when only a few frames are
- * actually used. In that case subGeometryCount (meta1.w) is 1 and we clamp the
- * BLAS-side geomIdx to 0 so we always read the renderable's only material. */
 /* Interpolate a vec3 vertex attribute at the hit point (barycentric). */
 vec3 getHitAttributeVec3 (MeshAccessor m, vec2 bary, uint offsetFloats)
 {
@@ -400,18 +400,19 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 			L = toLight / max(dist, 0.0001);
 			shadowDistance = dist;
 
-			/* Distance attenuation with radius falloff. */
+			/* Distance attenuation with radius falloff — the RASTER curve, verbatim:
+			 * `max(1 - dot(d/r, d/r), 0)` (LightGenerator.PBR.cpp). The squared-falloff form
+			 * written here, `clamp(1 - d/r, 0, 1)²`, is a DIFFERENT curve: at half the radius it
+			 * returns 0.25 where the raster returns 0.75, so a reflected surface was lit by a
+			 * third of the light the rendered one received at mid-range and the two images
+			 * diverged with distance. A light with no radius is not attenuated at all in the
+			 * raster, so it is not attenuated here either. */
 			float radius = posRadius.w;
 
 			if (radius > 0.0)
 			{
-				attenuation = clamp(1.0 - (dist / radius), 0.0, 1.0);
-				attenuation *= attenuation;
-			}
-			else
-			{
-				/* Inverse-square falloff. */
-				attenuation = 1.0 / (1.0 + dist * dist);
+				float distanceRatio = dist / radius;
+				attenuation = max(1.0 - distanceRatio * distanceRatio, 0.0);
 			}
 
 			/* Spot light cone. */
@@ -456,7 +457,15 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 		vec3 F = fresnelSchlick(VdotH, F0);
 
 		vec3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.0001);
-		vec3 diffuse = albedo * (1.0 - metalnessHit) * (vec3(1.0) - F);
+		/* ⚠️ LAMBERT NORMALISATION. The outgoing luminance of a diffuse surface is `albedo * E / PI`,
+		 * and that is what the raster emits (`kD * albedo / 3.14159265`, LightGenerator.PBR.cpp) and
+		 * what RTGI emits (`albedo / PI`). RTR was the only member of the family without it, so every
+		 * reflected surface came out PI times too bright — measured 2026-09-13 on light-and-shadow-debug,
+		 * where the mirror floor showed the brick cube at 2.26x the luminance of the cube ITSELF while
+		 * the screen-space lane, which re-reads the rendered image, showed the physical 0.40x. A passive
+		 * mirror cannot outshine its source: the contract is that a reflected surface matches the
+		 * rendered one. */
+		vec3 diffuse = albedo * (1.0 - metalnessHit) * (vec3(1.0) - F) / PI;
 
 		totalLight += lightColor * (diffuse + specular) * NdotL * attenuation * visibility;
 	}
@@ -582,13 +591,12 @@ void main()
 		uint primitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
 		vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(rayQuery, true);
 
-		/* Unpack mesh data. */
-		MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
-
-		/* Look up material per sub-geometry — the BLAS may have several sub-geometries
-		 * with distinct materials (e.g. palm trunk + alpha-test leaves) and we pick the
-		 * one matching the actual hit triangle's sub-geometry. */
+		/* Unpack mesh data. The sub-geometry decides BOTH which triangle is read (its first
+		 * index rebases the geometry-relative primitive index onto the shared index buffer)
+		 * and which material shades it — a BLAS may hold several, e.g. palm trunk +
+		 * alpha-test leaves. */
 		uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
+		MeshAccessor mesh = getMeshAccessor(instanceIndex, geomIdx, primitiveIndex);
 		uint materialIndex = rtHitMaterialIndex(instanceIndex, geomIdx);
 		uint matBase = materialIndex * 7u;
 
@@ -729,7 +737,11 @@ void main()
 			vec3 probeDiffuse = diffuseAlbedo * probeIrradiance(hitPos, hitNormal, hitV) * probeVolume.ambientColor.w;
 			vec3 iblDiffuse = diffuseAlbedo * texture(texturesCube[nonuniformEXT(1)], hitNormal).rgb * ambientLight.w * (1.0 - probeCoverage);
 
-			litColor += albedo * ambientLight.rgb;
+			/* The scene ambient is an ILLUMINANCE in lux, so a Lambertian surface sends back
+			 * `albedo * E / PI` — the same 1/PI the raster applies (`iblBaseColor * 0.3183098862`,
+			 * LightGenerator.cpp). The two irradiance sources below already carry theirs: the probe
+			 * query and the bindless irradiance cube both store E/PI. */
+			litColor += albedo * ambientLight.rgb / PI;
 			litColor += probeDiffuse + iblDiffuse + iblSpecular * ambientLight.w;
 		}
 

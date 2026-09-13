@@ -251,6 +251,18 @@ namespace EmEn::Graphics::Geometry
 			}
 		}
 
+		/* Publish the partition the BLAS was built with. A hit shader indexes the SHARED index
+		 * buffer with a primitive index its ray query gives relative to ONE geometry, so it must
+		 * add that geometry's first index back — and it can only be read from here, never
+		 * re-derived, or the "do not partition" cases above would drift out of sync. */
+		m_BLASGeometryFirstIndices.clear();
+		m_BLASGeometryFirstIndices.reserve(geometries.size());
+
+		for ( const auto & geometryInput : geometries )
+		{
+			m_BLASGeometryFirstIndices.emplace_back(geometryInput.firstIndex);
+		}
+
 		m_accelerationStructure = accelerationStructureBuilder->buildBLAS(geometries);
 
 		if ( m_accelerationStructure == nullptr )

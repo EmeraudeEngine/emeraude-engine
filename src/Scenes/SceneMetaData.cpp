@@ -79,12 +79,18 @@ namespace EmEn::Scenes
 				m_deferredDestructor->retireObject(std::move(materialSSBO));
 			}
 
+			for ( auto & subGeometrySSBO : m_subGeometryDataSSBOs )
+			{
+				m_deferredDestructor->retireObject(std::move(subGeometrySSBO));
+			}
+
 			m_deferredDestructor->retireObject(std::move(m_TLAS));
 			m_deferredDestructor->retireObject(std::move(m_pendingTLASBuild));
 		}
 
 		m_meshMetaDataSSBOs.clear();
 		m_materialDataSSBOs.clear();
+		m_subGeometryDataSSBOs.clear();
 	}
 
 	bool
@@ -99,18 +105,21 @@ namespace EmEn::Scenes
 
 		m_meshMetaDataSSBOs.resize(frameCount);
 		m_materialDataSSBOs.resize(frameCount);
+		m_subGeometryDataSSBOs.resize(frameCount);
 
 		for ( uint32_t i = 0; i < frameCount; ++i )
 		{
 			m_meshMetaDataSSBOs[i] = std::make_unique< ShaderStorageBufferObject >(device, MaxRTInstances * sizeof(GPUMeshMetaData));
 			m_materialDataSSBOs[i] = std::make_unique< ShaderStorageBufferObject >(device, MaxRTMaterials * sizeof(Material::GPURTMaterialData));
+			m_subGeometryDataSSBOs[i] = std::make_unique< ShaderStorageBufferObject >(device, MaxRTSubGeometries * sizeof(GPUSubGeometryData));
 
-			if ( !m_meshMetaDataSSBOs[i]->createOnHardware() || !m_materialDataSSBOs[i]->createOnHardware() )
+			if ( !m_meshMetaDataSSBOs[i]->createOnHardware() || !m_materialDataSSBOs[i]->createOnHardware() || !m_subGeometryDataSSBOs[i]->createOnHardware() )
 			{
 				Tracer::error(ClassId, "Failed to create RT SSBOs for frame-in-flight, mesh metadata and material data will be unavailable.");
 
 				m_meshMetaDataSSBOs.clear();
 				m_materialDataSSBOs.clear();
+				m_subGeometryDataSSBOs.clear();
 
 				return false;
 			}
@@ -130,12 +139,14 @@ namespace EmEn::Scenes
 		/* Reuse persistent collection structures (clear but keep allocated memory). */
 		m_rebuildInstances.clear();
 		m_rebuildMeshEntries.clear();
+		m_rebuildSubGeometryEntries.clear();
 		m_rebuildMaterialMap.clear();
 		m_rebuildMaterialEntries.clear();
 		m_pendingSkinnedInstances.clear();
 
 		auto & instances = m_rebuildInstances;
 		auto & meshEntries = m_rebuildMeshEntries;
+		auto & subGeometryEntries = m_rebuildSubGeometryEntries;
 		auto & materialMap = m_rebuildMaterialMap;
 		auto & materialEntries = m_rebuildMaterialEntries;
 
@@ -243,17 +254,36 @@ namespace EmEn::Scenes
 					break;
 				}
 
-				/* --- Per-sub-geometry material lookup ---
-				 * For each of the renderable's layers (capped at MaxSubGeometriesPerMesh),
-				 * resolve its material index in the RT material SSBO. The RT trace shader
-				 * uses materialIndices[rayQueryGetIntersectionGeometryIndexEXT(...)] to
-				 * pick the right material at hit time. Without this, multi-layer meshes
-				 * (e.g. palm trunk + alpha-test leaves) would alias their materials.
+				/* --- Per-sub-geometry table ---
+				 * One row per geometry OF THE BLAS, in BLAS order, so a hit's
+				 * rayQueryGetIntersectionGeometryIndexEXT addresses it directly. The count and
+				 * the order are the BLAS's, never the renderable's layer count: the two differ
+				 * whenever a partition was declined (single sub-geometry, TriangleStrip CPU-index
+				 * fallback) or whenever the geometry carries more groups than the renderable has
+				 * materials (an animated sprite's per-frame quad groups).
+				 *
+				 * Each row carries the geometry's FIRST INDEX — the BLAS was built with a
+				 * primitiveOffset per geometry, so a hit shader must add it back before indexing
+				 * the SHARED index buffer — and the material of that layer, which keeps a
+				 * multi-layer mesh (palm trunk + alpha-test leaves) from aliasing its materials.
 				 *
 				 * Also tracks whether ANY sub-geometry is alpha-test, which triggers the
 				 * FORCE_NO_OPAQUE TLAS instance flag (so the ray query receives candidate
 				 * hits and the shader can sample the opacity texture). */
-				const auto subGeoCount = std::min(renderable->subGeometryCount(), MaxSubGeometriesPerMesh);
+				const auto & skinnedRefitInputs = batch.renderableInstance()->rtRefitInputs();
+				const auto & staticFirstIndices = geometry->BLASGeometryFirstIndices();
+
+				const auto BLASGeometryCount = std::max(1U, isSkinned ?
+					static_cast< uint32_t >(skinnedRefitInputs.size()) :
+					static_cast< uint32_t >(staticFirstIndices.size())
+				);
+
+				if ( subGeometryEntries.size() + BLASGeometryCount > MaxRTSubGeometries )
+				{
+					break;
+				}
+
+				const auto materialSlotCount = renderable->subGeometryCount();
 				bool anyAlphaTest = false;
 
 				/* --- Mesh metadata --- */
@@ -283,23 +313,36 @@ namespace EmEn::Scenes
 
 				meshMeta.normalByteOffset = computeNormalByteOffset(geometry);
 				meshMeta.primaryUVByteOffset = computeUVByteOffset(geometry);
-				meshMeta.subGeometryCount = subGeoCount;
+				meshMeta.subGeometryCount = BLASGeometryCount;
+				meshMeta.subGeometryTableOffset = static_cast< uint32_t >(subGeometryEntries.size());
 
-				for ( uint32_t subGeo = 0; subGeo < subGeoCount; ++subGeo )
+				for ( uint32_t subGeo = 0; subGeo < BLASGeometryCount; ++subGeo )
 				{
-					const auto * subMaterial = renderable->material(subGeo);
-					uint32_t subMaterialIndex = 0;
+					GPUSubGeometryData row{};
+
+					if ( isSkinned )
+					{
+						row.firstIndex = subGeo < skinnedRefitInputs.size() ? skinnedRefitInputs[subGeo].firstIndex : 0;
+					}
+					else
+					{
+						row.firstIndex = subGeo < staticFirstIndices.size() ? staticFirstIndices[subGeo] : 0;
+					}
+
+					/* A BLAS geometry past the renderable's last material slot takes the first
+					 * material — the animated sprite's frame groups all share one. */
+					const auto * subMaterial = renderable->material(subGeo < materialSlotCount ? subGeo : 0);
 
 					if ( subMaterial != nullptr )
 					{
 						if ( auto it = materialMap.find(subMaterial); it != materialMap.end() )
 						{
-							subMaterialIndex = it->second;
+							row.materialIndex = it->second;
 						}
 						else if ( materialEntries.size() < MaxRTMaterials )
 						{
-							subMaterialIndex = static_cast< uint32_t >(materialEntries.size());
-							materialMap.emplace(subMaterial, subMaterialIndex);
+							row.materialIndex = static_cast< uint32_t >(materialEntries.size());
+							materialMap.emplace(subMaterial, row.materialIndex);
 
 							Material::GPURTMaterialData rtMat{};
 							subMaterial->exportRTMaterialData(rtMat);
@@ -312,7 +355,7 @@ namespace EmEn::Scenes
 						}
 					}
 
-					meshMeta.materialIndices[subGeo] = subMaterialIndex;
+					subGeometryEntries.emplace_back(row);
 				}
 
 				meshEntries.emplace_back(meshMeta);
@@ -589,6 +632,16 @@ namespace EmEn::Scenes
 			{
 				std::memcpy(dst, materialEntries.data(), materialEntries.size() * sizeof(Material::GPURTMaterialData));
 				m_materialDataSSBOs[frameIndex]->unmapMemory();
+			}
+		}
+
+		/* --- Upload the sub-geometry table for the current frame --- */
+		if ( frameIndex < m_subGeometryDataSSBOs.size() && m_subGeometryDataSSBOs[frameIndex] != nullptr && !subGeometryEntries.empty() )
+		{
+			if ( auto * dst = m_subGeometryDataSSBOs[frameIndex]->mapMemoryAs< GPUSubGeometryData >(); dst != nullptr )
+			{
+				std::memcpy(dst, subGeometryEntries.data(), subGeometryEntries.size() * sizeof(GPUSubGeometryData));
+				m_subGeometryDataSSBOs[frameIndex]->unmapMemory();
 			}
 		}
 

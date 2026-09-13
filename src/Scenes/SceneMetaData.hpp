@@ -101,6 +101,11 @@ namespace EmEn::Scenes
 			/** @brief Maximum number of unique RT materials supported. */
 			static constexpr size_t MaxRTMaterials{1024};
 
+			/** @brief Maximum number of rows in the RT sub-geometry table, all instances together.
+			 * @note There is no per-instance ceiling on purpose: a mesh may declare as many
+			 * sub-geometries as it likes, only the scene total is bounded. */
+			static constexpr size_t MaxRTSubGeometries{16384};
+
 			/**
 			 * @brief Constructs the scene metadata manager.
 			 * @note Initializes the acceleration structure builder if the device supports ray tracing
@@ -235,6 +240,25 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the sub-geometry table SSBO for the given frame index.
+			 * @note One row per sub-geometry of every RT instance (first index + material index),
+			 * addressed by GPUMeshMetaData::subGeometryTableOffset + the hit's geometry index.
+			 * @param frameIndex The current frame-in-flight index.
+			 * @return const Vulkan::ShaderStorageBufferObject *
+			 */
+			[[nodiscard]]
+			const Vulkan::ShaderStorageBufferObject *
+			subGeometryDataSSBO (uint32_t frameIndex) const noexcept
+			{
+				if ( frameIndex >= m_subGeometryDataSSBOs.size() )
+				{
+					return nullptr;
+				}
+
+				return m_subGeometryDataSSBOs[frameIndex].get();
+			}
+
+			/**
 			 * @brief Returns the number of RT instances in the current frame.
 			 * @return size_t
 			 */
@@ -273,11 +297,14 @@ namespace EmEn::Scenes
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_meshMetaDataSSBOs;
 			/** @brief Per-frame material data SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_materialDataSSBOs;
+			/** @brief Per-frame sub-geometry table SSBOs (one per frame-in-flight). */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_subGeometryDataSSBOs;
 			/** @brief Cache of registered bindless texture indices keyed by texture pointer. */
 			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_textureRegistrationCache;
 			/** @brief Persistent per-frame collection structures (reused to avoid heap allocations). */
 			std::vector< Vulkan::TLASInstanceInput > m_rebuildInstances;
 			std::vector< GPUMeshMetaData > m_rebuildMeshEntries;
+			std::vector< GPUSubGeometryData > m_rebuildSubGeometryEntries;
 			std::unordered_map< const Graphics::Material::Interface *, uint32_t > m_rebuildMaterialMap;
 			std::vector< Graphics::Material::GPURTMaterialData > m_rebuildMaterialEntries;
 			std::unordered_set< const Vulkan::TextureInterface * > m_rebuildActiveTextures;

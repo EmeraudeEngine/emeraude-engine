@@ -173,16 +173,15 @@ vec3 computeDirectIrradiance (vec3 hitPos, vec3 hitNormal)
 			L = toLight / max(dist, 0.0001);
 			shadowDistance = dist;
 
+			/* The RASTER curve, verbatim: `max(1 - dot(d/r, d/r), 0)` (LightGenerator.PBR.cpp),
+			 * and no attenuation at all without a radius. The cache feeds RTGI and RTR, so it
+			 * must integrate the same lights they do. Same fix in both, 2026-09-13. */
 			float radius = posRadius.w;
 
 			if (radius > 0.0)
 			{
-				attenuation = clamp(1.0 - (dist / radius), 0.0, 1.0);
-				attenuation *= attenuation;
-			}
-			else
-			{
-				attenuation = 1.0 / (1.0 + dist * dist);
+				float distanceRatio = dist / radius;
+				attenuation = max(1.0 - distanceRatio * distanceRatio, 0.0);
 			}
 
 			if (type > 1.5)
@@ -265,7 +264,7 @@ void main ()
 		uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
 		vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(rayQuery, true);
 
-		MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
+		MeshAccessor mesh = getMeshAccessor(instanceIndex, geomIdx, primitiveIndex);
 		mat4x3 objectToWorld = rayQueryGetIntersectionObjectToWorldEXT(rayQuery, true);
 		vec3 hitNormal = normalize(mat3(objectToWorld) * getHitNormal(mesh, instanceIndex, barycentrics));
 

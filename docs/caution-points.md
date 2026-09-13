@@ -400,31 +400,117 @@ if ( materialType == StandardResource::ClassId )
 > which sub-geometry was hit and look up the correct material via
 > `GPUMeshMetaData::materialIndices[geomIdx]`.
 >
-> **Data layout change:** `GPUMeshMetaData` grew from 32 B to 48 B (3 `uvec4`
-> instead of 2). The new third `uvec4` is `materialIndices[MaxSubGeometriesPerMesh]`
-> with `MaxSubGeometriesPerMesh = 4`. RTR/RTGI shader indexing uses `* 3u` stride.
+> **Data layout:** `GPUMeshMetaData` grew from 32 B to 48 B (3 `uvec4` instead of 2).
+> RTR/RTGI shader indexing uses `* 3u` stride. The third `uvec4` held
+> `materialIndices[4]` inline until Sep 2026; it now holds the offset of the
+> instance's first row in a shared **sub-geometry table** — see the section below,
+> which also fixes what that inline array was silently getting wrong.
+
+### Fixed: the RT hit shader read the WRONG TRIANGLE of a multi-layer mesh (Sep 2026)
+
+> [!CRITICAL]
+> **The BLAS partition above gives each sub-geometry its own `primitiveOffset` into
+> ONE SHARED index buffer. `rayQueryGetIntersectionPrimitiveIndexEXT` therefore counts
+> from the start of the HIT geometry, while the shader indexed the shared buffer as if
+> the count were absolute — so every hit on a sub-geometry other than the first read
+> another sub-geometry's triangle.** Right material, wrong vertices: wrong UVs, wrong
+> normals.
 >
-> **Caveat — animated sprites:** the procedural sprite quad builder emits one
-> group per animation frame slot (`MaxFrames = 120`), so the BLAS has many more
-> sub-geometries than the renderable's logical material count (1). The shader
-> clamps `geomIdx` to 0 when `meshMeta.subGeometryCount == 1`, so multi-frame
-> sprite BLAS still resolves to a single material. If you add new procedural
-> geometries that produce more than `MaxSubGeometriesPerMesh` materials, bump
-> the constant in `Scenes/GPUMeshMetaData.hpp` (memory grows linearly with
-> instance count).
+> **Symptom, owner-reported 2026-09-13 on `light-and-shadow-debug --demo-options 0,1`:**
+> in the mirror floor's ray-traced reflection the palm TRUNK's bark was stretched, with a
+> hard, sharply bounded dark band at its base. The trunk rendered directly was correct —
+> the raster passes `subGeometryRange(i)[0]` as `firstIndex` to `vkCmdDrawIndexed`, so
+> only the RT path was affected. The palm's two layers are leaves (sub-geometry 0, 596
+> faces) then bark (sub-geometry 1), so each of the 80 trunk triangles read one of the
+> first 80 LEAF triangles: the bark texture landed on leaf UVs (the stretch) and the
+> borrowed normals faced away from the lights wherever a run of them agreed (the band).
+> The leaves looked fine because they ARE sub-geometry 0.
+>
+> **Fix:** a per-sub-geometry indirection table, `GPUSubGeometryData` (set 0, **binding 4**),
+> one `uvec2` row per BLAS geometry — `.x` = first index in the shared buffer, `.y` =
+> material index. `GPUMeshMetaData` carries `subGeometryTableOffset` and the row count, so
+> a hit reads row `offset + geometryIndex`. The shared GLSL is `EMEN_RT_SUBGEOMETRY_GLSL`
+> (`rtHitFirstIndex()`, `rtHitMaterialIndex()`), spliced before every `getMeshAccessor()`,
+> whose signature now takes the geometry index.
+>
+> ⚠️ **The table is filled from the partition the BLAS was ACTUALLY built with**, never
+> re-derived: `Geometry::Interface::BLASGeometryFirstIndices()` publishes it, and the
+> skinned path reads `RenderableInstance::Abstract::rtRefitInputs()`. Two sites deciding
+> "do we partition?" separately would drift the day one of the do-not-partition cases
+> changes (a single sub-geometry, or the TriangleStrip CPU-index fallback whose converted
+> indices no longer map to the original ranges).
+>
+> **The inline `materialIndices[4]` is gone with the same change.** It capped a mesh at 4
+> sub-geometries while the BLAS partitioned without a cap, so groups 5 and beyond silently
+> took material 0 — `Humans/OldMan` carries seven. The table has no per-instance ceiling;
+> only the scene total is bounded (`SceneMetaData::MaxRTSubGeometries`).
+>
+> **Caveat — animated sprites:** the procedural sprite quad builder emits one group per
+> animation frame slot (`MaxFrames = 120`), so the BLAS carries many more geometries than
+> the renderable has materials (1). Each still gets a row, with the correct first index;
+> a row past the renderable's last material slot takes material 0.
 >
 > **Files involved:**
-> - `Vulkan/AccelerationStructureBuilder.{hpp,cpp}` — `buildBLAS` now takes
+> - `Vulkan/AccelerationStructureBuilder.{hpp,cpp}` — `buildBLAS` takes
 >   `std::vector<BLASGeometryInput>`, each input has a `firstIndex` field
-> - `Graphics/Geometry/Interface.cpp:buildAccelerationStructure` — iterates
->   sub-geometries via `subGeometryRange(i)`
-> - `Scenes/GPUMeshMetaData.hpp` — 48 B layout with `materialIndices[4]`
-> - `Scenes/SceneMetaData.cpp:rebuild` — fills `materialIndices` per sub-geo,
->   adds one TLAS instance per renderable, FORCE_NO_OPAQUE if any sub-geo is
->   alpha-test
-> - `Scenes/Scene.rendering.cpp` — one RT batch per renderable (was per layer)
-> - `Graphics/Effects/Lighting/RTR.cpp`, `RTGI.cpp` — `getHitMaterialIndex`
->   uses `rayQueryGetIntersectionGeometryIndexEXT` + clamp on `subGeometryCount`
+> - `Graphics/Geometry/Interface.{hpp,cpp}` — partitions by `subGeometryRange(i)` and
+>   publishes the result through `BLASGeometryFirstIndices()`
+> - `Scenes/GPUMeshMetaData.hpp` — 48 B instance entry + the 8 B `GPUSubGeometryData` row
+> - `Scenes/SceneMetaData.{hpp,cpp}` — builds and uploads the table per frame-in-flight
+> - `Graphics/Renderer.cpp` — RT descriptor set binding 4
+> - `Graphics/Effects/Shared/RTAlphaTestGLSL.hpp` — `EMEN_RT_SUBGEOMETRY_GLSL`, and
+>   `getMeshAccessor(instance, geomIdx, primitive)`
+> - `Graphics/Effects/Lighting/RTR.cpp`, `RTGI.cpp`, `Graphics/IrradianceProbeVolume.cpp`
+>   — call sites; RTAO and RTContactShadows inherit it through `EMEN_RT_SCENE_DATA_GLSL`
+
+### Fixed: every ray-traced reflection was PI times too bright (Sep 2026)
+
+> [!CRITICAL]
+> **RTR shaded its hit points without the Lambert `1/PI` normalisation, on both the direct
+> diffuse lobe and the flat scene ambient. A reflected surface came out PI = 3.14 times
+> brighter than the same surface rendered directly — a passive mirror outshining its
+> source.**
+>
+> **Measured 2026-09-13 on `light-and-shadow-debug --demo-options 0,1`** (mirror floor:
+> albedo 1, roughness 0, metal — a PERFECT mirror, so the reflection must carry
+> essentially the full luminance of what it reflects). Reflected/direct luminance of the
+> same object inside ONE frame, linearised through gamma and the ACES curve — a ratio
+> taken inside one frame is exposure-independent, which is what makes two auto-exposed
+> captures comparable:
+>
+> | Object | Screen-space | Ray-traced, before | Ray-traced, after |
+> |---|---|---|---|
+> | Brick cube | 0.40 | **2.26** | 0.82 |
+> | Sphere | 0.40 | **1.73** | 0.83 |
+> | Palm trunk | 0.52 | **1.82** | 0.80 |
+>
+> **Why RTR alone had it:** the raster emits `kD * albedo / 3.14159265`
+> (`Saphir::LightGenerator::generatePBRFragmentShader`) and `iblBaseColor * 0.3183098862`
+> for the scalar ambient (`LightGenerator.cpp`); RTGI emits `albedo / PI`; the irradiance
+> probe volume divides its gathered irradiance by PI. RTR was the only member of the
+> family without it. ⚠️ The two other irradiance sources it adds — the probe query and the
+> bindless irradiance cube — already store `E/PI`, so they must NOT be divided again.
+>
+> **Same change, second divergence:** the radius falloff. The raster uses
+> `max(1 - dot(d/r, d/r), 0)` and no attenuation at all when the radius is 0; RTR, RTGI and
+> the probe volume used `clamp(1 - d/r, 0, 1)²` and an inverse square. The two curves return
+> 0.25 against 0.75 at half the radius, so a traced surface was lit by a third of what the
+> rendered one received at mid-range. All three now use the raster curve verbatim.
+>
+> ⚠️ **What this reveals about the screen-space lane:** on a PERFECT mirror the ray-traced
+> ratio is now ~0.8 (the effect's own `intensity` 0.8 times the distance fade), which is
+> the physically expected figure, while the screen-space lane sits at 0.38-0.50 — it is the
+> LOW one. Its `facingFade = 1 - pow(dot(viewDir, reflDir), 5)` (`SSR.cpp`) costs roughly
+> half the reflection on a floor seen at a shallow angle. That term hides a real screen-space
+> limitation (a ray coming back toward the camera cannot be traced), so it is not a defect to
+> delete — but "screen-space is the correct level" no longer holds, and the two lanes are
+> expected to disagree here.
+>
+> **Still divergent, deliberately left open** (owner scoped the fix to the free
+> divergences, 2026-09-13): no ambient occlusion at the hit, no Fdez-Agüera multi-scatter
+> deduction on the hit's IBL diffuse, the material's own `IBLIntensity` dropped, no colour
+> projection (gobo), binary shadow ray against a filtered shadow map. Each makes a
+> reflection brighter than the rendered surface and each needs new data in the RT SSBOs.
 
 ### Fixed: Sprite RT Pipeline — Per-Frame Bindless + CPU Billboard (May 2026)
 

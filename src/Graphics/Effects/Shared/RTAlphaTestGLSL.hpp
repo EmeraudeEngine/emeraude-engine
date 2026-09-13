@@ -41,9 +41,11 @@
  * The rule is a MACRO holding a string literal so it concatenates into the effects' own GLSL
  * literals at compile time — the shaders are `constexpr` literals, and a `constexpr const
  * char *` cannot be spliced into one. It relies on names EVERY RT effect shader already
- * declares: `meshSSBO`, `materialSSBO`, `textures2D`, `MeshAccessor getMeshAccessor()`,
- * `vec2 getHitUV()`, and the material flag constants `IsAlphaTest`, `HasOpacityTexture`,
- * `HasAlbedoTexture`.
+ * declares: `meshSSBO`, `materialSSBO`, `textures2D`, `MeshAccessor getMeshAccessor(instance,
+ * geomIdx, primitive)`, `vec2 getHitUV()`, the material flag constants `IsAlphaTest`,
+ * `HasOpacityTexture`, `HasAlbedoTexture`, and the sub-geometry lookups of
+ * EMEN_RT_SUBGEOMETRY_GLSL (`rtHitFirstIndex`, `rtHitMaterialIndex`) — which a shader carrying
+ * its own accessor must splice BEFORE that accessor.
  *
  * An effect that declares none of those names itself (an occlusion-only effect) splices
  * EMEN_RT_SCENE_DATA_GLSL(bindlessSet) first — it brings exactly the declarations the rule needs.
@@ -57,6 +59,52 @@
  * gl_RayFlagsTerminateOnFirstHitEXT composes with it — a shadow ray ends at the first CONFIRMED
  * candidate, exactly as before, only it now confirms the right ones.
  */
+
+/**
+ * @brief GLSL: the sub-geometry table of the RT set (set 0, binding 4) and the two lookups every
+ * hit needs — the first index of the hit geometry, and its material.
+ * @note ⚠️ THE FIRST INDEX IS NOT OPTIONAL. A BLAS carrying several sub-geometries is built with
+ * one VkAccelerationStructureGeometryKHR per sub-geometry, each with its own `primitiveOffset`
+ * into ONE SHARED index buffer, so `rayQueryGetIntersectionPrimitiveIndexEXT` counts from the
+ * start of the HIT geometry while the buffer is shared. Indexing the buffer with the raw
+ * primitive index reads another sub-geometry's triangle: right material, wrong vertices, wrong
+ * UVs, wrong normals. Measured on the two-layer palm of `light-and-shadow-debug` (leaves =
+ * sub-geometry 0, 596 faces; bark = sub-geometry 1): every reflected trunk hit read one of the
+ * first 80 LEAF triangles, stretching the bark over leaf UVs and leaving hard dark bands where
+ * the borrowed normals faced away from the lights (fixed 2026-09-13).
+ * @note Every consumer splices this BEFORE its own getMeshAccessor() — GLSL wants the
+ * declaration first, and the accessor cannot fetch a triangle without the offset.
+ */
+#define EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(
+/* Sub-geometry table (set 0, binding 4): one uvec2 per geometry of every instance's BLAS, in
+ * BLAS order — .x = first index in the shared index buffer, .y = material index. The instance's
+ * own rows start at meshEntries[i*3+2].x and there are meshEntries[i*3+1].w of them. */
+layout(set = 0, binding = 4) readonly buffer SubGeometryData { uvec2 subGeometries[]; } subGeoSSBO;
+
+/* Row of a hit in the sub-geometry table. A BLAS may carry more geometries than the instance has
+ * rows (it never should, but a stale metadata frame must not read another instance's rows): the
+ * clamp keeps the lookup inside this instance. */
+uint rtSubGeometryRow (uint instanceIndex, uint geomIdx)
+{
+	uint subGeoCount = meshSSBO.meshEntries[instanceIndex * 3u + 1u].w;
+	uint effectiveIdx = geomIdx < subGeoCount ? geomIdx : 0u;
+
+	return meshSSBO.meshEntries[instanceIndex * 3u + 2u].x + effectiveIdx;
+}
+
+/* First index of the hit sub-geometry in the SHARED index buffer: what turns the geometry-relative
+ * primitive index a ray query returns into an offset the index buffer can be read at. */
+uint rtHitFirstIndex (uint instanceIndex, uint geomIdx)
+{
+	return subGeoSSBO.subGeometries[rtSubGeometryRow(instanceIndex, geomIdx)].x;
+}
+
+/* Material of the hit sub-geometry. */
+uint rtHitMaterialIndex (uint instanceIndex, uint geomIdx)
+{
+	return subGeoSSBO.subGeometries[rtSubGeometryRow(instanceIndex, geomIdx)].y;
+}
+)GLSL"
 
 /**
  * @brief GLSL: the scene data the alpha-test rule reads, for an effect that does not declare it itself.
@@ -76,6 +124,7 @@ layout(buffer_reference, scalar) readonly buffer IndexBuffer { uint i[]; };
 /* RT scene data (set 0, the Renderer's set — the TLAS sits at binding 0). */
 layout(set = 0, binding = 1) readonly buffer MeshMetaData { uvec4 meshEntries[]; } meshSSBO;
 layout(set = 0, binding = 2) readonly buffer MaterialData { vec4 materials[]; } materialSSBO;
+)GLSL" EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(
 
 /* Bindless 2D textures (BindlessTextureManager::Texture2DBinding). */
 layout(set = )GLSL" #bindlessSet R"GLSL(, binding = 1) uniform sampler2D textures2D[];
@@ -100,8 +149,10 @@ struct MeshAccessor
 	uint idx0, idx1, idx2;
 };
 
-/* GPUMeshMetaData layout: 3 uvec4 per instance (see RTR.cpp for details). */
-MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
+/* GPUMeshMetaData layout: 3 uvec4 per instance (see RTR.cpp for details).
+ * The primitive index is relative to the HIT sub-geometry, the index buffer is shared by all of
+ * them: rtHitFirstIndex() is what rebases one onto the other. */
+MeshAccessor getMeshAccessor (uint instanceIndex, uint geomIdx, uint primitiveIndex)
 {
 	MeshAccessor m;
 	uvec4 meta0 = meshSSBO.meshEntries[instanceIndex * 3u];
@@ -110,9 +161,10 @@ MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 	m.ib = IndexBuffer(uvec2(meta0.z, meta0.w));
 	m.strideFloats = meta1.x / 4u;
 	m.uvOffsetFloats = meta1.y / 4u;
-	m.idx0 = m.ib.i[primitiveIndex * 3u];
-	m.idx1 = m.ib.i[primitiveIndex * 3u + 1u];
-	m.idx2 = m.ib.i[primitiveIndex * 3u + 2u];
+	uint base = rtHitFirstIndex(instanceIndex, geomIdx) + primitiveIndex * 3u;
+	m.idx0 = m.ib.i[base];
+	m.idx1 = m.ib.i[base + 1u];
+	m.idx2 = m.ib.i[base + 2u];
 	return m;
 }
 
@@ -127,15 +179,6 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 
 /** @brief GLSL: the function deciding whether a candidate triangle is solid at the hit texel. */
 #define EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
-/* Material index of a hit, clamped to the renderable's material slots (a BLAS may carry more
- * sub-geometries than the renderable has materials — animated sprite frame groups). */
-uint rtHitMaterialIndex (uint instanceIndex, uint geomIdx)
-{
-	uint subGeoCount = meshSSBO.meshEntries[instanceIndex * 3u + 1u].w;
-	uint effectiveIdx = (geomIdx < subGeoCount) ? geomIdx : 0u;
-	return meshSSBO.meshEntries[instanceIndex * 3u + 2u][effectiveIdx];
-}
-
 /* THE alpha-test rule: does this candidate triangle exist at the hit texel ?
  * Non-alpha-tested materials are solid (the BLAS default). An alpha-tested one is sampled at
  * the candidate's UV — opacity texture first, albedo alpha next, scalar albedo alpha last —
@@ -150,7 +193,7 @@ bool rtCandidateIsSolid (uint instanceIndex, uint geomIdx, uint primitiveIndex, 
 		return true;
 	}
 
-	MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
+	MeshAccessor mesh = getMeshAccessor(instanceIndex, geomIdx, primitiveIndex);
 	vec2 uv = getHitUV(mesh, bary);
 	float alpha = materialSSBO.materials[matBase].a;
 

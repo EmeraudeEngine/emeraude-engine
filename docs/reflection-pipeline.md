@@ -323,13 +323,26 @@ The trace pass is the interesting one:
   Aug 2026 — `AlphaTestEnabled`, the binary-cutout flag that deliberately stays in the OPAQUE
   raster list ([`src/Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § 5, "Alpha Test — the Binary
   Cutout Contract"). `alphaCutoff` is 0.5, the same fixed value as the raster and shadow discards.
-- **Material lookup is per sub-geometry**: `getHitMaterialIndex(instanceIndex, geomIdx)` reads
-  `GPUMeshMetaData[2][geomIdx]`, clamping to 0 when the BLAS has more sub-geometries than the
-  renderable has material slots (procedural sprite quads).
-- **Hit shading is Lambert only**: `albedo * (directLighting + sceneAmbient)`. Each light's
-  contribution is gated by a shadow ray, but **only for lights that cast shadows in the raster
-  passes** — a light without a shadow map deliberately shines through geometry on screen, and
-  the reflection must match the image.
+- **The sub-geometry decides BOTH the triangle and the material.** A hit reads one row of the
+  sub-geometry table (set 0, binding 4) at `GPUMeshMetaData.subGeometryTableOffset + geomIdx`:
+  `rtHitMaterialIndex()` takes the material from it, `rtHitFirstIndex()` takes the geometry's
+  first index in the SHARED index buffer. ⚠️ **That first index is mandatory**: the BLAS is built
+  with a `primitiveOffset` per sub-geometry, so `rayQueryGetIntersectionPrimitiveIndexEXT`
+  restarts at 0 for each of them. Until Sep 2026 the shader indexed the shared buffer with the
+  raw primitive index and every hit on a sub-geometry past the first read another one's triangle —
+  the reflected palm trunk of `light-and-shadow-debug` wore its bark texture on leaf UVs, stretched,
+  with hard dark bands from the borrowed normals. The rows are filled from the partition the BLAS
+  was actually built with, never re-derived; there is no per-instance ceiling (the inline
+  `materialIndices[4]` it replaced mis-materialled every group past the fourth, and
+  `Humans/OldMan` has seven).
+- Each light's contribution is gated by a shadow ray, but **only for lights that cast shadows in
+  the raster passes** — a light without a shadow map deliberately shines through geometry on
+  screen, and the reflection must match the image.
+- ⚠️ **The hit shading owes the raster the Lambert `1/PI`, and the raster's radius curve.** The
+  diffuse lobe is `albedo * (1-metalness) * (1-F) / PI` and the flat scene ambient
+  `albedo * ambientLight.rgb / PI`; the falloff is `max(1 - dot(d/r, d/r), 0)` with no
+  attenuation at radius 0. Both were missing until Sep 2026 (§ 4.3.1 for the measurement). The
+  probe query and the irradiance cube already store `E/PI` — never divide those again.
 - **On a miss**, the ACTIVE SCENE's prefiltered environment is sampled (bindless reserved
   cube slot 2, roughness-driven LOD) × the sky luminance. The former dedicated `envCubemap`
   binding fell back to the renderer DEFAULT cubemap when the caller passed none — dark sky
@@ -682,6 +695,42 @@ if (confidence > 0.001 && reflectivity > 0.0)
 The reflected colour IS tinted by the **reflector's** F0 since Aug 2026 (a gold surface reflects
 in gold): both resolve paths carry the normalized Fresnel tint `F / max(F)` on the colour, with
 `F0 = mix(0.04, albedo, metalness)`.
+
+#### 4.3.1 The two lanes do NOT deliver the same LEVEL, and the traced one is the reference
+
+Equal weights are not equal results: the lanes disagree on how much reflection reaches the pixel,
+and since Sep 2026 the disagreement is understood.
+
+Measured 2026-09-13 on `light-and-shadow-debug --demo-options 0,1`, whose floor is
+`Grounds/DebugMirror` — albedo 1, roughness 0, metalness 1, i.e. a **perfect mirror**, so the
+reflection should carry essentially the full luminance of what it reflects, times the effect's
+`intensity` (0.8) and the distance fade. Reflected/direct luminance of the SAME object inside
+ONE frame, linearised through gamma and ACES. ⚠️ A ratio taken inside one frame is
+exposure-independent — that is what lets two separately metered captures be compared at all.
+
+| Object | Screen-space | Ray-traced, before the `1/PI` fix | Ray-traced, after |
+|---|---|---|---|
+| Brick cube | 0.40 | **2.26** | 0.82 |
+| Sphere | 0.40 | **1.73** | 0.83 |
+| Palm trunk | 0.52 | **1.82** | 0.80 |
+
+Two readings, in order:
+
+1. **RTR was PI times too bright** — its hit shading had no Lambert `1/PI`, so a passive mirror
+   outshone its source. Fixed; see [`caution-points.md`](caution-points.md) § "every ray-traced
+   reflection was PI times too bright" and [`Graphics/AGENTS.md`](../src/Graphics/AGENTS.md) § RTR.
+2. **Once that is fixed, the SCREEN-SPACE lane is the low one.** 0.8 is the expected figure for
+   this floor and RTR lands on it; SSR delivers half. The cause is `facingFade =
+   1 - pow(max(0, dot(viewDir, reflDir)), 5)` (`SSR.cpp`), which on a floor seen at a shallow
+   angle costs roughly half the reflection. It is not a defect to delete: it hides a real
+   screen-space limitation, a ray coming back toward the camera cannot be traced. But
+   **"screen-space is the correct level" is false** — the lanes are expected to disagree on a
+   near-mirror, and a level comparison between them settles nothing on its own.
+
+⚠️ RTR still runs brighter than the raster on several terms nobody has closed: no ambient
+occlusion at the hit, no multi-scatter deduction on the hit's IBL diffuse, the material's
+`IBLIntensity` dropped, no colour projection, and a binary shadow ray against a filtered shadow
+map. Each needs new data in the RT SSBOs; owner scoped them out on 2026-09-13.
 
 ### 4.4 Non-physical F0 floors
 

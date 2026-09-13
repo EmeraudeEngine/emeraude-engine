@@ -311,6 +311,24 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Returns the first index of every geometry the BLAS was actually built with.
+			 * @note One entry per VkAccelerationStructureGeometryKHR, in BLAS order, so a ray
+			 * query's geometry index addresses it directly. It is the ONLY description of the
+			 * partition outside buildAccelerationStructure(): the decision not to partition
+			 * (single sub-geometry, or the TriangleStrip CPU-index fallback whose converted
+			 * indices no longer map to the original ranges) lives in ONE place and the RT
+			 * metadata reads the result rather than re-deriving the condition. Empty until the
+			 * BLAS is built.
+			 * @return const std::vector< uint32_t > &
+			 */
+			[[nodiscard]]
+			const std::vector< uint32_t > &
+			BLASGeometryFirstIndices () const noexcept
+			{
+				return m_BLASGeometryFirstIndices;
+			}
+
+			/**
 			 * @brief Builds the bottom-level acceleration structure (BLAS) for this geometry.
 			 * @note Builds for any triangle-based topology (TriangleList, TriangleStrip).
 			 * For TriangleStrip, calls generateTriangleListIndicesForRT() to convert indices.
@@ -543,6 +561,9 @@ namespace EmEn::Graphics::Geometry
 			/** @brief Optional triangle-list IBO for RT when native topology is not TriangleList.
 			 * Used by SceneMetaData to provide correct index buffer addresses for shader access. */
 			std::unique_ptr< Vulkan::IndexBufferObject > m_rtIndexBufferObject;
+
+			/** @brief First index of every geometry of the BLAS, in BLAS order. @see BLASGeometryFirstIndices() */
+			std::vector< uint32_t > m_BLASGeometryFirstIndices;
 
 		public:
 

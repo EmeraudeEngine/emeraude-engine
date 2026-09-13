@@ -2833,7 +2833,8 @@ namespace EmEn::Graphics
 		 * binding 0 = TLAS,
 		 * binding 1 = mesh metadata SSBO,
 		 * binding 2 = material data SSBO,
-		 * binding 3 = light array SSBO.
+		 * binding 3 = light array SSBO,
+		 * binding 4 = sub-geometry table SSBO.
 		 */
 		m_rtDescriptorSetLayout = std::make_shared< DescriptorSetLayout >(m_device, "RTDescriptorSet");
 
@@ -2845,7 +2846,8 @@ namespace EmEn::Graphics
 		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, rtStages) ||
 			 !m_rtDescriptorSetLayout->declareStorageBuffer(1, rtStages) ||
 			 !m_rtDescriptorSetLayout->declareStorageBuffer(2, rtStages) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(3, rtStages) )
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(3, rtStages) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(4, rtStages) )
 		{
 			TraceError{ClassId} << "Unable to declare RT descriptor set layout bindings!";
 
@@ -2946,6 +2948,18 @@ namespace EmEn::Graphics
 			};
 
 			static_cast< void >(descriptorSet->writeStorageBuffer(3, lightInfo));
+		}
+
+		/* Binding 4: Sub-geometry table SSBO (per-frame to avoid CPU/GPU race). */
+		if ( const auto * subGeometrySSBO = sceneMetaData.subGeometryDataSSBO(m_currentFrameIndex); subGeometrySSBO != nullptr )
+		{
+			const VkDescriptorBufferInfo subGeometryInfo{
+				.buffer = subGeometrySSBO->handle(),
+				.offset = 0,
+				.range = subGeometrySSBO->bytes()
+			};
+
+			static_cast< void >(descriptorSet->writeStorageBuffer(4, subGeometryInfo));
 		}
 
 		m_RTLightCount = lightSet.RTLightCount();

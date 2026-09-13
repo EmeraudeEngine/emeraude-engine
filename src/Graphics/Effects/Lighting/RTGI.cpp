@@ -106,6 +106,7 @@ layout(set = 0, binding = 3) readonly buffer LightData
 {
 	vec4 lights[];
 } lightSSBO;
+)GLSL" EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(
 
 /* Input textures + frame UBO (set 1). */
 layout(set = 1, binding = 0) uniform sampler2D depthTex;
@@ -205,8 +206,10 @@ struct MeshAccessor
 	uint idx0, idx1, idx2;
 };
 
-/* GPUMeshMetaData layout: 3 uvec4 per instance (see RTR.cpp for details). */
-MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
+/* GPUMeshMetaData layout: 3 uvec4 per instance (see RTR.cpp for details).
+ * ⚠️ primitiveIndex is relative to the HIT sub-geometry, the index buffer is shared by all of
+ * them: rtHitFirstIndex() rebases it (see EMEN_RT_SUBGEOMETRY_GLSL). */
+MeshAccessor getMeshAccessor (uint instanceIndex, uint geomIdx, uint primitiveIndex)
 {
 	MeshAccessor m;
 
@@ -219,9 +222,11 @@ MeshAccessor getMeshAccessor (uint instanceIndex, uint primitiveIndex)
 	m.uvOffsetFloats = meta1.y / 4u;
 	m.normalOffsetFloats = meta1.z / 4u;
 
-	m.idx0 = m.ib.i[primitiveIndex * 3u];
-	m.idx1 = m.ib.i[primitiveIndex * 3u + 1u];
-	m.idx2 = m.ib.i[primitiveIndex * 3u + 2u];
+	uint base = rtHitFirstIndex(instanceIndex, geomIdx) + primitiveIndex * 3u;
+
+	m.idx0 = m.ib.i[base];
+	m.idx1 = m.ib.i[base + 1u];
+	m.idx2 = m.ib.i[base + 2u];
 
 	return m;
 }
@@ -359,16 +364,16 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 			L = toLight / max(dist, 0.0001);
 			shadowDistance = dist;
 
+			/* The RASTER curve, verbatim: `max(1 - dot(d/r, d/r), 0)` (LightGenerator.PBR.cpp),
+			 * and no attenuation at all without a radius. `clamp(1 - d/r, 0, 1)²` is a different
+			 * curve (0.25 against 0.75 at half the radius) and made the traced bounce disagree
+			 * with the direct lighting it is supposed to extend. Same fix in RTR, 2026-09-13. */
 			float radius = posRadius.w;
 
 			if (radius > 0.0)
 			{
-				attenuation = clamp(1.0 - (dist / radius), 0.0, 1.0);
-				attenuation *= attenuation;
-			}
-			else
-			{
-				attenuation = 1.0 / (1.0 + dist * dist);
+				float distanceRatio = dist / radius;
+				attenuation = max(1.0 - distanceRatio * distanceRatio, 0.0);
 			}
 
 			/* Spot light cone. */
@@ -574,11 +579,11 @@ void main()
 			uint primitiveIndex = rayQueryGetIntersectionPrimitiveIndexEXT(rayQuery, true);
 			vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(rayQuery, true);
 
-			/* Unpack mesh data. */
-			MeshAccessor mesh = getMeshAccessor(instanceIndex, primitiveIndex);
-
-			/* Material per sub-geometry, clamped to the renderable's slots (shared RT rule). */
-			uint materialIndex = rtHitMaterialIndex(instanceIndex, rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true));
+			/* Unpack mesh data. The sub-geometry picks both the triangle (its first index rebases
+			 * the geometry-relative primitive index) and the material (shared RT rule). */
+			uint geomIdx = rayQueryGetIntersectionGeometryIndexEXT(rayQuery, true);
+			MeshAccessor mesh = getMeshAccessor(instanceIndex, geomIdx, primitiveIndex);
+			uint materialIndex = rtHitMaterialIndex(instanceIndex, geomIdx);
 			uint matBase = materialIndex * 7u;
 
 			vec3 albedo = materialSSBO.materials[matBase].rgb;
