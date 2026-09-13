@@ -40,39 +40,35 @@
 
 namespace
 {
-	/* Temporal resolve pass: exponential moving average between the current noisy GI and
-	 * the reprojected history. The history UV is found through the velocity buffer
-	 * (per-object motion vectors, NDC delta) with 3x3 depth-nearest dilation. History is
-	 * rejected on disocclusion (camera-distance mismatch, normal mismatch) and optionally
-	 * rectified by variance clipping against the current 3x3 neighbourhood (anti-ghosting).
-	 * Output: RGB = resolved DEMODULATED indirect irradiance (receiver albedo applied at
-	 * the combine), A = camera distance (0 = invalid/sky).
-	 *
-	 * Descriptor set 0:
-	 *   binding 0: current raw GI (the owner's trace output)
-	 *   binding 1: depth texture
-	 *   binding 2: normals texture (view space)
-	 *   binding 3: GI history texture (previous resolved frame)
-	 *   binding 4: world-normal history texture (previous frame)
-	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
-	 *   binding 6: moments history texture (accumulation age for the 1/N counter)
-	 *   binding 7: frame UBO (shared with the owner's trace pass)
-	 */
-	constexpr auto GIDenoiserTemporalFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outResolved;
-
-layout(set = 0, binding = 0) uniform sampler2D giTex;
+	/* Shared GLSL of the temporal and moments passes: the frame UBO, the flags and the
+	 * REPROJECTION — one function both passes call, so they can never disagree on which history
+	 * pixel is valid. Two reprojection paths:
+	 *  - SURFACE: the velocity buffer (per-object motion vectors, NDC delta) with 3x3 depth-nearest
+	 *    dilation, so thin foreground silhouettes drag their motion over the background edge pixels
+	 *    instead of smearing.
+	 *  - VIRTUAL (reflection mode, flag bit 3 — RTR, 2026-09-13): the reflected content does not
+	 *    move with the reflector, it moves with its mirror image — the VIRTUAL point P + V·hitT
+	 *    behind the surface (Stachowiak & Uludag, "Stochastic Screen-Space Reflections", SIGGRAPH
+	 *    2015 Advances; Zhdan, "ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II
+	 *    ch. 49, 2021 — the "virtual motion"). Exact for a planar mirror reflecting a static world,
+	 *    approximate on a curved reflector; the share of the virtual path fades with the roughness
+	 *    (a rough lobe has no single virtual point, and its blur hides the parallax the surface path
+	 *    gets wrong). Both histories are fetched and blended by their weights; an invalid one hands
+	 *    its weight to the other. In reflection mode the validation distance is the VIRTUAL one,
+	 *    cameraDistance + hitT, stored in the MOMENTS alpha — the colour history's alpha carries the
+	 *    trace confidence — and the surface path expects it too (the same reflector point had the
+	 *    same hit last frame).
+	 * Descriptor bindings shared by both passes: 1 depth, 2 normals (view space, alpha = packed
+	 * roughness/metalness), 4 world-normal history, 5 velocity, 7 hit data (RG16F: cone width,
+	 * hitT — the reflection mode's source; the diffuse producers bind a placeholder), 8 frame UBO. */
+#define GIDENOISER_REPROJECTION_GLSL R"GLSL(
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D normalTex;
-layout(set = 0, binding = 3) uniform sampler2D historyTex;
 layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
 layout(set = 0, binding = 5) uniform sampler2D velocityTex;
-layout(set = 0, binding = 6) uniform sampler2D momentsHistoryTex;
+layout(set = 0, binding = 7) uniform sampler2D hitDataTex;
 
-layout(set = 0, binding = 7, std140) uniform FrameData
+layout(set = 0, binding = 8, std140) uniform FrameData
 {
 	mat4 invViewProj;
 	mat4 prevViewProj;
@@ -81,9 +77,149 @@ layout(set = 0, binding = 7, std140) uniform FrameData
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise, bit2 1/N counter). */
+	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (see the Flag constants). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = accumulation cap N. */
 };
+
+const uint FlagVarianceClip = 1u;
+const uint FlagAnimatedNoise = 2u;
+const uint FlagAccumulationCounter = 4u;
+const uint FlagReflection = 8u;
+
+/* Roughness range over which the virtual path hands over to the surface path (reflection mode). */
+const float VirtualFadeStart = 0.15;
+const float VirtualFadeEnd = 0.45;
+
+const vec3 LumaWeights = vec3(0.2126, 0.7152, 0.0722);
+
+struct Reprojection
+{
+	vec2 surfaceUV;					/* Where the SURFACE point was last frame (velocity). */
+	vec2 virtualUV;					/* Where the reflected content was last frame (virtual point); = surfaceUV without a hit. */
+	float virtualWeight;			/* Share of the virtual path: 0 outside reflection mode, without a hit, or on a rough surface. */
+	float expectedSurfaceDistance;	/* What the history's distance channel must read at surfaceUV. */
+	float expectedVirtualDistance;	/* ... at virtualUV. */
+	float storeDistance;			/* The distance this pixel stores for the next frame's tests. */
+};
+
+Reprojection reproject (vec2 uv, float depth, vec3 worldPos, vec3 viewPos, float cameraDistance, float packedRM)
+{
+	/* Velocity DILATION: the velocity of the 3x3 neighbour closest to the camera. */
+	vec2 texelD = 1.0 / vec2(textureSize(depthTex, 0));
+	vec2 closestOffset = vec2(0.0);
+	float closestDepth = depth;
+
+	for (int y = -1; y <= 1; y++)
+	{
+		for (int x = -1; x <= 1; x++)
+		{
+			vec2 offset = vec2(x, y) * texelD;
+			float d = texture(depthTex, uv + offset).r;
+
+			if (d < closestDepth)
+			{
+				closestDepth = d;
+				closestOffset = offset;
+			}
+		}
+	}
+
+	vec2 velocity = texture(velocityTex, uv + closestOffset).rg;
+
+	Reprojection r;
+	r.surfaceUV = uv - velocity * 0.5;
+	r.virtualUV = r.surfaceUV;
+	r.virtualWeight = 0.0;
+	r.expectedSurfaceDistance = length(worldPos - prevCamPos.xyz);
+	r.expectedVirtualDistance = r.expectedSurfaceDistance;
+	r.storeDistance = cameraDistance;
+
+	if ((uint(temporalParams.w) & FlagReflection) != 0u)
+	{
+		float hitT = texture(hitDataTex, uv).g;
+
+		if (hitT > 0.0)
+		{
+			float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
+			vec3 viewDir = (worldPos - viewPos) / max(cameraDistance, 1e-4);
+			/* The mirror image of the hit point: seen through the reflector, the reflected content sits
+			 * hitT BEHIND the surface along the view ray. */
+			vec3 virtualPos = worldPos + viewDir * hitT;
+			vec4 prevClip = prevViewProj * vec4(virtualPos, 1.0);
+
+			if (prevClip.w > 1e-4)
+			{
+				r.virtualUV = (prevClip.xy / prevClip.w) * 0.5 + 0.5;
+				r.virtualWeight = 1.0 - smoothstep(VirtualFadeStart, VirtualFadeEnd, roughness);
+			}
+
+			r.expectedVirtualDistance = length(virtualPos - prevCamPos.xyz);
+			/* The surface path lands on the same reflector point, whose stored distance was ITS virtual one. */
+			r.expectedSurfaceDistance += hitT;
+			r.storeDistance = cameraDistance + hitT;
+		}
+	}
+
+	return r;
+}
+
+/* A history sample is usable only if every component is finite: a NaN or an infinity in the
+ * ping-pong (uninitialised memory on the first frames, or a poisoned pixel) must be REJECTED, not
+ * blended — `mix(NaN, current, alpha)` is NaN whatever alpha, and a NaN reaching the combine is a
+ * black pixel that the TAA cannot smooth. */
+bool historySampleFinite (vec4 value)
+{
+	return !(any(isnan(value)) || any(isinf(value)));
+}
+
+/* On-screen, distance within tolerance (rotation-invariant), reflector normal preserved.
+ * ⚠️ POSITIVE logic on purpose: `stored > 0 && |delta| <= tol` is FALSE for a NaN stored distance
+ * (every comparison with NaN is false), so garbage rejects itself. The inverted form
+ * `stored <= 0 || |delta| > tol` ACCEPTS a NaN — it shipped for a few hours on 2026-09-13 and let
+ * NaN texels of the uninitialised history through as black 4x4 blocks on the screen-space lane. */
+bool historyValid (vec2 uv, float storedDistance, float expectedDistance, vec3 worldNormal)
+{
+	if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+	{
+		return false;
+	}
+
+	bool distanceValid = storedDistance > 0.0 && abs(storedDistance - expectedDistance) <= temporalParams.y * expectedDistance;
+
+	if (!distanceValid)
+	{
+		return false;
+	}
+
+	vec3 prevNormal = texture(historyNormalTex, uv).xyz;
+
+	return dot(prevNormal, worldNormal) >= temporalParams.z;
+}
+)GLSL"
+
+	/* Temporal resolve pass: exponential moving average between the current noisy estimate and
+	 * the reprojected history (see the shared reprojection above). History is rejected on
+	 * disocclusion (distance mismatch, normal mismatch) and optionally rectified by variance
+	 * clipping against the current 3x3 neighbourhood (anti-ghosting).
+	 * Output: GI producers — RGB = resolved DEMODULATED indirect irradiance (receiver albedo applied
+	 * at the combine), A = camera distance (0 = invalid/sky). Reflection mode — RGBA = the resolved
+	 * premultiplied colour + confidence, the distance living in the moments.
+	 *
+	 * Descriptor set 0 (pass-specific bindings; the shared ones are in the prelude):
+	 *   binding 0: current raw estimate (the owner's trace output)
+	 *   binding 3: colour history texture (previous resolved frame)
+	 *   binding 6: moments history texture (accumulation age, and the distance in reflection mode)
+	 */
+	constexpr auto GIDenoiserTemporalFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outResolved;
+
+layout(set = 0, binding = 0) uniform sampler2D giTex;
+layout(set = 0, binding = 3) uniform sampler2D historyTex;
+layout(set = 0, binding = 6) uniform sampler2D momentsHistoryTex;
+)GLSL" GIDENOISER_REPROJECTION_GLSL R"GLSL(
 
 void main()
 {
@@ -96,7 +232,9 @@ void main()
 		return;
 	}
 
-	vec3 current = texture(giTex, vUV).rgb;
+	bool reflection = (uint(temporalParams.w) & FlagReflection) != 0u;
+
+	vec4 current = texture(giTex, vUV);
 
 	/* Reconstruct world-space position from NDC + depth via inverse VP. */
 	vec2 ndc = vUV * 2.0 - 1.0;
@@ -108,125 +246,111 @@ void main()
 	float cameraDistance = length(worldPos - viewPos);
 
 	/* Current world-space normal, for the history normal comparison. */
+	vec4 normalData = texture(normalTex, vUV);
 	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
-	vec3 worldNormal = normalize(invViewRot * normalize(texture(normalTex, vUV).rgb));
+	vec3 worldNormal = normalize(invViewRot * normalize(normalData.rgb));
+
+	/* What this pixel writes without a usable history: the current estimate — with the surface
+	 * distance in alpha for the GI producers; the reflection mode keeps its confidence there and
+	 * stores its distance through the moments pass. */
+	vec4 fresh = reflection ? current : vec4(current.rgb, cameraDistance);
+
+	Reprojection rp = reproject(vUV, depth, worldPos, viewPos, cameraDistance, normalData.a);
+
+	vec4 histS = texture(historyTex, rp.surfaceUV);
+	vec4 momS = texture(momentsHistoryTex, rp.surfaceUV);
+	bool validS = historySampleFinite(histS) && historySampleFinite(momS) && historyValid(rp.surfaceUV, reflection ? momS.a : histS.a, rp.expectedSurfaceDistance, worldNormal);
+	float wS = validS ? (1.0 - rp.virtualWeight) : 0.0;
+
+	vec4 histV = vec4(0.0);
+	vec4 momV = vec4(0.0);
+	bool validV = false;
+	float wV = 0.0;
+
+	if (rp.virtualWeight > 0.0)
+	{
+		histV = texture(historyTex, rp.virtualUV);
+		momV = texture(momentsHistoryTex, rp.virtualUV);
+		validV = historySampleFinite(histV) && historySampleFinite(momV) && historyValid(rp.virtualUV, momV.a, rp.expectedVirtualDistance, worldNormal);
+		wV = validV ? rp.virtualWeight : 0.0;
+	}
+
+	float wSum = wS + wV;
+
+	if (wSum <= 0.0)
+	{
+		/* Off-screen or disoccluded on every path: no history, full weight on the current estimate. */
+		outResolved = fresh;
+		return;
+	}
+
+	/* ⚠️ An INVALID sample is never multiplied in, not even by zero: garbage times zero is garbage
+	 * (NaN * 0 = NaN). Blend only what was validated. */
+	vec4 history = validS && validV ? (histS * wS + histV * wV) / wSum : (validS ? histS : histV);
+	float age = validS && validV ? (momS.b * wS + momV.b * wV) / wSum : (validS ? momS.b : momV.b);
 
 	float alpha = temporalParams.x;
 
-	/* Reproject into the previous frame through the velocity buffer (per-object motion
-	 * vectors, NDC delta = current - previous). Velocity DILATION: use the velocity of
-	 * the 3x3 neighbour closest to the camera, so thin foreground silhouettes drag their
-	 * motion over the background edge pixels instead of smearing. */
-	vec2 texelD = 1.0 / vec2(textureSize(depthTex, 0));
-	vec2 closestOffset = vec2(0.0);
-	float closestDepth = depth;
-
-	for (int y = -1; y <= 1; y++)
+	/* Per-pixel 1/N accumulation counter (SVGF): the blend weight follows the pixel's own
+	 * accumulation age (from the moments history — the moments pass maintains it with the SAME
+	 * validation) instead of a fixed EMA. Fast convergence after a disocclusion (1, 1/2, 1/3...),
+	 * tiny steady-state variance leak (1/N at the cap). */
+	if ((uint(temporalParams.w) & FlagAccumulationCounter) != 0u && alpha < 1.0)
 	{
-		for (int x = -1; x <= 1; x++)
-		{
-			vec2 offset = vec2(x, y) * texelD;
-			float d = texture(depthTex, vUV + offset).r;
-
-			if (d < closestDepth)
-			{
-				closestDepth = d;
-				closestOffset = offset;
-			}
-		}
-	}
-
-	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
-	vec2 prevUV = vUV - velocity * 0.5;
-
-	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
-	{
-		/* Off-screen: no history, full weight on the current estimate. */
-		outResolved = vec4(current, cameraDistance);
-		return;
-	}
-
-	vec4 history = texture(historyTex, prevUV);
-
-	/* Disocclusion test 1: camera-distance mismatch (rotation-invariant). */
-	float expectedDistance = length(worldPos - prevCamPos.xyz);
-	bool distanceValid = history.a > 0.0 && abs(history.a - expectedDistance) <= temporalParams.y * expectedDistance;
-
-	/* Disocclusion test 2: world-normal mismatch (silhouettes, grazing surfaces). */
-	vec3 prevNormal = texture(historyNormalTex, prevUV).xyz;
-	bool normalValid = dot(prevNormal, worldNormal) >= temporalParams.z;
-
-	if (!distanceValid || !normalValid)
-	{
-		outResolved = vec4(current, cameraDistance);
-		return;
-	}
-
-	/* Per-pixel 1/N accumulation counter (flag bit 2, SVGF): the blend weight follows the
-	 * pixel's own accumulation age (from the moments history — the moments pass maintains
-	 * it with the SAME validation) instead of a fixed EMA. Fast convergence after a
-	 * disocclusion (1, 1/2, 1/3...), tiny steady-state variance leak (1/N at the cap). */
-	if ((uint(temporalParams.w) & 4u) != 0u && alpha < 1.0)
-	{
-		float age = texture(momentsHistoryTex, prevUV).b;
 		float maxN = max(bounceParams.w, 1.0);
 		alpha = max(1.0 / (age + 1.0), 1.0 / maxN);
 	}
 
-	/* History rectification (flag bit 0): VARIANCE CLIPPING — bound the history to
-	 * mean ± gamma * sigma of the current 3x3 neighborhood (M. Salvi, "An Excursion in
-	 * Temporal Supersampling", GDC 2016 — the same technique as the engine TAA). It
-	 * replaced the min/max clamp: with ANIMATED noise the per-frame estimates are
-	 * deliberately different, and a min/max box collapses onto whatever outlier the
-	 * current frame produced, killing the convergence the animation exists for. The
-	 * statistical bound keeps disocclusion ghosting bounded while letting the EMA
-	 * actually accumulate. bounceParams.z = gamma (Temporal/VarianceGamma key). */
-	if ((uint(temporalParams.w) & 1u) != 0u)
+	/* History rectification: VARIANCE CLIPPING — bound the history to mean ± gamma * sigma of
+	 * the current 3x3 neighbourhood (M. Salvi, "An Excursion in Temporal Supersampling", GDC 2016
+	 * — the same technique as the engine TAA). It replaced the min/max clamp: with ANIMATED noise
+	 * the per-frame estimates are deliberately different, and a min/max box collapses onto whatever
+	 * outlier the current frame produced, killing the convergence the animation exists for. The
+	 * statistical bound keeps disocclusion ghosting bounded while letting the EMA actually
+	 * accumulate. In reflection mode the four channels are clipped (the confidence too).
+	 * bounceParams.z = gamma (Temporal/VarianceGamma key). */
+	if ((uint(temporalParams.w) & FlagVarianceClip) != 0u)
 	{
 		vec2 texel = 1.0 / vec2(textureSize(giTex, 0));
-		vec3 m1 = vec3(0.0);
-		vec3 m2 = vec3(0.0);
+		vec4 m1 = vec4(0.0);
+		vec4 m2 = vec4(0.0);
 
 		for (int y = -1; y <= 1; y++)
 		{
 			for (int x = -1; x <= 1; x++)
 			{
-				vec3 nb = texture(giTex, vUV + vec2(x, y) * texel).rgb;
+				vec4 nb = texture(giTex, vUV + vec2(x, y) * texel);
 				m1 += nb;
 				m2 += nb * nb;
 			}
 		}
 
-		vec3 mu = m1 / 9.0;
-		vec3 sigma = sqrt(max(m2 / 9.0 - mu * mu, vec3(0.0)));
+		vec4 mu = m1 / 9.0;
+		vec4 sigma = sqrt(max(m2 / 9.0 - mu * mu, vec4(0.0)));
+		vec4 clipped = clamp(history, mu - bounceParams.z * sigma, mu + bounceParams.z * sigma);
 
-		history.rgb = clamp(history.rgb, mu - bounceParams.z * sigma, mu + bounceParams.z * sigma);
+		history = reflection ? clipped : vec4(clipped.rgb, history.a);
 	}
 
-	outResolved = vec4(mix(history.rgb, current, alpha), cameraDistance);
+	outResolved = reflection ? mix(history, current, alpha) : vec4(mix(history.rgb, current.rgb, alpha), cameraDistance);
 }
 )GLSL";
 
 	/* Moments accumulation pass (SVGF, Schied et al. 2017, HPG): integrates the first and
-	 * second raw moments of the RAW estimate's luminance with the SAME velocity reprojection
-	 * and disocclusion validation as the colour resolve. The temporal variance
-	 * max(m2 - m1², 0) measures the per-pixel estimator noise and will drive the
-	 * luminance-weight normalisation of the à-trous filter (auto-dosage: noisy → smooth
-	 * hard, converged → preserve). The moments deliberately read the RAW input, not the
-	 * blurred one: variance of an already-smoothed signal underestimates the noise the
-	 * spatial filter must remove.
-	 * Output: R = m1, G = m2, B = accumulation age in frames (saturates at 64, reset on
-	 * disocclusion — the future 1/N counter), A = camera distance (0 = invalid/sky).
+	 * second raw moments of the RAW estimate's luminance with the SAME reprojection and
+	 * disocclusion validation as the colour resolve. The temporal variance max(m2 - m1², 0)
+	 * measures the per-pixel estimator noise and drives the luminance-weight normalisation of the
+	 * à-trous filter (auto-dosage: noisy → smooth hard, converged → preserve). The moments
+	 * deliberately read the RAW input, not the blurred one: variance of an already-smoothed
+	 * signal underestimates the noise the spatial filter must remove.
+	 * Output: R = m1, G = m2, B = accumulation age in frames (saturates at the cap, reset on
+	 * disocclusion — the 1/N counter), A = the validation distance (camera distance; the VIRTUAL
+	 * distance camera + hit in reflection mode; 0 = invalid/sky).
 	 *
-	 * Descriptor set 0:
-	 *   binding 0: raw GI estimate (the owner's trace output)
-	 *   binding 1: depth texture
-	 *   binding 2: normals texture (view space)
+	 * Descriptor set 0 (pass-specific bindings; the shared ones are in the prelude):
+	 *   binding 0: raw estimate (the owner's trace output)
 	 *   binding 3: moments history texture (previous frame)
-	 *   binding 4: world-normal history texture (previous frame)
-	 *   binding 5: velocity texture (RG16F NDC-delta motion vectors)
 	 *   binding 6: unused (layout shared with the temporal pass)
-	 *   binding 7: frame UBO (shared with the owner's trace pass)
 	 */
 	constexpr auto GIDenoiserMomentsFragmentShader = R"GLSL(
 #version 450
@@ -235,24 +359,8 @@ layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outMoments;
 
 layout(set = 0, binding = 0) uniform sampler2D rawTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-layout(set = 0, binding = 2) uniform sampler2D normalTex;
 layout(set = 0, binding = 3) uniform sampler2D momentsHistoryTex;
-layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
-layout(set = 0, binding = 5) uniform sampler2D velocityTex;
-
-layout(set = 0, binding = 7, std140) uniform FrameData
-{
-	mat4 invViewProj;
-	mat4 prevViewProj;
-	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
-	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
-	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
-	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
-	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
-	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise, bit2 1/N counter). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = accumulation cap N. */
-};
+)GLSL" GIDENOISER_REPROJECTION_GLSL R"GLSL(
 
 void main()
 {
@@ -265,7 +373,7 @@ void main()
 		return;
 	}
 
-	float luma = dot(texture(rawTex, vUV).rgb, vec3(0.2126, 0.7152, 0.0722));
+	float luma = dot(texture(rawTex, vUV).rgb, LumaWeights);
 
 	/* Reconstruct world-space position from NDC + depth via inverse VP. */
 	vec2 ndc = vUV * 2.0 - 1.0;
@@ -277,60 +385,52 @@ void main()
 	float cameraDistance = length(worldPos - viewPos);
 
 	/* Current world-space normal, for the history normal comparison. */
+	vec4 normalData = texture(normalTex, vUV);
 	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
-	vec3 worldNormal = normalize(invViewRot * normalize(texture(normalTex, vUV).rgb));
+	vec3 worldNormal = normalize(invViewRot * normalize(normalData.rgb));
 
 	float alpha = temporalParams.x;
 
-	/* Same velocity reprojection + 3x3 depth-nearest dilation as the colour resolve —
-	 * the moments and the colour MUST agree on which pixels have a valid history. */
-	vec2 texelD = 1.0 / vec2(textureSize(depthTex, 0));
-	vec2 closestOffset = vec2(0.0);
-	float closestDepth = depth;
+	/* Same reprojection + validation as the colour resolve — the moments and the colour MUST
+	 * agree on which pixels have a valid history. */
+	Reprojection rp = reproject(vUV, depth, worldPos, viewPos, cameraDistance, normalData.a);
 
-	for (int y = -1; y <= 1; y++)
+	vec4 momS = texture(momentsHistoryTex, rp.surfaceUV);
+	bool validS = historySampleFinite(momS) && historyValid(rp.surfaceUV, momS.a, rp.expectedSurfaceDistance, worldNormal);
+	float wS = validS ? (1.0 - rp.virtualWeight) : 0.0;
+
+	vec4 momV = vec4(0.0);
+	bool validV = false;
+	float wV = 0.0;
+
+	if (rp.virtualWeight > 0.0)
 	{
-		for (int x = -1; x <= 1; x++)
-		{
-			vec2 offset = vec2(x, y) * texelD;
-			float d = texture(depthTex, vUV + offset).r;
-
-			if (d < closestDepth)
-			{
-				closestDepth = d;
-				closestOffset = offset;
-			}
-		}
+		momV = texture(momentsHistoryTex, rp.virtualUV);
+		validV = historySampleFinite(momV) && historyValid(rp.virtualUV, momV.a, rp.expectedVirtualDistance, worldNormal);
+		wV = validV ? rp.virtualWeight : 0.0;
 	}
 
-	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
-	vec2 prevUV = vUV - velocity * 0.5;
+	float wSum = wS + wV;
 
-	bool offscreen = any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0)));
-
-	vec4 history = texture(momentsHistoryTex, prevUV);
-
-	/* Disocclusion tests, identical to the colour resolve. The alpha >= 1 test also
-	 * covers the first frame after (re)creation (the owner forces alpha to 1 while the
-	 * history is invalid) — the age must restart from the uninitialised ping-pong. */
-	float expectedDistance = length(worldPos - prevCamPos.xyz);
-	bool distanceValid = history.a > 0.0 && abs(history.a - expectedDistance) <= temporalParams.y * expectedDistance;
-	vec3 prevNormal = texture(historyNormalTex, prevUV).xyz;
-	bool normalValid = dot(prevNormal, worldNormal) >= temporalParams.z;
-
-	if (alpha >= 1.0 || offscreen || !distanceValid || !normalValid)
+	/* The alpha >= 1 test also covers the first frame after (re)creation (the owner forces
+	 * alpha to 1 while the history is invalid) — the age must restart from the uninitialised
+	 * ping-pong. */
+	if (alpha >= 1.0 || wSum <= 0.0)
 	{
 		/* Reset: single-sample moments (variance reads zero — consumers must use the
 		 * age-gated spatial fallback while the accumulation is young). */
-		outMoments = vec4(luma, luma * luma, 1.0, cameraDistance);
+		outMoments = vec4(luma, luma * luma, 1.0, rp.storeDistance);
 		return;
 	}
 
+	/* Blend only what was validated (see the colour resolve): garbage times zero is garbage. */
+	vec4 history = validS && validV ? (momS * wS + momV * wV) / wSum : (validS ? momS : momV);
+
 	float maxN = max(bounceParams.w, 1.0);
 
-	/* Per-pixel 1/N accumulation counter (flag bit 2, SVGF) — same weight as the colour
-	 * resolve so both integrate identically. */
-	if ((uint(temporalParams.w) & 4u) != 0u)
+	/* Per-pixel 1/N accumulation counter — same weight as the colour resolve so both integrate
+	 * identically. */
+	if ((uint(temporalParams.w) & FlagAccumulationCounter) != 0u)
 	{
 		alpha = max(1.0 / (history.b + 1.0), 1.0 / maxN);
 	}
@@ -339,7 +439,7 @@ void main()
 	float m2 = mix(history.g, luma * luma, alpha);
 	float age = min(history.b + 1.0, maxN);
 
-	outMoments = vec4(m1, m2, age, cameraDistance);
+	outMoments = vec4(m1, m2, age, rp.storeDistance);
 }
 )GLSL";
 
@@ -639,11 +739,11 @@ namespace EmEn::Graphics
 
 		/* ---- Descriptor set layouts ---- */
 
-		/* Temporal resolve input: GI + depth + normals + history + normal history + velocity
-		 * + moments history (1/N counter age), plus the frame UBO. The moments pass reuses
-		 * the SAME shape (raw GI + depth + normals + moments history + normal history +
-		 * velocity + unused + UBO). */
-		auto temporalInputLayout = this->getInputLayout(7, 1);
+		/* Temporal resolve input: estimate + depth + normals + history + normal history + velocity
+		 * + moments history (1/N counter age) + hit data (reflection mode), plus the frame UBO at
+		 * binding 8. The moments pass reuses the SAME shape (raw estimate + depth + normals + moments
+		 * history + normal history + velocity + unused + hit data + UBO). */
+		auto temporalInputLayout = this->getInputLayout(8, 1);
 
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
@@ -746,12 +846,12 @@ namespace EmEn::Graphics
 
 		for ( size_t f = 0; f < m_temporalPerFrame.size(); ++f )
 		{
-			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(7, *m_frameUBOs[f]) )
+			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(8, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
 
-			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(7, *m_frameUBOs[f]) )
+			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(8, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
@@ -903,7 +1003,8 @@ namespace EmEn::Graphics
 				static_cast< float >(
 					(m_parameters.temporalNeighborhoodClamp ? 1U : 0U) |
 					(this->temporalActive() && m_parameters.temporalAnimatedNoise ? 2U : 0U) |
-					(m_parameters.accumulationCounter ? 4U : 0U)
+					(m_parameters.accumulationCounter ? 4U : 0U) |
+					(m_parameters.reflectionMode ? 8U : 0U)
 				)
 			},
 			.bounceParams = {
@@ -961,7 +1062,7 @@ namespace EmEn::Graphics
 	}
 
 	const TextureInterface *
-	GIDenoiser::recordResolve (const CommandBuffer & commandBuffer, const TextureInterface & rawInput, const FrameContext & context) noexcept
+	GIDenoiser::recordResolve (const CommandBuffer & commandBuffer, const TextureInterface & rawInput, const FrameContext & context, const TextureInterface * hitData) noexcept
 	{
 		if ( !this->temporalActive() )
 		{
@@ -989,6 +1090,13 @@ namespace EmEn::Graphics
 		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(4, m_normalHistoryTargets[readIdx]));
 		/* Binding 6 is unused by the moments shader (shared layout) — keep it valid. */
 		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(6, m_momentsTargets[readIdx]));
+
+		/* Hit data (binding 7): the reflection mode's hit distances. The diffuse producers hand
+		 * nothing, and the binding must still hold a valid image — their raw input stands in (the
+		 * shader never reads it outside reflection mode). */
+		const TextureInterface & hitDataTexture = hitData != nullptr ? *hitData : rawInput;
+		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(7, hitDataTexture));
+		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(7, hitDataTexture));
 
 		if ( context.depth != nullptr )
 		{

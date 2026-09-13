@@ -45,8 +45,9 @@
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief The shared temporal denoiser of the diffuse GI producers (SVGF work site).
-	 * @note One instance is OWNED by each GI effect (RTGI, later SSGI): the code is shared,
+	 * @brief The shared temporal denoiser of the diffuse GI producers (SVGF work site) — and, in
+	 * REFLECTION mode, of the ray-traced reflections.
+	 * @note One instance is OWNED by each GI effect (RTGI, RTR, later SSGI): the code is shared,
 	 * the histories are not — two producers reprojecting into one history would corrupt each
 	 * other. The component owns the temporal resolve (velocity reprojection + dilation,
 	 * camera-distance/world-normal disocclusion, variance clipping, EMA), the history
@@ -137,6 +138,14 @@ namespace EmEn::Graphics
 				float temporalVarianceGamma{1.0F};
 				/* SVGF 1/N accumulation cap (steady-state blend weight floor = 1/N). */
 				uint32_t maxAccumulation{64};
+				/* REFLECTION mode (RTR, 2026-09-13): the input is a 4-channel premultiplied colour +
+				 * confidence accumulated as a whole; the history is reprojected through the VIRTUAL
+				 * position of the reflected point (P + V·hitT, hitT from the hit-data texture handed to
+				 * recordResolve()) blended with the surface reprojection as the roughness grows; the
+				 * validation distance is the virtual one and lives in the MOMENTS alpha channel (the
+				 * colour history's alpha carries the confidence). Off for the diffuse GI producers,
+				 * whose signal is an RGB irradiance with the camera distance in alpha. */
+				bool reflectionMode{false};
 				/* Rectify the history against the raw 3x3 statistics. Default OFF: on the
 				 * RAW input it pulls the history toward the noisy local distribution
 				 * (measured ~5% GI energy loss for no stability gain). */
@@ -364,10 +373,11 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param rawInput The owner's RAW estimate (trace output, before any filtering).
 			 * @param context The per-frame chain context.
+			 * @param hitData Reflection mode only: the per-pixel hit data (G = hit distance, 0 = no reflection). nullptr for the diffuse producers.
 			 * @return const Vulkan::TextureInterface * The texture the owner's combine must consume.
 			 */
 			[[nodiscard]]
-			const Vulkan::TextureInterface * recordResolve (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & rawInput, const FrameContext & context) noexcept;
+			const Vulkan::TextureInterface * recordResolve (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & rawInput, const FrameContext & context, const Vulkan::TextureInterface * hitData = nullptr) noexcept;
 
 		private:
 

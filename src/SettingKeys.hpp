@@ -522,6 +522,35 @@ namespace EmEn
 			 * how coarse a rough surface is allowed to get (each LOD halves the resolution). */
 			constexpr auto GraphicsPPReflectionsRTGlossyConeMaxLodKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/GlossyCone/MaxLod"};
 			constexpr auto DefaultGraphicsPPReflectionsRTGlossyConeMaxLod{8.0F};
+			/* Ray Tracing > Reflection > Temporal accumulation (2026-09-13). The trace is deterministic
+			 * — one mirror ray per texel, no frame term — but HALF-RES and fed by a G-buffer the TAA
+			 * jitters by half a pixel every frame: a reflected silhouette aliases at half resolution and
+			 * the TAA cannot reproject it (reflected content does not follow the reflector's velocity),
+			 * so its clamp let the flicker through — the owner's "fourmillement", measured at 0.44 mean
+			 * and 0.64 % of pixels above 16/255 on a static reflected object against 0.052 with the
+			 * jitter off (projet-alpha light-and-shadow-debug, mirror floor). The GIDenoiser accumulates
+			 * the RAW trace in REFLECTION mode: history reprojected through the VIRTUAL position of the
+			 * reflected point (P + V·hitT), blended toward the surface reprojection as the roughness
+			 * grows, validated on the virtual distance, variance-clipped. The blur and the glossy pyramid
+			 * then integrate a stable signal. The knobs mirror IndirectDiffuse/Temporal/*; the lane level
+			 * because the screen-space lane has no accumulation (yet). */
+			constexpr auto GraphicsPPReflectionsRTTemporalEnabledKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/Enabled"};
+			constexpr auto DefaultGraphicsPPReflectionsRTTemporalEnabled{true};
+			/* Fixed blend weight of the current frame, ruling only when the 1/N counter is capped. */
+			constexpr auto GraphicsPPReflectionsRTTemporalAlphaKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/Alpha"};
+			constexpr auto DefaultGraphicsPPReflectionsRTTemporalAlpha{0.1F};
+			/* Relative tolerance of the disocclusion test on the VIRTUAL distance (camera + hit). */
+			constexpr auto GraphicsPPReflectionsRTTemporalDepthToleranceKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/DepthTolerance"};
+			constexpr auto DefaultGraphicsPPReflectionsRTTemporalDepthTolerance{0.05F};
+			/* Minimum world-normal dot between the reflector now and at the history pixel. */
+			constexpr auto GraphicsPPReflectionsRTTemporalNormalThresholdKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/NormalThreshold"};
+			constexpr auto DefaultGraphicsPPReflectionsRTTemporalNormalThreshold{0.8F};
+			/* Variance-clipping width in standard deviations of the current 3x3 (anti-ghosting). */
+			constexpr auto GraphicsPPReflectionsRTTemporalVarianceGammaKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/VarianceGamma"};
+			constexpr auto DefaultGraphicsPPReflectionsRTTemporalVarianceGamma{1.0F};
+			/* 1/N accumulation cap: the steady-state weight of the current frame is 1/N. */
+			constexpr auto GraphicsPPReflectionsRTTemporalMaxAccumulationKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/MaxAccumulation"};
+			constexpr auto DefaultGraphicsPPReflectionsRTTemporalMaxAccumulation{32U};
 
 			/* Ray Tracing > Ambient Occlusion */
 			/* Samples per pixel for ray-traced ambient occlusion. */

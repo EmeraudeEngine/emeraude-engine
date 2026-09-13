@@ -119,9 +119,11 @@ layout(set = 1, binding = 0) uniform sampler2D depthTex;
 layout(set = 1, binding = 1) uniform sampler2D normalTex;
 layout(set = 1, binding = 2) uniform samplerCube envCubemap;
 layout(set = 1, binding = 3) uniform sampler2D albedoTex;
-/* Glossy cone width map, written per trace pixel (see the hit branch): the combine sizes its
- * pyramid lookup from it instead of a screen-uniform guess. */
-layout(set = 1, binding = 4, r16f) uniform writeonly image2D coneImage;
+/* Hit data map, written per trace pixel: R = glossy cone width (the combine sizes its pyramid
+ * lookup from it instead of a screen-uniform guess), G = hit distance hitT (the temporal
+ * accumulation reprojects the reflected content through the virtual point P + V·hitT; 0 = no
+ * reflection here, maxDistance on a sky miss so the environment reprojects as a far point). */
+layout(set = 1, binding = 4, rg16f) uniform writeonly image2D coneImage;
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cube array
  * (reserved slots: 1 = scene irradiance E/pi, 2 = GGX-prefiltered environment). */
@@ -298,6 +300,44 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 	return uv0 * (1.0 - bary.x - bary.y) + uv1 * bary.x + uv2 * bary.y;
 }
 
+/* RAY-CONE TEXTURE LOD at the hit -- Akenine-Moller, Nilsson, Andersson, Barre-Brisebois, Toth and
+ * Karras, "Texture Level of Detail Strategies for Real-Time Ray Tracing", Ray Tracing Gems,
+ * chapter 20 (Apress, 2019): the ray-cone method, re-derived here, no code taken.
+ * `texture()` in this pass had UNDEFINED derivatives: hitUV is not continuous across a quad (two
+ * neighbouring trace pixels can hit unrelated triangles) and the lookups sit in divergent control
+ * flow, so the hardware picked an arbitrary mip -- in practice the finest. The reflection of a
+ * textured wall was a field of point samples on a texture minified several times over, which the
+ * TAA jitter turned into a shimmer: measured 2026-09-13 on light-and-shadow-debug, the static brick
+ * cube's reflection moved 80x more than the mirror floor around it, its energy on the mortar lines.
+ * The triangle constant below is half the log2 of the hit triangle's UV-area over world-area ratio,
+ * texture-independent; rtTextureLod() adds half the log2 of one texture's texel count. */
+float rtTriangleLodBase (MeshAccessor m, mat4x3 objectToWorld)
+{
+	vec3 p0 = objectToWorld * vec4(readVertexVec3(m.vb, m.idx0, m.strideFloats, 0u), 1.0);
+	vec3 p1 = objectToWorld * vec4(readVertexVec3(m.vb, m.idx1, m.strideFloats, 0u), 1.0);
+	vec3 p2 = objectToWorld * vec4(readVertexVec3(m.vb, m.idx2, m.strideFloats, 0u), 1.0);
+	vec2 t0 = readVertexVec2(m.vb, m.idx0, m.strideFloats, m.uvOffsetFloats);
+	vec2 t1 = readVertexVec2(m.vb, m.idx1, m.strideFloats, m.uvOffsetFloats);
+	vec2 t2 = readVertexVec2(m.vb, m.idx2, m.strideFloats, m.uvOffsetFloats);
+
+	/* Twice the areas on both sides: only the ratio matters. */
+	float worldArea = length(cross(p1 - p0, p2 - p0));
+	vec2 e1 = t1 - t0;
+	vec2 e2 = t2 - t0;
+	float uvArea = abs(e1.x * e2.y - e1.y * e2.x);
+
+	return 0.5 * log2(max(uvArea, 1e-12) / max(worldArea, 1e-12));
+}
+
+/* The LOD of ONE texture at the hit: the cone footprint on the surface (hitLod carries the
+ * footprint in metres, the incidence and the triangle constant) expressed in that texture's texels. */
+float rtTextureLod (int texIndex, float hitLod)
+{
+	ivec2 size = textureSize(textures2D[nonuniformEXT(texIndex)], 0);
+
+	return hitLod + 0.5 * log2(float(size.x * size.y));
+}
+
 )GLSL" EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
 /* Shadow ray: returns 1.0 when the path from the surface toward the light is unoccluded,
  * 0.0 otherwise. TerminateOnFirstHit: the first CONFIRMED candidate ends the traversal.
@@ -429,7 +469,8 @@ void main()
 {
 	/* Use texelFetch (no bilinear filtering) to avoid interpolating
 	 * depth/normals across geometric edges at half-resolution. */
-	ivec2 fullResCoord = ivec2(vUV * vec2(textureSize(depthTex, 0)));
+	vec2 fullResSize = vec2(textureSize(depthTex, 0));
+	ivec2 fullResCoord = ivec2(vUV * fullResSize);
 	/* Cone width defaults to 0 (sharp): every early return below and the miss branch keep it. */
 	ivec2 coneCoord = ivec2(gl_FragCoord.xy);
 	imageStore(coneImage, coneCoord, vec4(0.0));
@@ -468,8 +509,12 @@ void main()
 		return;
 	}
 
-	/* Reconstruct world-space position from NDC + depth via inverse VP. */
-	vec2 ndc = vUV * 2.0 - 1.0;
+	/* Reconstruct world-space position from NDC + depth via inverse VP.
+	 * ⚠️ The NDC of the TEXEL whose depth was fetched, not of this half-res pixel's centre: the two
+	 * differ by half a full-res pixel, and unprojecting one with the depth of the other lands off the
+	 * surface by that offset times the depth slope -- on a floor seen at a grazing angle, a ray origin
+	 * biased along the view ray on every pixel (fixed 2026-09-13). */
+	vec2 ndc = ((vec2(fullResCoord) + 0.5) / fullResSize) * 2.0 - 1.0;
 	vec4 clipPos = vec4(ndc, depth, 1.0);
 	vec4 wp = invViewProj * clipPos;
 	vec3 worldPos = wp.xyz / wp.w;
@@ -502,6 +547,16 @@ void main()
 
 	/* Offset ray origin along normal to prevent self-intersection. */
 	vec3 rayOrigin = worldPos + worldNormal * 0.01;
+
+	/* GLOSSY LOBE and camera distance, read twice in the hit branch: by the ray-cone texture LOD
+	 * and by the cone-width map the combine sizes its pyramid lookup from. GGX with alpha =
+	 * roughness²: the half-vector distribution falls to half its peak at tan(thetaH) = 0.6436 alpha,
+	 * and the REFLECTED direction deviates by 2 thetaH, so the lobe is tan(2 thetaH) wide
+	 * (half-width) around the mirror direction. */
+	float coneAlpha = roughness * roughness;
+	float coneTanHalf = 0.6436 * coneAlpha;
+	float coneTan = 2.0 * coneTanHalf / max(1.0 - coneTanHalf * coneTanHalf, 1e-3);
+	float coneDistCam = length(worldPos - cameraPos);
 
 	/* Trace reflection ray.
 	 * Ray flag is NoneEXT (not OpaqueEXT) so candidate intersections on TLAS instances
@@ -540,23 +595,11 @@ void main()
 		vec3 albedo = materialSSBO.materials[matBase].rgb;
 		uint flags = floatBitsToUint(materialSSBO.materials[matBase + 4u].w);
 
-		/* Sample bindless albedo texture if available. */
-		if ((flags & HasAlbedoTexture) != 0u)
-		{
-			int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].x);
-
-			if (texIndex >= 0)
-			{
-				vec2 hitUV = getHitUV(mesh, barycentrics);
-				albedo = texture(textures2D[nonuniformEXT(texIndex)], hitUV).rgb;
-			}
-		}
-
 		/* Compute world-space hit position and geometric normal. */
 		vec3 hitPos = rayOrigin + reflDir * hitT;
 
 		/* Transform object-space normal to world space.
-		 * VBO normals are already in engine convention (Y+ = down, "Vulkan world axis").
+		 * VBO normals are already in engine convention (Y-UP, right-handed).
 		 * Apply objectToWorld for rotated/scaled instances. */
 		vec3 objectNormal = getHitNormal(mesh, barycentrics);
 		mat4x3 objectToWorld = rayQueryGetIntersectionObjectToWorldEXT(rayQuery, true);
@@ -573,9 +616,32 @@ void main()
 			return;
 		}
 
+		vec2 hitUV = getHitUV(mesh, barycentrics);
+
+		/* RAY-CONE TEXTURE LOD (rtTriangleLodBase). The cone leaves the camera one trace texel wide
+		 * (1 / coneScale radians), reaches the reflector at coneDistCam, keeps its spread across a
+		 * planar mirror bounce and widens by the GGX lobe (2 x the lobe's half-width tangent, the same
+		 * quantity the cone-width map is built from) over the reflected leg hitT. Divided by the
+		 * incidence cosine on the hit triangle -- the GEOMETRIC normal, before any normal mapping,
+		 * which is what the footprint stretches on. The reflector is taken planar, as for the cone
+		 * map: a curved one would add its own spread. Every textured read of this hit goes through
+		 * textureLod() with this footprint -- see the note on rtTriangleLodBase(). */
+		float coneWidthAtHit = (coneDistCam + hitT) / coneScale + 2.0 * coneTan * hitT;
+		float hitLod = rtTriangleLodBase(mesh, objectToWorld) + log2(max(coneWidthAtHit, 1e-6)) - log2(max(abs(dot(hitNormal, reflDir)), 0.05));
+
+		/* Sample bindless albedo texture if available. */
+		if ((flags & HasAlbedoTexture) != 0u)
+		{
+			int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].x);
+
+			if (texIndex >= 0)
+			{
+				albedo = textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod)).rgb;
+			}
+		}
+
 		/* ---- Enriched hit shading (uber-shader): the FULL material model, data-driven
 		 * from the RT material SSBO — no program duplication, one parametric BRDF. ---- */
-		vec2 hitUV = getHitUV(mesh, barycentrics);
 
 		/* Normal mapping at the hit: perturb the geometric normal through the material's
 		 * normal texture when the mesh carries tangent space. The engine vertex layout is
@@ -590,7 +656,7 @@ void main()
 
 			if (texIndex >= 0)
 			{
-				vec3 rawNormal = texture(textures2D[nonuniformEXT(texIndex)], hitUV).rgb * 2.0 - 1.0;
+				vec3 rawNormal = textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod)).rgb * 2.0 - 1.0;
 				float normalScale = materialSSBO.materials[matBase + 6u].w;
 				vec3 tangentSpaceNormal = normalize(vec3(rawNormal.xy * normalScale, rawNormal.z));
 
@@ -614,7 +680,7 @@ void main()
 
 			if (texIndex >= 0)
 			{
-				float roughnessTexel = texture(textures2D[nonuniformEXT(texIndex)], hitUV)[(flags >> RoughnessChannelShift) & ChannelMask];
+				float roughnessTexel = textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod))[(flags >> RoughnessChannelShift) & ChannelMask];
 
 				/* Smoothness/gloss source: invert before the factor applies (raster parity). */
 				hitRoughness *= ((flags & RoughnessTexInverted) != 0u) ? (1.0 - roughnessTexel) : roughnessTexel;
@@ -627,7 +693,7 @@ void main()
 
 			if (texIndex >= 0)
 			{
-				hitMetalness *= texture(textures2D[nonuniformEXT(texIndex)], hitUV)[(flags >> MetalnessChannelShift) & ChannelMask];
+				hitMetalness *= textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod))[(flags >> MetalnessChannelShift) & ChannelMask];
 			}
 		}
 
@@ -678,7 +744,7 @@ void main()
 
 				if (texIndex >= 0)
 				{
-					emission *= texture(textures2D[nonuniformEXT(texIndex)], hitUV).rgb;
+					emission *= textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod)).rgb;
 				}
 			}
 
@@ -690,10 +756,8 @@ void main()
 
 		float confidence = distFade * fresnel * roughnessFade;
 
-		/* GLOSSY CONE v2 — the width of the pyramid lookup, per pixel, in TRACE texels.
-		 * GGX with alpha = roughness²: the half-vector distribution falls to half its peak at
-		 * tan(thetaH) = 0.6436 alpha, and the REFLECTED direction deviates by 2 thetaH, so the lobe
-		 * is tan(2 thetaH) wide (half-width) around the mirror direction. That lobe paints a
+		/* GLOSSY CONE v2 — the width of the pyramid lookup, per pixel, in TRACE texels (the lobe
+		 * tangent and the camera distance are computed before the trace, see above). The lobe paints a
 		 * footprint hitT * tan(theta) on what it hits; seen through the reflector from a camera at
 		 * distance dCam, the footprint shrinks by dCam / (dCam + hitT) on the reflector and projects
 		 * to coneScale / dCam texels per metre — hence tan(theta) * hitT * coneScale / (dCam + hitT).
@@ -702,12 +766,8 @@ void main()
 		 * measured 2-3x too sharp for hits 6-16 m away while blurring contacts that must stay sharp
 		 * (projet-alpha post-processor-effect-debug bench, 2026-08-30). Flat reflector assumed: a
 		 * curved one compresses the image and would want the normal's screen-space derivative. */
-		float coneAlpha = roughness * roughness;
-		float coneTanHalf = 0.6436 * coneAlpha;
-		float coneTan = 2.0 * coneTanHalf / max(1.0 - coneTanHalf * coneTanHalf, 1e-3);
-		float coneDistCam = length(worldPos - cameraPos);
 		float coneWidth = 2.0 * coneTan * hitT * coneScale / max(coneDistCam + hitT, 1e-3);
-		imageStore(coneImage, coneCoord, vec4(coneWidth));
+		imageStore(coneImage, coneCoord, vec4(coneWidth, hitT, 0.0, 0.0));
 
 		outReflection = vec4(litColor * fresnelTint * confidence, confidence);
 	}
@@ -729,6 +789,10 @@ void main()
 		 * against 174 for the real sky, blue-minus-green -2.8 against +9.6). */
 		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], reflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
 		float confidence = fresnel * roughnessFade;
+
+		/* A sky miss reflects content at infinity: the temporal reprojection treats it as a far
+		 * point (rotation-consistent, no parallax), which is what maxDistance gives it. */
+		imageStore(coneImage, coneCoord, vec4(0.0, maxDistance, 0.0, 0.0));
 
 		outReflection = vec4(envColor * fresnelTint * confidence, confidence);
 	}
@@ -821,6 +885,14 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_coneBlendFull = std::max(m_coneBlendStart, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTGlossyConeBlendFullKey, DefaultGraphicsPPReflectionsRTGlossyConeBlendFull));
 		m_coneMaxLod = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTGlossyConeMaxLodKey, DefaultGraphicsPPReflectionsRTGlossyConeMaxLod));
 
+		/* Temporal accumulation knobs (SettingKeys.hpp § Reflections/RayTracing/Temporal). */
+		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPReflectionsRTTemporalEnabledKey, DefaultGraphicsPPReflectionsRTTemporalEnabled);
+		m_parameters.temporalAlpha = std::clamp(settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalAlphaKey, DefaultGraphicsPPReflectionsRTTemporalAlpha), 0.01F, 1.0F);
+		m_parameters.temporalDepthTolerance = std::max(0.001F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalDepthToleranceKey, DefaultGraphicsPPReflectionsRTTemporalDepthTolerance));
+		m_parameters.temporalNormalThreshold = std::clamp(settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalNormalThresholdKey, DefaultGraphicsPPReflectionsRTTemporalNormalThreshold), -1.0F, 1.0F);
+		m_parameters.temporalVarianceGamma = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalVarianceGammaKey, DefaultGraphicsPPReflectionsRTTemporalVarianceGamma));
+		m_parameters.temporalMaxAccumulation = std::max(1U, settings.getOrSetDefault< uint32_t >(GraphicsPPReflectionsRTTemporalMaxAccumulationKey, DefaultGraphicsPPReflectionsRTTemporalMaxAccumulation));
+
 		/* Trace target (half-res by default, RGBA16F: reflected color RGB + confidence A). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Trace") )
 		{
@@ -829,14 +901,41 @@ namespace EmEn::Graphics::Effects::Lighting
 			return false;
 		}
 
+		/* The temporal accumulation of the RAW trace: the shared GI denoiser in REFLECTION mode
+		 * (see GIDenoiser::Parameters::reflectionMode), at the trace resolution, without its à-trous
+		 * — the RTR keeps its own roughness-scaled bilateral and the glossy pyramid downstream, both
+		 * now fed by an integrated signal. Variance clipping ON: the trace is deterministic, so the
+		 * clip costs no convergence and bounds the ghosting of a reflected object that moves. */
+		m_denoiser.setTemporalEnabled(m_parameters.temporalEnabled);
+		m_denoiser.setParameters(GIDenoiser::Parameters{
+			.atrousIterations = 0,
+			.temporalAlpha = m_parameters.temporalAlpha,
+			.temporalDepthTolerance = m_parameters.temporalDepthTolerance,
+			.temporalNormalThreshold = m_parameters.temporalNormalThreshold,
+			.temporalVarianceGamma = m_parameters.temporalVarianceGamma,
+			.maxAccumulation = m_parameters.temporalMaxAccumulation,
+			.reflectionMode = true,
+			.temporalNeighborhoodClamp = true,
+			.temporalAnimatedNoise = false,
+			.accumulationCounter = true
+		});
+
+		if ( !m_denoiser.create(halfW, halfH) )
+		{
+			TraceError{ClassId} << "Failed to create the RTR temporal denoiser component !";
+
+			return false;
+		}
+
 		/* Blur targets (half-res, RGBA16F). */
-		/* ---- Glossy cone width map: one R16F texel per trace pixel, written by the trace fragment
-		 * shader (storage image), sampled by the combine. Same lifecycle as the pyramid. ---- */
+		/* ---- Hit data map: one RG16F texel per trace pixel (R = glossy cone width, G = hit
+		 * distance), written by the trace fragment shader (storage image), sampled by the combine
+		 * (R) and by the temporal accumulation (G). Same lifecycle as the pyramid. ---- */
 		{
 			m_coneImage = std::make_shared< Image >(
 				renderer.device(),
 				VK_IMAGE_TYPE_2D,
-				VK_FORMAT_R16_SFLOAT,
+				VK_FORMAT_R16G16_SFLOAT,
 				VkExtent3D{
 					.width = halfW,
 					.height = halfH,
@@ -1252,51 +1351,41 @@ namespace EmEn::Graphics::Effects::Lighting
 				return false;
 			}
 
+			/* One set per chain mip (1..N-1) plus the two base (mip 0) sets, one per source parity. */
+			const auto pyramidSetCount = (m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U) + static_cast< uint32_t >(m_pyramidBaseSets.size());
+
 			const std::vector< VkDescriptorPoolSize > poolSizes{
-				{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_pyramidMipCount},
-				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = m_pyramidMipCount}
+				{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = pyramidSetCount},
+				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = pyramidSetCount}
 			};
 
-			m_pyramidDescriptorPool = std::make_shared< DescriptorPool >(localDevice, poolSizes, m_pyramidMipCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+			m_pyramidDescriptorPool = std::make_shared< DescriptorPool >(localDevice, poolSizes, pyramidSetCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 			if ( !m_pyramidDescriptorPool->createOnHardware() )
 			{
 				return false;
 			}
 
-			const auto writeComputeSet = [&localDevice] (const DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const ImageView & destView) {
-				VkDescriptorImageInfo sourceInfo{};
-				sourceInfo.sampler = sourceSampler;
-				sourceInfo.imageView = sourceView;
-				sourceInfo.imageLayout = sourceLayout;
+			/* Base (mip 0) sets: their source is the TEMPORALLY RESOLVED reflection, whose ping-pong
+			 * parity flips every frame — written on first use by pyramidBaseSlot(), never in flight. */
+			for ( size_t slot = 0; slot < m_pyramidBaseSets.size(); ++slot )
+			{
+				auto descriptorSet = std::make_unique< DescriptorSet >(m_pyramidDescriptorPool, m_pyramidDSLayout);
+				descriptorSet->setIdentifier(ClassId, "Pyramid_Base_DescSet" + std::to_string(slot), "DescriptorSet");
 
-				VkDescriptorImageInfo destInfo{};
-				destInfo.sampler = VK_NULL_HANDLE;
-				destInfo.imageView = destView.handle();
-				destInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+				if ( !descriptorSet->create() )
+				{
+					return false;
+				}
 
-				std::array< VkWriteDescriptorSet, 2 > writes{};
+				m_pyramidBaseSets[slot] = std::move(descriptorSet);
+				m_pyramidBaseSources[slot] = nullptr;
+			}
 
-				writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				writes[0].dstSet = descriptorSet.handle();
-				writes[0].dstBinding = 0;
-				writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				writes[0].descriptorCount = 1;
-				writes[0].pImageInfo = &sourceInfo;
+			/* Chain sets: previous mip (sampled in GENERAL during the chain) -> this mip. */
+			m_pyramidSets.reserve(m_pyramidMipCount > 0U ? m_pyramidMipCount - 1U : 0U);
 
-				writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				writes[1].dstSet = descriptorSet.handle();
-				writes[1].dstBinding = 1;
-				writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				writes[1].descriptorCount = 1;
-				writes[1].pImageInfo = &destInfo;
-
-				vkUpdateDescriptorSets(localDevice->handle(), static_cast< uint32_t >(writes.size()), writes.data(), 0, nullptr);
-			};
-
-			m_pyramidSets.reserve(m_pyramidMipCount);
-
-			for ( uint32_t mip = 0; mip < m_pyramidMipCount; mip++ )
+			for ( uint32_t mip = 1; mip < m_pyramidMipCount; mip++ )
 			{
 				auto descriptorSet = std::make_unique< DescriptorSet >(m_pyramidDescriptorPool, m_pyramidDSLayout);
 				descriptorSet->setIdentifier(ClassId, "Pyramid_DescSet" + std::to_string(mip), "DescriptorSet");
@@ -1306,16 +1395,7 @@ namespace EmEn::Graphics::Effects::Lighting
 					return false;
 				}
 
-				if ( mip == 0 )
-				{
-					/* Trace target (fixed IRT, SHADER_READ_ONLY after its render pass) -> mip 0. */
-					writeComputeSet(*descriptorSet, m_traceTarget.imageView()->handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_pyramidSampler->handle(), *m_pyramidMipViews[0]);
-				}
-				else
-				{
-					/* Previous mip (sampled in GENERAL during the chain) -> this mip. */
-					writeComputeSet(*descriptorSet, m_pyramidMipViews[mip - 1]->handle(), VK_IMAGE_LAYOUT_GENERAL, m_pyramidSampler->handle(), *m_pyramidMipViews[mip]);
-				}
+				this->writePyramidSet(*descriptorSet, m_pyramidMipViews[mip - 1]->handle(), VK_IMAGE_LAYOUT_GENERAL, m_pyramidSampler->handle(), *m_pyramidMipViews[mip]);
 
 				m_pyramidSets.emplace_back(std::move(descriptorSet));
 			}
@@ -1325,8 +1405,86 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	void
+	RTR::writePyramidSet (const DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const ImageView & destView) const noexcept
+	{
+		VkDescriptorImageInfo sourceInfo{};
+		sourceInfo.sampler = sourceSampler;
+		sourceInfo.imageView = sourceView;
+		sourceInfo.imageLayout = sourceLayout;
+
+		VkDescriptorImageInfo destInfo{};
+		destInfo.sampler = VK_NULL_HANDLE;
+		destInfo.imageView = destView.handle();
+		destInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		std::array< VkWriteDescriptorSet, 2 > writes{};
+
+		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[0].dstSet = descriptorSet.handle();
+		writes[0].dstBinding = 0;
+		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writes[0].descriptorCount = 1;
+		writes[0].pImageInfo = &sourceInfo;
+
+		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[1].dstSet = descriptorSet.handle();
+		writes[1].dstBinding = 1;
+		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		writes[1].descriptorCount = 1;
+		writes[1].pImageInfo = &destInfo;
+
+		vkUpdateDescriptorSets(this->renderer().device()->handle(), static_cast< uint32_t >(writes.size()), writes.data(), 0, nullptr);
+	}
+
+	size_t
+	RTR::pyramidBaseSlot (const TextureInterface & source) noexcept
+	{
+		for ( size_t slot = 0; slot < m_pyramidBaseSources.size(); ++slot )
+		{
+			if ( m_pyramidBaseSources[slot] == &source )
+			{
+				return slot;
+			}
+		}
+
+		for ( size_t slot = 0; slot < m_pyramidBaseSources.size(); ++slot )
+		{
+			if ( m_pyramidBaseSources[slot] == nullptr )
+			{
+				/* Sources are IRTs sampled in SHADER_READ_ONLY after their render pass. */
+				this->writePyramidSet(*m_pyramidBaseSets[slot], source.imageView()->handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_pyramidSampler->handle(), *m_pyramidMipViews[0]);
+				m_pyramidBaseSources[slot] = &source;
+
+				return slot;
+			}
+		}
+
+		/* A third distinct source cannot happen (two history parities, or the trace target alone).
+		 * Should it ever, rewrite the slot of the frame parity and say so — a set rewritten in
+		 * flight is a hazard worth a trace, not a silent one. */
+		const size_t slot = this->renderer().currentFrameIndex() & 1U;
+
+		TraceWarning{ClassId} << "A third reflection pyramid source appeared; rewriting base set #" << slot << " in flight !";
+
+		this->writePyramidSet(*m_pyramidBaseSets[slot], source.imageView()->handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_pyramidSampler->handle(), *m_pyramidMipViews[0]);
+		m_pyramidBaseSources[slot] = &source;
+
+		return slot;
+	}
+
+	void
 	RTR::destroy () noexcept
 	{
+		m_denoiser.destroy();
+		m_temporalOutput = nullptr;
+
+		for ( auto & baseSet : m_pyramidBaseSets )
+		{
+			baseSet.reset();
+		}
+
+		m_pyramidBaseSources.fill(nullptr);
+
 		m_pyramidSets.clear();
 		m_pyramidDescriptorPool.reset();
 		m_pyramidDownsamplePipeline.reset();
@@ -1530,9 +1688,26 @@ namespace EmEn::Graphics::Effects::Lighting
 			}
 		}
 
+		/* ---- Pass 1a: temporal accumulation of the RAW trace (2026-09-13) ----
+		 * The shared GI denoiser in REFLECTION mode: history reprojected through the VIRTUAL position
+		 * of the reflected point (P + V·hitT, hitT from the hit-data map the trace just wrote), blended
+		 * toward the surface reprojection as the roughness grows, validated on the virtual distance,
+		 * variance-clipped against the current 3x3. The bilateral blur and the glossy pyramid consume
+		 * its output, so the whole glossy path integrates a STABLE signal. Why it exists: the trace is
+		 * deterministic but half-res and fed by a G-buffer the TAA jitters — a reflected silhouette
+		 * aliased at half resolution, and TAA cannot reproject a reflection (SettingKeys.hpp § Temporal).
+		 * Returns the raw trace when the chain is off. */
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, context, GIDenoiser::FrameInputs{}));
+		m_temporalOutput = m_denoiser.recordResolve(commandBuffer, m_traceTarget, context, &m_coneTexture);
+
 		/* ---- Pass 1b: pre-convolved reflection pyramid build (glossy cone source) ---- */
 		if ( m_pyramidImage != nullptr )
 		{
+			/* The pyramid's base is the TEMPORALLY RESOLVED reflection (the raw trace when the chain is
+			 * off): its parity flips every frame, so the mip-0 set is picked per source. */
+			const auto * pyramidSource = m_temporalOutput != nullptr ? m_temporalOutput : static_cast< const TextureInterface * >(&m_traceTarget);
+			const auto baseSlot = this->pyramidBaseSlot(*pyramidSource);
+
 			/* Trace render pass writes -> compute sampling of the trace target. */
 			{
 				VkMemoryBarrier barrier{};
@@ -1598,7 +1773,7 @@ namespace EmEn::Graphics::Effects::Lighting
 					.sourceMaxY = sourceHeight - 1
 				};
 
-				commandBuffer.bind(*m_pyramidSets[mip], *m_pyramidPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+				commandBuffer.bind(mip == 0 ? *m_pyramidBaseSets[baseSlot] : *m_pyramidSets[mip - 1], *m_pyramidPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 				vkCmdPushConstants(commandBuffer.handle(), m_pyramidPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PyramidPushConstants), &pc);
 				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
 			}
@@ -1623,7 +1798,9 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "rtr";
-		contribution.source = &m_traceTarget;
+		/* SVGF order: the spatial bilateral runs on the TEMPORALLY integrated trace (the raw trace
+		 * when the chain is off). */
+		contribution.source = m_temporalOutput != nullptr ? m_temporalOutput : static_cast< const TextureInterface * >(&m_traceTarget);
 		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
 		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
 		contribution.needsDepth = true;

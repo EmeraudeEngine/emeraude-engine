@@ -41,6 +41,7 @@
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/GIDenoiser.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Vulkan/ComputePipeline.hpp"
 #include "Vulkan/DescriptorPool.hpp"
@@ -100,6 +101,14 @@ namespace EmEn::Graphics::Effects::Lighting
 				uint32_t blurRadius{12};
 				float depthSigma{0.5F};
 				float normalSigma{0.3F};
+				/** @brief Temporal accumulation of the raw trace (GIDenoiser in reflection mode,
+				 * 2026-09-13) — see SettingKeys.hpp § Reflections/RayTracing/Temporal. */
+				float temporalAlpha{0.1F};
+				float temporalDepthTolerance{0.05F};
+				float temporalNormalThreshold{0.8F};
+				float temporalVarianceGamma{1.0F};
+				uint32_t temporalMaxAccumulation{32};
+				bool temporalEnabled{true};
 			};
 
 			/**
@@ -160,7 +169,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			explicit
 			RTR (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
+				: IndirectPostProcessEffect{renderer},
+				m_denoiser{renderer, ClassId}
 			{
 
 			}
@@ -174,7 +184,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			RTR (Renderer & renderer, const Parameters & parameters, const std::shared_ptr< TextureResource::TextureCubemap > & environmentCubemap = nullptr) noexcept
 				: IndirectPostProcessEffect{renderer},
 				m_parameters{parameters},
-				m_environmentCubemap{environmentCubemap}
+				m_environmentCubemap{environmentCubemap},
+				m_denoiser{renderer, ClassId}
 			{
 
 			}
@@ -185,6 +196,15 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::destroy() */
 			void destroy () noexcept override;
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresVelocity()
+			 * @note The temporal accumulation reprojects its surface path through the velocity buffer. */
+			[[nodiscard]]
+			bool
+			requiresVelocity () const noexcept override
+			{
+				return m_parameters.temporalEnabled;
+			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::producesOverlay() */
 			[[nodiscard]]
@@ -377,8 +397,40 @@ namespace EmEn::Graphics::Effects::Lighting
 					const std::shared_ptr< Vulkan::Sampler > & m_sampler;
 			};
 
+			/**
+			 * @brief Writes one pyramid compute set: a sampled source into a storage destination mip.
+			 * @param descriptorSet A reference to the set.
+			 * @param sourceView The source image view handle.
+			 * @param sourceLayout The layout the source is sampled in.
+			 * @param sourceSampler The sampler handle.
+			 * @param destView A reference to the destination mip view.
+			 * @return void
+			 */
+			void writePyramidSet (const Vulkan::DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const Vulkan::ImageView & destView) const noexcept;
+
+			/**
+			 * @brief Returns the pyramid base (mip 0) set reading a given source, writing it on first use.
+			 * @note The base of the pyramid is the temporally resolved reflection, whose ping-pong parity
+			 * flips every frame: one set per source texture ever seen (two history parities, or the trace
+			 * target alone), written ONCE — a set is never rewritten while a frame may still read it.
+			 * @param source A reference to the source texture.
+			 * @return size_t The slot in m_pyramidBaseSets.
+			 */
+			[[nodiscard]]
+			size_t pyramidBaseSlot (const Vulkan::TextureInterface & source) noexcept;
+
 			Parameters m_parameters;
 			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
+			/* Temporal accumulation of the raw trace: the shared GI denoiser in REFLECTION mode
+			 * (virtual-position reprojection), at the trace resolution. Created by create(). */
+			GIDenoiser m_denoiser;
+			/* The texture the blur and the pyramid consume this frame: the denoiser's resolved output
+			 * (ping-pong parity), or the raw trace when the temporal chain is off. Set by
+			 * recordPreDenoisePasses(), read by denoiseContribution(). */
+			const Vulkan::TextureInterface * m_temporalOutput{nullptr};
+			/* Pyramid base (mip 0) sets, one per source texture the chain may read — see pyramidBaseSlot(). */
+			std::array< std::unique_ptr< Vulkan::DescriptorSet >, 2 > m_pyramidBaseSets;
+			std::array< const Vulkan::TextureInterface *, 2 > m_pyramidBaseSources{nullptr, nullptr};
 			/* IRTs: trace (half-res), blur H (half-res), blur V (half-res). */
 			IntermediateRenderTarget m_traceTarget;
 			IntermediateRenderTarget m_blurHTarget;
