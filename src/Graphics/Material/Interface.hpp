@@ -419,6 +419,17 @@ namespace EmEn::Graphics::Material
 			void enableBlendingFromJson (const Json::Value & data) noexcept;
 
 			/**
+			 * @brief Uploads the material properties to their uniform buffer element.
+			 * @note Called by create() for the initial content and by Renderer::flushMaterialVideoMemoryUpdates()
+			 * on the render thread for every material that changed a DYNAMIC property since the last
+			 * frame (see StandardResource::markVideoMemoryDirty()). ⚠️ A material element lives in ONE
+			 * frame region: the write lands while a previous frame may still read it, which for a
+			 * property value means "one frame early at worst" — never a structural hazard.
+			 * @return bool
+			 */
+			virtual bool updateVideoMemory () noexcept = 0;
+
+			/**
 			 * @brief Returns whether the material is usable.
 			 * @return bool
 			 */

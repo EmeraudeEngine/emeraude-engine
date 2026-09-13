@@ -98,10 +98,10 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
-		if ( !this->isEnabled() )
-		{
-			return;
-		}
+		/* ⚠️ No early return on a DISABLED light: a light that moves while off and is then switched
+		 * on must not keep a STALE frame (DirectionalLight, Component::SunCourse at sunrise,
+		 * 2026-09-13). A light tracks its frame whether it emits or not; emitting is the render
+		 * passes' decision (they skip a disabled light themselves). */
 
 		if ( this->isShadowCastingEnabled() )
 		{

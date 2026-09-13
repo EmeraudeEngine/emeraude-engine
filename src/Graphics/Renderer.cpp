@@ -1510,6 +1510,10 @@ namespace EmEn::Graphics
 			 * header) sees the same jittered matrix. */
 			this->prepareFrameJitter(scene.get());
 
+			/* Materials whose dynamic properties changed: one region, so after the fence like
+			 * everything else this frame reads. */
+			this->flushMaterialVideoMemoryUpdates();
+
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
 			if ( this->isShadowMapsEnabled() )
@@ -1752,6 +1756,10 @@ namespace EmEn::Graphics
 			 * frame (the view UBO projection, the push-constant MVPs, the instance transforms
 			 * header) sees the same jittered matrix. */
 			this->prepareFrameJitter(scene.get());
+
+			/* Materials whose dynamic properties changed: one region, so after the fence like
+			 * everything else this frame reads. */
+			this->flushMaterialVideoMemoryUpdates();
 
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
@@ -3192,5 +3200,46 @@ namespace EmEn::Graphics
 		}
 
 		TraceSuccess{ClassId} << "Pipeline cache saved (" << blob.size() << " bytes).";
+	}
+
+	void
+	Renderer::requestMaterialVideoMemoryUpdate (std::weak_ptr< Material::Interface > material) noexcept
+	{
+		if ( material.expired() )
+		{
+			return;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_materialUpdatesAccess};
+
+		m_pendingMaterialUpdates.emplace_back(std::move(material));
+	}
+
+	void
+	Renderer::flushMaterialVideoMemoryUpdates () noexcept
+	{
+		std::vector< std::weak_ptr< Material::Interface > > pending;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_materialUpdatesAccess};
+
+			if ( m_pendingMaterialUpdates.empty() )
+			{
+				return;
+			}
+
+			pending.swap(m_pendingMaterialUpdates);
+		}
+
+		for ( const auto & weakMaterial : pending )
+		{
+			if ( const auto material = weakMaterial.lock(); material != nullptr && material->isCreated() )
+			{
+				if ( !material->updateVideoMemory() )
+				{
+					TraceError{ClassId} << "Unable to upload the changed properties of material '" << material->name() << "' !";
+				}
+			}
+		}
 	}
 }

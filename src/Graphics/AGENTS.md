@@ -2980,9 +2980,29 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
   directional lights from — `Direction` points TOWARD the body (engine frame, UP = +Y),
   `Illuminance` in lux, `Temperature` in kelvins (industry-standard authoring; wins over a direct
   `"Color"` when both are present) resolved via `Photometry::colorFromTemperature()` (Planckian
-  locus), `AngularDiameter` in degrees, `InTexture` = anti-double-counting flag (informative in
-  LDR, structuring for the future HDR pipeline). Zero stars is legitimate: pure ambiance
+  locus), `AngularDiameter` in degrees, `InTexture` = anti-double-counting flag — **STRUCTURING
+  since 2026-09-13**: the brightest `InTexture` body is MASKED OUT of the IBL bake (irradiance and
+  prefiltered), a cone of one angular diameter around its direction that the bake reads at the rim
+  (`IBLBaker::StarMask`, GLSL `maskStar()`, widened by the footprint of the source mip being read so
+  the coarse mips cannot leak the body back in). The analytic star carries that energy with shadows;
+  the visible skybox keeps the body. On Kloppenheim 05 the in-texture sun is 80 % of the ground
+  illuminance — unmasked it was a second, unshadowed sun. Zero stars is legitimate: pure ambiance
   (overcast, nebula, cave).
+- ⚠️⚠️ **`Direction` is in the WORLD frame, UP = +Y — and 28 of the 30 store manifests still carry
+  the Y-DOWN values of July 2026** (negative Y on every sun and moon): their entity lands below the
+  ground and the star shines upward (measured on `basic-scenery`). `AxisDebug` and `Kloppenheim05`
+  are correct. Owner-gated fix (negate Y in 28 files), item
+  `docs/todo/sky-manifests-star-direction-y-down.md`.
+- **Authoring an HDR manifest is a MEASUREMENT, not a guess: `tools/sky-manifest.py`** (Sep 2026).
+  It reads the equirectangular `.hdr`, finds the sun (brightest texel, radiance-weighted centroid),
+  prints its direction in the engine frame and its energy profile, integrates the sky-only and total
+  horizontal illuminances, and anchors everything on ONE declared value — the sun's illuminance in
+  lux (`--sun-illuminance 100000`): `Luminance = k · E_h,total / π` (what makes the loader's
+  dome-of-1 calibration reproduce the picture's absolute level), `AmbientIlluminance = k · E_h,sky-only`
+  (the dome without the sun the analytic star carries), `Stars[0]` = the measured sun, `InTexture`.
+  Reference run: `Kloppenheim05` (Poly Haven, the Intel Sponza 2022 sky) → `Luminance` 36 910 nits,
+  `AmbientIlluminance` 19 590 lx, sun at 74.5° elevation, direction (0.216, 0.964, 0.157), 97.6 % of
+  its excess energy within 0.5° — a compact veiled disc, hence the one-diameter mask.
 
 Parsing is CENTRALIZED in `AbstractBackground::parsePhotometry()` — every background type
 (`SkyBoxResource`, future `DynamicSkyResource`, `ColorBackgroundResource`) goes through it.
@@ -4637,7 +4657,17 @@ never the analytic-light Disney remap. Reconstruction in shaders:
 `specular = prefiltered * (F0 * lut.x + lut.y)`; the two channels also feed the
 Fdez-Agüera multi-scatter compensation (lot 3) with no extra resource.
 
-`bakeEnvironment(source, irradiance, prefiltered)` (lot 2): per-environment assets in ONE
+**In-texture celestial body mask (Sep 2026).** `bakeEnvironment()` takes a fourth argument,
+`IBLBaker::StarMask` (direction toward the body in cubemap = world space, cone half-angle in
+radians, `enabled()` when the half-angle is positive; a default-constructed mask keeps everything).
+The push-constant block grew a `vec4 starMask` (offset 16) that `ProbeConvolver` pushes zeroed —
+zero half-angle = no mask — so the borrowed prefilter pipeline is unaffected. The GLSL `maskStar(L,
+mip)` in the common block redirects any sample inside the cone to the rim, the cone widened by the
+footprint of the source mip read (`(π/2)·2^mip / sourceSize`); all three sample sites go through it
+(mirror copy, prefilter loop, irradiance loop). `Scene::environmentStarMask()` builds it from the
+background's brightest `InTexture` star, and the mask is part of the bake identity.
+
+`bakeEnvironment(source, irradiance, prefiltered, starMask)` (lot 2): per-environment assets in ONE
 blocking submission, re-baked at every sky change. Both passes use **filtered importance
 sampling** (Křivánek & Colbert, GPU Gems 3 ch. 20): each sample reads the SOURCE mip whose
 texel solid angle matches the sample solid angle — this is why environment cubemaps carry
@@ -4867,3 +4897,25 @@ Block formats are **absent** from both tables, which return 0 for them. That is 
 on this path: `Image::createFromCompressed()` never consults them — it is handed explicit per-level
 byte counts. Do not "fix" the tables by giving a block format a per-pixel size; the honest answer
 for BC7 is 1 byte per pixel *amortised over a 4×4 block*, which is not what those accessors mean.
+
+> **`AbstractBackground::setLuminance()` is a RUNTIME knob since 2026-09-13.** The luminance has two
+> consumers — the IBL scale pushed to the view buffers by `Scene::refreshAmbientLightProperties()`
+> (`environmentLuminance`, the only factor applied to what comes out of the environment cubemap) and
+> the emission of what is DRAWN. The second used to be fixed at load (the skybox material's emissive
+> strength, part of the material identity); the protected hook `onLuminanceChanged(nits)` now lets a
+> concrete background follow, and `SkyBoxResource` overrides it with
+> `StandardResource::setEmissiveStrengthValue()` (dynamic property) on the material IT authored from
+> the manifest — a caller-owned material (`load(material)`) stays as authored. Caller of record:
+> `Scenes::Component::SkyFollowsSun` (a sky fading through twilight behind `SunCourse`). ⚠️ Changing
+> the luminance does NOT re-bake the IBL: the bake is normalised, the scale is applied at sampling.
+
+> **Material DYNAMIC properties reach the GPU since 2026-09-13.** `StandardResource`'s 39 runtime
+> setters (`setRoughness`, `setOpacity`, `setAlbedoColor`, `setIBLIntensity`,
+> `setEmissiveStrengthValue`, …) used to raise `m_videoMemoryUpdated` that nothing read — the
+> material UBO was written once, by `create()`. Now they call `markVideoMemoryDirty()` (one
+> registration per flush) → `Renderer::requestMaterialVideoMemoryUpdate()` (any thread) →
+> `Renderer::flushMaterialVideoMemoryUpdates()` on the render thread, once per frame after the fence,
+> through the virtual `Material::Interface::updateVideoMemory()`. ⚠️ The material UBO has ONE frame
+> region: a value may be read one frame early by a frame still in flight — acceptable for a property,
+> to be frame-partitioned the day a property must be exact per frame. `docs/caution-points.md`
+> § "every dynamic material property was DEAD".

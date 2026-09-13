@@ -82,14 +82,33 @@ namespace EmEn::Scenes::Component
 		this->updateAnimations(scene.cycle());
 	}
 
+	Vector< 3, float >
+	DirectionalLight::resolveDirection (const CartesianFrame< float > & worldCoordinates) const noexcept
+	{
+		/* Use the world coordinates forward vector ... */
+		if ( m_useDirectionVector )
+		{
+			return worldCoordinates.forwardVector();
+		}
+
+		/* ... Or the inverse normalized position vector. ⚠️ A light AT the origin has no
+		 * position-to-origin direction: normalising the null vector would write NaN into the
+		 * light buffer, and the vertex shader normalises it again — one NaN there poisons the
+		 * whole frame through the bloom and the TAA history. Fall back to the forward axis. */
+		const auto & position = worldCoordinates.position();
+
+		if ( position.lengthSquared() < 1e-12F )
+		{
+			return worldCoordinates.forwardVector();
+		}
+
+		return -position.normalized();
+	}
+
 	void
 	DirectionalLight::setDirection (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
-		const auto direction = m_useDirectionVector ?
-			/* Use the world coordinates forward vector ... */
-			worldCoordinates.forwardVector() :
-			/* ... Or the inverse normalized position vector. */
-			-worldCoordinates.position().normalized();
+		const auto direction = this->resolveDirection(worldCoordinates);
 
 		m_buffer[DirectionOffset+0] = direction.x();
 		m_buffer[DirectionOffset+1] = direction.y();
@@ -99,10 +118,13 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
-		if ( !this->isEnabled() )
-		{
-			return;
-		}
+		/* ⚠️ No early return on a DISABLED light. This method used to skip everything while the
+		 * light was off, so a light that moved while disabled and was then enabled kept a STALE
+		 * direction, shadow frame and light-space matrix — whatever its last enabled move() had
+		 * staged, NaN included (Component::SunCourse, 2026-09-13: the light was built at the origin,
+		 * staged a NaN direction, spent the night disabled and rose with it — black frames, GPU
+		 * unresponsive). A light tracks its frame whether it emits or not; emitting is the render
+		 * passes' decision (they skip a disabled light themselves). */
 
 		/* NOTE: For CSM, the shadow map coordinates and matrices are computed in updateCascades()
 		 * based on the camera frustum. The classic shadow map logic below doesn't apply. */
@@ -119,11 +141,9 @@ namespace EmEn::Scenes::Component
 			 * full coverage as camera offset so that origin is at depth coverage/2.
 			 */
 
-			/* Compute the light direction (same logic as setDirection()).
-			 * This is the direction light rays travel (from light toward scene). */
-			const auto lightDirection = m_useDirectionVector ?
-				worldCoordinates.forwardVector() :
-				-worldCoordinates.position().normalized();
+			/* The direction light rays travel (from light toward scene) — the same resolution
+			 * setDirection() writes to the buffer, null-position guard included. */
+			const auto lightDirection = this->resolveDirection(worldCoordinates);
 
 			CartesianFrame< float > shadowMapFrame;
 

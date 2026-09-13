@@ -28,7 +28,7 @@ See [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architectu
 
 ### Available Components
 **Rendering:** Visual, MultipleVisuals
-**Lights:** DirectionalLight, PointLight, SpotLight
+**Lights:** DirectionalLight, PointLight, SpotLight, SunCourse (drives a DirectionalLight along the day), SkyFollowsSun (scales the background's luminance with a SunCourse)
 **Audio:** SoundEmitter, Microphone
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
 **Animation:** NodeAnimation
@@ -41,6 +41,35 @@ See [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architectu
 > ⚠️ **Node mode only** — a `StaticEntity` bakes its world frame at build time and has no local frame
 > left to animate; the consumer warns instead of silently dropping the animation.
 > ⚠️ **An animated node is exempt from flattening** — see [`Animations/AGENTS.md`](../Animations/AGENTS.md).
+
+> `SunCourse` (2026-09-13) drives a **`DirectionalLight` along the daily course of the sun**: each
+> logic cycle it places its PIVOT node on the unit vector toward the sun (the light in its
+> position-to-origin mode, `useDirectionVector(false)`, so the position IS the direction), writes the
+> illuminance from the **Kasten & Young (1989) air mass** through a Beer-Lambert extinction referenced
+> at the zenith (`Options::zenithIlluminance`, 100 klx by default; ~30 lx on the horizon), writes the
+> colour from a temperature sliding 5800 K → 2000 K with the same air mass, and **disables the light
+> while the sun is below the horizon** — at night it lights nothing. Great circle through the sunrise
+> and noon points at CONSTANT angular speed: day = night = `Options::dayDuration` (120 s default).
+> Built in one call by `Toolkit::generateSunCourse(name, course, shadows)` (a movable Node, the light
+> under a `DirectionalShadowOptions`, the component suffixed "Course"). ⚠️ **The sun only** (owner
+> decision): the sky, ambient and IBL stay the background's — a scene swapping a sky's sun for it passes
+> `applyStars = false`. ⚠️ The phase is an **integer cycle counter** over an integer revolution length,
+> never a float accumulated per cycle (owner rule: recompute from a stored reference) — `setPhase()`
+> lands on the same direction every time. Like `NodeAnimation` it holds WEAK references and asks for
+> its own removal when the node or the light dies.
+>
+> `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:
+> bound to a `SunCourse`, it maps the elevation through a smoothstep (`duskElevation` −6° → 0,
+> `dayElevation` +10° → 1, `nightFactor` 0 by default) and writes `dayLuminance × factor` to the
+> scene's background (`AbstractBackground::setLuminance()`), then `Scene::refreshAmbientLightProperties()`
+> — ONE knob for the IBL scale (diffuse AND specular: with the sky driving the ambient the scalar
+> ambient is zero and the irradiance cubemap × `environmentLuminance` IS the ambient), the sky term
+> read by the post-processing and, through the new `AbstractBackground::onLuminanceChanged()` hook,
+> the skybox's drawn emission (`SkyBoxResource` → `StandardResource::setEmissiveStrengthValue()`, a
+> dynamic material property). The DAY luminance is the manifest's, captured the first time the
+> background is seen loaded (and again after a sky swap); writes are quantised to 1/1024 so a
+> constant day or night pushes nothing. Its destructor gives the sky its day back. A demo composes
+> the two: `sun.entity()->componentBuilder< SkyFollowsSun >(...).setup(bind(sun.component()))`.
 
 ### Editor Subsystem
 
@@ -496,6 +525,9 @@ The `Toolkit` class (`Scenes/Toolkit.hpp`) provides high-level entity constructi
 1. `setCursor(x, y, z)` — Position for the next entity
 2. `generateCuboidInstance<entity_t>(name, size, material)` — Creates geometry + material + renderable + visual component
 3. Returns `BuiltEntity<entity_t, Component::Visual>` with `.entity()` and `.component()` accessors
+4. Lights: `generateDirectionalLight` / `generatePointLight` / `generateSpotLight`, and since 2026-09-13
+   `generateSunCourse(name, SunCourse::Options, DirectionalShadowOptions)` — the ANIMATED sun (see
+   `SunCourse` above and [`docs/toolkit-system.md`](../../docs/toolkit-system.md) § Lights)
 
 **Generation policies (`GenPolicy`):**
 
@@ -542,6 +574,8 @@ toolkit.clearGenerationParameters();
 - `generateDirectionalLight<T>(name, color, intensity, shadowRes, range)`
 - `generatePointLight<T>(name, color, range, intensity, shadowRes)`
 - `generateSpotLight<T>(name, color, range, intensity, angle, shadowRes)`
+- `generateSunCourse(name, SunCourse::Options, DirectionalShadowOptions)` — Node only: the ANIMATED sun
+  (pivot + `DirectionalLight` + `Component::SunCourse`), 2026-09-13
 - `generatePerspectiveCamera<T>(name, focalLengthMM, lookAt, primary, showModel, preset)` — ⚠️ the
   framing is a LENS in millimetres, never an angle (13.096 mm = the historical 85° default;
   12 mm = 90°, 20.8 = 60°, 25.7 = 50°, 50 = 27°). See `Component/Camera.hpp`.
@@ -553,6 +587,15 @@ toolkit.clearGenerationParameters();
 All generators support `<Node>` or `<StaticEntity>` as template parameter (default: `StaticEntity`).
 
 ### Creating a New Component
+0. ⚠️ **A component MAY move or query its own entity from `processLogics()`** (`Node::setPosition()`,
+   `getComponent()`, `forEachComponent()`…): `m_componentsMutex` is a **recursive mutex** since
+   2026-09-13, so the same-thread re-entry that used to deadlock the logic thread (black frame,
+   live console — `SunCourse`) is legal by construction. A move requested from the loop is still
+   DEFERRED by `onContainerMove()` to the end of the loop (same cycle) so the siblings are not
+   moved mid-iteration — same family as the deferred `ComponentBoundariesModified` refresh. What
+   stays FORBIDDEN from inside the loop is a structural change: `linkComponent()`,
+   `removeComponent()`, `clearComponents()` trace an error and do nothing (they would invalidate
+   the iteration) — a component leaves by returning `true` from `shouldBeRemoved()`.
 1. Inherit from `Component::Abstract` (Abstract.hpp)
 2. Implement `processLogics()` if per-frame logic needed
 3. Implement `move()` if reaction to entity movement needed
@@ -1175,9 +1218,31 @@ derives the scene lighting from the background photometric manifest — ambient 
 ambient illuminance, plus one `StaticEntity` + `DirectionalLight` per declared celestial body
 (`Graphics::CelestialBody`; the entity sits at `direction × 1000`, the component default shines
 along `-normalize(position)`). The first star becomes `mainDirectionalLight`. Options carry the
-NON-photometric choices only (shadow map resolution, classic coverage vs CSM cascades). Scene
+NON-photometric choices only: `applyAmbient`, `applyStars`, and the shadow policy as a
+`DirectionalShadowOptions` sub-struct (`options.shadows`, since 2026-09-13 — the same type
+`SceneDataConsumer::setDirectionalLightShadows()` takes for an asset's own directional lights;
+call sites write `{.shadows = {.shadowMapResolution = 2048, .shadowCoverage = 500.0F}}`). Scene
 JSON opt-in: `"ApplyLighting": true` in the `Background` block; console:
 `setBackground(name, true)`.
+
+⚠️ **A body declared IN the texture is masked out of the IBL bake (2026-09-13).**
+`Scene::environmentStarMask()` picks the brightest star with `InTexture: true` and hands
+`Graphics::Compute::IBLBaker::StarMask` (direction, cone half-angle = the body's angular diameter)
+to `bakeEnvironment()`, which reads the sky at the rim of that cone instead of inside it, in both
+the irradiance and the prefiltered chains; the visible skybox keeps the body. Why: the analytic
+directional light derived from the manifest already carries that energy WITH shadows, and a bake
+that kept it lit every surface a second time, unshadowed — on Kloppenheim 05 (the Sponza sky) the
+in-texture sun is 80 % of the illuminance the whole sky pours on the ground. The mask is part of
+the bake identity (`m_IBLBakedStarMask`): a manifest change re-bakes.
+`applyStars = false` (Sponza: the asset's own `SUN` is the sun) still masks the body — the mask
+follows the MANIFEST, not the stage, which is what makes the two paths consistent.
+
+⚠️⚠️ **OPEN — the 28 store manifests' `Direction` vectors are Y-DOWN legacy** (found 2026-09-13,
+not yet fixed, owner-gated with the sky review): `AutumnFieldPureSky`, `Clouds`, `Moon`, … all
+declare a negative Y where the doc says "toward the body, UP = +Y"; the derived entity sits BELOW
+the ground and the star shines UPWARD (measured on `basic-scenery --demo-options 1`: 50 klux sun,
+no ground shadow at all). `AxisDebug` (authored after the flip) and `Kloppenheim05` are correct.
+Item: `docs/todo/sky-manifests-star-direction-y-down.md`.
 
 ⚠️ **Threading contract (rewritten Jul 2026 after two live crashes)**: the entry point only
 RAISES a request (`m_backgroundLightingRequested`, atomic) — it may be called from ANY thread
@@ -1321,6 +1386,7 @@ loader.load(gltfPath, sceneData);
 // Step 2: Build scene hierarchy
 Scenes::SceneDataConsumer consumer;
 consumer.setCreateLights(true);                  // OFF by default — see the warning below
+consumer.setDirectionalLightShadows({.shadowMapResolution = 4096, .shadowCoverage = 200.0F});  // the caller's budget, never asset data
 consumer.build(sceneData, scene);                // StaticEntity mode
 consumer.build(sceneData, scene, parentNode);    // Node mode
 ```
@@ -1335,6 +1401,25 @@ consumer.build(sceneData, scene, parentNode);    // Node mode
 > - a **light-only node survives flattening** — dropping it would drop the emitter with it;
 > - in `StaticEntity` mode a node with a light but **no mesh still gets an entity**, since the
 >   emitter needs an owner.
+>
+> **Three rules of `attachLight()` (2026-09-13, found on Intel's Sponza — the first asset-lit demo):**
+> - **A directional light AIMS along its node's local -Z** (`KHR_lights_punctual` and UsdLux
+>   alike): the component is built with `useDirectionVector(true)` so it reads the entity frame's
+>   FORWARD vector. It used to keep the component default — "from my position toward the origin" —
+>   which was 7° off on Sponza's `SUN`, a zero vector for a light node at the origin, and ignored
+>   the frame the USD loader carefully bakes for a `DistantLight`.
+> - **A light with `intensity <= 0` is NOT instantiated** (one `TraceWarning` naming the node).
+>   Exporters do ship them: every one of Sponza's 24 lights left 3ds Max with `intensity: 0`, and
+>   a dome light degrades to a null point light. Built anyway, a 0 cd point light gets a culling
+>   radius of 0 = UNBOUNDED reach, bound to every draw for nothing. Fix the DATA
+>   (`tools/gltf-lights.py --set NAME=VALUE` writes the intensities into a .glb/.gltf), never the
+>   consumer.
+> - **The shadow policy of the directional lights is the CALLER's**:
+>   `setDirectionalLightShadows(DirectionalShadowOptions)` — the SAME struct
+>   `Scene::applyBackgroundLighting()` takes for a sky's celestial bodies
+>   (`Scenes/DirectionalShadowOptions.hpp`, one type, one dispatch `build()` between the three
+>   `DirectionalLight` constructors). No format carries a shadow map; it is a runtime budget.
+>   Default: no shadow map.
 >
 > Cameras declared by an asset are **never instantiated** — they stay data in `SceneData`.
 
@@ -1352,6 +1437,9 @@ consumer.build(sceneData, scene, parentNode);    // Node mode
 | Setter | Default | Effect |
 |--------|---------|--------|
 | `setFlattenHierarchy(true)` | `false` | Skip intermediate nodes, attach all meshes directly to parent |
+| `setCreateLights(true)` | `false` | Instantiate the asset's punctual lights (see the warning above) |
+| `setDirectionalLightShadows(options)` | no shadow map | Shadow policy of the asset's directional lights (`DirectionalShadowOptions`: classic map or CSM) |
+| `setInstanceTargetPerCell(n)` | `1024` | Population of one spatial cell of an instance set |
 
 ### Lighting Is Carried By the Descriptor (`MeshDescriptor::lightingEnabled`)
 

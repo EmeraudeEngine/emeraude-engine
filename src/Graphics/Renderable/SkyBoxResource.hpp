@@ -36,6 +36,12 @@
 #include "AbstractBackground.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics::Material
+{
+	class StandardResource;
+}
+
+/* Forward declarations. */
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -257,8 +263,12 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & material) noexcept;
 
+			/** @copydoc EmEn::Graphics::Renderable::AbstractBackground::onLuminanceChanged() */
+			void onLuminanceChanged (float nits) noexcept override;
+
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
+			std::weak_ptr< Material::StandardResource > m_emissiveMaterial; ///< The material THIS resource authored from a manifest, whose emission is the luminance; empty for a caller-owned material.
 			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
 	};
 }

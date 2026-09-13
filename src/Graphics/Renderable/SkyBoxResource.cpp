@@ -86,6 +86,9 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
+		/* This material's emission IS the luminance: a runtime setLuminance() must reach it. */
+		m_emissiveMaterial = material;
+
 		/* Store the cubemap for environment IBL access. */
 		m_environmentCubemap = std::move(defaultCubemapResource);
 
@@ -157,6 +160,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			return this->setLoadSuccess(false);
 		}
+
+		/* This material's emission IS the luminance: a runtime setLuminance() must reach it. */
+		m_emissiveMaterial = material;
 
 		/* Store the cubemap for environment IBL access. */
 		m_environmentCubemap = std::move(cubemapResource);
@@ -272,5 +278,17 @@ namespace EmEn::Graphics::Renderable
 		this->setReadyForInstantiation(true);
 
 		return true;
+	}
+
+	void
+	SkyBoxResource::onLuminanceChanged (float nits) noexcept
+	{
+		/* The drawn sky follows the luminance knob (a dimming sky at dusk): the emissive strength
+		 * is a DYNAMIC material property, uploaded with the next material update. A caller-owned
+		 * material (load(material)) is not ours to touch and stays as authored. */
+		if ( const auto material = m_emissiveMaterial.lock(); material != nullptr )
+		{
+			material->setEmissiveStrengthValue(nits);
+		}
 	}
 }

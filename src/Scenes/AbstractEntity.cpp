@@ -133,7 +133,7 @@ namespace EmEn::Scenes
 		this->setCollidable(false);
 
 		{
-			const std::lock_guard< std::mutex > lock{m_componentsMutex};
+			const std::scoped_lock lock{m_componentsMutex};
 
 			for ( const auto & component : m_components )
 			{
@@ -241,7 +241,7 @@ namespace EmEn::Scenes
 
 		m_collisionModel->resetShapeParameters();
 
-		const std::lock_guard< std::mutex > lock{m_componentsMutex};
+		const std::scoped_lock lock{m_componentsMutex};
 
 		for ( const auto & component : m_components )
 		{
@@ -272,8 +272,21 @@ namespace EmEn::Scenes
 	void
 	AbstractEntity::onContainerMove (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
+		/* ⚠️ Requested from a component's processLogics(): the component loop HOLDS
+		 * m_componentsMutex. The mutex is recursive, so re-locking would not deadlock any more
+		 * (it did, 2026-09-13) — but dispatching here would move the siblings in the MIDDLE of
+		 * their own iteration. Keep the coordinates; processLogics() dispatches them right after
+		 * the loop. The last request of a cycle wins, which is the final frame. */
+		if ( m_dispatchingComponentLogics )
+		{
+			m_deferredMoveCoordinates = worldCoordinates;
+			m_containerMoveDeferred = true;
+
+			return;
+		}
+
 		/* NOTE: Dispatch the move to every component. */
-		std::lock_guard< std::mutex > lock(m_componentsMutex);
+		const std::scoped_lock lock{m_componentsMutex};
 
 		for ( const auto & component : m_components )
 		{
@@ -284,8 +297,18 @@ namespace EmEn::Scenes
 	bool
 	AbstractEntity::linkComponent (const std::shared_ptr< Component::Abstract > & component, bool isPrimaryDevice) noexcept
 	{
+		/* ⚠️ The component loop of processLogics() iterates m_components: growing it from inside
+		 * a component's processLogics() would invalidate that iteration. Refused with a diagnostic
+		 * rather than left to undefined behaviour (the recursive mutex would have let it through). */
+		if ( m_dispatchingComponentLogics ) [[unlikely]]
 		{
-			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			TraceError{TracerTag} << "Refusing to link the component '" << component->name() << "' to entity '" << this->name() << "' from a component's processLogics() !";
+
+			return false;
+		}
+
+		{
+			const std::scoped_lock lock{m_componentsMutex};
 
 			if ( m_components.full() ) [[unlikely]]
 			{
@@ -403,7 +426,7 @@ namespace EmEn::Scenes
 	bool
 	AbstractEntity::containsComponent (std::string_view name) const noexcept
 	{
-		std::lock_guard< std::mutex > lock(m_componentsMutex);
+		const std::scoped_lock lock{m_componentsMutex};
 
 		return std::ranges::any_of(m_components, [&name] (const auto & component) {
 			return component->name() == name;
@@ -413,7 +436,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Component::Abstract >
 	AbstractEntity::getComponent (std::string_view name) noexcept
 	{
-		std::lock_guard< std::mutex > lock(m_componentsMutex);
+		const std::scoped_lock lock{m_componentsMutex};
 
 		const auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
 			return component->name() == name;
@@ -425,10 +448,19 @@ namespace EmEn::Scenes
 	bool
 	AbstractEntity::removeComponent (std::string_view name) noexcept
 	{
+		/* ⚠️ See linkComponent(): the component loop is iterating m_components. A component asking
+		 * for its own removal from processLogics() returns true from shouldBeRemoved() instead. */
+		if ( m_dispatchingComponentLogics ) [[unlikely]]
+		{
+			TraceError{TracerTag} << "Refusing to remove a component of entity '" << this->name() << "' from a component's processLogics() !";
+
+			return false;
+		}
+
 		std::shared_ptr< Component::Abstract > componentToUnlink;
 
 		{
-			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			const std::scoped_lock lock{m_componentsMutex};
 
 			const auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
 				return component->name() == name;
@@ -453,8 +485,17 @@ namespace EmEn::Scenes
 	void
 	AbstractEntity::clearComponents () noexcept
 	{
+		/* ⚠️ See linkComponent(): the component loop is iterating m_components. A component asking
+		 * for its own removal from processLogics() returns true from shouldBeRemoved() instead. */
+		if ( m_dispatchingComponentLogics ) [[unlikely]]
 		{
-			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			TraceError{TracerTag} << "Refusing to remove a component of entity '" << this->name() << "' from a component's processLogics() !";
+
+			return;
+		}
+
+		{
+			const std::scoped_lock lock{m_componentsMutex};
 			for ( const auto & component : m_components )
 			{
 				this->unlinkComponent(component);
@@ -473,7 +514,7 @@ namespace EmEn::Scenes
 		this->onSuspend();
 
 		/* Suspend all components. */
-		std::lock_guard< std::mutex > lock(m_componentsMutex);
+		const std::scoped_lock lock{m_componentsMutex};
 
 		for ( const auto & component : m_components )
 		{
@@ -488,7 +529,7 @@ namespace EmEn::Scenes
 		this->onWakeup();
 
 		/* Wakeup all components. */
-		std::lock_guard< std::mutex > lock(m_componentsMutex);
+		const std::scoped_lock lock{m_componentsMutex};
 
 		for ( const auto & component : m_components )
 		{
@@ -501,7 +542,10 @@ namespace EmEn::Scenes
 	{
 		/* Updates every component at this entity. */
 		{
-			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			const std::scoped_lock lock{m_componentsMutex};
+
+			/* A component moving its entity from here must not re-enter the lock: see onContainerMove(). */
+			m_dispatchingComponentLogics = true;
 
 			auto componentIt = m_components.begin();
 
@@ -522,6 +566,17 @@ namespace EmEn::Scenes
 					++componentIt;
 				}
 			}
+
+			m_dispatchingComponentLogics = false;
+		}
+
+		/* Deferred move (a component moved its entity during the loop): dispatched here, OUTSIDE
+		 * the components lock, so the siblings see the new frame in the same cycle. */
+		if ( m_containerMoveDeferred )
+		{
+			m_containerMoveDeferred = false;
+
+			this->onContainerMove(m_deferredMoveCoordinates);
 		}
 
 		/* Deferred collision shape refresh (ComponentBoundariesModified): consumed here,

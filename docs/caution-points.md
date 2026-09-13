@@ -900,6 +900,73 @@ if ( materialType == StandardResource::ClassId )
 >   full resolution × 8 spp doubled (12.3 → 26.3 ms on Sponza's ivy), at half resolution it costs
 >   7.2 ms, i.e. less than the uncorrected full-res effect. The resolution is the owner's setting.
 
+### Fixed: every "dynamic" material property was DEAD after creation (Sep 2026)
+
+> [!WARNING]
+> **Symptom:** `SkyBoxResource` dimmed its material's emissive strength for the night
+> (`StandardResource::setEmissiveStrengthValue()`, documented "a dynamic property") and the drawn
+> sky stayed at full daylight while the IBL, fed by the same luminance, went dark. Not specific to
+> the sky: 39 setters of `StandardResource` (`setRoughness`, `setOpacity`, `setAlbedoColor`,
+> `setIBLIntensity`, `setEmissiveStrengthValue`, …) wrote the CPU copy and raised
+> `m_videoMemoryUpdated`, and **nothing consumed that flag** — `updateVideoMemory()` had exactly one
+> caller, `create()`. A material changed once on the GPU, at creation, ever.
+>
+> **Fix (contract):** the setters go through `markVideoMemoryDirty()`, which raises the flag ONCE
+> per flush and registers the material with `Renderer::requestMaterialVideoMemoryUpdate()`
+> (thread-safe, any thread); `Renderer::flushMaterialVideoMemoryUpdates()` drains the list on the
+> render thread once per frame, right after the in-flight fence and before the scene's own
+> uploads, calling the now-virtual `Material::Interface::updateVideoMemory()`. ⚠️ A material element
+> lives in ONE frame region (the material UBO is not frame-partitioned): the write may land while a
+> previous frame still reads it — for a property VALUE that is "one frame early at worst", never a
+> structural hazard. Frame-partitioning the material UBO is the day a property must be exact per
+> frame. **Rule:** a "dynamic property" is only dynamic if something uploads it — grep the consumer
+> of a dirty flag before trusting the word in a doc comment.
+
+### Fixed: a component moving its OWN entity from processLogics() deadlocked the logic thread (Sep 2026)
+
+> [!CAUTION]
+> **Symptom:** the whole engine froze on a BLACK frame the moment `sponza --demo-options 1` (the
+> animated sun) started — the remote console still answered (main thread alive), nothing else did,
+> no validation error, no log line after the scene load. `Core.shutdown()` was accepted and never
+> completed. Both the owner's build and the AI's reproduced it identically.
+>
+> **Root cause:** `AbstractEntity::processLogics()` walks `m_components` UNDER `m_componentsMutex`
+> and calls each `processLogics()`. `Component::SunCourse` aims its pivot there through
+> `Node::setPosition()` → `onLocationDataUpdate()` → `AbstractEntity::onContainerMove()`, which
+> took the SAME mutex to dispatch `move()` to the siblings. A `std::mutex` is not recursive:
+> the logic thread waited for itself, forever. The scene never published a state again.
+>
+> **Fix (contract, two layers — owner rule: if a deadlock is easy to write, make it impossible):**
+> 1. `m_componentsMutex` is a **`std::recursive_mutex`**: any same-thread re-entry from a
+>    component's `processLogics()` — a move, `getComponent()`, `forEachComponent()`,
+>    `containsComponent()` — is legal by construction. The cost is an owner check per lock,
+>    once per entity per cycle.
+> 2. `onContainerMove()` requested while the component loop runs is still **DEFERRED** — the
+>    coordinates are kept (`m_deferredMoveCoordinates`) and dispatched right after the loop, in
+>    the same cycle (the last request of a cycle wins) — so the siblings are never moved in the
+>    middle of their own iteration. Same pattern as the deferred collision-boundaries refresh.
+>
+> What the recursive mutex would have let through is refused instead: `linkComponent()`,
+> `removeComponent()` and `clearComponents()` called from inside the component loop trace an
+> error and do nothing (they would invalidate the running iteration). A component that wants to
+> go returns `true` from `shouldBeRemoved()`. **A component may move or query its entity from
+> `processLogics()`**; it is the entity's job to make that safe, never the component's to know.
+>
+> **Second defect found on the way — a DISABLED light stopped tracking its frame.** The three
+> `move()` overrides (`DirectionalLight`, `PointLight`, `SpotLight`) returned early on
+> `!isEnabled()`, so a light moved while off and switched on later kept a STALE direction, shadow
+> frame and light-space matrix (whatever its last enabled `move()` had staged). Removed: a light
+> tracks its frame whether it emits or not — emitting is the render passes' decision, and they
+> skip a disabled light themselves. And `DirectionalLight::resolveDirection()` (the one expression
+> behind the uniform lane and the shadow camera) falls back to the frame's forward axis for a light
+> AT the origin in position-to-origin mode: normalising a null position wrote NaN into the light
+> buffer, which the vertex shader normalises again.
+>
+> **Rules:** anything a component triggers from `processLogics()` that reaches back into its
+> entity (a move, a notification, a boundaries change) goes through a DEFERRED path consumed
+> after the lock — never a direct re-entry. A freeze with a live console and a black frame is a
+> logic-thread deadlock first: look for a lock taken twice on the same thread before anything GPU.
+
 ### Fixed: removeStaticEntity() forgot the entity BEFORE unlinking its components — ghost lights, pure virtual crash (Jul 2026)
 
 > [!WARNING]
@@ -4737,6 +4804,57 @@ Sponza 0 VUID, emeraude-base 2049/2049, GPU cost in the AGENTS section.
   synchronisation. Fixed by adding `VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT` to both destination masks.
   ⚠️ It was suspected of the black squares above and it was NOT them (owner-tested); it stays as a
   correctness fix against the specification, with no measured visual effect.
+
+### Fixed: a degenerate hit normal became a NaN shadow-ray origin — DEVICE LOST scaling with the light count (Sep 2026)
+
+**Symptom:** Intel's Sponza lit by its own 22 wall lamps lost the device at the first frames
+(`VK_ERROR_DEVICE_LOST` on the shadow-map submit, a `[device_fault]` block of
+`INSTRUCTION_POINTER_UNKNOWN` addresses, no VUID); with 14 lamps it survived one run out of two,
+with none it never failed. The frames that did render under the ray-traced lane were near black.
+
+**Cause, named by GPU-assisted validation** (`VK_KHRONOS_VALIDATION_VALIDATE_GPU_BASED=GPU_BASED_GPU_ASSISTED`
+on the launch, the only instrument that saw it): `VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351`,
+*OpRayQueryInitializeKHR operand Ray Origin contains a NaN*, in the RTGI and RTR fragment shaders
+and the probe-volume compute. The hit normal interpolated from the vertex buffer was degenerate on
+some hits (`normalize(0)` = NaN), the shadow-ray origin `hitPos + hitNormal * bias` inherited it,
+and every light in the loop traced one illegal query per bad hit — 22 lamps turned one bad hit
+into 22 faults, which is why the count "mattered" without being the cause. NVIDIA answers a NaN
+ray query with a device loss; the denoiser spread the NaN of the surviving frames into darkness.
+
+**Fix (RTGI, RTR, `IrradianceProbeVolume`):** `getHitNormal()` returns `vec3(0.0)` on a degenerate
+interpolation, the caller resolves a zero world normal to the ray-facing direction, and
+`shadowRayVisibility()` returns *unoccluded* for a non-finite origin or direction. **Rules:** a ray
+query operand is checked finite BEFORE `rayQueryInitializeEXT()`, always; a `normalize()` of data read
+from a buffer is guarded; a device loss "that depends on the number of lights" is a per-light fault
+multiplied, not a capacity — run GPU-AV before bisecting counts.
+
+### An asset's lights can arrive with ZERO intensity — and one exporter zeroes them all (Sep 2026)
+
+Intel's Sponza 2022 glTF (3ds Max 2024, Babylon.js exporter) declares 24 `KHR_lights_punctual`
+lights with `intensity: 0.0` — the sun, the sky placeholder and the 22 lamps. Positions, colours
+and the sun's orientation are exact, the photometry is gone, and no other format of the package
+carries it (USD: no light prim; FBX: `Null` nodes). `SceneDataConsumer` now refuses a light without
+energy instead of building a 0 cd point light with an UNBOUNDED culling radius (a null radius means
+"reach everything", see `PointLight::touch()`). The values were written INTO the GLB with
+`tools/gltf-lights.py` (100 klx for the sun, 100 cd per lamp — owner decision 2026-09-13); the
+asset stays the authority, the demo writes no light.
+
+### The Intel Sponza normal maps were DirectX-convention — the engine decodes Khronos (Sep 2026)
+
+**Symptom (owner):** every mortar joint of Sponza's walls shaded as if lit from BELOW.
+**Not** the tangent frame, **not** the Y-up flip, **not** the irradiance orientation (verified on
+`coordinates-debug` under `AxisDebug`: the ground is tinted by the +Y face). **Measured on
+`normal-map-debug`** (the quad under the TOP omni, exposure pinned): Sponza's `brickwall_01` as
+shipped puts the bright lip of every groove ABOVE it (107 vs 102 below); with the green channel
+flipped, BELOW (106 vs 103); the store's Khronos-standardised `Walls/Bricks001-normal`, below. A
+curl test on the source PNGs (`corr(∂R/∂v, ∂G/∂u)`) has the opposite sign on Intel's files and
+on the standardised store. **Cause:** 3ds Max bakes +Y down (D3D texture origin), the Babylon
+exporter did not convert, and glTF mandates +Y up. **Fix in the DATA:** the 27 normal-map images
+of `Sponza.ktx2.glb` were re-encoded from Intel's PNGs with the green channel inverted, same
+recipe as the original (`ktx create v4.4.2`, UASTC quality 2, RDO λ 0.75, zstd 18, linear,
+13 mips, RGB), the GLB repacked without touching anything else. **Rule:** a normal map carries no
+metadata about its convention; when relief looks lit from below, put the texture on
+`normal-map-debug` (option 1-3 Sponza, 4 = the Khronos control) before touching the engine.
 
 ## Related Documentation
 

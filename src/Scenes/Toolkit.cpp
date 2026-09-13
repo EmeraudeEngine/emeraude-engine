@@ -173,6 +173,55 @@ namespace EmEn::Scenes
 		return staticEntity;
 	}
 
+	BuiltEntity< Node, Component::SunCourse >
+	Toolkit::generateSunCourse (const std::string & entityName, const Component::SunCourse::Options & course, const DirectionalShadowOptions & shadows) noexcept
+	{
+		/* The pivot: a MOVABLE node, the course writes its world position every logic cycle. */
+		auto pivot = this->generateNode(entityName, GenPolicy::Simple, true);
+
+		if ( pivot == nullptr )
+		{
+			return {};
+		}
+
+		/* The light, under the caller's shadow budget. It is built dark: the course writes the
+		 * direction and the photometry of its start phase as soon as it is bound. */
+		const auto light = shadows.build(*pivot, entityName, [] (Component::DirectionalLight & sun) {
+			sun.setColor(White);
+			sun.setIlluminance(0.0F);
+			sun.useDirectionVector(false);
+		});
+
+		if ( light == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the directional light of the sun course '" << entityName << "' !";
+
+			return {};
+		}
+
+		auto component = pivot->componentBuilder< Component::SunCourse >(entityName + "Course")
+			.setup([&pivot, &light, &course] (Component::SunCourse & sunCourse) {
+				sunCourse.bind(pivot, light);
+				sunCourse.configure(course);
+			}).build();
+
+		if ( component == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the sun course component '" << entityName << "' !";
+
+			return {};
+		}
+
+		if ( course.autoStart )
+		{
+			component->start();
+		}
+
+		TraceInfo{ClassId} << "Sun course '" << entityName << "': " << course.dayDuration << " s of day, " << course.noonElevation << "° at noon, " << course.zenithIlluminance << " lx at the zenith" << (shadows.shadowMapResolution > 0 ? ", shadow-mapped" : ", no shadow map") << ", pivot under '" << pivot->parent()->name() << "'.";
+
+		return {pivot, component};
+	}
+
 	std::vector< CartesianFrame< float > >
 	Toolkit::generateRandomCoordinates (size_t count, float min, float max) noexcept
 	{

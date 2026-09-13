@@ -1233,6 +1233,9 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool create (Renderer & renderer) noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::updateVideoMemory() */
+			bool updateVideoMemory () noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
 			void destroy () noexcept override;
 
@@ -1439,10 +1442,11 @@ namespace EmEn::Graphics::Material
 			bool parseTextureMapComponent (const Json::Value & data, const char * componentName, ComponentType componentType, const char * samplerName, const char * variableName, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
-			 * @brief Updates the UBO with material properties.
-			 * @return bool
+			 * @brief Flags the material properties as changed and registers the material for the
+			 * renderer's per-frame flush (after creation) — the single path every dynamic setter takes.
+			 * @return void
 			 */
-			bool updateVideoMemory () noexcept;
+			void markVideoMemoryDirty () noexcept;
 
 			/**
 			 * @brief Generates the fragment shader code for a specific texture component.
@@ -1716,8 +1720,9 @@ namespace EmEn::Graphics::Material
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
+			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine, outlives every material).
 			uint32_t m_sharedUBOIndex{0};
-			bool m_videoMemoryUpdated{false};
+			bool m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty(), cleared by updateVideoMemory().
 			bool m_invertRoughness{false};
 			bool m_isUsingEnvironmentCubemap{false};
 			/** @brief Explicitly authored cubemap reflection (texture mode): never replaced by SSR/RTR. */

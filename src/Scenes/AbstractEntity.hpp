@@ -1021,6 +1021,15 @@ namespace EmEn::Scenes
 			 * @param worldCoordinates The new world coordinates (position + orientation).
 			 *
 			 * @note This is thread-safe (protected by m_componentsMutex).
+			 * @note ⚠️ A component MAY move its own entity from processLogics() (Component::SunCourse
+			 * aims its pivot node every cycle). That call arrives UNDER m_componentsMutex, which the
+			 * component loop holds: with a plain std::mutex it deadlocked the logic thread — the whole
+			 * engine froze on a black frame, console still answering, 2026-09-13. Two layers make it
+			 * impossible now: the mutex is RECURSIVE (any same-thread re-entry is legal), and while
+			 * the component loop runs the dispatch is DEFERRED — the coordinates are kept and every
+			 * component gets its move() at the end of processLogics(), in the same cycle, so the
+			 * siblings are never moved in the middle of their own iteration. Same pattern as the
+			 * deferred collision-boundaries refresh.
 			 */
 			void onContainerMove (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
@@ -1270,13 +1279,16 @@ namespace EmEn::Scenes
 
 			const Scene & m_scene;						  ///< Reference to parent scene (immutable, valid for lifetime).
 			Base::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components; ///< Fixed-size component storage.
-			mutable std::mutex m_componentsMutex;		   ///< Protects m_components for thread-safe access.
+			mutable std::recursive_mutex m_componentsMutex;   ///< Protects m_components. RECURSIVE by design (2026-09-13): a component may query or move its entity from its own processLogics(), which runs under this lock — a same-thread re-entry is legal by construction, never a deadlock.
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
+			Base::Math::CartesianFrame< float > m_deferredMoveCoordinates; ///< World coordinates of a move requested from a component's processLogics(), dispatched after the component loop.
 			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).
+			bool m_dispatchingComponentLogics{false};	   ///< True while processLogics() walks the components under m_componentsMutex (logic thread only).
+			bool m_containerMoveDeferred{false};			///< A move arrived during the component loop: dispatch m_deferredMoveCoordinates after it.
 	};
 
 	template< typename component_t >

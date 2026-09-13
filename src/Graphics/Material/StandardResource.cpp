@@ -1351,6 +1351,9 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::create (Renderer & renderer) noexcept
 	{
+		/* The renderer flushes the dynamic properties this material changes after creation. */
+		m_renderer = &renderer;
+
 		if ( m_components.empty() )
 		{
 			TraceError{ClassId} << "The PBR material resource '" << this->name() << "' has no component !";
@@ -1631,6 +1634,27 @@ namespace EmEn::Graphics::Material
 		}
 
 		return true;
+	}
+
+	void
+	StandardResource::markVideoMemoryDirty () noexcept
+	{
+		/* One registration per flush: the flag is cleared by updateVideoMemory(). */
+		if ( m_videoMemoryUpdated )
+		{
+			return;
+		}
+
+		m_videoMemoryUpdated = true;
+
+		/* Before creation the flag is consumed by create() itself. After it, nothing ever
+		 * consumed it until 2026-09-13: every "dynamic property" setter of this class raised a
+		 * flag nobody read, so a material never changed once on the GPU. The renderer now flushes
+		 * the registered materials once per frame, on the render thread. */
+		if ( m_renderer != nullptr && this->isCreated() )
+		{
+			m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
+		}
 	}
 
 	bool
@@ -4228,7 +4252,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[HeightScaleOffset] = value;
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	bool
@@ -4362,7 +4386,7 @@ namespace EmEn::Graphics::Material
 
 		this->enableFlag(PostProcessReflectivityEnabled);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 
 		return true;
 	}
@@ -4810,7 +4834,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[ClearCoatNormalScaleOffset] = value;
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	bool
@@ -5012,7 +5036,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[AlbedoColorOffset+2] = color.blue();
 		m_materialProperties[AlbedoColorOffset+3] = color.alpha();
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5020,7 +5044,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[RoughnessOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5028,7 +5052,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[MetalnessOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5036,7 +5060,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[NormalScaleOffset] = value;
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5044,7 +5068,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[IOROffset] = std::clamp(value, 1.0F, 3.0F);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5052,7 +5076,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[IBLIntensityOffset] = std::clamp(value, 0.0F, 1.0F);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5063,7 +5087,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[AutoIlluminationColorOffset+2] = color.blue();
 		m_materialProperties[AutoIlluminationColorOffset+3] = color.alpha();
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5071,7 +5095,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[AutoIlluminationAmountOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5079,7 +5103,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[OpacityOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5087,7 +5111,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[AlphaThresholdOffset] = clampToUnit(threshold);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5095,7 +5119,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5103,7 +5127,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[RefractionAmountOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5111,7 +5135,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[AOIntensityOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5119,7 +5143,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[FogResponseOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5127,7 +5151,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[DoFMaskOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5135,7 +5159,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[ClearCoatFactorOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5143,7 +5167,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[ClearCoatRoughnessOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5151,7 +5175,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[SubsurfaceIntensityOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5159,7 +5183,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[SubsurfaceRadiusOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5170,7 +5194,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[SubsurfaceColorOffset+2] = color.blue();
 		m_materialProperties[SubsurfaceColorOffset+3] = color.alpha();
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5181,7 +5205,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[SheenColorOffset+2] = color.blue();
 		m_materialProperties[SheenColorOffset+3] = color.alpha();
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5189,7 +5213,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[SheenRoughnessOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5197,7 +5221,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[AnisotropyOffset] = std::clamp(value, -1.0F, 1.0F);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5205,7 +5229,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[AnisotropyRotationOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	/* ==================== Transmission Component Setters ==================== */
@@ -5310,7 +5334,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[TransmissionFactorOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5321,7 +5345,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[AttenuationColorOffset+2] = color.blue();
 		m_materialProperties[AttenuationColorOffset+3] = color.alpha();
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5329,7 +5353,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[AttenuationDistanceOffset] = std::max(0.0001F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5337,7 +5361,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[ThicknessFactorOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	/* ==================== Iridescence Component Setters ==================== */
@@ -5486,7 +5510,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[IridescenceFactorOffset] = clampToUnit(value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5494,7 +5518,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[IridescenceIOROffset] = std::clamp(value, 1.0F, 2.333F);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5502,7 +5526,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[IridescenceThicknessMinOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5510,7 +5534,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[IridescenceThicknessMaxOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	/* ==================== Dispersion Component Setters ==================== */
@@ -5539,7 +5563,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[DispersionOffset] = std::max(value, 0.0F);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	/* ==================== Specular Component Setters (KHR_materials_specular) ==================== */
@@ -5650,7 +5674,7 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[SpecularFactorOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	void
@@ -5661,7 +5685,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[SpecularColorOffset + 2] = color.blue();
 		m_materialProperties[SpecularColorOffset + 3] = color.alpha();
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 
 	/* ==================== Specular JSON Parsing ==================== */
@@ -5810,6 +5834,6 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, value);
 
-		m_videoMemoryUpdated = true;
+		this->markVideoMemoryDirty();
 	}
 }

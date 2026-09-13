@@ -281,6 +281,17 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Resolves the light emission direction from world coordinates, in world space.
+			 * @note The frame's forward axis in direction-vector mode; the normalised vector from the
+			 * position to the origin otherwise — falling back to the forward axis for a position AT the
+			 * origin, which has no such direction (normalising it would write NaN into the light buffer).
+			 * @param worldCoordinates A reference to the world coordinates of the light.
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float > resolveDirection (const Base::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
+
+			/**
 			 * @brief Returns the current light emission direction in world space.
 			 * @return Base::Math::Vector< 3, float >
 			 */

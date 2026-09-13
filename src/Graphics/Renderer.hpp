@@ -37,6 +37,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -211,6 +212,15 @@ namespace EmEn::Graphics
 	class EMEN_API Renderer final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
+
+			/**
+			 * @brief Registers a material whose dynamic properties changed, for the next frame's flush.
+			 * @note Thread-safe: called from the logic or loading threads (StandardResource::markVideoMemoryDirty()),
+			 * drained by flushMaterialVideoMemoryUpdates() on the render thread before the scene's own uploads.
+			 * @param material A weak pointer to the material.
+			 * @return void
+			 */
+			void requestMaterialVideoMemoryUpdate (std::weak_ptr< Material::Interface > material) noexcept;
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
@@ -1742,6 +1752,15 @@ namespace EmEn::Graphics
 			 * @note A user-level refusal of two expensive, intrusive photographic effects. It
 			 * OVERRIDES the camera, which only ever requests them. */
 			bool m_depthOfFieldAllowed{true};
+			/**
+			 * @brief Uploads every material registered by requestMaterialVideoMemoryUpdate() since the last frame.
+			 * @note Render thread, once per frame, right before the scene uploads its own buffers.
+			 * @return void
+			 */
+			void flushMaterialVideoMemoryUpdates () noexcept;
+
+			std::mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
+			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates; ///< Materials that changed a dynamic property since the last flush.
 			bool m_motionBlurAllowed{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};

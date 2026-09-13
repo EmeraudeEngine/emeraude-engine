@@ -123,6 +123,10 @@ namespace EmEn::Graphics::Renderable
 			setLuminance (float nits) noexcept
 			{
 				m_luminance = std::max(0.0F, nits);
+
+				/* Both consumers follow ONE knob, at runtime too: the IBL scale reads luminance()
+				 * (Scene::refreshAmbientLightProperties()), the drawn background answers here. */
+				this->onLuminanceChanged(m_luminance);
 			}
 
 			/**
@@ -240,6 +244,23 @@ namespace EmEn::Graphics::Renderable
 			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyDomeGeometry (Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 		protected:
+
+			/**
+			 * @brief Called when the luminance changes, so the DRAWN side of the background can follow.
+			 * @note ⚠️ The luminance has TWO consumers — the IBL scale, which reads luminance() when the
+			 * scene refreshes its view buffers, and the emission of what is drawn (a skybox material's
+			 * emissive strength). Until 2026-09-13 only the first followed a runtime setLuminance(): a
+			 * sky dimmed for the night kept drawing its daylight picture. A concrete background that
+			 * draws something self-illuminated overrides this and updates its emission. Default: nothing.
+			 * @param nits The new luminance, in candela per square meter (already clamped to >= 0).
+			 * @return void
+			 */
+			virtual
+			void
+			onLuminanceChanged (float /*nits*/) noexcept
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an abstract renderable background.
