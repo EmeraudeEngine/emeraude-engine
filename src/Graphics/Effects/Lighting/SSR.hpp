@@ -149,6 +149,10 @@ namespace EmEn::Graphics::Effects::Lighting
 				 * the miss path samples a NORMALIZED source and must scale it into the HDR chain,
 				 * exactly as the RTR miss path does with its `ambientLight.w`. */
 				float skyLuminance;
+				/** @brief > 0.5: the resolve PAINTS a non-finite input instead of rejecting it
+				 * (Core/Graphics/PostProcessing/DebugNonFinite): red = grabbed colour, blue = pyramid,
+				 * green = trace data, magenta = the mix only. */
+				float debugNonFinite;
 			};
 
 			/**
@@ -345,5 +349,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Per-frame-in-flight descriptor sets (updated every frame). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_resolvePerFrame;
+			/* Core/Graphics/PostProcessing/DebugNonFinite, read at create(): the resolve paints a
+			 * non-finite input instead of rejecting it. */
+			bool m_debugNonFinite{false};
 	};
 }

@@ -19,10 +19,20 @@ removed the symptom), but the producer is untouched: somewhere in the lit path o
 fully transparent texel yields a NaN that the blender writes as `dst · 1 + NaN · 0 = NaN`. Any other
 reader of the colour buffer (bloom, DoF, motion blur, the TAA history) is exposed to the same NaN.
 
+## Status 2026-09-13, end of day
+Not reproducible any more: after the owner invalidated the build and cleared every cache, a clean
+rebuild with the day's fixes (SSR non-finite guard, grab barrier → compute stage, NaN-safe denoiser
+validity test) showed no square of any colour with the sprite present and the probes on. The guard
+was never seen firing on a clean build, so the sprite-lighting NaN is a HYPOTHESIS, not a measured
+fact; the alternatives are the `CutFrameAroundTranslucency` path (a region driven by the
+translucent's per-frame extent, memory outside it undefined) and a stale intermediate build during
+the bisection. Keep this item until one occurrence is caught with the instrument below.
+
 ## What remains
-- Probe first: paint every non-finite pixel of the TAA input in a flat colour (boolean probe,
-  `docs/temporal-stability-measurement.md` § 4 of projet-alpha) and watch the sprite — the texels
-  and the frame draw themselves.
+- The instrument is in place: `Core/Graphics/PostProcessing/DebugNonFinite = true`, relaunch, look
+  at the squares — red = grabbed colour, blue = colour pyramid, green = trace data, magenta = the mix;
+  the TAA paints in red any direct pixel whose 3x3 holds a non-finite texel.
+- Second discriminant when it returns: `CutFrameAroundTranslucency = false`.
 - Then read the generated fragment shader of the blended lit sprite (`ShowSourceCode` +
   `--clear-shader-cache`): candidates are a division by the texture alpha, a degenerate specular term
   (`NdotV = 0` with `4 · NdotL · NdotV` in a denominator), or a normalisation of a zero vector.

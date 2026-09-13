@@ -1641,6 +1641,11 @@ code is: **concept first, mechanism second**.
 Core/Graphics/PostProcessing/
 ├── LightingLane                       "Auto" (default) | "RayTracing" | "ScreenSpace" | "None"
 ├── CutFrameAroundTranslucency
+├── DebugNonFinite                     false (default): ON, SSR paints WHICH input is NaN/Inf
+│                                      (red grabbed colour, blue pyramid, green trace, magenta
+│                                      mix) and TAA paints in red any pixel whose 3x3 holds one;
+│                                      read at effect creation. The instrument of the 2026-09-13
+│                                      black squares — see caution-points.
 ├── <Concept>/Enabled                  ContactShadows, IndirectDiffuse, Reflections, AmbientOcclusion
 ├── <Concept>/<param>                  knobs COMMON to both lanes — same meaning, same unit, same
 │                                      default — read by both occupants (IndirectDiffuse/MaxDistance,

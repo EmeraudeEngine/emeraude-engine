@@ -63,7 +63,9 @@ namespace
 		 * the jitter phase and the variance clip drags the history along. */
 		float jitterUVX;
 		float jitterUVY;
-		float padding0;
+		/* > 0.5: paint in red every pixel whose 3x3 reconstruction holds a non-finite scene texel
+		 * (Core/Graphics/PostProcessing/DebugNonFinite). */
+		float debugNonFinite;
 	};
 
 	static_assert(sizeof(TAAPushConstants) == 32, "TAAPushConstants must be 32 bytes.");
@@ -107,7 +109,7 @@ layout(push_constant) uniform PushConstants
 	float lumaWeighting;
 	float jitterUVX;
 	float jitterUVY;
-	float padding0;
+	float debugNonFinite;
 };
 
 float luminanceOf(vec3 color)
@@ -259,6 +261,16 @@ void main()
 		}
 	}
 
+	/* DEBUG VIEW (Core/Graphics/PostProcessing/DebugNonFinite): paint in flat red every pixel whose
+	 * 3x3 reconstruction footprint holds a NON-FINITE scene texel. Off, the max() below turns a NaN
+	 * into 0 on NVIDIA — a black pixel that hides its cause; painted, the offending texels draw
+	 * themselves (born from the 7x7 black squares of 2026-09-13, never caught in the act). */
+	if (debugNonFinite > 0.5 && (any(isnan(sourceTotal)) || any(isinf(sourceTotal))))
+	{
+		outResolved = vec4(2000.0, 0.0, 0.0, 1.0);
+		return;
+	}
+
 	/* Normalized (the truncated support does not sum to one), clamped because the filter's
 	 * negative lobes can undershoot below zero on HDR edges. */
 	vec3 current = max(sourceTotal / max(sourceWeightTotal, 1e-6), vec3(0.0));
@@ -363,6 +375,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		m_parameters.alpha = settings.getOrSetDefault< float >(GraphicsPPTemporalAAAlphaKey, DefaultGraphicsPPTemporalAAAlpha);
 		m_parameters.varianceGamma = settings.getOrSetDefault< float >(GraphicsPPTemporalAAVarianceGammaKey, DefaultGraphicsPPTemporalAAVarianceGamma);
 		m_parameters.lumaWeighting = settings.getOrSetDefault< bool >(GraphicsPPTemporalAALumaWeightingKey, DefaultGraphicsPPTemporalAALumaWeighting);
+		m_parameters.debugNonFinite = settings.getOrSetDefault< bool >(GraphicsPPDebugNonFiniteKey, DefaultGraphicsPPDebugNonFinite);
 
 		/* History starts invalid: the first frame after (re)creation must not read the
 		 * uninitialized ping-pong images (alpha forced to 1). The default resize()
@@ -503,7 +516,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			/* NDC jitter -> UV units (frame-history contract, see the shader note). */
 			.jitterUVX = context.projectionJitter.x() * 0.5F,
 			.jitterUVY = context.projectionJitter.y() * 0.5F,
-			.padding0 = 0.0F
+			.debugNonFinite = m_parameters.debugNonFinite ? 1.0F : 0.0F
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(

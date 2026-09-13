@@ -607,6 +607,19 @@ namespace EmEn
 			constexpr auto GraphicsPPCutFrameAroundTranslucencyKey{"Core/Graphics/PostProcessing/CutFrameAroundTranslucency"};
 			constexpr auto DefaultGraphicsPPCutFrameAroundTranslucency{true};
 
+			/* Post-processing > DEBUG VIEW of the NON-FINITE values (2026-09-13). ON, the chain PAINTS
+			 * every NaN/Inf it meets instead of hiding it: the SSR resolve paints WHICH input is
+			 * non-finite (RED = the grabbed scene colour, BLUE = the colour pyramid, GREEN = the trace
+			 * data, MAGENTA = the mixed result only) and the TAA paints in red any pixel whose 3x3
+			 * reconstruction holds one. OFF, the SSR rejects such a colour as a miss and the TAA's max()
+			 * turns a NaN into 0 — a BLACK pixel on NVIDIA, undefined elsewhere. Read at effect creation:
+			 * relaunch to flip. Born from the 7x7 black squares of projet-alpha's light-and-shadow-debug
+			 * (a non-finite reflected colour on the screen-space lane, spread 5x5 by the SSR blur and 7x7
+			 * by the TAA neighbourhood), whose source was never caught in the act: this is the instrument
+			 * for the next occurrence — one key, one look, the guilty buffer. */
+			constexpr auto GraphicsPPDebugNonFiniteKey{"Core/Graphics/PostProcessing/DebugNonFinite"};
+			constexpr auto DefaultGraphicsPPDebugNonFinite{false};
+
 			/* Post-processing > which LANE the lighting family starts on: "Auto" (the best lane
 			 * this machine can actually run), "RayTracing", "ScreenSpace", or "None" for no
 			 * indirect lighting at all. Every lighting concept exists in both lanes and both stay

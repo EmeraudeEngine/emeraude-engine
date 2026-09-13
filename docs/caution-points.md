@@ -4618,11 +4618,20 @@ Sponza 0 VUID, emeraude-base 2049/2049, GPU cost in the AGENTS section.
   wherever a transparent texel's lighting produced one. The animation frames move those texels —
   the period. RTR never sees them: it alpha-tests the sprite at the hit and shades the hit itself.
 - **Guard (in place)**: `SSR.cpp`, the resolve rejects a non-finite reflected colour as a miss. A
-  filter must never ingest NaN/Inf; this is the filter's own protection and it removed the symptom.
-- **ROOT, OPEN**: WHY a transparent texel of a blended lit sprite produces a NaN in the lighting pass
-  — `docs/todo/blended-lit-sprite-writes-nan.md`. The probe that will find it in one capture: paint
-  every non-finite pixel of the DIRECT image (TAA input) in a flat colour; the offending texels and
-  the offending frame draw themselves.
+  filter must never ingest NaN/Inf; this is the filter's own protection. ⚠️ **Its role in the
+  disappearance is NOT proven**: after the owner invalidated the build and every cache, a clean
+  rebuild with all the day's fixes AND the probes showed no square of any colour, sprite present —
+  the probe would have painted any non-finite value reaching the resolve. Either one of the
+  committed fixes removed the cause (the transfer → compute barrier is the only one that repairs a
+  timing-dependent race, which fits a session-dependent symptom), or some intermediate CLion
+  incremental rebuilds were stale and their verdicts wrong. Undecidable without a reproduction.
+- **ROOT, OPEN — not reproducible since the clean rebuild**: `docs/todo/blended-lit-sprite-writes-nan.md`
+  keeps the facts and the hypotheses (sprite lighting NaN; the `CutFrameAroundTranslucency` path,
+  whose region a translucent's per-frame extent could drive). **The instrument is permanent**:
+  `Core/Graphics/PostProcessing/DebugNonFinite = true` (relaunch) makes the SSR resolve paint WHICH
+  input is non-finite — red = grabbed colour, blue = colour pyramid, green = trace data, magenta = the
+  mix only — and the TAA paint in red any pixel whose 3x3 reconstruction holds one. The day the
+  squares return: one key, one look, the guilty buffer.
 - ⚠️ **Attribution lessons**: (1) this was NOT caused by the day's RTR/denoiser work — an A/B by
   `git stash` of the four files, rebuilt and looked at by the owner, kept the squares; three
   plausible mechanisms (a NaN-unsafe history test, a missing compute stage in the grab barrier, an

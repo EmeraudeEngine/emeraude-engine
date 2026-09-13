@@ -527,6 +527,7 @@ layout(push_constant) uniform PushConstants
 	float pyramidLodOffset;
 	float pyramidMaxLod;
 	float skyLuminance;
+	float debugNonFinite;
 };
 
 float linearizeDepth (float depth)
@@ -639,7 +640,30 @@ void main()
 		 * into a plain BLACK square on every glossy surface of the screen-space lane
 		 * (owner-captured, light-and-shadow-debug mirror floor, 2026-09-13). The root is the
 		 * overflow upstream; this is the filter's own guard: a filter must never ingest NaN/Inf. */
-		if (any(isnan(reflColor)) || any(isinf(reflColor)))
+		bool badMix = any(isnan(reflColor)) || any(isinf(reflColor));
+
+		/* DEBUG VIEW (Core/Graphics/PostProcessing/DebugNonFinite): paint WHICH input is non-finite
+		 * instead of rejecting it. RED = the sharp colour (colorTex, the grabbed scene colour), BLUE =
+		 * the colour pyramid, GREEN = the trace data (hit UV / confidence), MAGENTA = the mixed result
+		 * only. Confidence 1 so the combine shows the marker plainly. The extra fetches only run with
+		 * the key on. */
+		if (debugNonFinite > 0.5)
+		{
+			vec3 probeSharp = texture(colorTex, traceData.xy).rgb;
+			vec3 probeCone = textureLod(pyramidTex, traceData.xy, clamp(log2(max(coneWidthTexels, 1.0)) + pyramidLodOffset, 0.0, pyramidMaxLod)).rgb;
+			bool badTrace = any(isnan(traceData)) || any(isinf(traceData));
+			bool badSharp = any(isnan(probeSharp)) || any(isinf(probeSharp));
+			bool badCone = any(isnan(probeCone)) || any(isinf(probeCone));
+
+			if (badTrace || badSharp || badCone || badMix)
+			{
+				vec3 marker = badTrace ? vec3(0.0, 1.0, 0.0) : (badSharp ? vec3(1.0, 0.0, 0.0) : (badCone ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 1.0)));
+
+				outResolve = vec4(marker * 2000.0, 1.0);
+				return;
+			}
+		}
+		else if (badMix)
 		{
 			outResolve = vec4(0.0);
 			return;
@@ -704,6 +728,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsPPReflectionsSSBlurRadiusKey, DefaultGraphicsPPReflectionsSSBlurRadius);
 		m_depthSigma = settings.getOrSetDefault< float >(GraphicsPPReflectionsSSDepthSigmaKey, DefaultGraphicsPPReflectionsSSDepthSigma);
 		m_normalSigma = settings.getOrSetDefault< float >(GraphicsPPReflectionsSSNormalSigmaKey, DefaultGraphicsPPReflectionsSSNormalSigma);
+		m_debugNonFinite = settings.getOrSetDefault< bool >(GraphicsPPDebugNonFiniteKey, DefaultGraphicsPPDebugNonFinite);
 
 		/* Trace target (half-res, RGBA16F: hitUV.xy + confidence.z). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "SSR_Trace") )
@@ -1608,7 +1633,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				.pyramidMaxLod = static_cast< float >(m_colorPyramidMipCount > 0U ? m_colorPyramidMipCount - 1U : 0U),
 				/* The environment fallback samples a normalized cubemap: scaled into nits exactly
 				 * as the RTR miss path is (FrameContext::skyLuminance, 0 under a closed scene). */
-				.skyLuminance = context.skyLuminance
+				.skyLuminance = context.skyLuminance,
+				.debugNonFinite = m_debugNonFinite ? 1.0F : 0.0F
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
