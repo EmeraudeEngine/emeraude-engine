@@ -127,6 +127,12 @@ namespace EmEn::Graphics
 			 * frame on the render thread. Left behind, the very next sync would revert this
 			 * effect to whatever was selected before it existed. */
 			m_selectedOccupant[static_cast< size_t >(slot)].store(static_cast< int8_t >(occupants.size() - 1), std::memory_order_relaxed);
+
+			/* Adding an effect is an explicit authoring act: the concept is wanted. Without this,
+			 * an effect a scene adds to a concept the settings switched off would run until the
+			 * first lane switch and vanish there — installLightingFamily() overwrites the four
+			 * lighting concepts from their settings right after filing its own occupants. */
+			m_conceptEnabled[static_cast< size_t >(slot)] = true;
 		}
 
 		this->rebuildOrderedEffects();
@@ -198,6 +204,9 @@ namespace EmEn::Graphics
 		{
 			selected.store(NoOccupant, std::memory_order_relaxed);
 		}
+
+		m_conceptEnabled.fill(true);
+		m_lightingLane = std::nullopt;
 
 		this->rebuildOrderedEffects();
 	}
@@ -296,6 +305,11 @@ namespace EmEn::Graphics
 
 			m_selectedOccupant[static_cast< size_t >(slot)].store(static_cast< int8_t >(index), std::memory_order_relaxed);
 
+			/* An explicit selection switches the CONCEPT on: from here the concept follows the lane
+			 * switches, whatever its setting said at launch — the console owns the session for what
+			 * it names explicitly. */
+			m_conceptEnabled[static_cast< size_t >(slot)] = true;
+
 			return true;
 		}
 
@@ -311,6 +325,10 @@ namespace EmEn::Graphics
 		}
 
 		m_selectedOccupant[static_cast< size_t >(slot)].store(NoOccupant, std::memory_order_relaxed);
+
+		/* The concept is off for the session: a lane switch leaves it off. Switching the whole
+		 * family off while keeping the concepts is selectNoLightingLane(). */
+		m_conceptEnabled[static_cast< size_t >(slot)] = false;
 	}
 
 	bool
@@ -356,12 +374,19 @@ namespace EmEn::Graphics
 				break;
 			}
 
-			resolved[index] = selected;
-
+			/* The refusal below is about RESIDENCY — is this lane filed anywhere ? — so the
+			 * occupant found counts before the gate is applied. */
 			if ( selected != NoOccupant )
 			{
 				found = true;
 			}
+
+			/* ⚠️⚠️ The per-concept gate. A concept switched off — by its setting at install, or by
+			 * selectNoOccupant() since — is NOT brought back by a lane switch: the switch decides
+			 * HOW the concepts that are on are computed, never WHICH ones are on. Until 2026-09-13
+			 * this loop selected the lane's occupant for every concept, so
+			 * `Reflections/Enabled = false` held exactly until the first switch. */
+			resolved[index] = m_conceptEnabled[index] ? selected : NoOccupant;
 		}
 
 		if ( !found )
@@ -377,7 +402,49 @@ namespace EmEn::Graphics
 			}
 		}
 
+		m_lightingLane = lane;
+
 		return true;
+	}
+
+	void
+	PostProcessStack::selectNoLightingLane () noexcept
+	{
+		/* The FAMILY goes off, the concept gates stay: the next selectLightingLane() brings back
+		 * exactly the concepts that were on. */
+		for ( size_t index = 0; index < EffectSlotCount; ++index )
+		{
+			if ( isLightingSlot(static_cast< EffectSlot >(index)) )
+			{
+				m_selectedOccupant[index].store(NoOccupant, std::memory_order_relaxed);
+			}
+		}
+
+		m_lightingLane = std::nullopt;
+	}
+
+	bool
+	PostProcessStack::isLightingLaneResident (LightingLane lane) const noexcept
+	{
+		const auto wantRayTracing = lane == LightingLane::RayTracing;
+
+		for ( size_t index = 0; index < EffectSlotCount; ++index )
+		{
+			if ( !isLightingSlot(static_cast< EffectSlot >(index)) )
+			{
+				continue;
+			}
+
+			for ( const auto & occupant : m_slots[index] )
+			{
+				if ( occupant != nullptr && occupant->requiresRayTracing() == wantRayTracing )
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	void
@@ -464,26 +531,13 @@ namespace EmEn::Graphics
 			lane = LightingLane::ScreenSpace;
 		}
 
-		static_cast< void >(this->selectLightingLane(lane));
-
-		if ( wantsNoLane )
-		{
-			for ( size_t index = 0; index < EffectSlotCount; ++index )
-			{
-				const auto slot = static_cast< EffectSlot >(index);
-
-				if ( isLightingSlot(slot) )
-				{
-					this->selectNoOccupant(slot);
-				}
-			}
-
-			return;
-		}
-
-		/* The per-CONCEPT switches, applied AFTER the lane: turning a concept off must survive
-		 * the lane choice, and a later setLightingMode() from the console deliberately brings it
-		 * back — the settings decide how the scene STARTS, the console owns the session. */
+		/* The per-CONCEPT gates, read BEFORE the lane is selected: they say WHICH concepts run,
+		 * the lane says HOW, and selectLightingLane() honours them on every switch — at launch
+		 * here, from the console and from a key later. ⚠️ Until 2026-09-13 they were applied
+		 * AFTER the lane as a plain selectNoOccupant(), on the doctrine that "the settings decide
+		 * how the scene starts, the console owns the session": the first setLightingMode() or
+		 * KeyPad9 brought a disabled concept back, and the owner read it as the key being ignored
+		 * — which it was. addEffect() above switched the four concepts on; this is the overwrite. */
 		const std::array< std::pair< EffectSlot, bool >, 4 > conceptSwitches{{
 			{EffectSlot::ContactShadows, settings.getOrSetDefault< bool >(GraphicsPPContactShadowsEnabledKey, DefaultGraphicsPPContactShadowsEnabled)},
 			{EffectSlot::IndirectDiffuse, settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseEnabledKey, DefaultGraphicsPPIndirectDiffuseEnabled)},
@@ -493,11 +547,17 @@ namespace EmEn::Graphics
 
 		for ( const auto & [slot, enabled] : conceptSwitches )
 		{
-			if ( !enabled )
-			{
-				this->selectNoOccupant(slot);
-			}
+			m_conceptEnabled[static_cast< size_t >(slot)] = enabled;
 		}
+
+		if ( wantsNoLane )
+		{
+			this->selectNoLightingLane();
+
+			return;
+		}
+
+		static_cast< void >(this->selectLightingLane(lane));
 	}
 
 	bool
@@ -1193,8 +1253,12 @@ namespace EmEn::Graphics
 	bool
 	PostProcessStack::requiresJitter () const noexcept
 	{
+		/* ⚠️ ENABLED occupants only. m_orderedEffects holds every RESIDENT occupant, selected or
+		 * not, so a TAA switched off by selection kept the projection jittering with nothing left
+		 * to resolve it: the whole frame shimmered on a static camera (measured 2026-09-13, the
+		 * brick cube of light-and-shadow-debug moving on 64 % of its pixels). Fixed the same day. */
 		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
-			return effect != nullptr && effect->requiresJitter();
+			return effect != nullptr && effect->isEnabled() && effect->requiresJitter();
 		});
 	}
 }

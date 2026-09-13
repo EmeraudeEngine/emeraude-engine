@@ -34,6 +34,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -155,6 +156,8 @@ namespace EmEn::Graphics
 					selected.store(NoOccupant, std::memory_order_relaxed);
 				}
 
+				m_conceptEnabled.fill(true);
+
 				for ( auto & effective : m_effectiveOccupant )
 				{
 					effective.store(NoOccupant, std::memory_order_relaxed);
@@ -258,6 +261,8 @@ namespace EmEn::Graphics
 			 * owner wants, and @ref syncSlotSelection() applies it on the render thread at the
 			 * next frame boundary. Calling `enable()` from here instead is what the console used
 			 * to have to do, and it was a data race against the chain walk.
+			 * @note An explicit selection also switches the CONCEPT on (see @ref isConceptEnabled()):
+			 * a concept the settings had switched off follows the lane switches from then on.
 			 * @param slot The slot.
 			 * @param label The occupant's label, as reported by IndirectPostProcessEffect::label().
 			 * @return bool False when the slot holds no occupant carrying that label.
@@ -267,6 +272,10 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Selects NO occupant for a slot — the concept is switched off.
 			 * @note ⚠️ MAIN THREAD (console). Same deferred contract as @ref selectOccupant().
+			 * @note The concept stays off across lane switches (see @ref isConceptEnabled()): a
+			 * later @ref selectLightingLane() leaves it alone, only @ref selectOccupant() brings it
+			 * back. To switch the whole FAMILY off while keeping the concepts, call
+			 * @ref selectNoLightingLane() instead.
 			 * @param slot The slot.
 			 * @return void
 			 */
@@ -281,17 +290,81 @@ namespace EmEn::Graphics
 			 * every lighting slot has an occupant in both lanes, so this case no longer arises for
 			 * the family the engine installs — it still can for a slot an application populates
 			 * itself.
+			 * @note ⚠️⚠️ Only the concepts switched ON are given the lane's occupant (see
+			 * @ref isConceptEnabled()). A lane switch decides HOW the concepts that are on are
+			 * computed, never WHICH ones are on: `Core/Graphics/PostProcessing/Reflections/Enabled
+			 * = false` — or a console `disable(Reflections)` — holds across every switch. Until
+			 * 2026-09-13 this method re-enabled every concept, so a disabled key held only until the
+			 * first switch (owner-reported).
 			 * @warning ⚠️ REFUSED, atomically, when the lane has no occupant in ANY lighting slot:
 			 * nothing is changed and false is returned. Applying it would switch the whole
 			 * lighting family OFF while reporting that the lane was selected — which is what it
 			 * did until Sep 2026 on a session started with `LightingLane = "ScreenSpace"` (no
 			 * acceleration structure is built then, so the traced lane is not resident at all).
 			 * A partial lane is still applied: the slots that have an occupant get it, the others
-			 * go off, which is the documented behaviour above.
+			 * go off, which is the documented behaviour above. The refusal is about RESIDENCY, not
+			 * about the concept gates: a lane every concept has switched off is still selected,
+			 * and the family stays dark by the owner's own choice.
 			 * @param lane The lane.
 			 * @return bool
 			 */
 			bool selectLightingLane (LightingLane lane) noexcept;
+
+			/**
+			 * @brief Switches the whole lighting family OFF — no lane selected.
+			 * @note ⚠️ MAIN THREAD (console). Same deferred contract as @ref selectOccupant(). The
+			 * per-concept gates are left untouched: the FAMILY is off, not the concepts, so the next
+			 * @ref selectLightingLane() brings back exactly the concepts that were on. This is what
+			 * `LightingLane = "None"` does at launch, what `setLightingMode("None")` does live, and
+			 * what a "family off" step of a lane cycle must call — a loop of @ref selectNoOccupant()
+			 * would switch every concept off for the rest of the session.
+			 * @return void
+			 */
+			void selectNoLightingLane () noexcept;
+
+			/**
+			 * @brief Returns the lane the lighting family stands on, std::nullopt when it is off.
+			 * @note ⚠️ MAIN THREAD. This is the INTENT recorded by @ref selectLightingLane() and
+			 * @ref selectNoLightingLane(). A per-slot @ref selectOccupant() does not move it: a
+			 * hand-mixed family still reports the lane it was last switched to as a whole, which is
+			 * what a key or a cycle needs to know where it stands.
+			 * @return std::optional< LightingLane >
+			 */
+			[[nodiscard]]
+			std::optional< LightingLane >
+			selectedLightingLane () const noexcept
+			{
+				return m_lightingLane;
+			}
+
+			/**
+			 * @brief Returns whether a lane holds at least one occupant in a lighting slot.
+			 * @note Residency is a SESSION constant (see @ref installLightingFamily()), so this
+			 * answers once and for all whether a lane can be switched to. It says nothing about
+			 * readiness (the TLAS of the frame), which is the render thread's question.
+			 * @param lane The lane.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isLightingLaneResident (LightingLane lane) const noexcept;
+
+			/**
+			 * @brief Returns whether a concept is switched ON — the per-concept gate.
+			 * @note ⚠️ MAIN THREAD. Every slot starts on; @ref installLightingFamily() overwrites
+			 * the four lighting concepts from `Core/Graphics/PostProcessing/<Concept>/Enabled`.
+			 * @ref selectOccupant() and @ref addEffect() switch a concept on for the session,
+			 * @ref selectNoOccupant() switches it off; @ref selectLightingLane() and
+			 * @ref selectNoLightingLane() READ it and never write it. The gate decides WHICH
+			 * concepts run, the lane decides HOW.
+			 * @param slot The slot.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isConceptEnabled (EffectSlot slot) const noexcept
+			{
+				return m_conceptEnabled[static_cast< size_t >(slot)];
+			}
 
 			/**
 			 * @brief Returns the occupant the owner SELECTED for a slot, or nullptr.
@@ -604,8 +677,10 @@ namespace EmEn::Graphics
 			bool requiresLightSet () const noexcept;
 
 			/**
-			 * @brief Returns whether any effect in the stack requires the sub-pixel projection jitter (TAA).
+			 * @brief Returns whether any ENABLED effect in the stack requires the sub-pixel projection jitter (TAA).
 			 * @note The Renderer polls this once per rendered frame to drive the Halton jitter sequence.
+			 * ⚠️ Enabled, not resident: a TAA switched off by selection must take its jitter with it,
+			 * or the frame keeps shimmering with nothing left to resolve it (fixed 2026-09-13).
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -658,6 +733,16 @@ namespace EmEn::Graphics
 			 * @note RENDER THREAD only — read and written by syncSlotSelection() alone, hence a
 			 * plain integer where its two neighbours are atomic. */
 			std::array< uint16_t, EffectSlotCount > m_selectionStallFrames{};
+			/** @brief The lane the lighting family was last switched to as a whole, std::nullopt = off.
+			 * @note MAIN THREAD only (console, key handlers, install) — the render thread reads the
+			 * per-slot selection, never this. */
+			std::optional< LightingLane > m_lightingLane;
+			/** @brief The per-concept gate: is this concept switched ON ? Indexed by EffectSlot.
+			 * @note MAIN THREAD only, like m_lightingLane. Filled with true in the constructor so a
+			 * slot an application populates by hand behaves as it always did; installLightingFamily()
+			 * overwrites the four lighting concepts from their settings. A lane switch reads it and
+			 * never writes it — that is the whole point of it. */
+			std::array< bool, EffectSlotCount > m_conceptEnabled{};
 			/** @brief The slot table flattened in EffectSlot order — THE chain order. */
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_orderedEffects;
 			/* Display effects (AA, sharpening): no GPU resources of their own, they are

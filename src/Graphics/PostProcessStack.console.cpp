@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "IndirectPostProcessEffect.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -195,6 +196,16 @@ namespace EmEn::Graphics
 					"key to 'Auto' and relaunch.");
 			}
 
+			/* The lane the family stands on, as recorded by the whole-family switches. */
+			if ( const auto lane = this->selectedLightingLane(); lane.has_value() )
+			{
+				outputs.emplace_back(Severity::Info, std::stringstream{} << "Lane selected: " << to_cstring(lane.value()) << ".");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Info, "Lane selected: none — the lighting family is off (setLightingMode(\"ScreenSpace\"|\"RayTracing\") brings it back, concepts as they were).");
+			}
+
 			for ( size_t index = 0; index < EffectSlotCount; ++index )
 			{
 				const auto slot = static_cast< EffectSlot >(index);
@@ -225,8 +236,14 @@ namespace EmEn::Graphics
 
 				if ( selected == effective )
 				{
+					/* A lighting concept switched OFF by its gate says so: "off" alone reads as a
+					 * fallback or a wiring defect, when it is the owner's setting being honoured
+					 * across the lane switches. */
+					const auto gatedOff = isLightingSlot(slot) && !this->isConceptEnabled(slot);
+
 					outputs.emplace_back(Severity::Info, std::stringstream{} <<
-						to_cstring(slot) << ": " << ( effective != nullptr ? effective->label() : "off" )
+						to_cstring(slot) << ": " << ( effective != nullptr ? effective->label() : "off" ) <<
+						( gatedOff ? "  (concept switched off — a lane switch leaves it off; select(<slot>, <effect>) turns it back on)" : "" )
 					);
 
 					continue;
@@ -301,20 +318,34 @@ namespace EmEn::Graphics
 
 			this->selectNoOccupant(slot.value());
 
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "The '" << slotName << "' concept is switched off (applied on the next frame).");
+			outputs.emplace_back(Severity::Success, std::stringstream{} <<
+				"The '" << slotName << "' concept is switched off (applied on the next frame). It stays off across lane switches; select(" << slotName << ", <effect>) turns it back on."
+			);
 
 			return true;
-		}, "Switch a whole concept off. Argument: slot name.");
+		}, "Switch a whole concept off, for the session — a lane switch leaves it off. Argument: slot name.");
 
 		this->bindCommand("setLightingMode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
 			{
-				outputs.emplace_back(Severity::Error, "Usage: setLightingMode(\"ScreenSpace\") or setLightingMode(\"RayTracing\").");
+				outputs.emplace_back(Severity::Error, "Usage: setLightingMode(\"ScreenSpace\"), setLightingMode(\"RayTracing\") or setLightingMode(\"None\").");
 
 				return false;
 			}
 
 			const auto modeName = arguments[0].asString();
+
+			/* "None" = the whole family off, the concept gates kept — the live twin of the
+			 * `LightingLane = "None"` setting, and the one-command control a "no indirect
+			 * lighting" capture needs. */
+			if ( modeName == GraphicsPPLightingLaneNone )
+			{
+				this->selectNoLightingLane();
+
+				outputs.emplace_back(Severity::Success, "Lighting family switched OFF (applied on the next frame). The concepts keep their switches: the next lane selection brings back exactly those that were on.");
+
+				return true;
+			}
 
 			std::optional< LightingLane > lane;
 
@@ -329,7 +360,7 @@ namespace EmEn::Graphics
 
 			if ( !lane.has_value() )
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "'" << modeName << "' is not a lighting mode. Expected 'ScreenSpace' or 'RayTracing'.");
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "'" << modeName << "' is not a lighting mode. Expected 'ScreenSpace', 'RayTracing' or 'None'.");
 
 				return false;
 			}
@@ -360,7 +391,19 @@ namespace EmEn::Graphics
 					continue;
 				}
 
-				if ( this->selectedOccupant(slot) == nullptr )
+				if ( this->selectedOccupant(slot) != nullptr )
+				{
+					continue;
+				}
+
+				/* Two reasons for an empty slot, and they must not be confused: the owner's gate
+				 * (honoured, expected) or a lane with no occupant there (a wiring gap, worth a
+				 * warning). */
+				if ( !this->isConceptEnabled(slot) )
+				{
+					outputs.emplace_back(Severity::Info, std::stringstream{} << "The '" << to_cstring(slot) << "' concept stays OFF: it is switched off (setting or disable()); select(" << to_cstring(slot) << ", <effect>) turns it back on.");
+				}
+				else
 				{
 					outputs.emplace_back(Severity::Warning, std::stringstream{} << "The '" << to_cstring(slot) << "' slot has no occupant in the '" << modeName << "' lane: it is now OFF.");
 				}
@@ -369,6 +412,6 @@ namespace EmEn::Graphics
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Lighting lane '" << modeName << "' selected (applied on the next frame).");
 
 			return true;
-		}, "Switch the whole lighting family to one lane. Argument: 'ScreenSpace' or 'RayTracing'.");
+		}, "Switch the whole lighting family to one lane, or off. Argument: 'ScreenSpace', 'RayTracing' or 'None'. A concept switched off stays off.");
 	}
 }
