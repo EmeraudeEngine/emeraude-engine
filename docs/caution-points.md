@@ -18,6 +18,63 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### A shared-UBO bank that fills up takes a material's MESH out of the scene — FIXED 2026-09-14
+
+> **Symptom:** an asset with many distinct materials renders with **geometry missing**. No VUID, no
+> black frame, no missing-resource warning; the object simply is not there, and a grid of test cells
+> just looks sparser than the reference. The log carries `Unable to add the PBR material to the
+> shared uniform buffer !`, one line per lost material and with no total, which reads like a
+> cosmetic complaint.
+>
+> **Root cause:** `SharedUniformBuffer::computeBlockAlignment()` sizes the bank from a **hard-coded
+> 65536** (`src/Graphics/SharedUniformBuffer.cpp:86` — the device's `maxUniformBufferRange` sits
+> commented out on the same line), `addElement()` returns false once every seat is taken, and
+> `Material::Interface::getSharedUniformBuffer()` states the consequence in its own comment: the
+> material **fails to load entirely, removing its sub-meshes from the scene**.
+>
+> **The arithmetic, and why it MOVES:** seats = 65536 / (material block aligned to
+> `minUniformBufferOffsetAlignment`). The block is **416 bytes** today and alignment is 64 on this
+> NVIDIA device ⇒ 448 ⇒ **146 seats**. The block was 320 bytes before `KHR_texture_transform`'s
+> rotation added a second block of 6 vec4 in Aug 2026, i.e. **204 seats**. Every future material
+> field narrows the ceiling again, and nothing announces it.
+>
+> **Measured (2026-09-14):** both Khronos iridescence grids declare 344 untextured materials — all
+> in the same `MaterialStandardResourceSimple` bank — and **197 of them (indices 146…342) fail**.
+> Isolated spheres read 203…216 with a seat and 19.8…31.1 without, against a background of
+> 16.7…32.7: **57 % of each grid is absent from the scene.**
+>
+> ⚠️⚠️ **The trap when you go to verify it:** a sphere whose material failed shows whatever is
+> BEHIND it, and in a 7×7×7 grid that is almost always another sphere. A naive per-cell probe
+> therefore reports the missing half as *saturated and correlated with its declared parameters* —
+> a plausible, publishable, completely wrong reading. Restrict the measurement to cells with
+> **nothing in front of or behind them** before concluding anything.
+>
+> **Do not** diagnose this as an unwired material feature: it looks exactly like one, the same way
+> the resource-key collapse did (see *Fixed: an asset NAME was used as a resource identity*).
+> Count the `Unable to add` lines and compare with the asset's material count first.
+>
+> **Fixed 2026-09-14**, two halves:
+> 1. `SharedUniformBuffer::bankSize()` is now the single place a bank's size is decided, and it is
+>    `min(maxUniformBufferRange, 65536)`. ⚠️ **The device limit is a CEILING, never the size to
+>    allocate** — desktop AMD reports it in the gigabytes, and *allocating that* is the defect the
+>    old `TODO: this doesn't work with desktop AMD graphics card` note was about, which is why the
+>    limit had been commented out in favour of a bare constant. Honour a device that offers less;
+>    cap one that offers absurdly more.
+> 2. `addElement()` allocates **another bank** instead of returning false, which is what this
+>    class's own sizing comment always claimed it did. Capacity comes from more banks, never from a
+>    bigger one.
+>
+> ⚠️ **Why both bank vectors are `reserve()`d to `MaxBankCount` at construction, and why that is
+> load-bearing:** a material writes its own block through `writeElementData()` from the logic
+> thread while another material is still loading and may be adding a bank. Reserved, a `push_back`
+> can never reallocate, so a reader indexing a bank that already existed when it got its seat is
+> safe. Remove the reservation and the growth becomes a use-after-free that only shows under
+> concurrent loading.
+>
+> **Measured after the fix**, same scene: zero `Unable to add` lines, zero VUID, and the isolated
+> seat-less spheres go from 19.8…31.1 (the backdrop) to **30.1…217.2, mean 187.9** — the grid is
+> complete, and its pastel iridescence is visible for the first time.
+
 ### A colour AND a texture cannot both be the same material component — the second `emplace()` is rejected SILENTLY
 
 > **Symptom:** a material is given both a colour and a texture for the same component (albedo being

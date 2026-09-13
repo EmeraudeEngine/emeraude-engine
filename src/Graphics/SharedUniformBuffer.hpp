@@ -245,6 +245,39 @@ namespace EmEn::Graphics
 			bool addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept;
 
 			/**
+			 * @brief The byte size of one bank.
+			 * @note ⚠️ The device limit is a CEILING, never the size to allocate: desktop AMD reports
+			 * a `maxUniformBufferRange` in the gigabytes, and allocating that was the defect the old
+			 * "this doesn't work with desktop AMD graphics card" note referred to — which is why the
+			 * limit had been commented out in favour of a bare 65536. Take the smaller of the two:
+			 * a device that offers less is honoured, a device that offers absurdly more is capped.
+			 * Capacity comes from MORE BANKS, not from a bigger one.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t bankSize () const noexcept;
+
+			/**
+			 * @brief Adds one bank using the flavour this buffer was constructed with.
+			 * @warning The caller MUST hold m_elementsAccess.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool growOneBank () noexcept;
+
+			/**
+			 * @brief The highest number of banks a shared uniform buffer will ever allocate.
+			 * @note ⚠️ Load-bearing: both bank vectors are RESERVED to it at construction so that a
+			 * later push_back can never reallocate them. A material writes its own block through
+			 * writeElementData() from the logic thread while another material is still loading and
+			 * may be adding a bank — with a reallocation those readers would be indexing freed
+			 * storage. Reserved, the growth only appends, and a reader only ever indexes a bank
+			 * that already existed when it got its seat. 64 banks is 4 MiB of uniform memory at the
+			 * 64 KiB cap, and 9344 material blocks at the current 448-byte alignment.
+			 */
+			static constexpr uint32_t MaxBankCount{64};
+
+			/**
 			 * @brief Returns the right UBO index from element index.
 			 * @param index The element index.
 			 * @return uint32_t
@@ -257,6 +290,11 @@ namespace EmEn::Graphics
 			}
 
 			std::shared_ptr< Vulkan::Device > m_device;
+			/* NOTE: Kept so the buffer can grow a bank on its own AFTER construction. The dynamic
+			 * flavour needs its renderer and its descriptor-set recipe to build the bank's
+			 * descriptor set; the plain flavour leaves both empty and grows through addBuffer(). */
+			Renderer * m_renderer{nullptr};
+			descriptor_set_creator_t m_descriptorSetCreator{};
 			uint32_t m_uniformBlockSize;
 			uint32_t m_maxElementCountPerUBO{0};
 			uint32_t m_blockAlignedSize{0};

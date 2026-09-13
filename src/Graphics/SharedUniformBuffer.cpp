@@ -50,6 +50,10 @@ namespace EmEn::Graphics
 	{
 		m_frameCount = std::max(1U, frameCount);
 
+		/* ⚠️ Reserved ONCE, so no later growth can reallocate these vectors under a reader. See
+		 * MaxBankCount. */
+		m_uniformBufferObjects.reserve(MaxBankCount);
+
 		const auto bufferCount = this->computeBlockAlignment(maxElementCount);
 
 		for ( uint32_t index = 0; index < bufferCount; index++ )
@@ -66,6 +70,13 @@ namespace EmEn::Graphics
 		m_uniformBlockSize(uniformBlockSize)
 	{
 		m_frameCount = std::max(1U, frameCount);
+		m_renderer = &renderer;
+		m_descriptorSetCreator = descriptorSetCreator;
+
+		/* ⚠️ Reserved ONCE, so no later growth can reallocate these vectors under a reader. See
+		 * MaxBankCount. */
+		m_uniformBufferObjects.reserve(MaxBankCount);
+		m_descriptorSets.reserve(MaxBankCount);
 
 		const auto bufferCount = this->computeBlockAlignment(maxElementCount);
 
@@ -83,7 +94,7 @@ namespace EmEn::Graphics
 	{
 		/* NOTE: nvidia GTX 1070 : 65536 bytes and 256 bytes alignment, so 256 optimal elements. */
 		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
-		const auto maxUBOSize = 65536U;//limits.maxUniformBufferRange;
+		const auto maxUBOSize = this->bankSize();
 		const auto minUBOAlignment = limits.minUniformBufferOffsetAlignment;
 
 		m_blockAlignedSize = static_cast< uint32_t >(minUBOAlignment) * Math::alignCount(m_uniformBlockSize, static_cast< uint32_t >(minUBOAlignment));
@@ -164,6 +175,33 @@ namespace EmEn::Graphics
 		return m_descriptorSets.at(bufferIndex).get();
 	}
 
+	uint32_t
+	SharedUniformBuffer::bankSize () const noexcept
+	{
+		/* 64 KiB is the size every desktop device handles well and the value this engine has always
+		 * used; the device limit only ever makes it SMALLER. See the header note for why the raw
+		 * limit must never be allocated. */
+		constexpr uint32_t PreferredBankSize{65536};
+
+		return std::min(m_device->physicalDevice()->propertiesVK10().limits.maxUniformBufferRange, PreferredBankSize);
+	}
+
+	bool
+	SharedUniformBuffer::growOneBank () noexcept
+	{
+		if ( m_uniformBufferObjects.size() >= MaxBankCount )
+		{
+			return false;
+		}
+
+		if ( m_renderer != nullptr )
+		{
+			return this->addBuffer(*m_renderer, m_descriptorSetCreator);
+		}
+
+		return this->addBuffer();
+	}
+
 	bool
 	SharedUniformBuffer::addElement (const void * element, uint32_t & offset) noexcept
 	{
@@ -187,7 +225,27 @@ namespace EmEn::Graphics
 			offset++;
 		}
 
-		return false;
+		/* ⚠️ Every seat is taken, and this used to be the end of it: the owner failed to load, and
+		 * `Material::Interface::getSharedUniformBuffer()`'s own comment spells out the consequence —
+		 * its sub-meshes leave the scene, with no VUID and no black frame to say so. Measured on the
+		 * Khronos iridescence grids: 344 materials against 146 seats, 197 spheres silently absent.
+		 * A bank is allocated instead, which is what this class's sizing comment always claimed it
+		 * did. The new seats are appended, so `offset` — already walked to the end of the previous
+		 * table — is exactly the first of them. */
+		if ( !this->growOneBank() )
+		{
+			TraceError{ClassId} <<
+				"The shared uniform buffer is full at " << m_elements.size() << " elements "
+				"(" << m_uniformBufferObjects.size() << " banks of " << m_maxElementCountPerUBO << ") "
+				"and cannot grow any further ! The owner will fail to load and its geometry will "
+				"leave the scene.";
+
+			return false;
+		}
+
+		m_elements[offset] = element;
+
+		return true;
 	}
 
 	void
@@ -267,11 +325,9 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addBuffer () noexcept
 	{
-		/* TODO: Check this code (this doesn't work with desktop AMD graphics card) */
-		//const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "Chunk#" << m_uniformBufferObjects.size()).str();
 
-		constexpr auto UBOMaxSize = 65536;//limits.maxUniformBufferRange;
+		const auto UBOMaxSize = this->bankSize();
 
 		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, UBOMaxSize, m_blockAlignedSize)).get();
 		uniformBufferObject->setIdentifier(ClassId, chunkId, "UniformBufferObject");
@@ -291,11 +347,9 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept
 	{
-		/* TODO: Check this code (this doesn't work with desktop AMD graphics card) */
-		//const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "DynamicChunk#" << m_uniformBufferObjects.size()).str();
 
-		constexpr auto UBOMaxSize = 65536;//limits.maxUniformBufferRange;
+		const auto UBOMaxSize = this->bankSize();
 
 		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, UBOMaxSize, m_blockAlignedSize)).get();
 		uniformBufferObject->setIdentifier(ClassId, chunkId, "UniformBufferObject");
