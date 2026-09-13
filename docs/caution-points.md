@@ -818,6 +818,45 @@ if ( materialType == StandardResource::ClassId )
 > luminance weight protects them as "converged signal" (visible fireflies). Animation and
 > the denoiser are a package: neither works alone.
 
+### Fixed: the screen-space lane lit enclosed spaces with the UNOCCLUDED sky (Sep 2026)
+
+> [!CAUTION]
+> **Measured on `sponza`, upper gallery, exposure PINNED (f/11 · 1/250 s · ISO 100), 2880×1620,
+> RTX 3070 Ti, 0 VUID: the same frame read 11.2/255 mean in the RayTracing lane and 52.8 in the
+> ScreenSpace lane.** The galleries were lit as if the courtyard had no roof.
+>
+> **The cause was the indirect-diffuse OWNERSHIP contract, not a knob.** `RTGI` claimed the indirect
+> diffuse, so `Scene::updateIBLDiffuseOwnership()` switched the raster ambient pass' diffuse IBL leg
+> off and the sky reached every surface through rays that measure its visibility. `SSGI` claimed
+> nothing and had no sky term, so the weight stayed at 1 and the ambient pass applied the **whole
+> irradiance cubemap** to every surface — attenuated only by the short-range SSAO, with the SSGI
+> bounce added on top.
+>
+> **The fix**: SSGI runs a **GTAO horizon search** (Jimenez et al., SIGGRAPH 2016; Intel XeGTAO as
+> the implementation reference) and composites `irradianceCube(bentNormal) * skyLuminance * V` inside
+> its trace, so the sky rides its existing SVGF denoiser. It then claims the ownership like RTGI.
+> Full description, settings and acceptance table: `src/Graphics/AGENTS.md` § "The screen-space sky
+> visibility".
+
+**Three traps this defect and its measurement have already sprung:**
+
+- ⚠️⚠️ **`global-illumination` is NOT a bench for a sky term.** The demo declares no background and
+  `setAmbientLightIntensity(0)`, so `FrameContext::skyLuminance` is 0 AND the reserved irradiance
+  cube slot holds the engine's default **black** 16² cubemap: every sky term, raster or effect, is
+  exactly zero there and an A/B measures nothing. The item's plan named it as the "no double count"
+  test; it took a look at `onSetupLighting()` to see it could not be. A sky bench needs a scene with
+  a background — Sponza's own grass apron, seen from `setPosition(-9, 0, -2.5)` +
+  `lookAt(-9, 1.2, 6)`, is an open-sky surface that fills half the frame.
+- ⚠️⚠️ **A pinned exposure is pinned to A SCENE.** `f/11 · 1/250 s · ISO 100` is the daylight triad
+  the Sponza measurements use; on the (indoor, one-omni) `global-illumination` bench the same triad
+  renders a mean of 0.0/255 — a black capture that looks exactly like a broken lane. Bracket the
+  triad on the scene at hand before concluding anything (that bench sits at `f/5.6 · 1/60 s ·
+  ISO 800`, mean 123).
+- ⚠️ **Comparing two lanes in DISPLAY space understates everything.** The tone mapper is ACES plus a
+  gamma: on the gallery pose the display-space gap reads 4.6×, the linearised one 8.4×. Undo the
+  gamma, then invert the ACES fit `(x(2.51x+0.03))/(x(2.43x+0.59)+0.14)` — a quadratic — before any
+  ratio.
+
 ### Fixed: RTAO/RTGI tMin Skipped Near Occluders + SSAO Double Intensity & Screen-Edge Band (Jul 2026)
 
 > [!WARNING]

@@ -924,6 +924,45 @@ namespace EmEn
 			constexpr auto GraphicsPPIndirectDiffuseSSStepCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/StepCount"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseSSStepCount{16U};
 
+			/* Screen Space > Global Illumination > SKY VISIBILITY (GTAO horizon search, Sep 2026).
+			 * ⚠️ THE reason the two lanes disagreed in an enclosed space: RTGI's rays measure the
+			 * real visibility of the sky (a ray that escapes returns sky radiance), SSGI had NO sky
+			 * term at all, so the scene kept handing the raster its full, UNOCCLUDED irradiance
+			 * cubemap — Sponza read 54.7/255 mean on the screen-space lane against 11.8 on the
+			 * traced one, the sky lighting the galleries as if the courtyard had no roof. The
+			 * horizon search gives the screen-space lane the visibility it lacked, and with it the
+			 * indirect-diffuse OWNERSHIP (see PostProcessEffect::providesIndirectDiffuse()).
+			 * @note Jimenez, Wu, Pesce, Jarabo, "Practical Realtime Strategies for Accurate Indirect
+			 * Occlusion" (SIGGRAPH 2016 courses) for the slice integral and the bent normal; Intel
+			 * XeGTAO (MIT) as the implementation reference. */
+			/* Whether the screen-space lane computes its own sky visibility. Turning it OFF gives
+			 * the indirect diffuse back to the raster (unoccluded sky) — the A/B of the defect. */
+			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilityEnabledKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilityEnabled"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityEnabled{true};
+			/* How far the horizon search looks for an occluder of the SKY, in world units.
+			 * ⚠️ NOT IndirectDiffuse/MaxDistance: that one is the BOUNCE range (8 m), and the two are
+			 * independent by construction in the traced lane too — RTGI casts its ray to the FAR
+			 * PLANE and only reads a bounce from a hit closer than MaxDistance ("nothing hit within
+			 * 8 m does not mean sees the sky"). A roof 12 m above a courtyard occludes the sky
+			 * without ever carrying a bounce. */
+			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilityRadiusKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilityRadius"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityRadius{16.0F};
+			/* Directions sampled per pixel: each slice is a plane through the view vector, and the
+			 * search walks BOTH of its sides. XeGTAO calls 3 "high quality". */
+			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilitySliceCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilitySliceCount"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount{3U};
+			/* Depth samples per slice SIDE. The step distribution is quadratic, so the near field
+			 * keeps its detail while the last steps reach the radius. */
+			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilityStepCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilityStepCount"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount{6U};
+			/* Fraction of the radius over which a far occluder fades out, in [0;1].
+			 * ⚠️ Low ON PURPOSE, and NOT XeGTAO's 0.615: that value keeps an ARTISTIC ambient
+			 * occlusion local, while a roof must occlude the sky at full strength however far it
+			 * is. The fade only smooths the LAST FIFTH of the range so geometry does not pop as it
+			 * crosses the boundary — the same choice, for the same reason, as the SSGI range fade. */
+			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilityFalloffRangeKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilityFalloffRange"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityFalloffRange{0.2F};
+
 			/* Screen-space reflections (SSR). */
 			/* Compute reflections at half resolution (pixel doubling) to save performance.
 			 * Default FALSE (owner decision): screen-space effects run full-res by default —

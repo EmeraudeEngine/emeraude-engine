@@ -246,7 +246,8 @@ Measured from the `execute()` implementations (render passes + compute dispatche
 | ToneMapping (auto-exposure) | ~8 + CPU readback | log-luminance chain to 1×1 + adaptation + tonemap; 1 pass in manual mode |
 | DepthOfField | 4–7 + CPU readback | autofocus 1×1 + CoC setup + optional near-field dilate/gather + far gather + composite |
 | RTGI | 4–6 | + temporal resolve + normal-history copy when enabled |
-| RTAO / SSAO / SSGI / MotionBlur / ContactShadows | 4 each | trace/extract + blur/tile pair + apply. MotionBlur early-outs to 0 without velocity/shutter. |
+| RTAO / SSAO / MotionBlur / ContactShadows | 4 each | trace/extract + blur/tile pair + apply. MotionBlur early-outs to 0 without velocity/shutter. |
+| SSGI | 5 | **+1 since Sep 2026**: the sky-visibility pass (GTAO horizon search) precedes the trace — ≈ 1.0 ms at 2880×1620, half res. It is what lets the screen-space lane own the indirect diffuse; see `src/Graphics/AGENTS.md` § "The screen-space sky visibility". |
 | VolumetricLight / LensFlare | 3 each | extract + blur/ghosts + composite |
 | TAA / FXAA / Sharpen / FXAASharpen / AtmosphericFog | 1 each | |
 

@@ -1793,9 +1793,11 @@ two implementations of one thing). Post-processing was also spread over **six** 
 **Switching lanes changes what the frame MEANS**, not merely how fast it was obtained. Verified on
 Sponza (2880×1620, zero VUIDs): the two captures differ on 99.7 % of pixels, mean |Δ| 20/255, while
 the mean luminance is unchanged (84.96 vs 84.97 — the auto-exposure absorbs it, so **a luminance
-comparison cannot detect this switch**). The visible difference is the shadowed arcade: RTGI owns
-the indirect diffuse and integrates the sky with real visibility, so it stays lit; SSGI has no sky
-term at all and it crushes to black. See § "Indirect-diffuse OWNERSHIP".
+comparison cannot detect this switch**). The visible difference is the shadowed arcade, where the
+two lanes measure the sky differently. ⚠️ This paragraph said *"SSGI has no sky term at all and it
+crushes to black"* until Sep 2026: SSGI HAS a sky term since the sky-visibility pass, and the
+failure it produced was the opposite one — the raster kept the diffuse IBL leg and lit the arcade
+with the UNOCCLUDED sky. See § "Indirect-diffuse OWNERSHIP" and § "The screen-space sky visibility".
 
 ### Available Effects
 
@@ -1838,7 +1840,7 @@ term at all and it crushes to black. See § "Indirect-diffuse OWNERSHIP".
 | **RTR** | `Effects/Lighting/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Lighting/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
 | **RTAO** | `Effects/Lighting/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
-| **SSGI** | `Effects/Lighting/SSGI.hpp/cpp` | SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR |
+| **SSGI** | `Effects/Lighting/SSGI.hpp/cpp` | SkyVisibility (GTAO horizon search) → SVGF chain (Trace→GIDenoiser, same shape as RTGI) | Depth, Normals, MaterialProps, Albedo, Velocity, HDR, **bindless irradiance cubemap** |
 | **RTContactShadows** | `Effects/Lighting/RTContactShadows.hpp/cpp` | Multi-pass, HALF-res | Depth, Normals (READ since Sep 2026 — the ray origin's normal offset), MaterialProps, LightSet, RT (TLAS+SSBOs) |
 | **SSContactShadows** | `Effects/Lighting/SSContactShadows.hpp/cpp` | Multi-pass, FULL-res | Depth, Normals, MaterialProps (combine only), LightSet |
 | **LensFlare** | `Effects/Camera/LensFlare.hpp/cpp` | Multi-pass | Depth (the source occlusion probe), HDR, LightSet |
@@ -2654,12 +2656,18 @@ variance fallback must cover.
 > - ⚠️ **The scene's SCALAR ambient is untouched.** A hand-lit scene's `setAmbientLightIntensity()`
 >   (Sponza's 200 lx) is the owner's deliberate residual — the "skylight leaking" knob of the
 >   reference implementations — not a computed term. Only the sky-derived irradiance changes hands.
-> - ⚠️⚠️ **A screen-space effect can NEVER be an owner.** SSGI has no sky term at all (a miss in
->   screen space means "no occluder found in the depth buffer", not "open sky" — implemented,
->   measured and reverted in Jul 2026: mean 96.2 / median 96.0, i.e. zero spatial variation, which
->   is exactly the flat ambient it was meant to replace). SSGI's contribution and the raster's
->   ambient are DISJOINT, so they are legitimately added. `providesIndirectDiffuse()` returning
->   `false` for SSGI is a consequence of what it can measure, not a policy choice.
+> - ⚠️⚠️ **SSGI IS an owner since Sep 2026, and this bullet said the exact opposite.** It read
+>   *"a screen-space effect can NEVER be an owner […] SSGI has no sky term at all"*. The premise was
+>   right and the conclusion was wrong: a ray MISS in screen space indeed means "no occluder found
+>   in the depth buffer", never "open sky" (implemented from the miss branch, measured and reverted
+>   in Jul 2026: mean 96.2 / median 96.0, zero spatial variation — the flat ambient it was meant to
+>   replace). The answer is not to give up the sky, it is to MEASURE its visibility instead of
+>   inferring it from a miss: SSGI now runs a GTAO horizon search and composites
+>   `irradianceCube(bentNormal) * skyLuminance * V`. See § "The screen-space sky visibility" for the
+>   pass, its acceptance measurements and what it still cannot see.
+>   ⚠️ Leaving the raster leg on was NOT the safe half of the choice: an enclosed space came out
+>   **4.6× brighter than the traced lane** on Sponza, the galleries lit as if the courtyard had no
+>   roof. Two disjoint terms only add up when BOTH are right.
 > - ⚠️⚠️ **The provider must be gated on its ability to RUN.** `RTGI::providesIndirectDiffuse()`
 >   repeats the exact gate `PostProcessor` skips the effect on (hardware, `isRayTracingSettingEnabled()`,
 >   `isRayTracingReady()`). Claiming ownership while the TLAS is still building would hand the diffuse
@@ -2675,11 +2683,102 @@ variance fallback must cover.
 > applies that replacement to non-transparent surfaces only). Both REPLACE, neither adds.
 >
 > **Files**: `Graphics/PostProcessEffect.hpp` (the virtual), `Graphics/PostProcessStack.{hpp,cpp}`,
-> `Graphics/Effects/Lighting/RTGI.{hpp,cpp}`, `Scenes/Scene.lighting.cpp`
+> `Graphics/Effects/Lighting/RTGI.{hpp,cpp}` and `Graphics/Effects/Lighting/SSGI.{hpp,cpp}` (the two
+> providers), `Scenes/Scene.lighting.cpp`
 > (`updateIBLDiffuseOwnership`, `refreshAmbientLightProperties`), `Scenes/Scene.cpp` (the poll),
 > `Saphir/LightGenerator.cpp` (`iblDiffuseIrradiance`), `Saphir/Generator/Abstract.cpp` +
 > `Graphics/ViewMatrices{2D,3D,Cascaded}UBO.*` (the UBO lane — it fits in the EXISTING padding
 > after `environmentLuminance`, so the UBO size did not move).
+
+### The screen-space sky visibility — the GTAO horizon search that made SSGI an owner (Sep 2026)
+
+> [!CAUTION]
+> **THE DEFECT.** The two lanes are supposed to be two costs of ONE lighting. In an enclosed space
+> they were two lightings: measured on `sponza` (2026-09-13, RTX 3070 Ti, 2880×1620, exposure
+> PINNED at f/11 · 1/250 s · ISO 100, upper gallery `setPosition(4.8, 8.4, -0.3)` +
+> `lookAt(-6, 0, 0.5)`), the same frame read **11.2/255 mean in the RayTracing lane and 52.8 in the
+> ScreenSpace lane** — the galleries lit as if the courtyard had no roof.
+>
+> **The cause was a contract, not a knob.** RTGI claims the indirect diffuse, so the scene switches
+> the raster's diffuse IBL leg off and the sky reaches every surface through rays that measure its
+> real visibility. SSGI claimed nothing and had no sky term, so the weight stayed 1 and the ambient
+> pass applied the **full irradiance cubemap** — the sky as if nothing stood in the way — attenuated
+> only by the short-range SSAO, with the SSGI bounce added on top.
+
+**The mechanism** (`Effects/Lighting/SSGI.cpp`, pass `SSGI_SkyVisibility`, half-res RGBA16F):
+a **GTAO horizon search** — Jimenez, Wu, Pesce, Jarabo, *"Practical Realtime Strategies for Accurate
+Indirect Occlusion"* (SIGGRAPH 2016 courses); implementation reference **Intel XeGTAO** (MIT). Per
+pixel, `SkyVisibilitySliceCount` planes through the view vector are walked on both sides; each depth
+sample raises that side's horizon; the cosine-weighted arc between the two horizons is the
+visibility **V**, and the mean direction of that arc is the **bent normal**. The trace pass then adds
+
+```glsl
+indirectLight += texture(texturesCube[IrradianceCubemapSlot], bentNormalWorld).rgb * skyLuminance * V;
+```
+
+right where it normalises its bounce estimator — so the sky rides the SAME demodulated convention
+(an irradiance `E/PI`, the receiver albedo applied ONCE at the combine) and the SAME SVGF denoiser
+as the bounce, exactly as RTGI's sky does. `SSGI::providesIndirectDiffuse()` then returns true and
+the raster leg goes to 0.
+
+> [!IMPORTANT]
+> **Why the pass lives in SSGI and not in SSAO**, where the first plan put it: the slot order is
+> `ContactShadows → IndirectDiffuse → Reflections → AmbientOcclusion`, and `SSR` flushes the combine
+> group before it runs (`readsChainColorUpstream()`). A sky composited at the `AmbientOcclusion`
+> slot lands AFTER the reflections have sampled the chain colour, so every screen-space reflection
+> would reflect a world with no sky light — trading one incoherence for another. Composited at
+> `IndirectDiffuse`, the reflections see it. Owner decision, 2026-09-13.
+
+**Acceptance measurements** (Sponza, SS lane, pinned exposure, validation layers on, **0 VUID**,
+values linearised through the gamma and the ACES fit before any ratio):
+
+| Test | Sky term OFF | Sky term ON | Reading |
+|---|---|---|---|
+| **Open sky** (grass outside, `setPosition(-9, 0, -2.5)` + `lookAt(-9, 1.2, 6)`) | 0.04663 | 0.04663 | **ratio 1.0000, bit-identical over two separate launches** — with V ≈ 1 the sky term IS the raster leg it replaces: no double count, no loss |
+| **On-screen occluder** (the vault above, same pose) | 0.02643 | 0.01170 | ×0.44 — the arches occlude the sky |
+| **Atrium floor** (`setPosition(-9, 5, 0)` + `lookAt(-9, 0, 0.6)`) | 0.1031 | 0.0449 | implied **V = 0.44**, against **0.45 analytic** for a 10 m wide, 10 m high slot of sky (`V = sin(atan(W/2H))`) |
+| **Upper gallery** (the defect's own pose) | 0.0479 | 0.0212 | the gap to the traced lane falls from **8.4× to 3.7×** (RT 0.0057) |
+
+**Cost**: `SSGIEffect/internal` 6.02 ms → 7.02 ms average at 2880×1620 (RTX 3070 Ti, GPU profiler,
+same pose sequence) — **≈ 1.0 ms** for 3 slices × 6 steps × 2 sides at half resolution. For scale,
+`SSAOEffect/trace` is 0.40 ms and `RTGIEffect/trace` 39 ms on the same frame.
+**Temporal stability**: static camera, consecutive frames, mean |Δ| 0.5-0.7/255, p99.9 ≤ 7/255,
+0.001-0.013 % of pixels above 16 — the animated R2 noise is absorbed by the SVGF accumulation.
+
+> [!WARNING]
+> **What it still cannot see, by construction: an occluder that is OFF SCREEN.** A roof above and
+> behind the camera does not occlude anything in a depth-buffer search. That is what the remaining
+> 3.7× at the gallery pose is made of, and it is the structural limit of the lane, not a defect of
+> this pass. ⚠️ Out-of-frame samples are **skipped, never clamped**: a clamp-to-edge sampler recycles
+> the border depth and paints a false occlusion band along the frame (the trap the SSAO kernel
+> already documents).
+>
+> ⚠️ **Do NOT "fix" the residual by scaling the lane down.** The missing quantity is a per-pixel
+> visibility, not a level: a flat factor would darken the open bench that is now exactly right.
+>
+> ⚠️ **OPEN QUESTION, owner-gated** (`docs/todo/rt-lane-underlights-enclosed-spaces.md`): on that
+> same atrium floor the traced lane delivers **0.05** of the unoccluded sky where the geometry says
+> 0.45 and the screen-space lane measures 0.44. The residual gap may well be the TRACED lane
+> under-lighting rather than the screen-space one over-lighting. Not investigated here.
+
+**Settings** (`Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/`): `SkyVisibilityEnabled`
+(the A/B of the whole defect — off restores the raster's unoccluded leg), `SkyVisibilityRadius`
+(**16 m**, and ⚠️ NOT `IndirectDiffuse/MaxDistance`: that one is the BOUNCE range, 8 m, and the two
+are independent in the traced lane too — RTGI casts its ray to the FAR PLANE and only reads a bounce
+from a hit closer than `MaxDistance`, because *"nothing hit within 8 m"* does not mean *"sees the
+sky"*), `SkyVisibilitySliceCount` (3), `SkyVisibilityStepCount` (6), `SkyVisibilityFalloffRange`
+(**0.2**, ⚠️ not XeGTAO's 0.615: that value keeps an ARTISTIC occlusion local, while a roof must
+occlude the sky at full strength however far it is — the fade only smooths the last fifth of the
+range, the same choice as the SSGI range fade).
+
+> [!NOTE]
+> **Two deliberate deviations from XeGTAO**, both documented in the shader: the slice frame uses a
+> NORMALISED tangent (XeGTAO rotates the raw screen direction, an approximation exact only at the
+> centre of the frame), and `FinalValuePower` (2.2) is NOT applied — it is a look control for an
+> artistic AO, and this V is a physical visibility that multiplies a light source.
+> **`SSAO` was deliberately left untouched** (owner decision, 2026-09-13): it keeps its short-range
+> hemisphere kernel for its own multiply. Sharing one visibility between the two effects is a
+> separate item, `docs/todo/ssao-consumes-the-sky-visibility-lane.md`.
 
 ### The albedo G-buffer: BASE colour in RGB, DIFFUSE WEIGHT in ALPHA (Aug 2026)
 

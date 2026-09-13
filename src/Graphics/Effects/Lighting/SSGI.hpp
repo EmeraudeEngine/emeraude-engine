@@ -45,11 +45,18 @@ namespace EmEn::Graphics::Effects::Lighting
 {
 	/**
 	 * @brief Screen-Space Global Illumination (SSGI) post-processing effect.
-	 * @note One-bounce diffuse indirect lighting approximation using screen-space ray marching.
-	 * For each pixel, casts cosine-weighted hemisphere rays through the depth buffer;
-	 * on hit, samples the scene color at the hit point to produce indirect radiance
-	 * (color bleeding). This is the screen-space fallback for RTGI when ray tracing
-	 * hardware is not available.
+	 * @note The COMPLETE indirect-diffuse estimator of the screen-space lane: the sky and the
+	 * bounce, exactly like RTGI in the traced lane.
+	 * - The BOUNCE: cosine-weighted hemisphere rays marched through the depth buffer; on hit, the
+	 *   scene color at the hit point is the indirect radiance (color bleeding).
+	 * - The SKY (Sep 2026): a GTAO horizon search measures how much of the sky each pixel actually
+	 *   sees, and the baked irradiance cubemap sampled along the resulting BENT NORMAL gives the
+	 *   irradiance that visibility lets through. Without it this effect claimed no sky, the scene
+	 *   kept handing the raster its full unoccluded irradiance cubemap, and an enclosed space came
+	 *   out 4.6x brighter than the traced lane (measured on Sponza, 2026-09-13).
+	 * @note That sky term is what makes this effect an indirect-diffuse PROVIDER
+	 * (providesIndirectDiffuse()): the scene drops the raster's own diffuse IBL leg to 0 and the
+	 * sky is composited ONCE, by whoever measures its visibility.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
 	class EMEN_API SSGI final : public IndirectPostProcessEffect
@@ -86,6 +93,13 @@ namespace EmEn::Graphics::Effects::Lighting
 				float thickness{0.5F};
 				uint32_t sampleCount{8};
 				uint32_t stepCount{16};
+				/* Sky visibility (GTAO horizon search). The radius is the SKY occluder range and
+				 * has nothing to do with maxDistance, which is the bounce range — see
+				 * SettingKeys.hpp. */
+				float skyVisibilityRadius{16.0F};
+				float skyVisibilityFalloffRange{0.2F};
+				uint32_t skyVisibilitySliceCount{3};
+				uint32_t skyVisibilityStepCount{6};
 				/* À-trous edge-stopping sigmas + iteration count (GIDenoiser::Parameters). */
 				float depthSigma{1.0F};
 				float normalSigma{0.5F};
@@ -100,6 +114,7 @@ namespace EmEn::Graphics::Effects::Lighting
 				/* Denoiser debug view (combine draws it INSTEAD of the GI): 0 = off,
 				 * 1 = temporal variance, 2 = accumulation age. */
 				uint32_t denoiserDebugView{0};
+				bool skyVisibilityEnabled{true};
 				bool denoiserAccumulationCounter{true};
 				bool temporalEnabled{true};
 				bool temporalNeighborhoodClamp{false};
@@ -123,6 +138,32 @@ namespace EmEn::Graphics::Effects::Lighting
 				uint32_t stepCount;
 				/* Animated-noise frame index of the R2 sequence (< 0 = frozen pattern). */
 				float noiseFrameIndex;
+				/* Luminance of the sky in nits (0 = no sky): the scale of the irradiance cubemap,
+				 * the SAME value the raster leg this effect takes over applied
+				 * (ViewUB EnvironmentLuminance). Read by the sky-visibility variant only. */
+				float skyLuminance;
+			};
+
+			/**
+			 * @brief Push constants for the sky-visibility pass (GTAO horizon search).
+			 * @note The three inverse-view columns carry the view -> world rotation the bent normal
+			 * needs to sample the irradiance cubemap; their unused w components carry the scalars
+			 * that would otherwise pad the block.
+			 */
+			struct EMEN_API HorizonPushConstants
+			{
+				/* xyz = inverse view rotation column 0, w = search radius in world units. */
+				float invViewCol0[4];
+				/* xyz = inverse view rotation column 1, w = falloff range, as a fraction of the radius. */
+				float invViewCol1[4];
+				/* xyz = inverse view rotation column 2, w = animated-noise frame index (< 0 = frozen). */
+				float invViewCol2[4];
+				float nearPlane;
+				float farPlane;
+				float tanHalfFovY;
+				float aspectRatio;
+				uint32_t sliceCount;
+				uint32_t stepCount;
 			};
 
 			/**
@@ -184,6 +225,16 @@ namespace EmEn::Graphics::Effects::Lighting
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]
 			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::PostProcessEffect::providesIndirectDiffuse()
+			 * @note True as soon as the sky-visibility pass is live: the effect then composites the
+			 * sky irradiance itself, with the visibility it measures, and the scene switches its
+			 * ambient pass' diffuse IBL leg off (Scene::updateIBLDiffuseOwnership()).
+			 * ⚠️ Gated on the SAME conditions the pass actually runs on — created, and with the
+			 * bindless irradiance cubemap available — for the reason RTGI documents: claiming the
+			 * indirect diffuse while nothing composites it leaves the frame with NO sky at all. */
+			[[nodiscard]]
+			bool providesIndirectDiffuse () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth() */
 			[[nodiscard]]
@@ -264,15 +315,28 @@ namespace EmEn::Graphics::Effects::Lighting
 			Parameters m_parameters;
 			/* IRT: trace (half-res). The denoiser owns everything downstream. */
 			IntermediateRenderTarget m_traceTarget;
+			/* IRT: sky visibility (half-res, RGBA16F) — xyz = WORLD-space bent normal, w = the
+			 * cosine-weighted visibility of the hemisphere. Written before the trace, read by it. */
+			IntermediateRenderTarget m_horizonTarget;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_horizonPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_horizonLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_horizonPerFrame;
 			/* Texture consumed by this frame's combine snippet: the denoiser output when
 			 * the temporal chain is active, the raw trace otherwise. Set by
 			 * recordOverlayPasses() every frame. */
 			const Vulkan::TextureInterface * m_combineSource{nullptr};
+			/* Whether the sky-visibility half of the estimator is live: the user setting AND the
+			 * bindless irradiance cubemap this effect samples. Decided ONCE, by create(), because
+			 * it selects the trace shader variant and the pipeline layout.
+			 * ⚠️ Read by providesIndirectDiffuse() from the LOGIC thread while create() writes it
+			 * on the render thread — the same benign race as the effects' enabled flags, and with
+			 * the same worst case: one frame of the previous ownership weight. */
+			bool m_skyVisibilityActive{false};
 	};
 }
