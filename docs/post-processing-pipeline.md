@@ -93,7 +93,11 @@ Three things this settles:
 - **The grab pass reads exactly as § 3 specifies.** Immediately after the scene pass, outside any
   render pass: `[barrier] vkCmdBlitImage + vkCmdCopyImage ×5 [barrier]`. The batched-barrier
   contract holds (two barriers, not twelve), and it is a direct view of the **five copies nothing
-  overwrites afterwards** — the redundancy § 4b prices at ~0.5 ms.
+  overwrites afterwards** — the redundancy § 4b prices at ~0.5 ms. ⚠️ The publishing barrier's
+  destination stages must name EVERY consumer stage: since 2026-09-13 it includes
+  `COMPUTE_SHADER`, because SSR reads the grabbed depth (Hi-Z copy) and colour (colour pyramid) in
+  compute shaders — until then that transfer → compute hazard had no synchronisation at all
+  (`PostProcessor.cpp` and `GrabPass.cpp`, both sites).
 - **The chain is one render pass per fullscreen draw**, 49 of them. ONE of those draws is the RTGI
   trace at ~40 ms; the other 48 share ~13 ms.
 - ⚠️ **The multi-pass forward is NOT the ceiling on this scene.** 579 scene draws against 454

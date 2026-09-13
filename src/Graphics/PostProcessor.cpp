@@ -1145,7 +1145,15 @@ namespace EmEn::Graphics
 		{
 			/* Destinations are sampled by fragment shaders; color sources resume as color
 			 * attachments; the depth source resumes at the early fragment tests. */
-			VkPipelineStageFlags postDstStages = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			/* ⚠️ COMPUTE too, not only fragment: the grab copies are consumed by compute shaders as
+			 * well — SSR builds its Hi-Z pyramid from the grabbed depth and its colour pyramid from
+			 * the grabbed colour in 8x8 workgroups (RTR's pyramid reads its own targets). Without
+			 * this stage the transfer -> compute hazard was unsynchronised: a workgroup could read a
+			 * tile the copy had not written yet, and a pyramid mip-2 texel of that tile came out
+			 * BLACK — intermittent 7x7 black squares on every glossy surface of the screen-space
+			 * lane (owner-captured on light-and-shadow-debug, 2026-09-13; disabling SSR alone
+			 * removed them, the RTR/denoiser A/B did not). */
+			VkPipelineStageFlags postDstStages = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 
 			if ( copyDepth )
 			{

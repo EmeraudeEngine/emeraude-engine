@@ -632,6 +632,19 @@ void main()
 			reflColor = mix(sharpColor, coneColor, clamp(coneWidthTexels - 1.0, 0.0, 1.0));
 		}
 
+		/* ⚠️ A NON-FINITE reflected colour is REJECTED, never blended. The scene colour is RGBA16F
+		 * (maximum 65 504 nits): a mirror-polished metal under a 100 000 lx sun writes its specular
+		 * peak as +Inf, and a ray landing on such a pixel brought Inf here, which the confidence
+		 * multiply, the separable blur (radius 2 -> 5x5) and the TAA neighbourhood (-> 7x7) turned
+		 * into a plain BLACK square on every glossy surface of the screen-space lane
+		 * (owner-captured, light-and-shadow-debug mirror floor, 2026-09-13). The root is the
+		 * overflow upstream; this is the filter's own guard: a filter must never ingest NaN/Inf. */
+		if (any(isnan(reflColor)) || any(isinf(reflColor)))
+		{
+			outResolve = vec4(0.0);
+			return;
+		}
+
 		/* The trace confidence already carries the distance, edge, facing and roughness fades;
 		 * the Fresnel lobe weight completes it. PREMULTIPLIED output. */
 		confidence *= fresnel;

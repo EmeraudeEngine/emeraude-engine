@@ -4548,6 +4548,101 @@ Sponza 0 VUID, emeraude-base 2049/2049, GPU cost in the AGENTS section.
 `Graphics/Renderer.{hpp,cpp}`, `Graphics/BindlessTextureManager.cpp`, `Graphics/Effects/Lighting/RTR.cpp`,
 `SettingKeys.hpp`.
 
+### Fixed: disabling TAA by selection left the projection JITTERING with nothing to resolve it (Sep 2026)
+
+- **Symptom**: `Core.SceneManagerService.PostProcess.disable(TemporalAA)` on a parked camera, and
+  the whole frame shimmers — the brick cube of `light-and-shadow-debug` moving on **64 %** of its
+  pixels (peak-to-peak > 4/255 over 8 frames), the walls speckling.
+- **Cause**: `PostProcessStack::requiresJitter()` asked every occupant of `m_orderedEffects` — the
+  flattened slot table, which holds every RESIDENT occupant, selected or not — so a TAA that was
+  filed but disabled still answered "yes", and `Renderer::prepareFrameJitter()` kept advancing the
+  Halton sequence.
+- **Fix**: the predicate also requires `isEnabled()`. Measured after: the direct cube 7.66 → **0.176**
+  (the RT effects' own floor), the walls and the mirror floor **0.000**.
+- ⚠️ **Methodology consequence**: any "TAA off" series taken through the console before 2026-09-13
+  measured the RAW jittered frame, not a jitter-free one. The protocol in projet-alpha
+  `docs/temporal-stability-measurement.md` §1 relied on a launch-time setting for that reason; the
+  console switch is now equivalent.
+
+### Fixed: the RTR trace sampled its hit textures at an UNDEFINED LOD — the shimmer in every textured reflection (Sep 2026)
+
+- **Symptom** (owner, 2026-09-13, and already on Sponza 2026-08-30): a strong *fourmillement* on
+  every surface receiving ray-traced reflections, with TAA on.
+- **Measured first** (`light-and-shadow-debug --demo-options 0,1`, mirror floor, parked camera, RT
+  lane, 8-frame peak-to-peak of 8-bit luma): the mirror floor reflecting the dark wall is stable
+  at **0.004** in every configuration; the reflection of the static brick cube moves **0.65** mean,
+  p99.9 **53**, against **0.008** with reflections off — ×80. With the jitter truly off the same
+  reflection sits at **0.052**: the instability is 100 % jitter-driven. Its energy was on the
+  mortar lines and the silhouette (correlation with the image gradient: displacement, not noise).
+- **Cause 1, fixed**: `texture()` on the bindless hit textures inside divergent control flow, with a
+  `hitUV` that is not continuous across a quad — implicit derivatives undefined, finest mip taken,
+  minified textures point-sampled. Now `textureLod()` with a ray-cone footprint (Ray Tracing Gems
+  ch. 20; see `docs/reflection-pipeline.md` § 3.2). Crop mean **0.65 → 0.44**, p99.9 **53 → 32**,
+  interior of the reflected cube 0.131 with no pixel above 4.
+- **Cause 2, fixed**: the half-res trace unprojected the half-res pixel centre with the depth of a
+  full-res texel half a pixel away — a ray-origin bias along the view ray. Now the fetched texel's
+  own NDC. ⚠️ Same pattern still in `RTAO.cpp` and `SSR.cpp` (`docs/todo/`).
+- **Cause 3, fixed the same day (owner decision)**: what remained (75 % of the residual energy)
+  was the reflected SILHOUETTE — the geometric edge aliasing of a half-res, one-sample trace under
+  a half-pixel jitter, which TAA integrates for the direct image but only partly for a reflection
+  it cannot reproject (the reflected content does not move with the reflector's velocity). No
+  texture filter touches it. The RTR now accumulates its raw trace through the shared `GIDenoiser`
+  in REFLECTION mode — history reprojected through the VIRTUAL point `P + V·hitT`, blended toward
+  the surface path with the roughness, validated on the virtual distance, variance-clipped —
+  before the blur and the pyramid. Crop mean **0.44 → 0.177**, p99.9 **32 → 2.0**, no pixel above
+  16; one frame after a 0.3 m camera jump the reflection already sits where the new pose puts it
+  (0.02 % of the region > 16). ⚠️ Never reproject a REFLECTION through the surface velocity
+  alone — a mirror reflecting a static wall smears under camera motion when its history follows
+  the floor; the virtual path is what makes the history land. Details: `docs/reflection-pipeline.md` § 3.2, `src/Graphics/AGENTS.md` § GIDenoiser.
+- ⚠️ **Protocol lessons**: (1) `light-and-shadow-debug` carries ANIMATED content (the sprite, the
+  palm) — a whole-frame or whole-floor statistic mixes their legitimate motion into the reading;
+  measure on crops of a STATIC reflected object and check the crop with reflections off reads ~0.
+  (2) Compare the reflection of an object with the object's own direct rendering under the same
+  TAA: the DIRECT cube integrates to 0.52 with 0.09 % of pixels > 16, the REFLECTED one to 0.44
+  with 0.64 % > 16 — the mean can look equal while the tail, which the eye reads as shimmer, is
+  seven times heavier.
+
+### Fixed (guard) / OPEN (root): 7x7 black squares on every glossy surface of the screen-space lane — a NaN in the colour buffer under an animated BLENDED sprite (Sep 2026)
+
+- **Symptom** (owner, `light-and-shadow-debug` with the mirror floor, 2026-09-13): sharp, fully black
+  **7x7** squares on the sphere and the palm trunk in SSR mode, at FIXED positions, appearing at a
+  CONSTANT period; none on the ray-traced lane. Disabling SSR alone removed them; disabling SSGI,
+  SSAO or the contact shadows did not. Commenting out the animated `pinup` sprite removed them too.
+- **Chain, measured backwards from the shape**: a single NON-FINITE texel of the SSR resolve is
+  spread by the separable bilateral blur (radius 2 on those roughnesses → **5x5**, a NaN passes
+  every weight), mixed by the combine, then widened by one pixel on each side by the TAA's 3x3
+  variance-clip statistics (→ **7x7**), and tone-mapped to black. The texel is non-finite because
+  the SSR resolve read the scene colour at a hit on the sprite's quad — `pinup.json` is
+  `BlendingMode: Normal` + `Lit: true`, a blended AND lit quad whose fully transparent texels still
+  run the lighting pass and the blender: `dst · 1 + NaN · 0 = NaN`, so the colour buffer holds NaN
+  wherever a transparent texel's lighting produced one. The animation frames move those texels —
+  the period. RTR never sees them: it alpha-tests the sprite at the hit and shades the hit itself.
+- **Guard (in place)**: `SSR.cpp`, the resolve rejects a non-finite reflected colour as a miss. A
+  filter must never ingest NaN/Inf; this is the filter's own protection and it removed the symptom.
+- **ROOT, OPEN**: WHY a transparent texel of a blended lit sprite produces a NaN in the lighting pass
+  — `docs/todo/blended-lit-sprite-writes-nan.md`. The probe that will find it in one capture: paint
+  every non-finite pixel of the DIRECT image (TAA input) in a flat colour; the offending texels and
+  the offending frame draw themselves.
+- ⚠️ **Attribution lessons**: (1) this was NOT caused by the day's RTR/denoiser work — an A/B by
+  `git stash` of the four files, rebuilt and looked at by the owner, kept the squares; three
+  plausible mechanisms (a NaN-unsafe history test, a missing compute stage in the grab barrier, an
+  fp16 overflow of the mirror's specular peak) were each fixed or tested and were NOT it. Only the
+  live per-effect bisection on the owner's instance (`disable(<slot>)` one at a time) and the
+  owner's own sprite removal named the carrier and the trigger. (2) The AI never reproduced it in
+  320 captured frames: a NaN written through the blender depends on content the AI's runs did not
+  have in the same state — do not read "not reproduced on my side" as "not there". (3) The 7x7
+  measurement was worth more than any hypothesis: it is the arithmetic of two filters, and it ruled
+  out the 8x8 compute-workgroup reading and the mip-texel reading.
+
+### Fixed: the grab-pass publication barrier omitted the COMPUTE stage (Sep 2026)
+
+- `PostProcessor.cpp` and `GrabPass.cpp` published the grabbed copies with
+  `TRANSFER → FRAGMENT_SHADER | COLOR_ATTACHMENT_OUTPUT` while SSR reads the grabbed depth (Hi-Z
+  copy) and colour (colour pyramid) in COMPUTE shaders — a transfer → compute hazard with no
+  synchronisation. Fixed by adding `VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT` to both destination masks.
+  ⚠️ It was suspected of the black squares above and it was NOT them (owner-tested); it stays as a
+  correctness fix against the specification, with no measured visual effect.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

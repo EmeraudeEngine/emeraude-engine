@@ -312,9 +312,15 @@ names. The **space bar** then walks the cycle `OFF -> clip 1 -> ... -> clip N ->
 turn always returns to the rest pose. `Core.cycleAnimation()` is the remote equivalent, calling
 the very same `Core::cycleViewerAnimation()`.
 
-⚠️ **The console command is not a convenience, it is the only remote way in.** A keyboard event
-injected through `Input::Manager::injectKeyEvent()` walks the keyboard-listener list and **never
-reaches a Core-level binding**, so `keyPress(32, 0)` executes and cycles nothing, silently.
+⚠️ **The console command is the deterministic remote way in — and the claim that it was the ONLY
+one is doubtful since 2026-09-13.** This paragraph used to state that a keyboard event injected
+through `Input::Manager::injectKeyEvent()` **never reaches a Core-level binding** (observed Aug 2026
+on `keyPress(32, 0)`, which cycled nothing). On 2026-09-13 the consumer projet-alpha injected F9
+(`keyPress(298, 0)`) and its `Application::onCoreKeyRelease()` toggled the compass on screen — the
+same `Core::onKeyRelease()` entry the space bar's default behaviour sits behind, since `Core`
+registers itself as a keyboard listener. The space bar itself was **not** re-measured; treat the
+Aug 2026 observation as unreproduced rather than as a rule, and prefer `Core.cycleAnimation()`
+because it does not depend on which scene has the focus.
 
 ⚠️ **`enableAutoPlayFirstClip(false)` mutates a CACHED resource**: the flag survives for every
 later instance of the same asset in the session, viewer or not. An asset opened in the viewer and
@@ -419,6 +425,7 @@ python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.listEffect
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.getStatus()'
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightingMode(ScreenSpace)'
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightingMode(RayTracing)'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightingMode(None)'
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.select(Reflections, SSREffect)'
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.disable(AmbientOcclusion)'
 ```
@@ -438,6 +445,15 @@ per frame).
 - Every lighting slot has an occupant in **both** lanes since Sep 2026 (`SSContactShadows`
   completed the set), so `setLightingMode()` no longer leaves a slot dark. It still warns, per
   slot, if one ever does.
+- **A lane switch moves the LANE, never the set of concepts that are on** (fixed 2026-09-13). A
+  concept switched off by `Core/Graphics/PostProcessing/<Concept>/Enabled = false`, or by
+  `disable(<slot>)`, stays off across every `setLightingMode()` and every KeyPad9 press; an explicit
+  `select(<slot>, <effect>)` switches it on for the session and it follows the lanes from then on.
+  `setLightingMode(None)` switches the whole family off and keeps the concepts' switches, so the next
+  lane brings back exactly what was on — the one-command "no indirect lighting" control a three-mode
+  capture needs. `getStatus()` opens with `Lane selected: RayTracing | ScreenSpace | none` and
+  annotates a gated-off concept (`Reflections: off  (concept switched off — …)`) so that "off" is
+  never mistaken for a fallback.
 - ⚠️ The four camera-owned slots (`DepthOfField`, `MotionBlur`, `Glare`, `ToneMapping`) are
   reported but **not selectable**: the camera owns them, drive them through the camera.
 - ⚠️⚠️ **A lane switch is invisible to a mean-luminance comparison.** Measured on Sponza: the two

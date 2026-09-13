@@ -1439,8 +1439,11 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
   consumable TLAS; never record a trace pass behind a `if (rtDescSet != nullptr)` bind alone
   (drawing with set 0 unbound is what that guard silently allowed before Aug 2026 — see
   `docs/caution-points.md` § Vulkan Validation).
-- `requiresJitter()` (temporal anti-aliasing) — when any effect in the active stack declares
-  it, `Renderer::prepareFrameJitter()` advances a Halton (2,3) sub-pixel sequence and applies
+- `requiresJitter()` (temporal anti-aliasing) — when any **enabled** effect in the active stack
+  declares it (⚠️ enabled, not resident — until 2026-09-13 a TAA switched off by selection left the
+  projection jittering with nothing to resolve it, the whole frame shimmering on a parked camera:
+  64 % of the brick cube's pixels moving on `light-and-shadow-debug`, measured),
+  `Renderer::prepareFrameJitter()` advances a Halton (2,3) sub-pixel sequence and applies
   it to the MAIN view only, once per rendered frame, before the video-memory update. Implies
   `requiresVelocity()` in practice: a temporal effect without motion vectors smears.
   ⚠️ The jitter reaches the shaders through **per-draw push constants**, never through the
@@ -1618,8 +1621,9 @@ executor skips on** — they must stay identical, or the fallback and the record
 **Console** — the stack is a `Console::ControllableTrait` registered by `Scenes::Manager` on scene
 activation, so the active scene's chain is addressable as `Core.SceneManagerService.PostProcess.*`:
 `listEffects()`, `getStatus()`, `select(slot, effect)`, `disable(slot)`,
-`setLightingMode("ScreenSpace"|"RayTracing")`. A selection is applied on the next frame, never
-immediately. ⚠️ A stack the renderer materializes on its own (`Scene::requirePostProcessStack()`,
+`setLightingMode("ScreenSpace"|"RayTracing"|"None")`. A selection is applied on the next frame, never
+immediately. `getStatus()` opens with the lane the family stands on (`Lane selected: …`) and marks a
+concept its gate holds off — see the caution *The per-concept gate* below. ⚠️ A stack the renderer materializes on its own (`Scene::requirePostProcessStack()`,
 the camera-only path) is **not** registered — that call runs on the render thread and mutating the
 console tree from there would race the main thread reading it.
 
@@ -1644,7 +1648,8 @@ Core/Graphics/PostProcessing/
 │                                      ContactShadows/MaxDistance|NormalBias|Intensity|MaxBlurRadius,
 │                                      AmbientOcclusion/Intensity)
 ├── <Concept>/RayTracing/<param>       the ray-traced lane's OWN knobs (ray bias, PixelDoubling,
-│                                      MultiBounce/*, GlossyCone/*, …)
+│                                      MultiBounce/*, GlossyCone/*, Reflections' Temporal/* —
+│                                      lane level because SSR has no accumulation — …)
 ├── <Concept>/ScreenSpace/<param>      the screen-space lane's OWN knobs (march StepCount, Thickness,
 │                                      depth Bias, hemisphere Radius, …)
 ├── DepthOfField/Enabled               user refusal of the two expensive photographic effects;
@@ -1687,6 +1692,29 @@ two implementations of one thing). Post-processing was also spread over **six** 
   the rule for every slot. ⚠️ projet-alpha does not reset its settings: a `settings.json` written
   before the change keeps the old `<Concept>/<Lane>/<param>` entries as orphans — the owner's was
   migrated by hand (values kept, orphans dropped).
+
+> [!CAUTION]
+> **The per-concept gate — `<Concept>/Enabled` holds across lane switches (fixed 2026-09-13,
+> owner-reported).** The stack keeps one boolean per slot, `m_conceptEnabled`, that says WHICH
+> concepts run; the lane says HOW. `installLightingFamily()` fills the four lighting gates from
+> their settings *before* selecting the lane, `selectLightingLane()` gives the lane's occupant only
+> to the concepts whose gate is on, and `selectNoLightingLane()` (the live `setLightingMode("None")`,
+> the launch `LightingLane = "None"`, a cycle's "family off" step) switches the family off without
+> touching any gate — so the next lane brings back exactly the concepts that were on. The gate is
+> edited by the explicit per-slot intents only: `selectOccupant()` / `addEffect()` switch a concept
+> ON for the session (an explicit `select(Reflections, SSREffect)` on a concept the settings had
+> switched off makes it follow the lanes from then on), `selectNoOccupant()` (console `disable()`)
+> switches it OFF for the session — a lane switch leaves it off too.
+> ⚠️ Until 2026-09-13 the gates were applied AFTER the lane as a plain `selectNoOccupant()`, on the
+> doctrine *"the settings decide how the scene starts, the console owns the session"*: the first
+> `setLightingMode()` or KeyPad9 brought a disabled concept back, and the owner read
+> `Reflections/Enabled = false` as ignored — it was, after one press. ⚠️ The refusal of
+> `selectLightingLane()` is about RESIDENCY, never about the gates: a lane every concept has
+> switched off is still selected and the family stays dark by choice; `getStatus()` says
+> `<Concept>: off  (concept switched off — a lane switch leaves it off; …)` so that this "off" is
+> not read as a fallback. Verified 2026-09-13 through `getStatus()` on `light-and-shadow-debug` and
+> `asset-loader`: setting → two switches → `select()` → two switches → `disable()` → switch →
+> `None` → lane, every step as stated, 0 VUID.
 
 > [!CAUTION]
 > **`LightingLane` decides whether the acceleration structures exist AT ALL — it is a launch
@@ -2423,9 +2451,26 @@ from reflecting themselves (e.g. floor reflecting floor).
 
 `Graphics/GIDenoiser.{hpp,cpp}` — the temporal machinery extracted VERBATIM from RTGI
 (stage 0 of the SVGF plan; measured non-regression: Sponza corridor ptp 0.733/0.790 within
-the 0.67–0.80 baseline envelope, identical GPU timings). **One instance is OWNED by each GI
-effect** (RTGI today, SSGI planned): the code is shared, the histories are NOT — two
-producers reprojecting into one history would corrupt each other. Like `DenoisePass`, it
+the 0.67–0.80 baseline envelope, identical GPU timings). **One instance is OWNED by each
+producer** (RTGI, SSGI, and RTR since 2026-09-13): the code is shared, the histories are NOT —
+two producers reprojecting into one history would corrupt each other.
+
+> [!IMPORTANT]
+> **Reflection mode (2026-09-13, `Parameters::reflectionMode`, flag bit 3).** The temporal and
+> moments passes share ONE GLSL reprojection (`GIDENOISER_REPROJECTION_GLSL`) with two paths:
+> the SURFACE path through the velocity buffer (the GI producers' only path, unchanged), and the
+> VIRTUAL path — the reflected content moves with its mirror image `P + V·hitT`, projected with
+> `prevViewProj` (Stachowiak 2015, ReBLUR 2021). Both histories are fetched and blended by their
+> weights (virtual share fading over roughness 0.15 → 0.45; an invalid path hands its weight to
+> the other); the signal is accumulated on FOUR channels (premultiplied colour + confidence); the
+> validation distance is the virtual one, `cameraDistance + hitT`, stored in the MOMENTS alpha
+> (the colour history's alpha carries the confidence). The owner hands the hit data to
+> `recordResolve(cb, raw, context, &hitData)` (binding 7, RG16F: cone width, hitT — 0 = no
+> reflection, `maxDistance` on a sky miss so the environment reprojects as a far point); the GI
+> producers pass nothing and the binding holds their raw input as a placeholder. The frame UBO
+> moved to binding 8. ⚠️ Outside reflection mode every path is bit-for-bit the previous
+> behaviour (verified on the direct image: cube 0.54, wall 0.34 as before). Numbers and the
+> integration in RTR: `docs/reflection-pipeline.md` § 3.2. Like `DenoisePass`, it
 extends `IndirectPostProcessEffect` purely to reuse the fullscreen-pass infrastructure and
 is never inserted into a stack.
 

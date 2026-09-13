@@ -303,13 +303,15 @@ sky) is the successor.
 References: Uludag, *Hi-Z Screen-Space Cone-Traced Reflections*, GPU Pro 5; McGuire & Mara,
 *Efficient GPU Screen-Space Ray Tracing*, JCGT 2014.
 
-### 3.2 RTR — 4 passes
+### 3.2 RTR — the passes
 
 | Pass | Target | What it does |
 |------|--------|--------------|
-| 1 Trace | half-res (full-res if `RayTracing/Reflection/PixelDoubling` = false) | one mirror ray per pixel against the TLAS via `rayQueryEXT` |
-| 2-3 Blur | half-res | separable **bilateral** filter, depth + normal aware, radius scaled by roughness |
-| 4 Composite | full-res | depth-aware 4-tap upsample, then section 4.3 |
+| 1 Trace | half-res (full-res if `Reflections/RayTracing/PixelDoubling` = false) | one mirror ray per pixel against the TLAS via `rayQueryEXT`; writes the hit-data map (RG16F: glossy cone width, hit distance) |
+| 1a Temporal | half-res, ×3 (resolve, moments, normal history) | `GIDenoiser` in **reflection mode** (2026-09-13): the raw trace accumulated through a VIRTUAL-position reprojection — see below |
+| 1b Pyramid | half-res base, mip chain (compute) | pre-convolved reflection pyramid of the RESOLVED trace, the glossy cone's source |
+| 2-3 Blur | half-res | separable **bilateral** filter on the resolved trace, depth + normal aware, radius scaled by roughness |
+| 4 Composite | full-res | depth-aware 4-tap upsample, cone gather, then section 4.3 |
 
 The trace pass is the interesting one:
 
@@ -374,6 +376,64 @@ The trace pass is the interesting one:
   Saphir-generated SBT (`VK_KHR_ray_tracing_pipeline`) — the per-material codegen already
   exists for raster.
 
+- **Ray-cone texture LOD at the hit (2026-09-13)**: every textured read of the hit material
+  (albedo, normal, roughness, metalness, emission) goes through `textureLod()` with a footprint
+  from the ray-cone method — Akenine-Möller, Nilsson, Andersson, Barré-Brisebois, Toth, Karras,
+  *"Texture Level of Detail Strategies for Real-Time Ray Tracing"*, Ray Tracing Gems ch. 20, 2019
+  (re-derived, no code taken). The cone leaves the camera one TRACE texel wide (`1 / coneScale`
+  rad), reaches the reflector at `dCam`, keeps its spread across the planar bounce, widens by the
+  GGX lobe (`2 · tan(2θH)`, the cone-map quantity) over `hitT`, and is divided by the incidence
+  cosine on the hit triangle's GEOMETRIC normal; the triangle constant is `½·log2(A_uv / A_world)`
+  from the three vertices, each texture adding `½·log2(texW·texH)`. ⚠️ Before this, `texture()` sat
+  in divergent control flow with a `hitUV` that is not continuous across a quad, so its implicit
+  derivatives were UNDEFINED and the hardware took the finest mip: the reflection of a textured
+  wall was a field of point samples on a texture minified several times over. **Measured** on
+  `light-and-shadow-debug --demo-options 0,1` (mirror floor, the static brick cube's reflection,
+  8-frame peak-to-peak of 8-bit luma, RT lane, TAA on): mean **0.65 → 0.44**, p99.9 **53 → 32**,
+  with the mirror floor around it at 0.004 in every configuration. The reflection stays as sharp
+  (mean image unchanged on the crop).
+- **Unprojection at the TEXEL centre (2026-09-13)**: the half-res trace reads the depth of one
+  full-res texel (`texelFetch`) but unprojected the half-res pixel's own centre — half a full-res
+  pixel away — so the ray origin sat off the surface by that offset times the depth slope, a bias
+  along the view ray on a floor seen at a grazing angle. The NDC now comes from the fetched texel.
+  ⚠️ `RTAO.cpp` (two sites) and `SSR.cpp` carry the same pattern — engine `docs/todo/`
+  `half-res-unprojection-texel-centre-rtao-ssr`.
+- **⚠️⚠️ Temporal stability — the trace has NO accumulation of its own, and it shows under TAA.**
+  The trace is deterministic (one mirror ray per texel, per-pixel gather rotation, no frame term),
+  so on a parked camera with the jitter OFF the reflection is stable: **0.052** on the brick cube's
+  reflection, 0.000 on the floor and walls (TAA disabled by selection, 2026-09-13). With TAA ON
+  the projection jitters half a pixel per frame and the half-res, single-sample reflection is not
+  band-limited: the raw jittered reflection of that cube moved **4.46** mean / 32 % of pixels > 4
+  (against 7.66 for the DIRECT cube under the same raw jitter), and TAA — which integrates the
+  direct cube down to 0.52 with 0.09 % of pixels > 16 — only brings the reflection to 0.44 with
+  0.64 % > 16: the tail TAA cannot clip away is the owner's *fourmillement*. After the LOD fix
+  **75 % of the residual energy sits on the reflected SILHOUETTE columns** (16 % of the crop),
+  the textured interior being at 0.131 with 0 % of pixels > 4: what remained was the geometric
+  edge aliasing of a half-res trace under jitter, which no texture filter can touch.
+- **Temporal accumulation with VIRTUAL-position reprojection (2026-09-13, owner decision A)**:
+  the raw trace is accumulated by the shared `GIDenoiser` in **reflection mode** (pass 1a), and
+  the bilateral blur and the glossy pyramid consume the RESOLVED signal (SVGF order). The history
+  is reprojected on two paths blended by their weights: the SURFACE path (velocity buffer, as for
+  the GI) and the VIRTUAL path — the reflected content moves with its mirror image, the point
+  `P + V·hitT` behind the reflector (Stachowiak & Uludag, *Stochastic Screen-Space Reflections*,
+  SIGGRAPH 2015 Advances; Zhdan, *ReBLUR*, Ray Tracing Gems II ch. 49, 2021, "virtual motion"),
+  projected with the previous view-projection; its share fades from roughness 0.15 to 0.45 (a
+  rough lobe has no single virtual point, and its blur hides the parallax). Validation on the
+  VIRTUAL distance (`cameraDistance + hitT`, stored in the moments' alpha — the colour history
+  keeps the trace confidence), world-normal test, 1/N counter capped at 32, variance clipping on
+  the four channels. Knobs: `Reflections/RayTracing/Temporal/{Enabled, Alpha, DepthTolerance,
+  NormalThreshold, VarianceGamma, MaxAccumulation}`. **Measured** on the same crop: mean
+  **0.44 → 0.177**, p99 10.2 → **1.4**, p99.9 32 → **2.0**, pixels > 16: 0.64 % → **0.00 %** —
+  the reflection is now steadier than the DIRECT rendering of the same cube under TAA (0.54,
+  0.08 % > 16); with the jitter off 0.070. **Ghost probe**: one frame after a 0.3 m sideways
+  camera jump the reflected-cube region differs from the converged new-pose frame by 0.73 mean
+  with 0.02 % of pixels > 16, 0.09 after 0.4 s — the reflection lands where the new pose puts
+  it, no double image (a surface reprojection would have smeared it by the parallax). The direct
+  image is unchanged (the shared denoiser's GI path measures as before: direct cube 0.54, wall
+  0.34). Cost: three half-res fullscreen passes, ⚠️ not yet measured with the GPU profiler (off in
+  the owner's settings). ⚠️ The pyramid's base set is chosen per SOURCE (the two history parities,
+  or the raw trace when the chain is off) and written once — a descriptor set is never rewritten
+  while a frame may read it (`RTR::pyramidBaseSlot()`).
 - **Glossy via the reflection pyramid (Aug 2026)**: the traced result used to composite
   SHARP whatever the roughness (the bilateral blur tops out at a few texels — nowhere near
   the ~100 px a 0.45-roughness cone spans). The trace output (PREMULTIPLIED color +
