@@ -832,7 +832,7 @@ namespace EmEn
 			constexpr auto GraphicsPPDepthOfFieldEnabledKey{"Core/Graphics/PostProcessing/DepthOfField/Enabled"};
 			constexpr auto DefaultGraphicsPPDepthOfFieldEnabled{true};
 			constexpr auto GraphicsPPMotionBlurEnabledKey{"Core/Graphics/PostProcessing/MotionBlur/Enabled"};
-			constexpr auto DefaultGraphicsPPMotionBlurEnabled{false};
+			constexpr auto DefaultGraphicsPPMotionBlurEnabled{true};
 
 			/* Anti-Aliasing > Temporal (TAA). HDR resolve BEFORE DoF/tone mapping (the only
 			 * AA effect not bound by the runsAfterToneMapping contract — the Karis luminance
