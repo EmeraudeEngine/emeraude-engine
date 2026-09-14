@@ -867,10 +867,15 @@ namespace EmEn::Saphir
 				Code{fragmentShader, Location::Output} <<
 					"/* Clear coat IBL - energy conservation + coat reflection. */" "\n"
 					"const float ccFactor = " << m_surfaceClearCoatFactor << ";" "\n"
-					"const float ccNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
+					/* ⚠️ The coat reflects along ITS OWN normal, at ITS OWN roughness, when it has a
+					 * normal map — not along the base surface's. Without one the material emits
+					 * nothing and this falls back to exactly the code that was here before. */
+					"const vec3 ccReflNormal = " << (m_surfaceClearCoatReflectionNormal.empty() ? std::string{"reflectionNormal"} : m_surfaceClearCoatReflectionNormal) << ";" "\n"
+					"const vec3 ccReflColor = " << (m_surfaceClearCoatReflectionColor.empty() ? std::string{"reflectedColor"} : m_surfaceClearCoatReflectionColor + ".rgb * " + m_surfaceReflectionAmount + " * " + this->reflectionIntensity()) << ";" "\n"
+					"const float ccNdotV = max(dot(ccReflNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 ccFresnel = vec3(0.04) + (vec3(1.0) - vec3(0.04)) * pow(1.0 - ccNdotV, 5.0);" "\n" <<
 					m_fragmentColor << ".rgb *= (vec3(1.0) - ccFactor * ccFresnel);" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel;";
+					m_fragmentColor << ".rgb += ccReflColor * ccFactor * ccFresnel;";
 			}
 		}
 		else if ( m_useReflection && m_useTransmission && !m_useRefraction && generator.highQualityEnabled() )
@@ -921,10 +926,15 @@ namespace EmEn::Saphir
 				Code{fragmentShader, Location::Output} <<
 					"/* Clear coat IBL - energy conservation + coat reflection. */" "\n"
 					"const float ccFactor = " << m_surfaceClearCoatFactor << ";" "\n"
-					"const float ccNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
+					/* ⚠️ The coat reflects along ITS OWN normal, at ITS OWN roughness, when it has a
+					 * normal map — not along the base surface's. Without one the material emits
+					 * nothing and this falls back to exactly the code that was here before. */
+					"const vec3 ccReflNormal = " << (m_surfaceClearCoatReflectionNormal.empty() ? std::string{"reflectionNormal"} : m_surfaceClearCoatReflectionNormal) << ";" "\n"
+					"const vec3 ccReflColor = " << (m_surfaceClearCoatReflectionColor.empty() ? std::string{"reflectedColor"} : m_surfaceClearCoatReflectionColor + ".rgb * " + m_surfaceReflectionAmount + " * " + this->reflectionIntensity()) << ";" "\n"
+					"const float ccNdotV = max(dot(ccReflNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 ccFresnel = vec3(0.04) + (vec3(1.0) - vec3(0.04)) * pow(1.0 - ccNdotV, 5.0);" "\n" <<
 					m_fragmentColor << ".rgb *= (vec3(1.0) - ccFactor * ccFresnel);" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel;";
+					m_fragmentColor << ".rgb += ccReflColor * ccFactor * ccFresnel;";
 			}
 		}
 		else if ( m_useReflection && generator.highQualityEnabled() )
@@ -1025,10 +1035,15 @@ namespace EmEn::Saphir
 				Code{fragmentShader, Location::Output} <<
 					"/* Clear coat IBL - energy conservation + coat reflection. */" "\n"
 					"const float ccFactor = " << m_surfaceClearCoatFactor << ";" "\n"
-					"const float ccNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
+					/* ⚠️ The coat reflects along ITS OWN normal, at ITS OWN roughness, when it has a
+					 * normal map — not along the base surface's. Without one the material emits
+					 * nothing and this falls back to exactly the code that was here before. */
+					"const vec3 ccReflNormal = " << (m_surfaceClearCoatReflectionNormal.empty() ? std::string{"reflectionNormal"} : m_surfaceClearCoatReflectionNormal) << ";" "\n"
+					"const vec3 ccReflColor = " << (m_surfaceClearCoatReflectionColor.empty() ? std::string{"reflectedColor"} : m_surfaceClearCoatReflectionColor + ".rgb * " + m_surfaceReflectionAmount + " * " + this->reflectionIntensity()) << ";" "\n"
+					"const float ccNdotV = max(dot(ccReflNormal, -reflectionI), 0.0);" "\n"
 					"const vec3 ccFresnel = vec3(0.04) + (vec3(1.0) - vec3(0.04)) * pow(1.0 - ccNdotV, 5.0);" "\n" <<
 					m_fragmentColor << ".rgb *= (vec3(1.0) - ccFactor * ccFresnel);" "\n" <<
-					m_fragmentColor << ".rgb += reflectedColor * ccFactor * ccFresnel;";
+					m_fragmentColor << ".rgb += ccReflColor * ccFactor * ccFresnel;";
 			}
 		}
 		else if ( m_useReflection )

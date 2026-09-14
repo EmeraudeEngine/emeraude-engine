@@ -254,11 +254,16 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* NOTE: If normal mapping is used, we need the TBN matrix
-		 * to transform tangent-space normals to view space in the fragment shader.
-		 * NOTE: Clear coat normal WITHOUT base normal mapping computes T/B from N
-		 * in the fragment shader, just like anisotropy does. */
-		if ( m_useNormalMapping )
+		/* NOTE: If normal mapping is used, we need the TBN matrix to transform tangent-space
+		 * normals to view space in the fragment shader.
+		 * ⚠️ A CLEAR COAT normal map needs it just as much: `clearcoatNormalTexture` is a
+		 * tangent-space normal map, authored against the mesh's UV layout exactly like the base
+		 * one. It used to be resolved against a frame built procedurally from N — the trick
+		 * anisotropy uses, which is right for a DIRECTION field and wrong for a normal map: the
+		 * map's X and Y then point along axes that have nothing to do with the texture's own, and
+		 * the authored relief cannot appear. So the matrix is requested whenever EITHER map is
+		 * present. */
+		if ( m_useNormalMapping || !m_surfaceClearCoatNormal.empty() )
 		{
 			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::ViewTBNMatrix, VariableScope::ToNextStage) )
 			{
@@ -824,10 +829,9 @@ namespace EmEn::Saphir
 			if ( !m_surfaceClearCoatNormal.empty() )
 			{
 				Code{fragmentShader} <<
-					"/* Clear coat normal from dedicated normal map, transformed by fragment-local TBN from N. */" << Line::End <<
-					"const vec3 ccT = abs(N.y) < 0.999 ? normalize(cross(N, vec3(0.0, 1.0, 0.0))) : normalize(cross(N, vec3(1.0, 0.0, 0.0)));" << Line::End <<
-					"const vec3 ccB = cross(N, ccT);" << Line::End <<
-					"const vec3 Ncc = normalize(ccT * " << m_surfaceClearCoatNormal << ".x + ccB * " << m_surfaceClearCoatNormal << ".y + N * " << m_surfaceClearCoatNormal << ".z);" << Line::End;
+					"/* Clear coat normal from its own map, resolved in the mesh TANGENT space — the\n"
+					"   space it was authored in, the same one the base normal map uses. */" << Line::End <<
+					"const vec3 Ncc = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceClearCoatNormal << ");" << Line::End;
 			}
 			else
 			{
@@ -874,10 +878,9 @@ namespace EmEn::Saphir
 			if ( !m_surfaceClearCoatNormal.empty() )
 			{
 				Code{fragmentShader} <<
-					"/* Clear coat normal from dedicated normal map, transformed by fragment-local TBN from N. */" << Line::End <<
-					"const vec3 ccT = abs(N.y) < 0.999 ? normalize(cross(N, vec3(0.0, 1.0, 0.0))) : normalize(cross(N, vec3(1.0, 0.0, 0.0)));" << Line::End <<
-					"const vec3 ccB = cross(N, ccT);" << Line::End <<
-					"const vec3 Ncc = normalize(ccT * " << m_surfaceClearCoatNormal << ".x + ccB * " << m_surfaceClearCoatNormal << ".y + N * " << m_surfaceClearCoatNormal << ".z);" << Line::End;
+					"/* Clear coat normal from its own map, resolved in the mesh TANGENT space — the\n"
+					"   space it was authored in, the same one the base normal map uses. */" << Line::End <<
+					"const vec3 Ncc = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceClearCoatNormal << ");" << Line::End;
 			}
 			else
 			{

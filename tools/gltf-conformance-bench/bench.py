@@ -180,6 +180,16 @@ ENVIRONMENTS = {
         "Core/Viewers/EnvironmentCubemap": "",
         "Core/Viewers/AmbientIntensity": 0,
     },
+    # ⚠️ Its README asks for it in as many words: "It is recommended to have an environment with
+    # distinctive bright light sources for testing." The coat's Fresnel is 0.04 at normal
+    # incidence, so a band of coat present-vs-absent is a 4 % step in the REFLECTION — invisible
+    # against the viewer's dark forest, plain against a bright sky. The `Partial coating` row is
+    # unreadable without this, and reading it as a defect is the mistake to avoid.
+    "ClearCoatTest": {
+        "Core/Viewers/Background": "Kloppenheim05",
+        "Core/Viewers/EnvironmentCubemap": "",
+        "Core/Viewers/AmbientIntensity": 0,
+    },
     "SheenCloth": {
         "Core/Viewers/Background": "",
         "Core/Viewers/EnvironmentCubemap": "",

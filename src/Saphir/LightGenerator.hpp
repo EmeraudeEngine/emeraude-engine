@@ -516,6 +516,26 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the clear coat's OWN environment reflection for the ambient pass.
+			 * @warning ⚠️ Declared from the MATERIAL's fragment generation, never from
+			 * setupLightGenerator(): the two variables only exist when the material actually emits
+			 * them (bindless environment cubemap, high quality, a coat normal map present), and
+			 * those conditions are not knowable at setup time. Declaring them otherwise produces a
+			 * shader that fails at RUNTIME with 'undeclared identifier' — the C++ compiles either
+			 * way. The material's fragment code is generated BEFORE this generator's, which is what
+			 * makes declaring there both possible and correct.
+			 * @param normalVariableName The coat normal in WORLD space.
+			 * @param colorVariableName The prefiltered environment sampled along it, at the COAT's roughness.
+			 * @return void
+			 */
+			void
+			declareSurfaceClearCoatReflection (const std::string & normalVariableName, const std::string & colorVariableName) noexcept
+			{
+				m_surfaceClearCoatReflectionNormal = normalVariableName;
+				m_surfaceClearCoatReflectionColor = colorVariableName;
+			}
+
+			/**
 			 * @brief Declares the variables used by the fragment shader for subsurface scattering.
 			 * @param intensityVariableName A reference to a string for GLSL variable holding the SSS intensity.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the SSS color.
@@ -1193,6 +1213,8 @@ namespace EmEn::Saphir
 			std::string m_surfaceClearCoatFactor;
 			std::string m_surfaceClearCoatRoughness;
 			std::string m_surfaceClearCoatNormal;
+			std::string m_surfaceClearCoatReflectionNormal;
+			std::string m_surfaceClearCoatReflectionColor;
 			/* SSS-specific variables. */
 			std::string m_surfaceSubsurfaceIntensity;
 			std::string m_surfaceSubsurfaceColor;

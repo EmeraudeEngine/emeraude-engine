@@ -50,7 +50,7 @@ instancing. Nothing here measures them, so nothing here fails on them.
 | model | cause | tracked |
 |---|---|---|
 | `SheenCloth` | its two maps are READ since this pass and demonstrably reach the shader (13.1 % of pixels, cloth mean 158.2 → 80.7), but it tiles them **30×** through `KHR_texture_transform` and no sheen component type has a UV transform slot | [`uv-transform-slots-for-extension-maps.md`](uv-transform-slots-for-extension-maps.md) |
-| `ClearCoatTest` | the three maps are read and the `Roughness variations` row carries the coating's stripes, but the **`Coat normal map` row does not corrugate** and `Partial coating`'s bands are weak | this file, below |
+| `ClearCoatTest` | **the coat normal map corrugates since 2026-09-14** (the coat reflects the environment along its own normal now); the residual is the **`Partial coating`** row, whose band boundary is still not readable | this file, below |
 
 ## What the second pass fixed
 
@@ -73,9 +73,21 @@ enumerates a level; never conclude a capability is missing from a truncated pipe
 
 ## What remains
 
-- [ ] **Clearcoat's residual**: the `Coat normal map` row does not corrugate. All three maps are
-      read and the roughness map demonstrably works, so look at the coat tangent frame
-      (`Ncc`, `LightGenerator.PBR.cpp:808-814`) before the loader.
+- [ ] **Clearcoat's residual is now the `Partial coating` row alone.** The coat FACTOR map reaches
+      the ambient pass (28 generated shaders read `SurfaceClearCoatFactor` rather than the UBO
+      scalar), and the row changes when it is wired, so it is not unread. What is not established is
+      whether the band boundary is *rendered too weakly* or simply *unreadable at this contrast*:
+      the coat's Fresnel is 0.04 at normal incidence, so coat-present versus coat-absent is a 4 %
+      step in the reflection. The bench now poses this test under Kloppenheim05 with no flat ambient,
+      as its own README asks ("an environment with distinctive bright light sources"), and the band
+      is still not obvious. **Measure the step across the boundary before touching any code** — a
+      4 % reflection difference may be correct and simply invisible, and calling that a defect is
+      the mistake this row invites.
+- [ ] **A clear coat WITHOUT a normal map still samples the environment at the BASE roughness.**
+      Wrong for the same reason the normal was: a coat is typically far smoother than what it covers,
+      so its reflection comes out as blurry as the base's. Scoped out of the 2026-09-14 fix on
+      purpose, to keep every row without a coat normal map bit-exact as the control. Fixing it moves
+      `Simple coating` and `Roughness variations`, so it needs its own before/after.
 - [ ] **UV transform slots for the extension maps** —
       [`uv-transform-slots-for-extension-maps.md`](uv-transform-slots-for-extension-maps.md). The
       only thing between `SheenCloth` and a PASS, and it needs a design decision, not a patch.

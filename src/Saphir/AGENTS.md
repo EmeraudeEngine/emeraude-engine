@@ -515,6 +515,38 @@ Stretches specular highlights along a direction (brushed metal, hair, vinyl reco
 - **Normal mapping compatible**: Procedural frame is rebuilt from the perturbed N, so anisotropy correctly follows normal-mapped surfaces.
 - **Files**: `LightGenerator.PBR.cpp` (BRDF functions + per-light), vertex shader TBN only for normal mapping
 
+> [!CAUTION]
+> **The clear coat reflects the environment along ITS OWN normal since 2026-09-14, and that is what
+> makes a coat normal map visible at all.** Until then the ambient pass handed the coat
+> `reflectedColor` — the environment sampled along the BASE normal, at the BASE roughness — weighted
+> by a Fresnel built from the BASE normal, so `clearcoatNormalTexture` could not appear in the
+> dominant term of an IBL-lit scene. `ClearCoatTest`'s `Coat normal map` row rendered as a smooth
+> capsule while `Shared normal map` (whose BASE carries the same map) corrugated correctly — the
+> shape of the bug, and the thing that identifies it.
+> The material now emits `SurfaceClearCoatReflectionNormal` (the coat normal in WORLD space) and
+> `SurfaceClearCoatReflectionColor` (the prefiltered cubemap along it, at the COAT's roughness LOD),
+> and declares them through `declareSurfaceClearCoatReflection()`.
+> - ⚠️ **Declared from the MATERIAL's fragment generation, never from `setupLightGenerator()`**: the
+>   two variables exist only under the conditions that emit them (bindless environment cubemap, high
+>   quality, a coat normal map, a non-zero coat factor), which are not knowable at setup time. The
+>   material's fragment code is generated BEFORE the light generator's, which is what makes that
+>   possible. Declaring them unconditionally yields a shader that fails at RUNTIME with
+>   `undeclared identifier`; the C++ compiles either way.
+> - ⚠️ **Emission order is load-bearing**: the sample consumes `SurfaceClearCoatNormal`, so it is
+>   emitted AFTER that component's block. Both are `Location::Top`, where the order is the EMISSION
+>   order.
+> - ⚠️ `TangentToWorldMatrix` is now requested when EITHER the base or the coat has a normal map. A
+>   material whose base is smooth and whose coat is not would otherwise have no world tangent frame.
+> - ⚠️ **A coat WITHOUT a normal map still samples at the BASE roughness**, which is wrong for the
+>   same reason — a clear coat is typically far smoother than what it covers. Scoped out
+>   deliberately so every other row of the test stays bit-exact; recorded as remaining work.
+> - Measured: the two rows carrying a coat normal map change on **5.43 %** of their pixels (max delta
+>   207 / 221) and the corrugation appears; the three rows with no coat normal map are **bit-exact**
+>   (0.00 %, delta 0). Zero VUID, base suite 2049/2049.
+> - ⚠️ The per-light lobe was ALSO wrong and is fixed with it: `Ncc` resolved the tangent-space map
+>   against a frame built procedurally from N — the trick anisotropy uses, right for a DIRECTION
+>   field and wrong for a normal map. It now uses `transpose(ViewTBNMatrix)`, like the base normal.
+
 > [!WARNING]
 > **Anisotropy tangent frame**: Do NOT use `ViewTBNMatrix` for anisotropy direction. Per-vertex tangent vectors from UV-mapped meshes have discontinuities at UV seams, causing visible triangle edges in specular highlights. Always compute T/B procedurally from the fragment normal.
 

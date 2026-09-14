@@ -2740,7 +2740,12 @@ namespace EmEn::Graphics::Material
 					}
 				}
 
-				if ( this->isComponentPresent(ComponentType::Normal) )
+				/* ⚠️ The CLEAR COAT normal map needs the world tangent frame just as much as the
+				 * base one: it is a tangent-space map, and the ambient pass resolves it to world
+				 * space to reflect the environment along the COAT's own normal. A material whose
+				 * base is smooth and whose coat is not (ClearCoatTest's `Coat normal map` row) has
+				 * no `Normal` component at all, so the frame would never be synthesized. */
+				if ( this->isComponentPresent(ComponentType::Normal) || this->isComponentPresent(ComponentType::ClearCoatNormal) )
 				{
 					vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
 				}
@@ -3809,6 +3814,44 @@ namespace EmEn::Graphics::Material
 			TraceError{ClassId} << "Unable to generate fragment code for the clear coat normal component of PBR material '" << this->name() << "' !";
 
 			return false;
+		}
+
+		/* The clear coat's OWN environment reflection.
+		 *
+		 * ⚠️⚠️ Until 2026-09-14 the ambient pass gave the coat `reflectedColor` — the environment
+		 * sampled along the BASE normal, at the BASE roughness — weighted by a Fresnel built from
+		 * the BASE normal. The coat's normal map therefore could not appear in the dominant term of
+		 * an IBL-lit scene, which is why `ClearCoatTest`'s `Coat normal map` row rendered smooth
+		 * while `Shared normal map` (whose BASE carries the same map) corrugated correctly. Proven
+		 * by reading the generated GLSL, not inferred.
+		 *
+		 * ⚠️ Emission order is load-bearing: this consumes `SurfaceClearCoatNormal`, so it MUST
+		 * come after that component's own block — both emit at Location::Top, where the order is
+		 * the EMISSION order. Generated before it, the shader fails at RUNTIME with
+		 * 'undeclared identifier' and the C++ compiles either way.
+		 *
+		 * ⚠️ Scoped to materials that declare a coat normal map: those without one keep the exact
+		 * code they had, so every other row of the test stays bit-exact. A coat WITHOUT a normal
+		 * map is still sampled at the base roughness, which is wrong for the same reason and is
+		 * recorded as remaining work. */
+		if ( m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled() && generator.highQualityEnabled()
+			&& this->isComponentPresent(ComponentType::ClearCoatNormal) && m_materialProperties[ClearCoatFactorOffset] > 0.0F )
+		{
+			const auto ccRoughnessIt = m_components.find(ComponentType::ClearCoatRoughness);
+			const auto ccRoughnessExpression = ccRoughnessIt != m_components.cend()
+				? ccRoughnessIt->second->variableName()
+				: std::string{MaterialUB(UniformBlock::Component::ClearCoatRoughness)};
+			const auto ccLOD = "clamp(" + ccRoughnessExpression + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
+
+			Code{fragmentShader, Location::Top} <<
+				"/* Clear coat environment reflection: the coat's OWN normal and roughness. */" << Line::End <<
+				"const vec3 " << SurfaceClearCoatReflectionNormal << " = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceClearCoatNormal << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceClearCoatNormal << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceClearCoatNormal << ".z);" << Line::End <<
+				"const vec4 " << SurfaceClearCoatReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", reflect(reflectionI, " << SurfaceClearCoatReflectionNormal << "), " << ccLOD << ");";
+
+			/* Declared HERE and not in setupLightGenerator(): the two variables exist only under
+			 * the conditions just tested, and the light generator's fragment code is emitted after
+			 * this one. Declaring them unconditionally would produce a shader that fails at runtime. */
+			lightGenerator.declareSurfaceClearCoatReflection(SurfaceClearCoatReflectionNormal, SurfaceClearCoatReflectionColor);
 		}
 
 		/* Subsurface intensity component (texture-based). */

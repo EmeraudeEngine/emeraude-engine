@@ -108,6 +108,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceClearCoatFactor{"SurfaceClearCoatFactor"};
 			static constexpr auto SurfaceClearCoatRoughness{"SurfaceClearCoatRoughness"};
 			static constexpr auto SurfaceClearCoatNormal{"SurfaceClearCoatNormal"};
+			/* The coat's own environment reflection: its normal in WORLD space, and the
+			 * prefiltered cubemap sampled along it at the COAT's roughness. */
+			static constexpr auto SurfaceClearCoatReflectionNormal{"SurfaceClearCoatReflectionNormal"};
+			static constexpr auto SurfaceClearCoatReflectionColor{"SurfaceClearCoatReflectionColor"};
 			static constexpr auto SurfaceSubsurfaceIntensity{"SurfaceSubsurfaceIntensity"};
 			static constexpr auto SurfaceSubsurfaceColor{"SurfaceSubsurfaceColor"};
 			static constexpr auto SurfaceSubsurfaceThickness{"SurfaceSubsurfaceThickness"};
