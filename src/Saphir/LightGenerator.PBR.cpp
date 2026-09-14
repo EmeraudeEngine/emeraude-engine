@@ -643,8 +643,16 @@ namespace EmEn::Saphir
 					"const vec3 T = T0 * cosR + B0 * sinR;" << Line::End <<
 					"const vec3 B = -T0 * sinR + B0 * cosR;" << Line::End <<
 					"const float alphaRoughness = " << roughness << " * " << roughness << ";" << Line::End <<
-					"const float at = max(alphaRoughness * (1.0 + anisoValue), 0.001);" << Line::End <<
-					"const float ab = max(alphaRoughness * (1.0 - anisoValue), 0.001);" << Line::Blank;
+					/* ⚠️ KHR_materials_anisotropy's own formula, verbatim from the extension's
+					 * implementation notes and the Khronos Sample Renderer's brdf.glsl, which
+					 * agree word for word. It widens ONE axis toward the isotropic ceiling rather
+					 * than scaling both apart, which is what makes anisotropy vanish at roughness
+					 * 1.0 as the extension requires: alphaRoughness is then 1.0 and mix(1, 1, s²)
+					 * is 1.0 on both axes. The previous `alphaRoughness * (1 ± anisoValue)` put
+					 * at = 2.0 (outside a GGX alpha's valid range) and ab = 0.0 there, and the
+					 * lobe still stretched x1.84 where the spec mandates x1. */
+					"const float at = mix(alphaRoughness, 1.0, anisoValue * anisoValue);" << Line::End <<
+					"const float ab = clamp(alphaRoughness, 0.001, 1.0);" << Line::Blank;
 			}
 			else
 			{
@@ -660,8 +668,16 @@ namespace EmEn::Saphir
 					"const vec3 T = T0 * cosR + B0 * sinR;" << Line::End <<
 					"const vec3 B = -T0 * sinR + B0 * cosR;" << Line::End <<
 					"const float alphaRoughness = " << roughness << " * " << roughness << ";" << Line::End <<
-					"const float at = max(alphaRoughness * (1.0 + anisoValue), 0.001);" << Line::End <<
-					"const float ab = max(alphaRoughness * (1.0 - anisoValue), 0.001);" << Line::Blank;
+					/* ⚠️ KHR_materials_anisotropy's own formula, verbatim from the extension's
+					 * implementation notes and the Khronos Sample Renderer's brdf.glsl, which
+					 * agree word for word. It widens ONE axis toward the isotropic ceiling rather
+					 * than scaling both apart, which is what makes anisotropy vanish at roughness
+					 * 1.0 as the extension requires: alphaRoughness is then 1.0 and mix(1, 1, s²)
+					 * is 1.0 on both axes. The previous `alphaRoughness * (1 ± anisoValue)` put
+					 * at = 2.0 (outside a GGX alpha's valid range) and ab = 0.0 there, and the
+					 * lobe still stretched x1.84 where the spec mandates x1. */
+					"const float at = mix(alphaRoughness, 1.0, anisoValue * anisoValue);" << Line::End <<
+					"const float ab = clamp(alphaRoughness, 0.001, 1.0);" << Line::Blank;
 			}
 
 			/* Compute Cook-Torrance BRDF with anisotropic NDF and visibility. */

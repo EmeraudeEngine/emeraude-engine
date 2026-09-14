@@ -497,7 +497,20 @@ Stretches specular highlights along a direction (brushed metal, hair, vinyl reco
 - `visibilityAniso(T, B, N, V, L, at, ab)` — Smith height-correlated anisotropic visibility (Heitz 2014)
 
 **Key implementation details:**
-- **Roughness squaring**: `alphaRoughness = roughness²`, then `at = alpha * (1 + aniso)`, `ab = alpha * (1 - aniso)`. Must match engine's standard GGX convention.
+- **Roughness squaring**: `alphaRoughness = roughness²`, then **`at = mix(alphaRoughness, 1.0, aniso²)`, `ab = clamp(alphaRoughness, 0.001, 1.0)`** — `KHR_materials_anisotropy`'s own formula, verbatim from the extension's implementation notes and the Khronos Sample Renderer's `brdf.glsl`, which agree word for word. It widens ONE axis toward the isotropic ceiling instead of scaling both apart.
+  > ⚠️⚠️ **It was `at = alpha * (1 + aniso)` / `ab = alpha * (1 - aniso)` until 2026-09-14, and that
+  > violated the extension.** At roughness 1.0 it gave `at = 2.0` — outside a GGX alpha's valid
+  > range — and `ab = 0.0`, so the highlight stayed maximally anisotropic exactly where the spec
+  > says anisotropy must have **no effect**. Measured on `AnisotropyStrengthTest`: the lobe still
+  > stretched **×1.84** down the roughness-1.0 column (now ×0.85, i.e. flat), while the
+  > roughness-0.0 column — where the extension says the effect should be strongest — was
+  > unmeasurable (a near-delta lobe of a few pixels) and now runs **18.73 → 9.61**.
+  > ⚠️ The squaring drops the SIGN of `aniso`, whose range this engine documents as -1..1. glTF's
+  > `anisotropyStrength` is ≥ 0 so nothing is lost there, and no material in the store declares a
+  > negative value (27 use a positive one) — but a negative anisotropy now behaves like its
+  > absolute value instead of stretching the other way. Rotate by a quarter turn to get that.
+  > ⚠️ Control for any change here: `MetalRoughSpheres`, which declares no anisotropy, must come
+  > out **bit-exact** (it did: 0.000 % of pixels, max delta 1).
 - **Procedural tangent frame**: T/B derived from N in fragment shader (`cross(N, up)`), NOT from mesh TBN. This avoids triangle-seam artifacts at UV discontinuities.
 - **Normal mapping compatible**: Procedural frame is rebuilt from the perturbed N, so anisotropy correctly follows normal-mapped surfaces.
 - **Files**: `LightGenerator.PBR.cpp` (BRDF functions + per-light), vertex shader TBN only for normal mapping
