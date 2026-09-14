@@ -755,6 +755,11 @@ holding 353 entries, 38 USD layers and 285 images. Demo: `projet-alpha --load-de
 >
 > **The live open point is now § 11.5 item 1: half the frame sits at or above 0.9 sRGB with the
 > floor correct**, which points at baked lighting being counted twice rather than at the exposure.
+>
+> ⚠️ **2026-09-14 — the demo stopped loading for a reason that belonged to neither.** A dependency
+> update re-armed tinyusdz's parent-relative path guard; the fix is four flags in the loader and is
+> written up in **§ 11.7**. Read it before debugging anything on this asset: while the guard was
+> armed, `--demo-options 0` reported SUCCESS with ten prims.
 
 ### 11.1 The archive is MAPPED, never extracted
 
@@ -902,9 +907,68 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
 2. **THE FLOOR ALBEDO HAS NEVER BEEN MEASURED** — 0.7 is an assumption, and it is one of the two
    unpinned terms in the photometric chain (§ 11.6). Closing it means sampling the floor's baked
    base-colour texture; 0.86 would account for the whole `+0.30 EV` residual on its own.
-3. **85 × `Unsafe asset path: ../../Materials/Bake/…`** — the patch fixed the **composition** path
-   (`ValidateAndNormalizeRelativeAssetPath`) but **not Tydra's image loader**, which still calls the
-   strict validator. Identical count across every run to date.
+3. **⚠️⚠️ THE STAGE IS INCOMPLETE AND NO TEXTURE IS TRANSLATED — a tinyusdz v1.0.0-rc3 regression,
+   ATTRIBUTED (2026-09-14).** Two separate deltas against the patched v0.9.4 figures of § 11.2,
+   both measured with the same instrument (the loader's own `stage composed:` line, option 1):
+
+   | | Patched v0.9.4 (2026-08-11) | v1.0.0-rc3 (2026-09-14) |
+   |---|---|---|
+   | Prims | 2806 | **1988** |
+   | Meshes | 942 | **741** |
+   | Materials | 155 | **31** |
+   | Textures | 348 | 0 → **85** once patched, see below |
+   | `SphereLight` | 4 | **0** |
+   | Depth, cameras, `DiskLight`, `DomeLight` | 9 / 5 / 25 / 1 | 9 / 5 / 25 / 1 — unchanged |
+
+   **(a) The zero textures are ATTRIBUTED AND FIXED (2026-09-14) — `RemapPathsInPrimSpecTree()`
+   gated on the wrong predicate** (`src/composition.cc:4063`). It remaps a spliced sub-tree's internal paths and takes
+   the connection branch only `if (prop.second.is_attribute_connection())`, which resolves through
+   `Attribute::is_connection()` — **false as soon as the attribute also carries a value**
+   (`src/core/attribute.hh:375`). An input authored as BOTH a fallback value and a `.connect` is
+   the normal UsdPreviewSurface idiom and exactly what Omniverse Kit writes:
+
+   ```
+   color3f inputs:diffuseColor = (0.18, 0.18, 0.18)
+   color3f inputs:diffuseColor.connect = </World/Looks/Ash_01/UsdUVTexture.outputs:rgb>
+   ```
+
+   Such a connection is never remapped, keeps pointing at its pre-splice path, and Tydra reports
+   `Cannot find path </World/Looks/Ash_01> in the Stage`. **This is the SAME defect
+   `ext-deps-generator` patched in v0.9.4** — in `ReplaceRootPrimPathRec()`, with
+   `prop.second.is_attribute() && prop.second.attribute().has_connections()`. That function is now
+   `[[maybe_unused]]` dead code and the live rewrite carries the original predicate: the surrounding
+   function was rewritten, so the patch stopped applying, and **the defect travelled into the
+   replacement**. ⚠️ The relationship branch right above it IS remapped, so `material:binding`
+   survives — only the shader-graph connections dangle.
+
+   **Fixed by a new hunk in `ext-deps-generator/patches/tinyusdz.patch`** (owner decision,
+   2026-09-14), patching the live site only and leaving the dead `ReplaceRootPrimPathRec()` alone.
+   Re-measured after rebuilding tinyusdz and the cascade: **0 → 85 textures, 0 → 85 images** on the
+   same 27 translated materials, `Cannot find path` gone, 0 VUID. A column reads with its material
+   grain and the luminaires show their perforation instead of flat white.
+
+   ⚠️⚠️ **This also closes, by measurement, the attribution left open for the 85 ×
+   `Unsafe asset path: ../../Materials/Bake/…`.** Those 85 image loads were the SAME 85: in August
+   all 85 were attempted and all 85 rejected; before this hunk 0 were attempted (hence 0 warnings,
+   which proved nothing); now 85 are attempted and **85 succeed with zero warnings**. The resolver
+   flag of § 11.7 is what makes them resolve — it was simply never reached while the connections
+   dangled. **Two defects were stacked on one symptom**, and each looked like the whole story from
+   where the other one stood.
+
+   **(b) The 818 missing prims are STILL NOT attributed, and the fix above did not move them.**
+   Re-measured after the hunk: 1988 prims, 741 meshes, 31 materials — **identical**, as expected,
+   since a dangling connection cannot delete a prim. 201 meshes, 124 material prims and all four
+   `SphereLight` remain absent, and the 85 textures are what 31 materials carry where 155 carried
+   348 (≈ 2.7 vs ≈ 2.2 per material — the same order, so the shortfall is the missing MATERIALS,
+   not a second texture defect). ⚠️ **Do not fold this into (a)** — it is a THIRD mechanism, and
+   (a) being proven does not make it the same one.
+
+   ⚠️ Three of the seven v0.9.4 patch fixes were verified present upstream while attributing this:
+   the `is_connection()` → `has_connections()` texture defect (22 sites in
+   `tydra/render-data-material.cc`, the 5 remaining `is_connection()` are comments), and the
+   default-prim arc prefix, absorbed verbatim as `GetReferencedPrimPath()`
+   (`src/composition.cc:351`). The claim that all seven were absorbed does not hold for the one in
+   (a). Upstream tracking item: `ext-deps-generator/docs/todo/remeasure-tinyusdz-composition.md`.
 4. **28 meshes have no `st` UV set** (`ConvertMesh: Failed to get texture coordinate`).
 5. **The DomeLight carries no image** (`intensity 1000, image '<none>'`), so there is nothing to
    install as an environment.
@@ -979,3 +1043,83 @@ invalidated the whole measurement: (1) the floor chroma is **neutral everywhere*
 B/G 0.98-1.00) while the flashlight is `LightYellow` and carries a projection texture; (2) floor
 luminance **rises** with distance from the player (0.631 → 0.646 → 0.776) instead of decaying by
 inverse square from the eye. Owner confirmed it was off.
+
+### 11.7 Parent-relative (`..`) asset paths — the guard that came back (2026-09-14)
+
+**Symptom:** `--load-demo world-lobby --demo-options 1` stopped loading entirely, on an error that
+names the library, not the asset:
+
+```
+[Error][USDLoader] Unable to composite the arcs of 'WorldLobby.usdz' :
+  composition.cc:LoadAsset():466 Unsafe asset path in composition: `../Source/Lobby/assets_Lobby.usd`
+  composition.cc:CompositeSublayersRec():1281 Load asset in subLayer failed
+  composition.cc:LoadAsset():729 Failed to composite subLayers of `Assembly/assembly_Lobby.usd`
+  composition.cc:CompositePayloadLocal():1861 Failed to `payload` asset `./Assembly/assembly_Lobby.usd`
+```
+
+**Cause — a dependency regression, not an asset or a loader defect.** tinyusdz refuses any `..`
+segment in an asset path by default, as a path-traversal guard
+(`security_policy::ValidateAndNormalizeAssetPath`). That refusal used to be lifted by a LOCAL PATCH
+carried in `ext-deps-generator/patches/tinyusdz.patch`. Upstream then absorbed the feature — but as
+an **opt-in option** (`allow_parent_relative_paths`, default **`false`**) rather than a relaxed
+default, so the patch hunks were correctly dropped when the patches were re-verified against the
+updated sources (`ext-deps-generator` commit **`1191c0e`, 2026-08-31**). Nothing in the engine was
+updated to set the new option, so the guard came back armed and every stage built on `..` broke.
+
+A Kit export is built on `..` — it anchors its arcs above the layer that declares them — and so are
+the usd-wg sample assets, which share their textures through `../_common/*`.
+
+**Fix — four flags, all in `USDLoader::load()`, no library patch:**
+
+| Where | What |
+|---|---|
+| `AssetResolutionResolver` | `resolver.set_allow_parent_relative_paths(true)` |
+| `CompositeSublayers()` | `SublayersCompositionOptions::allow_parent_relative_paths` |
+| `CompositeAllArcs()` | `AllArcsCompositionOptions::references.allow_parent_relative_paths` |
+| `CompositeAllArcs()` | `AllArcsCompositionOptions::payload.allow_parent_relative_paths` |
+
+> [!CAUTION]
+> **The RESOLVER flag is not redundant with the composition options.** Tydra reads it back
+> (`assetResolver.get_allow_parent_relative_paths()`) in `render-data.cc`,
+> `render-data-material.cc` and `render-data-anim.cc` to sanitize the texture and animation asset
+> paths it loads AFTER composition. Setting the composition options alone composes the stage and
+> then rejects every `../../Materials/...` image of it, one warning per file.
+
+> [!CAUTION]
+> **Enabling the option does NOT skip the validation.** Null bytes, absolute paths and
+> drive-absolute paths are still refused, a `..` that collapses lexically still collapses, and only
+> a LEADING `..` survives — handed to the resolver to rebase against its base directory and search
+> paths. `USDZArchive::normalize()` already collapses it against the archive's own namespace.
+
+> [!WARNING]
+> **The same defect wears two different faces depending on the demo option, and only one of them is
+> loud.** `resolveReferences` is `option != 0` (`WorldLobby.cpp`), and the guard only ever fires
+> during ARC composition:
+>
+> | Launch | Symptom while the guard is armed |
+> |---|---|
+> | `--demo-options 1` | the error above, scene refused — LOUD |
+> | `--demo-options 0` | **10 prims, 0 meshes, success reported** — indistinguishable from § 11.2 |
+>
+> Option `0` legitimately yields ten prims (the root layer's body is two `prepend payload` arcs), so
+> a broken option `1` reads exactly like a healthy option `0`. **Reproduce this asset's arc defects
+> on option 1 only**; option 0 cannot show them.
+
+**Measured after the fix (2026-09-14, Release, validation layers on):** 1988 prims, depth 9,
+**741 source meshes → 741 built**, 31 materials (27 translated), 25 punctual lights placed,
+26 lights, 5 cameras, **0 VUID**, and **zero** `Unsafe asset path` of any kind. The lobby renders:
+curtain wall, columns, ceiling and floor all present.
+
+> [!CAUTION]
+> **RESTORING COMPOSITION IS NOT RESTORING THE STAGE.** 1988 prims is a working loader, and it is
+> still **818 prims, 201 meshes, 124 materials and 348 textures short** of what the patched v0.9.4
+> delivered (§ 11.2, § 11.5 item 3). A number that moves from 10 to 1988 looks like a fix and is
+> only half of one — **always land a restored asset against its RECORDED counts**, never against
+> "it loads now".
+
+⚠️ **Do not credit this fix with closing § 11.5 item 3.** The 85 × `Unsafe asset path:
+../../Materials/Bake/…` no longer appear, but the texture count is **still 0** and Tydra now fails
+EARLIER, at the shader-graph lookup (`diffuseColor connection could not be resolved to a
+UsdUVTexture — Cannot find path </World/Looks/Ash_01> in the Stage`). An image path that is never
+reached cannot be rejected, so the warnings' disappearance is **not evidence** that the resolver
+flag fixed them. That attribution is open.

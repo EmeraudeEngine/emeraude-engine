@@ -2002,6 +2002,29 @@ namespace EmEn::Scenes::Loaders
 		 * eleven silently missing `*_classes.usda` prototype layers into resolved ones. */
 		tinyusdz::AssetResolutionResolver resolver;
 
+		/* ⚠️ Parent-relative ('..') asset paths must be ALLOWED explicitly. tinyusdz refuses them by
+		 * default as a path-traversal guard (`security_policy::ValidateAndNormalizeAssetPath`), which
+		 * kills any authoring tool anchoring its arcs above the layer that declares them: an Omniverse
+		 * Kit export reaches its assets through `../Source/...`, and the usd-wg sample assets share
+		 * their textures through `../_common/...`. Enabling the option does NOT skip the validation —
+		 * a '..' that collapses lexically still does, only a LEADING one survives, handed to the
+		 * resolver to rebase against its base directory and search paths. The engine composes local
+		 * assets the user selected, through a resolver whose reach is the archive table or the stage's
+		 * own directory tree, so the guard buys nothing here and costs every real-world stage
+		 * (owner decision, 2026-09-14).
+		 *
+		 * ⚠️ The flag is carried by the RESOLVER as well as by the composition options below,
+		 * because Tydra reads it back (`assetResolver.get_allow_parent_relative_paths()`) to sanitize
+		 * the texture and animation asset paths it loads AFTER composition. Setting it on the
+		 * composition options alone leaves every '../../Materials/...' texture of such a stage
+		 * rejected, one warning per image, with the stage rendering untextured.
+		 *
+		 * ⚠️ History: this used to be a local patch of tinyusdz relaxing the validator itself.
+		 * Upstream absorbed the feature as this OPT-IN option, so the patch was dropped from
+		 * ext-deps-generator (commit 1191c0e, 2026-08-31) — which silently re-armed the guard and broke
+		 * every stage built on '..'. Do not patch the library again: set the option. */
+		resolver.set_allow_parent_relative_paths(true);
+
 		std::vector< std::string > searchPaths;
 
 		if ( m_archive != nullptr )
@@ -2064,7 +2087,10 @@ namespace EmEn::Scenes::Loaders
 
 		tinyusdz::Layer sublayered;
 
-		if ( !tinyusdz::CompositeSublayers(resolver, layer, &sublayered, &warning, &error) )
+		tinyusdz::SublayersCompositionOptions sublayerOptions;
+		sublayerOptions.allow_parent_relative_paths = true;
+
+		if ( !tinyusdz::CompositeSublayers(resolver, layer, &sublayered, &warning, &error, sublayerOptions) )
 		{
 			TraceError{ClassId} << "Unable to composite sublayers of '" << filepath.filename().string() << "' : " << error;
 
@@ -2094,7 +2120,11 @@ namespace EmEn::Scenes::Loaders
 
 		if ( m_options.resolveReferences )
 		{
-			if ( !tinyusdz::CompositeAllArcs(resolver, sublayered, composited.get(), &warning, &error) )
+			tinyusdz::AllArcsCompositionOptions arcOptions;
+			arcOptions.references.allow_parent_relative_paths = true;
+			arcOptions.payload.allow_parent_relative_paths = true;
+
+			if ( !tinyusdz::CompositeAllArcs(resolver, sublayered, composited.get(), &warning, &error, arcOptions) )
 			{
 				TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' : " << error;
 

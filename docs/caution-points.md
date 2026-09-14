@@ -3339,6 +3339,47 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### An ext-deps patch hunk that UPSTREAM absorbs as an OPT-IN option silently re-arms what it disabled
+
+> **Symptom:** a feature that worked for weeks stops working after nothing in the cascade changed,
+> and the error names a THIRD-PARTY source file. Measured case (2026-09-14): `world-lobby` refused
+> to load on
+> `composition.cc:LoadAsset():466 Unsafe asset path in composition: '../Source/Lobby/assets_Lobby.usd'`.
+>
+> **Root cause:** the behaviour was supplied by a local patch in
+> `ext-deps-generator/patches/<lib>.patch`. Upstream later implemented the same thing — but as an
+> **option defaulting to the restrictive value** instead of a relaxed default. The patch hunk then
+> becomes a genuine conflict against the updated sources and is correctly dropped when the patches
+> are re-verified (`ext-deps-generator` commit `1191c0e`, 2026-08-31, for tinyusdz). Upstream's
+> feature is present, the consumer never opts in, and the restriction returns.
+>
+> **⚠️ The trap is that the patch file looks HEALTHY afterwards** — it applies cleanly, the library
+> builds, `git status` in `repositories/<lib>` is clean, and the library checkout carries no local
+> modification to inspect. Nothing anywhere says a capability was withdrawn.
+>
+> **How to diagnose, in this order:**
+> 1. `git log -p --follow -- patches/<lib>.patch` in `ext-deps-generator` and look for **removed**
+>    hunks touching the symbol the error names. A "re-verify the patches" commit is the usual one.
+> 2. Grep the updated upstream sources for that symbol — an absorbed feature almost always survives
+>    as a struct field or a setter (`allow_parent_relative_paths`, `set_*()`), with the old
+>    behaviour reachable by setting it.
+> 3. Check the **installed** headers under `ext-deps-generator/output/<triplet>/include/`, not only
+>    `repositories/`. If the option is there, the fix is a call-site change and needs **no ext-deps
+>    regeneration at all**.
+>
+> **⚠️ Fix it by SETTING THE OPTION, never by re-patching the library.** A re-applied patch is
+> silently reverted by the next update; a call-site flag survives it and is visible in our own code.
+> An absorbed feature is upstream telling us the behaviour is supported — take the supported route.
+>
+> **⚠️ An opt-in restriction can also fail SILENTLY where the patch used to fail loudly**, because
+> the option often sits next to `error_when_*` flags that default to `false`. On the case above one
+> demo option errored out while the other reported success with an empty stage. When a dependency
+> update is suspected, **set the `error_when_*` flags temporarily** — it names the asset the strict
+> path is dropping in one run, where three rounds of guessing had named nothing.
+>
+> **Reference:** [`docs/scene-loaders-usd.md`](scene-loaders-usd.md) § 11.7 (the full case),
+> `src/Scenes/Loaders/USDLoader.cpp` (`USDLoader::load()`, the four flags).
+
 ### CMake must be RECONFIGURED after a source file is renamed, moved or removed (`GLOB_RECURSE`)
 
 > **Symptom:** after a `git mv` or a deletion, Ninja fails with
