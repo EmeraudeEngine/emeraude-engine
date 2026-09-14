@@ -219,6 +219,29 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
+			 * @brief Displays one packed lane of the material-properties G-buffer as the frame colour.
+			 * @note 0 = off, 1 = reflectivity, 2 = AO response. See GraphicsDebugMaterialPropertiesLaneKey.
+			 * @param lane The lane index.
+			 * @return void
+			 */
+			void
+			setDebugMaterialPropertiesLane (uint32_t lane) noexcept
+			{
+				m_debugMaterialPropertiesLane = lane;
+			}
+
+			/**
+			 * @brief Returns the material-properties lane displayed as the frame colour, 0 when off.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			debugMaterialPropertiesLane () const noexcept
+			{
+				return m_debugMaterialPropertiesLane;
+			}
+
+			/**
 			 * @brief Returns whether the renderable is using instancing.
 			 * @return bool
 			 */
@@ -788,5 +811,6 @@ namespace EmEn::Saphir::Generator
 			const Vulkan::Framebuffer * m_pipelineFramebuffer{nullptr}; /**< @todo Remove when a dedicated post-process RenderTarget exists. */
 			uint32_t m_nextShaderVariableLocation{0};
 			int m_pomIterations{16};
+			uint32_t m_debugMaterialPropertiesLane{0};
 	};
 }

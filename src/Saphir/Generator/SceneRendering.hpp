@@ -92,6 +92,8 @@ namespace EmEn::Saphir::Generator
 
 				this->setPOMIterations(this->highQualityEnabled() ? settings.getOrSetDefault< int >(GraphicsTexturePOMIterationsKey, DefaultGraphicsTexturePOMIterations) : 0);
 
+				this->setDebugMaterialPropertiesLane(settings.getOrSetDefault< uint32_t >(GraphicsDebugMaterialPropertiesLaneKey, DefaultGraphicsDebugMaterialPropertiesLane));
+
 				if ( (this->materialEnabled() && this->getMaterialInterface()->useEnvironmentCubemap()) || Graphics::renderPassUsesColorProjection(renderPassType) )
 				{
 					this->enableBindlessTextures(true);

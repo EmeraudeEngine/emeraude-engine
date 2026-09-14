@@ -609,6 +609,20 @@ namespace EmEn::Saphir::Generator
 					{
 						Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = " << m_lightGenerator.materialPropertiesExpression() << ";";
 					}
+
+					/* ⚠️ THE instrument for "why is that surface reflecting": the packed lane,
+					 * written to the FRAME in grey. Displaying a G-buffer lane as the frame colour
+					 * settled the Sponza dirt-decal report in one capture where three A/Bs had
+					 * circled it — see docs/caution-points.md § Material Properties. Off by default
+					 * (Core/Graphics/DebugMaterialPropertiesLane = 0) and read once per program
+					 * generation, so it costs one `if` at generation time and nothing at runtime. */
+					if ( this->debugMaterialPropertiesLane() > 0 )
+					{
+						const auto lane = this->debugMaterialPropertiesLane() == 1 ? "r" : "g";
+
+						Code{*fragmentShader, Location::Output} <<
+							m_lightGenerator.fragmentColor() << " = vec4(vec3(" << ShaderVariable::OutputMaterialProperties << "." << lane << "), " << m_lightGenerator.fragmentColor() << ".a);";
+					}
 				}
 				else
 				{
