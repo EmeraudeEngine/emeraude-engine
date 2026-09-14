@@ -91,6 +91,10 @@ SCREENSHOT_PATH = re.compile(r"Screenshot saved:\s*(\S+)")
 VIEWS = {
     "front":     (0.0, 0.0),
     "three-qtr": (35.0, 20.0),
+    # The mirror of three-qtr, for a model that carries a second set of features on the three
+    # OPPOSITE faces — OrientationTest's CMY arrows (matrix encodings) against its RGB ones
+    # (quaternions). Reading only one of the two halves is how a half-tested verdict is written.
+    "three-qtr-rear": (215.0, -20.0),
     "back":      (180.0, 0.0),
     "top-down":  (0.0, 70.0),
     "top":       (0.0, 80.0),
@@ -124,7 +128,12 @@ MODELS = {
     "NormalTangentMirrorTest":      ["front", "top-down", "back"],
     # Arrows on all six faces: RGB (quaternions) on three, CMY (matrices) on the others. One view
     # per axis per encoding, or the test is only half read.
-    "OrientationTest":              ["front", "back", "top", "bottom", "right", "left"],
+    # ⚠️ The six axis views show an arrow but NOT the target it must point at: the targets sit on
+    # the box's far rim, out of frame at this framing. The test's criterion is the arrow-to-target
+    # ALIGNMENT, so it also gets the three-quarter view its own reference screenshot uses, where
+    # arrow and same-colour target appear together. Judging it from an axis view alone cannot be
+    # done — and inheriting a previous run's verdict instead is how a stale PASS survives.
+    "OrientationTest":              ["three-qtr", "three-qtr-rear", "front", "back", "top", "bottom", "right", "left"],
     # Showcase assets: a face-on and a three-quarter, as the references show them.
     "BoomBox":                      ["front", "three-qtr"],
     "WaterBottle":                  ["front", "three-qtr"],
@@ -138,10 +147,137 @@ MODELS = {
     "VolumeAbsorptionProbe":        ["front"],
 }
 
+# --- Per-model viewer environment ------------------------------------------------------------
+#
+# ⚠️ A test must be posed in the environment IT declares, and three of these cannot be judged in
+# the viewer's default daylight sky. `+ModelViewer` reads these three settings when it builds its
+# scene, and `Core.SettingsService.set()` reaches them over the console, so the bench poses each
+# test and restores the session's values afterwards.
+#
+#   Core/Viewers/Background          what is BEHIND the subject ("" = a bit-exact black backdrop)
+#   Core/Viewers/EnvironmentCubemap  what the subject REFLECTS ("" = whatever the background set)
+#   Core/Viewers/AmbientIntensity    flat ambient floor, in lux
+#
+# ⚠️ The first two are INDEPENDENT axes, and black is not the universal answer — measured:
+#   - `SpecularTest` is too DARK, not washed out: baseColor [0,0,0,1], metallic 0, roughness 0, a
+#     dielectric mirror whose F0 never exceeds 0.04. On the default sky its 35 spheres span
+#     19.5/255 mean; under Kloppenheim05 with no flat ambient they span 89.5 and the seven rows
+#     separate. It needs a BRIGHT REFLECTION, not a darker backdrop.
+#   - `AnisotropyStrengthTest` needs a DISTINCT source. In an outdoor environment a sphere's
+#     brightest pixels are an image of the sky, and every shape metric reads noise — five were
+#     confounded that way. With no background, no environment cubemap and no ambient, the only
+#     specular source left is the viewer's own key light, the lobe becomes a lobe, and the
+#     elongation runs 1.11 -> 9.26 monotonically up the anisotropy axis.
+#   - `SheenCloth` is shot on black by Khronos; its rim-to-backdrop contrast goes 8.1x -> 390x.
+ENVIRONMENTS = {
+    "SpecularTest": {
+        "Core/Viewers/Background": "Kloppenheim05",
+        "Core/Viewers/EnvironmentCubemap": "",
+        "Core/Viewers/AmbientIntensity": 0,
+    },
+    "AnisotropyStrengthTest": {
+        "Core/Viewers/Background": "",
+        "Core/Viewers/EnvironmentCubemap": "",
+        "Core/Viewers/AmbientIntensity": 0,
+    },
+    "SheenCloth": {
+        "Core/Viewers/Background": "",
+        "Core/Viewers/EnvironmentCubemap": "",
+        "Core/Viewers/AmbientIntensity": 0,
+    },
+}
+
+ENVIRONMENT_KEYS = ("Core/Viewers/Background", "Core/Viewers/EnvironmentCubemap", "Core/Viewers/AmbientIntensity")
+
+
+def asset_directory_candidates() -> tuple:
+    """
+    Every place the vendored Khronos corpus can legitimately be, most specific first.
+
+    ⚠️ It is NOT in the engine tree. Test data belongs to the testbed (owner decision,
+    2026-08-31), so `glTF-Sample-Assets` is a submodule of the CONSUMER — `projet-alpha` — while
+    this script lives in the engine. Three layouts are real and all three are supported:
+
+    1. the engine checked out (or symlinked) at `<consumer>/dependencies/emeraude-engine`, which
+       is how the cascade is documented — reached from the UNRESOLVED script path, because
+       `resolve()` follows the symlink straight out of the consumer's tree and loses it;
+    2. the engine and its consumer as SIBLING directories, the symlink's actual target on the
+       owner's workstation — found by scanning the resolved engine root's siblings;
+    3. the corpus cloned inside the engine itself, for a standalone engine checkout with no
+       consumer at all.
+
+    ⚠️ The corpus is a PARTIAL clone (`blob:none`, 201 MB against 1.7 GB upstream) — never
+    re-clone it plainly.
+    """
+    relative = Path("dependencies") / "glTF-Sample-Assets" / "Models"
+
+    unresolved_engine_root = Path(__file__).absolute().parents[2]
+    resolved_engine_root = Path(__file__).resolve().parents[2]
+
+    candidates = [
+        unresolved_engine_root.parents[1] / relative,
+        resolved_engine_root.parents[1] / relative,
+    ]
+
+    # The sibling layout: no arithmetic can name the consumer, so ask the filesystem which
+    # neighbour carries the corpus. Sorted, so the answer never depends on directory order.
+    for sibling in sorted(resolved_engine_root.parent.iterdir()):
+        if sibling.is_dir() and sibling != resolved_engine_root:
+            candidates.append(sibling / relative)
+
+    candidates.append(resolved_engine_root / relative)
+
+    return tuple(candidates)
+
+
+def console_literal(value) -> str:
+    """A value as the console expression parser wants it: strings quoted, numbers bare."""
+    return f'"{value}"' if isinstance(value, str) else str(value)
+
+
+def read_environment(console) -> dict:
+    """
+    The session's current viewer environment, so the bench can put it back.
+
+    ⚠️ It MUST be put back: `Core.shutdown()` saves the settings on the way out, so a value this
+    script leaves behind lands in the user's settings.json permanently.
+    """
+    import json as _json
+
+    answer = console.run("Core.SettingsService.getJson()", timeout=20.0)
+    start = answer.find("{")
+
+    if start < 0:
+        return {}
+
+    try:
+        tree = _json.loads(answer[start:answer.rfind("}") + 1])
+    except ValueError:
+        return {}
+
+    viewers = tree.get("Core", {}).get("Viewers", {})
+
+    return {key: viewers.get(key.rsplit("/", 1)[1]) for key in ENVIRONMENT_KEYS if key.rsplit("/", 1)[1] in viewers}
+
+
+def apply_environment(console, environment: dict) -> None:
+    """Poses the viewer environment. Read by +ModelViewer when it builds its scene, so BEFORE openFiles()."""
+    for key, value in environment.items():
+        console.run(f'Core.SettingsService.set("{key}", {console_literal(value)})', timeout=20.0)
+
 
 def default_assets_directory() -> Path:
-    """The vendored Khronos sample assets, relative to this script inside the engine tree."""
-    return Path(__file__).resolve().parents[2] / "dependencies" / "glTF-Sample-Assets" / "Models"
+    """
+    The first candidate layout that actually holds the corpus.
+
+    Falls back to the documented one so a failure names the place the assets are SUPPOSED to be
+    rather than the last place that was tried.
+    """
+    for candidate in asset_directory_candidates():
+        if candidate.is_dir():
+            return candidate
+
+    return asset_directory_candidates()[0]
 
 
 def local_assets_directory() -> Path:
@@ -296,6 +432,9 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
     report = []
 
     with Console(host, port) as console:
+        session_environment = read_environment(console)
+        posed_environment = False
+
         for entry in plan:
             model = entry["model"]
             bounds = entry["bounds"]
@@ -303,8 +442,24 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
 
             print(f"\n=== {model}  (radius {bounds['radius']:.4f} m, {bounds['primitives']} primitives)")
 
+            # The environment this test declares, posed BEFORE the scene is built — and the
+            # session's own values put back as soon as a model that wants none comes along, so a
+            # run never leaves one test's environment on another's capture.
+            environment = ENVIRONMENTS.get(model)
+
+            if environment is not None:
+                apply_environment(console, environment)
+                posed_environment = True
+                print(f"  environment: " + ", ".join(f"{k.rsplit('/', 1)[1]}={v!r}" for k, v in environment.items()))
+            elif posed_environment:
+                apply_environment(console, session_environment)
+                posed_environment = False
+
             record = {key: entry[key] for key in ("model", "asset", "bounds", "distance")}
             record["views"] = {}
+
+            if environment is not None:
+                record["environment"] = environment
 
             answer = console.run(f'Core.openFiles("{entry["asset"]}")', timeout=90.0)
 
@@ -356,6 +511,12 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
                       f"coverage~{entry['frame_coverage'] * 100:5.1f}% of frame height{flag}")
 
             report.append(record)
+
+        # ⚠️ Always put the session's environment back: `Core.shutdown()` SAVES the settings, so a
+        # value left behind here ends up in the user's settings.json for good.
+        if posed_environment and session_environment:
+            apply_environment(console, session_environment)
+            print(f"\nviewer environment restored: " + ", ".join(f"{k.rsplit('/', 1)[1]}={v!r}" for k, v in session_environment.items()))
 
     return report
 
@@ -417,8 +578,20 @@ def main() -> int:
         return 1
 
     arguments.out.mkdir(parents=True, exist_ok=True)
+    # ⚠️ A partial run (`./bench.py OneModel`) MERGES into the existing report instead of replacing
+    # it: the report carries the bounds and framing distance every later measurement reads back, and
+    # a twenty-minute full run must not be erased by a one-model re-capture. Re-captured models
+    # replace their own record, everything else is kept.
     report_path = arguments.out / "bench-report.json"
-    report_path.write_text(json.dumps(report, indent=2))
+    merged = []
+
+    if report_path.exists():
+        previous = json.loads(report_path.read_text())
+        captured = {record["model"] for record in report}
+        merged = [record for record in previous if record["model"] not in captured]
+
+    merged.extend(report)
+    report_path.write_text(json.dumps(merged, indent=2))
 
     print(f"\n{sum(len(record['views']) for record in report)} capture(s) in {arguments.out}")
     print(f"Report: {report_path}")

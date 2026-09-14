@@ -4,11 +4,18 @@ Captures the Khronos [glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-S
 test models through the engine, under the framing each test's README imposes, so the renderer's
 glTF 2.0 conformance can be **measured** rather than eyeballed.
 
-The assets are vendored as a sparse checkout under `dependencies/glTF-Sample-Assets`. A second,
-much smaller tree — `assets/`, next to this script — holds **our own** probes for the gaps Khronos
-does not cover; `pick_asset()` searches it first. Every asset in it must be produced by a versioned
-generator (today: `make-volume-probe.py`), because a binary blob nobody can regenerate is worse
-than no test at all.
+The assets are vendored as a partial clone (`blob:none`) of the Khronos corpus. ⚠️ **It is a
+submodule of `projet-alpha`, not of the engine** (owner decision, 2026-08-31: test data belongs to
+the testbed), so it sits two levels above this script's engine root — and on a workstation where
+the engine is *symlinked* into the consumer from a sibling directory, no arithmetic on the resolved
+script path can reach it. `asset_directory_candidates()` therefore tries the consumer tree (from
+the unresolved path), the resolved engine root's siblings, and finally the engine itself, in that
+order; `--assets` overrides the lot.
+
+A second, much smaller tree — `assets/`, next to this script — holds **our own** probes for the gaps
+Khronos does not cover; `pick_asset()` searches it first. Every asset in it must be produced by a
+versioned generator (today: `make-volume-probe.py`), because a binary blob nobody can regenerate is
+worse than no test at all.
 
 ## Running it
 
@@ -25,6 +32,9 @@ than no test at all.
 ```
 
 Captures and `bench-report.json` land in `./gltf-bench-captures` unless `--out` says otherwise.
+A partial run **merges** into an existing report rather than replacing it: the report carries the
+bounds and framing distance every later measurement reads back, and a one-model re-capture must not
+erase a twenty-minute full run (it did, once).
 
 > [!IMPORTANT]
 > **Launch the engine without `--load-demo`.** A running demo scene is never disturbed by the
@@ -198,3 +208,43 @@ The failure images name the defect, which is what turns a capture into a fix.
 | `bench.py` | the driver: framing plan, camera placement, capture loop |
 | `gltf_bounds.py` | world-space bounds of a glTF/GLB by walking the node hierarchy with transforms |
 | `../emeraude_console.py` | the shared remote-console client |
+## Traps the 2026-09-14 re-judgement added
+
+- **⚠️⚠️ A missing object shows you the object BEHIND it.** Probing the iridescence grids
+  sphere-by-sphere reported the seat-less half as *saturated and correlated with its declared film
+  thickness* — the exact opposite of the truth, which is that those 197 spheres are not in the scene
+  at all. In a 7×7×7 grid almost every cell has another cell behind it, so the probe was reading a
+  neighbour. Restricting the reading to **isolated** spheres (nothing of the lattice in front of or
+  behind, from the projected discs) settled it in one pass: with a seat, luminance 203…216; without,
+  19.8…31.1, against a background of 16.7…32.7. **Prove nothing else can be under a pixel before you
+  read it.**
+- **⚠️⚠️ In an outdoor environment, a sphere's brightest pixels are an IMAGE OF THE SKY, not a BRDF
+  lobe.** The highlight-elongation metric for `AnisotropyStrengthTest` — the shape metric this bench
+  has wanted for three runs — came back as pure noise (1.23 … 6.82, no structure, the anisotropy-0
+  row no more isotropic than the rest). Five metrics have now been confounded on this test, and the
+  lesson is that the metric was never the problem: no shape metric can work while the reflected
+  environment is a landscape. **Pose the test in a dark environment with a distinct source, then
+  measure.** Same root cause blocks `SpecularTest` (too dark) and `SheenCloth` (washed out).
+- **⚠️ A listing you truncated is not a listing.** This section first claimed
+  `Core.SettingsService` had **no `set`** — and therefore that a test could not be posed in its own
+  environment at all. False: `set(key, value)` has been there since the console was unified. The
+  "evidence" was a `help` dump piped through `grep | head`, and `set` sorts one line past `save`,
+  i.e. exactly where the default `head -10` cut. **Use `<path>.lsfunc()` to enumerate a level's
+  commands, and never conclude a capability is missing from a truncated pipe.** The bench now poses
+  a per-test environment through that command (`ENVIRONMENTS` in `bench.py`) and restores the
+  session's values afterwards.
+- **⚠️ Always restore what you posed.** `Core.shutdown()` *saves the settings on the way out*, so a
+  value the bench leaves behind lands in the user's `settings.json` permanently. `run_bench()` reads
+  the session's three viewer keys before touching anything and puts them back at the end, and also
+  between models, so one test's environment never lands on another's capture.
+- **⚠️ `ModelViewer` can miss the extents and frame by fallback.** `TextureTransformTest` logged
+  *"The imported content published no extents in time, using the fallback framing"* on both
+  attempts — reproducible. The warning is in the engine log and nowhere in `bench-report.json`:
+  **read the engine log for that line before trusting a capture's framing.**
+- **⚠️ `OrientationTest` cannot be judged from an axis view.** The six axis views each show an arrow
+  but never the target it must point at — the targets sit on the far rim, out of frame. It now gets
+  `three-qtr` and `three-qtr-rear`, which show the RGB (quaternion) and CMY (matrix) sets with their
+  targets, the way its own reference screenshot does.
+- **⚠️ The plan's `coverage~38.9 %` is stale arithmetic**; the real subtended height at
+  `DISTANCE_FACTOR = 5.142` is ~83 %, which is what the captures show. Do not conclude anything about
+  framing from that column.

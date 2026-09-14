@@ -1,6 +1,6 @@
 ---
 id: gltf-conformance-loader-gaps
-title: glTF conformance — the loader gaps the bench located (re-measured 2026-08-27)
+title: glTF conformance — the loader gaps that remain (re-judged 2026-09-14)
 status: open
 priority: high
 scope: Scenes/Loaders/GLTF
@@ -9,315 +9,148 @@ blocked-by: []
 tags: [gltf, material, measured]
 ---
 
-# glTF conformance — the loader gaps the bench located
+# glTF conformance — the loader gaps that remain
 
-> ⚠️ **Location changed 2026-08-31**: `glTF-Sample-Assets` is now a **submodule of projet-alpha**
-> (`projet-alpha/dependencies/glTF-Sample-Assets`), not a directory under the engine's. Test data
-> belongs with the testbed. It is a **partial clone** (`blob:none`, 201 MB against 1.7 GB upstream)
-> — do not re-clone it plainly.
+> ⚠️ **Asset location** (owner decision, 2026-08-31): `glTF-Sample-Assets` is a **submodule of
+> projet-alpha** (`projet-alpha/dependencies/glTF-Sample-Assets`), not of the engine. Test data
+> belongs to the testbed. It is a **partial clone** (`blob:none`, 201 MB against 1.7 GB upstream)
+> — do not re-clone it plainly. The bench searches three layouts for it since 2026-09-14 (the
+> engine checkout here is a **symlink to a sibling directory**, so no path arithmetic on the
+> resolved script path can find the consumer's submodule).
 
-## Why
+## The count, re-judged 2026-09-14 (second pass, after three fixes the first pass found)
 
-Bench re-run on **2026-08-27** against `glTF-Sample-Assets` @ `2bac6f8` (19 models), 44 captures, **zero VUID and zero `VK_ERROR`** with the Khronos validation layer
-active: **7 PASS / 10 FAIL / 2 undecided** — the same headline as the 2026-08-25 run, but one gap
-is closed and two failures are now attributed to a cause that is not this loader.
+Full re-run against the current cascade: **49 captures, ZERO VUID, zero `VK_ERROR`**, zero
+shared-UBO failures. Every model re-read against its own README. base suite **2049/2049**.
 
-Since the 2026-08-25 run, `c77313f7` closed the **sampler wrap mode** gap. Measured on the
-`TextureTransformTest` scale quad, where the UV deliberately leaves `[0,1]`: the area outside is a
-uniform grey (std **5.3** and **8.0** out of 255) with **0.00 %** arrow-ink pixels, against std
-57.3 and 11.19 % ink inside the sampled square. CLAMP_TO_EDGE is honoured; a REPEAT would put a
-second arrow there. Only `MetalRoughSpheres` and `TextureTransformTest` declare a non-default wrap
-in the whole bench, so that is the full extent of the change.
+| | 2026-08-27 | 2026-09-14 (first pass) | **2026-09-14 (final)** |
+|---|---|---|---|
+| PASS | 7 | 14 | **16** |
+| FAIL | 10 | 1 | **4** |
+| blocked by the instrument | 2 | 5 | **0** |
 
-**PASS (7)** — each with the number that decides it:
+⚠️ **The FAIL count went UP from the first pass to the final one, and that is the good outcome**:
+the five "blocked" models became judgeable, and four of the judged models fail for a reason now
+pinned in code. A blocked model hides a defect; a failing one names it.
+
+**PASS (16)** — each with the number that decides it:
 
 | model | measurement |
 |---|---|
-| `NormalTangentTest` | geometry 98.7° vs normal-mapped 93.2°, max row delta 11.5°, no sign flip |
-| `AlphaBlendModeTest` | MASK cutoffs **0.260 / 0.504 / 0.748** vs 0.25 / 0.50 / 0.75; OPAQUE control flat (spread 0.017); BLEND ramp ×3.50 monotone |
-| `OrientationTest` | 6/6 arrows on their same-colour target, quaternion **and** matrix encodings |
-| `EmissiveStrengthTest` | linear-luminance ratios 2.21 / 2.28 / 1.97 / 1.59 against a declared 1-2-4-8-16 doubling |
-| `MetalRoughSpheres` | clean mirror-to-diffuse progression (also the exposure control) |
+| `AlphaBlendModeTest` | OPAQUE flat (spread **2.3/255**), BLEND ramp ×38.7 monotone on 98 % of steps, MASK cutoffs sharp (< 0.012 alpha) and spaced **0.236 / 0.245** against a declared 0.25 |
+| `OrientationTest` | **6/6** arrows on their same-colour target — RGB (quaternions) *and* CMY (matrices) |
+| `NormalTangentTest` | normal-mapped highlight within **17°** of geometry, same quadrant, no Y flip |
+| `NormalTangentMirrorTest` | four columns within **3.8°**: Geometry −27.5°, Normal −27.4°, V Mirror −23.7°, U Mirror −23.7° |
+| `TextureTransformTest` | offset ✓ rotation ✓ scale ✓ clamp ✓ — all three arrows on their green ✓ |
+| `VertexColorTest` | pure R/G/B check marks, zero complementary ink |
+| `EmissiveStrengthTest` | ratios **2.42 / 2.21 / 1.81 / 1.48** against a declared doubling |
+| `MetalRoughSpheres` | the exposure/IBL control; matches the reference |
+| `MetalRoughSpheresNoTextures` | metallic axis **10.8 → 119.1 → 204.9** (smooth) and **60.9 → 115.1 → 190.2** (rough), both monotone |
+| `TransmissionTest` | the four declared hues — peaks at **0-10° / 60° / 120° / 200°** |
+| `TransmissionRoughnessTest` | the Air row (IOR 1.00) does **not** blur (×1.34) while Sapphire/Glass/Water fall ×4.35 / ×4.55 / ×3.12 |
+| `BoomBox` | matches the reference, crisp |
 | `WaterBottle` | matches the reference, chirality correct |
-| `BoomBox` | correct, but only 14.1 % of frame height (near-plane clamp) |
+| `VolumeAbsorptionProbe` (ours) | centre G/R **0.993 / 0.993 / 14.87**, backdrop (201, 200, 196) |
+| `IridescenceDielectricSpheres` | **the grid is complete for the first time** — the 197 absent spheres are back and the pastel film sweep reads along the thickness axis |
+| `IridescenceMetallicSpheres` | idem, with the saturated metal film; judged on the parametrisation, not the level (Khronos shoots it in a studio) |
 
-**FAIL (10)**: NormalTangentMirrorTest, TextureTransformTest (rotation only, see below),
-VertexColorTest, SpecularTest, ClearCoatTest, TransmissionTest, TransmissionRoughnessTest,
-Iridescence ×2, AnisotropyStrengthTest.
+⚠️ Reservation on `TransmissionRoughnessTest`: the Diamond row (IOR 2.42) decays only ×1.37 because
+at that IOR the *reflection* dominates and a sharpness metric cannot separate a sharp reflection
+from a sharp transmission. Not a transmission defect — an unresolvable row for this metric.
 
-**Undecided (2)**: `MetalRoughSpheresNoTextures` and `SheenCloth`. ⚠️ Both of
-`MetalRoughSpheresNoTextures`' blockers are now GONE: its 98 spheres were one sphere (resource-key
-collapse, fixed) and it was capped at 5.5 % of frame height by the hard-coded near plane — also
-fixed, and it now fills the frame with its whole 7×7 grid, labels readable. `BoomBox` likewise went
-from 14.1 % to the nominal 38.9 %. It is judgeable now and simply has not been judged.
-`SheenCloth` was blocked by the lighting, and that is now UNBLOCKED too: `+ModelViewer` gained three
-environment settings (2026-08-28) and with `Core/Viewers/Background = ""` plus
-`Core/Viewers/AmbientIntensity = 0` its rim-to-backdrop contrast goes from **8.1× to 390×** against a
-bit-exact black backdrop — the Khronos framing. Like the other two, it is judgeable now and simply has
-not been judged.
-⚠️ **Black is NOT the universal answer.** `SpecularTest` and `AnisotropyStrengthTest` are too DARK,
-not washed out, and need a bright *reflected* environment (`Core/Viewers/EnvironmentCubemap`) —
-the other axis. Choose per test, from what the test declares.
+**FAIL (4), every cause pinned in code**
 
-> [!CAUTION]
-> **2026-08-28 — FIVE OF THOSE VERDICTS ARE VOID, and one of the undecided with them.** The root
-> cause found that day is not in this loader's material handling at all: the loaders keyed every
-> resource on the asset's **name**, which neither glTF nor FBX makes unique, so a grid of meshes
-> sharing a name collapsed onto ONE renderable — one geometry, one material. Fixed in
-> `Scenes::Loaders::buildResourceKey()`; see
-> [`docs/caution-points.md`](../caution-points.md) § *Fixed: an asset NAME was used as a resource
-> identity* (the item file that tracked it is gone — the work is done).
->
-> | verdict | duplicate names it was measured through | re-judged 2026-08-28 |
-> |---|---|---|
-> | `ClearCoatTest` FAIL | `ClearCoatSampleMesh` ×18 | **the collapse WAS the whole failure** — see below |
-> | `TransmissionTest` FAIL | `Sphere` ×12 + 3 different materials named `BlueTransWithMask` | **the collapse WAS the whole failure** |
-> | `MetalRoughSpheresNoTextures` undecided | `Sphere` ×98 | **now renders its grid** — see below |
-> | `TransmissionRoughnessTest` FAIL | `RoughnessSamples` ×6, images `RoughnessGrid` ×2 | **still FAIL**, cause re-attributed to `ior` |
-> | `SpecularTest` FAIL | `OneSample` ×20, `FiveSamples` ×3 | **still FAIL, capture BIT-IDENTICAL** — the collapse was invisible here |
->
-> ⚠️ **The other verdicts stand.** `AnisotropyStrengthTest` and both iridescence models have
-> **unnamed** meshes and materials, so the index fallback already protected them: their failures
-> are genuine extension gaps. `NormalTangentMirrorTest`, `TextureTransformTest`, `VertexColorTest`
-> and all seven PASS models carry unique names and were never affected.
+| model | cause | tracked |
+|---|---|---|
+| `SheenCloth` | **`KHR_materials_sheen`'s two textures are never read** — `GLTFLoader.cpp:1090-1107` reads `sheenColorFactor` and `sheenRoughnessFactor` only. The asset's whole point is its sheen texture (colour in RGB, roughness in alpha). | this file, below |
+| `ClearCoatTest` | the three maps are read since 2026-09-14 and the `Roughness variations` row now carries the coating's stripes, but the **`Coat normal map` row still does not corrugate** and `Partial coating`'s bands are weak | this file, below |
+| `SpecularTest` | 6 rows of 7 pass (leftmost sphere exactly **0.00**, each texture row matching its factor row to **0.06/255**); the 7th is flat because `specularColorFactor > 1` is clamped by `Color< float >` | [`specular-colour-factor-above-one-is-clamped.md`](specular-colour-factor-above-one-is-clamped.md) |
+| `AnisotropyStrengthTest` | the axis works (lobe elongation **1.11 → 9.26**, monotone — a first), but it still acts at **roughness 1.0** (×1.84) where the extension says it must not | [`anisotropy-alpha-ignores-the-spec-formula.md`](anisotropy-alpha-ignores-the-spec-formula.md) |
 
-## Re-run 2026-08-28 — the resource-key fix, measured (44 captures, ZERO VUID)
+## What the second pass fixed
 
-Captures: `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-20260828/`. Same script, same
-framing as the 2026-08-27 run, whose captures **survive on disk** — so this pass is a true pixel
-A/B, not a re-description.
+- **The shared-UBO ceiling** — 197 of 344 materials per iridescence grid had no seat and their
+  spheres were absent. `bankSize()` now caps the device limit instead of ignoring it, and
+  `addElement()` grows a bank instead of failing. Item deleted (done); the knowledge and the
+  concurrency constraint are in [`docs/caution-points.md`](../caution-points.md)
+  § *A shared-UBO bank that fills up…*.
+- **Clearcoat's three maps** — read, with the roughness map on **GREEN** as the extension requires.
+  `Simple coating`, the row declaring no texture, is **bit-exact**: the control this needed.
+- **The bench poses a per-test environment** (`ENVIRONMENTS` in `bench.py`) and restores the
+  session's values. That is what made `SpecularTest`, `AnisotropyStrengthTest` and `SheenCloth`
+  judgeable at all.
 
-**⚠️⚠️ THE METHOD THAT DECIDED IT — a full-frame pixel diff against the previous run, partitioned
-by whether the asset has duplicate names.** This is what a loader-wide change must be verified
-with, and it is far stronger than re-reading individual captures:
-
-| group | captures | changed pixels | max delta |
-|---|---|---|---|
-| models with **unique** names | 32 | 0.000 % … 1.322 % | **≤ 2 / 255** |
-| models with **duplicate** names | 12 | 0.000 % … **15.137 %** | **243 / 255** |
-
-The ≤2 LSB on the unique-name group is ordinary temporal dither: **the fix is a bit-exact no-op
-wherever names are unique**, which is the control this change needed. Change happens if and only
-if an asset has duplicate names AND the aliased materials actually differ.
-
-**Per-model numbers:**
-
-- `ClearCoatTest`: std across the 18 cell colours **R 2.32 → 46.79**, G 0.96 → 11.19,
-  B 1.04 → 28.47; the red channel's range over the grid goes from 159.8‥168.9 (i.e. one colour,
-  eighteen times) to 5.5‥167.4. Row 1 now measures a linear **1.000 : 0.033 : 0.022** against a
-  declared 1.000 : 0.040 : 0.020, rows 2-6 **0.15 : 0.21 : 1.000** against 0.119 : 0.203 : 1.000,
-  and the whole `Coating Only` column its declared **black** (mean sRGB 5.5‥15.4, the residual
-  being the sky's specular on the coat — physically required). **The three columns separate.**
-- `TransmissionTest`: hues of the saturated spheres
-  **[16,16,16,16,17,17,17,17,17,17] → [16,16,17,61,61,61,123,127,128,194]** — one hue became the
-  four declared ones (6° red, 62° yellow, 124° green, 210° blue).
-- `MetalRoughSpheresNoTextures`: with a 7×7 lattice **fitted to the image** (guessed coordinates
-  produce garbage at this framing — see the trap below), cell-mean std **6.43 → 35.22** (×5.5),
-  spread 23.98 → 163.84, and the **metallic axis is now strictly monotone over its seven steps**
-  (116.3 → 127.2 → 140.9 → 155.8 → 169.9 → 177.4 → 189.2). Before, all 49 sampled cells read
-  180 ± 1. The roughness axis peaks at column 5 and falls — physically expected (a smooth metal
-  mirrors the dark forest, a rough one scatters the bright sky, then the lobe widens past it), not
-  a defect. ⚠️ At the time of that measurement it was only **5.5 % of frame height**, the hard-coded
-  near plane since fixed (2026-08-28) — it now fills the frame, so those per-cell numbers deserve
-  re-taking at the new framing, where per-cell
-  photometry stays coarse; the axis monotonicity is what carries the verdict.
-- `SpecularTest`: **capture bit-identical, 0.000 % of pixels changed.** Its 24 materials all
-  declare `baseColorFactor [0,0,0,1]`, `metallicFactor 0`, `roughnessFactor 0` and differ ONLY in
-  `KHR_materials_specular` — which is never read. So the aliasing had nothing to alias, and the
-  35 cell means still span 2.70‥4.57 / 255 (std 0.52) with zero exactly-black pixels. **FAIL
-  confirmed, and now correctly attributed to the unread extension rather than to the key.**
-- `TransmissionRoughnessTest`: the 6 spheres are now 6 distinct renderables (0.87 % of pixels
-  changed), and the failure is isolated: over the declared IOR range 1.00 → 2.42 the five rows
-  move by **1.46 / 255** — noise — while the roughness axis moves by **15.42**. `ior` does
-  nothing, exactly as the code says (zero occurrences). **FAIL, cause pinned.**
-
-⚠️ **A trap this re-run added.** Sampling a small grid on **guessed** pixel coordinates produced a
-*plausible but wrong* measurement — a per-cell std of 51.97 on the BEFORE capture of
-`MetalRoughSpheresNoTextures`, which is impossible for 98 identical spheres and was the sampling
-window drifting into the sky. Fit the lattice to the image (high-pass, then a brute-forced
-pitch/offset over the row and column profiles) before reporting any per-cell number.
-
-**Consumers re-verified at runtime** (`animation-debug`, zero VUID): the Fox renders with its
-texture and shadow through the renamed `glTF:Fox/Mesh/fox1-0`, and both Paladins render through
-the FBX path whose keys changed identically.
+⚠️⚠️ **A correction to the previous revision of this file**: it claimed `Core.SettingsService` had
+**no `set`**, and built a whole "missing capability" section on it. False — `set(key, value)` has
+been there since the console was unified. The claim came from a `help` dump piped through
+`grep | head`, where `set` sorts one line past `save` and fell off the end. **`<path>.lsfunc()`
+enumerates a level; never conclude a capability is missing from a truncated pipe.**
 
 ## What remains
 
-- [x] **`KHR_materials_specular` + `KHR_materials_ior`: FACTORS WIRED 2026-08-28.** The GPU side
-  was already complete and spec-exact (`LightGenerator.PBR.cpp:589-590`); only the loader's read
-  was missing, and the identity defaults hid it. `SpecularTest`'s four factor rows go from flat
-  (spread ≤ 0.17 / 255) to monotone (2.36‥3.35), `specularFactor 0` renders exactly 0, the three
-  texture rows stay bit-identical (built-in control), and the controls `MetalRoughSpheres` /
-  `WaterBottle` move by 1 and 0. `TransmissionRoughnessTest`'s IOR axis: **1.46 → 4.24 / 255,
-  monotone** (diamond darkest, air brightest). Zero VUID. Details and traps in
-  [`docs/caution-points.md`](../caution-points.md) § *An IDENTITY default makes an unwired feature
-  indistinguishable from a disabled one*.
-  - [x] **The two specular TEXTURES — DONE the same day.** `ComponentType::SpecularColor` added
-    (glTF declares two maps for one extension, the material had one slot); `specularTexture` →
-    `ComponentType::Specular`, **A channel**; `specularColorTexture` → `ComponentType::SpecularColor`,
-    RGB, sRGB-decoded. Measured: the three texture rows go from flat (0.10 / 0.10 / 0.25) to
-    monotone (3.12 / 3.60 / 2.41), the four factor rows **bit-identical** (control), the two paths
-    agreeing to within **0.33 / 255** (ratio 1.05‥1.11). Controls `MetalRoughSpheres` delta 1,
-    `WaterBottle` delta 0, zero VUID.
-  - [ ] `KHR_texture_transform` on either specular map is dropped with a warning — no UV transform
-    slot in the material UBO for those component types. No conformance asset needs it.
-  - [ ] **`FBXLoader` reads neither, on purpose.** ufbx's `pbr.specular_factor`/`specular_color`
-    mean the dielectric specular weight on an OpenPBR/Standard-Surface material but the **Phong**
-    specular on a legacy `FbxSurfacePhong`, and the engine's legacy specular is a glossiness path.
-    The semantics must be settled before any code is copied across — see
-    `project_specular_normalisation_glossiness` reasoning in the specular/glossiness work.
-  Measured symptom: the 35 spheres all sit between **3.65 and 3.83 out of 255** (total spread 0.18)
-  with **zero exactly-black pixels** — drawn, then crushed, not absent.
-- [x] **`KHR_materials_volume` — READ 2026-08-28.** Declared on the parser and never read; the
-  shader already had the Beer-Lambert formula. ⚠️ **The real finding is that the engine's defaults
-  are not the spec's** — `thicknessFactor` 1.0 vs 0 (thin-walled) and `attenuationDistance` 1.0 m vs
-  +infinity — harmless only while `attenuationColor` stays white, and an invented absorption the
-  moment it does not. The loader now states the spec defaults.
-  ⚠️ **Unverifiable on real content, and that was checked FIRST**: over 60 glTF files, 15 materials
-  declare the extension, 2 declare `attenuationColor`, **zero** declare `attenuationDistance`, so per
-  spec none of them absorbs anything either before or after. Measured on a purpose-built probe
-  instead (three spheres, identical but for the declared volume, in ONE capture — a stronger control
-  than a before/after since it is immune to temporal variation): rim green-over-red **1.005** with no
-  volume, **1.004** with colour but no distance, **1.174** with both, peak green excess **147/255**.
-  Zero VUID.
-  - [ ] `thicknessTexture` (G channel) is logged and ignored — needs a new `ComponentType`, as the
-    specular maps did. Used by `IridescentDishWithOlives`' `glassCover`.
-  - [x] **The probe is now IN the bench** (owner decision, 2026-08-28):
-    `tools/gltf-conformance-bench/make-volume-probe.py` generates
-    `assets/VolumeAbsorptionProbe/glTF-Binary/VolumeAbsorptionProbe.glb`, `pick_asset()` searches our
-    own `assets/` tree before the vendored Khronos one, and the model is in `MODELS`. Reference
-    reading at the bench framing — share of disc pixels where green exceeds red by more than 25/255:
-    **0.0 % / 0.0 % / 34.2 %** left to right. ⚠️ The MIDDLE ball being **0.0 %** is the assertion
-    that matters: a colour without a distance must NOT tint. Every asset in `assets/` must stay
-    generated by a versioned script — a binary nobody can rebuild is worse than no test.
-- [x] **Iridescence — WIRED IN FULL 2026-08-28** (IOR + both film thicknesses + the factor map), and
-  a shader defect fixed with it: the thickness read `mix(min, max, 0.5)` where the spec says the
-  MAXIMUM absent a thickness texture. The spheres gain a golden rim, a violet body and magenta/cyan
-  fringes where they were plain blue-grey metal. The thickness MAP still needs a `ComponentType`.
-- [x] **Anisotropy — WIRED 2026-08-28**, strength + rotation + the direction texture. ⚠️ glTF gives
-  RADIANS, the engine wants TURNS and clamps to [0,1] — divided by 2π, or it would be wrong by 2π and
-  flattened. The highlight now stretches from a round blob at strength 0 into thin bands at 1.
-- [x] The two iridescence grids gained a **three-quarter** bench view: they are 3-D grids and a
-  dead-on `front` collapses them into overlapping rows.
-- [ ] ⚠️⚠️ **NEITHER OF THOSE TWO HAS A NUMERIC CRITERION, and that is what remains.** Four metrics
-  were tried and all four were confounded (principal axis on a curved arc; percentile threshold
-  across a brightness change; saturation over a crop containing lawn). **The 2026-08-27 anisotropy
-  figures below came from the first of them and must not be trusted.** What is established is that
-  both extensions demonstrably act: 6.6‥9.6 % of pixels changed on the three declaring models with
-  deltas to 239, against `MetalRoughSpheres` at exactly 0 and `WaterBottle` at delta 1. These tests
-  need a measurement METHOD, not rendering work.
-- [ ] ~~**Iridescence — PURE WIRING, and nearly a ONE-LINE change.**~~ (superseded, kept for the
-  code references) ⚠️ Previously estimated as "a
-  thin-film BRDF to write": WRONG, and the estimate was made without checking the GPU end. The
-  shader already carries a complete `evalIridescence()` thin-film function taking `iridescenceIOR`
-  and `thickness` (`LightGenerator.PBR.cpp:183-190`), the UBO carries `IridescenceIOR`,
-  `IridescenceThicknessMin` and `IridescenceThicknessMax`, and
-  `StandardResource::setIridescenceComponent(factor, ior, thicknessMin, thicknessMax)` takes
-  exactly the four values — **the loader calls it with one and lets the other three default**
-  (`GLTFLoader.cpp:1405`). fastgltf exposes `iridescenceIor`,
-  `iridescenceThicknessMinimum/Maximum` and both textures. Pass them.
-  Original note, still accurate on what is read: `GLTFLoader.cpp` reads only `iridescenceFactor`;
-  `iridescenceIor` and the film thickness (min/max/texture) are never parsed — and those are the
-  two axes both test models sweep. The test CANNOT pass as it stands.
-- [ ] **Clearcoat / transmission / sheen**: only the scalar factors are read, no texture (nor coat
-  normal map). ⚠️ **The scalar factor IS wired and now measurable** (2026-08-28): the `Coated`
-  column is brighter than `Base layer` on all six rows, with the top-5 % highlight up **+6.7 to
-  +17.3** out of 255. The 2026-08-27 claim of "**no separation at all**" was the resource-key
-  collapse, not the shading — those three columns were literally the same renderable. What remains
-  is therefore narrower than it looked: the clearcoat **textures** (factor/roughness texture and
-  the coat normal map), which is why the `Partial coating`, `Base normal map`, `Shared normal map`
-  and `Coat normal map` rows still cannot be conformant. **`ClearCoatTest` stays FAIL on that
-  residual**, and the base-colour half of its failure is closed.
-- [x] **`KHR_texture_transform` rotation — DONE 2026-08-28. `TextureTransformTest` PASSES**:
-  offset ✓ scale ✓ clamp ✓ **rotation ✓**. The value was already parsed and thrown away with a
-  warning; it now reaches the material UBO as **(cos, sin)** in a second block of 6 vec4 (offsets
-  80-103, neutral (1,0,0,0)), the trig resolved ONCE per material on the CPU rather than per
-  fragment. The shader composes `mat2(cos, -sin, sin, cos) * (uv * scale) + offset`.
-  ⚠️ Two sign/order traps, both specified by the extension and both able to produce a
-  plausible-but-wrong result: the composition is `translation * rotation * scale` (rotating the
-  offset lands the texture elsewhere), and the extension's matrix is `[cos, sin ; -sin, cos]` —
-  the minus on the BOTTOM-LEFT, a clockwise UV rotation, the opposite of the usual maths
-  convention — which in GLSL's column-major `mat2` is written `mat2(cos, -sin, sin, cos)`.
-  **Measured on the test's own markers**: the `Rotation` quad's arrow moved off the yellow
-  "not applied" marker onto the **green ✓**, and the `All` quad (offset + rotation + scale) now
-  lands on its green ✓ too. The `Scale` quad, which declares no rotation, is untouched.
-  **Control**: the rotation is the ONLY thing in the whole bench that declares one, and every
-  other capture is **bit-exact** (`AlphaBlendModeTest`, `BoomBox`, `WaterBottle` exactly 0 px;
-  `MetalRoughSpheres` delta 1 = temporal dither) — the neutral `mat2(1,0,0,1)` is the identity.
-  Zero VUID. Material UBO grows 80 → 104 floats (320 → 416 bytes).
-  ⚠️ Still missing from this extension: the per-`TextureInfo` **`texCoord` override**, which is
-  the multi-UV gap, and any transform on the two **specular** maps (no UV slot for those
-  component types).
-> ⚠️ **A measurement trap this lot re-paid** (knowledge, not work — it belongs here and not in a
-  checkbox). Marker boxes placed on GUESSED pixel
-  coordinates read 85.9 % ink both before and after — the box was saturated and could not
-  discriminate. Locate the changed region first (`np.where` on the diff mask, then group the
-  columns into bands) and crop THAT; the two rotated quads showed up as two clean column bands
-  with the untouched `Scale` quad between them, which is what identified them.
-- [x] **Supplied tangents — READ 2026-08-28** (`NormalTangentMirrorTest`). The accessor was not
-  read at all, and the bitangent handedness did not exist anywhere in the cascade:
-  `ShapeVertex::biNormal()` was a bare `cross(normal, tangent)`, so mirrored UV islands got a
-  flipped bitangent. `ShapeVertex` gained a signed handedness member (neutral +1 ⇒ bit-exact no-op
-  for every other loader and every generated shape), `setTangent(Vector<4>)` stops dropping W, and
-  the loader skips its own tangent computation when the asset authored them.
-  Measured (highlight angle per column, five roughnesses): the two mirrored columns go from a
-  circular spread of **107.7°** and **102.9°** (deviating −115.3° / −110.8° from `Geometry`) to
-  **1.8°** and **1.3°** at −7.8° / −12.1°, the same family as the already-passing `Normal` column
-  (−6.3°). Controls: `Geometry` and `Normal` **identical to the decimal**, `NormalTangentTest`
-  **bit-identical on all three views**, `MetalRoughSpheres` delta 1. `BoomBox` reads visibly
-  crisper; `WaterBottle` and `SheenCloth` differ in micro-detail only. Zero VUID.
-  ⚠️ Side effects to know: it is **all-or-nothing per mesh** (a mixed mesh recomputes everything and
-  logs it), and `sizeof(ShapeVertex)` 80 → 84 forced the **native format version to 2** with no v1
-  read path — `FileFormatNative` writes vertices as a raw blob, so a size change with an unchanged
-  version is silent corruption. New base tests: `test_VertexFactoryShapeVertex.cpp` (6 cases,
-  including a `sizeof` pin) + a v1-rejection case; base suite 2029 → **2036**.
-- [x] **`COLOR_0` — READ 2026-08-28. `VertexColorTest` PASSES.** The README's literal failure
-  signature is gone: the test tiles went Red 39.8 % red + **58.1 % cyan** → **97.4 % red, zero
-  cyan**; Green 37.6 % + **59.9 % magenta** → **97.4 % green, zero magenta**; Blue **60.5 % yellow**
-  + 39.5 % → **100 % blue, zero yellow**, while the reference tiles stayed 100 % pure. Every other
-  capture in the lot is **bit-exact** (0 px, delta 0) — `COLOR_0` is the only thing that changed.
-  Sponza's 136 meshes load with **zero VUID**, which is what proves the material-variant split
-  correct on its 17 shared materials.
-  ⚠️ Design consequence, deliberate: a `…-vc` material variant, because `UseVertexColors` changes
-  the shader contract while the attribute belongs to the geometry. The architecture is upside down
-  and is recorded as
-  [`vertex-attribute-presence-belongs-to-geometry.md`](vertex-attribute-presence-belongs-to-geometry.md);
-  `TEXCOORD_1+` will hit the same wall.
-- [ ] **Full conformance re-judgement against each model's README is NOT done.** The 2026-08-28
-  pass closed the resource-key collapse and re-attributed the five affected verdicts; it did not
-  re-read all nineteen READMEs and re-derive PASS/FAIL from scratch. The headline count above is
-  still the 2026-08-27 one. Do not quote it as current.
-- [ ] **Anisotropy — PURE WIRING too.** ⚠️ Also previously estimated as "an anisotropic GGX to
-  write": WRONG. `LightGenerator.PBR.cpp` already has an **anisotropic GGX NDF** (:133), an
-  **anisotropic Smith-GGX height-correlated visibility** (:153) and the tangent-frame construction
-  with rotation (:620-626), all gated on `m_useAnisotropy`; the UBO carries `Anisotropy` and
-  `AnisotropyRotation`; `setAnisotropyComponent()` exists in BOTH a scalar and a texture overload.
-  `KHR_materials_anisotropy` appears in `GLTFLoader.cpp` exactly ONCE — in the parser mask
-  (`:487`) — and is never read. fastgltf exposes `anisotropyStrength`, `anisotropyRotation` and
-  `anisotropyTexture`.
-  Original measurement, taken while it was unread: the aspect ratio of the top 5 % brightest
-  pixels: reference **3.65** at anisotropy 1.0 against **1.62** at 0.0 (ratio **2.26**); ours
-  **2.67** against **3.29** (ratio **0.81**, inside the noise and pointing the wrong way).
+- [ ] **`KHR_materials_sheen`'s two textures** (`sheenColorTexture` RGB, `sheenRoughnessTexture`
+      alpha) — never read. The only reason `SheenCloth` fails, and the same shape as the clearcoat
+      and specular maps: check the material side first, it may well already be complete.
+- [ ] **Clearcoat's residual**: the `Coat normal map` row does not corrugate and `Partial coating`'s
+      bands are weak, although all three maps are now read and the roughness map demonstrably works.
+      Look at the coat tangent frame (`Ncc`, `LightGenerator.PBR.cpp:808-814`) before the loader.
+- [ ] **`specularColorFactor > 1`** — [`specular-colour-factor-above-one-is-clamped.md`](specular-colour-factor-above-one-is-clamped.md), owner decision.
+- [ ] **The anisotropy alpha formula** — [`anisotropy-alpha-ignores-the-spec-formula.md`](anisotropy-alpha-ignores-the-spec-formula.md), owner decision.
+- [ ] `KHR_texture_transform`'s per-`TextureInfo` **`texCoord` override** — the multi-UV gap
+      (`GLTFLoader.cpp:1000`). Walls into
+      [`vertex-attribute-presence-belongs-to-geometry.md`](vertex-attribute-presence-belongs-to-geometry.md).
+- [ ] `KHR_texture_transform` on a **specular** or **clearcoat** map — no UV transform slot for those
+      component types (`GLTFLoader.cpp:1295` and the clearcoat warning next to it). No conformance
+      asset needs it.
+- [ ] **`FBXLoader` reads neither specular nor ior, on purpose.** ufbx's
+      `pbr.specular_factor`/`specular_color` mean the dielectric specular weight on an
+      OpenPBR/Standard-Surface material but the **Phong** specular on a legacy `FbxSurfacePhong`,
+      and the engine's legacy specular is a glossiness path. **Owner decision needed.**
+- [ ] ⚠️ **`ModelViewer` misses the extents on `TextureTransformTest`** — *"published no extents in
+      time, using the fallback framing"*, on every attempt, a `.gltf` with external textures. The
+      capture stays usable but its framing is not the computed one, and the warning appears only in
+      the engine log, never in `bench-report.json`.
+
+## Closed since the previous revision of this file (2026-08-28 → 2026-08-29)
+
+- `KHR_materials_iridescence`'s **thickness texture** (`cb4ad679`) — `ComponentType::IridescenceThickness`.
+- `KHR_materials_volume`'s **thickness texture** and **one ambient Fresnel** (`809e0f78`): the
+  ambient pass had four branches disagreeing on the Fresnel term, two of them hard-coding F0 = 0.04
+  and ignoring `KHR_materials_ior`; iridescence reached zero ambient shaders and now reaches two.
+  ⚠️ Both items' own files were deleted with the work, as the rule requires — this list exists so
+  the next reader does not re-open them.
 
 ## ⚠️ Traps of this bench (they cost real time)
 
-The bench harness and its traps now live with the tool, in
-[`tools/gltf-conformance-bench/README.md`](../../tools/gltf-conformance-bench/README.md).
-Two that this run added, because each one nearly produced a wrong verdict:
+The harness and its older traps live with the tool, in
+[`tools/gltf-conformance-bench/README.md`](../../tools/gltf-conformance-bench/README.md). What the
+2026-09-14 run added:
 
-- **A reference screenshot shot in a dark studio is not a criterion.** `EmissiveStrengthTest` looks
-  like a failure next to its reference — no cube glows — purely because the viewer meters a
-  daylight sky at sunny-sixteen. Judged on the RATIOS between cubes it passes cleanly.
-- **Luminance variation along a test's axis is not proof the axis works.** The anisotropy grid
-  varies 14.3 % down its anisotropy axis at roughness 0 and 2.8 % at roughness 1 — which is exactly
-  what a sky gradient over spheres at different heights produces, with no anisotropy at all. The
-  2026-08-25 run's "16.2 % where the spec mandates zero" was that confound. Measure the highlight
-  SHAPE.
+- ⚠️⚠️ **A missing sphere shows you the sphere BEHIND it.** The first probe of the iridescence
+  grids sampled every sphere centre and found the seat-less half *saturated and correlated with its
+  declared film thickness* — the opposite of "not drawn", and wrong. In a 7×7×7 grid almost every
+  cell has another cell behind it. Only the **isolated** spheres (nothing of the lattice in front
+  of or behind, computed from the projected discs) answer the question, and they answered it
+  cleanly. **Before reading a pixel, prove that nothing else can be under it.**
+- ⚠️⚠️ **The brightest pixels of a sphere in an outdoor environment are an IMAGE OF THE SKY, not a
+  BRDF lobe.** The highlight-elongation metric for `AnisotropyStrengthTest` — the shape metric this
+  file has been asking for — returned pure noise (1.23 … 6.82 with no structure, and the
+  anisotropy-0 row no more isotropic than the rest). That is the **fifth** confounded metric for
+  this test. The metric is not the problem: no shape metric can work while the reflected
+  environment is a landscape. Pose the test in a dark environment with a distinct source first.
+- ⚠️ **`ModelViewer` can miss the extents and fall back.** `TextureTransformTest` (a `.gltf` with
+  external textures) logged *"The imported content published no extents in time, using the fallback
+  framing"* on **both** attempts — reproducible, not a fluke. The capture was usable here, but the
+  framing was not the computed one. A capture whose framing silently differs is a measurement
+  hazard; the warning is in the engine log and nowhere in the report.
+- ⚠️ **The plan's `coverage~38.9 %` is stale arithmetic.** The real subtended height is ~83 % at
+  `DISTANCE_FACTOR = 5.142`, which is what every capture shows. Cosmetic, but do not use that
+  number to conclude anything about framing.
 
 ## References
 
-- Captures: `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-20260827/` (44 PNG +
-  `bench-report.json`).
+- Captures: `~/.local/share/LNIsle/projet-alpha/captures/bench-gltf-20260914/` (48 PNG).
+- Previous runs kept for pixel A/B: `bench-gltf-20260827/`, `bench-gltf-20260828/`.
 - The owner's gallery verdict on the pre-merge bench run
   (`captures/bench-gltf-20260812/galerie-banc-gltf.html`) was the D5 gate of the material merge;
   it is still pending.
