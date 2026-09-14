@@ -151,13 +151,19 @@ def scene_bounds(path):
     lo = [math.inf] * 3
     hi = [-math.inf] * 3
     mesh_count = 0
+    # ⚠️ Mesh-bearing NODES, not primitives: the engine builds one static entity per such node, so
+    # this is the number the scene's entity count has to be checked against. See the bench README,
+    # "a criterion that reads the whole frame hides a per-cell failure".
+    mesh_node_count = 0
 
     def visit(node_index, parent):
-        nonlocal mesh_count
+        nonlocal mesh_count, mesh_node_count
         node = nodes[node_index]
         world = mat_mul(parent, trs_matrix(node))
 
         if "mesh" in node:
+            mesh_node_count += 1
+
             for primitive in meshes[node["mesh"]].get("primitives", []):
                 position = primitive.get("attributes", {}).get("POSITION")
                 if position is None:
@@ -193,6 +199,7 @@ def scene_bounds(path):
         "extent": extent,
         "radius": radius,
         "primitives": mesh_count,
+        "meshNodes": mesh_node_count,
     }
 
 

@@ -481,6 +481,25 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
 
             try:
                 record["entities"] = wait_for_viewer(console, model)
+
+
+                # ⚠️⚠️ THE STRUCTURAL CONTROL, and the cheapest one this bench has: the engine builds
+                # one static entity per mesh-bearing NODE, so anything below that count is geometry
+                # that never reached the scene. It is what a per-pixel criterion cannot see —
+                # `TransmissionTest` was marked PASS for weeks with two of its twelve spheres absent,
+                # because its three nodes named `BlueTransWithMask` collided in a registry keyed by
+                # name and the reading criterion only asked whether the four declared hues appeared
+                # somewhere in the frame. Run this before reading a single pixel.
+                # The viewer adds a couple of entities of its own, so only a DEFICIT is a defect.
+                expected = bounds.get("meshNodes", 0)
+                record["meshNodes"] = expected
+
+                if expected > 0 and record["entities"] < expected:
+                    record["missingEntities"] = expected - record["entities"]
+                    print(f"  ⚠️ MISSING GEOMETRY: {record['entities']} static entities for {expected} "
+                          f"mesh-bearing nodes — {record['missingEntities']} node(s) never reached the scene")
+                else:
+                    print(f"  entities {record['entities']} / {expected} mesh-bearing nodes")
             except TimeoutError as error:
                 print(f"  ! {error}")
                 record["error"] = str(error)
