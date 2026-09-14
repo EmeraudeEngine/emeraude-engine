@@ -2114,6 +2114,62 @@ namespace EmEn::Graphics::Material
 		return (std::stringstream{} << '(' << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << " * " << MaterialUB(UniformBlock::Component::EmissiveStrength) << ')').str();
 	}
 
+	void
+	StandardResource::onBeforeCreation () noexcept
+	{
+		/* Every texture is guaranteed loaded and nothing is on the GPU yet, so the alpha channel can
+		 * finally be MEASURED — the only moment the engine can tell a mis-declared cutout from a real
+		 * blend, and the last moment the material flags can still change. */
+		this->promoteBinaryCoverageToCutout();
+	}
+
+	void
+	StandardResource::promoteBinaryCoverageToCutout () noexcept
+	{
+		/* Already a cutout: the asset (or a loader) said so explicitly. */
+		if ( this->isFlagEnabled(AlphaTestEnabled) )
+		{
+			return;
+		}
+
+		/* Only a material that blends can be a cutout in disguise. */
+		if ( !this->isFlagEnabled(BlendingEnabled) || this->blendingMode() != BlendingMode::Normal )
+		{
+			return;
+		}
+
+		/* A grab-pass surface is true refraction — its alpha drives a lens, not a coverage mask. */
+		if ( this->requiresGrabPass() )
+		{
+			return;
+		}
+
+		const auto * component = this->alphaSourceTextureComponent();
+
+		if ( component == nullptr )
+		{
+			return;
+		}
+
+		const auto texture = component->textureResource();
+
+		if ( texture == nullptr || !texture->isBinaryAlphaMask() )
+		{
+			return;
+		}
+
+		/* ⚠️ The threshold stays the engine default rather than anything read from the asset: the
+		 * mip chain this mask will be sampled through had its coverage preserved against that same
+		 * default (AlphaCoverage::DefaultCutoff), and a cutout testing against a different value
+		 * would read a chain corrected for another one. */
+		this->enableAlphaTest(DefaultAlphaThreshold);
+
+		TraceInfo{ClassId} <<
+			"PBR material '" << this->name() << "' declares blending but its alpha source '" <<
+			texture->name() << "' is a BINARY coverage mask: promoted to a cutout so it stops "
+			"writing depth and G-buffer lanes over its whole geometry.";
+	}
+
 	bool
 	StandardResource::requiresAlphaTestedShadows () const noexcept
 	{

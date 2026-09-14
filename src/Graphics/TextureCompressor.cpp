@@ -33,6 +33,7 @@
 #include <cstring>
 
 /* Local inclusions. */
+#include "Graphics/AlphaCoverage.hpp"
 #include "PixelFactory/Processor.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
@@ -187,6 +188,24 @@ namespace EmEn::Graphics
 			return {};
 		}
 
+		/* A BINARY coverage mask (foliage, a grate, a sprite) needs its COVERAGE preserved down the
+		 * chain, not its alpha mean: a box filter keeps the mean and lets the fraction passing the
+		 * alpha test collapse — measured on Sponza's cypress mask, 6.34 % at the base against 1.56 %
+		 * at mip 9 and 0 % at mip 10, i.e. a canopy that thins out and then disappears with distance.
+		 * Castano's correction rescales each level's alpha to match the base coverage. Graded alpha
+		 * (a translucent decal, a glass pane) is left strictly alone — there is no coverage to hold.
+		 * ⚠️ The chain keeps filtering the UNCORRECTED level: feeding the correction back into the
+		 * next downsample would compound the gain and turn the mask opaque a few levels down. */
+		const auto preserveCoverage = AlphaCoverage::isBinaryMask(pixmap);
+		const auto baseCoverage = preserveCoverage ? AlphaCoverage::coverage(pixmap, AlphaCoverage::DefaultCutoff) : 0.0F;
+
+		if ( preserveCoverage )
+		{
+			TraceInfo{ClassId} <<
+				"Binary alpha mask detected (base coverage " << (baseCoverage * 100.0F) <<
+				" %): preserving coverage across the mip chain.";
+		}
+
 		/* Generate and compress subsequent mip levels. */
 		Pixmap< uint8_t > currentMip = pixmap;
 
@@ -201,7 +220,18 @@ namespace EmEn::Graphics
 				break;
 			}
 
-			result.emplace_back(compressLevel(currentMip));
+			if ( preserveCoverage )
+			{
+				auto correctedMip = currentMip;
+
+				AlphaCoverage::rescaleToCoverage(correctedMip, baseCoverage, AlphaCoverage::DefaultCutoff);
+
+				result.emplace_back(compressLevel(correctedMip));
+			}
+			else
+			{
+				result.emplace_back(compressLevel(currentMip));
+			}
 
 			if ( result.back().data.empty() )
 			{

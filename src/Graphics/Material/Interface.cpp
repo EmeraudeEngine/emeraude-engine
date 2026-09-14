@@ -62,6 +62,10 @@ namespace EmEn::Graphics::Material
 			return true;
 		}
 
+		/* Every dependency is loaded and nothing is on the GPU yet: the only window where a material
+		 * may still change its flags after measuring a texture it depends on. */
+		this->onBeforeCreation();
+
 		if ( !this->create(this->serviceProvider().graphicsRenderer()) )
 		{
 			TraceError{TracerTag} << "Unable to load the material resource '" << this->name() << "' into the GPU!";

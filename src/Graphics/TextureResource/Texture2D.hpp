@@ -288,6 +288,12 @@ namespace EmEn::Graphics::TextureResource
 			Base::PixelFactory::Color< float > averageColor () const noexcept override;
 
 			/**
+			 * @copydoc EmEn::Graphics::TextureResource::Abstract::isBinaryAlphaMask()
+			 */
+			[[nodiscard]]
+			bool isBinaryAlphaMask () const noexcept override;
+
+			/**
 			 * @copydoc EmEn::Resources::ResourceTrait::classLabel() const
 			 * @version 0.8.35
 			 */

@@ -580,6 +580,19 @@ namespace EmEn::Saphir::Generator
 				}
 			}
 
+			/* ⚠️⚠️ The debug lane must be forced in EVERY pass, not just the ambient one: the light
+			 * passes blend ADDITIVELY onto the frame, so an override written only in the ambient
+			 * pass is buried under the lighting of every lit pixel. The first two attempts at this
+			 * instrument came back showing the ordinary frame, and the numbers read off them —
+			 * "the nibble is 0.195 on the leaves against 0.205 on the stone" — were the shaded
+			 * frame divided by 255, not the lane. An instrument must be PROVEN on before anything
+			 * is read from it. */
+			if ( this->debugMaterialPropertiesLane() > 0
+				&& m_renderPassType != RenderPassType::AmbientPass && m_renderPassType != RenderPassType::SimplePass )
+			{
+				Code{*fragmentShader, Location::Output} << m_lightGenerator.fragmentColor() << " = vec4(0.0, 0.0, 0.0, 1.0);";
+			}
+
 			if ( m_hasMaterialPropertiesAttachment )
 			{
 				/* Write material properties to MRT attachment 2 for post-process effect modulation.
@@ -618,10 +631,28 @@ namespace EmEn::Saphir::Generator
 					 * generation, so it costs one `if` at generation time and nothing at runtime. */
 					if ( this->debugMaterialPropertiesLane() > 0 )
 					{
-						const auto lane = this->debugMaterialPropertiesLane() == 1 ? "r" : "g";
+						if ( this->debugMaterialPropertiesLane() == 3 )
+						{
+							/* ⚠️ Lane 3 is the NORMAL attachment, not a material-properties nibble, and
+							 * it answers a different question: WHERE does the G-buffer think there is a
+							 * surface, and with WHICH normal.
+							 * ⚠️ It was built on the theory that a blended leaf card stamps its normal
+							 * over the WHOLE quad. MEASUREMENT REFUTED THAT at close range: the blend
+							 * floor already discards 93.6 % of Sponza's cypress mask, the silhouettes
+							 * come out crisp, and the canopy still washed out. What the lane is
+							 * actually useful for is the opposite end — the mask's EDGE texels, whose
+							 * authored normal is near-tangent (mean Z +0.272 against +0.676 on the
+							 * needle body), which is what spikes every NdotV-driven term at once. */
+							Code{*fragmentShader, Location::Output} <<
+								m_lightGenerator.fragmentColor() << " = vec4(" << ShaderVariable::OutputNormal << ".rgb * 0.5 + 0.5, " << m_lightGenerator.fragmentColor() << ".a);";
+						}
+						else
+						{
+							const auto lane = this->debugMaterialPropertiesLane() == 1 ? "r" : "g";
 
-						Code{*fragmentShader, Location::Output} <<
-							m_lightGenerator.fragmentColor() << " = vec4(vec3(" << ShaderVariable::OutputMaterialProperties << "." << lane << "), " << m_lightGenerator.fragmentColor() << ".a);";
+							Code{*fragmentShader, Location::Output} <<
+								m_lightGenerator.fragmentColor() << " = vec4(vec3(" << ShaderVariable::OutputMaterialProperties << "." << lane << "), " << m_lightGenerator.fragmentColor() << ".a);";
+						}
 					}
 				}
 				else
@@ -768,10 +799,31 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		/* Discard nearly transparent pixels to avoid blending artifacts. */
-		if ( this->materialEnabled() && this->getMaterialInterface()->blendingMode() != BlendingMode::None )
+		/* Discard nearly invisible pixels to avoid blending artifacts.
+		 * ⚠️ This is NOT a coverage test and must never be used as one: 0.01 is a "this texel adds
+		 * nothing to the blend" floor, while an alpha test asks "does this texel cover the pixel".
+		 * A blended material writes DEPTH and the whole G-buffer wherever it survives, so using this
+		 * floor as the coverage gate stamped every leaf QUAD into the depth buffer as soon as the
+		 * mask was minified — the box-filtered mip chain drove the two apart without bound (on
+		 * Sponza's cypress, 6.41 % of the quad passing 0.01 at the base level against 26.56 % at
+		 * mip 9 and 100 % at mip 11, for a real coverage of 6.34 %), and the reflections then
+		 * applied on the quad instead of on the leaves. A mis-declared cutout is promoted to a real
+		 * one at load time instead — StandardResource::promoteBinaryCoverageToCutout(), run from the
+		 * onBeforeCreation() hook — which clears BlendingEnabled and takes it out of this branch.
+		 * ⚠️ Scope, measured: this is the DISTANT-foliage half of the defect. Up close the mask is
+		 * sampled near mip 0, the coverage is already correct, and the canopy still washes out — that
+		 * near-field half is the grazing-normal Fresnel spike, not this.
+		 * ⚠️ The flag, not blendingMode(): enableAlphaTest() clears BlendingEnabled but leaves the
+		 * mode in place, so gating on the mode alone would keep emitting this test on a material
+		 * that no longer blends at all. */
+		if ( this->materialEnabled() )
 		{
-			Code{*fragmentShader, Location::Output} << "if ( " << ShaderVariable::OutputFragment << ".a < 0.01 ) discard;";
+			const auto * material = this->getMaterialInterface();
+
+			if ( material->blendingMode() != BlendingMode::None && material->isFlagEnabled(Material::BlendingEnabled) )
+			{
+				Code{*fragmentShader, Location::Output} << "if ( " << ShaderVariable::OutputFragment << ".a < 0.01 ) discard;";
+			}
 		}
 
 		return fragmentShader->generateSourceCode(*this);
@@ -950,6 +1002,13 @@ namespace EmEn::Saphir::Generator
 
 		/* 6. Generator flags (instancing, lighting, facing camera, etc.). */
 		hashCombine(hash, static_cast< size_t >(this->flags()));
+
+		/* 6b. ⚠️ The G-buffer debug lane CHANGES THE GENERATED SOURCE, so it belongs in the key.
+		 * The cache keys on the descriptor layout and the flag bits, never on plain values — a
+		 * value that alters the emitted GLSL and is left out of the key means the cached program of
+		 * the previous run is served and the change never appears. Which is exactly what happened
+		 * the first time this instrument was switched on: the frame came back untouched, twice. */
+		hashCombine(hash, static_cast< size_t >(this->debugMaterialPropertiesLane()));
 
 		/* 7. Material layout signature to separate incompatible pipelines (e.g. Standard Refl/Refract). */
 		if ( this->materialEnabled() )

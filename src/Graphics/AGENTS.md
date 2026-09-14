@@ -5048,3 +5048,69 @@ for BC7 is 1 byte per pixel *amortised over a 4×4 block*, which is not what tho
 > region: a value may be read one frame early by a frame still in flight — acceptable for a property,
 > to be frame-partitioned the day a property must be exact per frame. `docs/caution-points.md`
 > § "every dynamic material property was DEAD".
+
+## Alpha COVERAGE: a mask is not a gradient (Sep 2026)
+
+`Graphics/AlphaCoverage.hpp` — `coverage()`, `isBinaryMask()`, `rescaleToCoverage()`.
+
+A box filter preserves the alpha MEAN; an alpha test reads the alpha COVERAGE. The two diverge
+without bound as a binary mask is minified. Measured on Sponza's cypress mask (4096², **99.86 %
+binary**): the fraction passing a 0.5 cutoff falls 6.34 % → 1.56 % (mip 9) → 0 % (mip 10), while the
+fraction passing the G-buffer's 0.01 blend floor RISES 6.41 % → 26.56 % → **100 %** (mip 11). Far
+foliage therefore either vanishes or stamps depth and the whole G-buffer over its entire QUAD.
+
+Three pieces, all decided **on the pixels, never on the declaration**:
+
+1. **Coverage-preserving mips** (Castaño, NVIDIA 2010) in `TextureCompressor::compress()`, gated on
+   `isBinaryMask()` so graded alpha is untouched. ⚠️ The solver returns the bisection bound whose
+   coverage is CLOSEST to the target — coverage is a step function, and the upper bound on a 1×1
+   level means "the whole quad is opaque". ⚠️ The chain keeps filtering the UNCORRECTED level, or
+   the gain compounds and the mask goes opaque.
+2. **`TextureResource::Abstract::isBinaryAlphaMask()`** — virtual, defaults to `false`, overridden
+   by `Texture2D`. A block-compressed source answers `false` (it would have to be decoded).
+3. **`Material::Interface::onBeforeCreation()`** — ⚠️⚠️ the ONLY window where a material may still
+   change its FLAGS: creation bakes them into the descriptor set layout and the program-cache key,
+   and the loaders returned long before. `StandardResource::promoteBinaryCoverageToCutout()` runs
+   there and turns a mis-declared `alphaMode = BLEND` carrying a binary mask into a real cutout.
+   ⚠️⚠️ Derived classes override THIS, never `onDependenciesLoaded()` — that one is private because
+   it IS the GPU creation, and an override of it that forgot to chain left 133 materials uncreated
+   and the window BLACK.
+
+⚠️⚠️ **None of it reaches a KTX2 asset.** `Sponza.ktx2.glb` keeps 84 of 84 images block-compressed
+(UASTC transcoded block-to-block, never decoded), so the mask is never pixels. This path is
+**unverified end to end at runtime** — no shipped scene exercises it yet.
+
+⚠️ `TextureCache::Version` must be bumped whenever the BLOCKS a given pixmap compresses to change,
+not only when the file layout does: the key hashes the SOURCE pixels, so an older blob stays a valid
+hit forever otherwise.
+
+## The environment Fresnel is ROUGHNESS-BOUNDED (Sep 2026)
+
+`RTR.cpp` and `SSR.cpp` use Lagarde's form (*Moving Frostbite to PBR*, 2014), not plain Schlick:
+
+```glsl
+F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+```
+
+Plain Schlick sends F to 1.0 at grazing incidence — right for a smooth flat surface, catastrophic
+for anything whose silhouette is everywhere. Measured on Sponza's cypress: the mask's EDGE texels
+carry an AUTHORED near-tangent normal (mean Z **+0.272** against +0.676 on the needle body), so
+`NdotV → 0` on every silhouette; F reached 1.0 and the composite replaced up to half of each edge
+pixel with a colourless sky (a dielectric's F0 is a grey 0.04, so the reflection carries NONE of the
+surface's own colour). Foliage saturation read **8.45 %** against **52.88 %** with the Reflections
+slot off, at a pinned exposure on the same frame.
+
+⚠️ **Environment term only.** The direct-lighting Fresnel uses the half-vector `dot(H,V)` and keeps
+plain Schlick — bounding that one would break the specular highlight of every light in the scene.
+
+⚠️⚠️ **This is a partial fix and the remainder is MEASURED**: it removes 34 % of the excess
+luminance. 74 % of the residual rim pixels are shared between the two lanes and **42 % of them
+survive with the reflections entirely off** — that share is the DIRECT specular, which no
+reflection-side change can reach. One cause (the near-tangent edge normal), three symptoms. The
+open item is geometric specular antialiasing:
+[`docs/todo/foliage-takes-most-of-its-light-from-the-reflection.md`](../../docs/todo/foliage-takes-most-of-its-light-from-the-reflection.md).
+
+⚠️ **Never "fix" this with the roughness fade window.** Moving `roughnessFade` to
+`smoothstep(0.2, 0.6, roughness)` takes the rim from 51 % to 2 % and looks like a cure — it dims the
+reflection of EVERY material under 0.6 roughness in both lanes (stone control's saturation +27 %)
+and would wreck the calibrated 0.82 mirror of `post-processor-effect-debug`.

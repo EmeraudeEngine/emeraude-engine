@@ -5071,6 +5071,56 @@ recipe as the original (`ktx create v4.4.2`, UASTC quality 2, RDO λ 0.75, zstd 
 metadata about its convention; when relief looks lit from below, put the texture on
 `normal-map-debug` (option 1-3 Sponza, 4 = the Khronos control) before touching the engine.
 
+### Fixed: the environment Fresnel was unbounded — foliage washed out to grey in BOTH lanes (Sep 2026)
+
+Owner-reported: *"un blanc dégueulasse qui entoure toutes les aiguilles du cyprès"*. Sponza's cypress
+rendered grey-white where it must be green, and switching the Reflections slot off made it green
+again — in BOTH lanes, which is what proved the cause was the WEIGHT given to the reflection, not how
+it is gathered.
+
+**Root**: `RTR.cpp` and `SSR.cpp` used plain Schlick on the environment term, which sends F to **1.0**
+at grazing incidence. The alpha mask's EDGE texels carry an AUTHORED near-tangent normal (measured on
+`Cypress_LF01_Spring_Normal.png`: mean Z **+0.272** at the edge against **+0.676** on the needle body,
+and +0.980 under the transparent texels — a blend of the latter two cannot produce 0.272), so
+`NdotV → 0` on every silhouette. A dielectric's F0 is a colourless 0.04, so `fresnelTint` is WHITE and
+the reflection carries none of the leaf's green. Fixed with Lagarde's roughness-bounded form
+(*Moving Frostbite to PBR*, 2014).
+
+⚠️ **Environment term only** — the direct-lighting Fresnel uses `dot(H,V)` and must keep plain Schlick.
+
+⚠️⚠️ **Partial, and the remainder is measured**: 34 % of the excess luminance removed (foliage
+85.36 → 63.47 at a pinned exposure, stone control stable). Of the residual rim, **74 % of the pixels
+are shared between the two lanes** and **42 % survive with reflections entirely off** — that share is
+the DIRECT specular. ONE cause, THREE symptoms; the remaining fix is geometric specular antialiasing,
+applied to the roughness all three read.
+
+⚠️ **A blunt global lever looks exactly like a fix.** Moving `roughnessFade` to
+`smoothstep(0.2, 0.6, roughness)` dropped the rim from 51 % to 2.09 % and was confirmed by eye — while
+dimming the reflection of every material under 0.6 roughness in both lanes (stone control's saturation
++27 %). Reverted; its only value was diagnostic.
+
+### The application SAVES its settings on exit — restore a debug key AFTER the process is gone (Sep 2026)
+
+`Core.shutdown()` writes the live settings back to `~/.config/LNIsle/projet-alpha/settings.json`.
+Restoring a temporarily-changed key while the instance is still running is undone by its own exit:
+`MipMappingLevels` and `DebugMaterialPropertiesLane` were each restored, then silently rewritten to
+the experimental value by the shutdown that followed. **Stop the process first, restore second, and
+verify by re-reading the file.**
+
+### Overriding a private virtual that owns the GPU creation leaves the window BLACK (Sep 2026)
+
+`Material::Interface::onDependenciesLoaded()` is private *because it IS the material's GPU creation*.
+An override added on `StandardResource` to adjust flags replaced it without chaining: 133 materials
+never created, 14 986 renderables failing with *"The PBR material '...' is not created ! It can't
+configure the light generator."*, and a black window. The fix is the contract, not the call: a
+protected `onBeforeCreation()` hook that `Interface` invokes before `create()`, which derived classes
+override instead. **Before overriding a resource hook, check every class BETWEEN yours and the one
+that declares it** — `StandardResource.hpp` carried no override, the base two levels up did.
+
+⚠️ Disabling mipmapping globally (`Core/Graphics/Texture/MipMappingLevels = 1`) is a decisive
+DIAGNOSTIC and never a measurement: it also sharpens every normal map, and the stone control moved
+27.57 → 18.89 with its saturation 12 % → 20 %. When the control moves, read the image, not the table.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

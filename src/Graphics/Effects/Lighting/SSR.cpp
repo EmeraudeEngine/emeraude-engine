@@ -602,7 +602,26 @@ void main()
 	 * combines apply): a diffuse albedo here reads 0 for every metal and kills its reflection. */
 	vec3 albedo = texture(albedoTex, vUV).rgb;
 	vec3 F0 = mix(vec3(0.04), albedo, originMetalness);
-	vec3 fresnelColor = F0 + (1.0 - F0) * pow(1.0 - NdotV, 5.0);
+	/* ⚠️ ROUGHNESS-BOUNDED Fresnel (Lagarde, "Moving Frostbite to PBR", 2014 — the same form
+	 * Filament and UE use for the environment term), NOT plain Schlick. Plain Schlick sends F to
+	 * 1.0 at grazing incidence, which is right for a smooth flat surface and catastrophic for
+	 * anything whose silhouette is everywhere: on Sponza's cypress the mask's EDGE texels carry an
+	 * AUTHORED near-tangent normal — measured mean Z +0.272 against +0.676 on the needle body and
+	 * +0.980 under the transparent texels, and a blend of those two cannot produce 0.272, so the
+	 * rolled edge of the needle is encoded faithfully. NdotV therefore goes to 0 on every
+	 * silhouette, F reached 1.0 there, and the composite replaced up to half of each edge pixel
+	 * with the sky. (The two-sided flip `N = dot(N,V) < 0 ? -N : N` pushes the same way on a
+	 * doubleSided card, but it is the authored normal that was measured.) Since a
+	 * dielectric's F0 is a colourless 0.04, fresnelTint is WHITE — the reflection carried none of
+	 * the leaf's green, and the canopy washed out to grey (foliage saturation 8.45 % against
+	 * 52.88 % with the Reflections slot off, at a pinned exposure and the same frame).
+	 * Bounding F90 by (1 - roughness) is what a rough surface physically does: it cannot form a
+	 * sharp grazing mirror. Head-on behaviour is unchanged (F still starts at F0), so this does
+	 * not touch a smooth metal's reflection.
+	 * ⚠️ This applies to the ENVIRONMENT term only (NdotV). The direct-lighting Fresnel uses the
+	 * half-vector dot(H,V) and must keep plain Schlick — bounding that one would break the
+	 * specular highlight of every light in the scene. */
+	vec3 fresnelColor = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
 	float fresnel = max(fresnelColor.r, max(fresnelColor.g, fresnelColor.b));
 	vec3 fresnelTint = fresnelColor / max(fresnel, 0.001);
 

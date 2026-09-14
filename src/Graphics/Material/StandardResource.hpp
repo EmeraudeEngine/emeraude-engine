@@ -1289,6 +1289,28 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Graphics::Material::Interface::onBeforeCreation() */
+			void onBeforeCreation () noexcept override;
+
+			/**
+			 * @brief Turns a material that DECLARES blending but carries a binary coverage mask into a
+			 * real cutout.
+			 *
+			 * @note An asset routinely mis-declares a coverage mask as a blend: glTF `alphaMode = BLEND`
+			 * on foliage, and on this engine's side setOpacityComponent() arms BlendingMode::Normal
+			 * because a material manifest has no JSON key to ask for a cutout. The cost is not cosmetic:
+			 * a blended surface writes DEPTH and the whole G-buffer wherever its alpha clears the blend
+			 * floor, so every G-buffer effect — reflections first — applies on the leaf QUAD instead of
+			 * on the visible leaves. The same defect was fixed for the shadow maps alone in
+			 * requiresAlphaTestedShadows(); this is the colour pass catching up, at the root rather
+			 * than per-pass.
+			 * @note It is decided on the PIXELS, never on the declaration: only an alpha channel that is
+			 * actually binary is promoted (TextureResource::Abstract::isBinaryAlphaMask()). Graded alpha
+			 * is left blended — promoting a decal at a uniform opacity of 0.35 would erase it.
+			 * @return void
+			 */
+			void promoteBinaryCoverageToCutout () noexcept;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
 			[[nodiscard]]
 			bool create (Renderer & renderer) noexcept override;

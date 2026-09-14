@@ -156,7 +156,12 @@ namespace EmEn::Graphics
 			bool store (size_t key, const std::vector< CompressedMipLevel > & mipLevels) const noexcept;
 
 			static constexpr uint32_t Magic{0x43374342}; /* "BC7C" */
-			static constexpr uint32_t Version{1};
+			/* ⚠️ BUMP THIS whenever the BLOCKS a given pixmap compresses to change, not only when the
+			 * file layout does: the key hashes the SOURCE pixels, so a blob produced by an older
+			 * compressor stays a valid hit forever otherwise. Version 2 = coverage-preserving mip
+			 * chains for binary alpha masks (TextureCompressor::compress()); version 1 blobs carry
+			 * box-filtered alpha and would keep far foliage thinning out. */
+			static constexpr uint32_t Version{2};
 			static constexpr auto CacheDirectoryName{"texture-cache"};
 			static constexpr auto CacheFileExtension{".bc7cache"};
 

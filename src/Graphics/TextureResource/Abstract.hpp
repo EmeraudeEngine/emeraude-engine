@@ -183,6 +183,27 @@ namespace EmEn::Graphics::TextureResource
 			virtual Base::PixelFactory::Color< float > averageColor () const noexcept = 0;
 
 			/**
+			 * @brief Returns whether the alpha channel is a BINARY coverage mask (foliage, a grate, a
+			 * sprite) rather than graded translucency (a glass pane, a decal at a uniform opacity).
+			 * @note This is what lets a material tell a MIS-DECLARED cutout from a genuine blend. An
+			 * asset may declare `alphaMode = BLEND` while carrying a mask — Sponza's cypress leaves
+			 * measure 99.86 % binary — and a blended surface writes depth and G-buffer lanes over its
+			 * whole QUAD, so every G-buffer effect then applies on the quad instead of on the visible
+			 * leaves. See Graphics::Material::StandardResource::onDependenciesLoaded().
+			 * @note The default is false: only a plain 2D texture can carry a coverage mask in this
+			 * engine, and false is the answer that changes nothing. Override it in another texture
+			 * kind the day one needs to be tested this way.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			isBinaryAlphaMask () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Validates a pixmap for Vulkan requirements.
 			 * @param classId A pointer to the class id validating the pixmap.
 			 * @param resourceName A reference to a string.

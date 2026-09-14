@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "FileSystem.hpp"
+#include "Graphics/AlphaCoverage.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/TextureCompressor.hpp"
 #include "Resources/Manager.hpp"
@@ -365,6 +366,20 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		return m_localData->data().averageColor();
+	}
+
+	bool
+	Texture2D::isBinaryAlphaMask () const noexcept
+	{
+		/* NOTE: Same reasoning as isGrayScale() — a block-compressed source would have to be decoded
+		 * to answer. "Not a mask" is the conservative reply: it leaves the material blended, which is
+		 * what the asset declared. */
+		if ( !this->isLoaded() || m_localData == nullptr )
+		{
+			return false;
+		}
+
+		return AlphaCoverage::isBinaryMask(m_localData->data());
 	}
 
 	bool

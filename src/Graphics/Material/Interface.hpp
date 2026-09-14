@@ -773,6 +773,26 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			virtual bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept = 0;
 
+			/**
+			 * @brief Last chance to adjust the material before it is created on the GPU, with every
+			 * texture dependency guaranteed loaded.
+			 * @note This is the ONLY moment a material may still change its FLAGS: creation bakes them
+			 * into the descriptor set layout and the shader program cache key, and the loaders have
+			 * long returned by then. It exists because some material properties can only be decided by
+			 * MEASURING a dependency — a glTF `alphaMode = BLEND` that actually carries a binary
+			 * coverage mask, for instance (StandardResource::promoteBinaryCoverageToCutout()).
+			 * @note Derived classes override THIS, never onDependenciesLoaded(): that one is private
+			 * because it owns the GPU creation itself, and an override of it that forgot to chain left
+			 * every material uncreated and the whole scene black.
+			 * @return void
+			 */
+			virtual
+			void
+			onBeforeCreation () noexcept
+			{
+
+			}
+
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() noexcept */
