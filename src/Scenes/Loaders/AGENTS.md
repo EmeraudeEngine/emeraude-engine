@@ -539,11 +539,40 @@ Not a wish list — these are silent today, so a diagnosis that assumes them pre
 (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) except its `texCoord` override, which is the multi-UV gap;
-every extension in the parser mask is now read; **the sheen and transmission extensions still read
-only their scalar factors, never their textures** (clearcoat's three maps are read since 2026-09-14,
-see below); animation channels targeting a node that is
+every extension in the parser mask is now read; **transmission is the last one reading only its
+scalar factor, never its texture** (clearcoat's three maps and sheen's two are read since
+2026-09-14, see below); animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
 impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+
+**`KHR_materials_sheen`'s TWO MAPS are read since 2026-09-14.** Sixth occurrence of "GPU ready,
+loader mute" — the `Sheen` ComponentType already sampled a **vec4** and the generator already read
+`.rgb` from it, and even the `SurfaceSheenRoughness` variable name was already provisioned.
+- ⚠️ The roughness is the **ALPHA** channel and gets a ComponentType of its own
+  (`SheenRoughness`), exactly as the two specular maps and the iridescence thickness did. Not a
+  channel of the colour component: the two maps may be different images, and they do NOT share a
+  colour space — the colour is **sRGB**, the roughness is linear **DATA**. `Component::Texture`
+  decides that from the variable name's `Color` suffix, so `SurfaceSheenRoughness` must never be
+  renamed to end in `Color`.
+- ⚠️ An asset may point BOTH `sheenColorTexture` and `sheenRoughnessTexture` at the same image —
+  `SheenCloth` does (index 3 for both). That works because the texture cache keeps **two
+  colour-space slots per texture index**; each component gets the one its usage requires.
+- ⚠️⚠️ **`SheenCloth` still FAILS, and the reason is no longer the maps.** It tiles its 256×256
+  textures **30 times in U and V** through `KHR_texture_transform`, and no sheen component type has
+  a UV transform slot in the material UBO (six exist: albedo, roughness, metalness, normal, AO,
+  emissive). Its sheen therefore reads at 1/30 of the authored frequency. Wiring the maps was
+  necessary and is not sufficient — see
+  [`docs/todo/uv-transform-slots-for-extension-maps.md`](../../docs/todo/uv-transform-slots-for-extension-maps.md).
+  Measured anyway: the cloth changes on 13.1 % of its pixels and its mean drops 158.2 → 80.7, so
+  the maps demonstrably reach the shader.
+
+**`KHR_materials_specular`'s colour factor is carried as a `Math::Vector< 3, float >` since
+2026-09-14, NOT a `PixelFactory::Color`.** The extension allows `specularColorFactor` **above 1**
+so the material's IOR cannot cap the specular response, and `Color`'s constructor clamps every
+component to [0, 1] — right for a colour, wrong for a multiplier. `SpecularTest`'s seventh row went
+from flat (9.33 / 9.35 / 9.05 / 8.87) to a monotone ramp (**10.22 / 26.42 / 47.13 / 70.95**) with
+the six other rows identical to the hundredth. See `docs/caution-points.md` § *A `PixelFactory::Color`
+CLAMPS to [0,1]*.
 
 **`KHR_materials_clearcoat`'s THREE MAPS are read since 2026-09-14** — the factor map, the
 roughness map and the coat normal map. Like every extension before it in this file, the GPU side was
@@ -774,10 +803,24 @@ not among them, so `transformedTexCoords()` falls back to plain coordinates. A t
 UV is logged and dropped; no conformance asset uses one.
 ⚠️ `setIOR()` clamps to [1.0, 3.0]; that spans the whole glTF range and happens to render the spec's
 `ior = 0` special case correctly (0 clamps to 1, and ((1−1)/(1+1))² is 0 = the F0 = 0 it asks for).
-⚠️ **`FBXLoader` reads neither**, deliberately: ufbx's `pbr.specular_factor`/`specular_color` mean
-the dielectric specular weight on an OpenPBR/Standard-Surface material but the **Phong** specular on
-a legacy `FbxSurfacePhong`, and the engine's legacy specular is a glossiness path — mapping one onto
-the other needs the semantics settled first, not a copy of the glTF code.
+⚠️⚠️ **`FBXLoader` reads them since 2026-09-14, and ONLY on a PBR shading model.** ufbx's
+`pbr.specular_factor`/`specular_color` are a VIEW over whatever the file declares, and the same two
+fields carry two incompatible meanings: the **dielectric specular weight and tint** on a
+Standard-Surface / OpenPBR / physical material, and the **Phong specular highlight** on a legacy
+`FbxSurfacePhong` — whose engine counterpart is the glossiness path, not F0. Reading them blind
+would push an old asset's highlight colour into the dielectric F0 of every surface it touches, with
+nothing to report it.
+`ufbx_material::shader_type` is always defined and settles it: `OSL_STANDARD_SURFACE`,
+`ARNOLD_STANDARD_SURFACE`, `3DS_MAX_PHYSICAL_MATERIAL`, `3DS_MAX_PBR_METAL_ROUGH`, `GLTF_MATERIAL`
+and `OPENPBR_MATERIAL` take the F0 meaning; everything else — `FBX_PHONG`, `FBX_LAMBERT`,
+`BLENDER_PHONG`, `WAVEFRONT_MTL`, `SHADERFX_GRAPH`, `UNKNOWN`, and `3DS_MAX_PBR_SPEC_GLOSS` which is
+a specular/glossiness workflow rather than an F0 scale — is **left alone**, keeping the engine's own
+defaults rather than receiving a value that means something else.
+⚠️ Like the glTF path, the factor is carried as a `Math::Vector< 3, float >`, never a `Color`.
+⚠️ **The PBR branch is UNEXERCISED by the content in reach**: the only FBX assets here are the
+Paladin's, which are legacy Phong. Verified that they still render unchanged with zero VUID
+(`animation-debug`), which proves the gate is CLOSED where it must be — it proves nothing about the
+open branch. Judge that one when a Standard-Surface FBX exists to judge it with.
 
 > [!NOTE]
 > Two of those gaps are **live on the compressed Sponza**, which is now the reference asset:

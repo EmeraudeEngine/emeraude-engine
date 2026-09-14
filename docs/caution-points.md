@@ -18,6 +18,33 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### A `PixelFactory::Color` CLAMPS to [0,1] — so it cannot carry a factor that may exceed 1
+
+> **Symptom:** a material parameter that the format explicitly allows above 1.0 renders as though
+> it were exactly 1.0. No warning, no log line, nothing in the shader to blame — the value is gone
+> before the material ever sees it.
+>
+> **Root cause:** `Color< float >`'s constructor runs every component through `Math::clampToUnit`
+> (`emeraude-base/src/PixelFactory/Color.hpp:78`). That is correct for a COLOUR and wrong for a
+> MULTIPLIER, and the two are easy to confuse because the glTF field is called
+> `specularColorFactor`.
+>
+> **Measured (2026-09-14):** `KHR_materials_specular` allows `specularColorFactor` above 1 so a
+> material's IOR cannot cap its specular response, and `SpecularTest`'s seventh row exists to check
+> it — its last sphere must read as a mirror ball. Through a `Color` the row was **flat**:
+> 9.33 / 9.35 / 9.05 / 8.87 out of 255. Carried as a `Math::Vector< 3, float >` it becomes
+> **10.22 / 26.42 / 47.13 / 70.95**, a monotone ramp, while the six other rows stay identical to
+> the hundredth — the control.
+>
+> **The rule:** a value the format calls a *factor*, *weight*, *gain* or *scale* goes in a
+> `Math::Vector`, never a `PixelFactory::Color`, however colour-shaped its name. Do NOT widen
+> `Color` to fix a case like this: it is a foundation type whose [0,1] contract is relied on
+> everywhere. Add the overload that takes the vector, as `setSpecularColor()` does.
+>
+> ⚠️ Energy conservation is not what is at stake, and checking it is not enough to clear this:
+> the shader already clamps the RESULT (`F0 = min(dielectricF0 * specularColor * specularFactor, 1)`).
+> It was the TRANSPORT of the authored value that was lossy.
+
 ### A shared-UBO bank that fills up takes a material's MESH out of the scene — FIXED 2026-09-14
 
 > **Symptom:** an asset with many distinct materials renders with **geometry missing**. No VUID, no

@@ -1275,12 +1275,13 @@ namespace EmEn::Graphics::Material
 		 * feature parser again.
 		 * ============================================================================ */
 		{
-			const std::array< std::tuple< const char *, ComponentType, const char *, const char * >, 5 > textureMaps{{
+			const std::array< std::tuple< const char *, ComponentType, const char *, const char * >, 6 > textureMaps{{
 				{ClearCoatRoughnessString, ComponentType::ClearCoatRoughness, Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness},
 				{ClearCoatNormalString, ComponentType::ClearCoatNormal, Uniform::ClearCoatNormalSampler, SurfaceClearCoatNormal},
 				{SpecularColorString, ComponentType::SpecularColor, Uniform::SpecularColorSampler, SurfaceSpecularColor},
 				{IridescenceThicknessString, ComponentType::IridescenceThickness, Uniform::IridescenceThicknessSampler, SurfaceIridescenceThickness},
-				{VolumeThicknessString, ComponentType::VolumeThickness, Uniform::VolumeThicknessSampler, SurfaceVolumeThickness}
+				{VolumeThicknessString, ComponentType::VolumeThickness, Uniform::VolumeThicknessSampler, SurfaceVolumeThickness},
+				{SheenRoughnessString, ComponentType::SheenRoughness, Uniform::SheenRoughnessSampler, SurfaceSheenRoughness}
 			}};
 
 			for ( const auto & [componentName, componentType, samplerName, variableName] : textureMaps )
@@ -2414,19 +2415,20 @@ namespace EmEn::Graphics::Material
 		{
 			const auto componentIt = m_components.find(ComponentType::Sheen);
 
+			/* ⚠️ The two maps are INDEPENDENT: a material may declare either, both or neither, so
+			 * each half falls back on its own UBO scalar. Same pattern as the two specular maps. */
+			const auto sheenRoughnessIt = m_components.find(ComponentType::SheenRoughness);
+			const auto sheenRoughness = sheenRoughnessIt != m_components.cend()
+				? sheenRoughnessIt->second->variableName()
+				: MaterialUB(UniformBlock::Component::SheenRoughness);
+
 			if ( componentIt != m_components.cend() )
 			{
-				lightGenerator.declareSurfaceSheen(
-					componentIt->second->variableName(),
-					MaterialUB(UniformBlock::Component::SheenRoughness)
-				);
+				lightGenerator.declareSurfaceSheen(componentIt->second->variableName(), sheenRoughness);
 			}
-			else if ( m_materialProperties[SheenColorOffset] > 0.0F || m_materialProperties[SheenColorOffset+1] > 0.0F || m_materialProperties[SheenColorOffset+2] > 0.0F )
+			else if ( sheenRoughnessIt != m_components.cend() || m_materialProperties[SheenColorOffset] > 0.0F || m_materialProperties[SheenColorOffset+1] > 0.0F || m_materialProperties[SheenColorOffset+2] > 0.0F )
 			{
-				lightGenerator.declareSurfaceSheen(
-					MaterialUB(UniformBlock::Component::SheenColor),
-					MaterialUB(UniformBlock::Component::SheenRoughness)
-				);
+				lightGenerator.declareSurfaceSheen(MaterialUB(UniformBlock::Component::SheenColor), sheenRoughness);
 			}
 		}
 
@@ -3845,6 +3847,18 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Sheen roughness component (texture-based, KHR_materials_sheen: the ALPHA channel). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::SheenRoughness, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::SheenRoughness) << ";";
+
+			return true;
+		}, fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to generate fragment code for the sheen roughness component of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
 		/* Anisotropy component (texture-based, KHR_materials_anisotropy format: RG = direction, B = strength). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Anisotropy, [this] (FragmentShader & shader, const Texture * component) {
 			/* NOTE: KHR_materials_anisotropy texture format:
@@ -4970,6 +4984,49 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::setSheenRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & color, float roughness, Base::PixelFactory::Channel sourceChannel) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the sheen roughness component.";
+
+			return false;
+		}
+
+		/* ⚠️ The ALPHA channel, per KHR_materials_sheen — and deliberately a component of its own
+		 * rather than the A of the colour map: the two maps may be different images, and they do
+		 * not share a colour space (the colour is sRGB, this is linear data). When an asset packs
+		 * both into one image, as SheenCloth does, the texture cache hands out its two colour-space
+		 * slots for the same index and each component gets the one it needs. */
+		auto component = std::make_unique< Texture >(Uniform::SheenRoughnessSampler, SurfaceSheenRoughness, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::SheenRoughness, std::move(component));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to PBR material '" << this->name() << "' for sheen roughness component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		this->setSheenColor(color);
+		this->setSheenRoughness(roughness);
+
+		return true;
+	}
+
+	bool
 	StandardResource::setAnisotropyComponent (float anisotropy, float rotation) noexcept
 	{
 		if ( this->isCreated() )
@@ -5641,6 +5698,14 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const PixelFactory::Color< float > & color) noexcept
 	{
+		/* A Color is already clamped to [0, 1] by its own constructor, so this conversion loses
+		 * nothing — it just routes both overloads through one body. */
+		return this->setSpecularColorComponent(texture, Base::Math::Vector< 3, float >{color.red(), color.green(), color.blue()});
+	}
+
+	bool
+	StandardResource::setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::Math::Vector< 3, float > & factor) noexcept
+	{
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
@@ -5673,7 +5738,7 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 
-		this->setSpecularColor(color);
+		this->setSpecularColor(factor);
 
 		return true;
 	}
@@ -5695,6 +5760,21 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[SpecularColorOffset + 1] = color.green();
 		m_materialProperties[SpecularColorOffset + 2] = color.blue();
 		m_materialProperties[SpecularColorOffset + 3] = color.alpha();
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	StandardResource::setSpecularColor (const Base::Math::Vector< 3, float > & factor) noexcept
+	{
+		/* ⚠️ Written VERBATIM, no clampToUnit: KHR_materials_specular allows this factor above 1
+		 * and the shader clamps the resulting F0, not its inputs. Passing through a
+		 * PixelFactory::Color here would silently cap it at 1 — which is the defect this overload
+		 * exists to undo. */
+		m_materialProperties[SpecularColorOffset] = factor[Base::Math::X];
+		m_materialProperties[SpecularColorOffset + 1] = factor[Base::Math::Y];
+		m_materialProperties[SpecularColorOffset + 2] = factor[Base::Math::Z];
+		m_materialProperties[SpecularColorOffset + 3] = 1.0F;
 
 		this->markVideoMemoryDirty();
 	}

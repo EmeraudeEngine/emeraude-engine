@@ -612,6 +612,61 @@ namespace EmEn::Scenes::Loaders
 					|| pbr.emission_color.value_vec3.y > 0.0F
 					|| pbr.emission_color.value_vec3.z > 0.0F);
 
+			/* Specular (KHR_materials_specular semantics) — read ONLY on a PBR shading model.
+			 *
+			 * ⚠️⚠️ `pbr.specular_factor` / `pbr.specular_color` are a VIEW ufbx builds over whatever
+			 * the file declares, and the SAME two fields carry two incompatible meanings:
+			 *   - on a Standard-Surface / OpenPBR / physical material they are the **dielectric
+			 *     specular weight and tint**, i.e. exactly what KHR_materials_specular scales and
+			 *     tints in the engine's F0;
+			 *   - on a legacy `FbxSurfacePhong` they are the **Phong specular highlight**, whose
+			 *     engine counterpart is the glossiness path, not F0.
+			 * Reading them blind would push an old asset's Phong highlight colour into the
+			 * dielectric F0 of every surface it touches, and nothing would report it.
+			 *
+			 * `ufbx_material::shader_type` is always defined, so the file tells us which meaning
+			 * applies. Anything ufbx cannot name — and `3DS_MAX_PBR_SPEC_GLOSS`, which is a
+			 * specular/glossiness workflow rather than an F0 scale — is left alone on purpose: the
+			 * identity is what a material that declares nothing must keep. */
+			bool specularIsDielectricF0 = false;
+
+			switch ( fbxMaterial.shader_type )
+			{
+				case UFBX_SHADER_OSL_STANDARD_SURFACE :
+				case UFBX_SHADER_ARNOLD_STANDARD_SURFACE :
+				case UFBX_SHADER_3DS_MAX_PHYSICAL_MATERIAL :
+				case UFBX_SHADER_3DS_MAX_PBR_METAL_ROUGH :
+				case UFBX_SHADER_GLTF_MATERIAL :
+				case UFBX_SHADER_OPENPBR_MATERIAL :
+					specularIsDielectricF0 = true;
+					break;
+
+				default :
+					break;
+			}
+
+			float specularFactor = 1.0F;
+			/* ⚠️ A Vector, not a Color: the factor is a MULTIPLIER and may legitimately exceed 1,
+			 * which `PixelFactory::Color` would clamp away. Same reasoning as the glTF loader. */
+			Base::Math::Vector< 3, float > specularColor{1.0F, 1.0F, 1.0F};
+
+			if ( specularIsDielectricF0 )
+			{
+				if ( pbr.specular_factor.has_value )
+				{
+					specularFactor = static_cast< float >(pbr.specular_factor.value_real);
+				}
+
+				if ( pbr.specular_color.has_value )
+				{
+					specularColor = Base::Math::Vector< 3, float >{
+						static_cast< float >(pbr.specular_color.value_vec3.x),
+						static_cast< float >(pbr.specular_color.value_vec3.y),
+						static_cast< float >(pbr.specular_color.value_vec3.z)
+					};
+				}
+			}
+
 			/* Opacity (engine opacity contract). ufbx.pbr.opacity is 1.0 (fully opaque) by
 			 * default. FBX has no cutout notion: a texture-driven opacity is a grayscale
 			 * per-pixel alpha scale (rule 3), a scalar < 1 a uniform transparency (rule 1) —
@@ -628,7 +683,8 @@ namespace EmEn::Scenes::Loaders
 				normalTex = std::move(normalTex),
 				aoTex = std::move(aoTex),
 				emissiveTex = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
-				opacityTex = std::move(opacityTex), opacityValue
+				opacityTex = std::move(opacityTex), opacityValue,
+				specularIsDielectricF0, specularFactor, specularColor
 			] (auto & materialResource) {
 				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
 				 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
@@ -698,6 +754,16 @@ namespace EmEn::Scenes::Loaders
 				{
 					materialResource.setOpacityComponent(opacityValue);
 					materialResource.enableBlending(BlendingMode::Normal);
+				}
+
+				/* ⚠️ Applied ONLY when the shading model gives these fields the dielectric-F0
+				 * meaning. A legacy Phong material keeps whatever the resource was constructed
+				 * with — the engine's own defaults — rather than receiving a highlight colour in
+				 * the slot that scales its F0. */
+				if ( specularIsDielectricF0 )
+				{
+					materialResource.setSpecularFactor(specularFactor);
+					materialResource.setSpecularColor(specularColor);
 				}
 
 				return materialResource.setManualLoadSuccess(true);

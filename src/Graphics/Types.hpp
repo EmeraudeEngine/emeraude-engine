@@ -443,6 +443,11 @@ namespace EmEn::Graphics
 		 * channel, MULTIPLYING thicknessFactor. It is what makes a moulded glass refract unevenly:
 		 * thick at the base, thin at the rim. */
 		VolumeThickness = 25,
+		/** @brief KHR_materials_sheen's sheenRoughnessTexture — the sheen roughness in its **A**
+		 * channel. A SEPARATE map from `Sheen` (which carries the sheen colour in RGB): glTF
+		 * declares two textures for that one extension, so the material needs two slots — even
+		 * though an asset may, and SheenCloth does, pack both into the same image. */
+		SheenRoughness = 26,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -465,6 +470,7 @@ namespace EmEn::Graphics
 	constexpr auto SubsurfaceString{"Subsurface"};
 	constexpr auto SubsurfaceThicknessString{"SubsurfaceThickness"};
 	constexpr auto SheenString{"Sheen"};
+	constexpr auto SheenRoughnessString{"SheenRoughness"};
 	constexpr auto AnisotropyString{"Anisotropy"};
 	constexpr auto TransmissionString{"Transmission"};
 	constexpr auto IridescenceString{"Iridescence"};

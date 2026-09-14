@@ -721,6 +721,7 @@ namespace EmEn::Saphir
 			constexpr auto SubsurfaceThicknessSampler{"uSubsurfaceThicknessSampler"};
 			/* Material specific (PBR Sheen) */
 			constexpr auto SheenSampler{"uSheenSampler"};
+			constexpr auto SheenRoughnessSampler{"uSheenRoughnessSampler"};
 			/* Material specific (PBR Anisotropy) */
 			constexpr auto AnisotropySampler{"uAnisotropySampler"};
 			/* Material specific (PBR Transmission) */

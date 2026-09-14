@@ -112,6 +112,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceSubsurfaceColor{"SurfaceSubsurfaceColor"};
 			static constexpr auto SurfaceSubsurfaceThickness{"SurfaceSubsurfaceThickness"};
 			static constexpr auto SurfaceSheenColor{"SurfaceSheenColor"};
+			/* ⚠️ Must NOT end with "Color": Component::Texture decides sRGB decoding from that
+			 * suffix, and a roughness map is DATA. The colour map above is sRGB for the same reason. */
 			static constexpr auto SurfaceSheenRoughness{"SurfaceSheenRoughness"};
 			static constexpr auto SurfaceAnisotropy{"SurfaceAnisotropy"};
 			static constexpr auto SurfaceTransmissionFactor{"SurfaceTransmissionFactor"};
@@ -887,6 +889,24 @@ namespace EmEn::Graphics::Material
 			 */
 			bool setSheenComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float roughness = DefaultSheenRoughness) noexcept;
 
+			/**
+			 * @brief Sets the sheen roughness component as a texture (KHR_materials_sheen).
+			 * @warning This function is available before creation time.
+			 * @note ⚠️ The extension puts the sheen roughness in the **ALPHA** channel, and lets an
+			 * asset pack it into the very image whose RGB carries the sheen colour — SheenCloth
+			 * does. That is why this is a component of its own rather than a channel of the colour
+			 * one: the two maps may also be different images, and they have different colour spaces
+			 * (the colour is sRGB, this is linear data).
+			 * @note The sampled channel MULTIPLIES the scalar roughness, whose default of 1.0 here
+			 * makes the map the whole value.
+			 * @param texture A reference to a texture smart pointer for the sheen roughness map.
+			 * @param color The sheen colour the material keeps when no colour map is present.
+			 * @param roughness The sheen roughness the map multiplies. Default 1.0.
+			 * @param sourceChannel The texel channel holding the sheen roughness (glTF uses Alpha). Default Alpha.
+			 * @return bool
+			 */
+			bool setSheenRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & color = DefaultSheenColor, float roughness = 1.0F, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Alpha) noexcept;
+
 			/* ==================== Anisotropy Component Setters (Pre-creation) ==================== */
 
 			/**
@@ -1168,6 +1188,16 @@ namespace EmEn::Graphics::Material
 			 */
 			bool setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::PixelFactory::Color< float > & color = DefaultSpecularColor) noexcept;
 
+			/**
+			 * @brief Sets the specular colour map with an UNCLAMPED three-component factor.
+			 * @warning See setSpecularColor(const Vector< 3, float > &) for why a Color cannot
+			 * carry this value.
+			 * @param texture A reference to a texture smart pointer for the specular colour map.
+			 * @param factor The linear specular colour factor the map multiplies. May exceed 1.
+			 * @return bool
+			 */
+			bool setSpecularColorComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Base::Math::Vector< 3, float > & factor) noexcept;
+
 			/* ==================== Specular Dynamic Property Setters (Post-creation) ==================== */
 
 			/**
@@ -1185,6 +1215,21 @@ namespace EmEn::Graphics::Material
 			 * @return void
 			 */
 			void setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept;
+
+			/**
+			 * @brief Sets the specular colour factor from an UNCLAMPED three-component factor.
+			 * @warning ⚠️ `KHR_materials_specular` allows `specularColorFactor` **above 1.0**, so
+			 * that a material's IOR does not cap its specular response — `SpecularTest`'s last row
+			 * exists to check exactly that, and its final sphere must read as a mirror ball. A
+			 * `PixelFactory::Color` cannot carry it: its constructor clamps every component to
+			 * [0, 1], which is right for a colour and wrong for a MULTIPLIER. Hence this overload,
+			 * rather than widening a foundation type used everywhere.
+			 * @note Energy conservation is unaffected: the shader already clamps the RESULT
+			 * (`F0 = min(dielectricF0 * specularColor * specularFactor, 1)`).
+			 * @param factor The linear specular colour factor. Components may exceed 1.
+			 * @return void
+			 */
+			void setSpecularColor (const Base::Math::Vector< 3, float > & factor) noexcept;
 
 			/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */
 

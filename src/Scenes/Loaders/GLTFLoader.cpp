@@ -1077,6 +1077,24 @@ namespace EmEn::Scenes::Loaders
 				|| glTFMaterial.emissiveFactor[1] > 0.0F
 				|| glTFMaterial.emissiveFactor[2] > 0.0F;
 
+			auto sheenColorTex = ( glTFMaterial.sheen != nullptr && glTFMaterial.sheen->sheenColorTexture.has_value() )
+				? resolveTexture(glTFMaterial.sheen->sheenColorTexture->textureIndex, true) : nullptr;
+
+			auto sheenRoughnessTex = ( glTFMaterial.sheen != nullptr && glTFMaterial.sheen->sheenRoughnessTexture.has_value() )
+				? resolveTexture(glTFMaterial.sheen->sheenRoughnessTexture->textureIndex) : nullptr;
+
+			/* ⚠️⚠️ Same UV-transform hole as the specular and clearcoat maps, and here it BITES: the
+			 * material UBO carries six UV transform slots (albedo, roughness, metalness, normal, AO,
+			 * emissive) and neither sheen component type is among them. SheenCloth tiles its 256x256
+			 * maps **30 times in U and V** through KHR_texture_transform, so its sheen reads at 1/30
+			 * of the intended frequency. Wiring the maps is necessary and not sufficient for that
+			 * asset. */
+			if ( ( sheenColorTex != nullptr && readUVTransform(glTFMaterial.sheen->sheenColorTexture).present )
+			  || ( sheenRoughnessTex != nullptr && readUVTransform(glTFMaterial.sheen->sheenRoughnessTexture).present ) )
+			{
+				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_sheen texture is not supported (no UV transform slot), ignored.";
+			}
+
 			/* Clear coat (KHR_materials_clearcoat), factors AND the three maps.
 			 *
 			 * ⚠️ All three are DATA, never sRGB: the factor map carries a coverage in RED, the
@@ -1118,7 +1136,13 @@ namespace EmEn::Scenes::Loaders
 				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_clearcoat texture is not supported (no UV transform slot), ignored.";
 			}
 
-			/* Sheen (KHR_materials_sheen). */
+			/* Sheen (KHR_materials_sheen), factors AND both maps.
+			 *
+			 * ⚠️ The two maps do NOT share a colour space: `sheenColorTexture` carries a perceptual
+			 * colour in RGB and is **sRGB**, `sheenRoughnessTexture` a roughness in **ALPHA** and is
+			 * linear DATA. An asset may point both at the SAME image — SheenCloth does — and the
+			 * texture cache's two colour-space slots per index is exactly what makes that work.
+			 * Each map MULTIPLIES its factor, so the factors are read either way. */
 			Color< float > sheenColor{};
 			float sheenRoughness = 0.0F;
 
@@ -1288,7 +1312,14 @@ namespace EmEn::Scenes::Loaders
 			 * them here rather than borrowing `StandardResource`'s private constants keeps the
 			 * loader answerable to the format it reads. */
 			float specularFactor = 1.0F;
-			Color< float > specularColor{1.0F, 1.0F, 1.0F, 1.0F};
+			/* ⚠️⚠️ A Vector, NOT a `Color`: `KHR_materials_specular` allows `specularColorFactor`
+			 * **above 1.0** so that the material's IOR does not cap its specular response, and
+			 * `PixelFactory::Color`'s constructor clamps every component to [0, 1] — right for a
+			 * colour, wrong for a multiplier. Building a Color here silently flattened
+			 * `SpecularTest`'s last row, whose final sphere must read as a mirror ball, and the
+			 * clamp left no trace anywhere. Energy conservation is unaffected: the shader clamps
+			 * the RESULT, `F0 = min(dielectricF0 * specularColor * specularFactor, 1)`. */
+			Base::Math::Vector< 3, float > specularColor{1.0F, 1.0F, 1.0F};
 
 			if ( glTFMaterial.specular != nullptr )
 			{
@@ -1296,13 +1327,11 @@ namespace EmEn::Scenes::Loaders
 
 				const auto & scf = glTFMaterial.specular->specularColorFactor;
 
-				specularColor = Color< float >{
+				specularColor = Base::Math::Vector< 3, float >{
 					static_cast< float >(scf[0]),
 					static_cast< float >(scf[1]),
-					static_cast< float >(scf[2]),
-					1.0F
+					static_cast< float >(scf[2])
 				};
-
 			}
 
 			/* The two specular maps. ⚠️ `specularTexture` carries its value in the **A channel**
@@ -1360,6 +1389,8 @@ namespace EmEn::Scenes::Loaders
 					clearcoatRoughnessTex = std::move(clearcoatRoughnessTex),
 					clearcoatNormalTex = std::move(clearcoatNormalTex),
 					sheenColor, sheenRoughness,
+					sheenColorTex = std::move(sheenColorTex),
+					sheenRoughnessTex = std::move(sheenRoughnessTex),
 					transmissionFactor,
 					iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax,
 					iridescenceTex = std::move(iridescenceTex),
@@ -1493,10 +1524,26 @@ namespace EmEn::Scenes::Loaders
 						}
 					}
 
-					/* Sheen (KHR_materials_sheen). */
+					/* Sheen (KHR_materials_sheen), factors then maps.
+					 * ⚠️ The two maps are independent and each falls back on its own scalar, so the
+					 * colour setter is called with the texture when there is one and with the colour
+					 * otherwise, and the roughness map — which also carries the colour forward, since
+					 * it may be the only map — comes after it. */
 					if ( sheenRoughness > 0.0F || sheenColor.red() > 0.0F || sheenColor.green() > 0.0F || sheenColor.blue() > 0.0F )
 					{
-						materialResource.setSheenComponent(sheenColor, sheenRoughness);
+						if ( sheenColorTex != nullptr )
+						{
+							materialResource.setSheenComponent(sheenColorTex, sheenRoughness);
+						}
+						else
+						{
+							materialResource.setSheenComponent(sheenColor, sheenRoughness);
+						}
+
+						if ( sheenRoughnessTex != nullptr )
+						{
+							materialResource.setSheenRoughnessComponent(sheenRoughnessTex, sheenColor, sheenRoughness, Base::PixelFactory::Channel::Alpha);
+						}
 					}
 
 					/* Transmission (KHR_materials_transmission).

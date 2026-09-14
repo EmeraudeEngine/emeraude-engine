@@ -489,6 +489,9 @@ namespace EmEn::Graphics
 			case ComponentType::IridescenceThickness :
 				return IridescenceThicknessString;
 
+			case ComponentType::SheenRoughness :
+				return SheenRoughnessString;
+
 			case ComponentType::VolumeThickness :
 				return VolumeThicknessString;
 
@@ -610,6 +613,11 @@ namespace EmEn::Graphics
 		if ( value == ClearCoatNormalString )
 		{
 			return ComponentType::ClearCoatNormal;
+		}
+
+		if ( value == SheenRoughnessString )
+		{
+			return ComponentType::SheenRoughness;
 		}
 
 		if ( value == IridescenceThicknessString )
