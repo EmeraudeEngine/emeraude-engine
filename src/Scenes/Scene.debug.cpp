@@ -216,7 +216,18 @@ namespace EmEn::Scenes
 				return meshResource.load(geometry, material, {PolygonMode::Line, CullingMode::None});
 			});
 
-		const auto meshInstance = this->createStaticEntity(GroundZeroPlaneDisplay)
+		const auto entity = this->createStaticEntity(GroundZeroPlaneDisplay);
+
+		/* ⚠️ createStaticEntity() returns nullptr when the name is already taken (since 2026-09-14
+		 * it refuses to hand back an orphan). Enabling this display twice without disabling it in
+		 * between is exactly that case, and the chained call that used to be here dereferenced the
+		 * result blind. */
+		if ( entity == nullptr )
+		{
+			return;
+		}
+
+		const auto meshInstance = entity
 			->componentBuilder< Component::Visual >(GroundZeroPlaneDisplay)
 			.setup([] (auto & component) {
 				component.getRenderableInstance()->disableDepthTest(true);
@@ -286,6 +297,13 @@ namespace EmEn::Scenes
 				});
 
 			const auto entity = this->createStaticEntity(plane.label, plane.position * m_boundary);
+
+			/* ⚠️ Same reason as the ground-zero plane: a second enable without a disable finds the
+			 * name taken and gets nullptr. */
+			if ( entity == nullptr )
+			{
+				continue;
+			}
 
 			if ( plane.position[X] != 0.0F )
 			{
