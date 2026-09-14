@@ -400,7 +400,18 @@ namespace EmEn::Scenes
 
 		if ( hasMesh || hasLight )
 		{
-			auto staticEntity = scene.createStaticEntity(nodeDesc.name, worldFrame);
+			/* ⚠️ A node name is NOT unique in glTF or FBX, and the scene's entity registry is keyed
+			 * by name: a collision used to cost the whole node, silently. Only the DUPLICATES are
+			 * renamed — the first holder of a name keeps it verbatim, so every entity that already
+			 * resolved by name still does. Same remedy as `buildResourceKey()`, one level up. */
+			auto entityName = nodeDesc.name;
+
+			if ( scene.findStaticEntity(entityName) != nullptr )
+			{
+				entityName += '-' + std::to_string(nodeIndex);
+			}
+
+			auto staticEntity = scene.createStaticEntity(entityName, worldFrame);
 
 			if ( staticEntity != nullptr )
 			{
@@ -408,7 +419,7 @@ namespace EmEn::Scenes
 				{
 					const auto meshIndex = nodeDesc.meshIndex.value();
 
-					staticEntity->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
+					staticEntity->componentBuilder< Component::Visual >(entityName + "/Visual")
 						.setup([lightingEnabled = sceneData.meshes[meshIndex].lightingEnabled] (auto & visual) {
 							visual.getRenderableInstance()->setLightingState(lightingEnabled);
 						})

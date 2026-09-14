@@ -158,7 +158,23 @@ namespace EmEn::Scenes
 	{
 		auto staticEntity = std::make_shared< StaticEntity >(*this, name, m_lifetimeMS, coordinates);
 
-		m_staticEntities.emplace(name, staticEntity);
+		/* ⚠️⚠️ `emplace` on an EXISTING key is a no-op that DISCARDS its argument, and this used to
+		 * return the orphan anyway: the caller then built its components onto an entity that is not
+		 * in the scene, and the geometry silently never rendered. Measured on the Khronos
+		 * `TransmissionTest`, whose 22 mesh-bearing nodes carry only 16 distinct names — three of
+		 * them are called `BlueTransWithMask` — so the scene received 16 entities and two of the
+		 * three blue spheres were absent from the grid, with nothing logged anywhere.
+		 * Neither glTF nor FBX makes node names unique; the caller must expect a collision. */
+		const auto [entityIt, inserted] = m_staticEntities.emplace(name, staticEntity);
+
+		if ( !inserted )
+		{
+			TraceError{ClassId} <<
+				"A static entity named '" << name << "' is already in the scene '" << this->name() << "' ! "
+				"The new one is DISCARDED — name it differently.";
+
+			return nullptr;
+		}
 
 		this->observe(staticEntity.get());
 

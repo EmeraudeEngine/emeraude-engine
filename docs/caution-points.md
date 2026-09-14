@@ -18,6 +18,43 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### The UV transform table is INDEXED — the component picks a slot, it does not own one
+
+> **What it replaced (2026-09-14):** six fixed `vec4` pairs in the material UBO, one per component
+> type — albedo, roughness, metalness, normal, AO, emissive — and a `switch` in
+> `transformedTexCoords()` whose `default:` returned the PLAIN coordinates. Fourteen component types
+> fell through it, so `KHR_texture_transform` on a sheen, clear coat, specular, iridescence,
+> transmission or volume map was parsed, sometimes logged, and dropped.
+>
+> **Why indexed rather than wider:** measured over **1347 materials** (Khronos corpus + project),
+> only **38** declare any UV transform at all, **31 of those declare exactly ONE** shared by every
+> map they carry, and **none declares more than three**. Widening the fixed table to all twenty
+> component types would have cost 160 floats for the benefit of 2.8 % of materials; a four-entry
+> table plus one index per component type costs 60 and serves every one of them.
+>
+> **The layout:** `uvwTransform[4]` (scale.xy, offset.zw), `uvwRotation[4]` (cos, sin), and
+> `uvwIndex[7]` — one float per `ComponentType`, packed four to a `vec4`. **Slot 0 is always the
+> identity**, so a component that declares nothing indexes it and comes out unchanged.
+>
+> ⚠️⚠️ **The index is a VALUE in the UBO, never a GLSL literal.** The slot POSITION is a function of
+> the ComponentType and is identical for every material, so that part is a literal; the entry it
+> holds is per-material and must not be. The program cache keys on the descriptor layout and the
+> material flag bits, never on values — two materials with the same layout share a program, and a
+> baked index would serve one material's transform to the other. Same rule as every other per-material
+> value.
+>
+> ⚠️ **The trig stays on the CPU**, resolved once per material in `syncComponentUVWTransforms()`: the
+> angle is a material constant, and a `sin`/`cos` in the shader is paid per pixel per frame forever.
+>
+> ⚠️ A material declaring more than three distinct transforms keeps the identity on the surplus maps
+> and **says so once** in the log. A wrong transform would be worse than an absent one, and silence
+> worse than both.
+>
+> **The control for any change here is `TextureTransformTest`** — the only asset in the bench that
+> declares a rotation, and the one that exercises offset, scale and clamp together. The rewrite left
+> it **bit-exact** (0.00 % of pixels, delta 0), as did `MetalRoughSpheres` and `WaterBottle`. If it
+> moves, the table is wrong.
+
 ### A `PixelFactory::Color` CLAMPS to [0,1] — so it cannot carry a factor that may exceed 1
 
 > **Symptom:** a material parameter that the format explicitly allows above 1.0 renders as though
@@ -1913,6 +1950,42 @@ raw (empty) name. Two anonymous animations therefore collapsed onto the empty ke
 animator's clip map, and only one stayed reachable. `CesiumMan.glb` is the asset that exhibits it.
 
 ## Scene Rendering
+
+### A duplicate ENTITY NAME cost the whole node — `emplace` discarded it and the caller never knew
+
+> **Symptom:** a loaded model renders with objects missing. No VUID, no warning, no failed resource
+> — the geometry is simply absent, and every remaining object looks right.
+>
+> **Root cause:** `Scene::createStaticEntity()` did `m_staticEntities.emplace(name, entity)` and
+> returned the entity **unconditionally**. `emplace` on an existing key is a no-op that DISCARDS its
+> argument, so the caller received a live pointer to an entity that is not in the scene, attached
+> its components to it, and the node never rendered. The scene's registry is keyed by name, and
+> **neither glTF nor FBX makes node names unique** — so a collision is the normal case, not an edge
+> one.
+>
+> **Measured (2026-09-14, owner-reported):** the Khronos `TransmissionTest` carries 22 mesh-bearing
+> nodes under only **16 distinct names** — three of them are called `BlueTransWithMask`. The scene
+> built **18** static entities (16 + the viewer's own two) and **two of the three blue spheres were
+> missing from the grid**, along with one of the four column labels. After the fix: **24** entities,
+> the 3×4 grid complete. The arithmetic is the diagnosis — count the entities against the asset's
+> mesh-bearing nodes before looking at anything else.
+>
+> **Fixed in two halves:**
+> 1. `createStaticEntity()` reads the `emplace` result, traces an error and **returns nullptr** on a
+>    collision. It can no longer hand back an orphan.
+> 2. `SceneDataConsumer` renames only the DUPLICATES (`<name>-<nodeIndex>`, the remedy
+>    `buildResourceKey()` uses one level down). The first holder of a name keeps it verbatim, so
+>    every entity that already resolved by name still does.
+>
+> ⚠️ **Same family as two defects already in this file** — the resource key built on an asset NAME,
+> and `Material::Interface`'s component map where the second `emplace()` is rejected in silence.
+> When something is missing and nothing is logged, look for a map keyed on a name the format does
+> not make unique.
+>
+> ⚠️ **The node-hierarchy import path is NOT covered by this fix.** `SceneDataConsumer` also builds
+> children with `createChild(nodeDesc.name)` (the `+ModelViewer` file path, `AssetRoot`); whether
+> that registry tolerates a duplicate is unverified. Measure it the same way — entity count against
+> the asset's node count — before assuming either answer.
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)
 

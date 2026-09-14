@@ -44,12 +44,17 @@ instancing. Nothing here measures them, so nothing here fails on them.
 |---|---|---|
 | `SpecularTest` | 6 rows of 7; the 7th flat at 9.33 / 9.35 / 9.05 / 8.87 | **7/7** — the `color factor > 1.0` row is a monotone ramp **10.22 / 26.42 / 47.13 / 70.95**, the six others identical to the hundredth |
 | `AnisotropyStrengthTest` | the axis acted at roughness 1.0 (×1.84) where the spec forbids it, and was unmeasurable at roughness 0 | **both clauses met** — roughness 1.0 flat (**×0.85**), roughness 0.0 now the strongest column (**18.73 → 9.61**) |
+| `TransmissionTest` | **two of its twelve spheres were ABSENT from the scene**, and one of the four column labels with them — owner-reported from the picture, after this file had it marked PASS | **the 3×4 grid is complete**: 24 static entities against 22 mesh-bearing nodes + the viewer's two (was 18) |
+
+⚠️ **The headline count was therefore WRONG while it was published**: `TransmissionTest` was counted
+PASS with two cells missing, so the true figure was 17 PASS / 3 FAIL, not 18 / 2. It is 18 / 2 again
+now, for a different reason. The criterion that let it through is the first trap below.
 
 **FAIL (2)**
 
 | model | cause | tracked |
 |---|---|---|
-| `SheenCloth` | its two maps are READ since this pass and demonstrably reach the shader (13.1 % of pixels, cloth mean 158.2 → 80.7), but it tiles them **30×** through `KHR_texture_transform` and no sheen component type has a UV transform slot | [`uv-transform-slots-for-extension-maps.md`](uv-transform-slots-for-extension-maps.md) |
+| `SheenCloth` | **the 30× tiling applies since the UV transform table became indexed (2026-09-14)**: the low-frequency violet wash is gone, hue dispersion across the cloth **8.51° → 2.57°** at an unchanged mean hue. What remains is a LEVEL difference against the Khronos reference, not a structural one — unjudged | this file, below |
 | `ClearCoatTest` | **the coat normal map corrugates since 2026-09-14** (the coat reflects the environment along its own normal now); the residual is the **`Partial coating`** row, whose band boundary is still not readable | this file, below |
 
 ## What the second pass fixed
@@ -88,9 +93,11 @@ enumerates a level; never conclude a capability is missing from a truncated pipe
       so its reflection comes out as blurry as the base's. Scoped out of the 2026-09-14 fix on
       purpose, to keep every row without a coat normal map bit-exact as the control. Fixing it moves
       `Simple coating` and `Roughness variations`, so it needs its own before/after.
-- [ ] **UV transform slots for the extension maps** —
-      [`uv-transform-slots-for-extension-maps.md`](uv-transform-slots-for-extension-maps.md). The
-      only thing between `SheenCloth` and a PASS, and it needs a design decision, not a patch.
+- [ ] **`SheenCloth`'s remaining gap is a LEVEL, not a structure.** Its weave now reads at the
+      authored frequency, but the cloth renders far brighter than the Khronos reference, which shoots
+      it dark navy. That looks like the viewer's key/fill lighting against theirs rather than the
+      sheen — but it is UNMEASURED, so the model stays FAIL until someone compares the rim-to-body
+      ratio instead of the absolute level.
 - [ ] **`KHR_materials_transmission`'s texture** — the last extension still reading only its scalar
       factor. No conformance model in the bench fails on it today.
 - [ ] `KHR_texture_transform`'s per-`TextureInfo` **`texCoord` override** — the multi-UV gap
@@ -115,6 +122,19 @@ enumerates a level; never conclude a capability is missing from a truncated pipe
   the next reader does not re-open them.
 
 ## ⚠️ Traps of this bench (they cost real time)
+
+- ⚠️⚠️ **A criterion that reads the WHOLE frame hides a per-cell failure.** `TransmissionTest` was
+  marked PASS on "the four declared hues are present" — and they were, because each hue appeared
+  somewhere. Two of its twelve spheres were **absent from the scene entirely**, spotted by the owner
+  looking at the picture, weeks after the verdict. Count the CELLS, not the palette: a grid test must
+  assert that every cell is drawn AND distinct, and the cheapest form of that assertion is the
+  engine's own entity count against the asset's mesh-bearing node count
+  (`Core.SceneManagerService.getSceneInfo()`).
+- ⚠️⚠️ **A projected sample that misses its target reads the BACKDROP, and a backdrop is a plausible
+  colour.** Probing those two spheres by projecting their node positions returned "saturation 4.9 and
+  4.4", which reads as *desaturated* — while the truth was *not drawn at all*. Two different defects
+  behind one number. The picture settled it in one look; the probe never would have. Same trap as the
+  iridescence grids, paid twice.
 
 The harness and its older traps live with the tool, in
 [`tools/gltf-conformance-bench/README.md`](../../tools/gltf-conformance-bench/README.md). What the
