@@ -133,6 +133,10 @@ layout(set = )GLSL" #bindlessSet R"GLSL(, binding = 1) uniform sampler2D texture
 const uint HasAlbedoTexture = 1u << 0;
 const uint HasOpacityTexture = 1u << 7;
 const uint IsAlphaTest = 1u << 8;
+const uint IsBlended = 1u << 10;
+/* A BLEND material declares no cutoff of its own; 0.5 is the industry default for turning a
+   blend into the cutout a ray query can actually express. Mirrors GPURTMaterialData::RTBlendedCutoff. */
+const float RTBlendedCutoff = 0.5;
 
 vec2 readVertexVec2 (VertexBuffer vb, uint vertexIndex, uint strideFloats, uint attrOffsetFloats)
 {
@@ -179,16 +183,25 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 
 /** @brief GLSL: the function deciding whether a candidate triangle is solid at the hit texel. */
 #define EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
-/* THE alpha-test rule: does this candidate triangle exist at the hit texel ?
- * Non-alpha-tested materials are solid (the BLAS default). An alpha-tested one is sampled at
- * the candidate's UV — opacity texture first, albedo alpha next, scalar albedo alpha last —
- * and exists only above the material's own cutoff (glTF alphaCutoff, raster parity). */
+/* THE non-opaque rule: does this candidate triangle exist at the hit texel ?
+ * Opaque materials are solid (the BLAS default). An alpha-TESTED one is sampled at the
+ * candidate's UV — opacity texture first, albedo alpha next, scalar albedo alpha last — and
+ * exists only above the material's own cutoff (glTF alphaCutoff, raster parity).
+ *
+ * ⚠️ A BLENDED one takes the SAME path at RTBlendedCutoff, because a ray query cannot blend:
+ * it confirms a candidate or it does not. Treating a blend as opaque instead is what turned
+ * Sponza's canopy into a solid sheet — its leaves are `alphaMode = BLEND`, so every
+ * transparent texel of every leaf card reflected the sky. Measured 2026-09-15: the Reflections
+ * slot supplied 60 % of the foliage's luminance against 4.5 % of the stone's, and the tree
+ * rendered as a flat beige mush that goes green the moment the slot is switched off. */
 bool rtCandidateIsSolid (uint instanceIndex, uint geomIdx, uint primitiveIndex, vec2 bary)
 {
 	uint matBase = rtHitMaterialIndex(instanceIndex, geomIdx) * 7u;
 	uint flags = floatBitsToUint(materialSSBO.materials[matBase + 4u].w);
 
-	if ((flags & IsAlphaTest) == 0u)
+	bool alphaTested = (flags & IsAlphaTest) != 0u;
+
+	if (!alphaTested && (flags & IsBlended) == 0u)
 	{
 		return true;
 	}
@@ -216,7 +229,7 @@ bool rtCandidateIsSolid (uint instanceIndex, uint geomIdx, uint primitiveIndex, 
 		}
 	}
 
-	return alpha >= materialSSBO.materials[matBase + 6u].z;
+	return alpha >= (alphaTested ? materialSSBO.materials[matBase + 6u].z : RTBlendedCutoff);
 }
 )GLSL"
 

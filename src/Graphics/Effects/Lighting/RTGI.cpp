@@ -170,6 +170,10 @@ const uint HasAlbedoTexture = 1u;
 const uint HasMetalnessTexture = 1u << 3;
 const uint HasOpacityTexture = 1u << 7;
 const uint IsAlphaTest = 1u << 8;
+const uint IsBlended = 1u << 10;
+/* A BLEND material declares no cutoff of its own; rays treat it as a cutout at this value.
+   Mirrors GPURTMaterialData::RTBlendedCutoff and the shared rtCandidateIsSolid(). */
+const float RTBlendedCutoff = 0.5;
 
 /* Packed texel channel index (0:R, 1:G, 2:B, 3:A) — matches
  * GPURTMaterialData::MetalnessChannelShift. */

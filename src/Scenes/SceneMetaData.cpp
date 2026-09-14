@@ -284,7 +284,7 @@ namespace EmEn::Scenes
 				}
 
 				const auto materialSlotCount = renderable->subGeometryCount();
-				bool anyAlphaTest = false;
+				bool anyNonOpaque = false;
 
 				/* --- Mesh metadata --- */
 				const auto instanceIndex = static_cast< uint32_t >(meshEntries.size());
@@ -349,9 +349,17 @@ namespace EmEn::Scenes
 							materialEntries.emplace_back(rtMat);
 						}
 
-						if ( subMaterial->isAlphaTest() )
+						/* ⚠️ A BLEND material counts too. A ray query cannot blend — it confirms a
+						 * candidate or it does not — so a blended instance left OPAQUE reflects,
+						 * shadows and occludes with its whole triangle, transparent texels
+						 * included. Sponza's tree leaves are `alphaMode = BLEND`: its canopy
+						 * reflected as a solid sheet and supplied 60 % of the foliage's luminance
+						 * from the Reflections slot, against 4.5 % on the stone. Flagged
+						 * FORCE_NO_OPAQUE, the shared rtCandidateIsSolid() cuts them out at
+						 * RTBlendedCutoff. */
+						if ( subMaterial->isAlphaTest() || subMaterial->isFlagEnabled(Material::BlendingEnabled) )
 						{
-							anyAlphaTest = true;
+							anyNonOpaque = true;
 						}
 					}
 
@@ -401,7 +409,7 @@ namespace EmEn::Scenes
 				 * texture per hit, and the alpha-test per-material flag determines
 				 * whether to actually run the test or auto-accept. Materials without
 				 * alpha-test on any sub-geometry keep the BLAS default opacity. */
-				if ( anyAlphaTest )
+				if ( anyNonOpaque )
 				{
 					instance.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
 				}
@@ -463,7 +471,7 @@ namespace EmEn::Scenes
 						<< " subGeo=" << subGeoCount
 						<< " pos=(" << rm[0][3] << ", " << rm[1][3] << ", " << rm[2][3] << ")"
 						<< " scale=" << colScale
-						<< (anyAlphaTest ? " [alphaTest]" : "");
+						<< (anyNonOpaque ? " [nonOpaque]" : "");
 				}
 #endif
 			}

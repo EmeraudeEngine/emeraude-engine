@@ -125,6 +125,16 @@ namespace EmEn::Graphics::Material
 		static constexpr uint32_t IsEmissive			  = 1U << 6;
 		static constexpr uint32_t HasOpacityTexture	   = 1U << 7;
 		static constexpr uint32_t IsAlphaTest			 = 1U << 8;
+		/** @brief glTF `alphaMode = BLEND`. ⚠️ Rays treat it as a CUTOUT at
+		 * RTBlendedCutoff, they cannot blend: a ray query confirms a hit or it does not.
+		 * Without this flag a blended instance is an OPAQUE triangle for every ray — every
+		 * transparent texel of a leaf card reflects, and a canopy becomes a solid sheet.
+		 * Measured on Sponza's tree: the Reflections slot supplied 60 % of the foliage's
+		 * luminance against 4.5 % of the stone's, and the leaves lost their greens. */
+		static constexpr uint32_t IsBlended			   = 1U << 10;
+		/** @brief The cutoff rays apply to a BLEND material, which declares none of its own.
+		 * 0.5 is the industry default for turning a blend into a cutout. */
+		static constexpr float RTBlendedCutoff{0.5F};
 		/** @brief The roughness texture is a smoothness/gloss map: the sampled texel is
 		 * inverted (1 - texel) before the factor applies — raster parity (m_invertRoughness). */
 		static constexpr uint32_t RoughnessTexInverted	= 1U << 9;

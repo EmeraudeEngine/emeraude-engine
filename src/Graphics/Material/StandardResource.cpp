@@ -1978,12 +1978,20 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Alpha-test: signal the RT trace shaders to sample the opacity at hit time. The
-		 * cutoff mirrors the raster threshold (UBO slot); blending materials keep the 0.5
-		 * default of the mirror, unchanged behaviour. */
+		 * cutoff mirrors the raster threshold (UBO slot). */
 		if ( this->isAlphaTest() )
 		{
 			outData.flags |= GPURTMaterialData::IsAlphaTest;
 			outData.alphaCutoff = m_materialProperties[AlphaThresholdOffset];
+		}
+
+		/* ⚠️ A BLEND material must say so too. A ray query cannot blend — it confirms a hit or
+		 * it does not — so the trace shaders treat a blended hit as a CUTOUT at
+		 * RTBlendedCutoff. Without this flag the instance stays opaque for every ray and each
+		 * leaf card reflects, shadows and occludes as a full quad, transparent texels included. */
+		if ( this->isFlagEnabled(BlendingEnabled) )
+		{
+			outData.flags |= GPURTMaterialData::IsBlended;
 		}
 
 		/* Normal map intensity for the RT hit shading (same value the raster uses). */
