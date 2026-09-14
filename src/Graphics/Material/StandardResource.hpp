@@ -1695,22 +1695,16 @@ namespace EmEn::Graphics::Material
 			/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw).
 			 * Neutral (1,1,0,0) — applied UNCONDITIONALLY at the sampling sites, so the neutral
 			 * value MUST be the identity (same precedent as DefaultAlbedoColor/DefaultTextureFactor). */
-			static constexpr auto AlbedoUVWTransformOffset{56UL};
-			static constexpr auto RoughnessUVWTransformOffset{60UL};
-			static constexpr auto MetalnessUVWTransformOffset{64UL};
-			static constexpr auto NormalUVWTransformOffset{68UL};
-			static constexpr auto AmbientOcclusionUVWTransformOffset{72UL};
-			static constexpr auto AutoIlluminationUVWTransformOffset{76UL};
-			/* KHR_texture_transform's ROTATION, one vec4 per component as (cos, sin, 0, 0).
-			 * ⚠️ Kept in its own block rather than widened into the transform vec4 above: the
-			 * existing four slots are fully used (scale.xy, offset.zw), and an additive block whose
-			 * neutral is (1, 0, 0, 0) leaves every non-rotating material BIT-EXACT. */
-			static constexpr auto AlbedoUVWRotationOffset{80UL};
-			static constexpr auto RoughnessUVWRotationOffset{84UL};
-			static constexpr auto MetalnessUVWRotationOffset{88UL};
-			static constexpr auto NormalUVWRotationOffset{92UL};
-			static constexpr auto AmbientOcclusionUVWRotationOffset{96UL};
-			static constexpr auto AutoIlluminationUVWRotationOffset{100UL};
+			/** @brief Entries in the indexed UV transform table. Slot 0 is ALWAYS the identity,
+			 * leaving three for the distinct transforms a material declares — which covers every
+			 * asset measured (1347 materials, maximum three distinct). Beyond that the surplus
+			 * components fall back to the identity and the material says so once. */
+			static constexpr auto UVWTransformSlots{4UL};
+			/** @brief vec4 count of the per-ComponentType index table (4 indices per vec4). */
+			static constexpr auto UVWIndexVectors{7UL};
+			static constexpr auto UVWTransformTableOffset{56UL};
+			static constexpr auto UVWRotationTableOffset{72UL};
+			static constexpr auto UVWIndexTableOffset{88UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -1771,12 +1765,12 @@ namespace EmEn::Graphics::Material
 			 * reflection amount 0, and every UV transform at scale 0, which collapses each texture
 			 * lookup onto a single texel. A duplicated initialiser list for a fixed-offset UBO is a
 			 * defect waiting on the next field; never reintroduce the second copy.
-			 * @return const std::array< float, 104 > &
+			 * @return const std::array< float, 116 > &
 			 */
 			[[nodiscard]]
-			static const std::array< float, 104 > & neutralMaterialProperties () noexcept;
+			static const std::array< float, 116 > & neutralMaterialProperties () noexcept;
 
-			std::array< float, 104 > m_materialProperties{neutralMaterialProperties()};
+			std::array< float, 116 > m_materialProperties{neutralMaterialProperties()};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;

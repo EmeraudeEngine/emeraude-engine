@@ -803,21 +803,21 @@ namespace EmEn::Saphir
 				constexpr auto RefractionIOR{"refractionIOR"};
 				/* Per-component UV transform (KHR_texture_transform): vec4 = (scale.xy, offset.xy),
 				 * neutral (1,1,0,0). Applied UNCONDITIONALLY at the sampling sites. */
-				constexpr auto AlbedoUVWTransform{"albedoUVWTransform"};
-				constexpr auto RoughnessUVWTransform{"roughnessUVWTransform"};
-				constexpr auto MetalnessUVWTransform{"metalnessUVWTransform"};
-				constexpr auto NormalUVWTransform{"normalUVWTransform"};
-				constexpr auto AmbientOcclusionUVWTransform{"ambientOcclusionUVWTransform"};
-				constexpr auto AutoIlluminationUVWTransform{"autoIlluminationUVWTransform"};
+				/* KHR_texture_transform, indexed table (2026-09-14). One entry per DISTINCT
+				 * transform a material declares, not one per component type: measured over 1347
+				 * materials, 31 of the 38 that declare any use a SINGLE transform and none uses
+				 * more than three. Slot 0 is always the identity, so a component that declares
+				 * nothing indexes it and comes out unchanged. */
+				constexpr auto UVWTransform{"uvwTransform"};
+				constexpr auto UVWRotation{"uvwRotation"};
+				/* One float per ComponentType, packed four to a vec4: which table entry that
+				 * component reads. A VALUE, never a GLSL literal — the program cache keys on the
+				 * descriptor layout and the flag bits, so two materials with the same layout share
+				 * a program and a baked index would serve one material's transform to the other. */
+				constexpr auto UVWIndex{"uvwIndex"};
 				/* KHR_texture_transform's ROTATION half, kept in its own vec4 as (cos, sin, 0, 0).
 				 * The trig is done ONCE on the CPU: a per-fragment sin/cos for a value that is
 				 * constant per material would be pure waste. Neutral is (1, 0, 0, 0). */
-				constexpr auto AlbedoUVWRotation{"albedoUVWRotation"};
-				constexpr auto RoughnessUVWRotation{"roughnessUVWRotation"};
-				constexpr auto MetalnessUVWRotation{"metalnessUVWRotation"};
-				constexpr auto NormalUVWRotation{"normalUVWRotation"};
-				constexpr auto AmbientOcclusionUVWRotation{"ambientOcclusionUVWRotation"};
-				constexpr auto AutoIlluminationUVWRotation{"autoIlluminationUVWRotation"};
 				constexpr auto DiffuseUVWTransform{"diffuseUVWTransform"};
 				constexpr auto OpacityUVWTransform{"opacityUVWTransform"};
 				/* Material specific (PBR) */

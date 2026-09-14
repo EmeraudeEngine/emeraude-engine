@@ -1083,17 +1083,12 @@ namespace EmEn::Scenes::Loaders
 			auto sheenRoughnessTex = ( glTFMaterial.sheen != nullptr && glTFMaterial.sheen->sheenRoughnessTexture.has_value() )
 				? resolveTexture(glTFMaterial.sheen->sheenRoughnessTexture->textureIndex) : nullptr;
 
-			/* ⚠️⚠️ Same UV-transform hole as the specular and clearcoat maps, and here it BITES: the
-			 * material UBO carries six UV transform slots (albedo, roughness, metalness, normal, AO,
-			 * emissive) and neither sheen component type is among them. SheenCloth tiles its 256x256
-			 * maps **30 times in U and V** through KHR_texture_transform, so its sheen reads at 1/30
-			 * of the intended frequency. Wiring the maps is necessary and not sufficient for that
-			 * asset. */
-			if ( ( sheenColorTex != nullptr && readUVTransform(glTFMaterial.sheen->sheenColorTexture).present )
-			  || ( sheenRoughnessTex != nullptr && readUVTransform(glTFMaterial.sheen->sheenRoughnessTexture).present ) )
-			{
-				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_sheen texture is not supported (no UV transform slot), ignored.";
-			}
+			/* ⚠️ SheenCloth tiles its 256x256 maps THIRTY times in U and V through
+			 * KHR_texture_transform, and that tiling IS the weave of the fabric. Served since the
+			 * transform table became indexed (2026-09-14); before it these two maps fell through to
+			 * plain coordinates and the sheen read at 1/30 of the authored frequency. */
+			const auto sheenColorUVTransform = glTFMaterial.sheen != nullptr ? readUVTransform(glTFMaterial.sheen->sheenColorTexture) : UVTransform{};
+			const auto sheenRoughnessUVTransform = glTFMaterial.sheen != nullptr ? readUVTransform(glTFMaterial.sheen->sheenRoughnessTexture) : UVTransform{};
 
 			/* Clear coat (KHR_materials_clearcoat), factors AND the three maps.
 			 *
@@ -1126,15 +1121,9 @@ namespace EmEn::Scenes::Loaders
 				clearcoatNormalScale = static_cast< float >(glTFMaterial.clearcoat->clearcoatNormalTexture->scale);
 			}
 
-			/* ⚠️ Same UV-transform hole as the two specular maps: the material UBO carries six UV
-			 * transform slots (albedo, roughness, metalness, normal, AO, emissive) and none of the
-			 * clear coat component types is among them. An asset that transforms its clear coat UVs
-			 * is silently untransformed — none in the conformance bench does. */
-			if ( ( clearcoatTex != nullptr && readUVTransform(glTFMaterial.clearcoat->clearcoatTexture).present )
-			  || ( clearcoatRoughnessTex != nullptr && readUVTransform(glTFMaterial.clearcoat->clearcoatRoughnessTexture).present ) )
-			{
-				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_clearcoat texture is not supported (no UV transform slot), ignored.";
-			}
+			const auto clearcoatUVTransform = glTFMaterial.clearcoat != nullptr ? readUVTransform(glTFMaterial.clearcoat->clearcoatTexture) : UVTransform{};
+			const auto clearcoatRoughnessUVTransform = glTFMaterial.clearcoat != nullptr ? readUVTransform(glTFMaterial.clearcoat->clearcoatRoughnessTexture) : UVTransform{};
+			const auto clearcoatNormalUVTransform = glTFMaterial.clearcoat != nullptr ? readUVTransform(glTFMaterial.clearcoat->clearcoatNormalTexture) : UVTransform{};
 
 			/* Sheen (KHR_materials_sheen), factors AND both maps.
 			 *
@@ -1344,16 +1333,8 @@ namespace EmEn::Scenes::Loaders
 			auto specularColorTex = ( glTFMaterial.specular != nullptr && glTFMaterial.specular->specularColorTexture.has_value() )
 				? resolveTexture(glTFMaterial.specular->specularColorTexture->textureIndex, true) : nullptr;
 
-			/* ⚠️ Neither map gets a KHR_texture_transform slot: the material UBO carries six UV
-			 * transforms (albedo, roughness, metalness, normal, AO, emissive) and the specular
-			 * component types are not among them, so `transformedTexCoords()` falls back to the
-			 * plain coordinates. An asset that transforms its specular UVs is silently untransformed
-			 * — none in the conformance bench does. Read before assuming it is supported. */
-			if ( ( specularTex != nullptr && readUVTransform(glTFMaterial.specular->specularTexture).present )
-			  || ( specularColorTex != nullptr && readUVTransform(glTFMaterial.specular->specularColorTexture).present ) )
-			{
-				TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform on a KHR_materials_specular texture is not supported (no UV transform slot), ignored.";
-			}
+			const auto specularUVTransform = glTFMaterial.specular != nullptr ? readUVTransform(glTFMaterial.specular->specularTexture) : UVTransform{};
+			const auto specularColorUVTransform = glTFMaterial.specular != nullptr ? readUVTransform(glTFMaterial.specular->specularColorTexture) : UVTransform{};
 
 			/* IOR (KHR_materials_ior) — drives the dielectric F0 itself:
 			 * `dielectricF0 = ((ior - 1) / (ior + 1))^2`, already in the shader. glTF's default is
@@ -1385,11 +1366,11 @@ namespace EmEn::Scenes::Loaders
 					albedoUVTransform, metallicRoughnessUVTransform, normalUVTransform, aoUVTransform, emissiveUVTransform,
 					emissiveTex = std::move(emissiveTex), emissiveStrength, emissiveColor, hasEmissiveColor,
 					clearcoatFactor, clearcoatRoughness, clearcoatNormalScale,
-					clearcoatTex = std::move(clearcoatTex),
+					clearcoatTex = std::move(clearcoatTex), clearcoatUVTransform, clearcoatRoughnessUVTransform, clearcoatNormalUVTransform,
 					clearcoatRoughnessTex = std::move(clearcoatRoughnessTex),
 					clearcoatNormalTex = std::move(clearcoatNormalTex),
 					sheenColor, sheenRoughness,
-					sheenColorTex = std::move(sheenColorTex),
+					sheenColorTex = std::move(sheenColorTex), sheenColorUVTransform, sheenRoughnessUVTransform,
 					sheenRoughnessTex = std::move(sheenRoughnessTex),
 					transmissionFactor,
 					iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax,
@@ -1399,7 +1380,7 @@ namespace EmEn::Scenes::Loaders
 					specularFactor, specularColor, materialIOR,
 					volumeThicknessFactor, volumeAttenuationDistance, volumeAttenuationColor,
 					volumeThicknessTex = std::move(volumeThicknessTex),
-					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex),
+					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex), specularUVTransform, specularColorUVTransform,
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
 				] (auto & materialResource) {
@@ -1518,9 +1499,24 @@ namespace EmEn::Scenes::Loaders
 							materialResource.setClearCoatRoughnessComponent(clearcoatRoughnessTex, clearcoatFactor, clearcoatRoughness, Base::PixelFactory::Channel::Green);
 						}
 
+						if ( clearcoatUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::ClearCoat, clearcoatUVTransform.scale, clearcoatUVTransform.offset, clearcoatUVTransform.rotation);
+						}
+
+						if ( clearcoatRoughnessTex != nullptr && clearcoatRoughnessUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::ClearCoatRoughness, clearcoatRoughnessUVTransform.scale, clearcoatRoughnessUVTransform.offset, clearcoatRoughnessUVTransform.rotation);
+						}
+
 						if ( clearcoatNormalTex != nullptr )
 						{
 							materialResource.setClearCoatNormalComponent(clearcoatNormalTex, clearcoatNormalScale);
+
+							if ( clearcoatNormalUVTransform.present )
+							{
+								materialResource.setComponentUVWTransform(ComponentType::ClearCoatNormal, clearcoatNormalUVTransform.scale, clearcoatNormalUVTransform.offset, clearcoatNormalUVTransform.rotation);
+							}
 						}
 					}
 
@@ -1540,9 +1536,19 @@ namespace EmEn::Scenes::Loaders
 							materialResource.setSheenComponent(sheenColor, sheenRoughness);
 						}
 
+						if ( sheenColorUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::Sheen, sheenColorUVTransform.scale, sheenColorUVTransform.offset, sheenColorUVTransform.rotation);
+						}
+
 						if ( sheenRoughnessTex != nullptr )
 						{
 							materialResource.setSheenRoughnessComponent(sheenRoughnessTex, sheenColor, sheenRoughness, Base::PixelFactory::Channel::Alpha);
+
+							if ( sheenRoughnessUVTransform.present )
+							{
+								materialResource.setComponentUVWTransform(ComponentType::SheenRoughness, sheenRoughnessUVTransform.scale, sheenRoughnessUVTransform.offset, sheenRoughnessUVTransform.rotation);
+							}
 						}
 					}
 
@@ -1629,9 +1635,19 @@ namespace EmEn::Scenes::Loaders
 						materialResource.setSpecularFactor(specularFactor);
 					}
 
+					if ( specularTex != nullptr && specularUVTransform.present )
+					{
+						materialResource.setComponentUVWTransform(ComponentType::Specular, specularUVTransform.scale, specularUVTransform.offset, specularUVTransform.rotation);
+					}
+
 					if ( specularColorTex != nullptr )
 					{
 						materialResource.setSpecularColorComponent(specularColorTex, specularColor);
+
+						if ( specularColorUVTransform.present )
+						{
+							materialResource.setComponentUVWTransform(ComponentType::SpecularColor, specularColorUVTransform.scale, specularColorUVTransform.offset, specularColorUVTransform.rotation);
+						}
 					}
 					else
 					{

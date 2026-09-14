@@ -1431,48 +1431,111 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::syncComponentUVWTransforms () noexcept
 	{
-		struct Slot
+		/* Slot 0 is the identity and every component starts on it, so a material that declares no
+		 * transform is bit-exact whatever it indexes. */
+		for ( size_t slot = 0; slot < UVWTransformSlots; slot++ )
 		{
-			ComponentType componentType;
-			size_t transformOffset;
-			size_t rotationOffset;
-		};
+			m_materialProperties[UVWTransformTableOffset + slot * 4] = 1.0F;
+			m_materialProperties[UVWTransformTableOffset + slot * 4 + 1] = 1.0F;
+			m_materialProperties[UVWTransformTableOffset + slot * 4 + 2] = 0.0F;
+			m_materialProperties[UVWTransformTableOffset + slot * 4 + 3] = 0.0F;
 
-		static constexpr Slot slots[] = {
-			{ComponentType::Albedo, AlbedoUVWTransformOffset, AlbedoUVWRotationOffset},
-			{ComponentType::Roughness, RoughnessUVWTransformOffset, RoughnessUVWRotationOffset},
-			{ComponentType::Metalness, MetalnessUVWTransformOffset, MetalnessUVWRotationOffset},
-			{ComponentType::Normal, NormalUVWTransformOffset, NormalUVWRotationOffset},
-			{ComponentType::AmbientOcclusion, AmbientOcclusionUVWTransformOffset, AmbientOcclusionUVWRotationOffset},
-			{ComponentType::AutoIllumination, AutoIlluminationUVWTransformOffset, AutoIlluminationUVWRotationOffset}
-		};
+			m_materialProperties[UVWRotationTableOffset + slot * 4] = 1.0F;
+			m_materialProperties[UVWRotationTableOffset + slot * 4 + 1] = 0.0F;
+			m_materialProperties[UVWRotationTableOffset + slot * 4 + 2] = 0.0F;
+			m_materialProperties[UVWRotationTableOffset + slot * 4 + 3] = 0.0F;
+		}
 
-		for ( const auto & [componentType, offset, rotationOffset] : slots )
+		for ( size_t index = 0; index < UVWIndexVectors * 4; index++ )
 		{
-			const auto componentIt = m_components.find(componentType);
+			m_materialProperties[UVWIndexTableOffset + index] = 0.0F;
+		}
 
-			if ( componentIt == m_components.cend() || componentIt->second->type() != Component::Type::Texture )
+		/* ⚠️ EVERY texture component, not a fixed list of six. The transform belongs to the
+		 * component (`Texture::UVWScale/UVWOffset/UVWRotation`), so the sheen, clear coat,
+		 * specular, iridescence, transmission and volume maps all carry one — they simply had
+		 * nowhere to put it. */
+		size_t used = 1;
+		bool overflowed = false;
+
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component->type() != Component::Type::Texture )
 			{
 				continue;
 			}
 
-			const auto * textureComponent = static_cast< const Texture * >(componentIt->second.get());
+			const auto * textureComponent = static_cast< const Texture * >(component.get());
 
-			m_materialProperties[offset] = textureComponent->UVWScale()[0];
-			m_materialProperties[offset + 1] = textureComponent->UVWScale()[1];
-			m_materialProperties[offset + 2] = textureComponent->UVWOffset()[0];
-			m_materialProperties[offset + 3] = textureComponent->UVWOffset()[1];
-
+			const auto scaleX = textureComponent->UVWScale()[0];
+			const auto scaleY = textureComponent->UVWScale()[1];
+			const auto offsetX = textureComponent->UVWOffset()[0];
+			const auto offsetY = textureComponent->UVWOffset()[1];
 			/* ⚠️ The trig is resolved HERE, once per material, not per fragment: the angle is a
 			 * material constant, so a sin/cos in the shader would be paid on every pixel of every
 			 * frame for a value that never changes. */
-			const auto radians = textureComponent->UVWRotation();
+			const auto cosine = std::cos(textureComponent->UVWRotation());
+			const auto sine = std::sin(textureComponent->UVWRotation());
 
-			m_materialProperties[rotationOffset] = std::cos(radians);
-			m_materialProperties[rotationOffset + 1] = std::sin(radians);
-			m_materialProperties[rotationOffset + 2] = 0.0F;
-			m_materialProperties[rotationOffset + 3] = 0.0F;
+			/* Slot 0 already holds the identity: a component that declares nothing keeps it. */
+			if ( scaleX == 1.0F && scaleY == 1.0F && offsetX == 0.0F && offsetY == 0.0F && textureComponent->UVWRotation() == 0.0F )
+			{
+				continue;
+			}
+
+			/* Reuse an identical entry — the common case by a wide margin: of 1347 materials
+			 * measured, 31 of the 38 declaring any transform declare exactly ONE, shared by every
+			 * map they carry. */
+			size_t slot = 0;
+
+			for ( size_t candidate = 1; candidate < used; candidate++ )
+			{
+				if ( m_materialProperties[UVWTransformTableOffset + candidate * 4] == scaleX
+				  && m_materialProperties[UVWTransformTableOffset + candidate * 4 + 1] == scaleY
+				  && m_materialProperties[UVWTransformTableOffset + candidate * 4 + 2] == offsetX
+				  && m_materialProperties[UVWTransformTableOffset + candidate * 4 + 3] == offsetY
+				  && m_materialProperties[UVWRotationTableOffset + candidate * 4] == cosine
+				  && m_materialProperties[UVWRotationTableOffset + candidate * 4 + 1] == sine )
+				{
+					slot = candidate;
+
+					break;
+				}
+			}
+
+			if ( slot == 0 )
+			{
+				if ( used >= UVWTransformSlots )
+				{
+					/* Reported once, and the surplus component keeps the identity: a wrong
+					 * transform would be far worse than an absent one, and silence worse still. */
+					overflowed = true;
+
+					continue;
+				}
+
+				slot = used++;
+
+				m_materialProperties[UVWTransformTableOffset + slot * 4] = scaleX;
+				m_materialProperties[UVWTransformTableOffset + slot * 4 + 1] = scaleY;
+				m_materialProperties[UVWTransformTableOffset + slot * 4 + 2] = offsetX;
+				m_materialProperties[UVWTransformTableOffset + slot * 4 + 3] = offsetY;
+
+				m_materialProperties[UVWRotationTableOffset + slot * 4] = cosine;
+				m_materialProperties[UVWRotationTableOffset + slot * 4 + 1] = sine;
+			}
+
+			m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] = static_cast< float >(slot);
 		}
+
+		if ( overflowed )
+		{
+			TraceWarning{ClassId} <<
+				"PBR material '" << this->name() << "' declares more than " << (UVWTransformSlots - 1) <<
+				" distinct UV transforms; the surplus maps are sampled untransformed.";
+		}
+
+		this->markVideoMemoryDirty();
 	}
 
 	bool
@@ -1678,10 +1741,10 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
-	const std::array< float, 104 > &
+	const std::array< float, 116 > &
 	StandardResource::neutralMaterialProperties () noexcept
 	{
-		static const std::array< float, 104 > properties{
+		static const std::array< float, 116 > properties{
 				/* Albedo color (4) */
 				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
 				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
@@ -1710,23 +1773,28 @@ namespace EmEn::Graphics::Material
 				DefaultEmissiveStrength, DefaultClearCoatNormalScale, DefaultOpacity, DefaultAlphaThreshold,
 				/* ReflectionAmount (1), RefractionAmount (1), FogResponse (1), DoFMask (1) */
 				DefaultReflectionAmount, DefaultRefractionAmount, DefaultFogResponse, DefaultDoFMask,
-				/* Per-component UV transforms (6 x vec4 = scale.xy, offset.zw), identity neutral:
-				 * Albedo, Roughness, Metalness, Normal, AmbientOcclusion, AutoIllumination. */
+				/* UV transform table (4 x vec4 = scale.xy, offset.zw). Every entry starts at the
+				 * identity, so a material that declares nothing is unchanged whatever it indexes. */
 				1.0F, 1.0F, 0.0F, 0.0F,
 				1.0F, 1.0F, 0.0F, 0.0F,
 				1.0F, 1.0F, 0.0F, 0.0F,
 				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F,
-				1.0F, 1.0F, 0.0F, 0.0F,
-				/* Per-component UV ROTATIONS (6 x vec4 = cos, sin, 0, 0), identity neutral, same
-				 * component order. ⚠️ (1, 0) is cos(0)/sin(0): the neutral rotation, which is what
-				 * keeps every non-rotating material bit-exact. */
+				/* UV ROTATION table (4 x vec4 = cos, sin, 0, 0), one entry per transform slot.
+				 * ⚠️ (1, 0) is cos(0)/sin(0): the neutral rotation, which is what keeps every
+				 * non-rotating material bit-exact. */
 				1.0F, 0.0F, 0.0F, 0.0F,
 				1.0F, 0.0F, 0.0F, 0.0F,
 				1.0F, 0.0F, 0.0F, 0.0F,
 				1.0F, 0.0F, 0.0F, 0.0F,
-				1.0F, 0.0F, 0.0F, 0.0F,
-				1.0F, 0.0F, 0.0F, 0.0F
+				/* Per-ComponentType index into the two tables above, four to a vec4. All zero:
+				 * every component reads slot 0, the identity. */
+				0.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -2617,19 +2685,13 @@ namespace EmEn::Graphics::Material
 		 * them explicit costs nothing and keeps the GLSL block matching the C++ offsets exactly. */
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::FogResponse);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::DoFMask);
-		/* Per-component UV transforms (KHR_texture_transform): vec4 = (scale.xy, offset.zw). */
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::MetalnessUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientOcclusionUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWTransform);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AlbedoUVWRotation);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::RoughnessUVWRotation);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::MetalnessUVWRotation);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::NormalUVWRotation);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientOcclusionUVWRotation);
-		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AutoIlluminationUVWRotation);
+		/* KHR_texture_transform, indexed table: vec4 = (scale.xy, offset.zw), one entry per
+		 * DISTINCT transform, plus one index per ComponentType packed four to a vec4.
+		 * ⚠️ ARRAYS, not separate members: the index is read from the UBO at run time, so the
+		 * lookup has to be a dynamic one. */
+		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWTransform, UVWTransformSlots);
+		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWRotation, UVWTransformSlots);
+		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWIndex, UVWIndexVectors);
 
 		return block;
 	}
@@ -2854,55 +2916,32 @@ namespace EmEn::Graphics::Material
 	std::string
 	StandardResource::transformedTexCoords (ComponentType componentType, const Texture * component) const noexcept
 	{
-		/* The per-component UV transform (KHR_texture_transform / JSON "UVW" keys) is a
-		 * material UBO vec4 (scale.xy, offset.zw) applied UNCONDITIONALLY — the neutral
-		 * value is the identity, and going through the UBO (values, never GLSL literals)
-		 * respects the shader program cache contract. 2D coordinates only: volumetric
-		 * textures keep the plain lookup. */
+		/* The UV transform (KHR_texture_transform / JSON "UVW" keys) is applied UNCONDITIONALLY —
+		 * the neutral table entry is the identity, and going through the UBO (values, never GLSL
+		 * literals) respects the shader program cache contract. 2D coordinates only: volumetric
+		 * textures keep the plain lookup.
+		 *
+		 * ⚠️ Every ComponentType is served since 2026-09-14. It used to be a switch over SIX types
+		 * — albedo, roughness, metalness, normal, AO, emissive — with everything else falling
+		 * through to plain coordinates: the sheen, clear coat, specular, iridescence, transmission
+		 * and volume maps were sampled untransformed, and SheenCloth, which tiles its sheen maps
+		 * THIRTY times, read them at 1/30 of the authored frequency. */
 		if ( component->isVolumetricTexture() )
 		{
 			return textCoords(component);
 		}
 
-		const char * transformKey = nullptr;
-		const char * rotationKey = nullptr;
-
-		switch ( componentType )
-		{
-			case ComponentType::Albedo :
-				transformKey = UniformBlock::Component::AlbedoUVWTransform;
-				rotationKey = UniformBlock::Component::AlbedoUVWRotation;
-				break;
-
-			case ComponentType::Roughness :
-				transformKey = UniformBlock::Component::RoughnessUVWTransform;
-				rotationKey = UniformBlock::Component::RoughnessUVWRotation;
-				break;
-
-			case ComponentType::Metalness :
-				transformKey = UniformBlock::Component::MetalnessUVWTransform;
-				rotationKey = UniformBlock::Component::MetalnessUVWRotation;
-				break;
-
-			case ComponentType::Normal :
-				transformKey = UniformBlock::Component::NormalUVWTransform;
-				rotationKey = UniformBlock::Component::NormalUVWRotation;
-				break;
-
-			case ComponentType::AmbientOcclusion :
-				transformKey = UniformBlock::Component::AmbientOcclusionUVWTransform;
-				rotationKey = UniformBlock::Component::AmbientOcclusionUVWRotation;
-				break;
-
-			case ComponentType::AutoIllumination :
-				transformKey = UniformBlock::Component::AutoIlluminationUVWTransform;
-				rotationKey = UniformBlock::Component::AutoIlluminationUVWRotation;
-				break;
-
-			default :
-				/* No transform slot for this component: plain coordinates. */
-				return textCoords(component);
-		}
+		/* ⚠️ The component type picks the INDEX SLOT, which is the same for every material and so
+		 * may be a literal; the VALUE it holds is the per-material table entry and comes from the
+		 * UBO. Baking that value instead would hand one material's transform to another the moment
+		 * they share a program — the cache keys on the descriptor layout and the flag bits, never
+		 * on values. */
+		const auto slot = static_cast< size_t >(componentType);
+		const auto index =
+			std::string{MaterialUB(UniformBlock::Component::UVWIndex)} + "[" + std::to_string(slot / 4) + "][" + std::to_string(slot % 4) + "]";
+		const auto entry = "int(" + index + ")";
+		const auto transform = std::string{MaterialUB(UniformBlock::Component::UVWTransform)} + "[" + entry + "]";
+		const auto rotation = std::string{MaterialUB(UniformBlock::Component::UVWRotation)} + "[" + entry + "]";
 
 		/* KHR_texture_transform composes its matrix as translation * rotation * scale, so the
 		 * order below is SCALE, then ROTATE, then OFFSET — swapping rotation and offset rotates
@@ -2914,18 +2953,13 @@ namespace EmEn::Graphics::Material
 		 * cos): first pair is column 0. Getting either of those backwards produces a rotation of
 		 * the right magnitude in the wrong direction — which looks like a plausible result.
 		 *
-		 * The cos/sin come from the UBO, resolved once per material on the CPU, never as a
-		 * per-fragment trig call nor as a GLSL literal (shader program cache contract: the cache
-		 * keys on the descriptor layout, never on values, so a value-dependent variant could serve
-		 * one material's program to another).
-		 *
 		 * A neutral rotation is (1, 0), i.e. mat2(1, 0, 0, 1) — the identity, so a material that
 		 * declares no rotation computes `1*x + 0*y` and comes out unchanged. */
 		std::stringstream expression;
 		expression <<
-			"(mat2(" << MaterialUB(rotationKey) << ".x, -" << MaterialUB(rotationKey) << ".y, " << MaterialUB(rotationKey) << ".y, " << MaterialUB(rotationKey) << ".x)"
-			" * (" << textCoords(component) << " * " << MaterialUB(transformKey) << ".xy)"
-			" + " << MaterialUB(transformKey) << ".zw)";
+			"(mat2(" << rotation << ".x, -" << rotation << ".y, " << rotation << ".y, " << rotation << ".x)"
+			" * (" << textCoords(component) << " * " << transform << ".xy)"
+			" + " << transform << ".zw)";
 
 		return expression.str();
 	}
@@ -3733,7 +3767,7 @@ namespace EmEn::Graphics::Material
 		 * literal (program-cache contract); rule 3 (grayscale) emits no test and the alpha
 		 * lands in fragmentColor() for blending. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Opacity, component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
 
 			if ( this->isFlagEnabled(AlphaTestEnabled) )
 			{
@@ -3764,7 +3798,7 @@ namespace EmEn::Graphics::Material
 		/* Reflectivity Map component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ReflectivityMap, [this] (FragmentShader & shader, const Texture * component) {
 			/* NOTE: Reflectivity is typically stored in a grayscale texture (red channel). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ReflectivityMap, component) << ").r;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3778,7 +3812,7 @@ namespace EmEn::Graphics::Material
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoat, [this] (FragmentShader & shader, const Texture * component) {
 			/* ⚠️ KHR_materials_clearcoat: the map MULTIPLIES the factor, and the channel is the
 			 * component's own (Red for glTF, but a packed map may say otherwise). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::ClearCoatFactor) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ClearCoat, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::ClearCoatFactor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3792,7 +3826,7 @@ namespace EmEn::Graphics::Material
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoatRoughness, [this] (FragmentShader & shader, const Texture * component) {
 			/* ⚠️ glTF packs this one in GREEN, not red: read the component's channel, never a
 			 * hard-coded swizzle. It multiplies the scalar roughness, as the extension requires. */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::ClearCoatRoughness) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ClearCoatRoughness, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::ClearCoatRoughness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3805,7 +3839,7 @@ namespace EmEn::Graphics::Material
 		/* Clear Coat normal component (texture-based, KHR_materials_clearcoat). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoatNormal, [this] (FragmentShader & shader, const Texture * component) {
 			Code{shader, Location::Top} <<
-				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ClearCoatNormal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
 				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::ClearCoatNormalScale) << ", " << component->variableName() << "_raw.z));";
 
 			return true;
@@ -3856,7 +3890,7 @@ namespace EmEn::Graphics::Material
 
 		/* Subsurface intensity component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Subsurface, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Subsurface, component) << ").r;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3868,7 +3902,7 @@ namespace EmEn::Graphics::Material
 
 		/* Subsurface thickness component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::SubsurfaceThickness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::SubsurfaceThickness, component) << ").r;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3880,7 +3914,7 @@ namespace EmEn::Graphics::Material
 
 		/* Sheen color component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Sheen, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ");";
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Sheen, component) << ");";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3892,7 +3926,7 @@ namespace EmEn::Graphics::Material
 
 		/* Sheen roughness component (texture-based, KHR_materials_sheen: the ALPHA channel). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::SheenRoughness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::SheenRoughness) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::SheenRoughness, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::SheenRoughness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3908,7 +3942,7 @@ namespace EmEn::Graphics::Material
 			 * R, G = tangent-space direction vector (encoded [0,1] -> [-1,1])
 			 * B = strength factor [0,1], multiplied by UBO anisotropy value. */
 			Code{shader, Location::Top} <<
-				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb;" << Line::End <<
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Anisotropy, component) << ").rgb;" << Line::End <<
 				"const vec2 " << component->variableName() << "_dir = " << component->variableName() << "_raw.rg * 2.0 - 1.0;" << Line::End <<
 				"const float " << component->variableName() << " = " << MaterialUB(UniformBlock::Component::Anisotropy) << " * " << component->variableName() << "_raw.b;";
 
@@ -3929,7 +3963,7 @@ namespace EmEn::Graphics::Material
 		 * ray length. Generated after, it produced `'SurfaceVolumeThickness' : undeclared
 		 * identifier` at runtime — the C++ compiles either way, only the launched engine says so. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::VolumeThickness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").g;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::VolumeThickness, component) << ").g;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3967,7 +4001,7 @@ namespace EmEn::Graphics::Material
 
 		/* Transmission factor component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Transmission, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Transmission, component) << ").r;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3979,7 +4013,7 @@ namespace EmEn::Graphics::Material
 
 		/* Iridescence factor component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Iridescence, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Iridescence, component) << ").r;";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -3994,7 +4028,7 @@ namespace EmEn::Graphics::Material
 		 * this very texture is often the factor map packed alongside. Reading .r here would work
 		 * on a single-purpose map and silently produce the wrong film on a packed one. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::IridescenceThickness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ").g;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::IridescenceThickness, component) << ").g;";
 
 			return true;
 		}, fragmentShader, materialSet) )
