@@ -18,54 +18,39 @@ tags: [gltf, material, measured]
 > engine checkout here is a **symlink to a sibling directory**, so no path arithmetic on the
 > resolved script path can find the consumer's submodule).
 
-## The count, re-judged 2026-09-14 (second pass, after three fixes the first pass found)
+## The count, re-judged 2026-09-14 (third pass, after four owner decisions)
 
-Full re-run against the current cascade: **49 captures, ZERO VUID, zero `VK_ERROR`**, zero
-shared-UBO failures. Every model re-read against its own README. base suite **2049/2049**.
+**49 captures, ZERO VUID, zero `VK_ERROR`, zero shared-UBO failures.** base suite **2049/2049**.
 
-| | 2026-08-27 | 2026-09-14 (first pass) | **2026-09-14 (final)** |
-|---|---|---|---|
-| PASS | 7 | 14 | **16** |
-| FAIL | 10 | 1 | **4** |
-| blocked by the instrument | 2 | 5 | **0** |
+| | 2026-08-27 | first pass | second pass | **final** |
+|---|---|---|---|---|
+| PASS | 7 | 14 | 16 | **18** |
+| FAIL | 10 | 1 | 4 | **2** |
+| blocked by the instrument | 2 | 5 | 0 | **0** |
 
-⚠️ **The FAIL count went UP from the first pass to the final one, and that is the good outcome**:
-the five "blocked" models became judgeable, and four of the judged models fail for a reason now
-pinned in code. A blocked model hides a defect; a failing one names it.
+On the nineteen Khronos models alone (the twentieth is our own volume probe): **17 / 19 = 89 %**,
+against 7 / 19 = 37 % in August.
 
-**PASS (16)** — each with the number that decides it:
+⚠️ **What that number is not**: 89 % of what this bench drives, which is nineteen models chosen
+because each isolates one defect — not a percentage of glTF 2.0. The corpus is a partial clone
+(30 materialised of ~180 upstream), and the gaps it does NOT exercise are listed in
+[`src/Scenes/Loaders/AGENTS.md`](../../src/Scenes/Loaders/AGENTS.md) § *Known gaps*: no multi-UV,
+four skin influences, no morph targets, `TRIANGLES` only, no rigid-node animation, no GPU
+instancing. Nothing here measures them, so nothing here fails on them.
 
-| model | measurement |
-|---|---|
-| `AlphaBlendModeTest` | OPAQUE flat (spread **2.3/255**), BLEND ramp ×38.7 monotone on 98 % of steps, MASK cutoffs sharp (< 0.012 alpha) and spaced **0.236 / 0.245** against a declared 0.25 |
-| `OrientationTest` | **6/6** arrows on their same-colour target — RGB (quaternions) *and* CMY (matrices) |
-| `NormalTangentTest` | normal-mapped highlight within **17°** of geometry, same quadrant, no Y flip |
-| `NormalTangentMirrorTest` | four columns within **3.8°**: Geometry −27.5°, Normal −27.4°, V Mirror −23.7°, U Mirror −23.7° |
-| `TextureTransformTest` | offset ✓ rotation ✓ scale ✓ clamp ✓ — all three arrows on their green ✓ |
-| `VertexColorTest` | pure R/G/B check marks, zero complementary ink |
-| `EmissiveStrengthTest` | ratios **2.42 / 2.21 / 1.81 / 1.48** against a declared doubling |
-| `MetalRoughSpheres` | the exposure/IBL control; matches the reference |
-| `MetalRoughSpheresNoTextures` | metallic axis **10.8 → 119.1 → 204.9** (smooth) and **60.9 → 115.1 → 190.2** (rough), both monotone |
-| `TransmissionTest` | the four declared hues — peaks at **0-10° / 60° / 120° / 200°** |
-| `TransmissionRoughnessTest` | the Air row (IOR 1.00) does **not** blur (×1.34) while Sapphire/Glass/Water fall ×4.35 / ×4.55 / ×3.12 |
-| `BoomBox` | matches the reference, crisp |
-| `WaterBottle` | matches the reference, chirality correct |
-| `VolumeAbsorptionProbe` (ours) | centre G/R **0.993 / 0.993 / 14.87**, backdrop (201, 200, 196) |
-| `IridescenceDielectricSpheres` | **the grid is complete for the first time** — the 197 absent spheres are back and the pastel film sweep reads along the thickness axis |
-| `IridescenceMetallicSpheres` | idem, with the saturated metal film; judged on the parametrisation, not the level (Khronos shoots it in a studio) |
+**Repaired in this pass**
 
-⚠️ Reservation on `TransmissionRoughnessTest`: the Diamond row (IOR 2.42) decays only ×1.37 because
-at that IOR the *reflection* dominates and a sharpness metric cannot separate a sharp reflection
-from a sharp transmission. Not a transmission defect — an unresolvable row for this metric.
+| model | was | now |
+|---|---|---|
+| `SpecularTest` | 6 rows of 7; the 7th flat at 9.33 / 9.35 / 9.05 / 8.87 | **7/7** — the `color factor > 1.0` row is a monotone ramp **10.22 / 26.42 / 47.13 / 70.95**, the six others identical to the hundredth |
+| `AnisotropyStrengthTest` | the axis acted at roughness 1.0 (×1.84) where the spec forbids it, and was unmeasurable at roughness 0 | **both clauses met** — roughness 1.0 flat (**×0.85**), roughness 0.0 now the strongest column (**18.73 → 9.61**) |
 
-**FAIL (4), every cause pinned in code**
+**FAIL (2)**
 
 | model | cause | tracked |
 |---|---|---|
-| `SheenCloth` | **`KHR_materials_sheen`'s two textures are never read** — `GLTFLoader.cpp:1090-1107` reads `sheenColorFactor` and `sheenRoughnessFactor` only. The asset's whole point is its sheen texture (colour in RGB, roughness in alpha). | this file, below |
-| `ClearCoatTest` | the three maps are read since 2026-09-14 and the `Roughness variations` row now carries the coating's stripes, but the **`Coat normal map` row still does not corrugate** and `Partial coating`'s bands are weak | this file, below |
-| `SpecularTest` | 6 rows of 7 pass (leftmost sphere exactly **0.00**, each texture row matching its factor row to **0.06/255**); the 7th is flat because `specularColorFactor > 1` is clamped by `Color< float >` | [`specular-colour-factor-above-one-is-clamped.md`](specular-colour-factor-above-one-is-clamped.md) |
-| `AnisotropyStrengthTest` | the axis works (lobe elongation **1.11 → 9.26**, monotone — a first), but it still acts at **roughness 1.0** (×1.84) where the extension says it must not | [`anisotropy-alpha-ignores-the-spec-formula.md`](anisotropy-alpha-ignores-the-spec-formula.md) |
+| `SheenCloth` | its two maps are READ since this pass and demonstrably reach the shader (13.1 % of pixels, cloth mean 158.2 → 80.7), but it tiles them **30×** through `KHR_texture_transform` and no sheen component type has a UV transform slot | [`uv-transform-slots-for-extension-maps.md`](uv-transform-slots-for-extension-maps.md) |
+| `ClearCoatTest` | the three maps are read and the `Roughness variations` row carries the coating's stripes, but the **`Coat normal map` row does not corrugate** and `Partial coating`'s bands are weak | this file, below |
 
 ## What the second pass fixed
 
@@ -88,28 +73,25 @@ enumerates a level; never conclude a capability is missing from a truncated pipe
 
 ## What remains
 
-- [ ] **`KHR_materials_sheen`'s two textures** (`sheenColorTexture` RGB, `sheenRoughnessTexture`
-      alpha) — never read. The only reason `SheenCloth` fails, and the same shape as the clearcoat
-      and specular maps: check the material side first, it may well already be complete.
-- [ ] **Clearcoat's residual**: the `Coat normal map` row does not corrugate and `Partial coating`'s
-      bands are weak, although all three maps are now read and the roughness map demonstrably works.
-      Look at the coat tangent frame (`Ncc`, `LightGenerator.PBR.cpp:808-814`) before the loader.
-- [ ] **`specularColorFactor > 1`** — [`specular-colour-factor-above-one-is-clamped.md`](specular-colour-factor-above-one-is-clamped.md), owner decision.
-- [ ] **The anisotropy alpha formula** — [`anisotropy-alpha-ignores-the-spec-formula.md`](anisotropy-alpha-ignores-the-spec-formula.md), owner decision.
+- [ ] **Clearcoat's residual**: the `Coat normal map` row does not corrugate. All three maps are
+      read and the roughness map demonstrably works, so look at the coat tangent frame
+      (`Ncc`, `LightGenerator.PBR.cpp:808-814`) before the loader.
+- [ ] **UV transform slots for the extension maps** —
+      [`uv-transform-slots-for-extension-maps.md`](uv-transform-slots-for-extension-maps.md). The
+      only thing between `SheenCloth` and a PASS, and it needs a design decision, not a patch.
+- [ ] **`KHR_materials_transmission`'s texture** — the last extension still reading only its scalar
+      factor. No conformance model in the bench fails on it today.
 - [ ] `KHR_texture_transform`'s per-`TextureInfo` **`texCoord` override** — the multi-UV gap
       (`GLTFLoader.cpp:1000`). Walls into
       [`vertex-attribute-presence-belongs-to-geometry.md`](vertex-attribute-presence-belongs-to-geometry.md).
-- [ ] `KHR_texture_transform` on a **specular** or **clearcoat** map — no UV transform slot for those
-      component types (`GLTFLoader.cpp:1295` and the clearcoat warning next to it). No conformance
-      asset needs it.
-- [ ] **`FBXLoader` reads neither specular nor ior, on purpose.** ufbx's
-      `pbr.specular_factor`/`specular_color` mean the dielectric specular weight on an
-      OpenPBR/Standard-Surface material but the **Phong** specular on a legacy `FbxSurfacePhong`,
-      and the engine's legacy specular is a glossiness path. **Owner decision needed.**
+- [ ] ⚠️ **The FBX specular's PBR branch is unexercised.** `FBXLoader` reads
+      `pbr.specular_factor`/`specular_color` since this pass, gated on `ufbx_material::shader_type`
+      so a legacy Phong material is left alone. Verified that the Paladins still render unchanged
+      with zero VUID — which proves the gate is CLOSED where it must be and nothing about the open
+      branch. Judge it when a Standard-Surface / OpenPBR FBX exists to judge it with.
 - [ ] ⚠️ **`ModelViewer` misses the extents on `TextureTransformTest`** — *"published no extents in
-      time, using the fallback framing"*, on every attempt, a `.gltf` with external textures. The
-      capture stays usable but its framing is not the computed one, and the warning appears only in
-      the engine log, never in `bench-report.json`.
+      time, using the fallback framing"*, on every attempt. The capture stays usable but its framing
+      is not the computed one, and the warning appears only in the engine log.
 
 ## Closed since the previous revision of this file (2026-08-28 → 2026-08-29)
 
