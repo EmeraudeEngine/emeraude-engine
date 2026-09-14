@@ -572,7 +572,44 @@ namespace EmEn::Saphir::Generator
 					const auto normalExpr = m_lightGenerator.finalNormalViewSpaceExpression();
 					const auto roughnessExpr = m_lightGenerator.roughnessShaderExpression();
 					const auto metalnessExpr = m_lightGenerator.metalnessShaderExpression();
-					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(" << normalExpr << ", clamp(" << roughnessExpr << ", 0.0, 1.0) + round(clamp(" << metalnessExpr << ", 0.0, 1.0)) * 2.0);";
+
+					/* GEOMETRIC SPECULAR ANTIALIASING (Kaplanyan et al., "Filtering Distributions of
+					 * Normals"; Tokuyoshi & Kaplanyan, "Improved Geometric Specular Antialiasing" —
+					 * the Filament constants). A surface whose normal varies WITHIN the pixel is
+					 * rough at pixel scale, whatever its material says, so the normal's screen-space
+					 * variance is folded into the roughness written to the G-buffer.
+					 *
+					 * ⚠️ This is the term Sponza's cypress was missing. The alpha mask's EDGE texels
+					 * carry an AUTHORED near-tangent normal (measured mean Z +0.272 against +0.676 on
+					 * the needle body), so NdotV collapses on every silhouette and every NdotV-driven
+					 * term spikes there at once — the ray-traced reflection, the screen-space one, and
+					 * the direct specular. Measured: 74 % of the residual rim pixels are shared
+					 * between the two lanes, and 42 % of them survive with the reflections switched
+					 * off entirely. One cause, three symptoms; widening the roughness is the only
+					 * lever that reaches all three, because all three read it.
+					 *
+					 * ⚠️ Both lanes inherit this for FREE: RTR and SSR decode their roughness from
+					 * this very attachment (alpha = roughness + round(metalness) * 2). Nothing in
+					 * either effect needs to change.
+					 *
+					 * ⚠️ The variance is measured on the FINAL normal — the normal-mapped one that is
+					 * actually written — never on the geometric normal, or the high-frequency detail
+					 * the filter exists to tame is invisible to it.
+					 *
+					 * ⚠️ Perceptual roughness in, perceptual roughness out: the kernel is added in
+					 * ALPHA-SQUARED space (alpha = perceptual²), hence the two square roots. Adding
+					 * it to the perceptual value directly over-blurs smooth surfaces badly. */
+					constexpr auto SpecularAAVariance = "0.25";
+					constexpr auto SpecularAAThreshold = "0.18";
+
+					Code{*fragmentShader, Location::Output} <<
+						"const vec3 saaNormalDdx = dFdx(" << normalExpr << ");" << Line::End <<
+						"const vec3 saaNormalDdy = dFdy(" << normalExpr << ");" << Line::End <<
+						"const float saaVariance = " << SpecularAAVariance << " * (dot(saaNormalDdx, saaNormalDdx) + dot(saaNormalDdy, saaNormalDdy));" << Line::End <<
+						"const float saaAlpha = clamp(" << roughnessExpr << ", 0.0, 1.0) * clamp(" << roughnessExpr << ", 0.0, 1.0);" << Line::End <<
+						"const float saaFiltered = sqrt(sqrt(clamp(saaAlpha * saaAlpha + min(2.0 * saaVariance, " << SpecularAAThreshold << "), 0.0, 1.0)));";
+
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(" << normalExpr << ", saaFiltered + round(clamp(" << metalnessExpr << ", 0.0, 1.0)) * 2.0);";
 				}
 				else
 				{

@@ -5071,14 +5071,16 @@ recipe as the original (`ktx create v4.4.2`, UASTC quality 2, RDO λ 0.75, zstd 
 metadata about its convention; when relief looks lit from below, put the texture on
 `normal-map-debug` (option 1-3 Sponza, 4 = the Khronos control) before touching the engine.
 
-### Fixed: the environment Fresnel was unbounded — foliage washed out to grey in BOTH lanes (Sep 2026)
+### Fixed: the reflection effects weighted the environment with a raw FRESNEL instead of the environment BRDF (Sep 2026)
 
 Owner-reported: *"un blanc dégueulasse qui entoure toutes les aiguilles du cyprès"*. Sponza's cypress
 rendered grey-white where it must be green, and switching the Reflections slot off made it green
 again — in BOTH lanes, which is what proved the cause was the WEIGHT given to the reflection, not how
 it is gathered.
 
-**Root**: `RTR.cpp` and `SSR.cpp` used plain Schlick on the environment term, which sends F to **1.0**
+**Root**: `RTR.cpp` and `SSR.cpp` weighted their composite with a raw Schlick Fresnel where the
+split-sum requires the ENVIRONMENT BRDF — `F0 * A + B`, the integral of the specular BRDF over the
+lobe (Karis, *Real Shading in Unreal Engine 4*, 2013). Schlick sends F to **1.0**
 at grazing incidence. The alpha mask's EDGE texels carry an AUTHORED near-tangent normal (measured on
 `Cypress_LF01_Spring_Normal.png`: mean Z **+0.272** at the edge against **+0.676** on the needle body,
 and +0.980 under the transparent texels — a blend of the latter two cannot produce 0.272), so
@@ -5088,11 +5090,20 @@ the reflection carries none of the leaf's green. Fixed with Lagarde's roughness-
 
 ⚠️ **Environment term only** — the direct-lighting Fresnel uses `dot(H,V)` and must keep plain Schlick.
 
-⚠️⚠️ **Partial, and the remainder is measured**: 34 % of the excess luminance removed (foliage
-85.36 → 63.47 at a pinned exposure, stone control stable). Of the residual rim, **74 % of the pixels
-are shared between the two lanes** and **42 % survive with reflections entirely off** — that share is
-the DIRECT specular. ONE cause, THREE symptoms; the remaining fix is geometric specular antialiasing,
-applied to the roughness all three read.
+**Measured**, share of foliage pixels bright AND desaturated (the white rim), floor 0.9 %:
+RT **71.15 % → 2.17 %**, SS **16.42 % → 2.98 %**; foliage saturation RT 8.45 % → 30.92 %.
+
+⚠️⚠️ **It is not "reflections off"**, and that is the test that separates a correct re-weighting from
+a lever: the stone KEEPS its reflection (34.39 against 28.15 with the slot off) while the foliage
+stops being flooded. A smooth metal is untouched by construction (F0 = 1, roughness 0 returns 1.000).
+
+⚠️⚠️ **The raster IBL path was already correct** — it goes through `IBLTexture::Role::BRDFLut`. Only
+the reflection effects were not, so the raster and the reflections computed the same quantity two
+different ways on the same surface. **When a value looks wrong, check whether another path in the
+same engine already computes it correctly before deriving a correction for it** — three
+physically-founded fixes in a row (roughness-bounded Fresnel, geometric specular antialiasing,
+traced specular occlusion) each moved the number, 71 % → 51 % → 40 % → 28 %, while the real defect
+was a MISSING TERM rather than a mis-tuned one.
 
 ⚠️ **A blunt global lever looks exactly like a fix.** Moving `roughnessFade` to
 `smoothstep(0.2, 0.6, roughness)` dropped the rim from 51 % to 2.09 % and was confirmed by eye — while

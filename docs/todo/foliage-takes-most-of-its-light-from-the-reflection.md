@@ -1,7 +1,7 @@
 ---
 id: foliage-takes-most-of-its-light-from-the-reflection
-title: Foliage washes out to grey — every NdotV-driven term spikes on the alpha silhouette
-status: in-progress
+title: Foliage washed out to grey — the reflection effects owed the ENVIRONMENT BRDF (resolved; residual tracked)
+status: open
 priority: unranked
 scope: Graphics/Effects/Lighting (RTR, SSR), Saphir/LightGenerator
 opened: 2026-09-15
@@ -9,7 +9,7 @@ blocked-by: []
 tags: [reflection, measured, owner-reported]
 ---
 
-# Foliage washes out to grey — every NdotV-driven term spikes on the alpha silhouette
+# Foliage washed out to grey — the reflection effects owed the ENVIRONMENT BRDF
 
 ## Why
 
@@ -79,44 +79,60 @@ Rim = share of foliage pixels that are bright AND desaturated (`lum > 55`, `sat 
 - **42.2 % of the RT rim exists with NO reflection at all** — so a large share of it is the DIRECT
   specular highlight, which no reflection-side fix can reach.
 
-⚠️ **Consequence: specular occlusion is NOT the right target.** It would only address the
-reflection share. Three symptoms (RT reflection, SS reflection, direct specular) have ONE cause:
-a near-tangent shading normal at the mask edge. The fix must sit where all three read — the normal
-and the roughness — not in either lane.
+⚠️ This reading — three symptoms, one near-tangent shading normal at the mask edge — is correct and
+is why the geometric specular antialiasing was applied to the roughness all three read. But it is
+NOT what carried the fix, and the conclusion drawn from it at the time ("specular occlusion is not
+the right target") was wrong twice over: the occlusion did help, and the real defect was elsewhere
+entirely. The grazing normal is the AMPLIFIER; the missing environment BRDF was the CAUSE. See
+below.
 
-## What is delivered
+## What is delivered — and what actually carried it
 
-**Roughness-bounded Fresnel for the ENVIRONMENT term** (Lagarde, *Moving Frostbite to PBR*, 2014;
-the form Filament and UE use), in `RTR.cpp` and `SSR.cpp`:
+**The environment BRDF** (Karis, *Real Shading in Unreal Engine 4*, 2013, analytic fit), in
+`RTR.cpp` and `SSR.cpp`. The composite weight is now `F0 * A + B` — the integral of the specular
+BRDF over the lobe, which is what must multiply a prefiltered environment — instead of a raw
+Schlick Fresnel patched up by a roughness fade and a reflectivity nibble.
 
-```glsl
-F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
-```
+At grazing incidence on the leaf (F0 = 0.04, roughness 0.5): **0.500 against 0.155**, a 3.2x
+overestimate applied precisely on the alpha silhouettes.
 
-A rough surface cannot form a sharp grazing mirror, so F90 is bounded by `1 − roughness` instead of
-1. Head-on behaviour is unchanged (F still starts at F0), so a smooth metal is untouched. Measured:
-foliage luminance 85.36 → 63.47, saturation 8.45 → 12.20 %, **34 % of the excess luminance removed**,
-stone control stable. Real, physically founded, and **not sufficient on its own**.
+⚠️⚠️ **The raster IBL path was already doing this correctly** through `IBLTexture::Role::BRDFLut`.
+Only the reflection effects were not — the raster and the reflections disagreed on the same surface.
 
-⚠️ **The direct-lighting Fresnel uses the half-vector `dot(H,V)` and must keep plain Schlick.**
-Bounding that one would break the specular highlight of every light in the scene.
+| configuration | foliage lum | saturation | G−R | rim |
+|---|---|---|---|---|
+| raw Schlick (RT) | 85.36 | 8.45 % | +0.65 | 71.15 % |
+| **environment BRDF (RT)** | **32.17** | **30.92 %** | **+4.07** | **2.17 %** |
+| raw Schlick (SS) | 70.86 | 38.72 % | +7.92 | 16.42 % |
+| **environment BRDF (SS)** | **55.95** | **47.15 %** | **+8.53** | **2.98 %** |
+| reflections off — the FLOOR | 21.60 | 52.88 % | +4.50 | 0.91 % |
+
+⚠️ **It is not "reflections off"** — the stone KEEPS its reflection (34.39 against 28.15 with the
+slot off) while the foliage stops being flooded. A smooth metal is untouched by construction
+(F0 = 1, roughness 0 returns 1.000), so the calibrated 0.82 mirror cannot move.
+
+Three smaller terms landed with it, cumulative but minor next to it:
+
+1. **Roughness-bounded Fresnel** (Lagarde 2014) — 34 % of the excess luminance on its own. Now
+   superseded as the composite weight by the environment BRDF.
+2. **Geometric specular antialiasing** folded into the roughness WRITTEN TO THE G-BUFFER
+   (`SceneRendering.cpp`), so both lanes and the direct specular inherit it from ONE place.
+   ⚠️ It filters SUB-PIXEL normal variance, so it does almost nothing at point-blank range where the
+   normal is resolved — it earns its keep on distant foliage. Predicting otherwise cost a detour.
+3. **Traced specular occlusion** in RTR: four visibility-only rays across `coneTan` weight the
+   sky-miss branch, because the mirror ray is a ONE-SAMPLE estimate of the lobe. ⚠️ MISS branch only.
+   ⚠️ RT lane only — SSR cannot trace.
 
 ## What remains
 
-**Geometric specular antialiasing** (Kaplanyan *et al.*, *Filtering Distributions of Normals*;
-Tokuyoshi & Kaplanyan, *Improved Geometric Specular Antialiasing*): where the shading normal varies
-sharply from pixel to pixel — the definition of a needle edge — widen the effective roughness by the
-normal variance. The lobe spreads, the spike dies, and it reaches the RT reflection, the SS
-reflection and the direct specular **at once**, because it acts on the roughness they all read.
-Physically founded: a surface whose normal varies within the pixel IS rough at pixel scale.
-
-Apply it ONCE, before the roughness is consumed — the BRDF and the G-buffer write at
-`Saphir/Generator/SceneRendering.cpp` (attachment 1 packs `roughness + round(metalness) · 2`), so
-both lanes inherit it by reading the G-buffer.
-
-⚠️ Unlike the texture-side work ([`alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain.md`](alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain.md)),
-this one DOES reach Sponza: it works on the interpolated normal at shading time, not on texture
-pixels, so the KTX2 block-compressed payload does not block it.
+- The rim floor is 0.9 % (the legitimately sun-lit needle tips) and the lanes now sit at 2.2 % and
+  3.0 %. The residual is small and structured.
+- ⚠️ The SS/RT luminance gap that remains (55.95 against 32.17 on foliage, 69.60 against 34.39 on
+  stone) is the DOCUMENTED screen-space sky-visibility over-estimate in enclosed spaces, not
+  anything introduced here.
+- The edge albedo is still only 48 % of the true colour for want of alpha dilation, which is what
+  gives any remaining glint its contrast:
+  [`alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain.md`](alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain.md).
 
 ## ⚠️ Traps this has already cost
 
@@ -127,10 +143,17 @@ pixels, so the KTX2 block-compressed payload does not block it.
   anything is read from it**, and a lead must never be closed on an unproven one.
 - ⚠️⚠️ **A blunt global lever looks like a fix and is not.** Moving `roughnessFade` to
   `smoothstep(0.2, 0.6, roughness)` took the rim from 51 % to 2.09 % and the owner confirmed it by
-  eye — but it dims the reflection of EVERY material under 0.6 roughness in both lanes (the stone
-  control's saturation moved +27 %) and would wreck the calibrated 0.82 mirror of
-  `post-processor-effect-debug`. Reverted. Its value was diagnostic: it proved a ~6× reduction is
-  what the foliage needs.
+  eye — but it dims the reflection of EVERY material under 0.6 roughness in both lanes and would
+  wreck the calibrated 0.82 mirror of `post-processor-effect-debug`. Reverted. Its value was
+  diagnostic: it proved a ~6x reduction was what the foliage needed, which is almost exactly what
+  the environment BRDF later delivered by re-weighting instead of dimming. **The test that tells
+  them apart is the stone: a lever dims it too, the correct term leaves it reflecting.**
+- ⚠️⚠️ **Three physically-founded fixes in a row moved the number and missed the cause.** Lagarde,
+  specular AA and traced occlusion each helped (71 % -> 51 % -> 40 % -> 28 % rim) while the real
+  defect was a MISSING TERM, not a mis-tuned one. The tell was available from the start and was not
+  read: the raster IBL and the reflection effects computed the same quantity two different ways.
+  **When a value looks wrong, check whether another path in the same engine already computes it
+  correctly before deriving a correction for it.**
 - The first three observations on this frame — "white speckles on the stone", "blown-out leaves",
   "the asset is pale" — were made by LOOKING at a downscaled view and none survived measurement.
 - A wrong exposure triad hides the whole thing: at sunny-16 both A/B frames sit near black.

@@ -535,6 +535,37 @@ float linearizeDepth (float depth)
 	return (nearPlane * farPlane) / (farPlane - depth * (farPlane - nearPlane));
 }
 
+/* ENVIRONMENT BRDF — the SECOND half of the split-sum approximation (Karis, "Real Shading in
+ * Unreal Engine 4", SIGGRAPH 2013), in its analytic form (Karis' mobile fit, the one Unreal and
+ * Filament ship). It returns `F0 * A + B`: the integral of the specular BRDF over the lobe, which
+ * is what must multiply the PREFILTERED environment — never a raw Fresnel.
+ *
+ * ⚠️ This effect used raw Schlick as the composite weight and compensated with a roughness fade and
+ * a reflectivity nibble. That is the defect: Schlick rises to 1.0 at grazing incidence whatever the
+ * roughness, while the real BRDF integral does not — a rough dielectric simply cannot return its
+ * whole lobe. Measured on Sponza's cypress (F0 = 0.04, roughness 0.5), at grazing incidence the
+ * bounded Schlick gives 0.500 and this term gives 0.155: a 3.2x overestimate, applied precisely on
+ * the alpha silhouettes where the authored normal is near-tangent (mean Z +0.272 against +0.676 on
+ * the needle body) and therefore on most of a canopy's visible surface. That is the white rim.
+ *
+ * ⚠️ A smooth metal is UNTOUCHED: F0 = 1, roughness 0, head-on returns 1.0 to three decimals, so
+ * the calibrated 0.82 mirror of `post-processor-effect-debug` cannot move.
+ *
+ * ⚠️ The raster IBL path already does this properly through the engine's BRDF LUT
+ * (`IBLTexture::Role::BRDFLut`). The reflection effects did not, so the raster and the reflections
+ * disagreed on the same surface. This closes that gap analytically rather than by binding the LUT
+ * into two more effects. */
+vec3 environmentBRDF (vec3 F0, float roughness, float NdotV)
+{
+	const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+	const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+	const vec4 r = roughness * c0 + c1;
+	const float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+	const vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
+
+	return F0 * AB.x + AB.y;
+}
+
 void main()
 {
 	/* texelFetch, NOT texture(): RG carry hit COORDINATES, not a filterable quantity. Trace and
@@ -621,7 +652,7 @@ void main()
 	 * ⚠️ This applies to the ENVIRONMENT term only (NdotV). The direct-lighting Fresnel uses the
 	 * half-vector dot(H,V) and must keep plain Schlick — bounding that one would break the
 	 * specular highlight of every light in the scene. */
-	vec3 fresnelColor = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+	vec3 fresnelColor = environmentBRDF(F0, clamp(roughness, 0.0, 1.0), NdotV);
 	float fresnel = max(fresnelColor.r, max(fresnelColor.g, fresnelColor.b));
 	vec3 fresnelTint = fresnelColor / max(fresnel, 0.001);
 

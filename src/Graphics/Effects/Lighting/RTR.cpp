@@ -355,6 +355,37 @@ float rtTextureLod (int texIndex, float hitLod)
  * ⚠️ NOT gl_RayFlagsOpaqueEXT: the reflection ray below judged its alpha-tested candidates
  * while this one accepted them whole — a leaf shadowed a reflected surface as a solid quad.
  * Both rays now apply the ONE shared rule (RTAlphaTestGLSL.hpp). */
+/* ENVIRONMENT BRDF — the SECOND half of the split-sum approximation (Karis, "Real Shading in
+ * Unreal Engine 4", SIGGRAPH 2013), in its analytic form (Karis' mobile fit, the one Unreal and
+ * Filament ship). It returns `F0 * A + B`: the integral of the specular BRDF over the lobe, which
+ * is what must multiply the PREFILTERED environment — never a raw Fresnel.
+ *
+ * ⚠️ This effect used raw Schlick as the composite weight and compensated with a roughness fade and
+ * a reflectivity nibble. That is the defect: Schlick rises to 1.0 at grazing incidence whatever the
+ * roughness, while the real BRDF integral does not — a rough dielectric simply cannot return its
+ * whole lobe. Measured on Sponza's cypress (F0 = 0.04, roughness 0.5), at grazing incidence the
+ * bounded Schlick gives 0.500 and this term gives 0.155: a 3.2x overestimate, applied precisely on
+ * the alpha silhouettes where the authored normal is near-tangent (mean Z +0.272 against +0.676 on
+ * the needle body) and therefore on most of a canopy's visible surface. That is the white rim.
+ *
+ * ⚠️ A smooth metal is UNTOUCHED: F0 = 1, roughness 0, head-on returns 1.0 to three decimals, so
+ * the calibrated 0.82 mirror of `post-processor-effect-debug` cannot move.
+ *
+ * ⚠️ The raster IBL path already does this properly through the engine's BRDF LUT
+ * (`IBLTexture::Role::BRDFLut`). The reflection effects did not, so the raster and the reflections
+ * disagreed on the same surface. This closes that gap analytically rather than by binding the LUT
+ * into two more effects. */
+vec3 environmentBRDF (vec3 F0, float roughness, float NdotV)
+{
+	const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+	const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+	const vec4 r = roughness * c0 + c1;
+	const float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+	const vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
+
+	return F0 * AB.x + AB.y;
+}
+
 float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 {
 	/* ⚠️ The spec forbids a NaN operand (VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351) and
@@ -379,6 +410,59 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	}
 
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+}
+
+/* SPECULAR OCCLUSION, traced.
+ *
+ * The single mirror ray is a ONE-SAMPLE estimate of the specular lobe, and on dense geometry that
+ * one sample is routinely the only direction that escapes. Sponza's cypress is the canonical case:
+ * a needle in the middle of a canopy does not see the sky, yet its mirror ray slips between its
+ * neighbours and comes back with a full, unoccluded sky — measured, the foliage read a saturation
+ * of 8.45 % against 52.88 % with the Reflections slot off.
+ *
+ * So spread a few VISIBILITY-only rays across the lobe (the same `coneTan` half-width the ray-cone
+ * LOD is built from) and keep the fraction that escapes. Cheap: they terminate on first hit, and
+ * they reuse the alpha-test confirmation so a ray still passes through the transparent texels of
+ * the very foliage being tested.
+ *
+ * ⚠️ Applied to the MISS branch ONLY. When the mirror ray HITS, that direction is already occluded
+ * and shaded as such — weighting it again would double-count the same occlusion.
+ * ⚠️ A smooth surface is untouched BY CONSTRUCTION: `coneTan` goes to 0 with roughness², every
+ * sample collapses onto the mirror direction and the visibility returns ~1. The calibrated mirror
+ * of `post-processor-effect-debug` cannot move. That is what makes this safe where a global
+ * roughness-fade lever was not.
+ * ⚠️ The estimate is deliberately one-sided: it removes the sky a blocked lobe cannot see, and does
+ * NOT add back what the blockers themselves reflect. On foliage the blockers are dark needles, so
+ * the error leans toward the reflection-free reference rather than away from it. */
+const int SpecularOcclusionSamples = 4;
+
+float specularLobeVisibility (vec3 origin, vec3 mirrorDir, float coneTan, float maxT, float seedAngle)
+{
+	/* A degenerate lobe has nothing to spread: keep the mirror answer. */
+	if (coneTan <= 1e-4)
+	{
+		return 1.0;
+	}
+
+	/* Orthonormal basis around the mirror direction; the guard avoids a null cross product when
+	 * the direction is itself vertical. */
+	const vec3 up = abs(mirrorDir.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+	const vec3 tangent = normalize(cross(up, mirrorDir));
+	const vec3 bitangent = cross(mirrorDir, tangent);
+
+	float visibility = 0.0;
+
+	for (int index = 0; index < SpecularOcclusionSamples; index++)
+	{
+		/* Golden-angle spiral: an even cover of the disc with no pattern to alias against. */
+		const float angle = seedAngle + float(index) * 2.39996323;
+		const float radius = sqrt((float(index) + 0.5) / float(SpecularOcclusionSamples)) * coneTan;
+		const vec3 direction = normalize(mirrorDir + (tangent * cos(angle) + bitangent * sin(angle)) * radius);
+
+		visibility += shadowRayVisibility(origin, direction, maxT);
+	}
+
+	return visibility / float(SpecularOcclusionSamples);
 }
 
 /* Compute direct lighting at the reflection hit point (Lambert diffuse over all scene lights).
@@ -589,7 +673,7 @@ void main()
 	 * ⚠️ This applies to the ENVIRONMENT term only (NdotV). The direct-lighting Fresnel uses the
 	 * half-vector dot(H,V) and must keep plain Schlick — bounding that one would break the
 	 * specular highlight of every light in the scene. */
-	vec3 fresnelColor = F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+	vec3 fresnelColor = environmentBRDF(F0, clamp(roughness, 0.0, 1.0), NdotV);
 	float fresnel = max(fresnelColor.r, max(fresnelColor.g, fresnelColor.b));
 	vec3 fresnelTint = fresnelColor / max(fresnel, 0.001);
 
@@ -843,7 +927,11 @@ void main()
 		 * — where rays leave toward the sky — reflected the dark GROUND instead (luminance 85
 		 * against 174 for the real sky, blue-minus-green -2.8 against +9.6). */
 		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], reflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
-		float confidence = fresnel * roughnessFade;
+
+		/* The mirror ray escaped — but did the LOBE? See specularLobeVisibility() above: one escaping
+		 * sample is not evidence that a surface buried in geometry sees the sky. */
+		const float lobeSeed = 6.2831853 * fract(sin(dot(vec2(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
+		float confidence = fresnel * roughnessFade * specularLobeVisibility(rayOrigin, reflDir, coneTan, maxDistance, lobeSeed);
 
 		/* A sky miss reflects content at infinity: the temporal reprojection treats it as a far
 		 * point (rotation-consistent, no parallax), which is what maxDistance gives it. */
