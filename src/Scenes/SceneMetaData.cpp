@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cmath>
 #include <ranges>
-#include <sstream>
 #include <unordered_map>
 #include <utility>
 
@@ -182,11 +181,6 @@ namespace EmEn::Scenes
 
 			return offset * static_cast< uint32_t >(sizeof(float));
 		};
-
-#ifdef DEBUG
-		/* Human-readable TLAS content description, logged when the instance count changes. */
-		std::ostringstream TLASDump;
-#endif
 
 		/* Collect instances from a render list. */
 		const auto collectFromList = [&] (const RenderBatch::List & renderList) {
@@ -459,21 +453,6 @@ namespace EmEn::Scenes
 				}
 
 				instances.emplace_back(instance);
-
-				/* Describe the instance for the TLAS content log below. */
-#ifdef DEBUG
-				{
-					const auto & rm = instance.transform.matrix;
-					const float colScale = std::sqrt(rm[0][0] * rm[0][0] + rm[1][0] * rm[1][0] + rm[2][0] * rm[2][0]);
-
-					TLASDump << "\n\t#" << instanceIndex
-						<< " '" << renderable->name() << "'"
-						<< " subGeo=" << subGeoCount
-						<< " pos=(" << rm[0][3] << ", " << rm[1][3] << ", " << rm[2][3] << ")"
-						<< " scale=" << colScale
-						<< (anyNonOpaque ? " [nonOpaque]" : "");
-				}
-#endif
 			}
 		};
 
@@ -492,10 +471,6 @@ namespace EmEn::Scenes
 		{
 			m_lastTLASInstanceCounts[1] = m_lastTLASInstanceCounts[0];
 			m_lastTLASInstanceCounts[0] = instances.size();
-
-#ifdef DEBUG
-			TraceInfo{ClassId} << "[TLAS-DUMP] " << instances.size() << " instance(s):" << TLASDump.str();
-#endif
 		}
 		else if ( instances.size() != m_lastTLASInstanceCounts[0] )
 		{
