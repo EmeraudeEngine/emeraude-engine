@@ -468,7 +468,7 @@ namespace EmEn::Scenes
 
 					TLASDump << "\n\t#" << instanceIndex
 						<< " '" << renderable->name() << "'"
-						<< " subGeo=" << subGeoCount
+						<< " BLASGeo=" << BLASGeometryCount
 						<< " pos=(" << rm[0][3] << ", " << rm[1][3] << ", " << rm[2][3] << ")"
 						<< " scale=" << colScale
 						<< (anyNonOpaque ? " [nonOpaque]" : "");
