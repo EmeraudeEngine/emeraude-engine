@@ -539,7 +539,7 @@ namespace EmEn
 			 * the RAW trace in REFLECTION mode: history reprojected through the VIRTUAL position of the
 			 * reflected point (P + V·hitT), blended toward the surface reprojection as the roughness
 			 * grows, validated on the virtual distance, variance-clipped. The blur and the glossy pyramid
-			 * then integrate a stable signal. The knobs mirror IndirectDiffuse/Temporal/*; the lane level
+			 * then integrate a stable signal. The knobs mirror IndirectDiffuse/Temporal/x; the lane level
 			 * because the screen-space lane has no accumulation (yet). */
 			constexpr auto GraphicsPPReflectionsRTTemporalEnabledKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/Enabled"};
 			constexpr auto DefaultGraphicsPPReflectionsRTTemporalEnabled{true};
