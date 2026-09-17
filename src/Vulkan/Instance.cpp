@@ -848,14 +848,40 @@ namespace EmEn::Vulkan
 
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
 		DeviceRequirements requirements{true, window, false};
+
+		/* ⚠️ A feature requested here that the device does not advertise makes vkCreateDevice fail
+		 * with VK_ERROR_FEATURE_NOT_PRESENT for the WHOLE set, naming none of them — so one absent
+		 * feature costs the renderer, and the log says only that a device could not be created.
+		 * `checkDevicesFeaturesForGraphics()` above warns per feature and lets the device through
+		 * (its `return false` are deliberately commented out), so the warnings and the request were
+		 * not connected to each other: the engine observed availability and then asked anyway.
+		 *
+		 * Measured 2026-09-17 on a GitHub Windows runner against CEF's SwiftShader (software
+		 * device): 26 features absent, three of them requested below — `geometryShader`,
+		 * `shaderImageGatherExtended` and `shaderInt64` — and the application died at startup.
+		 * The macOS guard below was the same problem answered by platform: an Apple iGPU has no
+		 * geometry stage, which is a statement about a DEVICE, not about an operating system. */
+		const auto & availableFeatures = selectedPhysicalDevice->featuresVK10();
+
+		const auto requestOptionalVK10 = [&] (VkBool32 VkPhysicalDeviceFeatures::* feature, const char * featureName, const char * lostCapability) {
+			if ( availableFeatures.*feature == VK_FALSE )
+			{
+				TraceWarning{ClassId} <<
+					"The physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName <<
+					"' does not advertise '" << featureName << "': not requested, " << lostCapability << " unavailable.";
+
+				return;
+			}
+
+			requirements.featuresVK10().*feature = VK_TRUE;
+		};
+
 		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
 		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
-		if constexpr ( !IsMacOS )
-		{
-			/* NOTE: macOS M1/M2/M3/M4 iGPU do not have the geometry shader stage. */
-			requirements.featuresVK10().geometryShader = VK_TRUE; // Required for TBN space display
-		}
+		/* NOTE: was `if constexpr ( !IsMacOS )` — Apple M1/M2/M3/M4 iGPUs have no geometry stage,
+		 * and neither does a software device. Asked of the device instead of the platform. */
+		requestOptionalVK10(&VkPhysicalDeviceFeatures::geometryShader, "geometryShader", "TBN space display");
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK10().independentBlend = VK_TRUE; // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
 		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
@@ -865,7 +891,7 @@ namespace EmEn::Vulkan
 		 * it a caster closer to the light than the near plane writes nothing, so the map keeps its
 		 * 1.0 clear there and the receiver below reads "lit": a shadow-shaped HOLE. */
 		requirements.featuresVK10().depthClamp = VK_TRUE; // Required for shadow map depth clamping (see ShadowCasting)
-		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
+		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderImageGatherExtended, "shaderImageGatherExtended", "PCF shadow filtering");
 		requirements.featuresVK10().imageCubeArray = VK_TRUE; // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
 		{
@@ -880,7 +906,11 @@ namespace EmEn::Vulkan
 		/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
 		requirements.featuresVK10().multiDrawIndirect = VK_TRUE; // Required for vkCmdDrawIndexedIndirect with drawCount > 1
 		requirements.featuresVK10().drawIndirectFirstInstance = VK_TRUE; // Required for firstInstance in indirect commands
-		requirements.featuresVK10().shaderInt64 = VK_TRUE; // Required for uint64_t in shaders (BDA address reconstruction)
+		/* ⚠️ Unlike the two above, dropping this one is NOT cosmetic: BDA address reconstruction in
+		 * shaders needs uint64_t. A device without it boots and renders, and any path relying on
+		 * buffer device addresses has to be off. Made conditional so the engine starts and says so,
+		 * rather than refusing to create a device and saying nothing. */
+		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderInt64, "shaderInt64", "uint64_t in shaders (BDA address reconstruction)");
 		/* Required for imageStore() from a FRAGMENT shader: the RTR trace writes its per-pixel glossy
 		 * cone width map (a storage image) next to its colour attachment. Without the feature the SPIR-V
 		 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to
