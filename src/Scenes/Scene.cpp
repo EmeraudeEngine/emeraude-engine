@@ -76,7 +76,8 @@ namespace EmEn::Scenes
 			m_bindlessTextureSet.setCapacities(
 				bindlessTextureManager.maxTextures2D(),
 				bindlessTextureManager.maxTexturesCube(),
-				bindlessTextureManager.maxTexturesCubeArray()
+				bindlessTextureManager.maxTexturesCubeArray(),
+				bindlessTextureManager.firstDynamicSlot()
 			);
 		}
 

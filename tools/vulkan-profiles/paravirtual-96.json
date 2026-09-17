@@ -1,0 +1,29 @@
+{
+    "$schema": "https://schema.khronos.org/vulkan/profiles-0.8.2-latest.json",
+    "profiles": {
+        "VP_EMERAUDE_virtual_gpu_96": {
+            "version": 1,
+            "api-version": "1.2.0",
+            "label": "Virtualised GPU, 96-descriptor update-after-bind budget",
+            "description": "Reproduces the Apple Paravirtual device of the GitHub Actions macOS runner: the five update-after-bind limits BindlessTextureManager::computeCapacities() reads, pinned to 96. See docs/troubleshooting.md.",
+            "contributors": {},
+            "history": [],
+            "capabilities": [
+                "ciLimits"
+            ]
+        }
+    },
+    "capabilities": {
+        "ciLimits": {
+            "properties": {
+                "VkPhysicalDeviceVulkan12Properties": {
+                    "maxPerStageDescriptorUpdateAfterBindSamplers": 96,
+                    "maxDescriptorSetUpdateAfterBindSamplers": 96,
+                    "maxPerStageDescriptorUpdateAfterBindSampledImages": 96,
+                    "maxDescriptorSetUpdateAfterBindSampledImages": 96,
+                    "maxPerStageUpdateAfterBindResources": 96
+                }
+            }
+        }
+    }
+}

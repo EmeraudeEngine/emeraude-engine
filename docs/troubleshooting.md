@@ -289,6 +289,77 @@ against a known-good reference image.
 
 ---
 
+### Bindless table refused on a virtualised GPU — CI cannot boot (fixed Sep 2026)
+
+**Symptoms:** the engine selects a device and then dies before the first frame. Seen on the
+**GitHub Actions macOS runner**, which is a VM:
+
+```
+[Success][VulkanInstanceService] Graphics capable physical device selected: Apple Paravirtual device
+[Error][BindlessTextureManagerService] The device update-after-bind budget (96 descriptors) cannot
+  host the bindless descriptor table (120 minimum, plus 32 reserved for other sets) !
+[Fatal][RendererService] BindlessTextureManagerService service failed to execute!
+[Fatal][Core] RendererService service failed to execute!
+```
+
+**Root cause — two thirds of that arithmetic is ours, not the device's.** The August fix sizes the
+table from the device budget but kept a *uniform* floor of `MinTexturesPerArray` per array, and that
+floor is `FirstDynamicSlot + 8` = **24**. Five arrays × 24 = **120**, and `FirstDynamicSlot` is 16,
+so **80 of those 120 descriptors are reserved headroom holding nothing**: the named slots span 0-5
+(cube 0-2, 2D 3-5) and the 6-15 range is room for future ones. On a device with 96 descriptors the
+engine was refusing to start over headroom it was not using.
+
+⚠️ **96 is not a small conformant device, it is two orders of magnitude below the Vulkan 1.2 spec
+minimum of 500** for these limits. Virtualised GPUs are simply not conformant here, and the engine
+has to survive one to have a macOS CI at all.
+
+**Solution:** a third profile below `reduced`, taken only when the reduced one does not fit.
+`MinimalFirstDynamicSlot` gives up the reserved *headroom* — never a named slot, every slot below 6
+keeps its meaning — and the two arrays that carry neither a named slot nor an allocator (1D and 3D:
+`updateTexture1D()` / `updateTexture3D()` have no caller in the engine) drop to a token capacity.
+A 96-descriptor device gets **1D[4] 2D[28] 3D[4] Cube[14] CubeArray[14]** with the first dynamic slot
+at 6, and the floor becomes a `deviceBudget` of **82**. Below that, initialization still fails loudly.
+
+⚠️ **The first dynamic slot is now a RUNTIME value.** `Scenes::BindlessTextureSet` seeds its three
+cursors from `BindlessTextureManager::firstDynamicSlot()`, pushed by `Scenes::Scene` through
+`setCapacities()`. A cursor seeded from the compile-time `FirstDynamicSlot` would start at 16, past
+the end of a 14-entry array, and register **nothing** — silently, since `registerInBucket()` returns
+`UINT32_MAX` rather than failing.
+
+**The trace now names the limit.** The five update-after-bind limits differ by three orders of
+magnitude between drivers, and the old message printed only their minimum — "the budget is 96" does
+not say what to fix. `computeCapacities()` traces all five and the name of the binding one, on every
+device and not only on failure.
+
+**Nothing changes on a real GPU**: budgets of 1024 (Apple/MoltenVK) and 500 (spec minimum) still take
+the reduced profile with the same capacities, and the desired profile is untouched. The minimal one
+is unreachable above 82.
+
+#### Reproducing it on real hardware, without a VM
+
+The **Khronos Profiles layer** (Vulkan SDK) forces the limits an application sees, so an M2 can be
+made to report the runner's budget:
+
+```bash
+export VK_ADD_LAYER_PATH=<SDK>/macOS/share/vulkan/explicit_layer.d
+export VK_LOADER_LAYERS_ENABLE=VK_LAYER_KHRONOS_profiles
+export VK_KHRONOS_PROFILES_PROFILE_FILE=tools/vulkan-profiles/paravirtual-96.json
+export VK_KHRONOS_PROFILES_PROFILE_NAME=VP_EMERAUDE_virtual_gpu_96
+export VK_KHRONOS_PROFILES_SIMULATE_CAPABILITIES=SIMULATE_API_VERSION_BIT,SIMULATE_FEATURES_BIT,SIMULATE_PROPERTIES_BIT
+```
+
+⚠️ **Two ways to get a well-formed "nothing happened"**: `VK_INSTANCE_LAYERS` is ignored by the
+current loader (use `VK_LOADER_LAYERS_ENABLE`), and `SIMULATE_LIMITS_BIT` is not a value of that
+enum (it is `SIMULATE_PROPERTIES_BIT`). Both leave the limits untouched, which reads exactly like
+"the simulation is refused by the device" — check with `vulkaninfo` that the numbers actually moved
+before concluding anything about the engine.
+
+A harsher variant needs no layer at all: `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0` collapses
+MoltenVK's own budget to **16** (measured on an M2: per-stage samplers 16, set samplers 80,
+per-stage resources 159), which is below the 82 floor and therefore tests the loud failure instead.
+
+---
+
 ### Tone mapping blows out to white and never recovers / auto-ISO shows nothing (mitigated Aug 2026)
 
 **Symptoms:** the frame is massively overexposed, toggling HDR off/on fixes it, looking at the sky

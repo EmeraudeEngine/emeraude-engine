@@ -86,8 +86,26 @@ namespace EmEn::Graphics
 			static constexpr uint32_t GrabPassSlot = 4;
 			static constexpr uint32_t GrabPassDepthSlot = 5;
 
-			/* First slot available for scene-dynamic textures (all arrays). */
+			/* First slot available for scene-dynamic textures (all arrays).
+			 * @warning This is the DEFAULT, not the effective value: a device whose budget cannot
+			 * host it falls back to MinimalFirstDynamicSlot. Never use it to seed a slot cursor —
+			 * use firstDynamicSlot(), which is what Scenes::BindlessTextureSet is handed. */
 			static constexpr uint32_t FirstDynamicSlot = 16;
+
+			/** @brief Number of slots the named reserved slots above actually span.
+			 * @note The numbering is shared across arrays — cube uses 0-2, 2D uses 3-5 — so an array
+			 * carrying any named slot must host the whole 0-5 range, and none of them needs more.
+			 * The gap between this and FirstDynamicSlot is headroom for future named slots, and it
+			 * is the first thing given up on a constrained device. */
+			static constexpr uint32_t ReservedSlotCount = 6;
+
+			/** @brief First dynamic slot used when the budget cannot host the default one.
+			 * @note Gives up the reserved headroom, not a named slot: every slot below is still
+			 * addressable, so no reserved-slot write changes meaning. */
+			static constexpr uint32_t MinimalFirstDynamicSlot = ReservedSlotCount;
+
+			/** @brief Dynamic entries any allocating array keeps beyond its reserved region. */
+			static constexpr uint32_t MinDynamicSlotsPerArray = 8;
 
 			/** @brief Desired (uncapped) texture counts per type.
 			 * @warning These are a TARGET, not the effective capacity. The descriptor table is
@@ -109,10 +127,20 @@ namespace EmEn::Graphics
 			static constexpr uint32_t ReducedMaxTexturesCube = 128;
 			static constexpr uint32_t ReducedMaxTexturesCubeArray = 32;
 
-			/** @brief Absolute floor for any array: the reserved slots plus a few dynamic entries.
-			 * @note A device that cannot host five arrays of this size cannot run the engine's
-			 * bindless design at all; initialization fails loudly rather than rendering garbage. */
-			static constexpr uint32_t MinTexturesPerArray = FirstDynamicSlot + 8;
+			/** @brief Floor for an allocating array under the default reserved region. */
+			static constexpr uint32_t MinTexturesPerArray = FirstDynamicSlot + MinDynamicSlotsPerArray;
+
+			/** @brief Capacities of the MINIMAL profile, for a virtualised or otherwise tiny device.
+			 * @note Only three arrays allocate dynamic slots (2D, cube, cube array — see
+			 * Scenes::BindlessTextureSet); the 1D and 3D arrays carry no named slot and have no
+			 * allocator, so they keep a token capacity rather than a reserved region. Measured
+			 * need on an Apple Paravirtual device (GitHub Actions macOS runner): a 96-descriptor
+			 * budget, of which OtherSetsSamplerHeadroom leaves 64.
+			 * @warning A device that cannot host even this cannot run the engine's bindless design;
+			 * initialization fails loudly rather than rendering garbage. */
+			static constexpr uint32_t MinimalMaxTextures1D = 4;
+			static constexpr uint32_t MinimalMaxTextures3D = 4;
+			static constexpr uint32_t MinimalTexturesPerDynamicArray = MinimalFirstDynamicSlot + MinDynamicSlotsPerArray;
 
 			/** @brief Sampler budget left to the OTHER descriptor sets of a pipeline layout.
 			 * @note The update-after-bind pipeline-layout VUIDs (03022, 03036) sum the sampler
@@ -156,6 +184,20 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept;
+
+			/**
+			 * @brief Returns the first slot available for scene-dynamic textures.
+			 * @note Valid after service initialization; before that, the default. Whoever allocates
+			 * dynamic slots MUST seed its cursors from here rather than from FirstDynamicSlot: on a
+			 * constrained device the reserved headroom is given up to fit the table.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			firstDynamicSlot () const noexcept
+			{
+				return m_firstDynamicSlot;
+			}
 
 			/**
 			 * @brief Returns the effective capacity of the 1D texture array.
@@ -400,6 +442,7 @@ namespace EmEn::Graphics
 			uint32_t m_maxTextures3D{DesiredMaxTextures3D};
 			uint32_t m_maxTexturesCube{DesiredMaxTexturesCube};
 			uint32_t m_maxTexturesCubeArray{DesiredMaxTexturesCubeArray};
+			uint32_t m_firstDynamicSlot{FirstDynamicSlot};
 			std::shared_ptr< Vulkan::Device > m_device;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;

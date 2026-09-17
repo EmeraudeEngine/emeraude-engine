@@ -103,12 +103,17 @@ namespace EmEn::Scenes
 			 * compile-time desired values on every device (MoltenVK caps them). Handing out a slot
 			 * beyond the table size would make the manager silently reject the descriptor write and
 			 * the texture would never appear. Called by the owning scene at construction.
+			 * @warning The first dynamic slot MUST come from the manager too
+			 * (Graphics::BindlessTextureManager::firstDynamicSlot()): on a device that took the
+			 * minimal profile the reserved region shrinks, and a cursor seeded from the compile-time
+			 * constant would start past the end of the array and register nothing.
 			 * @param maxTextures2D The capacity of the 2D array.
 			 * @param maxTexturesCube The capacity of the cubemap array.
 			 * @param maxTexturesCubeArray The capacity of the cube array array.
+			 * @param firstDynamicSlot The first slot available for dynamic textures in every array.
 			 * @return void
 			 */
-			void setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray) noexcept;
+			void setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t firstDynamicSlot) noexcept;
 
 			/**
 			 * @brief Registers a 2D texture (deduplicated by texture instance).
@@ -218,6 +223,10 @@ namespace EmEn::Scenes
 			std::queue< uint32_t > m_free2D;
 			std::queue< uint32_t > m_freeCube;
 			std::queue< uint32_t > m_freeCubeArray;
+
+			/* First dynamic slot of every array, pushed by the owning scene — see setCapacities().
+			 * The compile-time default is only a fallback for a set used before the scene wires it. */
+			uint32_t m_firstDynamicSlot{Graphics::BindlessTextureManager::FirstDynamicSlot};
 
 			uint32_t m_next2D{Graphics::BindlessTextureManager::FirstDynamicSlot};
 			uint32_t m_nextCube{Graphics::BindlessTextureManager::FirstDynamicSlot};

@@ -99,13 +99,20 @@ namespace EmEn::Scenes
 	}
 
 	void
-	BindlessTextureSet::setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray) noexcept
+	BindlessTextureSet::setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t firstDynamicSlot) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
 		m_maxTextures2D = maxTextures2D;
 		m_maxTexturesCube = maxTexturesCube;
 		m_maxTexturesCubeArray = maxTexturesCubeArray;
+
+		/* Called by the scene at construction, before any registration: moving the cursors is safe
+		 * here and nowhere else — a later call would hand out slots already in use. */
+		m_firstDynamicSlot = firstDynamicSlot;
+		m_next2D = firstDynamicSlot;
+		m_nextCube = firstDynamicSlot;
+		m_nextCubeArray = firstDynamicSlot;
 	}
 
 	uint32_t
@@ -221,9 +228,9 @@ namespace EmEn::Scenes
 		m_freeCube = {};
 		m_freeCubeArray = {};
 
-		m_next2D = BindlessTextureManager::FirstDynamicSlot;
-		m_nextCube = BindlessTextureManager::FirstDynamicSlot;
-		m_nextCubeArray = BindlessTextureManager::FirstDynamicSlot;
+		m_next2D = m_firstDynamicSlot;
+		m_nextCube = m_firstDynamicSlot;
+		m_nextCubeArray = m_firstDynamicSlot;
 
 		m_environmentCubemap.reset();
 	}

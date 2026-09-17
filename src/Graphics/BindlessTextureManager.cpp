@@ -28,6 +28,8 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
@@ -50,6 +52,38 @@
 namespace EmEn::Graphics
 {
 	using namespace Base;
+
+	namespace
+	{
+		/**
+		 * @brief Returns the update-after-bind budget of a device, and the NAME of the limit that
+		 * sets it.
+		 * @note A COMBINED_IMAGE_SAMPLER descriptor is charged to the sampler AND the sampled-image
+		 * update-after-bind limits, and both have a per-set and a per-stage variant. The binding
+		 * constraint is whichever is smallest — on MoltenVK with Metal argument buffers the sampler
+		 * pair (1024), on desktop none of them in practice, on a virtualised GPU any of them. The
+		 * name travels with the value because "the budget is 96" does not say what to fix, and the
+		 * five limits differ by three orders of magnitude between drivers.
+		 * @param properties A reference to the device Vulkan 1.2 properties.
+		 * @return std::pair< uint32_t, const char * >
+		 */
+		[[nodiscard]]
+		std::pair< uint32_t, const char * >
+		updateAfterBindBudget (const VkPhysicalDeviceVulkan12Properties & properties) noexcept
+		{
+			const std::array< std::pair< uint32_t, const char * >, 5 > limits{{
+				{properties.maxPerStageDescriptorUpdateAfterBindSamplers, "maxPerStageDescriptorUpdateAfterBindSamplers"},
+				{properties.maxDescriptorSetUpdateAfterBindSamplers, "maxDescriptorSetUpdateAfterBindSamplers"},
+				{properties.maxPerStageDescriptorUpdateAfterBindSampledImages, "maxPerStageDescriptorUpdateAfterBindSampledImages"},
+				{properties.maxDescriptorSetUpdateAfterBindSampledImages, "maxDescriptorSetUpdateAfterBindSampledImages"},
+				{properties.maxPerStageUpdateAfterBindResources, "maxPerStageUpdateAfterBindResources"}
+			}};
+
+			return *std::min_element(limits.cbegin(), limits.cend(), [] (const auto & lhs, const auto & rhs) {
+				return lhs.first < rhs.first;
+			});
+		}
+	}
 
 	BindlessTextureManager::BindlessTextureManager (Renderer & renderer) noexcept
 		: ServiceInterface{ClassId},
@@ -123,25 +157,29 @@ namespace EmEn::Graphics
 	{
 		const auto & properties = m_device->physicalDevice()->propertiesVK12();
 
-		/* A COMBINED_IMAGE_SAMPLER descriptor is charged to the sampler AND the sampled-image
-		 * update-after-bind limits, and both have a per-set and a per-stage variant. The binding
-		 * constraint is whichever is smallest — on MoltenVK the sampler pair (1024), on desktop
-		 * none of them in practice. */
-		const auto deviceBudget = std::min({
-			properties.maxPerStageDescriptorUpdateAfterBindSamplers,
-			properties.maxDescriptorSetUpdateAfterBindSamplers,
-			properties.maxPerStageDescriptorUpdateAfterBindSampledImages,
-			properties.maxDescriptorSetUpdateAfterBindSampledImages,
-			properties.maxPerStageUpdateAfterBindResources
-		});
+		const auto [deviceBudget, limitName] = updateAfterBindBudget(properties);
 
-		constexpr uint32_t minimalTotal = 5 * MinTexturesPerArray;
+		/* Traced on EVERY device, not only on failure: the five limits are what decides which
+		 * profile below is taken, and a log that only prints the minimum cannot tell a tight
+		 * driver from a tight GPU. */
+		TraceInfo{ClassId} <<
+			"Device update-after-bind budget: " << deviceBudget << " descriptors, set by '" << limitName << "'. "
+			"Limits: perStageSamplers[" << properties.maxPerStageDescriptorUpdateAfterBindSamplers << "], "
+			"setSamplers[" << properties.maxDescriptorSetUpdateAfterBindSamplers << "], "
+			"perStageSampledImages[" << properties.maxPerStageDescriptorUpdateAfterBindSampledImages << "], "
+			"setSampledImages[" << properties.maxDescriptorSetUpdateAfterBindSampledImages << "], "
+			"perStageResources[" << properties.maxPerStageUpdateAfterBindResources << "].";
+
+		/* The table can never claim the whole device budget — see OtherSetsSamplerHeadroom. */
+		constexpr uint32_t minimalTotal =
+			MinimalMaxTextures1D + MinimalMaxTextures3D + (3 * MinimalTexturesPerDynamicArray);
 
 		if ( deviceBudget < OtherSetsSamplerHeadroom + minimalTotal )
 		{
 			TraceError{ClassId} <<
-				"The device update-after-bind budget (" << deviceBudget << " descriptors) cannot host "
-				"the bindless descriptor table (" << minimalTotal << " minimum, plus " << OtherSetsSamplerHeadroom << " reserved for other sets) !";
+				"The device update-after-bind budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
+				"cannot host the minimal bindless descriptor table (" << minimalTotal << " minimum, plus "
+				<< OtherSetsSamplerHeadroom << " reserved for other sets) !";
 
 			return false;
 		}
@@ -163,40 +201,62 @@ namespace EmEn::Graphics
 			return true;
 		}
 
-		/* Reduced profile: fixed floors for the secondary arrays, the remainder to the 2D array. */
-		m_maxTextures1D = ReducedMaxTextures1D;
-		m_maxTextures3D = ReducedMaxTextures3D;
-		m_maxTexturesCube = ReducedMaxTexturesCube;
-		m_maxTexturesCubeArray = ReducedMaxTexturesCubeArray;
-
+		/* Reduced profile: fixed floors for the secondary arrays, the remainder to the 2D array.
+		 * The reserved region is untouched here — only the capacities shrink. */
 		constexpr uint32_t reducedSecondaryTotal =
 			ReducedMaxTextures1D + ReducedMaxTextures3D + ReducedMaxTexturesCube + ReducedMaxTexturesCubeArray;
 
-		if ( budget < reducedSecondaryTotal + MinTexturesPerArray )
+		if ( budget >= reducedSecondaryTotal + MinTexturesPerArray )
 		{
-			/* Even the reduced floors do not fit: fall back to the absolute floor everywhere. The
-			 * Vulkan 1.2 spec minimum for these limits is 500, so this branch is unreachable on a
-			 * conformant device — it exists so a non-conformant one degrades instead of corrupting. */
-			m_maxTextures1D = MinTexturesPerArray;
-			m_maxTextures3D = MinTexturesPerArray;
-			m_maxTexturesCube = MinTexturesPerArray;
-			m_maxTexturesCubeArray = MinTexturesPerArray;
-			m_maxTextures2D = budget - (4 * MinTexturesPerArray);
-		}
-		else
-		{
+			m_maxTextures1D = ReducedMaxTextures1D;
+			m_maxTextures3D = ReducedMaxTextures3D;
+			m_maxTexturesCube = ReducedMaxTexturesCube;
+			m_maxTexturesCubeArray = ReducedMaxTexturesCubeArray;
 			m_maxTextures2D = std::min(budget - reducedSecondaryTotal, DesiredMaxTextures2D);
+
+			TraceWarning{ClassId} <<
+				"The device update-after-bind budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
+				"cannot host the desired bindless table (" << desiredTotal << " descriptors). Reduced to "
+				"1D[" << m_maxTextures1D << "], "
+				"2D[" << m_maxTextures2D << "], "
+				"3D[" << m_maxTextures3D << "], "
+				"Cube[" << m_maxTexturesCube << "], "
+				"CubeArray[" << m_maxTexturesCubeArray << "]. "
+				"A scene needing more textures of one type will fail to register them.";
+
+			return true;
 		}
 
+		/* Minimal profile — virtualised GPUs land here (Apple Paravirtual: 96 descriptors, two
+		 * orders of magnitude below the Vulkan 1.2 spec minimum of 500 for these limits).
+		 *
+		 * The reduced profile cannot be squeezed further by capacity alone: three arrays allocate
+		 * dynamic slots from FirstDynamicSlot, so they cost 16 descriptors each BEFORE holding a
+		 * single texture — 48 of a 64-descriptor budget spent on reserved headroom. What gives way
+		 * here is that headroom, not a named slot: the reserved region shrinks to the 0-5 range the
+		 * named slots actually span, and every reserved-slot write keeps its meaning.
+		 *
+		 * ⚠️ m_firstDynamicSlot is what Scenes::BindlessTextureSet seeds its cursors from
+		 * (Scenes::Scene passes it through setCapacities). A slot cursor seeded from the CONSTANT
+		 * FirstDynamicSlot would start past the end of a 14-entry array and register nothing. */
+		m_firstDynamicSlot = MinimalFirstDynamicSlot;
+		m_maxTextures1D = MinimalMaxTextures1D;
+		m_maxTextures3D = MinimalMaxTextures3D;
+		m_maxTexturesCube = MinimalTexturesPerDynamicArray;
+		m_maxTexturesCubeArray = MinimalTexturesPerDynamicArray;
+		m_maxTextures2D = std::min(budget - (minimalTotal - MinimalTexturesPerDynamicArray), DesiredMaxTextures2D);
+
 		TraceWarning{ClassId} <<
-			"The device update-after-bind budget (" << deviceBudget << " descriptors) cannot host the desired "
-			"bindless table (" << desiredTotal << " descriptors). Reduced to "
+			"The device update-after-bind budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
+			"cannot host the reduced bindless table. Minimal profile: "
 			"1D[" << m_maxTextures1D << "], "
 			"2D[" << m_maxTextures2D << "], "
 			"3D[" << m_maxTextures3D << "], "
 			"Cube[" << m_maxTexturesCube << "], "
-			"CubeArray[" << m_maxTexturesCubeArray << "]. "
-			"A scene needing more textures of one type will fail to register them.";
+			"CubeArray[" << m_maxTexturesCubeArray << "], "
+			"first dynamic slot lowered from " << FirstDynamicSlot << " to " << m_firstDynamicSlot << ". "
+			"This is a virtualised or non-conformant device: the engine runs, but a scene of any "
+			"size will fail to register textures.";
 
 		return true;
 	}
