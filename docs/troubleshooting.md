@@ -355,8 +355,15 @@ enum (it is `SIMULATE_PROPERTIES_BIT`). Both leave the limits untouched, which r
 before concluding anything about the engine.
 
 A harsher variant needs no layer at all: `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=0` collapses
-MoltenVK's own budget to **16** (measured on an M2: per-stage samplers 16, set samplers 80,
-per-stage resources 159), which is below the 82 floor and therefore tests the loud failure instead.
+MoltenVK's own budget to **16** (measured on an M2 with `vulkaninfo`: per-stage samplers 16, set
+samplers 80, per-stage resources 159), which is below the 82 floor and would therefore exercise the
+loud failure instead.
+
+**What was actually run**, on the built application, same binary, September 2026: the M2 native
+device (1024) taking the reduced profile unchanged; the layer at **96** taking the minimal profile,
+`RendererService` up and an autotest suite passing; the layer at **64** failing loudly with exit 1.
+The `MVK_CONFIG_*` variant above is measured at the `vulkaninfo` level only — its effect on the
+engine is deduced from the 82 floor, not observed.
 
 ---
 
