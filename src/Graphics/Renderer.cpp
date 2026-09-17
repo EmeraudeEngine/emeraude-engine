@@ -789,6 +789,20 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* ⚠️ MDI indexes its per-draw SSBO with gl_DrawID (Saphir::VertexShader::prepareMDIModelMatrix(),
+		 * MDI::PerDrawData), which needs the 'shaderDrawParameters' feature. That feature is now
+		 * requested only when the device advertises it (Vulkan::Instance), so a device without it
+		 * boots — and must NOT then run MDI, or every draw would read the wrong per-draw entry and
+		 * render silently wrong. Refused here, with the setting named, rather than warned about. */
+		if ( m_MDIEnabled && m_device != nullptr && m_device->physicalDevice()->featuresVK11().shaderDrawParameters == VK_FALSE )
+		{
+			TraceError{ClassId} <<
+				"'" << GraphicsMDIEnabledKey << "' is enabled, but the device does not support 'shaderDrawParameters' "
+				"(gl_DrawID). Multi-Draw Indirect is disabled: it would index its per-draw data wrongly.";
+
+			m_MDIEnabled = false;
+		}
+
 		/* Initialize Multi-Draw Indirect batch builder if enabled and device supports it. */
 		if ( m_MDIEnabled && m_device != nullptr )
 		{

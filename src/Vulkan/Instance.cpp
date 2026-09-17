@@ -876,6 +876,21 @@ namespace EmEn::Vulkan
 			requirements.featuresVK10().*feature = VK_TRUE;
 		};
 
+		const auto & availableFeaturesVK11 = selectedPhysicalDevice->featuresVK11();
+
+		const auto requestOptionalVK11 = [&] (VkBool32 VkPhysicalDeviceVulkan11Features::* feature, const char * featureName, const char * lostCapability) {
+			if ( availableFeaturesVK11.*feature == VK_FALSE )
+			{
+				TraceWarning{ClassId} <<
+					"The physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName <<
+					"' does not advertise '" << featureName << "': not requested, " << lostCapability << " unavailable.";
+
+				return;
+			}
+
+			requirements.featuresVK11().*feature = VK_TRUE;
+		};
+
 		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
 		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
@@ -916,7 +931,15 @@ namespace EmEn::Vulkan
 		 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to
 		 * create. Universally supported on desktop GPUs; the physical-device probe above warns when absent. */
 		requirements.featuresVK10().fragmentStoresAndAtomics = VK_TRUE;
-		requirements.featuresVK11().shaderDrawParameters = VK_TRUE; // Required for gl_DrawID in vertex shaders
+		/* ⚠️ Required for gl_DrawID in vertex shaders, which ONLY the Multi-Draw Indirect path uses —
+		 * and MDI is opt-in and OFF by default (`Core/Graphics/MDI/Enabled`,
+		 * DefaultGraphicsMDIEnabled == false). Requesting it unconditionally made the engine refuse
+		 * to create a device, for a path nobody had switched on: measured 2026-09-17 against
+		 * SwiftShader, where this single bit out of the nine non-VK10 features requested here is
+		 * the only one absent (bufferDeviceAddress IS present there). Renderer::onInitialize()
+		 * refuses to build the MDI batch builder when it is missing, so a device without it cannot
+		 * silently render with a wrong per-draw index. */
+		requestOptionalVK11(&VkPhysicalDeviceVulkan11Features::shaderDrawParameters, "shaderDrawParameters", "gl_DrawID, hence the Multi-Draw Indirect path");
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
 		/* NOTE: Optional extension detection. Query all device extensions once and enable
