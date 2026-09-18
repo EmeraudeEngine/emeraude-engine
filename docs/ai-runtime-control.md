@@ -337,6 +337,22 @@ as a plain precondition; it fails only when the model viewer is not the active s
 ⚠️ **The console command is the deterministic remote way in — and the claim that it was the ONLY
 one is doubtful since 2026-09-13.** This paragraph used to state that a keyboard event injected
 through `Input::Manager::injectKeyEvent()` **never reaches a Core-level binding** (observed Aug 2026
+> [!IMPORTANT]
+> **`mouseClick()` CANNOT drive anything that needs a held button.** It injects a press *and* a
+> release, so every `mouseMove()` sent afterwards arrives with the button already up: an orbit
+> camera, a gizmo drag, a slider — all see nothing, and the capture comes back **bit-identical**,
+> which reads exactly like a broken control. Use the pair added 2026-09-18:
+>
+> ```
+> Core.InputManagerService.mousePress(x, y, 0, 0)
+> Core.InputManagerService.mouseMove(x2, y)          # as many as the gesture needs
+> Core.InputManagerService.mouseRelease(x2, y, 0, 0)
+> ```
+>
+> Measured on a model viewer: a held drag moves **99.82 %** of the pixels where the same gesture
+> through `mouseClick` moves **0.0000 %**. ⚠️ The engine does NOT pair them — a forgotten
+> `mouseRelease` leaves the control believing the button is still down.
+
 on `keyPress(32, 0)`, which cycled nothing). On 2026-09-13 the consumer projet-alpha injected F9
 (`keyPress(298, 0)`) and its `Application::onCoreKeyRelease()` toggled the compass on screen — the
 same `Core::onKeyRelease()` entry the space bar's default behaviour sits behind, since `Core`
@@ -974,7 +990,7 @@ Core
 +-- AudioManagerService
 |   +-- TrackMixerService   (play, pause, stop, volume, playlist, etc.)
 +-- FileSystemService       (getJson, get, print)
-+-- InputManagerService     (keyPress, mouseClick, mouseMove)
++-- InputManagerService     (keyPress, mouseClick, mousePress, mouseRelease, mouseMove, pointerState)
 +-- RendererService         (screenshot, getStatus)
 +-- ResourcesManagerService (listContainers, listResources)
 +-- SceneManagerService     (createScene, setGround, setBackground, addMesh, etc.)

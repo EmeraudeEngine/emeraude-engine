@@ -2042,12 +2042,17 @@ kept at **index 0 of the same vector**, so the five dispatch loops are untouched
 be forgotten; everything else keeps its newest-first order.
 
 > [!NOTE]
-> **No regression on the scene controls, by construction**: `Overlay::Manager::onButtonPress()`
+> **No regression on the scene controls — MEASURED, 2026-09-18.** `Overlay::Manager::onButtonPress()`
 > returns `false` for any screen that is empty, not visible or not listening, so with the menu closed
-> the event reaches the orbit controller exactly as before. ⚠️ Verified by reading that code rather
-> than by exercising it: the console can inject a click (press **and** release) but not a **held**
-> button, so an orbit drag cannot be reproduced remotely — `m_dragActive` is already false by the
-> time the injected moves arrive.
+> the event reaches the orbit controller exactly as before. A held drag across the viewport of a
+> model viewer moves **99.82 %** of the pixels after the change.
+>
+> ⚠️ That measurement only became possible with `mousePress`/`mouseRelease`, added the same day:
+> `mouseClick` presses **and releases**, so every `mouseMove` sent afterwards arrives with the button
+> already up and a drag-driven control sees nothing — the same drag through `mouseClick` reports
+> **0.0000 %**. This note first shipped saying "verified by reading the code rather than by
+> exercising it", which was true for about an hour. **A control that can only be driven by a held
+> button is untestable until the console can hold one.**
 
 > [!WARNING]
 > `Scenes::Editor::Manager` also registers a pointer listener and had the same exposure. It is fixed

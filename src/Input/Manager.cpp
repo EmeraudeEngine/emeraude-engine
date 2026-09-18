@@ -1176,7 +1176,55 @@ namespace EmEn::Input
 			outputs.emplace_back(Severity::Success, "Mouse click injected.");
 
 			return true;
-		}}, "Inject a mouse click event. Args: x, y, button, modifiers");
+		}}, "Inject a mouse click event (press then release, so it cannot hold a drag). Args: x, y, button, modifiers");
+
+		/* ⚠️ mousePress/mouseRelease exist because mouseClick CANNOT express a drag: it releases
+		 * immediately, so any pointer move sent afterwards arrives with the button already up and a
+		 * drag-driven control sees nothing. That is not hypothetical — it made the scene's orbit
+		 * camera untestable from the console on 2026-09-18, and a fix to the pointer dispatch had to
+		 * ship verified by code reading instead of by measurement. A drag is now:
+		 *   mousePress(x, y) ; mouseMove(...) ... ; mouseRelease(x, y)
+		 * ⚠️ The press and the release are NOT paired by the engine: a caller that forgets the
+		 * release leaves the control believing the button is still down. */
+		this->bindCommand("mousePress", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+			if ( arguments.size() < 2 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: mousePress(x, y, button, modifiers)");
+
+				return false;
+			}
+
+			const auto x = arguments[0].asFloat();
+			const auto y = arguments[1].asFloat();
+			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
+			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
+
+			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+
+			outputs.emplace_back(Severity::Success, "Mouse button press injected (it stays DOWN until mouseRelease).");
+
+			return true;
+		}}, "Injects a mouse button PRESS and leaves it down, so a drag can be performed with mouseMove. Args: x, y, button, modifiers");
+
+		this->bindCommand("mouseRelease", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
+			if ( arguments.size() < 2 )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: mouseRelease(x, y, button, modifiers)");
+
+				return false;
+			}
+
+			const auto x = arguments[0].asFloat();
+			const auto y = arguments[1].asFloat();
+			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
+			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
+
+			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
+
+			outputs.emplace_back(Severity::Success, "Mouse button release injected.");
+
+			return true;
+		}}, "Injects a mouse button RELEASE, ending a drag started with mousePress. Args: x, y, button, modifiers");
 
 		this->bindCommand("mouseMove", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
 			if ( arguments.size() < 2 )
