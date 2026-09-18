@@ -1607,6 +1607,50 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 
 ## Resources / Loaders
 
+### A bufferView-less glTF accessor reads as ZEROS, silently — the Draco trap (Sep 2026)
+
+> [!CAUTION]
+> **Adding support for a compression extension can turn a LOUD failure into a SILENT one.**
+> Before `KHR_draco_mesh_compression` was declared on the fastgltf `Parser`, a Draco asset was
+> refused outright (`Error::MissingExtensions`, one error line, zero nodes). Declaring it makes the
+> file parse — and **every accessor of a Draco primitive carries no `bufferView` at all**.
+> glTF § 5.1.1 then mandates that such an accessor "MUST be initialized with zeros; extensions MAY
+> override", and `fastgltf::iterateAccessor` implements exactly that (`tools.hpp:746`): it emits
+> `count` zero-initialised elements with **no error and no log**.
+>
+> A read site that is not routed through the decoder therefore yields positions all at the origin,
+> normals at zero, indices all zero — a mesh collapsed to a point, with nothing in the log.
+>
+> **The fix is a hard guard, not care.** `readDracoAwareAttribute()` / `readDracoAwareIndices()` in
+> `GLTFLoader.cpp` are the single gate; a bufferView-less accessor that Draco did not claim **fails
+> the mesh** with an error naming the attribute. Never soften that into a warning, and never add a
+> tenth read site that calls `fastgltf::iterateAccessor` directly.
+
+> [!WARNING]
+> **The meshopt design does not transpose to Draco.** `EXT_meshopt_compression` intercepts at the
+> **buffer view** level, so a `BufferDataAdapter` serves decoded bytes transparently. Draco
+> intercepts at the **primitive** level, and fastgltf only calls the adapter *after* resolving a
+> bufferView — which a Draco accessor does not have. Writing a `DracoBufferAdapter` cannot work;
+> it will simply never be called.
+
+> [!WARNING]
+> **`Attribute::accessorIndex` is NOT an accessor index inside `Primitive::dracoCompression`.**
+> fastgltf reuses its generic `Attribute` struct for the extension's map, whose values are Draco
+> **attribute unique ids**. Indexing `asset.accessors` with one reads an unrelated accessor — and
+> the ids differ from primitive to primitive within the same mesh.
+
+> [!NOTE]
+> **Draco is lossy: do not use bit-equality as the pass criterion, and do not panic at a high
+> local maximum.** Measured 2026-09-18 against the uncompressed variants at identical framing:
+> `Box` is bit-identical (0 of 2 073 600 pixels), but `Avocado` differs on 10.3 % of pixels
+> (mean **0.18/255**) and `CesiumMan` on 3.3 % (mean **0.11/255**) — a sparse scatter along
+> silhouettes, background strictly identical. Tiny mean + high local maxima confined to edges is
+> the quantisation signature. A **region** or a **block** of difference is not, and means a defect.
+> ⚠️ Before believing any such comparison, check the comparator discriminates at all: two
+> *different* models must come out far apart (58.5 % of pixels, mean 95.6/255 here). And make sure
+> the second asset has actually finished loading — a screenshot taken mid-swap compares a frame to
+> itself and reports a perfect match for the wrong reason.
+
 ### Critical: Resource getOrCreateResource Lambdas Run on Loading Threads — Capture By VALUE
 
 > [!CRITICAL]

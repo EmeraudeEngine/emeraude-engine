@@ -405,6 +405,8 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupMeshOptimizer) # Vertex/index codec (EXT_meshopt_compression)
 
+	include(SetupDraco) # Mesh codec (KHR_draco_mesh_compression)
+
 	include(SetupOpenAL)
 
 	if ( EMERAUDE_ENABLE_IMGUI )

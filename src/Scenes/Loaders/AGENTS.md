@@ -532,6 +532,104 @@ but it forfeits the entire benefit — this is a safety net, not a supported tar
 > a KTX2 asset: *every* material comes out untextured, with no error. `resolveTexture()` falls back
 > from one to the other.
 
+#### KHR_draco_mesh_compression — the OTHER compression family (added 2026-09-18)
+
+Draco is the second, **independent** compression family: an asset uses it *instead of*
+`EXT_meshopt_compression`, not alongside it. It is what Sketchfab, older Blender exports and most
+`gltf-pipeline` output carry. `KHR_texture_basisu` may still accompany it (`CarConcept` does both).
+
+| | `EXT_meshopt_compression` | `KHR_draco_mesh_compression` |
+|---|---|---|
+| Granularity | **buffer view** | **primitive** (attributes **and** indices, one bitstream) |
+| Accessor | keeps its `bufferView` | **has NO `bufferView` at all** |
+| Interception | a fastgltf `BufferDataAdapter` — transparent | **explicit, at every read site** |
+| Decoder | `MeshoptBufferCache` | `DracoPrimitiveCache` |
+| Lossy | no | **yes** (quantisation) |
+
+> [!CAUTION]
+> **THE MESHOPT DESIGN DOES NOT TRANSPOSE, and reusing it is a dead end.** fastgltf only calls a
+> `BufferDataAdapter` once it has resolved a `bufferView`. A Draco accessor has none, so the
+> adapter is *never consulted* — the interception has to happen at each read site instead. That is
+> what `readDracoAwareAttribute()` / `readDracoAwareIndices()` (in `GLTFLoader.cpp`) exist for, and
+> all nine read sites of `loadMeshes()` go through them.
+
+> [!CAUTION]
+> **A MISSED READ SITE PRODUCES SILENT ZEROS, NOT AN ERROR — this is the trap of this extension.**
+> glTF § 5.1.1 says an accessor with no `bufferView` "MUST be initialized with zeros; extensions
+> MAY override". `fastgltf::iterateAccessor` implements exactly that (`tools.hpp:746`): it emits
+> `count` zero-initialised elements, no error, no log. Since **every** accessor of a Draco
+> primitive is bufferView-less, a forgotten site yields a mesh collapsed onto the origin, silently.
+> Declaring the extension on the `Parser` is what turns "the file is refused" into "the file is
+> read", so the failure mode moves from loud to silent the moment support is added.
+> **Hence the hard guard**: a bufferView-less accessor that Draco did not claim fails the mesh with
+> an error naming the attribute. Never soften it into a warning.
+
+**fastgltf parses, does not decode** — same division of labour as meshopt.
+`Primitive::dracoCompression` carries the buffer view and the attribute map; `DracoPrimitiveCache`
+runs the codec, **lazily and cached per buffer view** (one bitstream holds every attribute *and*
+the indices of its primitive, so the nine read sites must not decode it nine times).
+
+> [!WARNING]
+> **`Attribute::accessorIndex` does NOT hold an accessor index inside `dracoCompression`.**
+> fastgltf reuses its generic `Attribute` struct to carry the extension's map, whose values are
+> Draco **attribute unique ids** (`GetAttributeByUniqueId`). The field name lies in this context,
+> and indexing `asset.accessors` with it reads an unrelated accessor. The ids are also **per
+> primitive** — `MorphPrimitivesTest` gives `POSITION:1/NORMAL:0` on one primitive and
+> `POSITION:0/NORMAL:1` on the next.
+
+> [!WARNING]
+> **A Draco attribute is a value table plus a point → value mapping**, so `mapped_index()` is not
+> decoration: reading the table in point order scrambles every attribute with fewer values than
+> points (a hard edge splits UVs but not positions, and the two tables then differ in length).
+
+**A primitive may be MIXED.** The extension covers the primitive's own attributes and its indices —
+nothing else. Anything else it declares stays an ordinary accessor and takes the plain branch;
+morph targets are the case that exists in the corpus (`MorphPrimitivesTest` has bufferView-bearing
+target accessors next to bufferView-less attribute accessors). This loader reads no morph target
+anyway (see *Known gaps*), so today that branch only matters for the guard.
+
+**Three consistency checks**, because each fails silently otherwise: decoded point count must equal
+`accessor.count` (the vertex array is pre-allocated from the accessor), face count × 3 must equal
+the index count, and a disagreement on `normalized` between the bitstream and the glTF accessor is
+reported — the accessor is the authority in glTF, Draco carries its own flag, and a mismatch would
+scale an attribute by 255. **No corpus asset exercises that last one** (every Draco-compressed
+attribute there is plain `f32`, or `u16` for `JOINTS_0` and the indices), so it is unverified.
+
+> [!NOTE]
+> **Draco is LOSSY** — do not expect bit-equality against the uncompressed variant, except on
+> geometry whose quantised positions land exactly (`Box` *is* bit-identical, 0 of 2 073 600 pixels).
+> Measured 2026-09-18 at the same viewer framing: `Avocado` 10.3 % of pixels differ, mean
+> **0.18/255**; `CesiumMan` 3.3 %, mean **0.11/255** — a sparse scatter along silhouettes and
+> contours, background strictly identical. That shape (tiny mean, high local maxima, edges only) is
+> the quantisation signature; a **region** or a **block** of difference is not, and means a defect.
+
+**Verified 2026-09-18** over the whole corpus, Vulkan validation layers ON: **16 of 17** Draco
+variants decode, 0 error, 0 VUID — including `BrainStem` (59 bitstreams), `CarConcept`
+(109, **KTX2 + Draco**), `VirtualCity` (167), and the skinned set (`CesiumMan`, `RiggedFigure`,
+`RiggedSimple`, `BrainStem`) whose `JOINTS_0`/`WEIGHTS_0` go through the decoder.
+`SunglassesKhronos` is the seventeenth and fails **for an unrelated reason**: it requires
+`EXT_texture_webp`, which is not in the parser mask (item
+`docs/todo/gltf-ext-texture-webp-not-in-parser-mask.md`).
+
+**Those sixteen are now BENCH ROWS, not a one-off sweep.** `tools/gltf-conformance-bench` captures
+each of them twice — plain and Draco, at an **identical framing** — and reports the per-pixel delta
+under `dracoDelta` (`DRACO_MODELS` in `bench.py`, `--no-draco` to skip). Full run 2026-09-18: 64
+captures, 0 error, 0 entity mismatch, worst mean delta **0.76/255** (`VirtualCity`). ⚠️ The A/B
+reuses the **plain** variant's bounds on purpose — quantisation dilates the bounding sphere by a
+constant **+0.0977 %**, so a recomputed framing measures the camera move instead of the codec. Read
+[`tools/gltf-conformance-bench/README.md`](../../../tools/gltf-conformance-bench/README.md)
+§ *The compressed-variant A/B* before judging any of those numbers.
+
+> [!NOTE]
+> `GLTFLoader` logs `Decoded N Draco-compressed primitive bitstream(s)` on a successful load. It is
+> a **positive** trace on purpose: decoded geometry is indistinguishable from plain geometry once
+> built, so that line is the only cheap evidence the path ran rather than being skipped.
+
+**Build**: `cmake/SetupDraco.cmake` in **emeraude-base** (owner of external dependencies), pinned to
+Draco **1.5.7**, decoder only. ⚠️ Draco installs **no CMake config package** — only
+`lib/pkgconfig/draco.pc` — so `find_package(draco CONFIG)` cannot work and the archive is referenced
+directly, as for FastGLTF. Symbol hiding needs no entry: the sweep globs `*.a`.
+
 #### Known gaps (glTF 2.0)
 
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
@@ -540,7 +638,11 @@ Not a wish list — these are silent today, so a diagnosis that assumes them pre
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) on **every** map since 2026-09-14, except its `texCoord` override, which is
 the multi-UV gap;
-every extension in the parser mask is now read; **transmission is the last one reading only its
+every extension in the parser mask is now read, but `EXT_texture_webp` is **not in the mask** —
+and since fastgltf rejects the whole file over a missing *required* extension, such an asset does
+not load at all (`SunglassesKhronos`, found 2026-09-18; `libwebp` is available in
+ext-deps-generator, so this is a decoder-wiring gap, not a dependency one);
+**transmission is the last one reading only its
 scalar factor, never its texture** (clearcoat's three maps and sheen's two are read since
 2026-09-14, see below); animation channels targeting a node that is
 not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
@@ -1410,6 +1512,11 @@ Checks `isSingleMesh()` — refuses multi-mesh assets. Transfers skeletal data a
   `MeshoptBufferAdapter` (`EXT_meshopt_compression`), defined in the **.cpp** because their interface
   speaks fastgltf types, which must never leak into a public engine header — hence the forward
   declaration in the .hpp and the out-of-line constructor **and** destructor.
+  `DracoPrimitiveCache` (`KHR_draco_mesh_compression`) lives in the same .cpp for the same reason,
+  but needs **no** forward declaration in the .hpp: unlike the meshopt cache it is not a member of
+  the loader — it is a local of `loadMeshes()`, because Draco never reaches skins, animations or
+  nodes. Its two read helpers `readDracoAwareAttribute()` / `readDracoAwareIndices()` are the single
+  gate every attribute and index read goes through.
 - `Graphics/KTX2Decoder.hpp/.cpp` — KTX2 container + Basis transcoder (`KHR_texture_basisu`)
 - `Graphics/CompressedImageResource.hpp/.cpp` — the block-compressed counterpart of `ImageResource`
 - `Scenes/Loaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)

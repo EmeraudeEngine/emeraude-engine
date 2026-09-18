@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <numbers>
 #include <span>
@@ -41,6 +42,8 @@
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 #include <meshoptimizer.h>
+#include <draco/compression/decode.h>
+#include <draco/mesh/mesh.h>
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
@@ -438,6 +441,347 @@ namespace EmEn::Scenes::Loaders
 		}
 	};
 
+	/**
+	 * @brief Decodes KHR_draco_mesh_compression primitives on demand and keeps the result.
+	 *
+	 * The extension replaces a primitive's vertex attributes AND its indices with a single Draco
+	 * bitstream held in one buffer view. fastgltf parses the extension metadata — the view index
+	 * and the glTF-name -> Draco-attribute-id map — but decodes nothing, so the work lands here.
+	 * Same division of labour as MeshoptBufferCache, for the other compression family.
+	 *
+	 * ⚠️⚠️ THE MESHOPT DESIGN DOES NOT TRANSPOSE, and trying to reuse it is a dead end.
+	 * EXT_meshopt_compression works at the BUFFER VIEW level, so a fastgltf::BufferDataAdapter
+	 * serves decoded bytes transparently and the rest of the loader never learns it exists.
+	 * Draco works at the PRIMITIVE level, and the accessors of a Draco primitive carry **no
+	 * bufferView at all** — so the adapter is never even consulted, because fastgltf only calls
+	 * it once a bufferView has been resolved. The interception therefore has to happen at every
+	 * read site, which is what readDracoAwareAttribute() below is for.
+	 *
+	 * Decoding is cached per buffer view: one bitstream carries every attribute AND the indices
+	 * of its primitive at once, so the eight read sites of a primitive must not decode it eight
+	 * times over.
+	 *
+	 * @note Not thread-safe : a loader instance drives a single load, on a single thread.
+	 * @see https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_draco_mesh_compression
+	 */
+	class DracoPrimitiveCache final
+	{
+		public:
+
+			DracoPrimitiveCache () noexcept = default;
+
+			/**
+			 * @brief Returns the decoded mesh backing a Draco-compressed primitive.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param primitive A reference to the primitive, which MUST carry the extension.
+			 * @return A pointer to the decoded mesh, nullptr on failure.
+			 */
+			[[nodiscard]]
+			const draco::Mesh *
+			mesh (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive) noexcept
+			{
+				const auto bufferViewIndex = primitive.dracoCompression->bufferView;
+
+				const auto decodedIt = m_decoded.find(bufferViewIndex);
+
+				if ( decodedIt != m_decoded.cend() )
+				{
+					/* A present but null entry is a bitstream that already failed: the failure is
+					 * paid once, not once per attribute, and it stays a failure. */
+					return decodedIt->second.get();
+				}
+
+				auto & decoded = m_decoded[bufferViewIndex];
+
+				decoded = DracoPrimitiveCache::decode(asset, bufferViewIndex);
+
+				if ( decoded == nullptr )
+				{
+					TraceError{GLTFLoader::ClassId} << "Unable to decode the Draco-compressed buffer view " << bufferViewIndex << " !";
+				}
+
+				return decoded.get();
+			}
+
+			/**
+			 * @brief Returns the Draco attribute backing one glTF attribute of a primitive.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param primitive A reference to the primitive, which MUST carry the extension.
+			 * @param attributeName The glTF attribute name, e.g. "POSITION".
+			 * @return A pointer to the attribute, or nullptr when this primitive does not
+			 * compress it — which is LEGAL and means the plain accessor still holds the data.
+			 */
+			[[nodiscard]]
+			const draco::PointAttribute *
+			attribute (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, std::string_view attributeName) noexcept
+			{
+				const auto & compression = *primitive.dracoCompression;
+
+				const auto * const attributeIt = compression.findAttribute(attributeName);
+
+				if ( attributeIt == compression.attributes.cend() )
+				{
+					return nullptr;
+				}
+
+				const auto * const decoded = this->mesh(asset, primitive);
+
+				if ( decoded == nullptr )
+				{
+					return nullptr;
+				}
+
+				/* ⚠️ `Attribute::accessorIndex` does NOT hold an accessor index here: fastgltf
+				 * reuses its generic Attribute struct to carry the extension's map, whose values
+				 * are Draco ATTRIBUTE UNIQUE IDS. The field name lies in this context, and
+				 * indexing asset.accessors with it would read an unrelated accessor. */
+				return decoded->GetAttributeByUniqueId(static_cast< uint32_t >(attributeIt->accessorIndex));
+			}
+
+			/**
+			 * @brief Returns the number of Draco bitstreams decoded so far.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			meshCount () const noexcept
+			{
+				return m_decoded.size();
+			}
+
+		private:
+
+			/**
+			 * @brief Runs one buffer view through the Draco codec.
+			 * @param asset A reference to the parsed glTF asset.
+			 * @param bufferViewIndex The index of the buffer view holding the bitstream.
+			 * @return std::unique_ptr< draco::Mesh >
+			 */
+			[[nodiscard]]
+			static
+			std::unique_ptr< draco::Mesh >
+			decode (const fastgltf::Asset & asset, size_t bufferViewIndex) noexcept
+			{
+				/* ⚠️ Read through the DEFAULT adapter, deliberately NOT through the meshopt cache:
+				 * the two compression extensions never apply to the same buffer view, and handing
+				 * a Draco bitstream to the meshopt codec would only get it rejected. */
+				const auto bytes = fastgltf::DefaultBufferDataAdapter{}(asset, bufferViewIndex);
+
+				if ( bytes.empty() )
+				{
+					return nullptr;
+				}
+
+				draco::DecoderBuffer buffer;
+				buffer.Init(reinterpret_cast< const char * >(bytes.data()), bytes.size());
+
+				draco::Decoder decoder;
+
+				/* @note DecodeMeshFromBuffer() checks the encoded geometry type itself and fails
+				 * on a point cloud, so no separate GetEncodedGeometryType() call is needed. */
+				auto result = decoder.DecodeMeshFromBuffer(&buffer);
+
+				if ( !result.ok() )
+				{
+					TraceError{GLTFLoader::ClassId} << "The Draco codec rejected a buffer view : " << result.status().error_msg();
+
+					return nullptr;
+				}
+
+				return std::move(result).value();
+			}
+
+			std::unordered_map< size_t, std::unique_ptr< draco::Mesh > > m_decoded;
+	};
+
+	/**
+	 * @brief Describes a fastgltf vector element so a Draco value can be written into one.
+	 * @tparam ElementType The fastgltf::math::vec specialisation used at the read site.
+	 */
+	template< typename ElementType >
+	struct AttributeElement;
+
+	template< typename component_t, size_t component_count >
+	struct AttributeElement< fastgltf::math::vec< component_t, component_count > >
+	{
+		using Component = component_t;
+
+		static constexpr int8_t ComponentCount{static_cast< int8_t >(component_count)};
+	};
+
+	/**
+	 * @brief Reads one vertex attribute of a primitive, whichever way it is stored.
+	 *
+	 * Routes to the Draco decoder when the primitive compresses this attribute, and to the plain
+	 * accessor otherwise. A primitive is allowed to be MIXED — KHR_draco_mesh_compression only
+	 * covers the primitive's own attributes and its indices, so anything else it declares (morph
+	 * targets, most notably) stays an ordinary accessor and takes the second branch.
+	 *
+	 * ⚠️⚠️ THE GUARD IS THE POINT OF THIS FUNCTION. An accessor with no bufferView makes
+	 * fastgltf::iterateAccessor() emit `count` ZERO-INITIALISED elements without any error, as
+	 * glTF § 5.1.1 mandates ("MUST be initialized with zeros; extensions MAY override"). Since
+	 * every accessor of a Draco primitive is bufferView-less, a read site that forgot to route
+	 * through here would produce a mesh collapsed onto the origin, silently, with no log line
+	 * and no failure. So a bufferView-less accessor that Draco did not claim is a hard error.
+	 *
+	 * @tparam ElementType The fastgltf vector type the functor expects.
+	 * @tparam Functor The per-element callback type.
+	 * @param asset A reference to the parsed glTF asset.
+	 * @param primitive A reference to the primitive being read.
+	 * @param attributeName The glTF attribute name, e.g. "POSITION".
+	 * @param accessor A reference to the accessor declared for that attribute.
+	 * @param dracoCache A reference to the Draco cache.
+	 * @param adapter A reference to the meshopt-backed buffer adapter.
+	 * @param functor The callback invoked once per element, in vertex order.
+	 * @return bool
+	 */
+	template< typename ElementType, typename Functor >
+	[[nodiscard]]
+	bool
+	readDracoAwareAttribute (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, std::string_view attributeName, const fastgltf::Accessor & accessor, DracoPrimitiveCache & dracoCache, const MeshoptBufferAdapter & adapter, Functor && functor) noexcept
+	{
+		if ( primitive.dracoCompression != nullptr )
+		{
+			const auto * const dracoAttribute = dracoCache.attribute(asset, primitive, attributeName);
+
+			if ( dracoAttribute != nullptr )
+			{
+				const auto * const dracoMesh = dracoCache.mesh(asset, primitive);
+
+				if ( dracoMesh == nullptr )
+				{
+					return false;
+				}
+
+				/* ⚠️ The decoded point count and the accessor count MUST agree: the rest of
+				 * loadMeshes() pre-allocated its vertex array from the ACCESSOR, so a shorter
+				 * decode would leave uninitialised vertices and a longer one would write past
+				 * the primitive's slice. */
+				if ( static_cast< size_t >(dracoMesh->num_points()) != accessor.count )
+				{
+					TraceError{GLTFLoader::ClassId} <<
+						"Draco attribute '" << attributeName << "' decodes " << dracoMesh->num_points() <<
+						" points where the accessor declares " << accessor.count << " !";
+
+					return false;
+				}
+
+				/* ⚠️ The glTF accessor is the authority on normalisation, not the bitstream.
+				 * Draco carries its own `normalized` flag and ConvertValue() honours it, so a
+				 * disagreement between the two would silently scale an attribute by 255 (or by
+				 * 1/255). No asset of the Khronos corpus exercises this — every Draco-compressed
+				 * attribute there is plain float or plain uint16 — so say so rather than guess. */
+				if ( dracoAttribute->normalized() != accessor.normalized )
+				{
+					TraceWarning{GLTFLoader::ClassId} <<
+						"Draco attribute '" << attributeName << "' declares normalized=" << dracoAttribute->normalized() <<
+						" where the glTF accessor declares " << accessor.normalized << " — reading with the bitstream's own convention.";
+				}
+
+				using Component = typename AttributeElement< ElementType >::Component;
+
+				constexpr auto componentCount = AttributeElement< ElementType >::ComponentCount;
+
+				std::array< Component, static_cast< size_t >(componentCount) > components{};
+
+				for ( uint32_t pointIndex = 0; pointIndex < dracoMesh->num_points(); ++pointIndex )
+				{
+					/* ⚠️ `mapped_index()` is not decoration: a Draco attribute is stored as a
+					 * value table plus a point -> value mapping, so reading the table in point
+					 * order would scramble every attribute that has fewer values than points
+					 * (a hard edge splits UVs but not positions, and the two tables differ). */
+					if ( !dracoAttribute->ConvertValue< Component >(dracoAttribute->mapped_index(draco::PointIndex{pointIndex}), componentCount, components.data()) )
+					{
+						TraceError{GLTFLoader::ClassId} << "Draco attribute '" << attributeName << "' could not be converted at point " << pointIndex << " !";
+
+						return false;
+					}
+
+					functor(ElementType::fromPointer(components.data()));
+				}
+
+				return true;
+			}
+		}
+
+		if ( !accessor.bufferViewIndex.has_value() )
+		{
+			TraceError{GLTFLoader::ClassId} <<
+				"Attribute '" << attributeName << "' has no buffer view and no Draco source — "
+				"reading it would silently yield zeros. Refusing the mesh.";
+
+			return false;
+		}
+
+		fastgltf::iterateAccessor< ElementType >(asset, accessor, std::forward< Functor >(functor), adapter);
+
+		return true;
+	}
+
+	/**
+	 * @brief Reads the triangle indices of a primitive, whichever way they are stored.
+	 *
+	 * ⚠️ Unlike an attribute, the indices of a Draco primitive are ALWAYS carried by the
+	 * bitstream — the extension has no notion of compressing the attributes while leaving the
+	 * indices behind. So a Draco primitive whose mesh fails to decode is a hard failure here,
+	 * with no accessor to fall back on.
+	 *
+	 * @tparam Functor The per-index callback type.
+	 * @param asset A reference to the parsed glTF asset.
+	 * @param primitive A reference to the primitive being read.
+	 * @param accessor A reference to the index accessor.
+	 * @param dracoCache A reference to the Draco cache.
+	 * @param adapter A reference to the meshopt-backed buffer adapter.
+	 * @param functor The callback invoked once per index, three per triangle.
+	 * @return bool
+	 */
+	template< typename Functor >
+	[[nodiscard]]
+	bool
+	readDracoAwareIndices (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, const fastgltf::Accessor & accessor, DracoPrimitiveCache & dracoCache, const MeshoptBufferAdapter & adapter, Functor && functor) noexcept
+	{
+		if ( primitive.dracoCompression != nullptr )
+		{
+			const auto * const dracoMesh = dracoCache.mesh(asset, primitive);
+
+			if ( dracoMesh == nullptr )
+			{
+				return false;
+			}
+
+			if ( static_cast< size_t >(dracoMesh->num_faces()) * 3 != accessor.count )
+			{
+				TraceError{GLTFLoader::ClassId} <<
+					"The Draco bitstream decodes " << dracoMesh->num_faces() << " faces where the index accessor declares " <<
+					accessor.count << " indices !";
+
+				return false;
+			}
+
+			for ( uint32_t faceIndex = 0; faceIndex < dracoMesh->num_faces(); ++faceIndex )
+			{
+				const auto & face = dracoMesh->face(draco::FaceIndex{faceIndex});
+
+				functor(face[0].value());
+				functor(face[1].value());
+				functor(face[2].value());
+			}
+
+			return true;
+		}
+
+		if ( !accessor.bufferViewIndex.has_value() )
+		{
+			Tracer::error(GLTFLoader::ClassId, "The index accessor has no buffer view and no Draco source — reading it would silently yield zeros. Refusing the mesh.");
+
+			return false;
+		}
+
+		fastgltf::iterateAccessor< uint32_t >(asset, accessor, std::forward< Functor >(functor), adapter);
+
+		return true;
+	}
+
 	GLTFLoader::GLTFLoader (Resources::Manager & resources) noexcept
 		: m_resources{resources}
 	{
@@ -496,7 +840,19 @@ namespace EmEn::Scenes::Loaders
 			 *    transforms extractFrameFromNode() already reads. */
 			fastgltf::Extensions::KHR_texture_basisu |
 			fastgltf::Extensions::EXT_meshopt_compression |
-			fastgltf::Extensions::KHR_mesh_quantization
+			fastgltf::Extensions::KHR_mesh_quantization |
+			/* NOTE: The second compression family, independent from the meshopt one above.
+			 * fastgltf only PARSES the extension — it fills `Primitive::dracoCompression` with
+			 * the buffer view holding the bitstream and the glTF-name -> Draco-attribute-id map,
+			 * and decodes nothing. DracoPrimitiveCache below does the decoding.
+			 *
+			 * ⚠️⚠️ Declaring this line is what makes such an asset PARSE instead of being
+			 * refused with Error::MissingExtensions — and a parsed Draco asset is exactly where
+			 * a missed read site turns into silent garbage rather than an error, because the
+			 * accessors of a Draco primitive carry NO bufferView and glTF § 5.1.1 then mandates
+			 * zeros. Every attribute read in loadMeshes() therefore goes through
+			 * readDracoAwareAttribute()/readDracoAwareIndices(), which fail loudly instead. */
+			fastgltf::Extensions::KHR_draco_mesh_compression
 		);
 
 		constexpr auto options =
@@ -1730,6 +2086,12 @@ namespace EmEn::Scenes::Loaders
 		 * geometry rather than an error. */
 		const MeshoptBufferAdapter adapter{m_bufferCache.get()};
 
+		/* KHR_draco_mesh_compression working set. Unlike the meshopt cache this one is NOT a
+		 * buffer adapter and cannot be: a Draco accessor has no buffer view for an adapter to
+		 * serve. It is consulted explicitly by every read site below, and it lives only for the
+		 * duration of this function — Draco never reaches skins, animations or nodes. */
+		DracoPrimitiveCache dracoCache;
+
 		bool allSuccess = true;
 
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
@@ -1864,6 +2226,11 @@ namespace EmEn::Scenes::Loaders
 			 * silently produced an EMPTY vector and the first colour write segfaulted. */
 
 			/* Second pass: fill vertices and triangles directly into pre-allocated vectors. */
+			/* ⚠️ Set by any read site that could not obtain its data — a failed Draco decode, or a
+			 * bufferView-less accessor nothing claimed. It must abort the mesh instead of letting
+			 * the zero-filled fallback of glTF § 5.1.1 pass for geometry. */
+			bool primitiveReadFailed = false;
+
 			const bool buildSuccess = shape->build([&] (auto & groups, auto & vertices, auto & triangles) {
 				vertices.resize(totalVertexCount);
 				triangles.reserve(totalTriangleCount);
@@ -1908,10 +2275,13 @@ namespace EmEn::Scenes::Loaders
 					{
 						size_t index = 0;
 
-						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, posAccessor, [&] (const fastgltf::math::fvec3 & v) {
+						if ( !readDracoAwareAttribute< fastgltf::math::fvec3 >(asset, glTFPrimitive, "POSITION", posAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec3 & v) {
 							vertices[globalVertexOffset + index].setPosition(Vector< 3, float >{v.x() * m_options.uniformScale, v.y() * m_options.uniformScale, v.z() * m_options.uniformScale});
 							index++;
-						}, adapter);
+						}) )
+						{
+							primitiveReadFailed = true;
+						}
 					}
 
 					/* Read normals directly into vertex array. */
@@ -1922,10 +2292,13 @@ namespace EmEn::Scenes::Loaders
 						const auto & normAccessor = asset.accessors[normalIt->accessorIndex];
 						size_t index = 0;
 
-						fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, normAccessor, [&] (const fastgltf::math::fvec3 & v) {
+						if ( !readDracoAwareAttribute< fastgltf::math::fvec3 >(asset, glTFPrimitive, "NORMAL", normAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec3 & v) {
 							vertices[globalVertexOffset + index].setNormal(Vector< 3, float >{v.x(), v.y(), v.z()});
 							index++;
-						}, adapter);
+						}) )
+						{
+							primitiveReadFailed = true;
+						}
 					}
 
 					/* Read authored tangents directly into vertex array.
@@ -1946,10 +2319,13 @@ namespace EmEn::Scenes::Loaders
 							const auto & tangentAccessor = asset.accessors[tangentIt->accessorIndex];
 							size_t index = 0;
 
-							fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, tangentAccessor, [&] (const fastgltf::math::fvec4 & v) {
+							if ( !readDracoAwareAttribute< fastgltf::math::fvec4 >(asset, glTFPrimitive, "TANGENT", tangentAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec4 & v) {
 								vertices[globalVertexOffset + index].setTangent(Vector< 4, float >{v.x(), v.y(), v.z(), v.w()});
 								index++;
-							}, adapter);
+							}) )
+							{
+								primitiveReadFailed = true;
+							}
 						}
 					}
 
@@ -1974,17 +2350,23 @@ namespace EmEn::Scenes::Loaders
 
 							if ( colorAccessor.type == fastgltf::AccessorType::Vec3 )
 							{
-								fastgltf::iterateAccessor< fastgltf::math::fvec3 >(asset, colorAccessor, [&] (const fastgltf::math::fvec3 & v) {
+								if ( !readDracoAwareAttribute< fastgltf::math::fvec3 >(asset, glTFPrimitive, "COLOR_0", colorAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec3 & v) {
 									colors[globalVertexOffset + index] = {v.x(), v.y(), v.z(), 1.0F};
 									index++;
-								}, adapter);
+								}) )
+								{
+									primitiveReadFailed = true;
+								}
 							}
 							else
 							{
-								fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, colorAccessor, [&] (const fastgltf::math::fvec4 & v) {
+								if ( !readDracoAwareAttribute< fastgltf::math::fvec4 >(asset, glTFPrimitive, "COLOR_0", colorAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec4 & v) {
 									colors[globalVertexOffset + index] = {v.x(), v.y(), v.z(), v.w()};
 									index++;
-								}, adapter);
+								}) )
+								{
+									primitiveReadFailed = true;
+								}
 							}
 						}
 					}
@@ -1997,10 +2379,13 @@ namespace EmEn::Scenes::Loaders
 						const auto & uvAccessor = asset.accessors[textureCoordinatesIt->accessorIndex];
 						size_t index = 0;
 
-						fastgltf::iterateAccessor< fastgltf::math::fvec2 >(asset, uvAccessor, [&] (const fastgltf::math::fvec2 & v) {
+						if ( !readDracoAwareAttribute< fastgltf::math::fvec2 >(asset, glTFPrimitive, "TEXCOORD_0", uvAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec2 & v) {
 							vertices[globalVertexOffset + index].setTextureCoordinates(Vector< 3, float >{v.x(), v.y(), 0.0F});
 							index++;
-						}, adapter);
+						}) )
+						{
+							primitiveReadFailed = true;
+						}
 					}
 
 					if ( !m_options.skipSkinning )
@@ -2013,7 +2398,7 @@ namespace EmEn::Scenes::Loaders
 							const auto & jointsAccessor = asset.accessors[jointsIt->accessorIndex];
 							size_t index = 0;
 
-							fastgltf::iterateAccessor< fastgltf::math::u16vec4 >(asset, jointsAccessor, [&] (const fastgltf::math::u16vec4 & v) {
+							if ( !readDracoAwareAttribute< fastgltf::math::u16vec4 >(asset, glTFPrimitive, "JOINTS_0", jointsAccessor, dracoCache, adapter, [&] (const fastgltf::math::u16vec4 & v) {
 								vertices[globalVertexOffset + index].setInfluences(
 									static_cast< int32_t >(v.x()),
 									static_cast< int32_t >(v.y()),
@@ -2022,7 +2407,10 @@ namespace EmEn::Scenes::Loaders
 								);
 
 								index++;
-							}, adapter);
+							}) )
+							{
+								primitiveReadFailed = true;
+							}
 						}
 
 						/* Read bone weights (WEIGHTS_0) for skeletal animation. */
@@ -2033,10 +2421,13 @@ namespace EmEn::Scenes::Loaders
 							const auto & weightsAccessor = asset.accessors[weightsIt->accessorIndex];
 							size_t index = 0;
 
-							fastgltf::iterateAccessor< fastgltf::math::fvec4 >(asset, weightsAccessor, [&] (const fastgltf::math::fvec4 & v) {
+							if ( !readDracoAwareAttribute< fastgltf::math::fvec4 >(asset, glTFPrimitive, "WEIGHTS_0", weightsAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec4 & v) {
 								vertices[globalVertexOffset + index].setWeights(v.x(), v.y(), v.z(), v.w());
 								index++;
-							}, adapter);
+							}) )
+							{
+								primitiveReadFailed = true;
+							}
 						}
 					}
 
@@ -2055,7 +2446,7 @@ namespace EmEn::Scenes::Loaders
 						std::array< uint32_t, 3 > triangleBuffer{};
 						uint32_t triangleSlot = 0;
 
-						fastgltf::iterateAccessor< uint32_t >(asset, indexAccessor, [&] (uint32_t value) {
+						if ( !readDracoAwareIndices(asset, glTFPrimitive, indexAccessor, dracoCache, adapter, [&] (uint32_t value) {
 							triangleBuffer.at(triangleSlot++) = globalVertexOffset + value;
 
 							if ( triangleSlot == 3 )
@@ -2076,7 +2467,10 @@ namespace EmEn::Scenes::Loaders
 
 								triangleSlot = 0;
 							}
-						}, adapter);
+						}) )
+						{
+							primitiveReadFailed = true;
+						}
 
 						/* Track triangles per group. */
 						if ( !groups.empty() )
@@ -2090,6 +2484,22 @@ namespace EmEn::Scenes::Loaders
 
 				return true;
 			}, true); /* textureCoordinatesDeclared = true */
+
+			/* ⚠️ Kept SEPARATE from the invalid-shape branch below, and reported as an ERROR
+			 * rather than a warning: a shape that fails isValid() is malformed content, whereas
+			 * this one means the loader could not read data it was told exists — a defect on our
+			 * side or a corrupt bitstream. Conflating the two would bury the second in the noise
+			 * of the first. */
+			if ( primitiveReadFailed )
+			{
+				TraceError{ClassId} << "Mesh '" << glTFMesh.name << "' could not be read (compressed geometry failed to decode, or an accessor had no data source), using default.";
+
+				m_meshes[meshIndex] = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
+
+				allSuccess = false;
+
+				continue;
+			}
 
 			if ( !buildSuccess || !shape->isValid() )
 			{
@@ -2263,6 +2673,14 @@ namespace EmEn::Scenes::Loaders
 			{
 				m_options.onMeshLoaded(output.meshes[meshIndex]);
 			}
+		}
+
+		/* A POSITIVE trace on purpose: the decoded geometry is indistinguishable from plain
+		 * geometry once built, so this line is the only cheap evidence that the Draco path ran
+		 * at all rather than being silently skipped. */
+		if ( dracoCache.meshCount() > 0 )
+		{
+			TraceInfo{ClassId} << "Decoded " << dracoCache.meshCount() << " Draco-compressed primitive bitstream(s).";
 		}
 
 		return allSuccess;
