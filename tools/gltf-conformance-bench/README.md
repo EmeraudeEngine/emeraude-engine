@@ -120,6 +120,27 @@ Picking a numeric threshold here would freeze one asset's quantisation grid into
 > silently — `dracoEntityMismatch` in the report. It is the same structural control the rest of the
 > bench runs, and it is what a per-pixel criterion cannot see.
 
+> [!CAUTION]
+> **A KEYSTROKE ON THE WINDOW SILENTLY CORRUPTS A CAPTURE, and the numbers alone will not say so.**
+> The bench drives a window that sits on someone's screen. Pressing **space** over it cycles the
+> model viewer's animation (`Core::cycleViewerAnimation`, reached from `KeyCode::KeySpace`), so the
+> subject is captured mid-stride instead of at rest. `Core.cycleAnimation()` over the console does
+> the same. Measured 2026-09-18: one stray space bar during a run took `CesiumMan`'s A/B from a mean
+> of **0.10/255 to 9.22**, and `BrainStem`'s to 8.88 — an 80x jump that reads exactly like the
+> "mean that moves" signature of a real defect.
+>
+> Two things make it diagnosable, and both must be used:
+> - **`m_viewerAnimationIndex` resets to 0 on every model open**, so only the capture between that
+>   keystroke and the next load is affected. In an A/B that means the *plain* capture is corrupted
+>   and its `[draco]` twin is not, which is a nonsensical asymmetry — the codec cannot make one
+>   variant walk.
+> - **The capture SHOWS it**: the overlay reads `Animation 1/1: <clip>` in the corner, and the
+>   subject's pose differs. Look at the image before trusting a number that moved.
+>
+> The cheap confirmation is to compare the SAME variant across two runs: a stable pair and a moving
+> one isolates the contaminated capture immediately. `BrainStem` additionally carries a genuine
+> ~0.02 % run-to-run non-determinism in **both** variants, so treat that as its floor, not a signal.
+
 > [!WARNING]
 > **Before believing any A/B, check the comparator discriminates.** Two *different* models must
 > come out far apart — 58.5 % of pixels and a mean of 95.6/255, measured. A comparison harness that
