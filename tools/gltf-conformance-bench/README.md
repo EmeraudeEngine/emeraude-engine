@@ -164,13 +164,15 @@ Picking a numeric threshold here would freeze one asset's quantisation grid into
 > comparison is confounded. ⚠️ This also means the `CarConcept` figure published on 2026-09-18
 > (mean 0.22 / 0.49) was never a Draco number.
 
-> [!CAUTION]
-> **Start the bench from an engine that has not hand-loaded the assets.** The glTF resource prefix
-> is keyed on the file **stem**, so both variants of a model share one resource namespace
-> (`glTF:SunglassesKhronos/`). Loading a variant through `Core.openFiles()` and then running the
-> bench in the same session reported **98.16 % of pixels, mean 39.28/255** for `SunglassesKhronos`;
-> from a clean session the same comparison is **6.35 % / 0.10** and reproduces exactly. Engine item:
-> `docs/todo/gltf-resource-prefix-collides-between-asset-variants.md`.
+> [!NOTE]
+> **A run is no longer sensitive to what the engine loaded before it — since 2026-09-18.** It used
+> to be: the glTF resource prefix was keyed on the file *stem*, so both variants of a model shared
+> one resource namespace and the second load served the first's cache. Hand-loading a variant with
+> `Core.openFiles()` and then benching it in the same session reported **98.16 % of pixels, mean
+> 39.28/255** for `SunglassesKhronos`, against **6.35 % / 0.10** from a clean session. The prefix is
+> now derived from the whole path, and that contaminated scenario reproduces 6.3451 % exactly.
+> Recorded because the shape recurs: **a defect that only moves a number, with nothing visibly
+> broken, is the hardest kind to catch — and a bench is precisely where it surfaces first.**
 
 **`DRACO_BLOCKED` is empty since 2026-09-18** — `SunglassesKhronos` was its only occupant, blocked
 by `EXT_texture_webp` rather than by anything to do with Draco, and that extension is now supported.

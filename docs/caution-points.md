@@ -1607,6 +1607,29 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 
 ## Resources / Loaders
 
+### Two files with the same NAME shared one resource namespace — fixed Sep 2026
+
+> [!CAUTION]
+> **A defect whose only symptom is a wrong NUMBER is the hardest kind to catch.** `GLTFLoader`'s
+> per-asset resource prefix was the file **stem**, so
+> `SunglassesKhronos/glTF-Binary/SunglassesKhronos.glb` and
+> `SunglassesKhronos/glTF-Draco/SunglassesKhronos.gltf` — different geometry *and* texture encodings
+> — shared `glTF:SunglassesKhronos/`, and the second load quietly served the first's cached
+> resources. Nothing crashed, nothing looked wrong: the conformance bench simply reported **98.16 %
+> of pixels differing, mean 39.28/255** where a clean session read **6.35 % / 0.10**.
+>
+> Fixed by keying on the whole path (`lexically_normal().generic_string()`, extension dropped). The
+> contaminated scenario now reproduces 6.3451 %, bit-identical to the clean one.
+>
+> ⚠️ It hid because replacing a viewer scene unloads its resources first, so the ordinary path never
+> collides. Reproducing it takes loading variant A then variant B **without the first scene being
+> torn down** — which is what a manual `Core.openFiles()` followed by an automated run does.
+>
+> ⚠️ The key is the path **as given**, NOT canonicalised: a caller must be able to predict it without
+> loading (projet-alpha's `Fox` skips a reload that way). The price is that two spellings of one file
+> are two keys — pass an asset's path consistently. Details:
+> `src/Scenes/Loaders/AGENTS.md` § *The resource PREFIX*.
+
 ### A bufferView-less glTF accessor reads as ZEROS, silently — the Draco trap (Sep 2026)
 
 > [!CAUTION]

@@ -105,6 +105,44 @@ class Interface {
 
 **Note:** `flattenHierarchy` is NOT in `LoaderOptions` — it only affects scene building and belongs in `Scenes::SceneDataConsumer`.
 
+### The resource PREFIX — A FILE NAME IS NOT AN IDENTITY EITHER (fixed 2026-09-18)
+
+The same lesson as the section below, one level up. `GLTFLoader::load()` builds every key under a
+per-asset prefix, and that prefix was the file **stem**:
+
+```cpp
+m_resourcePrefix = "glTF:" + filepath.stem().string() + "/";                       // until 2026-09-18
+m_resourcePrefix = "glTF:" + path.replace_extension().lexically_normal().generic_string() + "/";
+```
+
+So `SunglassesKhronos/glTF-Binary/SunglassesKhronos.glb` and
+`SunglassesKhronos/glTF-Draco/SunglassesKhronos.gltf` — different geometry encodings, different
+texture encodings — shared one namespace, `glTF:SunglassesKhronos/`, and the second load served the
+first's cached resources.
+
+> [!CAUTION]
+> **The symptom was a WRONG MEASUREMENT, never a crash.** The conformance bench read **98.16 % of
+> pixels differing, mean 39.28/255** for that model when a manual `Core.openFiles()` of one variant
+> preceded the run in the same session; from a clean session the same comparison is **6.35 % /
+> 0.10**. After the fix the contaminated scenario reproduces **6.3451 %**, bit-identical to the clean
+> one. A defect that only moves a number is the worst kind — nothing looks broken.
+>
+> It stayed hidden because replacing a viewer scene unloads its resources first, so the common case
+> never collides. Reproduce it by loading variant A and then variant B **without letting the first
+> scene be torn down**.
+
+**The key is derived from the path AS GIVEN**, deliberately: `lexically_normal()` folds `.`/`..`
+away and `generic_string()` forces forward slashes, so one file yields one key on every platform —
+but it is *not* canonicalised to an absolute path, because a caller must be able to **predict the
+key without loading anything**. projet-alpha's `Fox` does exactly that, to skip a reload it has
+already performed (`src/Actor/Fox.cpp`, `FoxMeshResourceName`).
+
+> [!WARNING]
+> **The price of that choice: two SPELLINGS of one file are two keys.** Passing
+> `data/data-stores/glTF/Fox.glb` in one place and an absolute path to the same file in another
+> loads its resources twice. Pass an asset's path consistently. Canonicalising instead would have
+> made every key machine-dependent and unwritable by hand.
+
 ### The resource key — AN ASSET NAME IS NOT AN IDENTITY (fixed 2026-08-28)
 
 > [!CAUTION]

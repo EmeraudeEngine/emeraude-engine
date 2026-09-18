@@ -874,7 +874,25 @@ namespace EmEn::Scenes::Loaders
 	GLTFLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
 		/* Generate a resource prefix from the filename. */
-		m_resourcePrefix = "glTF:" + filepath.stem().string() + "/";
+		/* ⚠️⚠️ The PATH, not the stem. Keyed on the stem — as it was until 2026-09-18 — two
+		 * different files named alike shared their whole resource namespace: the Khronos corpus
+		 * ships `SunglassesKhronos/glTF-Binary/SunglassesKhronos.glb` and
+		 * `SunglassesKhronos/glTF-Draco/SunglassesKhronos.gltf`, whose geometry AND texture
+		 * encodings differ, under one prefix `glTF:SunglassesKhronos/`. The symptom was never a
+		 * crash: the second load served the first's cached resources, and the conformance bench
+		 * measured 98.16 % of pixels differing where a clean session reads 6.35 % — a WRONG
+		 * MEASUREMENT, which is the worst failure mode. Same lesson as buildResourceKey() one
+		 * level down: a NAME IS NOT AN IDENTITY, and here the file name is the name.
+		 *
+		 * `lexically_normal()` folds `.` and `..` away and `generic_string()` forces forward
+		 * slashes, so one file yields one key on every platform.
+		 *
+		 * ⚠️ The key is derived from the path AS GIVEN, deliberately: a caller must be able to
+		 * predict it without loading anything — projet-alpha's Fox does exactly that, to skip a
+		 * reload it has already done. Canonicalising to an absolute path would make the key
+		 * machine-dependent and unwritable by hand. The price is that two SPELLINGS of one file
+		 * (a relative and an absolute path) are two keys: pass an asset's path consistently. */
+		m_resourcePrefix = "glTF:" + std::filesystem::path{filepath}.replace_extension().lexically_normal().generic_string() + "/";
 
 		/* stripRootMotion only ever acted on loadAnimationClipsOnly(), which this loader
 		 * does not implement (glTF carries its clips inside the asset, so the split-animation
