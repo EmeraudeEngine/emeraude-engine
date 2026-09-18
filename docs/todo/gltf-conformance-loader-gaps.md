@@ -109,36 +109,41 @@ been there since the console was unified. The claim came from a `help` dump pipe
 `grep | head`, where `set` sorts one line past `save` and fell off the end. **`<path>.lsfunc()`
 enumerates a level; never conclude a capability is missing from a truncated pipe.**
 
-### ⚠️⚠️ The capture's ENVIRONMENT is not deterministic (measured 2026-09-18)
+### ⚠️⚠️ The capture's ENVIRONMENT was not deterministic — FIXED 2026-09-18
 
-Re-running the compressed-variant bench unchanged, 30 of 34 rows reproduced **to the fourth
-decimal** and two moved hugely: `RiggedSimple` by **+28.39**/255 of mean, `CarConcept` by −1.78.
+Re-running the compressed-variant bench unchanged, two rows of 34 moved hugely while the other 32
+reproduced to the fourth decimal: `RiggedSimple` by **+28.39**/255 of mean, `CarConcept` by −1.78.
 
-Neither is a codec difference. Comparing each capture against its own counterpart in the previous
-run isolates it: the row that moved is the **plain** variant for `RiggedSimple` and the **Draco**
-one for `CarConcept` — a different side each time, which no codec can produce. In both, **the
-subject is pixel-identical and only the BACKGROUND differs**: one frame shows the default cubemap,
-the other the viewer's landscape.
+Neither was a codec difference, and the way to tell is worth keeping: comparing each capture against
+its own counterpart in the previous run showed the row that moved was the **plain** variant for one
+model and the **Draco** variant for the other — a different side each time, which no codec can
+produce. In both, the subject was pixel-identical and only the BACKGROUND differed. The viewer's
+environment cubemap streams, and the scene logs its choice before the texture is resident.
 
-The engine log shows the same sequence for both variants — `+DefaultTextureCubemap` twice, then
-`GreenLandscape`, all **before** either screenshot — so the scene had *decided* on the landscape in
-every case. The best explanation consistent with that is the cubemap still **streaming** when the
-frame was drawn, the decision being logged before the texture is resident. ⚠️ That last step is an
-inference, not a measurement: what is measured is that the background differs while the subject does
-not.
+**Two changes, and only the second cures it:**
 
-**How to read it**, because it mimics a real defect perfectly:
+1. The comparison is cropped to the subject's projected **AABB** (`subject_box()`). ⚠️ This does
+   **not** fix the race — it was tried first and made it worse, `RiggedSimple` going 28.43 → 38.40,
+   because a tight box around a slender model is still mostly background and removing the identical
+   sky merely concentrates the difference. It is kept because the mean now describes the subject
+   instead of being diluted over two megapixels of sky.
+2. `DRACO_AB_ENVIRONMENT` poses the bit-exact black backdrop on every A/B row that does not declare
+   an environment of its own. **Nothing left to stream, no race.**
 
-- the mean moves by **tens** of units, far above the quantisation floor;
-- the entity count still matches, so the structural control says nothing;
-- **the two frames differ across the whole background and nowhere on the model.**
+⚠️ The crop had its own defect, caught by checking the box DIMENSIONS rather than the means:
+`MorphPrimitivesTest` is flat, so seen face-on its AABB projects to a LINE — box `(223, 360, 1057,
+360)`, zero height, and a relative margin of zero gave an empty box and a row that silently dropped
+out of the table. Hence `MIN_SUBJECT_BOX_MARGIN_PIXELS`. **Read the boxes, not only the numbers: a
+row that vanishes looks like nothing at all.**
 
-Compare the same variant across two runs before blaming the codec: a row that moved on one side only
-is an environment race, not a decode.
+> [!CAUTION]
+> **Figures from before 2026-09-18 are NOT comparable with the ones after.** The mean is taken over
+> the subject's box and the environment reflection is gone from the comparison; every value roughly
+> doubled for that reason alone.
 
-**What would fix it**: wait for the environment to be resident before capturing — the bench has no
-signal for that today — or crop the comparison to the subject's bounding box, which it already knows
-from the framing plan. Until then, treat a mean jump with an untouched subject as this, and re-run.
+**Measured after both changes**, two consecutive full runs: 23 of 33 shared rows identical to the
+fourth decimal, largest drift **0.062**/255 — against 28.39 before. 34 rows compared, 0 entity
+mismatch, 0 load error, 0 degenerate box, 0 VUID.
 
 ## What remains
 

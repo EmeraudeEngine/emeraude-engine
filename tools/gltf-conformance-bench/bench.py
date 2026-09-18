@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console  # noqa: E402
 from gltf_bounds import image_encodings, scene_bounds  # noqa: E402
-from png_compare import compare as compare_captures  # noqa: E402
+from png_compare import compare as compare_captures, read_png_size  # noqa: E402
 
 
 # --- Optics -----------------------------------------------------------------------------------
@@ -201,6 +201,27 @@ DRACO_MODELS = {
 # occupant, and one that had nothing to do with Draco. The table stays because the next asset to be
 # blocked will need it, and because `main()` answers with the reason instead of "unknown model".
 DRACO_BLOCKED = {}
+
+# The environment every compressed-variant A/B is shot in.
+#
+# ⚠️⚠️ NOT a style choice — it is what makes the comparison reproducible. The viewer's environment
+# cubemap STREAMS, and the scene logs its choice before the texture is resident, so one capture of a
+# pair can be drawn with the default while its twin gets the landscape. Measured 2026-09-18: that
+# moved `RiggedSimple` by +28.39/255 of mean and `CarConcept` by -1.78 with the subject
+# pixel-identical — indistinguishable from a codec defect, and the entity count matched so the
+# structural control stayed silent.
+#
+# ⚠️ Cropping to the subject does NOT fix it, and was tried first: a tight box around a slender
+# model is still mostly background, and removing the identical sky only concentrates the difference
+# — `RiggedSimple` went from 28.43 to 38.40. The cure is to have nothing to stream.
+#
+# "" on both keys is the bit-exact black backdrop already used by the SpecularTest/SheenCloth rows.
+# The viewer's own key light still lights the subject, so it stays readable; what disappears is the
+# environment reflection, which a GEOMETRY codec test has no business measuring anyway.
+DRACO_AB_ENVIRONMENT = {
+    "Core/Viewers/Background": "",
+    "Core/Viewers/EnvironmentCubemap": "",
+}
 
 # --- Per-model viewer environment ------------------------------------------------------------
 #
@@ -582,6 +603,11 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
             # run never leaves one test's environment on another's capture.
             environment = ENVIRONMENTS.get(model)
 
+            # A compressed-variant pair is shot in a deterministic environment unless the model
+            # already declares one of its own, which then wins: a test posed for a reason keeps it.
+            if environment is None and model in DRACO_MODELS:
+                environment = DRACO_AB_ENVIRONMENT
+
             if environment is not None:
                 apply_environment(console, environment)
                 posed_environment = True
@@ -674,7 +700,7 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
                     record["views"][name] = {"error": str(error)}
                     continue
 
-                record["views"][name] = {"file": str(destination)}
+                record["views"][name] = {"file": str(destination), "position": position}
 
                 flag = "  [CLAMPED by the fixed near plane]" if entry["near_plane_clamped"] else ""
                 print(f"  {name:<10} d={entry['distance']:8.4f} m  "
@@ -689,6 +715,101 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
             print(f"\nviewer environment restored: " + ", ".join(f"{k.rsplit('/', 1)[1]}={v!r}" for k, v in session_environment.items()))
 
     return report
+
+
+def dot(a, b) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def cross(a, b) -> tuple:
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def normalise(v) -> tuple:
+    length = math.sqrt(dot(v, v))
+
+    return (v[0] / length, v[1] / length, v[2] / length) if length > 1e-12 else (0.0, 0.0, 1.0)
+
+
+# How much larger than the subject the comparison box is drawn.
+#
+# ⚠️ Not decoration: the silhouette is exactly where a lossy geometry codec differs, and a box cut
+# flush to the bounding sphere would clip the pixels the measurement is about. 15 % also absorbs the
+# small framing drift between two builds of the same scene.
+SUBJECT_BOX_MARGIN = 1.15
+
+# ⚠️ A FLOOR in pixels, because the margin above is RELATIVE and a flat model projects to a LINE.
+# `MorphPrimitivesTest` seen face-on gave the box (223, 360, 1057, 360) — zero height, so a relative
+# margin of zero, so an empty box and a row that could not be compared at all. Every other subject
+# clears this floor on its own; it exists for the degenerate projection.
+MIN_SUBJECT_BOX_MARGIN_PIXELS = 8.0
+
+
+def subject_box(capture, bounds: dict, camera) -> tuple:
+    """
+    Projects the subject's world AABB into pixels, as the comparison box.
+
+    ⚠️⚠️ WHY THIS EXISTS. The BACKGROUND is not deterministic: the viewer's environment cubemap can
+    still be streaming when a frame is drawn, so one capture of a pair shows the default and the
+    other the landscape. Measured 2026-09-18, that moved `RiggedSimple` by +28.39/255 of mean and
+    `CarConcept` by -1.78 while the subject stayed pixel-identical — a perfect imitation of a codec
+    defect, with the entity count matching so the structural control said nothing. Comparing only
+    the subject removes the failure mode at its source rather than re-running until it goes away.
+
+    ⚠️ The AABB, NOT the bounding sphere. The framing makes every subject subtend the same angle, so
+    a sphere-based box is the SAME SIZE for every model and leaves a tall thin subject swimming in
+    background: tried first, it took `RiggedSimple` from 28.43 to 27.81 — it barely moved, because
+    the sphere around a slender cylinder is mostly empty. The projected AABB is as narrow as the
+    model is.
+
+    @param capture Path to one of the two captures, for the frame size.
+    @param bounds The entry's world bounds, with its `min` and `max`.
+    @param camera The camera position this view was shot from.
+    @return (x0, y0, x1, y1)
+    """
+    width, height = read_png_size(capture)
+
+    low = bounds["min"]
+    high = bounds["max"]
+    centre = bounds["centre"]
+
+    forward = normalise([centre[i] - camera[i] for i in range(3)])
+
+    # ⚠️ The world up is safe here because VIEWS never uses a pure ±90 degree elevation — that is
+    # the lookAt gimbal singularity, and the table says so.
+    right = normalise(cross(forward, (0.0, 1.0, 0.0)))
+    up = cross(right, forward)
+
+    tangent = math.tan(FIELD_OF_VIEW / 2.0)
+    aspect = width / height
+
+    xs = []
+    ys = []
+
+    for corner in ((low[0], low[1], low[2]), (high[0], low[1], low[2]),
+                   (low[0], high[1], low[2]), (high[0], high[1], low[2]),
+                   (low[0], low[1], high[2]), (high[0], low[1], high[2]),
+                   (low[0], high[1], high[2]), (high[0], high[1], high[2])):
+        view = [corner[i] - camera[i] for i in range(3)]
+        depth = dot(view, forward)
+
+        if depth <= 1e-6:
+            # Behind the camera: cannot be projected, and a subject that straddles the eye is not a
+            # framing this bench produces. Fall back to the whole frame rather than invent a box.
+            return (0, 0, width, height)
+
+        xs.append(width * 0.5 * (1.0 + (dot(view, right) / depth) / (tangent * aspect)))
+        ys.append(height * 0.5 * (1.0 - (dot(view, up) / depth) / tangent))
+
+    half_width = max((max(xs) - min(xs)) * 0.5 * (SUBJECT_BOX_MARGIN - 1.0), MIN_SUBJECT_BOX_MARGIN_PIXELS)
+    half_height = max((max(ys) - min(ys)) * 0.5 * (SUBJECT_BOX_MARGIN - 1.0), MIN_SUBJECT_BOX_MARGIN_PIXELS)
+
+    return (
+        max(0, int(min(xs) - half_width)),
+        max(0, int(min(ys) - half_height)),
+        min(width, int(math.ceil(max(xs) + half_width))),
+        min(height, int(math.ceil(max(ys) + half_height))),
+    )
 
 
 def annotate_draco_deltas(report: list) -> None:
@@ -747,7 +868,9 @@ def annotate_draco_deltas(report: list) -> None:
                 continue
 
             try:
-                deltas[name] = compare_captures(other["file"], view["file"])
+                box = subject_box(view["file"], record["bounds"], view["position"])
+
+                deltas[name] = compare_captures(other["file"], view["file"], box)
             except (OSError, ValueError) as error:
                 deltas[name] = {"error": str(error)}
 

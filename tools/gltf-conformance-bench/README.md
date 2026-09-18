@@ -147,23 +147,34 @@ Picking a numeric threshold here would freeze one asset's quantisation grid into
 > one isolates the contaminated capture immediately. `BrainStem` additionally carries a genuine
 > ~0.02 % run-to-run non-determinism in **both** variants, so treat that as its floor, not a signal.
 
-> [!CAUTION]
-> **THE BACKGROUND IS NOT DETERMINISTIC, and it mimics a codec defect perfectly.** Measured
-> 2026-09-18 by re-running this bench unchanged: 30 of 34 rows reproduced to the fourth decimal
-> while `RiggedSimple` moved by **+28.39**/255 of mean and `CarConcept` by −1.78. In both, the
-> **subject is pixel-identical and only the environment cubemap differs** — one frame drawn with the
-> default, the other with the viewer's landscape, although the engine log shows the scene choosing
-> the landscape before either screenshot in every case. The cubemap is still streaming when the
-> frame is drawn.
+> [!IMPORTANT]
+> **The A/B compares only the SUBJECT, in a fixed environment — both were needed** (2026-09-18).
 >
-> **The tell, and it is decisive:** compare the SAME variant across two runs. The row that moved was
-> the *plain* one for `RiggedSimple` and the *Draco* one for `CarConcept` — a different side each
-> time, which no codec can produce. The entity count matches throughout, so the structural control
-> stays silent.
+> The background used to be non-deterministic: the viewer's environment cubemap streams, and the
+> scene logs its choice before the texture is resident, so one capture of a pair could be drawn with
+> the default and its twin with the landscape. Measured, that moved `RiggedSimple` by **+28.39**/255
+> of mean and `CarConcept` by −1.78 while the subject stayed pixel-identical — indistinguishable
+> from a codec defect, with the entity count matching so the structural control stayed silent.
 >
-> Until the bench can wait for the environment to be resident (it has no signal for that) or crop
-> the comparison to the subject's bounding box — which it already knows from the framing plan — a
-> mean that jumps with an untouched subject means **re-run**, not regression.
+> ⚠️ **Cropping to the subject does NOT fix that, and it was tried first.** A tight box around a
+> slender model is still mostly background, and removing the identical sky only *concentrates* the
+> difference: `RiggedSimple` went 28.43 → 38.40. What kills it is having nothing to stream —
+> `DRACO_AB_ENVIRONMENT` poses the bit-exact black backdrop (`Background` and `EnvironmentCubemap`
+> both `""`) on every A/B row that does not declare an environment of its own. The viewer's key
+> light still lights the subject; what disappears is the environment reflection, which a GEOMETRY
+> codec test has no business measuring.
+>
+> The crop is kept for a different reason: the mean now describes the subject instead of being
+> diluted over two megapixels of mostly-identical sky. ⚠️ It projects the **AABB**, not the bounding
+> sphere — the framing makes every subject subtend the same angle, so a sphere-based box comes out
+> the SAME SIZE for every model and leaves a slender subject swimming in background.
+>
+> ⚠️⚠️ **Numbers from before 2026-09-18 are NOT comparable with these.** The mean is now taken over
+> the subject's box and the environment reflection is gone; every figure roughly doubled for that
+> reason alone. Do not read the change as a regression.
+>
+> **Result**: over two consecutive full runs, 23 of 33 rows reproduce to the fourth decimal and the
+> largest drift is **0.062**/255, against 28.39 before.
 
 > [!WARNING]
 > **Before believing any A/B, check the comparator discriminates.** Two *different* models must
