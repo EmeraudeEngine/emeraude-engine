@@ -893,27 +893,59 @@ namespace EmEn::Input
 	}
 
 	void
-	Manager::addPointerListener (PointerListenerInterface * listener) noexcept
+	Manager::addPointerListener (PointerListenerInterface * listener, bool priority) noexcept
 	{
-		if ( std::ranges::binary_search(std::as_const(m_pointerListeners), listener) )
+		/* ⚠️ `find`, NOT `binary_search`: this vector is insertion-ordered and never sorted, so a
+		 * binary search over it is meaningless — the duplicate guard it was written as could miss a
+		 * real duplicate or invent one, at the compiler's discretion. */
+		if ( std::ranges::find(m_pointerListeners, listener) != m_pointerListeners.cend() )
 		{
 			TraceWarning{ClassId} << "Listener @" << listener << " already added!";
 
 			return;
 		}
 
-		m_pointerListeners.emplace(m_pointerListeners.begin(), listener);
+		/* ⚠️⚠️ THE INVARIANT: the priority listener, when there is one, sits at index 0 and every
+		 * other listener is inserted just after it. That is why the five dispatch loops below need
+		 * no special case — they simply walk the vector, and none of them can be forgotten.
+		 * Everything else keeps the newest-first order it always had. */
+		if ( priority )
+		{
+			if ( m_priorityPointerListener != nullptr && m_priorityPointerListener != listener )
+			{
+				TraceWarning{ClassId} << "Pointer listener @" << m_priorityPointerListener << " loses its priority to @" << listener << ".";
+			}
+
+			m_priorityPointerListener = listener;
+
+			m_pointerListeners.emplace(m_pointerListeners.begin(), listener);
+
+			return;
+		}
+
+		m_pointerListeners.emplace(m_pointerListeners.begin() + (m_priorityPointerListener != nullptr ? 1 : 0), listener);
 	}
 
 	void
 	Manager::removePointerListener (PointerListenerInterface * listener) noexcept
 	{
+		/* The slot has to be released with the listener, or the next insertion would keep skipping
+		 * index 0 to protect a priority listener that is no longer there. */
+		if ( m_priorityPointerListener == listener )
+		{
+			m_priorityPointerListener = nullptr;
+		}
+
 		m_pointerListeners.erase(std::ranges::remove(m_pointerListeners, listener).begin(), m_pointerListeners.end());
 	}
 
 	void
 	Manager::removeAllPointerListeners () noexcept
 	{
+		/* Released with the listeners: a dangling slot would make every later insertion skip index 0
+		 * to protect a priority listener that no longer exists. */
+		m_priorityPointerListener = nullptr;
+
 		m_pointerListeners.clear();
 	}
 

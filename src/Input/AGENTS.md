@@ -241,3 +241,43 @@ Related systems:
 - [`../Scenes/Editor/AGENTS.md`](../Scenes/Editor/AGENTS.md) - Editor uses input injection for remote testing
 - [`../Console/AGENTS.md`](../Console/AGENTS.md) - Console ControllableTrait for remote commands
 - GLFW documentation - For supported device details
+
+### Pointer priority — the overlay is served FIRST (fixed 2026-09-18)
+
+`Input::Manager::addPointerListener()` inserts every listener **at the front**, so the newest one is
+dispatched first. That is deliberate between scenes, and it was silently wrong for the UI: the
+`Overlay::Manager` registers once at engine start-up, so **every scene created afterwards outranked
+the interface drawn on top of it**.
+
+> [!CAUTION]
+> **Symptom: the application menu is perfectly drawn and completely dead.** Not frozen, not hidden —
+> rendered, hover states and all, while every click falls through to the scene. Measured: clicking a
+> menu entry changed **0.0000 %** of the pixels.
+>
+> It needs a scene whose `OrbitController` has a node to drive. `OrbitController::onButtonPress()`
+> returns `false` when `m_controlledNode == nullptr` and `true` otherwise — so a **demo** scene, whose
+> controller drives nothing, declines and the menu works, while the **model viewer**, which gives it
+> the subject to orbit, consumes the click. That asymmetry is what hid the defect for so long: it
+> only appeared after opening a viewer, which until 2026-09-18 meant dragging a file onto the window
+> — never twice in a row.
+
+`Overlay::Manager` now registers with `addPointerListener(this, true)`. The priority listener is
+kept at **index 0 of the same vector**, so the five dispatch loops are untouched and none of them can
+be forgotten; everything else keeps its newest-first order.
+
+> [!NOTE]
+> **No regression on the scene controls, by construction**: `Overlay::Manager::onButtonPress()`
+> returns `false` for any screen that is empty, not visible or not listening, so with the menu closed
+> the event reaches the orbit controller exactly as before. ⚠️ Verified by reading that code rather
+> than by exercising it: the console can inject a click (press **and** release) but not a **held**
+> button, so an orbit drag cannot be reproduced remotely — `m_dragActive` is already false by the
+> time the injected moves arrive.
+
+> [!WARNING]
+> `Scenes::Editor::Manager` also registers a pointer listener and had the same exposure. It is fixed
+> by the same change, since the overlay now outranks every scene-side listener rather than just that
+> one.
+
+⚠️ `addPointerListener()` guarded against duplicates with `std::ranges::binary_search` over a vector
+that is **never sorted** — front-insertion guarantees it is not. The guard could miss a real
+duplicate or invent one. Now `std::ranges::find`.

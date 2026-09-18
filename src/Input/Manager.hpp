@@ -443,10 +443,24 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Adds an object the pointer can control, like a player.
+			 *
+			 * @note Listeners are dispatched NEWEST FIRST, so a scene registering its controller
+			 * outranks the one before it. That order is deliberate and unchanged.
+			 *
+			 * @warning ⚠️⚠️ A UI overlay must pass @a priority. Without it, ANY scene registered
+			 * afterwards is served before the interface drawn ON TOP of it, and swallows its
+			 * clicks — which is exactly what happened to the application menu: the model viewer
+			 * gives its orbit controller a node to drive, `OrbitController::onButtonPress()` then
+			 * answers `true` instead of declining, and the menu went dead the moment a viewer
+			 * existed while still being perfectly drawn. A demo scene hid the defect, its
+			 * controller having no node and therefore declining. Input has to follow the VISUAL
+			 * stacking, and there is at most one priority listener: the last one to claim it wins.
+			 *
 			 * @param listener A pointer to a pointer listener interfaced object.
+			 * @param priority Serve this listener BEFORE every other one. Default false.
 			 * @return void
 			 */
-			void addPointerListener (PointerListenerInterface * listener) noexcept;
+			void addPointerListener (PointerListenerInterface * listener, bool priority = false) noexcept;
 
 			/**
 			 * @brief Removes an object of pointer listeners.
@@ -642,6 +656,9 @@ namespace EmEn::Input
 			Window & m_window;
 			std::vector< KeyboardListenerInterface * > m_keyboardListeners;
 			std::vector< PointerListenerInterface * > m_pointerListeners;
+			/** @brief The listener served first, kept at index 0 of the vector above — the whole
+			 * invariant, which is why the dispatch loops need no special case. nullptr when none. */
+			PointerListenerInterface * m_priorityPointerListener{nullptr};
 			PointerListenerInterface * m_moveEventsTracking{nullptr};
 			KeyboardController m_keyboardController;
 			PointerController m_pointerController;

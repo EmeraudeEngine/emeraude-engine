@@ -121,7 +121,15 @@ namespace EmEn::Overlay
 		if ( state )
 		{
 			inputManager.addKeyboardListener(this);
-			inputManager.addPointerListener(this);
+
+			/* ⚠️⚠️ PRIORITY. The overlay is drawn ON TOP of the scene, so it must be offered the
+			 * pointer first — input follows the visual stacking. Without it any scene registered
+			 * afterwards is served before the interface and eats its clicks: the application menu
+			 * went dead as soon as a model viewer existed, because that viewer gives the scene's
+			 * orbit controller a node to drive and the controller then answers `true` instead of
+			 * declining. It stayed unnoticed because a demo scene's controller has no node and
+			 * declines, so the menu worked there. */
+			inputManager.addPointerListener(this, true);
 		}
 		else
 		{
