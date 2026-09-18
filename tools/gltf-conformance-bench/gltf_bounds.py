@@ -72,6 +72,41 @@ def transform_point(m, p):
     )
 
 
+def image_encodings(path):
+    """
+    Returns the set of image encodings an asset uses, e.g. {"png"} or {"ktx2", "jpeg"}.
+
+    Exists for the compressed-variant A/B, which is only a measurement of the GEOMETRY codec if the
+    two variants are textured identically. Several Khronos models break that: SunglassesKhronos
+    ships PNG in glTF-Binary and WebP in glTF-Draco, CarConcept PNG against KTX2. Comparing those
+    pixel for pixel measures two codecs at once and attributes the lot to Draco.
+
+    ⚠️ `jpg` and `jpeg` are the SAME format, spelled differently by the mimeType and by a URI
+    extension -- normalised here. Without that, three more models look confounded and are not; the
+    first run of this check reported exactly that false positive.
+    """
+    gltf, _ = load_asset(path)
+
+    aliases = {"jpg": "jpeg"}
+    encodings = set()
+
+    for image in gltf.get("images", []):
+        mime = image.get("mimeType")
+
+        if mime:
+            encoding = mime.rsplit("/", 1)[-1].lower()
+        elif "uri" in image:
+            encoding = image["uri"].rsplit(".", 1)[-1].lower()
+        else:
+            # A bufferView-backed image with no mimeType: undeterminable, and treating it as a
+            # difference would flag a pair that may well be identical.
+            continue
+
+        encodings.add(aliases.get(encoding, encoding))
+
+    return encodings
+
+
 def load_asset(path):
     """Returns (gltf_json, buffers) for a .gltf or .glb file."""
     path = Path(path)

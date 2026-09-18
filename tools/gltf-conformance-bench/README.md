@@ -154,10 +154,28 @@ Picking a numeric threshold here would freeze one asset's quantisation grid into
 > has actually **finished loading**: a capture taken mid-swap compares a frame with itself and
 > reports a flawless result for entirely the wrong reason (it did, during this work).
 
-**`SunglassesKhronos` is listed in `DRACO_BLOCKED`, not omitted.** Its Draco variant also requires
-`EXT_texture_webp`, absent from `GLTFLoader`'s parser mask, so fastgltf rejects the whole file and
-nothing loads — nothing to do with Draco. An absent row would read as "never tried"; see
-`docs/todo/gltf-ext-texture-webp-not-in-parser-mask.md`.
+> [!CAUTION]
+> **A row flagged `textureEncodingsDiffer` is NOT a geometry-codec measurement.** Two Khronos models
+> ship their Draco variant with a *different texture encoding* than their plain one —
+> `SunglassesKhronos` is PNG against **WebP**, `CarConcept` PNG against **KTX2** — so their delta
+> carries two codecs at once. The bench detects this by reading both assets' image encodings (`jpg`
+> and `jpeg` normalised: without that, three more models look confounded and are not) and says so in
+> the run and in the report. The rows are kept because the LOAD is worth exercising; only the pixel
+> comparison is confounded. ⚠️ This also means the `CarConcept` figure published on 2026-09-18
+> (mean 0.22 / 0.49) was never a Draco number.
+
+> [!CAUTION]
+> **Start the bench from an engine that has not hand-loaded the assets.** The glTF resource prefix
+> is keyed on the file **stem**, so both variants of a model share one resource namespace
+> (`glTF:SunglassesKhronos/`). Loading a variant through `Core.openFiles()` and then running the
+> bench in the same session reported **98.16 % of pixels, mean 39.28/255** for `SunglassesKhronos`;
+> from a clean session the same comparison is **6.35 % / 0.10** and reproduces exactly. Engine item:
+> `docs/todo/gltf-resource-prefix-collides-between-asset-variants.md`.
+
+**`DRACO_BLOCKED` is empty since 2026-09-18** — `SunglassesKhronos` was its only occupant, blocked
+by `EXT_texture_webp` rather than by anything to do with Draco, and that extension is now supported.
+The table stays: a variant that cannot be benched belongs in it **with its reason**, because an
+absent row reads as "never tried", which is not the same claim.
 
 ## Traps this bench has already paid for
 

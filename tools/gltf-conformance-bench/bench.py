@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console  # noqa: E402
-from gltf_bounds import scene_bounds  # noqa: E402
+from gltf_bounds import image_encodings, scene_bounds  # noqa: E402
 from png_compare import compare as compare_captures  # noqa: E402
 
 
@@ -190,15 +190,17 @@ DRACO_MODELS = {
     "MorphPrimitivesTest":  ["front", "three-qtr"],
     # KTX2 *and* Draco on the same asset, 109 bitstreams: the two extension families together.
     "CarConcept":           ["front", "three-qtr"],
+    # WebP *and* Draco on the same asset. Blocked until 2026-09-18, when EXT_texture_webp landed.
+    "SunglassesKhronos":    ["front", "three-qtr"],
 }
 
-# ⚠️ NOT benchable, and the reason is not Draco: `SunglassesKhronos/glTF-Draco` also requires
-# `EXT_texture_webp`, which is absent from GLTFLoader's parser mask — so fastgltf rejects the whole
-# file and nothing loads. Tracked in `docs/todo/gltf-ext-texture-webp-not-in-parser-mask.md`.
-# It is listed here rather than silently omitted: an absent row reads as "never tried".
-DRACO_BLOCKED = {
-    "SunglassesKhronos": "requires EXT_texture_webp, which is not in the parser mask",
-}
+# Draco variants deliberately NOT benched, each with the reason. Listed rather than silently
+# omitted: an absent row reads as "never tried", which is not the same claim.
+#
+# Empty since 2026-09-18, when EXT_texture_webp support unblocked `SunglassesKhronos` — its only
+# occupant, and one that had nothing to do with Draco. The table stays because the next asset to be
+# blocked will need it, and because `main()` answers with the reason instead of "unknown model".
+DRACO_BLOCKED = {}
 
 # --- Per-model viewer environment ------------------------------------------------------------
 #
@@ -484,12 +486,23 @@ def build_plan(assets: Path, only: set, with_draco: bool = True) -> list:
         # ⚠️⚠️ bounds, distance and view POSITIONS are the plain entry's, copied verbatim and never
         # recomputed from the Draco file. Quantisation dilates the bounding sphere by ~0.0977 %, so
         # a recomputed framing moves the camera and the A/B measures that move instead of the codec.
+        draco_asset = pick_asset(assets, model, "draco")
+
+        # ⚠️ The A/B only measures the GEOMETRY codec if both variants are textured identically,
+        # and several Khronos models break that: SunglassesKhronos is PNG against WebP, CarConcept
+        # PNG against KTX2. Their delta then carries two codecs at once, and reading it as a Draco
+        # number is simply wrong -- SunglassesKhronos comes out at 98 % of pixels that way. Detected
+        # rather than hand-listed, so a corpus update cannot silently invalidate a row.
+        plain_encodings = image_encodings(Path(reference["asset"]))
+        draco_encodings = image_encodings(draco_asset)
+
         plan.append({
             "model": model,
             "label": f"{model}[draco]",
             "variant": "draco",
             "compare_with": reference["label"],
-            "asset": str(pick_asset(assets, model, "draco")),
+            "texture_encodings": sorted(plain_encodings | draco_encodings) if plain_encodings != draco_encodings else None,
+            "asset": str(draco_asset),
             "bounds": reference["bounds"],
             "distance": reference["distance"],
             "near_plane_clamped": reference["near_plane_clamped"],
@@ -584,6 +597,9 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
 
             if entry.get("compare_with"):
                 record["compareWith"] = entry["compare_with"]
+
+            if entry.get("texture_encodings"):
+                record["textureEncodingsDiffer"] = entry["texture_encodings"]
 
             if environment is not None:
                 record["environment"] = environment
@@ -689,6 +705,12 @@ def annotate_draco_deltas(report: list) -> None:
     mean that moves, or a maximum spread over a region, is a defect. Picking a pass threshold here
     would freeze one asset's quantisation grid into a rule for all of them.
 
+    ⚠️⚠️ A row flagged `textureEncodingsDiffer` is NOT a geometry-codec measurement: the two
+    variants of that model are textured differently (SunglassesKhronos ships PNG against WebP,
+    CarConcept PNG against KTX2), so its delta carries two codecs at once. Read as a Draco number
+    it is meaningless -- SunglassesKhronos comes out at 98 % of pixels that way. The row is kept
+    because the LOAD is still worth exercising; only the pixel comparison is confounded.
+
     ⚠️ The ENTITY COUNT is the exception — it is a hard, non-arbitrary criterion, and the same
     structural control the rest of the bench already runs: the two variants declare the same nodes,
     so a deficit on the compressed side means a primitive failed to decode and silently vanished.
@@ -732,13 +754,21 @@ def annotate_draco_deltas(report: list) -> None:
         if deltas:
             record["dracoDelta"] = deltas
 
+            confounded = record.get("textureEncodingsDiffer")
+
+            if confounded:
+                print(f"  ⚠️ {record['label']}: the two variants are textured DIFFERENTLY "
+                      f"({', '.join(confounded)}) — the delta below measures the texture codec as "
+                      f"well as Draco and is NOT a geometry-codec number")
+
             for name, delta in deltas.items():
                 if "error" in delta:
                     print(f"  ! {record['label']} {name}: {delta['error']}")
                 else:
+                    mark = "  [texture codec differs]" if confounded else ""
                     print(f"  {record['label']:<28} {name:<10} "
                           f"differ {delta['differingPercent']:7.4f} %  "
-                          f"mean {delta['meanAbsDelta']:7.4f}/255  max {delta['maxAbsDelta']:3d}/255")
+                          f"mean {delta['meanAbsDelta']:7.4f}/255  max {delta['maxAbsDelta']:3d}/255{mark}")
 
 
 def print_plan(plan: list) -> None:
