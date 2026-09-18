@@ -428,6 +428,24 @@ namespace EmEn
 			bool cycleViewerAnimation () noexcept;
 
 			/**
+			 * @brief Forces the asset shown by the model viewer back to its rest pose.
+			 * @details The deterministic counterpart of cycleViewerAnimation(): that one only
+			 * advances by one step, so reaching the rest pose from an unknown position takes as many
+			 * calls as the asset has clips, and a caller cannot know how many without tracking the
+			 * state itself. This sets the cycle back to 0 in one call, whatever it was on.
+			 * @note ⚠️ Deliberately draws NO on-screen notification, unlike cycleViewerAnimation().
+			 * It exists so an automated capture can guarantee a known pose, and a toast burnt into
+			 * the frame would defeat exactly that — the notification is what corrupted a
+			 * conformance-bench capture on 2026-09-18 and cost a false regression diagnosis.
+			 * @note Console-only on purpose: no key is bound to it, so a human never triggers a
+			 * silent state change.
+			 * @note An asset carrying no animation is already at rest, and counts as a success.
+			 * @return bool True once the rest pose is guaranteed, false when the model viewer is not
+			 * the active scene.
+			 */
+			bool resetViewerAnimation () noexcept;
+
+			/**
 			 * @brief Suspends engine execution to run an external system command.
 			 * @details Pauses all engine processing, executes the specified command through
 			 * the system shell, then resumes engine operation. Useful for launching external

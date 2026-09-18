@@ -179,6 +179,24 @@ namespace EmEn
 			return true;
 		}, "Walks the animations of the model shown by the viewer: OFF -> clip 1 -> ... -> OFF (same as the space bar).");
 
+		this->bindCommand("resetAnimation", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			/* NOTE: The deterministic counterpart of cycleAnimation(). Reaching the rest pose with
+			 * the cycle alone takes as many calls as the asset has clips, and the caller cannot know
+			 * how many without tracking the state itself — so an automated capture had no way to
+			 * guarantee a known pose. It draws NO notification, on purpose: the toast is what would
+			 * end up burnt into the screenshot. */
+			if ( !this->resetViewerAnimation() )
+			{
+				outputs.emplace_back(Severity::Error, "The model viewer is not the active scene.");
+
+				return false;
+			}
+
+			outputs.emplace_back(Severity::Success, "Animation reset to the rest pose.");
+
+			return true;
+		}, "Forces the model shown by the viewer back to its rest pose, in one call and without drawing a notification. Use it before an automated capture.");
+
 		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");
 

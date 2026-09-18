@@ -1959,6 +1959,44 @@ namespace EmEn
 		return true;
 	}
 
+	bool
+	Core::resetViewerAnimation () noexcept
+	{
+		std::shared_ptr< Scenes::Scene > viewerScene;
+
+		m_sceneManager.withSharedActiveScene([&viewerScene] (const std::shared_ptr< Scenes::Scene > & scene) {
+			if ( scene->name() == Viewers::ModelViewer::SceneName )
+			{
+				viewerScene = scene;
+			}
+		}, true);
+
+		if ( viewerScene == nullptr )
+		{
+			return false;
+		}
+
+		/* An asset with no clip is already at rest and has nothing to apply: that is a success, not
+		 * a failure. A caller uses this command as a PRECONDITION ("the pose is now known"), so
+		 * answering false here would force it to special-case every static asset. */
+		if ( m_viewerClipNames.empty() )
+		{
+			return true;
+		}
+
+		/* Applied unconditionally rather than only when the index has moved: this is a *force*, and
+		 * one apply costs nothing next to reasoning about how the index got where it is. */
+		m_viewerAnimationIndex = 0;
+
+		Viewers::ModelViewer::applyAnimation(*viewerScene, m_viewerClipNames, m_viewerAnimationIndex);
+
+		/* ⚠️ NO notifyUser() here, and that is the entire point of this function — see the header.
+		 * The toast cycleViewerAnimation() draws is burnt into any screenshot taken within the
+		 * notifier's lifetime, which is precisely the pollution this command exists to avoid. */
+
+		return true;
+	}
+
 	void
 	Core::hangExecution (const std::string & command) noexcept
 	{

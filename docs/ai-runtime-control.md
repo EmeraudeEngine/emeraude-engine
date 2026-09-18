@@ -312,6 +312,28 @@ names. The **space bar** then walks the cycle `OFF -> clip 1 -> ... -> clip N ->
 turn always returns to the rest pose. `Core.cycleAnimation()` is the remote equivalent, calling
 the very same `Core::cycleViewerAnimation()`.
 
+**`Core.resetAnimation()` forces the rest pose in ONE call** (added 2026-09-18), whatever the cycle
+was on. The cycle alone cannot do it: reaching the rest pose from an unknown position takes as many
+calls as the asset has clips, and a caller cannot know how many without tracking the state itself.
+An asset carrying no animation is already at rest and counts as a success, so the command is usable
+as a plain precondition; it fails only when the model viewer is not the active scene.
+
+> [!IMPORTANT]
+> **It draws NO on-screen notification, deliberately — that is the whole point of it.**
+> `cycleAnimation()` announces itself with a toast, and a screenshot taken within the notifier's
+> lifetime has that toast **burnt into the frame**. Use `resetAnimation()` before any automated
+> capture. Verified 2026-09-18 on `CesiumMan`: the capture comes back to the rest pose within a
+> single LSB (max delta **1/255**, against 219 for an actual pose change) and the notification band
+> is bit-identical to a clean frame, where a `cycleAnimation()` toast lights 536 pixels.
+
+> [!CAUTION]
+> **A stray space bar on the window silently corrupts an automated capture.** Measured 2026-09-18:
+> one keypress during a conformance-bench run took a model's A/B from a mean of 0.10/255 to 9.22 —
+> an 80x jump that reads exactly like a real defect, and it cost a false regression diagnosis. The
+> tells: `m_viewerAnimationIndex` resets on every model open, so only the capture between the
+> keystroke and the next load is hit (an asymmetry no codec can produce), and the frame **shows**
+> the `Animation 1/1: <clip>` overlay. Look at the image before trusting a number that moved.
+
 ⚠️ **The console command is the deterministic remote way in — and the claim that it was the ONLY
 one is doubtful since 2026-09-13.** This paragraph used to state that a keyboard event injected
 through `Input::Manager::injectKeyEvent()` **never reaches a Core-level binding** (observed Aug 2026
