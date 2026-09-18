@@ -782,6 +782,80 @@ namespace EmEn::Scenes::Loaders
 		return true;
 	}
 
+	/**
+	 * @brief Names the extensions an asset requires that this loader does not declare.
+	 *
+	 * Called only when a parse failed with Error::MissingExtensions. fastgltf refuses such a file
+	 * whole, so its extensionsRequired array is never handed back — the list has to be recovered by
+	 * re-parsing with every extension fastgltf knows, which is what this does. It costs a second
+	 * parse of a file that was going to be rejected anyway, once, on an error path.
+	 *
+	 * @param filepath A reference to the asset path, for the .glb/.gltf discrimination and the log.
+	 * @param data A reference to the already-loaded file bytes.
+	 * @param parentPath A reference to the directory external resources resolve against.
+	 * @param declared The extension mask this loader passes to its own Parser.
+	 */
+	void
+	reportMissingExtensions (const std::filesystem::path & filepath, fastgltf::GltfDataBuffer & data, const std::filesystem::path & parentPath, fastgltf::Extensions declared) noexcept
+	{
+		/* Everything fastgltf itself knows about. A parse with this mask can still fail on
+		 * MissingExtensions, but only for an extension fastgltf has never heard of. */
+		auto everything = fastgltf::Extensions::None;
+
+		for ( const auto & [name, value] : fastgltf::extensionStrings )
+		{
+			everything |= value;
+		}
+
+		fastgltf::Parser permissive{everything};
+
+		/* No options: nothing is consumed from this asset, only its extension list is read. */
+		auto retry = filepath.extension() == ".glb" ?
+			permissive.loadGltfBinary(data, parentPath, fastgltf::Options::None) :
+			permissive.loadGltf(data, parentPath, fastgltf::Options::None);
+
+		if ( retry.error() != fastgltf::Error::None )
+		{
+			Tracer::error(GLTFLoader::ClassId, "The asset requires an extension that fastgltf itself does not know, so it cannot be named. Check its 'extensionsRequired' array by hand.");
+
+			return;
+		}
+
+		const auto declaredNames = fastgltf::stringifyExtensionBits(declared);
+
+		std::string missing;
+
+		for ( const auto & required : retry.get().extensionsRequired )
+		{
+			const auto isDeclared = std::ranges::any_of(declaredNames, [&required] (const auto & name) {
+				return name == required;
+			});
+
+			if ( isDeclared )
+			{
+				continue;
+			}
+
+			if ( !missing.empty() )
+			{
+				missing += ", ";
+			}
+
+			missing.append(required.data(), required.size());
+		}
+
+		if ( missing.empty() )
+		{
+			/* Should not happen: the first parse refused the file for a missing extension, so the
+			 * diff cannot be empty. Say so rather than print a misleading empty list. */
+			Tracer::error(GLTFLoader::ClassId, "The parse was refused for a missing extension, but every required extension is declared. The extension mask and the refusal disagree.");
+
+			return;
+		}
+
+		TraceError{GLTFLoader::ClassId} << "Required extension(s) this loader does not support : " << missing << '.';
+	}
+
 	GLTFLoader::GLTFLoader (Resources::Manager & resources) noexcept
 		: m_resources{resources}
 	{
@@ -817,7 +891,9 @@ namespace EmEn::Scenes::Loaders
 
 		const auto parentPath = filepath.parent_path();
 
-		fastgltf::Parser parser(
+		/* The extensions this loader declares. Named rather than inlined so the diagnostic below
+		 * can say what we support against what the asset demands. */
+		constexpr auto declaredExtensions =
 			fastgltf::Extensions::KHR_materials_clearcoat |
 			fastgltf::Extensions::KHR_materials_emissive_strength |
 			fastgltf::Extensions::KHR_materials_ior |
@@ -852,8 +928,9 @@ namespace EmEn::Scenes::Loaders
 			 * accessors of a Draco primitive carry NO bufferView and glTF § 5.1.1 then mandates
 			 * zeros. Every attribute read in loadMeshes() therefore goes through
 			 * readDracoAwareAttribute()/readDracoAwareIndices(), which fail loudly instead. */
-			fastgltf::Extensions::KHR_draco_mesh_compression
-		);
+			fastgltf::Extensions::KHR_draco_mesh_compression;
+
+		fastgltf::Parser parser(declaredExtensions);
 
 		constexpr auto options =
 			fastgltf::Options::LoadExternalBuffers |
@@ -867,6 +944,15 @@ namespace EmEn::Scenes::Loaders
 		if ( result.error() != fastgltf::Error::None )
 		{
 			TraceError{ClassId} << "Failed to parse '" << filepath << "' : " << fastgltf::getErrorMessage(result.error());
+
+			/* ⚠️ fastgltf's own message for this case is "One or more extensions are required by the
+			 * glTF but not enabled in the Parser" — it never says WHICH, and the asset is refused
+			 * whole, so there is nothing left to inspect either. Naming them is the difference
+			 * between a one-line fix and an afternoon of bisecting an asset by hand. */
+			if ( result.error() == fastgltf::Error::MissingExtensions )
+			{
+				reportMissingExtensions(filepath, gltfFile.get(), parentPath, declaredExtensions);
+			}
 
 			return false;
 		}

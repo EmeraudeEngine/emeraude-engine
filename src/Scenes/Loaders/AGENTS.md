@@ -597,7 +597,9 @@ attribute there is plain `f32`, or `u16` for `JOINTS_0` and the indices), so it 
 
 > [!NOTE]
 > **Draco is LOSSY** — do not expect bit-equality against the uncompressed variant, except on
-> geometry whose quantised positions land exactly (`Box` *is* bit-identical, 0 of 2 073 600 pixels).
+> geometry whose quantised positions land exactly — `Box` usually comes out at 0 of 2 073 600
+> pixels, but an intermittent single-LSB residual on ~0.44 % of them (max **1**/255) appears from
+> run to run, so one LSB is the CAPTURE's floor and never a codec signal.
 > Measured 2026-09-18 at the same viewer framing: `Avocado` 10.3 % of pixels differ, mean
 > **0.18/255**; `CesiumMan` 3.3 %, mean **0.11/255** — a sparse scatter along silhouettes and
 > contours, background strictly identical. That shape (tiny mean, high local maxima, edges only) is
@@ -640,8 +642,12 @@ filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_text
 the multi-UV gap;
 every extension in the parser mask is now read, but `EXT_texture_webp` is **not in the mask** —
 and since fastgltf rejects the whole file over a missing *required* extension, such an asset does
-not load at all (`SunglassesKhronos`, found 2026-09-18; `libwebp` is available in
-ext-deps-generator, so this is a decoder-wiring gap, not a dependency one);
+not load at all (`SunglassesKhronos`, and the owner's own `SheenWoodLeatherSofa.glb`, found
+2026-09-18; `libwebp` is available in ext-deps-generator, so this is a decoder-wiring gap, not a
+dependency one). ⚠️ Since 2026-09-18 the loader at least **names** what it lacks:
+`reportMissingExtensions()` re-parses with every extension fastgltf knows — the only way to recover
+`extensionsRequired` from a file fastgltf refused whole — and logs the difference against its own
+mask, because fastgltf's message says only that *something* is missing;
 **transmission is the last one reading only its
 scalar factor, never its texture** (clearcoat's three maps and sheen's two are read since
 2026-09-14, see below); animation channels targeting a node that is
