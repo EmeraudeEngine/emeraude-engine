@@ -922,8 +922,6 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		const bool temporalActive = m_denoiser.temporalActive();
-
 		/* ---- Per-frame descriptor updates (trace pass) ---- */
 
 		if ( inputDepth != nullptr )
