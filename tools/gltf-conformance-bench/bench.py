@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console  # noqa: E402
 from gltf_bounds import scene_bounds  # noqa: E402
+from png_compare import compare as compare_captures  # noqa: E402
 
 
 # --- Optics -----------------------------------------------------------------------------------
@@ -145,6 +146,58 @@ MODELS = {
     # content whether it works or not. Three identical transmissive balls differing only in
     # the volume they declare, so the control lives inside the single capture.
     "VolumeAbsorptionProbe":        ["front"],
+}
+
+# --- Compressed-variant A/B ---------------------------------------------------------------------
+#
+# Models captured TWICE — once from the plain glTF, once from its `glTF-Draco` sibling — and
+# compared per pixel. Added 2026-09-18 with KHR_draco_mesh_compression support.
+#
+# ⚠️ A codec test asks a DIFFERENT question from the rest of this bench. Everywhere else the
+# criterion is "does the renderer obey the spec"; here it is "does the compressed asset render the
+# SAME thing as its uncompressed source". There is no reference image to read — the reference is
+# the other capture, and it is only a reference if both are shot at an IDENTICAL framing.
+#
+# ⚠️⚠️ WHICH IS WHY THE FRAMING IS COMPUTED FROM THE PLAIN ASSET AND REUSED VERBATIM. Draco
+# quantisation dilates the bounding box by half a quantum, measured at a constant **+0.0977 %** on
+# the radius across Box/Avocado/BoomBox/WaterBottle. Letting each variant compute its own bounds
+# moves the camera by that much, and the A/B then measures the camera, not the codec.
+#
+# The value is the view list, used only for a model that is NOT already in MODELS above; a model
+# present in both inherits MODELS' views, so the two captures always have views to compare.
+DRACO_MODELS = {
+    # Showcase assets already benched uncompressed: they inherit their MODELS views.
+    "BoomBox":              None,
+    "WaterBottle":          None,
+    # Draco-only entries. Two views, because a single face-on shot of a symmetric subject can hide
+    # a decode error behind its own silhouette.
+    "Avocado":              ["front", "three-qtr"],
+    "BarramundiFish":       ["front", "three-qtr"],
+    "Box":                  ["front", "three-qtr"],
+    "Corset":               ["front", "three-qtr"],
+    "Duck":                 ["front", "three-qtr"],
+    "Lantern":              ["front", "three-qtr"],
+    "CesiumMilkTruck":      ["front", "three-qtr"],
+    "VirtualCity":          ["front", "three-qtr"],
+    # The skinned set — JOINTS_0 and WEIGHTS_0 go through the decoder here, and a wrong influence
+    # shreds the mesh rather than nudging it.
+    "CesiumMan":            ["front", "three-qtr"],
+    "BrainStem":            ["front", "three-qtr"],
+    "RiggedFigure":         ["front", "three-qtr"],
+    "RiggedSimple":         ["front", "three-qtr"],
+    # Draco attributes sitting NEXT TO plain bufferView-bearing morph-target accessors — the mixed
+    # primitive. This loader reads no morph target, so what is verified is the base geometry.
+    "MorphPrimitivesTest":  ["front", "three-qtr"],
+    # KTX2 *and* Draco on the same asset, 109 bitstreams: the two extension families together.
+    "CarConcept":           ["front", "three-qtr"],
+}
+
+# ⚠️ NOT benchable, and the reason is not Draco: `SunglassesKhronos/glTF-Draco` also requires
+# `EXT_texture_webp`, which is absent from GLTFLoader's parser mask — so fastgltf rejects the whole
+# file and nothing loads. Tracked in `docs/todo/gltf-ext-texture-webp-not-in-parser-mask.md`.
+# It is listed here rather than silently omitted: an absent row reads as "never tried".
+DRACO_BLOCKED = {
+    "SunglassesKhronos": "requires EXT_texture_webp, which is not in the parser mask",
 }
 
 # --- Per-model viewer environment ------------------------------------------------------------
@@ -302,27 +355,45 @@ def local_assets_directory() -> Path:
     return Path(__file__).resolve().parent / "assets"
 
 
-def pick_asset(assets: Path, model: str) -> Path:
+# Folder/suffix pairs searched for a variant, in order of preference.
+#
+# ⚠️ The default prefers the self-contained .glb; the Draco variants are shipped as loose .gltf
+# only, and `CarConcept` carries its Draco bitstreams in the KTX2 folder rather than a plain
+# `glTF-Draco` one — hence two entries, not one.
+VARIANT_FOLDERS = {
+    None:    (("glTF-Binary", ".glb"), ("glTF", ".gltf")),
+    "draco": (("glTF-Draco", ".gltf"), ("glTF-KTX-BasisU-Draco", ".gltf")),
+}
+
+
+def pick_asset(assets: Path, model: str, variant: str = None) -> Path:
     """
     Prefers the self-contained binary variant, falls back to the plain glTF.
 
     Our own assets/ directory is searched FIRST so a probe shadows nothing upstream and needs
     no entry anywhere else; the vendored Khronos tree is the fallback.
+
+    ⚠️ The `rglob` last resort applies to the DEFAULT variant only. A variant asks for one precise
+    encoding of a model, so "any glTF under this directory" would happily hand back the plain file
+    and the A/B would then compare an asset with itself — reporting a perfect match for a variant
+    that was never loaded. A missing variant must raise instead.
     """
     for root in (local_assets_directory(), assets):
-        for folder, suffix in (("glTF-Binary", ".glb"), ("glTF", ".gltf")):
+        for folder, suffix in VARIANT_FOLDERS[variant]:
             candidate = root / model / folder / f"{model}{suffix}"
 
             if candidate.exists():
                 return candidate
 
-        if (root / model).is_dir():
+        if variant is None and (root / model).is_dir():
             matches = sorted((root / model).rglob("*.gl[tb]*"))
 
             if matches:
                 return matches[0]
 
-    raise FileNotFoundError(f"No glTF asset found for {model} under {local_assets_directory()} or {assets}")
+    label = model if variant is None else f"{model} [{variant}]"
+
+    raise FileNotFoundError(f"No glTF asset found for {label} under {local_assets_directory()} or {assets}")
 
 
 def clamp_distance(distance: float, radius: float) -> tuple:
@@ -355,7 +426,7 @@ def camera_position(centre, distance: float, azimuth_deg: float, elevation_deg: 
     ]
 
 
-def build_plan(assets: Path, only: set) -> list:
+def build_plan(assets: Path, only: set, with_draco: bool = True) -> list:
     """
     Computes, for every selected model, its world bounds and one camera placement per view.
 
@@ -366,17 +437,16 @@ def build_plan(assets: Path, only: set) -> list:
     """
     plan = []
 
-    for model, views in MODELS.items():
-        if only and model not in only:
-            continue
-
+    def plain_entry(model: str, views: list) -> dict:
         asset = pick_asset(assets, model)
         bounds = scene_bounds(asset)
         radius = bounds["radius"]
         distance, clamped = clamp_distance(DISTANCE_FACTOR * max(radius, 1e-4), radius)
 
-        plan.append({
+        return {
             "model": model,
+            "label": model,
+            "variant": None,
             "asset": str(asset),
             "bounds": bounds,
             "distance": distance,
@@ -386,6 +456,45 @@ def build_plan(assets: Path, only: set) -> list:
                 {"name": name, "position": camera_position(bounds["centre"], distance, *VIEWS[name])}
                 for name in views
             ],
+        }
+
+    for model, views in MODELS.items():
+        if only and model not in only:
+            continue
+
+        plan.append(plain_entry(model, views))
+
+    if not with_draco:
+        return plan
+
+    planned = {entry["model"]: entry for entry in plan}
+
+    for model, fallback_views in DRACO_MODELS.items():
+        if only and model not in only:
+            continue
+
+        # A model already benched uncompressed keeps ITS views; a Draco-only one uses the list
+        # declared next to it in DRACO_MODELS.
+        reference = planned.get(model)
+
+        if reference is None:
+            reference = plain_entry(model, fallback_views)
+            plan.append(reference)
+
+        # ⚠️⚠️ bounds, distance and view POSITIONS are the plain entry's, copied verbatim and never
+        # recomputed from the Draco file. Quantisation dilates the bounding sphere by ~0.0977 %, so
+        # a recomputed framing moves the camera and the A/B measures that move instead of the codec.
+        plan.append({
+            "model": model,
+            "label": f"{model}[draco]",
+            "variant": "draco",
+            "compare_with": reference["label"],
+            "asset": str(pick_asset(assets, model, "draco")),
+            "bounds": reference["bounds"],
+            "distance": reference["distance"],
+            "near_plane_clamped": reference["near_plane_clamped"],
+            "frame_coverage": reference["frame_coverage"],
+            "views": [dict(view) for view in reference["views"]],
         })
 
     return plan
@@ -447,10 +556,13 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
 
         for entry in plan:
             model = entry["model"]
+            # The capture name and the report key; `model` stays the ENVIRONMENT key, because a
+            # compressed variant must be posed exactly like the asset it is compared against.
+            label = entry.get("label", model)
             bounds = entry["bounds"]
             centre = bounds["centre"]
 
-            print(f"\n=== {model}  (radius {bounds['radius']:.4f} m, {bounds['primitives']} primitives)")
+            print(f"\n=== {label}  (radius {bounds['radius']:.4f} m, {bounds['primitives']} primitives)")
 
             # The environment this test declares, posed BEFORE the scene is built — and the
             # session's own values put back as soon as a model that wants none comes along, so a
@@ -466,7 +578,12 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
                 posed_environment = False
 
             record = {key: entry[key] for key in ("model", "asset", "bounds", "distance")}
+            record["label"] = label
+            record["variant"] = entry.get("variant")
             record["views"] = {}
+
+            if entry.get("compare_with"):
+                record["compareWith"] = entry["compare_with"]
 
             if environment is not None:
                 record["environment"] = environment
@@ -480,7 +597,7 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
                 continue
 
             try:
-                record["entities"] = wait_for_viewer(console, model)
+                record["entities"] = wait_for_viewer(console, label)
 
 
                 # ⚠️⚠️ THE STRUCTURAL CONTROL, and the cheapest one this bench has: the engine builds
@@ -524,7 +641,7 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
 
                 time.sleep(VIEW_SETTLE_S)
 
-                destination = output / f"{model}_{name}.png"
+                destination = output / f"{label}_{name}.png"
 
                 try:
                     capture(console, destination)
@@ -550,15 +667,81 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
     return report
 
 
+def annotate_draco_deltas(report: list) -> None:
+    """
+    Fills each compressed-variant record with its per-view difference against the plain capture.
+
+    ⚠️ THE NUMBERS ARE NOT A VERDICT, and this function deliberately writes none. Draco is LOSSY:
+    measured 2026-09-18, `Box` comes out bit-identical (its quantised positions land exactly) while
+    `Avocado` differs on 10.3 % of pixels for a mean of 0.18/255 and `CesiumMan` on 3.3 % for
+    0.11/255 — a sparse scatter along silhouettes, background untouched. Read the three numbers
+    together: a tiny mean with a high maximum confined to edges is the quantisation signature; a
+    mean that moves, or a maximum spread over a region, is a defect. Picking a pass threshold here
+    would freeze one asset's quantisation grid into a rule for all of them.
+
+    ⚠️ The ENTITY COUNT is the exception — it is a hard, non-arbitrary criterion, and the same
+    structural control the rest of the bench already runs: the two variants declare the same nodes,
+    so a deficit on the compressed side means a primitive failed to decode and silently vanished.
+    That one is flagged.
+    """
+    by_label = {record.get("label", record["model"]): record for record in report}
+
+    for record in report:
+        reference_label = record.get("compareWith")
+
+        if reference_label is None:
+            continue
+
+        reference = by_label.get(reference_label)
+
+        if reference is None:
+            record["dracoDeltaError"] = f"the reference capture '{reference_label}' is not in this run"
+            continue
+
+        if "entities" in record and "entities" in reference and record["entities"] != reference["entities"]:
+            record["dracoEntityMismatch"] = {
+                "variant": record["entities"],
+                "reference": reference["entities"],
+            }
+            print(f"  ⚠️ {record['label']}: {record['entities']} entities against "
+                  f"{reference['entities']} for the plain variant — geometry lost in the decode")
+
+        deltas = {}
+
+        for name, view in record["views"].items():
+            other = reference["views"].get(name)
+
+            if "file" not in view or other is None or "file" not in other:
+                continue
+
+            try:
+                deltas[name] = compare_captures(other["file"], view["file"])
+            except (OSError, ValueError) as error:
+                deltas[name] = {"error": str(error)}
+
+        if deltas:
+            record["dracoDelta"] = deltas
+
+            for name, delta in deltas.items():
+                if "error" in delta:
+                    print(f"  ! {record['label']} {name}: {delta['error']}")
+                else:
+                    print(f"  {record['label']:<28} {name:<10} "
+                          f"differ {delta['differingPercent']:7.4f} %  "
+                          f"mean {delta['meanAbsDelta']:7.4f}/255  max {delta['maxAbsDelta']:3d}/255")
+
+
 def print_plan(plan: list) -> None:
     print(f"Vertical field of view {math.degrees(FIELD_OF_VIEW):.2f} deg "
           f"({FOCAL_LENGTH_MM:.0f} mm on {SENSOR_HEIGHT_MM:.0f} mm), "
           f"framing distance = {DISTANCE_FACTOR:.3f} x radius\n")
     print(f"{'model':<30} {'radius':>10} {'distance':>10} {'coverage':>9}  views")
+    # A `[draco]` row shows the radius and distance of the PLAIN entry it is compared against —
+    # that is the point, not a display shortcut. See DRACO_MODELS.
 
     for entry in plan:
         flag = " *" if entry["near_plane_clamped"] else "  "
-        print(f"{entry['model']:<30} {entry['bounds']['radius']:>10.4f} {entry['distance']:>10.4f} "
+        print(f"{entry.get('label', entry['model']):<30} {entry['bounds']['radius']:>10.4f} {entry['distance']:>10.4f} "
               f"{entry['frame_coverage'] * 100:>8.1f}%{flag}{', '.join(v['name'] for v in entry['views'])}")
 
     if any(entry["near_plane_clamped"] for entry in plan):
@@ -576,6 +759,9 @@ def main() -> int:
                         help="Directory receiving the captures and the report.")
     parser.add_argument("--plan", action="store_true",
                         help="Print the framing plan and exit. Needs no running engine.")
+    parser.add_argument("--no-draco", action="store_true",
+                        help="Skip the compressed-variant A/B (DRACO_MODELS), which doubles the "
+                             "capture count for the models it covers.")
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     arguments = parser.parse_args()
@@ -586,14 +772,22 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    unknown = set(arguments.models) - set(MODELS)
+    known = set(MODELS) | set(DRACO_MODELS)
+    unknown = set(arguments.models) - known
 
     if unknown:
-        print(f"Unknown model(s): {', '.join(sorted(unknown))}\n"
-              f"Known: {', '.join(sorted(MODELS))}", file=sys.stderr)
+        blocked = unknown & set(DRACO_BLOCKED)
+
+        for model in sorted(blocked):
+            print(f"{model} is deliberately not benched: {DRACO_BLOCKED[model]}", file=sys.stderr)
+
+        if unknown - blocked:
+            print(f"Unknown model(s): {', '.join(sorted(unknown - blocked))}\n"
+                  f"Known: {', '.join(sorted(known))}", file=sys.stderr)
+
         return 1
 
-    plan = build_plan(arguments.assets, set(arguments.models))
+    plan = build_plan(arguments.assets, set(arguments.models), not arguments.no_draco)
 
     if arguments.plan:
         print_plan(plan)
@@ -606,6 +800,10 @@ def main() -> int:
               "and was it launched WITHOUT --load-demo?", file=sys.stderr)
         return 1
 
+    if any(record.get("compareWith") for record in report):
+        print("\n=== compressed-variant A/B (Draco against the plain capture, identical framing)")
+        annotate_draco_deltas(report)
+
     arguments.out.mkdir(parents=True, exist_ok=True)
     # ⚠️ A partial run (`./bench.py OneModel`) MERGES into the existing report instead of replacing
     # it: the report carries the bounds and framing distance every later measurement reads back, and
@@ -616,8 +814,11 @@ def main() -> int:
 
     if report_path.exists():
         previous = json.loads(report_path.read_text())
-        captured = {record["model"] for record in report}
-        merged = [record for record in previous if record["model"] not in captured]
+        # ⚠️ Keyed on the LABEL, not the model: since 2026-09-18 a model can produce TWO records
+        # (its plain capture and its `[draco]` twin) and keying on the model alone would let one
+        # evict the other. `.get` keeps a pre-2026-09-18 report readable.
+        captured = {record.get("label", record["model"]) for record in report}
+        merged = [record for record in previous if record.get("label", record["model"]) not in captured]
 
     merged.extend(report)
     report_path.write_text(json.dumps(merged, indent=2))

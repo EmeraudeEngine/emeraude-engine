@@ -29,6 +29,12 @@ worse than no test at all.
 # Capture everything, or a subset.
 ./bench.py
 ./bench.py NormalTangentTest NormalTangentMirrorTest
+
+# One model and its Draco twin (a model of DRACO_MODELS always captures BOTH variants).
+./bench.py Avocado
+
+# Everything except the compressed-variant A/B, which doubles the captures it covers.
+./bench.py --no-draco
 ```
 
 Captures and `bench-report.json` land in `./gltf-bench-captures` unless `--out` says otherwise.
@@ -71,6 +77,60 @@ SpecularTest/screenshot/purple.jpg
 
 Comparing a capture against `screenshot.png` alone tells you something is wrong but never *what*.
 The failure images name the defect, which is what turns a capture into a fix.
+
+## The compressed-variant A/B (Draco, added 2026-09-18)
+
+Sixteen models are captured **twice** — once from the plain glTF, once from its `glTF-Draco`
+sibling — and compared per pixel. The table is `DRACO_MODELS` in `bench.py`; `--no-draco` skips
+the lot, and a `[draco]` suffix marks the compressed row everywhere (plan, capture filename,
+report record).
+
+**It asks a different question from the rest of this bench.** Everywhere else the criterion is
+"does the renderer obey the spec", read against a Khronos reference image. Here it is "does the
+compressed asset render the *same thing* as its uncompressed source" — there is no reference image,
+the reference **is** the other capture.
+
+> [!CAUTION]
+> **The framing is computed from the plain asset and reused verbatim for the compressed one.**
+> Draco quantisation dilates the bounding sphere by half a quantum — measured at a constant
+> **+0.0977 %** on the radius across `Box`, `Avocado`, `BoomBox` and `WaterBottle`. Letting each
+> variant compute its own bounds moves the camera by that much, and the A/B then measures the
+> camera move instead of the codec. This is why a `[draco]` row in `--plan` shows its twin's radius
+> and distance, and why `pick_asset()` **refuses** a missing variant instead of falling back to
+> `rglob`: a fallback would hand back the plain file and the A/B would compare an asset with
+> itself, reporting a perfect match for a variant that was never loaded.
+
+**How to read the three numbers** (`differingPercent`, `meanAbsDelta`, `maxAbsDelta`, per view in
+`bench-report.json` under `dracoDelta`): Draco is **lossy**, so bit-equality is not the criterion
+and `annotate_draco_deltas()` deliberately writes **no verdict**. Measured 2026-09-18:
+
+| | differing | mean | max |
+|---|---|---|---|
+| `Box` (quantised positions land exactly) | **0.0000 %** | 0.0000 | 0 |
+| `Avocado` (curved, fully textured) | 10.8 % | **0.1737** | 192 |
+| `CesiumMan` (skinned) | 3.2 % | **0.1128** | 211 |
+
+A **tiny mean with a high maximum confined to silhouettes** is the quantisation signature — that is
+a pass. A mean that *moves*, or a maximum spread over a **region** or a **block**, is a defect.
+Picking a numeric threshold here would freeze one asset's quantisation grid into a rule for all.
+
+> [!IMPORTANT]
+> **The entity count is the one hard criterion, and it is flagged.** The two variants declare the
+> same nodes, so a deficit on the compressed side means a primitive failed to decode and vanished
+> silently — `dracoEntityMismatch` in the report. It is the same structural control the rest of the
+> bench runs, and it is what a per-pixel criterion cannot see.
+
+> [!WARNING]
+> **Before believing any A/B, check the comparator discriminates.** Two *different* models must
+> come out far apart — 58.5 % of pixels and a mean of 95.6/255, measured. A comparison harness that
+> silently reports zero is indistinguishable from a perfect match. And make sure the second asset
+> has actually **finished loading**: a capture taken mid-swap compares a frame with itself and
+> reports a flawless result for entirely the wrong reason (it did, during this work).
+
+**`SunglassesKhronos` is listed in `DRACO_BLOCKED`, not omitted.** Its Draco variant also requires
+`EXT_texture_webp`, absent from `GLTFLoader`'s parser mask, so fastgltf rejects the whole file and
+nothing loads — nothing to do with Draco. An absent row would read as "never tried"; see
+`docs/todo/gltf-ext-texture-webp-not-in-parser-mask.md`.
 
 ## Traps this bench has already paid for
 
@@ -207,6 +267,7 @@ The failure images name the defect, which is what turns a capture into a fix.
 |---|---|
 | `bench.py` | the driver: framing plan, camera placement, capture loop |
 | `gltf_bounds.py` | world-space bounds of a glTF/GLB by walking the node hierarchy with transforms |
+| `png_compare.py` | dependency-free PNG decode + per-pixel comparison, for the compressed-variant A/B (numpy is used when importable, as a speed-up only) |
 | `../emeraude_console.py` | the shared remote-console client |
 ## Traps the 2026-09-14 re-judgement added
 
