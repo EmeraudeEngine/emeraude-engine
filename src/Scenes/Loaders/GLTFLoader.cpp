@@ -2447,7 +2447,12 @@ namespace EmEn::Scenes::Loaders
 						uint32_t triangleSlot = 0;
 
 						if ( !readDracoAwareIndices(asset, glTFPrimitive, indexAccessor, dracoCache, adapter, [&] (uint32_t value) {
-							triangleBuffer.at(triangleSlot++) = globalVertexOffset + value;
+							/* ⚠️ `operator[]`, never `at()`: the cascade builds with exceptions
+							 * disabled, so a throwing std call is forbidden — `at()` would call
+							 * std::terminate instead of reporting anything. Nothing is lost here:
+							 * `triangleSlot` returns to 0 the moment it reaches 3, so the write
+							 * index is only ever 0, 1 or 2. */
+							triangleBuffer[triangleSlot++] = globalVertexOffset + value;
 
 							if ( triangleSlot == 3 )
 							{
@@ -2741,11 +2746,13 @@ namespace EmEn::Scenes::Loaders
 				fastgltf::iterateAccessor< fastgltf::math::fmat4x4 >(asset, ibmAccessor, [&] (const fastgltf::math::fmat4x4 & m) {
 					std::array< float, 16 > data{};
 
+					/* ⚠️ `operator[]`, never `at()` — exceptions are disabled cascade-wide.
+					 * Both bounds are literals, so the index stays inside [0, 16). */
 					for ( size_t col = 0; col < 4; ++col )
 					{
 						for ( size_t row = 0; row < 4; ++row )
 						{
-							data.at((col * 4) + row) = m.col(col)[row];
+							data[(col * 4) + row] = m.col(col)[row];
 						}
 					}
 
