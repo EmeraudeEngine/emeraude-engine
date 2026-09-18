@@ -625,6 +625,14 @@ def run_bench(plan: list, output: Path, host: str, port: int) -> list:
 
             console.run("Core.SceneManagerService.targetActiveScene()", timeout=6.0)
 
+            # ⚠️ Forces the rest pose before any capture, so a stray space bar on the window cannot
+            # freeze the subject mid-stride and pass the result off as a codec difference (it did,
+            # 2026-09-18: one keypress took a model's A/B from a mean of 0.10/255 to 9.22). This
+            # command draws NO notification, unlike Core.cycleAnimation() whose toast would be burnt
+            # into the frame -- which is exactly why it exists. Harmless on a static asset: an asset
+            # with no clip is already at rest and the call succeeds.
+            console.run("Core.resetAnimation()", timeout=6.0)
+
             # Long enough for the textures to upload AND for the "Viewing <file>" toast to expire.
             time.sleep(LOAD_SETTLE_S)
 
@@ -672,7 +680,9 @@ def annotate_draco_deltas(report: list) -> None:
     Fills each compressed-variant record with its per-view difference against the plain capture.
 
     ⚠️ THE NUMBERS ARE NOT A VERDICT, and this function deliberately writes none. Draco is LOSSY:
-    measured 2026-09-18, `Box` comes out bit-identical (its quantised positions land exactly) while
+    measured 2026-09-18, `Box` usually comes out bit-identical (its quantised positions land exactly,
+    though an intermittent single-LSB residual on ~0.44 % of its pixels appears from run to run --
+    one LSB is the CAPTURE's noise floor, never a codec signal) while
     `Avocado` differs on 10.3 % of pixels for a mean of 0.18/255 and `CesiumMan` on 3.3 % for
     0.11/255 — a sparse scatter along silhouettes, background untouched. Read the three numbers
     together: a tiny mean with a high maximum confined to edges is the quantisation signature; a

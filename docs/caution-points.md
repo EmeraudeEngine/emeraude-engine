@@ -1642,7 +1642,9 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 > [!NOTE]
 > **Draco is lossy: do not use bit-equality as the pass criterion, and do not panic at a high
 > local maximum.** Measured 2026-09-18 against the uncompressed variants at identical framing:
-> `Box` is bit-identical (0 of 2 073 600 pixels), but `Avocado` differs on 10.3 % of pixels
+> `Box` usually comes out bit-identical (0 of 2 073 600 pixels) — but not always: the same run
+> repeated shows an intermittent single-LSB residual on ~0.44 % of its pixels (max **1**/255),
+> so treat one LSB as the CAPTURE's noise floor, never as a codec signal. `Avocado` differs on 10.3 % of pixels
 > (mean **0.18/255**) and `CesiumMan` on 3.3 % (mean **0.11/255**) — a sparse scatter along
 > silhouettes, background strictly identical. Tiny mean + high local maxima confined to edges is
 > the quantisation signature. A **region** or a **block** of difference is not, and means a defect.

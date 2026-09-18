@@ -106,9 +106,15 @@ and `annotate_draco_deltas()` deliberately writes **no verdict**. Measured 2026-
 
 | | differing | mean | max |
 |---|---|---|---|
-| `Box` (quantised positions land exactly) | **0.0000 %** | 0.0000 | 0 |
+| `Box` (quantised positions land exactly) | **0.0000 %** usually | 0.0000 | 0 |
 | `Avocado` (curved, fully textured) | 10.8 % | **0.1737** | 192 |
 | `CesiumMan` (skinned) | 3.2 % | **0.1128** | 211 |
+
+> [!NOTE]
+> **One LSB is the CAPTURE's noise floor, not a codec signal.** `Box` is the bit-identical case, but
+> not reliably: the same run repeated shows an intermittent residual of **max 1/255 on ~0.44 %** of
+> its pixels. `BrainStem` carries a comparable ~0.02 % run-to-run wobble in **both** variants. A row
+> whose maximum is 1 has nothing to say about the codec.
 
 A **tiny mean with a high maximum confined to silhouettes** is the quantisation signature — that is
 a pass. A mean that *moves*, or a maximum spread over a **region** or a **block**, is a defect.
