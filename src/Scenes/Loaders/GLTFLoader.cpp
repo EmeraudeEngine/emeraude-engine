@@ -149,6 +149,12 @@ namespace
 			case fastgltf::MimeType::PNG :
 				return Pixmap< uint8_t >::Format::PNG;
 
+			/* ⚠️ Decoded to RGB/RGBA pixels like PNG and JPEG, NOT kept compressed like KTX2:
+			 * WebP has no GPU format, so it takes the ordinary Pixmap path and the consumer's
+			 * CPU BC7 + texture cache afterwards. */
+			case fastgltf::MimeType::WEBP :
+				return Pixmap< uint8_t >::Format::WebP;
+
 			default :
 				return Pixmap< uint8_t >::Format::None;
 		}
@@ -928,7 +934,12 @@ namespace EmEn::Scenes::Loaders
 			 * accessors of a Draco primitive carry NO bufferView and glTF § 5.1.1 then mandates
 			 * zeros. Every attribute read in loadMeshes() therefore goes through
 			 * readDracoAwareAttribute()/readDracoAwareIndices(), which fail loudly instead. */
-			fastgltf::Extensions::KHR_draco_mesh_compression;
+			fastgltf::Extensions::KHR_draco_mesh_compression |
+			/* NOTE: Images are WebP containers, hung off `Texture::webpImageIndex` exactly as
+			 * KHR_texture_basisu hangs its own — see resolveTexture(). Decoded through
+			 * PixelFactory::FileFormatWebP, in emeraude-base: a WebP is plain pixels, so it is an
+			 * image format of the foundation and not a glTF special case. */
+			fastgltf::Extensions::EXT_texture_webp;
 
 		fastgltf::Parser parser(declaredExtensions);
 
@@ -1331,10 +1342,25 @@ namespace EmEn::Scenes::Loaders
 
 				const auto & glTFTexture = asset.textures[textureIndex];
 
-				/* NOTE: KHR_texture_basisu hangs the image off its own index, and a texture that
-				 * uses it has NO plain imageIndex at all. Reading only imageIndex does not degrade
-				 * gracefully on such an asset : every single material comes out untextured. */
-				const auto sourceIndex = glTFTexture.imageIndex.has_value() ? glTFTexture.imageIndex : glTFTexture.basisuImageIndex;
+				/* NOTE: KHR_texture_basisu and EXT_texture_webp each hang the image off their OWN
+				 * index, and a texture using either has NO plain imageIndex at all. Reading only
+				 * imageIndex does not degrade gracefully on such an asset : every single material
+				 * comes out untextured, with no error.
+				 *
+				 * ⚠️ The two are ALTERNATIVES on the same texture, so all three legs must be tried.
+				 * Stopping at the first one a reader happens to know is the whole trap: it leaves
+				 * the other kind silently untextured. */
+				auto sourceIndex = glTFTexture.imageIndex;
+
+				if ( !sourceIndex.has_value() )
+				{
+					sourceIndex = glTFTexture.basisuImageIndex;
+				}
+
+				if ( !sourceIndex.has_value() )
+				{
+					sourceIndex = glTFTexture.webpImageIndex;
+				}
 
 				if ( !sourceIndex.has_value() )
 				{

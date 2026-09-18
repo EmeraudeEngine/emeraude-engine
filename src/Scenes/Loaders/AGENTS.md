@@ -616,7 +616,11 @@ variants decode, 0 error, 0 VUID — including `BrainStem` (59 bitstreams), `Car
 **Those sixteen are now BENCH ROWS, not a one-off sweep.** `tools/gltf-conformance-bench` captures
 each of them twice — plain and Draco, at an **identical framing** — and reports the per-pixel delta
 under `dracoDelta` (`DRACO_MODELS` in `bench.py`, `--no-draco` to skip). Full run 2026-09-18: 64
-captures, 0 error, 0 entity mismatch, worst mean delta **0.76/255** (`VirtualCity`). ⚠️ The A/B
+captures, 0 error, 0 entity mismatch, worst mean delta **0.76/255** (`VirtualCity`). ⚠️ Two rows are
+**not** geometry-codec numbers and the bench now says so: `CarConcept` (PNG against KTX2) and
+`SunglassesKhronos` (PNG against WebP) ship their Draco variant with a different TEXTURE encoding,
+so their delta carries two codecs — the `CarConcept` figure first published that day was never a
+Draco measurement. ⚠️ The A/B
 reuses the **plain** variant's bounds on purpose — quantisation dilates the bounding sphere by a
 constant **+0.0977 %**, so a recomputed framing measures the camera move instead of the codec. Read
 [`tools/gltf-conformance-bench/README.md`](../../../tools/gltf-conformance-bench/README.md)
@@ -632,6 +636,32 @@ Draco **1.5.7**, decoder only. ⚠️ Draco installs **no CMake config package**
 `lib/pkgconfig/draco.pc` — so `find_package(draco CONFIG)` cannot work and the archive is referenced
 directly, as for FastGLTF. Symbol hiding needs no entry: the sweep globs `*.a`.
 
+#### EXT_texture_webp — an IMAGE format, owned by the foundation (added 2026-09-18)
+
+Images are WebP containers hung off `Texture::webpImageIndex`, exactly as `KHR_texture_basisu`
+hangs its own. Decoded by **`EmEn::Base::PixelFactory::FileFormatWebP`, in emeraude-base** — not
+here: a WebP is plain pixels, so it is an image format of the foundation, and decoding it inside
+this loader would have left `.webp` unreadable everywhere else (dropped files, data stores,
+material components).
+
+> [!CAUTION]
+> **WebP is NOT KTX2, and copying the KTX2 path would be the mistake.** A KTX2 container stays
+> block-compressed from disk to `VkImage` and never becomes pixels. WebP has **no GPU format**: it
+> decodes to RGB/RGBA into a `Pixmap` and then takes the ordinary consumer path (CPU BC7 +
+> `TextureCache`), like PNG and JPEG.
+
+> [!CAUTION]
+> **`KHR_texture_basisu` and `EXT_texture_webp` are ALTERNATIVES on the same texture, and a texture
+> using either has NO plain `imageIndex` at all.** `resolveTexture()` therefore tries all three
+> legs. Stopping at the first one a reader happens to know is the whole trap: every material of the
+> other kind comes out silently untextured, with no error — which is why the parser mask and the
+> decoder had to ship together, never one without the other.
+
+**Verified 2026-09-18**: the owner's `SheenWoodLeatherSofa.glb` (`KHR_texture_transform` +
+`EXT_texture_webp`) loads fully textured, and `SunglassesKhronos/glTF-Draco` — **WebP and Draco in
+one asset**, 8 bitstreams — renders with its transmissive lenses. emeraude-base unit suite
+2049/2049.
+
 #### Known gaps (glTF 2.0)
 
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
@@ -640,14 +670,11 @@ Not a wish list — these are silent today, so a diagnosis that assumes them pre
 filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
 (offset, scale **and rotation**) on **every** map since 2026-09-14, except its `texCoord` override, which is
 the multi-UV gap;
-every extension in the parser mask is now read, but `EXT_texture_webp` is **not in the mask** —
-and since fastgltf rejects the whole file over a missing *required* extension, such an asset does
-not load at all (`SunglassesKhronos`, and the owner's own `SheenWoodLeatherSofa.glb`, found
-2026-09-18; `libwebp` is available in ext-deps-generator, so this is a decoder-wiring gap, not a
-dependency one). ⚠️ Since 2026-09-18 the loader at least **names** what it lacks:
-`reportMissingExtensions()` re-parses with every extension fastgltf knows — the only way to recover
-`extensionsRequired` from a file fastgltf refused whole — and logs the difference against its own
-mask, because fastgltf's message says only that *something* is missing;
+every extension in the parser mask is now read;
+⚠️ when one is nevertheless missing the loader **names** it: `reportMissingExtensions()` re-parses
+with every extension fastgltf knows — the only way to recover `extensionsRequired` from a file
+fastgltf refused whole — and logs the difference against its own mask, because fastgltf's own
+message says only that *something* is missing;
 **transmission is the last one reading only its
 scalar factor, never its texture** (clearcoat's three maps and sheen's two are read since
 2026-09-14, see below); animation channels targeting a node that is
