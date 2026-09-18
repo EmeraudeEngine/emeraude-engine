@@ -147,6 +147,24 @@ Picking a numeric threshold here would freeze one asset's quantisation grid into
 > one isolates the contaminated capture immediately. `BrainStem` additionally carries a genuine
 > ~0.02 % run-to-run non-determinism in **both** variants, so treat that as its floor, not a signal.
 
+> [!CAUTION]
+> **THE BACKGROUND IS NOT DETERMINISTIC, and it mimics a codec defect perfectly.** Measured
+> 2026-09-18 by re-running this bench unchanged: 30 of 34 rows reproduced to the fourth decimal
+> while `RiggedSimple` moved by **+28.39**/255 of mean and `CarConcept` by −1.78. In both, the
+> **subject is pixel-identical and only the environment cubemap differs** — one frame drawn with the
+> default, the other with the viewer's landscape, although the engine log shows the scene choosing
+> the landscape before either screenshot in every case. The cubemap is still streaming when the
+> frame is drawn.
+>
+> **The tell, and it is decisive:** compare the SAME variant across two runs. The row that moved was
+> the *plain* one for `RiggedSimple` and the *Draco* one for `CarConcept` — a different side each
+> time, which no codec can produce. The entity count matches throughout, so the structural control
+> stays silent.
+>
+> Until the bench can wait for the environment to be resident (it has no signal for that) or crop
+> the comparison to the subject's bounding box — which it already knows from the framing plan — a
+> mean that jumps with an untouched subject means **re-run**, not regression.
+
 > [!WARNING]
 > **Before believing any A/B, check the comparator discriminates.** Two *different* models must
 > come out far apart — 58.5 % of pixels and a mean of 95.6/255, measured. A comparison harness that

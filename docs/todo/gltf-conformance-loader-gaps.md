@@ -13,8 +13,11 @@ tags: [gltf, material, measured]
 
 > ⚠️ **Asset location** (owner decision, 2026-08-31): `glTF-Sample-Assets` is a **submodule of
 > projet-alpha** (`projet-alpha/dependencies/glTF-Sample-Assets`), not of the engine. Test data
-> belongs to the testbed. It is a **partial clone** (`blob:none`, 201 MB against 1.7 GB upstream)
-> — do not re-clone it plainly. The bench searches three layouts for it since 2026-09-14 (the
+> belongs to the testbed. ⚠️ It is a **FULL clone**, ~3.2 GB (1.4 GB of working tree, 148 models
+> with every variant, plus 1.8 GB of git objects). This file said "partial clone (`blob:none`,
+> 201 MB against 1.7 GB upstream) — do not re-clone it plainly" until 2026-09-18; **measured that
+> day, no partial-clone filter is configured at all**, in the submodule or in its real git dir, so
+> there is no filter to preserve. The bench searches three layouts for it since 2026-09-14 (the
 > engine checkout here is a **symlink to a sibling directory**, so no path arithmetic on the
 > resolved script path can find the consumer's submodule).
 
@@ -80,8 +83,8 @@ reflection from a sharp transmission. Unresolvable with this metric, not a defec
 ### ⚠️⚠️ What 20 / 20 does NOT mean
 
 100 % of what this bench drives: **nineteen Khronos models chosen because each isolates one
-defect**, plus one probe of ours. Not a percentage of glTF 2.0. The corpus is a partial clone (30
-materialised of ~180 upstream) and the gaps the bench does not exercise at all are unchanged and
+defect**, plus one probe of ours. Not a percentage of glTF 2.0 — the corpus holds 148 models, and
+the gaps the bench does not exercise at all are unchanged and
 listed in [`src/Scenes/Loaders/AGENTS.md`](../../src/Scenes/Loaders/AGENTS.md) § *Known gaps*: no
 multi-UV, four skin influences, no morph targets, `TRIANGLES` only, no rigid-node animation, no GPU
 instancing — plus `KHR_materials_transmission`'s texture, the last extension reading only its
@@ -105,6 +108,37 @@ scalar factor.
 been there since the console was unified. The claim came from a `help` dump piped through
 `grep | head`, where `set` sorts one line past `save` and fell off the end. **`<path>.lsfunc()`
 enumerates a level; never conclude a capability is missing from a truncated pipe.**
+
+### ⚠️⚠️ The capture's ENVIRONMENT is not deterministic (measured 2026-09-18)
+
+Re-running the compressed-variant bench unchanged, 30 of 34 rows reproduced **to the fourth
+decimal** and two moved hugely: `RiggedSimple` by **+28.39**/255 of mean, `CarConcept` by −1.78.
+
+Neither is a codec difference. Comparing each capture against its own counterpart in the previous
+run isolates it: the row that moved is the **plain** variant for `RiggedSimple` and the **Draco**
+one for `CarConcept` — a different side each time, which no codec can produce. In both, **the
+subject is pixel-identical and only the BACKGROUND differs**: one frame shows the default cubemap,
+the other the viewer's landscape.
+
+The engine log shows the same sequence for both variants — `+DefaultTextureCubemap` twice, then
+`GreenLandscape`, all **before** either screenshot — so the scene had *decided* on the landscape in
+every case. The best explanation consistent with that is the cubemap still **streaming** when the
+frame was drawn, the decision being logged before the texture is resident. ⚠️ That last step is an
+inference, not a measurement: what is measured is that the background differs while the subject does
+not.
+
+**How to read it**, because it mimics a real defect perfectly:
+
+- the mean moves by **tens** of units, far above the quantisation floor;
+- the entity count still matches, so the structural control says nothing;
+- **the two frames differ across the whole background and nowhere on the model.**
+
+Compare the same variant across two runs before blaming the codec: a row that moved on one side only
+is an environment race, not a decode.
+
+**What would fix it**: wait for the environment to be resident before capturing — the bench has no
+signal for that today — or crop the comparison to the subject's bounding box, which it already knows
+from the framing plan. Until then, treat a mean jump with an untouched subject as this, and re-run.
 
 ## What remains
 
