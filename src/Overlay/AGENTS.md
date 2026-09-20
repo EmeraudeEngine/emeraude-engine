@@ -214,6 +214,84 @@ popup on screen. Uses the region overload of `CommandBuffer::copyImage` (explici
 - Windows/D3D11 (`Win32D3D11Texture`) and macOS/IOSurface (`IOSurface`, via VK_EXT_metal_objects)
   are implemented; DmaBuf (Linux) is a descriptor placeholder.
 
+### The transition-buffer placeholder is invisible (⚠️ measured cost)
+
+On the **CPU-pixmap path only**, `updatePhysicalRepresentation()` builds a placeholder for the newly
+sized transition buffer by bilinear-resizing the whole active pixmap
+(`Processor< uint8_t >::resize(...)`, **serially** — the optional `ThreadPool *` argument is not
+passed). The stated intent is "a placeholder image while waiting for new content".
+
+**That placeholder is never displayed.** `descriptorSet()` only ever serves the active buffer, and a
+transition buffer becomes active through `commitTransitionBuffer()` (or the inline swap of
+`importAcceleratedFrame()`), both of which the content provider calls **after** writing a full frame
+into it. The placeholder pixels are computed, uploaded, then overwritten before they could be
+sampled. `TransitionBufferStatus::Ready` versus `WaitingForContent` changes nothing either:
+`isTransitionBufferReady()` only excludes `Resizing`.
+
+Measured on an Apple M4 Pro (`-O2`), one full-screen retina surface, 3456x1964 → 3456x1900:
+
+| Step | Cost |
+|---|---|
+| `Processor::resize`, serial — what runs today | **28.6 ms** |
+| the same with the 14-thread `ThreadPool` | 4.4 ms |
+| `pixmap.initialize()` alone — the fallback when the copy is disabled | **1.6 ms** |
+
+`Overlay::Manager::onWindowResized()` runs this for **every** surface on **every** resize event
+(the only damping is `Core`'s `m_windowChanged` boolean, which merely coalesces what arrives between
+two main-loop turns). With two full-screen CPU-pixmap surfaces that was ~56 ms of dead main-thread
+work per event.
+
+> [!IMPORTANT]
+> **`disablePixmapCopyInTransitionBuffer(true)` is the answer, not a thread pool.** Parallelising
+> the resize would still burn fourteen cores computing pixels nobody sees, and would still be three
+> times slower than not doing it. AppSystem sets the flag on every `WebView` (`src/UI/WebView.cpp`,
+> constructor). An engine surface that genuinely displays its transition buffer before content
+> arrives would need the copy — none does today.
+
+### Initial clear of the surface image (⚠️ not cosmetic — and only on the ACTIVE buffer)
+
+Neither asynchronous-provider path writes a single pixel at creation time — the mapped path waits
+for its CPU producer, the accelerated path for its first GPU→GPU copy. A buffer that can be
+**sampled** before its first frame therefore shows raw device memory, which is `UNDEFINED`: desktop
+drivers happen to hand back zeroed pages, while **Metal/MoltenVK hands back real garbage, reading as
+a uniform magenta rectangle**. That was the pink flash the Lychee Slicer splash screen showed on
+macOS before its image appeared (fixed 2026-09-20), on every CEF web-view and not only the splash.
+Same class of bug, same fix, as `Graphics::IntermediateRenderTarget::create()`.
+
+`createFramebufferResources()` takes a **`clearOnCreate`** parameter, and the caller decides:
+
+| Call site | Buffer | `clearOnCreate` | Why |
+|---|---|---|---|
+| `createOnHardware()` | active | **true** | Sampled from the very next frame |
+| `updatePhysicalRepresentation()`, single-buffer mode | active | **true** | Recreated in place and sampled immediately, nothing hides the gap |
+| `updatePhysicalRepresentation()`, transition buffer | transition | **false** | Never sampled |
+| `recreateTransitionBufferToRequestedSize()` | transition | **false** | Never sampled |
+
+> [!IMPORTANT]
+> **The transition buffer is never sampled, and that is what keeps the clear off the resize path.**
+> `descriptorSet()` always serves `m_activeBuffer`, and a transition buffer only becomes active
+> through `commitTransitionBuffer()` (or the inline swap in `importAcceleratedFrame()`), both of
+> which the content provider calls **after** writing its frame. Clearing it would be pure cost:
+> the two transition call sites are the window-**resize** path, which runs on every drag event, for
+> every surface.
+>
+> ⚠️ **This is an invariant, not an optimisation detail.** Anyone who makes the transition buffer
+> sampleable, or commits one without content, must flip those two call sites to `true` — otherwise
+> the magenta comes back, and only on Apple hardware.
+
+The two clear mechanisms differ because the two images differ:
+
+| Path | Image | How it is cleared |
+|---|---|---|
+| Accelerated source | `OPTIMAL`, `TRANSFER_DST\|SAMPLED` | `UNDEFINED` → `TRANSFER_DST_OPTIMAL`, `TransferManager::clearColorImage()` to transparent black, → `SHADER_READ_ONLY_OPTIMAL` |
+| Memory mapping | `LINEAR`, `SAMPLED` only, host visible | `memset` of the mapped memory through `Framebuffer::writeWithMapping()`, **after** the transition (a transition *from* `UNDEFINED` may discard the contents) |
+
+> [!WARNING]
+> `vkCmdClearColorImage()` is **illegal on the memory-mapping image**: it carries no
+> `VK_IMAGE_USAGE_TRANSFER_DST_BIT` (see the usage flags above). Hence the two mechanisms.
+> When `clearOnCreate` is false the image is transitioned straight to `SHADER_READ_ONLY_OPTIMAL`,
+> exactly as before this fix existed.
+
 ### Supported Content Types
 
 **Generic Surface**: Modifiable Pixmap bitmap (main use case)

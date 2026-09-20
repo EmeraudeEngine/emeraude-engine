@@ -1370,10 +1370,13 @@ namespace EmEn::Overlay
 			 * @param renderer A reference to the graphics renderer.
 			 * @param width The texture width in pixels.
 			 * @param height The texture height in pixels.
+			 * @param clearOnCreate Clear to transparent black. True for the ACTIVE buffer, sampled
+			 * before its provider writes to it — undefined device memory reads as magenta on Metal.
+			 * False for the TRANSITION buffer: never sampled, and recreated on every resize event.
 			 * @return bool True on success, false on failure.
 			 */
 			[[nodiscard]]
-			bool createFramebufferResources (Framebuffer & buffer, Graphics::Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
+			bool createFramebufferResources (Framebuffer & buffer, Graphics::Renderer & renderer, uint32_t width, uint32_t height, bool clearOnCreate) const noexcept;
 
 			/**
 			 * @brief Updates the model matrix to place the surface on screen.

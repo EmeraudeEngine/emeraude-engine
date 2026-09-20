@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -224,7 +225,7 @@ namespace EmEn::Overlay
 			}
 		}
 
-		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight) )
+		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight, true) )
 		{
 			m_activeBuffer.destroy();
 
@@ -516,7 +517,7 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Surface::createFramebufferResources (Framebuffer & buffer, Renderer & renderer, uint32_t width, uint32_t height) const noexcept
+	Surface::createFramebufferResources (Framebuffer & buffer, Renderer & renderer, uint32_t width, uint32_t height, bool clearOnCreate) const noexcept
 	{
 		/* NOTE: When memory mapping is disabled, the pixmap is required.
 		 * When memory mapping OR the accelerated source is enabled, we skip the pixmap entirely. */
@@ -580,17 +581,59 @@ namespace EmEn::Overlay
 
 			/* NOTE: Transition the image layout to SHADER_READ_ONLY_OPTIMAL so it can be sampled.
 			 * Unlike the staging buffer path, we don't go through transfer operations. */
+			const auto useVulkanClear = clearOnCreate && !m_memoryMappingEnabled;
+
 			if ( !renderer.transferManager().transitionImageLayout(
 				*buffer.image,
 				VK_IMAGE_ASPECT_COLOR_BIT,
 				VK_IMAGE_LAYOUT_UNDEFINED,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
+				useVulkanClear ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
 			{
 				TraceError{ClassId} << "Unable to transition the image layout for the surface '" << this->name() << "' !";
 
 				buffer.image.reset();
 
 				return false;
+			}
+
+			if ( clearOnCreate && m_memoryMappingEnabled )
+			{
+				/* NOTE: The mapped image is LINEAR + SAMPLED only, so vkCmdClearColorImage() is illegal
+				 * on it. Zeroed AFTER the transition: one FROM undefined may discard the contents. */
+				if ( !buffer.writeWithMapping([height] (void * mappedPointer, VkDeviceSize rowPitch) {
+					std::memset(mappedPointer, 0, static_cast< size_t >(rowPitch) * height);
+
+					return true;
+				}) )
+				{
+					TraceWarning{ClassId} << "Unable to clear the mapped framebuffer image of the surface '" << this->name() << "' ! The first frames may show uninitialized memory.";
+				}
+			}
+			else if ( useVulkanClear )
+			{
+				const auto & transferManager = renderer.transferManager();
+
+				if ( !transferManager.clearColorImage(*buffer.image, VkClearColorValue{.float32 = {0.0F, 0.0F, 0.0F, 0.0F}}) )
+				{
+					TraceError{ClassId} << "Unable to clear the framebuffer image of the surface '" << this->name() << "' !";
+
+					buffer.image.reset();
+
+					return false;
+				}
+
+				if ( !transferManager.transitionImageLayout(
+					*buffer.image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
+				{
+					TraceError{ClassId} << "Unable to transition the image layout for the surface '" << this->name() << "' !";
+
+					buffer.image.reset();
+
+					return false;
+				}
 			}
 		}
 		else
@@ -776,7 +819,8 @@ namespace EmEn::Overlay
 
 		m_transitionBuffer.destroy();
 
-		if ( !this->createFramebufferResources(m_transitionBuffer, renderer, requestedWidth, requestedHeight) )
+		/* NOTE: No clear — never sampled, and this runs on every window-drag event. */
+		if ( !this->createFramebufferResources(m_transitionBuffer, renderer, requestedWidth, requestedHeight, false) )
 		{
 			m_transitionBuffer.destroy();
 
@@ -868,7 +912,8 @@ namespace EmEn::Overlay
 
 			m_transitionBuffer.destroy();
 
-			if ( !this->createFramebufferResources(m_transitionBuffer, renderer, textureWidth, textureHeight) )
+			/* NOTE: No clear — never sampled, and this runs on every window-drag event. */
+			if ( !this->createFramebufferResources(m_transitionBuffer, renderer, textureWidth, textureHeight, false) )
 			{
 				m_transitionBuffer.destroy();
 
@@ -909,7 +954,7 @@ namespace EmEn::Overlay
 
 		m_activeBuffer.destroy();
 
-		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight) )
+		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight, true) )
 		{
 			m_activeBuffer.destroy();
 
