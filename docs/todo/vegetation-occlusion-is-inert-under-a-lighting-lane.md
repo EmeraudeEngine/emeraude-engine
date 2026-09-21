@@ -31,18 +31,43 @@ The data itself is not the problem: on a quaking aspen the channel has a median 
 0.84 and 88 % of its vertices below 0.95, over a 0.45–1.0 range. It is the term it multiplies that
 has almost no weight once a lane is on.
 
+## ⚠️⚠️ The obvious fix was BUILT, MEASURED and REVERTED (2026-09-22)
+
+Option 3 below — feeding the baked density to the lane as a **floor** on its own visibility,
+`V = min(V_search, V_baked)` — was implemented end to end and reverted after measurement. Keep this
+section before trying it again.
+
+- The publication path worked: the **R low nibble** of the material-properties G-buffer, which was
+  `reserved` and written as a literal 0, carried the bound with **15 as the neutral value** (0 would
+  have meant "sees no sky" for every surface that forgot to publish). The SSGI **horizon pass**
+  took a third input and clamped its result. Zero validation error.
+- It changed **nothing**: with the wind frozen so the two runs are geometrically identical (0.100 %
+  of the image differs), foliage luminance moved **-0.01 %**, the darkest quarter +0.69 %, the
+  brightest -0.18 %, sky and grass controls 0.00 %.
+- **Why, and it invalidates the argument that motivated it**: the horizon search already measures,
+  inside a canopy, a visibility BELOW the baked bound (median 0.87). Its blindness is for occluders
+  that are **off screen**; a leaf deep in a tree is occluded by other leaves that are mostly on
+  screen and near. The Sponza floor at 12x is not the same situation as a canopy.
+- Reverted on the owner's call: nothing inert ships in the engine.
+
+⚠️ A measurement trap found doing it: **freeze the wind before comparing two runs**. With the trees
+swaying, two captures are at different wind phases and the comparison is worthless — the first one
+reported the canopy interior getting 13 % BRIGHTER under a floor, which a floor cannot do.
+
 ## What remains
 
-An owner decision, because the obvious move is also the dangerous one:
+An owner decision, with one branch now closed:
 
-1. **Leave it.** The channel serves the no-lane case and costs nothing otherwise. Honest, and the
-   canopy keeps looking flat under a lane.
-2. **Attenuate the lane's indirect diffuse by it too.** ⚠️⚠️ Both lanes already estimate their own
-   occlusion — SSGI runs a GTAO horizon search, RTGI traces — so multiplying a vertex-baked density
-   on top **double-darkens** the inside of the canopy. If this is chosen, it needs a rule for what
-   each term owns, not just a multiply.
-3. **Make it a hint the lane consumes**, e.g. as a floor or a bias on its own visibility rather
-   than a multiplier. More work, and it is the only shape that cannot double-count by construction.
+1. **Leave it.** The channel serves the no-lane case (-2.44 %) and costs nothing otherwise. The
+   canopy keeps looking flat under a lane. This is the current state.
+2. **Attenuate the lane's indirect diffuse by it.** ⚠️⚠️ Both lanes already estimate their own
+   occlusion, so multiplying a vertex-baked density on top **double-darkens** the inside of the
+   canopy, and the result would swing with the camera angle. It needs a rule for what each term
+   owns, not a multiply.
+3. ~~A floor on the lane's visibility~~ — **tried, inert, reverted**. See above.
+4. **Find the case where the search really does over-estimate** (foliage under a roof, a camera
+   below the canopy against a wall) and measure the bound there before building anything. That is
+   what the floor attempt skipped.
 
 ## Traps
 
