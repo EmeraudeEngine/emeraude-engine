@@ -414,6 +414,33 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Enables the vegetation wind displacement in the vertex stage.
+			 * @note The displacement chain is skinning -> wind -> every consumer. It reads the four
+			 * vertex colour channels the tree skinner fills (R trunk bend, G branch bend, B flutter
+			 * phase, A baked occlusion) and the per-frame wind state in the instance-transforms SSBO
+			 * header.
+			 * @warning ⚠️ It needs the instance transforms: without them the SSBO holding the wind
+			 * state is not even declared, and the request is ignored.
+			 * @return void
+			 */
+			void
+			enableVegetationWind () noexcept
+			{
+				m_vegetationWindEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the vegetation wind displacement is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isVegetationWindEnabled () const noexcept
+			{
+				return m_vegetationWindEnabled;
+			}
+
+			/**
 			 * @brief Enables skeletal skinning in this vertex shader.
 			 * @return void
 			 */
@@ -435,6 +462,32 @@ namespace EmEn::Saphir
 			}
 
 		private:
+
+			/**
+			 * @brief Returns the GLSL expression holding the object-space vertex position.
+			 * @note ⚠️ Every consumer goes through here rather than spelling out the ternary itself.
+			 * There were NINE copies of "m_skinningEnabled ? skinnedPosition : position" before the
+			 * wind was added; a displacement stage is learnt once now, not nine times.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char * vertexPositionExpression () const noexcept;
+
+			/**
+			 * @brief Returns the GLSL expression holding the object-space vertex position of the
+			 * PREVIOUS frame, for the motion-vector pass.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char * previousVertexPositionExpression () const noexcept;
+
+			/**
+			 * @brief Returns the GLSL block displacing the vertex by the wind, prefixed to main().
+			 * @param baseExpression The expression the displacement starts from.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string generateVegetationWindCode (const char * baseExpression) const noexcept;
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
 			[[nodiscard]]
@@ -724,6 +777,8 @@ namespace EmEn::Saphir
 			bool m_csmModeEnabled{false};
 			bool m_MDIEnabled{false};
 			bool m_skinningEnabled{false};
+			bool m_vegetationWindEnabled{false};
+			bool m_previousWindRequired{false};
 			bool m_instanceTransformsEnabled{false};
 			bool m_infinityViewEnabled{false};
 			bool m_instanceMotionHistoryEnabled{false};

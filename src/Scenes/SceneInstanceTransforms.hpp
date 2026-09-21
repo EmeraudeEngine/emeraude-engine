@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 
@@ -103,6 +104,18 @@ namespace EmEn::Scenes
 				 * the renderables rendered with it (the sky background). Mixing the two forms is a
 				 * STRUCTURAL mismatch that does not cancel on a static camera. */
 				Base::Math::Matrix< 4, float > previousViewProjectionInfinityMatrix;
+				/** @brief Vegetation wind: xyz the direction, w the strength as the tip displacement in
+				 * metres. It rides HERE rather than in a block of its own because the wind is per-frame
+				 * exactly like the matrices above, and because the motion-vector pass needs its PREVIOUS
+				 * value from the same place it already reads the previous view-projection. */
+				Base::Math::Vector< 4, float > windDirectionStrength;
+				/** @brief x the wind time of this frame, y the wind time of the PREVIOUS one, z the gust
+				 * envelope, w unused.
+				 * @note ⚠️ y is what keeps a swaying tree from smearing under TAA: the vertex stage
+				 * displaces the previous position with the previous time, so the velocity it reports is
+				 * the real one. Feeding the same time to both silently reports zero velocity for a
+				 * moving vertex. */
+				Base::Math::Vector< 4, float > windTimes;
 			};
 
 			/**
@@ -116,7 +129,7 @@ namespace EmEn::Scenes
 				Base::Math::Matrix< 4, float > previousModelMatrix;
 			};
 
-			static_assert(sizeof(Header) == 128, "InstanceTransforms header must match the GPU layout (2 x mat4).");
+			static_assert(sizeof(Header) == 160, "InstanceTransforms header must match the GPU layout (2 x mat4 + 2 x vec4).");
 
 			static_assert(sizeof(Entry) == 128, "InstanceTransforms entry must match the GPU layout (2 x mat4).");
 			static_assert(std::is_trivially_copyable_v< Header > && std::is_trivially_copyable_v< Entry >, "InstanceTransforms structures must be trivially copyable (raw memcpy upload).");
@@ -199,6 +212,25 @@ namespace EmEn::Scenes
 			{
 				m_stagedHeader.previousViewProjectionMatrix = previousViewProjectionMatrix;
 				m_stagedHeader.previousViewProjectionInfinityMatrix = previousViewProjectionInfinityMatrix;
+			}
+
+			/**
+			 * @brief Stages the vegetation wind state of this frame.
+			 * @warning ⚠️ @a previousTime must be the time the PREVIOUS frame displaced with, not
+			 * this one. The vertex stage builds the previous position from it, and that is the only
+			 * thing that makes a swaying tree report a real velocity instead of zero.
+			 * @param direction The wind direction, normalized.
+			 * @param strength The tip displacement, in metres.
+			 * @param time The wind time of this frame, in seconds.
+			 * @param previousTime The wind time of the previous frame, in seconds.
+			 * @param gust The gust envelope, in [0, 1].
+			 * @return void
+			 */
+			void
+			setWindState (const Base::Math::Vector< 3, float > & direction, float strength, float time, float previousTime, float gust) noexcept
+			{
+				m_stagedHeader.windDirectionStrength = {direction[Base::Math::X], direction[Base::Math::Y], direction[Base::Math::Z], strength};
+				m_stagedHeader.windTimes = {time, previousTime, gust, 0.0F};
 			}
 
 			/**

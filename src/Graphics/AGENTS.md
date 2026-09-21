@@ -4458,6 +4458,53 @@ dependency's *content*.
 ceiling with a trace, in both `MeshResource` and `MultiLayerMeshResource`. It was latent only
 because nothing filed more than four levels before.
 
+## 15c. Vegetation Wind (Sept 2026)
+
+A renderable flagged `HasVegetationWind` has its vertices displaced in the vertex stage by a
+per-frame wind state, from the four colour channels the emeraude-base tree skinner writes:
+**R** trunk bending weight, **G** branch bending weight, **B** leaf flutter phase, **A** baked
+occlusion.
+
+**The displacement chain is `skinning → wind → every consumer`.** It follows the skinning
+precedent exactly: a computed variable replaces the position attribute. The nine copies of
+`m_skinningEnabled ? "skinnedPosition" : Attribute::Position` became
+`VertexShader::vertexPositionExpression()` and `previousVertexPositionExpression()` — a third
+displacement stage is learnt once now, not nine times.
+
+**Where the state lives:** in the `Scenes::SceneInstanceTransforms` header, beside
+`previousViewProjection` — per-frame state, and its PREVIOUS value where the motion-vector pass
+already reads its own. `Scene::setVegetationWind(direction, strength, gustiness)` sets it;
+**strength defaults to 0**, so no existing scene starts moving because the feature appeared.
+
+⚠️ **The previous wind time is not optional.** The vertex stage builds the previous position with
+`windTimes.y`; feeding it the current time reports zero velocity for a moving vertex and the
+canopy smears under TAA. Verified on the `tree-generator` bench: with the wind on, the foliage
+gradient energy is **13.05** against **13.18** still — a 0.9 % drop, inside the 0.4 % noise of a
+static ground control. A broken motion vector would have collapsed it.
+
+⚠️ **The wind direction is a WORLD direction applied to an OBJECT-space position.** Exact for a
+tree standing unrotated, which is how `Toolkit::generateTreeInstance()` plants them; a tree rotated
+around Y bends along a direction rotated with it. Fixing that means routing the model matrix into
+the displacement, which every path would have to prepare.
+
+⚠️ **Decided, not forgotten: the traced lane does NOT see the wind** (owner decision,
+2026-09-21). The BLAS holds the undisplaced triangles, so a reflected or ray-traced-shadowed
+canopy does not sway while the raster one does. A per-frame refit of 120 000 foliage triangles per
+tree is the cost that buys consistency, and `blas-build-queue-saturation` is already open.
+
+⚠️ **The shadow pass does not sway either** — but for a structural reason, not a decision: it
+never receives the `PerSceneTransforms` descriptor set. Measured on the bench: 16.34 % of the
+foliage pixels move between two captures, 0.70 % of the shadow ones. `LightGenerator::ShadowMap`
+still samples the shadow term at the UNDISPLACED position, which keeps the two halves consistent
+and is why nothing flickers — displacing one without the other reproduces the self-occlusion the
+skinning path already hit. Open item: `vegetation-wind-does-not-reach-the-shadow-pass`.
+
+**Code references:**
+- `Saphir/VertexShader.cpp` — `generateVegetationWindCode()`, the two position accessors
+- `Saphir/Generator/SceneRendering.cpp` — the enable and the cache-key contribution
+- `Scenes/SceneInstanceTransforms.hpp` — `setWindState()` and the header layout
+- `Graphics/Renderable/Abstract.hpp` — `HasVegetationWind`
+
 ## 16. Frame Synchronization — Double-Buffering
 
 > [!CRITICAL]

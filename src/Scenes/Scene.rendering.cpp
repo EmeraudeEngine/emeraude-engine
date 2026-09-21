@@ -465,6 +465,15 @@ namespace EmEn::Scenes
 				previousProjection * viewMatrices.previousViewMatrix(),
 				previousProjection * viewMatrices.previousInfinityViewMatrix()
 			);
+
+			/* The vegetation wind rides in the same header, staged in the same place and under the
+			 * same guard: once per frame, primary view only. */
+			const auto windTime = static_cast< float >(m_lifetimeUS) * 0.000001F;
+			const auto windGust = m_windGustiness * std::sin(windTime * 0.23F);
+
+			m_instanceTransforms.setWindState(m_windDirection, m_windStrength, windTime, m_previousWindTime, windGust);
+
+			m_previousWindTime = windTime;
 		}
 
 		/* Upload the staged instance transforms (header + frame-linear entries) to the

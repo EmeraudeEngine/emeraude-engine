@@ -599,6 +599,50 @@ namespace EmEn::Scenes
 				return m_cycle;
 			}
 
+			/**
+			 * @brief Sets the wind every vegetation renderable of this scene sways with.
+			 * @note A strength of 0 — the DEFAULT — means no wind at all, so no existing scene starts
+			 * moving because the feature appeared.
+			 * @warning ⚠️ The direction is a WORLD direction, applied to the OBJECT-space position of
+			 * the vertex. It is exact for a tree standing unrotated, which is how the tree toolkit
+			 * plants them; a tree rotated around Y would bend along a direction rotated with it.
+			 * @param direction The wind direction, normalized here if it is not.
+			 * @param strength The tip displacement in metres. 0 disables the wind.
+			 * @param gustiness How much the strength breathes, in [0, 1].
+			 * @return void
+			 */
+			void
+			setVegetationWind (const Base::Math::Vector< 3, float > & direction, float strength, float gustiness = 0.35F) noexcept
+			{
+				const auto length = direction.length();
+
+				m_windDirection = length > 0.0F ? direction / length : Base::Math::Vector< 3, float >{1.0F, 0.0F, 0.0F};
+				m_windStrength = std::max(0.0F, strength);
+				m_windGustiness = std::clamp(gustiness, 0.0F, 1.0F);
+			}
+
+			/**
+			 * @brief Returns the wind direction.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			vegetationWindDirection () const noexcept
+			{
+				return m_windDirection;
+			}
+
+			/**
+			 * @brief Returns the wind strength, the tip displacement in metres.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			vegetationWindStrength () const noexcept
+			{
+				return m_windStrength;
+			}
+
 			/* ============================================================
 			 * [CONCEPT: MANAGERS/ACCESSORS]
 			 * Access to scene subsystems and properties.
@@ -2748,6 +2792,13 @@ namespace EmEn::Scenes
 			float m_boundary{0};
 			/** @brief Accumulated scene runtime in microseconds. */
 			uint64_t m_lifetimeUS{0};
+			Base::Math::Vector< 3, float > m_windDirection{1.0F, 0.0F, 0.0F};
+			float m_windStrength{0.0F};
+			float m_windGustiness{0.35F};
+			/* NOTE: The wind time the PREVIOUS frame displaced with. The motion-vector pass reads
+			 * it to build the previous vertex position; feeding it the current time reports zero
+			 * velocity for a moving vertex and the foliage smears under TAA. */
+			float m_previousWindTime{0.0F};
 			/** @brief Accumulated scene runtime in milliseconds. */
 			uint32_t m_lifetimeMS{0};
 			/** @brief Number of logic cycles executed. */

@@ -395,12 +395,19 @@ namespace EmEn::Saphir
 		/* Double skinning: the previous clip position uses the PREVIOUS pose (the skinning
 		 * SSBO interleaves {current, previous} bone matrices) — limb motion produces real
 		 * velocity, not just the transform delta. */
-		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
-		const auto prevPosExpr = m_skinningEnabled ? "previousSkinnedPosition" : Attribute::Position;
+		const auto posExpr = this->vertexPositionExpression();
+		const auto prevPosExpr = this->previousVertexPositionExpression();
 
 		if ( m_skinningEnabled )
 		{
 			m_previousSkinningRequired = true;
+		}
+
+		/* NOTE: The wind needs its previous displacement for the SAME reason skinning needs its
+		 * previous pose: without it a swaying vertex reports zero velocity and smears under TAA. */
+		if ( m_vegetationWindEnabled )
+		{
+			m_previousWindRequired = true;
 		}
 
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
@@ -771,7 +778,7 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+			const auto posExpr = this->vertexPositionExpression();
 
 			code << ShaderVariable::MDIModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
@@ -782,7 +789,7 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+			const auto posExpr = this->vertexPositionExpression();
 
 			code << Attribute::ModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
@@ -793,13 +800,13 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+			const auto posExpr = this->vertexPositionExpression();
 
 			code << ShaderVariable::InstanceModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
 		else
 		{
-			const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+			const auto posExpr = this->vertexPositionExpression();
 
 			code << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
@@ -900,7 +907,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+		const auto posExpr = this->vertexPositionExpression();
 
 		code << ShaderVariable::PositionViewSpace << " = " << ShaderVariable::ModelViewMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 
@@ -943,7 +950,7 @@ namespace EmEn::Saphir
 			MVPMatrix = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
 		}
 
-		const auto posExpr = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+		const auto posExpr = this->vertexPositionExpression();
 
 		outputInstructions += "\t" "gl_Position = ";
 		outputInstructions += MVPMatrix;
@@ -1670,6 +1677,84 @@ namespace EmEn::Saphir
 		return true;
 	}
 
+	const char *
+	VertexShader::vertexPositionExpression () const noexcept
+	{
+		/* The chain is skinning -> wind -> consumers: the wind displaces what the skinning
+		 * produced, never the raw attribute. */
+		if ( m_vegetationWindEnabled )
+		{
+			return "windPosition";
+		}
+
+		if ( m_skinningEnabled )
+		{
+			return "skinnedPosition";
+		}
+
+		return Attribute::Position;
+	}
+
+	const char *
+	VertexShader::previousVertexPositionExpression () const noexcept
+	{
+		if ( m_vegetationWindEnabled )
+		{
+			return "previousWindPosition";
+		}
+
+		if ( m_skinningEnabled )
+		{
+			return "previousSkinnedPosition";
+		}
+
+		return Attribute::Position;
+	}
+
+	std::string
+	VertexShader::generateVegetationWindCode (const char * baseExpression) const noexcept
+	{
+		const std::string base{baseExpression};
+		const std::string color{Attribute::Color};
+
+		/* The wind state rides in the instance-transforms SSBO header, beside the previous
+		 * view-projection: per-frame state, and its PREVIOUS value sits where the motion-vector
+		 * pass already reads its own. */
+		std::string code =
+			"\t" "/* Vegetation wind. R trunk bend, G branch bend, B flutter phase. */" "\n"
+			"\t" "vec3 windDirection = ubInstanceTransforms.windDirectionStrength.xyz;" "\n"
+			"\t" "float windAmplitude = ubInstanceTransforms.windDirectionStrength.w * (1.0 + ubInstanceTransforms.windTimes.z);" "\n"
+			"\t" "float windSpatial = dot(" + base + ".xz, vec2(0.27, 0.19));" "\n"
+			"\t" "float windLeafPhase = " + color + ".b * 6.2831853;" "\n";
+
+		const auto offsetCode = [&color] (const std::string & target, const std::string & timeExpression) {
+			return
+				"\t" "{" "\n"
+				"\t\t" "float windTime = " + timeExpression + ";" "\n"
+				"\t\t" "float trunkWave = sin(windTime * 0.9 + windSpatial);" "\n"
+				"\t\t" "float branchWave = sin(windTime * 2.7 + windSpatial * 3.1 + windLeafPhase);" "\n"
+				"\t\t" "float flutterWave = sin(windTime * 9.0 + windLeafPhase);" "\n"
+				"\t\t" + target + " += windDirection * (" + color + ".r * trunkWave + " + color + ".g * branchWave * 0.45) * windAmplitude;" "\n"
+				"\t\t" + target + ".y += " + color + ".g * flutterWave * windAmplitude * 0.08;" "\n"
+				"\t" "}" "\n";
+		};
+
+		/* Two scales, not one sine: the trunk carries everything slowly, the branch beats faster
+		 * over it, the leaf faster still. A single global sine reads as a breathing blob. */
+		code += "\t" "vec3 windPosition = " + base + ";" "\n";
+		code += offsetCode("windPosition", "ubInstanceTransforms.windTimes.x");
+
+		if ( m_previousWindRequired )
+		{
+			code += "\t" "vec3 previousWindPosition = " + base + ";" "\n";
+			code += offsetCode("previousWindPosition", "ubInstanceTransforms.windTimes.y");
+		}
+
+		code += "\n";
+
+		return code;
+	}
+
 	bool
 	VertexShader::generateMainUniqueInstructions (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
@@ -1797,6 +1882,8 @@ namespace EmEn::Saphir
 		/* Skeletal skinning: compute skinned position/normal/tangent/binormal at the top of main().
 		 * This runs AFTER generateMainUniqueInstructions so m_vertexAttributes is fully populated.
 		 * The code is PREPENDED to topInstructions so it executes before any synthesis code. */
+		size_t displacementPrefixLength = 0;
+
 		if ( m_skinningEnabled )
 		{
 			const bool hasNormal = m_vertexAttributes.contains(Graphics::VertexAttributeType::Normal);
@@ -1850,6 +1937,25 @@ namespace EmEn::Saphir
 
 			/* Prepend: skinning must execute before any other topInstructions. */
 			topInstructions.insert(0, skinCode);
+
+			displacementPrefixLength = skinCode.size();
+		}
+
+		/* The wind goes AFTER the skinning prefix and before everything else: it displaces the
+		 * skinned position, never the raw attribute. Inserting it at 0 would run it first and
+		 * read a variable that does not exist yet. */
+		if ( m_vegetationWindEnabled )
+		{
+			/* The four channels are what the wind reads; a consumer that never asked for the colour
+			 * would otherwise leave the attribute undeclared and the shader would not compile. */
+			if ( !this->declare(InputAttribute{VertexAttributeType::VertexColor}) )
+			{
+				return false;
+			}
+
+			const auto * base = m_skinningEnabled ? "skinnedPosition" : Attribute::Position;
+
+			topInstructions.insert(displacementPrefixLength, this->generateVegetationWindCode(base));
 		}
 
 		/* MDI: Declare the buffer_reference struct for per-draw SSBO access via BDA.

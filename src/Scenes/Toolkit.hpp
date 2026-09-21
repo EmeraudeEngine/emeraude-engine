@@ -974,10 +974,20 @@ namespace EmEn::Scenes
 					RasterizationOptions{PolygonMode::Fill, CullingMode::None}
 				};
 
-				return m_resourceManager.container< MultiLayerMeshResource >()
+				auto renderable = m_resourceManager.container< MultiLayerMeshResource >()
 					->getOrCreateResource(resourceName, [geometryLODs, bark, leaf, rasterizationOptions] (auto & meshResource) {
 						return meshResource.load(geometryLODs, {bark, leaf}, rasterizationOptions);
 					});
+
+				/* A generated tree is vegetation by construction: its four colour channels mean what the
+				 * wind expects. The flag is on the OBJECT, so the same bark material stays still on a
+				 * palm asset. It does nothing until a scene actually sets a wind strength. */
+				if ( renderable != nullptr )
+				{
+					renderable->enableVegetationWind(true);
+				}
+
+				return renderable;
 			}
 
 			/**

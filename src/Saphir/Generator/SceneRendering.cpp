@@ -397,6 +397,11 @@ namespace EmEn::Saphir::Generator
 			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
 			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
 			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjectionInfinity");
+			/* NOTE: The vegetation wind rides in the same header: it is per-frame like the matrices,
+			 * and the motion-vector pass needs its PREVIOUS value from the place it already reads the
+			 * previous view-projection. xyz/w = direction/strength, then {time, previousTime, gust}. */
+			ssbo.addMember(Declaration::VariableType::FloatVector4, "windDirectionStrength");
+			ssbo.addMember(Declaration::VariableType::FloatVector4, "windTimes");
 			ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
 			vertexShader->declare(ssbo);
 		}
@@ -410,6 +415,20 @@ namespace EmEn::Saphir::Generator
 		if ( !this->declareViewUniformBlock(*vertexShader) )
 		{
 			return false;
+		}
+
+		/* Vegetation wind: the vertex stage displaces by the per-frame wind state. It needs the
+		 * instance-transforms SSBO, which carries that state in its header — without the instance
+		 * transforms the block is not even declared, so the request is dropped rather than
+		 * producing a shader that will not compile. */
+		if ( this->isRenderableInstanceAvailable() )
+		{
+			const auto * renderable = this->getRenderable();
+
+			if ( renderable != nullptr && renderable->hasVegetationWind() && vertexShader->isInstanceTransformsEnabled() )
+			{
+				vertexShader->enableVegetationWind();
+			}
 		}
 
 		/* Skeletal animation: declare bone attributes and SSBO. */
@@ -1028,6 +1047,9 @@ namespace EmEn::Saphir::Generator
 			if ( renderable != nullptr )
 			{
 				hashCombine(hash, Hash::FNV1a(renderable->name()));
+
+				/* The wind changes the vertex stage, so it changes the program. */
+				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
 			}
 		}
 

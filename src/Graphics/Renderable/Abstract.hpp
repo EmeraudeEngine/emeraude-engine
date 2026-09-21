@@ -81,7 +81,12 @@ namespace EmEn::Graphics::Renderable
 		/** @brief This flag tells that the renderable has a skeletal animation available. */
 		HasSkeletalAnimation = 1U << 1,
 		/** @brief This flag tells the system this renderable uses a single quad which should always face the camera. */
-		IsSprite = 1U << 2
+		IsSprite = 1U << 2,
+		/** @brief This flag tells the renderable is vegetation: its vertex stage displaces the
+		 * vertices by the per-frame wind state, reading the four colour channels a tree skinner
+		 * fills. It is a property of the OBJECT, not of its materials — the same bark material
+		 * stays still on a palm asset and sways on a generated tree. */
+		HasVegetationWind = 1U << 3
 	};
 
 	/**
@@ -169,6 +174,39 @@ namespace EmEn::Graphics::Renderable
 			hasSkeletalAnimation () const noexcept
 			{
 				return this->isFlagEnabled(HasSkeletalAnimation);
+			}
+
+			/**
+			 * @brief Declares the renderable as vegetation swaying in the wind.
+			 * @warning ⚠️ The geometry must carry VERTEX COLOURS, and they must mean what the tree
+			 * skinner writes: R trunk bending weight, G branch bending weight, B leaf flutter phase,
+			 * A baked occlusion. Setting this on a mesh whose colours mean anything else displaces it
+			 * by nonsense.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableVegetationWind (bool state) noexcept
+			{
+				if ( state )
+				{
+					this->enableFlag(HasVegetationWind);
+				}
+				else
+				{
+					this->disableFlag(HasVegetationWind);
+				}
+			}
+
+			/**
+			 * @brief Returns whether the renderable sways in the wind.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasVegetationWind () const noexcept
+			{
+				return this->isFlagEnabled(HasVegetationWind);
 			}
 
 			/**
