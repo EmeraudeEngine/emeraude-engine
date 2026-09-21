@@ -1,10 +1,9 @@
 ---
 id: vegetation-wind-shader
 title: Vegetation — the wind shader that consumes the generator's vertex channels
-status: blocked
+status: open
 priority: unranked
 scope: Saphir, Graphics
-blocked-by: [tree-generator-skinning-lod-and-wind-channels]   # emeraude-base
 tags: [vegetation, shaders, saphir]
 opened: 2026-09-21
 ---
@@ -41,5 +40,7 @@ inert data and the trees are rigid.
 
 ## References
 
-- Producer side: emeraude-base `docs/todo/tree-generator-skinning-lod-and-wind-channels`.
+- Producer side: DONE. The skinner fills R/G/B/A on every vertex of every level. See
+  emeraude-base `src/VertexFactory/AGENTS.md` § *Vegetation* for what each channel holds, and
+  the warning that A is a density estimate rather than ray-traced occlusion.
 - Sibling: `vegetation-renderable-and-lod-chain`.

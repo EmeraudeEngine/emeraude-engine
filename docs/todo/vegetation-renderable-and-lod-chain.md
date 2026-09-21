@@ -1,10 +1,9 @@
 ---
 id: vegetation-renderable-and-lod-chain
 title: Vegetation — a renderable resource for a generated tree, with its LOD chain
-status: blocked
+status: open
 priority: unranked
 scope: Graphics/Renderable, Graphics/Geometry
-blocked-by: [tree-generator-skinning-lod-and-wind-channels]   # emeraude-base
 tags: [vegetation, geometry, lod]
 opened: 2026-09-21
 ---
@@ -50,6 +49,8 @@ layer 1, and the base-generated LOD meshes filed as LOD levels rather than decim
 
 ## References
 
-- Producer side: emeraude-base `docs/todo/tree-generator-skinning-lod-and-wind-channels`.
+- Producer side: DONE. `Base::VertexFactory::TreeGenerator::generate()` returns a `TreeMesh`
+  holding the skeleton, the level chain (two groups each, bark then leaves) and the imposter
+  card. See emeraude-base `src/VertexFactory/AGENTS.md` § *Vegetation*.
 - `src/Graphics/Geometry/Interface.hpp:534` — `buildSubGeometries(…, Shape)`.
 - `src/Graphics/Renderable/MultiLayerMeshResource.hpp:276` — the multi-material load.

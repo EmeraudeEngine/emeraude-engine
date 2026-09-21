@@ -37,4 +37,5 @@ renderer, so it belongs here.
 ## References
 
 - Requires: `vegetation-renderable-and-lod-chain`.
-- Geometry side: emeraude-base `docs/todo/tree-generator-skinning-lod-and-wind-channels`.
+- Geometry side: DONE. `TreeMesh::imposter()` is the crossed-quads card, kept apart from the
+  level chain because it carries ONE group: it samples the atlas this item bakes.
