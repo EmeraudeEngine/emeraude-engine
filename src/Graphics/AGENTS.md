@@ -4434,6 +4434,30 @@ The threshold is read from `ScreenCoverageThreshold` at scene init (cached in `m
 - `Scenes/Scene.rendering.cpp:selectLODLevel()` — Runtime LOD selection
 - `Renderable/Types.hpp` — `MaxLODLevels` (4), legacy constants
 
+### A chain supplied by its producer (Sept 2026)
+
+Decimation is not the only way in. `MultiLayerMeshResource::load(geometryLODs, materialList,
+rasterizationOptions)` files a chain the producer already reduced, finest first, and decimates
+nothing. That is the path vegetation takes: a quadric decimator can shrink a leaf card, never
+merge two of them, and the canopy is where the triangles are. `Scenes::Toolkit::generateTreeRenderable()`
+is the caller.
+
+⚠️ **Every level must expose the SAME number of sub-geometries.** A layer is addressed by its
+index whatever the level drawn, so a level that disagrees would silently draw one part with
+another part's material — bark shaded as foliage.
+
+⚠️⚠️ **That check CANNOT live in `load()`.** The geometries are *dependencies*: inside `load()`
+they are still loading, and asking one for its sub-geometry count there answered **1** for a
+two-group shape and rejected a perfectly valid tree — the first run of the tree bench lost its
+whole back row to it. It belongs in `onDependenciesLoaded()`, where every dependency is
+guaranteed loaded. The rule generalises to anything `load()` might want to know about a
+dependency's *content*.
+
+⚠️ `m_geometry` is a `StaticVector< …, MaxLODLevels >` and its `emplace_back()` **calls
+`std::abort()`** when full — this build has no exceptions. `setGeometry()` now refuses past the
+ceiling with a trace, in both `MeshResource` and `MultiLayerMeshResource`. It was latent only
+because nothing filed more than four levels before.
+
 ## 16. Frame Synchronization — Double-Buffering
 
 > [!CRITICAL]

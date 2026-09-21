@@ -276,6 +276,26 @@ namespace EmEn::Graphics::Renderable
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions = {}) noexcept;
 
 			/**
+			 * @brief Loads a mesh resource from a CHAIN of levels of detail and a materials list.
+			 * @note The chain is filed as given, finest first, and is NOT decimated here: a producer
+			 * that knows what its mesh is made of reduces it better than a quadric decimator can. That
+			 * is the whole point for foliage, where the triangles are leaf cards a decimator can only
+			 * shrink, never merge.
+			 * @warning ⚠️ Every level must expose the SAME number of sub-geometries, because a layer is
+			 * addressed by its index whatever the level drawn. A chain that disagrees is refused rather
+			 * than drawn with a shifted material.
+			 * @param geometryLODs A reference to the geometry resources, finest first, at most MaxLODLevels.
+			 * @param materialList A reference to a list of a material resource smart pointer.
+			 * @param rasterizationOptions A reference to a list of rasterization options. Defaults.
+			 * @return bool
+			 */
+			bool load (const std::vector< std::shared_ptr< Geometry::Interface > > & geometryLODs, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions = {}) noexcept;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
+
+			/**
 			 * @brief Parses a JSON stream to get the material information.
 			 * @note This method is public to allow SimpleMeshResource to reuse it.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
@@ -293,10 +313,6 @@ namespace EmEn::Graphics::Renderable
 			static RasterizationOptions parseLayerOptions (const Json::Value & data) noexcept;
 
 		private:
-
-			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
-			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
 
 			/**
 			 * @brief Sets the geometry resource.

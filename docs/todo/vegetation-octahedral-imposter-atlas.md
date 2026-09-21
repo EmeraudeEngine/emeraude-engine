@@ -1,10 +1,9 @@
 ---
 id: vegetation-octahedral-imposter-atlas
 title: Vegetation — bake an octahedral imposter atlas for the last LOD
-status: blocked
+status: open
 priority: unranked
 scope: Graphics
-blocked-by: [vegetation-renderable-and-lod-chain]
 tags: [vegetation, lod, offscreen]
 opened: 2026-09-21
 ---
@@ -36,6 +35,9 @@ renderer, so it belongs here.
 
 ## References
 
-- Requires: `vegetation-renderable-and-lod-chain`.
+- The renderable side is DONE: `Scenes::Toolkit::generateTreeRenderable()` builds a
+  `MultiLayerMeshResource` from a `TreeMesh`, and `TreeMesh::imposter()` is the card waiting
+  for the atlas this item bakes. See `src/Graphics/AGENTS.md` § 15b and the projet-alpha
+  `tree-generator` bench.
 - Geometry side: DONE. `TreeMesh::imposter()` is the crossed-quads card, kept apart from the
   level chain because it carries ONE group: it samples the atlas this item bakes.

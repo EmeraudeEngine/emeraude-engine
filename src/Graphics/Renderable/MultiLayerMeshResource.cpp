@@ -465,11 +465,85 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
+	MultiLayerMeshResource::load (const std::vector< std::shared_ptr< Geometry::Interface > > & geometryLODs, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( geometryLODs.empty() )
+		{
+			TraceError{ClassId} << "No geometry at all for mesh '" << this->name() << "' !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( geometryLODs.size() > MaxLODLevels )
+		{
+			TraceError{ClassId} <<
+				"Mesh '" << this->name() << "' was given " << geometryLODs.size() <<
+				" levels of detail, the ceiling is " << MaxLODLevels << " !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		for ( size_t level = 0; level < geometryLODs.size(); ++level )
+		{
+			const auto & geometry = geometryLODs[level];
+
+			if ( geometry == nullptr )
+			{
+				TraceError{ClassId} << "Level of detail " << level << " of mesh '" << this->name() << "' is null !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			if ( !this->setGeometry(geometry) )
+			{
+				return this->setLoadSuccess(false);
+			}
+		}
+
+		m_layers.clear();
+
+		for ( size_t index = 0; index < materialList.size(); ++index )
+		{
+			const auto & material = materialList[index];
+
+			if ( material == nullptr )
+			{
+				Tracer::error(ClassId, "One material of the list is empty !");
+
+				return this->setLoadSuccess(false);
+			}
+
+			const RasterizationOptions options = index < rasterizationOptions.size() ? rasterizationOptions[index] : RasterizationOptions{};
+
+			this->addMaterial(material, options, 0);
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
 	MultiLayerMeshResource::setGeometry (const std::shared_ptr< Geometry::Interface > & geometry) noexcept
 	{
 		if ( geometry == nullptr )
 		{
 			TraceError{ClassId} << "Geometry pointer tried to be attached to renderable object '" << this->name() << "' " << this << " is null !";
+
+			return false;
+		}
+
+		/* ⚠️ m_geometry is a StaticVector of MaxLODLevels: its emplace_back() does not grow, it
+		 * calls std::abort() when full, this build having no exceptions. Refusing here turns a
+		 * process kill into a traced failure. */
+		if ( m_geometry.size() >= MaxLODLevels )
+		{
+			TraceError{ClassId} <<
+				"The renderable object '" << this->name() << "' already holds " << MaxLODLevels <<
+				" levels of detail, the geometry is refused.";
 
 			return false;
 		}
@@ -503,6 +577,29 @@ namespace EmEn::Graphics::Renderable
 	bool
 	MultiLayerMeshResource::onDependenciesLoaded () noexcept
 	{
+		/* ⚠️ A layer is addressed by its INDEX whatever the level drawn, so a level exposing a
+		 * different number of sub-geometries would silently draw one part with another part's
+		 * material — bark shaded as foliage on a tree. This CANNOT be checked in load(): the
+		 * geometries are dependencies and are still loading there, so asking one for its
+		 * sub-geometry count that early answers 1 for a two-group shape and rejects a valid
+		 * chain. Here every dependency is guaranteed loaded. */
+		{
+			const std::lock_guard< std::mutex > lock{m_geometryMutex};
+
+			for ( size_t level = 1; level < m_geometry.size(); ++level )
+			{
+				if ( m_geometry[level]->subGeometryCount() != m_geometry[0]->subGeometryCount() )
+				{
+					TraceError{ClassId} <<
+						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+						"Level of detail " << level << " exposes " << m_geometry[level]->subGeometryCount() <<
+						" sub-geometries where the finest one exposes " << m_geometry[0]->subGeometryCount() << "!";
+
+					return false;
+				}
+			}
+		}
+
 		/* NOTE: Check for sub-geometries and layer count coherence. */
 		if ( this->subGeometryCount() != this->layerCount() )
 		{

@@ -292,6 +292,18 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
+		/* ⚠️ m_geometry is a StaticVector of MaxLODLevels: its emplace_back() does not grow, it
+		 * calls std::abort() when full, this build having no exceptions. Refusing here turns a
+		 * process kill into a traced failure. */
+		if ( m_geometry.size() >= MaxLODLevels )
+		{
+			TraceError{ClassId} <<
+				"The renderable object '" << this->name() << "' already holds " << MaxLODLevels <<
+				" levels of detail, the geometry is refused.";
+
+			return false;
+		}
+
 		this->setReadyForInstantiation(false);
 
 		m_geometry.emplace_back(geometryResource);

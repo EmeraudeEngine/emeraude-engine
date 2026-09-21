@@ -39,6 +39,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "VertexFactory/TreeMesh.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Physics/SphereCollisionModel.hpp"
@@ -906,6 +907,104 @@ namespace EmEn::Scenes
 				}
 
 				return this->generateRenderableInstance< entity_t >(entityName, geometryResource, materialResource, physicalProperties, enableLighting);
+			}
+
+			/**
+			 * @brief Builds a renderable from a generated tree: bark on layer 0, leaf cards on layer 1,
+			 * and one geometry per level of detail the generator produced.
+			 * @note It lives here rather than in Geometry::ResourceGenerator because a tree needs two
+			 * MATERIALS, and that generator only ever hands back geometry.
+			 * @note The levels are filed as the generator produced them. They are deliberately NOT
+			 * decimated here: a quadric decimator can shrink a leaf card, never merge two of them, and
+			 * the canopy is where the triangles are.
+			 * @warning ⚠️ This helper guarantees the layer ORDER and the culling. The alpha mask that
+			 * cuts the leaf silhouette belongs to the leaf material, which the caller supplies.
+			 * @param resourceName A reference to a string naming the renderable and its geometries.
+			 * @param treeMesh A reference to a generated tree.
+			 * @param barkMaterial A material smart pointer for the branches. Default material resource.
+			 * @param leafMaterial A material smart pointer for the cards. Default the bark material.
+			 * @return std::shared_ptr< Graphics::Renderable::MultiLayerMeshResource >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::Renderable::MultiLayerMeshResource >
+			generateTreeRenderable (const std::string & resourceName, const Base::VertexFactory::TreeMesh< float > & treeMesh, const std::shared_ptr< Graphics::Material::Interface > & barkMaterial = nullptr, const std::shared_ptr< Graphics::Material::Interface > & leafMaterial = nullptr) noexcept
+			{
+				using namespace Graphics;
+				using namespace Graphics::Renderable;
+
+				if ( treeMesh.empty() )
+				{
+					return nullptr;
+				}
+
+				auto bark = barkMaterial;
+
+				if ( bark == nullptr )
+				{
+					bark = m_resourceManager.container< Material::StandardResource >()->getDefaultResource();
+				}
+
+				const auto leaf = leafMaterial != nullptr ? leafMaterial : bark;
+
+				/* ⚠️ EnableVertexColor is not decoration here: the four channels the skinner fills — trunk
+				 * bending, branch bending, flutter phase, baked occlusion — reach the vertex buffer only if
+				 * the geometry is asked for them. Without the flag they are dropped in silence and the wind
+				 * shader reads zeros off a tree that simply never moves. */
+				const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnableVertexColor};
+
+				std::vector< std::shared_ptr< Geometry::Interface > > geometryLODs;
+				geometryLODs.reserve(treeMesh.levelCount());
+
+				for ( uint32_t level = 0; level < treeMesh.levelCount(); ++level )
+				{
+					auto geometryResource = generator.shape(treeMesh.shape(level), resourceName + "LOD" + std::to_string(level));
+
+					if ( geometryResource == nullptr )
+					{
+						return nullptr;
+					}
+
+					geometryLODs.emplace_back(std::move(geometryResource));
+				}
+
+				/* A leaf card is flat: drawn one-sided, half the canopy disappears depending on where the
+				 * camera stands. The bark is a closed tube and keeps its back-face culling. */
+				const std::vector< RasterizationOptions > rasterizationOptions{
+					RasterizationOptions{},
+					RasterizationOptions{PolygonMode::Fill, CullingMode::None}
+				};
+
+				return m_resourceManager.container< MultiLayerMeshResource >()
+					->getOrCreateResource(resourceName, [geometryLODs, bark, leaf, rasterizationOptions] (auto & meshResource) {
+						return meshResource.load(geometryLODs, {bark, leaf}, rasterizationOptions);
+					});
+			}
+
+			/**
+			 * @brief Generates a tree instance in the scene from a generated tree.
+			 * @note Shortcut to Toolkit::generateTreeRenderable() then Toolkit::generateRenderableInstance().
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @param entityName A reference to a string.
+			 * @param treeMesh A reference to a generated tree.
+			 * @param barkMaterial A material smart pointer for the branches. Default material resource.
+			 * @param leafMaterial A material smart pointer for the cards. Default the bark material.
+			 * @param physicalProperties A reference to a body physical properties. Default properties.
+			 * @param enableLighting Enable the lighting. Default true.
+			 * @return BuiltEntity< entity_t, Component::Visual >
+			 */
+			template< typename entity_t = StaticEntity >
+			BuiltEntity< entity_t, Component::Visual >
+			generateTreeInstance (const std::string & entityName, const Base::VertexFactory::TreeMesh< float > & treeMesh, const std::shared_ptr< Graphics::Material::Interface > & barkMaterial = nullptr, const std::shared_ptr< Graphics::Material::Interface > & leafMaterial = nullptr, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			{
+				const auto renderable = this->generateTreeRenderable("Tree(" + entityName + ')', treeMesh, barkMaterial, leafMaterial);
+
+				if ( renderable == nullptr )
+				{
+					return {};
+				}
+
+				return this->generateRenderableInstance< entity_t >(entityName, renderable, physicalProperties, enableLighting);
 			}
 
 			/**

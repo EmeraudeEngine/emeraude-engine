@@ -1940,6 +1940,33 @@ validated against a case where the answer is known. When four attempts are confo
 deliverable is "the feature demonstrably acts, by this diff and this control; the criterion is still
 missing", not the fourth number.
 
+### ⚠️⚠️ Inside `load()`, a dependency is NOT loaded — never ask one about its content (Sept 2026)
+
+`ResourceTrait::load()` implementations register dependencies with `addDependency()` and end on
+`setLoadSuccess(true)`. At that point the dependencies are typically still loading: resource
+creation goes through the thread pool, and `ResourceGenerator::shape()` says so in its own comment.
+So anything `load()` reads *from* a dependency is a race.
+
+It cost a whole row of a bench to learn. `MultiLayerMeshResource::load(geometryLODs, …)` validated
+that every level of detail exposed the same number of sub-geometries, by calling
+`subGeometryCount()` on each geometry it had just been handed. For a shape carrying two groups the
+answer came back **1**, the load was refused, and four perfectly valid trees never appeared —
+while the four built later in the same frame, having had more time, loaded fine. A race that
+depends on how busy the pool is looks exactly like a random defect.
+
+**The check belongs in `onDependenciesLoaded()`**, which the contract guarantees is called with
+every dependency in the `Loaded` state. What `load()` may legitimately check is what it holds
+itself: null pointers, list sizes, ceilings.
+
+⚠️ And when overriding `onDependenciesLoaded()`, **chain to the implementation you override** —
+`MultiLayerMeshResource`'s already did real work (sub-geometry / layer coherence, LOD generation),
+so a fresh override that forgot to call it would have silently disabled all of it.
+
+⚠️ Related: check whether the hook is ALREADY overridden before adding one. A truncated
+`grep | head` said it was not, and the duplicate only surfaced as a compile error. The grep that
+answers the question is the one without `head`.
+
+
 ## Animation
 
 ### Fixed: `play()` keys on the CLIP name, the loaders hand out RESOURCE names — a silent, total no-op (Aug 2026)
