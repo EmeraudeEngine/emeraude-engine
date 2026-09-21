@@ -125,6 +125,18 @@ namespace EmEn::Saphir::Generator
 					return false;
 				}
 			}
+
+			/* The vegetation generator bakes an occlusion in the ALPHA of the vertex color. Declared
+			 * AFTER the material so it composes with a material AO texture instead of racing it. */
+			if ( this->isRenderableInstanceAvailable() )
+			{
+				const auto * renderable = this->getRenderable();
+
+				if ( renderable != nullptr && renderable->hasVegetationWind() )
+				{
+					m_lightGenerator.declareVegetationBakedOcclusion(ShaderVariable::PrimaryVertexColor);
+				}
+			}
 		}
 
 		/* Generate the vertex shader stage. */
@@ -449,6 +461,18 @@ namespace EmEn::Saphir::Generator
 
 		/* NOTE: The position is always required and available. */
 		if ( !vertexShader->requestSynthesizeInstruction(ShaderVariable::PositionScreenSpace) )
+		{
+			return false;
+		}
+
+		/* A vegetation renderable carries its baked occlusion in the vertex color ALPHA, which no
+		 * texture-based material ever asks for, so the fragment stage would never see it.
+		 * ⚠️⚠️ Requesting it here is safe ONLY because the material does not use vertex colors: a
+		 * material that does multiplies its albedo by the WHOLE vertex color
+		 * (StandardResource.cpp, SurfaceAlbedoFinal), which on a tree would tint every leaf by its
+		 * bending weights. Never enable vertex colors on a vegetation material without revisiting
+		 * that multiply. */
+		if ( vertexShader->isVegetationWindEnabled() && !vertexShader->requestSynthesizeInstruction(ShaderVariable::PrimaryVertexColor, Saphir::VariableScope::ToNextStage) )
 		{
 			return false;
 		}

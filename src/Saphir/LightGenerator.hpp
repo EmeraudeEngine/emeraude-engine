@@ -262,6 +262,23 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the interstage vertex color whose ALPHA channel carries the occlusion a
+			 * vegetation generator baked per vertex.
+			 * @note It composes with whatever the material declared rather than replacing it: a bark
+			 * material with its own AO texture keeps it, and the canopy density multiplies on top.
+			 * @note ⚠️ A density estimate, not ray-traced occlusion — a shading hint, never a
+			 * photometric quantity. See emeraude-base `src/VertexFactory/AGENTS.md` § Vegetation.
+			 * @param vertexColorVariableName A reference to a string for the GLSL variable holding the
+			 * interstage vertex color. The NAME, never an expression.
+			 * @return void
+			 */
+			void
+			declareVegetationBakedOcclusion (const std::string & vertexColorVariableName) noexcept
+			{
+				m_vegetationVertexColor = vertexColorVariableName;
+			}
+
+			/**
 			 * @brief Declares the variable holding the surface's atmospheric-fog response.
 			 * @note Packed into the material-properties G-buffer A channel, high nibble, and read
 			 * by AtmosphericFog. Undeclared means 1.0 — fully fogged.
@@ -1207,6 +1224,8 @@ namespace EmEn::Saphir
 			std::string m_surfaceIBLIntensity;
 			std::string m_surfaceAutoIlluminationColor;
 			std::string m_surfaceAmbientOcclusion;
+			/* NOTE: The interstage vertex color of a vegetation renderable; only its ALPHA is read. */
+			std::string m_vegetationVertexColor;
 			std::string m_surfaceAOIntensity;
 			std::string m_surfaceFogResponse;
 			std::string m_surfaceDoFMask;

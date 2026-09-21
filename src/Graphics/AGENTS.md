@@ -4513,6 +4513,28 @@ motion (24.06 % against 24.44 %). The baseline is not zero because the measured 
 cast shadow — the screen-space occlusion follows the moving geometry by itself — which is exactly
 why the conclusion rests on the A/B and not on the absolute figure.
 
+### The baked occlusion channel (Sept 2026)
+
+The fourth channel, **A**, is folded into the DIFFUSE AMBIENT factor by
+`LightGenerator::declareVegetationBakedOcclusion()`, beside a material AO texture rather than
+instead of it. It never touches the direct lighting — a leaf in the sun is lit whatever its
+neighbours do — nor the specular IBL, nor the emission.
+
+⚠️⚠️ **It is nearly inert while a lighting lane is on**, because both lanes own the indirect
+diffuse and the raster ambient leg they replaced is what this multiplies. Measured on the
+`tree-generator` bench at a pinned exposure, declaration ON against OFF: **-0.37 %** mean foliage
+luminance with a lane active, **-2.44 %** with `setLightingMode("None")` — 6.6x — and the foliage
+contrast rises 35.11 → 36.15 in that case. Sky and grass controls moved 0.00 %. The channel itself
+is rich (median 0.87, mean 0.84, 88 % of the vertices below 0.95), so the weakness is the term, not
+the data. Open item: `vegetation-occlusion-is-inert-under-a-lighting-lane`.
+
+⚠️⚠️ **`SceneRendering` requests the vertex color to the fragment stage itself**, since no
+texture-based material ever asks for it. That is safe ONLY because the tree materials do not use
+vertex colors: a material that does multiplies its albedo by the WHOLE vertex color
+(`StandardResource.cpp`, `SurfaceAlbedoFinal`), which on a tree would tint every leaf by its
+bending weights. Never enable vertex colors on a vegetation material without revisiting that
+multiply.
+
 **Code references:**
 - `Saphir/VertexShader.cpp` — `generateVegetationWindCode()`, the two position accessors
 - `Saphir/Generator/SceneRendering.cpp` — the enable and the cache-key contribution

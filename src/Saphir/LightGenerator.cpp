@@ -830,6 +830,17 @@ namespace EmEn::Saphir
 			aoFactor = " * iblAmbientAO";
 		}
 
+		/* The occlusion a vegetation generator baked per vertex: the inside of a canopy sees less
+		 * sky than its rim. It rides the SAME diffuse-ambient factor, so it never touches the
+		 * direct lighting — a leaf in the sun is lit whatever its neighbours do — nor the specular
+		 * IBL, nor the emission. It composes with the material AO above rather than replacing it. */
+		if ( !m_vegetationVertexColor.empty() )
+		{
+			Code{fragmentShader} << "const float vegetationAmbientAO = " << m_vegetationVertexColor << ".a;";
+
+			aoFactor += " * vegetationAmbientAO";
+		}
+
 		if ( m_useReflection && m_useRefraction && generator.highQualityEnabled() )
 		{
 			/* NOTE: PBR Glass/transparent materials with both reflection and refraction.
