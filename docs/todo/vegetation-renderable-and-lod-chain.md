@@ -4,7 +4,7 @@ title: Vegetation — a renderable resource for a generated tree, with its LOD c
 status: blocked
 priority: unranked
 scope: Graphics/Renderable, Graphics/Geometry
-blocked-by: []
+blocked-by: [tree-generator-skinning-lod-and-wind-channels]   # emeraude-base
 tags: [vegetation, geometry, lod]
 opened: 2026-09-21
 ---

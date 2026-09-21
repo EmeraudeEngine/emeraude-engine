@@ -4,7 +4,7 @@ title: Vegetation — the wind shader that consumes the generator's vertex chann
 status: blocked
 priority: unranked
 scope: Saphir, Graphics
-blocked-by: []
+blocked-by: [tree-generator-skinning-lod-and-wind-channels]   # emeraude-base
 tags: [vegetation, shaders, saphir]
 opened: 2026-09-21
 ---
