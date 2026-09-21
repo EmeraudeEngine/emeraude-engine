@@ -834,7 +834,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see pushMatricesForShadowCasting() For push constant strategy.
 			 * @version 0.8.35
 			 */
-			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.

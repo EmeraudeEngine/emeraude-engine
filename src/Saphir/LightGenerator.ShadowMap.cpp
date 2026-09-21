@@ -97,19 +97,15 @@ namespace EmEn::Saphir
 		 * ANIMATED mesh depth (the shadow pass skins), so sampling it at the bind-pose vertex
 		 * position made every animated pose self-occlude — the whole body flickered down to the
 		 * ambient term on fast animation frames (measured on the reflexion-debug dragon). */
+		/* NOTE: The same reasoning covers the vegetation wind: the shadow pass displaces too, so
+		 * the term must be evaluated at the DISPLACED position or a swaying canopy self-occludes.
+		 * Going through the shader's own accessor is what keeps the two in step whatever
+		 * displacement stage is added next. */
 		std::string localPosition;
-
-		if ( vertexShader.isSkinningEnabled() )
-		{
-			localPosition = "vec4(skinnedPosition, 1.0)";
-		}
-		else
-		{
-			localPosition.reserve(32);
-			localPosition = "vec4(";
-			localPosition += Attribute::Position;
-			localPosition += ", 1.0)";
-		}
+		localPosition.reserve(48);
+		localPosition = "vec4(";
+		localPosition += vertexShader.vertexPositionExpression();
+		localPosition += ", 1.0)";
 
 		/* NOTE: For point light. */
 		if ( shadowCubemap )

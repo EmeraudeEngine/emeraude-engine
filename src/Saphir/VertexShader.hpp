@@ -414,6 +414,24 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Returns the GLSL expression holding the object-space vertex position.
+			 * @note ⚠️ Every consumer goes through here rather than spelling out the ternary itself.
+			 * There were NINE copies of "m_skinningEnabled ? skinnedPosition : position" before the
+			 * wind was added; a displacement stage is learnt once now, not nine times.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char * vertexPositionExpression () const noexcept;
+
+			/**
+			 * @brief Returns the GLSL expression holding the object-space vertex position of the
+			 * PREVIOUS frame, for the motion-vector pass.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char * previousVertexPositionExpression () const noexcept;
+
+			/**
 			 * @brief Enables the vegetation wind displacement in the vertex stage.
 			 * @note The displacement chain is skinning -> wind -> every consumer. It reads the four
 			 * vertex colour channels the tree skinner fills (R trunk bend, G branch bend, B flutter
@@ -462,24 +480,6 @@ namespace EmEn::Saphir
 			}
 
 		private:
-
-			/**
-			 * @brief Returns the GLSL expression holding the object-space vertex position.
-			 * @note ⚠️ Every consumer goes through here rather than spelling out the ternary itself.
-			 * There were NINE copies of "m_skinningEnabled ? skinnedPosition : position" before the
-			 * wind was added; a displacement stage is learnt once now, not nine times.
-			 * @return const char *
-			 */
-			[[nodiscard]]
-			const char * vertexPositionExpression () const noexcept;
-
-			/**
-			 * @brief Returns the GLSL expression holding the object-space vertex position of the
-			 * PREVIOUS frame, for the motion-vector pass.
-			 * @return const char *
-			 */
-			[[nodiscard]]
-			const char * previousVertexPositionExpression () const noexcept;
 
 			/**
 			 * @brief Returns the GLSL block displacing the vertex by the wind, prefixed to main().

@@ -32,6 +32,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Saphir/Code.hpp"
+#include "Scenes/SceneInstanceTransforms.hpp"
 #include "SkinningLayoutHelper.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
@@ -73,6 +74,19 @@ namespace EmEn::Saphir::Generator
 			if ( renderTarget->isCubemap() || renderTarget->isCascadedShadowMap() )
 			{
 				setIndexes.enableSet(SetType::PerView);
+			}
+		}
+
+		/* Vegetation wind: the shadow map must hold the DISPLACED tree, or a swaying canopy casts
+		 * a frozen shadow. The set is enabled per renderable, exactly like the skinning one below,
+		 * so the sealed pipeline layout of every OTHER shadow caster is untouched. */
+		if ( this->isRenderableInstanceAvailable() )
+		{
+			const auto * renderable = this->getRenderable();
+
+			if ( renderable != nullptr && renderable->hasVegetationWind() )
+			{
+				setIndexes.enableSet(SetType::PerSceneTransforms);
 			}
 		}
 
@@ -138,6 +152,28 @@ namespace EmEn::Saphir::Generator
 		if ( this->renderTarget()->isCubemap() || needsAlphaTest )
 		{
 			Abstract::generatePushConstantRanges(this->shaderProgram()->fragmentShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_FRAGMENT_BIT);
+		}
+
+		/* Add the instance transforms SSBO layout, which carries the vegetation wind state.
+		 * ⚠️ FIRST, and before the skinning one: the order of this list IS the set index order
+		 * (PerView, PerSceneTransforms, PerLight, PerModel, PerModelLayer), and the PerView layout
+		 * is already appended by the base class before this hook runs.
+		 * ⚠️⚠️ Enabling the set is NOT enough on its own: without its layout here the pipeline is
+		 * refused with VUID-VkGraphicsPipelineCreateInfo-layout-07988, "uses descriptor [Set 0,
+		 * Binding 0, variable ubInstanceTransforms] but was not declared in the pipeline layout",
+		 * and EVERY shadow program of the renderable fails to build. */
+		if ( setIndexes.isSetEnabled(SetType::PerSceneTransforms) )
+		{
+			auto descriptorSetLayout = Scenes::SceneInstanceTransforms::getDescriptorSetLayout(renderer.layoutManager());
+
+			if ( descriptorSetLayout == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to get the instance transforms descriptor set layout !");
+
+				return false;
+			}
+
+			descriptorSetLayouts.emplace_back(descriptorSetLayout);
 		}
 
 		/* Add the skinning SSBO descriptor set layout for skeletal meshes. */
@@ -278,6 +314,25 @@ namespace EmEn::Saphir::Generator
 			{
 				return false;
 			}
+		}
+
+		/* Vegetation wind: declare the same SSBO the scene pass declares — the header layout must
+		 * stay in lockstep with Scenes::SceneInstanceTransforms — and displace with it, so the
+		 * depth written here is the depth of the SWAYING tree. */
+		if ( program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
+		{
+			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
+
+			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
+			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
+			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
+			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjectionInfinity");
+			ssbo.addMember(Declaration::VariableType::FloatVector4, "windDirectionStrength");
+			ssbo.addMember(Declaration::VariableType::FloatVector4, "windTimes");
+			ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
+			vertexShader->declare(ssbo);
+
+			vertexShader->enableVegetationWind();
 		}
 
 		/* Skeletal animation: declare bone attributes and SSBO. */
@@ -444,6 +499,11 @@ namespace EmEn::Saphir::Generator
 			if ( renderable != nullptr )
 			{
 				hashCombine(hash, Hash::FNV1a(renderable->name()));
+
+				/* The wind changes the vertex stage AND adds a descriptor set to the layout, so it
+				 * changes the program. The name alone would already separate a tree from anything
+				 * else, but a key must state what it depends on rather than rely on that. */
+				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
 			}
 		}
 

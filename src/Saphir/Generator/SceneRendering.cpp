@@ -425,7 +425,7 @@ namespace EmEn::Saphir::Generator
 		{
 			const auto * renderable = this->getRenderable();
 
-			if ( renderable != nullptr && renderable->hasVegetationWind() && vertexShader->isInstanceTransformsEnabled() )
+			if ( renderable != nullptr && renderable->hasVegetationWind() && program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
 			{
 				vertexShader->enableVegetationWind();
 			}

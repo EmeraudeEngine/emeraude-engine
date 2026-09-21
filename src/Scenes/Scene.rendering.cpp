@@ -388,7 +388,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
 		{
-			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel());
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedInstanceTransformsDS);
 		}
 	}
 

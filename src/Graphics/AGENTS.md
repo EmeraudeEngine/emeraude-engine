@@ -4492,12 +4492,26 @@ the displacement, which every path would have to prepare.
 canopy does not sway while the raster one does. A per-frame refit of 120 000 foliage triangles per
 tree is the cost that buys consistency, and `blas-build-queue-saturation` is already open.
 
-⚠️ **The shadow pass does not sway either** — but for a structural reason, not a decision: it
-never receives the `PerSceneTransforms` descriptor set. Measured on the bench: 16.34 % of the
-foliage pixels move between two captures, 0.70 % of the shadow ones. `LightGenerator::ShadowMap`
-still samples the shadow term at the UNDISPLACED position, which keeps the two halves consistent
-and is why nothing flickers — displacing one without the other reproduces the self-occlusion the
-skinning path already hit. Open item: `vegetation-wind-does-not-reach-the-shadow-pass`.
+**The shadow pass sways too** (2026-09-22). `ShadowCasting` enables `PerSceneTransforms`
+**per renderable**, exactly as it enables the skinning set, so the sealed pipeline layout of every
+OTHER shadow caster is untouched. `castShadows()` carries the descriptor set,
+`Scenes::Scene` hands it the one it already prepared, and `LightGenerator::ShadowMap` evaluates the
+shadow term through `vertexShader.vertexPositionExpression()` so the two halves move together —
+displacing one without the other reproduces the self-occlusion the skinning path already hit.
+
+⚠️⚠️ **Enabling the set is NOT enough.** `onCreateDataLayouts()` must also hand the pipeline the
+matching descriptor set layout, **in set-index order** (PerView, PerSceneTransforms, PerLight,
+PerModel, PerModelLayer — the base class appends PerView before the hook runs). Without it every
+shadow program of the renderable is refused with
+`VUID-VkGraphicsPipelineCreateInfo-layout-07988`, "uses descriptor [Set 0, Binding 0, variable
+ubInstanceTransforms] but was not declared in the pipeline layout", and the trees simply cast no
+shadow at all.
+
+Measured by A/B on the `tree-generator` bench, toggling ONLY the shadow-pass displacement:
+**20.71 % → 36.39 %** of the shadow pixels move between two captures, at an unchanged foliage
+motion (24.06 % against 24.44 %). The baseline is not zero because the measured band is not pure
+cast shadow — the screen-space occlusion follows the moving geometry by itself — which is exactly
+why the conclusion rests on the A/B and not on the absolute figure.
 
 **Code references:**
 - `Saphir/VertexShader.cpp` — `generateVegetationWindCode()`, the two position accessors

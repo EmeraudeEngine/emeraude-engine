@@ -1024,7 +1024,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel) const noexcept
+	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
@@ -1062,6 +1062,21 @@ namespace EmEn::Graphics::RenderableInstance
 		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
 		{
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
+		}
+
+		/* Bind the scene instance transforms SSBO. On THIS pass it carries nothing but the wind
+		 * state, and only a vegetation renderable has the set in its layout — the sealed layout of
+		 * every other shadow caster is untouched. */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
+		{
+			if ( sceneTransformsDS == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerSceneTransforms", *renderTarget);
+
+				return;
+			}
+
+			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
 		}
 
 		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
