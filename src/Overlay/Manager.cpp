@@ -179,8 +179,18 @@ namespace EmEn::Overlay
 		}
 
 #ifdef IMGUI_ENABLED
-		if ( this->initImGUI() )
+		/* NOTE: ImGUI's platform backend IS a GLFW window (inputs, cursor, display size). A window-less run
+		 * (--window-less) has none: initialising it there dereferenced a null GLFWwindow and killed the process
+		 * without a line in the log (SIGSEGV in glfwSetWindowFocusCallback, found 2026-09-22 on the Intel iGPU
+		 * bench). The ImGUI screens still exist; they are simply never drawn. */
+		if ( m_resourceManager.graphicsRenderer().window().isWindowLessMode() )
 		{
+			TraceInfo{ClassId} << "Window-less mode: the ImGUI library is not initialized, ImGUI screens are not drawn.";
+		}
+		else if ( this->initImGUI() )
+		{
+			m_ImGUIInitialized = true;
+
 			TraceSuccess{ClassId} << "ImGUI library initialized !";
 		}
 		else
@@ -207,9 +217,14 @@ namespace EmEn::Overlay
 	Manager::onTerminate () noexcept
 	{
 #ifdef IMGUI_ENABLED
-		TraceInfo{ClassId} << "Releasing ImGUI library ...";
+		if ( m_ImGUIInitialized )
+		{
+			TraceInfo{ClassId} << "Releasing ImGUI library ...";
 
-		this->releaseImGUI();
+			this->releaseImGUI();
+
+			m_ImGUIInitialized = false;
+		}
 #endif
 
 		this->forget(&m_resourceManager.graphicsRenderer().window());
@@ -745,7 +760,7 @@ namespace EmEn::Overlay
 			return screen->isVisible();
 		});
 
-		if ( hasVisibleImGUIScreen )
+		if ( m_ImGUIInitialized && hasVisibleImGUIScreen )
 		{
 			ImGui_ImplVulkan_NewFrame();
 			ImGui_ImplGlfw_NewFrame();

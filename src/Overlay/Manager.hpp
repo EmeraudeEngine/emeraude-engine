@@ -513,6 +513,10 @@ namespace EmEn::Overlay
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
 			mutable std::mutex m_screensAccess;
 			bool m_enabled{false};
+#ifdef IMGUI_ENABLED
+			/** @brief False in a window-less run: ImGUI's platform backend needs a GLFW window. */
+			bool m_ImGUIInitialized{false};
+#endif
 
 			/* NOTE: Diagnostic only, render thread. @see Surface::UploadStatistics and the setting
 			 * Core/Video/Overlay/EnableUploadStatistics (read once at initialization). */
