@@ -201,17 +201,27 @@ question (RenderDoc is for draw-call-level dissection of ONE pass).
   **Torn down explicitly in `Renderer::onTerminate()`** while the device is alive: letting
   the `unique_ptr` member die at Renderer destruction destroys the pools AFTER
   `vkDestroyDevice` (loader error `VUID-vkDestroyQueryPool-device-parameter`).
-- **Scope placement:** `beginFrame()` (pool reset — must be OUTSIDE a render pass) right
-  after the main command buffer `begin()`; RAII `GPUProfiler::ScopedZone` around each pass
+- **Scope placement:** `openFrame()` right after the fence reset (before the shadow maps), then
+  `beginFrame()` right after the main command buffer `begin()` (the V1 GPU-side pool reset,
+  OUTSIDE a render pass, when there is no host reset); RAII `GPUProfiler::ScopedZone` around each pass
   (`TLASBuild`, `ScenePass`, `PostFXChain` + one scope per REAL pass inside the chain,
   `FinalComposite`). Effect labels come from `PostProcessEffect::label()` (returns the
   effect's ClassId; override it on every new effect).
 - **Interleaving truth:** a shared-denoise effect has NO contiguous per-effect cost — the
   attribution is per pass (`RTGIEffect/trace`, `SharedDenoise`, `RTGIEffect/temporal`,
   `Combine`), mirroring the actual command stream. Do not "fix" this by summing.
-- **V1 limit:** only the MAIN frame command buffer. Shadow maps / render-to-textures are
-  separate submissions recorded BEFORE it — resetting the shared pool there would wipe
-  their queries (see [`docs/todo/gpu-profiler-v2.md`](../../docs/todo/gpu-profiler-v2.md)).
+- **Side submissions (2026-09-23):** the shadow maps and render-to-textures are separate
+  submissions recorded BEFORE the main command buffer, so a pool reset recorded in it would wipe
+  their queries on the GPU timeline. With the optional Vulkan 1.2 feature `hostQueryReset`
+  (requested when advertised, `Device::hostQueryResetEnabled()`) the pool is reset from the HOST
+  in `GPUProfiler::openFrame()`, right after the slot's fence wait, and each side submission gets
+  its own top-level scope: `ShadowMap/<target id>` and `RenderToTexture/<target id>` (the
+  post-render compute included). Without the feature the profiler keeps the V1 scope, main
+  command buffer only, and says so in its "ready" line. Safe on a discarded frame: its empty
+  batch still signals the fence, and a fence signal covers every earlier submission of the queue.
+- ⚠️ **`ScenePass` does NOT contain the shadow maps**: they are their own submissions. Before
+  2026-09-23 a shadow cost was simply invisible in the timings (a peer session once read a
+  ScenePass delta as "colour + shadow").
 - Console: `Core.RendererService.getGPUTimings([reset])` — see `docs/ai-runtime-control.md` §6.
 
 ### Swap-Chain Format Configuration

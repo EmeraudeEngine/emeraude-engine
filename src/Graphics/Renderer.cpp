@@ -1569,6 +1569,13 @@ namespace EmEn::Graphics
 		/* 5. The new frame rendering is starting now. */
 		m_statistics.start();
 
+		/* Before the shadow maps and the render-to-textures: they are submitted ahead of the main command buffer
+		 * and may record profiling scopes (host query reset only, see GPUProfiler). */
+		if ( m_GPUProfiler != nullptr )
+		{
+			m_GPUProfiler->openFrame(m_currentFrameIndex);
+		}
+
 		/* NOTE: Offscreen rendering */
 		if ( scene != nullptr )
 		{
@@ -2236,11 +2243,17 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			commandBuffer->beginRenderPass(*shadowMap->framebuffer(), shadowMap->renderArea(), m_shadowMapClearValues, VK_SUBPASS_CONTENTS_INLINE);
+			{
+				/* One scope per map, outside ScenePass: it is its own submission. */
+				GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
+				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "ShadowMap", shadowMap->id().c_str()};
 
-			scene.castShadows(shadowMap, *commandBuffer);
+				commandBuffer->beginRenderPass(*shadowMap->framebuffer(), shadowMap->renderArea(), m_shadowMapClearValues, VK_SUBPASS_CONTENTS_INLINE);
 
-			commandBuffer->endRenderPass();
+				scene.castShadows(shadowMap, *commandBuffer);
+
+				commandBuffer->endRenderPass();
+			}
 
 			if ( !commandBuffer->end() )
 			{
@@ -2329,22 +2342,28 @@ namespace EmEn::Graphics
 				clearValues[0].color = renderToTexture->clearColorOverride();
 			}
 
-			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), clearValues, VK_SUBPASS_CONTENTS_INLINE);
-
-			if ( scene.prepareRender(renderToTexture) )
 			{
-				m_bindlessTextureManager.syncTextureSet(scene.bindlessTextureSet(), scene.lifetimeMS());
+				/* One scope per target, the post-render compute included: it is its own submission. */
+				GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
+				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "RenderToTexture", renderToTexture->id().c_str()};
 
-				scene.renderOpaque(renderToTexture, *commandBuffer);
-				scene.renderTranslucent(renderToTexture, *commandBuffer);
-				scene.renderTranslucentGB(renderToTexture, *commandBuffer);
+				commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), clearValues, VK_SUBPASS_CONTENTS_INLINE);
+
+				if ( scene.prepareRender(renderToTexture) )
+				{
+					m_bindlessTextureManager.syncTextureSet(scene.bindlessTextureSet(), scene.lifetimeMS());
+
+					scene.renderOpaque(renderToTexture, *commandBuffer);
+					scene.renderTranslucent(renderToTexture, *commandBuffer);
+					scene.renderTranslucentGB(renderToTexture, *commandBuffer);
+				}
+
+				commandBuffer->endRenderPass();
+
+				/* Post-render compute owned by the target itself (e.g. the GGX convolution of a
+				 * probe's prefiltered mip chain), recorded in the SAME submission. */
+				renderToTexture->recordPostRenderCompute(*commandBuffer);
 			}
-
-			commandBuffer->endRenderPass();
-
-			/* Post-render compute owned by the target itself (e.g. the GGX convolution of a
-			 * probe's prefiltered mip chain), recorded in the SAME submission. */
-			renderToTexture->recordPostRenderCompute(*commandBuffer);
 
 			if ( !commandBuffer->end() )
 			{

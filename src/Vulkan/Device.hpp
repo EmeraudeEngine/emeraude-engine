@@ -257,6 +257,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the Vulkan 1.2 `hostQueryReset` feature is enabled (vkResetQueryPool from the host).
+			 * @note OPTIONAL: the GPU profiler times the side submissions (shadow maps, render-to-textures) with it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hostQueryResetEnabled () const noexcept
+			{
+				return m_hostQueryResetEnabled;
+			}
+
+			/**
 			 * @brief Returns whether VK_EXT_mesh_shader is enabled on this device (task and mesh stages).
 			 * @note OPTIONAL, like the geometry stage: enabled when the device advertises it (never on
 			 * MoltenVK, 2026-09-22). A consumer keeps its classic vertex path when this is false.
@@ -822,6 +834,7 @@ namespace EmEn::Vulkan
 			bool m_useMemoryAllocator{false};
 			bool m_rayTracingEnabled{false};
 			bool m_meshShadersEnabled{false};
+			bool m_hostQueryResetEnabled{false};
 			bool m_externalMemoryWin32Enabled{false};
 			bool m_metalObjectsEnabled{false};
 	};

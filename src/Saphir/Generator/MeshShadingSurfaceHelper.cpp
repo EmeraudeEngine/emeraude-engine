@@ -34,9 +34,11 @@
 #include "Abstract.hpp"
 #include "Graphics/Geometry/MeshShadingSurface.hpp"
 #include "Graphics/Material/Interface.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/MeshShader.hpp"
+#include "Saphir/Program.hpp"
 #include "Saphir/TaskShader.hpp"
 #include "Tracer.hpp"
 
@@ -81,7 +83,57 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader) noexcept
+	declareMeshSurfaceCullingMatrix (const Abstract & generator, TaskShader & taskShader, std::string & expression) noexcept
+	{
+		expression.clear();
+
+		const auto & renderTarget = generator.renderTarget();
+
+		if ( renderTarget->isCubemap() || renderTarget->isCascadedShadowMap() )
+		{
+			return true;
+		}
+
+		/* The model matrix, as AbstractVertexStage synthesises it: the InstanceTransforms entry (stride 2) or the
+		 * pushed one. */
+		const auto & program = *generator.shaderProgram();
+		std::string model;
+
+		if ( program.wasInstanceTransformsEnabled() )
+		{
+			if ( !generator.declareInstanceTransformsBlock(taskShader) )
+			{
+				return false;
+			}
+
+			model = std::string{"ubInstanceTransforms.instanceMatrices["} + meshSurfaceInstanceIndexExpression() + " * 2]";
+		}
+
+		/* The branches of Abstract::declareMatrixPushConstantBlock() (no MDI, no instancing for a surface). */
+		if ( program.wasAdvancedMatricesEnabled() )
+		{
+			if ( !generator.declareViewUniformBlock(taskShader) )
+			{
+				return false;
+			}
+
+			expression = ViewUB(UniformBlock::Component::ProjectionMatrix, false) + " * " + MatrixPC(PushConstant::Component::ViewMatrix) + " * " +
+				(model.empty() ? MatrixPC(PushConstant::Component::ModelMatrix) : model);
+		}
+		else if ( !model.empty() )
+		{
+			expression = MatrixPC(PushConstant::Component::ViewProjectionMatrix) + " * " + model;
+		}
+		else
+		{
+			expression = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
+		}
+
+		return true;
+	}
+
+	bool
+	generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader, const std::string & cullingMatrix) noexcept
 	{
 		const std::string grid{MatrixPC(PushConstant::Component::MeshSurfaceGrid)};
 		const std::string view{MatrixPC(PushConstant::Component::MeshSurfaceView)};
@@ -102,7 +154,31 @@ namespace EmEn::Saphir::Generator
 
 		/* ---- TASK: one workgroup per tile. ---- */
 		Code{taskShader} <<
-			"const vec2 tileOrigin = " << grid << ".xy + vec2(gl_WorkGroupID.xy) * " << grid << ".z;" << Line::End <<
+			"const vec2 tileOrigin = " << grid << ".xy + vec2(gl_WorkGroupID.xy) * " << grid << ".z;" << Line::End;
+
+		/* Frustum culling: the tile's box, from the ground plane down to the deepest relief, against the four side
+		 * planes and the w > 0 half-space of the clip volume. Never the near and far planes: the depth convention
+		 * and the shadow pass's depth clamp make them unreliable, and they cut little on a ground. A tile is kept
+		 * unless ALL its corners are out on the SAME side: conservative, a kept tile may still be invisible. */
+		if ( !cullingMatrix.empty() )
+		{
+			Code{taskShader} <<
+				"{" << Line::End <<
+				"	const mat4 cullMatrix = " << cullingMatrix << ";" << Line::End <<
+				"	const float tileDepth = " << heightScale << " / " << grid << ".w;" << Line::End <<
+				"	uint outside = 0x1Fu;" << Line::End <<
+				"	for ( uint corner = 0u; corner < 8u; ++corner ) {" << Line::End <<
+				"		const vec3 p = vec3(tileOrigin.x + ((corner & 1u) != 0u ? " << grid << ".z : 0.0), (corner & 4u) != 0u ? -tileDepth : 0.0, tileOrigin.y + ((corner & 2u) != 0u ? " << grid << ".z : 0.0));" << Line::End <<
+				"		const vec4 c = cullMatrix * vec4(p, 1.0);" << Line::End <<
+				"		outside &= (c.x < -c.w ? 1u : 0u) | (c.x > c.w ? 2u : 0u) | (c.y < -c.w ? 4u : 0u) | (c.y > c.w ? 8u : 0u) | (c.w <= 0.0 ? 16u : 0u);" << Line::End <<
+				"	}" << Line::End <<
+				"	if ( outside != 0u ) {" << Line::End <<
+				"		EmitMeshTasksEXT(0u, 0u, 0u);" << Line::End <<
+				"	}" << Line::End <<
+				"}" << Line::End;
+		}
+
+		Code{taskShader} <<
 			"/* The nearest point of the tile to the camera (the surface's plane is y = 0). */" << Line::End <<
 			"const vec2 nearest = clamp(" << view << ".xz, tileOrigin, tileOrigin + vec2(" << grid << ".z));" << Line::End <<
 			"const float tileDistance = length(vec3(nearest.x, 0.0, nearest.y) - " << view << ".xyz);" << Line::End <<

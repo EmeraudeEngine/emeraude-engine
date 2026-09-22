@@ -891,6 +891,21 @@ namespace EmEn::Vulkan
 			requirements.featuresVK11().*feature = VK_TRUE;
 		};
 
+		const auto & availableFeaturesVK12 = selectedPhysicalDevice->featuresVK12();
+
+		const auto requestOptionalVK12 = [&] (VkBool32 VkPhysicalDeviceVulkan12Features::* feature, const char * featureName, const char * lostCapability) {
+			if ( availableFeaturesVK12.*feature == VK_FALSE )
+			{
+				TraceWarning{ClassId} <<
+					"The physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName <<
+					"' does not advertise '" << featureName << "': not requested, " << lostCapability << " unavailable.";
+
+				return;
+			}
+
+			requirements.featuresVK12().*feature = VK_TRUE;
+		};
+
 		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
 		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
@@ -918,6 +933,7 @@ namespace EmEn::Vulkan
 			requirements.featuresVK12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 		}
 		requirements.featuresVK12().bufferDeviceAddress = VK_TRUE; // Required for buffer device addresses (VBO/IBO for RT, etc.)
+		requestOptionalVK12(&VkPhysicalDeviceVulkan12Features::hostQueryReset, "hostQueryReset", "GPU timing of the shadow maps and render-to-textures");
 		/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
 		requirements.featuresVK10().multiDrawIndirect = VK_TRUE; // Required for vkCmdDrawIndexedIndirect with drawCount > 1
 		requirements.featuresVK10().drawIndirectFirstInstance = VK_TRUE; // Required for firstInstance in indirect commands

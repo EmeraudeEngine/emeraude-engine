@@ -56,11 +56,12 @@ namespace EmEn::Vulkan
 	 * References:
 	 *  - https://docs.vulkan.org/samples/latest/samples/api/timestamp_queries/README.html
 	 *  - https://nikitablack.github.io/post/how_to_use_vulkan_timestamp_queries/
-	 * @warning V1 scope: only the MAIN frame command buffer is instrumented. The shadow
-	 * map and render-to-texture passes are submitted through separate command buffers
-	 * BEFORE the main one; resetting the shared pool from the main command buffer would
-	 * wipe their queries on the GPU timeline. Widening the coverage needs one pool range
-	 * per submission — deferred until the need is proven.
+	 * @note SIDE SUBMISSIONS (2026-09-23): the shadow maps and render-to-textures are submitted through their own
+	 * command buffers BEFORE the main one, so a pool reset recorded in the main command buffer would wipe their
+	 * queries on the GPU timeline. With `hostQueryReset` (Vulkan 1.2, enabled when the device advertises it) the
+	 * pool is reset from the HOST in openFrame(), right after the slot's fence wait, and every command buffer of
+	 * the frame may write scopes (profilesSideSubmissions()). Without it the profiler keeps its V1 scope: the main
+	 * command buffer only, reset by beginFrame().
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
 	class EMEN_API GPUProfiler final : public AbstractDeviceDependentObject
@@ -159,6 +160,27 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void harvest (uint32_t frameSlot) noexcept;
+
+			/**
+			 * @brief Opens the frame slot for recording: clears its scopes and, with `hostQueryReset`, resets its pool from
+			 * the host so that the side submissions recorded before the main command buffer can write scopes.
+			 * @warning Must be called after harvest() (the slot's fence wait) and before any command buffer of the frame
+			 * records a scope.
+			 * @param frameSlot The frame-in-flight slot index.
+			 * @return void
+			 */
+			void openFrame (uint32_t frameSlot) noexcept;
+
+			/**
+			 * @brief Returns whether a side submission (shadow map, render-to-texture) may record scopes this frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			profilesSideSubmissions () const noexcept
+			{
+				return m_usable && m_hostQueryReset;
+			}
 
 			/**
 			 * @brief Starts the frame: resets the slot's query pool and opens the root scope.
@@ -309,6 +331,7 @@ namespace EmEn::Vulkan
 			uint64_t m_timestampMask{~0ULL};
 			uint32_t m_currentSlot{0};
 			bool m_scopeOverflowTraced{false};
+			bool m_hostQueryReset{false};
 			bool m_usable{false};
 	};
 }

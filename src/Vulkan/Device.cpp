@@ -267,6 +267,8 @@ namespace EmEn::Vulkan
 			return std::strcmp(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0;
 		});
 
+		m_hostQueryResetEnabled = requirements.featuresVK12().hostQueryReset == VK_TRUE;
+
 		/* NOTE: Detect if the mesh shader extension was enabled on this device (optional stages). */
 		m_meshShadersEnabled = std::ranges::any_of(extensions, [] (const char * ext) {
 			return std::strcmp(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0;

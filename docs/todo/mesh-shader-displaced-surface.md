@@ -63,8 +63,8 @@ but no generator builds a LIT, material-driven program from it.
    (`ShadowCasting::generateMeshShadingStages()`, subdivided for the MAIN camera like a heightfield's levels):
    under an 8° sun, switching `Core/Graphics/ShadowMapping/Enabled` off brightens 20 % of the near-ground pixels by
    more than 10/255 (mean 109.5 → 115.8). The level flagstones shadow the JOINTS, not each other's tops: their tops
-   all sit at the ground plane, only the joints are displaced down. REMAINING: frustum culling in the task stage
-   and the GPU cost (below).
+   all sit at the ground plane, only the joints are displaced down. FRUSTUM CULLING DONE the same day; the GPU cost
+   remains (below).
 5. The handover band, the fallback, `relief` option 0 = 2, measurements.
 
 ## The concrete design (2026-09-22, implementing steps 3 + 4 together — step 3 alone cannot run)
@@ -75,9 +75,8 @@ but no generator builds a LIT, material-driven program from it.
   emit a single quad (the ground stays flat there and the material's POM / normal map does the relief),
   near tiles emit up to 16×16 meshlets (128×128 quads per metre, ~8 mm). No hole, no z-fight with a
   second ground.
-- **Crack-free by geomorph** — the CDLOD rule already used by the terrain (`Geometry/HeightfieldSurface`):
-  every vertex morphs toward the next coarser lattice over the last part of its level's range, as a
-  function of its own world distance, so two tiles sharing an edge agree on it.
+- ~~Crack-free by geomorph~~ — SUPERSEDED by the owner's decision of 2026-09-23: SKIRTS (a vertical strip down to
+  the deepest relief along each tile edge, both windings), which is what is implemented.
 - **The displacement is the MATERIAL's height map** (same texture, same `heightScale`, same UV transform as
   the POM — one relief, two techniques): `depth = (1 − h) · heightScale · repeatSize`, scaled by the
   handover factor. The frame stays the flat ground's (the normal map carries the lighting relief, as in
@@ -100,15 +99,30 @@ render mode 2 pixel-indistinguishable from mode 1 (inside the run-to-run noise).
 - **The GPU cost is too high: +9.6 ms of ScenePass** on an RTX 3060 Laptop (Windows, validation ON, relief spawn
   pose): ScenePass 3.91 ms in mode 1 against 13.52 ms in mode 2, the whole frame 8.73 → 17.19 ms. The draw
   launches one task workgroup per 1 m tile, 256 × 256 = 65 536 of them for the relief ground, in the colour pass
-  AND the shadow pass, and every one emits at least its flat quad — none is culled.
+  AND the shadow pass, and every one emits at least its flat quad — none is culled. ⚠️ ScenePass never contained
+  the shadow map (its own submission, untimed before 2026-09-23): these deltas are the colour pass alone.
 - Re-measured 2026-09-23 with the displaced SHADOW (same RTX 3060, the new spawn and 8° sun): ScenePass mode 2
   vs mode 1 = 13.49 vs 5.37 ms with validation, **15.24 vs 4.69 ms without** — +8 to +10.5 ms; validation does not
   inflate it, and the laptop varies by ±1-2 ms run to run. The displaced shadow added nothing visible (13.52 →
-  13.49). ⚠️ The GPU profiler has no per-pass scope inside ScenePass (shadow vs colour cannot be split): add one
-  before the culling A/B, or its gain cannot be attributed.
-- **Frustum culling in the task stage** (a tile outside the view emits nothing; the shadow pass culls against the
-  light's frustum), then re-measure the cost with validation OFF, and break ScenePass down if it is still high.
-- Measure on the RTX 3070 Ti too (this workstation), same pose, same method (`Core/Graphics/GPUProfiler/Enabled`).
+  13.49) — expected, since the shadow map is not inside ScenePass. The profiler now times it on its own line.
+- **Frustum culling in the task stage: DONE 2026-09-23** (`src/Saphir/AGENTS.md` § The mesh-shading surface), and the
+  GPU profiler now times the shadow maps (`ShadowMap/<id>`, host query reset). RTX 3070 Ti, validation OFF, relief
+  spawn, 8° sun, the same settings copy for the three runs:
+
+  | | ScenePass | ShadowMap |
+  |---|---|---|
+  | mode 1 (POM) | 3.41 ms | 0.04 ms |
+  | mode 2, no culling | 8.70 ms | 0.56 ms |
+  | mode 2, culled | 6.64 ms | 0.52 ms |
+
+  The culling saves 2.1 ms of the colour pass; it barely moves the shadow (0.56 → 0.52), whose cost is not
+  the tile count. What is left, +3.2 ms colour and +0.5 ms shadow, is the displaced geometry itself.
+- **Next, not yet measured** (split the remaining cost before choosing):
+  - the density — 0.004 m of quad per metre is ~5 px per quad at 1620p, and the rasteriser is inefficient
+    below ~8 px per triangle;
+  - the number of lit passes that regenerate the geometry — the program set holds an ambient AND a
+    directional-light task/mesh pair, so each lighting pass re-runs the task and mesh stages;
+  - the 32 task invocations doing the same scalar work.
 
 ## ⚠️ Traps
 

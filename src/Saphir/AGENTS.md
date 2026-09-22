@@ -1196,6 +1196,14 @@ the log says so once.
   (camera, then the InstanceTransforms slot as raw bits — a mesh stage has no `gl_InstanceIndex`) at
   `Program::meshSurfacePushConstantOffset()` (80, 112 B in all). The draw is
   `RenderableInstance::…::drawMeshShadingSurface()`: `drawMeshTasks(tileCountX, tileCountZ, 1)`.
+- FRUSTUM CULLING in the task stage (2026-09-23): `declareMeshSurfaceCullingMatrix()` declares in the task stage what
+  its local-to-clip matrix needs and returns that matrix's expression. It follows the branches of
+  `declareMatrixPushConstantBlock()`: P from the view UBO × the pushed V × the InstanceTransforms model in the lit
+  passes, the pushed MVP in a classic shadow map. A tile's box, from the plane down to the deepest relief, is
+  rejected when all 8 corners are out on the same SIDE plane or behind w = 0; near/far are never tested (depth
+  convention, shadow depth clamp). Multiview targets (cubemap, CSM) are NOT culled: their matrices are per
+  `gl_ViewIndex`. `Abstract::declareInstanceTransformsBlock()` is now the single declaration of that SSBO layout
+  (scene pass, shadow pass, task stage).
 - The SHADOW program takes the same stages (`ShadowCasting::generateMeshShadingStages()`, 2026-09-23): the shadow map
   sees the displaced geometry, subdivided for the MAIN camera (the receiver's), like a heightfield's levels. The
   shadow draw passes that position, not the light's: from the light, every tile would be past the handover and flat.

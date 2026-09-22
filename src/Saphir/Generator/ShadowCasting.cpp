@@ -354,16 +354,10 @@ namespace EmEn::Saphir::Generator
 		 * depth written here is the depth of the SWAYING tree. */
 		if ( program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
 		{
-			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
-
-			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
-			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
-			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
-			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjectionInfinity");
-			ssbo.addMember(Declaration::VariableType::FloatVector4, "windDirectionStrength");
-			ssbo.addMember(Declaration::VariableType::FloatVector4, "windTimes");
-			ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
-			vertexShader->declare(ssbo);
+			if ( !this->declareInstanceTransformsBlock(*vertexShader) )
+			{
+				return false;
+			}
 
 			vertexShader->enableVegetationWind();
 		}
@@ -486,7 +480,16 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader) )
+		/* The task stage culls the tiles against the light's clip volume (a classic map; no culling for a cubemap or
+		 * a CSM, see declareMeshSurfaceCullingMatrix()). */
+		std::string cullingMatrix;
+
+		if ( !declareMeshSurfaceCullingMatrix(*this, *taskShader, cullingMatrix) )
+		{
+			return false;
+		}
+
+		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader, cullingMatrix) )
 		{
 			Tracer::error(ClassId, "Unable to generate the mesh-shading surface stages of a shadow map !");
 

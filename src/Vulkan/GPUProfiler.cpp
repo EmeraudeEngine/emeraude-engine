@@ -115,11 +115,24 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		m_hostQueryReset = device->hostQueryResetEnabled();
+
+		/* A host reset needs the pool reset once before its first use from the host too: from then on every
+		 * openFrame() resets it after the slot's fence wait. */
+		if ( m_hostQueryReset )
+		{
+			for ( const auto & frame : m_frames )
+			{
+				vkResetQueryPool(device->handle(), frame.pool, 0, createInfo.queryCount);
+			}
+		}
+
 		m_usable = true;
 
 		TraceSuccess{ClassId} <<
 			"GPU profiler ready: " << m_frames.size() << " query pools of " << createInfo.queryCount << " timestamps, "
-			"period " << m_timestampPeriodNS << " ns/tick, " << timestampValidBits << " valid bits.";
+			"period " << m_timestampPeriodNS << " ns/tick, " << timestampValidBits << " valid bits, " <<
+			(m_hostQueryReset ? "shadow maps and render-to-textures included (host query reset)." : "main command buffer only (no hostQueryReset).");
 
 		return true;
 	}
@@ -210,7 +223,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	GPUProfiler::beginFrame (const CommandBuffer & commandBuffer, uint32_t frameSlot) noexcept
+	GPUProfiler::openFrame (uint32_t frameSlot) noexcept
 	{
 		if ( !m_usable || frameSlot >= m_frames.size() )
 		{
@@ -222,11 +235,36 @@ namespace EmEn::Vulkan
 		auto & frame = m_frames[frameSlot];
 		frame.records.clear();
 		frame.queryCount = 0;
+		frame.submitted = false;
 
 		m_openScopes.clear();
 
-		/* NOTE: Must be recorded outside a render pass. */
-		vkCmdResetQueryPool(commandBuffer.handle(), frame.pool, 0, MaxScopesPerFrame * 2);
+		/* The caller waited this slot's fence and harvest() read its results: no submission uses the pool any more.
+		 * ⚠️ A frame whose main command buffer was discarded still signals that fence through its empty batch, and
+		 * a fence signal covers every EARLIER submission of the queue — the side submissions included. */
+		if ( m_hostQueryReset )
+		{
+			vkResetQueryPool(this->device()->handle(), frame.pool, 0, MaxScopesPerFrame * 2);
+		}
+	}
+
+	void
+	GPUProfiler::beginFrame (const CommandBuffer & commandBuffer, uint32_t frameSlot) noexcept
+	{
+		if ( !m_usable || frameSlot >= m_frames.size() )
+		{
+			return;
+		}
+
+		/* V1 path: the pool is reset on the GPU timeline, so nothing recorded before this point survives. The host
+		 * path already reset it in openFrame() and keeps the side submissions' scopes. */
+		if ( !m_hostQueryReset )
+		{
+			this->openFrame(frameSlot);
+
+			/* NOTE: Must be recorded outside a render pass. */
+			vkCmdResetQueryPool(commandBuffer.handle(), m_frames[frameSlot].pool, 0, MaxScopesPerFrame * 2);
+		}
 
 		this->beginScope(commandBuffer, "Frame");
 	}

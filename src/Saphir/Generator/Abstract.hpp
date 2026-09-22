@@ -545,6 +545,18 @@ namespace EmEn::Saphir::Generator
 			bool declareMatrixPushConstantBlock (AbstractShader & shader) const noexcept;
 
 			/**
+			 * @brief Declares the scene's InstanceTransforms storage block (Scenes::SceneInstanceTransforms layout): the
+			 * {previousViewProjection, previousViewProjectionInfinity, wind} header, then the {model, previousModel}
+			 * matrices interleaved (stride 2).
+			 * @note Same call-timing contract as declareViewUniformBlock(). The one declaration of that layout: the
+			 * scene pass, the shadow pass and a mesh-shading surface's task stage share it.
+			 * @param shader A reference to a shader where to declare the storage block.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declareInstanceTransformsBlock (AbstractShader & shader) const noexcept;
+
+			/**
 			 * @brief Generates the shader program.
 			 * @note Looks up computeProgramCacheKey() in the renderer's program cache first. On a hit,
 			 * the cached program's Set 1 (material) descriptor layout hash is checked against the

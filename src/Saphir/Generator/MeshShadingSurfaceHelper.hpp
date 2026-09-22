@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <string>
+
 /* Forward declarations. */
 namespace EmEn
 {
@@ -56,6 +59,22 @@ namespace EmEn::Saphir::Generator
 	[[nodiscard]]
 	const char * meshSurfaceInstanceIndexExpression () noexcept;
 
+	/**
+	 * @brief Declares, in a mesh-shading surface's task stage, what its LOCAL-TO-CLIP matrix needs, and returns its GLSL
+	 * expression: the same matrix the mesh stage's per-vertex synthesis builds, for the same push-constant layout
+	 * (Abstract::declareMatrixPushConstantBlock()).
+	 * @note The expression is EMPTY for a multiview target (cubemap, cascaded shadow map): their matrices are indexed
+	 * by gl_ViewIndex and a tile would have to be tested against every view, so they are not culled.
+	 * @warning Call after the mesh stage is configured (the program's per-vertex queries answer from it) and after
+	 * the task stage declared the matrices push-constant block.
+	 * @param generator The generator.
+	 * @param taskShader The task stage.
+	 * @param expression A reference to the returned expression.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool declareMeshSurfaceCullingMatrix (const Abstract & generator, TaskShader & taskShader, std::string & expression) noexcept;
+
 	/** @brief The task payload variable shared by the two stages of a mesh-shading surface. */
 	static constexpr auto MeshSurfacePayload{"msSurface"};
 
@@ -64,7 +83,9 @@ namespace EmEn::Saphir::Generator
 	 * @note The TASK stage: one workgroup per tile (dispatch = tile counts), which picks the tile's subdivision
 	 * from the camera distance — about MeshShadingSurfaceDetail metres of quad per metre of distance, a power of
 	 * two up to MeshShadingSurface::MaxTileSubdivision — and launches its meshlets. Beyond the material's
-	 * geometry-to-parallax handover the relief is parallax only, so the tile is one flat quad.
+	 * geometry-to-parallax handover the relief is parallax only, so the tile is one flat quad. A tile whose box
+	 * (its square, from the ground plane down to the deepest relief) lies entirely outside one side plane of the
+	 * clip volume launches nothing (the frustum culling, 2026-09-23).
 	 * The MESH stage: one meshlet of at most 8 × 8 quads, plus the SKIRTS of the tile edges it owns (owner
 	 * decision 2026-09-22: a vertical strip down to the deepest relief, which hides the cracks between two tiles
 	 * of different subdivisions; both windings). It PROVIDES the vertex attributes (position, flat frame, UV)
@@ -76,8 +97,9 @@ namespace EmEn::Saphir::Generator
 	 * @param material The material that owns the relief.
 	 * @param taskShader The task stage.
 	 * @param meshShader The mesh stage.
+	 * @param cullingMatrix The task stage's local-to-clip matrix (declareMeshSurfaceCullingMatrix()), empty for none.
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader) noexcept;
+	bool generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader, const std::string & cullingMatrix) noexcept;
 }

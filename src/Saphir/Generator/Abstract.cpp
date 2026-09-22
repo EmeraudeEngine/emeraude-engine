@@ -621,6 +621,31 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
+	Abstract::declareInstanceTransformsBlock (AbstractShader & shader) const noexcept
+	{
+		/* NOTE: {model, previousModel} interleaved (stride 2), preceded by the
+		 * {previousViewProjection, previousViewProjectionInfinity} header reserved for the
+		 * motion-vector pass — the second one serves the renderables rendered with the
+		 * translation-free INFINITY view (the sky), whose velocity would otherwise be wrong
+		 * by the camera translation. Both header matrices are UNJITTERED — the TAA sub-pixel
+		 * jitter is a per-draw push constant applied to gl_Position only, so the velocity clip
+		 * positions computed from this header need no jitter correction.
+		 * Must match Scenes::SceneInstanceTransforms GPU layout. */
+		Declaration::ShaderStorageBlock ssbo{m_shaderProgram->setIndex(SetType::PerSceneTransforms), 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
+		ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
+		ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
+		ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjectionInfinity");
+		/* NOTE: The vegetation wind rides in the same header: it is per-frame like the matrices,
+		 * and the motion-vector pass needs its PREVIOUS value from the place it already reads the
+		 * previous view-projection. xyz/w = direction/strength, then {time, previousTime, gust}. */
+		ssbo.addMember(Declaration::VariableType::FloatVector4, "windDirectionStrength");
+		ssbo.addMember(Declaration::VariableType::FloatVector4, "windTimes");
+		ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
+
+		return shader.declare(ssbo);
+	}
+
+	bool
 	Abstract::declareViewUniformBlock (AbstractShader & shader, uint32_t binding) const noexcept
 	{
 		const auto setIndex = m_shaderProgram->setIndex(SetType::PerView);

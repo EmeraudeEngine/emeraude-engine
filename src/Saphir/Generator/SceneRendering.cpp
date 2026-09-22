@@ -449,7 +449,15 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader) )
+		/* The task stage culls the tiles against the camera's clip volume. */
+		std::string cullingMatrix;
+
+		if ( !declareMeshSurfaceCullingMatrix(*this, *taskShader, cullingMatrix) )
+		{
+			return false;
+		}
+
+		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader, cullingMatrix) )
 		{
 			Tracer::error(ClassId, "Unable to generate the mesh-shading surface stages !");
 
@@ -511,27 +519,11 @@ namespace EmEn::Saphir::Generator
 				vertexShader.enableInstanceTransforms();
 			}
 
-			const auto setIndex = program.setIndexes().set(SetType::PerSceneTransforms);
-
-			/* NOTE: {model, previousModel} interleaved (stride 2), preceded by the
-			 * {previousViewProjection, previousViewProjectionInfinity} header reserved for the
-			 * motion-vector pass — the second one serves the renderables rendered with the
-			 * translation-free INFINITY view (the sky), whose velocity would otherwise be wrong
-			 * by the camera translation. Both header matrices are UNJITTERED — the TAA sub-pixel
-			 * jitter is a per-draw push constant applied to gl_Position only, so the velocity clip
-			 * positions computed from this header need no jitter correction.
-			 * Must match Scenes::SceneInstanceTransforms GPU layout. */
-			Declaration::ShaderStorageBlock ssbo{setIndex, 0, Declaration::MemoryLayout::Std430, "InstanceTransforms", "ubInstanceTransforms"};
-			ssbo.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
-			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjection");
-			ssbo.addMember(Declaration::VariableType::Matrix4, "previousViewProjectionInfinity");
-			/* NOTE: The vegetation wind rides in the same header: it is per-frame like the matrices,
-			 * and the motion-vector pass needs its PREVIOUS value from the place it already reads the
-			 * previous view-projection. xyz/w = direction/strength, then {time, previousTime, gust}. */
-			ssbo.addMember(Declaration::VariableType::FloatVector4, "windDirectionStrength");
-			ssbo.addMember(Declaration::VariableType::FloatVector4, "windTimes");
-			ssbo.addMember(Declaration::VariableType::Matrix4, "instanceMatrices[]");
-			vertexShader.declare(ssbo);
+			/* The one declaration of the layout (Abstract::declareInstanceTransformsBlock()). */
+			if ( !this->declareInstanceTransformsBlock(vertexShader) )
+			{
+				return false;
+			}
 		}
 
 		if ( !this->declareMatrixPushConstantBlock(vertexShader) )

@@ -699,8 +699,14 @@ echo "Core.RendererService.getGPUTimings(reset)" | nc -q 2 localhost 7777   # cl
   `SharedDenoise`, `<Effect>/temporal`, `Combine`, plus standalone effects (TAA...) —
   and the final composite. Shared-denoise effects have NO contiguous per-effect total by
   design: their passes are interleaved (this mirrors the actual command stream).
-- **V1 limit:** shadow map and render-to-texture passes are NOT covered (separate command
-  buffers submitted before the main one). Use RenderDoc below when those are the suspects.
+- **Shadow maps and render-to-textures** (2026-09-23): each gets a TOP-LEVEL line
+  `ShadowMap/<target id>` / `RenderToTexture/<target id>`, listed before `Frame` — they are
+  separate submissions, so they are NOT inside `Frame` or `ScenePass`. Needs the device feature
+  `hostQueryReset` (every desktop driver and MoltenVK advertise it); without it the profiler's
+  startup line says "main command buffer only" and those lines are absent.
+- A continuous reflection probe is SUSPENDED while an enabled SSR/RTR is in the stack, so its
+  `RenderToTexture/…` line is absent until `PostProcess.disable(Reflections)`: that is the
+  reflection cost ladder, not a profiler gap.
 - This is the FIRST tool for any "the frame is slow" question — reach for RenderDoc only
   when a single pass needs draw-call-level dissection.
 
