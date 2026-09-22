@@ -224,7 +224,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Registers a geometry that STAGED new vertex data, for the next frame's flush.
-			 * @note Thread-safe: a worker thread builds and parks the new buffer (Geometry::AdaptiveVertexGridResource::updateData()),
+			 * @note Thread-safe: a worker thread builds and parks the new buffer (Geometry::CDLODTerrainResource::updateRayTracingProxy()),
 			 * the render thread publishes it through Geometry::Interface::updateVideoMemory() from
 			 * flushGeometryVideoMemoryUpdates(), behind the frame fence and before the scene's own uploads —
 			 * the ONE place a buffer that draw calls read may be swapped. The same shape as the materials'.
@@ -232,6 +232,18 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void requestGeometryVideoMemoryUpdate (std::weak_ptr< Geometry::Interface > geometry) noexcept;
+
+			/**
+			 * @brief Registers a geometry whose synthesized surface must be updated EVERY frame (a
+			 * heightfield's clipmap follows the camera).
+			 * @note Thread-safe (the geometry registers itself when it is created, on a loading thread).
+			 * The registration lasts as long as the geometry does: an expired entry is dropped at the
+			 * next frame. The render thread calls Geometry::Interface::updateSurfaceVideoMemory() on each
+			 * one from updateSurfaceGeometries(), before the shadow maps.
+			 * @param geometry A weak pointer to the geometry.
+			 * @return void
+			 */
+			void registerSurfaceGeometry (std::weak_ptr< Geometry::Interface > geometry) noexcept;
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
@@ -1777,10 +1789,22 @@ namespace EmEn::Graphics
 			 */
 			void flushGeometryVideoMemoryUpdates () noexcept;
 
+			/**
+			 * @brief Updates the surface of every geometry registered by registerSurfaceGeometry() for the
+			 * frame being prepared, from the MAIN camera of that frame.
+			 * @note Render thread, right after flushGeometryVideoMemoryUpdates() and before the scene's
+			 * uploads and the shadow maps — every pass of the frame then reads the updated surface.
+			 * @param readStateIndex The render state index the frame latched (Scenes::Scene::frameReadStateIndex()).
+			 * @return void
+			 */
+			void updateSurfaceGeometries (uint32_t readStateIndex) noexcept;
+
 			std::mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
 			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates; ///< Materials that changed a dynamic property since the last flush.
 			std::mutex m_geometryUpdatesAccess; ///< Guards m_pendingGeometryUpdates (worker threads register, the render thread flushes).
 			std::vector< std::weak_ptr< Geometry::Interface > > m_pendingGeometryUpdates; ///< Geometries that staged new vertex data since the last flush.
+			std::mutex m_surfaceGeometriesAccess; ///< Guards m_surfaceGeometries (loading threads register, the render thread updates).
+			std::vector< std::weak_ptr< Geometry::Interface > > m_surfaceGeometries; ///< Geometries whose surface follows the camera every frame.
 			bool m_motionBlurAllowed{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};

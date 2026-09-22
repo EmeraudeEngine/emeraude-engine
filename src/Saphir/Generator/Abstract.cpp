@@ -505,6 +505,29 @@ namespace EmEn::Saphir::Generator
 		 * This allows shaders to construct 3D texture coordinates from 2D UVs + frame index. */
 		pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::FrameIndex);
 
+		/* NOTE: A heightfield pushes its NODE per draw (and the camera the nodes were selected for),
+		 * after everything else: std430 aligns the vec4 on 16 bytes, so the largest block (76 B) puts
+		 * the node at 80 and the camera at 96 — 112 B, under the 128 B Vulkan minimum guarantee. The
+		 * offset is recorded on the program for the draw that pushes it.
+		 * ⚠️ There is no room left for a third per-node vec4 under that guarantee. */
+		if ( m_shaderProgram->wasHeightfieldSurfaceEnabled() )
+		{
+			const auto matricesBytes = pushConstantBlock.bytes();
+			const auto nodeOffset = (matricesBytes + 15U) & ~15U;
+
+			pushConstantBlock.addMember(Declaration::VariableType::FloatVector4, PushConstant::Component::HeightfieldNode);
+			pushConstantBlock.addMember(Declaration::VariableType::FloatVector4, PushConstant::Component::HeightfieldCamera);
+
+			if ( pushConstantBlock.bytes() > 128U )
+			{
+				TraceError{TracerTag} << "The heightfield push constants end at byte " << pushConstantBlock.bytes() << ", past the 128 B Vulkan minimum guarantee !";
+
+				return false;
+			}
+
+			m_shaderProgram->setHeightfieldPushConstantOffset(nodeOffset);
+		}
+
 		return shader.declare(pushConstantBlock);
 	}
 

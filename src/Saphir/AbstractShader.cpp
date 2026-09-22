@@ -259,13 +259,18 @@ namespace EmEn::Saphir
 
 		/* Common shader code declarations. */
 		AbstractShader::generateDeclarations(code, this->specializationConstantDeclarations(), "Specialization constants");
-		AbstractShader::generateDeclarations(code, this->functionDeclarations(), "Functions");
 		AbstractShader::generateDeclarations(code, this->structureDeclarations(), "Structures");
 		AbstractShader::generateDeclarations(code, this->uniformBlockDeclarations(), "Uniform blocks (OpenGL/Vulkan UBO)");
 		AbstractShader::generateDeclarations(code, this->shaderStorageBlockDeclarations(), "Shader storage blocks (OpenGL/Vulkan SSBO)");
 		AbstractShader::generateDeclarations(code, this->samplerDeclarations(), "Samplers");
 		AbstractShader::generateDeclarations(code, this->texelBufferDeclarations(), "Texel buffers");
 		AbstractShader::generateDeclarations(code, this->pushConstantBlockDeclarations(), "Push constant block (Vulkan)");
+
+		/* NOTE: The functions come LAST, right before main(): GLSL only lets a function name what is
+		 * declared above it, and a function may read a uniform block, a sampler or a push constant
+		 * (the heightfield's height and normal lookups read all three). They used to be emitted before
+		 * the structures and the resources, which only held because no function read any of them. */
+		AbstractShader::generateDeclarations(code, this->functionDeclarations(), "Functions");
 
 		/* NOTE: Generate the main() function code. */
 		code <<

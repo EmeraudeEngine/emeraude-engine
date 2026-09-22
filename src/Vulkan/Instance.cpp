@@ -926,6 +926,10 @@ namespace EmEn::Vulkan
 		 * buffer device addresses has to be off. Made conditional so the engine starts and says so,
 		 * rather than refusing to create a device and saying nothing. */
 		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderInt64, "shaderInt64", "uint64_t in shaders (BDA address reconstruction)");
+		/* A compute pass writing a storage image of a two-channel or 16-bit format (R16G16_SFLOAT, ...)
+		 * needs it: the heightfield bakes its normal clipmap that way (Graphics::Geometry::HeightfieldSurface::NormalFormat).
+		 * Universal on desktop GPUs and MoltenVK; a terrain on a device without it has no normals and says so. */
+		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderStorageImageExtendedFormats, "shaderStorageImageExtendedFormats", "compute writes to two-channel/16-bit storage images (the heightfield normal clipmap)");
 		/* Required for imageStore() from a FRAGMENT shader: the RTR trace writes its per-pixel glossy
 		 * cone width map (a storage image) next to its colour attachment. Without the feature the SPIR-V
 		 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to

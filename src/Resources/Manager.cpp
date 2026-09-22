@@ -41,7 +41,6 @@
 #include "Graphics/CubemapMovieResource.hpp"
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/FontResource.hpp"
-#include "Graphics/Geometry/AdaptiveVertexGridResource.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/RawIndexedVertexResource.hpp"
 #include "Graphics/Geometry/RawVertexResource.hpp"
@@ -555,7 +554,6 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Geometry::RawVertexResource), std::make_unique< RawVertexGeometries >("Raw geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::RawIndexedVertexResource), std::make_unique< RawIndexedVertexGeometries >("Raw indexed geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::VertexGridResource), std::make_unique< VertexGridGeometries >("Grid geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
-			m_containers.emplace(typeid(Graphics::Geometry::AdaptiveVertexGridResource), std::make_unique< AdaptiveVertexGridGeometries >("Adaptive grid geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Material::StandardResource), std::make_unique< StandardMaterials >("Standard material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< SimpleMeshes >("Simple mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
 			m_containers.emplace(typeid(Graphics::Renderable::MultiLayerMeshResource), std::make_unique< Meshes >("Mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));

@@ -28,12 +28,44 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
+#include <cstring>
 
 /* Local inclusions. */
 #include "GeometryShader.hpp"
+#include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "TesselationEvaluationShader.hpp"
 #include "Tracer.hpp"
 #include "VertexShader.hpp"
+
+namespace
+{
+	/** @brief A frame variable the heightfield rebuilds per pixel: its canonical name, the name the
+	 * interpolated vertex value is received under, and the GLSL rebuilding it from the pixel's
+	 * T/B/N (object space) and the flat rotations of the vertex stage. */
+	struct HeightfieldFrameOverride
+	{
+		const char * canonical;
+		const char * received;
+		const char * type;
+		const char * definition;
+	};
+
+	/* NOTE: Each definition is the vertex stage's own formula (VertexShader::synthesize*()), applied
+	 * to the pixel's vectors: world vectors = model matrix · v (not normalized), view vectors =
+	 * normalize(normal matrix · v), and TangentToWorldMatrix = normal matrix · mat3(T, B, N). */
+	constexpr std::array< HeightfieldFrameOverride, 9 > HeightfieldFrameOverrides{{
+		{EmEn::Saphir::Keys::ShaderVariable::NormalWorldSpace, "hfvNormalWorldSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "hfPixelToWorld * hfPixelNormal"},
+		{EmEn::Saphir::Keys::ShaderVariable::TangentWorldSpace, "hfvTangentWorldSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "hfPixelToWorld * hfPixelTangent"},
+		{EmEn::Saphir::Keys::ShaderVariable::BinormalWorldSpace, "hfvBinormalWorldSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "hfPixelToWorld * hfPixelBinormal"},
+		{EmEn::Saphir::Keys::ShaderVariable::NormalViewSpace, "hfvNormalViewSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "normalize(hfPixelToView * hfPixelNormal)"},
+		{EmEn::Saphir::Keys::ShaderVariable::TangentViewSpace, "hfvTangentViewSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "normalize(hfPixelToView * hfPixelTangent)"},
+		{EmEn::Saphir::Keys::ShaderVariable::BinormalViewSpace, "hfvBinormalViewSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "normalize(hfPixelToView * hfPixelBinormal)"},
+		{EmEn::Saphir::Keys::ShaderVariable::WorldTBNMatrix, "hfvWorldTBNMatrix", EmEn::Saphir::Keys::GLSL::Matrix3, "mat3(normalize(hfPixelToWorld * hfPixelTangent), normalize(hfPixelToWorld * hfPixelBinormal), normalize(hfPixelToWorld * hfPixelNormal))"},
+		{EmEn::Saphir::Keys::ShaderVariable::ViewTBNMatrix, "hfvViewTBNMatrix", EmEn::Saphir::Keys::GLSL::Matrix3, "transpose(mat3(normalize(hfPixelToView * hfPixelTangent), normalize(hfPixelToView * hfPixelBinormal), normalize(hfPixelToView * hfPixelNormal)))"},
+		{EmEn::Saphir::Keys::ShaderVariable::TangentToWorldMatrix, "hfvTangentToWorldMatrix", EmEn::Saphir::Keys::GLSL::Matrix3, "hfPixelToView * mat3(hfPixelTangent, hfPixelBinormal, hfPixelNormal)"}
+	}};
+}
 
 namespace EmEn::Saphir
 {
@@ -128,6 +160,24 @@ namespace EmEn::Saphir
 
 		for ( const auto & stageOutput : vertexShader.stageOutputs() )
 		{
+			if ( m_heightfieldPixelFrameEnabled )
+			{
+				const auto * override = std::ranges::find_if(HeightfieldFrameOverrides, [&stageOutput] (const auto & entry) {
+					return std::strcmp(entry.canonical, stageOutput.name()) == 0;
+				});
+
+				if ( override != HeightfieldFrameOverrides.end() )
+				{
+					/* Same location, same type: the interpolated value is still received (the interface
+					 * must match), under a name nothing reads. */
+					this->declare(StageInput{stageOutput.location(), stageOutput.type(), override->received, stageOutput.interpolation(), stageOutput.arraySize()});
+
+					m_heightfieldOverrides.emplace_back(override->canonical);
+
+					continue;
+				}
+			}
+
 			this->declare(StageInput{stageOutput});
 		}
 
@@ -200,8 +250,30 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	FragmentShader::onSourceCodeGeneration (Generator::Abstract & /*generator*/, std::stringstream & code, std::string & /*topInstructions*/, std::string & /*outputInstructions*/) noexcept
+	FragmentShader::onSourceCodeGeneration (Generator::Abstract & /*generator*/, std::stringstream & code, std::string & topInstructions, std::string & /*outputInstructions*/) noexcept
 	{
+		/* The surface frame of THIS pixel, first thing in main(): every canonical frame variable the
+		 * vertex stage handed over is defined here, from the normal clipmap. */
+		if ( m_heightfieldPixelFrameEnabled )
+		{
+			std::string prelude =
+				"\t" "/* Heightfield surface: the frame of this pixel, from the normal clipmap. */" "\n"
+				"\t" "const vec3 hfPixelNormal = hfPixelNormalAt(" + std::string{Geometry::HeightfieldSurface::PixelPositionVarying} + ");" "\n"
+				"\t" "const vec3 hfPixelTangent = normalize(vec3(hfPixelNormal.y, -hfPixelNormal.x, 0.0));" "\n"
+				"\t" "const vec3 hfPixelBinormal = cross(hfPixelNormal, hfPixelTangent);" "\n";
+
+			for ( const auto * canonical : m_heightfieldOverrides )
+			{
+				const auto * override = std::ranges::find_if(HeightfieldFrameOverrides, [canonical] (const auto & entry) {
+					return std::strcmp(entry.canonical, canonical) == 0;
+				});
+
+				prelude += "\t" "const " + std::string{override->type} + " " + canonical + " = " + override->definition + ";" "\n";
+			}
+
+			topInstructions.insert(0, prelude + "\n");
+		}
+
 		/* Specific input shader code declarations. */
 		AbstractShader::generateDeclarations(code, m_stageInputs, "Stage inputs (From previous stage)");
 		AbstractShader::generateDeclarations(code, m_inputBlocks, "Input blocks (From previous stage)");

@@ -31,6 +31,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
+#include "HeightfieldSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "SkinningLayoutHelper.hpp"
@@ -90,8 +91,9 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		/* Enable the bone matrix SSBO set for skeletal meshes. */
-		if ( this->isSkeletalAnimationEnabled() )
+		/* Enable the bone matrix SSBO set for skeletal meshes, or the surface of a heightfield: the
+		 * shadow map must hold the DISPLACED terrain, selected and morphed like the one it falls on. */
+		if ( this->isSkeletalAnimationEnabled() || this->isHeightfieldSurfaceEnabled() )
 		{
 			setIndexes.enableSet(SetType::PerModel);
 		}
@@ -176,14 +178,16 @@ namespace EmEn::Saphir::Generator
 			descriptorSetLayouts.emplace_back(descriptorSetLayout);
 		}
 
-		/* Add the skinning SSBO descriptor set layout for skeletal meshes. */
+		/* Add the skinning SSBO descriptor set layout for skeletal meshes, or the heightfield surface's. */
 		if ( setIndexes.isSetEnabled(SetType::PerModel) )
 		{
-			auto descriptorSetLayout = getSkinningDescriptorSetLayout(renderer.layoutManager());
+			auto descriptorSetLayout = this->isHeightfieldSurfaceEnabled() ?
+				getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
+				getSkinningDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{
-				Tracer::error(ClassId, "Unable to get the skinning SSBO descriptor set layout !");
+				Tracer::error(ClassId, "Unable to get the PerModel descriptor set layout (skinning SSBO or heightfield surface) !");
 
 				return false;
 			}
@@ -279,6 +283,18 @@ namespace EmEn::Saphir::Generator
 			isCubemap /* enableCubemapMode - only for cubemap, NOT for CSM */
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
+
+		/* Heightfield surface, before the matrices push-constant block (which appends the node). The
+		 * depth pass needs positions only: no pixel frame. */
+		if ( this->isHeightfieldSurfaceEnabled() )
+		{
+			vertexShader->enableHeightfieldSurface();
+
+			if ( !declareHeightfieldSurface(*vertexShader, program.setIndexes().set(SetType::PerModel), false) )
+			{
+				return false;
+			}
+		}
 
 		/* Instanced motion history: fixes the per-instance VBO stride (previous model matrix). */
 		if ( this->isInstanceMotionHistoryEnabled() )
@@ -505,6 +521,9 @@ namespace EmEn::Saphir::Generator
 				 * else, but a key must state what it depends on rather than rely on that. */
 				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
 			}
+
+			/* A heightfield surface: another vertex stage and another PerModel layout. */
+			hashCombine(hash, static_cast< size_t >(this->isHeightfieldSurfaceEnabled()));
 		}
 
 		/* 4. Layer index. */

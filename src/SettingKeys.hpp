@@ -446,15 +446,16 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 
-			/* Triangle budget for the BLAS of an ADAPTIVE terrain grid (Geometry::AdaptiveVertexGridResource).
-			 * That geometry is a TriangleStrip whose index buffer holds every LOD of every sector at once,
-			 * so its BLAS is regenerated from the grid instead: the finest LOD step whose triangle count
-			 * fits this budget. A BLAS has no view-dependent LOD selection, hence a single fixed proxy.
-			 * The full-resolution surface is quadratic in the division count and unbounded: a 4096-division
-			 * grid is 33.5 M triangles and was MEASURED at +2471 MiB of VRAM (5357 -> 7828 MiB of 8192 on
-			 * the `terrain` demo). At 2 M the same grid drops to LOD step 4 (2.1 M triangles) while a
-			 * 128-division one (the `forest` floor, 32 768 triangles) keeps its exact surface.
-			 * Raising it buys exactness for the RT occlusion of fine relief, and costs VRAM quadratically. */
+			/* Triangle budget for the ray-tracing proxy of a TERRAIN (Geometry::CDLODTerrainResource).
+			 * The terrain draws a flat patch its vertex stage displaces, so nothing of its rendering buffers
+			 * can be traced: a fixed proxy (a BLAS has no view-dependent LOD) is built on the CPU from the
+			 * height grid, over `rayTracingProxySize` (4096 m) around the camera, at the finest power-of-two
+			 * step whose triangle count fits this budget. The full-resolution surface is quadratic in the
+			 * division count and unbounded: 4096 m at 1 m is 33.5 M triangles, MEASURED at +2471 MiB of VRAM
+			 * on the former adaptive grid. At 2 M that window takes step 8 (524 288 triangles, 51 ms to
+			 * build, 2026-09-22) — step 4 would be 2.1 M, one hair over — while a 128-division floor keeps
+			 * its exact surface. Raising it buys exactness for the RT occlusion of fine relief, and costs
+			 * VRAM quadratically. */
 			constexpr auto GraphicsRayTracingTerrainBLASMaxTrianglesKey{"Core/Graphics/RayTracing/TerrainBLASMaxTriangles"};
 			constexpr auto DefaultGraphicsRayTracingTerrainBLASMaxTriangles{2000000U};
 

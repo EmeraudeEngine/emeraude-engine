@@ -37,6 +37,7 @@
 /* Local inclusions. */
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
@@ -72,52 +73,11 @@ namespace EmEn::Graphics::Renderable
 	bool
 	TerrainResource::createGeometryFromLocalData () noexcept
 	{
-		const auto cellCount = this->visibleCellCount();
-		const auto divisions = m_localData.squaredQuadCount();
-		const auto fineCell = m_localData.quadSize();
-
-		m_windowSnapCells = 0;
-
-		/* The far mesh, when the numbers allow it. Every constraint here is what lets the far mesh MEET
-		 * the window: same source points at the shared vertices, and a hole that is a whole number of far
-		 * sectors. A window already covering the grid needs none. */
-		if ( m_farCellSize > 0.0F && fineCell > 0.0F && cellCount < divisions )
+		/* The grid is shared, not copied: the geometry builds its pyramid from it and keeps it for the
+		 * clip level updates and the ray-tracing proxy, the physics reads it through getLevelAt(). */
+		if ( !m_geometry->load(m_localData, m_parameters) )
 		{
-			const auto farStep = static_cast< uint32_t >(std::lround(m_farCellSize / fineCell));
-			const auto farCell = fineCell * static_cast< float >(farStep);
-			const auto farSectorCells = farStep > 0 ? static_cast< uint32_t >(std::lround(m_farSectorSize / farCell)) : 0U;
-			const auto snapCells = farSectorCells * farStep;
-
-			if ( farStep == 0 || !isPowerOfTwo(farStep) || divisions % farStep != 0 )
-			{
-				TraceInfo{ClassId} << "Terrain '" << this->name() << "': no far mesh, its cell (" << m_farCellSize << " m) is not a power-of-two multiple of the grid's (" << fineCell << " m) dividing " << divisions << " cells.";
-			}
-			else if ( farSectorCells == 0 || (divisions / farStep) % farSectorCells != 0 || cellCount % snapCells != 0 )
-			{
-				TraceInfo{ClassId} << "Terrain '" << this->name() << "': no far mesh, its sector (" << m_farSectorSize << " m) must cut both the far grid (" << (divisions / farStep) << " cells) and the window (" << cellCount << " cells) evenly.";
-			}
-			else
-			{
-				const auto farGrid = m_localData.coarsened(farStep);
-
-				if ( farGrid.isValid() && m_geometry->setFarGrid(farGrid, (divisions / farStep) / farSectorCells, m_farDepthOffset) )
-				{
-					m_windowSnapCells = snapCells;
-
-					TraceInfo{ClassId} <<
-						"Terrain '" << this->name() << "': far mesh of " << farGrid.pointCount() << " points at " << farCell << " m, " <<
-						((divisions / farStep) / farSectorCells) << "x" << ((divisions / farStep) / farSectorCells) << " sectors of " << (farCell * static_cast< float >(farSectorCells)) <<
-						" m, " << m_farDepthOffset << " m below the terrain; the window snaps to " << snapCells << " cells.";
-				}
-			}
-		}
-
-		/* The first window, centred on the origin — snapped to the far sector when there is one. */
-		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, cellCount, m_windowSnapCells);
-
-		if ( !m_geometry->load(m_localData.subGrid(m_windowCenter, cellCount, m_windowSnapCells)) )
-		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+			TraceError{ClassId} << "Unable to build the CDLOD geometry of terrain '" << this->name() << "' !";
 
 			return false;
 		}
@@ -125,86 +85,13 @@ namespace EmEn::Graphics::Renderable
 		return true;
 	}
 
-	uint32_t
-	TerrainResource::visibleCellCount () const noexcept
-	{
-		const auto quadSize = m_localData.quadSize();
-
-		if ( quadSize <= 0.0F )
-		{
-			return 1;
-		}
-
-		return std::max(1U, static_cast< uint32_t >(std::round(m_visibleSize / quadSize)));
-	}
-
 	void
 	TerrainResource::updateVisibility (const Vector< 3, float > & worldPosition) noexcept
 	{
-		/* Logic thread, once per cycle. One slide in flight at a time. */
-		if ( m_geometry->isUpdating() )
-		{
-			return;
-		}
-
-		/* The slide fires on the distance to the window's EDGE: the margin is what the camera must
-		 * always have ahead of it. A margin the window cannot honour is pulled back (a window can
-		 * only be recentred, never widened here). */
-		const auto halfWindow = m_visibleSize * 0.5F;
-		const auto margin = std::min(m_slideMargin, halfWindow * 0.75F);
-		const auto distanceToCenter = Vector< 2, float >::distance(m_windowCenter, {worldPosition[X], worldPosition[Z]});
-
-		if ( distanceToCenter <= halfWindow - margin )
-		{
-			return;
-		}
-
-		/* Where the window CAN go: snapped and clamped the way the extraction will do it. The slide is
-		 * worth its 896 MiB only if that window differs from the one we hold by more than the slack
-		 * itself. ⚠️ Against the grid border the camera stays past the threshold for ever (the window
-		 * cannot follow it), and testing the wanted centre for mere INEQUALITY regenerated the whole
-		 * window for every metre the camera drifted along the border — four 896 MiB uploads in eight
-		 * seconds, measured 2026-09-22. The distance between the two centres is the honest test. */
-		const auto cellCount = this->visibleCellCount();
-		const auto wantedCenter = m_localData.subGridCenter({worldPosition[X], worldPosition[Z]}, cellCount, m_windowSnapCells);
-
-		if ( Vector< 2, float >::distance(wantedCenter, m_windowCenter) <= halfWindow - margin )
-		{
-			return;
-		}
-
-		/* The slot is claimed HERE, before the work leaves this thread: the next cycle must see it
-		 * taken even if the worker has not started yet. */
-		if ( !m_geometry->beginUpdate() )
-		{
-			return;
-		}
-
-		TraceInfo{ClassId} <<
-			"Terrain '" << this->name() << "' slides its window to (" << wantedCenter[0] << ", " << wantedCenter[1] << "): "
-			"the camera is " << (halfWindow - distanceToCenter) << " m from the edge (margin " << margin << " m).";
-
-		m_windowCenter = wantedCenter;
-
-		/* The engine's pool, never a raw std::thread: its constructor throws on exhaustion and the
-		 * cascade is built without exceptions. The worker EXTRACTS the window from the full grid (a
-		 * read of data nothing mutates after load — 26 ms that used to stall the logic tick), builds
-		 * and STAGES it; the render thread publishes it (AdaptiveVertexGridResource::updateVideoMemory()). */
-		const auto threadPool = this->serviceProvider().primaryServices().threadPool();
-
-		const auto enqueued = threadPool != nullptr && threadPool->enqueue([self = std::static_pointer_cast< TerrainResource >(this->shared_from_this()), geometry = m_geometry, wantedCenter, cellCount, snapCells = m_windowSnapCells] () {
-			if ( !geometry->updateData(self->m_localData.subGrid(wantedCenter, cellCount, snapCells)) )
-			{
-				TraceError{ClassId} << "Unable to stage the new terrain window of '" << geometry->name() << "' !";
-			}
-		});
-
-		if ( !enqueued )
-		{
-			TraceError{ClassId} << "Unable to hand the terrain window of '" << this->name() << "' to the thread pool !";
-
-			m_geometry->cancelUpdate();
-		}
+		/* Logic thread, once per cycle. The clipmap follows the camera on the render thread, every
+		 * frame (Geometry::CDLODTerrainResource::updateSurfaceVideoMemory()); only the ray-tracing proxy,
+		 * a CPU-built surface, is re-centred from here. */
+		m_geometry->updateRayTracingProxy(worldPosition);
 	}
 
 	bool
@@ -216,24 +103,24 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the local data. */
-		if ( !m_localData.initializeByGridSize(DefaultGridSize, DefaultGridDivision) )
+		if ( !m_localData->initializeByGridSize(DefaultGridSize, DefaultGridDivision) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		/* Create the initial adaptive geometry (visible part). */
+		/* Create the CDLOD geometry. */
 		if ( !this->createGeometryFromLocalData() )
 		{
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
 
 		if ( !this->setMaterial(this->serviceProvider().container< Material::StandardResource >()->getDefaultResource()) )
 		{
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -297,9 +184,9 @@ namespace EmEn::Graphics::Renderable
 		/* Checks size and division options... */
 		const auto gridSize = FastJSON::getValue< float >(data, JKGridSize).value_or(DefaultGridSize);
 		const auto gridDivision = FastJSON::getValue< uint32_t >(data, JKGridDivision).value_or(DefaultGridDivision);
-		m_visibleSize = FastJSON::getValue< float >(data, JKGridVisibleSize).value_or(DefaultVisibleSize);
-		this->setSlideMargin(FastJSON::getValue< float >(data, JKGridSlideMargin).value_or(DefaultSlideMargin));
-		this->setFarMesh(FastJSON::getValue< float >(data, JKGridFarCellSize).value_or(DefaultFarCellSize), FastJSON::getValue< float >(data, JKGridFarSectorSize).value_or(DefaultFarSectorSize), FastJSON::getValue< float >(data, JKGridFarDepthOffset).value_or(DefaultFarDepthOffset));
+		m_parameters.detailDistance = FastJSON::getValue< float >(data, JKGridDetailDistance).value_or(m_parameters.detailDistance);
+		m_parameters.patchQuads = FastJSON::getValue< uint32_t >(data, JKGridPatchQuads).value_or(m_parameters.patchQuads);
+		m_parameters.clipTexels = FastJSON::getValue< uint32_t >(data, JKGridClipTexels).value_or(m_parameters.clipTexels);
 
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
@@ -314,7 +201,7 @@ namespace EmEn::Graphics::Renderable
 		/* Then, we actually load the data. */
 
 		/* Create the local data. */
-		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+		if ( !m_localData->initializeByGridSize(gridSize, gridDivision) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 
@@ -391,7 +278,7 @@ namespace EmEn::Graphics::Renderable
 					const auto mode = magic_enum::enum_cast< PointTransformationMode >(modeString).value();
 
 					/* Applies the height map on the geometry. */
-					m_localData.applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
+					m_localData->applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
 				}
 			}
 			else
@@ -417,7 +304,7 @@ namespace EmEn::Graphics::Renderable
 					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
 					const auto perlinMode = magic_enum::enum_cast< EmEn::Base::VertexFactory::PointTransformationMode >(modeString).value();
 
-					m_localData.applyPerlinNoise(perlinSize, perlinScale, perlinMode);
+					m_localData->applyPerlinNoise(perlinSize, perlinScale, perlinMode);
 				}
 			}
 			else
@@ -429,16 +316,16 @@ namespace EmEn::Graphics::Renderable
 		/* Checks if the UV multiplier parameter. */
 		const auto value = FastJSON::getValue< float >(data, FastJSON::UVMultiplierKey).value_or(1.0F);
 
-		m_localData.setUVMultiplier(value);
+		m_localData->setUVMultiplier(value);
 
 		// TODO: Check to enable vertex color from JSON.
 		//if ( vertexColorMap != nullptr )
 		//	m_geometry->enableVertexColor(vertexColorMap);
 
-		/* Create the initial adaptive geometry (visible part). */
+		/* Create the CDLOD geometry. */
 		if ( !this->createGeometryFromLocalData() )
 		{
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -455,19 +342,19 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the local data. */
-		m_localData.setUVMultiplier(UVMultiplier);
+		m_localData->setUVMultiplier(UVMultiplier);
 
-		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+		if ( !m_localData->initializeByGridSize(gridSize, gridDivision) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		/* Create the initial adaptive geometry (visible part). */
+		/* Create the CDLOD geometry. */
 		if ( !this->createGeometryFromLocalData() )
 		{
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -504,7 +391,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Initialize local data. */
-		if ( !m_localData.initializeByGridSize(gridSize, division) )
+		if ( !m_localData->initializeByGridSize(gridSize, division) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 
@@ -512,18 +399,18 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Apply diamond square algorithm. */
-		m_localData.setUVMultiplier(UVMultiplier);
-		m_localData.applyDiamondSquare(noise);
+		m_localData->setUVMultiplier(UVMultiplier);
+		m_localData->applyDiamondSquare(noise);
 
 		if ( !Utility::isZero(shiftHeight) )
 		{
-			m_localData.shiftHeight(shiftHeight);
+			m_localData->shiftHeight(shiftHeight);
 		}
 
-		/* Create the initial adaptive geometry (visible part). */
+		/* Create the CDLOD geometry. */
 		if ( !this->createGeometryFromLocalData() )
 		{
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -536,7 +423,7 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
 
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -555,7 +442,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Initialize local data. */
-		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+		if ( !m_localData->initializeByGridSize(gridSize, gridDivision) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 
@@ -563,18 +450,18 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Apply perlin noise. */
-		m_localData.setUVMultiplier(UVMultiplier);
-		m_localData.applyPerlinNoise(noise.size, noise.factor);
+		m_localData->setUVMultiplier(UVMultiplier);
+		m_localData->applyPerlinNoise(noise.size, noise.factor);
 
 		if ( !Utility::isZero(shiftHeight) )
 		{
-			m_localData.shiftHeight(shiftHeight);
+			m_localData->shiftHeight(shiftHeight);
 		}
 
-		/* Create the initial adaptive geometry (visible part). */
+		/* Create the CDLOD geometry. */
 		if ( !this->createGeometryFromLocalData() )
 		{
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -587,7 +474,7 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
 
-			m_localData.clear();
+			m_localData->clear();
 
 			return this->setLoadSuccess(false);
 		}

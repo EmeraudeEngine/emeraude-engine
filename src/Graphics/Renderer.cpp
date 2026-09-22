@@ -1528,6 +1528,7 @@ namespace EmEn::Graphics
 			 * everything else this frame reads. */
 			this->flushMaterialVideoMemoryUpdates();
 			this->flushGeometryVideoMemoryUpdates();
+			this->updateSurfaceGeometries(scene->frameReadStateIndex());
 
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
@@ -1776,6 +1777,7 @@ namespace EmEn::Graphics
 			 * everything else this frame reads. */
 			this->flushMaterialVideoMemoryUpdates();
 			this->flushGeometryVideoMemoryUpdates();
+			this->updateSurfaceGeometries(scene->frameReadStateIndex());
 
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
@@ -3277,6 +3279,67 @@ namespace EmEn::Graphics
 				{
 					TraceError{ClassId} << "Unable to publish the staged vertex data of geometry '" << geometry->name() << "' !";
 				}
+			}
+		}
+	}
+
+	void
+	Renderer::registerSurfaceGeometry (std::weak_ptr< Geometry::Interface > geometry) noexcept
+	{
+		if ( geometry.expired() )
+		{
+			return;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_surfaceGeometriesAccess};
+
+		m_surfaceGeometries.emplace_back(std::move(geometry));
+	}
+
+	void
+	Renderer::updateSurfaceGeometries (uint32_t readStateIndex) noexcept
+	{
+		std::vector< std::shared_ptr< Geometry::Interface > > alive;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_surfaceGeometriesAccess};
+
+			if ( m_surfaceGeometries.empty() )
+			{
+				return;
+			}
+
+			std::erase_if(m_surfaceGeometries, [] (const auto & weakGeometry) {
+				return weakGeometry.expired();
+			});
+
+			alive.reserve(m_surfaceGeometries.size());
+
+			for ( const auto & weakGeometry : m_surfaceGeometries )
+			{
+				if ( auto geometry = weakGeometry.lock(); geometry != nullptr )
+				{
+					alive.emplace_back(std::move(geometry));
+				}
+			}
+		}
+
+		/* The camera the levels of detail are picked for in every pass of this frame (shadows included,
+		 * Scenes::Scene::castShadows()): the surface must be centred where they will be selected. */
+		const auto mainRenderTarget = this->mainRenderTarget();
+
+		if ( mainRenderTarget == nullptr )
+		{
+			return;
+		}
+
+		const auto lodViewPosition = mainRenderTarget->viewMatrices().position(readStateIndex);
+
+		for ( const auto & geometry : alive )
+		{
+			if ( geometry->isCreated() && !geometry->updateSurfaceVideoMemory(lodViewPosition, m_currentFrameIndex) )
+			{
+				TraceError{ClassId} << "Unable to update the synthesized surface of geometry '" << geometry->name() << "' !";
 			}
 		}
 	}

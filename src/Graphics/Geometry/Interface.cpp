@@ -153,9 +153,17 @@ namespace EmEn::Graphics::Geometry
 			return;
 		}
 
-		const auto * vbo = this->vertexBufferObject();
+		/* A heightfield draws a flat patch its vertex stage displaces: what is traced is its dedicated
+		 * proxy, never the rendering buffer (dedicatedRTVertexBufferObject()). */
+		const auto * vbo = this->rtVertexBufferObject();
+		const auto * dedicatedIBO = this->dedicatedRTIndexBufferObject();
 
 		if ( vbo == nullptr || !vbo->isCreated() )
+		{
+			return;
+		}
+
+		if ( this->dedicatedRTVertexBufferObject() != nullptr && (dedicatedIBO == nullptr || !dedicatedIBO->isCreated()) )
 		{
 			return;
 		}
@@ -186,7 +194,14 @@ namespace EmEn::Graphics::Geometry
 		std::vector< uint32_t > convertedIndices;
 		uint32_t totalIndexCount = 0;
 
-		if ( topo == Topology::TriangleStrip )
+		if ( dedicatedIBO != nullptr )
+		{
+			/* The proxy is a triangle list by contract, whatever the rendering topology. */
+			sharedHeader.indexBuffer = dedicatedIBO->handle();
+			sharedHeader.indexType = VK_INDEX_TYPE_UINT32;
+			totalIndexCount = dedicatedIBO->indexCount();
+		}
+		else if ( topo == Topology::TriangleStrip )
 		{
 			convertedIndices = this->generateTriangleListIndicesForRT();
 

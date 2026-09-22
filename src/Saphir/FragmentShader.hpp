@@ -171,6 +171,26 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Rebuilds the SURFACE FRAME per pixel from the heightfield's normal clipmap instead of
+			 * interpolating the vertex stage's.
+			 * @note Every frame variable the vertex stage hands over (normal, tangent, binormal and the three
+			 * TBN matrices, in world or view space) is received under another name, and main() opens by
+			 * defining the canonical name from the normal of THIS pixel — so the material code, which reads
+			 * the canonical names, is untouched. Vulkan matches stage interfaces by LOCATION, never by name,
+			 * which is what makes the rename free. The normal comes from the finest clip level that covers
+			 * the pixel and is not finer than its footprint (Graphics::Geometry::HeightfieldSurface): a
+			 * distant ridge is lit by its filtered normal, not by the 1 m one of the vertex that happens to
+			 * be there. Requires VertexShader::enableHeightfieldPixelFrame() and the surface set declared
+			 * in this stage (Generator::declareHeightfieldSurface()).
+			 * @return void
+			 */
+			void
+			enableHeightfieldPixelFrame () noexcept
+			{
+				m_heightfieldPixelFrameEnabled = true;
+			}
+
+			/**
 			 * @brief Copies output from a vertex shader to this fragment shader.
 			 * @warning The vertex shader must already have its source code generated (@c isGenerated() must be
 			 * true), otherwise this fails. A vertex shader with no stage output and no output block (i.e. it only
@@ -236,6 +256,8 @@ namespace EmEn::Saphir
 			std::vector< Declaration::StageInput > m_stageInputs;
 			std::vector< Declaration::InputBlock > m_inputBlocks;
 			std::vector< Declaration::OutputFragment > m_outputFragments;
+			std::vector< const char * > m_heightfieldOverrides; ///< Canonical frame variables received renamed (enableHeightfieldPixelFrame()).
 			uint32_t m_samples{1};
+			bool m_heightfieldPixelFrameEnabled{false};
 	};
 }

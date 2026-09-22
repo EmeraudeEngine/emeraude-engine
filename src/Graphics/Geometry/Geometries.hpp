@@ -31,7 +31,6 @@
 #include <string_view>
 
 /* Local inclusions for usages. */
-#include "AdaptiveVertexGridResource.hpp"
 #include "IndexedVertexResource.hpp"
 #include "RawIndexedVertexResource.hpp"
 #include "RawVertexResource.hpp"
@@ -40,12 +39,11 @@
 
 namespace EmEn::Graphics::Geometry
 {
-	constexpr auto Types = std::array< std::string_view, 6 >{
+	constexpr auto Types = std::array< std::string_view, 5 >{
 		VertexResource::ClassId,
 		IndexedVertexResource::ClassId,
 		RawVertexResource::ClassId,
 		RawIndexedVertexResource::ClassId,
-		VertexGridResource::ClassId,
-		AdaptiveVertexGridResource::ClassId
+		VertexGridResource::ClassId
 	};
 }

@@ -164,7 +164,8 @@ namespace EmEn::Graphics::Material
 			return true;
 		}
 
-		if ( !geometry.primaryTextureCoordinatesEnabled() )
+		/* NOTE: A heightfield has no UV attribute and still gives UVs: its vertex stage synthesizes them. */
+		if ( !geometry.surfaceProvidesPrimaryTextureCoordinates() )
 		{
 			TraceError{material.classLabel()} <<
 				"The geometry '" << geometry.name() << "' has no 2D primary texture coordinates "

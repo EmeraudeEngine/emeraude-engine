@@ -904,6 +904,14 @@ namespace EmEn::Saphir
 				constexpr auto TransformationMatrix{"transformationMatrix"};
 				/* NOTE : Animated texture frame index. */
 				constexpr auto FrameIndex{"frameIndex"};
+				/* NOTE : Heightfield surface (CDLOD), pushed per quadtree node: xy = node origin (world
+				 * XZ, minimum corner), z = node size (m), w = level of detail. See
+				 * Graphics::Geometry::HeightfieldSurface. */
+				constexpr auto HeightfieldNode{"heightfieldNode"};
+				/* NOTE : Heightfield surface: the camera the levels of detail were selected for (xyz,
+				 * world), per PASS — a reflection probe selects from its own point of view, a shadow map
+				 * from the main camera's. */
+				constexpr auto HeightfieldCamera{"heightfieldCamera"};
 				/* NOTE : Post-processing. */
 				constexpr auto FrameSize{"frameSize"};
 				constexpr auto Time{"time"};

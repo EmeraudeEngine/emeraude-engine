@@ -60,11 +60,10 @@ namespace EmEn::Graphics::Renderable
 	static constexpr auto JKFlip{"Flip"};
 	static constexpr auto JKGridSize{"GridSize"};
 	static constexpr auto JKGridDivision{"GridDivision"};
-	static constexpr auto JKGridVisibleSize{"GridVisibleSize"};
-	static constexpr auto JKGridSlideMargin{"GridSlideMargin"};
-	static constexpr auto JKGridFarCellSize{"GridFarCellSize"};
-	static constexpr auto JKGridFarSectorSize{"GridFarSectorSize"};
-	static constexpr auto JKGridFarDepthOffset{"GridFarDepthOffset"};
+	/* CDLOD terrain (Graphics::Geometry::CDLODTerrainParameters). */
+	static constexpr auto JKGridDetailDistance{"GridDetailDistance"};
+	static constexpr auto JKGridPatchQuads{"GridPatchQuads"};
+	static constexpr auto JKGridClipTexels{"GridClipTexels"};
 	static constexpr auto JKHeightMap{"HeightMap"};
 	static constexpr auto JKImageName{"ImageName"};
 	static constexpr auto JKInverse{"Inverse"};

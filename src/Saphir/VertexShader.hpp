@@ -459,6 +459,63 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Enables the HEIGHTFIELD surface: the vertex is a point of a shared flat patch, placed
+			 * by the per-node push constants and displaced by the height clipmap
+			 * (Graphics::Geometry::HeightfieldSurface).
+			 * @note The patch buffer holds positions only: the normal, the tangent frame and the primary
+			 * texture coordinates are SYNTHESIZED here and every consumer reads them through
+			 * vertexFrameExpression() — no normal, tangent, binormal or UV attribute is declared. The
+			 * geomorph of Strugar's CDLOD collapses the odd vertices of a node onto the next level's
+			 * lattice over the last part of its range, and the height blends from the node's clip level
+			 * to the next one with the SAME factor, so a fully morphed vertex reads what the coarser
+			 * neighbour reads.
+			 * @warning ⚠️ The patch's object space IS the world (a heightfield answers ground levels in
+			 * world coordinates): the node origin and the camera are pushed in world coordinates.
+			 * @return void
+			 */
+			void
+			enableHeightfieldSurface () noexcept
+			{
+				m_heightfieldSurfaceEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the heightfield surface is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHeightfieldSurfaceEnabled () const noexcept
+			{
+				return m_heightfieldSurfaceEnabled;
+			}
+
+			/**
+			 * @brief Hands the fragment stage what it needs to rebuild the surface frame PER PIXEL: the
+			 * world XZ, and the flat rotations the vertex stage applies to a surface vector (object to
+			 * world, and the normal matrix, object to view).
+			 * @note Only with enableHeightfieldSurface(). The fragment side is
+			 * FragmentShader::enableHeightfieldPixelFrame().
+			 * @return void
+			 */
+			void
+			enableHeightfieldPixelFrame () noexcept
+			{
+				m_heightfieldPixelFrameEnabled = true;
+			}
+
+			/**
+			 * @brief Returns the GLSL expression holding the object-space tangent, binormal or normal of the vertex.
+			 * @note ⚠️ The ONE place those expressions are spelled: skinned vectors, synthesized heightfield
+			 * vectors or the raw attributes. There were seven copies of the skinning ternary before the
+			 * heightfield was added.
+			 * @param vectorType Tangent, Binormal or Normal.
+			 * @return const char * Null for any other attribute.
+			 */
+			[[nodiscard]]
+			const char * vertexFrameExpression (Graphics::VertexAttributeType vectorType) const noexcept;
+
+			/**
 			 * @brief Enables skeletal skinning in this vertex shader.
 			 * @return void
 			 */
@@ -488,6 +545,40 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			std::string generateVegetationWindCode (const char * baseExpression) const noexcept;
+
+			/**
+			 * @brief Returns the GLSL block placing and displacing a heightfield vertex, prefixed to main().
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string generateHeightfieldSurfaceCode () const noexcept;
+
+			/**
+			 * @brief Declares a tangent-frame attribute — unless the heightfield synthesizes it.
+			 * @note Records that the heightfield must emit its frame (it is otherwise skipped, the shadow
+			 * pass needs positions only).
+			 * @param vectorType Tangent, Binormal or Normal.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declareFrameAttribute (Graphics::VertexAttributeType vectorType) noexcept;
+
+			/**
+			 * @brief Resolves the GLSL expression of the model matrix that takes a vector to world space.
+			 * @param expression Receives the expression.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool resolveWorldModelMatrix (std::string & expression) noexcept;
+
+			/**
+			 * @brief Declares and writes the per-pixel frame outputs of enableHeightfieldPixelFrame().
+			 * @param generator A reference to the generator (output locations).
+			 * @param outputInstructions The output instructions of main().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declareHeightfieldPixelFrameOutputs (Generator::Abstract & generator, std::string & outputInstructions) noexcept;
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
 			[[nodiscard]]
@@ -778,6 +869,10 @@ namespace EmEn::Saphir
 			bool m_MDIEnabled{false};
 			bool m_skinningEnabled{false};
 			bool m_vegetationWindEnabled{false};
+			bool m_heightfieldSurfaceEnabled{false};
+			bool m_heightfieldPixelFrameEnabled{false};
+			bool m_heightfieldFrameRequested{false};
+			bool m_heightfieldTextureCoordinatesRequested{false};
 			bool m_previousWindRequired{false};
 			bool m_instanceTransformsEnabled{false};
 			bool m_infinityViewEnabled{false};

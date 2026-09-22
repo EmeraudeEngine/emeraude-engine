@@ -106,6 +106,10 @@ namespace EmEn::Saphir::Generator
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "nearPlane");
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "farPlane");
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "tanHalfFovY");
+			/* NOTE: Mirror of Graphics::PostProcessor::PushConstants, which is what the CPU pushes (28 B).
+			 * Missing here, the block declared 24 B and the push overran the range — hidden until
+			 * 2026-09-22 by PushConstantBlock::bytes() counting the vec2 frame size as 16 B. */
+			pushConstantBlock.addMember(Declaration::VariableType::Float, "deltaTime");
 
 			if ( !vertexShader->declare(pushConstantBlock) )
 			{
@@ -159,6 +163,10 @@ namespace EmEn::Saphir::Generator
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "nearPlane");
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "farPlane");
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "tanHalfFovY");
+			/* NOTE: Mirror of Graphics::PostProcessor::PushConstants, which is what the CPU pushes (28 B).
+			 * Missing here, the block declared 24 B and the push overran the range — hidden until
+			 * 2026-09-22 by PushConstantBlock::bytes() counting the vec2 frame size as 16 B. */
+			pushConstantBlock.addMember(Declaration::VariableType::Float, "deltaTime");
 
 			if ( !fragmentShader->declare(pushConstantBlock) )
 			{

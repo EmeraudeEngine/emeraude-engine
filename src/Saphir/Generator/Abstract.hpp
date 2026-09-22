@@ -432,6 +432,19 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
+			 * @brief Returns whether the geometry is a heightfield surface its vertex stage builds.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHeightfieldSurfaceEnabled () const noexcept
+			{
+				const auto * geometry = this->getGeometryInterface();
+
+				return geometry != nullptr && geometry->heightfieldSurfaceEnabled();
+			}
+
+			/**
 			 * @brief Returns whether the generator will use a material.
 			 * @note The material is provided by the constructor with a renderable instance.
 			 * @return bool

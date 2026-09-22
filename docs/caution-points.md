@@ -386,177 +386,70 @@ if ( materialType == StandardResource::ClassId )
 
 ## Ray Tracing / Acceleration Structures
 
-### Fixed: every ADAPTIVE TERRAIN was absent from the TLAS, and its IBO cannot be converted (Sep 2026)
+### CDLOD terrain — what the adaptive grid taught, and the traps of its replacement (2026-09-22)
 
-> [!CRITICAL]
-> **`Geometry::AdaptiveVertexGridResource` — every terrain floor — did not override
-> `generateTriangleListIndicesForRT()`**, so it inherited the base returning `{}`. A TriangleStrip
-> geometry with no conversion gets **no BLAS at all**: the ground was invisible to RTGI, RTAO,
-> RTR and RTContactShadows, which traced straight through it to the sky. The only outward sign was
-> a log line, and it **repeats** — `SceneMetaData` retries the build on every TLAS refresh, so a
-> 2-minute `forest` run printed it **2237 times**:
-> `Geometry 'ForestFloorAdaptiveGrid' uses TriangleStrip but generateTriangleListIndicesForRT() returned empty indices !`
+Every `TerrainResource` floor is `Geometry::CDLODTerrainResource` since 2026-09-22: one shared patch
+displaced by a height clipmap, Strugar's selection and geomorph, per-pixel normals, a dedicated
+ray-tracing proxy (`src/Graphics/AGENTS.md` § "Adaptive geometries"). It replaced
+`AdaptiveVertexGridResource` (deleted). What that grid's day of fixes taught still holds:
 
-⚠️⚠️ **Its index buffer must NOT be converted wholesale**, unlike `VertexGridResource`'s. It holds,
-per sector, **one strip range per LOD level over the same quads**, plus the edge-stitching ranges:
-converting all of it stacks every LOD of the terrain inside one BLAS, one surface on top of another.
-The override therefore **ignores the IBO and regenerates a single proxy from the grid**. A BLAS has
-no view-dependent LOD selection, so one fixed step is the only coherent content.
+- ⚠️⚠️ **A terrain's rendering buffers are not traceable.** The adaptive grid's IBO stacked every LOD
+  of every sector (converting it put the terrain in the BLAS eight times over), and it did not even
+  override the strip conversion, so every terrain was ABSENT from the TLAS while the log repeated
+  `uses TriangleStrip but generateTriangleListIndicesForRT() returned empty indices` (2237 times in two
+  minutes: `SceneMetaData` retries on every TLAS refresh). The CDLOD patch is flatter still — so the
+  terrain traces a DEDICATED proxy built from the CPU grid (`Interface::dedicatedRTVertexBufferObject()`,
+  read by the BLAS build AND the hit-shading metadata through `rtVertexBufferObject()` / `rtVertexFlags()`;
+  a geometry that gave the BLAS one buffer and the hit shaders another would shade the wrong triangles).
+- ⚠️⚠️ **The full-resolution surface is quadratic and unbounded**: 4096 m at 1 m is 33.5 M triangles,
+  **7.5 GiB against 5.05 GiB** of VRAM measured on an 8 GiB card. Hence `Core/Graphics/RayTracing/TerrainBLASMaxTriangles`
+  (2 000 000, owner decision): the finest power-of-two step that fits — step 8, 524 288 triangles, for the
+  4096 m proxy.
+- ⚠️⚠️ **A geometry that replaces what it traces must say so, LAST**: the proxy re-centres as the camera
+  travels, and the BLAS keeps the previous surface without a word — no error, no VUID. The swap calls
+  `markAccelerationStructureStale()` as its last statement; the old buffers leave through the
+  `DeferredDestructor`. Proving it is a LOG measurement (one rebuild per re-centre), never two images:
+  two runs do not move the same way.
+- ⚠️⚠️ **A move decision is a DISTANCE between the wanted centre and the held one, never an inequality**
+  (`Grid::subGridCenter()` clamps at the grid border, where the camera stays past any threshold for
+  ever): the grid once regenerated its whole 896 MiB window six times in eight seconds while the camera
+  drifted along the border. The proxy uses the same test.
+- ⚠️⚠️ **Two cameras, two questions.** The LEVEL comes from the camera whose picture it is — for a shadow
+  map the MAIN camera (`Scene::castShadows()`), never the light, or the shadow swims at every boundary —
+  and the FRUSTUM is the pass's own. The shadow pass once drew the adaptive grid's whole IBO (46 M indices
+  per shadow target) because it did not take the adaptive branch; both paths go through
+  `drawAdaptiveGeometry()`.
+- ⚠️ **A level of detail is chosen from the distance to the node's BOX SURFACE** (`AACuboid::distanceTo()`,
+  with each node's own Y range): from the sector CENTRE, the sector under the camera sat at 8 m quads and
+  the 1 m data was never drawn — a 0.6 ms `ScenePass` that looked fast because it drew nothing.
+- **Two measurement traps**: the `terrain` sun is ANIMATED (11.5 % of mean luminance between two runs
+  80 s apart at a pinned exposure) — bench with `--demo-options 100000,25`; and `forest`'s wind moves
+  31.6 % of the pixels within one run — attribute on ground-only blocks.
 
-⚠️⚠️ **The full-resolution surface is quadratic in the division count and unbounded.** Measured on
-`terrain` (4096 divisions) the 2026-09-22 session: step 1 = **33 554 432 triangles and 7.5 GiB** of
-VRAM, against **5.05 GiB** at the default budget (step 8, 524 288 triangles), idle 1.9 GiB on an
-8 GiB card — 2.5 GiB for the exact surface, on a card that then had ~360 MiB left. Hence
-`Core/Graphics/RayTracing/TerrainBLASMaxTriangles` (default 2 000 000, owner decision 2026-09-22):
-the finest step whose triangle count fits. `forest` (128 divisions, 32 768 triangles) keeps step 1.
+Traps of the CDLOD work itself:
 
-**Two measurement traps met while proving the fix**, both of which invalidated a first result:
-- ⚠️⚠️ **The `terrain` demo's sun is ANIMATED** — a `Toolkit::generateSunCourse()` + `SkyFollowsSun`
-  since 2026-09-22 (a `Node::WorldZRotation` + `Animations::ConstantValue` before that). Two runs
-  captured 80 s apart differed by 11.5 % of mean luminance *from the sun alone*, at a pinned
-  exposure — the first A/B "measured" the time of day. A scene whose lighting is animated cannot
-  bench anything across two runs **unless the sun is frozen: `--demo-options 100000` gives it a
-  100 000 s day (0.0018°/s)**. Its night is BLACK by construction (`nightFactor` 0, no lamp). `forest`'s sun is a `StaticEntity` and its
-  ground crops repeat to **0.014/255** between captures.
-- ⚠️⚠️ **Wind moves foliage, so a FULL-FRAME number is not attributable**: 31.6 % of pixels move by
-  more than 4/255 *within a single run* of `forest`. The control that separates the two is the
-  intra-run pair: on ground-only blocks the wind stays inside ±1.3/255, while putting the terrain
-  in the BLAS darkened the blocks of the **steep slope** by **−7.6 to −9.8/255** — the hillside
-  occluding its own sky, landing on the relief rather than everywhere, which is what says the proxy
-  is geometrically aligned and not merely present.
-
-**A geometry that replaces its vertex data must say so** (same day). `TerrainResource::updateVisibility()`
-slides the sub-grid as the camera travels and the geometry swaps its whole VBO: the BLAS then held
-the surface of the PREVIOUS window, and nothing said so — no error, no validation message, just an
-occlusion that no longer matches the picture. The geometry now calls
-`Interface::markAccelerationStructureStale()` as the LAST statement of the swap (the flag is what
-publishes the new data), and `SceneMetaData::rebuild()` consumes it on the frame path, beside the
-on-demand build of a missing BLAS. The old BLAS **and** the old RT index buffer go out through the
-`DeferredDestructor`, never freed in place.
-⚠️ **Proving it is a LOG measurement, not an image one**: two runs of the same demo do not slide the
-same number of times (4 against 2 here), so they end up showing different windows of the terrain and
-any pixel comparison between them is void. What is attributable: with the flag, each
-`Threshold reached` is followed by exactly one proxy rebuild; without it, four slides produced none.
-
-### Fixed: the terrain window slid on a detached `std::thread` and swapped its VBO under the render thread (2026-09-22, later that day)
-
-`updateVisibility()` used to start the update with `std::thread(...).detach()` — a constructor that
-throws, in a cascade built without exceptions — and `updateData()` then `std::swap`ped the live VBO
-and overwrote the live grid from that thread while draw calls read both. **The slide is now split in
-two halves that never touch the same data**: the LOGIC thread claims the single update slot
-(`AdaptiveVertexGridResource::beginUpdate()`, before the work leaves the thread — the next cycle must
-see it taken even if the worker has not started) and hands the window to the engine `ThreadPool`; the
-WORKER builds the new VBO, its sector boxes and the new grid beside the live ones and STAGES them
-(`updateData()`), then registers the geometry with `Renderer::requestGeometryVideoMemoryUpdate()`; the
-RENDER thread publishes the staged set in `updateVideoMemory()` from
-`Renderer::flushGeometryVideoMemoryUpdates()` — same region as the materials' flush, after the frame
-fence and before the scene's own uploads — retiring the previous VBO through the `DeferredDestructor`
-and marking the BLAS stale as its last statement. `Geometry::Interface::updateVideoMemory()` had been
-a virtual nobody ever called. ⚠️ A window staged while a previous one waits replaces it: the newest wins.
-Exercised live by the owner flying 6 km across `terrain`: four slides, four publications, 0 VUID.
-**A slide, MEASURED, then fixed twice** (`terrain`, 4096 × 1 m window, 32-core host, 2026-09-22 —
-`updateData()` traces every slide: `Window ... staged: N vertices generated in X ms, uploaded (M MiB) in Y ms`):
-
-| | before | after |
-|---|---|---|
-| trigger | after `visibleSize / 3` = 1365 m of travel, i.e. with the window's edge **683 m** ahead | when less than `slideMargin` (**1500 m**, `TerrainResource::DefaultSlideMargin`, JSON `GridSlideMargin`, `setSlideMargin()`) is left to the EDGE — after 548 m of travel on a 4096 m window |
-| generation of the 16 785 409 vertices | **1.29 s**, one worker (77 ns per vertex: normal + tangent from the neighbours) | **163-184 ms**, `ThreadPool::parallelFor` over the grid rows (`generateVertexAttributes()`, safe from a pool worker — the slide runs on one) — also the initial build: boot 7.1 → 6.1 s |
-| upload | 896 MiB in 36-54 ms — never the problem | unchanged |
-| sub-grid extraction (67 MB copy) | **26 ms on the LOGIC tick** | on the worker (`TerrainResource` hands `subGrid()` to the pool task; the full grid is read-only after load) — no `logicsTask` hitch left |
-
-The edge still sits 2048 m away right after a slide: on a 16 km terrain seen from a hill that edge is a
-picture, not a corner case — the reason the owner saw "the limit of the terrain in video memory" while
-flying. The margin and the parallel generation make it arrive later and go away faster; only a coarse
-mesh of the whole terrain around the window removes it
-([`docs/todo/terrain-far-mesh-under-the-streamed-window.md`](todo/terrain-far-mesh-under-the-streamed-window.md)),
-and only a packed vertex lets the window grow
-([`docs/todo/terrain-pack-vertex-and-height-data.md`](todo/terrain-pack-vertex-and-height-data.md)).
-
-⚠️⚠️ **The slide decision is a DISTANCE between the wanted window centre and the held one, never a
-mere inequality.** `Grid::subGridCenter()` (emeraude-base, the single clamp `subGrid()` uses, with
-its tests) says where the window CAN go: against the grid border the camera stays past the threshold
-for ever, and the first version compared the clamped centre for inequality — every metre the camera
-drifted along the border changed it by one cell and regenerated the whole window: **six 896 MiB
-uploads in eight seconds**, measured. Since the fix a border drift of 300 m produced none and a 950 m
-one produced one.
-
-### Added: a FAR MESH around the streamed terrain window, so its edge is never a picture (2026-09-22, evening)
-
-Owner decisions, in order: the far mesh lives INSIDE `AdaptiveVertexGridResource` (same VBO, same IBO,
-same selection, same shadow pass), at **32 m cells in 1024 m sectors** (16 × 16 over `terrain`,
-263 169 vertices, ~15 MB), with the window's centre **snapped to the far sector** so the hole the
-window leaves is a whole number of far sectors — no overlap, no gap; the seam is closed by **exact
-stitching fans** on the window side; the far mesh sits **0.5 m below the terrain** (`GridFarDepthOffset`,
-"important near the camera, lost in the pixels far away") with a **skirt** hanging from the window's
-edges down to it; and the fine window is drawn FIRST, the far mesh after (early-Z rejects what it hides).
-`TerrainResource::createGeometryFromLocalData()` is the single site: `Grid::coarsened(step)` (point
-samples, never an average — the shared vertices must share a height), `setFarGrid()`, then the window
-snapped through `Grid::subGridCenter(pos, cells, snapCells)`. A grid the numbers do not fit (a cell that
-is not a power-of-two multiple, a sector that does not divide) gets no far mesh and says why.
-
-**The seam, in three layers, all from window-side vertices except the last**: (1) the window's border
-sectors at level k and the far mesh at step 32 share their edge vertices at every multiple of 32 m —
-same source grid, same texture coordinates (`Grid` sub-grids now carry a UV OFFSET so a window's UVs
-are its parent's: without it the texture jumped by `startX × U / N` at every slide, invisible on
-`terrain` only because that was a whole number of tiles); (2) `outerStitching[k][edge]`, a fan per
-32 m segment between the coarser of the two steps and the finer, generalising the one-step edge
-stitching; (3) `farSkirt[edge]`, a wall of quads from the 32 m edge vertices to their copies lowered by
-the depth offset (the skirt vertices, appended after the window's points), whose bottom edge IS the
-lowered far edge. The skirt is emitted with BOTH windings: the rasterisation default is back-face
-culling and a wall is seen from either side.
-
-⚠️⚠️ **Found while testing: `Grid::subGrid()` built its bounding box CENTRED ON ZERO**, ignoring the
-window's world offset, so the hole test (far sectors whose centre lies inside the window's box) kept the
-hole at the ORIGIN after every slide: a real hole in the terrain where the window used to be, and the far
-mesh drawn UNDER the window where it now was — z-fighting and dark 32 m caps on every peak (owner: "on
-voit des trous"). The box now carries the offset (`test_VertexFactoryGrid.cpp`). The offset the owner
-then asked for is a second line of defence, not the fix: with the box right the two surfaces never
-overlap.
-
-**Measured** (`terrain`, noon, 2026-09-22): boot 7 s (unchanged), `ScenePass` 1.4-2.0 ms with the far
-mesh in view, the application at **2791 MiB** of VRAM per `nvidia-smi --query-compute-apps` (the
-total's swing of +675 MiB that day was Chrome, Discord and the Claude desktop, not the terrain — read the
-PROCESS's number, never the card's), 0 VUID, slides still 170 ms. From 2.5 km straight above, the seam
-reads as a thin dark contour along the 4096 m square — the 0.5 m step and its skirt. `--demo-options
-100000,25,1` draws the terrain in WIREFRAME (option 2), which shows the levels and the far lattice but
-cannot show a crack (everything is see-through): judge seams in solid mode.
-
-### Fixed: the shadow pass drew an adaptive terrain WHOLE — every level of every sector stacked (2026-09-22)
-
-`RenderableInstance::Abstract::castShadows()` ended in `commandBuffer.draw(*geometry, instanceCount)`,
-i.e. `vkCmdDrawIndexed(indexCount())` over the whole index buffer, while `render()` had the adaptive
-branch. An adaptive grid's IBO holds, per sector, one strip range PER LEVEL over the same quads plus
-the stitching: on `terrain` that is **45 974 784 indices** (≈ 23 M triangles, the surface eight times
-over) per shadow target per frame. Nothing paid for it only because no demo put a shadow map on a
-`TerrainResource`. Both paths now go through one `drawAdaptiveGeometry()` helper.
-⚠️⚠️ **Two cameras, two questions.** `Geometry::Interface::prepareAdaptiveRendering(lodViewPosition,
-cullingFrustum, worldCoordinates)`: the LEVEL comes from the camera whose picture it is — for a shadow
-map the MAIN camera (`Scene::castShadows()` reads `mainRenderTarget()->viewMatrices().position(readStateIndex)`
-and passes it down), never the light, or the caster is not the mesh the receiver is drawn with and
-the shadow swims at every level boundary (Strugar, CDLOD 2010, § node selection) — while the
-FRUSTUM is the pass's own, the light's for a shadow map. A multi-view target (cubemap, cascades) gets
-`nullptr` and draws every sector: one draw covers every view. Measured on `terrain` at noon, 4096 px
-over a 2000 m half-extent: the shadow passes cost **≈ 0.4 ms** of frame (`Frame` − `ScenePass` −
-`PostFXChain` − `FinalComposite`; the profiler does not scope them), 0 VUID.
-
-### Fixed: an adaptive terrain picked its level from the distance to the sector's CENTRE (2026-09-22)
-
-A 512 m sector seen from its own edge measured 362 m, so with thresholds of 64 · 2ᵏ m the sector
-under the camera sat at step 8 (8 m quads) and **the 1 m data the 940 MB VBO carried was never
-drawn** — `ScenePass` cost 0.6 ms whether the camera stood on the ground or looked down from 900 m,
-which is not a fast terrain, it is a terrain that draws nothing. The level now comes from
-`AACuboid::distanceTo()` — the distance to the SURFACE of the sector's box (emeraude-base, with its
-tests) — and each box carries the Y range of ITS points, not the whole grid's, so a camera 500 m
-above a valley is 500 m away from it. Every sector still takes part in the neighbour constraint (a
-culled sector constrains a visible one, or the stitching on their shared edge would not match), and
-the sectors the pass's frustum does not see are dropped from the draw list. After: `ScenePass`
-2.0-3.4 ms at 1 m quads under the camera, VRAM unchanged (4.49 → 4.53 GiB, the shadow map).
-⚠️ **Residual, and the reason the CDLOD rework (option B) is scheduled**: the VBO holds ONE normal
-per grid point, computed from its 1 m neighbours, and every level reads it. At 64-128 m quads the
-shading interpolates point-sampled fine normals, some of which face away from the sun: **dark streaks
-along distant ridges**, which shrink as the camera approaches (LOD-dependent, hence not shadow acne —
-verified from 6 km, 3.5 km and 1.5 km). The coarse level needs the AVERAGE normal of its footprint,
-which a heightmap texture's mip chain gives for free and a per-vertex VBO cannot.
+- ⚠️⚠️⚠️ **`PushConstantBlock::bytes()` counted a `vec2` as 16 bytes** (it summed `size_bytes()`, the
+  PADDED size) while std430 packs it in 8. The range only grew, so nothing ever failed — until the
+  heightfield computed its node offset from it: the CPU pushed the node at **96** while the shader read it
+  at **80**, every terrain vertex went to garbage, and the frame showed **no terrain and zero validation
+  messages** (the push landed inside the range). Diagnosed by tracing the pushed offset against the
+  generated GLSL. `bytes()` now uses the exact std430 sizes (vec2 8, vec3 12, vec3 arrays on 16).
+  ⚠️ The exact size then revealed a second, older lie: the post-processing block declared 24 B while
+  `PostProcessor::PushConstants` pushes 28 (`deltaTime` was missing from the GLSL) —
+  `VUID-vkCmdPushConstants-offset-01795`, now declared. **A push struct and its GLSL block are mirrors:
+  change both.**
+- ⚠️⚠️ **Saphir emitted the functions BEFORE the uniform blocks, samplers and push constants**: a
+  function reading any of them did not compile. They are emitted last now, right before `main()`.
+- ⚠️⚠️ **A vertex-stage preparation asked after `generateMainUniqueInstructions()` is never emitted**
+  (the normal matrix of the pixel-frame outputs named a variable nothing declared): the heightfield's
+  pixel-frame outputs are declared before it.
+- ⚠️ **The clipmap is written on the GRAPHICS queue ahead of the frame, never through the transfer
+  queue's region upload**: `Image::writeDataRegion()` transitions the whole image on another queue while
+  frames in flight sample it. A barrier recorded on the graphics queue has every earlier command in its
+  first scope, and the frame's fence covers the submission.
+- ⚠️ **R16 heights are 6 cm of quantum over the `terrain` range (-2000 m + [0, 4000] m)**: the normals are
+  baked from those 16-bit heights. No banding was seen on the first captures; if contouring ever appears
+  on gentle lit slopes, the culprit is this quantum, not the bake (owner decision R16, 2026-09-22).
 
 ### Measured: the diamond-square's finest level is white noise at the vertex frequency (2026-09-22)
 
@@ -572,7 +465,7 @@ slopes: vertex-frequency curvature **0.44 m → 0.083 (1.25) → 0.017 (1.5) →
 generator's other signature, straight subdivision creases along the grid axes, remains at every H —
 it is the algorithm's, not the exponent's.
 
-**Files**: `src/Graphics/Geometry/{Interface,AdaptiveVertexGridResource}.{hpp,cpp}`, `src/Graphics/Renderable/TerrainResource.{hpp,cpp}`, `src/Graphics/RenderableInstance/Abstract.{hpp,cpp}`, `src/Graphics/Renderer.{hpp,cpp}`, `src/Scenes/Scene.rendering.cpp`, `src/SettingKeys.hpp`; emeraude-base `Math/Space3D/AACuboid.hpp`, `Algorithms/DiamondSquare.hpp`, `VertexFactory/Grid.hpp`.
+**Files**: `src/Graphics/Geometry/{Interface,CDLODTerrainResource}.{hpp,cpp}`, `src/Graphics/Geometry/HeightfieldSurface.hpp`, `src/Saphir/Generator/HeightfieldSurfaceHelper.{hpp,cpp}`, `src/Saphir/{VertexShader,FragmentShader}.{hpp,cpp}`, `src/Saphir/Declaration/PushConstantBlock.cpp`, `src/Graphics/Renderable/TerrainResource.{hpp,cpp}`, `src/Graphics/RenderableInstance/Abstract.{hpp,cpp}`, `src/Graphics/Renderer.{hpp,cpp}`, `src/Scenes/Scene.rendering.cpp`, `src/SettingKeys.hpp`; emeraude-base `Math/Space3D/AACuboid.hpp`, `Algorithms/DiamondSquare.hpp`, `VertexFactory/Grid.hpp`.
 
 ### Fixed: TLAS Instance Transform Must Include Renderable Scale (Apr 2026)
 

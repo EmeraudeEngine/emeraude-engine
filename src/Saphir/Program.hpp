@@ -147,6 +147,42 @@ namespace EmEn::Saphir
 			bool wasInstanceTransformsEnabled () const noexcept;
 
 			/**
+			 * @brief Returns whether the vertex shader builds a heightfield surface (Graphics::Geometry::HeightfieldSurface).
+			 * @note Returns false silently if the vertex shader has not been initialized yet.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			wasHeightfieldSurfaceEnabled () const noexcept
+			{
+				return m_vertexShader != nullptr && m_vertexShader->isHeightfieldSurfaceEnabled();
+			}
+
+			/**
+			 * @brief Records where, in the matrices push-constant block, the heightfield node and camera start.
+			 * @note Written by the generator while it lays the block out (std430: aligned on 16 bytes after
+			 * the matrices), read by the draw that pushes each node.
+			 * @param offset The byte offset of the node vec4 (the camera vec4 follows it).
+			 * @return void
+			 */
+			void
+			setHeightfieldPushConstantOffset (uint32_t offset) noexcept
+			{
+				m_heightfieldPushConstantOffset = offset;
+			}
+
+			/**
+			 * @brief Returns the byte offset of the heightfield node vec4 in the matrices push-constant block.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			heightfieldPushConstantOffset () const noexcept
+			{
+				return m_heightfieldPushConstantOffset;
+			}
+
+			/**
 			 * @brief Initializes the vertex shader and returns it.
 			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
 			 * nullptr; the vertex shader, once initialized, cannot be re-initialized or replaced.
@@ -521,6 +557,7 @@ namespace EmEn::Saphir
 			std::shared_ptr< Graphics::VertexBufferFormat > m_vertexBufferFormat;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_graphicsPipeline;
+			uint32_t m_heightfieldPushConstantOffset{0};
 			std::map< uint32_t, bool > m_fragmentSpecConstantsBool; // FIXME: Use a cheaper structure here.
 	};
 }

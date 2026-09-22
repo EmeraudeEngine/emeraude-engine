@@ -1829,6 +1829,19 @@ namespace EmEn::Scenes
 			void beginRenderFrame () noexcept;
 
 			/**
+			 * @brief Returns the render state index latched by beginRenderFrame() for the frame being rendered.
+			 * @note Render thread. Every pass of the frame reads this state; a per-frame upload done
+			 * before the passes (Graphics::Renderer::updateSurfaceGeometries()) must read the same one.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			frameReadStateIndex () const noexcept
+			{
+				return m_frameReadStateIndex;
+			}
+
+			/**
 			 * @brief Prepares render lists for a frame without issuing draw calls.
 			 *
 			 * Populates render lists via frustum culling and Z-sorting, and caches

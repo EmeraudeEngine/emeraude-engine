@@ -49,6 +49,7 @@
 namespace EmEn::Vulkan
 {
 	class AccelerationStructureBuilder;
+	class DescriptorSet;
 }
 
 namespace EmEn::Graphics
@@ -220,6 +221,166 @@ namespace EmEn::Graphics::Geometry
 			usePrimitiveRestart () const noexcept
 			{
 				return this->isFlagEnabled(EnablePrimitiveRestart);
+			}
+
+			/**
+			 * @brief Returns whether the vertex stage builds this geometry's surface from a height field.
+			 * @note Such a geometry's vertex buffer holds the flat positions of a shared patch only. The
+			 * height, the tangent frame and the primary texture coordinates come from its surface
+			 * descriptor set (surfaceDescriptorSet()), so its attribute flags are all OFF — ask
+			 * surfaceProvidesTangentSpace() and surfaceProvidesPrimaryTextureCoordinates() what it can
+			 * give a material, never tangentSpaceEnabled(), which describes the VERTEX BUFFER.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			heightfieldSurfaceEnabled () const noexcept
+			{
+				return this->isFlagEnabled(EnableHeightfieldSurface);
+			}
+
+			/**
+			 * @brief Returns whether a material can get a full tangent frame on this geometry, from the
+			 * vertex buffer or synthesized by the vertex stage.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			surfaceProvidesTangentSpace () const noexcept
+			{
+				return this->tangentSpaceEnabled() || this->heightfieldSurfaceEnabled();
+			}
+
+			/**
+			 * @brief Returns whether a material can get a normal on this geometry, from the vertex buffer
+			 * or synthesized by the vertex stage.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			surfaceProvidesNormal () const noexcept
+			{
+				return this->normalEnabled() || this->heightfieldSurfaceEnabled();
+			}
+
+			/**
+			 * @brief Returns whether a material can get 2D primary texture coordinates on this geometry,
+			 * from the vertex buffer or synthesized by the vertex stage.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			surfaceProvidesPrimaryTextureCoordinates () const noexcept
+			{
+				return this->primaryTextureCoordinatesEnabled() || this->heightfieldSurfaceEnabled();
+			}
+
+			/**
+			 * @brief Returns the descriptor set the vertex and fragment stages read the synthesized
+			 * surface from, for the frame being recorded.
+			 * @note Only a geometry with EnableHeightfieldSurface has one; it takes the PerModel set
+			 * index of the program (a heightfield is never skinned). Its layout is the one returned by
+			 * Saphir::Generator::getHeightfieldSurfaceDescriptorSetLayout().
+			 * @return const Vulkan::DescriptorSet * Null when the geometry has no surface set yet.
+			 */
+			[[nodiscard]]
+			virtual
+			const Vulkan::DescriptorSet *
+			surfaceDescriptorSet () const noexcept
+			{
+				return nullptr;
+			}
+
+			/**
+			 * @brief Updates what the synthesized surface of this frame needs on the GPU, before the first
+			 * pass of the frame records anything.
+			 * @note Render thread, once per frame, behind the in-flight fence of `frameIndex` and BEFORE
+			 * the shadow maps (Renderer::updateSurfaceGeometries()). A geometry that must copy into its
+			 * surface images submits its own work to the graphics queue here: queue order puts it ahead
+			 * of every pass of the frame, and the frame fence covers it (a fence signal includes every
+			 * command submitted earlier to the queue).
+			 * @param lodViewPosition World-space position of the MAIN camera for this frame.
+			 * @param frameIndex The frame-in-flight index being prepared.
+			 * @return bool
+			 */
+			virtual
+			bool
+			updateSurfaceVideoMemory ([[maybe_unused]] const Base::Math::Vector< 3, float > & lodViewPosition, [[maybe_unused]] uint32_t frameIndex) noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief Returns a vertex buffer dedicated to ray tracing, when the rendering one cannot be traced.
+			 * @note A heightfield's rendering buffer is a flat patch the vertex stage displaces: it holds
+			 * no surface a BLAS could be built from. Such a geometry keeps a separate proxy — built on the
+			 * CPU, with the full float layout of dedicatedRTVertexFlags() — that the BLAS and the hit
+			 * shaders read instead. Null for every other geometry: they trace their own buffer.
+			 * @return const Vulkan::VertexBufferObject *
+			 */
+			[[nodiscard]]
+			virtual
+			const Vulkan::VertexBufferObject *
+			dedicatedRTVertexBufferObject () const noexcept
+			{
+				return nullptr;
+			}
+
+			/**
+			 * @brief Returns the triangle-list index buffer that goes with dedicatedRTVertexBufferObject().
+			 * @return const Vulkan::IndexBufferObject *
+			 */
+			[[nodiscard]]
+			virtual
+			const Vulkan::IndexBufferObject *
+			dedicatedRTIndexBufferObject () const noexcept
+			{
+				return nullptr;
+			}
+
+			/**
+			 * @brief Returns the geometry flags describing the layout of dedicatedRTVertexBufferObject().
+			 * @note The hit shaders find the normal and the UV in a vertex from these flags.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			virtual
+			uint32_t
+			dedicatedRTVertexFlags () const noexcept
+			{
+				return 0;
+			}
+
+			/**
+			 * @brief Returns the vertex buffer ray tracing reads: the dedicated one when there is one.
+			 * @return const Vulkan::VertexBufferObject *
+			 */
+			[[nodiscard]]
+			const Vulkan::VertexBufferObject *
+			rtVertexBufferObject () const noexcept
+			{
+				if ( const auto * dedicated = this->dedicatedRTVertexBufferObject(); dedicated != nullptr )
+				{
+					return dedicated;
+				}
+
+				return this->vertexBufferObject();
+			}
+
+			/**
+			 * @brief Returns the geometry flags describing the vertex buffer ray tracing reads.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			rtVertexFlags () const noexcept
+			{
+				if ( this->dedicatedRTVertexBufferObject() != nullptr )
+				{
+					return this->dedicatedRTVertexFlags();
+				}
+
+				return this->flags();
 			}
 
 			/**
@@ -425,6 +586,22 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Returns the per-draw constants of a draw call selected by prepareAdaptiveRendering().
+			 * @note Only a heightfield surface has them (the node's placement, pushed right before its draw
+			 * at the program's Saphir::Program::heightfieldPushConstantOffset()); every other adaptive
+			 * geometry draws index ranges and ignores this.
+			 * @param drawCallIndex The draw call index (0 to getAdaptiveDrawCallCount()-1).
+			 * @return std::array< float, 4 >
+			 */
+			[[nodiscard]]
+			virtual
+			std::array< float, 4 >
+			getAdaptiveDrawCallConstants ([[maybe_unused]] uint32_t drawCallIndex) const noexcept
+			{
+				return {0.0F, 0.0F, 0.0F, 0.0F};
+			}
+
+			/**
 			 * @brief Returns the number of stitching draw calls after prepareAdaptiveRendering().
 			 * @return uint32_t The number of stitching draw calls.
 			 */
@@ -618,14 +795,20 @@ namespace EmEn::Graphics::Geometry
 		public:
 
 			/**
-			 * @brief Returns the RT-specific index buffer (triangle-list converted) if available.
-			 * @note Returns nullptr for TriangleList geometries (use indexBufferObject() directly).
+			 * @brief Returns the RT-specific index buffer if available: the dedicated proxy's
+			 * (dedicatedRTIndexBufferObject()), else the triangle-list conversion of a strip.
+			 * @note Returns nullptr for TriangleList geometries without a proxy (use indexBufferObject() directly).
 			 * @return const Vulkan::IndexBufferObject *
 			 */
 			[[nodiscard]]
 			const Vulkan::IndexBufferObject *
 			rtIndexBufferObject () const noexcept
 			{
+				if ( const auto * dedicated = this->dedicatedRTIndexBufferObject(); dedicated != nullptr )
+				{
+					return dedicated;
+				}
+
 				return m_rtIndexBufferObject.get();
 			}
 

@@ -38,7 +38,6 @@
 #include "SkeletalDataTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Geometry/AdaptiveVertexGridResource.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 
 /* Forward declarations. */

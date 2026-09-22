@@ -93,7 +93,8 @@ namespace EmEn::Graphics::Geometry
 			"Enable3DSecondaryTextureCoordinates : " << ( (geometryFlagBits & Enable3DSecondaryTextureCoordinates) != 0 ? "yes" : "no" ) << "\n"
 			"EnableDynamicVertexBuffer : " << ( (geometryFlagBits & EnableDynamicVertexBuffer) != 0 ? "yes" : "no" ) << "\n"
 			"EnableAbsolutePosition : " << ( (geometryFlagBits & EnableAbsolutePosition) != 0 ? "yes" : "no" ) << "\n"
-			"EnablePrimitiveRestart : " << ( (geometryFlagBits & EnablePrimitiveRestart) != 0 ? "yes" : "no" ) << "\n";
+			"EnablePrimitiveRestart : " << ( (geometryFlagBits & EnablePrimitiveRestart) != 0 ? "yes" : "no" ) << "\n"
+			"EnableHeightfieldSurface : " << ( (geometryFlagBits & EnableHeightfieldSurface) != 0 ? "yes" : "no" ) << "\n";
 
 		return output.str();
 	}

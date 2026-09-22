@@ -32,6 +32,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
+#include "HeightfieldSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
 #include "Scenes/Scene.hpp"
 #include "SkinningLayoutHelper.hpp"
@@ -86,7 +87,9 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		if ( this->isSkeletalAnimationEnabled() )
+		/* The PerModel set is the skinning SSBO of a skeletal mesh, or the surface of a heightfield
+		 * (clipmaps + uniforms) — never both, a heightfield is not skinned. */
+		if ( this->isSkeletalAnimationEnabled() || this->isHeightfieldSurfaceEnabled() )
 		{
 			setIndexes.enableSet(SetType::PerModel);
 		}
@@ -296,14 +299,16 @@ namespace EmEn::Saphir::Generator
 			descriptorSetLayouts.emplace_back(descriptorSetLayout);
 		}
 
-		/* Prepare the descriptor set layout for skeletal animation bone matrices. */
+		/* Prepare the descriptor set layout for skeletal animation bone matrices, or for a heightfield surface. */
 		if ( setIndexes.isSetEnabled(SetType::PerModel) )
 		{
-			auto descriptorSetLayout = getSkinningDescriptorSetLayout(renderer.layoutManager());
+			auto descriptorSetLayout = this->isHeightfieldSurfaceEnabled() ?
+				getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
+				getSkinningDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{
-				Tracer::error(ClassId, "Unable to get the skinning SSBO descriptor set layout !");
+				Tracer::error(ClassId, "Unable to get the PerModel descriptor set layout (skinning SSBO or heightfield surface) !");
 
 				return false;
 			}
@@ -361,6 +366,20 @@ namespace EmEn::Saphir::Generator
 			this->isMultiDrawIndirectEnabled()
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
+
+		/* Heightfield surface: switched on FIRST, the matrices push-constant block below appends the
+		 * node and the camera for it. The fragment stage rebuilds the frame per pixel, so the vertex
+		 * stage hands it the world XZ and its rotations. */
+		if ( this->isHeightfieldSurfaceEnabled() )
+		{
+			vertexShader->enableHeightfieldSurface();
+			vertexShader->enableHeightfieldPixelFrame();
+
+			if ( !declareHeightfieldSurface(*vertexShader, program.setIndexes().set(SetType::PerModel), false) )
+			{
+				return false;
+			}
+		}
 
 		/* Instanced motion history: fixes the per-instance VBO stride (previous model matrix). */
 		if ( this->isInstanceMotionHistoryEnabled() )
@@ -529,6 +548,18 @@ namespace EmEn::Saphir::Generator
 		/* Create the fragment shader. */
 		auto * fragmentShader = program.initFragmentShader(this->name( ) + "FragmentShader");
 		fragmentShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
+
+		/* A heightfield's frame is rebuilt per pixel: armed BEFORE the connection, which is where the
+		 * interpolated frame variables are received under other names. */
+		if ( program.vertexShader()->isHeightfieldSurfaceEnabled() )
+		{
+			fragmentShader->enableHeightfieldPixelFrame();
+
+			if ( !declareHeightfieldSurface(*fragmentShader, program.setIndexes().set(SetType::PerModel), true) )
+			{
+				return false;
+			}
+		}
 
 		/* Automatic input declarations from vertex shader. */
 		if ( !fragmentShader->connectFromPreviousShader(*program.vertexShader()) )
@@ -1075,6 +1106,10 @@ namespace EmEn::Saphir::Generator
 				/* The wind changes the vertex stage, so it changes the program. */
 				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
 			}
+
+			/* So does a heightfield surface: another vertex stage, another fragment prelude, another
+			 * PerModel layout. */
+			hashCombine(hash, static_cast< size_t >(this->isHeightfieldSurfaceEnabled()));
 		}
 
 		/* 4. Layer index. */

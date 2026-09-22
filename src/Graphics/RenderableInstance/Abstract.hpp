@@ -1134,6 +1134,19 @@ namespace EmEn::Graphics::RenderableInstance
 			void traceMissingDescriptorSet (const char * setName, const RenderTarget::Abstract & renderTarget) const noexcept;
 
 			/**
+			 * @brief Binds the PerModel set of a program: the skinning SSBO of a skeletal mesh, or the
+			 * surface (clipmaps + per-frame uniforms) of a heightfield geometry.
+			 * @param commandBuffer A reference to the command buffer.
+			 * @param pipelineLayout A reference to the pipeline layout.
+			 * @param setIndex The PerModel set index of the program.
+			 * @param LODLevel The level of detail being drawn.
+			 * @param renderTarget A reference to the render target (for the error trace).
+			 * @return bool False if the set is missing: the draw must be skipped.
+			 */
+			[[nodiscard]]
+			bool bindPerModelSet (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, uint32_t setIndex, uint32_t LODLevel, const RenderTarget::Abstract & renderTarget) const noexcept;
+
+			/**
 			 * @brief Returns whether the renderable declares skeletal data but the instance does
 			 * not own its skinning descriptor sets yet.
 			 * @note The program cache lives on the RENDERABLE (shared by every instance of the

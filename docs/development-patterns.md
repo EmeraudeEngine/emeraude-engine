@@ -35,94 +35,32 @@ myMesh->load(geometry, material, options);
 
 ## Terrain Patterns
 
-### Procedural Terrain with DiamondSquare
+### Procedural CDLOD terrain with DiamondSquare
 
-Generate terrain with procedural heightmaps using the DiamondSquare algorithm:
-
-```cpp
-#include "Graphics/Geometry/AdaptiveVertexGridResource.hpp"
-
-// Create adaptive LOD terrain
-auto terrain = resources.container<EmEn::Graphics::Geometry::AdaptiveVertexGridResource>()
-    ->getOrCreateResource("MyTerrain", true, {
-        8192.0F,   // 8km total size
-        256,       // grid subdivisions
-        true       // tileable (same corner values)
-    });
-
-// Apply procedural heightmap
-// factor = max height displacement in meters (normalized output)
-// roughness = 0.0-1.0, controls terrain detail
-// seed = for reproducible results
-terrain->grid().applyDiamondSquare({
-    100.0F,  // ±100 meters max height
-    0.5F,    // moderate roughness
-    42       // seed
-});
-```
-
-**Note:** The DiamondSquare algorithm outputs normalized values in [-1, 1]. The `factor` parameter directly represents the maximum height in world units (meters).
-
-### Tuning LOD Distance Selection
-
-Adjust when LOD transitions occur based on distance:
+A `Graphics::Renderable::TerrainResource` owns the height grid (physics, spawn) and draws it through
+`Graphics::Geometry::CDLODTerrainResource` — a shared patch displaced by a height clipmap
+(`src/Graphics/AGENTS.md` § "Adaptive geometries"). The grid must be a power of two of cells and a
+power-of-two multiple of the patch (64 quads by default); `loadDiamondSquare()` snaps the division up.
 
 ```cpp
-// Default values: baseMultiplier=0.125, thresholdGrowth=2.0
-// - baseMultiplier: Initial threshold as fraction of sector size
-// - thresholdGrowth: How fast thresholds grow for lower LODs
+#include "Graphics/Renderable/TerrainResource.hpp"
 
-// For higher quality at distance (more GPU load)
-terrain->setLODDistanceParameters(0.2F, 1.5F);
+auto terrain = std::make_shared< EmEn::Graphics::Renderable::TerrainResource >(resources, "MyTerrain");
 
-// For more aggressive LOD reduction (better performance)
-terrain->setLODDistanceParameters(0.08F, 2.5F);
+/* Optional, BEFORE loading: the CDLOD knobs (defaults = the measured ones of the `terrain` demo). */
+EmEn::Graphics::Geometry::CDLODTerrainParameters parameters;
+parameters.detailDistance = 384.0F; /* 1 m quads up to 384 m, 2 m up to 768 m, ... */
+terrain->setCDLODParameters(parameters);
+
+/* 16 km at 1 m, relief ±2000 m, Hurst 1.25 (the measured `terrain` exponent), one tile per 8 m. */
+terrain->loadDiamondSquare(16384.0F, 16384, material, {.factor = 2000.0F, .roughness = 1.0F, .seed = 0, .hurst = 1.25F}, {}, 16384.0F * 0.125F);
 ```
 
-| baseMultiplier | Effect |
-|----------------|--------|
-| Lower (0.08) | Earlier LOD transitions, better performance |
-| Higher (0.2) | Later transitions, higher quality at distance |
-
-| thresholdGrowth | Effect |
-|-----------------|--------|
-| Lower (1.5) | More gradual LOD falloff |
-| Higher (2.5) | Faster falloff to low LODs |
-
-### Complete Terrain Setup Example
-
-```cpp
-void setupTerrain(EmEn::Resources::Manager & resources)
-{
-    // Create terrain resource with LOD support
-    auto terrain = resources.container<EmEn::Graphics::Geometry::AdaptiveVertexGridResource>()
-        ->getOrCreateResource("GiantTerrain", true, {
-            16384.0F,  // 16km terrain
-            512,       // high resolution base
-            true       // tileable edges
-        });
-
-    // Apply procedural heightmap
-    terrain->grid().applyDiamondSquare({
-        150.0F,  // ±150m mountains
-        0.6F,    // rougher terrain
-        7        // consistent seed
-    });
-
-    // Tune LOD for large terrain
-    terrain->setLODDistanceParameters(0.1F, 2.0F);
-
-    // Optional: Custom rasterization
-    EmEn::Graphics::RasterizationOptions rasterOpts;
-    rasterOpts.setPolygonMode(VK_POLYGON_MODE_FILL);
-    rasterOpts.setCullMode(VK_CULL_MODE_BACK_BIT);
-
-    // Create renderable with material and options
-    auto renderable = terrain->createRenderable(terrainMaterial, rasterOpts);
-}
-```
-
----
+- JSON keys (`TerrainResource::load(const Json::Value &)`): `GridSize`, `GridDivision`, `GridDetailDistance`,
+  `GridPatchQuads`, `GridClipTexels`, plus the material and displacement keys.
+- A ground of a few hundred metres takes `BasicGroundResource`: nothing streams at that size.
+- Bench a terrain with its sun frozen (`terrain --demo-options 100000,25`); the wireframe option 2 shows
+  the level rings, not a crack — judge seams solid.
 
 ## Material Patterns
 

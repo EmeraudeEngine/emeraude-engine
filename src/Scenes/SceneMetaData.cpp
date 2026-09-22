@@ -149,15 +149,18 @@ namespace EmEn::Scenes
 		auto & materialMap = m_rebuildMaterialMap;
 		auto & materialEntries = m_rebuildMaterialEntries;
 
-		/* Compute vertex attribute byte offsets from geometry flags.
+		/* Compute vertex attribute byte offsets from the flags of the buffer RAY TRACING reads — a
+		 * heightfield's dedicated proxy, not its flat rendering patch (Geometry::Interface::rtVertexFlags()).
 		 * Layout order: Position(3) → TangentSpace(9) or Normal(3) → PrimaryUV(2/3) → ... */
 		const auto computeNormalByteOffset = [] (const Geometry::Interface * geometry) -> uint32_t {
+			const auto flags = geometry->rtVertexFlags();
+
 			/* Position = 3 floats. */
 			uint32_t offset = 3;
 
 			/* When tangent space is enabled, layout is Position(3) → Tangent(3) → Bitangent(3) → Normal(3).
 			 * Skip Tangent + Bitangent to reach Normal. */
-			if ( geometry->tangentSpaceEnabled() )
+			if ( (flags & Geometry::EnableTangentSpace) != 0U )
 			{
 				offset += 6;
 			}
@@ -166,15 +169,17 @@ namespace EmEn::Scenes
 		};
 
 		const auto computeUVByteOffset = [] (const Geometry::Interface * geometry) -> uint32_t {
+			const auto flags = geometry->rtVertexFlags();
+
 			/* Position = 3 floats. */
 			uint32_t offset = 3;
 
 			/* TangentSpace (9 floats) overrides Normal (3 floats). */
-			if ( geometry->tangentSpaceEnabled() )
+			if ( (flags & Geometry::EnableTangentSpace) != 0U )
 			{
 				offset += 9;
 			}
-			else if ( geometry->normalEnabled() )
+			else if ( (flags & Geometry::EnableNormal) != 0U )
 			{
 				offset += 3;
 			}
@@ -289,7 +294,7 @@ namespace EmEn::Scenes
 
 				GPUMeshMetaData meshMeta{};
 
-				if ( const auto * VBO = geometry->vertexBufferObject(); VBO != nullptr )
+				if ( const auto * VBO = geometry->rtVertexBufferObject(); VBO != nullptr )
 				{
 					/* Skinned instances: hit shading must fetch the CURRENT pose (normals,
 					 * UVs at skinned positions), i.e. the mirror buffer — not the bind-pose

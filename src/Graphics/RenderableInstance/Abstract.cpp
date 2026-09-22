@@ -76,7 +76,7 @@ namespace EmEn::Graphics::RenderableInstance
 		 * (2026-09-22).
 		 */
 		void
-		drawAdaptiveGeometry (const Geometry::Interface & geometry, const RenderTarget::Abstract & renderTarget, uint32_t readStateIndex, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance) noexcept
+		drawAdaptiveGeometry (const Geometry::Interface & geometry, const RenderTarget::Abstract & renderTarget, uint32_t readStateIndex, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance, const PushConstantContext & pushContext, const Saphir::Program & program) noexcept
 		{
 			const auto & viewMatrices = renderTarget.viewMatrices();
 			const auto singleView = !renderTarget.isCubemap() && !renderTarget.isCascadedShadowMap();
@@ -86,9 +86,25 @@ namespace EmEn::Graphics::RenderableInstance
 
 			const auto drawCallCount = geometry.getAdaptiveDrawCallCount();
 
+			/* A heightfield draws ONE patch per node: the node's placement and the camera its level was
+			 * selected for are pushed right before its draw (Saphir::Generator::Abstract::declareMatrixPushConstantBlock()).
+			 * The camera is the SAME one the selection used, so the vertex stage morphs exactly where the
+			 * selection put the boundaries. */
+			const bool pushesNodes = program.wasHeightfieldSurfaceEnabled() && pushContext.pipelineLayout != nullptr;
+			std::array< float, 8 > nodeConstants{0.0F, 0.0F, 0.0F, 0.0F, lodViewPosition[X], lodViewPosition[Y], lodViewPosition[Z], 0.0F};
+
 			for ( uint32_t drawCallIndex = 0; drawCallIndex < drawCallCount; ++drawCallIndex )
 			{
 				const auto range = geometry.getAdaptiveDrawCallRange(drawCallIndex);
+
+				if ( pushesNodes )
+				{
+					const auto node = geometry.getAdaptiveDrawCallConstants(drawCallIndex);
+
+					std::copy(node.begin(), node.end(), nodeConstants.begin());
+
+					vkCmdPushConstants(commandBuffer.handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, program.heightfieldPushConstantOffset(), static_cast< uint32_t >(sizeof(nodeConstants)), nodeConstants.data());
+				}
 
 				commandBuffer.drawIndexed(range[0], range[1], instanceCount, firstInstance);
 			}
@@ -106,6 +122,40 @@ namespace EmEn::Graphics::RenderableInstance
 
 	/* Rendered-frame cursor for the skinning per-frame upload (render thread only). */
 	uint64_t Abstract::s_skinningFrameCursor{0};
+
+	bool
+	Abstract::bindPerModelSet (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, uint32_t setIndex, uint32_t LODLevel, const RenderTarget::Abstract & renderTarget) const noexcept
+	{
+		/* A heightfield's surface is the GEOMETRY's (one clipmap, whatever the instance), selected
+		 * for the frame being recorded by Geometry::Interface::updateSurfaceVideoMemory(). */
+		if ( const auto * geometry = m_renderable->geometry(LODLevel); geometry != nullptr && geometry->heightfieldSurfaceEnabled() )
+		{
+			const auto * surfaceDS = geometry->surfaceDescriptorSet();
+
+			if ( surfaceDS == nullptr )
+			{
+				this->traceMissingDescriptorSet("PerModel (heightfield surface)", renderTarget);
+
+				return false;
+			}
+
+			commandBuffer.bind(*surfaceDS, pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndex);
+
+			return true;
+		}
+
+		if ( !this->hasSkinningResources() )
+		{
+			this->traceMissingDescriptorSet("PerModel (skinning)", renderTarget);
+
+			return false;
+		}
+
+		/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
+		commandBuffer.bind(*this->flushSkinningMatrices(), pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndex);
+
+		return true;
+	}
 
 	Abstract::~Abstract ()
 	{
@@ -1122,18 +1172,10 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
 		}
 
-		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) )
+		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) && !this->bindPerModelSet(commandBuffer, *pipelineLayout, setIndexes.set(Saphir::SetType::PerModel), LODLevel, *renderTarget) )
 		{
-			if ( !this->hasSkinningResources() )
-			{
-				this->traceMissingDescriptorSet("PerModel (skinning)", *renderTarget);
-
-				return;
-			}
-
-			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
-			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModel));
+			return;
 		}
 
 		/* Bind material descriptor set for alpha-tested shadows. */
@@ -1184,7 +1226,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		if ( geometry != nullptr && geometry->isAdaptiveLOD() )
 		{
-			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0);
+			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0, pushContext, *program);
 		}
 		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
@@ -1305,18 +1347,10 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.bind(*lightEmitter->descriptorSet(useShadowMap), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerLight), lightEmitter->UBOOffset());
 		}
 
-		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) )
+		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) && !this->bindPerModelSet(commandBuffer, *pipelineLayout, setIndexes.set(Saphir::SetType::PerModel), LODLevel, *renderTarget) )
 		{
-			if ( !this->hasSkinningResources() )
-			{
-				this->traceMissingDescriptorSet("PerModel (skinning)", *renderTarget);
-
-				return;
-			}
-
-			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
-			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModel));
+			return;
 		}
 
 		/* Bind material UBO and samplers. */
@@ -1358,7 +1392,7 @@ namespace EmEn::Graphics::RenderableInstance
 		if ( geometry->isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
-			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance);
+			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
@@ -1549,18 +1583,10 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
-		/* Bind skinning SSBO (PerModel set) for skeletal meshes. */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) )
+		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) && !this->bindPerModelSet(commandBuffer, *pipelineLayout, setIndexes.set(Saphir::SetType::PerModel), LODLevel, *renderTarget) )
 		{
-			if ( !this->hasSkinningResources() )
-			{
-				this->traceMissingDescriptorSet("PerModel (skinning)", *renderTarget);
-
-				return;
-			}
-
-			/* Upload the staged pose ONCE per frame; every pass then binds the same section. */
-			commandBuffer.bind(*this->flushSkinningMatrices(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModel));
+			return;
 		}
 
 		/* Bind material UBO and samplers (skip if already bound). */
@@ -1624,7 +1650,7 @@ namespace EmEn::Graphics::RenderableInstance
 		if ( geometry->isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
-			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance);
+			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,

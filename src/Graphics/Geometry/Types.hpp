@@ -67,8 +67,24 @@ namespace EmEn::Graphics::Geometry
 		/** @brief This flag tells the vertex positions are expressed in world coordinates. */
 		EnableAbsolutePosition = 1U << 10U,
 		/** @brief This flag tells the index buffer uses the special index to restart primitives. */
-		EnablePrimitiveRestart = 1U << 11U
+		EnablePrimitiveRestart = 1U << 11U,
+		/**
+		 * @brief This flag tells the VERTEX STAGE builds the surface from a height field: the vertex
+		 * buffer holds nothing but the flat positions of a shared patch, and the height, the tangent
+		 * frame and the primary texture coordinates are synthesized by the shader from the geometry's
+		 * surface descriptor set (Geometry::Interface::surfaceDescriptorSet()).
+		 * @note It adds NO vertex attribute: the element count stays the one of the other flags, which
+		 * is why the attribute flags are left off on such a geometry. What the surface provides is
+		 * answered by Interface::surfaceProvidesTangentSpace() and siblings, never by those flags.
+		 */
+		EnableHeightfieldSurface = 1U << 12U
 	};
+
+	/**
+	 * @brief Maximum number of geometry levels of detail a renderable holds (a mesh's LOD chain).
+	 * @note It used to live in the adaptive terrain grid's header, deleted on 2026-09-22.
+	 */
+	static constexpr uint32_t MaxLODLevels{8};
 
 	/** @brief SubGeometry flag bits. */
 	// NOLINTNEXTLINE(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.

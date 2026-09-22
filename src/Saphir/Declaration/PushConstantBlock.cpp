@@ -27,6 +27,7 @@
 #include "PushConstantBlock.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <ranges>
 #include <sstream>
 
@@ -71,7 +72,33 @@ namespace EmEn::Saphir::Declaration
 				}
 			}
 
-			size += pushConstant.bytes();
+			/* ⚠️ The member's OWN std430 size, not its padded one: Member::PushConstant::bytes() goes
+			 * through size_bytes(), which rounds a vec2 or a vec3 up to 16 bytes. Summed here, it put
+			 * every member after the TAA jitter (a vec2) 8 bytes later than the SPIR-V block does — the
+			 * range only grew, so nothing failed, until a heightfield pushed its node at the offset this
+			 * computed (96) while the shader read it at 80: every terrain vertex went to garbage,
+			 * without a single validation message (2026-09-22). */
+			switch ( pushConstant.type() )
+			{
+				case VariableType::FloatVector2 :
+				case VariableType::UIntVector2 :
+				case VariableType::SIntVector2 :
+				case VariableType::BooleanVector2 :
+					size += 8U * std::max(1U, pushConstant.arraySize());
+					break;
+
+				case VariableType::FloatVector3 :
+				case VariableType::UIntVector3 :
+				case VariableType::SIntVector3 :
+				case VariableType::BooleanVector3 :
+					/* std430 keeps a vec3 ARRAY on a 16-byte stride; the last element is 12 bytes. */
+					size += (16U * (std::max(1U, pushConstant.arraySize()) - 1U)) + 12U;
+					break;
+
+				default :
+					size += pushConstant.bytes();
+					break;
+			}
 		}
 
 		if ( this->arraySize() > 1U )

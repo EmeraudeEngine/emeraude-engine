@@ -43,6 +43,7 @@
 #include "Declaration/OutputBlock.hpp"
 #include "Declaration/StageOutput.hpp"
 #include "Generator/Abstract.hpp"
+#include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "Graphics/Types.hpp"
 #include "Keys.hpp"
 #include "Tracer.hpp"
@@ -1062,7 +1063,12 @@ namespace EmEn::Saphir
 	{
 		if ( std::strcmp(TCVariableName, ShaderVariable::Primary2DTextureCoordinates) == 0 )
 		{
-			if ( !this->declare(InputAttribute{VertexAttributeType::Primary2DTextureCoordinates}) )
+			/* A heightfield has no UV attribute: its coordinates are the world XZ, scaled. */
+			if ( m_heightfieldSurfaceEnabled )
+			{
+				m_heightfieldTextureCoordinatesRequested = true;
+			}
+			else if ( !this->declare(InputAttribute{VertexAttributeType::Primary2DTextureCoordinates}) )
 			{
 				return false;
 			}
@@ -1073,7 +1079,7 @@ namespace EmEn::Saphir
 			}
 
 			outputInstructions.append((std::stringstream{} <<
-				'\t' << TCVariableName << " = " << Attribute::Primary2DTextureCoordinates << ";" "\n"
+				'\t' << TCVariableName << " = " << (m_heightfieldSurfaceEnabled ? "hfTextureCoordinates" : Attribute::Primary2DTextureCoordinates) << ";" "\n"
 			).str());
 		}
 		else if ( std::strcmp(TCVariableName, ShaderVariable::Primary3DTextureCoordinates) == 0 )
@@ -1143,17 +1149,17 @@ namespace EmEn::Saphir
 		switch ( vectorType )
 		{
 			case VertexAttributeType::Tangent :
-				attributeName = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
+				attributeName = this->vertexFrameExpression(VertexAttributeType::Tangent);
 				vectorName = ShaderVariable::TangentWorldSpace;
 				break;
 
 			case VertexAttributeType::Binormal :
-				attributeName = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
+				attributeName = this->vertexFrameExpression(VertexAttributeType::Binormal);
 				vectorName = ShaderVariable::BinormalWorldSpace;
 				break;
 
 			case VertexAttributeType::Normal :
-				attributeName = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+				attributeName = this->vertexFrameExpression(VertexAttributeType::Normal);
 				vectorName = ShaderVariable::NormalWorldSpace;
 				break;
 
@@ -1164,7 +1170,7 @@ namespace EmEn::Saphir
 				return false;
 		}
 
-		if ( !this->declare(InputAttribute{vectorType}) )
+		if ( !this->declareFrameAttribute(vectorType) )
 		{
 			return false;
 		}
@@ -1184,36 +1190,9 @@ namespace EmEn::Saphir
 
 		std::string modelMatrix;
 
-		if ( this->isMDIEnabled() )
+		if ( !this->resolveWorldModelMatrix(modelMatrix) )
 		{
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
-
-			modelMatrix = ShaderVariable::MDIModelMatrix;
-		}
-		else if ( this->isInstancingEnabled() )
-		{
-			if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
-			{
-				return false;
-			}
-
-			modelMatrix = Attribute::ModelMatrix;
-		}
-		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
-		{
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
-
-			modelMatrix = ShaderVariable::InstanceModelMatrix;
-		}
-		else
-		{
-			modelMatrix = MatrixPC(PushConstant::Component::ModelMatrix);
+			return false;
 		}
 
 		/* NOTE: w=0.0 because normals are direction vectors, not points.
@@ -1241,17 +1220,17 @@ namespace EmEn::Saphir
 		switch ( vectorType )
 		{
 			case VertexAttributeType::Tangent :
-				attributeName = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
+				attributeName = this->vertexFrameExpression(VertexAttributeType::Tangent);
 				vectorName = ShaderVariable::TangentViewSpace;
 				break;
 
 			case VertexAttributeType::Binormal :
-				attributeName = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
+				attributeName = this->vertexFrameExpression(VertexAttributeType::Binormal);
 				vectorName = ShaderVariable::BinormalViewSpace;
 				break;
 
 			case VertexAttributeType::Normal :
-				attributeName = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+				attributeName = this->vertexFrameExpression(VertexAttributeType::Normal);
 				vectorName = ShaderVariable::NormalViewSpace;
 				break;
 
@@ -1262,7 +1241,7 @@ namespace EmEn::Saphir
 				return false;
 		}
 
-		if ( !this->declare(InputAttribute{vectorType}) )
+		if ( !this->declareFrameAttribute(vectorType) )
 		{
 			return false;
 		}
@@ -1302,17 +1281,17 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::synthesizeWorldTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Tangent}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Tangent) )
 		{
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Binormal}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Binormal) )
 		{
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Normal) )
 		{
 			return false;
 		}
@@ -1322,34 +1301,19 @@ namespace EmEn::Saphir
 			return false;
 		}
 
+		/* NOTE: The one resolution of the world model matrix, shared with the world-space vectors. This
+		 * copy used to have no MDI branch, so an MDI program asking for the world TBN read a push
+		 * constant member that its block does not declare. */
 		std::string modelMatrix;
 
-		if ( this->isInstancingEnabled() )
+		if ( !this->resolveWorldModelMatrix(modelMatrix) )
 		{
-			if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
-			{
-				return false;
-			}
-
-			modelMatrix = Attribute::ModelMatrix;
-		}
-		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
-		{
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
-
-			modelMatrix = ShaderVariable::InstanceModelMatrix;
-		}
-		else
-		{
-			modelMatrix = MatrixPC(PushConstant::Component::ModelMatrix);
+			return false;
 		}
 
-		const auto tanExpr = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
-		const auto binExpr = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
-		const auto norExpr = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+		const auto tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
+		const auto binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
+		const auto norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
 
 		topInstructions.append((std::stringstream{} <<
 			"	const vec3 worldT = normalize((" << modelMatrix << " * vec4(" << tanExpr << ", 0.0)).xyz);" "\n"
@@ -1376,17 +1340,17 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::synthesizeViewTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Tangent}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Tangent) )
 		{
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Binormal}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Binormal) )
 		{
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Normal) )
 		{
 			return false;
 		}
@@ -1402,9 +1366,9 @@ namespace EmEn::Saphir
 		}
 
 		{
-			const auto tanExpr = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
-			const auto binExpr = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
-			const auto norExpr = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+			const auto tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
+			const auto binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
+			const auto norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
 
 			topInstructions.append((std::stringstream{} <<
 				"	const vec3 viewT = normalize(" << ShaderVariable::NormalMatrix << " * " << tanExpr << ");" "\n"
@@ -1430,17 +1394,17 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::synthesizeTangentToWorldMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Tangent}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Tangent) )
 		{
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Binormal}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Binormal) )
 		{
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Normal}) )
+		if ( !this->declareFrameAttribute(VertexAttributeType::Normal) )
 		{
 			return false;
 		}
@@ -1455,9 +1419,9 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		const auto tanExpr = m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
-		const auto binExpr = m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
-		const auto norExpr = m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+		const auto tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
+		const auto binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
+		const auto norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
 
 		const auto matrixCode = (std::stringstream{} <<
 			'\t' << ShaderVariable::TangentToWorldMatrix << " = " << ShaderVariable::NormalMatrix << " * mat3(" << tanExpr << ", " << binExpr << ", " << norExpr << ");" "\n"
@@ -1678,8 +1642,191 @@ namespace EmEn::Saphir
 	}
 
 	const char *
+	VertexShader::vertexFrameExpression (VertexAttributeType vectorType) const noexcept
+	{
+		switch ( vectorType )
+		{
+			case VertexAttributeType::Tangent :
+				if ( m_heightfieldSurfaceEnabled )
+				{
+					return "hfTangent";
+				}
+
+				return m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
+
+			case VertexAttributeType::Binormal :
+				if ( m_heightfieldSurfaceEnabled )
+				{
+					return "hfBinormal";
+				}
+
+				return m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
+
+			case VertexAttributeType::Normal :
+				if ( m_heightfieldSurfaceEnabled )
+				{
+					return "hfNormal";
+				}
+
+				return m_skinningEnabled ? "skinnedNormal" : Attribute::Normal;
+
+			default :
+				return nullptr;
+		}
+	}
+
+	bool
+	VertexShader::declareFrameAttribute (VertexAttributeType vectorType) noexcept
+	{
+		if ( m_heightfieldSurfaceEnabled )
+		{
+			m_heightfieldFrameRequested = true;
+
+			return true;
+		}
+
+		return this->declare(InputAttribute{vectorType});
+	}
+
+	bool
+	VertexShader::resolveWorldModelMatrix (std::string & expression) noexcept
+	{
+		if ( this->isMDIEnabled() )
+		{
+			if ( !this->prepareMDIModelMatrix() )
+			{
+				return false;
+			}
+
+			expression = ShaderVariable::MDIModelMatrix;
+		}
+		else if ( this->isInstancingEnabled() )
+		{
+			if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
+			{
+				return false;
+			}
+
+			expression = Attribute::ModelMatrix;
+		}
+		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
+		{
+			if ( !this->prepareInstanceModelMatrix() )
+			{
+				return false;
+			}
+
+			expression = ShaderVariable::InstanceModelMatrix;
+		}
+		else
+		{
+			expression = MatrixPC(PushConstant::Component::ModelMatrix);
+		}
+
+		return true;
+	}
+
+	std::string
+	VertexShader::generateHeightfieldSurfaceCode () const noexcept
+	{
+		using namespace Graphics::Geometry;
+
+		const std::string surface{HeightfieldSurface::UniformBlockInstance};
+		const std::string node{MatrixPC(PushConstant::Component::HeightfieldNode)};
+		const std::string camera{MatrixPC(PushConstant::Component::HeightfieldCamera)};
+
+		/* Strugar's CDLOD vertex program (JGT 2009, § 3.3), on a clipmap instead of one heightmap:
+		 * - the patch point g (integers 0..G) is placed in the node: flat = origin + g · step;
+		 * - the morph factor grows from 0 to 1 over the last part of the node's range, measured from
+		 *   the camera the levels were SELECTED for (pushed per pass) to the unmorphed vertex;
+		 * - the odd coordinates slide by one cell toward the even ones, so at 1 the patch IS the next
+		 *   level's patch (degenerate triangles fill the rest);
+		 * - the height blends from the node's clip level to the next one with the same factor: a fully
+		 *   morphed vertex reads exactly what the coarser neighbour reads, and no seam is left to stitch. */
+		std::string code =
+			"\t" "/* Heightfield surface: CDLOD patch on the height clipmap. */" "\n"
+			"\t" "const vec4 hfNode = " + node + ";" "\n"
+			"\t" "const vec3 hfEye = " + camera + ".xyz;" "\n"
+			"\t" "const float hfStep = hfNode.z / " + surface + ".grid.w;" "\n"
+			"\t" "const int hfLastLevel = int(" + surface + ".grid.z) - 1;" "\n"
+			"\t" "const int hfLOD = int(hfNode.w);" "\n"
+			"\t" "const int hfFineLevel = min(hfLOD, hfLastLevel);" "\n"
+			"\t" "const int hfCoarseLevel = min(hfLOD + 1, hfLastLevel);" "\n"
+			"\t" "const vec2 hfGrid = " + std::string{Attribute::Position} + ".xz;" "\n"
+			"\t" "const vec2 hfFlat = hfNode.xy + (hfGrid * hfStep);" "\n"
+			"\t" "const vec4 hfRange = " + surface + ".levelsOfDetail[hfLOD];" "\n"
+			"\t" "const float hfMorph = clamp((distance(hfEye, vec3(hfFlat.x, hfHeight(hfFlat, hfFineLevel), hfFlat.y)) - hfRange.x) * hfRange.y, 0.0, 1.0);" "\n"
+			"\t" "const vec2 hfMorphed = hfNode.xy + ((hfGrid - (mod(hfGrid, 2.0) * hfMorph)) * hfStep);" "\n"
+			"\t" "const vec3 hfPosition = vec3(hfMorphed.x, mix(hfHeight(hfMorphed, hfFineLevel), hfHeight(hfMorphed, hfCoarseLevel), hfMorph), hfMorphed.y);" "\n";
+
+		/* The frame is a function of the normal (Khronos convention, like the grid it replaces:
+		 * T = dP/du along +X, B = N x T). The shadow pass asks for none of it. */
+		if ( m_heightfieldFrameRequested )
+		{
+			code +=
+				"\t" "const vec3 hfNormal = normalize(mix(hfNormalAt(hfMorphed, hfFineLevel), hfNormalAt(hfMorphed, hfCoarseLevel), hfMorph));" "\n"
+				"\t" "const vec3 hfTangent = normalize(vec3(hfNormal.y, -hfNormal.x, 0.0));" "\n"
+				"\t" "const vec3 hfBinormal = cross(hfNormal, hfTangent);" "\n";
+		}
+
+		if ( m_heightfieldTextureCoordinatesRequested )
+		{
+			code += "\t" "const vec2 hfTextureCoordinates = (hfMorphed * " + surface + ".textureCoordinates.xy) + " + surface + ".textureCoordinates.zw;" "\n";
+		}
+
+		code += "\n";
+
+		return code;
+	}
+
+	bool
+	VertexShader::declareHeightfieldPixelFrameOutputs (Generator::Abstract & generator, std::string & outputInstructions) noexcept
+	{
+		using namespace Graphics::Geometry;
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector2, HeightfieldSurface::PixelPositionVarying, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(3), GLSL::Matrix3, HeightfieldSurface::PixelToWorldVarying, GLSL::Flat}) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(3), GLSL::Matrix3, HeightfieldSurface::PixelToViewVarying, GLSL::Flat}) )
+		{
+			return false;
+		}
+
+		std::string modelMatrix;
+
+		if ( !this->resolveWorldModelMatrix(modelMatrix) || !this->prepareNormalMatrix() )
+		{
+			return false;
+		}
+
+		/* The same two rotations the vertex stage applies to a surface vector
+		 * (synthesizeVertexVectorInWorldSpace() / synthesizeVertexVectorInViewSpace()), handed flat so
+		 * the fragment stage applies them to the vector of ITS pixel. */
+		outputInstructions.append((std::stringstream{} <<
+			'\t' << HeightfieldSurface::PixelPositionVarying << " = hfPosition.xz;" "\n" <<
+			'\t' << HeightfieldSurface::PixelToWorldVarying << " = mat3(" << modelMatrix << ");" "\n" <<
+			'\t' << HeightfieldSurface::PixelToViewVarying << " = " << ShaderVariable::NormalMatrix << ";" "\n"
+		).str());
+
+		return true;
+	}
+
+	const char *
 	VertexShader::vertexPositionExpression () const noexcept
 	{
+		/* A heightfield is its own displacement stage: the patch point placed and lifted. */
+		if ( m_heightfieldSurfaceEnabled )
+		{
+			return "hfPosition";
+		}
+
 		/* The chain is skinning -> wind -> consumers: the wind displaces what the skinning
 		 * produced, never the raw attribute. */
 		if ( m_vegetationWindEnabled )
@@ -1698,6 +1845,14 @@ namespace EmEn::Saphir
 	const char *
 	VertexShader::previousVertexPositionExpression () const noexcept
 	{
+		/* The ground does not move: a vertex's previous position is its current one. The geomorph does
+		 * slide a vertex as the camera moves, by a fraction of a cell over the morph range — a motion
+		 * the velocity buffer deliberately ignores rather than tracking the previous camera. */
+		if ( m_heightfieldSurfaceEnabled )
+		{
+			return "hfPosition";
+		}
+
 		if ( m_vegetationWindEnabled )
 		{
 			return "previousWindPosition";
@@ -1873,10 +2028,38 @@ namespace EmEn::Saphir
 	bool
 	VertexShader::onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
+		/* ⚠️ BEFORE the unique instructions: these outputs prepare the normal matrix and the model
+		 * matrix, and generateMainUniqueInstructions() is what emits every preparation — asked after
+		 * it, they would name variables nothing declares. */
+		if ( m_heightfieldSurfaceEnabled && m_heightfieldPixelFrameEnabled && !this->declareHeightfieldPixelFrameOutputs(generator, outputInstructions) )
+		{
+			return false;
+		}
+
 		/* NOTE: This will add some declarations and populate m_vertexAttributes. */
 		if ( !this->generateMainUniqueInstructions(generator, topInstructions, outputInstructions) )
 		{
 			return false;
+		}
+
+		/* Heightfield surface: the patch point is placed and displaced at the top of main(), before any
+		 * synthesis reads hfPosition or its frame. It is its own displacement stage: a heightfield is
+		 * never skinned nor blown by the wind. */
+		if ( m_heightfieldSurfaceEnabled )
+		{
+			if ( m_skinningEnabled || m_vegetationWindEnabled )
+			{
+				Tracer::error(ClassId, "A heightfield surface cannot be skinned or displaced by the wind !");
+
+				return false;
+			}
+
+			if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+			{
+				return false;
+			}
+
+			topInstructions.insert(0, this->generateHeightfieldSurfaceCode());
 		}
 
 		/* Skeletal skinning: compute skinned position/normal/tangent/binormal at the top of main().
