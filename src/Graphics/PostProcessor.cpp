@@ -803,10 +803,11 @@ namespace EmEn::Graphics
 		const auto dstColorImage = m_grabPass->image();
 
 		/* Scene color source layout: the internal scene target image stays in
-		 * COLOR_ATTACHMENT_OPTIMAL; the swap-chain image is in PRESENT_SRC_KHR after RP2 end. */
+		 * COLOR_ATTACHMENT_OPTIMAL; the swap-chain image is in its final layout after RP2 end
+		 * (PRESENT_SRC_KHR, or COLOR_ATTACHMENT_OPTIMAL in a window-less run). */
 		const auto srcColorLayout = m_renderer.sceneTarget() != nullptr
 			? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			: m_renderer.swapChainFinalColorLayout();
 
 		/* Optional G-buffer copies enabled this frame. */
 		const auto srcDepthImage = m_renderer.currentSceneDepthImage();

@@ -28,6 +28,11 @@ visual verification depends on.
   belongs to the presentation engine until re-acquired); only the layer's detection differs.
 - ⚠️ So a Linux run proves nothing about this item: check it on macOS, and grep `UNASSIGNED` besides `VUID`.
 
+## Headless is already clean (2026-09-22)
+
+A window-less run's swap-chain is headless (`src/Vulkan/AGENTS.md` § Headless swap-chain): its capture reads
+the last SUBMITTED engine-owned image and reports nothing. What remains is the PRESENTED path only.
+
 ## What remains
 
 - [ ] Fix the `capture()` path so it works on an acquired image (or on its own copy).

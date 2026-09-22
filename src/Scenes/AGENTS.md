@@ -371,7 +371,7 @@ nothing.
 
 1. It does **not** live in the scene graph — no `StaticEntity`, no `Component::Visual`.
 2. Its pipeline is compiled against `Renderer::overlayFramebuffer()` (which resolves to the
-   swap-chain post-process framebuffer, or the windowless view's framebuffer in windowless mode),
+   swap-chain post-process framebuffer — the same in a window-less run, whose swap-chain is headless),
    **not** the scene render target's.
 3. It is recorded **after** `PostProcessor::executeDirectPostProcessEffects()`, from the three
    sites in `Graphics/Renderer.cpp` that draw the editor gizmos. Recording it any earlier puts it
@@ -972,8 +972,8 @@ jitter to also sit in the single-buffered view UBO, which raced the GPU; see eng
 `docs/caution-points.md` § "Sub-pixel projection jitter raced the single-buffered view UBO".
 
 **Frame contract (frame-linear slots):**
-1. The **Renderer** calls `Scene::beginRenderFrame()` once per rendered frame (both windowed
-   and windowless flows), BEFORE any `Scene::prepareRender()` — this resets the staging cursor
+1. The **Renderer** calls `Scene::beginRenderFrame()` once per rendered frame (windowed
+   and window-less runs: ONE flow since 2026-09-22, the swap-chain is headless in the latter), BEFORE any `Scene::prepareRender()` — this resets the staging cursor
    and targets the current frame-in-flight buffer.
 2. Every `prepareRender()` of the frame (render-to-textures first, main view last) stages one
    entry per **visible non-instanced** instance (`!useModelVertexBufferObject()`) via

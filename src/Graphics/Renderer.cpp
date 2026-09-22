@@ -636,70 +636,29 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* NOTE: Create the swap-chain for presenting images to the screen. */
-		if ( m_windowLess )
+		/* NOTE: Create the swap-chain for presenting images to the screen. In a window-less run it is HEADLESS
+		 * (SwapChain::isHeadless()): the same frames into engine-owned images, never presented — so a window-less
+		 * run renders exactly what a window shows, post-process included, and can be captured. It used to
+		 * create a separate 8-bit 'WindowLessView' drawn by a one-pass forward renderOffscreenFrame(), which
+		 * showed neither the HDR target nor the post-process chain, and could not be captured (2026-09-22). */
+		m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings(), m_vulkanInstance.showInformation());
+		m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
+
+		if ( !m_swapChain->createOnHardware() )
 		{
-			const auto viewDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
+			Tracer::fatal(ClassId, "Unable to create the swap-chain!");
 
-			/* NOTE: Windowless mode uses single-sample only. renderOffscreenFrame() has a single
-			 * render pass, so the overlay pipeline (created for single-sample) must match.
-			 * TODO: Add a two-pass structure (scene MSAA -> resolve -> overlay single-sample)
-			 * to renderOffscreenFrame() to support MSAA for quality screenshots. */
-			constexpr uint32_t sampleCount = 1;
-			/*auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
-
-			if ( sampleCount > 1 )
-			{
-				sampleCount = m_device->checkMultisampleCount(sampleCount);
-			}*/
-
-			m_windowLessView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
-				"WindowLessView",
-				m_window.state().windowWidth,
-				m_window.state().windowHeight,
-				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount},
-				viewDistance,
-				false
-			);
-
-			if ( !m_windowLessView->createRenderTarget(*this) )
-			{
-				Tracer::fatal(ClassId, "Unable to create the window less view!");
-
-				return false;
-			}
-
-			/* Create a command pools and command buffers following the offscreen view image. */
-			if ( !this->createRenderingSystem(1) )
-			{
-				m_windowLessView.reset();
-
-				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers!");
-
-				return false;
-			}
+			return false;
 		}
-		else
+
+		/* Create a command pools and command buffers following the swap-chain images. */
+		if ( !this->createRenderingSystem(m_swapChain->imageCount()) )
 		{
-			m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings(), m_vulkanInstance.showInformation());
-			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
+			m_swapChain.reset();
 
-			if ( !m_swapChain->createOnHardware() )
-			{
-				Tracer::fatal(ClassId, "Unable to create the swap-chain!");
+			Tracer::fatal(ClassId, "Unable to create the swap-chain command pools and buffers!");
 
-				return false;
-			}
-
-			/* Create a command pools and command buffers following the swap-chain images. */
-			if ( !this->createRenderingSystem(m_swapChain->imageCount()) )
-			{
-				m_swapChain.reset();
-
-				Tracer::fatal(ClassId, "Unable to create the swap-chain command pools and buffers!");
-
-				return false;
-			}
+			return false;
 		}
 
 		/* Create the RT descriptor set for ray query shaders. */
@@ -918,7 +877,6 @@ namespace EmEn::Graphics
 
 		m_swapChain.reset();
 		m_sceneTarget.reset();
-		m_windowLessView.reset();
 
 		/* Terminate sub-services. */
 		{
@@ -963,11 +921,6 @@ namespace EmEn::Graphics
 	std::shared_ptr< RenderTarget::Abstract >
 	Renderer::mainRenderTarget () const noexcept
 	{
-		if ( m_windowLess )
-		{
-			return m_windowLessView;
-		}
-
 		return m_swapChain;
 	}
 
@@ -980,6 +933,12 @@ namespace EmEn::Graphics
 		}
 
 		return nullptr;
+	}
+
+	VkImageLayout
+	Renderer::swapChainFinalColorLayout () const noexcept
+	{
+		return m_swapChain != nullptr ? m_swapChain->finalColorLayout() : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	}
 
 	VkFormat
@@ -1155,7 +1114,7 @@ namespace EmEn::Graphics
 			m_sceneTarget.reset();
 		}
 
-		if ( !m_postProcessingActive && !m_windowLess )
+		if ( !m_postProcessingActive )
 		{
 			/* No scene target: the grab reads the swap chain back, so it must follow ITS format. */
 			static_cast< void >(this->refreshGrabPass());
@@ -1408,11 +1367,6 @@ namespace EmEn::Graphics
 	const Framebuffer *
 	Renderer::overlayFramebuffer () const noexcept
 	{
-		if ( m_windowLess )
-		{
-			return m_windowLessView != nullptr ? m_windowLessView->framebuffer() : nullptr;
-		}
-
 		return m_swapChain != nullptr ? m_swapChain->postProcessFramebuffer() : nullptr;
 	}
 
@@ -1473,151 +1427,6 @@ namespace EmEn::Graphics
 		{
 			std::this_thread::yield();
 		}
-	}
-
-	void
-	Renderer::renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
-	{
-		/* NOTE: Record frame start time for the optional frame limiter. */
-		if ( this->isSoftwareFrameLimiterEnabled() )
-		{
-			m_frameStartTime = std::chrono::high_resolution_clock::now();
-		}
-
-		auto & currentFrameScope = m_rendererFrameScope[0];
-
-		/* NOTE: Wait for the current frame to complete. */
-		if ( currentFrameScope.inFlightFence()->waitAndReset(m_timeout) )
-		{
-			m_statistics.stop();
-
-			currentFrameScope.prepareForNewFrame();
-		}
-		else
-		{
-			TraceError{ClassId} << "Something wrong happens while waiting the fence for image!";
-
-			std::abort();
-
-			return;
-		}
-
-		m_statistics.start();
-
-		/* NOTE: Offscreen rendering */
-		if ( scene != nullptr )
-		{
-			/* Frame-begin contract: resets the scene's frame-linear instance transforms
-			 * staging BEFORE any prepareRender() of this frame (render-to-textures included).
-			 * The skinning frame cursor selects the skinning SSBO section of this frame and
-			 * deduplicates the per-frame pose upload (see RenderableInstance::Abstract). */
-			RenderableInstance::Abstract::setSkinningFrameCursor(++m_skinningFrameCursor);
-
-			scene->beginRenderFrame();
-
-			/* ⚠️ [ONE FRAME, ONE TRUTH] Both of these used to run in Core::renderingTask(), BEFORE
-			 * this function and therefore before the in-flight fence above. They belong here:
-			 * after the fence, and after beginRenderFrame() has latched the read state index this
-			 * whole frame will use.
-			 * Jitter FIRST — the temporal anti-aliasing contract is that every consumer of the
-			 * frame (the view UBO projection, the push-constant MVPs, the instance transforms
-			 * header) sees the same jittered matrix. */
-			this->prepareFrameJitter(scene.get());
-
-			/* Materials whose dynamic properties changed: one region, so after the fence like
-			 * everything else this frame reads. */
-			this->flushMaterialVideoMemoryUpdates();
-			this->flushGeometryVideoMemoryUpdates();
-			this->updateSurfaceGeometries(scene->frameReadStateIndex());
-
-			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
-
-			if ( this->isShadowMapsEnabled() )
-			{
-				/* [VULKAN-SHADOW] */
-				this->renderShadowMaps(currentFrameScope, *scene, m_graphicsQueue);
-			}
-
-			if ( this->isRenderToTexturesEnabled() )
-			{
-				this->renderRenderToTextures(currentFrameScope, *scene, m_graphicsQueue);
-			}
-
-			/* Forward any unconsumed primary semaphores (shadow maps) to secondary,
-			 * so the final submit correctly waits on them. */
-			currentFrameScope.promotePrimaryToSecondary();
-		}
-
-		/* Then we need the command buffer linked to this image by its index. */
-		const auto commandBuffer = currentFrameScope.getCommandBuffer(m_windowLessView.get());
-
-		if ( !commandBuffer->begin() )
-		{
-			return;
-		}
-
-		commandBuffer->beginRenderPass(*m_windowLessView->framebuffer(), m_windowLessView->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
-
-		/* First, render the scene. */
-		if ( scene != nullptr )
-		{
-			if ( scene->prepareRender(m_windowLessView) )
-			{
-				m_bindlessTextureManager.syncTextureSet(scene->bindlessTextureSet(), scene->lifetimeMS());
-
-				scene->renderOpaque(m_windowLessView, *commandBuffer);
-				scene->renderTranslucent(m_windowLessView, *commandBuffer);
-				scene->renderTranslucentGB(m_windowLessView, *commandBuffer);
-
-				if ( m_TBNSpaceRenderingEnabled )
-				{
-					scene->renderTBNSpace(m_windowLessView, *commandBuffer);
-				}
-			}
-		}
-
-		/* Render the scene debug helpers (compass) over the 3D-rendered scene. */
-		if ( scene != nullptr )
-		{
-			scene->renderDebugOverlay(*commandBuffer);
-		}
-
-		/* Render the editor gizmos over the 3D-rendered scene. */
-		if ( editorManager != nullptr )
-		{
-			editorManager->render(*commandBuffer);
-		}
-
-		/* Then render the overlay system over the 3D-rendered scene. */
-		overlayManager.render(m_windowLessView, *commandBuffer);
-
-		commandBuffer->endRenderPass();
-
-		if ( !commandBuffer->end() )
-		{
-			return;
-		}
-
-		const StaticVector< VkPipelineStageFlags, 16 > waitStages(
-			currentFrameScope.secondarySemaphores().size(),
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-		);
-
-		const auto submitResult = m_graphicsQueue->submit(
-			*commandBuffer,
-			SynchInfo{}
-				.waits(currentFrameScope.secondarySemaphores(), waitStages)
-				.withFence(currentFrameScope.inFlightFence()->handle())
-		);
-
-		if ( !submitResult )
-		{
-			TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_windowLessView->id() << "' !";
-
-			return;
-		}
-
-		this->applyFrameRateLimit();
 	}
 
 	void
@@ -2599,17 +2408,10 @@ namespace EmEn::Graphics
 				/* NOTE: These two notifications invalidate the framebuffer content. */
 				case Window::OSNotifiesFramebufferResized :
 				case Window::OSRequestsToRescaleContentBy :
-					if ( m_windowLess )
+					/* NOTE: We declare the swap-chain degraded (a headless one follows the fake window's size). */
+					if ( m_swapChain != nullptr )
 					{
-						// TODO: Resize the windowless framebuffer to the new size!
-					}
-					else
-					{
-						/* NOTE: We declare the swap-chain degraded. */
-						if ( m_swapChain != nullptr )
-						{
-							m_swapChain->setDegraded();
-						}
+						m_swapChain->setDegraded();
 					}
 					break;
 

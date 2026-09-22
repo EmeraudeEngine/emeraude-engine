@@ -54,6 +54,14 @@ namespace EmEn::Vulkan
 {
 	/**
 	 * @brief The vulkan swap-chain class.
+	 * @note HEADLESS in a window-less run (`--window-less`): the same object and the same frames, the color
+	 * images owned by the engine instead of a VkSwapchainKHR. Acquisition picks the next image and signals the
+	 * image-available semaphore with an empty submit; presentation consumes the render-finished semaphore the
+	 * same way and shows nothing. Renderer::renderFrame() runs unchanged — the whole Vulkan frame, HDR scene
+	 * target and post-process chain included — and the frame's color image ends in COLOR_ATTACHMENT_OPTIMAL
+	 * (finalColorLayout()), since PRESENT_SRC_KHR is reserved to presentable images. Owner, 2026-09-22: "il
+	 * doit être capable comme le mode avec fenêtre, ce n'est que du traitement vulkan au final, sans
+	 * presentation".
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
 	 */
@@ -317,6 +325,30 @@ namespace EmEn::Vulkan
 			setDegraded () noexcept
 			{
 				m_status = SwapChainStatus::Degraded;
+			}
+
+			/**
+			 * @brief Returns whether the images are engine-owned and never presented (window-less run).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHeadless () const noexcept
+			{
+				return m_headless;
+			}
+
+			/**
+			 * @brief Returns the layout a frame's color image is left in: PRESENT_SRC_KHR for a presentable image,
+			 * COLOR_ATTACHMENT_OPTIMAL for a headless one.
+			 * @note Every reader of a finished frame (capture, video recorder, grab pass) must start from this.
+			 * @return VkImageLayout
+			 */
+			[[nodiscard]]
+			VkImageLayout
+			finalColorLayout () const noexcept
+			{
+				return m_headless ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 			}
 
 			/**
@@ -603,6 +635,8 @@ namespace EmEn::Vulkan
 			std::atomic<SwapChainStatus> m_status{SwapChainStatus::Uninitialized};
 			uint32_t m_imageCount{0};
 			uint32_t m_acquiredImageIndex{0};
+			/** @brief Headless only: the image of the last submitted frame, what a capture reads (render thread writes, console thread reads). */
+			std::atomic< uint32_t > m_presentedImageIndex{0};
 			Base::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
 			Base::Math::CartesianFrame< float > m_worldCoordinates;
@@ -613,5 +647,8 @@ namespace EmEn::Vulkan
 			bool m_tripleBufferingEnabled{false};
 			bool m_VSyncEnabled{false};
 			bool m_sRGBEnabled{false};
+			bool m_headless{false};
+			/** @brief Headless only: a frame was submitted, so m_presentedImageIndex holds a finished image. */
+			std::atomic< bool > m_framePresented{false};
 	};
 }

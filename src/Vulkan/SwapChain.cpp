@@ -43,6 +43,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/Queue.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Utility.hpp"
 
@@ -69,14 +70,44 @@ namespace EmEn::Vulkan
 		m_showInformation{showInformation},
 		m_tripleBufferingEnabled{settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering)},
 		m_VSyncEnabled{settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync)},
-		m_sRGBEnabled{settings.getOrSetDefault< bool >(VideoEnableSRGBKey, DefaultEnableSRGB)}
+		m_sRGBEnabled{settings.getOrSetDefault< bool >(VideoEnableSRGBKey, DefaultEnableSRGB)},
+		m_headless{renderer.window().isWindowLessMode()}
 	{
-		m_renderer.window().surface()->update(renderer.device());
+		if ( !m_headless )
+		{
+			m_renderer.window().surface()->update(renderer.device());
+		}
 	}
 
 	bool
 	SwapChain::createBaseSwapChain (const Window & window, VkSwapchainKHR oldSwapChain) noexcept
 	{
+		/* Headless: no surface to query. The create info is kept filled all the same — it is what the image,
+		 * render pass and framebuffer code reads (format, extent, image count, usage). */
+		if ( m_headless )
+		{
+			const auto framebufferSize = window.getFramebufferSize();
+
+			m_createInfo = {};
+			m_createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+			m_createInfo.minImageCount = m_tripleBufferingEnabled ? 3 : 2;
+			m_createInfo.imageFormat = m_sRGBEnabled ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
+			m_createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+			m_createInfo.imageExtent = {std::max(framebufferSize[0], 1U), std::max(framebufferSize[1], 1U)};
+			m_createInfo.imageArrayLayers = 1;
+			m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			this->setExtent(m_createInfo.imageExtent.width, m_createInfo.imageExtent.height);
+
+			if ( m_showInformation )
+			{
+				TraceInfo{ClassId} << "Headless swap-chain (window-less run): " << m_createInfo.minImageCount << " engine-owned images of " << m_createInfo.imageExtent.width << 'x' << m_createInfo.imageExtent.height << '.';
+			}
+
+			return true;
+		}
+
 		const auto * surface = window.surface();
 		const auto surfaceFormat = this->chooseSurfaceFormat();
 		const auto & capabilities = surface->capabilities();
@@ -136,7 +167,7 @@ namespace EmEn::Vulkan
 	{
 		auto & window = renderer.window();
 
-		if ( !this->hasDevice() || window.surface() == nullptr )
+		if ( !this->hasDevice() || (!m_headless && window.surface() == nullptr) )
 		{
 			Tracer::fatal(ClassId, "No device or window surface to create the swap-chain !");
 
@@ -236,6 +267,12 @@ namespace EmEn::Vulkan
 	bool
 	SwapChain::fullRecreate (bool useNativeCode) noexcept
 	{
+		/* NOTE: The full recreation exists for the SURFACE; a headless swap-chain has none. */
+		if ( m_headless )
+		{
+			return this->recreate();
+		}
+
 		/* Destroy the old framebuffer. */
 		this->resetFramebuffer();
 
@@ -468,6 +505,14 @@ namespace EmEn::Vulkan
 	bool
 	SwapChain::prepareFrameData () noexcept
 	{
+		if ( m_headless )
+		{
+			m_imageCount = m_createInfo.minImageCount;
+			m_frames.resize(m_imageCount);
+
+			return true;
+		}
+
 		/* NOTE: Will set the image count for the swap-chain. */
 		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, nullptr); result != VK_SUCCESS )
 		{
@@ -489,6 +534,12 @@ namespace EmEn::Vulkan
 	std::vector< VkImage >
 	SwapChain::retrieveSwapChainImages () noexcept
 	{
+		/* Headless: no image to retrieve; createColorBuffer() creates each one (a null handle asks for it). */
+		if ( m_headless )
+		{
+			return std::vector< VkImage >(m_imageCount, VK_NULL_HANDLE);
+		}
+
 		std::vector< VkImage > imageHandles{m_imageCount, VK_NULL_HANDLE};
 
 		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, imageHandles.data()); result != VK_SUCCESS )
@@ -932,7 +983,7 @@ namespace EmEn::Vulkan
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+				.finalLayout = this->finalColorLayout()
 			});
 
 			subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -1020,7 +1071,7 @@ namespace EmEn::Vulkan
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+				.finalLayout = this->finalColorLayout()
 			});
 
 			subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -1208,15 +1259,37 @@ namespace EmEn::Vulkan
 	{
 		const auto instanceId = identifier + "ColorBuffer";
 
-		/* NOTE: Create an image from existing data from the swap-chain. */
-		image = Image::createFromSwapChain(this->device(), swapChainImage, m_createInfo);
-		image->setIdentifier(ClassId, instanceId, "Image");
-
-		if ( swapChainImage != image->handle() )
+		if ( m_headless )
 		{
-			TraceFatal{ClassId} << "Unable to create image '" << instanceId << "' !";
+			/* NOTE: Headless, the engine owns the image: same format, extent and usage as a swap-chain image. */
+			image = std::make_shared< Image >(
+				this->device(),
+				VK_IMAGE_TYPE_2D,
+				m_createInfo.imageFormat,
+				VkExtent3D{m_createInfo.imageExtent.width, m_createInfo.imageExtent.height, 1},
+				m_createInfo.imageUsage
+			);
+			image->setIdentifier(ClassId, instanceId, "Image");
 
-			return false;
+			if ( !image->createOnHardware() )
+			{
+				TraceFatal{ClassId} << "Unable to create the headless image '" << instanceId << "' !";
+
+				return false;
+			}
+		}
+		else
+		{
+			/* NOTE: Create an image from existing data from the swap-chain. */
+			image = Image::createFromSwapChain(this->device(), swapChainImage, m_createInfo);
+			image->setIdentifier(ClassId, instanceId, "Image");
+
+			if ( swapChainImage != image->handle() )
+			{
+				TraceFatal{ClassId} << "Unable to create image '" << instanceId << "' !";
+
+				return false;
+			}
 		}
 
 		const auto & imageCreateInfo = image->createInfo();
@@ -1334,6 +1407,27 @@ namespace EmEn::Vulkan
 			return std::nullopt;
 		}
 
+		/* Headless: the next image in turn. The renderer waits on the image-available semaphore as for a real
+		 * acquisition, so it is signalled by an empty submit — the frame then runs unchanged. The in-flight
+		 * fences already guarantee the image's previous frame is complete (image count >= frames in flight). */
+		if ( m_headless )
+		{
+			m_acquiredImageIndex = (m_acquiredImageIndex + 1) % m_imageCount;
+
+			const VkSemaphore semaphore = imageAvailableSemaphore->handle();
+
+			if ( !m_renderer.graphicsQueue()->submit(SynchInfo{}.signals({&semaphore, 1})) )
+			{
+				TraceError{ClassId} << "Unable to signal the image-available semaphore of the headless image #" << m_acquiredImageIndex << " !";
+
+				m_status = SwapChainStatus::Failure;
+
+				return std::nullopt;
+			}
+
+			return m_acquiredImageIndex;
+		}
+
 		const auto result = vkAcquireNextImageKHR(
 			this->device()->handle(),
 			m_handle,
@@ -1400,6 +1494,27 @@ namespace EmEn::Vulkan
 	void
 	SwapChain::present (const uint32_t & imageIndex, const Queue * queue, VkSemaphore presentSemaphore) noexcept
 	{
+		/* Headless: nothing is shown, but the render-finished semaphore was signalled and must be consumed
+		 * before the frame signals it again. */
+		if ( m_headless )
+		{
+			constexpr VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+			if ( !queue->submit(SynchInfo{}.waits({&presentSemaphore, 1}, {&waitStage, 1})) )
+			{
+				TraceError{ClassId} << "Unable to consume the render-finished semaphore of the headless image #" << imageIndex << " !";
+
+				m_status = SwapChainStatus::Failure;
+
+				return;
+			}
+
+			m_presentedImageIndex = imageIndex;
+			m_framePresented = true;
+
+			return;
+		}
+
 		VkPresentInfoKHR presentInfo{};
 		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 		presentInfo.pNext = nullptr;
@@ -1654,16 +1769,24 @@ namespace EmEn::Vulkan
 			TraceWarning{ClassId} << "SwapChain does not support layered images. Layer " << layerIndex << " requested, using layer 0 instead.";
 		}
 
-		if ( m_acquiredImageIndex >= m_frames.size() )
+		/* Headless: the image of the last SUBMITTED frame (present() records it). The acquired one may be the
+		 * frame being recorded right now on the render thread; the download is queued after that submit on the
+		 * same queue, and its barrier's first synchronisation scope covers it. */
+		const uint32_t imageIndex = m_headless ? m_presentedImageIndex.load() : m_acquiredImageIndex;
+
+		if ( imageIndex >= m_frames.size() || (m_headless && !m_framePresented.load()) )
 		{
 			TraceError{ClassId} << "Invalid acquired image index for capture!";
 
 			return false;
 		}
 
-		const auto & frame = m_frames[m_acquiredImageIndex];
+		const auto & frame = m_frames[imageIndex];
 
-		/* NOTE: The image captured here is a SWAP-CHAIN image whose last writer is vkQueuePresentKHR.
+		/* NOTE: HEADLESS (window-less run), the image is the engine's and was last written as a color attachment:
+		 * none of what follows applies, the capture is clean.
+		 *
+		 * NOTE: The image captured here is a SWAP-CHAIN image whose last writer is vkQueuePresentKHR.
 		 * The download below transitions it out of PRESENT_SRC — a WRITE — on an image the engine no
 		 * longer owns: a presented image belongs to the presentation engine until it is RE-ACQUIRED.
 		 * The Synchronization Validation layer reports `SYNC-HAZARD-WRITE-AFTER-PRESENT` and refuses
@@ -1680,7 +1803,7 @@ namespace EmEn::Vulkan
 		/* Capture color buffer. */
 		if ( frame.colorImage )
 		{
-			if ( !transferManager.downloadImage(*frame.colorImage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+			if ( !transferManager.downloadImage(*frame.colorImage, this->finalColorLayout(), VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
 			{
 				TraceError{ClassId} << "Failed to capture color buffer!";
 

@@ -54,6 +54,37 @@ namespace EmEn::Graphics
 {
 	using namespace Base;
 
+	/** @brief How a finished frame's color image is left, for the barriers of a read-back taken from it. */
+	struct FinalColorState
+	{
+		VkImageLayout layout;
+		/** @brief Source access when leaving that layout for the transfer. */
+		VkAccessFlags leaveAccess;
+		/** @brief Destination access when going back to it. */
+		VkAccessFlags returnAccess;
+		/** @brief The stage on the frame's side of both barriers. */
+		VkPipelineStageFlags stage;
+	};
+
+	/**
+	 * @brief Returns the barrier terms of a read-back from a finished frame's color image.
+	 * @note A presented image is handed back by the presentation engine (MEMORY_READ at BOTTOM_OF_PIPE, the
+	 * historical terms). A headless one (window-less run, SwapChain::isHeadless()) was last WRITTEN as a color
+	 * attachment and will be written again by the next frame, so the read-back synchronises on that.
+	 * @param layout The layout the frame left the image in (Renderer::swapChainFinalColorLayout()).
+	 * @return FinalColorState
+	 */
+	static FinalColorState
+	finalColorState (VkImageLayout layout) noexcept
+	{
+		if ( layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR )
+		{
+			return {layout, VK_ACCESS_MEMORY_READ_BIT, static_cast< VkAccessFlags >(0), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT};
+		}
+
+		return {layout, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	}
+
 	/* Helper to write a little-endian value to a byte buffer. */
 	static void
 	writeLE16 (uint8_t * dst, uint16_t value) noexcept
@@ -1182,6 +1213,7 @@ namespace EmEn::Graphics
 
 		/* Get the source swap-chain image. */
 		const auto sourceImage = m_renderer.currentSwapChainColorImage();
+		const auto finalState = finalColorState(m_renderer.swapChainFinalColorLayout());
 
 		if ( sourceImage == nullptr )
 		{
@@ -1201,18 +1233,18 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Barrier: PRESENT_SRC_KHR -> TRANSFER_SRC_OPTIMAL */
+		/* Barrier: final layout (PRESENT_SRC_KHR, or COLOR_ATTACHMENT_OPTIMAL headless) -> TRANSFER_SRC_OPTIMAL */
 		{
 			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*sourceImage,
-				VK_ACCESS_MEMORY_READ_BIT,
+				finalState.leaveAccess,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				finalState.layout,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			};
 
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+			slot.commandBuffer->pipelineBarrier(barrier, finalState.stage, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
 		/* Copy image to staging buffer. */
@@ -1248,18 +1280,18 @@ namespace EmEn::Graphics
 			);
 		}
 
-		/* Barrier: TRANSFER_SRC_OPTIMAL -> PRESENT_SRC_KHR */
+		/* Barrier: TRANSFER_SRC_OPTIMAL -> back to the final layout */
 		{
 			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*sourceImage,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				static_cast< VkAccessFlags >(0),
+				finalState.returnAccess,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				finalState.layout,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			};
 
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, finalState.stage);
 		}
 
 		if ( !slot.commandBuffer->end() )
@@ -1294,6 +1326,7 @@ namespace EmEn::Graphics
 	Recorder::submitTransferQueueCopy (size_t slotIndex) noexcept
 	{
 		const auto sourceImage = m_renderer.currentSwapChainColorImage();
+		const auto finalState = finalColorState(m_renderer.swapChainFinalColorLayout());
 
 		if ( sourceImage == nullptr )
 		{
@@ -1314,18 +1347,18 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Barrier: PRESENT_SRC_KHR → TRANSFER_SRC_OPTIMAL */
+		/* Barrier: final layout (PRESENT_SRC_KHR, or COLOR_ATTACHMENT_OPTIMAL headless) → TRANSFER_SRC_OPTIMAL */
 		{
 			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*sourceImage,
-				VK_ACCESS_MEMORY_READ_BIT,
+				finalState.leaveAccess,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				finalState.layout,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			};
 
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+			slot.commandBuffer->pipelineBarrier(barrier, finalState.stage, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
 		/* Copy image to device-local intermediate buffer (fast GPU → GPU). */
@@ -1361,18 +1394,18 @@ namespace EmEn::Graphics
 			);
 		}
 
-		/* Barrier: TRANSFER_SRC_OPTIMAL → PRESENT_SRC_KHR */
+		/* Barrier: TRANSFER_SRC_OPTIMAL → back to the final layout */
 		{
 			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*sourceImage,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				static_cast< VkAccessFlags >(0),
+				finalState.returnAccess,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				finalState.layout,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			};
 
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, finalState.stage);
 		}
 
 		if ( !slot.commandBuffer->end() )
@@ -1612,6 +1645,7 @@ namespace EmEn::Graphics
 		}
 
 		const auto sourceImage = m_renderer.currentSwapChainColorImage();
+		const auto finalState = finalColorState(m_renderer.swapChainFinalColorLayout());
 
 		if ( sourceImage == nullptr )
 		{
@@ -1625,18 +1659,18 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* Swap-chain: PRESENT -> TRANSFER_SRC. */
+		/* Swap-chain: final layout -> TRANSFER_SRC. */
 		{
 			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*sourceImage,
-				VK_ACCESS_MEMORY_READ_BIT,
+				finalState.leaveAccess,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				finalState.layout,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			};
 
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+			slot.commandBuffer->pipelineBarrier(barrier, finalState.stage, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
 		/* Snapshot: UNDEFINED -> TRANSFER_DST (content fully overwritten). */
@@ -1681,18 +1715,18 @@ namespace EmEn::Graphics
 			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 		}
 
-		/* Swap-chain: back to PRESENT. */
+		/* Swap-chain: back to the final layout. */
 		{
 			const Vulkan::Sync::ImageMemoryBarrier barrier{
 				*sourceImage,
 				VK_ACCESS_TRANSFER_READ_BIT,
-				static_cast< VkAccessFlags >(0),
+				finalState.returnAccess,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				finalState.layout,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			};
 
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, finalState.stage);
 		}
 
 		if ( !slot.commandBuffer->end() || !slot.fence->reset() )

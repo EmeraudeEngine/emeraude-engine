@@ -284,7 +284,7 @@ namespace EmEn
 				 * i.e. before the frame's in-flight fence had been waited on. Every buffer they
 				 * write is single-instance, so the host was overwriting memory that up to
 				 * framesInFlight() - 1 still-executing frames were reading. They now live inside
-				 * Renderer::renderFrame() / renderOffscreenFrame(), after the fence and after
+				 * Renderer::renderFrame(), after the fence and after
 				 * Scene::beginRenderFrame() has latched the frame's read state index.
 				 * The overlay stays here on purpose: it writes surface IMAGES through the transfer
 				 * manager (a staged transfer, a different hazard class) and already sizes per frame. */
@@ -295,14 +295,9 @@ namespace EmEn
 				/* Render the scene (optional), editor gizmos, and the overlay on top. */
 				const auto * editorPtr = m_sceneManager.editorManager().isActive() ? &m_sceneManager.editorManager() : nullptr;
 
-				if ( m_graphicsRenderer.isWindowLess() )
-				{
-					m_graphicsRenderer.renderOffscreenFrame(activeScene, m_overlayManager, editorPtr);
-				}
-				else
-				{
-					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager, editorPtr);
-				}
+				/* NOTE: The same frame with or without a window: a window-less run renders into a HEADLESS
+				 * swap-chain (Vulkan::SwapChain::isHeadless()). */
+				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager, editorPtr);
 
 				if ( m_graphicsRenderer.recorder().isRecording() && m_graphicsRenderer.recorder().shouldCaptureFrame() )
 				{

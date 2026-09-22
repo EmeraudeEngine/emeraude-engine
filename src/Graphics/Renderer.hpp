@@ -962,6 +962,14 @@ namespace EmEn::Graphics
 			VkFormat swapChainColorFormat () const noexcept;
 
 			/**
+			 * @brief Returns the layout a finished frame's color image is left in (SwapChain::finalColorLayout()):
+			 * PRESENT_SRC_KHR when presented, COLOR_ATTACHMENT_OPTIMAL in a window-less run.
+			 * @return VkImageLayout
+			 */
+			[[nodiscard]]
+			VkImageLayout swapChainFinalColorLayout () const noexcept;
+
+			/**
 			 * @brief Returns the swap chain depth/stencil format.
 			 * @return VkFormat
 			 */
@@ -977,8 +985,9 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns whether the internal scene render target is needed.
-			 * @note The internal target is required when the post-processor is active,
-			 * windowless mode is active, or MSAA is enabled.
+			 * @note The internal target is required when the post-processor is active, or MSAA is enabled.
+			 * A window-less run no longer forces it: it renders the same frame as a window
+			 * (SwapChain::isHeadless()).
 			 * @note "Active" is not the master switch: it is the switch AND actual work to do
 			 * (see m_postProcessingActive). The value is the one decided by the last recorded
 			 * frame, which is what the resize/recreate paths need.
@@ -988,7 +997,7 @@ namespace EmEn::Graphics
 			bool
 			needsInternalTarget () const noexcept
 			{
-				return m_windowLess || m_postProcessingActive;
+				return m_postProcessingActive;
 			}
 
 			/**
@@ -1388,15 +1397,6 @@ namespace EmEn::Graphics
 			void prepareFrameJitter (const Scenes::Scene * scene) noexcept;
 
 			/**
-			 * @brief Render a new offscreen frame for the active scene.
-			 * @param scene A reference to the scene smart pointer.
-			 * @param overlayManager A reference to the overlay manager.
-			 * @param editorManager
-			 * @return void
-			 */
-			void renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
-
-			/**
 			 * @brief Render a new frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
@@ -1682,7 +1682,6 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
 			std::shared_ptr< SceneRenderTarget > m_sceneTarget;
 			Vulkan::DeferredDestructor m_deferredDestructor;
-			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			/** @brief Semaphores signaled by the frame submission and waited on by
 			 * vkQueuePresentKHR(), indexed by ACQUIRED SWAP-CHAIN IMAGE INDEX — never by frame

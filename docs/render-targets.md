@@ -169,8 +169,8 @@ target lifetime removes the freeing path entirely.
 
 **Init-order constraint:** because the swap-chain creates its view matrices inside
 `createRenderTarget()` at renderer init, the main `DescriptorPool` must be created **before**
-the swap-chain / windowless view in `Renderer::onInitialize()` (it is now created right after
-`initializeSubServices()`, before the windowless/swap-chain branch).
+the swap-chain (headless in a window-less run, `src/Vulkan/AGENTS.md` § Headless swap-chain) in `Renderer::onInitialize()` (it is now created right after
+`initializeSubServices()`, before the swap-chain creation).
 
 A resize goes through `SwapChain::recreate()` / `fullRecreate()`, which only call
 `updateViewProperties()` (data) — the view-matrices GPU resource survives a resize untouched.

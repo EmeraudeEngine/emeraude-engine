@@ -460,6 +460,33 @@ UniformBufferObject::getDescriptorInfo (uint32_t elementOffset) const noexcept
 > `VkPipelineCache` documented at the end of this file, which is what spares the DRIVER the
 > compilation work. They are complementary — neither replaces the other.
 
+### Headless swap-chain — the window-less run (Sep 2026)
+
+`--window-less` makes the swap-chain **HEADLESS** (`SwapChain::isHeadless()`, from
+`Window::isWindowLessMode()`): the same object, the same render passes, the same
+`Renderer::renderFrame()` — HDR scene target and post-process chain included — with the color images
+**owned by the engine** instead of a `VkSwapchainKHR`. Owner (2026-09-22): "il doit être capable comme le
+mode avec fenêtre, ce n'est que du traitement vulkan au final, sans presentation".
+
+| | presented | headless |
+|---|---|---|
+| images | `vkGetSwapchainImagesKHR` | `Image` created by `createColorBuffer()`, same format/extent/usage |
+| create info | surface capabilities | filled by hand: fake window size, `B8G8R8A8_SRGB/UNORM`, 3 or 2 images |
+| `acquireNextImage()` | `vkAcquireNextImageKHR` | next index in turn + an EMPTY submit signalling the image-available semaphore |
+| `present()` | `vkQueuePresentKHR` | an EMPTY submit consuming the render-finished semaphore |
+| final color layout | `PRESENT_SRC_KHR` | `COLOR_ATTACHMENT_OPTIMAL` — `PRESENT_SRC_KHR` is reserved to presentable images |
+| `capture()` | the ACQUIRED image (defect: `docs/todo/screenshot-non-acquired-swapchain-image.md`) | the last SUBMITTED image — clean |
+
+⚠️ **Every reader of a finished frame starts from `SwapChain::finalColorLayout()`**
+(`Renderer::swapChainFinalColorLayout()`): the capture, the post-processor's grab source, the video
+recorder's three read-backs (`Recorder.cpp`, `finalColorState()`: a presented image is left by the
+presentation engine — `MEMORY_READ` at `BOTTOM_OF_PIPE` — a headless one by a color write).
+It replaced a separate 8-bit `WindowLessView` drawn by a one-pass forward `renderOffscreenFrame()`,
+which showed neither the HDR target nor the post-process chain and could not be captured; both are
+DELETED. Measured 2026-09-22 on `relief`: window-less captures on the RTX 3070 Ti AND on the Intel
+iGPU (which cannot present in the owner's Wayland session), 0 VUID, 0 UNASSIGNED. The frame size is the
+fake window's (`m_state`, 1280×720 by default).
+
 ### SwapChain render passes (three variants)
 
 `SwapChain` owns three render passes sharing the same attachments (color + depth,
