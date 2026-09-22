@@ -320,6 +320,98 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
+			 * @brief Restricts this target to a SINGLE renderable instance: it becomes a BAKE.
+			 * @note The offscreen pass renders the whole SCENE (Renderer::renderRenderToTextures() calls
+			 * Scene::renderOpaque()/renderTranslucent()/renderTranslucentGB()), which is what an
+			 * environment probe wants and exactly what a bake does not: an imposter atlas, an asset
+			 * thumbnail or an icon must show ONE subject and nothing else. With a subject set, every
+			 * other instance is skipped while the render lists are populated, so the MDI batches and the
+			 * lighted selections inherit the restriction instead of each having to re-check it.
+			 * @warning A bake almost always wants setClearColorOverride() too: the default clear is the
+			 * renderer's OPAQUE colour, and a card baked over it shows a rectangle of background.
+			 * @warning Same lifetime contract as excludeFromRendering(): the key is opaque (the
+			 * RenderableInstance address) to keep the render target free of any scene dependency, and
+			 * nothing clears it when the instance dies. Clear it when the bake is done.
+			 * @param renderableInstance The renderable instance address, nullptr to render the whole scene.
+			 * @return void
+			 */
+			void
+			setBakeSubject (const void * renderableInstance) noexcept
+			{
+				m_bakeSubject = renderableInstance;
+			}
+
+			/**
+			 * @brief Returns the single instance this target bakes, nullptr when it renders the scene.
+			 * @return const void *
+			 */
+			[[nodiscard]]
+			const void *
+			bakeSubject () const noexcept
+			{
+				return m_bakeSubject;
+			}
+
+			/**
+			 * @brief Returns whether a renderable instance is kept out by this target's bake subject.
+			 * @note Always false on a target with no subject, which is every target that is not a bake.
+			 * @param renderableInstance The renderable instance address.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRejectedByBakeSubject (const void * renderableInstance) const noexcept
+			{
+				return m_bakeSubject != nullptr && m_bakeSubject != renderableInstance;
+			}
+
+			/**
+			 * @brief Gives this target its own colour-attachment clear value.
+			 * @note Without it, the offscreen pass clears with the RENDERER's colour, which is opaque.
+			 * A bake destined to be composited needs alpha 0 behind its subject.
+			 * @param color The clear colour.
+			 * @return void
+			 */
+			void
+			setClearColorOverride (const VkClearColorValue & color) noexcept
+			{
+				m_clearColorOverride = color;
+				m_hasClearColorOverride = true;
+			}
+
+			/**
+			 * @brief Drops the clear value override, returning this target to the renderer's colour.
+			 * @return void
+			 */
+			void
+			clearClearColorOverride () noexcept
+			{
+				m_hasClearColorOverride = false;
+			}
+
+			/**
+			 * @brief Returns whether this target carries its own clear value.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasClearColorOverride () const noexcept
+			{
+				return m_hasClearColorOverride;
+			}
+
+			/**
+			 * @brief Returns this target's own clear value, meaningless unless hasClearColorOverride().
+			 * @return const VkClearColorValue &
+			 */
+			[[nodiscard]]
+			const VkClearColorValue &
+			clearColorOverride () const noexcept
+			{
+				return m_clearColorOverride;
+			}
+
+			/**
 			 * @brief Returns the precisions of the framebuffer.
 			 * @return const FramebufferPrecisions &
 			 */
@@ -691,11 +783,16 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
 			/** @brief Renderable instances excluded from this target (probe self-inclusion fix). */
 			std::vector< const void * > m_renderingExclusions;
+			/** @brief The single instance this target bakes, nullptr when it renders the whole scene. */
+			const void * m_bakeSubject{nullptr};
+			/** @brief This target's own colour clear value, used only when m_hasClearColorOverride. */
+			VkClearColorValue m_clearColorOverride{};
 			bool m_isOrthographicProjection{false};
 			bool m_enableSyncPrimitive{false};
 			bool m_renderOutOfDate{false};
 			bool m_automaticRendering{false};
 			bool m_suspendableByPostProcessReflections{false};
 			bool m_hasBeenRendered{false};
+			bool m_hasClearColorOverride{false};
 	};
 }

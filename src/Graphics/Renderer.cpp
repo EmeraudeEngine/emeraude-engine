@@ -2500,7 +2500,16 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+			/* A bake needs alpha 0 behind its subject; the renderer's own clear colour is opaque, and a
+			 * card composited over it shows a rectangle of background. Every other target keeps it. */
+			auto clearValues = m_swapChainClearColors;
+
+			if ( renderToTexture->hasClearColorOverride() )
+			{
+				clearValues[0].color = renderToTexture->clearColorOverride();
+			}
+
+			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), clearValues, VK_SUBPASS_CONTENTS_INLINE);
 
 			if ( scene.prepareRender(renderToTexture) )
 			{

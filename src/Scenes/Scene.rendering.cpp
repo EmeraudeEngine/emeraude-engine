@@ -1050,6 +1050,16 @@ namespace EmEn::Scenes
 			return true; // Continue
 		}
 
+		/* A BAKE target draws ONE subject and nothing else: an imposter atlas, an asset thumbnail,
+		 * an icon. The offscreen pass renders the whole scene, so without this the atlas of a tree
+		 * would carry the ground, the sky and the neighbours. Filtered HERE, while the render lists
+		 * are populated, rather than at each draw site: the MDI batches and the lighted selections
+		 * are built from these lists and inherit the restriction for free. */
+		if ( renderTarget->isRejectedByBakeSubject(renderableInstance.get()) )
+		{
+			return true; // Continue
+		}
+
 		/* AUTO-exclusion (probe self-sampling): an instance whose material SAMPLES the render
 		 * target being populated must never be rendered into it, whether or not the caller
 		 * registered it in the manual exclusion list above. Sampling an image that is

@@ -32,28 +32,52 @@ small rotation, and the blend landing back on the direction asked for.
 The geometry side is also done: `TreeMesh::imposter()` is the crossed-quads card, kept apart from
 the level chain because it carries ONE group — it samples the atlas this item bakes.
 
+## Owner decisions taken (2026-09-22)
+
+1. **The atlas is baked ONCE AT LOAD TIME**, not stored in the data store. A visible hitch is
+   accepted; a baked atlas on disk is not wanted.
+2. **The tree is isolated by a PER-TARGET FILTER added to the engine**, not by a throwaway bake
+   scene and not by a visibility-layer system. A render target learns to draw ONE renderable over
+   a transparent clear. The contract is the one a baker actually needs and it is reusable by any
+   future bake (asset thumbnails, icons, per-object probes); a layer mask would touch every entity
+   and every pass for a far wider scope than this item.
+
 ## What remains
 
-1. **The bake orchestration.** The engine already renders offscreen on demand, and this was
-   verified rather than assumed:
-   - `Scenes::Scene::createRenderToTexture2D(name, w, h, colorCount, viewDistance, ortho)`
-     (`src/Scenes/Scene.rendering.cpp:159`) creates the target and registers it on the scene.
-   - `Graphics::Renderer::renderRenderToTextures()` (`src/Graphics/Renderer.cpp:2457`) walks
-     `scene.forEachRenderToTexture()` once per frame and **honours an on-demand contract**: with
-     `isAutomaticRendering()` false, a target renders only while `setRenderOutOfDate()` has
-     flagged it (`src/Graphics/RenderTarget/Abstract.hpp:170-215`). That is exactly the "bake
-     once, then never again" the atlas needs.
-   - `Scenes::Toolkit::generateTexture2DRenderer()` (`src/Scenes/Toolkit.hpp:1185`) is the working
-     precedent: a perspective camera entity connected to the target through
-     `AVConsoleManager().connectVideoDevices()`.
-   ⚠️ The loop renders **one target per frame pass**, so an N x N atlas is an N² multi-frame
-   sequence unless N² targets are registered at once. Decide which: a long hitch, or a lot of
-   simultaneous framebuffers. **Owner decision.**
-2. **The shading path.** A camera-facing quad that calls `octahedralBlend()` for the view
-   direction and blends the three cells. The mapping header is ready; the GLSL side is not
-   written, and Saphir has no octahedral node yet.
-3. **When the atlas is baked**: offline into the data store, or once at load time. A load-time
-   bake costs a visible hitch; a stored atlas costs disk and a pipeline step. **Owner decision.**
+1. ~~The per-target bake filter~~ **DONE** (2026-09-22). `RenderTarget::Abstract` gained
+   `setBakeSubject()` (render ONE instance, `nullptr` = the whole scene as before) and
+   `setClearColorOverride()` (the target's own clear, the renderer's being opaque). The filter sits
+   at the single site that feeds every render list,
+   `Scene::checkRenderableInstanceForRendering()`, so the MDI batches and the lighted selections
+   inherit it for free. Cascade builds clean, 0 warning. ⚠ **Not yet exercised at runtime** — no
+   caller sets a bake subject until the orchestration below exists. Described in
+   `src/Graphics/AGENTS.md` § 15d.
+
+2. **The N x N sequencing.** Secondary, and cheap either way now that the assembly is known to
+   exist: `commandBuffer.blitImage()` / `copyImage()` are already used by `GrabPass`
+   (`src/Graphics/GrabPass.cpp:709-736`) and `PostProcessor` (`src/Graphics/PostProcessor.cpp:760`),
+   so N views are assembled into one atlas image with no new Vulkan work. The loop draws one
+   target per pass, so it is either N^2 targets registered at once (one long hitch) or one target
+   over N^2 frames (a small state machine). To be settled when the filter lands — it trades VRAM
+   against hitch length and nothing else.
+3. **The GLSL side.** No blocker: `Declaration::Function` is the mechanism, and
+   `Graphics/Effects/Resolve/FXAA.cpp:46` is the working model (name, return type,
+   `addInParameter`, `Code{fn, Location::Output}`, `shader.declare(fn)`). ⚠️ Functions are emitted
+   BEFORE sampler declarations, so a declared function may not reference a sampler declared later
+   — it takes the sampler as an in-parameter, exactly as FXAA does. The octahedral node is pure
+   `vec3` math, so this costs nothing. ⚠️ **It will be a SECOND implementation of the mapping**,
+   and the four tests guard the C++ one only: transcribe it line by line and say so in both files.
+
+The mechanics already verified and available:
+- `Scenes::Scene::createRenderToTexture2D()` (`src/Scenes/Scene.rendering.cpp:159`) creates and
+  registers the target.
+- `Renderer::renderRenderToTextures()` honours an **on-demand contract**: with
+  `isAutomaticRendering()` false, a target renders only while `setRenderOutOfDate()` flags it
+  (`src/Graphics/RenderTarget/Abstract.hpp:170-215`). That is the "bake once, then never again"
+  the atlas wants.
+- `Scenes::Toolkit::generateTexture2DRenderer()` (`src/Scenes/Toolkit.hpp:1185`) is the working
+  precedent: a camera entity connected to the target through
+  `AVConsoleManager().connectVideoDevices()`.
 
 ## Traps
 
@@ -63,6 +87,8 @@ the level chain because it carries ONE group — it samples the atlas this item 
   to force a cell onto itself. A test of mine asserted a cell recognises its own INDEX and failed
   on exactly that; assert on the DIRECTION the imposter shows. Full account in emeraude-base
   `docs/caution-points.md` § *The octahedral map is 2-to-1 on the BORDER*.
+- ⚠️ The offscreen pass clears with `m_swapChainClearColors`, an OPAQUE colour. An imposter needs
+  alpha 0 behind the tree, or every card shows a rectangle of sky.
 - ⚠️ Bake at a **pinned exposure** (`Core.SceneManagerService.Act.setExposure()`). Baking through
   the auto-exposure burns whatever the camera happened to be metering into the atlas, and the
   imposter then never matches the mesh it replaces.
