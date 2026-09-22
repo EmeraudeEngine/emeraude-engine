@@ -113,6 +113,15 @@ namespace EmEn::Saphir::Generator
 			bool generateVertexShader (Program & program, bool needsAlphaTest) noexcept;
 
 			/**
+			 * @brief Generates the task + mesh stages of a mesh-shading surface's shadow (isMeshShadingSurfaceEnabled()).
+			 * @param program A reference to the program.
+			 * @param needsAlphaTest Whether the material needs alpha-tested shadows.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateMeshShadingStages (Program & program, bool needsAlphaTest) noexcept;
+
+			/**
 			 * @brief Generates the fragment shader stage of the graphics pipeline.
 			 * @note Used for cubemap shadow maps (linear depth) and/or alpha-tested shadows.
 			 * @param program A reference to the program being constructed.

@@ -1196,6 +1196,9 @@ the log says so once.
   (camera, then the InstanceTransforms slot as raw bits — a mesh stage has no `gl_InstanceIndex`) at
   `Program::meshSurfacePushConstantOffset()` (80, 112 B in all). The draw is
   `RenderableInstance::…::drawMeshShadingSurface()`: `drawMeshTasks(tileCountX, tileCountZ, 1)`.
+- The SHADOW program takes the same stages (`ShadowCasting::generateMeshShadingStages()`, 2026-09-23): the shadow map
+  sees the displaced geometry, subdivided for the MAIN camera (the receiver's), like a heightfield's levels. The
+  shadow draw passes that position, not the light's: from the light, every tile would be past the handover and flat.
 - ⚠️ The first run failed on `pcMatrices.viewMatrix`: a mesh stage created without `enableAdvancedMatrices()` gets
   the classic VP-only block while the lit passes synthesize view-space vectors. Any new per-vertex mode the vertex
   shader takes from `initVertexShader()` must be mirrored in `generateMeshShadingStages()`.

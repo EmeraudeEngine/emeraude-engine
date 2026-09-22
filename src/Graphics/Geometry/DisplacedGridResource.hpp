@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cmath>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -46,6 +45,9 @@ namespace EmEn::Graphics::Geometry
 	 * ground (Renderable::BasicGroundResource::load(vertexGridResource, …)) first.
 	 * @warning The grid must be centred on its origin (no world or UV offset), which is what every
 	 * VertexGridResource::load() builds.
+	 * @note Every member is defined in the .cpp: an EMEN_API class defined entirely inline in a header that no engine
+	 * translation unit includes is never exported by the MSVC DLL, and a consumer then fails to link (LNK2019 on the
+	 * __imp_ symbols) while GCC and Clang, which emit inline members on the consumer side, link fine.
 	 * @extends EmEn::Graphics::Geometry::VertexGridResource The flat grid it falls back to.
 	 */
 	class EMEN_API DisplacedGridResource final : public VertexGridResource
@@ -62,12 +64,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param tileSize The side of one mesh-shading tile, in metres. Default 1 m.
 			 * @param resourceFlags The geometry resource flag bits. Default none.
 			 */
-			DisplacedGridResource (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, float tileSize = 1.0F, uint32_t resourceFlags = 0) noexcept
-				: VertexGridResource{serviceProvider, name, resourceFlags | EnableMeshShadingSurface},
-				m_tileSize{tileSize > 0.0F ? tileSize : 1.0F}
-			{
-
-			}
+			DisplacedGridResource (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, float tileSize = 1.0F, uint32_t resourceFlags = 0) noexcept;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
@@ -82,53 +79,19 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Base::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
-			{
-				return getClassUID();
-			}
+			size_t classUID () const noexcept override;
 
 			/** @copydoc EmEn::Base::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				/* It IS a vertex grid too: everything that asks for one keeps working. */
-				return classUID == getClassUID() || classUID == VertexGridResource::getClassUID();
-			}
+			bool is (size_t classUID) const noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char *
-			classLabel () const noexcept override
-			{
-				return ClassId;
-			}
+			const char * classLabel () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::meshShadingSurface() */
 			[[nodiscard]]
-			const MeshShadingSurface *
-			meshShadingSurface () const noexcept override
-			{
-				const auto & grid = this->localData();
-
-				if ( !grid.isValid() )
-				{
-					return nullptr;
-				}
-
-				const auto size = grid.squaredSize();
-				const auto tileCount = static_cast< uint32_t >(std::max(std::lround(size / m_tileSize), 1L));
-
-				m_surface.originX = -grid.halfSquaredSize();
-				m_surface.originZ = -grid.halfSquaredSize();
-				m_surface.tileSize = size / static_cast< float >(tileCount);
-				m_surface.uvPerMeter = grid.UMultiplier() / size;
-				m_surface.tileCountX = tileCount;
-				m_surface.tileCountZ = tileCount;
-
-				return &m_surface;
-			}
+			const MeshShadingSurface * meshShadingSurface () const noexcept override;
 
 		private:
 

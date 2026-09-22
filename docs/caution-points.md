@@ -3831,6 +3831,20 @@ misleading.
   the other RTR shaders (`RTRBlurFragmentShader`, `RTRCompositeFragmentShader`) are still small but any
   shader that keeps growing will re-trigger this on the next Windows build.
 
+### ⚠️ An `EMEN_API` class defined ENTIRELY inline in a header no engine TU includes does not link on MSVC (Sep 2026)
+
+- **Symptom (MSVC only):** the CONSUMER fails to link — `LNK2019` / `LNK2001` on `__imp_` symbols of the class
+  (its constructor, destructor and virtuals), then `LNK1120`. Linux and macOS link fine.
+- **Cause:** a `dllexport` class is instantiated and exported only by a DLL translation unit that sees its
+  definition. When nothing in the engine includes the header, `Emeraude.dll` exports nothing for it, while the
+  consumer sees `dllimport` and calls the `__imp_` entries. GCC and Clang emit inline members on the consumer
+  side, so they never notice.
+- **Seen in:** `Graphics/Geometry/DisplacedGridResource.hpp` (engine `cf16fd26`, caught by the Windows session on
+  2026-09-23: projet-alpha's `Relief.cpp` was the only includer).
+- **Fix (the engine convention):** a real `.cpp` with the constructor and the virtuals out of line — like
+  `VertexGridResource.cpp`. A `.cpp` that only includes the header also links, but hides the reason.
+- **Preventive:** every new `EMEN_API` class gets its `.cpp`, even when it is small.
+
 ### ⚠️⚠️ `FetchContent`: a `SOURCE_DIR` you point at an existing checkout gets ERASED — and `MakeAvailable` builds the fetched project unless you tell it not to (Sep 2026)
 
 > **Context:** RenderDoc stopped being a submodule (Sep 2026) — 219 MB of sources cloned by everyone

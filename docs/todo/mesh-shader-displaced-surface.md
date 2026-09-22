@@ -59,8 +59,12 @@ but no generator builds a LIT, material-driven program from it.
 4. `DisplacedGridResource` + task/mesh code + draw branch — COLOUR PASSES DONE 2026-09-23: relief option 0 = 2
    renders on the RTX 3070 Ti, 0 VUID, real geometry near the camera and POM beyond (docs:
    `src/Saphir/AGENTS.md` § The mesh-shading surface). Owner decisions of the day: a dedicated GEOMETRY rather
-   than a renderable, and SKIRTS rather than a geomorph against the cracks. REMAINING: the shadow program
-   (ShadowCasting still draws the flat grid), frustum culling in the task stage, and the GPU timing against mode 1.
+   than a renderable, and SKIRTS rather than a geomorph against the cracks. SHADOW PROGRAM DONE 2026-09-23
+   (`ShadowCasting::generateMeshShadingStages()`, subdivided for the MAIN camera like a heightfield's levels):
+   under an 8° sun, switching `Core/Graphics/ShadowMapping/Enabled` off brightens 20 % of the near-ground pixels by
+   more than 10/255 (mean 109.5 → 115.8). The level flagstones shadow the JOINTS, not each other's tops: their tops
+   all sit at the ground plane, only the joints are displaced down. REMAINING: frustum culling in the task stage
+   and the GPU cost (below).
 5. The handover band, the fallback, `relief` option 0 = 2, measurements.
 
 ## The concrete design (2026-09-22, implementing steps 3 + 4 together — step 3 alone cannot run)
@@ -89,13 +93,25 @@ but no generator builds a LIT, material-driven program from it.
 
 ## What remains
 
-- [ ] Design the renderable + the generator path (task/mesh/fragment), shadow program included.
-- [ ] Handover with the POM band (no double relief, no gap).
-- [ ] `relief` option 0 = 2; measure GPU cost against mode 1 at the A/B pose.
-- [ ] Device without `VK_EXT_mesh_shader` (MoltenVK): the surface must fall back to POM, visibly traced.
+Steps 1-4 and the step-5 functions are done and cross-checked (2026-09-23): the handover band, `relief` option
+0 = 2, and the fallback — MoltenVK (Apple M2) and the Windows AMD iGPU both log the fallback exactly once and
+render mode 2 pixel-indistinguishable from mode 1 (inside the run-to-run noise). Left:
+
+- **The GPU cost is too high: +9.6 ms of ScenePass** on an RTX 3060 Laptop (Windows, validation ON, relief spawn
+  pose): ScenePass 3.91 ms in mode 1 against 13.52 ms in mode 2, the whole frame 8.73 → 17.19 ms. The draw
+  launches one task workgroup per 1 m tile, 256 × 256 = 65 536 of them for the relief ground, in the colour pass
+  AND the shadow pass, and every one emits at least its flat quad — none is culled.
+- **Frustum culling in the task stage** (a tile outside the view emits nothing; the shadow pass culls against the
+  light's frustum), then re-measure the cost with validation OFF, and break ScenePass down if it is still high.
+- Measure on the RTX 3070 Ti too (this workstation), same pose, same method (`Core/Graphics/GPUProfiler/Enabled`).
 
 ## ⚠️ Traps
 
 - The height map must be a HEIGHT (`src/Graphics/AGENTS.md` § Parallax Occlusion Mapping): the same
   data drives both techniques, so a photo-luminance map breaks both.
 - MoltenVK has no `VK_EXT_mesh_shader` (verified 2026-09-22).
+- A POM surface cannot cast its relief's shadow at all (the shadow map sees the flat plane), so the shadow A/B
+  of the three techniques is mode 2 against itself with `Core/Graphics/ShadowMapping/Enabled = false`, never
+  mode 2 against mode 1.
+- `relief` option 3 = 1 draws the ground in WIREFRAME (`PolygonMode::Line`): the instrument that shows the
+  subdivision the task stage chose — dense near the camera, one flat quad per 1 m tile beyond the handover.
