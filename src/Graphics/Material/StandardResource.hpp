@@ -254,7 +254,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowVertexCode() */
 			[[nodiscard]]
-			bool generateShadowVertexCode (const Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader) const noexcept override;
+			bool generateShadowVertexCode (const Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowAlphaTestCode() */
 			[[nodiscard]]
@@ -266,7 +266,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::generateVertexShaderCode() */
 			[[nodiscard]]
-			bool generateVertexShaderCode (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader) const noexcept override;
+			bool generateVertexShaderCode (Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::generateFragmentShaderCode() */
 			[[nodiscard]]

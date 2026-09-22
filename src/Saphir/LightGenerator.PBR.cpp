@@ -207,7 +207,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept
+	LightGenerator::generatePBRVertexShader (Generator::Abstract & generator, AbstractVertexStage & vertexShader, LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept
 	{
 		Declaration::OutputBlock lightBlock{LightBlock, generator.getNextShaderVariableLocation(lightType == LightType::Spot ? 2 : 1), ShaderVariable::Light};
 

@@ -72,7 +72,7 @@ namespace EmEn
 		}
 
 		class LightGenerator;
-		class VertexShader;
+		class AbstractVertexStage;
 		class FragmentShader;
 	}
 
@@ -546,7 +546,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool generateVertexShaderCode (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader) const noexcept = 0;
+			virtual bool generateVertexShaderCode (Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader) const noexcept = 0;
 
 			/**
 			 * @brief Generates the code responsible for the fragment shader.
@@ -645,7 +645,7 @@ namespace EmEn::Graphics::Material
 			 */
 			[[nodiscard]]
 			virtual bool
-			generateShadowVertexCode ([[maybe_unused]] const Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::VertexShader & vertexShader) const noexcept
+			generateShadowVertexCode ([[maybe_unused]] const Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::AbstractVertexStage & vertexShader) const noexcept
 			{
 				return true;
 			}

@@ -454,7 +454,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generateVertexShaderCode (Generator::Abstract & generator, VertexShader & vertexShader) const noexcept
+	LightGenerator::generateVertexShaderCode (Generator::Abstract & generator, AbstractVertexStage & vertexShader) const noexcept
 	{
 		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 

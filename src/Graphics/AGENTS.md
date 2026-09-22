@@ -4426,7 +4426,7 @@ receiver is drawn with, or the shadow swims at every level boundary. The camera 
 the SAME `lodViewPosition` the selection used, so the vertex stage morphs exactly where the selection
 put the boundaries — a reflection probe selects and morphs from its own centre, consistently.
 
-**The vertex stage** (`VertexShader::generateHeightfieldSurfaceCode()`): `flat = origin + g · step`;
+**The vertex stage** (`AbstractVertexStage::generateHeightfieldSurfaceCode()`): `flat = origin + g · step`;
 `morphK` grows 0 → 1 over the last third of the node's ring (Strugar's `morphStartRatio` 0.66, fully
 morphed 1 % before the boundary), from the camera to the UNMORPHED vertex; the odd coordinates slide by
 one cell toward the even ones (at 1 the patch IS the next level's patch — every quad is split along the
@@ -4655,7 +4655,7 @@ bending weights. Never enable vertex colors on a vegetation material without rev
 multiply.
 
 **Code references:**
-- `Saphir/VertexShader.cpp` — `generateVegetationWindCode()`, the two position accessors
+- `Saphir/AbstractVertexStage.cpp` — `generateVegetationWindCode()`, the two position accessors
 - `Saphir/Generator/SceneRendering.cpp` — the enable and the cache-key contribution
 - `Scenes/SceneInstanceTransforms.hpp` — `setWindState()` and the header layout
 - `Graphics/Renderable/Abstract.hpp` — `HasVegetationWind`
@@ -4934,7 +4934,7 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 - `Vulkan/CommandBuffer.cpp:drawIndexedIndirect()` — Wraps `vkCmdDrawIndexedIndirect`
 - `Renderable/ProgramCacheKey.hpp` — `isMDIEnabled` field
 - `Saphir/Generator/Abstract.hpp` — `IsMultiDrawIndirectEnabled` flag
-- `Saphir/VertexShader.cpp` — MDI paths in all synthesize/prepare methods
+- `Saphir/AbstractVertexStage.cpp` — MDI paths in all synthesize/prepare methods
 - `Renderer.hpp/.cpp` — `m_MDIBatchBuilder`, `m_MDIEnabled`, init in `onSetup()`
 
 ### Extension Registration Ordering (Critical)

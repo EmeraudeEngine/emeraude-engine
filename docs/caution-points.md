@@ -380,7 +380,7 @@ if ( materialType == StandardResource::ClassId )
 >
 > **Code references:**
 > - `Saphir/Keys.hpp:ShaderVariable::TangentToWorldMatrix`
-> - `Saphir/VertexShader.cpp:synthesizeTangentToWorldMatrix()`
+> - `Saphir/AbstractVertexStage.cpp:synthesizeTangentToWorldMatrix()`
 
 ---
 
@@ -3316,7 +3316,7 @@ defects and one data defect, each enough to produce it on its own:
 1. **Wrong space.** The tangent-space view vector was `transpose(TangentToWorldMatrix) · (camera − P)world`.
    `TangentToWorldMatrix` is `NormalMatrix · (T, B, N)`, a VIEW-space frame outside MDI: the march
    direction turned with the camera. Now `WorldTBNMatrix`. ⚠️ The name lies; read the synthesis
-   (`VertexShader::synthesizeTangentToWorldMatrix()`) before using it on a world vector — the
+   (`AbstractVertexStage::synthesizeTangentToWorldMatrix()`) before using it on a world vector — the
    reflection-normal code still does, unattributed.
 2. **The v sign.** `B` is the image's +Y (Khronos), i.e. DECREASING v: a tangent `(x, y)` is `(x, −y)` in UV.
    Verify with the relief read along ±X AND ±Z — a sign error on one axis shows raised along one and

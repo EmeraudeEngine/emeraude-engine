@@ -43,7 +43,7 @@ namespace EmEn
 			class Abstract;
 		}
 
-		class VertexShader;
+		class AbstractVertexStage;
 	}
 
 	namespace Graphics
@@ -112,7 +112,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	EMEN_API bool checkPrimaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
+	EMEN_API bool checkPrimaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Checks secondary texture coordinates linkage between the material and the geometry.
@@ -123,7 +123,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	EMEN_API bool checkSecondaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
+	EMEN_API bool checkSecondaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Adds a 3D texture coordinate fallback for volumetric textures when geometry only has 2D UVs.
@@ -134,7 +134,7 @@ namespace EmEn::Graphics::Material
 	 * @return bool
 	 */
 	[[nodiscard]]
-	EMEN_API bool addVolumetricTextureFallback (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept;
+	EMEN_API bool addVolumetricTextureFallback (Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Parses the base of a component structure from JSON data.

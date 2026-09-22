@@ -2219,7 +2219,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::generateShadowVertexCode (const Saphir::Generator::Abstract & /*generator*/, Saphir::VertexShader & vertexShader) const noexcept
+	StandardResource::generateShadowVertexCode (const Saphir::Generator::Abstract & /*generator*/, Saphir::AbstractVertexStage & vertexShader) const noexcept
 	{
 		const auto * component = this->alphaSourceTextureComponent();
 
@@ -2779,7 +2779,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::generateVertexShaderCode (Generator::Abstract & generator, VertexShader & vertexShader) const noexcept
+	StandardResource::generateVertexShaderCode (Generator::Abstract & generator, AbstractVertexStage & vertexShader) const noexcept
 	{
 		if ( !this->isCreated() )
 		{

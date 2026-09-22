@@ -1137,7 +1137,7 @@ depth test + write ON simply overwrites it.
 > [!CAUTION]
 > **The sky's clip DEPTH is pinned to the far plane, and its geometric size is therefore
 > irrelevant. Never "fix" a missing sky by growing the cuboid or by pushing the camera's far
-> distance out.** `VertexShader::synthesizeVertexPositionInScreenSpace()` emits
+> distance out.** `AbstractVertexStage::synthesizeVertexPositionInScreenSpace()` emits
 > `gl_Position.z = gl_Position.w` for every infinity-view program (the standard skybox trick,
 > `clipPosition.xyww` in the Khronos glTF Sample Viewer's `skybox.vert`); the projection maps near
 > to 0 and far to 1, so `z = w` lands exactly on the far plane and can never be clipped.

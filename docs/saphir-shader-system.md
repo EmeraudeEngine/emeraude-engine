@@ -595,9 +595,9 @@ When modifying matrix access in shader generation, these files need updates:
 | File | Functions | Purpose |
 |------|-----------|---------|
 | `Generator/Abstract.cpp` | `declareMatrixPushConstantBlock()` | Push constant declaration |
-| `VertexShader.cpp` | `prepareModelViewMatrix()` | ModelView computation |
-| `VertexShader.cpp` | `prepareModelViewProjectionMatrix()` | MVP computation |
-| `VertexShader.cpp` | `prepareSpriteModelMatrix()` | Billboard matrix |
+| `AbstractVertexStage.cpp` | `prepareModelViewMatrix()` | ModelView computation |
+| `AbstractVertexStage.cpp` | `prepareModelViewProjectionMatrix()` | MVP computation |
+| `AbstractVertexStage.cpp` | `prepareSpriteModelMatrix()` | Billboard matrix |
 | `LightGenerator.PBR.cpp` | `generatePBRVertexShader()` | The lighting vertex stage (light direction/distance varyings) |
 
 #### Common Error

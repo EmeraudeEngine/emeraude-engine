@@ -13,7 +13,7 @@ tags: [architecture, material, program-cache, gltf]
 ## Why
 
 Surfaced while wiring glTF `COLOR_0` (2026-08-28). `StandardResource`'s codegen asks
-`usingVertexColors()` — a **material flag** — and, when true, `VertexShader::synthesizeVertexColor()`
+`usingVertexColors()` — a **material flag** — and, when true, `AbstractVertexStage::synthesizeVertexColor()`
 declares an `InputAttribute{VertexAttributeType::VertexColor}`, i.e. a **vertex input attribute**.
 But whether that attribute exists in the buffer is decided by the **geometry**
 (`Geometry::Interface::vertexColorEnabled()` → `VertexColorType::RGBA` in
@@ -69,7 +69,7 @@ wall.
 ## References
 
 - `Graphics/Material/StandardResource.cpp` (`usingVertexColors()` call sites),
-  `Saphir/VertexShader.cpp::synthesizeVertexColor()`,
+  `Saphir/AbstractVertexStage.cpp::synthesizeVertexColor()`,
   `Graphics/RenderableInstance/Abstract.cpp::buildProgramCacheKey()`,
   `Scenes/Loaders/GLTFLoader.cpp` (the `…-vc` variant).
 - [`src/Scenes/Loaders/AGENTS.md`](../../src/Scenes/Loaders/AGENTS.md) § *Known gaps (glTF 2.0)*.

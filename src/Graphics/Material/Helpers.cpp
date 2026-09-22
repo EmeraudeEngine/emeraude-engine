@@ -122,7 +122,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	checkPrimaryTextureCoordinates (Generator::Abstract & generator, VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept
+	checkPrimaryTextureCoordinates (Generator::Abstract & generator, AbstractVertexStage & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept
 	{
 		/* NOTE: There is no need of primary texture coordinates. */
 		if ( !material.usingPrimaryTextureCoordinates() )
@@ -219,7 +219,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	checkSecondaryTextureCoordinates (Generator::Abstract & generator, VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept
+	checkSecondaryTextureCoordinates (Generator::Abstract & generator, AbstractVertexStage & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept
 	{
 		/* NOTE: There is no need of secondary texture coordinates. */
 		if ( !material.usingSecondaryTextureCoordinates() )
@@ -289,7 +289,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	addVolumetricTextureFallback (Generator::Abstract & generator, VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept
+	addVolumetricTextureFallback (Generator::Abstract & generator, AbstractVertexStage & vertexShader, const Geometry::Interface & geometry) noexcept
 	{
 		/* If geometry already has 3D UVs or has no UVs at all, nothing to do. */
 		if ( geometry.primaryTextureCoordinates3DEnabled() || !geometry.primaryTextureCoordinatesEnabled() )

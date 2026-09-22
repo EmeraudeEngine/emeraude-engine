@@ -125,8 +125,31 @@ ctest -R Saphir
 - `Generator/ShadowCasting.cpp/.hpp` - Shadow map generator
 - `Generator/OverlayRendering.cpp/.hpp` - 2D overlay generator
 - `LightGenerator.cpp/.hpp` - Lighting code generation (PerFragment, PerVertex, PBR, NormalMap, color projection)
+- `AbstractVertexStage.cpp/.hpp` - The PER-VERTEX stage feeding the rasterizer: the whole synthesis machinery (`requestSynthesizeInstruction()`, the synthetic variables, model-matrix sources, skinning/wind/heightfield). `VertexShader.hpp` is a thin concrete stage on top of it
 - `Program.cpp/.hpp` - Shader program (shaders + pipeline layout)
 - `ShaderManager.cpp/.hpp` - ShaderModule cache and compilation
+
+## The per-vertex stage contract — `AbstractVertexStage` (Sep 2026)
+
+The material, light and shadow generators address **`AbstractVertexStage &`**, never `VertexShader &`:
+`Material::Interface::generateVertexShaderCode()` / `generateShadowVertexCode()`, the three
+`Material/Helpers` texture-coordinate checks, and `LightGenerator::generateVertexShaderCode()` /
+`generatePBRVertexShader()` / `generateVertexShaderShadowMapCode()`. The synthesis machinery lives in that
+base, so a second per-vertex stage — the MESH shader, engine item `mesh-shader-displaced-surface` — gets
+every synthetic variable without a second copy (owner decisions, 2026-09-22: an abstract stage interface,
+and **overloads, not virtuals**, where the stages diverge: connection to the fragment stage, output
+declaration, `gl_Position`, the draw).
+
+⚠️ It was extracted by MOVING `VertexShader.cpp` (now `AbstractVertexStage.cpp`), not rewriting it, and
+proven inert: the generated GLSL of `relief`, `light-and-shadow-debug`, `forest`, `terrain` and
+`animation-debug` — **410 sources** across SceneRendering, ShadowCasting, PostProcessing and
+OverlayRendering — is byte-identical before and after (`--settings-filepath` on a copy with
+`EnableSourceCodeDump`, `--cache-directory` per run, `diff -r`). Use the same A/B for any change meant to
+be codegen-neutral.
+
+What stays VertexShader-only on purpose: `FragmentShader`/`GeometryShader`/`TesselationControlShader::connectFromPreviousShader(const VertexShader &)`,
+`VertexBufferFormatManager::getVertexBufferFormat()` (only a vertex shader has vertex attributes) and
+`Program::vertexShader()`.
 
 ## ShaderManager Include Contract (compile-time)
 
@@ -620,7 +643,7 @@ transform is rigid, so a world-space ray LENGTH carries over untouched.
 
 **`ShaderVariable::ModelScale` (`svModelScale`)** is the new synthesizable vertex variable this
 needs: glTF authors `thicknessFactor` in MESH space, so it must be scaled to world units.
-`VertexShader::synthesizeModelScale()` emits `vec3(length(M[0].xyz), length(M[1].xyz), length(M[2].xyz))`
+`AbstractVertexStage::synthesizeModelScale()` emits `vec3(length(M[0].xyz), length(M[1].xyz), length(M[2].xyz))`
 as a **flat** output — it is a per-draw/per-instance constant, never per-vertex. ⚠️ Its four branches
 (MDI / instancing attribute / instance-transforms SSBO / push constant) **mirror
 `synthesizeVertexPositionInWorldSpace()`**; a fifth model-matrix path must teach BOTH.
@@ -863,7 +886,7 @@ of the same name is byte-identical, returns `true`, and emits **no warning**:
 
 - **Vertex input attributes** (`VertexShader::declare(const Declaration::InputAttribute &)`).
   Name, location and GLSL type are all derived from the `VertexAttributeType`, so a
-  duplicate cannot conflict. The `synthesize*` / TBN helpers in `VertexShader.cpp`
+  duplicate cannot conflict. The `synthesize*` / TBN helpers in `AbstractVertexStage.cpp`
   and the `Generator/*` passes each declare what they consume.
 - **Unbounded bindless arrays** (`AbstractShader::declare(const Declaration::Sampler &)`
   when `declaration.isUnbounded()`). A fixed name maps to a fixed set/binding/type
@@ -1003,9 +1026,9 @@ MDI shaders are NOT generated for objects with special rendering requirements:
 **Code references:**
 - `Generator/Abstract.hpp:IsMultiDrawIndirectEnabled` — Generator flag
 - `Generator/Abstract.cpp:declareMatrixPushConstantBlock()` — MDI push constant block
-- `VertexShader.hpp:enableMDI()` — Extension registration + `m_MDIEnabled` flag
-- `VertexShader.cpp:prepareMDIModelMatrix()` — BDA reconstruction + SSBO access
-- `VertexShader.cpp:onSourceCodeGeneration()` — `PerDrawDataRef` struct declaration
+- `AbstractVertexStage.hpp:enableMDI()` — Extension registration + `m_MDIEnabled` flag
+- `AbstractVertexStage.cpp:prepareMDIModelMatrix()` — BDA reconstruction + SSBO access
+- `AbstractVertexStage.cpp:onSourceCodeGeneration()` — `PerDrawDataRef` struct declaration
 - `Program.hpp:wasMDIEnabled()` — Query MDI state from program
 - `RenderableInstance/Abstract.cpp:getReadyForMDI()` — MDI program generation
 - `Renderable/ProgramCacheKey.hpp:isMDIEnabled` — Cache key discrimination
@@ -1233,7 +1256,7 @@ The classic non-instanced scene path reads its model matrix from the per-scene
   plus the non-instanced shadow-receiving reads in `LightGenerator.ShadowMap.cpp`.
 - **Assumed limit (owner decision)**: cubemap scene, shadow 2D, CSM and shadow-cubemap
   paths STAY on push constants (64-68 B, min-spec clean — no motion data needed there).
-- **Velocity clip positions** — `VertexShader::synthesizeVelocityClipPositions()` emits
+- **Velocity clip positions** — `AbstractVertexStage::synthesizeVelocityClipPositions()` emits
   `svClipPositionCurrent` (recomputed from the MVP, deliberately **independent** of the
   `gl_Position` instruction so output ordering cannot break it) and `svClipPositionPrevious`
   (`previousViewProjection` × the odd-slot previous model, or the previous skinned pose).
@@ -1336,9 +1359,9 @@ const auto viewMatrixSource = vertexShader.isCubemapModeEnabled() ?
 ### Files Implementing Cubemap Support
 
 - `Generator/Abstract.cpp:declareMatrixPushConstantBlock()` - Push constant declaration
-- `VertexShader.cpp:prepareModelViewMatrix()` - ModelView matrix computation
-- `VertexShader.cpp:prepareModelViewProjectionMatrix()` - MVP computation
-- `VertexShader.cpp:prepareSpriteModelMatrix()` - Billboard sprite support
+- `AbstractVertexStage.cpp:prepareModelViewMatrix()` - ModelView matrix computation
+- `AbstractVertexStage.cpp:prepareModelViewProjectionMatrix()` - MVP computation
+- `AbstractVertexStage.cpp:prepareSpriteModelMatrix()` - Billboard sprite support
 - `LightGenerator.PerFragment.cpp` - Light direction/position in view space
 - `LightGenerator.PerFragment.NormalMap.cpp` - Normal mapping light calculations
 - `LightGenerator.PerVertex.cpp` - Per-vertex (Gouraud) lighting

@@ -1,5 +1,5 @@
 /*
- * src/Saphir/VertexShader.cpp
+ * src/Saphir/AbstractVertexStage.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "VertexShader.hpp"
+#include "AbstractVertexStage.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -57,7 +57,7 @@ namespace EmEn::Saphir
 	using namespace Graphics;
 
 	Function
-	VertexShader::generateComputeUpwardVectorFunction () noexcept
+	AbstractVertexStage::generateComputeUpwardVectorFunction () noexcept
 	{
 		std::stringstream functionCode;
 
@@ -103,7 +103,7 @@ namespace EmEn::Saphir
 	}
 
 	Function
-	VertexShader::generateGetBillBoardModelMatrixFunction () noexcept
+	AbstractVertexStage::generateGetBillBoardModelMatrixFunction () noexcept
 	{
 		std::stringstream functionCode;
 
@@ -130,7 +130,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::declare (const InputAttribute & declaration) noexcept
+	AbstractVertexStage::declare (const InputAttribute & declaration) noexcept
 	{
 		if ( !declaration.isValid() )
 		{
@@ -163,7 +163,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::declare (const StageOutput & declaration) noexcept
+	AbstractVertexStage::declare (const StageOutput & declaration) noexcept
 	{
 		if ( !declaration.isValid() )
 		{
@@ -185,7 +185,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::declare (const OutputBlock & declaration) noexcept
+	AbstractVertexStage::declare (const OutputBlock & declaration) noexcept
 	{
 		if ( !declaration.isValid() )
 		{
@@ -207,7 +207,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::preparationAlreadyDone (const char * preparation) const noexcept
+	AbstractVertexStage::preparationAlreadyDone (const char * preparation) const noexcept
 	{
 		/*return std::ranges::any_of(m_uniquePreparations, [preparation] (const auto & pair) {
 			return std::strcmp(pair.first, preparation) == 0;
@@ -226,7 +226,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::prepareSpriteModelMatrix () noexcept
+	AbstractVertexStage::prepareSpriteModelMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::SpriteModelMatrix) )
 		{
@@ -252,8 +252,8 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		this->declare(VertexShader::generateComputeUpwardVectorFunction());
-		this->declare(VertexShader::generateGetBillBoardModelMatrixFunction());
+		this->declare(AbstractVertexStage::generateComputeUpwardVectorFunction());
+		this->declare(AbstractVertexStage::generateGetBillBoardModelMatrixFunction());
 
 		/* NOTE: In cubemap mode, the view matrix comes from the UBO indexed by gl_ViewIndex,
 		 * not from the push constant. */
@@ -272,7 +272,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::prepareMDIModelMatrix () noexcept
+	AbstractVertexStage::prepareMDIModelMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::MDIModelMatrix) )
 		{
@@ -294,7 +294,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::prepareInstanceModelMatrix () noexcept
+	AbstractVertexStage::prepareInstanceModelMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::InstanceModelMatrix) )
 		{
@@ -315,7 +315,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVelocityClipPositions (Generator::Abstract & generator, bool & emitted) noexcept
+	AbstractVertexStage::synthesizeVelocityClipPositions (Generator::Abstract & generator, bool & emitted) noexcept
 	{
 		emitted = false;
 
@@ -438,7 +438,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::prepareModelViewMatrix () noexcept
+	AbstractVertexStage::prepareModelViewMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::ModelViewMatrix) )
 		{
@@ -538,7 +538,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::prepareNormalMatrix () noexcept
+	AbstractVertexStage::prepareNormalMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::NormalMatrix) )
 		{
@@ -576,7 +576,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::prepareModelViewProjectionMatrix () noexcept
+	AbstractVertexStage::prepareModelViewProjectionMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::ModelViewProjectionMatrix) )
 		{
@@ -738,7 +738,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexPositionInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope, bool asGLStandardPosition) noexcept
+	AbstractVertexStage::synthesizeVertexPositionInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope, bool asGLStandardPosition) noexcept
 	{
 		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
 		{
@@ -825,7 +825,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeModelScale (Generator::Abstract & generator, std::string & outputInstructions) noexcept
+	AbstractVertexStage::synthesizeModelScale (Generator::Abstract & generator, std::string & outputInstructions) noexcept
 	{
 		/* NOTE: The four branches MIRROR synthesizeVertexPositionInWorldSpace() — same paths, same
 		 * order, same prepare*() calls. They are duplicated rather than factored because the
@@ -883,7 +883,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexPositionInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeVertexPositionInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
 		{
@@ -925,7 +925,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexPositionInScreenSpace (std::string & outputInstructions) noexcept
+	AbstractVertexStage::synthesizeVertexPositionInScreenSpace (std::string & outputInstructions) noexcept
 	{
 		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
 		{
@@ -1001,7 +1001,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexPositionInTextureSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeVertexPositionInTextureSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		topInstructions.append((std::stringstream{} <<
 			"\t" "const float positionTextureX = dot(-" << ShaderVariable::PositionViewSpace << ".xyz, " << ShaderVariable::TangentViewSpace << ");" "\n" <<
@@ -1037,7 +1037,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexColor (Generator::Abstract & generator, std::string & outputInstructions) noexcept
+	AbstractVertexStage::synthesizeVertexColor (Generator::Abstract & generator, std::string & outputInstructions) noexcept
 	{
 		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::PrimaryVertexColor, GLSL::Smooth}) )
 		{
@@ -1059,7 +1059,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexTextureCoordinates (Generator::Abstract & generator, std::string & outputInstructions, const char * TCVariableName) noexcept
+	AbstractVertexStage::synthesizeVertexTextureCoordinates (Generator::Abstract & generator, std::string & outputInstructions, const char * TCVariableName) noexcept
 	{
 		if ( std::strcmp(TCVariableName, ShaderVariable::Primary2DTextureCoordinates) == 0 )
 		{
@@ -1141,7 +1141,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexVectorInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VertexAttributeType vectorType, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeVertexVectorInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VertexAttributeType vectorType, VariableScope scope) noexcept
 	{
 		const char * attributeName = nullptr;
 		const char * vectorName = nullptr;
@@ -1212,7 +1212,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeVertexVectorInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VertexAttributeType vectorType, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeVertexVectorInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VertexAttributeType vectorType, VariableScope scope) noexcept
 	{
 		const char * attributeName = nullptr;
 		const char * vectorName = nullptr;
@@ -1279,7 +1279,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeWorldTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeWorldTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declareFrameAttribute(VertexAttributeType::Tangent) )
 		{
@@ -1338,7 +1338,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeViewTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeViewTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declareFrameAttribute(VertexAttributeType::Tangent) )
 		{
@@ -1392,7 +1392,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeTangentToWorldMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
+	AbstractVertexStage::synthesizeTangentToWorldMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declareFrameAttribute(VertexAttributeType::Tangent) )
 		{
@@ -1440,7 +1440,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeRequestInstructions (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions) noexcept
+	AbstractVertexStage::synthesizeRequestInstructions (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
 		for ( const auto & [variableType, variableScope] : m_requests )
 		{
@@ -1642,7 +1642,7 @@ namespace EmEn::Saphir
 	}
 
 	const char *
-	VertexShader::vertexFrameExpression (VertexAttributeType vectorType) const noexcept
+	AbstractVertexStage::vertexFrameExpression (VertexAttributeType vectorType) const noexcept
 	{
 		switch ( vectorType )
 		{
@@ -1676,7 +1676,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::declareFrameAttribute (VertexAttributeType vectorType) noexcept
+	AbstractVertexStage::declareFrameAttribute (VertexAttributeType vectorType) noexcept
 	{
 		if ( m_heightfieldSurfaceEnabled )
 		{
@@ -1689,7 +1689,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::resolveWorldModelMatrix (std::string & expression) noexcept
+	AbstractVertexStage::resolveWorldModelMatrix (std::string & expression) noexcept
 	{
 		if ( this->isMDIEnabled() )
 		{
@@ -1727,7 +1727,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	VertexShader::generateHeightfieldSurfaceCode () const noexcept
+	AbstractVertexStage::generateHeightfieldSurfaceCode () const noexcept
 	{
 		using namespace Graphics::Geometry;
 
@@ -1780,7 +1780,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::declareHeightfieldPixelFrameOutputs (Generator::Abstract & generator, std::string & outputInstructions) noexcept
+	AbstractVertexStage::declareHeightfieldPixelFrameOutputs (Generator::Abstract & generator, std::string & outputInstructions) noexcept
 	{
 		using namespace Graphics::Geometry;
 
@@ -1819,7 +1819,7 @@ namespace EmEn::Saphir
 	}
 
 	const char *
-	VertexShader::vertexPositionExpression () const noexcept
+	AbstractVertexStage::vertexPositionExpression () const noexcept
 	{
 		/* A heightfield is its own displacement stage: the patch point placed and lifted. */
 		if ( m_heightfieldSurfaceEnabled )
@@ -1843,7 +1843,7 @@ namespace EmEn::Saphir
 	}
 
 	const char *
-	VertexShader::previousVertexPositionExpression () const noexcept
+	AbstractVertexStage::previousVertexPositionExpression () const noexcept
 	{
 		/* The ground does not move: a vertex's previous position is its current one. The geomorph does
 		 * slide a vertex as the camera moves, by a fraction of a cell over the morph range — a motion
@@ -1867,7 +1867,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	VertexShader::generateVegetationWindCode (const char * baseExpression) const noexcept
+	AbstractVertexStage::generateVegetationWindCode (const char * baseExpression) const noexcept
 	{
 		const std::string base{baseExpression};
 		const std::string color{Attribute::Color};
@@ -1911,7 +1911,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::generateMainUniqueInstructions (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions) noexcept
+	AbstractVertexStage::generateMainUniqueInstructions (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
 		std::string tempTopInstructions{};
 
@@ -1936,7 +1936,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::isSyntheticVariableAllowed (const char * variableName) noexcept
+	AbstractVertexStage::isSyntheticVariableAllowed (const char * variableName) noexcept
 	{
 		constexpr std::array< const char *, 20 > variables{
 			ShaderVariable::PositionScreenSpace,
@@ -1967,9 +1967,9 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::requestSynthesizeInstruction (const char * variableName, VariableScope scope) noexcept
+	AbstractVertexStage::requestSynthesizeInstruction (const char * variableName, VariableScope scope) noexcept
 	{
-		if ( !VertexShader::isSyntheticVariableAllowed(variableName) )
+		if ( !AbstractVertexStage::isSyntheticVariableAllowed(variableName) )
 		{
 			TraceError{ClassId} << "Unable to synthesize '" << variableName << "' variable for " << to_string(this->type()) << " '" << this->name() << "' !";
 
@@ -2026,7 +2026,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
+	AbstractVertexStage::onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
 		/* ⚠️ BEFORE the unique instructions: these outputs prepare the normal matrix and the model
 		 * matrix, and generateMainUniqueInstructions() is what emits every preparation — asked after
@@ -2166,7 +2166,7 @@ namespace EmEn::Saphir
 	}
 
 	void
-	VertexShader::onGetDeclarationStats (std::stringstream & output) const noexcept
+	AbstractVertexStage::onGetDeclarationStats (std::stringstream & output) const noexcept
 	{
 		output <<
 		 	"Vertex shader input declarations : " "\n"

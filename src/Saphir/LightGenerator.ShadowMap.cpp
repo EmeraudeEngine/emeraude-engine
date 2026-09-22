@@ -91,7 +91,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept
+	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, AbstractVertexStage & vertexShader, bool shadowCubemap) const noexcept
 	{
 		/* The shadow term MUST be evaluated at the SKINNED position: the shadow map holds the
 		 * ANIMATED mesh depth (the shadow pass skins), so sampling it at the bind-pose vertex

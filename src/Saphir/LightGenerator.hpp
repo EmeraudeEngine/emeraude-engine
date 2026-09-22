@@ -45,7 +45,7 @@ namespace EmEn::Saphir
 		class Abstract;
 	}
 
-	class VertexShader;
+	class AbstractVertexStage;
 	class FragmentShader;
 }
 
@@ -903,7 +903,7 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateVertexShaderCode (Generator::Abstract & generator, VertexShader & vertexShader) const noexcept;
+			bool generateVertexShaderCode (Generator::Abstract & generator, AbstractVertexStage & vertexShader) const noexcept;
 
 			/**
 			 * @brief Generates the fragment shader light code.
@@ -950,7 +950,7 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept;
+			bool generateVertexShaderShadowMapCode (Generator::Abstract & generator, AbstractVertexStage & vertexShader, bool shadowCubemap) const noexcept;
 
 			/**
 			 * @brief Generates the ambient component light which is the same for every light.
@@ -995,7 +995,7 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
+			bool generatePBRVertexShader (Generator::Abstract & generator, AbstractVertexStage & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the fragment shader for a light using PBR Cook-Torrance BRDF.
