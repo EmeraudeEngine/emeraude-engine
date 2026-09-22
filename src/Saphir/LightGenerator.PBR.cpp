@@ -180,29 +180,7 @@ namespace EmEn::Saphir
 		/* Thin-film iridescence (Airy equation for 3 RGB wavelengths). */
 		if ( m_useIridescence )
 		{
-			Declaration::Function evalIridescence{"evalIridescence", GLSL::FloatVector3};
-			evalIridescence.addInParameter(GLSL::Float, "outsideIOR");
-			evalIridescence.addInParameter(GLSL::Float, "iridescenceIOR");
-			evalIridescence.addInParameter(GLSL::Float, "cosTheta1");
-			evalIridescence.addInParameter(GLSL::Float, "thickness");
-			evalIridescence.addInParameter(GLSL::FloatVector3, "baseF0");
-			Code{evalIridescence, Location::Output} <<
-				"float eta = outsideIOR / iridescenceIOR;" << Line::End <<
-				"float sinTheta2Sq = eta * eta * (1.0 - cosTheta1 * cosTheta1);" << Line::End <<
-				"float cosTheta2 = sqrt(max(1.0 - sinTheta2Sq, 0.0));" << Line::End <<
-				"float R0_12 = pow((outsideIOR - iridescenceIOR) / (outsideIOR + iridescenceIOR), 2.0);" << Line::End <<
-				"float R12 = R0_12 + (1.0 - R0_12) * pow(1.0 - cosTheta1, 5.0);" << Line::End <<
-				"float OPD = 2.0 * iridescenceIOR * thickness * cosTheta2;" << Line::End <<
-				"vec3 phi = 2.0 * 3.14159265 * OPD / vec3(630.0, 530.0, 460.0);" << Line::End <<
-				"vec3 R23 = baseF0;" << Line::End <<
-				"vec3 sqrtR12 = vec3(sqrt(R12));" << Line::End <<
-				"vec3 sqrtR23 = sqrt(R23);" << Line::End <<
-				"vec3 cosPhi = cos(phi);" << Line::End <<
-				"vec3 num = vec3(R12) + R23 + 2.0 * sqrtR12 * sqrtR23 * cosPhi;" << Line::End <<
-				"vec3 den = vec3(1.0) + vec3(R12) * R23 + 2.0 * sqrtR12 * sqrtR23 * cosPhi;" << Line::End <<
-				"return clamp(num / den, vec3(0.0), vec3(1.0));";
-
-			fragmentShader.declare(evalIridescence);
+			LightGenerator::declareIridescenceFunctions(fragmentShader);
 		}
 	}
 

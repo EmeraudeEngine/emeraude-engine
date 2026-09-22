@@ -3308,6 +3308,23 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 
 Parallax Occlusion Mapping ray-marching is expensive at far distances, especially on large surfaces. The engine implements distance-based fade (default 8-18 m, per material through `setParallaxFadeDistances()`) and skips the march beyond it. See: `Graphics/AGENTS.md` (POM section).
 
+### IRIDESCENCE TOOK THE BASE'S REFLECTANCE AGAINST AIR AS THE FILM-TO-BASE TERM (fixed 2026-09-22)
+
+`evalIridescence()` existed twice (direct light, ambient pass) with `R23 = baseF0`, the base against AIR:
+- a base with F0 = 0 gave R23 = 0 and an achromatic film;
+- a base whose IOR equals the film's still reflected;
+- there was no interface phase shift.
+
+On both Khronos iridescence grids the colour sat in the wrong rows. The reference has it at LOW base IOR
+and dark metal; ours had it at the top. Found by the macOS bench.
+
+It is now ONE definition, `LightGenerator::declareIridescenceFunctions()`: Belcour & Barla 2017, as in the
+Khronos glTF Sample Viewer (Apache-2.0). The base IOR is recovered from F0, the film-to-base Fresnel is
+taken at the refracted angle, the π phase shifts are applied, and the spectral sensitivity is evaluated in
+XYZ, then converted to Rec.709. Re-captured on Linux: the trend now matches the Khronos screenshots, with
+0 VUID. ⚠️ The earlier bench verdict "the film sweep reads" judged the whole frame; judge a grid ROW by ROW
+against the reference.
+
 ### A DOUBLE-SIDED BACK FACE REFLECTED AS AN UNTINTED MIRROR (fixed 2026-09-22)
 
 Only the direct light turned the shading normal toward the viewer (`N = dot(N, V) < 0.0 ? -N : N`,

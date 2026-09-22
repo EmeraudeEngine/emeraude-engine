@@ -943,6 +943,15 @@ namespace EmEn::Saphir
 		private:
 
 			/**
+			 * @brief Declares the thin-film iridescence functions (Belcour & Barla 2017, the Khronos Sample Viewer's
+			 * formulation): `evalIridescence(outsideIOR, filmIOR, cosTheta1, thicknessNm, baseF0)` and its spectral
+			 * helper. ONE definition for the direct light and the ambient pass.
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @return void
+			 */
+			static void declareIridescenceFunctions (FragmentShader & fragmentShader) noexcept;
+
+			/**
 			 * @brief Generate the vertex shader code to fetch data from a shadow map.
 			 * @param generator A reference to the shader generator.
 			 * @param vertexShader A reference to the vertex shader.

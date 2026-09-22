@@ -56,8 +56,8 @@ reading criterion only asked whether the four declared hues appeared *somewhere 
 | `BoomBox` | matches the reference, crisp |
 | `ClearCoatTest` | all six rows. ⚠️ `Partial coating` settled by the coat CONTRIBUTION (Coated − Base): **bimodal, 62.9 % of pixels at +1.21 (uncoated) against 37.1 % at +11.09 (coated)**, where the two uniform-coat rows put **89.5 %** in a single mode. `Coat normal map` corrugates since the coat reflects along its own normal |
 | `EmissiveStrengthTest` | linear-luminance ratios **2.42 / 2.21 / 1.81 / 1.48** against a declared doubling |
-| `IridescenceDielectricSpheres` | ⚠️ **FAIL since 2026-09-22** (macOS bench): the grid is complete, but `R23 = baseF0` kills the film on the base-IOR 1.0 layer and inverts the colour trend — item `iridescence-film-to-base-reflectance`. "The film sweep reads" was a whole-frame verdict. |
-| `IridescenceMetallicSpheres` | ⚠️ **FAIL since 2026-09-22**, same cause: the black-base layer (F0 = 0) is achromatic at every thickness |
+| `IridescenceDielectricSpheres` | PASS again 2026-09-22 after the fix (Belcour & Barla, `caution-points.md` § Iridescence): colour at low base IOR, neutral at the top, as the Khronos screenshot. It FAILED between the macOS bench and the fix (`R23 = baseF0`); "the film sweep reads" had been a whole-frame verdict. |
+| `IridescenceMetallicSpheres` | PASS again 2026-09-22: the black-base layer (F0 = 0), achromatic before the fix, is iridescent as in the reference |
 | `MetalRoughSpheres` | the exposure/IBL control; matches the reference |
 | `MetalRoughSpheresNoTextures` | metallic axis **10.8 → 119.1 → 204.9** smooth, **60.9 → 115.1 → 190.2** rough, both monotone |
 | `NormalTangentTest` | normal-mapped highlight within 17° of geometry, same quadrant, no Y flip |

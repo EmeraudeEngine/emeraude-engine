@@ -721,6 +721,80 @@ namespace EmEn::Saphir
 	}
 
 	void
+	LightGenerator::declareIridescenceFunctions (FragmentShader & fragmentShader) noexcept
+	{
+		/* Thin-film iridescence, Belcour & Barla 2017, "A Practical Extension to Microfacet Theory for the
+		 * Modeling of Varying Iridescence" (ACM TOG 36(4)), as implemented by the Khronos glTF Sample Viewer
+		 * (source/Renderer/shaders/iridescence.glsl, Apache-2.0, https://github.com/KhronosGroup/glTF-Sample-Viewer),
+		 * the reference renderer of KHR_materials_iridescence.
+		 * ⚠️ ONE definition for the direct light and the ambient pass. The two copies it replaced (2026-09-22)
+		 * used `R23 = baseF0` — the base's reflectance against AIR as the FILM-to-BASE term — so a base with
+		 * F0 = 0 gave R23 = 0 and an achromatic film, a base IOR equal to the film's still reflected, and there
+		 * was no interface phase shift (IridescenceDielectricSpheres / IridescenceMetallicSpheres, macOS bench). */
+		Declaration::Function evalSensitivity{"evalIridescenceSensitivity", GLSL::FloatVector3};
+		evalSensitivity.addInParameter(GLSL::Float, "OPD");
+		evalSensitivity.addInParameter(GLSL::FloatVector3, "shift");
+		Code{evalSensitivity, Location::Output} <<
+			"/* The XYZ colour-matching functions in Fourier space (Gaussian fits), then XYZ -> linear Rec.709. */" << Line::End <<
+			"const float phase = 2.0 * 3.14159265359 * OPD * 1.0e-9;" << Line::End <<
+			"const vec3 val = vec3(5.4856e-13, 4.4201e-13, 5.2481e-13);" << Line::End <<
+			"const vec3 pos = vec3(1.6810e+06, 1.7953e+06, 2.2084e+06);" << Line::End <<
+			"const vec3 var = vec3(4.3278e+09, 9.3046e+09, 6.6121e+09);" << Line::End <<
+			"vec3 xyz = val * sqrt(2.0 * 3.14159265359 * var) * cos(pos * phase + shift) * exp(-(phase * phase) * var);" << Line::End <<
+			"xyz.x += 9.7470e-14 * sqrt(2.0 * 3.14159265359 * 4.5282e+09) * cos(2.2399e+06 * phase + shift.x) * exp(-4.5282e+09 * phase * phase);" << Line::End <<
+			"xyz /= 1.0685e-7;" << Line::End <<
+			"const mat3 XYZToRec709 = mat3(3.2404542, -0.9692660, 0.0556434, -1.5371385, 1.8760108, -0.2040259, -0.4985314, 0.0415560, 1.0572252);" << Line::End <<
+			"return XYZToRec709 * xyz;";
+
+		fragmentShader.declare(evalSensitivity);
+
+		Declaration::Function evalIridescence{"evalIridescence", GLSL::FloatVector3};
+		evalIridescence.addInParameter(GLSL::Float, "outsideIOR");
+		evalIridescence.addInParameter(GLSL::Float, "iridescenceIOR");
+		evalIridescence.addInParameter(GLSL::Float, "cosTheta1");
+		evalIridescence.addInParameter(GLSL::Float, "thickness");
+		evalIridescence.addInParameter(GLSL::FloatVector3, "baseF0");
+		Code{evalIridescence, Location::Output} <<
+			"/* The film fades to the outside medium as it gets thinner than 30 nm: no discontinuity at 0. */" << Line::End <<
+			"const float filmIOR = mix(outsideIOR, iridescenceIOR, smoothstep(0.0, 30.0, thickness));" << Line::End <<
+			"/* Snell to the base interface; total internal reflection reflects everything. */" << Line::End <<
+			"const float sinTheta2Sq = (outsideIOR / filmIOR) * (outsideIOR / filmIOR) * (1.0 - cosTheta1 * cosTheta1);" << Line::End <<
+			"const float cosTheta2Sq = 1.0 - sinTheta2Sq;" << Line::End <<
+			"if ( cosTheta2Sq < 0.0 ) { return vec3(1.0); }" << Line::End <<
+			"const float cosTheta2 = sqrt(cosTheta2Sq);" << Line::End <<
+			"/* First interface, outside -> film. */" << Line::End <<
+			"const float R0 = ((filmIOR - outsideIOR) / (filmIOR + outsideIOR)) * ((filmIOR - outsideIOR) / (filmIOR + outsideIOR));" << Line::End <<
+			"const float R12 = R0 + (1.0 - R0) * pow(1.0 - cosTheta1, 5.0);" << Line::End <<
+			"const float T121 = 1.0 - R12;" << Line::End <<
+			"const float phi12 = filmIOR < outsideIOR ? 3.14159265359 : 0.0;" << Line::End <<
+			"const float phi21 = 3.14159265359 - phi12;" << Line::End <<
+			"/* Second interface, film -> base: the base IOR is recovered from F0 (air-referenced), then the" << Line::End <<
+			" * reflectance is taken against the FILM, at the refracted angle. */" << Line::End <<
+			"const vec3 sqrtBaseF0 = sqrt(clamp(baseF0, vec3(0.0), vec3(0.9999)));" << Line::End <<
+			"const vec3 baseIOR = (vec3(1.0) + sqrtBaseF0) / (vec3(1.0) - sqrtBaseF0);" << Line::End <<
+			"const vec3 R1 = ((baseIOR - vec3(filmIOR)) / (baseIOR + vec3(filmIOR))) * ((baseIOR - vec3(filmIOR)) / (baseIOR + vec3(filmIOR)));" << Line::End <<
+			"const vec3 R23 = R1 + (vec3(1.0) - R1) * pow(1.0 - cosTheta2, 5.0);" << Line::End <<
+			"const vec3 phi23 = vec3(baseIOR.x < filmIOR ? 3.14159265359 : 0.0, baseIOR.y < filmIOR ? 3.14159265359 : 0.0, baseIOR.z < filmIOR ? 3.14159265359 : 0.0);" << Line::End <<
+			"/* Optical path difference and phase. */" << Line::End <<
+			"const float OPD = 2.0 * filmIOR * thickness * cosTheta2;" << Line::End <<
+			"const vec3 phi = vec3(phi21) + phi23;" << Line::End <<
+			"/* Compound terms: the Airy summation, its DC term and the first two orders. */" << Line::End <<
+			"const vec3 R123 = clamp(R12 * R23, vec3(1.0e-5), vec3(0.9999));" << Line::End <<
+			"const vec3 r123 = sqrt(R123);" << Line::End <<
+			"const vec3 Rs = (T121 * T121) * R23 / (vec3(1.0) - R123);" << Line::End <<
+			"vec3 I = vec3(R12) + Rs;" << Line::End <<
+			"vec3 Cm = Rs - vec3(T121);" << Line::End <<
+			"for ( int m = 1; m <= 2; ++m ) {" << Line::End <<
+			"	Cm *= r123;" << Line::End <<
+			"	I += Cm * 2.0 * evalIridescenceSensitivity(float(m) * OPD, float(m) * phi);" << Line::End <<
+			"}" << Line::End <<
+			"/* Out-of-gamut values are clamped, as the reference does. */" << Line::End <<
+			"return max(I, vec3(0.0));";
+
+		fragmentShader.declare(evalIridescence);
+	}
+
+	void
 	LightGenerator::generateAmbientFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
 	{
 		using Graphics::BindlessTextureManager;
@@ -728,29 +802,7 @@ namespace EmEn::Saphir
 		/* Declare evalIridescence function if needed for ambient/IBL pass. */
 		if ( m_useIridescence )
 		{
-			Declaration::Function evalIridescence{"evalIridescence", GLSL::FloatVector3};
-			evalIridescence.addInParameter(GLSL::Float, "outsideIOR");
-			evalIridescence.addInParameter(GLSL::Float, "iridescenceIOR");
-			evalIridescence.addInParameter(GLSL::Float, "cosTheta1");
-			evalIridescence.addInParameter(GLSL::Float, "thickness");
-			evalIridescence.addInParameter(GLSL::FloatVector3, "baseF0");
-			Code{evalIridescence, Location::Output} <<
-				"float eta = outsideIOR / iridescenceIOR;" << Line::End <<
-				"float sinTheta2Sq = eta * eta * (1.0 - cosTheta1 * cosTheta1);" << Line::End <<
-				"float cosTheta2 = sqrt(max(1.0 - sinTheta2Sq, 0.0));" << Line::End <<
-				"float R0_12 = pow((outsideIOR - iridescenceIOR) / (outsideIOR + iridescenceIOR), 2.0);" << Line::End <<
-				"float R12 = R0_12 + (1.0 - R0_12) * pow(1.0 - cosTheta1, 5.0);" << Line::End <<
-				"float OPD = 2.0 * iridescenceIOR * thickness * cosTheta2;" << Line::End <<
-				"vec3 phi = 2.0 * 3.14159265 * OPD / vec3(630.0, 530.0, 460.0);" << Line::End <<
-				"vec3 R23 = baseF0;" << Line::End <<
-				"vec3 sqrtR12 = vec3(sqrt(R12));" << Line::End <<
-				"vec3 sqrtR23 = sqrt(R23);" << Line::End <<
-				"vec3 cosPhi = cos(phi);" << Line::End <<
-				"vec3 num = vec3(R12) + R23 + 2.0 * sqrtR12 * sqrtR23 * cosPhi;" << Line::End <<
-				"vec3 den = vec3(1.0) + vec3(R12) * R23 + 2.0 * sqrtR12 * sqrtR23 * cosPhi;" << Line::End <<
-				"return clamp(num / den, vec3(0.0), vec3(1.0));";
-
-			fragmentShader.declare(evalIridescence);
+			LightGenerator::declareIridescenceFunctions(fragmentShader);
 		}
 
 		std::string surfaceColor{};
