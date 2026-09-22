@@ -82,7 +82,10 @@ LOAD_SETTLE_S = 4.5      # ⚠️ Must exceed Notifier::DefaultDuration (3000 ms
                          # <file>" toast is still on screen and pollutes the capture.
 VIEW_SETTLE_S = 1.2      # After moving the camera, before capturing.
 
-SCREENSHOT_PATH = re.compile(r"Screenshot saved:\s*(\S+)")
+# ⚠️ The path may contain SPACES — macOS captures land in "~/Library/Application Support/…" — and the
+# engine quotes it: take the quoted form whole, the bare token otherwise (found by the macOS session,
+# 2026-09-22: every view failed with "screenshot never landed on disk: /Users/…/Library/Application").
+SCREENSHOT_PATH = re.compile(r"Screenshot saved:\s*(\"[^\"]+\"|\S+)")
 
 # --- Views ------------------------------------------------------------------------------------
 #
@@ -275,6 +278,16 @@ ENVIRONMENTS = {
 
 ENVIRONMENT_KEYS = ("Core/Viewers/Background", "Core/Viewers/EnvironmentCubemap", "Core/Viewers/AmbientIntensity")
 
+# The engine's defaults for those keys (SettingKeys.hpp: DefaultViewerBackground,
+# DefaultViewerEnvironmentCubemap, DefaultViewerAmbientIntensity). A key ABSENT from the session's settings
+# is restored to its default: +ModelViewer creates it with that very value on its first scene, so leaving
+# the last posed value behind would change the user's viewer for good. ⚠️ Keep them in sync with the engine.
+ENVIRONMENT_DEFAULTS = {
+    "Core/Viewers/Background": "GreenLandscape",
+    "Core/Viewers/EnvironmentCubemap": "",
+    "Core/Viewers/AmbientIntensity": 200.0,
+}
+
 
 def asset_directory_candidates() -> tuple:
     """
@@ -343,7 +356,10 @@ def read_environment(console) -> dict:
 
     viewers = tree.get("Core", {}).get("Viewers", {})
 
-    return {key: viewers.get(key.rsplit("/", 1)[1]) for key in ENVIRONMENT_KEYS if key.rsplit("/", 1)[1] in viewers}
+    # ⚠️ Every key, present or not: a key absent from settings.json (a session that never opened a viewer)
+    # used to be left out, so nothing was restored and Core.shutdown() saved the last posed environment
+    # (found by the macOS session, 2026-09-22). Absent means "the engine default".
+    return {key: viewers.get(key.rsplit("/", 1)[1], ENVIRONMENT_DEFAULTS[key]) for key in ENVIRONMENT_KEYS}
 
 
 def apply_environment(console, environment: dict) -> None:

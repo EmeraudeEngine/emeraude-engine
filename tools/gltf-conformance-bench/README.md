@@ -47,6 +47,13 @@ erase a twenty-minute full run (it did, once).
 > dropped-files pipeline: `Core.openFiles()` answers *"a scene is running, the file was ignored"*
 > and the bench captures nothing.
 
+> [!WARNING]
+> **Portable since 2026-09-22 (macOS run).** A capture path with spaces (`~/Library/Application Support/…`)
+> used to be cut at the first space, so every view "never landed on disk". And a session whose settings
+> have no `Core/Viewers` section restored nothing, so `Core.shutdown()` saved the last posed environment:
+> absent keys are now restored to the engine defaults (`ENVIRONMENT_DEFAULTS`, keep them in sync with
+> `SettingKeys.hpp`).
+
 ## What the harness is
 
 The engine's own `+ModelViewer` scene, opened through `Core.openFiles()`. It brings the three
