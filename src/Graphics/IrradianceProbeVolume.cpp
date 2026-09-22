@@ -564,6 +564,8 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 	using namespace Saphir;
 
+	IrradianceProbeVolume::IrradianceProbeVolume () noexcept = default;
+
 	IrradianceProbeVolume::~IrradianceProbeVolume () noexcept
 	{
 		this->destroy();

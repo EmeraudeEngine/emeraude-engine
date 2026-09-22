@@ -145,8 +145,11 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Constructs the volume.
+			 * @note Out of line, like the destructor: MSVC instantiates the members' destructors from an inline
+			 * constructor (C2027 on the forward-declared Vulkan::ComputePipeline, found by the Windows build on
+			 * 2026-09-22); GCC and Clang do not, so only a Windows build can catch it.
 			 */
-			IrradianceProbeVolume () noexcept = default;
+			IrradianceProbeVolume () noexcept;
 
 			/**
 			 * @brief Destructs the volume.
