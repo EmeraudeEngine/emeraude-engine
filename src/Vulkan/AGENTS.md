@@ -266,6 +266,23 @@ void waitEvents(std::span< const VkEvent > events, ...);
 - Zero allocation on caller side with `StaticVector`
 - Backward compatible with existing code using `std::vector`
 
+### ⚠⚠ `CommandBuffer::bind()` — a sub-geometry is selected at DRAW time, never at BIND time
+
+Both `bind()` overloads take a `subGeometryIndex` and **both ignore it**. The sub-geometry is
+chosen by `draw(geometry, subGeometryIndex, instanceCount)`, which reads
+`Geometry::Interface::subGeometryRange(i)` — documented `{firstIndex, indexCount}` — and hands it
+to `vkCmdDrawIndexed` as `firstIndex` / `indexCount`. The vertex buffer is therefore **always bound
+at offset 0**.
+
+The instanced overload used to bind it at `range[0]`: a first-INDEX used as a vertex-buffer BYTE
+offset, on top of the `firstIndex` the draw applied anyway. Measured on an instanced two-layer
+procedural tree, offset `405` — neither 4-aligned nor a multiple of the 72-byte stride — and the
+driver dropped every draw (`VUID-vkCmdDrawIndexed-None-02721`). Fixed Sep 2026; full account in
+`docs/caution-points.md`.
+
+⚠️ If a future overload ever needs a non-zero geometry VBO offset, it is a **byte** offset and it
+must be a multiple of the vertex stride. Never derive it from a sub-geometry range.
+
 ## Important Files
 
 - `Device.cpp/.hpp` - Vulkan logical device abstraction; **owns the `VkPipelineCache`** (`pipelineCache()`, `createPipelineCache()`, `getPipelineCacheData()` — see the dedicated section at the end of this file)

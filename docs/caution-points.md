@@ -5314,6 +5314,44 @@ that declares it** — `StandardResource.hpp` carried no override, the base two 
 DIAGNOSTIC and never a measurement: it also sharpens every normal map, and the stone control moved
 27.57 → 18.89 with its saturation 12 % → 20 %. When the control moves, read the image, not the table.
 
+### ⚠⚠ A sub-geometry range indexes the INDEX buffer — the instanced bind used it as a VERTEX-buffer BYTE offset (Sep 2026, FIXED)
+
+`Geometry::Interface::subGeometryRange(i)` returns `{firstIndex, indexCount}`. The engine says so
+wherever it reads it (`Graphics/Geometry/Interface.cpp:246`,
+`Graphics/RenderableInstance/Abstract.cpp:394`), and `buildSubGeometries()` builds it from
+`group.first * 3` — triangles times three, i.e. **indices**.
+
+`CommandBuffer::bind(geometry, modelVBO, subGeometryIndex, modelVBOOffset)` — the **instanced**
+overload — passed `range[0]` straight into `vkCmdBindVertexBuffers` as the **byte offset of the
+vertex buffer**. Three things were wrong at once: the wrong buffer, the wrong unit, and applied
+twice, because `CommandBuffer::draw(geometry, subGeometryIndex, instanceCount)` already passes
+`range[0]` as `vkCmdDrawIndexed`'s `firstIndex` and `range[1]` as its `indexCount`.
+
+**Only INSTANCED, MULTI-SUB-GEOMETRY renderables were affected.** The non-instanced sibling
+(`bind(geometry, subGeometryIndex)`) has always bound 0 and ignores its `subGeometryIndex` — which
+is why `Component::Visual` content was fine and nothing in the cascade had ever hit this: the first
+instanced multi-layer renderable was a procedural tree (bark layer + foliage layer) planted with
+`Component::MultipleVisuals`.
+
+**Symptom**: the geometry silently does not draw, and the validation layers name it exactly:
+
+    vkCmdDrawIndexed(): Format VK_FORMAT_R32G32B32_SFLOAT has an alignment of 4 but the alignment
+    of attribAddress (477) is not aligned in pVertexAttributeDescriptions[0] (binding=0 location=0)
+    where attribAddress = vertex buffer offset (405) + binding stride (72) + attribute offset (0)
+
+⚠️ **Read the OFFSET in that message, not the format.** `405` is neither 4-aligned nor a multiple
+of the 72-byte stride — no legitimate vertex-buffer offset ever looks like that, and its value is a
+first-INDEX. A VUID about attribute alignment is naming a bad **binding offset**, not a bad vertex
+layout.
+
+⚠⚠ **This is why the validation layers stay on.** With them off, 240 trees are simply absent and
+every plausible explanation — culling, level of detail, the camera, a material — costs an hour
+each. See `docs/todo/vegetation-octahedral-imposter-atlas.md` for the demo that found it
+(projet-alpha `forest`).
+
+Fix: `src/Vulkan/CommandBuffer.cpp`, the instanced overload binds the geometry VBO at 0 and now
+ignores its `subGeometryIndex`, like its non-instanced sibling.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

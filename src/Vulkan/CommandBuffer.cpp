@@ -1307,7 +1307,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t subGeometryIndex, VkDeviceSize modelVBOOffset) const noexcept
+	CommandBuffer::bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t /*subGeometryIndex*/, VkDeviceSize modelVBOOffset) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -1321,10 +1321,22 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* Binding vertex buffer object if exists. */
+		/* Binding vertex buffer object if exists.
+		 * ⚠⚠ The vertex buffer is bound at offset 0, NOT at the sub-geometry's range. A
+		 * sub-geometry is selected at DRAW time: draw(geometry, subGeometryIndex, instanceCount)
+		 * passes subGeometryRange()[0] as vkCmdDrawIndexed's firstIndex and [1] as its indexCount.
+		 * That range indexes the INDEX buffer -- the engine says so wherever it reads it
+		 * (Graphics/Geometry/Interface.cpp, Graphics/RenderableInstance/Abstract.cpp:
+		 * `{firstIndex, indexCount}`) -- and this overload used it here as a BYTE offset into the
+		 * VERTEX buffer, on top of the firstIndex the draw applies anyway.
+		 * The non-instanced sibling above has always bound 0 and ignored its subGeometryIndex,
+		 * which is why only INSTANCED multi-sub-geometry renderables were affected: measured on
+		 * an instanced procedural tree (bark + foliage), the second layer bound the vertex buffer
+		 * at offset 405, neither 4-aligned nor a multiple of the 72-byte stride, and the driver
+		 * dropped every draw -- VUID-vkCmdDrawIndexed-None-02721, the whole forest invisible. */
 		{
-			const auto range = geometry.subGeometryRange(subGeometryIndex);
 			constexpr uint32_t firstBinding = 0;
+			constexpr VkDeviceSize geometryVBOOffset = 0;
 
 			const std::array< VkBuffer, 2 > vertexBuffers{
 				geometry.vertexBufferObject()->handle(),
@@ -1332,7 +1344,7 @@ namespace EmEn::Vulkan
 			};
 
 			const std::array< VkDeviceSize, 2 > offsets{
-				range[0],
+				geometryVBOOffset,
 				modelVBOOffset
 			};
 
