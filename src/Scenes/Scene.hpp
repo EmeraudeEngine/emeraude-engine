@@ -1788,7 +1788,7 @@ namespace EmEn::Scenes
 			 * @see processLogics() For simulation updates.
 			 * @see publishStateForRendering() For state synchronization.
 			 */
-			void updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept;
+			void updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) noexcept;
 
 			/**
 			 * @brief Flags every ON-DEMAND render target (a "once" probe, an on-demand view)

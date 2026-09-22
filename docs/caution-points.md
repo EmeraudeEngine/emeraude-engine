@@ -5389,6 +5389,39 @@ Fix: `RenderStateTracker::lastInstanceModelBuffer`, fed by a new virtual
 model VBO in `Multiple`. The non-instanced path binds no such buffer, so its redundant-bind
 elimination is untouched.
 
+### ⚠⚠ The shadow pass is recorded BEFORE every `prepareRender()` of the frame (Sep 2026, FIXED)
+
+`Renderer::renderShadowMaps()` runs right after `Scene::updateVideoMemory()` and **before** any
+`Scene::prepareRender()` — the main view's and the render-to-textures' alike. Anything a frame
+stages inside `prepareRender()` therefore reaches the shadow pass **one frame late**, and anything
+the shadow pass reads from a member written there belongs to the PREVIOUS frame.
+
+That is what happened to the vegetation wind. `Scene::castShadows()` bound
+`m_preparedInstanceTransformsDS`, written in `prepareRender()`, so at shadow time it held the
+descriptor set captured on the previous frame: **another frame-in-flight slot**, outside this
+pass's fence, carrying the previous frame's wind. A tree and its shadow swayed one frame apart, and
+on the very first frame the member was still null and every vegetation shadow draw was skipped —
+78 of the demo's 132 instanced components logging *"the sealed pipeline layout declares the
+'PerSceneTransforms' set, but the renderable instance cannot provide it"*.
+
+⚠️ **That error message is honest but its shape misleads.** It names a descriptor-set contract and
+invites a search in `Saphir::Generator`; the divergence was neither in the generator nor in the
+binding condition, it was in **when** the set became available. An item opened against it was
+titled *"instanced vegetation casts no shadow"* and was **wrong**: the shadows were cast, from
+frame 2 onward, from a stale buffer. Measured before believing it — a top-down capture shows the
+ground shadow offset from each canopy in the sun's direction, which ambient occlusion (centred
+under the canopy) never does.
+
+**Fix**: the wind is staged and uploaded in `Scene::updateVideoMemory()`, which runs immediately
+before the shadow pass; `Scene::castShadows()` fetches the CURRENT frame's descriptor set instead
+of the prepared member. The previous view-projection half of the same header stays in
+`prepareRender()` behind its primary-view guard — it needs a render target, the wind does not. The
+`InstanceTransforms` upload is cumulative, so the later one still carries both.
+
+⚠️ **Rule**: a per-frame value the SHADOW pass must see is staged in `updateVideoMemory()`, never
+in `prepareRender()`. Same family as the `[ONE FRAME, ONE TRUTH]` latch in `prepareRender()`: a
+frame must read one state, and a pass must read its own slot.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

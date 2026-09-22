@@ -323,7 +323,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept
+	Scene::updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) noexcept
 	{
 		const uint32_t readStateIndex = m_frameReadStateIndex;
 		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
@@ -363,6 +363,32 @@ namespace EmEn::Scenes
 		{
 			Tracer::error(ClassId, "Unable to update the light set data to the video memory !");
 		}
+
+		/* ⚠⚠ [ONE FRAME, ONE TRUTH] The vegetation wind is staged and uploaded HERE, not in
+		 * prepareRender(). This function runs immediately before Renderer::renderShadowMaps(), and
+		 * EVERY prepareRender() of the frame runs after it — so a wind staged there reaches the
+		 * shadow pass only on the NEXT frame. It used to: Scene::castShadows() bound
+		 * m_preparedInstanceTransformsDS, a member written during prepareRender(), which at shadow
+		 * time still held the descriptor set captured on the PREVIOUS frame — a slot that is not
+		 * this frame's, so not covered by this frame's in-flight fence, and carrying the previous
+		 * frame's wind. A tree and its shadow swayed one frame apart, and on the very first frame
+		 * the member was still null and every vegetation shadow draw was skipped outright.
+		 * The wind is a SCENE property and needs no render target, unlike the previous
+		 * view-projection half of the same header, which stays in prepareRender() behind its
+		 * primary-view guard. The upload is cumulative, so the one there still carries both. */
+		{
+			const auto windTime = static_cast< float >(m_lifetimeUS) * 0.000001F;
+			const auto windGust = m_windGustiness * std::sin(windTime * 0.23F);
+
+			m_instanceTransforms.setWindState(m_windDirection, m_windStrength, windTime, m_previousWindTime, windGust);
+
+			m_previousWindTime = windTime;
+
+			if ( !m_instanceTransforms.updateVideoMemory() )
+			{
+				Tracer::error(ClassId, "Unable to update the instance transforms SSBO to the video memory !");
+			}
+		}
 	}
 
 	void
@@ -386,9 +412,19 @@ namespace EmEn::Scenes
 			"Shadow map content :" "\n"
 			" - Plain objects : " << m_renderLists[Shadows].size() << "\n";*/
 
+		/* ⚠⚠ The CURRENT frame's descriptor set, fetched here rather than read from
+		 * m_preparedInstanceTransformsDS. That member is written by prepareRender(), and every
+		 * prepareRender() of the frame runs AFTER this pass is recorded: it held the set captured on
+		 * the previous frame, i.e. another frame-in-flight slot, outside this pass's fence and
+		 * carrying the previous frame's wind. On the first frame it was still null and every
+		 * vegetation shadow draw was skipped, which is what logged the descriptor-set contract
+		 * violations. The wind is staged and uploaded in updateVideoMemory(), which runs just before
+		 * this pass, so the slot read here is written and is this frame's. */
+		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
+
 		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
 		{
-			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedInstanceTransformsDS);
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), sceneTransformsDS);
 		}
 	}
 
@@ -466,14 +502,10 @@ namespace EmEn::Scenes
 				previousProjection * viewMatrices.previousInfinityViewMatrix()
 			);
 
-			/* The vegetation wind rides in the same header, staged in the same place and under the
-			 * same guard: once per frame, primary view only. */
-			const auto windTime = static_cast< float >(m_lifetimeUS) * 0.000001F;
-			const auto windGust = m_windGustiness * std::sin(windTime * 0.23F);
-
-			m_instanceTransforms.setWindState(m_windDirection, m_windStrength, windTime, m_previousWindTime, windGust);
-
-			m_previousWindTime = windTime;
+			/* ⚠️ The vegetation wind used to ride here, under the same guard. It does NOT any more:
+			 * the shadow pass is recorded before any prepareRender() of the frame, so a wind staged
+			 * here reached it one frame late. It is staged in updateVideoMemory() now — see the note
+			 * there. This block keeps what genuinely belongs to the primary view. */
 		}
 
 		/* Upload the staged instance transforms (header + frame-linear entries) to the
