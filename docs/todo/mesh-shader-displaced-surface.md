@@ -101,6 +101,11 @@ render mode 2 pixel-indistinguishable from mode 1 (inside the run-to-run noise).
   pose): ScenePass 3.91 ms in mode 1 against 13.52 ms in mode 2, the whole frame 8.73 → 17.19 ms. The draw
   launches one task workgroup per 1 m tile, 256 × 256 = 65 536 of them for the relief ground, in the colour pass
   AND the shadow pass, and every one emits at least its flat quad — none is culled.
+- Re-measured 2026-09-23 with the displaced SHADOW (same RTX 3060, the new spawn and 8° sun): ScenePass mode 2
+  vs mode 1 = 13.49 vs 5.37 ms with validation, **15.24 vs 4.69 ms without** — +8 to +10.5 ms; validation does not
+  inflate it, and the laptop varies by ±1-2 ms run to run. The displaced shadow added nothing visible (13.52 →
+  13.49). ⚠️ The GPU profiler has no per-pass scope inside ScenePass (shadow vs colour cannot be split): add one
+  before the culling A/B, or its gain cannot be attributed.
 - **Frustum culling in the task stage** (a tile outside the view emits nothing; the shadow pass culls against the
   light's frustum), then re-measure the cost with validation OFF, and break ScenePass down if it is still high.
 - Measure on the RTX 3070 Ti too (this workstation), same pose, same method (`Core/Graphics/GPUProfiler/Enabled`).

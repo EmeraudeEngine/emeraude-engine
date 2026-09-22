@@ -26,6 +26,11 @@ the log shows "Scene render target created" + "Scene will use environment cubema
 something RE-CREATES a scene target during teardown. The first "hang" was that slowness plus a second
 `Core.shutdown()` that never executed.
 
+## Re-measured, 2026-09-23 (Windows, `relief`, RTX 3060)
+
+`Core.shutdown()` took 2 s in most runs, but 102 s (mode 2 wireframe), 61 s (mode 2, validation on) and 179 s (mode
+1, validation off). Every one of them exited cleanly in the end: the hang is intermittent and not tied to validation.
+
 ## What remains
 
 - [ ] Reproduce it: a loop of launch → shutdown on Windows, with the log around the act removal.
