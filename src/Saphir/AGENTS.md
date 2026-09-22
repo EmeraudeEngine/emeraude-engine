@@ -1118,6 +1118,23 @@ were emitted before every resource, which held only because none did.
 ⚠️ Read the generated GLSL (`Core/Graphics/Shader/ShowSourceCode`) before blaming the data: the
 invisible-terrain defect was found by comparing the offset the CPU pushed with the block the log printed.
 
+## Task and mesh stages (optional, Sep 2026)
+
+`ShaderType::TaskShader` / `ShaderType::MeshShader` (appended after `ComputeShader`), classes `TaskShader`
+and `MeshShader`, `Program::initTaskShader()` / `initMeshShader()`. A mesh-shading program has NO vertex,
+tesselation or geometry stage (`Program::isComplete()` enforces it) and its last stage before the fragment
+is the mesh one; `FragmentShader::connectFromPreviousShader(const MeshShader &)` turns the mesh's per-vertex
+ARRAY outputs (`StageOutput` with array size -1) into plain inputs. Both stages enable `GL_EXT_mesh_shader`
+themselves; the task payload is a verbatim `taskPayloadSharedEXT` declaration given to BOTH stages
+(`setTaskPayload()`). No generator builds one yet: the stages are AVAILABLE (owner request, 2026-09-22),
+not consumed. Only usable when `Vulkan::Device::meshShadersEnabled()` (never on MoltenVK today).
+⚠️⚠️ **glslang's mesh limits must be set** (`ShaderManager.cpp`, `maxMeshOutputVerticesEXT` and siblings):
+left at zero, glslang rejects every mesh shader. They hold glslang's reference values; the device's real
+ceilings are `PhysicalDevice::meshShaderProperties()`. Verified 2026-09-22 by compiling a task + mesh pair
+through `ShaderManager::getShaderModuleFromSourceCode()`: both modules created, 0 VUID (after `maintenance4`,
+see `src/Vulkan/AGENTS.md` § Mesh Shader Support). ⚠️ `ShaderManager::getShaderModules()` returns at most 5
+modules — enough for task + mesh + fragment.
+
 ## Cubemap Rendering Mode (Multiview)
 
 When rendering to a cubemap (e.g., environment probes, reflection captures), the shader system operates differently:

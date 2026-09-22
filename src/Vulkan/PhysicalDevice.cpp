@@ -95,6 +95,38 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* NOTE: Mesh shaders (VK_EXT_mesh_shader), optional. Queried SEPARATELY and only when the
+		 * extension is advertised, for the same reason as the portability subset: a feature or property
+		 * structure of an unsupported extension must not enter the query chain. */
+		{
+			const auto extensions = this->getExtensions();
+
+			m_hasMeshShaderExtension = std::ranges::any_of(extensions, [] (const auto & extension) {
+				return std::strcmp(extension.extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0;
+			});
+
+			if ( m_hasMeshShaderExtension )
+			{
+				m_meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+				m_meshShaderFeatures.pNext = nullptr;
+
+				VkPhysicalDeviceFeatures2 features{};
+				features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+				features.pNext = &m_meshShaderFeatures;
+
+				vkGetPhysicalDeviceFeatures2(m_physicalDevice, &features);
+
+				m_meshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+				m_meshShaderProperties.pNext = nullptr;
+
+				VkPhysicalDeviceProperties2 properties{};
+				properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+				properties.pNext = &m_meshShaderProperties;
+
+				vkGetPhysicalDeviceProperties2(m_physicalDevice, &properties);
+			}
+		}
+
 		/* NOTE: Get the device properties. */
 		{
 			/* NOTE: Device properties from Vulkan 1.3 API. */

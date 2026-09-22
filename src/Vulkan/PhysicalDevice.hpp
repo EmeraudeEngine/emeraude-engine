@@ -221,6 +221,43 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the device advertises VK_EXT_mesh_shader AND supports the mesh stage.
+			 * @note Optional, like the geometry stage: nothing requires it, a consumer asks here (or on the
+			 * logical device, Device::meshShadersEnabled()) and keeps a classic path otherwise. MoltenVK does
+			 * not expose the extension (checked 2026-09-22), so it is never true on macOS today.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			supportsMeshShaders () const noexcept
+			{
+				return m_hasMeshShaderExtension && m_meshShaderFeatures.meshShader == VK_TRUE;
+			}
+
+			/**
+			 * @brief Returns the mesh shader features the device reports (all VK_FALSE without the extension).
+			 * @return const VkPhysicalDeviceMeshShaderFeaturesEXT &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceMeshShaderFeaturesEXT &
+			meshShaderFeatures () const noexcept
+			{
+				return m_meshShaderFeatures;
+			}
+
+			/**
+			 * @brief Returns the mesh shader limits of the device (zeros without the extension): output
+			 * vertices and primitives per workgroup, workgroup sizes and counts, payload size...
+			 * @return const VkPhysicalDeviceMeshShaderPropertiesEXT &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceMeshShaderPropertiesEXT &
+			meshShaderProperties () const noexcept
+			{
+				return m_meshShaderProperties;
+			}
+
+			/**
 			 * @brief Returns whether a comparison sampler can be WRITTEN into a descriptor set.
 			 *
 			 * @note This is the `mutableComparisonSamplers` feature of `VK_KHR_portability_subset`,
@@ -724,7 +761,10 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
 			/* Resolved in the constructor; only populated when the extension is advertised. */
 			PortabilitySubset::Features m_portabilitySubsetFeatures{};
+			VkPhysicalDeviceMeshShaderFeaturesEXT m_meshShaderFeatures{};
+			VkPhysicalDeviceMeshShaderPropertiesEXT m_meshShaderProperties{};
 			bool m_hasPortabilitySubset{false};
+			bool m_hasMeshShaderExtension{false};
 			VkPhysicalDeviceProperties2 m_properties{};
 			VkPhysicalDeviceVulkan11Properties m_propertiesVK11{};
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};

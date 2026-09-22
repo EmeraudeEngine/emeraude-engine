@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -39,6 +40,8 @@
 /* Local inclusions for usages. */
 #include "FragmentShader.hpp"
 #include "GeometryShader.hpp"
+#include "MeshShader.hpp"
+#include "TaskShader.hpp"
 #include "Graphics/VertexBufferFormatManager.hpp"
 #include "SetIndexes.hpp"
 #include "TesselationControlShader.hpp"
@@ -231,6 +234,31 @@ namespace EmEn::Saphir
 			GeometryShader * initGeometryShader (const std::string & name, const Declaration::InputPrimitive & inputPrimitive, const Declaration::OutputPrimitive & outputPrimitive) noexcept;
 
 			/**
+			 * @brief Initializes the task shader of a mesh-shading program (VK_EXT_mesh_shader, optional) and returns it.
+			 * @note Only with a mesh shader (initMeshShader()). Calling this a second time returns nullptr.
+			 * @param name A reference to a string.
+			 * @param workgroupSize The local workgroup size (X, Y, Z).
+			 * @return TaskShader *
+			 */
+			[[nodiscard]]
+			TaskShader * initTaskShader (const std::string & name, const std::array< uint32_t, 3 > & workgroupSize) noexcept;
+
+			/**
+			 * @brief Initializes the mesh shader of a mesh-shading program (VK_EXT_mesh_shader, optional) and returns it.
+			 * @note A mesh-shading program has NO vertex, tesselation or geometry stage: the mesh stage emits
+			 * the primitives. Only valid when Vulkan::Device::meshShadersEnabled(). Calling this a second time
+			 * returns nullptr.
+			 * @param name A reference to a string.
+			 * @param topology The emitted primitive.
+			 * @param maxVertices The most vertices a workgroup emits.
+			 * @param maxPrimitives The most primitives a workgroup emits.
+			 * @param workgroupSize The local workgroup size (X, Y, Z).
+			 * @return MeshShader *
+			 */
+			[[nodiscard]]
+			MeshShader * initMeshShader (const std::string & name, MeshOutputTopology topology, uint32_t maxVertices, uint32_t maxPrimitives, const std::array< uint32_t, 3 > & workgroupSize) noexcept;
+
+			/**
 			 * @brief Initializes the fragment shader.
 			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
 			 * nullptr. The fragment shader is optional (e.g. depth-only passes have none).
@@ -325,6 +353,61 @@ namespace EmEn::Saphir
 			hasGeometryShader () const noexcept
 			{
 				return m_geometryShader != nullptr;
+			}
+
+			/**
+			 * @brief Returns whether a task shader is present in the program.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasTaskShader () const noexcept
+			{
+				return m_taskShader != nullptr;
+			}
+
+			/**
+			 * @brief Returns whether this is a mesh-shading program (a mesh shader in place of the vertex stage).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasMeshShader () const noexcept
+			{
+				return m_meshShader != nullptr;
+			}
+
+			/**
+			 * @brief Returns the task shader, or nullptr.
+			 * @return TaskShader *
+			 */
+			[[nodiscard]]
+			TaskShader *
+			taskShader () noexcept
+			{
+				return m_taskShader.get();
+			}
+
+			/**
+			 * @brief Returns the mesh shader, or nullptr.
+			 * @return MeshShader *
+			 */
+			[[nodiscard]]
+			MeshShader *
+			meshShader () noexcept
+			{
+				return m_meshShader.get();
+			}
+
+			/**
+			 * @brief Returns the mesh shader, or nullptr.
+			 * @return const MeshShader *
+			 */
+			[[nodiscard]]
+			const MeshShader *
+			meshShader () const noexcept
+			{
+				return m_meshShader.get();
 			}
 
 			/**
@@ -553,6 +636,8 @@ namespace EmEn::Saphir
 			std::unique_ptr< TesselationControlShader > m_tesselationControlShader;
 			std::unique_ptr< TesselationEvaluationShader > m_tesselationEvaluationShader;
 			std::unique_ptr< GeometryShader > m_geometryShader;
+			std::unique_ptr< TaskShader > m_taskShader;
+			std::unique_ptr< MeshShader > m_meshShader;
 			std::unique_ptr< FragmentShader > m_fragmentShader;
 			std::shared_ptr< Graphics::VertexBufferFormat > m_vertexBufferFormat;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;

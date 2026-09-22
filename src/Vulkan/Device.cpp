@@ -267,6 +267,25 @@ namespace EmEn::Vulkan
 			return std::strcmp(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0;
 		});
 
+		/* NOTE: Detect if the mesh shader extension was enabled on this device (optional stages). */
+		m_meshShadersEnabled = std::ranges::any_of(extensions, [] (const char * ext) {
+			return std::strcmp(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0;
+		});
+
+		if ( m_meshShadersEnabled )
+		{
+			m_fpCmdDrawMeshTasks = reinterpret_cast< PFN_vkCmdDrawMeshTasksEXT >(vkGetDeviceProcAddr(m_deviceHandle, "vkCmdDrawMeshTasksEXT"));
+			m_fpCmdDrawMeshTasksIndirect = reinterpret_cast< PFN_vkCmdDrawMeshTasksIndirectEXT >(vkGetDeviceProcAddr(m_deviceHandle, "vkCmdDrawMeshTasksIndirectEXT"));
+			m_fpCmdDrawMeshTasksIndirectCount = reinterpret_cast< PFN_vkCmdDrawMeshTasksIndirectCountEXT >(vkGetDeviceProcAddr(m_deviceHandle, "vkCmdDrawMeshTasksIndirectCountEXT"));
+
+			if ( m_fpCmdDrawMeshTasks == nullptr || m_fpCmdDrawMeshTasksIndirect == nullptr )
+			{
+				Tracer::error(ClassId, "VK_EXT_mesh_shader is enabled but its draw commands cannot be loaded: mesh shaders stay unavailable !");
+
+				m_meshShadersEnabled = false;
+			}
+		}
+
 		/* NOTE: Detect if the Win32 external-memory import extension was enabled on this device
 		 * (zero-copy CEF accelerated paint: D3D11 shared texture → VkImage). */
 		m_externalMemoryWin32Enabled = std::ranges::any_of(extensions, [] (const char * ext) {

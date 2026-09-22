@@ -946,6 +946,19 @@ namespace EmEn::Vulkan
 		requestOptionalVK11(&VkPhysicalDeviceVulkan11Features::shaderDrawParameters, "shaderDrawParameters", "gl_DrawID, hence the Multi-Draw Indirect path");
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
+		/* NOTE: maintenance4 (Vulkan 1.3 core, optional): glslang writes the workgroup size of a task or
+		 * mesh shader as OpExecutionMode LocalSizeId when it targets SPIR-V 1.6, and that execution mode is
+		 * refused without this feature (VUID-RuntimeSpirv-LocalSizeId-06434 — found by the first compile
+		 * of a mesh shader, 2026-09-22). Requested when the device reports it. */
+		if ( selectedPhysicalDevice->featuresVK13().maintenance4 == VK_TRUE )
+		{
+			requirements.featuresVK13().maintenance4 = VK_TRUE;
+		}
+		else
+		{
+			TraceWarning{ClassId} << "The physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' does not advertise 'maintenance4': not requested, task and mesh shaders compiled for SPIR-V 1.6 will be refused.";
+		}
+
 		/* NOTE: Optional extension detection. Query all device extensions once and enable
 		 * supported optional features (portability subset, ray tracing). */
 		{
@@ -1023,6 +1036,36 @@ namespace EmEn::Vulkan
 			else
 			{
 				Tracer::info(ClassId, "Ray tracing not supported by this device.");
+			}
+
+			/* NOTE: Mesh shaders (VK_EXT_mesh_shader) — OPTIONAL stages, like the geometry stage: enabled
+			 * when advertised, and a consumer keeps its classic vertex path otherwise (Device::meshShadersEnabled()).
+			 * Only what the device reports is requested: `meshShader` always, the task stage and the
+			 * multiview variant (cubemap and cascade targets) when supported. Left off: the fragment
+			 * shading rate variant (needs VK_KHR_fragment_shading_rate) and the pipeline statistics
+			 * queries. MoltenVK does not expose the extension (checked 2026-09-22): never on macOS today.
+			 * Its SPIR-V 1.4 requirement is met by the Vulkan 1.2 core the engine targets. */
+			if ( physicalDevice->supportsMeshShaders() && hasExtension(VK_EXT_MESH_SHADER_EXTENSION_NAME) )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
+				const auto & supported = physicalDevice->meshShaderFeatures();
+				auto & requested = requirements.meshShaderFeatures();
+
+				requested.meshShader = VK_TRUE;
+				requested.taskShader = supported.taskShader;
+				requested.multiviewMeshShader = supported.multiviewMeshShader;
+
+				const auto & limits = physicalDevice->meshShaderProperties();
+
+				TraceInfo{ClassId} <<
+					"Mesh shaders detected and enabled (VK_EXT_mesh_shader): task stage " << (supported.taskShader == VK_TRUE ? "yes" : "no") <<
+					", multiview " << (supported.multiviewMeshShader == VK_TRUE ? "yes" : "no") <<
+					", at most " << limits.maxMeshOutputVertices << " vertices and " << limits.maxMeshOutputPrimitives << " primitives per mesh workgroup.";
+			}
+			else
+			{
+				Tracer::info(ClassId, "Mesh shaders not supported by this device.");
 			}
 
 			/* NOTE: Vulkan Video H.265 hardware encode (RushMaker hardware path).

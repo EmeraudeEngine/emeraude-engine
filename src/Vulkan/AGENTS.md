@@ -161,6 +161,26 @@ semaphores.
 - `Queue::waitIdle()` for synchronous compute completion
 - Compute shaders compiled via `Saphir::ShaderManager::getShaderModuleFromSourceCode()`
 
+### Mesh Shader Support (optional, Sep 2026)
+
+`VK_EXT_mesh_shader` is an OPTIONAL capability, like the geometry stage: nothing requires it, a
+consumer asks `Device::meshShadersEnabled()` and keeps its classic vertex path otherwise.
+- **Detection**: `PhysicalDevice::supportsMeshShaders()`, `meshShaderFeatures()`, `meshShaderProperties()`
+  (the device's ceilings: `maxMeshOutputVertices`, `maxMeshOutputPrimitives`, workgroup sizes...), queried
+  in a SEPARATE chain only when the extension is advertised (as the portability subset).
+- **Enabling** (`Instance.cpp`, beside ray tracing): the extension, `meshShader`, and `taskShader` /
+  `multiviewMeshShader` when reported. Left off: the fragment-shading-rate variant, the statistics queries.
+  RTX 3070 Ti: task yes, multiview yes, 256 vertices / 256 primitives per workgroup.
+- **Drawing**: `CommandBuffer::drawMeshTasks()`, `drawMeshTasksIndirect()`, `drawMeshTasksIndirectCount()`,
+  through entry points `Device` loads at creation (null when disabled: the call is refused with an error).
+- **Pipelines**: `GraphicsPipeline::finalize()` accepts a pipeline with a mesh stage and no vertex input /
+  input assembly state (the spec ignores both).
+- ⚠️ **MoltenVK does not expose the extension** (checked 2026-09-22: absent from its supported-extension
+  list, the 2024 implementation sits on an unmerged `mesh-shader` branch). Never true on macOS today.
+- ⚠️⚠️ **`maintenance4` is REQUESTED for it**: glslang writes a task/mesh workgroup size as
+  `OpExecutionMode LocalSizeId` when it targets SPIR-V 1.6, refused without the feature
+  (`VUID-RuntimeSpirv-LocalSizeId-06434`) — found by the first compiled mesh shader.
+
 ### GPU Profiler (`GPUProfiler.cpp/.hpp`)
 
 Per-pass GPU timing via timestamp queries — the first tool for any "the frame is slow"

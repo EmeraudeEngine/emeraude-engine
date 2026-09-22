@@ -252,6 +252,28 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Gives access to configure mesh shader features (EXT extension, optional).
+			 * @return VkPhysicalDeviceMeshShaderFeaturesEXT &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceMeshShaderFeaturesEXT &
+			meshShaderFeatures () noexcept
+			{
+				return m_meshShaderFeatures;
+			}
+
+			/**
+			 * @brief Returns the mesh shader features (EXT extension).
+			 * @return const VkPhysicalDeviceMeshShaderFeaturesEXT &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceMeshShaderFeaturesEXT &
+			meshShaderFeatures () const noexcept
+			{
+				return m_meshShaderFeatures;
+			}
+
+			/**
 			 * @brief Gives access to configure device fault features (EXT extension).
 			 * @return VkPhysicalDeviceFaultFeaturesEXT &
 			 */
@@ -295,6 +317,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
 			VkPhysicalDeviceFaultFeaturesEXT m_faultFeatures{};
+			VkPhysicalDeviceMeshShaderFeaturesEXT m_meshShaderFeatures{};
 			PortabilitySubset::Features m_portabilitySubsetFeatures{};
 			VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 			bool m_enableGraphics{false};

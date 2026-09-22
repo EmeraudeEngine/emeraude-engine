@@ -850,8 +850,14 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: A mesh-shading pipeline (VK_EXT_mesh_shader, optional) has no vertex input and no input
+		 * assembly: the mesh stage emits its primitives itself, and the spec ignores both states. */
+		const bool hasMeshStage = std::any_of(m_createInfo.pStages, m_createInfo.pStages + m_createInfo.stageCount, [] (const VkPipelineShaderStageCreateInfo & stage) {
+			return (stage.stage & VK_SHADER_STAGE_MESH_BIT_EXT) != 0;
+		});
+
 		/* NOTE: It can be NULL if the pipeline is created with the VK_DYNAMIC_STATE_VERTEX_INPUT_EXT dynamic state set. */
-		if ( m_createInfo.pVertexInputState == nullptr && !this->hasDynamicState(VK_DYNAMIC_STATE_VERTEX_INPUT_EXT) )
+		if ( !hasMeshStage && m_createInfo.pVertexInputState == nullptr && !this->hasDynamicState(VK_DYNAMIC_STATE_VERTEX_INPUT_EXT) )
 		{
 			Tracer::error(ClassId, "There is no vertex input state to build the graphics pipeline properly !");
 
@@ -861,7 +867,7 @@ namespace EmEn::Vulkan
 		/* NOTE: it can be NULL if the pipeline is created with both VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE
 		 * and VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY dynamic states set and dynamicPrimitiveTopologyUnrestricted is VK_TRUE.
 		 * It is ignored if the pipeline includes a mesh shader stage (VK_EXT_mesh_shader). */
-		if ( m_createInfo.pInputAssemblyState == nullptr && !this->hasDynamicState(VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY) )
+		if ( !hasMeshStage && m_createInfo.pInputAssemblyState == nullptr && !this->hasDynamicState(VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY) )
 		{
 			Tracer::error(ClassId, "There is no input assembly state to build the graphics pipeline properly !");
 

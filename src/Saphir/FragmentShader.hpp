@@ -40,6 +40,7 @@ namespace EmEn::Saphir
 	class VertexShader;
 	class TesselationEvaluationShader;
 	class GeometryShader;
+	class MeshShader;
 }
 
 namespace EmEn::Saphir
@@ -212,6 +213,16 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			bool connectFromPreviousShader (const TesselationEvaluationShader & tesselationEvaluationShader) noexcept;
+
+			/**
+			 * @brief Copies the outputs of a mesh shader to this fragment shader.
+			 * @note A mesh output is an ARRAY indexed by vertex (or by primitive); the matching fragment input
+			 * is the plain variable, same location, same qualifier (perprimitiveEXT included).
+			 * @param meshShader A reference to a generated mesh shader.
+			 * @return bool False if the mesh shader is not generated yet.
+			 */
+			[[nodiscard]]
+			bool connectFromPreviousShader (const MeshShader & meshShader) noexcept;
 
 			/**
 			 * @brief Copies output from a geometry shader to this fragment shader.

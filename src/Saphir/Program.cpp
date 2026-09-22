@@ -38,6 +38,29 @@ namespace EmEn::Saphir
 	bool
 	Program::isComplete () const noexcept
 	{
+		/* NOTE: A mesh-shading program (VK_EXT_mesh_shader, optional): the mesh stage replaces every
+		 * stage before the fragment one, the task stage is optional. */
+		if ( m_meshShader != nullptr )
+		{
+			if ( m_vertexShader != nullptr || m_tesselationControlShader != nullptr || m_tesselationEvaluationShader != nullptr || m_geometryShader != nullptr )
+			{
+				return false;
+			}
+
+			if ( !m_meshShader->isGenerated() || (m_taskShader != nullptr && !m_taskShader->isGenerated()) )
+			{
+				return false;
+			}
+
+			return m_fragmentShader == nullptr || m_fragmentShader->isGenerated();
+		}
+
+		/* NOTE: A task stage without a mesh stage is not a program. */
+		if ( m_taskShader != nullptr )
+		{
+			return false;
+		}
+
 		/* NOTE: The vertex shader is mandatory! */
 		if ( m_vertexShader == nullptr || !m_vertexShader->isGenerated() )
 		{
@@ -223,6 +246,36 @@ namespace EmEn::Saphir
 		return m_tesselationEvaluationShader.get();
 	}
 
+	TaskShader *
+	Program::initTaskShader (const std::string & name, const std::array< uint32_t, 3 > & workgroupSize) noexcept
+	{
+		if ( m_taskShader != nullptr )
+		{
+			Tracer::error(ClassId, "The task shader is already initialized !");
+
+			return nullptr;
+		}
+
+		m_taskShader = std::make_unique< TaskShader >(name, m_GLSLVersion, m_GLSLProfile, workgroupSize);
+
+		return m_taskShader.get();
+	}
+
+	MeshShader *
+	Program::initMeshShader (const std::string & name, MeshOutputTopology topology, uint32_t maxVertices, uint32_t maxPrimitives, const std::array< uint32_t, 3 > & workgroupSize) noexcept
+	{
+		if ( m_meshShader != nullptr )
+		{
+			Tracer::error(ClassId, "The mesh shader is already initialized !");
+
+			return nullptr;
+		}
+
+		m_meshShader = std::make_unique< MeshShader >(name, m_GLSLVersion, m_GLSLProfile, topology, maxVertices, maxPrimitives, workgroupSize);
+
+		return m_meshShader.get();
+	}
+
 	GeometryShader *
 	Program::initGeometryShader (const std::string & name, const Declaration::InputPrimitive & inputPrimitive, const Declaration::OutputPrimitive & outputPrimitive) noexcept
 	{
@@ -264,6 +317,11 @@ namespace EmEn::Saphir
 		if ( m_geometryShader != nullptr && m_geometryShader->isGenerated() )
 		{
 			return ShaderType::GeometryShader;
+		}
+
+		if ( m_meshShader != nullptr && m_meshShader->isGenerated() )
+		{
+			return ShaderType::MeshShader;
 		}
 
 		if ( m_tesselationEvaluationShader != nullptr && m_tesselationEvaluationShader->isGenerated() )
@@ -418,7 +476,17 @@ namespace EmEn::Saphir
 	Program::getShaderList () const noexcept
 	{
 		std::vector< AbstractShader * > list{};
-		list.reserve(5);;
+		list.reserve(7);
+
+		if ( m_taskShader != nullptr )
+		{
+			list.emplace_back(m_taskShader.get());
+		}
+
+		if ( m_meshShader != nullptr )
+		{
+			list.emplace_back(m_meshShader.get());
+		}
 
 		if ( m_vertexShader != nullptr )
 		{

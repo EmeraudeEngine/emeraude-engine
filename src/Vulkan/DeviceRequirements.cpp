@@ -59,9 +59,13 @@ namespace EmEn::Vulkan
 		 * and omits the structure silently loses capabilities the device actually has. */
 		m_portabilitySubsetFeatures.sType = PortabilitySubset::FeaturesType;
 		m_portabilitySubsetFeatures.pNext = nullptr;
+		/* NOTE: Mesh shader features (EXT extension) — optional, all-zero unless Instance.cpp fills
+		 * them for a device that advertises the extension. */
+		m_meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+		m_meshShaderFeatures.pNext = &m_portabilitySubsetFeatures;
 		/* NOTE: Device fault features (EXT extension) — GPU device-lost diagnostics. */
 		m_faultFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
-		m_faultFeatures.pNext = &m_portabilitySubsetFeatures;
+		m_faultFeatures.pNext = &m_meshShaderFeatures;
 		/* NOTE: Ray query features (KHR extension). */
 		m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
 		m_rayQueryFeatures.pNext = &m_faultFeatures;

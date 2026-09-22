@@ -257,6 +257,52 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether VK_EXT_mesh_shader is enabled on this device (task and mesh stages).
+			 * @note OPTIONAL, like the geometry stage: enabled when the device advertises it (never on
+			 * MoltenVK, 2026-09-22). A consumer keeps its classic vertex path when this is false.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			meshShadersEnabled () const noexcept
+			{
+				return m_meshShadersEnabled;
+			}
+
+			/**
+			 * @brief Returns vkCmdDrawMeshTasksEXT, or null when mesh shaders are not enabled.
+			 * @return PFN_vkCmdDrawMeshTasksEXT
+			 */
+			[[nodiscard]]
+			PFN_vkCmdDrawMeshTasksEXT
+			cmdDrawMeshTasks () const noexcept
+			{
+				return m_fpCmdDrawMeshTasks;
+			}
+
+			/**
+			 * @brief Returns vkCmdDrawMeshTasksIndirectEXT, or null when mesh shaders are not enabled.
+			 * @return PFN_vkCmdDrawMeshTasksIndirectEXT
+			 */
+			[[nodiscard]]
+			PFN_vkCmdDrawMeshTasksIndirectEXT
+			cmdDrawMeshTasksIndirect () const noexcept
+			{
+				return m_fpCmdDrawMeshTasksIndirect;
+			}
+
+			/**
+			 * @brief Returns vkCmdDrawMeshTasksIndirectCountEXT, or null when mesh shaders are not enabled.
+			 * @return PFN_vkCmdDrawMeshTasksIndirectCountEXT
+			 */
+			[[nodiscard]]
+			PFN_vkCmdDrawMeshTasksIndirectCountEXT
+			cmdDrawMeshTasksIndirectCount () const noexcept
+			{
+				return m_fpCmdDrawMeshTasksIndirectCount;
+			}
+
+			/**
 			 * @brief Returns whether Vulkan Video H.265 hardware encode is available on this device.
 			 * @note True when VK_KHR_video_queue + VK_KHR_video_encode_queue + VK_KHR_video_encode_h265
 			 * are enabled AND a VIDEO_ENCODE queue family was configured. The RushMaker uses the
@@ -745,6 +791,9 @@ namespace EmEn::Vulkan
 			PFN_vkGetDeviceFaultInfoEXT m_fpGetDeviceFaultInfo{nullptr};
 			PFN_vkGetQueueCheckpointDataNV m_fpGetQueueCheckpointData{nullptr};
 			PFN_vkCmdSetCheckpointNV m_fpCmdSetCheckpoint{nullptr};
+			PFN_vkCmdDrawMeshTasksEXT m_fpCmdDrawMeshTasks{nullptr};
+			PFN_vkCmdDrawMeshTasksIndirectEXT m_fpCmdDrawMeshTasksIndirect{nullptr};
+			PFN_vkCmdDrawMeshTasksIndirectCountEXT m_fpCmdDrawMeshTasksIndirectCount{nullptr};
 			Base::StaticVector< std::unique_ptr< Queue >, 32 > m_queues;
 			DeviceQueueConfiguration m_graphicsQueueConfiguration;
 			DeviceQueueConfiguration m_computeQueueConfiguration;
@@ -757,6 +806,7 @@ namespace EmEn::Vulkan
 			bool m_videoEncodeH265Enabled{false};
 			bool m_useMemoryAllocator{false};
 			bool m_rayTracingEnabled{false};
+			bool m_meshShadersEnabled{false};
 			bool m_externalMemoryWin32Enabled{false};
 			bool m_metalObjectsEnabled{false};
 	};

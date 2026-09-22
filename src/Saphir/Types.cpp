@@ -51,6 +51,12 @@ namespace EmEn::Saphir
 			case ShaderType::ComputeShader :
 				return ComputeShaderString;
 
+			case ShaderType::TaskShader :
+				return TaskShaderString;
+
+			case ShaderType::MeshShader :
+				return MeshShaderString;
+
 			default:
 				return nullptr;
 		}
@@ -78,6 +84,12 @@ namespace EmEn::Saphir
 
 			case ShaderType::ComputeShader :
 				return ComputeShaderFileExtension;
+
+			case ShaderType::TaskShader :
+				return TaskShaderFileExtension;
+
+			case ShaderType::MeshShader :
+				return MeshShaderFileExtension;
 
 			default:
 				return nullptr;

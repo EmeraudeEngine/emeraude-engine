@@ -44,7 +44,12 @@ namespace EmEn::Saphir
 		TesselationEvaluationShader,
 		GeometryShader,
 		FragmentShader,
-		ComputeShader
+		ComputeShader,
+		/* Optional stages of VK_EXT_mesh_shader (Vulkan::Device::meshShadersEnabled()): a task
+		 * (amplification) stage launching mesh workgroups, and the mesh stage emitting primitives in
+		 * place of the vertex stage. Appended last: the values above are unchanged. */
+		TaskShader,
+		MeshShader
 	};
 
 	static constexpr auto VertexShaderString{"VertexShader"};
@@ -53,6 +58,8 @@ namespace EmEn::Saphir
 	static constexpr auto GeometryShaderString{"GeometryShader"};
 	static constexpr auto FragmentShaderString{"FragmentShader"};
 	static constexpr auto ComputeShaderString{"ComputeShader"};
+	static constexpr auto TaskShaderString{"TaskShader"};
+	static constexpr auto MeshShaderString{"MeshShader"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.
@@ -82,6 +89,8 @@ namespace EmEn::Saphir
 	static constexpr auto GeometryShaderFileExtension{"geom"};
 	static constexpr auto FragmentShaderFileExtension{"frag"};
 	static constexpr auto ComputeShaderFileExtension{"comp"};
+	static constexpr auto TaskShaderFileExtension{"task"};
+	static constexpr auto MeshShaderFileExtension{"mesh"};
 
 	[[nodiscard]]
 	const char * getShaderFileExtension (ShaderType type) noexcept;

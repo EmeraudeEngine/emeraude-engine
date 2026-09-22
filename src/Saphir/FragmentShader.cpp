@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "GeometryShader.hpp"
+#include "MeshShader.hpp"
 #include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "TesselationEvaluationShader.hpp"
 #include "Tracer.hpp"
@@ -214,6 +215,26 @@ namespace EmEn::Saphir
 		for ( const auto & outputBlock : tesselationEvaluationShader.outputBlocks() )
 		{
 			this->declare(InputBlock{outputBlock});
+		}
+
+		return true;
+	}
+
+	bool
+	FragmentShader::connectFromPreviousShader (const MeshShader & meshShader) noexcept
+	{
+		if ( !meshShader.isGenerated() )
+		{
+			TraceError{ClassId} << "The mesh shader '" << meshShader.name() << "' is not generated !";
+
+			return false;
+		}
+
+		for ( const auto & stageOutput : meshShader.stageOutputs() )
+		{
+			/* The array is the mesh stage's (one element per vertex or primitive); the fragment stage
+			 * receives one interpolated value. */
+			this->declare(StageInput{stageOutput.location(), stageOutput.type(), stageOutput.name(), stageOutput.interpolation(), 0});
 		}
 
 		return true;

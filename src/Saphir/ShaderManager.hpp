@@ -73,13 +73,15 @@ namespace EmEn::Saphir
 	 * @note Used to filter shader source files apart from any other file sharing the
 	 * same directory (the generated-source dump, clearCache()).
 	 */
-	static constexpr std::array< const char * const, 6 > ShaderFileExtensions{
+	static constexpr std::array< const char * const, 8 > ShaderFileExtensions{
 		VertexShaderFileExtension,
 		TesselationControlShaderFileExtension,
 		TesselationEvaluationShaderFileExtension,
 		GeometryShaderFileExtension,
 		FragmentShaderFileExtension,
-		ComputeShaderFileExtension
+		ComputeShaderFileExtension,
+		TaskShaderFileExtension,
+		MeshShaderFileExtension
 	};
 
 	/**

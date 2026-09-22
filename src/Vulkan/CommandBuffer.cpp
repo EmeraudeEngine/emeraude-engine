@@ -1757,4 +1757,72 @@ namespace EmEn::Vulkan
 			stride
 		);
 	}
+
+	void
+	CommandBuffer::drawMeshTasks (uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const noexcept
+	{
+		const auto device = m_commandPool->device();
+		const auto function = device->cmdDrawMeshTasks();
+
+		if ( function == nullptr )
+		{
+			Tracer::error(ClassId, "drawMeshTasks() called while mesh shaders are not enabled on this device !");
+
+			return;
+		}
+
+		function(m_handle, groupCountX, groupCountY, groupCountZ);
+	}
+
+	void
+	CommandBuffer::drawMeshTasksIndirect (VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) const noexcept
+	{
+		const auto device = m_commandPool->device();
+		const auto function = device->cmdDrawMeshTasksIndirect();
+
+		if ( function == nullptr )
+		{
+			Tracer::error(ClassId, "drawMeshTasksIndirect() called while mesh shaders are not enabled on this device !");
+
+			return;
+		}
+
+		if constexpr ( IsDebug )
+		{
+			if ( buffer == VK_NULL_HANDLE || drawCount == 0 )
+			{
+				Tracer::error(ClassId, "Null indirect buffer or no draw count for drawMeshTasksIndirect() !");
+
+				return;
+			}
+		}
+
+		function(m_handle, buffer, offset, drawCount, stride);
+	}
+
+	void
+	CommandBuffer::drawMeshTasksIndirectCount (VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride) const noexcept
+	{
+		const auto device = m_commandPool->device();
+		const auto function = device->cmdDrawMeshTasksIndirectCount();
+
+		if ( function == nullptr )
+		{
+			Tracer::error(ClassId, "drawMeshTasksIndirectCount() called while mesh shaders are not enabled on this device !");
+
+			return;
+		}
+
+		if constexpr ( IsDebug )
+		{
+			if ( buffer == VK_NULL_HANDLE || countBuffer == VK_NULL_HANDLE || maxDrawCount == 0 )
+			{
+				Tracer::error(ClassId, "Null buffer or no draw ceiling for drawMeshTasksIndirectCount() !");
+
+				return;
+			}
+		}
+
+		function(m_handle, buffer, offset, countBuffer, countBufferOffset, maxDrawCount, stride);
+	}
 }

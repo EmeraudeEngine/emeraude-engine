@@ -123,6 +123,12 @@ namespace EmEn::Saphir
 			case ShaderType::ComputeShader :
 				return EShLangCompute;
 
+			case ShaderType::TaskShader :
+				return EShLangTask;
+
+			case ShaderType::MeshShader :
+				return EShLangMesh;
+
 			default:
 				Tracer::error(ShaderManager::ClassId, "Unknown shader type !");
 
@@ -284,6 +290,19 @@ namespace EmEn::Saphir
 		builtInResource.maxCullDistances = 8;
 		builtInResource.maxCombinedClipAndCullDistances = 8;
 		builtInResource.maxSamples = 4;
+		/* NOTE: The mesh and task stages (VK_EXT_mesh_shader, optional). Left at zero, glslang rejects
+		 * EVERY mesh shader ("max_vertices exceeds..."): these are its own reference values (the
+		 * glslang default resources), which cover what the spec guarantees. The device's real ceilings
+		 * are PhysicalDevice::meshShaderProperties(), and a shader must stay under those. */
+		builtInResource.maxMeshOutputVerticesEXT = 256;
+		builtInResource.maxMeshOutputPrimitivesEXT = 256;
+		builtInResource.maxMeshWorkGroupSizeX_EXT = 128;
+		builtInResource.maxMeshWorkGroupSizeY_EXT = 128;
+		builtInResource.maxMeshWorkGroupSizeZ_EXT = 128;
+		builtInResource.maxTaskWorkGroupSizeX_EXT = 128;
+		builtInResource.maxTaskWorkGroupSizeY_EXT = 128;
+		builtInResource.maxTaskWorkGroupSizeZ_EXT = 128;
+		builtInResource.maxMeshViewCountEXT = 4;
 
 		builtInResource.limits.nonInductiveForLoops = true;
 		builtInResource.limits.whileLoops = true;
@@ -891,6 +910,12 @@ namespace EmEn::Saphir
 
 			case ShaderType::ComputeShader :
 				return VK_SHADER_STAGE_COMPUTE_BIT;
+
+			case ShaderType::TaskShader :
+				return VK_SHADER_STAGE_TASK_BIT_EXT;
+
+			case ShaderType::MeshShader :
+				return VK_SHADER_STAGE_MESH_BIT_EXT;
 
 			default:
 				return static_cast< VkShaderStageFlagBits >(0);

@@ -672,6 +672,43 @@ namespace EmEn::Vulkan
 			 */
 			void drawIndexedIndirect (VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) const noexcept;
 
+			/**
+			 * @brief Registers a mesh-shading draw: groupCountX × Y × Z workgroups of the first stage of the
+			 * bound pipeline (the task stage, or the mesh stage when there is none).
+			 * @note OPTIONAL stages: only valid when Device::meshShadersEnabled(). Called otherwise, it is
+			 * refused with an error instead of crashing on a null entry point.
+			 * @param groupCountX Workgroups on X.
+			 * @param groupCountY Workgroups on Y. Default 1.
+			 * @param groupCountZ Workgroups on Z. Default 1.
+			 * @return void
+			 */
+			void drawMeshTasks (uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1) const noexcept;
+
+			/**
+			 * @brief Registers drawCount mesh-shading draws read from a buffer of VkDrawMeshTasksIndirectCommandEXT.
+			 * @note Only valid when Device::meshShadersEnabled().
+			 * @param buffer The indirect buffer handle.
+			 * @param offset Byte offset of the first command.
+			 * @param drawCount Number of draws.
+			 * @param stride Byte stride between commands.
+			 * @return void
+			 */
+			void drawMeshTasksIndirect (VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) const noexcept;
+
+			/**
+			 * @brief Registers mesh-shading draws whose COUNT is read from a GPU buffer (GPU-driven culling).
+			 * @note Only valid when Device::meshShadersEnabled() (the entry point is part of VK_EXT_mesh_shader
+			 * and needs drawIndirectCount, core in Vulkan 1.2).
+			 * @param buffer The indirect buffer handle.
+			 * @param offset Byte offset of the first command.
+			 * @param countBuffer The buffer holding the draw count.
+			 * @param countBufferOffset Byte offset of the count.
+			 * @param maxDrawCount The ceiling on the count.
+			 * @param stride Byte stride between commands.
+			 * @return void
+			 */
+			void drawMeshTasksIndirectCount (VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride) const noexcept;
+
 		private:
 
 			VkCommandBuffer m_handle{VK_NULL_HANDLE};
