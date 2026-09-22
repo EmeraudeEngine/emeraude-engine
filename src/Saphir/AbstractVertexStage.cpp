@@ -307,7 +307,7 @@ namespace EmEn::Saphir
 		 * (stride 2). The slot is encoded in the firstInstance draw parameter: with
 		 * instanceCount always 1 on this path, gl_InstanceIndex == firstInstance — no
 		 * shaderDrawParameters feature required (contrary to gl_BaseInstance). */
-		code << "\t" "const mat4 " << ShaderVariable::InstanceModelMatrix << " = ubInstanceTransforms.instanceMatrices[gl_InstanceIndex * 2];" "\n\n";
+		code << "\t" "const mat4 " << ShaderVariable::InstanceModelMatrix << " = ubInstanceTransforms.instanceMatrices[" << m_instanceIndexExpression << " * 2];" "\n\n";
 
 		m_uniquePreparations.emplace_back(ShaderVariable::InstanceModelMatrix, code.str());
 
@@ -367,7 +367,7 @@ namespace EmEn::Saphir
 		else if ( this->isInstanceTransformsEnabled() )
 		{
 			/* Non-instanced: the previous model matrix lives in the SSBO entry (odd index). */
-			previousModelMatrix = "ubInstanceTransforms.instanceMatrices[gl_InstanceIndex * 2 + 1]";
+			previousModelMatrix = "ubInstanceTransforms.instanceMatrices[" + std::string{m_instanceIndexExpression} + " * 2 + 1]";
 		}
 		else
 		{
@@ -756,7 +756,7 @@ namespace EmEn::Saphir
 			 * generator requests today — verified 2026-07-25. Should it ever be used for a real
 			 * render pass, the TAA sub-pixel jitter would have to be applied by whichever stage
 			 * produces the clip position (see isProjectionJitterPushed()). */
-			code << "gl_Position = ";
+			code << m_positionOutput << " = ";
 		}
 		else
 		{
@@ -953,7 +953,7 @@ namespace EmEn::Saphir
 
 		const auto posExpr = this->vertexPositionExpression();
 
-		outputInstructions += "\t" "gl_Position = ";
+		outputInstructions += "\t" + std::string{m_positionOutput} + " = ";
 		outputInstructions += MVPMatrix;
 		outputInstructions += " * vec4(";
 		outputInstructions += posExpr;
@@ -981,7 +981,7 @@ namespace EmEn::Saphir
 		 * (synthesizeVelocityClipPositions), so the motion vectors are untouched. */
 		if ( this->isInfinityViewEnabled() )
 		{
-			outputInstructions += "\t" "gl_Position.z = gl_Position.w;" "\n";
+			outputInstructions += "\t" + std::string{m_positionOutput} + ".z = " + m_positionOutput + ".w;" "\n";
 		}
 
 		/* TAA sub-pixel jitter: applied HERE and nowhere else. Offsetting the clip position by
@@ -992,9 +992,9 @@ namespace EmEn::Saphir
 		 * main view sets a jitter, shadow maps / RTT / cubemaps push zero). */
 		if ( this->isProjectionJitterPushed() )
 		{
-			outputInstructions += "\t" "gl_Position.xy += ";
+			outputInstructions += "\t" + std::string{m_positionOutput} + ".xy += ";
 			outputInstructions += MatrixPC(PushConstant::Component::ProjectionJitter);
-			outputInstructions += " * gl_Position.w;" "\n";
+			outputInstructions += " * " + std::string{m_positionOutput} + ".w;" "\n";
 		}
 
 		return true;
@@ -2026,7 +2026,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	AbstractVertexStage::onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
+	AbstractVertexStage::generatePerVertexCode (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept
 	{
 		/* ⚠️ BEFORE the unique instructions: these outputs prepare the normal matrix and the model
 		 * matrix, and generateMainUniqueInstructions() is what emits every preparation — asked after
@@ -2154,13 +2154,6 @@ namespace EmEn::Saphir
 				"\t" "uint _padding[3];" "\n"
 				"};" "\n\n";
 		}
-
-		/* Specific input shader code declarations. */
-		generateDeclarations(code, m_inputAttributes, "Input vertex attributes (Vertex shader only)");
-
-		/* Specific output shader code declarations. */
-		generateDeclarations(code, m_stageOutputs, "Stage outputs (To next stage)");
-		generateDeclarations(code, m_outputBlocks, "Output blocks (To next stage)");
 
 		return true;
 	}

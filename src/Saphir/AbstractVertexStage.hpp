@@ -536,6 +536,46 @@ namespace EmEn::Saphir
 
 			}
 
+			/**
+			 * @brief Generates everything the stages share: the synthesized instructions and the displacement
+			 * chain (heightfield, skinning, wind) into the main() instruction strings, and the MDI struct into
+			 * `code`. It does NOT declare the vertex inputs nor the outputs: that is the concrete stage's part
+			 * (plain `in`/`out` for a vertex shader, per-vertex arrays for a mesh shader).
+			 * @param generator A reference to the generator.
+			 * @param code The stage-specific declaration stream.
+			 * @param topInstructions The top instructions of main().
+			 * @param outputInstructions The output instructions of main().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generatePerVertexCode (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept;
+
+			/**
+			 * @brief Names the variable the clip-space position is written to.
+			 * @note `gl_Position` for a vertex shader (the default); a mesh shader writes a local it copies into
+			 * `gl_MeshVerticesEXT[i].gl_Position`, since a built-in of that name does not exist there.
+			 * @param variable A static string.
+			 * @return void
+			 */
+			void
+			setPositionOutput (const char * variable) noexcept
+			{
+				m_positionOutput = variable;
+			}
+
+			/**
+			 * @brief Names the GLSL expression that indexes the InstanceTransforms SSBO.
+			 * @note `gl_InstanceIndex` for a vertex shader (the default, == firstInstance); a mesh shader has no
+			 * instance index and supplies its own (a push constant).
+			 * @param expression A static string.
+			 * @return void
+			 */
+			void
+			setInstanceIndexExpression (const char * expression) noexcept
+			{
+				m_instanceIndexExpression = expression;
+			}
+
 		private:
 
 			/**
@@ -580,12 +620,12 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			bool declareHeightfieldPixelFrameOutputs (Generator::Abstract & generator, std::string & outputInstructions) noexcept;
 
-			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
-			[[nodiscard]]
-			bool onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept override;
+		protected:
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onGetDeclarationStats() */
 			void onGetDeclarationStats (std::stringstream & output) const noexcept override;
+
+		private:
 
 			/**
 			 * @brief Returns whether a variable preparation has already been asked.
@@ -861,6 +901,8 @@ namespace EmEn::Saphir
 			std::vector< Declaration::StageOutput > m_stageOutputs;
 			std::vector< Declaration::OutputBlock > m_outputBlocks;
 			std::set< Graphics::VertexAttributeType > m_vertexAttributes;
+			const char * m_positionOutput{"gl_Position"};
+			const char * m_instanceIndexExpression{"gl_InstanceIndex"};
 			bool m_instancingEnabled{false};
 			bool m_advancedMatricesEnabled{false};
 			bool m_billBoardingEnabled{false};

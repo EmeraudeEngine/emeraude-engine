@@ -41,6 +41,7 @@ namespace EmEn::Saphir
 	class TesselationEvaluationShader;
 	class GeometryShader;
 	class MeshShader;
+	class AbstractVertexStage;
 }
 
 namespace EmEn::Saphir
@@ -256,6 +257,14 @@ namespace EmEn::Saphir
 			static Declaration::Function generateToLinearColorFunction () noexcept;
 
 		private:
+
+			/**
+			 * @brief Receives the outputs of a per-vertex stage (vertex or mesh shader): what both overloads share.
+			 * @param perVertexStage A reference to the per-vertex stage.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool connectFromPerVertexStage (const AbstractVertexStage & perVertexStage) noexcept;
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
 			[[nodiscard]]

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -458,6 +459,19 @@ namespace EmEn::Saphir
 			 */
 			virtual void onGetDeclarationStats (std::stringstream & output) const noexcept = 0;
 
+			/**
+			 * @brief Sets GLSL emitted at the very END of main(), after every output instruction.
+			 * @note For a stage whose main() is a frame around the collected instructions (the mesh shader closes
+			 * its per-vertex loop and emits its primitives here). Set it from onSourceCodeGeneration().
+			 * @param code The GLSL code [std::move].
+			 * @return void
+			 */
+			void
+			setMainEpilogue (std::string code) noexcept
+			{
+				m_mainEpilogue = std::move(code);
+			}
+
 		private:
 
 			/**
@@ -469,6 +483,7 @@ namespace EmEn::Saphir
 			std::string m_GLSLVersion;
 			std::string m_GLSLProfile;
 			std::string m_sourceCode;
+			std::string m_mainEpilogue;
 			size_t m_sourceCodeHash{0};
 			std::vector< std::string > m_headers;
 			std::vector< Declaration::SpecializationConstant > m_specializationConstants; /* Special case before compilation */

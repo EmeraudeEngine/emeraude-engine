@@ -277,6 +277,7 @@ namespace EmEn::Saphir
 			 "void main ()" "\n"
 			 "{" "\n" <<
 			 this->getCode(topInstructions, outputInstructions) <<
+			 m_mainEpilogue <<
 			 "}" "\n";
 
 		m_sourceCode = code.str();

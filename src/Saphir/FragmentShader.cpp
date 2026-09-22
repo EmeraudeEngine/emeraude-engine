@@ -144,22 +144,26 @@ namespace EmEn::Saphir
 	bool
 	FragmentShader::connectFromPreviousShader (const VertexShader & vertexShader) noexcept
 	{
-		if ( !vertexShader.isGenerated() )
+		return this->connectFromPerVertexStage(vertexShader);
+	}
+
+	bool
+	FragmentShader::connectFromPerVertexStage (const AbstractVertexStage & perVertexStage) noexcept
+	{
+		if ( !perVertexStage.isGenerated() )
 		{
-			TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' is not generated !";
+			TraceError{ClassId} << "The " << to_string(perVertexStage.type()) << " '" << perVertexStage.name() << "' is not generated !";
 
 			return false;
 		}
 
-		if ( vertexShader.stageOutputs().empty() && vertexShader.outputBlocks().empty() )
+		if ( perVertexStage.stageOutputs().empty() && perVertexStage.outputBlocks().empty() )
 		{
 			/* NOTE : This can only have gl_Position. */
-			//TraceWarning{ClassId} << "The vertex shader '" << vertexShader.name() << "' has no output declaration !";
-
 			return true;
 		}
 
-		for ( const auto & stageOutput : vertexShader.stageOutputs() )
+		for ( const auto & stageOutput : perVertexStage.stageOutputs() )
 		{
 			if ( m_heightfieldPixelFrameEnabled )
 			{
@@ -182,7 +186,7 @@ namespace EmEn::Saphir
 			this->declare(StageInput{stageOutput});
 		}
 
-		for ( const auto & outputBlock : vertexShader.outputBlocks() )
+		for ( const auto & outputBlock : perVertexStage.outputBlocks() )
 		{
 			this->declare(InputBlock{outputBlock});
 		}
@@ -223,21 +227,9 @@ namespace EmEn::Saphir
 	bool
 	FragmentShader::connectFromPreviousShader (const MeshShader & meshShader) noexcept
 	{
-		if ( !meshShader.isGenerated() )
-		{
-			TraceError{ClassId} << "The mesh shader '" << meshShader.name() << "' is not generated !";
-
-			return false;
-		}
-
-		for ( const auto & stageOutput : meshShader.stageOutputs() )
-		{
-			/* The array is the mesh stage's (one element per vertex or primitive); the fragment stage
-			 * receives one interpolated value. */
-			this->declare(StageInput{stageOutput.location(), stageOutput.type(), stageOutput.name(), stageOutput.interpolation(), 0});
-		}
-
-		return true;
+		/* NOTE: The mesh stage declares its outputs exactly as a vertex shader does (canonical names, same
+		 * locations); only its emission turns them into per-vertex arrays, so the fragment side is one path. */
+		return this->connectFromPerVertexStage(meshShader);
 	}
 
 	bool

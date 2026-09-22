@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -68,5 +69,11 @@ namespace EmEn::Saphir
 			{
 				return ShaderType::VertexShader;
 			}
+
+		private:
+
+			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
+			[[nodiscard]]
+			bool onSourceCodeGeneration (Generator::Abstract & generator, std::stringstream & code, std::string & topInstructions, std::string & outputInstructions) noexcept override;
 	};
 }

@@ -46,7 +46,10 @@ but no generator builds a LIT, material-driven program from it.
 1. ~~Extract the per-vertex stage base~~ — DONE 2026-09-22 (`AbstractVertexStage`, 410 generated
    sources byte-identical; `src/Saphir/AGENTS.md` § The per-vertex stage contract). Owner, same day:
    the stages diverge through OVERLOADS, not virtuals.
-2. `MeshShader` implements it (array outputs, output blocks, `perprimitiveEXT` on the fragment side).
+2. ~~`MeshShader` implements it~~ — DONE 2026-09-22: per-vertex loop + provided attributes + array outputs at
+   the same locations + the light block through a local structure; per-primitive outputs dropped (unused).
+   `src/Saphir/AGENTS.md` § Task and mesh stages. Vertex path re-proven byte-identical; the mesh path is
+   exercised for the first time at step 4.
 3. Program/pipeline without a vertex stage (vertex format, empty vertex input, push-constant and
    descriptor-layout stage flags).
 4. `DisplacedSurfaceResource` + task/mesh code + draw branch + shadow program.
