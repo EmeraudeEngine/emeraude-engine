@@ -130,6 +130,13 @@ namespace EmEn::Saphir
 		 * char_traits::copy as a -Wstringop-overread overflow (a known false positive that
 		 * only surfaces once the PCH shifts the STL inlining context). A guaranteed-heap
 		 * string removes the ambiguity. */
+		/* The ambient pass writes the G-buffer normal TURNED TOWARD THE VIEWER (two-sided, 2026-09-22): the
+		 * post-process effects must see the side the camera looks at. It requests PositionViewSpace for it. */
+		if ( m_renderPassType == RenderPassType::AmbientPass )
+		{
+			return std::string{"faceforward(normalize("} + Keys::ShaderVariable::NormalViewSpace + "), " + Keys::ShaderVariable::PositionViewSpace + ".xyz, normalize(" + Keys::ShaderVariable::NormalViewSpace + "))";
+		}
+
 		std::string expression;
 		expression.reserve(sizeof("normalize(") + sizeof(Keys::ShaderVariable::NormalViewSpace));
 		expression += "normalize(";
@@ -488,6 +495,25 @@ namespace EmEn::Saphir
 
 						return false;
 					}
+
+					/* Its view-space twin decides which way the geometric normal must face (the sign of a dot
+					 * product survives the rotation between the two spaces). */
+					if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalViewSpace, VariableScope::ToNextStage) )
+					{
+						Tracer::error(ClassId, "Unable to synthesize NormalViewSpace for the ambient pass IBL !");
+
+						return false;
+					}
+				}
+
+				/* TWO-SIDED: every normal this pass uses — the IBL diffuse normal and the G-buffer normal the
+				 * post-process effects read — is turned toward the viewer, like the direct light's (2026-09-22).
+				 * The view vector is -PositionViewSpace. */
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionViewSpace, VariableScope::ToNextStage) )
+				{
+					Tracer::error(ClassId, "Unable to synthesize PositionViewSpace for the ambient pass !");
+
+					return false;
 				}
 
 				return true;
@@ -587,7 +613,10 @@ namespace EmEn::Saphir
 		 * statement always sees it. */
 		if ( m_renderPassType == RenderPassType::AmbientPass && m_useNormalMapping && !m_surfaceNormalVector.empty() )
 		{
-			Code{fragmentShader} << "const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");";
+			/* Turned toward the viewer, like the light passes' N (faceforward(N, I, N) = N facing -I). */
+			Code{fragmentShader} <<
+				"const vec3 ambientPerturbedNormal = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");" << Line::End <<
+				"const vec3 N = faceforward(ambientPerturbedNormal, " << ShaderVariable::PositionViewSpace << ".xyz, ambientPerturbedNormal);";
 		}
 
 		switch ( m_renderPassType )
@@ -791,7 +820,9 @@ namespace EmEn::Saphir
 			 * convolved cubemap carries no frequency a normal map could reveal.
 			 * The world is Y-UP: the world normal samples the cubemap as-is (the former (D.x, -D.y, D.z) compensation is gone). */
 			Code{fragmentShader} <<
-				"const vec3 iblAmbientNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
+				/* TWO-SIDED: a back face reads the irradiance on ITS side, not behind it. The facing is decided
+				 * in view space (NormalViewSpace against -PositionViewSpace) and applied to the world normal. */
+				"const vec3 iblAmbientNormal = dot(normalize(" << ShaderVariable::NormalViewSpace << "), " << ShaderVariable::PositionViewSpace << ".xyz) > 0.0 ? -normalize(" << ShaderVariable::NormalWorldSpace << ") : normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
 				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], iblAmbientNormal).rgb;" << Line::End <<
 				"/* INDIRECT-DIFFUSE OWNERSHIP: an enabled provider (RTGI) gathers this very irradiance"
 				" with visibility, so the scene drops the weight to 0 and the raster stops adding its"

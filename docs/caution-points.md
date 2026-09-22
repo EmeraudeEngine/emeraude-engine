@@ -3308,6 +3308,26 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 
 Parallax Occlusion Mapping ray-marching is expensive at far distances, especially on large surfaces. The engine implements distance-based fade (default 8-18 m, per material through `setParallaxFadeDistances()`) and skips the march beyond it. See: `Graphics/AGENTS.md` (POM section).
 
+### A DOUBLE-SIDED BACK FACE REFLECTED AS AN UNTINTED MIRROR (fixed 2026-09-22)
+
+Only the direct light turned the shading normal toward the viewer (`N = dot(N, V) < 0.0 ? -N : N`,
+two-sided lighting, `5bec23db`). Every other normal kept pointing away on a back face:
+- the environment normal: NdotV clamped to 0, the Fresnel pinned at 1, and F0 was lost. The back of
+  `NormalTangentTest`'s gold plates reflected the sky with no gold, and the pink ones became mirrors;
+- the ambient pass's IBL diffuse normal: the irradiance was read BEHIND the face;
+- the G-buffer normal the post-process effects read.
+
+It was found by the macOS bench and reproduced on Linux. Now every normal a term uses faces the viewer,
+by the same rule (`faceforward(N, I, N)`, view vector `-I`). The environment normal is built ONCE by
+`StandardResource::declareEnvironmentFrame()`: it was redeclared by seven sites, and it also mixed spaces
+(`TangentToWorldMatrix[0..1]` is a VIEW-space frame, `NormalWorldSpace` a world one). It is now
+`WorldTBNMatrix · n`, in world space end to end.
+
+Measured on the glTF bench (Linux, ScreenSpace lane, 16 captures): only the two back views of the
+double-sided tests move (12 % and 9 % of their pixels). Every front view is unchanged to 0.01/255. That
+proves the old space mix was invisible from those FRONT poses (view ≈ world rotation), and bench poses
+cannot vouch for it elsewhere.
+
 ### A "BROKEN" POM WAS THREE DEFECTS AND ONE BAD TEXTURE (fixed 2026-09-22)
 
 Owner reports, 2026-09-08 and 2026-09-22: the parallax "looks blown out" (*éclaté*). Three shader

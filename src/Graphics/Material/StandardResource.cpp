@@ -2891,7 +2891,9 @@ namespace EmEn::Graphics::Material
 				 * no `Normal` component at all, so the frame would never be synthesized. */
 				if ( this->isComponentPresent(ComponentType::Normal) || this->isComponentPresent(ComponentType::ClearCoatNormal) )
 				{
-					vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
+					/* WORLD tangent frame: the environment normal is built and used in world space
+					 * (declareEnvironmentFrame()). TangentToWorldMatrix is a VIEW-space frame outside MDI. */
+					vertexShader.requestSynthesizeInstruction(ShaderVariable::WorldTBNMatrix);
 				}
 
 				/* NOTE: Camera world position is read directly from View UBO instead of computing inverse(ViewMatrix).
@@ -2981,6 +2983,27 @@ namespace EmEn::Graphics::Material
 		}
 
 		return codeGenerator(fragmentShader, component);
+	}
+
+	void
+	StandardResource::declareEnvironmentFrame (FragmentShader & fragmentShader) const noexcept
+	{
+		/* The frame every environment consumer reads (reflection, refraction, transmission, the clear coat's
+		 * incident vector), declared ONCE per fragment shader by whichever of them comes first.
+		 * ⚠️ WORLD space end to end: the cubemaps are sampled by world directions. The normal-mapped normal used
+		 * to be TangentToWorldMatrix[0] · n.x + TangentToWorldMatrix[1] · n.y + NormalWorldSpace · n.z — two
+		 * VIEW-space columns and a world one (TangentToWorldMatrix is NormalMatrix · (T, B, N) outside MDI).
+		 * ⚠️ TWO-SIDED: turned toward the viewer by the rule the direct light already uses
+		 * (LightGenerator.PBR.cpp, `N = dot(N, V) < 0.0 ? -N : N`, with V = -I). Unturned, a back face kept
+		 * a normal pointing away: NdotV clamped to 0, the Fresnel pinned at 1 and F0 was lost — the back of a
+		 * gold double-sided plate reflected as an untinted mirror (NormalTangentTest_back, macOS and Linux,
+		 * 2026-09-22; glTF 2.0: a double-sided back face shades with its normal reversed). */
+		Code{fragmentShader, Location::Top} <<
+			"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
+			"const vec3 reflectionNormalRaw = " << (this->isComponentPresent(ComponentType::Normal)
+				? std::string{"normalize("} + ShaderVariable::WorldTBNMatrix + " * " + SurfaceNormalVector + ")"
+				: std::string{"normalize("} + ShaderVariable::NormalWorldSpace + ")") << ";" << Line::End <<
+			"const vec3 reflectionNormal = dot(reflectionNormalRaw, reflectionI) > 0.0 ? -reflectionNormalRaw : reflectionNormalRaw;";
 	}
 
 	const char *
@@ -3099,18 +3122,11 @@ namespace EmEn::Graphics::Material
 		/* Generate the reflection sampling code using bindless textures. */
 		if ( generator.highQualityEnabled() )
 		{
-			if ( this->isComponentPresent(ComponentType::Normal) )
-			{
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-			}
-			else
-			{
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-			}
+			/* The environment frame (world-space normal facing the viewer + incident vector): ONE definition. */
+			this->declareEnvironmentFrame(fragmentShader);
 
 			/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 			Code(fragmentShader, Location::Top) <<
-				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
 				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;" << Line::End <<
 				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
@@ -3163,16 +3179,9 @@ namespace EmEn::Graphics::Material
 
 			if ( !reflectionAlreadyDeclared )
 			{
-				if ( this->isComponentPresent(ComponentType::Normal) )
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-				}
-				else
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-				}
+				/* The environment frame (world-space normal facing the viewer + incident vector): ONE definition. */
+				this->declareEnvironmentFrame(fragmentShader);
 
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
 			}
 
 			/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone).
@@ -3251,16 +3260,9 @@ namespace EmEn::Graphics::Material
 
 			if ( !reflectionAlreadyDeclared )
 			{
-				if ( this->isComponentPresent(ComponentType::Normal) )
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-				}
-				else
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-				}
+				/* The environment frame (world-space normal facing the viewer + incident vector): ONE definition. */
+				this->declareEnvironmentFrame(fragmentShader);
 
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
 			}
 
 			/* Sample the REAL prefiltered cubemap (reserved slot 2) — the frosted-glass LOD
@@ -3344,16 +3346,9 @@ namespace EmEn::Graphics::Material
 
 			if ( !reflectionAlreadyDeclared )
 			{
-				if ( this->isComponentPresent(ComponentType::Normal) )
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-				}
-				else
-				{
-					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-				}
+				/* The environment frame (world-space normal facing the viewer + incident vector): ONE definition. */
+				this->declareEnvironmentFrame(fragmentShader);
 
-				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
 			}
 
 			/* ⚠️⚠️ The screen-space displacement is the PROJECTION of the refraction ray's exit
@@ -3760,18 +3755,11 @@ namespace EmEn::Graphics::Material
 		else if ( !this->generateTextureComponentFragmentShader(ComponentType::Reflection, [&] (FragmentShader & shader, const Texture * component) {
 			if ( generator.highQualityEnabled() )
 			{
-				if ( this->isComponentPresent(ComponentType::Normal) )
-				{
-					Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
-				}
-				else
-				{
-					Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-				}
+				/* The environment frame (world-space normal facing the viewer + incident vector): ONE definition. */
+				this->declareEnvironmentFrame(shader);
 
 				/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 				Code(shader, Location::Top) <<
-					"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
 					"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
 					"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;";
 
@@ -3830,33 +3818,15 @@ namespace EmEn::Graphics::Material
 			if ( !this->generateTextureComponentFragmentShader(ComponentType::Refraction, [&] (FragmentShader & shader, const Texture * component) {
 				if ( generator.highQualityEnabled() )
 				{
-					if ( this->isComponentPresent(ComponentType::Normal) )
+					/* Reuse the environment frame if reflection (explicit or bindless) already declared it. */
+					if ( !reflectionVariablesDeclared )
 					{
-						/* Reuse reflectionNormal if already declared by reflection (explicit or bindless), otherwise declare it. */
-						if ( !reflectionVariablesDeclared )
-						{
-							Code(shader, Location::Top) <<
-								"const vec3 reflGeomN = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-								"const vec3 reflRawT = " << ShaderVariable::TangentToWorldMatrix << "[0];" << Line::End <<
-								"const vec3 reflGeomT = normalize(reflRawT - reflGeomN * dot(reflGeomN, reflRawT));" << Line::End <<
-								"const vec3 reflGeomB = cross(reflGeomN, reflGeomT) * sign(dot(cross(reflGeomN, reflGeomT), " << ShaderVariable::TangentToWorldMatrix << "[1]));" << Line::End <<
-								"const vec3 reflectionNormal = normalize(reflGeomT * " << SurfaceNormalVector << ".x + reflGeomB * " << SurfaceNormalVector << ".y + reflGeomN * " << SurfaceNormalVector << ".z);";
-						}
-					}
-					else if ( !reflectionVariablesDeclared )
-					{
-						Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+						this->declareEnvironmentFrame(shader);
 					}
 
 					/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 					Code(shader, Location::Top) <<
 						"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End;
-
-					/* Reuse reflectionI if already declared by reflection (explicit or bindless), otherwise declare it. */
-					if ( !reflectionVariablesDeclared )
-					{
-						Code(shader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End;
-					}
 
 					Code(shader, Location::Top) <<
 						"const vec3 refractDir = refract(reflectionI, reflectionNormal, eta);" << Line::End <<
@@ -4006,7 +3976,9 @@ namespace EmEn::Graphics::Material
 
 			Code{fragmentShader, Location::Top} <<
 				"/* Clear coat environment reflection: the coat's OWN normal and roughness. */" << Line::End <<
-				"const vec3 " << SurfaceClearCoatReflectionNormal << " = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceClearCoatNormal << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceClearCoatNormal << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceClearCoatNormal << ".z);" << Line::End <<
+				/* World-space, and facing the viewer like the base's environment normal (declareEnvironmentFrame()). */
+				"const vec3 clearCoatNormalRaw = normalize(" << ShaderVariable::WorldTBNMatrix << " * " << SurfaceClearCoatNormal << ");" << Line::End <<
+				"const vec3 " << SurfaceClearCoatReflectionNormal << " = dot(clearCoatNormalRaw, reflectionI) > 0.0 ? -clearCoatNormalRaw : clearCoatNormalRaw;" << Line::End <<
 				"const vec4 " << SurfaceClearCoatReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", reflect(reflectionI, " << SurfaceClearCoatReflectionNormal << "), " << ccLOD << ");";
 
 			/* Declared HERE and not in setupLightGenerator(): the two variables exist only under

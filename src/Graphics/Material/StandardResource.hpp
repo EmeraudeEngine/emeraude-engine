@@ -1574,6 +1574,16 @@ namespace EmEn::Graphics::Material
 			const char * textCoords (const Component::Texture * component) const noexcept;
 
 			/**
+			 * @brief Declares the environment frame in the fragment shader: `reflectionI` (the world incident
+			 * vector) and `reflectionNormal` (the world-space shading normal, normal-mapped, TURNED TOWARD THE
+			 * VIEWER on a back face).
+			 * @note One definition for every environment consumer; call it once per fragment shader.
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @return void
+			 */
+			void declareEnvironmentFrame (Saphir::FragmentShader & fragmentShader) const noexcept;
+
+			/**
 			 * @brief Returns the GLSL texture coordinates expression with the component's UV
 			 * transform applied (uv * scale + offset, from the material UBO — identity neutral).
 			 * @param componentType The component type (selects the UBO transform slot).
