@@ -423,8 +423,22 @@ the finest step whose triangle count fits. `forest` (128 divisions, 32 768 trian
   occluding its own sky, landing on the relief rather than everywhere, which is what says the proxy
   is geometrically aligned and not merely present.
 
-⚠️ The BLAS is **not refreshed when the sub-grid slides** (`updateData()` swaps the VBO):
-[`docs/todo/adaptive-terrain-blas-goes-stale-on-subgrid-slide.md`](todo/adaptive-terrain-blas-goes-stale-on-subgrid-slide.md).
+**A geometry that replaces its vertex data must say so** (same day). `TerrainResource::updateVisibility()`
+slides the sub-grid as the camera travels and `updateData()` swaps the whole VBO: the BLAS then held
+the surface of the PREVIOUS window, and nothing said so — no error, no validation message, just an
+occlusion that no longer matches the picture. The geometry now calls
+`Interface::markAccelerationStructureStale()` as the LAST statement of the update (the flag is what
+publishes the new data), and `SceneMetaData::rebuild()` consumes it on the frame path, beside the
+on-demand build of a missing BLAS. The old BLAS **and** the old RT index buffer go out through the
+`DeferredDestructor`, never freed in place.
+⚠️ **Proving it is a LOG measurement, not an image one**: two runs of the same demo do not slide the
+same number of times (4 against 2 here), so they end up showing different windows of the terrain and
+any pixel comparison between them is void. What is attributable: with the flag, each
+`Threshold reached` is followed by exactly one proxy rebuild; without it, four slides produced none.
+
+⚠️ Still open, and named in its own item: `updateVisibility()` starts that update on a **detached
+`std::thread`** — a `-fno-exceptions` violation and a concurrent VBO swap under the render thread.
+[`docs/todo/terrain-visibility-update-runs-on-a-detached-thread.md`](todo/terrain-visibility-update-runs-on-a-detached-thread.md).
 
 **Files**: `src/Graphics/Geometry/AdaptiveVertexGridResource.{hpp,cpp}`, `src/SettingKeys.hpp`.
 

@@ -32,6 +32,9 @@
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
+/* STL inclusions. */
+#include <atomic>
+
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
 #include "Graphics/Types.hpp"
@@ -311,6 +314,21 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Returns whether the built BLAS no longer describes the geometry.
+			 * @note Set by a geometry that REPLACES its vertex data after the initial upload — today
+			 * the adaptive terrain grid, whose sub-grid slides with the camera. The rebuild cannot
+			 * happen where the data changes (a worker thread), so the flag is consumed on the frame
+			 * path by Scenes::SceneMetaData::rebuild(), next to the on-demand build of a missing BLAS.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAccelerationStructureStale () const noexcept
+			{
+				return m_accelerationStructureStale.load(std::memory_order_acquire);
+			}
+
+			/**
 			 * @brief Returns the first index of every geometry the BLAS was actually built with.
 			 * @note One entry per VkAccelerationStructureGeometryKHR, in BLAS order, so a ray
 			 * query's geometry index addresses it directly. It is the ONLY description of the
@@ -555,6 +573,19 @@ namespace EmEn::Graphics::Geometry
 				return {};
 			}
 
+			/**
+			 * @brief Declares the built BLAS out of date with the geometry it describes.
+			 * @note Call it as the LAST statement of the update that replaced the vertex data: the
+			 * flag is what publishes that data to the frame path, so everything it must see has to
+			 * be written before. @see isAccelerationStructureStale()
+			 * @return void
+			 */
+			void
+			markAccelerationStructureStale () noexcept
+			{
+				m_accelerationStructureStale.store(true, std::memory_order_release);
+			}
+
 			/** @brief The BLAS for ray tracing. Null when RT is disabled or not yet built. */
 			std::unique_ptr< Vulkan::AccelerationStructure > m_accelerationStructure;
 
@@ -564,6 +595,9 @@ namespace EmEn::Graphics::Geometry
 
 			/** @brief First index of every geometry of the BLAS, in BLAS order. @see BLASGeometryFirstIndices() */
 			std::vector< uint32_t > m_BLASGeometryFirstIndices;
+
+			/** @brief The BLAS describes vertex data that has since been replaced. @see markAccelerationStructureStale() */
+			std::atomic< bool > m_accelerationStructureStale{false};
 
 		public:
 

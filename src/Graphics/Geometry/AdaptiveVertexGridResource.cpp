@@ -835,6 +835,17 @@ namespace EmEn::Graphics::Geometry
 
 		m_isUpdating.store(false, std::memory_order_release);
 
+		/* The BLAS holds the surface of the PREVIOUS window: the sub-grid just slid, so every vertex
+		 * moved in XZ and its height changed with it. Until this is answered, the traced lane occludes
+		 * against a terrain that is no longer where it is drawn — and nothing says so, neither an
+		 * error nor a validation message.
+		 * ⚠️ This MUST be the last statement: the flag is what publishes the new grid and the new VBO
+		 * to the frame path that rebuilds (Scenes::SceneMetaData::rebuild(), which re-reads
+		 * m_localData through generateTriangleListIndicesForRT()). A rebuild is the right answer
+		 * rather than a refit because a slide is rare — visibleSize / 3 of travel — and a refit would
+		 * freeze a BVH partition built for another window (owner decision, 2026-09-22). */
+		this->markAccelerationStructureStale();
+
 		return true;
 	}
 

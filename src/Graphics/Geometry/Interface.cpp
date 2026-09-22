@@ -51,9 +51,14 @@ namespace EmEn::Graphics::Geometry
 		/* NOTE: A geometry can be unloaded at runtime while command buffers (ray
 		 * queries) still reference its BLAS: retire it instead of destroying it in
 		 * place. The BLAS owns its backing buffer, so both follow the same delay. */
-		if ( m_accelerationStructure != nullptr )
+		if ( m_accelerationStructure != nullptr || m_rtIndexBufferObject != nullptr )
 		{
-			this->serviceProvider().graphicsRenderer().deferredDestructor().retireObject(std::move(m_accelerationStructure));
+			auto & deferredDestructor = this->serviceProvider().graphicsRenderer().deferredDestructor();
+
+			deferredDestructor.retireObject(std::move(m_accelerationStructure));
+			/* The converted index buffer is read by the hit shaders through the metadata SSBO, so it
+			 * is referenced by the same in-flight command buffers as the BLAS and follows it out. */
+			deferredDestructor.retireObject(std::move(m_rtIndexBufferObject));
 		}
 	}
 
@@ -153,6 +158,22 @@ namespace EmEn::Graphics::Geometry
 		if ( vbo == nullptr || !vbo->isCreated() )
 		{
 			return;
+		}
+
+		/* From here the structure IS rebuilt, so the staleness is answered — even if the build below
+		 * fails, in which case the null structure puts this geometry back on SceneMetaData's
+		 * on-demand path rather than into a rebuild every frame. */
+		m_accelerationStructureStale.store(false, std::memory_order_release);
+
+		/* A REBUILD (an adaptive terrain whose sub-grid slid) replaces objects the GPU may still be
+		 * reading, from a frame in flight: they are retired, never freed here.
+		 * @see Vulkan::DeferredDestructor, docs/caution-points.md and the Sponza DEVICE_LOST. */
+		if ( m_accelerationStructure != nullptr || m_rtIndexBufferObject != nullptr )
+		{
+			auto & deferredDestructor = this->serviceProvider().graphicsRenderer().deferredDestructor();
+
+			deferredDestructor.retireObject(std::move(m_accelerationStructure));
+			deferredDestructor.retireObject(std::move(m_rtIndexBufferObject));
 		}
 
 		/* Shared header: same VB/IB across all sub-geometries of this Geometry::Interface. */

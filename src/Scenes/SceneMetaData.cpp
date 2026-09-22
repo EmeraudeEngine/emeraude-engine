@@ -228,8 +228,12 @@ namespace EmEn::Scenes
 				{
 					blas = geometry->accelerationStructure();
 
-					/* Build BLAS on-demand for geometries loaded before the RT builder was set. */
-					if ( blas == nullptr )
+					/* Build the BLAS on-demand for a geometry loaded before the RT builder was set,
+					 * and REBUILD it for one that has replaced its vertex data since — an adaptive
+					 * terrain whose sub-grid slid under the camera. The geometry cannot do it where
+					 * the data changes (a worker thread), so it raises a flag and the rebuild lands
+					 * here, on the frame path, where the old structure is retired. */
+					if ( blas == nullptr || geometry->isAccelerationStructureStale() )
 					{
 						const_cast< Geometry::Interface * >(geometry)->buildAccelerationStructure();
 
