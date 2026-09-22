@@ -188,6 +188,28 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Records where, in the matrices push-constant block, the mesh-shading surface's two vec4 start.
+			 * @param offset The byte offset of the grid vec4 (the view vec4 follows it).
+			 * @return void
+			 */
+			void
+			setMeshSurfacePushConstantOffset (uint32_t offset) noexcept
+			{
+				m_meshSurfacePushConstantOffset = offset;
+			}
+
+			/**
+			 * @brief Returns the byte offset of the mesh-shading surface's push constants (grid vec4, then view vec4).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			meshSurfacePushConstantOffset () const noexcept
+			{
+				return m_meshSurfacePushConstantOffset;
+			}
+
+			/**
 			 * @brief Initializes the vertex shader and returns it.
 			 * @note Calling this a second time on the same Program is a no-op that logs an error and returns
 			 * nullptr; the vertex shader, once initialized, cannot be re-initialized or replaced.
@@ -681,6 +703,7 @@ namespace EmEn::Saphir
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_graphicsPipeline;
 			uint32_t m_heightfieldPushConstantOffset{0};
+			uint32_t m_meshSurfacePushConstantOffset{0};
 			std::map< uint32_t, bool > m_fragmentSpecConstantsBool; // FIXME: Use a cheaper structure here.
 	};
 }

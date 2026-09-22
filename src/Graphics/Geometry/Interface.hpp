@@ -41,6 +41,7 @@
 #include "Math/CartesianFrame.hpp"
 #include "VertexFactory/Grid.hpp"
 #include "VertexFactory/Shape.hpp"
+#include "MeshShadingSurface.hpp"
 #include "SubGeometry.hpp"
 #include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
@@ -237,6 +238,31 @@ namespace EmEn::Graphics::Geometry
 			heightfieldSurfaceEnabled () const noexcept
 			{
 				return this->isFlagEnabled(EnableHeightfieldSurface);
+			}
+
+			/**
+			 * @brief Returns whether this geometry is a mesh-shading surface (Geometry::MeshShadingSurface).
+			 * @note The flag alone: whether the device can draw it that way is the generator's question
+			 * (Vulkan::Device::meshShadersEnabled()); without mesh shaders the geometry draws as its buffer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			meshShadingSurfaceEnabled () const noexcept
+			{
+				return this->isFlagEnabled(EnableMeshShadingSurface);
+			}
+
+			/**
+			 * @brief Returns the tiling a mesh-shading surface is drawn with.
+			 * @return const MeshShadingSurface * Null for every other geometry.
+			 */
+			[[nodiscard]]
+			virtual
+			const MeshShadingSurface *
+			meshShadingSurface () const noexcept
+			{
+				return nullptr;
 			}
 
 			/**

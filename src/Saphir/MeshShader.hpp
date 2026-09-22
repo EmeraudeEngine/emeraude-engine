@@ -80,6 +80,9 @@ namespace EmEn::Saphir
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MeshShader"};
 
+			/** @brief The mesh stage supplies its own InstanceTransforms index (it has no gl_InstanceIndex). */
+			using AbstractVertexStage::setInstanceIndexExpression;
+
 			/** @brief The loop variable of the per-vertex iteration, readable by the vertex source's prologue. */
 			static constexpr auto VertexIndex{"msVertexIndex"};
 			/** @brief The loop variable of the per-primitive iteration, readable by the primitive source. */

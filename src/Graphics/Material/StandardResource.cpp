@@ -1814,7 +1814,10 @@ namespace EmEn::Graphics::Material
 				/* Parallax (max layers, fade start, fade end, unused). 0 layers = no ray march; a
 				 * material with a height map gets 'Core/Graphics/Texture/POMIterations' at creation
 				 * unless it chose its own count. */
-				0.0F, DefaultParallaxFadeStart, DefaultParallaxFadeEnd, 0.0F
+				0.0F, DefaultParallaxFadeStart, DefaultParallaxFadeEnd, 0.0F,
+				/* Parallax handover (geometry-to-parallax start, end, unused, unused): 0, 0 = none. Only a
+				 * mesh-shading surface reads it (setParallaxHandover()). */
+				0.0F, 0.0F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -2778,6 +2781,7 @@ namespace EmEn::Graphics::Material
 		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWRotation, UVWTransformSlots);
 		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWIndex, UVWIndexVectors);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ParallaxParameters);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ParallaxHandover);
 
 		return block;
 	}
@@ -2989,6 +2993,54 @@ namespace EmEn::Graphics::Material
 		return codeGenerator(fragmentShader, component);
 	}
 
+	bool
+	StandardResource::generateSurfaceDisplacementCode (const Generator::Abstract & generator, AbstractVertexStage & stage, const std::string & uvVariable, const std::string & uvStepVariable, const std::string & metresPerUVVariable, const std::string & distanceVariable, const std::string & depthVariable, std::string & code) const noexcept
+	{
+		const auto componentIt = m_components.find(ComponentType::Displacement);
+
+		if ( !m_useParallaxOcclusionMapping || componentIt == m_components.cend() || componentIt->second->type() != Type::Texture )
+		{
+			return false;
+		}
+
+		const auto * component = static_cast< const Texture * >(componentIt->second.get());
+
+		/* The mesh stage reads the height through the material's own set: its UBO (heightScale, the UV
+		 * transforms, the handover) and the height sampler — whose layout names the mesh stage
+		 * (createDescriptorSetLayout(), Vulkan::Device::meshShadingStages()). */
+		if ( !generator.declareMaterialUniformBlock(*this, stage, 0) )
+		{
+			return false;
+		}
+
+		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
+
+		if ( !stage.declare(Declaration::Sampler{materialSet, component->binding(), component->textureType(), component->samplerName()}) )
+		{
+			return false;
+		}
+
+		const auto handover = std::string{MaterialUB(UniformBlock::Component::ParallaxHandover)};
+		const auto sampler = std::string{component->samplerName()};
+
+		/* ONE relief for the two techniques: the height is the parallax's (same texture, same UV transform,
+		 * same heightScale in UV units, converted to metres), with the depth convention of the ray march
+		 * (white = the top, depth = 1 − h). The geometric share is (1 − t) of the handover band; the fragment
+		 * parallax carries t (generateFragmentShaderCode(), `pomHandover`).
+		 * ⚠️ textureLod(): a mesh stage has no derivatives. The level follows the vertex spacing, so a coarse
+		 * lattice reads a coarse mip instead of aliasing the fine one. */
+		std::stringstream glsl;
+		glsl <<
+			"const float " << depthVariable << "Handover = " << handover << ".y > " << handover << ".x ? 1.0 - smoothstep(" << handover << ".x, " << handover << ".y, " << distanceVariable << ") : 1.0;" "\n\t"
+			"const float " << depthVariable << "Lod = max(log2(max(" << uvStepVariable << " * float(textureSize(" << sampler << ", 0).x), 1.0)), 0.0);" "\n\t"
+			"const float " << depthVariable << " = (1.0 - textureLod(" << sampler << ", " << this->transformedTexCoords(ComponentType::Displacement, component, uvVariable) << ", " << depthVariable << "Lod).r)"
+				" * " << MaterialUB(UniformBlock::Component::HeightScale) << " * " << metresPerUVVariable << " * " << depthVariable << "Handover;";
+
+		code = glsl.str();
+
+		return true;
+	}
+
 	void
 	StandardResource::declareEnvironmentFrame (FragmentShader & fragmentShader) const noexcept
 	{
@@ -3027,7 +3079,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	std::string
-	StandardResource::transformedTexCoords (ComponentType componentType, const Texture * component) const noexcept
+	StandardResource::transformedTexCoords (ComponentType componentType, const Texture * component, const std::string & coordinates) const noexcept
 	{
 		/* The UV transform (KHR_texture_transform / JSON "UVW" keys) is applied UNCONDITIONALLY —
 		 * the neutral table entry is the identity, and going through the UBO (values, never GLSL
@@ -3071,7 +3123,7 @@ namespace EmEn::Graphics::Material
 		std::stringstream expression;
 		expression <<
 			"(mat2(" << rotation << ".x, -" << rotation << ".y, " << rotation << ".y, " << rotation << ".x)"
-			" * (" << textCoords(component) << " * " << transform << ".xy)"
+			" * (" << (coordinates.empty() ? std::string{textCoords(component)} : coordinates) << " * " << transform << ".xy)"
 			" + " << transform << ".zw)";
 
 		return expression.str();
@@ -3537,25 +3589,25 @@ namespace EmEn::Graphics::Material
 
 		if ( m_pomGenerationActive )
 		{
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [this] (FragmentShader & shader, const Texture * component) {
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [this, &generator] (FragmentShader & shader, const Texture * component) {
 				/* The height is sampled through the height component's own UV transform, while the
 				 * march itself runs in MESH UV space: that is the space the tangent frame describes, and
 				 * the one every other component transforms from. transformedTexCoords() is written in
 				 * terms of pomTexCoords; it is re-pointed at the march variable. */
 				const auto heightCoordinates = [this, component] (const char * variable) {
-					auto expression = this->transformedTexCoords(ComponentType::Displacement, component);
-					const std::string_view token{ShaderVariable::ParallaxTextureCoordinates};
-					const std::string_view replacement{variable};
-
-					for ( auto position = expression.find(token); position != std::string::npos; position = expression.find(token, position + replacement.size()) )
-					{
-						expression.replace(position, token.size(), replacement);
-					}
-
-					return expression;
+					return this->transformedTexCoords(ComponentType::Displacement, component, variable);
 				};
 
 				const auto parameters = MaterialUB(UniformBlock::Component::ParallaxParameters);
+
+				/* On a MESH-SHADING surface the relief near the camera is real geometry (owner decision 5,
+				 * 2026-09-22): the geometric depth is heightScale · (1 − t) and the parallax one heightScale · t,
+				 * t = smoothstep(handover start, end, distance), so the sum stays the full relief and nothing is
+				 * drawn twice. No handover declared = geometry only (t = 0). A vertex program keeps t = 1. */
+				const auto handover = std::string{MaterialUB(UniformBlock::Component::ParallaxHandover)};
+				const auto pomHandover = generator.shaderProgram()->hasMeshShader()
+					? "(" + handover + ".y > " + handover + ".x ? smoothstep(" + handover + ".x, " + handover + ".y, length(pomToCamera)) : 0.0)"
+					: std::string{"1.0"};
 
 				/* Steep parallax + linear refinement between the two last layers (Tatarchuk, "Practical
 				 * Parallax Occlusion Mapping", GDC 2006; the refinement as in learnopengl.com,
@@ -3573,7 +3625,7 @@ namespace EmEn::Graphics::Material
 					"const vec2 pomHeightDy = dFdy(" << heightCoordinates(ShaderVariable::Primary2DTextureCoordinates) << ");" << Line::End <<
 					"const vec3 pomToCamera = CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz;" << Line::End <<
 					"/* Distance fade: full relief closer than parallaxParameters.y, none (and no march) beyond .z. */" << Line::End <<
-					"const float pomFade = 1.0 - smoothstep(" << parameters << ".y, " << parameters << ".z, length(pomToCamera));" << Line::End <<
+					"const float pomFade = (1.0 - smoothstep(" << parameters << ".y, " << parameters << ".z, length(pomToCamera))) * " << pomHandover << ";" << Line::End <<
 					"const vec3 pomView = transpose(" << ShaderVariable::WorldTBNMatrix << ") * normalize(pomToCamera);" << Line::End <<
 					"if ( pomFade > 0.0 && " << parameters << ".x >= 1.0 && pomView.z > 0.0 ) {" << Line::End <<
 					"	/* More layers at grazing angles, where a step covers more texels; fewer as the relief fades. */" << Line::End <<
@@ -4458,6 +4510,17 @@ namespace EmEn::Graphics::Material
 	{
 		m_materialProperties[ParallaxParametersOffset] = static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations));
 		m_parallaxIterationsSet = true;
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	StandardResource::setParallaxHandover (float start, float end) noexcept
+	{
+		const auto handoverStart = std::max(start, 0.0F);
+
+		m_materialProperties[ParallaxHandoverOffset] = handoverStart;
+		m_materialProperties[ParallaxHandoverOffset + 1] = std::max(end, handoverStart);
 
 		this->markVideoMemoryDirty();
 	}

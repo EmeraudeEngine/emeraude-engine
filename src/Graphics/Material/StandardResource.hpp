@@ -268,6 +268,10 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateVertexShaderCode (Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::generateSurfaceDisplacementCode() */
+			[[nodiscard]]
+			bool generateSurfaceDisplacementCode (const Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & stage, const std::string & uvVariable, const std::string & uvStepVariable, const std::string & metresPerUVVariable, const std::string & distanceVariable, const std::string & depthVariable, std::string & code) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::generateFragmentShaderCode() */
 			[[nodiscard]]
 			bool generateFragmentShaderCode (Saphir::Generator::Abstract & generator, Saphir::LightGenerator & lightGenerator, Saphir::FragmentShader & fragmentShader) const noexcept override;
@@ -483,6 +487,18 @@ namespace EmEn::Graphics::Material
 			 * @return void
 			 */
 			void setParallaxFadeDistances (float start, float end) noexcept;
+
+			/**
+			 * @brief Sets the band over which a MESH-SHADING surface hands its relief from real geometry to the parallax.
+			 * @note This is a dynamic property. Closer than @p start the relief is displaced geometry, beyond @p end it
+			 * is parallax (then the usual parallax fade-out), and in between the two depths share the relief:
+			 * geometry · (1 − t) + parallax · t. Read only by a mesh-shading program (Geometry::MeshShadingSurface);
+			 * without a band the surface is geometry only. Owner decision 5, 2026-09-22.
+			 * @param start The distance where the parallax starts to take over, in metres.
+			 * @param end The distance where the relief is parallax only, in metres. Raised to @p start if lower.
+			 * @return void
+			 */
+			void setParallaxHandover (float start, float end) noexcept;
 
 			/**
 			 * @brief Sets the reflection/IBL component as a cubemap texture.
@@ -1588,10 +1604,11 @@ namespace EmEn::Graphics::Material
 			 * transform applied (uv * scale + offset, from the material UBO — identity neutral).
 			 * @param componentType The component type (selects the UBO transform slot).
 			 * @param component A pointer to the texture component.
+			 * @param coordinates The coordinates to transform. Default: the component's own (textCoords()).
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component) const noexcept;
+			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component, const std::string & coordinates = {}) const noexcept;
 
 			/**
 			 * @brief Returns the texture component feeding the alpha test, if any.
@@ -1712,6 +1729,7 @@ namespace EmEn::Graphics::Material
 			 * vec4 uvwRotation[4]		  (offset 72-87) - UV rotation table (cos, sin, 0, 0)
 			 * vec4 uvwIndex[7]			 (offset 88-115) - Per-ComponentType index into the two tables
 			 * vec4 parallaxParameters	  (offset 116-119) - POM (max layers, fade start, fade end, unused)
+			 * vec4 parallaxHandover		(offset 120-123) - geometry-to-parallax handover (start, end) of a mesh-shading surface
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1766,8 +1784,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto UVWIndexTableOffset{88UL};
 			/** @brief POM parameters vec4: (max layer count, fade start, fade end, unused). */
 			static constexpr auto ParallaxParametersOffset{116UL};
+			/** @brief POM handover vec4 on a mesh-shading surface: (geometry-to-parallax start, end, unused, unused). */
+			static constexpr auto ParallaxHandoverOffset{120UL};
 			/** @brief Float count of the material UBO. */
-			static constexpr auto MaterialPropertiesSize{120UL};
+			static constexpr auto MaterialPropertiesSize{124UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo

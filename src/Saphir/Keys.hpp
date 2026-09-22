@@ -849,6 +849,8 @@ namespace EmEn::Saphir
 				/** @brief POM vec4: (max layer count, fade start, fade end, unused). Values, so every
 				 * material sharing a program keeps its own ray march. */
 				constexpr auto ParallaxParameters{"parallaxParameters"};
+				/** @brief Mesh-shading surface: the geometry-to-parallax handover band (start, end, unused, unused). */
+				constexpr auto ParallaxHandover{"parallaxHandover"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};
@@ -915,6 +917,12 @@ namespace EmEn::Saphir
 				 * world), per PASS — a reflection probe selects from its own point of view, a shadow map
 				 * from the main camera's. */
 				constexpr auto HeightfieldCamera{"heightfieldCamera"};
+				/* NOTE : Mesh-shading surface (Graphics::Geometry::MeshShadingSurface), per draw: xy = origin of the
+				 * first tile (object XZ), z = tile size (m), w = texture repeats per metre. */
+				constexpr auto MeshSurfaceGrid{"meshSurfaceGrid"};
+				/* NOTE : Mesh-shading surface: xyz = the camera the tiles are subdivided for (object space), w = the
+				 * InstanceTransforms slot as raw uint bits (a mesh workgroup has no gl_InstanceIndex). */
+				constexpr auto MeshSurfaceView{"meshSurfaceView"};
 				/* NOTE : Post-processing. */
 				constexpr auto FrameSize{"frameSize"};
 				constexpr auto Time{"time"};

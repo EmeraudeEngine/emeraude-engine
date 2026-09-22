@@ -1175,6 +1175,31 @@ through `ShaderManager::getShaderModuleFromSourceCode()`: both modules created, 
 see `src/Vulkan/AGENTS.md` § Mesh Shader Support). ⚠️ `ShaderManager::getShaderModules()` returns at most 5
 modules — enough for task + mesh + fragment.
 
+## The mesh-shading surface (Sep 2026)
+
+A geometry flagged `EnableMeshShadingSurface` (`Graphics::Geometry::DisplacedGridResource`) draws through task + mesh
+stages when `Generator::Abstract::isMeshShadingSurfaceEnabled()`: that is, the geometry is such a surface, a
+material exists, and the device enabled `VK_EXT_mesh_shader`, which is latched at the start of
+`generateShaderProgram()` and enters the cache key. Otherwise it draws its flat grid through the vertex stage, and
+the log says so once.
+- `SceneRendering::generateMeshShadingStages()` creates the mesh stage (117 vertices / 256 primitives, workgroup 32)
+  and the task stage. It sets the modes `initVertexShader()` would set (advanced matrices, cubemap), then runs the
+  SAME `configurePerVertexStage()` as the vertex path: instance transforms, push constants, view UBO, velocity,
+  material and light code.
+- `Generator::generateMeshShadingSurface()` (`MeshShadingSurfaceHelper.cpp`) then writes:
+  - the task code: one workgroup per 1 m tile. It picks the subdivision from the camera distance (≈ 4 mm per metre,
+    a power of two up to 128 quads per side) and emits one flat quad beyond the material's handover band;
+  - the mesh vertex source: grid and SKIRT vertices, the flat grid's own UV and frame, and the depth from
+    `Material::Interface::generateSurfaceDisplacementCode()`;
+  - the primitive source: the flat grid's winding, skirts in both windings.
+- Push constants: the matrices block gains `meshSurfaceGrid` (origin, tile size, UV per metre) and `meshSurfaceView`
+  (camera, then the InstanceTransforms slot as raw bits — a mesh stage has no `gl_InstanceIndex`) at
+  `Program::meshSurfacePushConstantOffset()` (80, 112 B in all). The draw is
+  `RenderableInstance::…::drawMeshShadingSurface()`: `drawMeshTasks(tileCountX, tileCountZ, 1)`.
+- ⚠️ The first run failed on `pcMatrices.viewMatrix`: a mesh stage created without `enableAdvancedMatrices()` gets
+  the classic VP-only block while the lit passes synthesize view-space vectors. Any new per-vertex mode the vertex
+  shader takes from `initVertexShader()` must be mirrored in `generateMeshShadingStages()`.
+
 ## Cubemap Rendering Mode (Multiview)
 
 When rendering to a cubemap (e.g., environment probes, reflection captures), the shader system operates differently:

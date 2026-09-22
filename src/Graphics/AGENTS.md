@@ -733,8 +733,18 @@ and the integrated range gives the physically consistent `heightScale` (`Pavemen
 materials (authored before the PBR material) — a relief one texture repeat deep. Harmless while
 `POMIterations` is 0; set it globally and those materials explode.
 
-**Bench:** projet-alpha's `relief` demo (option 0: 0 normal mapping, 1 POM; option 1 layers; option 2
-depth in thousandths of a repeat) — one flat ground, `Pavement006`, low lateral sun.
+**Bench:** projet-alpha's `relief` demo — one flat ground, `Pavement006`, low lateral sun. Option 0 is the
+technique: 0 = normal mapping, 1 = POM, 2 = mesh shaders. Option 1 is the layer count. Option 2 is the depth in
+thousandths of a repeat.
+
+**Handover to real geometry (mesh-shading surface, Sep 2026).** `setParallaxHandover(start, end)` (UBO
+`parallaxHandover`, float 120; the array is now 124 floats) sets the band over which a
+`Geometry::DisplacedGridResource` hands its relief from displaced geometry to the POM. The geometric depth is
+heightScale · (1 − t) and the POM depth heightScale · t, with t = smoothstep(start, end, d). ONLY a mesh-shading
+program reads it: without a band, such a program is geometry only, and a vertex program keeps t = 1 (the fallback
+is plain POM). The displacement is the material's own, through `Material::Interface::generateSurfaceDisplacementCode()`:
+the same height texture, UV transform (`transformedTexCoords(…, coordinates)`) and `heightScale` (UV units × metres
+per UV), read with `textureLod()` at the mip of the vertex spacing. One relief, two techniques.
 
 **Code references:**
 - `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation (+ distance fade)

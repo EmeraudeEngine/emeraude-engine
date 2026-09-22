@@ -423,6 +423,22 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
+			 * @brief Returns whether this program draws a MESH-SHADING surface through task + mesh stages
+			 * (Graphics::Geometry::MeshShadingSurface): the geometry is one, a material displaces it, and the device
+			 * enabled VK_EXT_mesh_shader. Otherwise the same geometry draws its flat grid through the vertex stage.
+			 * @note The device half is latched at the start of generateShaderProgram(), before the cache key.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMeshShadingSurfaceEnabled () const noexcept
+			{
+				const auto * geometry = this->getGeometryInterface();
+
+				return m_meshShadingAvailable && geometry != nullptr && geometry->meshShadingSurfaceEnabled() && this->materialEnabled();
+			}
+
+			/**
 			 * @brief Returns whether the generator will use a material.
 			 * @note The material is provided by the constructor with a renderable instance.
 			 * @return bool
@@ -802,5 +818,7 @@ namespace EmEn::Saphir::Generator
 			const Vulkan::Framebuffer * m_pipelineFramebuffer{nullptr}; /**< @todo Remove when a dedicated post-process RenderTarget exists. */
 			uint32_t m_nextShaderVariableLocation{0};
 			uint32_t m_debugMaterialPropertiesLane{0};
+			/** @brief Latched from the device at the start of generateShaderProgram() (VK_EXT_mesh_shader enabled). */
+			bool m_meshShadingAvailable{false};
 	};
 }

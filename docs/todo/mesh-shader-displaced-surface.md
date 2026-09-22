@@ -56,7 +56,11 @@ but no generator builds a LIT, material-driven program from it.
    per-vertex stage (MESH | TASK for a mesh program, VERTEX unchanged otherwise), and
    `Device::meshShadingStages()` ORed into the view, instance-transforms, light and material layouts (the
    material's height sampler included).
-4. `DisplacedSurfaceResource` + task/mesh code + draw branch + shadow program.
+4. `DisplacedGridResource` + task/mesh code + draw branch — COLOUR PASSES DONE 2026-09-23: relief option 0 = 2
+   renders on the RTX 3070 Ti, 0 VUID, real geometry near the camera and POM beyond (docs:
+   `src/Saphir/AGENTS.md` § The mesh-shading surface). Owner decisions of the day: a dedicated GEOMETRY rather
+   than a renderable, and SKIRTS rather than a geomorph against the cracks. REMAINING: the shadow program
+   (ShadowCasting still draws the flat grid), frustum culling in the task stage, and the GPU timing against mode 1.
 5. The handover band, the fallback, `relief` option 0 = 2, measurements.
 
 ## The concrete design (2026-09-22, implementing steps 3 + 4 together — step 3 alone cannot run)

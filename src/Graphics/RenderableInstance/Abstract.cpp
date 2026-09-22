@@ -26,6 +26,10 @@
 
 #include "Abstract.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <bit>
+
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Material/Interface.hpp"
@@ -75,6 +79,33 @@ namespace EmEn::Graphics::RenderableInstance
 		 * eight surfaces into the shadow map — 45 974 784 indices per pass on a 4096-division terrain
 		 * (2026-09-22).
 		 */
+		/**
+		 * @brief Draws a MESH-SHADING surface (Geometry::MeshShadingSurface): pushes its tiling and the camera its
+		 * tiles are subdivided for, then launches one task workgroup per tile.
+		 * @note The camera is world-space and the surface's object space is taken as the world (the ground sits at
+		 * the origin), as for a heightfield. The InstanceTransforms slot rides in the view vec4's w, as raw bits:
+		 * a mesh workgroup has no gl_InstanceIndex (Saphir::Generator::meshSurfaceInstanceIndexExpression()).
+		 */
+		void
+		drawMeshShadingSurface (const Geometry::Interface & geometry, const CommandBuffer & commandBuffer, const PushConstantContext & pushContext, const Saphir::Program & program, const Vector< 3, float > & cameraPosition, uint32_t instanceSlot) noexcept
+		{
+			const auto * surface = geometry.meshShadingSurface();
+
+			if ( surface == nullptr || surface->tileCountX == 0 || surface->tileCountZ == 0 || pushContext.pipelineLayout == nullptr )
+			{
+				return;
+			}
+
+			const std::array< float, 8 > surfaceConstants{
+				surface->originX, surface->originZ, surface->tileSize, surface->uvPerMeter,
+				cameraPosition[X], cameraPosition[Y], cameraPosition[Z], std::bit_cast< float >(instanceSlot)
+			};
+
+			vkCmdPushConstants(commandBuffer.handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, program.meshSurfacePushConstantOffset(), static_cast< uint32_t >(sizeof(surfaceConstants)), surfaceConstants.data());
+
+			commandBuffer.drawMeshTasks(surface->tileCountX, surface->tileCountZ, 1);
+		}
+
 		void
 		drawAdaptiveGeometry (const Geometry::Interface & geometry, const RenderTarget::Abstract & renderTarget, uint32_t readStateIndex, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance, const PushConstantContext & pushContext, const Saphir::Program & program) noexcept
 		{
@@ -1208,7 +1239,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled()
 		};
@@ -1224,7 +1255,13 @@ namespace EmEn::Graphics::RenderableInstance
 		 * animated layer of a multi-layer mesh draw layer 0's triangles. */
 		const auto * geometry = m_renderable->geometry(LODLevel);
 
-		if ( geometry != nullptr && geometry->isAdaptiveLOD() )
+		/* The shadow of a mesh-shading surface is its displaced geometry, subdivided for the MAIN camera (the
+		 * receiver's), like a heightfield's levels. */
+		if ( geometry != nullptr && program->hasMeshShader() )
+		{
+			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, *program, lodViewPosition, 0);
+		}
+		else if ( geometry != nullptr && geometry->isAdaptiveLOD() )
 		{
 			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0, pushContext, *program);
 		}
@@ -1296,7 +1333,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
 			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
@@ -1388,8 +1425,13 @@ namespace EmEn::Graphics::RenderableInstance
 		 * parameter (read as gl_InstanceIndex in the vertex shader, instanceCount == 1). */
 		const uint32_t firstInstance = pushContext.useInstanceTransforms ? this->instanceTransformsSlot() : 0;
 
+		/* A mesh-shading surface is re-tessellated by its task + mesh program, not drawn from its buffer. */
+		if ( program->hasMeshShader() )
+		{
+			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, *program, renderTarget->viewMatrices().position(readStateIndex), firstInstance);
+		}
 		/* Check for adaptive LOD rendering. */
-		if ( geometry->isAdaptiveLOD() )
+		else if ( geometry->isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
 			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
@@ -1511,7 +1553,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
 			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
@@ -1647,7 +1689,11 @@ namespace EmEn::Graphics::RenderableInstance
 		const uint32_t firstInstance = pushContext.useInstanceTransforms ? this->instanceTransformsSlot() : 0;
 
 		/* Issue the draw command (same logic as non-tracked render). */
-		if ( geometry->isAdaptiveLOD() )
+		if ( program->hasMeshShader() )
+		{
+			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, *program, renderTarget->viewMatrices().position(readStateIndex), firstInstance);
+		}
+		else if ( geometry->isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
 			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
@@ -1711,7 +1757,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled()
 		};

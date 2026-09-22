@@ -26,6 +26,9 @@
 
 #include "Abstract.hpp"
 
+/* STL inclusions. */
+#include <mutex>
+
 /* Local inclusions. */
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
@@ -33,6 +36,7 @@
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/Code.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -292,6 +296,24 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::generateShaderProgram (Renderer & renderer, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
 	{
+		/* NOTE: A mesh-shading surface takes the task + mesh path only where the device has it; latched here,
+		 * BEFORE the cache key, which isMeshShadingSurfaceEnabled() enters. */
+		m_meshShadingAvailable = renderer.device()->meshShadersEnabled();
+
+		if ( !m_meshShadingAvailable )
+		{
+			const auto * geometry = this->getGeometryInterface();
+
+			if ( geometry != nullptr && geometry->meshShadingSurfaceEnabled() )
+			{
+				static std::once_flag fallbackTraced;
+
+				std::call_once(fallbackTraced, [] {
+					TraceInfo{TracerTag} << "A mesh-shading surface falls back to its flat grid (and its material's parallax): this device has no VK_EXT_mesh_shader.";
+				});
+			}
+		}
+
 		/* NOTE: Check if we have a cached program with the same configuration.
 		 * This avoids redundant shader generation for identical renderable instances. */
 		const auto programCacheKey = this->computeProgramCacheKey();
@@ -536,6 +558,26 @@ namespace EmEn::Saphir::Generator
 			}
 
 			m_shaderProgram->setHeightfieldPushConstantOffset(nodeOffset);
+		}
+
+		/* NOTE: A mesh-shading surface pushes its tiling and its camera + instance slot per draw, after the
+		 * matrices, like the heightfield: 76 B of matrices put them at 80 and 96 — 112 B. */
+		if ( m_shaderProgram->hasMeshShader() )
+		{
+			const auto matricesBytes = pushConstantBlock.bytes();
+			const auto surfaceOffset = (matricesBytes + 15U) & ~15U;
+
+			pushConstantBlock.addMember(Declaration::VariableType::FloatVector4, PushConstant::Component::MeshSurfaceGrid);
+			pushConstantBlock.addMember(Declaration::VariableType::FloatVector4, PushConstant::Component::MeshSurfaceView);
+
+			if ( pushConstantBlock.bytes() > 128U )
+			{
+				TraceError{TracerTag} << "The mesh-shading surface push constants end at byte " << pushConstantBlock.bytes() << ", past the 128 B Vulkan minimum guarantee !";
+
+				return false;
+			}
+
+			m_shaderProgram->setMeshSurfacePushConstantOffset(surfaceOffset);
 		}
 
 		return shader.declare(pushConstantBlock);

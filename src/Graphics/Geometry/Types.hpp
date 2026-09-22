@@ -77,7 +77,15 @@ namespace EmEn::Graphics::Geometry
 		 * is why the attribute flags are left off on such a geometry. What the surface provides is
 		 * answered by Interface::surfaceProvidesTangentSpace() and siblings, never by those flags.
 		 */
-		EnableHeightfieldSurface = 1U << 12U
+		EnableHeightfieldSurface = 1U << 12U,
+		/**
+		 * @brief This flag tells the geometry is a MESH-SHADING surface (Geometry::MeshShadingSurface): on a
+		 * device with VK_EXT_mesh_shader it is drawn by a task + mesh program that re-tessellates and
+		 * displaces it every frame; elsewhere its ordinary vertex buffer is drawn.
+		 * @note It changes nothing in the vertex buffer: the flat grid stays complete, for the fallback, the
+		 * ray tracing and the physics.
+		 */
+		EnableMeshShadingSurface = 1U << 13U
 	};
 
 	/**

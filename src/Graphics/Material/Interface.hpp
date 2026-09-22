@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <string>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -634,6 +635,30 @@ namespace EmEn::Graphics::Material
 			generateShadowAlphaTestCode ([[maybe_unused]] const Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::FragmentShader & fragmentShader) const noexcept
 			{
 				return true;
+			}
+
+			/**
+			 * @brief Generates the displacement of a MESH-SHADING surface's vertex by this material's relief
+			 * (Geometry::MeshShadingSurface): the same height map, scale and UV transform the material's parallax
+			 * uses, so the two techniques draw ONE relief.
+			 * @note Emitted in the per-vertex prologue of the mesh stage. The code may read the GLSL variables named
+			 * by the parameters and must define `float <depthVariable>`: the depth at the vertex, in metres,
+			 * positive INTO the surface, already scaled by the geometry-to-parallax handover of the material.
+			 * @param generator The shader generator.
+			 * @param stage The per-vertex stage (the mesh shader).
+			 * @param uvVariable A vec2: the vertex's primary texture coordinates.
+			 * @param uvStepVariable A float: the UV distance to the next vertex (the mip level to read).
+			 * @param metresPerUVVariable A float: metres per UV unit.
+			 * @param distanceVariable A float: the vertex's distance to the camera, in metres.
+			 * @param depthVariable The name of the float to define.
+			 * @param code Receives the GLSL.
+			 * @return bool False when the material has no relief to displace by (the caller then emits a zero depth).
+			 */
+			[[nodiscard]]
+			virtual bool
+			generateSurfaceDisplacementCode ([[maybe_unused]] const Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::AbstractVertexStage & stage, [[maybe_unused]] const std::string & uvVariable, [[maybe_unused]] const std::string & uvStepVariable, [[maybe_unused]] const std::string & metresPerUVVariable, [[maybe_unused]] const std::string & distanceVariable, [[maybe_unused]] const std::string & depthVariable, [[maybe_unused]] std::string & code) const noexcept
+			{
+				return false;
 			}
 
 			/**

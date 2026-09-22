@@ -229,6 +229,24 @@ namespace EmEn::Saphir::Generator
 			bool generateVertexShader (Program & program) noexcept;
 
 			/**
+			 * @brief Generates the task and mesh stages of a mesh-shading surface (isMeshShadingSurfaceEnabled()).
+			 * @param program A reference to the program.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateMeshShadingStages (Program & program) noexcept;
+
+			/**
+			 * @brief Configures a per-vertex stage (vertex or mesh shader) with everything the scene, the material and
+			 * the lights need from it — the part the two stages share. It does not generate the source.
+			 * @param program A reference to the program.
+			 * @param vertexShader A reference to the per-vertex stage.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool configurePerVertexStage (Program & program, AbstractVertexStage & vertexShader) noexcept;
+
+			/**
 			 * @brief Generates the fragment shader stage of the graphics pipeline.
 			 * @note Must run after generateVertexShader(): it reads m_velocityOutputsEmitted and
 			 * relies on connectFromPreviousShader() to pick up the vertex stage's outputs. Emits one
