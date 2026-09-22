@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -67,7 +68,16 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
 
 			static constexpr auto DefaultGridSize{5000.0F}; /* NOTE: 5 kilometer. */
-			static constexpr auto DefaultVisibleSize{4096.0F}; /* NOTE: 4 kilometer. */
+			/** @brief Side of the visible window, in METRES (4 km). Converted to a cell count against the grid's own cell size — see visibleCellCount(). */
+			static constexpr auto DefaultVisibleSize{4096.0F};
+			/**
+			 * @brief Terrain kept AHEAD of the camera before the window slides, in metres (owner decision, 2026-09-22).
+			 * @note The slide fires when the camera is closer than this to the window's edge — a distance
+			 * to the EDGE, never a fraction of the window: the former `visibleSize / 3` let the edge come
+			 * within 683 m before reacting, and a slide then took 1.3 s during which the camera kept
+			 * closing in. With 1500 m on a 4096 m window the slide fires after 548 m of travel.
+			 */
+			static constexpr auto DefaultSlideMargin{1500.0F};
 			static constexpr auto DefaultGridDivision{5000U}; /* NOTE: Cell wil be 1 meter. */
 			static constexpr auto DefaultUVMultiplier{5000.0F};
 
@@ -205,8 +215,8 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				// TODO ...
-				return 0;
+				/* The whole grid's heights on the CPU, plus the visible window's geometry (its heights, VBO, IBO). */
+				return m_localData.pointCount() * sizeof(float) + (m_geometry != nullptr ? m_geometry->memoryOccupied() : 0);
 			}
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(const Base::Math::Vector< 3, float > &) const */
@@ -235,6 +245,30 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::updateVisibility() */
 			void updateVisibility (const Base::Math::Vector< 3, float > & worldPosition) noexcept override;
+
+			/**
+			 * @brief Sets how much terrain is kept ahead of the camera before the window slides, in metres.
+			 * @note Clamped at use to three quarters of the half-window: a margin the window cannot honour
+			 * would slide on every cycle. Negative values are taken as 0 (slide when the edge is reached).
+			 * @param margin The margin, in metres.
+			 * @return void
+			 */
+			void
+			setSlideMargin (float margin) noexcept
+			{
+				m_slideMargin = std::max(0.0F, margin);
+			}
+
+			/**
+			 * @brief Returns the terrain kept ahead of the camera before the window slides, in metres.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			slideMargin () const noexcept
+			{
+				return m_slideMargin;
+			}
 
 			/**
 			 * @brief Loads a parametric terrain with a material.
@@ -281,7 +315,9 @@ namespace EmEn::Graphics::Renderable
 				m_localData.applyDisplacementMapping(displacementMap, displacementFactor);
 
 				/* 3. Create adaptive geometry from local data. */
-				const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+				m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
+
+				const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
 
 				if ( !m_geometry->load(subGrid) )
 				{
@@ -346,12 +382,24 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
 
+			/**
+			 * @brief Returns the visible window as a CELL count of the current grid.
+			 * @note ⚠️ `m_visibleSize` is in metres — the slide threshold compares it to a travelled
+			 * distance — while Grid::subGrid() takes a cell count. The two coincided on every scene so
+			 * far only because their cells were 1 m; the cast that stood here made a 2 m grid stream a
+			 * window twice as wide as asked. At least one cell.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t visibleCellCount () const noexcept;
+
 			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
 			Base::VertexFactory::Grid< float > m_localData;
-			Base::Math::Vector< 2, float > m_lastAdaptiveGridPositionUpdated;
+			Base::Math::Vector< 2, float > m_windowCenter; ///< The CLAMPED centre of the window the geometry holds or is staging (X, Z), as Grid::subGridCenter() gives it.
 			RasterizationOptions m_rasterizationOptions;
-			float m_visibleSize{DefaultVisibleSize};
+			float m_visibleSize{DefaultVisibleSize}; ///< Side of the streamed window, in metres.
+			float m_slideMargin{DefaultSlideMargin}; ///< Terrain kept ahead of the camera before the window slides, in metres.
 	};
 }
 

@@ -1527,6 +1527,7 @@ namespace EmEn::Graphics
 			/* Materials whose dynamic properties changed: one region, so after the fence like
 			 * everything else this frame reads. */
 			this->flushMaterialVideoMemoryUpdates();
+			this->flushGeometryVideoMemoryUpdates();
 
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
@@ -1774,6 +1775,7 @@ namespace EmEn::Graphics
 			/* Materials whose dynamic properties changed: one region, so after the fence like
 			 * everything else this frame reads. */
 			this->flushMaterialVideoMemoryUpdates();
+			this->flushGeometryVideoMemoryUpdates();
 
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
@@ -3236,6 +3238,47 @@ namespace EmEn::Graphics
 		const std::lock_guard< std::mutex > lock{m_materialUpdatesAccess};
 
 		m_pendingMaterialUpdates.emplace_back(std::move(material));
+	}
+
+	void
+	Renderer::requestGeometryVideoMemoryUpdate (std::weak_ptr< Geometry::Interface > geometry) noexcept
+	{
+		if ( geometry.expired() )
+		{
+			return;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_geometryUpdatesAccess};
+
+		m_pendingGeometryUpdates.emplace_back(std::move(geometry));
+	}
+
+	void
+	Renderer::flushGeometryVideoMemoryUpdates () noexcept
+	{
+		std::vector< std::weak_ptr< Geometry::Interface > > pending;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_geometryUpdatesAccess};
+
+			if ( m_pendingGeometryUpdates.empty() )
+			{
+				return;
+			}
+
+			pending.swap(m_pendingGeometryUpdates);
+		}
+
+		for ( const auto & weakGeometry : pending )
+		{
+			if ( const auto geometry = weakGeometry.lock(); geometry != nullptr && geometry->isCreated() )
+			{
+				if ( !geometry->updateVideoMemory() )
+				{
+					TraceError{ClassId} << "Unable to publish the staged vertex data of geometry '" << geometry->name() << "' !";
+				}
+			}
+		}
 	}
 
 	void

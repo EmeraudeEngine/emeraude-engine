@@ -4359,6 +4359,48 @@ for reads (render thread), exclusive lock for writes (resource loading thread).
 > created AFTER `syncCameraEffects()`, so a stack the camera just populated already reports
 > `requiresHDR()` on the very frame it appears — no one-frame LDR flash.
 
+### Adaptive geometries — the terrain grid, its two cameras and its slide (Sept 2026)
+
+`Geometry::AdaptiveVertexGridResource` (every `TerrainResource` floor) is the one geometry that is
+never drawn whole: one VBO with a vertex per grid point, one IBO holding, per sector, **one strip
+range per level of detail over the same quads** plus the four edge-stitching ranges. The contract on
+`Geometry::Interface` is therefore a SELECTION, made once per pass on the render thread:
+
+| Call | Role |
+|---|---|
+| `prepareAdaptiveRendering(lodViewPosition, cullingFrustum, worldCoordinates)` | picks each sector's level from the 3D distance between `lodViewPosition` and the sector's box (`AACuboid::distanceTo()`, the SURFACE, never the centre; each box carries the Y range of its own points), constrains neighbours to one step, culls with the pass's frustum (`nullptr` = draw every sector, for multi-view targets), builds the draw list and the stitching list |
+| `getAdaptiveDrawCallCount()` / `getAdaptiveDrawCallRange(i)` | the selected sector ranges |
+| `getStitchingDrawCallCount()` / `getStitchingDrawCallRange(i)` | the stitching ranges of the visible sectors |
+
+⚠️⚠️ **The LOD camera and the culling frustum are two different things.** `RenderableInstance::render()`
+passes its own view for both. `castShadows()` passes the SHADOW target's frustum but the **MAIN
+camera's position** (`Scene::castShadows()` reads `mainRenderTarget()->viewMatrices().position(readStateIndex)`):
+the caster must be the very mesh the receiver is drawn with, or the shadow swims at every level
+boundary (Strugar, CDLOD 2010). Both paths share `drawAdaptiveGeometry()` in `RenderableInstance/Abstract.cpp`;
+before 2026-09-22 the shadow pass called `draw(geometry)` and drew the whole IBO, every level stacked —
+46 M indices per shadow target on `terrain`.
+
+**The slide** (`TerrainResource::updateVisibility()`, logic thread, once per cycle): when less than
+`slideMargin` (1500 m by default, JSON `GridSlideMargin`, `setSlideMargin()`) is left between the camera
+and the window's EDGE, the logic thread asks `Grid::subGridCenter()` where the window can go (snapped,
+clamped inside the grid — the single clamp `subGrid()` uses) and slides only if that centre is farther
+than the slack from the held one (⚠️ an inequality test regenerated the window for every metre of
+drift along the grid border). It then claims the update slot (`beginUpdate()`) and hands the pool a task
+that EXTRACTS the sub-grid (a read of the full grid, immutable after load) and STAGES the window
+(`updateData()`: `generateVertexAttributes()` fans the 16.8 M vertices out with `parallelFor`, 1.29 s →
+170 ms; the VBO is created and filled on the worker), then registers with
+`Renderer::requestGeometryVideoMemoryUpdate()`. The render thread publishes in `updateVideoMemory()` from
+`flushGeometryVideoMemoryUpdates()` (next to the materials' flush), retires the old VBO through the
+`DeferredDestructor` and marks the BLAS stale last. Nothing the render thread reads is written by
+another thread; nothing heavier than a distance test runs on the logic tick. `m_visibleSize` is in metres
+and `visibleCellCount()` converts it against the grid's own cell size (the two coincided only on 1 m
+grids). Details and measurements: [`docs/caution-points.md`](../../docs/caution-points.md) § Ray Tracing.
+
+⚠️ **Known residual — the reason a heightmap-texture terrain (CDLOD) is scheduled**: one normal per grid
+point, computed at 1 m, read by every level; at 64-128 m quads the coarse levels shade with
+point-sampled fine normals and distant ridges show dark streaks. The coarse level needs the average
+normal of its footprint, which a heightmap's mip chain gives and a per-vertex VBO cannot.
+
 ## 15c-bis. GrabPass — the COLOR grab carries a mip chain, and only it (Aug 2026)
 
 Frosted glass is a `textureLod()` away, provided the levels exist. `GrabPass::create()` gives the

@@ -36,6 +36,7 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -84,6 +85,7 @@ namespace EmEn::Graphics::Geometry
 	{
 		uint32_t sectorX{0};
 		uint32_t sectorY{0};
+		/** @brief The sector's own box, in the geometry's space: its XZ footprint and the Y range of ITS points (not the whole grid's). */
 		Base::Math::Space3D::AACuboid< float > bounds;
 		std::array< SectorDrawCall, MaxLODLevels > lodDrawCalls{};
 		/**
@@ -99,11 +101,20 @@ namespace EmEn::Graphics::Geometry
 	 * @extends EmEn::Graphics::Geometry::Interface The common base for all geometry types.
 	 *
 	 * This class implements a section-based LOD system where:
-	 * - The grid is divided into NxN sections
-	 * - Each section has multiple pre-computed LOD levels
-	 * - LOD selection is based on distance from camera
+	 * - The grid is divided into NxN sections (sectors)
+	 * - Each section has multiple pre-computed LOD levels (one strip range per level in ONE index buffer)
+	 * - LOD selection is the 3D distance from the LOD camera to the SURFACE of the sector's box
 	 * - Triangle caps fill gaps between sections at different LOD levels
-	 * - Frustum culling skips invisible sections
+	 * - Frustum culling skips the sectors the pass does not see
+	 *
+	 * @note ⚠️ Because the index buffer holds every level of every sector, this geometry must NEVER be
+	 * drawn whole: a plain `draw(geometry)` stacks all its levels on top of one another. Every pass
+	 * goes through prepareAdaptiveRendering() + the selected ranges — the shadow pass included.
+	 * @note The sub-grid window slides as the camera travels (TerrainResource::updateVisibility()):
+	 * a worker thread generates the new vertex data and stages it (updateData()), the RENDER thread
+	 * publishes it (updateVideoMemory(), reached through Renderer::requestGeometryVideoMemoryUpdate())
+	 * and retires the previous buffer through the DeferredDestructor. Nothing the render thread
+	 * reads is ever written by another thread.
 	 */
 	class EMEN_API AdaptiveVertexGridResource final : public Interface
 	{
@@ -310,8 +321,19 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				// TODO ...
-				return 0;
+				size_t bytes = m_localData.pointCount() * sizeof(float);
+
+				if ( m_vertexBufferObject != nullptr )
+				{
+					bytes += m_vertexBufferObject->bytes();
+				}
+
+				if ( m_indexBufferObject != nullptr )
+				{
+					bytes += m_indexBufferObject->bytes();
+				}
+
+				return bytes;
 			}
 
 			/**
@@ -452,12 +474,41 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
-			 * @brief Updates the geometry with new grid data.
-			 * @note The grid must have the same point count as the current local data.
-			 * @param grid A reference to the new grid data.
-			 * @return bool True if update succeeded.
+			 * @brief Claims the single update slot before generating a new window.
+			 * @note Called on the thread that decides a slide (the logic thread), BEFORE the work is
+			 * handed to a worker: it is what stops the next cycle from queuing a second one while the
+			 * first has not started. Released by updateVideoMemory() once the window is published, or
+			 * by cancelUpdate() / a failed updateData().
+			 * @return bool False when an update is already in flight.
 			 */
-			bool updateData (const Base::VertexFactory::Grid< float > & grid) noexcept;
+			[[nodiscard]]
+			bool
+			beginUpdate () noexcept
+			{
+				return !m_isUpdating.exchange(true, std::memory_order_acq_rel);
+			}
+
+			/**
+			 * @brief Releases the update slot claimed by beginUpdate() when the work could not be handed out.
+			 * @return void
+			 */
+			void
+			cancelUpdate () noexcept
+			{
+				m_isUpdating.store(false, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Generates the vertex data of a new grid window and STAGES it for the render thread.
+			 * @note Worker-thread side of a slide. The grid must have the same point count as the current
+			 * local data. Everything the render thread reads (the VBO, the local data, the sector bounds)
+			 * stays untouched here: the new buffer is created and filled, then parked with the new grid
+			 * and this geometry registers itself with Renderer::requestGeometryVideoMemoryUpdate(). The
+			 * swap happens in updateVideoMemory(), on the render thread, behind the frame fence.
+			 * @param grid The new grid data [std::move].
+			 * @return bool True if the data was staged.
+			 */
+			bool updateData (Base::VertexFactory::Grid< float > grid) noexcept;
 
 			/**
 			 * @brief Checks if an update is currently in progress.
@@ -478,16 +529,16 @@ namespace EmEn::Graphics::Geometry
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::Geometry::Interface::prepareAdaptiveRendering() */
+			void prepareAdaptiveRendering (const Base::Math::Vector< 3, float > & lodViewPosition, const Frustum * cullingFrustum, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Geometry::Interface::getAdaptiveDrawCallCount() */
 			[[nodiscard]]
-			uint32_t getAdaptiveDrawCallCount (const Base::Math::Vector< 3, float > & viewPosition) const noexcept override;
+			uint32_t getAdaptiveDrawCallCount () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::getAdaptiveDrawCallRange() */
 			[[nodiscard]]
-			std::array< uint32_t, 2 > getAdaptiveDrawCallRange (uint32_t drawCallIndex, const Base::Math::Vector< 3, float > & viewPosition) const noexcept override;
-
-			/** @copydoc EmEn::Graphics::Geometry::Interface::prepareAdaptiveRendering() */
-			void prepareAdaptiveRendering (const Base::Math::Vector< 3, float > & viewPosition) const noexcept override;
+			std::array< uint32_t, 2 > getAdaptiveDrawCallRange (uint32_t drawCallIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::getStitchingDrawCallCount() */
 			[[nodiscard]]
@@ -498,9 +549,13 @@ namespace EmEn::Graphics::Geometry
 			std::array< uint32_t, 2 > getStitchingDrawCallRange (uint32_t drawCallIndex) const noexcept override;
 
 			/**
-			 * @brief Computes the LOD level for a specific sector based on view distance.
+			 * @brief Computes the LOD level for a specific sector based on the view distance to the sector's box.
+			 * @note ⚠️ The distance is to the SURFACE of the sector's box, never to its centre: a 512 m
+			 * sector seen from its own edge is 0 m away. Measured against the centre, the sector under
+			 * the camera sat at 362 m and never left step 8, so the finest three levels of a 1 m grid
+			 * were carried in the VBO and never drawn (2026-09-22).
 			 * @param sectorIndex The sector index.
-			 * @param viewPosition The view/camera position.
+			 * @param viewPosition The view/camera position, in the geometry's space.
 			 * @return uint32_t The LOD level (0 = highest detail).
 			 */
 			[[nodiscard]]
@@ -517,12 +572,53 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Gets stitching draw calls for current LOD configuration.
 			 * @param sectorLODs The LOD level of each sector.
+			 * @param sectorVisibility One flag per sector; a culled sector emits no stitching. Empty = every sector visible.
 			 * @param outDrawCalls Output vector of [indexOffset, indexCount] pairs.
 			 * @return void
 			 */
-			void getStitchingDrawCalls (const std::vector< uint32_t > & sectorLODs, std::vector< std::array< uint32_t, 2 > > & outDrawCalls) const noexcept;
+			void getStitchingDrawCalls (const std::vector< uint32_t > & sectorLODs, const std::vector< uint8_t > & sectorVisibility, std::vector< std::array< uint32_t, 2 > > & outDrawCalls) const noexcept;
 
 		private:
+
+			/**
+			 * @brief Computes the box of one sector: its XZ footprint and the Y range of its own points.
+			 * @param grid The grid the sector belongs to.
+			 * @param quadStartX First quad column of the sector.
+			 * @param quadStartY First quad row of the sector.
+			 * @param quadEndX One past the last quad column (the sector's last point column).
+			 * @param quadEndY One past the last quad row (the sector's last point row).
+			 * @return Base::Math::Space3D::AACuboid< float >
+			 */
+			[[nodiscard]]
+			static Base::Math::Space3D::AACuboid< float > computeSectorBounds (const Base::VertexFactory::Grid< float > & grid, uint32_t quadStartX, uint32_t quadStartY, uint32_t quadEndX, uint32_t quadEndY) noexcept;
+
+			/**
+			 * @brief Computes the boxes of every sector of a grid, in sector order.
+			 * @param grid The grid.
+			 * @param sectorCountPerAxis The sector count per axis.
+			 * @return std::vector< Base::Math::Space3D::AACuboid< float > >
+			 */
+			[[nodiscard]]
+			static std::vector< Base::Math::Space3D::AACuboid< float > > computeAllSectorBounds (const Base::VertexFactory::Grid< float > & grid, uint32_t sectorCountPerAxis) noexcept;
+
+			/**
+			 * @brief Picks the level of a sector from the distance between a view position and the sector's box.
+			 * @param bounds The sector's box, in the same space as the view position.
+			 * @param sectorSize The sector's edge length, the unit of the LOD thresholds.
+			 * @param viewPosition The view position.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t sectorLevelOfDetail (const Base::Math::Space3D::AACuboid< float > & bounds, float sectorSize, const Base::Math::Vector< 3, float > & viewPosition) const noexcept;
+
+			/**
+			 * @brief Computes the constrained levels of every sector against a set of boxes.
+			 * @param viewPosition The view position, in the boxes' space.
+			 * @param bounds One box per sector, in sector order.
+			 * @param outLODs Output vector (resized to the sector count).
+			 * @return void
+			 */
+			void computeAllSectorLODs (const Base::Math::Vector< 3, float > & viewPosition, const std::vector< Base::Math::Space3D::AACuboid< float > > & bounds, std::vector< uint32_t > & outLODs) const noexcept;
 
 			/**
 			 * @brief Prepares data vector to go on GPU.
@@ -535,14 +631,27 @@ namespace EmEn::Graphics::Geometry
 			bool generateGPUBuffers (std::vector< float > & vertexAttributes, uint32_t vertexElementCount, std::vector< uint32_t > & indices) noexcept;
 
 			/**
-			 * @brief Adds a vertex to the local buffer.
-			 * @param pointIndex The point index in the local grid.
-			 * @param vertexAttributes A writable reference to a vector of vertex attributes.
+			 * @brief Writes one vertex of a grid at a destination: exactly the element count of the flags.
+			 * @note Thread-safe for concurrent points of one grid (it reads the grid and this geometry's
+			 * flags, writes only its own slot), which is what lets generateVertexAttributes() fan out.
+			 * @param grid The grid the point is read from (the local data, or a window being staged).
+			 * @param pointIndex The point index in the grid.
+			 * @param destination Where the vertex's elements go.
+			 * @return void
+			 */
+			void writeVertex (const Base::VertexFactory::Grid< float > & grid, uint32_t pointIndex, float * destination) const noexcept;
+
+			/**
+			 * @brief Generates the vertex attributes of a whole grid, one vertex per point in point order.
+			 * @note Fans out on the engine ThreadPool (`parallelFor`, safe from a pool worker — the slide
+			 * runs on one): 16.8 M vertices took 1.29 s on one thread. Falls back to one thread when the
+			 * random vertex colour is on (its generator is not reentrant).
+			 * @param grid The grid.
 			 * @param vertexElementCount The number of elements which compose one vertex.
-			 * @return uint32_t
+			 * @return std::vector< float >
 			 */
 			[[nodiscard]]
-			uint32_t addVertexToBuffer (uint32_t pointIndex, std::vector< float > & vertexAttributes, uint32_t vertexElementCount) const noexcept;
+			std::vector< float > generateVertexAttributes (const Base::VertexFactory::Grid< float > & grid, uint32_t vertexElementCount) const noexcept;
 
 			/* Vulkan buffers. */
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
@@ -562,12 +671,19 @@ namespace EmEn::Graphics::Geometry
 			/* LOD distance configuration. */
 			float m_lodBaseMultiplier{0.125F};
 			float m_lodThresholdGrowth{2.0F};
-			/* Thread safety for VBO updates. */
+			/* A window slide in flight: claimed by beginUpdate(), released once published. */
 			std::atomic< bool > m_isUpdating{false};
-			/* Deferred VBO destruction (to avoid Vulkan use-after-free). */
-			std::unique_ptr< Vulkan::VertexBufferObject > m_pendingDestructionVBO;
-			/* Cached stitching data (updated by prepareAdaptiveRendering()). */
+			/* The staged window (written by a worker in updateData(), consumed by updateVideoMemory() on the render thread). */
+			std::mutex m_pendingAccess;
+			std::unique_ptr< Vulkan::VertexBufferObject > m_pendingVertexBufferObject;
+			Base::VertexFactory::Grid< float > m_pendingLocalData;
+			std::vector< Base::Math::Space3D::AACuboid< float > > m_pendingSectorBounds;
+			bool m_hasPendingUpdate{false};
+			/* The selection of the current pass (render thread only, rebuilt by prepareAdaptiveRendering()). */
+			mutable std::vector< Base::Math::Space3D::AACuboid< float > > m_cachedWorldBounds;
 			mutable std::vector< uint32_t > m_cachedSectorLODs;
+			mutable std::vector< uint8_t > m_cachedSectorVisibility;
+			mutable std::vector< std::array< uint32_t, 2 > > m_cachedDrawCalls;
 			mutable std::vector< std::array< uint32_t, 2 > > m_cachedStitchingDrawCalls;
 	};
 }

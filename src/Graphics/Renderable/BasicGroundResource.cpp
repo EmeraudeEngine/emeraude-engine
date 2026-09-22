@@ -336,7 +336,7 @@ namespace EmEn::Graphics::Renderable
 		if ( grid.initializeByGridSize(gridSize, division) )
 		{
 			grid.setUVMultiplier(UVMultiplier);
-			grid.applyDiamondSquare(noise.factor, noise.roughness, noise.seed);
+			grid.applyDiamondSquare(noise);
 
 			if ( !Utility::isZero(shiftHeight) )
 			{

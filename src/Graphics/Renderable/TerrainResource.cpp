@@ -27,7 +27,9 @@
 #include "TerrainResource.hpp"
 
 /* STL inclusions. */
-#include <thread>
+#include <algorithm>
+#include <cmath>
+#include <utility>
 
 /* Third-party inclusions. */
 #include "magic_enum/magic_enum.hpp"
@@ -36,7 +38,9 @@
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
+#include "ThreadPool.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -65,31 +69,85 @@ namespace EmEn::Graphics::Renderable
 		return this->addDependency(m_material);
 	}
 
+	uint32_t
+	TerrainResource::visibleCellCount () const noexcept
+	{
+		const auto quadSize = m_localData.quadSize();
+
+		if ( quadSize <= 0.0F )
+		{
+			return 1;
+		}
+
+		return std::max(1U, static_cast< uint32_t >(std::round(m_visibleSize / quadSize)));
+	}
+
 	void
 	TerrainResource::updateVisibility (const Vector< 3, float > & worldPosition) noexcept
 	{
-		/* Skip if geometry is already updating. */
+		/* Logic thread, once per cycle. One slide in flight at a time. */
 		if ( m_geometry->isUpdating() )
 		{
 			return;
 		}
 
-		const auto visibilityThreshold = m_visibleSize / 3.0F;
-		const float distance = Vector< 2, float >::distance(m_lastAdaptiveGridPositionUpdated, {worldPosition[X], worldPosition[Z]});
+		/* The slide fires on the distance to the window's EDGE: the margin is what the camera must
+		 * always have ahead of it. A margin the window cannot honour is pulled back (a window can
+		 * only be recentred, never widened here). */
+		const auto halfWindow = m_visibleSize * 0.5F;
+		const auto margin = std::min(m_slideMargin, halfWindow * 0.75F);
+		const auto distanceToCenter = Vector< 2, float >::distance(m_windowCenter, {worldPosition[X], worldPosition[Z]});
 
-		if ( distance > visibilityThreshold )
+		if ( distanceToCenter <= halfWindow - margin )
 		{
-			TraceInfo{ClassId} << "Threshold reached at " << worldPosition << "!";
+			return;
+		}
 
-			m_lastAdaptiveGridPositionUpdated = {worldPosition[X], worldPosition[Z]};
+		/* Where the window CAN go: snapped and clamped the way the extraction will do it. The slide is
+		 * worth its 896 MiB only if that window differs from the one we hold by more than the slack
+		 * itself. ⚠️ Against the grid border the camera stays past the threshold for ever (the window
+		 * cannot follow it), and testing the wanted centre for mere INEQUALITY regenerated the whole
+		 * window for every metre the camera drifted along the border — four 896 MiB uploads in eight
+		 * seconds, measured 2026-09-22. The distance between the two centres is the honest test. */
+		const auto cellCount = this->visibleCellCount();
+		const auto wantedCenter = m_localData.subGridCenter({worldPosition[X], worldPosition[Z]}, cellCount);
 
-			/* Prepare the sub-grid data. */
-			const auto subGrid = m_localData.subGrid(m_lastAdaptiveGridPositionUpdated, static_cast< uint32_t >(m_visibleSize));
+		if ( Vector< 2, float >::distance(wantedCenter, m_windowCenter) <= halfWindow - margin )
+		{
+			return;
+		}
 
-			/* Launch update in a detached thread. */
-			std::thread([geometry = m_geometry, subGrid = subGrid] () {
-				geometry->updateData(subGrid);
-			}).detach();
+		/* The slot is claimed HERE, before the work leaves this thread: the next cycle must see it
+		 * taken even if the worker has not started yet. */
+		if ( !m_geometry->beginUpdate() )
+		{
+			return;
+		}
+
+		TraceInfo{ClassId} <<
+			"Terrain '" << this->name() << "' slides its window to (" << wantedCenter[0] << ", " << wantedCenter[1] << "): "
+			"the camera is " << (halfWindow - distanceToCenter) << " m from the edge (margin " << margin << " m).";
+
+		m_windowCenter = wantedCenter;
+
+		/* The engine's pool, never a raw std::thread: its constructor throws on exhaustion and the
+		 * cascade is built without exceptions. The worker EXTRACTS the window from the full grid (a
+		 * read of data nothing mutates after load — 26 ms that used to stall the logic tick), builds
+		 * and STAGES it; the render thread publishes it (AdaptiveVertexGridResource::updateVideoMemory()). */
+		const auto threadPool = this->serviceProvider().primaryServices().threadPool();
+
+		const auto enqueued = threadPool != nullptr && threadPool->enqueue([self = std::static_pointer_cast< TerrainResource >(this->shared_from_this()), geometry = m_geometry, wantedCenter, cellCount] () {
+			if ( !geometry->updateData(self->m_localData.subGrid(wantedCenter, cellCount)) )
+			{
+				TraceError{ClassId} << "Unable to stage the new terrain window of '" << geometry->name() << "' !";
+			}
+		});
+
+		if ( !enqueued )
+		{
+			TraceError{ClassId} << "Unable to hand the terrain window of '" << this->name() << "' to the thread pool !";
+
+			m_geometry->cancelUpdate();
 		}
 	}
 
@@ -110,7 +168,9 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
+
+		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
 
 		if ( !m_geometry->load(subGrid) )
 		{
@@ -188,6 +248,7 @@ namespace EmEn::Graphics::Renderable
 		const auto gridSize = FastJSON::getValue< float >(data, JKGridSize).value_or(DefaultGridSize);
 		const auto gridDivision = FastJSON::getValue< uint32_t >(data, JKGridDivision).value_or(DefaultGridDivision);
 		m_visibleSize = FastJSON::getValue< float >(data, JKGridVisibleSize).value_or(DefaultVisibleSize);
+		this->setSlideMargin(FastJSON::getValue< float >(data, JKGridSlideMargin).value_or(DefaultSlideMargin));
 
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
@@ -324,7 +385,9 @@ namespace EmEn::Graphics::Renderable
 		//	m_geometry->enableVertexColor(vertexColorMap);
 
 		/* Create the initial adaptive geometry (visible part). */
-		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
+
+		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
 
 		if ( !m_geometry->load(subGrid) )
 		{
@@ -357,7 +420,9 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
+
+		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
 
 		if ( !m_geometry->load(subGrid) )
 		{
@@ -409,7 +474,7 @@ namespace EmEn::Graphics::Renderable
 
 		/* Apply diamond square algorithm. */
 		m_localData.setUVMultiplier(UVMultiplier);
-		m_localData.applyDiamondSquare(noise.factor, noise.roughness, noise.seed);
+		m_localData.applyDiamondSquare(noise);
 
 		if ( !Utility::isZero(shiftHeight) )
 		{
@@ -417,7 +482,9 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
+
+		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
 
 		if ( !m_geometry->load(subGrid) )
 		{
@@ -472,7 +539,9 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
+
+		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
 
 		if ( !m_geometry->load(subGrid) )
 		{

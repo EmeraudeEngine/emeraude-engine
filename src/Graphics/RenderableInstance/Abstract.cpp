@@ -61,6 +61,49 @@ namespace EmEn::Graphics::RenderableInstance
 
 	constexpr auto TracerTag{"RenderableInstance"};
 
+	namespace
+	{
+		/**
+		 * @brief Records the draws of an adaptive geometry for one pass: its parts at the level the LOD
+		 * camera dictates, culled by the pass's own frustum, then the stitching between levels.
+		 * @note ⚠️ The LOD camera is not always the pass's camera. For a shadow map it is the MAIN
+		 * camera — the receiver's — so the caster is the same mesh as the surface it shadows, while
+		 * the light's frustum still decides what the map contains. A multi-view target (cubemap,
+		 * cascades) draws every part: one draw covers every view, so no single frustum applies.
+		 * @note ⚠️ Never the whole index buffer for such a geometry: it holds every level of every part,
+		 * one strip range per level over the SAME quads plus the stitching, so a plain draw stacked
+		 * eight surfaces into the shadow map — 45 974 784 indices per pass on a 4096-division terrain
+		 * (2026-09-22).
+		 */
+		void
+		drawAdaptiveGeometry (const Geometry::Interface & geometry, const RenderTarget::Abstract & renderTarget, uint32_t readStateIndex, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance) noexcept
+		{
+			const auto & viewMatrices = renderTarget.viewMatrices();
+			const auto singleView = !renderTarget.isCubemap() && !renderTarget.isCascadedShadowMap();
+			const auto & frustum = viewMatrices.frustum(readStateIndex, 0);
+
+			geometry.prepareAdaptiveRendering(lodViewPosition, singleView ? &frustum : nullptr, worldCoordinates);
+
+			const auto drawCallCount = geometry.getAdaptiveDrawCallCount();
+
+			for ( uint32_t drawCallIndex = 0; drawCallIndex < drawCallCount; ++drawCallIndex )
+			{
+				const auto range = geometry.getAdaptiveDrawCallRange(drawCallIndex);
+
+				commandBuffer.drawIndexed(range[0], range[1], instanceCount, firstInstance);
+			}
+
+			const auto stitchingCount = geometry.getStitchingDrawCallCount();
+
+			for ( uint32_t stitchIndex = 0; stitchIndex < stitchingCount; ++stitchIndex )
+			{
+				const auto range = geometry.getStitchingDrawCallRange(stitchIndex);
+
+				commandBuffer.drawIndexed(range[0], range[1], instanceCount, firstInstance);
+			}
+		}
+	}
+
 	/* Rendered-frame cursor for the skinning per-frame upload (render thread only). */
 	uint64_t Abstract::s_skinningFrameCursor{0};
 
@@ -1024,7 +1067,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
+	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
@@ -1137,7 +1180,13 @@ namespace EmEn::Graphics::RenderableInstance
 		 * Texture2DArray, and its sub-geometry index must stay the LAYER index.
 		 * Discriminating on material->isAnimated() conflated the two and silently made every
 		 * animated layer of a multi-layer mesh draw layer 0's triangles. */
-		if ( const auto * geometry = m_renderable->geometry(LODLevel); geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
+		const auto * geometry = m_renderable->geometry(LODLevel);
+
+		if ( geometry != nullptr && geometry->isAdaptiveLOD() )
+		{
+			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0);
+		}
+		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
 			commandBuffer.draw(*geometry, this->frameIndexFor(layerIndex), this->instanceCount());
 		}
@@ -1308,30 +1357,8 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Check for adaptive LOD rendering. */
 		if ( geometry->isAdaptiveLOD() )
 		{
-			const auto & viewPosition = renderTarget->viewMatrices().position();
-
-			/* Prepare LODs and stitching for this frame. */
-			geometry->prepareAdaptiveRendering(viewPosition);
-
-			/* Draw all sectors at their computed LOD level. */
-			const auto drawCallCount = geometry->getAdaptiveDrawCallCount(viewPosition);
-
-			for ( uint32_t drawCallIndex = 0; drawCallIndex < drawCallCount; ++drawCallIndex )
-			{
-				const auto range = geometry->getAdaptiveDrawCallRange(drawCallIndex, viewPosition);
-
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
-			}
-
-			/* Draw stitching geometry between LOD zones. */
-			const auto stitchingCount = geometry->getStitchingDrawCallCount();
-
-			for ( uint32_t stitchIndex = 0; stitchIndex < stitchingCount; ++stitchIndex )
-			{
-				const auto range = geometry->getStitchingDrawCallRange(stitchIndex);
-
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
-			}
+			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
+			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
@@ -1596,27 +1623,8 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Issue the draw command (same logic as non-tracked render). */
 		if ( geometry->isAdaptiveLOD() )
 		{
-			const auto & viewPosition = renderTarget->viewMatrices().position();
-
-			geometry->prepareAdaptiveRendering(viewPosition);
-
-			const auto drawCallCount = geometry->getAdaptiveDrawCallCount(viewPosition);
-
-			for ( uint32_t drawCallIndex = 0; drawCallIndex < drawCallCount; ++drawCallIndex )
-			{
-				const auto range = geometry->getAdaptiveDrawCallRange(drawCallIndex, viewPosition);
-
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
-			}
-
-			const auto stitchingCount = geometry->getStitchingDrawCallCount();
-
-			for ( uint32_t stitchIndex = 0; stitchIndex < stitchingCount; ++stitchIndex )
-			{
-				const auto range = geometry->getStitchingDrawCallRange(stitchIndex);
-
-				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount(), firstInstance);
-			}
+			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
+			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,

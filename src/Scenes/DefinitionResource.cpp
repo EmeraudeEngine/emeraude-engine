@@ -286,6 +286,8 @@ namespace EmEn::Scenes
 				noise.factor = FastJSON::getValue< float >(n, FactorKey).value_or(0.89F);
 				noise.roughness = FastJSON::getValue< float >(n, RoughnessKey).value_or(0.5F);
 				noise.seed = FastJSON::getValue< int32_t >(n, SeedKey).value_or(0);
+				/* Optional: the per-level decay of the generator (1 = Brownian, the default; higher damps the finest levels). */
+				noise.hurst = FastJSON::getValue< float >(n, HurstKey).value_or(1.0F);
 			}
 
 			loaded = ground->loadDiamondSquare(boundary, gridDivision, materialResource, noise, {}, uvMultiplier, shiftHeight);

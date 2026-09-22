@@ -112,6 +112,7 @@ namespace EmEn::Scenes
 			static constexpr auto FactorKey{"Factor"};
 			static constexpr auto RoughnessKey{"Roughness"};
 			static constexpr auto SeedKey{"Seed"};
+			static constexpr auto HurstKey{"Hurst"};
 
 			/* Lighting keys. */
 			static constexpr auto AmbientKey{"Ambient"};

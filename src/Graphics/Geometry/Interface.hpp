@@ -38,6 +38,7 @@
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
 #include "Graphics/Types.hpp"
+#include "Math/CartesianFrame.hpp"
 #include "VertexFactory/Grid.hpp"
 #include "VertexFactory/Shape.hpp"
 #include "SubGeometry.hpp"
@@ -48,6 +49,11 @@
 namespace EmEn::Vulkan
 {
 	class AccelerationStructureBuilder;
+}
+
+namespace EmEn::Graphics
+{
+	class Frustum;
 }
 
 namespace EmEn::Graphics::Geometry
@@ -369,43 +375,53 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
-			 * @brief Returns the number of draw calls needed for adaptive LOD rendering.
-			 * @param viewPosition The current view/camera position in world space.
-			 * @return uint32_t The number of draw calls to issue.
+			 * @brief Selects what an adaptive geometry draws for ONE render pass: the level of detail of
+			 * each of its parts, and which parts the pass sees at all.
+			 * @note ⚠️ The two view arguments answer two DIFFERENT questions and may come from two
+			 * different cameras. The level of detail is a property of the PICTURE a viewer looks at, so
+			 * `lodViewPosition` is the camera whose picture this is — for a shadow map that is the MAIN
+			 * camera, never the light: a caster tessellated from the light's point of view is not the
+			 * mesh the receiver is drawn with, and the mismatch is a shadow that swims at every level
+			 * boundary (Strugar, "Continuous Distance-Dependent Level of Detail for Rendering
+			 * Heightmaps", 2010, § node selection). The frustum culls the parts, so it IS the pass's
+			 * own — the light's for a shadow map.
+			 * @note Call it once per pass, on the render thread, before getAdaptiveDrawCallCount(),
+			 * getAdaptiveDrawCallRange() and the stitching queries, which read what it selected.
+			 * @param lodViewPosition World-space position of the camera the levels are picked for.
+			 * @param cullingFrustum The pass's frustum, or nullptr to draw every part (a multi-view target: one draw covers every view).
+			 * @param worldCoordinates The instance's world frame, or nullptr for the world origin.
+			 * @return void
+			 */
+			virtual
+			void
+			prepareAdaptiveRendering ([[maybe_unused]] const Base::Math::Vector< 3, float > & lodViewPosition, [[maybe_unused]] const Frustum * cullingFrustum, [[maybe_unused]] const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept
+			{
+
+			}
+
+			/**
+			 * @brief Returns the number of draw calls selected by prepareAdaptiveRendering().
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
 			virtual
 			uint32_t
-			getAdaptiveDrawCallCount ([[maybe_unused]] const Base::Math::Vector< 3, float > & viewPosition) const noexcept
+			getAdaptiveDrawCallCount () const noexcept
 			{
 				return 1;
 			}
 
 			/**
-			 * @brief Returns the index range for a specific adaptive draw call.
+			 * @brief Returns the index range of a draw call selected by prepareAdaptiveRendering().
 			 * @param drawCallIndex The draw call index (0 to getAdaptiveDrawCallCount()-1).
-			 * @param viewPosition The current view/camera position in world space.
 			 * @return std::array< uint32_t, 2 > The [indexOffset, indexCount] for this draw call.
 			 */
 			[[nodiscard]]
 			virtual
 			std::array< uint32_t, 2 >
-			getAdaptiveDrawCallRange ([[maybe_unused]] uint32_t drawCallIndex, [[maybe_unused]] const Base::Math::Vector< 3, float > & viewPosition) const noexcept
+			getAdaptiveDrawCallRange ([[maybe_unused]] uint32_t drawCallIndex) const noexcept
 			{
 				return this->subGeometryRange(0);
-			}
-
-			/**
-			 * @brief Prepares adaptive LOD stitching for the current view position.
-			 * @note Call this once per frame before rendering to pre-compute LODs and stitching.
-			 * @param viewPosition The current view/camera position in world space.
-			 * @return void
-			 */
-			virtual
-			void
-			prepareAdaptiveRendering ([[maybe_unused]] const Base::Math::Vector< 3, float > & viewPosition) const noexcept
-			{
-
 			}
 
 			/**

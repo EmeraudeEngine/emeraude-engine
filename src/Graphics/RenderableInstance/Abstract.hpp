@@ -823,18 +823,24 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
 			 * @param renderTarget A reference to the shadow map render target.
+			 * @param lodViewPosition World-space position of the MAIN camera — the receiver's — from
+			 * which an adaptive geometry (a terrain) picks its level of detail, so that the caster is the
+			 * very mesh the surface it shadows is drawn with. The shadow target's own frustum still
+			 * decides what the map contains. See Geometry::Interface::prepareAdaptiveRendering().
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
 			 * @param LODLevel The desired LOD level. Default 0.
 			 *
 			 * @note Shadow maps use depth-only rendering without material/lighting bindings.
+			 * @note ⚠️ An adaptive geometry is drawn by its selected ranges here as in render(), never
+			 * whole: its index buffer holds every level of every part, and a plain draw stacks them all.
 			 *
 			 * @see render() For full scene rendering with materials.
 			 * @see pushMatricesForShadowCasting() For push constant strategy.
 			 * @version 0.8.35
 			 */
-			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Base::Math::Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.

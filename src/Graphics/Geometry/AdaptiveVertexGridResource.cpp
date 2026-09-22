@@ -28,12 +28,17 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <limits>
+#include <utility>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "ThreadPool.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry
@@ -59,12 +64,7 @@ namespace EmEn::Graphics::Geometry
 		/* === STEP 1: Create VBO with all vertices === */
 		const auto totalPoints = m_localData.pointCount();
 
-		vertexAttributes.reserve(totalPoints * vertexElementCount);
-
-		for ( uint32_t pointIndex = 0; pointIndex < totalPoints; ++pointIndex )
-		{
-			(void) this->addVertexToBuffer(pointIndex, vertexAttributes, vertexElementCount);
-		}
+		vertexAttributes = this->generateVertexAttributes(m_localData, vertexElementCount);
 
 		/* === STEP 2: Prepare sector data === */
 		const auto gridQuadCount = m_localData.squaredQuadCount();
@@ -103,14 +103,8 @@ namespace EmEn::Graphics::Geometry
 				const auto sectorQuadEndX = sectorQuadStartX + quadsPerSector;
 				const auto sectorQuadEndY = sectorQuadStartY + quadsPerSector;
 
-				/* Calculate sector bounding box from corner positions. */
-				const auto topLeft = m_localData.position(sectorQuadStartX, sectorQuadStartY);
-				const auto bottomRight = m_localData.position(sectorQuadEndX, sectorQuadEndY);
-
-				sectorData.bounds.set(
-					{topLeft[X], m_localData.boundingBox().maximum(Y), topLeft[Z]},
-					{bottomRight[X], m_localData.boundingBox().minimum(Y), bottomRight[Z]}
-				);
+				/* The sector's own box: its footprint, and the Y range of ITS points. */
+				sectorData.bounds = computeSectorBounds(m_localData, sectorQuadStartX, sectorQuadStartY, sectorQuadEndX, sectorQuadEndY);
 
 				/* Generate indices for each LOD level (or just the forced one). */
 				const auto startLOD = (m_forcedLODLevel < m_lodLevelCount) ? m_forcedLODLevel : 0U;
@@ -406,14 +400,57 @@ namespace EmEn::Graphics::Geometry
 	bool
 	AdaptiveVertexGridResource::updateVideoMemory () noexcept
 	{
-		if ( !this->isCreated() )
+		/* Render thread, behind the frame fence: the ONE place the buffer draw calls read may change. */
+		std::unique_ptr< VertexBufferObject > vertexBufferObject;
+		Grid< float > localData;
+		std::vector< Space3D::AACuboid< float > > sectorBounds;
+
 		{
-			Tracer::warning(ClassId, "No buffer in video update to update !");
+			const std::lock_guard< std::mutex > lock{m_pendingAccess};
+
+			if ( !m_hasPendingUpdate )
+			{
+				return true;
+			}
+
+			vertexBufferObject = std::move(m_pendingVertexBufferObject);
+			localData = std::move(m_pendingLocalData);
+			sectorBounds = std::move(m_pendingSectorBounds);
+			m_hasPendingUpdate = false;
+		}
+
+		if ( !this->isCreated() || vertexBufferObject == nullptr || sectorBounds.size() != m_sectorsData.size() )
+		{
+			TraceError{ClassId} << "The staged window of '" << this->name() << "' cannot be published: the geometry is not created or the window does not match it.";
+
+			m_isUpdating.store(false, std::memory_order_release);
 
 			return false;
 		}
 
-		Tracer::warning(ClassId, "Updating geometry in video memory is not handled yet !");
+		/* The previous buffer may still be read by a frame in flight: retired, never freed here. */
+		this->serviceProvider().graphicsRenderer().deferredDestructor().retireObject(std::move(m_vertexBufferObject));
+
+		m_vertexBufferObject = std::move(vertexBufferObject);
+		m_localData = std::move(localData);
+
+		for ( size_t index = 0; index < m_sectorsData.size(); ++index )
+		{
+			m_sectorsData[index].bounds = sectorBounds[index];
+		}
+
+		m_isUpdating.store(false, std::memory_order_release);
+
+		/* The BLAS holds the surface of the PREVIOUS window: the sub-grid just slid, so every vertex
+		 * moved in XZ and its height changed with it. Until this is answered, the traced lane occludes
+		 * against a terrain that is no longer where it is drawn — and nothing says so, neither an
+		 * error nor a validation message.
+		 * ⚠️ This MUST be the last statement: the flag is what publishes the new grid and the new VBO
+		 * to the frame path that rebuilds (Scenes::SceneMetaData::rebuild(), which re-reads
+		 * m_localData through generateTriangleListIndicesForRT()). A rebuild is the right answer
+		 * rather than a refit because a slide is rare — visibleSize / 3 of travel — and a refit would
+		 * freeze a BVH partition built for another window (owner decision, 2026-09-22). */
+		this->markAccelerationStructureStale();
 
 		return true;
 	}
@@ -427,11 +464,16 @@ namespace EmEn::Graphics::Geometry
 			m_vertexBufferObject.reset();
 		}
 
-		if ( m_pendingDestructionVBO != nullptr )
 		{
-			m_pendingDestructionVBO->destroyFromHardware();
-			m_pendingDestructionVBO.reset();
+			const std::lock_guard< std::mutex > lock{m_pendingAccess};
+
+			m_pendingVertexBufferObject.reset();
+			m_pendingLocalData.clear();
+			m_pendingSectorBounds.clear();
+			m_hasPendingUpdate = false;
 		}
+
+		m_isUpdating.store(false, std::memory_order_release);
 
 		if ( m_indexBufferObject != nullptr )
 		{
@@ -613,65 +655,66 @@ namespace EmEn::Graphics::Geometry
 		return this->setLoadSuccess(true);
 	}
 
-	uint32_t
-	AdaptiveVertexGridResource::addVertexToBuffer (uint32_t pointIndex, std::vector< float > & vertexAttributes, uint32_t vertexElementCount) const noexcept
+	void
+	AdaptiveVertexGridResource::writeVertex (const Grid< float > & grid, uint32_t pointIndex, float * destination) const noexcept
 	{
-		const auto position = m_localData.position(pointIndex);
+		const auto position = grid.position(pointIndex);
+		auto * out = destination;
 
 		/* Vertex position */
-		vertexAttributes.emplace_back(position[X]);
-		vertexAttributes.emplace_back(position[Y]);
-		vertexAttributes.emplace_back(position[Z]);
+		*out++ = position[X];
+		*out++ = position[Y];
+		*out++ = position[Z];
 
 		if ( this->isFlagEnabled(EnableTangentSpace) )
 		{
-			const auto normal = m_localData.normal(pointIndex, position);
-			const auto tangent = m_localData.tangent(pointIndex, position, m_localData.textureCoordinates3D(pointIndex));
+			const auto normal = grid.normal(pointIndex, position);
+			const auto tangent = grid.tangent(pointIndex, position, grid.textureCoordinates3D(pointIndex));
 			const auto binormal = Vector< 3, float >::crossProduct(normal, tangent);
 
 			/* Tangent */
-			vertexAttributes.emplace_back(tangent[X]);
-			vertexAttributes.emplace_back(tangent[Y]);
-			vertexAttributes.emplace_back(tangent[Z]);
+			*out++ = tangent[X];
+			*out++ = tangent[Y];
+			*out++ = tangent[Z];
 
 			/* Binormal */
-			vertexAttributes.emplace_back(binormal[X]);
-			vertexAttributes.emplace_back(binormal[Y]);
-			vertexAttributes.emplace_back(binormal[Z]);
+			*out++ = binormal[X];
+			*out++ = binormal[Y];
+			*out++ = binormal[Z];
 
 			/* Normal */
-			vertexAttributes.emplace_back(normal[X]);
-			vertexAttributes.emplace_back(normal[Y]);
-			vertexAttributes.emplace_back(normal[Z]);
+			*out++ = normal[X];
+			*out++ = normal[Y];
+			*out++ = normal[Z];
 		}
 		else if ( this->isFlagEnabled(EnableNormal) )
 		{
-			const auto normal = m_localData.normal(pointIndex, position);
+			const auto normal = grid.normal(pointIndex, position);
 
 			/* Normal */
-			vertexAttributes.emplace_back(normal[X]);
-			vertexAttributes.emplace_back(normal[Y]);
-			vertexAttributes.emplace_back(normal[Z]);
+			*out++ = normal[X];
+			*out++ = normal[Y];
+			*out++ = normal[Z];
 		}
 
 		if ( this->isFlagEnabled(EnablePrimaryTextureCoordinates) )
 		{
 			if ( this->isFlagEnabled(Enable3DPrimaryTextureCoordinates) )
 			{
-				const auto UVWCoords = m_localData.textureCoordinates3D(pointIndex);
+				const auto UVWCoords = grid.textureCoordinates3D(pointIndex);
 
 				/* 3D texture coordinates */
-				vertexAttributes.emplace_back(UVWCoords[X]);
-				vertexAttributes.emplace_back(UVWCoords[Y]);
-				vertexAttributes.emplace_back(UVWCoords[Z]);
+				*out++ = UVWCoords[X];
+				*out++ = UVWCoords[Y];
+				*out++ = UVWCoords[Z];
 			}
 			else
 			{
-				const auto UVCoords = m_localData.textureCoordinates2D(pointIndex);
+				const auto UVCoords = grid.textureCoordinates2D(pointIndex);
 
 				/* 2D texture coordinates */
-				vertexAttributes.emplace_back(UVCoords[X]);
-				vertexAttributes.emplace_back(UVCoords[Y]);
+				*out++ = UVCoords[X];
+				*out++ = UVCoords[Y];
 			}
 		}
 
@@ -680,20 +723,20 @@ namespace EmEn::Graphics::Geometry
 		{
 			if ( this->isFlagEnabled(Enable3DSecondaryTextureCoordinates) )
 			{
-				const auto UVWCoords = m_localData.textureCoordinates3D(pointIndex);
+				const auto UVWCoords = grid.textureCoordinates3D(pointIndex);
 
 				/* 3D texture coordinates */
-				vertexAttributes.emplace_back(UVWCoords[X]);
-				vertexAttributes.emplace_back(UVWCoords[Y]);
-				vertexAttributes.emplace_back(UVWCoords[Z]);
+				*out++ = UVWCoords[X];
+				*out++ = UVWCoords[Y];
+				*out++ = UVWCoords[Z];
 			}
 			else
 			{
-				const auto UVCoords = m_localData.textureCoordinates2D(pointIndex);
+				const auto UVCoords = grid.textureCoordinates2D(pointIndex);
 
 				/* 2D texture coordinates */
-				vertexAttributes.emplace_back(UVCoords[X]);
-				vertexAttributes.emplace_back(UVCoords[Y]);
+				*out++ = UVCoords[X];
+				*out++ = UVCoords[Y];
 			}
 		}
 
@@ -703,10 +746,10 @@ namespace EmEn::Graphics::Geometry
 			switch ( m_vertexColorGenMode )
 			{
 				case VertexColorGenMode::UseGlobalColor :
-					vertexAttributes.emplace_back(m_globalVertexColor.red());
-					vertexAttributes.emplace_back(m_globalVertexColor.green());
-					vertexAttributes.emplace_back(m_globalVertexColor.blue());
-					vertexAttributes.emplace_back(1.0F);
+					*out++ = m_globalVertexColor.red();
+					*out++ = m_globalVertexColor.green();
+					*out++ = m_globalVertexColor.blue();
+					*out++ = 1.0F;
 					break;
 
 				case VertexColorGenMode::UseColorMap:
@@ -717,21 +760,21 @@ namespace EmEn::Graphics::Geometry
 				{
 					const auto randomColor = Color< float >::quickRandom();
 
-					vertexAttributes.emplace_back(randomColor.red());
-					vertexAttributes.emplace_back(randomColor.green());
-					vertexAttributes.emplace_back(randomColor.blue());
-					vertexAttributes.emplace_back(1.0F);
+					*out++ = randomColor.red();
+					*out++ = randomColor.green();
+					*out++ = randomColor.blue();
+					*out++ = 1.0F;
 				}
 					break;
 
 				case VertexColorGenMode::GenerateFromCoords :
 				{
-					const auto UVCoords = m_localData.textureCoordinates2D(pointIndex);
-					const auto level = 1.0F - ((position[Y] - m_localData.boundingBox().minimum(Y)) / m_localData.boundingBox().height());
+					const auto UVCoords = grid.textureCoordinates2D(pointIndex);
+					const auto level = 1.0F - ((position[Y] - grid.boundingBox().minimum(Y)) / grid.boundingBox().height());
 
-					vertexAttributes.emplace_back(UVCoords[X] / m_localData.UMultiplier());
-					vertexAttributes.emplace_back(UVCoords[Y] / m_localData.VMultiplier());
-					vertexAttributes.emplace_back(level);
+					*out++ = UVCoords[X] / grid.UMultiplier();
+					*out++ = UVCoords[Y] / grid.VMultiplier();
+					*out++ = level;
 				}
 					break;
 			}
@@ -740,22 +783,56 @@ namespace EmEn::Graphics::Geometry
 		/* Vertex weight. */
 		if ( this->isFlagEnabled(EnableWeight) )
 		{
-			vertexAttributes.emplace_back(1.0F);
-			vertexAttributes.emplace_back(1.0F);
-			vertexAttributes.emplace_back(1.0F);
-			vertexAttributes.emplace_back(1.0F);
+			*out++ = 1.0F;
+			*out++ = 1.0F;
+			*out++ = 1.0F;
+			*out++ = 1.0F;
 		}
 
-		return static_cast< uint32_t >(vertexAttributes.size() / vertexElementCount) - 1;
+	}
+
+	std::vector< float >
+	AdaptiveVertexGridResource::generateVertexAttributes (const Grid< float > & grid, uint32_t vertexElementCount) const noexcept
+	{
+		const auto totalPoints = grid.pointCount();
+
+		std::vector< float > vertexAttributes(static_cast< size_t >(totalPoints) * vertexElementCount);
+
+		const auto writeRange = [this, &grid, &vertexAttributes, vertexElementCount] (uint32_t begin, uint32_t end) {
+			for ( auto pointIndex = begin; pointIndex < end; ++pointIndex )
+			{
+				this->writeVertex(grid, pointIndex, &vertexAttributes[static_cast< size_t >(pointIndex) * vertexElementCount]);
+			}
+		};
+
+		/* The random vertex colour draws from a generator that is not reentrant: one thread then. */
+		const auto sequential = this->isFlagEnabled(EnableVertexColor) && m_vertexColorGenMode == VertexColorGenMode::UseRandom;
+		const auto threadPool = sequential ? nullptr : this->serviceProvider().primaryServices().threadPool();
+
+		if ( threadPool == nullptr )
+		{
+			writeRange(0U, totalPoints);
+		}
+		else
+		{
+			/* One grid row per grain: the neighbours a normal reads stay in cache. Safe from a pool
+			 * worker — the calling thread takes its share and helpers that find no chunk exit. */
+			threadPool->parallelFor(0U, totalPoints, writeRange, static_cast< size_t >(grid.squaredPointCount()));
+		}
+
+		return vertexAttributes;
 	}
 
 	bool
-	AdaptiveVertexGridResource::updateData (const Grid< float > & grid) noexcept
+	AdaptiveVertexGridResource::updateData (Grid< float > grid) noexcept
 	{
-		/* Validate grid compatibility. */
+		/* Worker-thread side of a slide. NOTHING the render thread reads is written here: the new
+		 * buffer is built beside the live one and parked, and the swap is updateVideoMemory()'s. */
 		if ( !grid.isValid() )
 		{
 			Tracer::error(ClassId, "Cannot update: grid is invalid!");
+
+			m_isUpdating.store(false, std::memory_order_release);
 
 			return false;
 		}
@@ -766,57 +843,28 @@ namespace EmEn::Graphics::Geometry
 				"Cannot update: point count mismatch. Expected " << m_localData.pointCount() <<
 				", got " << grid.pointCount() << ".";
 
+			m_isUpdating.store(false, std::memory_order_release);
+
 			return false;
 		}
 
-		/* Mark as updating. */
-		m_isUpdating.store(true, std::memory_order_release);
+		const auto stagingStart = std::chrono::steady_clock::now();
 
-		/* Destroy the previously pending VBO (safe now, it's been at least one frame). */
-		if ( m_pendingDestructionVBO != nullptr )
-		{
-			m_pendingDestructionVBO->destroyFromHardware();
-			m_pendingDestructionVBO.reset();
-		}
+		/* Sector boxes of the new window, so the render thread has nothing to compute at swap time. */
+		auto sectorBounds = computeAllSectorBounds(grid, m_sectorCountPerAxis);
 
-		/* Overwrite local data. */
-		m_localData = grid;
-
-		/* Update sector bounds to match new grid world position. */
-		const auto gridQuadCount = m_localData.squaredQuadCount();
-		const auto quadsPerSector = gridQuadCount / m_sectorCountPerAxis;
-
-		for ( auto & sectorData : m_sectorsData )
-		{
-			const auto sectorQuadStartX = sectorData.sectorX * quadsPerSector;
-			const auto sectorQuadStartY = sectorData.sectorY * quadsPerSector;
-			const auto sectorQuadEndX = sectorQuadStartX + quadsPerSector;
-			const auto sectorQuadEndY = sectorQuadStartY + quadsPerSector;
-
-			const auto topLeft = m_localData.position(sectorQuadStartX, sectorQuadStartY);
-			const auto bottomRight = m_localData.position(sectorQuadEndX, sectorQuadEndY);
-
-			sectorData.bounds.set(
-				{topLeft[X], m_localData.boundingBox().maximum(Y), topLeft[Z]},
-				{bottomRight[X], m_localData.boundingBox().minimum(Y), bottomRight[Z]}
-			);
-		}
-
-		/* Generate vertex attributes. */
+		/* Generate vertex attributes from the NEW grid, on every core the pool has. */
 		const auto vertexElementCount = getElementCountFromFlags(this->flags());
-		const auto totalPoints = m_localData.pointCount();
+		const auto totalPoints = grid.pointCount();
 
-		std::vector< float > vertexAttributes;
-		vertexAttributes.reserve(totalPoints * vertexElementCount);
+		auto vertexAttributes = this->generateVertexAttributes(grid, vertexElementCount);
 
-		for ( uint32_t pointIndex = 0; pointIndex < totalPoints; ++pointIndex )
-		{
-			(void) this->addVertexToBuffer(pointIndex, vertexAttributes, vertexElementCount);
-		}
+		auto & renderer = this->serviceProvider().graphicsRenderer();
+		auto & transferManager = renderer.transferManager();
 
-		auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
+		const auto generationEnd = std::chrono::steady_clock::now();
 
-		/* Create new VBO. */
+		/* Create and fill the new VBO. */
 		auto newVBO = std::make_unique< VertexBufferObject >(transferManager.device(), totalPoints, vertexElementCount, false);
 		newVBO->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
@@ -829,78 +877,112 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* Swap VBOs: new one becomes active, old one is queued for deferred destruction. */
-		std::swap(m_vertexBufferObject, newVBO);
-		m_pendingDestructionVBO = std::move(newVBO);
+		{
+			using Milliseconds = std::chrono::duration< double, std::milli >;
 
-		m_isUpdating.store(false, std::memory_order_release);
+			const auto uploadEnd = std::chrono::steady_clock::now();
 
-		/* The BLAS holds the surface of the PREVIOUS window: the sub-grid just slid, so every vertex
-		 * moved in XZ and its height changed with it. Until this is answered, the traced lane occludes
-		 * against a terrain that is no longer where it is drawn — and nothing says so, neither an
-		 * error nor a validation message.
-		 * ⚠️ This MUST be the last statement: the flag is what publishes the new grid and the new VBO
-		 * to the frame path that rebuilds (Scenes::SceneMetaData::rebuild(), which re-reads
-		 * m_localData through generateTriangleListIndicesForRT()). A rebuild is the right answer
-		 * rather than a refit because a slide is rare — visibleSize / 3 of travel — and a refit would
-		 * freeze a BVH partition built for another window (owner decision, 2026-09-22). */
-		this->markAccelerationStructureStale();
+			/* The two halves of a slide, measured: what the CPU spends rebuilding the window, and what
+			 * the transfer costs. A window the camera outruns is a number here before it is a picture. */
+			TraceInfo{ClassId} <<
+				"Window of '" << this->name() << "' staged: " << totalPoints << " vertices generated in " <<
+				Milliseconds{generationEnd - stagingStart}.count() << " ms, uploaded (" << (vertexAttributes.size() * sizeof(float) / 1048576) << " MiB) in " <<
+				Milliseconds{uploadEnd - generationEnd}.count() << " ms.";
+		}
+
+		/* Stage it. A window staged while a previous one waits replaces it: the newest wins. */
+		{
+			const std::lock_guard< std::mutex > lock{m_pendingAccess};
+
+			m_pendingVertexBufferObject = std::move(newVBO);
+			m_pendingLocalData = std::move(grid);
+			m_pendingSectorBounds = std::move(sectorBounds);
+			m_hasPendingUpdate = true;
+		}
+
+		/* The render thread publishes it through updateVideoMemory(), before the frame's uploads. */
+		renderer.requestGeometryVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
 
 		return true;
 	}
 
-	uint32_t
-	AdaptiveVertexGridResource::getAdaptiveDrawCallCount (const Vector< 3, float > & /*viewPosition*/) const noexcept
+	Space3D::AACuboid< float >
+	AdaptiveVertexGridResource::computeSectorBounds (const Grid< float > & grid, uint32_t quadStartX, uint32_t quadStartY, uint32_t quadEndX, uint32_t quadEndY) noexcept
 	{
-		return static_cast< uint32_t >(m_sectorsData.size());
+		/* The XZ footprint from the corner points, the Y range from EVERY point of the sector. The
+		 * level of detail is a 3D distance to this box; with the whole grid's Y range every sector
+		 * stood as tall as the highest peak, and a camera 500 m above a valley measured 0 m to it. */
+		const auto topLeft = grid.position(quadStartX, quadStartY);
+		const auto bottomRight = grid.position(quadEndX, quadEndY);
+
+		auto minimumY = std::numeric_limits< float >::max();
+		auto maximumY = std::numeric_limits< float >::lowest();
+
+		for ( auto pointY = quadStartY; pointY <= quadEndY; ++pointY )
+		{
+			for ( auto pointX = quadStartX; pointX <= quadEndX; ++pointX )
+			{
+				const auto height = grid.getHeightAt(pointX, pointY);
+
+				minimumY = std::min(minimumY, height);
+				maximumY = std::max(maximumY, height);
+			}
+		}
+
+		return {{bottomRight[X], maximumY, bottomRight[Z]}, {topLeft[X], minimumY, topLeft[Z]}};
+	}
+
+	std::vector< Space3D::AACuboid< float > >
+	AdaptiveVertexGridResource::computeAllSectorBounds (const Grid< float > & grid, uint32_t sectorCountPerAxis) noexcept
+	{
+		std::vector< Space3D::AACuboid< float > > bounds;
+		bounds.reserve(static_cast< size_t >(sectorCountPerAxis) * sectorCountPerAxis);
+
+		const auto quadsPerSector = grid.squaredQuadCount() / sectorCountPerAxis;
+
+		for ( uint32_t sectorY = 0; sectorY < sectorCountPerAxis; ++sectorY )
+		{
+			for ( uint32_t sectorX = 0; sectorX < sectorCountPerAxis; ++sectorX )
+			{
+				const auto quadStartX = sectorX * quadsPerSector;
+				const auto quadStartY = sectorY * quadsPerSector;
+
+				bounds.emplace_back(computeSectorBounds(grid, quadStartX, quadStartY, quadStartX + quadsPerSector, quadStartY + quadsPerSector));
+			}
+		}
+
+		return bounds;
+	}
+
+	uint32_t
+	AdaptiveVertexGridResource::getAdaptiveDrawCallCount () const noexcept
+	{
+		return static_cast< uint32_t >(m_cachedDrawCalls.size());
 	}
 
 	std::array< uint32_t, 2 >
-	AdaptiveVertexGridResource::getAdaptiveDrawCallRange (uint32_t drawCallIndex, const Vector< 3, float > & viewPosition) const noexcept
+	AdaptiveVertexGridResource::getAdaptiveDrawCallRange (uint32_t drawCallIndex) const noexcept
 	{
-		if ( drawCallIndex >= m_sectorsData.size() )
+		if ( drawCallIndex >= m_cachedDrawCalls.size() )
 		{
 			return {0, 0};
 		}
 
-		const auto & sector = m_sectorsData[drawCallIndex];
-
-		/* Use cached LOD if available (from prepareAdaptiveRendering). */
-		uint32_t lodLevel = 0;
-
-		if ( drawCallIndex < m_cachedSectorLODs.size() )
-		{
-			lodLevel = m_cachedSectorLODs[drawCallIndex];
-		}
-		else
-		{
-			/* Fallback: compute LOD directly. */
-			lodLevel = this->getSectorLOD(drawCallIndex, viewPosition);
-		}
-
-		const auto & drawCall = sector.lodDrawCalls[lodLevel];
-
-		return {drawCall.indexOffset, drawCall.indexCount};
+		return m_cachedDrawCalls[drawCallIndex];
 	}
 
 	uint32_t
-	AdaptiveVertexGridResource::getSectorLOD (uint32_t sectorIndex, const Vector< 3, float > & viewPosition) const noexcept
+	AdaptiveVertexGridResource::sectorLevelOfDetail (const Space3D::AACuboid< float > & bounds, float sectorSize, const Vector< 3, float > & viewPosition) const noexcept
 	{
-		if ( sectorIndex >= m_sectorsData.size() )
-		{
-			return 0;
-		}
-
-		const auto & sector = m_sectorsData[sectorIndex];
-
 		if ( m_forcedLODLevel < m_lodLevelCount )
 		{
 			return m_forcedLODLevel;
 		}
 
-		const auto sectorCenter = sector.bounds.centroid();
-		const auto distance = Vector< 3, float >::distance(viewPosition, sectorCenter);
-		const auto sectorSize = sector.bounds.width();
+		/* The distance to the SURFACE of the sector, in three dimensions: 0 for the sector under the
+		 * camera, the height above a valley floor for a camera in the air. Each level's range is
+		 * twice the previous one's, so the on-screen triangle density stays about constant. */
+		const auto distance = bounds.distanceTo(viewPosition);
 		auto threshold = sectorSize * m_lodBaseMultiplier;
 
 		for ( uint32_t lod = 0; lod < m_lodLevelCount - 1; ++lod )
@@ -916,16 +998,30 @@ namespace EmEn::Graphics::Geometry
 		return m_lodLevelCount - 1;
 	}
 
+	uint32_t
+	AdaptiveVertexGridResource::getSectorLOD (uint32_t sectorIndex, const Vector< 3, float > & viewPosition) const noexcept
+	{
+		if ( sectorIndex >= m_sectorsData.size() )
+		{
+			return 0;
+		}
+
+		const auto & sector = m_sectorsData[sectorIndex];
+
+		return this->sectorLevelOfDetail(sector.bounds, sector.bounds.width(), viewPosition);
+	}
+
 	void
-	AdaptiveVertexGridResource::computeAllSectorLODs (const Vector< 3, float > & viewPosition, std::vector< uint32_t > & outLODs) const noexcept
+	AdaptiveVertexGridResource::computeAllSectorLODs (const Vector< 3, float > & viewPosition, const std::vector< Space3D::AACuboid< float > > & bounds, std::vector< uint32_t > & outLODs) const noexcept
 	{
 		const auto sectorCount = static_cast< uint32_t >(m_sectorsData.size());
 		outLODs.resize(sectorCount);
 
-		/* First pass: compute raw LOD for each sector. */
-		for ( uint32_t i = 0; i < sectorCount; ++i )
+		/* First pass: the raw level of each sector, from ITS box (the sector's own width is the unit
+		 * of the thresholds; a world box may be wider once rotated). */
+		for ( uint32_t index = 0; index < sectorCount; ++index )
 		{
-			outLODs[i] = this->getSectorLOD(i, viewPosition);
+			outLODs[index] = this->sectorLevelOfDetail(bounds[index], m_sectorsData[index].bounds.width(), viewPosition);
 		}
 
 		/* Second pass: constrain adjacent sectors to differ by at most 1 LOD.
@@ -982,7 +1078,21 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	void
-	AdaptiveVertexGridResource::getStitchingDrawCalls (const std::vector< uint32_t > & sectorLODs, std::vector< std::array< uint32_t, 2 > > & outDrawCalls) const noexcept
+	AdaptiveVertexGridResource::computeAllSectorLODs (const Vector< 3, float > & viewPosition, std::vector< uint32_t > & outLODs) const noexcept
+	{
+		std::vector< Space3D::AACuboid< float > > bounds;
+		bounds.reserve(m_sectorsData.size());
+
+		for ( const auto & sector : m_sectorsData )
+		{
+			bounds.emplace_back(sector.bounds);
+		}
+
+		this->computeAllSectorLODs(viewPosition, bounds, outLODs);
+	}
+
+	void
+	AdaptiveVertexGridResource::getStitchingDrawCalls (const std::vector< uint32_t > & sectorLODs, const std::vector< uint8_t > & sectorVisibility, std::vector< std::array< uint32_t, 2 > > & outDrawCalls) const noexcept
 	{
 		outDrawCalls.clear();
 
@@ -991,6 +1101,13 @@ namespace EmEn::Graphics::Geometry
 			for ( uint32_t sectorX = 0; sectorX < m_sectorCountPerAxis; ++sectorX )
 			{
 				const auto idx = sectorY * m_sectorCountPerAxis + sectorX;
+
+				/* A culled sector's edges are not seen either: the stitching belongs to the finer side. */
+				if ( idx < sectorVisibility.size() && sectorVisibility[idx] == 0 )
+				{
+					continue;
+				}
+
 				const auto myLOD = sectorLODs[idx];
 				const auto & sector = m_sectorsData[idx];
 
@@ -1068,13 +1185,74 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	void
-	AdaptiveVertexGridResource::prepareAdaptiveRendering (const Vector< 3, float > & viewPosition) const noexcept
+	AdaptiveVertexGridResource::prepareAdaptiveRendering (const Vector< 3, float > & lodViewPosition, const Frustum * cullingFrustum, const CartesianFrame< float > * worldCoordinates) const noexcept
 	{
-		/* Compute constrained LODs for all sectors. */
-		this->computeAllSectorLODs(viewPosition, m_cachedSectorLODs);
+		const auto sectorCount = static_cast< uint32_t >(m_sectorsData.size());
 
-		/* Compute stitching draw calls based on LOD differences. */
-		this->getStitchingDrawCalls(m_cachedSectorLODs, m_cachedStitchingDrawCalls);
+		/* 1. The sector boxes in WORLD space, where the camera and the frustum live. The scene ground
+		 * sits on the root node, so this is the identity for it; any other frame gets the box of its
+		 * eight transformed corners (conservative under a rotation, which only makes a level finer). */
+		m_cachedWorldBounds.resize(sectorCount);
+
+		if ( worldCoordinates == nullptr )
+		{
+			for ( uint32_t index = 0; index < sectorCount; ++index )
+			{
+				m_cachedWorldBounds[index] = m_sectorsData[index].bounds;
+			}
+		}
+		else
+		{
+			const auto modelMatrix = worldCoordinates->getModelMatrix();
+
+			for ( uint32_t index = 0; index < sectorCount; ++index )
+			{
+				auto & worldBounds = m_cachedWorldBounds[index];
+				worldBounds.reset();
+
+				for ( const auto & corner : m_sectorsData[index].bounds.points() )
+				{
+					worldBounds.merge(modelMatrix * Vector< 4, float >{corner, 1.0F});
+				}
+			}
+		}
+
+		/* 2. The levels, from the LOD camera, constrained to one step between neighbours. Every sector
+		 * takes part — a culled sector still constrains the level of its visible neighbour, or the
+		 * stitching on their shared edge would not match. */
+		this->computeAllSectorLODs(lodViewPosition, m_cachedWorldBounds, m_cachedSectorLODs);
+
+		/* 3. The visibility, from THIS pass's frustum. */
+		m_cachedSectorVisibility.assign(sectorCount, 1);
+
+		if ( cullingFrustum != nullptr )
+		{
+			for ( uint32_t index = 0; index < sectorCount; ++index )
+			{
+				m_cachedSectorVisibility[index] = cullingFrustum->isSeeing(m_cachedWorldBounds[index]) ? 1 : 0;
+			}
+		}
+
+		/* 4. The draw list: one range per visible sector, at its level. */
+		m_cachedDrawCalls.clear();
+
+		for ( uint32_t index = 0; index < sectorCount; ++index )
+		{
+			if ( m_cachedSectorVisibility[index] == 0 )
+			{
+				continue;
+			}
+
+			const auto & drawCall = m_sectorsData[index].lodDrawCalls[m_cachedSectorLODs[index]];
+
+			if ( drawCall.indexCount > 0 )
+			{
+				m_cachedDrawCalls.push_back({drawCall.indexOffset, drawCall.indexCount});
+			}
+		}
+
+		/* 5. The stitching between levels, for the visible sectors. */
+		this->getStitchingDrawCalls(m_cachedSectorLODs, m_cachedSectorVisibility, m_cachedStitchingDrawCalls);
 	}
 
 	uint32_t

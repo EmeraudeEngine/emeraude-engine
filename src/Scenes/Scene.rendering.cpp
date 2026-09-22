@@ -422,9 +422,18 @@ namespace EmEn::Scenes
 		 * this pass, so the slot read here is written and is this frame's. */
 		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
 
+		/* ⚠️ An adaptive geometry (a terrain) picks its level of detail from the MAIN camera — the
+		 * receiver's — never from the light: the caster must be the very mesh the shadowed surface is
+		 * drawn with, or the shadow swims at every level boundary. The light's frustum still decides
+		 * what the map contains. Published render state, like everything this pass reads. */
+		const auto mainRenderTarget = m_AVConsoleManager.graphicsRenderer().mainRenderTarget();
+		const auto & lodViewPosition = mainRenderTarget != nullptr ?
+			mainRenderTarget->viewMatrices().position(readStateIndex) :
+			renderTarget->viewMatrices().position(readStateIndex);
+
 		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
 		{
-			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), sceneTransformsDS);
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, lodViewPosition, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), sceneTransformsDS);
 		}
 	}
 

@@ -61,6 +61,7 @@ namespace EmEn::Graphics::Renderable
 	static constexpr auto JKGridSize{"GridSize"};
 	static constexpr auto JKGridDivision{"GridDivision"};
 	static constexpr auto JKGridVisibleSize{"GridVisibleSize"};
+	static constexpr auto JKGridSlideMargin{"GridSlideMargin"};
 	static constexpr auto JKHeightMap{"HeightMap"};
 	static constexpr auto JKImageName{"ImageName"};
 	static constexpr auto JKInverse{"Inverse"};

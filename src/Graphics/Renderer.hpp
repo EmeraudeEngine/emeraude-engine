@@ -222,6 +222,17 @@ namespace EmEn::Graphics
 			 */
 			void requestMaterialVideoMemoryUpdate (std::weak_ptr< Material::Interface > material) noexcept;
 
+			/**
+			 * @brief Registers a geometry that STAGED new vertex data, for the next frame's flush.
+			 * @note Thread-safe: a worker thread builds and parks the new buffer (Geometry::AdaptiveVertexGridResource::updateData()),
+			 * the render thread publishes it through Geometry::Interface::updateVideoMemory() from
+			 * flushGeometryVideoMemoryUpdates(), behind the frame fence and before the scene's own uploads —
+			 * the ONE place a buffer that draw calls read may be swapped. The same shape as the materials'.
+			 * @param geometry A weak pointer to the geometry.
+			 * @return void
+			 */
+			void requestGeometryVideoMemoryUpdate (std::weak_ptr< Geometry::Interface > geometry) noexcept;
+
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
 
@@ -1759,8 +1770,17 @@ namespace EmEn::Graphics
 			 */
 			void flushMaterialVideoMemoryUpdates () noexcept;
 
+			/**
+			 * @brief Publishes the vertex data every geometry registered by requestGeometryVideoMemoryUpdate() has staged since the last frame.
+			 * @note Render thread, same region as flushMaterialVideoMemoryUpdates().
+			 * @return void
+			 */
+			void flushGeometryVideoMemoryUpdates () noexcept;
+
 			std::mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
 			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates; ///< Materials that changed a dynamic property since the last flush.
+			std::mutex m_geometryUpdatesAccess; ///< Guards m_pendingGeometryUpdates (worker threads register, the render thread flushes).
+			std::vector< std::weak_ptr< Geometry::Interface > > m_pendingGeometryUpdates; ///< Geometries that staged new vertex data since the last flush.
 			bool m_motionBlurAllowed{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
