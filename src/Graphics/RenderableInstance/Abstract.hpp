@@ -1078,6 +1078,23 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex, uint32_t LODLevel) const noexcept = 0;
 
+		/**
+		 * @brief Returns the per-instance model matrix buffer this instance binds, if any.
+		 * @note Two things ride on ONE bind call in bindInstanceModelLayer(): the geometry, shared by
+		 * every instance of a renderable, and this buffer, which is NOT. The state tracker needs
+		 * both to decide whether a bind is redundant — on the geometry alone, two instanced
+		 * components of one renderable draw with the first one's matrices.
+		 * @return VkBuffer VK_NULL_HANDLE when the instance binds no model buffer (the non-instanced
+		 * case, whose model matrix travels in the transforms SSBO or a push constant).
+		 */
+		[[nodiscard]]
+		virtual
+		VkBuffer
+		instanceModelBufferHandle () const noexcept
+		{
+			return VK_NULL_HANDLE;
+		}
+
 			/**
 			 * @brief Returns the animation time, in milliseconds, the frame indices derive from.
 			 * @note NOT a frame index — that is per layer, see frameIndexFor().

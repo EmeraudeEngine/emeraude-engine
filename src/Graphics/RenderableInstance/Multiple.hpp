@@ -207,6 +207,14 @@ namespace EmEn::Graphics::RenderableInstance
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer(const Vulkan::CommandBuffer &, uint32_t, uint32_t) const */
 			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex, uint32_t LODLevel) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceModelBufferHandle() const */
+			[[nodiscard]]
+			VkBuffer
+			instanceModelBufferHandle () const noexcept override
+			{
+				return m_vertexBufferObject != nullptr ? m_vertexBufferObject->handle() : VK_NULL_HANDLE;
+			}
+
 			/**
 			 * @brief Creates the model matrices.
 			 * @param device A reference to the device smart-pointer.

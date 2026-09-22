@@ -1414,12 +1414,22 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 #endif
 
-		/* Bind geometry (VBO/IBO) only if it changed. */
-		if ( tracker.lastGeometry != static_cast< const void * >(geometry) || tracker.lastLayerIndex != layerIndex )
+		/* Bind geometry (VBO/IBO) only if it changed.
+		 * ⚠⚠ The per-instance model buffer is part of the comparison because bindInstanceModelLayer()
+		 * binds it in the SAME call for an instanced renderable: the geometry is shared between every
+		 * instance of a renderable, that buffer is not, and the lighted list is state-sorted so those
+		 * instances arrive adjacent. Compared on the geometry alone, every one after the first drew
+		 * with the first one's matrices. It is VK_NULL_HANDLE on the non-instanced path, which binds
+		 * no such buffer, so nothing is rebound there that was not rebound before. */
+		if ( const auto instanceModelBuffer = this->instanceModelBufferHandle();
+			tracker.lastGeometry != static_cast< const void * >(geometry) ||
+			tracker.lastLayerIndex != layerIndex ||
+			tracker.lastInstanceModelBuffer != instanceModelBuffer )
 		{
 			this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
 			tracker.lastGeometry = geometry;
 			tracker.lastLayerIndex = layerIndex;
+			tracker.lastInstanceModelBuffer = instanceModelBuffer;
 		}
 #ifdef DEBUG
 		else

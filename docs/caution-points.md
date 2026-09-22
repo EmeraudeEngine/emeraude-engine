@@ -5352,6 +5352,43 @@ each. See `docs/todo/vegetation-octahedral-imposter-atlas.md` for the demo that 
 Fix: `src/Vulkan/CommandBuffer.cpp`, the instanced overload binds the geometry VBO at 0 and now
 ignores its `subGeometryIndex`, like its non-instanced sibling.
 
+### ⚠⚠⚠ One bind call, two identities — the state tracker followed only one (Sep 2026, FIXED)
+
+`RenderableInstance::Abstract` skips a geometry bind when the state tracker says it is redundant
+(`Abstract.cpp`, *"Bind geometry (VBO/IBO) only if it changed"*). The call it skips is
+`bindInstanceModelLayer()`, and for an **instanced** renderable that call binds **two** vertex
+buffers: the geometry's, shared by every instance of a renderable, and the instance's own **model
+matrix buffer**, which is not shared at all. The tracker compared the geometry and the layer index
+only.
+
+The lighted render list is **state-sorted**, so the instances of one renderable arrive adjacent:
+every one after the first had its bind elided and drew **with the first one's matrices**, landing
+exactly on top of it.
+
+**Measured** on the projet-alpha `forest` demo, counted from directly above the whole terrain:
+
+| | entities | components | groves on screen |
+|---|---|---|---|
+| before | 44 | 132 | **4** (= 12 renderables / 3 per grove) |
+| after | 44 | 132 | **44** |
+
+⚠⚠ **It failed in complete silence.** Every entity was in the rendering octree, every component
+was listed on its entity, no instance was broken, and not one error or warning was logged. The
+scene graph was right and the frame was not, which sends you looking at culling, level of detail
+and the camera — an hour each.
+
+⚠️ **This is the SECOND time this exact class of bug has been fixed in that struct**, and the first
+one is commented three lines above the new field: every light of a scene shares ONE descriptor set
+and only the dynamic offset distinguishes them, so deduplicating on the handle alone made a single
+light light the whole scene. **When one bind call carries two identities, tracking one of them
+silently reuses the other.** Before adding anything to `RenderStateTracker`, ask what else rides on
+the same call.
+
+Fix: `RenderStateTracker::lastInstanceModelBuffer`, fed by a new virtual
+`RenderableInstance::Abstract::instanceModelBufferHandle()` — `VK_NULL_HANDLE` by default, the
+model VBO in `Multiple`. The non-instanced path binds no such buffer, so its redundant-bind
+elimination is untouched.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

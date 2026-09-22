@@ -57,6 +57,18 @@ namespace EmEn::Graphics::RenderableInstance
 		const void * lastGeometry{nullptr};
 		/** @brief Last bound geometry layer index. */
 		uint32_t lastLayerIndex{UINT32_MAX};
+		/** @brief Last bound per-instance model matrix buffer.
+		 * @note An INSTANCED renderable binds two vertex buffers at once, the geometry's and its own
+		 * model matrices (RenderableInstance::Multiple::bindInstanceModelLayer()). Deduplicating on
+		 * the geometry alone made every instanced component of one renderable draw with the FIRST
+		 * one's matrices — and the lighted list is state-sorted, so they arrive adjacent and every
+		 * one after the first was elided. Measured: 44 groves of trees over 12 shared renderables
+		 * put 12 placements on screen, the other 120 draws landing exactly on top of them.
+		 * VK_NULL_HANDLE for a non-instanced instance, which binds no such buffer — so the
+		 * elimination is untouched on that path.
+		 * ⚠️ Same class as lastLightUBOOffset below: when ONE bind call carries two identities,
+		 * tracking one of them silently reuses the other. */
+		VkBuffer lastInstanceModelBuffer{VK_NULL_HANDLE};
 		/** @brief Last bound material descriptor set handle. */
 		VkDescriptorSet lastMaterialDS{VK_NULL_HANDLE};
 		/** @brief Last bound light descriptor set handle. */
@@ -87,6 +99,7 @@ namespace EmEn::Graphics::RenderableInstance
 			lastPipeline = VK_NULL_HANDLE;
 			lastGeometry = nullptr;
 			lastLayerIndex = UINT32_MAX;
+			lastInstanceModelBuffer = VK_NULL_HANDLE;
 			lastMaterialDS = VK_NULL_HANDLE;
 			lastLightDS = VK_NULL_HANDLE;
 			lastLightUBOOffset = UINT32_MAX;
