@@ -94,6 +94,32 @@ namespace EmEn::Graphics::Geometry
 		 * Connects this sector's edge at myLOD to neighbor's edge at myLOD+1.
 		 */
 		std::array< std::array< SectorDrawCall, 4 >, MaxLODLevels > edgeStitching{};
+		/**
+		 * @brief Stitching draw calls from this sector's OUTWARD edges to the far mesh, indexed by [myLOD][edge].
+		 * @note Filled for border sectors only, and only when a far mesh is set: a fan of triangles between
+		 * the coarser of the two steps (this level's, or the far mesh's) and the finer, over window vertices
+		 * alone — the far mesh's edge vertices coincide with the window's at its step. Empty when the steps match.
+		 */
+		std::array< std::array< SectorDrawCall, 4 >, MaxLODLevels > outerStitching{};
+		/**
+		 * @brief The SKIRT hanging from this border sector's outward edges down to the far mesh, indexed by edge.
+		 * @note The far mesh sits `depthOffset` below the terrain (owner decision, 2026-09-22: the fine
+		 * surface must win any depth contest near the camera). The skirt is a wall of quads between the
+		 * window's edge vertices at the far step and their lowered copies (the skirt vertices, appended
+		 * after the window's points): its bottom edge is exactly the far mesh's edge. Independent of the
+		 * level: the fans above hand the edge over at the far step, the skirt takes it from there.
+		 */
+		std::array< SectorDrawCall, 4 > farSkirt{};
+	};
+
+	/**
+	 * @brief One sector of the FAR mesh: the whole terrain at a coarse step, drawn around the window.
+	 */
+	struct EMEN_API FarSectorData final
+	{
+		/** @brief The sector's box, in the geometry's space, with the Y range of its own points. */
+		Base::Math::Space3D::AACuboid< float > bounds;
+		SectorDrawCall drawCall;
 	};
 
 	/**
@@ -110,6 +136,14 @@ namespace EmEn::Graphics::Geometry
 	 * @note ⚠️ Because the index buffer holds every level of every sector, this geometry must NEVER be
 	 * drawn whole: a plain `draw(geometry)` stacks all its levels on top of one another. Every pass
 	 * goes through prepareAdaptiveRendering() + the selected ranges — the shadow pass included.
+	 * @note A FAR MESH may surround the window (setFarGrid(), owner decision 2026-09-22): the whole terrain at
+	 * a coarse step (32 m on `terrain`), cut in its own sectors, appended to the same VBO and IBO and drawn
+	 * by the same selection — culled by the pass's frustum and by the HOLE the window occupies, which is
+	 * exact because the window's centre snaps to the far sector size (TerrainResource). Its edge vertices
+	 * coincide with the window's border vertices at the far step (same source grid, point samples, same
+	 * texture coordinates), and the window's border sectors close the remaining crack with outer stitching
+	 * fans. Without it the edge of the streamed window is 2048 m away at best — a picture on any terrain
+	 * wider than the window.
 	 * @note The sub-grid window slides as the camera travels (TerrainResource::updateVisibility()):
 	 * a worker thread generates the new vertex data and stages it (updateData()), the RENDER thread
 	 * publishes it (updateVideoMemory(), reached through Renderer::requestGeometryVideoMemoryUpdate())
@@ -321,7 +355,7 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				size_t bytes = m_localData.pointCount() * sizeof(float);
+				size_t bytes = (m_localData.pointCount() + m_farGrid.pointCount()) * sizeof(float) + m_farVertexAttributes.size() * sizeof(float);
 
 				if ( m_vertexBufferObject != nullptr )
 				{
@@ -376,6 +410,53 @@ namespace EmEn::Graphics::Geometry
 			 * @return bool
 			 */
 			bool load (const Base::VertexFactory::Grid< float > & grid, uint32_t sectorCountPerAxis = 8) noexcept;
+
+			/**
+			 * @brief Sets the far mesh: the whole terrain at a coarse step, drawn around the window.
+			 * @note Must be called before load(). The far grid is validated against the window there: its cell
+			 * must be a power-of-two multiple of the window's cell that divides the window's sector edge, so
+			 * that its edge vertices coincide with the window's at that step. Built from
+			 * Grid::coarsened() of the FULL grid — point samples, never an average.
+			 * @param farGrid The coarse grid of the whole terrain.
+			 * @param farSectorCountPerAxis How many sectors per axis the far mesh is cut in (its divisions must be a multiple).
+			 * @param depthOffset How far BELOW the terrain the far mesh sits, in metres (owner decision: the fine
+			 * surface wins near the camera; a skirt closes the resulting step at the window's edge). 0 = none.
+			 * @return bool
+			 */
+			bool setFarGrid (const Base::VertexFactory::Grid< float > & farGrid, uint32_t farSectorCountPerAxis, float depthOffset) noexcept;
+
+			/**
+			 * @brief Returns whether a far mesh surrounds the window.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasFarGrid () const noexcept
+			{
+				return m_farStep > 0;
+			}
+
+			/**
+			 * @brief Returns how many window cells make one far mesh cell (0 without a far mesh).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			farStep () const noexcept
+			{
+				return m_farStep;
+			}
+
+			/**
+			 * @brief Returns the far mesh sectors.
+			 * @return const std::vector< FarSectorData > &
+			 */
+			[[nodiscard]]
+			const std::vector< FarSectorData > &
+			farSectorsData () const noexcept
+			{
+				return m_farSectorsData;
+			}
 
 			/**
 			 * @brief Returns the number of sectors per axis.
@@ -639,7 +720,31 @@ namespace EmEn::Graphics::Geometry
 			 * @param destination Where the vertex's elements go.
 			 * @return void
 			 */
-			void writeVertex (const Base::VertexFactory::Grid< float > & grid, uint32_t pointIndex, float * destination) const noexcept;
+			void writeVertex (const Base::VertexFactory::Grid< float > & grid, uint32_t pointIndex, float * destination, float heightShift = 0.0F) const noexcept;
+
+			/**
+			 * @brief Generates the SKIRT vertices of a window: its four edges at the far step, lowered by the far mesh's depth offset.
+			 * @note Layout: North edge (y = 0), South (y = last), West (x = 0), East (x = last), each `cells / farStep + 1`
+			 * vertices in increasing order along the edge — skirtVertexIndex() addresses them. Empty without a far mesh.
+			 * @param grid The window grid.
+			 * @param vertexElementCount The number of elements which compose one vertex.
+			 * @return std::vector< float >
+			 */
+			[[nodiscard]]
+			std::vector< float > generateSkirtAttributes (const Base::VertexFactory::Grid< float > & grid, uint32_t vertexElementCount) const noexcept;
+
+			/**
+			 * @brief Returns the VBO index of a skirt vertex.
+			 * @param edge The window edge.
+			 * @param along The position along the edge, in far steps (0 to cells / farStep).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			skirtVertexIndex (SectorEdge edge, uint32_t along) const noexcept
+			{
+				return m_skirtVertexOffset + (static_cast< uint32_t >(edge) * m_skirtVerticesPerEdge) + along;
+			}
 
 			/**
 			 * @brief Generates the vertex attributes of a whole grid, one vertex per point in point order.
@@ -662,6 +767,16 @@ namespace EmEn::Graphics::Geometry
 			uint32_t m_sectorCountPerAxis{4};
 			uint32_t m_lodLevelCount{0};
 			std::vector< SectorLODData > m_sectorsData;
+			/* The far mesh: the whole terrain at a coarse step, static, appended after the window's vertices. */
+			Base::VertexFactory::Grid< float > m_farGrid;
+			std::vector< FarSectorData > m_farSectorsData;
+			std::vector< float > m_farVertexAttributes; ///< Generated once at load, copied into every staged window (the far mesh never moves).
+			uint32_t m_farSectorCountPerAxis{0};
+			uint32_t m_farStep{0}; ///< Window cells per far cell; 0 = no far mesh.
+			uint32_t m_skirtVertexOffset{0}; ///< First skirt vertex in the VBO (= the window's point count).
+			uint32_t m_skirtVerticesPerEdge{0}; ///< cells / farStep + 1.
+			uint32_t m_farVertexOffset{0}; ///< First far vertex in the VBO (after the skirt).
+			float m_farDepthOffset{0.0F}; ///< How far below the terrain the far mesh sits, in metres.
 			/* VBO generation options. */
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
 			Base::PixelFactory::Color< float > m_globalVertexColor;
@@ -681,6 +796,7 @@ namespace EmEn::Graphics::Geometry
 			bool m_hasPendingUpdate{false};
 			/* The selection of the current pass (render thread only, rebuilt by prepareAdaptiveRendering()). */
 			mutable std::vector< Base::Math::Space3D::AACuboid< float > > m_cachedWorldBounds;
+			mutable std::vector< Base::Math::Space3D::AACuboid< float > > m_cachedFarWorldBounds;
 			mutable std::vector< uint32_t > m_cachedSectorLODs;
 			mutable std::vector< uint8_t > m_cachedSectorVisibility;
 			mutable std::vector< std::array< uint32_t, 2 > > m_cachedDrawCalls;

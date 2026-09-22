@@ -69,6 +69,62 @@ namespace EmEn::Graphics::Renderable
 		return this->addDependency(m_material);
 	}
 
+	bool
+	TerrainResource::createGeometryFromLocalData () noexcept
+	{
+		const auto cellCount = this->visibleCellCount();
+		const auto divisions = m_localData.squaredQuadCount();
+		const auto fineCell = m_localData.quadSize();
+
+		m_windowSnapCells = 0;
+
+		/* The far mesh, when the numbers allow it. Every constraint here is what lets the far mesh MEET
+		 * the window: same source points at the shared vertices, and a hole that is a whole number of far
+		 * sectors. A window already covering the grid needs none. */
+		if ( m_farCellSize > 0.0F && fineCell > 0.0F && cellCount < divisions )
+		{
+			const auto farStep = static_cast< uint32_t >(std::lround(m_farCellSize / fineCell));
+			const auto farCell = fineCell * static_cast< float >(farStep);
+			const auto farSectorCells = farStep > 0 ? static_cast< uint32_t >(std::lround(m_farSectorSize / farCell)) : 0U;
+			const auto snapCells = farSectorCells * farStep;
+
+			if ( farStep == 0 || !isPowerOfTwo(farStep) || divisions % farStep != 0 )
+			{
+				TraceInfo{ClassId} << "Terrain '" << this->name() << "': no far mesh, its cell (" << m_farCellSize << " m) is not a power-of-two multiple of the grid's (" << fineCell << " m) dividing " << divisions << " cells.";
+			}
+			else if ( farSectorCells == 0 || (divisions / farStep) % farSectorCells != 0 || cellCount % snapCells != 0 )
+			{
+				TraceInfo{ClassId} << "Terrain '" << this->name() << "': no far mesh, its sector (" << m_farSectorSize << " m) must cut both the far grid (" << (divisions / farStep) << " cells) and the window (" << cellCount << " cells) evenly.";
+			}
+			else
+			{
+				const auto farGrid = m_localData.coarsened(farStep);
+
+				if ( farGrid.isValid() && m_geometry->setFarGrid(farGrid, (divisions / farStep) / farSectorCells, m_farDepthOffset) )
+				{
+					m_windowSnapCells = snapCells;
+
+					TraceInfo{ClassId} <<
+						"Terrain '" << this->name() << "': far mesh of " << farGrid.pointCount() << " points at " << farCell << " m, " <<
+						((divisions / farStep) / farSectorCells) << "x" << ((divisions / farStep) / farSectorCells) << " sectors of " << (farCell * static_cast< float >(farSectorCells)) <<
+						" m, " << m_farDepthOffset << " m below the terrain; the window snaps to " << snapCells << " cells.";
+				}
+			}
+		}
+
+		/* The first window, centred on the origin — snapped to the far sector when there is one. */
+		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, cellCount, m_windowSnapCells);
+
+		if ( !m_geometry->load(m_localData.subGrid(m_windowCenter, cellCount, m_windowSnapCells)) )
+		{
+			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+
+			return false;
+		}
+
+		return true;
+	}
+
 	uint32_t
 	TerrainResource::visibleCellCount () const noexcept
 	{
@@ -110,7 +166,7 @@ namespace EmEn::Graphics::Renderable
 		 * window for every metre the camera drifted along the border — four 896 MiB uploads in eight
 		 * seconds, measured 2026-09-22. The distance between the two centres is the honest test. */
 		const auto cellCount = this->visibleCellCount();
-		const auto wantedCenter = m_localData.subGridCenter({worldPosition[X], worldPosition[Z]}, cellCount);
+		const auto wantedCenter = m_localData.subGridCenter({worldPosition[X], worldPosition[Z]}, cellCount, m_windowSnapCells);
 
 		if ( Vector< 2, float >::distance(wantedCenter, m_windowCenter) <= halfWindow - margin )
 		{
@@ -136,8 +192,8 @@ namespace EmEn::Graphics::Renderable
 		 * and STAGES it; the render thread publishes it (AdaptiveVertexGridResource::updateVideoMemory()). */
 		const auto threadPool = this->serviceProvider().primaryServices().threadPool();
 
-		const auto enqueued = threadPool != nullptr && threadPool->enqueue([self = std::static_pointer_cast< TerrainResource >(this->shared_from_this()), geometry = m_geometry, wantedCenter, cellCount] () {
-			if ( !geometry->updateData(self->m_localData.subGrid(wantedCenter, cellCount)) )
+		const auto enqueued = threadPool != nullptr && threadPool->enqueue([self = std::static_pointer_cast< TerrainResource >(this->shared_from_this()), geometry = m_geometry, wantedCenter, cellCount, snapCells = m_windowSnapCells] () {
+			if ( !geometry->updateData(self->m_localData.subGrid(wantedCenter, cellCount, snapCells)) )
 			{
 				TraceError{ClassId} << "Unable to stage the new terrain window of '" << geometry->name() << "' !";
 			}
@@ -168,14 +224,8 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
-
-		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
-
-		if ( !m_geometry->load(subGrid) )
+		if ( !this->createGeometryFromLocalData() )
 		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
 			m_localData.clear();
 
 			return this->setLoadSuccess(false);
@@ -249,6 +299,7 @@ namespace EmEn::Graphics::Renderable
 		const auto gridDivision = FastJSON::getValue< uint32_t >(data, JKGridDivision).value_or(DefaultGridDivision);
 		m_visibleSize = FastJSON::getValue< float >(data, JKGridVisibleSize).value_or(DefaultVisibleSize);
 		this->setSlideMargin(FastJSON::getValue< float >(data, JKGridSlideMargin).value_or(DefaultSlideMargin));
+		this->setFarMesh(FastJSON::getValue< float >(data, JKGridFarCellSize).value_or(DefaultFarCellSize), FastJSON::getValue< float >(data, JKGridFarSectorSize).value_or(DefaultFarSectorSize), FastJSON::getValue< float >(data, JKGridFarDepthOffset).value_or(DefaultFarDepthOffset));
 
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
@@ -385,14 +436,8 @@ namespace EmEn::Graphics::Renderable
 		//	m_geometry->enableVertexColor(vertexColorMap);
 
 		/* Create the initial adaptive geometry (visible part). */
-		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
-
-		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
-
-		if ( !m_geometry->load(subGrid) )
+		if ( !this->createGeometryFromLocalData() )
 		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
 			m_localData.clear();
 
 			return this->setLoadSuccess(false);
@@ -420,14 +465,8 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
-
-		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
-
-		if ( !m_geometry->load(subGrid) )
+		if ( !this->createGeometryFromLocalData() )
 		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
 			m_localData.clear();
 
 			return this->setLoadSuccess(false);
@@ -482,14 +521,8 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
-
-		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
-
-		if ( !m_geometry->load(subGrid) )
+		if ( !this->createGeometryFromLocalData() )
 		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
 			m_localData.clear();
 
 			return this->setLoadSuccess(false);
@@ -539,14 +572,8 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Create the initial adaptive geometry (visible part). */
-		m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
-
-		const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
-
-		if ( !m_geometry->load(subGrid) )
+		if ( !this->createGeometryFromLocalData() )
 		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
 			m_localData.clear();
 
 			return this->setLoadSuccess(false);

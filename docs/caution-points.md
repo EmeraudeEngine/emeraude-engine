@@ -480,6 +480,47 @@ drifted along the border changed it by one cell and regenerated the whole window
 uploads in eight seconds**, measured. Since the fix a border drift of 300 m produced none and a 950 m
 one produced one.
 
+### Added: a FAR MESH around the streamed terrain window, so its edge is never a picture (2026-09-22, evening)
+
+Owner decisions, in order: the far mesh lives INSIDE `AdaptiveVertexGridResource` (same VBO, same IBO,
+same selection, same shadow pass), at **32 m cells in 1024 m sectors** (16 × 16 over `terrain`,
+263 169 vertices, ~15 MB), with the window's centre **snapped to the far sector** so the hole the
+window leaves is a whole number of far sectors — no overlap, no gap; the seam is closed by **exact
+stitching fans** on the window side; the far mesh sits **0.5 m below the terrain** (`GridFarDepthOffset`,
+"important near the camera, lost in the pixels far away") with a **skirt** hanging from the window's
+edges down to it; and the fine window is drawn FIRST, the far mesh after (early-Z rejects what it hides).
+`TerrainResource::createGeometryFromLocalData()` is the single site: `Grid::coarsened(step)` (point
+samples, never an average — the shared vertices must share a height), `setFarGrid()`, then the window
+snapped through `Grid::subGridCenter(pos, cells, snapCells)`. A grid the numbers do not fit (a cell that
+is not a power-of-two multiple, a sector that does not divide) gets no far mesh and says why.
+
+**The seam, in three layers, all from window-side vertices except the last**: (1) the window's border
+sectors at level k and the far mesh at step 32 share their edge vertices at every multiple of 32 m —
+same source grid, same texture coordinates (`Grid` sub-grids now carry a UV OFFSET so a window's UVs
+are its parent's: without it the texture jumped by `startX × U / N` at every slide, invisible on
+`terrain` only because that was a whole number of tiles); (2) `outerStitching[k][edge]`, a fan per
+32 m segment between the coarser of the two steps and the finer, generalising the one-step edge
+stitching; (3) `farSkirt[edge]`, a wall of quads from the 32 m edge vertices to their copies lowered by
+the depth offset (the skirt vertices, appended after the window's points), whose bottom edge IS the
+lowered far edge. The skirt is emitted with BOTH windings: the rasterisation default is back-face
+culling and a wall is seen from either side.
+
+⚠️⚠️ **Found while testing: `Grid::subGrid()` built its bounding box CENTRED ON ZERO**, ignoring the
+window's world offset, so the hole test (far sectors whose centre lies inside the window's box) kept the
+hole at the ORIGIN after every slide: a real hole in the terrain where the window used to be, and the far
+mesh drawn UNDER the window where it now was — z-fighting and dark 32 m caps on every peak (owner: "on
+voit des trous"). The box now carries the offset (`test_VertexFactoryGrid.cpp`). The offset the owner
+then asked for is a second line of defence, not the fix: with the box right the two surfaces never
+overlap.
+
+**Measured** (`terrain`, noon, 2026-09-22): boot 7 s (unchanged), `ScenePass` 1.4-2.0 ms with the far
+mesh in view, the application at **2791 MiB** of VRAM per `nvidia-smi --query-compute-apps` (the
+total's swing of +675 MiB that day was Chrome, Discord and the Claude desktop, not the terrain — read the
+PROCESS's number, never the card's), 0 VUID, slides still 170 ms. From 2.5 km straight above, the seam
+reads as a thin dark contour along the 4096 m square — the 0.5 m step and its skirt. `--demo-options
+100000,25,1` draws the terrain in WIREFRAME (option 2), which shows the levels and the far lattice but
+cannot show a crack (everything is see-through): judge seams in solid mode.
+
 ### Fixed: the shadow pass drew an adaptive terrain WHOLE — every level of every sector stacked (2026-09-22)
 
 `RenderableInstance::Abstract::castShadows()` ended in `commandBuffer.draw(*geometry, instanceCount)`,

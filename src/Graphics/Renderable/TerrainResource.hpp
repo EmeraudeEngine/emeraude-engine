@@ -78,6 +78,24 @@ namespace EmEn::Graphics::Renderable
 			 * closing in. With 1500 m on a 4096 m window the slide fires after 548 m of travel.
 			 */
 			static constexpr auto DefaultSlideMargin{1500.0F};
+			/**
+			 * @brief Cell of the FAR MESH, in metres (owner decision, 2026-09-22): the whole terrain at this step
+			 * surrounds the streamed window, so its edge is never a picture. 0 disables it.
+			 * @note Rounded to a power-of-two multiple of the grid's cell; must divide the window's sector edge.
+			 */
+			static constexpr auto DefaultFarCellSize{32.0F};
+			/**
+			 * @brief Sector of the far mesh, in metres. The window's centre snaps to this, so the hole the window
+			 * leaves in the far mesh is a whole number of far sectors — no overlap, no gap, no coarse surface
+			 * under the fine one to shadow or fight it.
+			 */
+			static constexpr auto DefaultFarSectorSize{1024.0F};
+			/**
+			 * @brief How far BELOW the terrain the far mesh sits, in metres (owner decision, 2026-09-22): the
+			 * fine surface must win any depth contest near the camera; far away the offset is lost in the
+			 * pixels. A skirt hangs from the window's edge down to the far mesh so the step is never open.
+			 */
+			static constexpr auto DefaultFarDepthOffset{0.5F};
 			static constexpr auto DefaultGridDivision{5000U}; /* NOTE: Cell wil be 1 meter. */
 			static constexpr auto DefaultUVMultiplier{5000.0F};
 
@@ -271,6 +289,21 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
+			 * @brief Sets the far mesh around the streamed window, before loading.
+			 * @param cellSize Its cell, in metres (0 = no far mesh). Rounded to a power-of-two multiple of the grid's cell.
+			 * @param sectorSize Its sector, in metres; the window's centre snaps to it.
+			 * @param depthOffset How far below the terrain it sits, in metres (0 = flush; a skirt closes the step otherwise).
+			 * @return void
+			 */
+			void
+			setFarMesh (float cellSize, float sectorSize, float depthOffset = DefaultFarDepthOffset) noexcept
+			{
+				m_farCellSize = std::max(0.0F, cellSize);
+				m_farSectorSize = std::max(0.0F, sectorSize);
+				m_farDepthOffset = std::max(0.0F, depthOffset);
+			}
+
+			/**
 			 * @brief Loads a parametric terrain with a material.
 			 * @param gridSize The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
 			 * @param gridDivision How many cells in one dimension.
@@ -315,14 +348,8 @@ namespace EmEn::Graphics::Renderable
 				m_localData.applyDisplacementMapping(displacementMap, displacementFactor);
 
 				/* 3. Create adaptive geometry from local data. */
-				m_windowCenter = m_localData.subGridCenter({0.0F, 0.0F}, this->visibleCellCount());
-
-				const auto subGrid = m_localData.subGrid(m_windowCenter, this->visibleCellCount());
-
-				if ( !m_geometry->load(subGrid) )
+				if ( !this->createGeometryFromLocalData() )
 				{
-					Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
 					m_localData.clear();
 
 					return this->setLoadSuccess(false);
@@ -393,6 +420,17 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			uint32_t visibleCellCount () const noexcept;
 
+			/**
+			 * @brief Builds the geometry from the full grid: the far mesh if the numbers allow it, then the
+			 * first window, centred on the origin and snapped to the far sector.
+			 * @note THE single site every load path ends in. The far mesh is skipped, with the reason traced,
+			 * when the grid cannot be cut to it (a cell that is not a power-of-two multiple, a division count
+			 * the sectors do not divide) or when the window already covers the whole grid.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createGeometryFromLocalData () noexcept;
+
 			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
 			Base::VertexFactory::Grid< float > m_localData;
@@ -400,6 +438,10 @@ namespace EmEn::Graphics::Renderable
 			RasterizationOptions m_rasterizationOptions;
 			float m_visibleSize{DefaultVisibleSize}; ///< Side of the streamed window, in metres.
 			float m_slideMargin{DefaultSlideMargin}; ///< Terrain kept ahead of the camera before the window slides, in metres.
+			float m_farCellSize{DefaultFarCellSize}; ///< Cell of the far mesh, in metres (0 = none).
+			float m_farSectorSize{DefaultFarSectorSize}; ///< Sector of the far mesh, in metres; the window's centre snaps to it.
+			float m_farDepthOffset{DefaultFarDepthOffset}; ///< How far below the terrain the far mesh sits, in metres.
+			uint32_t m_windowSnapCells{0}; ///< The window's centre snaps to this many grid cells (the far sector); 0 = any cell.
 	};
 }
 

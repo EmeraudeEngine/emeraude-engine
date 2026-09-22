@@ -4396,6 +4396,17 @@ another thread; nothing heavier than a distance test runs on the logic tick. `m_
 and `visibleCellCount()` converts it against the grid's own cell size (the two coincided only on 1 m
 grids). Details and measurements: [`docs/caution-points.md`](../../docs/caution-points.md) § Ray Tracing.
 
+**The far mesh** (`setFarGrid()`, owner decisions 2026-09-22): the whole terrain at a coarse step
+(`Grid::coarsened()`, 32 m on `terrain`) in its own sectors (1024 m), appended to the same VBO and IBO
+after the window's points and a ring of SKIRT vertices, drawn AFTER the window by the same selection —
+culled by the pass's frustum and by the hole the window occupies (far sectors whose centre lies inside
+the window's box, exact because `TerrainResource` snaps the window's centre to the far sector). It sits
+`depthOffset` below the terrain (0.5 m, `GridFarDepthOffset`); the window's border sectors close the seam
+with `outerStitching[lod][edge]` fans (window vertices only) and a `farSkirt[edge]` wall down to the
+lowered far edge. Per-sector Y bounds, frustum culling and the shadow pass apply to it like to the window.
+⚠️ The hole test reads `m_localData.boundingBox()`: a sub-grid's box carries the window's world offset
+since 2026-09-22 — centred on zero it kept the hole at the origin (`docs/caution-points.md`).
+
 ⚠️ **Known residual — the reason a heightmap-texture terrain (CDLOD) is scheduled**: one normal per grid
 point, computed at 1 m, read by every level; at 64-128 m quads the coarse levels shade with
 point-sampled fine normals and distant ridges show dark streaks. The coarse level needs the average

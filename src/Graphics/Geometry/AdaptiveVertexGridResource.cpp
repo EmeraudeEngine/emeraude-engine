@@ -31,6 +31,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <utility>
 
 /* Local inclusions. */
@@ -61,10 +62,26 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* === STEP 1: Create VBO with all vertices === */
+		/* === STEP 1: Create VBO with all vertices: the window's, then the far mesh's === */
 		const auto totalPoints = m_localData.pointCount();
 
 		vertexAttributes = this->generateVertexAttributes(m_localData, vertexElementCount);
+
+		if ( this->hasFarGrid() )
+		{
+			/* Layout: [window points][skirt: the window's edges at the far step, lowered][far mesh]. */
+			m_skirtVertexOffset = totalPoints;
+			m_skirtVerticesPerEdge = (m_localData.squaredQuadCount() / m_farStep) + 1;
+
+			const auto skirtAttributes = this->generateSkirtAttributes(m_localData, vertexElementCount);
+
+			vertexAttributes.insert(vertexAttributes.end(), skirtAttributes.begin(), skirtAttributes.end());
+
+			m_farVertexOffset = totalPoints + (4U * m_skirtVerticesPerEdge);
+			m_farVertexAttributes = this->generateVertexAttributes(m_farGrid, vertexElementCount);
+
+			vertexAttributes.insert(vertexAttributes.end(), m_farVertexAttributes.begin(), m_farVertexAttributes.end());
+		}
 
 		/* === STEP 2: Prepare sector data === */
 		const auto gridQuadCount = m_localData.squaredQuadCount();
@@ -244,7 +261,190 @@ namespace EmEn::Graphics::Geometry
 					}
 				}
 
+				/* === Outer stitching toward the far mesh, for the window's border sectors === */
+				if ( this->hasFarGrid() )
+				{
+					const auto emitFan = [this, &indices] (SectorDrawCall & drawCall, uint32_t lodLevel, uint32_t edgeStart, uint32_t edgeEnd, uint32_t fixedCoordinate, bool alongX, bool flipWinding) {
+						const auto step = 1U << lodLevel;
+
+						drawCall.indexOffset = static_cast< uint32_t >(indices.size());
+
+						/* The steps match: the far mesh's edge vertices ARE this level's, nothing to close. */
+						if ( step == m_farStep )
+						{
+							drawCall.indexCount = 0;
+
+							return;
+						}
+
+						const auto coarse = std::max(step, m_farStep);
+						const auto fine = std::min(step, m_farStep);
+
+						const auto vertexAt = [this, fixedCoordinate, alongX] (uint32_t along) {
+							return alongX ? m_localData.index(along, fixedCoordinate) : m_localData.index(fixedCoordinate, along);
+						};
+
+						/* One fan per coarse segment: from its first vertex over every fine vertex between the
+						 * two coarse ones. Each triangle closes the vertical sliver between the coarse edge
+						 * (a straight segment) and the fine edge (the real heights). */
+						for ( auto coarseStart = edgeStart; coarseStart < edgeEnd; coarseStart += coarse )
+						{
+							const auto coarseEnd = std::min(coarseStart + coarse, edgeEnd);
+							const auto apex = vertexAt(coarseStart);
+
+							for ( auto fineStart = coarseStart + fine; fineStart < coarseEnd; fineStart += fine )
+							{
+								const auto fineEnd = std::min(fineStart + fine, coarseEnd);
+
+								indices.emplace_back(apex);
+
+								if ( flipWinding )
+								{
+									indices.emplace_back(vertexAt(fineEnd));
+									indices.emplace_back(vertexAt(fineStart));
+								}
+								else
+								{
+									indices.emplace_back(vertexAt(fineStart));
+									indices.emplace_back(vertexAt(fineEnd));
+								}
+
+								indices.emplace_back(std::numeric_limits< uint32_t >::max());
+							}
+						}
+
+						drawCall.indexCount = static_cast< uint32_t >(indices.size()) - drawCall.indexOffset;
+					};
+
+					for ( uint32_t lodLevel = startLOD; lodLevel < endLOD; ++lodLevel )
+					{
+						/* The winding follows the edge stitching above when the WINDOW is the finer side
+						 * (North and East: apex, fine, next; South and West: apex, next, fine); when the far
+						 * mesh is the finer side the roles swap, and so does the winding. */
+						const bool farIsFiner = (1U << lodLevel) > m_farStep;
+
+						if ( sectorY == 0 )
+						{
+							emitFan(sectorData.outerStitching[lodLevel][static_cast< size_t >(SectorEdge::North)], lodLevel, sectorQuadStartX, sectorQuadEndX, sectorQuadStartY, true, farIsFiner);
+						}
+
+						if ( sectorY == m_sectorCountPerAxis - 1 )
+						{
+							emitFan(sectorData.outerStitching[lodLevel][static_cast< size_t >(SectorEdge::South)], lodLevel, sectorQuadStartX, sectorQuadEndX, sectorQuadEndY, true, !farIsFiner);
+						}
+
+						if ( sectorX == 0 )
+						{
+							emitFan(sectorData.outerStitching[lodLevel][static_cast< size_t >(SectorEdge::West)], lodLevel, sectorQuadStartY, sectorQuadEndY, sectorQuadStartX, false, !farIsFiner);
+						}
+
+						if ( sectorX == m_sectorCountPerAxis - 1 )
+						{
+							emitFan(sectorData.outerStitching[lodLevel][static_cast< size_t >(SectorEdge::East)], lodLevel, sectorQuadStartY, sectorQuadEndY, sectorQuadEndX, false, farIsFiner);
+						}
+					}
+
+					/* === The skirt: a wall from the edge (at the far step) down to the far mesh's lowered edge === */
+					const auto emitSkirt = [this, &indices] (SectorDrawCall & drawCall, SectorEdge edge, uint32_t edgeStart, uint32_t edgeEnd, uint32_t fixedCoordinate, bool alongX) {
+						drawCall.indexOffset = static_cast< uint32_t >(indices.size());
+
+						if ( m_farDepthOffset <= 0.0F )
+						{
+							drawCall.indexCount = 0;
+
+							return;
+						}
+
+						for ( auto along = edgeStart; along < edgeEnd; along += m_farStep )
+						{
+							const auto next = std::min(along + m_farStep, edgeEnd);
+							const auto topA = alongX ? m_localData.index(along, fixedCoordinate) : m_localData.index(fixedCoordinate, along);
+							const auto topB = alongX ? m_localData.index(next, fixedCoordinate) : m_localData.index(fixedCoordinate, next);
+							const auto bottomA = this->skirtVertexIndex(edge, along / m_farStep);
+							const auto bottomB = this->skirtVertexIndex(edge, next / m_farStep);
+
+							/* A vertical wall is seen from either side depending on where the camera stands:
+							 * both windings, a few hundred triangles per window. */
+							for ( const bool flip : {false, true} )
+							{
+								indices.emplace_back(topA);
+								indices.emplace_back(flip ? topB : bottomA);
+								indices.emplace_back(flip ? bottomA : topB);
+								indices.emplace_back(std::numeric_limits< uint32_t >::max());
+
+								indices.emplace_back(topB);
+								indices.emplace_back(flip ? bottomB : bottomA);
+								indices.emplace_back(flip ? bottomA : bottomB);
+								indices.emplace_back(std::numeric_limits< uint32_t >::max());
+							}
+						}
+
+						drawCall.indexCount = static_cast< uint32_t >(indices.size()) - drawCall.indexOffset;
+					};
+
+					if ( sectorY == 0 )
+					{
+						emitSkirt(sectorData.farSkirt[static_cast< size_t >(SectorEdge::North)], SectorEdge::North, sectorQuadStartX, sectorQuadEndX, sectorQuadStartY, true);
+					}
+
+					if ( sectorY == m_sectorCountPerAxis - 1 )
+					{
+						emitSkirt(sectorData.farSkirt[static_cast< size_t >(SectorEdge::South)], SectorEdge::South, sectorQuadStartX, sectorQuadEndX, sectorQuadEndY, true);
+					}
+
+					if ( sectorX == 0 )
+					{
+						emitSkirt(sectorData.farSkirt[static_cast< size_t >(SectorEdge::West)], SectorEdge::West, sectorQuadStartY, sectorQuadEndY, sectorQuadStartX, false);
+					}
+
+					if ( sectorX == m_sectorCountPerAxis - 1 )
+					{
+						emitSkirt(sectorData.farSkirt[static_cast< size_t >(SectorEdge::East)], SectorEdge::East, sectorQuadStartY, sectorQuadEndY, sectorQuadEndX, false);
+					}
+				}
+
 				m_sectorsData.emplace_back(std::move(sectorData));
+			}
+		}
+
+		/* === STEP 4: The far mesh's sectors, one strip range each, at its single step === */
+		m_farSectorsData.clear();
+
+		if ( this->hasFarGrid() )
+		{
+			const auto farQuadCount = m_farGrid.squaredQuadCount();
+			const auto farQuadsPerSector = farQuadCount / m_farSectorCountPerAxis;
+
+			m_farSectorsData.reserve(static_cast< size_t >(m_farSectorCountPerAxis) * m_farSectorCountPerAxis);
+
+			for ( uint32_t sectorY = 0; sectorY < m_farSectorCountPerAxis; ++sectorY )
+			{
+				for ( uint32_t sectorX = 0; sectorX < m_farSectorCountPerAxis; ++sectorX )
+				{
+					const auto startX = sectorX * farQuadsPerSector;
+					const auto startY = sectorY * farQuadsPerSector;
+					const auto endX = startX + farQuadsPerSector;
+					const auto endY = startY + farQuadsPerSector;
+
+					FarSectorData farSector;
+					farSector.bounds = computeSectorBounds(m_farGrid, startX, startY, endX, endY);
+					farSector.drawCall.indexOffset = static_cast< uint32_t >(indices.size());
+
+					for ( auto pointY = startY; pointY < endY; ++pointY )
+					{
+						for ( auto pointX = startX; pointX <= endX; ++pointX )
+						{
+							indices.emplace_back(m_farVertexOffset + m_farGrid.index(pointX, pointY));
+							indices.emplace_back(m_farVertexOffset + m_farGrid.index(pointX, pointY + 1));
+						}
+
+						indices.emplace_back(std::numeric_limits< uint32_t >::max());
+					}
+
+					farSector.drawCall.indexCount = static_cast< uint32_t >(indices.size()) - farSector.drawCall.indexOffset;
+
+					m_farSectorsData.emplace_back(farSector);
+				}
 			}
 		}
 
@@ -256,7 +456,9 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		TraceInfo{ClassId} <<
-			"Generated GPU buffers: " << totalPoints << " vertices, " << indices.size() << " indices, " <<
+			"Generated GPU buffers: " << totalPoints << " window vertices" <<
+			(this->hasFarGrid() ? " + " + std::to_string(m_farGrid.pointCount()) + " far mesh vertices (step " + std::to_string(m_farStep) + ", " + std::to_string(m_farSectorsData.size()) + " sectors)" : std::string{}) <<
+			", " << indices.size() << " indices, " <<
 			m_sectorsData.size() << " sectors with " << m_lodLevelCount << " LOD levels each.";
 
 		return true;
@@ -365,7 +567,7 @@ namespace EmEn::Graphics::Geometry
 
 		/* Create the VBO. */
 		{
-			m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), m_localData.pointCount(), vertexElementCount, false);
+			m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), m_localData.pointCount() + (4U * m_skirtVerticesPerEdge) + m_farGrid.pointCount(), vertexElementCount, false);
 			m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
 			if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->transferData(transferManager, vertexAttributes) )
@@ -486,6 +688,12 @@ namespace EmEn::Graphics::Geometry
 			this->setFlags(EnablePrimitiveRestart);
 
 			m_localData.clear();
+			m_farGrid.clear();
+			m_farSectorsData.clear();
+			m_farVertexAttributes.clear();
+			m_farStep = 0;
+			m_skirtVerticesPerEdge = 0;
+			m_farDepthOffset = 0.0F;
 			m_vertexColorMap.reset();
 		}
 	}
@@ -646,6 +854,31 @@ namespace EmEn::Graphics::Geometry
 		m_sectorCountPerAxis = sectorCountPerAxis;
 		m_lodLevelCount = lodLevelCount;
 
+		/* The far mesh against the window: its cell must be a power-of-two multiple of the window's that
+		 * divides the sector edge, so its edge vertices coincide with the window's at that step and the
+		 * outer stitching fans can be built from window vertices alone. A far grid that cannot meet the
+		 * window is dropped, with the reason; the window still works alone. */
+		if ( m_farGrid.isValid() )
+		{
+			const auto ratio = m_farGrid.quadSize() / grid.quadSize();
+			const auto farStep = static_cast< uint32_t >(std::lround(ratio));
+
+			if ( farStep < 1 || std::abs(ratio - static_cast< float >(farStep)) > 0.001F || !isPowerOfTwo(farStep) || divisionsPerSector % farStep != 0 || farStep > maxStep * 2 )
+			{
+				TraceError{ClassId} <<
+					"The far mesh of '" << this->name() << "' is dropped: its cell (" << m_farGrid.quadSize() << " m) must be a power-of-two multiple of the window's (" <<
+					grid.quadSize() << " m) dividing the sector edge (" << divisionsPerSector << " cells), at most twice the coarsest level's step (" << maxStep << ").";
+
+				m_farGrid.clear();
+				m_farSectorCountPerAxis = 0;
+				m_farStep = 0;
+			}
+			else
+			{
+				m_farStep = farStep;
+			}
+		}
+
 		TraceDebug{ClassId} <<
 			"Loaded adaptive grid: " << gridDivisions << "x" << gridDivisions << " divisions, " <<
 			m_sectorCountPerAxis << "x" << m_sectorCountPerAxis << " sectors (" << this->sectorCount() << " total), " <<
@@ -655,15 +888,50 @@ namespace EmEn::Graphics::Geometry
 		return this->setLoadSuccess(true);
 	}
 
+	bool
+	AdaptiveVertexGridResource::setFarGrid (const Grid< float > & farGrid, uint32_t farSectorCountPerAxis, float depthOffset) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			Tracer::error(ClassId, "The far mesh must be set before loading the data !");
+
+			return false;
+		}
+
+		if ( !farGrid.isValid() || farSectorCountPerAxis == 0 || farGrid.squaredQuadCount() % farSectorCountPerAxis != 0 )
+		{
+			TraceError{ClassId} <<
+				"The far grid of '" << this->name() << "' is invalid or its divisions (" << farGrid.squaredQuadCount() <<
+				") are not a multiple of the sector count (" << farSectorCountPerAxis << ") !";
+
+			return false;
+		}
+
+		m_farGrid = farGrid;
+		m_farSectorCountPerAxis = farSectorCountPerAxis;
+		m_farDepthOffset = std::max(0.0F, depthOffset);
+
+		/* Below the terrain by the offset: its heights, hence its box, its sector boxes and its edge. */
+		if ( m_farDepthOffset > 0.0F )
+		{
+			m_farGrid.shiftHeight(-m_farDepthOffset);
+		}
+
+		/* The step is settled by load(), against the window. */
+		m_farStep = 0;
+
+		return true;
+	}
+
 	void
-	AdaptiveVertexGridResource::writeVertex (const Grid< float > & grid, uint32_t pointIndex, float * destination) const noexcept
+	AdaptiveVertexGridResource::writeVertex (const Grid< float > & grid, uint32_t pointIndex, float * destination, float heightShift) const noexcept
 	{
 		const auto position = grid.position(pointIndex);
 		auto * out = destination;
 
-		/* Vertex position */
+		/* Vertex position (the skirt's copies of an edge vertex are shifted down; their frame stays the edge's). */
 		*out++ = position[X];
-		*out++ = position[Y];
+		*out++ = position[Y] + heightShift;
 		*out++ = position[Z];
 
 		if ( this->isFlagEnabled(EnableTangentSpace) )
@@ -823,6 +1091,56 @@ namespace EmEn::Graphics::Geometry
 		return vertexAttributes;
 	}
 
+	std::vector< float >
+	AdaptiveVertexGridResource::generateSkirtAttributes (const Grid< float > & grid, uint32_t vertexElementCount) const noexcept
+	{
+		std::vector< float > skirtAttributes;
+
+		if ( !this->hasFarGrid() )
+		{
+			return skirtAttributes;
+		}
+
+		const auto cells = grid.squaredQuadCount();
+		const auto perEdge = (cells / m_farStep) + 1;
+
+		skirtAttributes.resize(static_cast< size_t >(4U) * perEdge * vertexElementCount);
+
+		/* North, South, West, East — the order skirtVertexIndex() assumes. */
+		for ( uint32_t edge = 0; edge < 4; ++edge )
+		{
+			for ( uint32_t along = 0; along < perEdge; ++along )
+			{
+				const auto coordinate = std::min(along * m_farStep, cells);
+
+				uint32_t pointIndex = 0;
+
+				switch ( static_cast< SectorEdge >(edge) )
+				{
+					case SectorEdge::North :
+						pointIndex = grid.index(coordinate, 0U);
+						break;
+
+					case SectorEdge::South :
+						pointIndex = grid.index(coordinate, cells);
+						break;
+
+					case SectorEdge::West :
+						pointIndex = grid.index(0U, coordinate);
+						break;
+
+					case SectorEdge::East :
+						pointIndex = grid.index(cells, coordinate);
+						break;
+				}
+
+				this->writeVertex(grid, pointIndex, &skirtAttributes[(static_cast< size_t >(edge) * perEdge + along) * vertexElementCount], -m_farDepthOffset);
+			}
+		}
+
+		return skirtAttributes;
+	}
+
 	bool
 	AdaptiveVertexGridResource::updateData (Grid< float > grid) noexcept
 	{
@@ -859,13 +1177,22 @@ namespace EmEn::Graphics::Geometry
 
 		auto vertexAttributes = this->generateVertexAttributes(grid, vertexElementCount);
 
+		/* The skirt follows the window; the far mesh never moves, its vertices are the ones generated at load. */
+		if ( this->hasFarGrid() )
+		{
+			const auto skirtAttributes = this->generateSkirtAttributes(grid, vertexElementCount);
+
+			vertexAttributes.insert(vertexAttributes.end(), skirtAttributes.begin(), skirtAttributes.end());
+			vertexAttributes.insert(vertexAttributes.end(), m_farVertexAttributes.begin(), m_farVertexAttributes.end());
+		}
+
 		auto & renderer = this->serviceProvider().graphicsRenderer();
 		auto & transferManager = renderer.transferManager();
 
 		const auto generationEnd = std::chrono::steady_clock::now();
 
 		/* Create and fill the new VBO. */
-		auto newVBO = std::make_unique< VertexBufferObject >(transferManager.device(), totalPoints, vertexElementCount, false);
+		auto newVBO = std::make_unique< VertexBufferObject >(transferManager.device(), totalPoints + (4U * m_skirtVerticesPerEdge) + m_farGrid.pointCount(), vertexElementCount, false);
 		newVBO->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
 		if ( !newVBO->createOnHardware() || !newVBO->transferData(transferManager, vertexAttributes) )
@@ -1253,6 +1580,95 @@ namespace EmEn::Graphics::Geometry
 
 		/* 5. The stitching between levels, for the visible sectors. */
 		this->getStitchingDrawCalls(m_cachedSectorLODs, m_cachedSectorVisibility, m_cachedStitchingDrawCalls);
+
+		if ( !this->hasFarGrid() )
+		{
+			return;
+		}
+
+		/* 6. The crack between the window's border and the far mesh: the outward fans of the visible
+		 * border sectors, at their level. */
+		for ( uint32_t index = 0; index < sectorCount; ++index )
+		{
+			if ( m_cachedSectorVisibility[index] == 0 )
+			{
+				continue;
+			}
+
+			for ( const auto & fan : m_sectorsData[index].outerStitching[m_cachedSectorLODs[index]] )
+			{
+				if ( fan.indexCount > 0 )
+				{
+					m_cachedStitchingDrawCalls.push_back({fan.indexOffset, fan.indexCount});
+				}
+			}
+
+			for ( const auto & skirt : m_sectorsData[index].farSkirt )
+			{
+				if ( skirt.indexCount > 0 )
+				{
+					m_cachedStitchingDrawCalls.push_back({skirt.indexOffset, skirt.indexCount});
+				}
+			}
+		}
+
+		/* 7. The far mesh: every sector the pass sees, except those under the window, APPENDED after
+		 * the window's sectors — the fine surface is drawn first, so the early depth test rejects the
+		 * far mesh's fragments behind it instead of shading them (owner rule, 2026-09-22). The hole test
+		 * is done in the geometry's own space (both boxes live there); the window's centre snaps to
+		 * the far sector size, so a far sector is either fully under the window or fully outside. */
+		const auto farSectorCount = static_cast< uint32_t >(m_farSectorsData.size());
+		const auto & windowBox = m_localData.boundingBox();
+
+		m_cachedFarWorldBounds.resize(farSectorCount);
+
+		if ( worldCoordinates == nullptr )
+		{
+			for ( uint32_t index = 0; index < farSectorCount; ++index )
+			{
+				m_cachedFarWorldBounds[index] = m_farSectorsData[index].bounds;
+			}
+		}
+		else
+		{
+			const auto modelMatrix = worldCoordinates->getModelMatrix();
+
+			for ( uint32_t index = 0; index < farSectorCount; ++index )
+			{
+				auto & worldBounds = m_cachedFarWorldBounds[index];
+				worldBounds.reset();
+
+				for ( const auto & corner : m_farSectorsData[index].bounds.points() )
+				{
+					worldBounds.merge(modelMatrix * Vector< 4, float >{corner, 1.0F});
+				}
+			}
+		}
+
+		for ( uint32_t index = 0; index < farSectorCount; ++index )
+		{
+			const auto & farSector = m_farSectorsData[index];
+			const auto centre = farSector.bounds.centroid();
+
+			const bool underTheWindow =
+				centre[X] > windowBox.minimum(X) && centre[X] < windowBox.maximum(X) &&
+				centre[Z] > windowBox.minimum(Z) && centre[Z] < windowBox.maximum(Z);
+
+			if ( underTheWindow )
+			{
+				continue;
+			}
+
+			if ( cullingFrustum != nullptr && !cullingFrustum->isSeeing(m_cachedFarWorldBounds[index]) )
+			{
+				continue;
+			}
+
+			if ( farSector.drawCall.indexCount > 0 )
+			{
+				m_cachedDrawCalls.push_back({farSector.drawCall.indexOffset, farSector.drawCall.indexCount});
+			}
+		}
 	}
 
 	uint32_t
