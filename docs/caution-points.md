@@ -386,6 +386,48 @@ if ( materialType == StandardResource::ClassId )
 
 ## Ray Tracing / Acceleration Structures
 
+### Fixed: every ADAPTIVE TERRAIN was absent from the TLAS, and its IBO cannot be converted (Sep 2026)
+
+> [!CRITICAL]
+> **`Geometry::AdaptiveVertexGridResource` — every terrain floor — did not override
+> `generateTriangleListIndicesForRT()`**, so it inherited the base returning `{}`. A TriangleStrip
+> geometry with no conversion gets **no BLAS at all**: the ground was invisible to RTGI, RTAO,
+> RTR and RTContactShadows, which traced straight through it to the sky. The only outward sign was
+> a log line, and it **repeats** — `SceneMetaData` retries the build on every TLAS refresh, so a
+> 2-minute `forest` run printed it **2237 times**:
+> `Geometry 'ForestFloorAdaptiveGrid' uses TriangleStrip but generateTriangleListIndicesForRT() returned empty indices !`
+
+⚠️⚠️ **Its index buffer must NOT be converted wholesale**, unlike `VertexGridResource`'s. It holds,
+per sector, **one strip range per LOD level over the same quads**, plus the edge-stitching ranges:
+converting all of it stacks every LOD of the terrain inside one BLAS, one surface on top of another.
+The override therefore **ignores the IBO and regenerates a single proxy from the grid**. A BLAS has
+no view-dependent LOD selection, so one fixed step is the only coherent content.
+
+⚠️⚠️ **The full-resolution surface is quadratic in the division count and unbounded.** Measured on
+`terrain` (4096 divisions) the 2026-09-22 session: step 1 = **33 554 432 triangles and 7.5 GiB** of
+VRAM, against **5.05 GiB** at the default budget (step 8, 524 288 triangles), idle 1.9 GiB on an
+8 GiB card — 2.5 GiB for the exact surface, on a card that then had ~360 MiB left. Hence
+`Core/Graphics/RayTracing/TerrainBLASMaxTriangles` (default 2 000 000, owner decision 2026-09-22):
+the finest step whose triangle count fits. `forest` (128 divisions, 32 768 triangles) keeps step 1.
+
+**Two measurement traps met while proving the fix**, both of which invalidated a first result:
+- ⚠️⚠️ **The `terrain` demo's sun ROTATES** (`Node::WorldZRotation` + `Animations::ConstantValue`,
+  `Terrain.cpp`). Two runs captured 80 s apart differed by 11.5 % of mean luminance *from the sun
+  alone*, at a pinned exposure — the first A/B "measured" the time of day. A scene whose lighting
+  is animated cannot bench anything across two runs. `forest`'s sun is a `StaticEntity` and its
+  ground crops repeat to **0.014/255** between captures.
+- ⚠️⚠️ **Wind moves foliage, so a FULL-FRAME number is not attributable**: 31.6 % of pixels move by
+  more than 4/255 *within a single run* of `forest`. The control that separates the two is the
+  intra-run pair: on ground-only blocks the wind stays inside ±1.3/255, while putting the terrain
+  in the BLAS darkened the blocks of the **steep slope** by **−7.6 to −9.8/255** — the hillside
+  occluding its own sky, landing on the relief rather than everywhere, which is what says the proxy
+  is geometrically aligned and not merely present.
+
+⚠️ The BLAS is **not refreshed when the sub-grid slides** (`updateData()` swaps the VBO):
+[`docs/todo/adaptive-terrain-blas-goes-stale-on-subgrid-slide.md`](todo/adaptive-terrain-blas-goes-stale-on-subgrid-slide.md).
+
+**Files**: `src/Graphics/Geometry/AdaptiveVertexGridResource.{hpp,cpp}`, `src/SettingKeys.hpp`.
+
 ### Fixed: TLAS Instance Transform Must Include Renderable Scale (Apr 2026)
 
 > [!CRITICAL]

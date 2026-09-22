@@ -1747,7 +1747,15 @@ two implementations of one thing). Post-processing was also spread over **six** 
 > still are, gated on **`Device::rayTracingEnabled()` alone** — pure hardware detection, since the
 > RT extensions are requested from `physicalDevice->supportsRayTracing()` without consulting any
 > setting (`Instance.cpp`). The key's only unique job was the builder, which is what moved.
-> `Core/Graphics/RayTracing/` survives for ray tracing that is **not** an effect — `TLASDistance`.
+> `Core/Graphics/RayTracing/` survives for ray tracing that is **not** an effect — `TLASDistance`,
+> `IrradianceProbes/*` and, since 2026-09-22, **`TerrainBLASMaxTriangles`** (default 2 000 000): the
+> triangle budget of the proxy an ADAPTIVE terrain grid is given in the BLAS. That geometry's index
+> buffer holds every LOD of every sector at once, so the proxy is regenerated from the grid at the
+> finest step that fits the budget — read at BLAS build time, i.e. once per geometry.
+> ⚠️⚠️ **It is not a preference, it is a VRAM ceiling**: the full-resolution surface is quadratic in
+> the division count and unbounded. Measured on `terrain` (4096 divisions): step 1 = 33.5 M triangles
+> and **7.5 GiB** of VRAM, against **5.05 GiB** at the default step 8 (524 288 triangles), idle 1.9 GiB
+> on an 8 GiB card. `forest` (128 divisions) is 32 768 triangles and keeps its exact surface.
 >
 > **Two rules the episode leaves behind**, beyond this key:
 > - **`LightingLane` defaults to `"Auto"`**, never to a lane. Any fixed default makes a freshly

@@ -27,10 +27,13 @@
 #include "AdaptiveVertexGridResource.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry
@@ -263,6 +266,86 @@ namespace EmEn::Graphics::Geometry
 			m_sectorsData.size() << " sectors with " << m_lodLevelCount << " LOD levels each.";
 
 		return true;
+	}
+
+	std::vector< uint32_t >
+	AdaptiveVertexGridResource::generateTriangleListIndicesForRT () const noexcept
+	{
+		if ( !m_localData.isValid() )
+		{
+			return {};
+		}
+
+		/* NOTE: The IBO of this geometry CANNOT be converted as a whole. It holds, for every sector,
+		 * one strip range PER LOD LEVEL describing the SAME quads, plus the edge-stitching ranges:
+		 * converting all of it would stack every LOD of the terrain in the BLAS, one surface on top
+		 * of another. A BLAS has no view-dependent LOD selection either, so the right content is one
+		 * fixed proxy of the whole grid, regenerated here at a single step.
+		 * The VBO holds one vertex per grid point, in grid point order (createOnHardware() walks
+		 * [0, pointCount) through addVertexToBuffer()), so a grid index IS a VBO index. */
+		const auto quadCount = m_localData.squaredQuadCount();
+
+		if ( quadCount == 0 )
+		{
+			return {};
+		}
+
+		/* The full-resolution surface is quadratic in the division count and unbounded (a 4096-division
+		 * grid is 33.5 M triangles, MEASURED at +2471 MiB of VRAM), so the step is the finest one whose
+		 * triangle count fits the budget. A small grid keeps its exact surface. */
+		auto & settings = this->serviceProvider().primaryServices().settings();
+		const auto triangleBudget = std::max(2U, settings.getOrSetDefault< uint32_t >(GraphicsRayTracingTerrainBLASMaxTrianglesKey, DefaultGraphicsRayTracingTerrainBLASMaxTriangles));
+
+		uint32_t step = 1;
+
+		while ( step < quadCount )
+		{
+			const auto cellsPerAxis = (quadCount + step - 1) / step;
+
+			if ( 2U * cellsPerAxis * cellsPerAxis <= triangleBudget )
+			{
+				break;
+			}
+
+			step *= 2;
+		}
+
+		const auto cellsPerAxis = (quadCount + step - 1) / step;
+
+		TraceInfo{ClassId} <<
+			"Generating the RT proxy of '" << this->name() << "': step " << step << " over " << quadCount <<
+			" divisions, " << (2U * cellsPerAxis * cellsPerAxis) << " triangles (budget " << triangleBudget << ").";
+
+		std::vector< uint32_t > triangleList;
+		triangleList.reserve(static_cast< size_t >(cellsPerAxis) * cellsPerAxis * 6);
+
+		for ( uint32_t quadY = 0; quadY < quadCount; quadY += step )
+		{
+			const auto nextY = std::min(quadY + step, quadCount);
+
+			for ( uint32_t quadX = 0; quadX < quadCount; quadX += step )
+			{
+				const auto nextX = std::min(quadX + step, quadCount);
+
+				const auto topLeft = m_localData.index(quadX, quadY);
+				const auto topRight = m_localData.index(nextX, quadY);
+				const auto bottomLeft = m_localData.index(quadX, nextY);
+				const auto bottomRight = m_localData.index(nextX, nextY);
+
+				/* Same winding as the rasterized strip: a row emits top/bottom pairs, so the two
+				 * triangles of a quad come out as (T0, B0, T1) then (B0, B1, T1) once the strip
+				 * alternation is resolved. */
+				triangleList.emplace_back(topLeft);
+				triangleList.emplace_back(bottomLeft);
+				triangleList.emplace_back(topRight);
+
+				triangleList.emplace_back(bottomLeft);
+				triangleList.emplace_back(bottomRight);
+				triangleList.emplace_back(topRight);
+			}
+		}
+
+		return triangleList;
 	}
 
 	bool

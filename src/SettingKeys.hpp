@@ -446,6 +446,18 @@ namespace EmEn
 			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
 			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
 
+			/* Triangle budget for the BLAS of an ADAPTIVE terrain grid (Geometry::AdaptiveVertexGridResource).
+			 * That geometry is a TriangleStrip whose index buffer holds every LOD of every sector at once,
+			 * so its BLAS is regenerated from the grid instead: the finest LOD step whose triangle count
+			 * fits this budget. A BLAS has no view-dependent LOD selection, hence a single fixed proxy.
+			 * The full-resolution surface is quadratic in the division count and unbounded: a 4096-division
+			 * grid is 33.5 M triangles and was MEASURED at +2471 MiB of VRAM (5357 -> 7828 MiB of 8192 on
+			 * the `terrain` demo). At 2 M the same grid drops to LOD step 4 (2.1 M triangles) while a
+			 * 128-division one (the `forest` floor, 32 768 triangles) keeps its exact surface.
+			 * Raising it buys exactness for the RT occlusion of fine relief, and costs VRAM quadratically. */
+			constexpr auto GraphicsRayTracingTerrainBLASMaxTrianglesKey{"Core/Graphics/RayTracing/TerrainBLASMaxTriangles"};
+			constexpr auto DefaultGraphicsRayTracingTerrainBLASMaxTriangles{2000000U};
+
 			/* Ray Tracing > Irradiance probe volume — the engine's RADIANCE CACHE (DDGI, owner decision
 			 * 2026-09-12). Ray tracing that is not an effect: it serves the traced effects (RTR reads it
 			 * at every reflection hit) and lives next to the TLAS. All keys are read ONCE at renderer
