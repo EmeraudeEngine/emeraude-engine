@@ -55,6 +55,30 @@ but no generator builds a LIT, material-driven program from it.
 4. `DisplacedSurfaceResource` + task/mesh code + draw branch + shadow program.
 5. The handover band, the fallback, `relief` option 0 = 2, measurements.
 
+## The concrete design (2026-09-22, implementing steps 3 + 4 together — step 3 alone cannot run)
+
+- **One renderable covers the WHOLE ground**, near and far, in one `drawMeshTasks`: the ground is cut into
+  1 m tiles; one TASK workgroup per tile picks its subdivision from the camera distance and emits its
+  meshlets; one MESH workgroup = one meshlet of at most 8×8 quads (81 vertices, 128 triangles). Far tiles
+  emit a single quad (the ground stays flat there and the material's POM / normal map does the relief),
+  near tiles emit up to 16×16 meshlets (128×128 quads per metre, ~8 mm). No hole, no z-fight with a
+  second ground.
+- **Crack-free by geomorph** — the CDLOD rule already used by the terrain (`Geometry/HeightfieldSurface`):
+  every vertex morphs toward the next coarser lattice over the last part of its level's range, as a
+  function of its own world distance, so two tiles sharing an edge agree on it.
+- **The displacement is the MATERIAL's height map** (same texture, same `heightScale`, same UV transform as
+  the POM — one relief, two techniques): `depth = (1 − h) · heightScale · repeatSize`, scaled by the
+  handover factor. The frame stays the flat ground's (the normal map carries the lighting relief, as in
+  modes 0 and 1).
+- **Handover (owner decision 5)**: geometric depth · (1 − t) + POM depth · t, t = smoothstep(R1, R2, d); the
+  POM gains a fade-IN pair in the material UBO. Beyond R2 the ordinary POM fade-out (8 → 18 m) continues.
+- **Fallback (decision 6)**: without `VK_EXT_mesh_shader` the same renderable draws its flat grid through
+  the vertex path with POM, and says so once.
+- **Program/pipeline without a vertex stage (step 3)**: `Program::perVertexStage()` (the vertex OR mesh
+  stage) answers the `was*Enabled()` queries; no vertex buffer format for a mesh program; empty vertex
+  input; push-constant ranges and descriptor-set layouts (view, material, light, instance transforms) gain
+  `TASK | MESH` where the mesh path reads them.
+
 ## What remains
 
 - [ ] Design the renderable + the generator path (task/mesh/fragment), shadow program included.
