@@ -559,7 +559,11 @@ namespace EmEn::Graphics
 		 * createRenderTarget() (see RenderTarget::Abstract), so the pool must already
 		 * exist when the swap-chain / windowless view is created below. */
 		{
-			// TODO: Sizes management is maybe in the wrong place !
+			/* NOTE: These are the sizes of ONE PAGE of a growable pool (Vulkan::DescriptorPool adds a page when
+			 * one is exhausted), not a ceiling. ⚠️ Every descriptor TYPE the engine allocates from this pool must
+			 * appear here, or no page can ever serve it: the storage image was missing (RTR's cone image, since
+			 * 2026-08-30), NVIDIA tolerated it, the Windows validation layer refused the RTR trace set and the
+			 * AMD iGPU crashed (2026-09-22). The combined image samplers were 64 for 4096 sets. */
 			auto sizes = std::vector< VkDescriptorPoolSize >{
 				/* NOTE: Texture filtering alone. */
 				{
@@ -574,10 +578,13 @@ namespace EmEn::Graphics
 				/* NOTE: Texture associated with a filter (VK_DESCRIPTOR_TYPE_SAMPLER+VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE). */
 				{
 					.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.descriptorCount = 64
+					.descriptorCount = 1024
 				},
-				/* NOTE:  */
-				//{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0},
+				/* NOTE: Image written by a shader (RTR cone image, compute outputs of the effects). */
+				{
+					.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					.descriptorCount = 128
+				},
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 0},
 				/* NOTE:  */

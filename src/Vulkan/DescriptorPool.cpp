@@ -81,6 +81,18 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		{
+			const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+
+			for ( auto * page : m_extraPages )
+			{
+				vkDestroyDescriptorPool(this->device()->handle(), page, VK_NULL_HANDLE);
+			}
+
+			m_extraPages.clear();
+			m_setPages.clear();
+		}
+
 		if ( m_handle != VK_NULL_HANDLE )
 		{
 			vkDestroyDescriptorPool(this->device()->handle(), m_handle, VK_NULL_HANDLE);
@@ -93,6 +105,38 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
+	VkResult
+	DescriptorPool::allocateFromPage (VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayoutHandle, VkDescriptorSet & descriptorSetHandle) const noexcept
+	{
+		VkDescriptorSetAllocateInfo allocateInfo{};
+		allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocateInfo.pNext = nullptr;
+		allocateInfo.descriptorPool = pool;
+		allocateInfo.descriptorSetCount = 1;
+		allocateInfo.pSetLayouts = &descriptorSetLayoutHandle;
+
+		return vkAllocateDescriptorSets(this->device()->handle(), &allocateInfo, &descriptorSetHandle);
+	}
+
+	VkDescriptorPool
+	DescriptorPool::createPage () const noexcept
+	{
+		VkDescriptorPoolCreateInfo createInfo = m_createInfo;
+		createInfo.poolSizeCount = static_cast< uint32_t >(m_descriptorPoolSizes.size());
+		createInfo.pPoolSizes = m_descriptorPoolSizes.data();
+
+		VkDescriptorPool page = VK_NULL_HANDLE;
+
+		if ( const auto result = vkCreateDescriptorPool(this->device()->handle(), &createInfo, VK_NULL_HANDLE, &page); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create a new page for the descriptor pool '" << this->identifier() << "' : " << vkResultToCString(result) << " !";
+
+			return VK_NULL_HANDLE;
+		}
+
+		return page;
+	}
+
 	VkDescriptorSet
 	DescriptorPool::allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) const noexcept
 	{
@@ -100,21 +144,40 @@ namespace EmEn::Vulkan
 		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
 
 		auto * descriptorSetLayoutHandle = descriptorSetLayout.handle();
-
-		VkDescriptorSetAllocateInfo allocateInfo{};
-		allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocateInfo.pNext = nullptr;
-		allocateInfo.descriptorPool = m_handle;
-		allocateInfo.descriptorSetCount = 1;
-		allocateInfo.pSetLayouts = &descriptorSetLayoutHandle;
-
 		VkDescriptorSet descriptorSetHandle = VK_NULL_HANDLE;
 
-		if ( const auto result = vkAllocateDescriptorSets(this->device()->handle(), &allocateInfo, &descriptorSetHandle); result != VK_SUCCESS )
+		/* The current page is the last one created. */
+		auto * page = m_extraPages.empty() ? m_handle : m_extraPages.back();
+
+		auto result = this->allocateFromPage(page, descriptorSetLayoutHandle, descriptorSetHandle);
+
+		/* An exhausted page is not an error: add one of the same sizes and retry once there. */
+		if ( result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL )
+		{
+			page = this->createPage();
+
+			if ( page == VK_NULL_HANDLE )
+			{
+				return VK_NULL_HANDLE;
+			}
+
+			m_extraPages.emplace_back(page);
+
+			TraceInfo{ClassId} << "The descriptor pool '" << this->identifier() << "' was exhausted (" << vkResultToCString(result) << "): page #" << m_extraPages.size() + 1 << " added.";
+
+			result = this->allocateFromPage(page, descriptorSetLayoutHandle, descriptorSetHandle);
+		}
+
+		if ( result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to allocate a descriptor set : " << vkResultToCString(result) << " !";
 
 			return VK_NULL_HANDLE;
+		}
+
+		if ( page != m_handle )
+		{
+			m_setPages.emplace(descriptorSetHandle, page);
 		}
 
 		return descriptorSetHandle;
@@ -126,7 +189,16 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkFreeDescriptorSets() */
 		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
 
-		if ( const auto result = vkFreeDescriptorSets(this->device()->handle(), m_handle, 1, &descriptorSetHandle); result != VK_SUCCESS )
+		auto * page = m_handle;
+
+		if ( const auto pageIt = m_setPages.find(descriptorSetHandle); pageIt != m_setPages.end() )
+		{
+			page = pageIt->second;
+
+			m_setPages.erase(pageIt);
+		}
+
+		if ( const auto result = vkFreeDescriptorSets(this->device()->handle(), page, 1, &descriptorSetHandle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to free a descriptor set : " << vkResultToCString(result) << " ! "
 				"Was the pool created with VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT ?";
@@ -149,6 +221,19 @@ namespace EmEn::Vulkan
 
 			return false;
 		}
+
+		/* NOTE: A reset returns every set of every page; the extra pages are kept for the next allocations. */
+		for ( auto * page : m_extraPages )
+		{
+			if ( const auto result = vkResetDescriptorPool(this->device()->handle(), page, 0); result != VK_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to reset a page of the descriptor pool : " << vkResultToCString(result) << " !";
+
+				return false;
+			}
+		}
+
+		m_setPages.clear();
 
 		return true;
 	}

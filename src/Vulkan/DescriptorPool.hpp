@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -47,7 +48,16 @@ namespace EmEn::Vulkan
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief The DescriptorPool class
+	 * @brief The DescriptorPool class: a GROWABLE descriptor allocator.
+	 * @note When a page is exhausted (VK_ERROR_OUT_OF_POOL_MEMORY / VK_ERROR_FRAGMENTED_POOL), a new page of
+	 * the same sizes is created and the allocation retried; a set is freed into the page it came from. The
+	 * sizes are a PAGE, not a ceiling. Pattern: "DescriptorAllocatorGrowable", Victor Blanco, vkguide.dev
+	 * (MIT), https://vkguide.dev/docs/new_chapter_4/descriptor_abstractions/.
+	 * @warning The driver may tolerate an overdraw of a page, and NVIDIA does: the main pool declared 64
+	 * combined image samplers for 4096 sets and no storage image at all, and every Linux run passed, while the
+	 * Windows validation layer refused the RTR trace set (WrongType, the scene failed to load) and the AMD iGPU
+	 * returned VK_ERROR_OUT_OF_POOL_MEMORY and crashed (2026-09-22). A pool that works on one vendor proves
+	 * nothing about its sizes.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This vulkan object needs a device.
 	 */
 	class EMEN_API DescriptorPool final : public AbstractDeviceDependentObject
@@ -117,7 +127,8 @@ namespace EmEn::Vulkan
 			bool destroyFromHardware () noexcept override;
 
 			/**
-			 * @brief Returns the descriptor pool handle.
+			 * @brief Returns the FIRST page's handle.
+			 * @warning For an external allocator only (ImGUI): allocations through this handle never grow.
 			 * @return VkDescriptorPool
 			 */
 			[[nodiscard]]
@@ -181,11 +192,45 @@ namespace EmEn::Vulkan
 			 */
 			bool reset () const noexcept;
 
+			/**
+			 * @brief Returns the page count, the first one included.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			pageCount () const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+
+				return m_handle != VK_NULL_HANDLE ? 1 + m_extraPages.size() : 0;
+			}
+
 		private:
+
+			/**
+			 * @brief Allocates one set from one page.
+			 * @param pool The page.
+			 * @param descriptorSetLayoutHandle The layout.
+			 * @param descriptorSetHandle Receives the set.
+			 * @return VkResult
+			 */
+			[[nodiscard]]
+			VkResult allocateFromPage (VkDescriptorPool pool, VkDescriptorSetLayout descriptorSetLayoutHandle, VkDescriptorSet & descriptorSetHandle) const noexcept;
+
+			/**
+			 * @brief Creates one more page of the same sizes.
+			 * @return VkDescriptorPool Null on failure.
+			 */
+			[[nodiscard]]
+			VkDescriptorPool createPage () const noexcept;
 
 			VkDescriptorPool m_handle{VK_NULL_HANDLE};
 			VkDescriptorPoolCreateInfo m_createInfo{};
 			std::vector< VkDescriptorPoolSize > m_descriptorPoolSizes;
+			/** @brief Pages added on exhaustion, in creation order; the last one is where allocations go. */
+			mutable std::vector< VkDescriptorPool > m_extraPages;
+			/** @brief The page of every set allocated from an extra page (a set absent from it is the first page's). */
+			mutable std::unordered_map< VkDescriptorSet, VkDescriptorPool > m_setPages;
 			mutable std::mutex m_descriptorPoolAccess;
 	};
 }
