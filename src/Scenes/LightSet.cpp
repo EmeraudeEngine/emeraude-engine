@@ -518,7 +518,7 @@ namespace EmEn::Scenes
 			descriptorSetLayout->setIdentifier(ClassId, "LightProperties", "DescriptorSetLayout");
 
 			/* Binding 0: Light UBO (dynamic offset for shared buffer). */
-			descriptorSetLayout->declareUniformBufferDynamic(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+			descriptorSetLayout->declareUniformBufferDynamic(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | layoutManager.device()->meshShadingStages());
 
 			/* Binding 1: Shadow map sampler (real shadow map or dummy 1x1 depth texture). */
 			descriptorSetLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);

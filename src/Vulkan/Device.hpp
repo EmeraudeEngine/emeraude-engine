@@ -270,6 +270,21 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns TASK | MESH when mesh shaders are enabled, 0 otherwise: what a descriptor-set layout read by
+			 * a mesh-shading program ORs into its stage flags.
+			 * @note A layout may only name the task and mesh stages on a device that enabled them, so the flags are
+			 * conditional; shared layouts (view, instance transforms, lights, materials) take them unconditionally
+			 * otherwise, which costs nothing on the vertex path.
+			 * @return VkShaderStageFlags
+			 */
+			[[nodiscard]]
+			VkShaderStageFlags
+			meshShadingStages () const noexcept
+			{
+				return m_meshShadersEnabled ? VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT : static_cast< VkShaderStageFlags >(0);
+			}
+
+			/**
 			 * @brief Returns vkCmdDrawMeshTasksEXT, or null when mesh shaders are not enabled.
 			 * @return PFN_vkCmdDrawMeshTasksEXT
 			 */

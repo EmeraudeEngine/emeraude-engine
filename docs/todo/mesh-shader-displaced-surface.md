@@ -50,8 +50,12 @@ but no generator builds a LIT, material-driven program from it.
    the same locations + the light block through a local structure; per-primitive outputs dropped (unused).
    `src/Saphir/AGENTS.md` § Task and mesh stages. Vertex path re-proven byte-identical; the mesh path is
    exercised for the first time at step 4.
-3. Program/pipeline without a vertex stage (vertex format, empty vertex input, push-constant and
-   descriptor-layout stage flags).
+3. ~~Program/pipeline without a vertex stage~~ — DONE 2026-09-22 (inert on the vertex path):
+   `Program::perVertexStage()` / `perVertexStageFlags()`, the `was*Enabled()` queries through it, no vertex
+   buffer format and no vertex input / input assembly for a mesh program, push-constant ranges from the
+   per-vertex stage (MESH | TASK for a mesh program, VERTEX unchanged otherwise), and
+   `Device::meshShadingStages()` ORed into the view, instance-transforms, light and material layouts (the
+   material's height sampler included).
 4. `DisplacedSurfaceResource` + task/mesh code + draw branch + shadow program.
 5. The handover band, the fallback, `relief` option 0 = 2, measurements.
 

@@ -82,7 +82,7 @@ namespace EmEn::Scenes
 			descriptorSetLayout->setIdentifier(ClassId, "InstanceTransforms", "DescriptorSetLayout");
 
 			/* Binding 0: InstanceTransforms SSBO (host-visible, staged per frame). */
-			descriptorSetLayout->declareStorageBuffer(0, VK_SHADER_STAGE_VERTEX_BIT);
+			descriptorSetLayout->declareStorageBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | layoutManager.device()->meshShadingStages());
 
 			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
 			{

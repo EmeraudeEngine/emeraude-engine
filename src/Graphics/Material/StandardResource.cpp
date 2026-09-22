@@ -1641,14 +1641,18 @@ namespace EmEn::Graphics::Material
 			newLayout->setIdentifier(ClassId, identifier, "DescriptorSetLayout");
 
 			/* Declare the UBO for the material properties. */
-			newLayout->declareUniformBuffer(bindingPoint++, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+			/* NOTE: A mesh-shading surface displaces its vertices by the material's height map (heightScale,
+			 * UV transforms in this UBO), so the UBO and the height sampler are read by the mesh stage too. */
+			const auto meshStages = layoutManager.device()->meshShadingStages();
+
+			newLayout->declareUniformBuffer(bindingPoint++, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | meshStages);
 
 			/* Declare every sampler used by the material. */
-			for ( const auto & component : std::ranges::views::values(m_components) )
+			for ( const auto & [componentType, component] : m_components )
 			{
 				if ( component->type() == Type::Texture )
 				{
-					newLayout->declareCombinedImageSampler(bindingPoint++, VK_SHADER_STAGE_FRAGMENT_BIT);
+					newLayout->declareCombinedImageSampler(bindingPoint++, componentType == ComponentType::Displacement ? VK_SHADER_STAGE_FRAGMENT_BIT | meshStages : VK_SHADER_STAGE_FRAGMENT_BIT);
 				}
 			}
 

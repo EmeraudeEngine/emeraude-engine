@@ -158,7 +158,9 @@ namespace EmEn::Saphir
 			bool
 			wasHeightfieldSurfaceEnabled () const noexcept
 			{
-				return m_vertexShader != nullptr && m_vertexShader->isHeightfieldSurfaceEnabled();
+				const auto * stage = this->perVertexStage();
+
+				return stage != nullptr && stage->isHeightfieldSurfaceEnabled();
 			}
 
 			/**
@@ -419,6 +421,42 @@ namespace EmEn::Saphir
 			hasFragmentShader () const noexcept
 			{
 				return m_fragmentShader != nullptr;
+			}
+
+			/**
+			 * @brief Returns the PER-VERTEX stage of the program: its mesh shader in a mesh-shading program, its
+			 * vertex shader otherwise.
+			 * @note What every query about the vertex processing reads (instancing, matrices, heightfield...): the
+			 * two stages share AbstractVertexStage, so a mesh program answers them like a vertex one.
+			 * @return const AbstractVertexStage * Null before either stage exists.
+			 */
+			[[nodiscard]]
+			const AbstractVertexStage *
+			perVertexStage () const noexcept
+			{
+				if ( m_meshShader != nullptr )
+				{
+					return m_meshShader.get();
+				}
+
+				return m_vertexShader.get();
+			}
+
+			/**
+			 * @brief Returns the shader stages that read the per-vertex push constants and resources: MESH (+ TASK)
+			 * in a mesh-shading program, VERTEX (+ GEOMETRY) otherwise.
+			 * @return VkShaderStageFlags
+			 */
+			[[nodiscard]]
+			VkShaderStageFlags
+			perVertexStageFlags () const noexcept
+			{
+				if ( m_meshShader != nullptr )
+				{
+					return m_taskShader != nullptr ? VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT : VK_SHADER_STAGE_MESH_BIT_EXT;
+				}
+
+				return m_geometryShader != nullptr ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT;
 			}
 
 			/**

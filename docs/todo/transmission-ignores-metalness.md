@@ -21,8 +21,7 @@ never scales the transmission by (1 − metalness). The glTF PBR model: a metal 
 
 - [ ] Confirm on Linux, then weight the transmission by (1 − metalness) with the metal's F0 reflectance,
       as `KHR_materials_transmission` specifies.
-- [ ] Re-judge the MASK spheres' interiors (macOS saw them as untinted upside-down mirrors). It was
-      suspected to share the cause of the back-face defect, fixed 2026-09-22 (`caution-points.md` § A
-      double-sided back face reflected as an untinted mirror); check whether they are right now.
+- The MASK spheres' interiors (seen as untinted upside-down mirrors) were the back-face defect: fixed on
+  2026-09-22, and the macOS recheck shows the checker cloth and the tinted inner surface through the cut-outs.
 - [ ] The known gap on the same test (the missing stripes of the red TransmissionTexture spheres) is
       separate.

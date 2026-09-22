@@ -289,7 +289,7 @@ namespace EmEn::Graphics::RenderTarget
 		{
 			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(UUID);
 			descriptorSetLayout->setIdentifier(TracerTag, UUID, "DescriptorSetLayout");
-			descriptorSetLayout->declareUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+			descriptorSetLayout->declareUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | layoutManager.device()->meshShadingStages());
 
 			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
 			{

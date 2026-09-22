@@ -147,7 +147,10 @@ namespace EmEn::Saphir::Generator
 	bool
 	ShadowCasting::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
-		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
+		/* NOTE: The per-vertex stage owns the push constants: the vertex shader (VERTEX, unchanged), or the mesh
+		 * shader of a mesh-shading program, whose task stage reads them too (MESH | TASK). */
+		const auto & program = this->shaderProgram();
+		Abstract::generatePushConstantRanges(program->perVertexStage()->pushConstantBlockDeclarations(), pushConstantRanges, program->hasMeshShader() ? program->perVertexStageFlags() : VK_SHADER_STAGE_VERTEX_BIT);
 
 		const bool needsAlphaTest = this->needsAlphaTestedShadows();
 

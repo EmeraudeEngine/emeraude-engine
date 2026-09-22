@@ -346,7 +346,10 @@ namespace EmEn::Saphir::Generator
 			descriptorSetLayouts.emplace_back(descriptorSetLayout);
 		}
 
-		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
+		/* NOTE: The per-vertex stage owns the push constants: the vertex shader (VERTEX, unchanged), or the mesh
+		 * shader of a mesh-shading program, whose task stage reads them too (MESH | TASK). */
+		const auto & program = this->shaderProgram();
+		Abstract::generatePushConstantRanges(program->perVertexStage()->pushConstantBlockDeclarations(), pushConstantRanges, program->hasMeshShader() ? program->perVertexStageFlags() : VK_SHADER_STAGE_VERTEX_BIT);
 
 		return true;
 	}

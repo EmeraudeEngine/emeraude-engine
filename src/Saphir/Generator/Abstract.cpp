@@ -193,20 +193,25 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		const auto & vertexBufferFormat = *m_shaderProgram->vertexBufferFormat();
-
-		if ( !graphicsPipeline->configureVertexInputState(vertexBufferFormat) )
+		/* NOTE: A mesh-shading pipeline has no vertex input nor input assembly: the mesh stage emits the
+		 * primitives itself (GraphicsPipeline::finalize() skips both states when it sees a mesh stage). */
+		if ( !m_shaderProgram->hasMeshShader() )
 		{
-			Tracer::error(TracerTag, "Unable to configure the graphics pipeline vertex input state !");
+			const auto & vertexBufferFormat = *m_shaderProgram->vertexBufferFormat();
 
-			return false;
-		}
+			if ( !graphicsPipeline->configureVertexInputState(vertexBufferFormat) )
+			{
+				Tracer::error(TracerTag, "Unable to configure the graphics pipeline vertex input state !");
 
-		if ( !graphicsPipeline->configureInputAssemblyState(vertexBufferFormat) )
-		{
-			Tracer::error(TracerTag, "Unable to configure the graphics pipeline input assembly state !");
+				return false;
+			}
 
-			return false;
+			if ( !graphicsPipeline->configureInputAssemblyState(vertexBufferFormat) )
+			{
+				Tracer::error(TracerTag, "Unable to configure the graphics pipeline input assembly state !");
+
+				return false;
+			}
 		}
 
 		/* NOTE: If tesselation wasn't enabled, there is no point to configure it. */
@@ -352,7 +357,12 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( this->isRenderableInstanceAvailable() )
+		/* NOTE: A mesh-shading program fetches no vertex: it has no vertex buffer format. */
+		if ( m_shaderProgram->hasMeshShader() )
+		{
+			/* Nothing to prepare. */
+		}
+		else if ( this->isRenderableInstanceAvailable() )
 		{
 			if ( !m_shaderProgram->createVertexBufferFormat(renderer.vertexBufferFormatManager(), this->getGeometryInterface()) )
 			{

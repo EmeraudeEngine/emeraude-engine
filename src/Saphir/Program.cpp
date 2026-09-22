@@ -118,62 +118,62 @@ namespace EmEn::Saphir
 	bool
 	Program::wasInstancingEnabled () const noexcept
 	{
-		if ( m_vertexShader == nullptr )
+		const auto * stage = this->perVertexStage();
+
+		if ( stage == nullptr )
 		{
-			Tracer::error(ClassId, "The vertex shader is uninitialized ! Unable to know if instancing was enabled ...");
+			Tracer::error(ClassId, "The per-vertex stage is uninitialized ! Unable to know if instancing was enabled ...");
 
 			return false;
 		}
 
-		return m_vertexShader->isInstancingEnabled();
+		return stage->isInstancingEnabled();
 	}
 
 	bool
 	Program::wasAdvancedMatricesEnabled () const noexcept
 	{
-		if ( m_vertexShader == nullptr )
+		const auto * stage = this->perVertexStage();
+
+		if ( stage == nullptr )
 		{
-			Tracer::error(ClassId, "The vertex shader is uninitialized ! Unable to know if advanced matrices were enabled ...");
+			Tracer::error(ClassId, "The per-vertex stage is uninitialized ! Unable to know if advanced matrices were enabled ...");
 
 			return false;
 		}
 
-		return m_vertexShader->isAdvancedMatricesEnabled();
+		return stage->isAdvancedMatricesEnabled();
 	}
 
 	bool
 	Program::wasBillBoardingEnabled () const noexcept
 	{
-		if ( m_vertexShader == nullptr )
+		const auto * stage = this->perVertexStage();
+
+		if ( stage == nullptr )
 		{
-			Tracer::error(ClassId, "The vertex shader is uninitialized ! Unable to know if bill boarding was enabled ...");
+			Tracer::error(ClassId, "The per-vertex stage is uninitialized ! Unable to know if bill boarding was enabled ...");
 
 			return false;
 		}
 
-		return m_vertexShader->isBillBoardingEnabled();
+		return stage->isBillBoardingEnabled();
 	}
 
 	bool
 	Program::wasMDIEnabled () const noexcept
 	{
-		if ( m_vertexShader == nullptr )
-		{
-			return false;
-		}
+		const auto * stage = this->perVertexStage();
 
-		return m_vertexShader->isMDIEnabled();
+		return stage != nullptr && stage->isMDIEnabled();
 	}
 
 	bool
 	Program::wasInstanceTransformsEnabled () const noexcept
 	{
-		if ( m_vertexShader == nullptr )
-		{
-			return false;
-		}
+		const auto * stage = this->perVertexStage();
 
-		return m_vertexShader->isInstanceTransformsEnabled();
+		return stage != nullptr && stage->isInstanceTransformsEnabled();
 	}
 
 	VertexShader *
