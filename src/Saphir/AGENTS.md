@@ -196,49 +196,40 @@ When the renderer asks for the high tier:
 - Per-fragment lighting (Phong-Blinn or PBR Cook-Torrance)
 - Normal mapping support (if geometry provides tangent space)
 - Per-fragment reflection/refraction with Fresnel
-- Parallax Occlusion Mapping (if material has Height component and POM iterations > 0)
+- Parallax Occlusion Mapping (if material has a Height component; its layer count is a UBO value)
 
 When disabled:
 - Per-vertex lighting (Gouraud shading)
 - No normal mapping
 - Simplified reflection/refraction
-- POM completely disabled (forced to 0 iterations at source)
 
 ### POM Iterations Setting
 
-`GraphicsTexturePOMIterationsKey` (`Core/Graphics/Texture/POMIterations`, **default: 0** —
-i.e. POM ships DISABLED) controls POM ray-marching quality.
-
-> [!WARNING]
-> **This line said `Core/Graphics/Shader/POMIterations`, default 16, until 2026-09-08.** The key
-> MOVED to the `Texture/` subtree and the default became 0 (`SettingKeys.hpp:406`), and this doc
-> never followed. Consequence measured on the owner's machine: a hand-tuned
-> `Core/Graphics/Shader/POMIterations = 16` sat in `settings.json` and was read by **nothing**.
-> ⚠️⚠️ And the setting does not enter `computeProgramCacheKey()`, so changing it can be served a
-> cached shader built for the previous value — any A/B on it is invalid until that is fixed. See
-> [`../../docs/todo/pom-setting-outside-program-cache-key.md`](../../docs/todo/pom-setting-outside-program-cache-key.md).
-
-**Quality cascade** (centralized in `SceneRendering` constructor):
-```cpp
-this->setPOMIterations(this->highQualityEnabled()
-    ? settings.getOrSetDefault<int>(POMIterationsKey, DefaultPOMIterations)
-    : 0);
-```
+`GraphicsTexturePOMIterationsKey` (`Core/Graphics/Texture/POMIterations`, **default: 0**) is the POM
+layer count of every material with a height map that does not set its own
+(`StandardResource::setParallaxIterations()`). It is read **by the material, at its creation**, and
+written to its UBO (`parallaxParameters.x`) — it is **not a generator input any more** (2026-09-22):
+`Generator::Abstract::pomIterations()`/`setPOMIterations()` are deleted, and the POM code is generated
+for every material with a Height component. Changing the setting needs a relaunch (materials are
+created once), never a shader-cache purge.
 
 | Value | Effect |
 |-------|--------|
-| `0` | POM completely disabled — no POM code in shaders, no extra vertex outputs |
-| `4-8` | Low quality (fast, visible stepping artifacts) |
-| `16` | Default (good balance of quality/performance) |
-| `32-64` | High quality (smooth, more GPU load per fragment) |
+| `0` | The march is skipped: `pomTexCoords` = the mesh UVs, bit-exact (plain normal mapping) |
+| `8-16` | Visible layers at grazing angles (the bisection refinement hides most of it) |
+| `32` | The `relief` demo's default |
+| `64` | The compile-time bound of the loop (`StandardResource::MaxParallaxIterations`) |
 
-**Key design**: When `pomIterations() == 0`, materials behave identically to having no Height component — `textCoords()` returns original UVs, no POM GLSL is generated, no extra vertex shader outputs.
+> [!WARNING]
+> Until 2026-09-22 the count was a GLSL literal baked by the generator and gated the codegen, and it did
+> **not** enter `computeProgramCacheKey()`: a program built under one count served the next materials and,
+> through the on-disk SPIR-V cache, the next launches. A per-material value belongs in the material UBO,
+> never in a literal — the program cache keys on layouts and flags, not values.
 
 **Code references:**
-- `SettingKeys.hpp:POMIterationsKey` — Setting key definition
-- `Generator/Abstract.hpp:setPOMIterations()` — Clamps to [4, 64] or 0 (special disable value)
-- `Generator/SceneRendering.hpp` constructor — Quality cascade logic
-- `StandardResource.cpp:m_pomGenerationActive` — Fragment shader conditional
+- `SettingKeys.hpp:GraphicsTexturePOMIterationsKey` — Setting key definition
+- `StandardResource.cpp:create()` — resolution into the UBO
+- `StandardResource.cpp:generateFragmentShaderCode()` — the march (details: `src/Graphics/AGENTS.md` § Parallax Occlusion Mapping)
 
 ### Per-Vertex Lighting Shader Input Constraint
 

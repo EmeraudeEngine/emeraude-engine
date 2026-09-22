@@ -430,7 +430,9 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 ### Material Property Layout (std140)
 
 **StandardResource** — the ONE lit material (Cook-Torrance metallic-roughness) — stores properties
-in an 80-float array (320 bytes, std140):
+in a 120-float array (480 bytes, std140; `StandardResource::MaterialPropertiesSize`, one neutral list in
+`neutralMaterialProperties()`). ⚠️ This line said "80 floats" until 2026-09-22 — the layout had already
+grown to 116 with the indexed UV tables, and the table below had not followed:
 
 | Offset | Property | Type | Range/Default |
 |--------|----------|------|---------------|
@@ -470,9 +472,12 @@ in an 80-float array (320 bytes, std140):
 | 51 | alphaThreshold | float | 0.0-1.0 (0.5) — cutout cutoff |
 | 52 | reflectionAmount | float | 0.0-1.0 (**1.0**) — artistic override; the neutral 1.0 leaves the mix BRDF-controlled |
 | 53 | refractionAmount | float | 0.0-1.0 (**1.0**) — artistic override; the neutral 1.0 leaves the blend Fresnel-controlled |
-| 54-55 | padding | float | std140 alignment |
-| 56-79 | UVW transforms | 6 × vec4 | Albedo/Roughness/Metalness/Normal/AmbientOcclusion/AutoIllumination, `(scale.xy, offset.zw)`, neutral (1,1,0,0) |
-| 80-103 | UVW rotations | 6 × vec4 | same component order, `(cos, sin, 0, 0)`, neutral **(1,0,0,0)** — KHR_texture_transform's `rotation`, trig resolved once on the CPU |
+| 54 | fogResponse | float | 0.0-1.0 (1.0) — atmospheric fog response |
+| 55 | dofMask | float | 0.0-1.0 (1.0) — depth-of-field response |
+| 56-71 | uvwTransform[4] | 4 × vec4 | indexed table of DISTINCT transforms, `(scale.xy, offset.zw)`; slot 0 is always the identity (1,1,0,0) |
+| 72-87 | uvwRotation[4] | 4 × vec4 | same slots, `(cos, sin, 0, 0)`, neutral **(1,0,0,0)** — KHR_texture_transform's `rotation`, trig resolved once on the CPU |
+| 88-115 | uvwIndex[7] | 7 × vec4 | one float per ComponentType, four to a vec4: which table slot that component reads |
+| 116-119 | parallaxParameters | vec4 | POM (max layers 0-64, fade start 8 m, fade end 18 m, unused) — see § Parallax Occlusion Mapping |
 
 The GLSL struct is generated to match this layout exactly.
 
@@ -488,8 +493,9 @@ The GLSL struct is generated to match this layout exactly.
 > Recorded as a trap in [`../../docs/caution-points.md`](../../docs/caution-points.md) § *An
 > IDENTITY default makes an unwired feature indistinguishable from a disabled one*.
 >
-> ⚠️ There are **six** UV transform slots and they do not cover the specular maps: a
-> `KHR_texture_transform` on `specularTexture` / `specularColorTexture` is logged and dropped.
+> ⚠️ The UV transform table has **four** slots (the identity + three distinct transforms, which covers
+> every one of 1347 measured materials) and serves every ComponentType since 2026-09-14; a material
+> declaring more distinct transforms falls back to the identity for the surplus and says so once.
 
 > [!CAUTION]
 > **Slots 32-37 (the KHR_materials_volume group) carry ENGINE defaults that are NOT glTF's.**
@@ -669,36 +675,72 @@ vec3 normal = normalize(vec3(raw.xy * ubMaterial.normalScale, raw.z));
 
 POM ray-marches through a height map in the fragment shader to create depth/relief illusion on flat surfaces without extra geometry. Uses `ComponentType::Displacement` with height map textures.
 
-**Activation conditions** (all must be true):
-1. Material has a Height component (`m_useParallaxOcclusionMapping`)
-2. The renderer asks for the high quality tier (`Generator::Abstract::HighQualityEnabled`)
-3. POM iterations > 0 (`POMIterationsKey > 0`)
+**Activation:** a material with a Height component always gets the POM code (`m_useParallaxOcclusionMapping`).
+Its **layer count is a UBO value**, `parallaxParameters.x` (vec4 at float offset 116: max layers, fade
+start, fade end, unused): `setParallaxIterations(n)` sets it per material (clamped to [0, 64]), and a
+material that never calls it takes `Core/Graphics/Texture/POMIterations` **when it is created**
+(default 0). A count of 0 leaves `pomTexCoords` on the mesh UVs, bit-exact — the height map is then
+ignored and the surface is plain normal mapping.
+⚠️ Until 2026-09-22 the count was a GLSL literal read from the generator and gated the whole codegen:
+it was outside the program cache key, so a program built under one count served every later material
+and every later launch (the SPIR-V cache is on disk). It is a value now, never a literal — do not move
+it back into the generator.
 
 When active, a displaced UV (`pomTexCoords`) is computed at the start of the fragment shader and ALL subsequent texture samples use it automatically via `textCoords()`.
 
-**Key implementation details:**
-- Height map convention: white = high, black = low. POM inverts: `depth = 1.0 - texture().r`
-- UV displacement uses `pomViewDir.xy * heightScale` directly (no `/z` division — prevents angle-dependent depth)
-- Loop uses compile-time constant upper bound with early `break` for GPU safety
-- Occlusion interpolation (relief mapping refinement) for smooth results
-- `mutable bool m_pomGenerationActive` flag set at generation time, checked by `textCoords()` to return correct UV variable
+**Key implementation details (rewritten 2026-09-22):**
+- Height map convention: white = high, black = low. POM inverts: `depth = 1.0 - texture().r`.
+- The view vector is built in **WORLD space** and taken to tangent space with **`WorldTBNMatrix`**.
+  ⚠️⚠️ NOT `TangentToWorldMatrix`: despite its name it is `NormalMatrix · (T, B, N)` — a **VIEW**-space
+  frame outside MDI, a world one under MDI. The march used it on a world vector and marched in a
+  direction that turned with the camera: that was the "éclaté" POM of the owner's reports
+  (2026-09-08, 2026-09-22). The same misuse survives in the reflection-normal code
+  (`reflectionNormal = TangentToWorldMatrix[0] · n.x + … + NormalWorldSpace · n.z`, five sites) — not
+  attributed, not fixed.
+- ⚠️ Tangent-space `(x, y)` is `(x, −y)` in UV: `B` is the image's +Y (Khronos), which points toward
+  DECREASING v. The march used `+y` and inverted the relief along v only. Proof that it is right now: the
+  relief reads raised under all four horizontal view directions (`relief` demo, 2026-09-22).
+- Parallax proper: `offset = V.xy / V.z · heightScale`, with `V.z` bounded at 0.2 (a grazing ray shifts by
+  five depths at most). The old code had no `/z` ("offset limiting") — the relief flattened at grazing.
+- Layer march (count = `mix(max, max/4, V.z) · fade`, loop bounded by the compile-time 64), then
+  `ParallaxRefinementSteps` (5) **bisection** steps (relief mapping, Policarpo et al. 2005), then the
+  linear interpolation of the crossing. A single linear step leaves the layers visible as slices on every
+  slope facing the camera.
+- Every height sample is a `textureGrad()` with the gradients of the UNDISPLACED coordinates, taken
+  before any branch: the march exits per pixel, and an implicit-derivative lookup inside non-uniform
+  control flow reads undefined derivatives.
+- The march runs in MESH UV space and samples the height through the height component's own UV
+  transform (`transformedTexCoords()`, re-pointed at the march variable).
+- `mutable bool m_pomGenerationActive` flag set at generation time, checked by `textCoords()` to return correct UV variable.
 
-**Distance-based POM fade:**
-- POM effect fades out based on camera distance to prevent GPU stress on large surfaces
-- Full effect within 8 world units, fully disabled beyond 18 units
-- Both `heightScale` and `numLayers` are scaled by the fade factor
-- Complete early-out when `pomFade < 0.001` (returns original UVs, no ray-marching)
-- Uses `smoothstep(8.0, 18.0, distance)` for smooth transition
+**Distance fade** (`setParallaxFadeDistances(start, end)`, UBO `parallaxParameters.yz`, default 8 → 18 m):
+full relief closer than `start`, none beyond `end`; both the depth and the layer count follow the fade,
+and beyond `end` the march is SKIPPED — what keeps a large surface affordable (see `docs/troubleshooting.md`
+§ GPU hang with POM on large surfaces).
 
-**Vertex shader requirements** (when POM active):
-- `TangentToWorldMatrix` — transform view direction to tangent space
+**Vertex shader requirements** (Height component present):
+- `WorldTBNMatrix` — world tangent frame
 - `PositionWorldSpace` — fragment world position
 - `CameraWorldPosition` — camera position (reuses Reflection/Refraction output if present)
 
+**⚠️⚠️ The height map must be a HEIGHT.** Measured 2026-09-22 on the store: `Grounds/Pavement005-height`
+is the albedo's luminance (correlation **0.927**), its granite grain as tall as its joints — the march
+extrudes every grain into a spike, and no shader change can fix it. Test before blaming the technique:
+correlate the height with the albedo luminance (a real height is near 0: `Pavement006` reads −0.001), and
+integrate the normal map (Frankot-Chellappa) — a coherent pair correlates > 0.95 (`Pavement006`: 0.993),
+and the integrated range gives the physically consistent `heightScale` (`Pavement006`: 21.5 texels of
+1024 = 0.021 UV). ⚠️ `heightScale` is in **UV units**: the store's JSON `Height.Scale` is `1.0` on ~90
+materials (authored before the PBR material) — a relief one texture repeat deep. Harmless while
+`POMIterations` is 0; set it globally and those materials explode.
+
+**Bench:** projet-alpha's `relief` demo (option 0: 0 normal mapping, 1 POM; option 1 layers; option 2
+depth in thousandths of a repeat) — one flat ground, `Pavement006`, low lateral sun.
+
 **Code references:**
 - `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation (+ distance fade)
+- `StandardResource.cpp:create()` — the setting resolved into the UBO
 - `StandardResource.cpp:textCoords()` — UV variable selection
-- `Saphir/Keys.hpp:ParallaxTextureCoordinates` — `"pomTexCoords"`
+- `Saphir/Keys.hpp:ParallaxTextureCoordinates` — `"pomTexCoords"`; `ParallaxParameters` — `"parallaxParameters"`
 - `Saphir/Keys.hpp:HeightSampler` — `"uHeightSampler"`
 
 ## 6. Bindless Textures Manager

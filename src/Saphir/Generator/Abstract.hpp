@@ -197,28 +197,6 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
-			 * @brief Returns the maximum number of Parallax Occlusion Mapping iterations.
-			 * @return int
-			 */
-			[[nodiscard]]
-			int
-			pomIterations () const noexcept
-			{
-				return m_pomIterations;
-			}
-
-			/**
-			 * @brief Sets the maximum number of Parallax Occlusion Mapping iterations.
-			 * @param iterations The max iteration count (0 to disable POM, otherwise clamped to [4, 64]).
-			 * @return void
-			 */
-			void
-			setPOMIterations (int iterations) noexcept
-			{
-				m_pomIterations = (iterations <= 0) ? 0 : std::clamp(iterations, 4, 64);
-			}
-
-			/**
 			 * @brief Displays one packed lane of the material-properties G-buffer as the frame colour.
 			 * @note 0 = off, 1 = reflectivity, 2 = AO response. See GraphicsDebugMaterialPropertiesLaneKey.
 			 * @param lane The lane index.
@@ -823,7 +801,6 @@ namespace EmEn::Saphir::Generator
 			std::shared_ptr< Program > m_shaderProgram;
 			const Vulkan::Framebuffer * m_pipelineFramebuffer{nullptr}; /**< @todo Remove when a dedicated post-process RenderTarget exists. */
 			uint32_t m_nextShaderVariableLocation{0};
-			int m_pomIterations{16};
 			uint32_t m_debugMaterialPropertiesLane{0};
 	};
 }

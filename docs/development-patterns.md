@@ -225,8 +225,10 @@ Materials can be loaded from JSON files with a unified format supporting Basic a
     "Height": { "Type": "Texture", "Data": { "Name": "Walls/Bricks001-height" }, "Scale": 0.02 }
 }
 ```
-- `Scale`: Maximum parallax depth (default 0.02). Values above 0.05 tend to look exaggerated.
-- Requires `EnableHighQuality = true` and `POMIterations > 0` (see Saphir AGENTS.md).
+- `Scale`: Maximum parallax depth **in UV units** (default 0.02). Values above 0.05 tend to look exaggerated.
+  ⚠️ ~90 store materials carry `1.0` (authored before the PBR material): a relief one repeat deep.
+- The layer count comes from `Core/Graphics/Texture/POMIterations` (default 0 = off) unless the
+  material calls `setParallaxIterations()` (see `src/Graphics/AGENTS.md` § Parallax Occlusion Mapping).
 
 **FillingType values:**
 | Type | Data Format | Description |
@@ -450,14 +452,17 @@ auto material = resources.container<EmEn::Graphics::Material::StandardResource>(
 | 0.05+ | Exaggerated — good for demos, too much for realism |
 
 **Requirements:**
-- `EnableHighQuality` must be `true` (per-fragment lighting needed)
-- `POMIterations` must be > 0 (default: 16, set to 0 to disable globally)
-- Height map texture (grayscale: white = high, black = low)
+- A layer count: `mat.setParallaxIterations(32)`, or `Core/Graphics/Texture/POMIterations` > 0 for the
+  materials that set none (default 0 = the height map is ignored)
+- Height map texture (grayscale: white = high, black = low) that is a real HEIGHT — ⚠️ a map derived from
+  the photo's luminance extrudes its grain into spikes (`src/Graphics/AGENTS.md` § Parallax Occlusion Mapping)
 - Normal map recommended (POM displaces UVs, normal map provides surface detail)
 
 **Runtime control:**
 ```cpp
 material->setHeightScale(0.03F); // Change depth dynamically
+material->setParallaxIterations(32); // Layers at a grazing view (UBO value, 0..64)
+material->setParallaxFadeDistances(8.0F, 18.0F); // Full relief closer, no march beyond
 ```
 
 ---

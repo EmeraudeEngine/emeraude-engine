@@ -402,16 +402,19 @@ namespace EmEn
 			/* Distance up to which full-resolution textures are used (default ~5 km). */
 			constexpr auto GraphicsTextureViewDistanceKey{"Core/Graphics/Texture/ViewDistance"};
 			constexpr auto DefaultGraphicsTextureViewDistance{5000.0F}; /* NOTE: 5km */
-			/* Parallax occlusion mapping ray-march iteration count. */
+			/* Parallax occlusion mapping: the ray-march layer count (at a grazing view, clamped to
+			 * [0, 64]) of every material with a height map that does not set its own
+			 * (StandardResource::setParallaxIterations()). Resolved when the material is created and
+			 * written to its UBO; 0 = the height map is ignored (plain normal mapping). */
 			constexpr auto GraphicsTexturePOMIterationsKey{"Core/Graphics/Texture/POMIterations"};
+			constexpr auto DefaultGraphicsTexturePOMIterations{0};
 			/** @brief Displays one packed lane of the material-properties G-buffer as the frame
 			 * colour, in grey. 0 = off, 1 = reflectivity, 2 = AO response. ⚠️ It is the cheapest
 			 * instrument this engine has for a "why is that surface reflecting" question — it
 			 * settled the Sponza dirt-decal report in one capture where three A/Bs had circled.
 			 * Read once per program generation, so it takes effect on the next launch. */
 			constexpr auto GraphicsDebugMaterialPropertiesLaneKey{"Core/Graphics/DebugMaterialPropertiesLane"};
-			constexpr auto DefaultGraphicsTexturePOMIterations{0};
-	constexpr auto DefaultGraphicsDebugMaterialPropertiesLane{0};
+			constexpr auto DefaultGraphicsDebugMaterialPropertiesLane{0};
 			/* Persist BC7-compressed mip chains on disk, so a texture is encoded once and not at
 			 * every launch. Measured on material-debug: 231 mip levels cost 7705 ms of CPU BC7 on a
 			 * cold cache against 0 ms warm, which makes it the most profitable of the three on-disk

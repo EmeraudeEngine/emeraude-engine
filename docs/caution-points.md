@@ -3306,7 +3306,32 @@ Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clea
 
 ### POM GPU Stress on Large Surfaces
 
-Parallax Occlusion Mapping ray-marching is expensive at far distances, especially on large surfaces. The engine implements distance-based fade (8-18 world units) to mitigate this. See: `Graphics/AGENTS.md` (POM section).
+Parallax Occlusion Mapping ray-marching is expensive at far distances, especially on large surfaces. The engine implements distance-based fade (default 8-18 m, per material through `setParallaxFadeDistances()`) and skips the march beyond it. See: `Graphics/AGENTS.md` (POM section).
+
+### A "BROKEN" POM WAS THREE DEFECTS AND ONE BAD TEXTURE (fixed 2026-09-22)
+
+Owner reports, 2026-09-08 and 2026-09-22: the parallax "looks blown out" (*éclaté*). Three shader
+defects and one data defect, each enough to produce it on its own:
+
+1. **Wrong space.** The tangent-space view vector was `transpose(TangentToWorldMatrix) · (camera − P)world`.
+   `TangentToWorldMatrix` is `NormalMatrix · (T, B, N)`, a VIEW-space frame outside MDI: the march
+   direction turned with the camera. Now `WorldTBNMatrix`. ⚠️ The name lies; read the synthesis
+   (`VertexShader::synthesizeTangentToWorldMatrix()`) before using it on a world vector — the
+   reflection-normal code still does, unattributed.
+2. **The v sign.** `B` is the image's +Y (Khronos), i.e. DECREASING v: a tangent `(x, y)` is `(x, −y)` in UV.
+   Verify with the relief read along ±X AND ±Z — a sign error on one axis shows raised along one and
+   sunken along the other.
+3. **Implicit derivatives in a per-pixel loop** — undefined; every march sample is a `textureGrad()` with
+   the gradients of the undisplaced coordinates. Plus a bisection refinement: one linear step left the
+   layers as visible slices.
+4. **The texture.** ⚠️⚠️ `Grounds/Pavement005-height` is the photo's LUMINANCE (correlation 0.927 with the
+   albedo): the correct shader extruded its granite grain into spikes. Measure a height map BEFORE judging
+   the technique: correlation with the albedo luminance (a height is near 0), and the Frankot-Chellappa
+   integral of the normal map (a coherent pair > 0.95, and its range IS the right `heightScale` in UV).
+   `Pavement006` passes both (−0.001, 0.993, 0.021 UV).
+
+Also removed: the layer count was a GLSL literal outside the program cache key (served stale through the
+on-disk SPIR-V cache). It is a material UBO value. Bench: projet-alpha `relief`.
 
 ### A HARD-EDGED SPOT DIVIDED BY ZERO IN EVERY RASTER SHADER (fixed 2026-08-10)
 

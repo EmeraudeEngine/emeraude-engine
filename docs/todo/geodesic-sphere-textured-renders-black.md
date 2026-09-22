@@ -58,9 +58,10 @@ resource key, and the construction mode the shape came from (`Triangles` vs `Tri
   transposition (fixed for its own sake), the baked vertex colour, an inverted winding. Every one
   was plausible and every one fell to a single-variable measurement. The next step is an
   instrument, not a hypothesis.
-- ⚠️ Any A/B on a codegen setting is invalid while `POMIterations` is outside the program cache key
-  ([`pom-setting-outside-program-cache-key.md`](pom-setting-outside-program-cache-key.md)); set
-  both shader caches to false for such a measurement.
+- ⚠️ `POMIterations` is no longer a codegen input (a material UBO value since 2026-09-22), but any
+  OTHER generator input may still be missing from the program cache key
+  ([`program-cache-key-codegen-inputs-audit.md`](program-cache-key-codegen-inputs-audit.md)): set both
+  shader caches to false for an A/B on a codegen setting.
 - The material is `Grounds/Pavement002`, NOT `Walls/Bricks001` (that is the cube's) — an earlier
   version of the base item had it wrong.
 

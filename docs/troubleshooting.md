@@ -107,10 +107,11 @@ The variable is generated in `Saphir/LightGenerator.cpp`, `generateAmbientFragme
 
 **Root cause:** POM ray-marching is expensive per-fragment. At far distances, the effect is invisible but still consumes GPU cycles.
 
-**Solution:** Distance-based POM fade (built-in since Feb 2026):
-- Full POM within 8 world units
-- Linear fade between 8-18 units (both heightScale and numLayers reduced)
-- Complete skip beyond 18 units (early-out, returns original UVs)
+**Solution:** Distance-based POM fade (built-in since Feb 2026, per material since 2026-09-22):
+- Full POM closer than the fade start (default 8 m)
+- Smooth fade up to the fade end (default 18 m; both heightScale and the layer count reduced)
+- Complete skip beyond the fade end (the march is not run, original UVs)
+- `StandardResource::setParallaxFadeDistances(start, end)` — UBO values, per material
 
 **Code reference:** `StandardResource.cpp:generateFragmentShaderCode()` (POM section)
 

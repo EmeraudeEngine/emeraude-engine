@@ -96,6 +96,9 @@ namespace EmEn::Graphics::Material
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MaterialStandardResource"};
 
+			/** @brief Upper bound of the POM layer count: the compile-time bound of the generated ray-march loop. */
+			static constexpr auto MaxParallaxIterations{64};
+
 			/* Shader-specific keys. */
 			static constexpr auto SurfaceAlbedoColor{"SurfaceAlbedoColor"};
 			static constexpr auto SurfaceRoughness{"SurfaceRoughness"};
@@ -459,6 +462,27 @@ namespace EmEn::Graphics::Material
 			 * @return void
 			 */
 			void setHeightScale (float value) noexcept;
+
+			/**
+			 * @brief Sets the maximum ray-march layer count of the parallax occlusion mapping.
+			 * @note This is a dynamic property (a material UBO value, never a GLSL literal). It is the count at a
+			 * grazing view; a view along the normal takes a quarter of it. 0 switches the parallax off for this
+			 * material: the height map is then ignored and the surface is plain normal mapping.
+			 * @note Without a call, the material takes 'Core/Graphics/Texture/POMIterations' at creation.
+			 * @param iterations The layer count, clamped to [0, MaxParallaxIterations].
+			 * @return void
+			 */
+			void setParallaxIterations (int iterations) noexcept;
+
+			/**
+			 * @brief Sets the camera distances over which the parallax occlusion mapping fades out.
+			 * @note This is a dynamic property. Full effect closer than @p start, none beyond @p end: past that
+			 * distance the ray march is skipped entirely, which is what keeps a large surface affordable.
+			 * @param start The distance where the fade begins, in metres.
+			 * @param end The distance where the parallax is gone, in metres. Raised to @p start if lower.
+			 * @return void
+			 */
+			void setParallaxFadeDistances (float start, float end) noexcept;
 
 			/**
 			 * @brief Sets the reflection/IBL component as a cubemap texture.
@@ -1675,6 +1699,9 @@ namespace EmEn::Graphics::Material
 			 * vec4 normalUVWTransform	  (offset 68-71) - UV transform (scale.xy, offset.zw)
 			 * vec4 aoUVWTransform		  (offset 72-75) - UV transform (scale.xy, offset.zw)
 			 * vec4 emissiveUVWTransform	(offset 76-79) - UV transform (scale.xy, offset.zw)
+			 * vec4 uvwRotation[4]		  (offset 72-87) - UV rotation table (cos, sin, 0, 0)
+			 * vec4 uvwIndex[7]			 (offset 88-115) - Per-ComponentType index into the two tables
+			 * vec4 parallaxParameters	  (offset 116-119) - POM (max layers, fade start, fade end, unused)
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1727,6 +1754,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto UVWTransformTableOffset{56UL};
 			static constexpr auto UVWRotationTableOffset{72UL};
 			static constexpr auto UVWIndexTableOffset{88UL};
+			/** @brief POM parameters vec4: (max layer count, fade start, fade end, unused). */
+			static constexpr auto ParallaxParametersOffset{116UL};
+			/** @brief Float count of the material UBO. */
+			static constexpr auto MaterialPropertiesSize{120UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -1760,7 +1791,10 @@ namespace EmEn::Graphics::Material
 			static constexpr Base::PixelFactory::Color< float > DefaultAttenuationColor{1.0F, 1.0F, 1.0F, 1.0F}; /* White = no absorption. */
 			static constexpr auto DefaultAttenuationDistance{1.0F}; /* 1 meter for full attenuation. */
 			static constexpr auto DefaultThicknessFactor{1.0F}; /* Default material thickness. */
-			static constexpr auto DefaultHeightScale{0.02F}; /* Parallax occlusion mapping depth. */
+			static constexpr auto DefaultHeightScale{0.02F}; /* Parallax occlusion mapping depth, in UV units. */
+			static constexpr auto ParallaxRefinementSteps{5}; /* Bisection steps after the layer march: the crossing to 1/32 of a layer. */
+			static constexpr auto DefaultParallaxFadeStart{8.0F}; /* Metres: full parallax closer than this. */
+			static constexpr auto DefaultParallaxFadeEnd{18.0F}; /* Metres: no parallax (and no ray march) beyond this. */
 			static constexpr auto DefaultIridescenceFactor{0.0F}; /* No iridescence by default. */
 			static constexpr auto DefaultIridescenceIOR{1.3F}; /* Thin film IOR (soap bubble ~1.3). */
 			static constexpr auto DefaultIridescenceThicknessMin{100.0F}; /* Min thin film thickness in nm. */
@@ -1787,12 +1821,12 @@ namespace EmEn::Graphics::Material
 			 * reflection amount 0, and every UV transform at scale 0, which collapses each texture
 			 * lookup onto a single texel. A duplicated initialiser list for a fixed-offset UBO is a
 			 * defect waiting on the next field; never reintroduce the second copy.
-			 * @return const std::array< float, 116 > &
+			 * @return const std::array< float, MaterialPropertiesSize > &
 			 */
 			[[nodiscard]]
-			static const std::array< float, 116 > & neutralMaterialProperties () noexcept;
+			static const std::array< float, MaterialPropertiesSize > & neutralMaterialProperties () noexcept;
 
-			std::array< float, 116 > m_materialProperties{neutralMaterialProperties()};
+			std::array< float, MaterialPropertiesSize > m_materialProperties{neutralMaterialProperties()};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
@@ -1812,6 +1846,8 @@ namespace EmEn::Graphics::Material
 			bool m_isUsingGrabPassForTransmission{false};
 			bool m_isUsingDepthBasedOpacity{false};
 			bool m_useParallaxOcclusionMapping{false};
+			/** @brief Raised by setParallaxIterations(): the material chose its layer count, the setting must not override it at creation. */
+			bool m_parallaxIterationsSet{false};
 			mutable bool m_pomGenerationActive{false};
 	};
 }

@@ -846,6 +846,9 @@ namespace EmEn::Saphir
 				constexpr auto AttenuationDistance{"attenuationDistance"};
 				constexpr auto ThicknessFactor{"thicknessFactor"};
 				constexpr auto HeightScale{"heightScale"};
+				/** @brief POM vec4: (max layer count, fade start, fade end, unused). Values, so every
+				 * material sharing a program keeps its own ray march. */
+				constexpr auto ParallaxParameters{"parallaxParameters"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};

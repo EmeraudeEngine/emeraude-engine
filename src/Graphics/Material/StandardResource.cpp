@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <ranges>
 #include <sstream>
+#include <string_view>
 #include <tuple>
 
 /* Local inclusions. */
@@ -59,6 +60,7 @@
 #include "Saphir/Keys.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Saphir/VertexShader.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -1390,6 +1392,16 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* A height map the material did not configure takes the engine-wide layer count, resolved
+		 * ONCE here: it is a UBO value, so it never enters the program cache key (it used to be a
+		 * GLSL literal, and a program built under one count served every later material). */
+		if ( m_useParallaxOcclusionMapping && !m_parallaxIterationsSet )
+		{
+			const auto iterations = renderer.primaryServices().settings().getOrSetDefault< int >(GraphicsTexturePOMIterationsKey, DefaultGraphicsTexturePOMIterations);
+
+			m_materialProperties[ParallaxParametersOffset] = static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations));
+		}
+
 		const auto identifier = this->getSharedUniformBufferIdentifier();
 
 		if ( !this->createElementInSharedBuffer(renderer, identifier) )
@@ -1741,10 +1753,10 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
-	const std::array< float, 116 > &
+	const std::array< float, StandardResource::MaterialPropertiesSize > &
 	StandardResource::neutralMaterialProperties () noexcept
 	{
-		static const std::array< float, 116 > properties{
+		static const std::array< float, MaterialPropertiesSize > properties{
 				/* Albedo color (4) */
 				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
 				/* Roughness (1), Metalness (1), NormalScale (1), SpecularFactor (1) */
@@ -1794,7 +1806,11 @@ namespace EmEn::Graphics::Material
 				0.0F, 0.0F, 0.0F, 0.0F,
 				0.0F, 0.0F, 0.0F, 0.0F,
 				0.0F, 0.0F, 0.0F, 0.0F,
-				0.0F, 0.0F, 0.0F, 0.0F
+				0.0F, 0.0F, 0.0F, 0.0F,
+				/* Parallax (max layers, fade start, fade end, unused). 0 layers = no ray march; a
+				 * material with a height map gets 'Core/Graphics/Texture/POMIterations' at creation
+				 * unless it chose its own count. */
+				0.0F, DefaultParallaxFadeStart, DefaultParallaxFadeEnd, 0.0F
 					};
 
 		return properties;
@@ -1817,6 +1833,7 @@ namespace EmEn::Graphics::Material
 		m_blendingMode = BlendingMode::None;
 		m_materialProperties = neutralMaterialProperties();
 		m_useParallaxOcclusionMapping = false;
+		m_parallaxIterationsSet = false;
 		m_descriptorSetLayout.reset();
 		m_descriptorSet.reset();
 		m_sharedUniformBuffer.reset();
@@ -2756,6 +2773,7 @@ namespace EmEn::Graphics::Material
 		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWTransform, UVWTransformSlots);
 		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWRotation, UVWTransformSlots);
 		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWIndex, UVWIndexVectors);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ParallaxParameters);
 
 		return block;
 	}
@@ -2918,13 +2936,17 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Parallax Occlusion Mapping vertex requirements.
-		 * NOTE: POM needs TangentToWorldMatrix, PositionWorldSpace, and CameraWorldPosition in the fragment shader.
-		 * If Reflection/Refraction already requested them, this is a no-op for the synthesize calls.
-		 * When POM iterations is 0, POM is completely disabled - no extra vertex outputs needed. */
-		if ( m_useParallaxOcclusionMapping && generator.pomIterations() > 0 )
+		 * NOTE: POM needs the WORLD tangent frame, PositionWorldSpace and CameraWorldPosition in the
+		 * fragment shader: the view vector is built in world space, so the frame must be too.
+		 * ⚠️ Not TangentToWorldMatrix: despite its name it is NormalMatrix · (T, B, N), a VIEW-space
+		 * frame outside MDI. The ray march used it on a world vector until 2026-09-22 and marched in
+		 * a direction that turned with the camera. If Reflection/Refraction already requested these,
+		 * the synthesize calls are no-ops. The layer count is a UBO value, so the code is generated
+		 * whenever the material has a height map, whatever the setting says. */
+		if ( m_useParallaxOcclusionMapping )
 		{
 			vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace);
-			vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
+			vertexShader.requestSynthesizeInstruction(ShaderVariable::WorldTBNMatrix);
 
 			/* CameraWorldPosition stage output (if not already declared by Reflection/Refraction). */
 			if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap
@@ -3507,47 +3529,88 @@ namespace EmEn::Graphics::Material
 		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
 
 		/* Parallax Occlusion Mapping (Height component).
-		 * NOTE: Must be generated FIRST, before any other texture sampling, so that
-		 * all subsequent texture() calls use the parallax-displaced UVs (pomTexCoords).
-		 * When POM iterations is 0, POM is completely disabled and textCoords() returns original UVs. */
-		m_pomGenerationActive = m_useParallaxOcclusionMapping && generator.pomIterations() > 0;
+		 * NOTE: Must be generated FIRST, before any other texture sampling, so that every subsequent
+		 * texture() call reads the parallax-displaced UVs (pomTexCoords, returned by textCoords()).
+		 * The layer count and the fade distances are UBO values (parallaxParameters): a count of 0
+		 * leaves pomTexCoords on the mesh UVs, bit-exact, and a program is shared by every material
+		 * with the same layout whatever their counts. */
+		m_pomGenerationActive = m_useParallaxOcclusionMapping;
 
 		if ( m_pomGenerationActive )
 		{
-			const auto maxPOMIterations = generator.pomIterations();
-			const auto minPOMIterations = std::max(maxPOMIterations / 4, 2);
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [this] (FragmentShader & shader, const Texture * component) {
+				/* The height is sampled through the height component's own UV transform, while the
+				 * march itself runs in MESH UV space: that is the space the tangent frame describes, and
+				 * the one every other component transforms from. transformedTexCoords() is written in
+				 * terms of pomTexCoords; it is re-pointed at the march variable. */
+				const auto heightCoordinates = [this, component] (const char * variable) {
+					auto expression = this->transformedTexCoords(ComponentType::Displacement, component);
+					const std::string_view token{ShaderVariable::ParallaxTextureCoordinates};
+					const std::string_view replacement{variable};
 
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [maxPOMIterations, minPOMIterations] (FragmentShader & shader, const Texture * component) {
-				/* Inline POM ray-marching directly in main().
-				 * NOTE: Cannot use Declaration::Function because functions are emitted before
-				 * sampler declarations in the generated GLSL, causing 'undeclared identifier' errors. */
+					for ( auto position = expression.find(token); position != std::string::npos; position = expression.find(token, position + replacement.size()) )
+					{
+						expression.replace(position, token.size(), replacement);
+					}
+
+					return expression;
+				};
+
+				const auto parameters = MaterialUB(UniformBlock::Component::ParallaxParameters);
+
+				/* Steep parallax + linear refinement between the two last layers (Tatarchuk, "Practical
+				 * Parallax Occlusion Mapping", GDC 2006; the refinement as in learnopengl.com,
+				 * "Parallax Mapping").
+				 * ⚠️ The image's +Y is UP and the tangent frame's B is that +Y (Khronos convention,
+				 * docs/coordinate-system.md), so B points toward DECREASING v: a tangent-space
+				 * direction (x, y) is (x, -y) in UV. The march used +y until 2026-09-22 and drew
+				 * the relief inverted along v only.
+				 * ⚠️ textureGrad() with the gradients of the UNDISPLACED coordinates, taken before
+				 * any branch: the loop exits per pixel, and an implicit-derivative texture() inside
+				 * non-uniform control flow reads undefined derivatives. */
 				Code{shader, Location::Top} <<
-					"vec3 pomViewDir = normalize(transpose(" << ShaderVariable::TangentToWorldMatrix << ") * (CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz));" << Line::End <<
-					"/* Distance-based POM fade: full effect within 8 units, disabled beyond 18. */" << Line::End <<
-					"float pomFade = 1.0 - smoothstep(8.0, 18.0, length(CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz));" << Line::End <<
-					"vec2 " << ShaderVariable::ParallaxTextureCoordinates << ";" << Line::End <<
-					"if (pomFade < 0.001) {" << Line::End <<
-					"  " << ShaderVariable::ParallaxTextureCoordinates << " = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
-					"} else {" << Line::End <<
-					"  int angleLayers = clamp(int(mix(" << std::to_string(maxPOMIterations) << ".0, " << std::to_string(minPOMIterations) << ".0, max(dot(vec3(0.0, 0.0, 1.0), pomViewDir), 0.0))), " << std::to_string(minPOMIterations) << ", " << std::to_string(maxPOMIterations) << ");" << Line::End <<
-					"  int numLayers = max(int(float(angleLayers) * pomFade), " << std::to_string(minPOMIterations) << ");" << Line::End <<
-					"  float layerDepth = 1.0 / float(numLayers);" << Line::End <<
-					"  float currentLayerDepth = 0.0;" << Line::End <<
-					"  vec2 deltaTexCoords = pomViewDir.xy * (" << MaterialUB(UniformBlock::Component::HeightScale) << " * pomFade) / float(numLayers);" << Line::End <<
-					"  vec2 currentTexCoords = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
-					"  float currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
-					"  for (int i = 0; i < " << std::to_string(maxPOMIterations) << "; i++) {" << Line::End <<
-					"	if (currentLayerDepth >= currentDepthMapValue) break;" << Line::End <<
-					"	currentTexCoords -= deltaTexCoords;" << Line::End <<
-					"	currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
-					"	currentLayerDepth += layerDepth;" << Line::End <<
-					"  }" << Line::End <<
-					"  vec2 prevTexCoords = currentTexCoords + deltaTexCoords;" << Line::End <<
-					"  float afterDepth = currentDepthMapValue - currentLayerDepth;" << Line::End <<
-					"  float beforeDepth = 1.0 - texture(" << component->samplerName() << ", prevTexCoords).r - currentLayerDepth + layerDepth;" << Line::End <<
-					"  float denom = afterDepth - beforeDepth;" << Line::End <<
-					"  float weight = (abs(denom) > 0.0001) ? clamp(afterDepth / denom, 0.0, 1.0) : 0.5;" << Line::End <<
-					"  " << ShaderVariable::ParallaxTextureCoordinates << " = prevTexCoords * weight + currentTexCoords * (1.0 - weight);" << Line::End <<
+					"vec2 " << ShaderVariable::ParallaxTextureCoordinates << " = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
+					"const vec2 pomHeightDx = dFdx(" << heightCoordinates(ShaderVariable::Primary2DTextureCoordinates) << ");" << Line::End <<
+					"const vec2 pomHeightDy = dFdy(" << heightCoordinates(ShaderVariable::Primary2DTextureCoordinates) << ");" << Line::End <<
+					"const vec3 pomToCamera = CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz;" << Line::End <<
+					"/* Distance fade: full relief closer than parallaxParameters.y, none (and no march) beyond .z. */" << Line::End <<
+					"const float pomFade = 1.0 - smoothstep(" << parameters << ".y, " << parameters << ".z, length(pomToCamera));" << Line::End <<
+					"const vec3 pomView = transpose(" << ShaderVariable::WorldTBNMatrix << ") * normalize(pomToCamera);" << Line::End <<
+					"if ( pomFade > 0.0 && " << parameters << ".x >= 1.0 && pomView.z > 0.0 ) {" << Line::End <<
+					"	/* More layers at grazing angles, where a step covers more texels; fewer as the relief fades. */" << Line::End <<
+					"	const float pomLayers = clamp(floor(mix(" << parameters << ".x, " << parameters << ".x * 0.25, pomView.z) * pomFade), 1.0, " << MaxParallaxIterations << ".0);" << Line::End <<
+					"	const float pomLayerDepth = 1.0 / pomLayers;" << Line::End <<
+					"	/* The /z is the parallax proper; bounded at 0.2 (78 degrees) so a grazing ray shifts by five depths at most. */" << Line::End <<
+					"	const vec2 pomDelta = vec2(pomView.x, -pomView.y) / max(pomView.z, 0.2) * (" << MaterialUB(UniformBlock::Component::HeightScale) << " * pomFade) * pomLayerDepth;" << Line::End <<
+					"	vec2 pomCurrent = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
+					"	float pomCurrentLayer = 0.0;" << Line::End <<
+					"	float pomCurrentDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomCurrent") << ", pomHeightDx, pomHeightDy).r;" << Line::End <<
+					"	vec2 pomPrevious = pomCurrent;" << Line::End <<
+					"	float pomPreviousDepth = pomCurrentDepth;" << Line::End <<
+					"	for ( int pomIndex = 0; pomIndex < " << MaxParallaxIterations << "; ++pomIndex ) {" << Line::End <<
+					"		if ( float(pomIndex) >= pomLayers || pomCurrentLayer >= pomCurrentDepth ) { break; }" << Line::End <<
+					"		pomPrevious = pomCurrent;" << Line::End <<
+					"		pomPreviousDepth = pomCurrentDepth;" << Line::End <<
+					"		pomCurrent -= pomDelta;" << Line::End <<
+					"		pomCurrentLayer += pomLayerDepth;" << Line::End <<
+					"		pomCurrentDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomCurrent") << ", pomHeightDx, pomHeightDy).r;" << Line::End <<
+					"	}" << Line::End <<
+					"	/* The surface crosses the ray between the two last layers. Bisect that interval first (relief" << Line::End <<
+					"	 * mapping, Policarpo et al., I3D 2005): one linear step alone leaves the layers visible as" << Line::End <<
+					"	 * slices on every slope facing the camera. Then interpolate the crossing in what is left. */" << Line::End <<
+					"	float pomPreviousLayer = max(pomCurrentLayer - pomLayerDepth, 0.0);" << Line::End <<
+					"	for ( int pomStep = 0; pomStep < " << ParallaxRefinementSteps << "; ++pomStep ) {" << Line::End <<
+					"		const vec2 pomMiddle = 0.5 * (pomPrevious + pomCurrent);" << Line::End <<
+					"		const float pomMiddleLayer = 0.5 * (pomPreviousLayer + pomCurrentLayer);" << Line::End <<
+					"		const float pomMiddleDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomMiddle") << ", pomHeightDx, pomHeightDy).r;" << Line::End <<
+					"		if ( pomMiddleLayer >= pomMiddleDepth ) { pomCurrent = pomMiddle; pomCurrentLayer = pomMiddleLayer; pomCurrentDepth = pomMiddleDepth; }" << Line::End <<
+					"		else { pomPrevious = pomMiddle; pomPreviousLayer = pomMiddleLayer; pomPreviousDepth = pomMiddleDepth; }" << Line::End <<
+					"	}" << Line::End <<
+					"	const float pomAfter = pomCurrentDepth - pomCurrentLayer;" << Line::End <<
+					"	const float pomBefore = pomPreviousDepth - pomPreviousLayer;" << Line::End <<
+					"	const float pomSpan = pomAfter - pomBefore;" << Line::End <<
+					"	const float pomWeight = abs(pomSpan) > 0.00001 ? clamp(pomAfter / pomSpan, 0.0, 1.0) : 0.0;" << Line::End <<
+					"	" << ShaderVariable::ParallaxTextureCoordinates << " = mix(pomCurrent, pomPrevious, pomWeight);" << Line::End <<
 					"}";
 
 				return true;
@@ -4410,6 +4473,26 @@ namespace EmEn::Graphics::Material
 	StandardResource::setHeightScale (float value) noexcept
 	{
 		m_materialProperties[HeightScaleOffset] = value;
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	StandardResource::setParallaxIterations (int iterations) noexcept
+	{
+		m_materialProperties[ParallaxParametersOffset] = static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations));
+		m_parallaxIterationsSet = true;
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	StandardResource::setParallaxFadeDistances (float start, float end) noexcept
+	{
+		const auto fadeStart = std::max(start, 0.0F);
+
+		m_materialProperties[ParallaxParametersOffset + 1] = fadeStart;
+		m_materialProperties[ParallaxParametersOffset + 2] = std::max(end, fadeStart);
 
 		this->markVideoMemoryDirty();
 	}
