@@ -167,7 +167,7 @@ namespace EmEn::Saphir
 		{
 			if ( m_heightfieldPixelFrameEnabled )
 			{
-				const auto * override = std::ranges::find_if(HeightfieldFrameOverrides, [&stageOutput] (const auto & entry) {
+				const auto override = std::ranges::find_if(HeightfieldFrameOverrides, [&stageOutput] (const auto & entry) {
 					return std::strcmp(entry.canonical, stageOutput.name()) == 0;
 				});
 
@@ -277,7 +277,7 @@ namespace EmEn::Saphir
 
 			for ( const auto * canonical : m_heightfieldOverrides )
 			{
-				const auto * override = std::ranges::find_if(HeightfieldFrameOverrides, [canonical] (const auto & entry) {
+				const auto override = std::ranges::find_if(HeightfieldFrameOverrides, [canonical] (const auto & entry) {
 					return std::strcmp(entry.canonical, canonical) == 0;
 				});
 
