@@ -42,6 +42,18 @@ the level chain because it carries ONE group — it samples the atlas this item 
    future bake (asset thumbnails, icons, per-object probes); a layer mask would touch every entity
    and every pass for a far wider scope than this item.
 
+## Owner decisions taken (2026-09-23) — the `terrain` forest made it urgent
+
+The `terrain` demo now plants ~210 000 trees (projet-alpha `src/Builtin/AGENTS.md` § 6d). Measured with
+`Core.SceneManagerService.getRenderStatistics()`: every visible tree is at LOD 3 and LOD 3 is still ~16 000
+triangles, 1.09 billion triangles in view. The owner chose (2026-09-23):
+
+3. **Albedo + normal atlases, lit at RUNTIME** by the engine's pipeline (the sun of `terrain` is animated;
+   a baked lit colour would be wrong the moment it moves) — the Ryan Brucks / Unreal approach.
+4. **Hemi-octahedral** coverage: only the views above the horizon, all the resolution for them.
+5. **8 × 8 views × 128 px** per variant: a 1024² atlas, ~8 MB a variant for albedo + normal.
+6. **All views baked in ONE frame** (one submission, one hitch at load).
+
 ## What remains
 
 1. ~~The per-target bake filter~~ **DONE** (2026-09-22). `RenderTarget::Abstract` gained
