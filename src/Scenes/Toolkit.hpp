@@ -910,6 +910,32 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Which vegetation surface a material is built for (Toolkit::vegetationMaterial()).
+			 */
+			enum class VegetationSurface : uint8_t
+			{
+				/** @brief Branches: opaque, back-face culled. */
+				Bark,
+				/** @brief Leaf cards: alpha cut-out, drawn from both sides. */
+				Foliage
+			};
+
+			/**
+			 * @brief Resolves a vegetation material NAME (owner decision 2026-09-23: a name is enough, no JSON to write).
+			 * @note 1. A store material of that name (a JSON in `Materials/`) wins. 2. Otherwise the material is built from
+			 * the images that follow the convention, `<name>-color_a` being required:
+			 *  - Foliage: `<name>-alpha` is the cut-out mask (red channel), else the colour image's own alpha; an alpha
+			 *    test at 0.5 keeps the leaf opaque; `<name>-normal` if it exists; roughness 0.5.
+			 *  - Bark: `<name>-normal` and `<name>-roughness` if they exist, else roughness 0.85.
+			 * Built once per name (`Vegetation/<Surface>/<name>` in the material container).
+			 * @param name The material or image base name, e.g. "Vegetals/leaf003".
+			 * @param surface The surface.
+			 * @return std::shared_ptr< Graphics::Material::Interface > Null when neither exists (the reason is traced).
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::Material::Interface > vegetationMaterial (const std::string & name, VegetationSurface surface) noexcept;
+
+			/**
 			 * @brief Builds a renderable from a generated tree: bark on layer 0, leaf cards on layer 1,
 			 * and one geometry per level of detail the generator produced.
 			 * @note It lives here rather than in Geometry::ResourceGenerator because a tree needs two
@@ -917,12 +943,15 @@ namespace EmEn::Scenes
 			 * @note The levels are filed as the generator produced them. They are deliberately NOT
 			 * decimated here: a quadric decimator can shrink a leaf card, never merge two of them, and
 			 * the canopy is where the triangles are.
+			 * @note A material the caller passes wins; otherwise the one the SPECIES names (TreeMesh::barkMaterial() /
+			 * leafMaterial(), set by TreeGenerator::setBarkMaterial() / setLeafMaterial()) is resolved by
+			 * vegetationMaterial(); otherwise the default material for the bark and the bark for the leaves.
 			 * @warning ⚠️ This helper guarantees the layer ORDER and the culling. The alpha mask that
-			 * cuts the leaf silhouette belongs to the leaf material, which the caller supplies.
+			 * cuts the leaf silhouette belongs to the leaf material.
 			 * @param resourceName A reference to a string naming the renderable and its geometries.
 			 * @param treeMesh A reference to a generated tree.
-			 * @param barkMaterial A material smart pointer for the branches. Default material resource.
-			 * @param leafMaterial A material smart pointer for the cards. Default the bark material.
+			 * @param barkMaterial A material smart pointer for the branches. Default the species' one.
+			 * @param leafMaterial A material smart pointer for the cards. Default the species' one.
 			 * @return std::shared_ptr< Graphics::Renderable::MultiLayerMeshResource >
 			 */
 			[[nodiscard]]
@@ -939,12 +968,27 @@ namespace EmEn::Scenes
 
 				auto bark = barkMaterial;
 
+				if ( bark == nullptr && !treeMesh.barkMaterial().empty() )
+				{
+					bark = this->vegetationMaterial(treeMesh.barkMaterial(), VegetationSurface::Bark);
+				}
+
 				if ( bark == nullptr )
 				{
 					bark = m_resourceManager.container< Material::StandardResource >()->getDefaultResource();
 				}
 
-				const auto leaf = leafMaterial != nullptr ? leafMaterial : bark;
+				auto leaf = leafMaterial;
+
+				if ( leaf == nullptr && !treeMesh.leafMaterial().empty() )
+				{
+					leaf = this->vegetationMaterial(treeMesh.leafMaterial(), VegetationSurface::Foliage);
+				}
+
+				if ( leaf == nullptr )
+				{
+					leaf = bark;
+				}
 
 				/* ⚠️ EnableVertexColor is not decoration here: the four channels the skinner fills — trunk
 				 * bending, branch bending, flutter phase, baked occlusion — reach the vertex buffer only if

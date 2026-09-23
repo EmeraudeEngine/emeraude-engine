@@ -4648,6 +4648,16 @@ nothing. That is the path vegetation takes: a quadric decimator can shrink a lea
 merge two of them, and the canopy is where the triangles are. `Scenes::Toolkit::generateTreeRenderable()`
 is the caller.
 
+**Vegetation materials by NAME** (owner decision 2026-09-23): `generateTreeRenderable(label, mesh)`
+takes the materials the species names (`TreeMesh::barkMaterial()` / `leafMaterial()`) unless the caller
+passes its own, and `Toolkit::vegetationMaterial(name, Bark|Foliage)` resolves a name: a STORE material
+of that name (a JSON in `Materials/`) wins; otherwise one is built from the images of the convention —
+`<name>-color_a` (required); foliage: `<name>-alpha` as the cut-out mask (red channel) or the colour
+image's own alpha, an alpha test at 0.5 (the card stays opaque), roughness 0.5; bark: `<name>-roughness`
+or 0.85; both: `<name>-normal` if present. Built once, as `Vegetation/Bark|Foliage/<name>`. ⚠️ No
+back-lit translucency yet: the engine's subsurface term needs a thickness
+(`LightGenerator.PBR.cpp`), a thin leaf is its own open item.
+
 ⚠️ **Every level must expose the SAME number of sub-geometries.** A layer is addressed by its
 index whatever the level drawn, so a level that disagrees would silently draw one part with
 another part's material — bark shaded as foliage.

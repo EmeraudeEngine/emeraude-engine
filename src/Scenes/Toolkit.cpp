@@ -27,7 +27,9 @@
 #include "Toolkit.hpp"
 
 /* Local inclusions. */
+#include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 
 namespace EmEn::Scenes
 {
@@ -38,6 +40,81 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 
 	size_t Toolkit::s_autoEntityCount{0};
+
+	std::shared_ptr< Material::Interface >
+	Toolkit::vegetationMaterial (const std::string & name, VegetationSurface surface) noexcept
+	{
+		auto * materials = m_resourceManager.container< Material::StandardResource >();
+
+		/* 1. A store material of that name (a JSON in Materials/) wins: it is the surcharge. */
+		if ( materials->isResourceExists(name) )
+		{
+			return materials->getResource(name, false);
+		}
+
+		/* 2. The images of the convention. ⚠️ Synchronous: this runs while a scene is being built. */
+		const auto * images = m_resourceManager.container< ImageResource >();
+		const auto hasImage = [images, &name] (const char * suffix) {
+			return images->isResourceExists(name + suffix);
+		};
+
+		if ( !hasImage("-color_a") )
+		{
+			TraceError{ClassId} << "No vegetation material '" << name << "': neither a store material nor the image '" << name << "-color_a' !";
+
+			return nullptr;
+		}
+
+		auto * textures = m_resourceManager.container< TextureResource::Texture2D >();
+		const auto albedo = textures->getResource(name + "-color_a", false);
+		const auto normal = hasImage("-normal") ? textures->getResource(name + "-normal", false) : nullptr;
+		const bool foliage = surface == VegetationSurface::Foliage;
+		const auto alphaMask = foliage && hasImage("-alpha") ? textures->getResource(name + "-alpha", false) : nullptr;
+		const auto roughness = !foliage && hasImage("-roughness") ? textures->getResource(name + "-roughness", false) : nullptr;
+		const std::string materialName = std::string{foliage ? "Vegetation/Foliage/" : "Vegetation/Bark/"} + name;
+
+		return materials->getOrCreateResourceSync(materialName, [&albedo, &normal, &alphaMask, &roughness, foliage] (Material::StandardResource & material) {
+			if ( foliage )
+			{
+				/* The cut-out: a separate mask (red channel) or the colour image's own alpha. The alpha test keeps the
+				 * card OPAQUE (depth write, no sorting): a leaf is either there or not. */
+				if ( alphaMask != nullptr )
+				{
+					material.setAlbedoComponent(albedo);
+					material.setOpacityComponent(alphaMask);
+				}
+				else
+				{
+					material.setAlbedoComponent(albedo, true);
+				}
+
+				material.enableAlphaTest(0.5F);
+				material.setRoughnessComponent(0.5F);
+			}
+			else
+			{
+				material.setAlbedoComponent(albedo);
+
+				if ( roughness != nullptr )
+				{
+					material.setRoughnessComponent(roughness);
+				}
+				else
+				{
+					material.setRoughnessComponent(0.85F);
+				}
+			}
+
+			material.setMetalnessComponent(0.0F);
+
+			if ( normal != nullptr )
+			{
+				material.setNormalComponent(normal);
+			}
+
+			return material.setManualLoadSuccess(true);
+		});
+	}
 
 	std::shared_ptr< Node >
 	Toolkit::generateNode (const std::string & entityName, GenPolicy genPolicy, bool movable) noexcept
