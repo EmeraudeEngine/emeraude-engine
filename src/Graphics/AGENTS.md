@@ -1655,6 +1655,13 @@ filtered) decides whether the history is still valid.
   buffer. Those now FADE over the accumulation (~1/alpha frames) instead of snapping. If one becomes
   visible, add a colour test reserved to LARGE changes; never bring back a colour clip on still,
   unchanged geometry.
+- **Cross-OS (2026-09-23)**: macOS (M2, TAA forced on) whole frame > 8 = 0.01 %, max 11 — the Linux
+  figure; Windows (RTX 3060, 720p, RayTracing lane) 0.30 % against 1.21 % with its TAA OFF; Linux in
+  the RayTracing lane 0.27 %. The ScreenSpace/RayTracing gap is the lane, not the machine. ⚠️ OPEN: in
+  the RayTracing lane the far band stays 1.9 % > 8 with TAA against 0.02 % without — the half-res
+  traced effects vary with the jitter phase and the EMA does not fully average it (was 65 % before the
+  fix; not visible to the owner). Both Windows and macOS had `TemporalAA/Enabled = false` in their
+  settings: that, not the machine, is why they "did not shimmer".
 - An HDRP-style anti-flicker (the clip widened with stationarity and temporal contrast) was tried
   the same day and reached far band 11.6 / 7.9 (base gamma 1.0 / 1.5, full strength): it only
   softens the wrong test. Removed.
