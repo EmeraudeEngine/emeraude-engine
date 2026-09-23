@@ -1650,6 +1650,11 @@ the limit dropped every tree. With 250 m: shadows 419 878 → 8 430 instances, f
 `Multiple`): a 62.5 m cell of trees switches as one, and with the default coverage threshold (0.75) a
 ~8 m tree is at LOD 3 beyond ~21 m, so a cell centre 31-44 m away draws even its nearest tree at LOD 3.
 
+**Render-target lists are SNAPSHOT before their callbacks (2026-09-23).** `forEachRenderToShadowMap/Texture/View()`
+copy the live targets under the list lock and call back WITHOUT it (`snapshotRenderTargets()`): held across a
+`prepareRender()`, the texture-target lock crossed the node lock with `SkyFollowsSun` on the logic thread and froze
+`terrain` (`docs/caution-points.md`). The `with*()` batch variants still hold the lock — keep their callbacks trivial.
+
 **Draw range and bake-only instances (2026-09-23).** `RenderableInstance::setDrawDistanceRange(near, far)` is tested
 after the frustum in both render-list branches (static entities, nodes) and bounds the RT lists by its far limit;
 `isBakeOnly()` instances are rejected by `checkRenderableInstanceForRendering()` unless they are the target's bake

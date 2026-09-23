@@ -1675,19 +1675,48 @@ namespace EmEn::Scenes
 			forEachRenderToShadowMap (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
 			{
-				const std::scoped_lock lock{m_renderToShadowMapAccess};
-
-				for ( const auto & renderTargetWeak : m_renderToShadowMaps )
+				/* ⚠️⚠️ The list is SNAPSHOT under its lock and processed WITHOUT it: the callbacks reach deep into the
+				 * scene (the render thread prepares a target — Scene::populateRenderLists() takes the node and the
+				 * static-entity locks), while the logic thread reaches this list from INSIDE those locks
+				 * (SkyFollowsSun → refreshAmbientLightProperties() → here, under the node lock). Held across the
+				 * callback, the two orders crossed: a deadlock, the `terrain` forest frozen one second after its
+				 * start as soon as its imposter bake target joined this list (2026-09-23). */
+				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToShadowMapAccess, m_renderToShadowMaps, "shadow map") )
 				{
-					if ( const auto renderTarget = renderTargetWeak.lock() )
+					std::forward< function_t >(process)(renderTarget);
+				}
+			}
+
+			/**
+			 * @brief Returns the live targets of a render-target list, copied under its lock.
+			 * @param access A reference to the list's mutex.
+			 * @param list A reference to the list.
+			 * @param label The kind of target, for the trace of an expired one.
+			 * @return std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > >
+			 */
+			[[nodiscard]]
+			static
+			std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > >
+			snapshotRenderTargets (std::mutex & access, const RenderTargetAccessList & list, const char * label) noexcept
+			{
+				const std::scoped_lock lock{access};
+
+				std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > > targets;
+				targets.reserve(list.size());
+
+				for ( const auto & renderTargetWeak : list )
+				{
+					if ( auto renderTarget = renderTargetWeak.lock() )
 					{
-						std::forward< function_t >(process)(renderTarget);
+						targets.emplace_back(std::move(renderTarget));
 					}
 					else
 					{
-						Tracer::debug(ClassId, "Dead RenderTarget in the scene shadow map list!");
+						TraceDebug{ClassId} << "Dead RenderTarget in the scene " << label << " list!";
 					}
 				}
+
+				return targets;
 			}
 
 			/**
@@ -1729,18 +1758,15 @@ namespace EmEn::Scenes
 			forEachRenderToTexture (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
 			{
-				const std::scoped_lock lock{m_renderToTextureAccess};
-
-				for ( const auto & renderTargetWeak : m_renderToTextures )
+				/* ⚠️⚠️ The list is SNAPSHOT under its lock and processed WITHOUT it: the callbacks reach deep into the
+				 * scene (the render thread prepares a target — Scene::populateRenderLists() takes the node and the
+				 * static-entity locks), while the logic thread reaches this list from INSIDE those locks
+				 * (SkyFollowsSun → refreshAmbientLightProperties() → here, under the node lock). Held across the
+				 * callback, the two orders crossed: a deadlock, the `terrain` forest frozen one second after its
+				 * start as soon as its imposter bake target joined this list (2026-09-23). */
+				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToTextureAccess, m_renderToTextures, "texture") )
 				{
-					if ( const auto renderTarget = renderTargetWeak.lock() )
-					{
-						std::forward< function_t >(process)(renderTarget);
-					}
-					else
-					{
-						Tracer::debug(ClassId, "Dead RenderTarget in the scene texture list!");
-					}
+					std::forward< function_t >(process)(renderTarget);
 				}
 			}
 
@@ -1783,18 +1809,15 @@ namespace EmEn::Scenes
 			forEachRenderToView (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< Graphics::RenderTarget::Abstract > & >)
 			{
-				const std::scoped_lock lock{m_renderToViewAccess};
-
-				for ( const auto & renderTargetWeak : m_renderToViews )
+				/* ⚠️⚠️ The list is SNAPSHOT under its lock and processed WITHOUT it: the callbacks reach deep into the
+				 * scene (the render thread prepares a target — Scene::populateRenderLists() takes the node and the
+				 * static-entity locks), while the logic thread reaches this list from INSIDE those locks
+				 * (SkyFollowsSun → refreshAmbientLightProperties() → here, under the node lock). Held across the
+				 * callback, the two orders crossed: a deadlock, the `terrain` forest frozen one second after its
+				 * start as soon as its imposter bake target joined this list (2026-09-23). */
+				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToViewAccess, m_renderToViews, "view") )
 				{
-					if ( const auto renderTarget = renderTargetWeak.lock() )
-					{
-						std::forward< function_t >(process)(renderTarget);
-					}
-					else
-					{
-						Tracer::debug(ClassId, "Dead RenderTarget in the scene view list!");
-					}
+					std::forward< function_t >(process)(renderTarget);
 				}
 			}
 

@@ -27,6 +27,12 @@ A race that the validation's slowdown hides is the first suspect (the stall happ
 registers ~18 000 instanced visuals); under Wayland a main thread that does not pump the display events for 60 s
 also blocks `vkAcquireNextImageKHR`. Not attributed. The exit after the stall is not explained either.
 
+⚠️ **Not to be confused with the one-second FREEZE (FIXED 2026-09-23)**: `terrain` frozen for good about a second
+after its start was a logic/render DEADLOCK over the render-target list lock (`docs/caution-points.md` § *Holding a
+render-target list lock across its callback*). This item is the other pattern: two 60 s acquisition timeouts BEFORE
+`successfully started`, then a clean exit. Some of those runs overlapped another projet-alpha instance on the same
+machine (`Failed to bind to 127.0.0.1:7777` in one log): re-measure with a single instance before anything else.
+
 ## What remains
 
 - Reproduce without validation, with thread stacks during the stall (`gdb -p`, `thread apply all bt`).

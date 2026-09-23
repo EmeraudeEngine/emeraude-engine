@@ -5630,6 +5630,20 @@ box filter, odd sizes included), `generateMip()` uses it, `TextureCache::Version
 ⚠️ Measure a mip chain OFFLINE on the real image before suspecting the shader: a 20-line probe gave the answer the
 screenshots could not.
 
+### ⚠⚠⚠ Holding a render-target list lock across its callback DEADLOCKED the logic and render threads (Sep 2026, FIXED)
+
+Symptom (owner): `terrain` with its forest ran smoothly for about a second, then froze for good — the console
+silent, no imposter atlas baked; the same forest without imposters (option 5 = 1) never froze. Thread stacks (gdb):
+the LOGIC thread, updating the sun node under the node lock, reached `SkyFollowsSun` → `refreshAmbientLightProperties()`
+→ `forEachRenderToTexture()` and waited for the texture-target list lock; the RENDER thread held that very lock in
+`renderRenderToTextures()` → `prepareRender(imposterBake)` → `populateRenderLists()` and waited for the node lock.
+Latent since the helpers existed: it needs a render-to-texture target that is PREPARED (the list was empty in
+`terrain` until the imposter bake) and a logic-side caller of the list running under the node lock (an animated sun
+refreshes the ambient every tick — a frozen sun almost never, which is why runs at `--demo-options 100000,25` passed).
+Fix: `forEachRenderToShadowMap/Texture/View()` now SNAPSHOT the list under the lock and process it without
+(`Scene::snapshotRenderTargets()`). Rule: never hold a container lock while calling back into code that takes other
+locks — the `.claude/rules` "DEFER" rule, applied to locks.
+
 ### ⚠️ The imposter bake needs the COARSEST LOD and a TRANSPARENT clear (Sep 2026)
 
 Two faults of the first bake, both silent: the atlas was 100 % covered (the renderer's opaque clear colour was kept,
