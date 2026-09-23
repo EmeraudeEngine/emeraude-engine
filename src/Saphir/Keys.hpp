@@ -851,6 +851,10 @@ namespace EmEn::Saphir
 				constexpr auto ParallaxParameters{"parallaxParameters"};
 				/** @brief Mesh-shading surface: the geometry-to-parallax handover band (start, end, unused, unused). */
 				constexpr auto ParallaxHandover{"parallaxHandover"};
+				/** @brief Octahedral imposter: the object's bounding sphere (centre.xyz, radius), object space. */
+				constexpr auto ImposterBounds{"imposterBounds"};
+				/** @brief Octahedral imposter: (views per side, 1 / views per side, unused, unused). */
+				constexpr auto ImposterGrid{"imposterGrid"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};
@@ -953,6 +957,19 @@ namespace EmEn::Saphir
 			constexpr auto NormalViewSpace{"svNormalViewSpace"};
 			constexpr auto ModelScale{"svModelScale"};
 			constexpr auto RestPositionModelSpace{"svRestPositionModelSpace"};
+			/* Octahedral imposter billboard (AbstractVertexStage::enableImposterBillboarding()): the three atlas
+			 * coordinates of the fragment, their blend weights, the three cells, and the billboard's own frame
+			 * (three vec3, not a mat3: a mat3 varying takes three locations). */
+			constexpr auto ImposterAtlasCoordinates0{"svImposterUV0"};
+			constexpr auto ImposterAtlasCoordinates1{"svImposterUV1"};
+			constexpr auto ImposterAtlasCoordinates2{"svImposterUV2"};
+			constexpr auto ImposterWeights{"svImposterWeights"};
+			constexpr auto ImposterCell0{"svImposterCell0"};
+			constexpr auto ImposterCell1{"svImposterCell1"};
+			constexpr auto ImposterCell2{"svImposterCell2"};
+			constexpr auto ImposterFrameRight{"svImposterRight"};
+			constexpr auto ImposterFrameUp{"svImposterUp"};
+			constexpr auto ImposterFrameBack{"svImposterBack"};
 			constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
 			constexpr auto MDIModelMatrix{"svMDIModelMatrix"};
 			constexpr auto InstanceModelMatrix{"svInstanceModelMatrix"};

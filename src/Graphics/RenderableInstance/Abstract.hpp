@@ -153,7 +153,16 @@ namespace EmEn::Graphics::RenderableInstance
 		 * the current model matrix into the previous slot before overwriting it (one history
 		 * step per logic update). Meaningless on Unique and on sprites.
 		 */
-		EnableInstanceMotionHistory = 1U << 13
+		EnableInstanceMotionHistory = 1U << 13,
+		/**
+		 * @brief The instance exists only to be BAKED: it renders into the target whose bake subject it is
+		 * (RenderTarget::Abstract::setBakeSubject()) and nowhere else — no view, no probe, no ray tracing.
+		 * @note The 64 rotated copies of a tree an imposter atlas is baked from (Scenes::Toolkit::bakeTreeImposter()).
+		 */
+		BakeOnly = 1U << 14,
+		/** @brief The instance never enters the ray-tracing lists (TLAS): an imposter's quad would trace as a frozen,
+		 * wrongly facing card. */
+		DisableRayTracing = 1U << 15
 	};
 
 	/**
@@ -317,6 +326,95 @@ namespace EmEn::Graphics::RenderableInstance
 			isShadowCastingDisabled () const noexcept
 			{
 				return this->isFlagEnabled(DisableShadowCasting);
+			}
+
+			/**
+			 * @brief Marks the instance as bake-only (see RenderableInstanceFlagBits::BakeOnly).
+			 * @return Abstract *
+			 */
+			Abstract *
+			setBakeOnly () noexcept
+			{
+				this->enableFlag(BakeOnly);
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns whether the instance is bake-only.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isBakeOnly () const noexcept
+			{
+				return this->isFlagEnabled(BakeOnly);
+			}
+
+			/**
+			 * @brief Keeps the instance out of the ray-tracing lists.
+			 * @return Abstract *
+			 */
+			Abstract *
+			disableRayTracing () noexcept
+			{
+				this->enableFlag(DisableRayTracing);
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns whether the instance is kept out of the ray-tracing lists.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRayTracingDisabled () const noexcept
+			{
+				return this->isFlagEnabled(DisableRayTracing);
+			}
+
+			/**
+			 * @brief Restricts where the instance is drawn to a range of distances from the camera of the target, in
+			 * metres. Far = 0 means no far limit. Default [0, 0]: drawn at every distance.
+			 * @note The switch between a mesh and its imposter (owner decision 2026-09-23): the mesh visual says
+			 * [0, d], its imposter sibling [d, 0]. The ray-tracing lists honour the far limit too — what is no longer
+			 * drawn as a mesh no longer shows in reflections either. Distance to the instance's ENTITY position.
+			 * @param nearDistance The distance under which the instance is not drawn.
+			 * @param farDistance The distance beyond which the instance is not drawn, 0 for none.
+			 * @return Abstract *
+			 */
+			Abstract *
+			setDrawDistanceRange (float nearDistance, float farDistance) noexcept
+			{
+				m_drawNearDistance = nearDistance > 0.0F ? nearDistance : 0.0F;
+				m_drawFarDistance = farDistance > 0.0F ? farDistance : 0.0F;
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns whether a distance falls outside the draw range.
+			 * @param distance The distance from the target's camera.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isOutsideDrawDistanceRange (float distance) const noexcept
+			{
+				return distance < m_drawNearDistance || ( m_drawFarDistance > 0.0F && distance > m_drawFarDistance );
+			}
+
+			/**
+			 * @brief Returns whether a distance lies beyond the far draw limit.
+			 * @param distance The distance from the target's camera.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isBeyondDrawDistance (float distance) const noexcept
+			{
+				return m_drawFarDistance > 0.0F && distance > m_drawFarDistance;
 			}
 
 			/**
@@ -1259,6 +1357,10 @@ namespace EmEn::Graphics::RenderableInstance
 			uint32_t m_instanceTransformsSlot{0};
 			/** @brief Distance from the viewer beyond which the instance casts no shadow, 0 for no limit. */
 			float m_shadowCastingDistance{0.0F};
+			/** @brief Distance from the camera under which the instance is not drawn. */
+			float m_drawNearDistance{0.0F};
+			/** @brief Distance from the camera beyond which the instance is not drawn, 0 for no limit. */
+			float m_drawFarDistance{0.0F};
 			/* Skeletal skinning GPU resources (per-instance).
 			 * The SSBO holds one section per frame in flight; each descriptor set targets its
 			 * section (fixed offset/range, same layout). See createSkinningResources(). */

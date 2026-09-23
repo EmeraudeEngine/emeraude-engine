@@ -5617,6 +5617,26 @@ mips a box filter already gives. Two traps met on the way:
 
 Details and numbers: `src/Graphics/AGENTS.md` § Alpha Test and § Alpha COVERAGE.
 
+### ⚠⚠⚠ The BC7 mip chain lost the MEAN of every texture — a bilinear resample is not a mip filter (Sep 2026, FIXED)
+
+Symptom: distant pines rendered as bare trunks (owner, `forest` and `terrain`), and their imposter atlas baked bare
+(1.9 % coverage). Not the LOD, not the alpha test, not the cache: the conifer with the BROADLEAF's textures was full
+at 380 m, so it was the texture. `TextureCompressor` built each level with `Processor::resize(Linear)`, a display
+resize that reads two pixels around ONE point per destination pixel, at x·(w−1)/W from the top-left corner — a 1 × 1
+target is the corner pixel. Measured on the 23 % needle mask (1022 × 2048): mean 0.35 at 3 × 8, **0.001** at 1 × 4;
+the broadleaf's mask (1024²) went 0.38 → 0.118 → 0.000. Every card small enough to sample the tail vanished, and
+every texture of the engine had a wrong mip tail. Fix: emeraude-base `Processor::downsample()` (exact area-weighted
+box filter, odd sizes included), `generateMip()` uses it, `TextureCache::Version` 3.
+⚠️ Measure a mip chain OFFLINE on the real image before suspecting the shader: a 20-line probe gave the answer the
+screenshots could not.
+
+### ⚠️ The imposter bake needs the COARSEST LOD and a TRANSPARENT clear (Sep 2026)
+
+Two faults of the first bake, both silent: the atlas was 100 % covered (the renderer's opaque clear colour was kept,
+`ImposterBake` now overrides it with transparent black), and the aspen and pine views were nearly empty (baked at
+LOD 0, whose cards fall under a pixel of a 128 px view; the camera now stands at 280 m so `selectLODLevel()` picks the
+coarsest level — the one the imposter replaces). Graphics `AGENTS.md` § 15e.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

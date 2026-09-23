@@ -26,10 +26,17 @@
 
 #include "Toolkit.hpp"
 
+/* STL inclusions. */
+#include <vector>
+
 /* Local inclusions. */
+#include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Math/OctahedralMapping.hpp"
+#include "Scenes/Component/MultipleVisuals.hpp"
 
 namespace EmEn::Scenes
 {
@@ -118,6 +125,153 @@ namespace EmEn::Scenes
 
 			return material.setManualLoadSuccess(true);
 		});
+	}
+
+	Toolkit::TreeImposter
+	Toolkit::bakeTreeImposter (const std::string & label, const std::shared_ptr< Renderable::Abstract > & tree, const Space3D::Sphere< float > & bounds) noexcept
+	{
+		if ( m_scene == nullptr || tree == nullptr || bounds.radius() <= 0.0F )
+		{
+			TraceError{ClassId} << "Unable to bake the imposter of '" << label << "': no scene, no tree, or no bounds !";
+
+			return {};
+		}
+
+		auto & renderer = m_scene->AVConsoleManager().graphicsRenderer();
+
+		auto atlas = std::make_shared< ImposterAtlas >("Imposter/" + label);
+
+		if ( !atlas->create(renderer) )
+		{
+			return {};
+		}
+
+		const auto bakeTarget = m_scene->imposterBakeTarget(atlas->size());
+
+		if ( bakeTarget == nullptr )
+		{
+			return {};
+		}
+
+		/* The rig: far below the scene, inside its boundary. The camera looks along -Z at the plane z = 0 of the rig,
+		 * where the copies are laid, each scaled to a sphere of ImposterRigRadius in a cell twice as wide: the
+		 * orthographic box is the whole grid. The camera stands far (ImposterCameraDistance): the coarsest LOD. */
+		const auto gridSize = atlas->gridSize();
+		const auto cellSide = 2.0F * ImposterRigRadius;
+		const auto gridSide = cellSide * static_cast< float >(gridSize);
+		const Vector< 3, float > rigOrigin{0.0F, -0.5F * m_scene->boundary(), 0.0F};
+
+		bakeTarget->configureCamera(CartesianFrame< float >{rigOrigin + Vector< 3, float >{0.0F, 0.0F, ImposterCameraDistance}}, gridSide);
+
+		const auto radius = bounds.radius() * ImposterMargin;
+		const auto scale = ImposterRigRadius / radius;
+		const auto & centre = bounds.position();
+
+		std::vector< CartesianFrame< float > > copies;
+		copies.reserve(static_cast< size_t >(gridSize) * gridSize);
+
+		for ( uint32_t cellY = 0; cellY < gridSize; ++cellY )
+		{
+			for ( uint32_t cellX = 0; cellX < gridSize; ++cellX )
+			{
+				/* The view of this cell: the direction toward its camera, and the camera frame the shader reads it
+				 * back with (the SAME two functions its GLSL transcription uses). */
+				const auto view = imposterCellFrame(hemiOctahedralCellDirection< float >(cellX, cellY, gridSize));
+
+				/* The copy's rotation R maps the view's right / up / back onto the rig's X / Y / Z (the bake camera's
+				 * own axes), so its columns — what the frame holds — are R's rows read vertically. */
+				const Vector< 3, float > upward{view.right[Y], view.up[Y], view.back[Y]};
+				const Vector< 3, float > backward{view.right[Z], view.up[Z], view.back[Z]};
+				const Vector< 3, float > rotatedCentre{
+					Vector< 3, float >::dotProduct(view.right, centre),
+					Vector< 3, float >::dotProduct(view.up, centre),
+					Vector< 3, float >::dotProduct(view.back, centre)
+				};
+
+				/* Column cellX from the left, row cellY from the TOP of the image: the rig's +Y is the image's up. */
+				const Vector< 3, float > cellCentre{
+					(static_cast< float >(cellX) + 0.5F - static_cast< float >(gridSize) * 0.5F) * cellSide,
+					(static_cast< float >(gridSize) * 0.5F - static_cast< float >(cellY) - 0.5F) * cellSide,
+					0.0F
+				};
+
+				copies.emplace_back(cellCentre - rotatedCentre * scale, upward, backward, Vector< 3, float >{scale, scale, scale});
+			}
+		}
+
+		const auto previousCursor = this->cursor();
+
+		this->setCursor(rigOrigin);
+
+		const auto rig = this->generateEntity< StaticEntity >("ImposterRig/" + label);
+
+		this->setCursor(previousCursor);
+
+		if ( rig == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the imposter rig of '" << label << "' !";
+
+			return {};
+		}
+
+		const auto copiesVisual = rig->componentBuilder< Component::MultipleVisuals >("ImposterCopies")
+			.setup([] (Component::MultipleVisuals & visuals) {
+				visuals.getRenderableInstance()->setBakeOnly()->disableShadowCasting()->disableRayTracing();
+			})
+			.build(tree, copies);
+
+		if ( copiesVisual == nullptr || !bakeTarget->enqueue(copiesVisual->getRenderableInstance().get(), atlas) )
+		{
+			TraceError{ClassId} << "Unable to queue the imposter bake of '" << label << "' !";
+
+			return {};
+		}
+
+		/* The billboard: a [-1, 1]² quad the vertex stage turns toward the eye (AbstractVertexStage::
+		 * enableImposterBillboarding()), shaded by the imposter material. */
+		const Vector< 4, float > imposterBounds{centre[X], centre[Y], centre[Z], radius};
+
+		const auto material = m_resourceManager.container< Material::StandardResource >()->getOrCreateResourceSync("Imposter/" + label, [atlas, imposterBounds] (Material::StandardResource & imposterMaterial) {
+			if ( !imposterMaterial.setImposterAtlas(atlas, imposterBounds) )
+			{
+				return false;
+			}
+
+			/* Foliage and bark in one card: the leaves dominate a canopy seen from afar. */
+			imposterMaterial.setRoughnessComponent(0.6F);
+			imposterMaterial.setMetalnessComponent(0.0F);
+
+			return imposterMaterial.setManualLoadSuccess(true);
+		});
+
+		if ( material == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the imposter material of '" << label << "' !";
+
+			return {};
+		}
+
+		const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
+
+		const auto quad = generator.quad(2.0F, 2.0F, "Imposter/" + label + "/Quad");
+
+		if ( quad == nullptr )
+		{
+			return {};
+		}
+
+		auto renderable = m_resourceManager.container< Renderable::MeshResource >()->getOrCreateResourceSync("Imposter/" + label, [quad, material] (Renderable::MeshResource & meshResource) {
+			return meshResource.load(quad, material);
+		});
+
+		if ( renderable == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the imposter renderable of '" << label << "' !";
+
+			return {};
+		}
+
+		return {atlas, renderable};
 	}
 
 	std::shared_ptr< Node >

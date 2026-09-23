@@ -332,7 +332,7 @@ namespace EmEn::Vulkan
 			bool clearDepthImage (Image & image, float depthValue, uint32_t stencilValue = 0) const noexcept;
 
 			/**
-			 * @brief Clears a color image to a specific RGBA value.
+			 * @brief Clears a color image to a specific RGBA value, every mip level and every layer.
 			 * @note The image must be in VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL layout.
 			 * @param image A reference to the color image to clear.
 			 * @param clearColor The RGBA clear color values.

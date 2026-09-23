@@ -54,42 +54,46 @@ triangles, 1.09 billion triangles in view. The owner chose (2026-09-23):
 5. **8 × 8 views × 128 px** per variant: a 1024² atlas, ~8 MB a variant for albedo + normal.
 6. **All views baked in ONE frame** (one submission, one hitch at load).
 
+7. **The rung is a SIBLING visual with a draw-distance range**, not a fifth LOD slot: every LOD of a
+   renderable shares its layer's material and program (`Renderable::Abstract::material(layer)` takes no
+   LOD, the program key has none), and the imposter needs another material.
+8. **Switch at a distance in metres with a HASHED cross-fade band** (reusing the hashed alpha test), not a
+   hard cut and not screen coverage.
+9. **Beyond the switch distance a tree also leaves the TLAS** (its BLAS is LOD 0); the imposter never
+   enters it (a frozen, wrongly-facing quad).
+10. **The 12 variants bake over 12 consecutive frames** with one reused target (~56 MB transient).
+
+## The implementation plan (2026-09-23)
+
+1. emeraude-base `Math/OctahedralMapping.hpp`: HEMI-octahedral encode / decode / cell direction / blend +
+   the cell's camera frame; tests in `test_MathOctahedralMapping.cpp`.
+2. `RenderableInstance` flag `BakeOnly`: such an instance renders ONLY into the target whose bake subject it
+   is (never the view, the probes or the TLAS).
+3. A G-buffer bake render target (colour, normals, material properties, albedo, depth — the scene pass's MRT
+   order) whose attachments are copied to staging buffers in the same submission and read after the fence.
+4. `Scenes::ImposterBaker`: one variant per bake, 64 rotated copies of the tree in ONE instanced subject under
+   one orthographic camera, wind frozen during the bake; the CPU turns the read-back into two textures
+   (albedo+coverage sRGB, object-space normal+depth linear).
+5. A billboard vertex mode that keeps the instance's yaw and picks the three cells; the imposter mode of
+   `StandardResource` (three weighted atlas samples, hashed cutout anchored on the atlas, the decoded normal
+   fed to the lighting).
+6. `RenderableInstance` draw-distance range + `DisableRayTracing`; the demo adds the imposter visuals.
+
 ## What remains
 
-1. ~~The per-target bake filter~~ **DONE** (2026-09-22). `RenderTarget::Abstract` gained
-   `setBakeSubject()` (render ONE instance, `nullptr` = the whole scene as before) and
-   `setClearColorOverride()` (the target's own clear, the renderer's being opaque). The filter sits
-   at the single site that feeds every render list,
-   `Scene::checkRenderableInstanceForRendering()`, so the MDI batches and the lighted selections
-   inherit it for free. Cascade builds clean, 0 warning. ⚠ **Not yet exercised at runtime** — no
-   caller sets a bake subject until the orchestration below exists. Described in
-   `src/Graphics/AGENTS.md` § 15d.
+**The bake and the runtime imposter are DELIVERED (2026-09-23)** — `src/Graphics/AGENTS.md` § 15e: the atlas,
+the G-buffer bake target, `Toolkit::bakeTreeImposter()`, the billboard vertex mode, the imposter material mode, the
+draw-distance switch and the RT/shadow exclusion; `terrain` draws 117 186 imposters for 234 372 triangles. Open:
 
-2. **The N x N sequencing.** Secondary, and cheap either way now that the assembly is known to
-   exist: `commandBuffer.blitImage()` / `copyImage()` are already used by `GrabPass`
-   (`src/Graphics/GrabPass.cpp:709-736`) and `PostProcessor` (`src/Graphics/PostProcessor.cpp:760`),
-   so N views are assembled into one atlas image with no new Vulkan work. The loop draws one
-   target per pass, so it is either N^2 targets registered at once (one long hitch) or one target
-   over N^2 frames (a small state machine). To be settled when the filter lands — it trades VRAM
-   against hitch length and nothing else.
-3. **The GLSL side.** No blocker: `Declaration::Function` is the mechanism, and
-   `Graphics/Effects/Resolve/FXAA.cpp:46` is the working model (name, return type,
-   `addInParameter`, `Code{fn, Location::Output}`, `shader.declare(fn)`). ⚠️ Functions are emitted
-   BEFORE sampler declarations, so a declared function may not reference a sampler declared later
-   — it takes the sampler as an in-parameter, exactly as FXAA does. The octahedral node is pure
-   `vec3` math, so this costs nothing. ⚠️ **It will be a SECOND implementation of the mapping**,
-   and the four tests guard the C++ one only: transcribe it line by line and say so in both files.
-
-The mechanics already verified and available:
-- `Scenes::Scene::createRenderToTexture2D()` (`src/Scenes/Scene.rendering.cpp:159`) creates and
-  registers the target.
-- `Renderer::renderRenderToTextures()` honours an **on-demand contract**: with
-  `isAutomaticRendering()` false, a target renders only while `setRenderOutOfDate()` flags it
-  (`src/Graphics/RenderTarget/Abstract.hpp:170-215`). That is the "bake once, then never again"
-  the atlas wants.
-- `Scenes::Toolkit::generateTexture2DRenderer()` (`src/Scenes/Toolkit.hpp:1185`) is the working
-  precedent: a camera entity connected to the target through
-  `AVConsoleManager().connectVideoDevices()`.
+1. **The hashed CROSS-FADE band** (owner decision 8): today the switch at 250 m is a hard cut per cell. Needs a
+   per-draw fade factor both the mesh materials and the imposter read, from the cell distance and the band.
+2. **Visual validation of the imposter LIGHTING** against the mesh at the switch distance, pinned exposure and frozen
+   wind (the atlas geometry and coverage are validated; the normals were not compared side by side yet).
+3. **Depth / parallax**: the atlas stores no depth, so the three views are blended without per-view parallax
+   (Brucks' ray–plane step) — a mild ghosting when the eye turns fast around a near imposter.
+4. **Memory**: 12 variants × (albedo RGBA8 + normal RGBA16F, 5 mips) ≈ 200 MB uncompressed; BC7/BC5 would divide it.
+5. **The wind during the bake**: the copies sway with the scene's wind; the 1.15 margin absorbs `terrain`'s, a
+   stronger wind smears the views.
 
 ## Traps
 

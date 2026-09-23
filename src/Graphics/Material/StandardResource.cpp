@@ -44,6 +44,7 @@
 #include "GPURTMaterialData.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/IBLTexture.hpp"
+#include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
@@ -57,6 +58,7 @@
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/ImposterGLSL.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Saphir/VertexShader.hpp"
@@ -1817,7 +1819,11 @@ namespace EmEn::Graphics::Material
 				0.0F, DefaultParallaxFadeStart, DefaultParallaxFadeEnd, 0.0F,
 				/* Parallax handover (geometry-to-parallax start, end, unused, unused): 0, 0 = none. Only a
 				 * mesh-shading surface reads it (setParallaxHandover()). */
-				0.0F, 0.0F, 0.0F, 0.0F
+				0.0F, 0.0F, 0.0F, 0.0F,
+				/* Octahedral imposter bounds (centre.xyz, radius) and grid (views per side, 1 / views, unused,
+				 * unused). Read only by an imposter material (setImposterAtlas()). */
+				0.0F, 0.0F, 0.0F, 1.0F,
+				2.0F, 0.5F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -2851,6 +2857,8 @@ namespace EmEn::Graphics::Material
 		block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::UVWIndex, UVWIndexVectors);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ParallaxParameters);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ParallaxHandover);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ImposterBounds);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ImposterGrid);
 
 		return block;
 	}
@@ -2869,7 +2877,24 @@ namespace EmEn::Graphics::Material
 
 		const auto * geometry = generator.getGeometryInterface();
 
-		/* The hashed cutout anchors its threshold on the rest position (see alphaCutoutStatement()). */
+		/* An imposter is a billboard the vertex stage builds from the bounds and the grid: the material UBO is
+		 * read by the vertex stage too (its binding is visible there). */
+		if ( this->isFlagEnabled(ImposterAtlasEnabled) )
+		{
+			const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
+
+			if ( !vertexShader.declare(this->getUniformBlock(materialSet, 0)) )
+			{
+				TraceError{ClassId} << "Unable to declare the material uniform block in the vertex stage of the imposter '" << this->name() << "' !";
+
+				return false;
+			}
+
+			vertexShader.enableImposterBillboarding(MaterialUB(UniformBlock::Component::ImposterBounds), MaterialUB(UniformBlock::Component::ImposterGrid));
+		}
+
+		/* The hashed cutout anchors its threshold on the rest position (see alphaCutoutStatement()). On an imposter
+		 * that is the quad corner: the hash stays glued to the billboard, one cell per pixel, as the eye turns. */
 		if ( this->isFlagEnabled(AlphaTestEnabled) && this->isFlagEnabled(AlphaHashedEnabled) && !vertexShader.requestSynthesizeInstruction(ShaderVariable::RestPositionModelSpace) )
 		{
 			TraceError{ClassId} << "Unable to synthesize the rest position for the hashed alpha test of PBR material '" << this->name() << "' !";
@@ -3755,6 +3780,30 @@ namespace EmEn::Graphics::Material
 		 * Always generated (including ambient pass) because the MRT needs the perturbed normal
 		 * for post-process effects (RTR, SSR, SSAO, RTAO). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
+			/* An imposter's normal atlas holds, per view, the normal in THAT view's camera space (the bake's own
+			 * view space): each sample goes back to object space through its view's frame, the three are blended,
+			 * then expressed in the billboard's tangent space, which the standard TBN turns into the world normal. */
+			if ( this->isFlagEnabled(ImposterAtlasEnabled) )
+			{
+				if ( !ImposterGLSL::declareFunctions(shader) )
+				{
+					return false;
+				}
+
+				const std::string sampler{component->samplerName()};
+				const std::string grid = MaterialUB(UniformBlock::Component::ImposterGrid) + ".x";
+
+				Code{shader, Location::Top} <<
+					"const vec3 imposterNormalObject = " <<
+						ShaderVariable::ImposterWeights << ".x * (imposterCellFrame(imposterCellDirection(" << ShaderVariable::ImposterCell0 << ", " << grid << ")) * texture(" << sampler << ", " << ShaderVariable::ImposterAtlasCoordinates0 << ").xyz) + " <<
+						ShaderVariable::ImposterWeights << ".y * (imposterCellFrame(imposterCellDirection(" << ShaderVariable::ImposterCell1 << ", " << grid << ")) * texture(" << sampler << ", " << ShaderVariable::ImposterAtlasCoordinates1 << ").xyz) + " <<
+						ShaderVariable::ImposterWeights << ".z * (imposterCellFrame(imposterCellDirection(" << ShaderVariable::ImposterCell2 << ", " << grid << ")) * texture(" << sampler << ", " << ShaderVariable::ImposterAtlasCoordinates2 << ").xyz);" << Line::End <<
+					"const vec3 imposterNormalTangent = vec3(dot(imposterNormalObject, " << ShaderVariable::ImposterFrameRight << "), dot(imposterNormalObject, " << ShaderVariable::ImposterFrameUp << "), dot(imposterNormalObject, " << ShaderVariable::ImposterFrameBack << "));" << Line::End <<
+					"const vec3 " << component->variableName() << " = dot(imposterNormalTangent, imposterNormalTangent) > 1.0e-12 ? normalize(imposterNormalTangent) : vec3(0.0, 0.0, 1.0);";
+
+				return true;
+			}
+
 			Code{shader, Location::Top} <<
 				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
 				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
@@ -3775,6 +3824,23 @@ namespace EmEn::Graphics::Material
 		 * so a value-dependent variant could serve one material's program to another.
 		 * DefaultAlbedoColor is White precisely so this stays an identity when untouched. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Albedo, [this] (FragmentShader & shader, const Texture * component) {
+			/* An imposter's albedo atlas is PREMULTIPLIED by its coverage (the bake clears to 0, the mips average the
+			 * two together): the three views are blended premultiplied, then the colour is divided by the blended
+			 * coverage, which stays the alpha the cutout tests. */
+			if ( this->isFlagEnabled(ImposterAtlasEnabled) )
+			{
+				const std::string sampler{component->samplerName()};
+
+				Code{shader, Location::Top} <<
+					"const vec4 imposterAlbedoBlend = " <<
+						ShaderVariable::ImposterWeights << ".x * texture(" << sampler << ", " << ShaderVariable::ImposterAtlasCoordinates0 << ") + " <<
+						ShaderVariable::ImposterWeights << ".y * texture(" << sampler << ", " << ShaderVariable::ImposterAtlasCoordinates1 << ") + " <<
+						ShaderVariable::ImposterWeights << ".z * texture(" << sampler << ", " << ShaderVariable::ImposterAtlasCoordinates2 << ");" << Line::End <<
+					"const vec4 " << component->variableName() << " = vec4(imposterAlbedoBlend.rgb / max(imposterAlbedoBlend.a, 1.0e-4), imposterAlbedoBlend.a) * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
+
+				return true;
+			}
+
 			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Albedo, component) << ") * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
 
 			return true;
@@ -5005,6 +5071,54 @@ namespace EmEn::Graphics::Material
 		this->disableFlag(BlendingEnabled);
 
 		this->setAlphaThresholdToDiscard(threshold);
+	}
+
+	bool
+	StandardResource::setImposterAtlas (const std::shared_ptr< ImposterAtlas > & atlas, const Vector< 4, float > & bounds) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} << "The resource '" << this->name() << "' is created ! Unable to make it an imposter.";
+
+			return false;
+		}
+
+		if ( atlas == nullptr || !atlas->isCreated() )
+		{
+			TraceError{ClassId} << "The imposter material '" << this->name() << "' needs a created atlas !";
+
+			return false;
+		}
+
+		if ( !this->setAlbedoComponentFromRenderTarget(atlas->albedoTexture(), true) )
+		{
+			return false;
+		}
+
+		/* The normal atlas is a raw GPU texture, like the albedo's: no resource dependency, the atlas is held. */
+		const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, atlas->normalTexture()));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		m_imposterAtlas = atlas;
+
+		m_materialProperties[ImposterBoundsOffset] = bounds[X];
+		m_materialProperties[ImposterBoundsOffset + 1] = bounds[Y];
+		m_materialProperties[ImposterBoundsOffset + 2] = bounds[Z];
+		m_materialProperties[ImposterBoundsOffset + 3] = bounds[W] > 0.0F ? bounds[W] : 1.0F;
+
+		const auto gridSize = static_cast< float >(atlas->gridSize());
+
+		m_materialProperties[ImposterGridOffset] = gridSize;
+		m_materialProperties[ImposterGridOffset + 1] = 1.0F / gridSize;
+
+		this->enableFlag(ImposterAtlasEnabled);
+		this->enableHashedAlphaTest();
+
+		return true;
 	}
 
 	void

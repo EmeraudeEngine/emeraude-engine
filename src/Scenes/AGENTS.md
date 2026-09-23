@@ -1650,6 +1650,12 @@ the limit dropped every tree. With 250 m: shadows 419 878 → 8 430 instances, f
 `Multiple`): a 62.5 m cell of trees switches as one, and with the default coverage threshold (0.75) a
 ~8 m tree is at LOD 3 beyond ~21 m, so a cell centre 31-44 m away draws even its nearest tree at LOD 3.
 
+**Draw range and bake-only instances (2026-09-23).** `RenderableInstance::setDrawDistanceRange(near, far)` is tested
+after the frustum in both render-list branches (static entities, nodes) and bounds the RT lists by its far limit;
+`isBakeOnly()` instances are rejected by `checkRenderableInstanceForRendering()` unless they are the target's bake
+subject, and never reach a shadow list or the TLAS; a BAKE target (`bakeSubject() != nullptr`) never rebuilds the
+TLAS from its one-subject lists. `Toolkit::bakeTreeImposter()` uses both (Graphics `AGENTS.md` § 15e).
+
 ## Instance clustering — `Scenes/InstanceCluster.hpp` (2026-08-09)
 
 `buildInstanceClusters()` splits an instance set into a fixed metric grid, one entity per

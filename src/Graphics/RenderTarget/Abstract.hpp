@@ -342,6 +342,34 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
+			 * @brief Returns whether the target is flagged out of date when some instance of the scene becomes ready.
+			 * @note True by default: a probe or a view re-renders when new content arrives. A BAKE says false — it
+			 * renders when a job asks for it, and a forest streaming thousands of instances in would re-render it
+			 * every frame of the load for nothing.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			isRefreshedWhenContentArrives () const noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief RENDER THREAD. Records whether the render being recorded drew anything (Scene::prepareRender()).
+			 * @note Set by the renderer right after the scene prepared this target, read by recordPostRenderCompute():
+			 * a bake must not copy an empty render.
+			 * @param hasContent True when the render lists were not empty.
+			 * @return void
+			 */
+			void
+			setLastRenderHasContent (bool hasContent) noexcept
+			{
+				m_lastRenderHasContent = hasContent;
+			}
+
+			/**
 			 * @brief Returns the single instance this target bakes, nullptr when it renders the scene.
 			 * @return const void *
 			 */
@@ -634,6 +662,17 @@ namespace EmEn::Graphics::RenderTarget
 		protected:
 
 			/**
+			 * @brief RENDER THREAD. Returns whether the render being recorded drew anything.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			lastRenderHasContent () const noexcept
+			{
+				return m_lastRenderHasContent;
+			}
+
+			/**
 			 * @brief Returns the view matrices interface OWNED by this render target.
 			 * @note Lifecycle accessor: createRenderTarget()/destroyRenderTarget() operate on
 			 * this resource exclusively. Targets that delegate their render-time viewMatrices()
@@ -794,5 +833,6 @@ namespace EmEn::Graphics::RenderTarget
 			bool m_suspendableByPostProcessReflections{false};
 			bool m_hasBeenRendered{false};
 			bool m_hasClearColorOverride{false};
+			bool m_lastRenderHasContent{false};
 	};
 }

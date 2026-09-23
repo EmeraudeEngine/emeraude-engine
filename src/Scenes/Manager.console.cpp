@@ -27,6 +27,7 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <ranges>
@@ -36,6 +37,7 @@
 #include "Component/Microphone.hpp"
 #include "Component/Visual.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
@@ -940,6 +942,52 @@ namespace EmEn::Scenes
 
 			return true;
 		}, "Returns what the last frame's render lists submit, per geometry LOD: batches, instances, triangles (view, then shadows).");
+
+		this->bindCommand("writeImposterAtlases", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto bakeTarget = m_activeScene->existingImposterBakeTarget();
+
+			if ( bakeTarget == nullptr )
+			{
+				outputs.emplace_back(Severity::Warning, "The active scene baked no imposter.");
+
+				return true;
+			}
+
+			auto & renderer = m_activeScene->AVConsoleManager().graphicsRenderer();
+			const auto captureDirectory = renderer.primaryServices().fileSystem().userDataDirectory("captures");
+
+			std::stringstream report;
+			size_t written = 0;
+
+			for ( const auto & atlas : bakeTarget->bakedAtlases() )
+			{
+				auto fileName = atlas->name();
+
+				std::ranges::replace(fileName, '/', '-');
+
+				const auto filepath = captureDirectory / (fileName + "-albedo.png");
+
+				if ( atlas->writeAlbedo(renderer.transferManager(), filepath) )
+				{
+					report << filepath.string() << "\n";
+
+					++written;
+				}
+			}
+
+			report << written << " imposter atlas(es) written, " << bakeTarget->pendingJobs() << " bake(s) still queued.";
+
+			outputs.emplace_back(Severity::Info, report.str());
+
+			return true;
+		}, "Writes the albedo (premultiplied, mip 0) of every imposter atlas the active scene baked to the captures directory.");
 
 		this->bindCommand("getNode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )

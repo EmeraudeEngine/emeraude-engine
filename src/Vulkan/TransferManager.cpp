@@ -724,10 +724,12 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* EVERY mip level: an image cleared at mip 0 only leaves its chain undefined, and a sampler
+		 * minifying it reads garbage (the imposter atlas samples its mips before its first bake). */
 		VkImageSubresourceRange subresourceRange{};
 		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		subresourceRange.baseMipLevel = 0;
-		subresourceRange.levelCount = 1;
+		subresourceRange.levelCount = image.createInfo().mipLevels;
 		subresourceRange.baseArrayLayer = 0;
 		subresourceRange.layerCount = image.createInfo().arrayLayers;
 

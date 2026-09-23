@@ -195,6 +195,39 @@ namespace EmEn::Scenes
 		return renderTarget;
 	}
 
+	std::shared_ptr< RenderTarget::ImposterBake >
+	Scene::imposterBakeTarget (uint32_t size) noexcept
+	{
+		const std::scoped_lock lock{m_renderToTextureAccess};
+
+		if ( m_imposterBake != nullptr )
+		{
+			if ( m_imposterBake->extent().width != size )
+			{
+				TraceError{ClassId} << "The imposter bake target of the scene is " << m_imposterBake->extent().width << " px, not " << size << " !";
+
+				return nullptr;
+			}
+
+			return m_imposterBake;
+		}
+
+		auto renderTarget = std::make_shared< RenderTarget::ImposterBake >(this->name() + "/ImposterBake", size);
+
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
+		{
+			TraceError{ClassId} << "Unable to create the imposter bake target !";
+
+			return nullptr;
+		}
+
+		m_renderToTextures.emplace(renderTarget);
+
+		m_imposterBake = std::move(renderTarget);
+
+		return m_imposterBake;
+	}
+
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
 	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection, uint32_t colorBits) noexcept
 	{
@@ -448,7 +481,10 @@ namespace EmEn::Scenes
 		if ( m_onDemandRefreshPending.exchange(false, std::memory_order_acq_rel) )
 		{
 			const auto flagTarget = [] (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) {
-				renderTarget->setRenderOutOfDate();
+				if ( renderTarget->isRefreshedWhenContentArrives() )
+				{
+					renderTarget->setRenderOutOfDate();
+				}
 			};
 
 			this->forEachRenderToTexture(flagTarget);
@@ -553,8 +589,13 @@ namespace EmEn::Scenes
 
 		/* Rebuild the TLAS and RT metadata from RT-specific render lists (no frustum culling).
 		 * RT effects cast rays in world space and need ALL scene geometry, not just what's on screen. */
-		auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
-		m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
+		/* ⚠️ Not from a BAKE: its lists hold one subject, and a TLAS rebuilt from them would carry that subject
+		 * alone for the rest of the frame's earlier passes. */
+		if ( renderTarget->bakeSubject() == nullptr )
+		{
+			auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
+			m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
+		}
 
 		return true;
 	}
@@ -932,8 +973,8 @@ namespace EmEn::Scenes
 	bool
 	Scene::checkRenderableInstanceForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
 	{
-		/* NOTE: Skip instances that have shadow casting disabled. */
-		if ( renderableInstance->isShadowCastingDisabled() )
+		/* NOTE: Skip instances that have shadow casting disabled, and the bake-only ones (never in a shadow map). */
+		if ( renderableInstance->isShadowCastingDisabled() || renderableInstance->isBakeOnly() )
 		{
 			return true; // Continue (skip this instance)
 		}
@@ -1197,6 +1238,13 @@ namespace EmEn::Scenes
 			return true; // Continue
 		}
 
+		/* And the other way round: a bake-only instance (an imposter's rotated copies) shows in its own bake and
+		 * nowhere else — the view, the probes and the TLAS never see it. */
+		if ( renderableInstance->isBakeOnly() && renderTarget->bakeSubject() != renderableInstance.get() )
+		{
+			return true; // Continue
+		}
+
 		/* AUTO-exclusion (probe self-sampling): an instance whose material SAMPLES the render
 		 * target being populated must never be rendered into it, whether or not the caller
 		 * registered it in the manual exclusion list above. Sampling an image that is
@@ -1397,7 +1445,7 @@ namespace EmEn::Scenes
 					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
 					 * looked up by the RT trace shader via materialIndices[geometryIndex]
 					 * (multi-geometry BLAS). Distance-only culling, no frustum. */
-					if ( RTEnabled && distance <= m_TLASDistance )
+					if ( RTEnabled && distance <= m_TLASDistance && !renderableInstance->isRayTracingDisabled() && !renderableInstance->isBakeOnly() && !renderableInstance->isBeyondDrawDistance(distance) )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
@@ -1433,8 +1481,13 @@ namespace EmEn::Scenes
 						}
 					}
 
-					/* Raster list: frustum culling + distance check. */
+					/* Raster list: frustum culling + distance check, then the instance's own draw range (mesh vs imposter). */
 					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(frustum) ) )
+					{
+						return;
+					}
+
+					if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
 					{
 						return;
 					}
@@ -1480,7 +1533,7 @@ namespace EmEn::Scenes
 
 					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
 					 * looked up by the RT trace shader via materialIndices[geometryIndex]. */
-					if ( RTEnabled && distance <= m_TLASDistance )
+					if ( RTEnabled && distance <= m_TLASDistance && !renderableInstance->isRayTracingDisabled() && !renderableInstance->isBakeOnly() && !renderableInstance->isBeyondDrawDistance(distance) )
 					{
 						const auto * renderable = renderableInstance->renderable();
 
@@ -1523,6 +1576,11 @@ namespace EmEn::Scenes
 					}
 
 					if ( !renderTarget->isCubemap() && !currentNode->isVisibleTo(frustum) )
+					{
+						return;
+					}
+
+					if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
 					{
 						return;
 					}

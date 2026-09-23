@@ -63,6 +63,7 @@ namespace EmEn
 			class Texture;
 		}
 
+		class ImposterAtlas;
 		class SharedUniformBuffer;
 	}
 
@@ -686,6 +687,22 @@ namespace EmEn::Graphics::Material
 			 * @return void
 			 */
 			void enableHashedAlphaTest () noexcept;
+
+			/**
+			 * @brief Turns the material into the OCTAHEDRAL IMPOSTER of an object: albedo and normal from an atlas baked
+			 * from it (Graphics::ImposterAtlas, baked by Scenes::Toolkit::bakeTreeImposter()), lit at runtime like any
+			 * surface (owner decision 2026-09-23).
+			 * @note Draw it on a quad whose vertices span [-1, 1]² in x and y: the vertex stage places the quad in object
+			 * space, facing the eye, over the bounding sphere (AbstractVertexStage::enableImposterBillboarding()). The
+			 * fragment blends the three views around the direction to the eye — albedo UN-premultiplied by the blended
+			 * coverage, the view-space normals of each view brought back to object space by that view's frame, then
+			 * into the billboard's tangent space — and cuts it with the HASHED alpha test, anchored on the quad itself.
+			 * @note Must be called before the material is created. The atlas must outlive the material.
+			 * @param atlas A reference to the imposter atlas.
+			 * @param bounds The bounding sphere the atlas was baked around (centre.xyz, radius), object space.
+			 * @return bool
+			 */
+			bool setImposterAtlas (const std::shared_ptr< ImposterAtlas > & atlas, const Base::Math::Vector< 4, float > & bounds) noexcept;
 
 			/**
 			 * @brief Sets the artistic reflection mix amount (dynamic property, D2 override).
@@ -1756,6 +1773,8 @@ namespace EmEn::Graphics::Material
 			 * vec4 uvwIndex[7]			 (offset 88-115) - Per-ComponentType index into the two tables
 			 * vec4 parallaxParameters	  (offset 116-119) - POM (max layers, fade start, fade end, unused)
 			 * vec4 parallaxHandover		(offset 120-123) - geometry-to-parallax handover (start, end) of a mesh-shading surface
+			 * vec4 imposterBounds		  (offset 124-127) - octahedral imposter: bounding sphere (centre.xyz, radius), object space
+			 * vec4 imposterGrid			(offset 128-131) - octahedral imposter: (views per side, 1 / views per side, unused, unused)
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1812,8 +1831,12 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ParallaxParametersOffset{116UL};
 			/** @brief POM handover vec4 on a mesh-shading surface: (geometry-to-parallax start, end, unused, unused). */
 			static constexpr auto ParallaxHandoverOffset{120UL};
+			/** @brief Octahedral imposter vec4: the object's bounding sphere (centre.xyz, radius), object space. */
+			static constexpr auto ImposterBoundsOffset{124UL};
+			/** @brief Octahedral imposter vec4: (views per side, 1 / views per side, unused, unused). */
+			static constexpr auto ImposterGridOffset{128UL};
 			/** @brief Float count of the material UBO. */
-			static constexpr auto MaterialPropertiesSize{124UL};
+			static constexpr auto MaterialPropertiesSize{132UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -1886,6 +1909,8 @@ namespace EmEn::Graphics::Material
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
+			/** @brief The atlas of an imposter material (setImposterAtlas()), held so its textures outlive the material. */
+			std::shared_ptr< ImposterAtlas > m_imposterAtlas;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine, outlives every material).
 			uint32_t m_sharedUBOIndex{0};
 			bool m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty(), cleared by updateVideoMemory().

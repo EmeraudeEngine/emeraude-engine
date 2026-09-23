@@ -45,6 +45,7 @@
 #include "Generator/Abstract.hpp"
 #include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "Graphics/Types.hpp"
+#include "ImposterGLSL.hpp"
 #include "Keys.hpp"
 #include "Tracer.hpp"
 #include "Types.hpp"
@@ -1679,6 +1680,11 @@ namespace EmEn::Saphir
 		switch ( vectorType )
 		{
 			case VertexAttributeType::Tangent :
+				if ( m_imposterBillboardEnabled )
+				{
+					return "imposterTangent";
+				}
+
 				if ( m_heightfieldSurfaceEnabled )
 				{
 					return "hfTangent";
@@ -1687,6 +1693,11 @@ namespace EmEn::Saphir
 				return m_skinningEnabled ? "skinnedTangent" : Attribute::Tangent;
 
 			case VertexAttributeType::Binormal :
+				if ( m_imposterBillboardEnabled )
+				{
+					return "imposterBinormal";
+				}
+
 				if ( m_heightfieldSurfaceEnabled )
 				{
 					return "hfBinormal";
@@ -1695,6 +1706,11 @@ namespace EmEn::Saphir
 				return m_skinningEnabled ? "skinnedBinormal" : Attribute::Binormal;
 
 			case VertexAttributeType::Normal :
+				if ( m_imposterBillboardEnabled )
+				{
+					return "imposterNormal";
+				}
+
 				if ( m_heightfieldSurfaceEnabled )
 				{
 					return "hfNormal";
@@ -1710,6 +1726,12 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::declareFrameAttribute (VertexAttributeType vectorType) noexcept
 	{
+		/* The billboard synthesizes its frame (prepareImposterBillboard()). */
+		if ( m_imposterBillboardEnabled )
+		{
+			return true;
+		}
+
 		if ( m_heightfieldSurfaceEnabled )
 		{
 			m_heightfieldFrameRequested = true;
@@ -1853,6 +1875,12 @@ namespace EmEn::Saphir
 	const char *
 	AbstractVertexStage::vertexPositionExpression () const noexcept
 	{
+		/* An imposter billboard: the quad corner placed in object space, facing the eye. */
+		if ( m_imposterBillboardEnabled )
+		{
+			return "imposterPosition";
+		}
+
 		/* A heightfield is its own displacement stage: the patch point placed and lifted. */
 		if ( m_heightfieldSurfaceEnabled )
 		{
@@ -1885,6 +1913,12 @@ namespace EmEn::Saphir
 			return "hfPosition";
 		}
 
+		/* The billboard turns with the eye, not with time: the velocity keeps the object's own motion only. */
+		if ( m_imposterBillboardEnabled )
+		{
+			return "imposterPosition";
+		}
+
 		if ( m_vegetationWindEnabled )
 		{
 			return "previousWindPosition";
@@ -1896,6 +1930,103 @@ namespace EmEn::Saphir
 		}
 
 		return Attribute::Position;
+	}
+
+	bool
+	AbstractVertexStage::prepareImposterBillboard (Generator::Abstract & generator) noexcept
+	{
+		if ( this->preparationAlreadyDone("imposterPosition") )
+		{
+			return true;
+		}
+
+		if ( m_skinningEnabled || m_vegetationWindEnabled || m_heightfieldSurfaceEnabled )
+		{
+			Tracer::error(ClassId, "An imposter billboard cannot be skinned, blown by the wind or a heightfield !");
+
+			return false;
+		}
+
+		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		{
+			return false;
+		}
+
+		/* Registers the model matrix's own preparation (MDI, instance-transforms SSBO) BEFORE this one. */
+		std::string modelMatrix;
+
+		if ( !this->resolveWorldModelMatrix(modelMatrix) )
+		{
+			return false;
+		}
+
+		const std::array< std::pair< const char *, const char * >, 10 > outputs{{
+			{ShaderVariable::ImposterAtlasCoordinates0, GLSL::FloatVector2},
+			{ShaderVariable::ImposterAtlasCoordinates1, GLSL::FloatVector2},
+			{ShaderVariable::ImposterAtlasCoordinates2, GLSL::FloatVector2},
+			{ShaderVariable::ImposterWeights, GLSL::FloatVector3},
+			{ShaderVariable::ImposterCell0, GLSL::FloatVector2},
+			{ShaderVariable::ImposterCell1, GLSL::FloatVector2},
+			{ShaderVariable::ImposterCell2, GLSL::FloatVector2},
+			{ShaderVariable::ImposterFrameRight, GLSL::FloatVector3},
+			{ShaderVariable::ImposterFrameUp, GLSL::FloatVector3},
+			{ShaderVariable::ImposterFrameBack, GLSL::FloatVector3}
+		}};
+
+		for ( size_t index = 0; index < outputs.size(); ++index )
+		{
+			/* The atlas coordinates interpolate over the quad; everything else is one value per instance. */
+			const auto * interpolation = index < 3 ? GLSL::Smooth : GLSL::Flat;
+
+			if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), outputs[index].second, outputs[index].first, interpolation}) )
+			{
+				return false;
+			}
+		}
+
+		if ( !ImposterGLSL::declareFunctions(*this) )
+		{
+			return false;
+		}
+
+		const std::string position{Attribute::Position};
+
+		std::stringstream code;
+
+		code <<
+			"\t" "/* Octahedral imposter billboard, in object space. */" "\n"
+			"\t" "const mat4 imposterModel = " << modelMatrix << ";" "\n"
+			"\t" "const vec3 imposterEye = (inverse(imposterModel) * vec4(" << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz, 1.0)).xyz;" "\n"
+			"\t" "const vec4 imposterBounds = " << m_imposterBoundsExpression << ";" "\n"
+			"\t" "const float imposterGridSize = " << m_imposterGridExpression << ".x;" "\n"
+			"\t" "const vec3 imposterToEye = imposterEye - imposterBounds.xyz;" "\n"
+			"\t" "const mat3 imposterBillboard = imposterCellFrame(dot(imposterToEye, imposterToEye) > 0.0 ? imposterToEye : vec3(0.0, 0.0, 1.0));" "\n"
+			"\t" "const vec3 imposterPosition = imposterBounds.xyz + (imposterBillboard[0] * " << position << ".x + imposterBillboard[1] * " << position << ".y) * imposterBounds.w;" "\n"
+			"\t" "const vec3 imposterTangent = imposterBillboard[0];" "\n"
+			"\t" "const vec3 imposterBinormal = imposterBillboard[1];" "\n"
+			"\t" "const vec3 imposterNormal = imposterBillboard[2];" "\n"
+			"\t" "/* The three views around the direction to the eye: octahedralLatticeBlend(), transcribed. */" "\n"
+			"\t" "const vec2 imposterExact = clamp(imposterHemiEncode(imposterToEye), 0.0, 1.0) * (imposterGridSize - 1.0);" "\n"
+			"\t" "const vec2 imposterBase = min(floor(imposterExact), vec2(imposterGridSize - 2.0));" "\n"
+			"\t" "const vec2 imposterFraction = imposterExact - imposterBase;" "\n"
+			"\t" "const bool imposterLower = imposterFraction.x + imposterFraction.y <= 1.0;" "\n"
+			"\t" << ShaderVariable::ImposterCell0 << " = imposterLower ? imposterBase : imposterBase + vec2(1.0, 1.0);" "\n"
+			"\t" << ShaderVariable::ImposterCell1 << " = imposterLower ? imposterBase + vec2(1.0, 0.0) : imposterBase + vec2(0.0, 1.0);" "\n"
+			"\t" << ShaderVariable::ImposterCell2 << " = imposterLower ? imposterBase + vec2(0.0, 1.0) : imposterBase + vec2(1.0, 0.0);" "\n"
+			"\t" << ShaderVariable::ImposterWeights << " = imposterLower ?" "\n"
+			"\t\t" "vec3(1.0 - imposterFraction.x - imposterFraction.y, imposterFraction.x, imposterFraction.y) :" "\n"
+			"\t\t" "vec3(imposterFraction.x + imposterFraction.y - 1.0, 1.0 - imposterFraction.x, 1.0 - imposterFraction.y);" "\n"
+			"\t" << ShaderVariable::ImposterFrameRight << " = imposterBillboard[0];" "\n"
+			"\t" << ShaderVariable::ImposterFrameUp << " = imposterBillboard[1];" "\n"
+			"\t" << ShaderVariable::ImposterFrameBack << " = imposterBillboard[2];" "\n"
+			"\t" "const vec3 imposterOffset = imposterPosition - imposterBounds.xyz;" "\n"
+			"\t" << ShaderVariable::ImposterAtlasCoordinates0 << " = imposterAtlasCoordinates(" << ShaderVariable::ImposterCell0 << ", imposterOffset, imposterBounds.w, imposterGridSize);" "\n"
+			"\t" << ShaderVariable::ImposterAtlasCoordinates1 << " = imposterAtlasCoordinates(" << ShaderVariable::ImposterCell1 << ", imposterOffset, imposterBounds.w, imposterGridSize);" "\n"
+			"\t" << ShaderVariable::ImposterAtlasCoordinates2 << " = imposterAtlasCoordinates(" << ShaderVariable::ImposterCell2 << ", imposterOffset, imposterBounds.w, imposterGridSize);" "\n\n";
+
+		m_uniquePreparations.emplace_back("imposterPosition", code.str());
+
+		return true;
 	}
 
 	std::string
@@ -2080,6 +2211,13 @@ namespace EmEn::Saphir
 		 * matrix, and generateMainUniqueInstructions() is what emits every preparation — asked after
 		 * it, they would name variables nothing declares. */
 		if ( m_heightfieldSurfaceEnabled && m_heightfieldPixelFrameEnabled && !this->declareHeightfieldPixelFrameOutputs(generator, outputInstructions) )
+		{
+			return false;
+		}
+
+		/* ⚠️ BEFORE the unique instructions too: the billboard is itself a preparation, registered right after
+		 * the model matrix it reads, so it is emitted after it and before every synthesis that reads its position. */
+		if ( m_imposterBillboardEnabled && !this->prepareImposterBillboard(generator) )
 		{
 			return false;
 		}

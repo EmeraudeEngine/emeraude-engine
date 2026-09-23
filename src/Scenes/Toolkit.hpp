@@ -40,6 +40,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "VertexFactory/TreeMesh.hpp"
+#include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Physics/SphereCollisionModel.hpp"
@@ -1037,6 +1038,36 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief What bakeTreeImposter() hands back.
+			 */
+			struct TreeImposter final
+			{
+				/** @brief The atlas, baked over the next frames (ImposterAtlas::isBaked()). */
+				std::shared_ptr< Graphics::ImposterAtlas > atlas;
+				/** @brief The billboard that draws it: instance it with the tree's own frames. */
+				std::shared_ptr< Graphics::Renderable::Abstract > renderable;
+			};
+
+			/**
+			 * @brief Bakes the octahedral IMPOSTER of a tree and returns the renderable that draws it (owner decisions
+			 * 2026-09-23: albedo + normal lit at runtime, hemi-octahedral, 8 × 8 views of 128 px, the variants over
+			 * consecutive frames; engine `docs/todo/vegetation-octahedral-imposter-atlas.md`).
+			 * @note The bake: a BAKE-ONLY entity (RenderableInstance::setBakeOnly()) holding 64 copies of the tree, one
+			 * per view, each rotated so its view direction faces the scene's imposter bake camera and scaled to a unit
+			 * sphere, laid on the 8 × 8 grid the camera sees (Scene::imposterBakeTarget()); the target renders it with
+			 * the tree's own programs at LOD 0 and copies the albedo and normals into the atlas. The entity stays: it
+			 * costs nothing once baked, it is drawn nowhere else.
+			 * @note ⚠️ The copies sway in the scene's wind if one is set: the margin (ImposterMargin) absorbs a moderate
+			 * sway; a strong wind during the bake smears the views.
+			 * @param label The variant's name (resource names derive from it).
+			 * @param tree A reference to the tree renderable (Toolkit::generateTreeRenderable()).
+			 * @param bounds The tree's bounding sphere, object space (the LOD 0 shape's).
+			 * @return TreeImposter Both null on failure (traced).
+			 */
+			[[nodiscard]]
+			TreeImposter bakeTreeImposter (const std::string & label, const std::shared_ptr< Graphics::Renderable::Abstract > & tree, const Base::Math::Space3D::Sphere< float > & bounds) noexcept;
+
+			/**
 			 * @brief Generates a tree instance in the scene from a generated tree.
 			 * @note Shortcut to Toolkit::generateTreeRenderable() then Toolkit::generateRenderableInstance().
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
@@ -1329,6 +1360,23 @@ namespace EmEn::Scenes
 			static size_t s_autoEntityCount;
 
 			Settings & m_settings;
+			/** @brief The bounding sphere is enlarged by this factor inside its view: the margin keeps a view — and
+			 * the mips — from bleeding into its neighbours, and absorbs a moderate wind sway during the bake. */
+			static constexpr float ImposterMargin{1.15F};
+			/**
+			 * @brief The radius every copy of a bake is scaled to, in metres: the rig is the same for every variant.
+			 * @note ⚠️ Large on purpose, with the camera far away (ImposterCameraDistance): the level of detail is
+			 * chosen from the DISTANCE (Scene::selectLODLevel()), not from the image size — which an orthographic
+			 * camera does not change — so the bake draws the COARSEST level, the one the imposter replaces at its
+			 * switch distance. Baked at LOD 0, the small leaf cards of an aspen or a pine fell under a pixel in a
+			 * 128 px view, read their mask's last mip and vanished: 3.9 % and 2.1 % of the atlas covered, against
+			 * 18.3 % for the broadleaf (measured 2026-09-23).
+			 */
+			static constexpr float ImposterRigRadius{20.0F};
+			/** @brief The bake camera stands this far in front of the plane of the copies, in metres (inside the
+			 * orthographic box, whose depth is its side). */
+			static constexpr float ImposterCameraDistance{280.0F};
+
 			Resources::Manager & m_resourceManager;
 			std::shared_ptr< Scene > m_scene;
 			GenPolicy m_nodeGenerationPolicy{GenPolicy::Simple};

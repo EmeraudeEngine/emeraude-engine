@@ -489,6 +489,40 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Turns the geometry into an octahedral IMPOSTER billboard: a quad whose vertices, in [-1, 1]² on
+			 * x and y, are placed in object space facing the eye, around the object's bounding sphere.
+			 * @note The billboard is built in OBJECT space — the eye brought back through the inverse model matrix —
+			 * so the standard matrices, the velocity and the tangent frame downstream all apply unchanged; the
+			 * position and the frame are read through vertexPositionExpression()/vertexFrameExpression() like the
+			 * heightfield's. The stage also picks the three atlas views around the direction to the eye (the
+			 * hemi-octahedral lattice, Saphir `ImposterGLSL.hpp`) and outputs, for the fragment: their flat cells and
+			 * weights, the fragment's atlas coordinates in each of them, and the billboard frame (ShaderVariable::
+			 * Imposter*). The frame is imposterCellFrame() of the direction to the eye: the view the atlas holds.
+			 * @note Exclusive with skinning, the vegetation wind and a heightfield surface.
+			 * @param boundsExpression A GLSL vec4 expression: the bounding sphere (centre.xyz, radius), object space.
+			 * @param gridExpression A GLSL vec4 expression whose x is the number of views per side.
+			 * @return void
+			 */
+			void
+			enableImposterBillboarding (std::string boundsExpression, std::string gridExpression) noexcept
+			{
+				m_imposterBoundsExpression = std::move(boundsExpression);
+				m_imposterGridExpression = std::move(gridExpression);
+				m_imposterBillboardEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the imposter billboard is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isImposterBillboardingEnabled () const noexcept
+			{
+				return m_imposterBillboardEnabled;
+			}
+
+			/**
 			 * @brief Returns whether the heightfield surface is enabled.
 			 * @return bool
 			 */
@@ -615,6 +649,15 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			std::string generateHeightfieldSurfaceCode () const noexcept;
+
+			/**
+			 * @brief Registers the imposter billboard block as a unique preparation, AFTER the model matrix it reads,
+			 * and declares its stage outputs (enableImposterBillboarding()).
+			 * @param generator A reference to the shader generator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool prepareImposterBillboard (Generator::Abstract & generator) noexcept;
 
 			/**
 			 * @brief Declares a tangent-frame attribute — unless the heightfield synthesizes it.
@@ -937,6 +980,8 @@ namespace EmEn::Saphir
 			std::vector< Declaration::StageOutput > m_stageOutputs;
 			std::vector< Declaration::OutputBlock > m_outputBlocks;
 			std::set< Graphics::VertexAttributeType > m_vertexAttributes;
+			std::string m_imposterBoundsExpression;
+			std::string m_imposterGridExpression;
 			const char * m_positionOutput{"gl_Position"};
 			const char * m_instanceIndexExpression{"gl_InstanceIndex"};
 			bool m_instancingEnabled{false};
@@ -949,6 +994,7 @@ namespace EmEn::Saphir
 			bool m_vegetationWindEnabled{false};
 			bool m_vegetationFlutterEnabled{false};
 			bool m_heightfieldSurfaceEnabled{false};
+			bool m_imposterBillboardEnabled{false};
 			bool m_heightfieldPixelFrameEnabled{false};
 			bool m_heightfieldFrameRequested{false};
 			bool m_heightfieldTextureCoordinatesRequested{false};

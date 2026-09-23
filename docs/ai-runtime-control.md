@@ -964,6 +964,7 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777  # List service co
 | | `attachCamera(node, camName)` | Attach primary camera |
 | | `attachMicrophone(node, micName)` | Attach primary microphone |
 | | `getSceneInfo()` | Active scene summary |
+| | `writeImposterAtlases()` | Writes the albedo atlas (premultiplied, mip 0) of every octahedral imposter the active scene baked to the captures directory, and says how many bakes are still queued |
 | | `getRenderStatistics()` | What the last frame's render lists submit, per geometry LOD: batches, instances, triangles — view lists, then shadow lists (summed over the shadow targets). The answer to "is the LOD used, and where do the triangles go" without a GPU capture |
 | | `listScenes()` | List all scenes |
 | | `listNodes()` | List nodes (target scene first) |

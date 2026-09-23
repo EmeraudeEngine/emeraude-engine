@@ -65,8 +65,10 @@
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/RenderPass.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
 #include "Window.hpp"
@@ -2373,14 +2375,32 @@ namespace EmEn::Graphics
 				clearValues[0].color = renderToTexture->clearColorOverride();
 			}
 
+			/* A G-buffer target (an imposter bake: colour, normals, material properties, albedo) takes one clear
+			 * per colour attachment, the depth last. Every colour clears to the target's colour: a bake reads its
+			 * coverage from the albedo's alpha, so its zero clear IS the "nothing here". */
+			const auto renderPass = renderToTexture->framebuffer() != nullptr ? renderToTexture->framebuffer()->renderPass() : nullptr;
+			const bool isGBufferTarget = renderPass != nullptr && renderPass->colorAttachmentCount() == 4;
+			const std::array< VkClearValue, 5 > gBufferClearValues{clearValues[0], clearValues[0], clearValues[0], clearValues[0], clearValues[1]};
+
 			{
 				/* One scope per target, the post-render compute included: it is its own submission. */
 				GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
 				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "RenderToTexture", renderToTexture->id().c_str()};
 
-				commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), clearValues, VK_SUBPASS_CONTENTS_INLINE);
+				if ( isGBufferTarget )
+				{
+					commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), gBufferClearValues, VK_SUBPASS_CONTENTS_INLINE);
+				}
+				else
+				{
+					commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), clearValues, VK_SUBPASS_CONTENTS_INLINE);
+				}
 
-				if ( scene.prepareRender(renderToTexture) )
+				const bool hasContent = scene.prepareRender(renderToTexture);
+
+				renderToTexture->setLastRenderHasContent(hasContent);
+
+				if ( hasContent )
 				{
 					m_bindlessTextureManager.syncTextureSet(scene.bindlessTextureSet(), scene.lifetimeMS());
 

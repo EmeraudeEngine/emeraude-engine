@@ -160,8 +160,10 @@ namespace EmEn::Graphics
 			 * file layout does: the key hashes the SOURCE pixels, so a blob produced by an older
 			 * compressor stays a valid hit forever otherwise. Version 2 = coverage-preserving mip
 			 * chains for binary alpha masks (TextureCompressor::compress()); version 1 blobs carry
-			 * box-filtered alpha and would keep far foliage thinning out. */
-			static constexpr uint32_t Version{2};
+			 * box-filtered alpha and would keep far foliage thinning out. Version 3 = every mip level is an
+			 * exact area-weighted box filter (Processor::downsample()); version 2 blobs were bilinear
+			 * resamples whose tail lost the mean (a 23 % leaf mask read 0.001 at 1 × 4). */
+			static constexpr uint32_t Version{3};
 			static constexpr auto CacheDirectoryName{"texture-cache"};
 			static constexpr auto CacheFileExtension{".bc7cache"};
 

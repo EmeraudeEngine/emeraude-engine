@@ -45,7 +45,12 @@ namespace EmEn::Graphics
 	namespace
 	{
 		/**
-		 * @brief Generates a half-resolution mip level using a linear filter.
+		 * @brief Generates the next mip level: an exact area-weighted box filter (Processor::downsample()).
+		 * @note ⚠️ It was Processor::resize(Linear) — a bilinear resample from the top-left corner, which reads the
+		 * corner pixel alone for a 1 × 1 target and lost the MEAN of every texture along its chain. Measured on the
+		 * 23 % needle mask of the conifer (1022 × 2048): 0.35 at 3 × 8, 0.001 at 1 × 4. Every card small enough to
+		 * sample those levels vanished — the pines of the forest benches were bare trunks beyond ~300 m, and their
+		 * imposter atlas baked bare.
 		 * @param source A reference to the source pixmap.
 		 * @return Pixmap< uint8_t >
 		 */
@@ -56,7 +61,14 @@ namespace EmEn::Graphics
 			const auto newWidth = std::max(source.width() / 2, static_cast< decltype(source.width()) >(1));
 			const auto newHeight = std::max(source.height() / 2, static_cast< decltype(source.height()) >(1));
 
-			return Processor< uint8_t >::resize(source, newWidth, newHeight, FilteringMode::Linear);
+			Pixmap< uint8_t > mip;
+
+			if ( !Processor< uint8_t >::downsample(source, newWidth, newHeight, mip) )
+			{
+				return {};
+			}
+
+			return mip;
 		}
 
 		/**

@@ -53,6 +53,7 @@
 #include "Component/Visual.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/PostProcessStack.hpp"
+#include "Graphics/RenderTarget/ImposterBake.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
@@ -1555,6 +1556,30 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept;
 
 			/**
+			 * @brief Returns the scene's imposter bake target, created on first use. Thread-safe.
+			 * @note ONE per scene: every bake queues on it, one per rendered frame (Graphics::RenderTarget::ImposterBake).
+			 * It joins the render-to-texture list only — never the AV console, whose registration would prepare every
+			 * renderable instance of the scene for its render pass.
+			 * @param size The pixel size of the atlases it bakes (fixed by the first call).
+			 * @return std::shared_ptr< Graphics::RenderTarget::ImposterBake > nullptr on failure.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::RenderTarget::ImposterBake > imposterBakeTarget (uint32_t size) noexcept;
+
+			/**
+			 * @brief Returns the scene's imposter bake target if one was created, nullptr otherwise. Thread-safe.
+			 * @return std::shared_ptr< Graphics::RenderTarget::ImposterBake >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::RenderTarget::ImposterBake >
+			existingImposterBakeTarget () const noexcept
+			{
+				const std::scoped_lock lock{m_renderToTextureAccess};
+
+				return m_imposterBake;
+			}
+
+			/**
 			 * @brief Creates a cubemap render-to-texture target for environment mapping.
 			 *
 			 * Renders the scene in all 6 directions for dynamic reflections,
@@ -2817,6 +2842,8 @@ namespace EmEn::Scenes
 			RenderTargetAccessList m_renderToShadowMaps;
 			/** @brief Weak references to texture render targets. */
 			RenderTargetAccessList m_renderToTextures;
+			/** @brief The imposter bake target, created on first use (imposterBakeTarget()). */
+			std::shared_ptr< Graphics::RenderTarget::ImposterBake > m_imposterBake;
 			/** @brief Weak references to view render targets. */
 			RenderTargetAccessList m_renderToViews;
 			/** @brief Weak references to scene modifiers (force fields, etc.). */

@@ -648,6 +648,17 @@ as a **flat** output — it is a per-draw/per-instance constant, never per-verte
 (MDI / instancing attribute / instance-transforms SSBO / push constant) **mirror
 `synthesizeVertexPositionInWorldSpace()`**; a fifth model-matrix path must teach BOTH.
 
+**The octahedral imposter billboard (Sep 2026)** — `AbstractVertexStage::enableImposterBillboarding(bounds, grid)`
+(set by an imposter material, `StandardResource::setImposterAtlas()`). The quad's [-1, 1]² corners are placed in
+OBJECT space around the bounding sphere, facing the eye brought back through the inverse model matrix, so the
+standard matrices, the velocity and the TBN downstream apply unchanged; it is a unique preparation registered right
+after the model matrix it reads, and `vertexPositionExpression()` / `vertexFrameExpression()` return
+`imposterPosition` / `imposterTangent|Binormal|Normal` like the heightfield's. It also picks the three views around
+the direction to the eye and outputs `svImposterUV0..2` (smooth), `svImposterWeights`, `svImposterCell0..2` and the
+billboard frame as three `vec3` (`svImposterRight|Up|Back` — a `mat3` varying takes three locations). The GLSL of the
+hemi-octahedral mapping is `Saphir/ImposterGLSL.hpp`: ⚠️⚠️ a SECOND implementation of emeraude-base
+`Math/OctahedralMapping.hpp`, transcribed line by line — the unit tests guard the C++ one only; change both at once.
+
 **`ShaderVariable::RestPositionModelSpace` (`svRestPositionModelSpace`, Sep 2026)** is the raw position
 ATTRIBUTE, before skinning, the vegetation wind and any displacement — deliberately not
 `vertexPositionExpression()`. It is the anchor of the hashed alpha test

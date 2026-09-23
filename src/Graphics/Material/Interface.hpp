@@ -149,9 +149,16 @@ namespace EmEn::Graphics::Material
 		 * (AlphaCoverage) is no help to it. The hash is anchored on the vertex REST position in model space, one
 		 * cell per pixel, so the pattern is stable over time and does not crawl under the wind.
 		 */
-		AlphaHashedEnabled = 1U << 19
+		AlphaHashedEnabled = 1U << 19,
+		/**
+		 * @brief The material draws an octahedral IMPOSTER: its albedo and normal come from an ImposterAtlas, blended
+		 * from the three views around the direction to the eye, on a billboard the vertex stage builds
+		 * (StandardResource::setImposterAtlas()). A flag, so the imposter programs never share a cache entry with
+		 * the mesh ones.
+		 */
+		ImposterAtlasEnabled = 1U << 20
 
-		/* ⚠️ NEXT FREE BIT: 20. Keep this marker up to date and add new bits HERE, at the end.
+		/* ⚠️ NEXT FREE BIT: 21. Keep this marker up to date and add new bits HERE, at the end.
 		 * Nothing checks these values: a duplicate compiles silently and every enableFlag() of one
 		 * name then sets the other. That happened — PostProcessReflectivityEnabled was first written
 		 * as `1U << 17`, the value UnlitEnabled already had, so declaring a post-process reflectivity
