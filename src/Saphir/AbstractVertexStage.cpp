@@ -1996,7 +1996,7 @@ namespace EmEn::Saphir
 		code <<
 			"\t" "/* Octahedral imposter billboard, in object space. */" "\n"
 			"\t" "const mat4 imposterModel = " << modelMatrix << ";" "\n"
-			"\t" "const vec3 imposterEye = (inverse(imposterModel) * vec4(" << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz, 1.0)).xyz;" "\n"
+			"\t" "const vec3 imposterEye = (inverse(imposterModel) * vec4(" << ViewUB(Keys::UniformBlock::Component::PositionWorldSpace, false) << ".xyz, 1.0)).xyz;" "\n"
 			"\t" "const vec4 imposterBounds = " << m_imposterBoundsExpression << ";" "\n"
 			"\t" "const float imposterGridSize = " << m_imposterGridExpression << ".x;" "\n"
 			"\t" "const vec3 imposterToEye = imposterEye - imposterBounds.xyz;" "\n"
