@@ -117,6 +117,15 @@ render mode 2 pixel-indistinguishable from mode 1 (inside the run-to-run noise).
 
   The culling saves 2.1 ms of the colour pass; it barely moves the shadow (0.56 → 0.52), whose cost is not
   the tile count. What is left, +3.2 ms colour and +0.5 ms shadow, is the displaced geometry itself.
+- Split by resolution (RTX 3070 Ti, same bench, 1281×720 against 2880×1620): mode 1 ScenePass 1.01 / 3.41 ms,
+  mode 2 2.90 / 6.63 ms, the ShadowMap 0.52 ms at both. So mode 2 adds ~1.6 ms that do not depend on the
+  resolution (the geometry), plus ~0.33 ms per 720p worth of pixels. ⚠️ The Windows RTX 3060 Laptop is simply
+  3.7-5× slower than this card at the same resolution (mode 1 3.71 ms at 720p), and the culling did not show
+  there, inside its ±2 ms run-to-run spread. A "720p makes the triangles sub-pixel" theory was checked and is
+  FALSE: the cost falls with the resolution.
+- ⚠️ `f93c5a0d` (single `EmitMeshTasksEXT` with a zero count instead of an early exit) was pushed as a candidate
+  fix for a Windows white window, which turned out to be the shutdown hang (`shutdown-hangs-after-act-removal`).
+  The change stands on its own merits (one terminator, same cost, same image), not as that fix.
 - **Next, not yet measured** (split the remaining cost before choosing):
   - the density — 0.004 m of quad per metre is ~5 px per quad at 1620p, and the rasteriser is inefficient
     below ~8 px per triangle;
