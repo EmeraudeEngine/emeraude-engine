@@ -540,6 +540,19 @@ Two setters raise the flag:
   source is the **opacity texture component** when present (red channel), the **albedo texture alpha**
   otherwise (glTF `alphaMode: MASK`). It also disables the blending flag — cutout and blending are
   mutually exclusive by construction.
+- **`StandardResource::enableHashedAlphaTest()`** (Sep 2026) — the same cutout with a **STOCHASTIC**
+  threshold: `MaterialFlagBits::AlphaHashedEnabled = 1U << 19`. Chris Wyman & Morgan McGuire, *Hashed Alpha
+  Testing* (I3D 2017, JCGT 6(2)), listing 1 without the anisotropic refinement: each pixel compares its
+  alpha with its own threshold in (0,1], so the fraction of the surface kept EQUALS the alpha at every
+  distance. The lattice is sized to one cell per PIXEL from the screen derivatives of the anchor, the two
+  power-of-two lattices around it are blended and the blend remapped back to a uniform distribution; the
+  cell hash is PCG3D (Jarzynski & Olano, JCGT 9(3) 2020), an INTEGER hash so every vendor draws the same
+  pattern. The anchor is **`svRestPositionModelSpace`** — the raw position attribute, before skinning and
+  the vegetation wind: on the world position the pattern crawls over a swaying leaf. One spelling for the
+  three sites that test an alpha (albedo alpha, opacity component, shadow pass):
+  `StandardResource::alphaCutoutStatement()`. ⚠️ It reads derivatives: emit it in UNIFORM control flow.
+  ⚠️ The ray-traced alpha test does NOT hash (a ray query has no screen derivatives): it keeps the fixed
+  UBO threshold `enableAlphaTest()` stored. Caller of record: `Toolkit::vegetationMaterial()` (Foliage).
 
 **Opacity — the owner's 3-rule contract (Aug 2026).** `StandardResource` expresses opacity exactly three
 ways, parsed from the JSON `Opacity` component and mirrored by `setOpacityComponent()`:
@@ -652,6 +665,7 @@ is decided by the `RenderableInstance`, never by the material's transparency mod
 - `Material/StandardResource.cpp:parseOpacityComponent()` — the 3-rule JSON contract
 - `Material/StandardResource.cpp:alphaSourceTextureComponent()` — opacity component, else albedo alpha
 - `Material/StandardResource.cpp:generateShadowAlphaTestCode()` — shadow discard against the UBO threshold
+- `Material/StandardResource.cpp:alphaCutoutStatement()` — the fixed or HASHED discard, the one spelling
 - `Material/GPURTMaterialData.hpp:alphaCutoff` — the RT side (Basic 0.5, Standard = UBO threshold)
 - `Graphics/Renderable/ProgramCacheKey.hpp:materialFlags` — codegen flags in the program cache key
 - `Vulkan/GraphicsPipeline.cpp:configureColorBlendState()` — the `isOpaque()` branch
@@ -4653,7 +4667,8 @@ takes the materials the species names (`TreeMesh::barkMaterial()` / `leafMateria
 passes its own, and `Toolkit::vegetationMaterial(name, Bark|Foliage)` resolves a name: a STORE material
 of that name (a JSON in `Materials/`) wins; otherwise one is built from the images of the convention —
 `<name>-color_a` (required); foliage: `<name>-alpha` as the cut-out mask (red channel) or the colour
-image's own alpha, an alpha test at 0.5 (the card stays opaque), roughness 0.5; bark: `<name>-roughness`
+image's own alpha, a HASHED alpha test (the card stays opaque; see § Alpha Test — a fixed 0.5 left the
+distant pines bare trunks), roughness 0.5; bark: `<name>-roughness`
 or 0.85; both: `<name>-normal` if present. Built once, as `Vegetation/Bark|Foliage/<name>`. ⚠️ No
 back-lit translucency yet: the engine's subsurface term needs a thickness
 (`LightGenerator.PBR.cpp`), a thin leaf is its own open item.
@@ -5464,6 +5479,20 @@ Three pieces, all decided **on the pixels, never on the declaration**:
 ⚠️⚠️ **None of it reaches a KTX2 asset.** `Sponza.ktx2.glb` keeps 84 of 84 images block-compressed
 (UASTC transcoded block-to-block, never decoded), so the mask is never pixels. This path is
 **unverified end to end at runtime** — no shipped scene exercises it yet.
+
+⚠️⚠️ **A FIXED threshold loses a SPARSE mask at distance, and Castaño cannot save it** (forest, 2026-09-23).
+The conifer needle card (`leaf007-alpha`, a red-channel JPEG mask) is **23 %** opaque. Box-filtered, its
+tiny mips average to 0.23 — under 0.5, the whole card discarded, and the far pines rendered as bare trunks
+even with every tree forced to LOD 0 (the aspen's leaf, 51 %, rounds UP and survived). Castaño's correction
+does not help there: on a 2×1 or 1×1 level a pixel can only be all or nothing, and the nearest bound of a
+23 % target is **0** — the same vanishing, deliberately (see piece 1). The fix is the **hashed cutout**
+(§ Alpha Test): it wants the alpha MEAN, which is exactly what the box filter keeps, and keeps 23 % of the
+pixels at every distance. A red-channel mask never goes through Castaño (`isBinaryMask()` reads the ALPHA
+channel), which is what a hashed mask needs; a patch extending Castaño to red masks was written and
+reverted for that reason. Measured at the owner's pose (eye (0, 19.2, 120)): bare trunks → full crowns,
+0 VUID. Cost, wind frozen, 8 frames covering the jitter cycle: the broadleaf crop's >8/255 peak-to-peak
+goes 0.35 % → 0.60 % (the per-pixel threshold under the sub-pixel TAA jitter), the pine crop 1.33 % with
+crowns against 0.55 % bare.
 
 ⚠️ `TextureCache::Version` must be bumped whenever the BLOCKS a given pixmap compresses to change,
 not only when the file layout does: the key hashes the SOURCE pixels, so an older blob stays a valid

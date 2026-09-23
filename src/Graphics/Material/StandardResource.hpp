@@ -675,6 +675,19 @@ namespace EmEn::Graphics::Material
 			void setAlphaThresholdToDiscard (float threshold) noexcept;
 
 			/**
+			 * @brief Enables the binary cutout with a HASHED threshold (Wyman & McGuire, "Hashed Alpha Testing",
+			 * I3D 2017): each pixel compares its alpha against its own pseudo-random threshold in (0,1].
+			 * @note The fraction of the surface kept is then EQUAL to the alpha, at every distance — a fixed threshold
+			 * keeps all of a texel or none of it, and a box-filtered mip of a sparse mask falls below 0.5 a few levels
+			 * down: a needle card covering 23 % vanishes whole. The mode wants the alpha MEAN in the mips, which is what
+			 * a box filter keeps. Opaque render list, depth write kept, like enableAlphaTest(). The threshold stored
+			 * by enableAlphaTest() still drives the ray-traced alpha test, which does not hash.
+			 * @see MaterialFlagBits::AlphaHashedEnabled for the anchor of the hash.
+			 * @return void
+			 */
+			void enableHashedAlphaTest () noexcept;
+
+			/**
 			 * @brief Sets the artistic reflection mix amount (dynamic property, D2 override).
 			 * @note Applies to the artistic texture/probe reflection modes only; the neutral 1.0
 			 * leaves the mix BRDF-controlled. The environment IBL path keeps IBLIntensity as its knob.
@@ -1619,6 +1632,19 @@ namespace EmEn::Graphics::Material
 			 */
 			[[nodiscard]]
 			const Component::Texture * alphaSourceTextureComponent () const noexcept;
+
+			/**
+			 * @brief Returns the GLSL statement discarding the fragment when @a alpha fails the cutout, and declares
+			 * what that statement needs in @a fragmentShader.
+			 * @note The ONE place the fixed and the hashed cutouts are spelled, for the three sites that test an alpha:
+			 * the albedo alpha, the opacity component and the shadow pass. The hashed threshold reads derivatives:
+			 * the statement must be emitted in UNIFORM control flow, never inside a branch.
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @param alpha The GLSL expression of the alpha under test.
+			 * @return std::string An empty string when a declaration failed.
+			 */
+			[[nodiscard]]
+			std::string alphaCutoutStatement (Saphir::FragmentShader & fragmentShader, const std::string & alpha) const noexcept;
 
 			/**
 			 * @brief Returns the GLSL name/expression carrying the FINAL albedo.

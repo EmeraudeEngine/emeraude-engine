@@ -138,9 +138,20 @@ namespace EmEn::Graphics::Material
 		 * must route it to the reflectivity ladder. Splitting it this way is deliberate — the
 		 * program caches key on the descriptor layout and on these FLAG BITS, never on plain
 		 * values, so a value baked as a GLSL literal is not part of the key. */
-		PostProcessReflectivityEnabled = 1U << 18
+		PostProcessReflectivityEnabled = 1U << 18,
+		/**
+		 * @brief The cutout (AlphaTestEnabled) compares the alpha against a STOCHASTIC threshold instead of the
+		 * material's fixed one: Wyman & McGuire's hashed alpha testing (I3D 2017). Ignored without AlphaTestEnabled.
+		 * @note A fixed threshold reads the COVERAGE of a mip, and a box-filtered mip of a sparse mask keeps the
+		 * alpha MEAN: a needle card whose mask covers 23 % averages to 0.23 a few levels down, below 0.5, and the
+		 * whole card vanishes — distant pines reduced to their trunks. A hashed threshold keeps a fraction of the
+		 * pixels EQUAL to the alpha at every distance, so it wants the mean, and a coverage-preserving mip chain
+		 * (AlphaCoverage) is no help to it. The hash is anchored on the vertex REST position in model space, one
+		 * cell per pixel, so the pattern is stable over time and does not crawl under the wind.
+		 */
+		AlphaHashedEnabled = 1U << 19
 
-		/* ⚠️ NEXT FREE BIT: 19. Keep this marker up to date and add new bits HERE, at the end.
+		/* ⚠️ NEXT FREE BIT: 20. Keep this marker up to date and add new bits HERE, at the end.
 		 * Nothing checks these values: a duplicate compiles silently and every enableFlag() of one
 		 * name then sets the other. That happened — PostProcessReflectivityEnabled was first written
 		 * as `1U << 17`, the value UnlitEnabled already had, so declaring a post-process reflectivity

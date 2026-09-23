@@ -883,6 +883,28 @@ namespace EmEn::Saphir
 	}
 
 	bool
+	AbstractVertexStage::synthesizeRestPositionInModelSpace (Generator::Abstract & generator, std::string & outputInstructions) noexcept
+	{
+		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::RestPositionModelSpace, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		std::stringstream code{};
+
+		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << Attribute::Position << ";" "\n";
+
+		outputInstructions.append(code.str());
+
+		return true;
+	}
+
+	bool
 	AbstractVertexStage::synthesizeVertexPositionInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
@@ -1474,6 +1496,16 @@ namespace EmEn::Saphir
 				continue;
 			}
 
+			if ( std::strcmp(variableType, ShaderVariable::RestPositionModelSpace) == 0 )
+			{
+				if ( !this->synthesizeRestPositionInModelSpace(generator, outputInstructions) )
+				{
+					return false;
+				}
+
+				continue;
+			}
+
 			if ( std::strcmp(variableType, ShaderVariable::ModelScale) == 0 )
 			{
 				if ( !this->synthesizeModelScale(generator, outputInstructions) )
@@ -1953,7 +1985,7 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::isSyntheticVariableAllowed (const char * variableName) noexcept
 	{
-		constexpr std::array< const char *, 20 > variables{
+		constexpr std::array< const char *, 21 > variables{
 			ShaderVariable::PositionScreenSpace,
 			ShaderVariable::PositionWorldSpace,
 			ShaderVariable::GLPositionWorldSpace,
@@ -1971,6 +2003,7 @@ namespace EmEn::Saphir
 			ShaderVariable::NormalWorldSpace,
 			ShaderVariable::NormalViewSpace,
 			ShaderVariable::ModelScale,
+			ShaderVariable::RestPositionModelSpace,
 			ShaderVariable::WorldTBNMatrix,
 			ShaderVariable::ViewTBNMatrix,
 			ShaderVariable::TangentToWorldMatrix

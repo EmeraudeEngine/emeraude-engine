@@ -5597,6 +5597,26 @@ of the prepared member. The previous view-projection half of the same header sta
 in `prepareRender()`. Same family as the `[ONE FRAME, ONE TRUTH]` latch in `prepareRender()`: a
 frame must read one state, and a pass must read its own slot.
 
+### ⚠⚠ A SPARSE cutout mask vanishes at distance under a FIXED threshold — whatever the mips do (Sep 2026, FIXED)
+
+Symptom (owner, forest): far pines were bare trunks, full crowns up close; only the conifers. It is not
+the LOD — forcing every tree to LOD 0 changed nothing — and not the geometry (the side opacity of the
+crown is the same at every level). The needle card is 23 % opaque; a box-filtered mip of it averages to
+0.23, a fixed 0.5 threshold drops the card whole. Castaño's coverage-preserving mips do not rescue it: a
+2×1 or 1×1 level can only express 0 or 1, and 0 is the nearest to 23 %.
+
+Fix: the HASHED cutout (`StandardResource::enableHashedAlphaTest()`, Wyman & McGuire 2017), on the mean
+mips a box filter already gives. Two traps met on the way:
+
+- ⚠️ Blaming the TAA, then the mips, then the preset density — each was measured and cleared before the
+  real cause. **Force the suspected variable (LOD 0 here) and photograph at the owner's pose** before
+  touching anything; the density change I made first made the pines barer, not fuller.
+- ⚠️ A hashed threshold anchored on the WORLD position crawls under the wind: anchor it on the REST
+  position (`svRestPositionModelSpace`). A per-primitive anchor (`gl_PrimitiveID`) is out: it needs the
+  geometry-shader feature, which MoltenVK lacks.
+
+Details and numbers: `src/Graphics/AGENTS.md` § Alpha Test and § Alpha COVERAGE.
+
 ## Related Documentation
 
 - `@AGENTS.md` - Engine root context

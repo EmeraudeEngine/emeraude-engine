@@ -648,6 +648,14 @@ as a **flat** output — it is a per-draw/per-instance constant, never per-verte
 (MDI / instancing attribute / instance-transforms SSBO / push constant) **mirror
 `synthesizeVertexPositionInWorldSpace()`**; a fifth model-matrix path must teach BOTH.
 
+**`ShaderVariable::RestPositionModelSpace` (`svRestPositionModelSpace`, Sep 2026)** is the raw position
+ATTRIBUTE, before skinning, the vegetation wind and any displacement — deliberately not
+`vertexPositionExpression()`. It is the anchor of the hashed alpha test
+(`StandardResource::alphaCutoutStatement()`, `src/Graphics/AGENTS.md` § Alpha Test): a threshold hashed on
+the WORLD position crawls over a leaf the wind is swaying. Smooth-interpolated (the fragment takes its
+derivatives). ⚠️ On a heightfield surface the attribute is the flat patch point, not the surface: no
+hashed material runs there today.
+
 **Two properties worth keeping as tests**, both verified:
 
 - A **thin-walled** material (`thicknessFactor` 0, i.e. no `KHR_materials_volume`) must be a

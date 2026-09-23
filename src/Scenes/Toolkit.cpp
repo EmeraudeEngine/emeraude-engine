@@ -88,7 +88,11 @@ namespace EmEn::Scenes
 					material.setAlbedoComponent(albedo, true);
 				}
 
+				/* HASHED, not a fixed 0.5: a needle mask covering 23 % averages to 0.23 a few mips down and a
+				 * fixed threshold then drops the whole card — distant pines were bare trunks. The hashed test
+				 * keeps 23 % of the pixels at every distance (StandardResource::enableHashedAlphaTest()). */
 				material.enableAlphaTest(0.5F);
+				material.enableHashedAlphaTest();
 				material.setRoughnessComponent(0.5F);
 			}
 			else

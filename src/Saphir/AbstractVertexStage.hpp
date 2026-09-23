@@ -755,6 +755,19 @@ namespace EmEn::Saphir
 			bool synthesizeModelScale (Generator::Abstract & generator, std::string & outputInstructions) noexcept;
 
 			/**
+			 * @brief Synthesizes the REST position of the vertex in model space: the raw position attribute, before
+			 * skinning, vegetation wind and any other displacement.
+			 * @note The anchor of the hashed alpha test (StandardResource::generateAlphaCutoutCode()). A stochastic
+			 * threshold must stay glued to the SURFACE, or its pattern crawls over a leaf the wind is swaying: the
+			 * world position moves under the leaf, the rest position does not. Wyman & McGuire hash object-space
+			 * coordinates for the same reason (I3D 2017, § 5).
+			 * @param generator A reference to the shader generator.
+			 * @param outputInstructions Every instruction that should be at the end of the main() function.
+			 * @return bool
+			 */
+			bool synthesizeRestPositionInModelSpace (Generator::Abstract & generator, std::string & outputInstructions) noexcept;
+
+			/**
 			 * @brief Synthesizes the vertex position in view space in the vertex shader.
 			 * @note gl_Position = gl_modelViewMatrix * gl_Vertex;
 			 * @param generator A reference to the shader generator.

@@ -2247,6 +2247,15 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* The hashed cutout anchors its threshold on the rest position: the shadow map must drop the SAME
+		 * texels the colour pass drops, or a leaf casts the shadow of the pixels it does not show. */
+		if ( this->isFlagEnabled(AlphaHashedEnabled) && !vertexShader.requestSynthesizeInstruction(ShaderVariable::RestPositionModelSpace) )
+		{
+			TraceError{ClassId} << "Unable to synthesize the rest position for the shadow vertex shader of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
 		return true;
 	}
 
@@ -2288,10 +2297,70 @@ namespace EmEn::Graphics::Material
 
 		Code{fragmentShader, Location::Top} << "const float " << SurfaceOpacityAmount << " = texture(" << component->samplerName() << ", " << texCoordVariable << ")." << channel << ";";
 
-		/* Discard fragments below the material threshold. */
-		Code{fragmentShader, Location::Output} << "if ( " << SurfaceOpacityAmount << " < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+		/* Discard fragments failing the cutout. */
+		const auto cutout = this->alphaCutoutStatement(fragmentShader, SurfaceOpacityAmount);
+
+		if ( cutout.empty() )
+		{
+			TraceError{ClassId} << "Unable to declare the shadow alpha test of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		Code{fragmentShader, Location::Output} << cutout;
 
 		return true;
+	}
+
+	std::string
+	StandardResource::alphaCutoutStatement (FragmentShader & fragmentShader, const std::string & alpha) const noexcept
+	{
+		if ( !this->isFlagEnabled(AlphaHashedEnabled) )
+		{
+			return "if ( " + alpha + " < " + MaterialUB(UniformBlock::Component::AlphaThreshold) + " ) { discard; }";
+		}
+
+		/* One hash per lattice cell. PCG3D, Jarzynski & Olano, "Hash Functions for GPU Rendering", JCGT 9(3),
+		 * 2020 (https://jcgt.org/published/0009/03/02/): an INTEGER hash, so every vendor draws the same
+		 * pattern — the sine hash of the paper below depends on the precision of sin() at large arguments. The
+		 * int-to-uint constructor keeps the bit pattern of a negative cell. */
+		Declaration::Function alphaHashCell{"alphaHashCell", GLSL::Float};
+		alphaHashCell.addInParameter(GLSL::FloatVector3, "cell");
+		Code{alphaHashCell, Location::Output} <<
+			"uvec3 v = uvec3(ivec3(cell)) * 1664525u + 1013904223u;" << Line::End <<
+			"v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;" << Line::End <<
+			"v ^= v >> 16u;" << Line::End <<
+			"v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;" << Line::End <<
+			"return float(v.x >> 8u) * (1.0 / 16777216.0);";
+
+		/* Hashed alpha testing: Chris Wyman & Morgan McGuire, "Hashed Alpha Testing", I3D 2017 (and the JCGT
+		 * 2017 extended version, https://jcgt.org/published/0006/02/01/), listing 1 with the anisotropic
+		 * refinement left out. The lattice is sized so that one cell covers about one PIXEL, from the screen
+		 * derivatives of the anchor; the two power-of-two lattices around that size are blended so the pattern
+		 * does not pop when the distance crosses a power of two, and the blend of two uniform values is
+		 * remapped back to a UNIFORM distribution (the three cases), without which a blended threshold would
+		 * keep more or less than the alpha. */
+		Declaration::Function hashedAlphaThreshold{"hashedAlphaThreshold", GLSL::Float};
+		hashedAlphaThreshold.addInParameter(GLSL::FloatVector3, "anchor");
+		Code{hashedAlphaThreshold, Location::Output} <<
+			"const float maxDerivative = max(max(length(dFdx(anchor)), length(dFdy(anchor))), 1.0e-8);" << Line::End <<
+			"const float scaleLevel = log2(1.0 / maxDerivative);" << Line::End <<
+			"const vec2 scales = vec2(exp2(floor(scaleLevel)), exp2(ceil(scaleLevel)));" << Line::End <<
+			"const vec2 hashes = vec2(alphaHashCell(floor(scales.x * anchor)), alphaHashCell(floor(scales.y * anchor)));" << Line::End <<
+			"const float blend = fract(scaleLevel);" << Line::End <<
+			"const float x = mix(hashes.x, hashes.y, blend);" << Line::End <<
+			"const float a = min(blend, 1.0 - blend);" << Line::End <<
+			"const float spread = max(2.0 * a * (1.0 - a), 1.0e-6);" << Line::End <<
+			"const vec3 cases = vec3(x * x / spread, (x - 0.5 * a) / max(1.0 - a, 1.0e-6), 1.0 - (1.0 - x) * (1.0 - x) / spread);" << Line::End <<
+			"const float threshold = x < 1.0 - a ? (x < a ? cases.x : cases.y) : cases.z;" << Line::End <<
+			"return clamp(threshold, 1.0e-6, 1.0);";
+
+		if ( !fragmentShader.declare(alphaHashCell) || !fragmentShader.declare(hashedAlphaThreshold) )
+		{
+			return {};
+		}
+
+		return "if ( " + alpha + " < hashedAlphaThreshold(" + ShaderVariable::RestPositionModelSpace + ") ) { discard; }";
 	}
 
 	bool
@@ -2799,6 +2868,14 @@ namespace EmEn::Graphics::Material
 		}
 
 		const auto * geometry = generator.getGeometryInterface();
+
+		/* The hashed cutout anchors its threshold on the rest position (see alphaCutoutStatement()). */
+		if ( this->isFlagEnabled(AlphaTestEnabled) && this->isFlagEnabled(AlphaHashedEnabled) && !vertexShader.requestSynthesizeInstruction(ShaderVariable::RestPositionModelSpace) )
+		{
+			TraceError{ClassId} << "Unable to synthesize the rest position for the hashed alpha test of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
 
 		/* Check texture coordinate attributes. */
 		if ( this->usingTexture() )
@@ -3727,7 +3804,16 @@ namespace EmEn::Graphics::Material
 		 * owns the test instead (see the opacity component block below). */
 		if ( this->isFlagEnabled(AlphaTestEnabled) && !this->isComponentPresent(ComponentType::Opacity) && ( this->isComponentPresent(ComponentType::Albedo) || this->usingVertexColors() ) )
 		{
-			Code{fragmentShader, Location::Top} << "if ( " << this->albedoExpression() << ".a < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+			const auto cutout = this->alphaCutoutStatement(fragmentShader, this->albedoExpression() + ".a");
+
+			if ( cutout.empty() )
+			{
+				TraceError{ClassId} << "Unable to declare the albedo alpha test of PBR material '" << this->name() << "' !";
+
+				return false;
+			}
+
+			Code{fragmentShader, Location::Top} << cutout;
 		}
 
 		/* Roughness component.
@@ -3924,7 +4010,14 @@ namespace EmEn::Graphics::Material
 
 			if ( this->isFlagEnabled(AlphaTestEnabled) )
 			{
-				Code{shader, Location::Top} << "if ( " << component->variableName() << " < " << MaterialUB(UniformBlock::Component::AlphaThreshold) << " ) { discard; }";
+				const auto cutout = this->alphaCutoutStatement(shader, component->variableName());
+
+				if ( cutout.empty() )
+				{
+					return false;
+				}
+
+				Code{shader, Location::Top} << cutout;
 			}
 
 			return true;
@@ -4912,6 +5005,19 @@ namespace EmEn::Graphics::Material
 		this->disableFlag(BlendingEnabled);
 
 		this->setAlphaThresholdToDiscard(threshold);
+	}
+
+	void
+	StandardResource::enableHashedAlphaTest () noexcept
+	{
+		/* The fixed threshold stays stored: the ray-traced alpha test reads it (the ray-query hit shaders have
+		 * no screen derivatives to size a lattice with). */
+		if ( !this->isFlagEnabled(AlphaTestEnabled) )
+		{
+			this->enableAlphaTest(DefaultAlphaThreshold);
+		}
+
+		this->enableFlag(AlphaHashedEnabled);
 	}
 
 	bool
