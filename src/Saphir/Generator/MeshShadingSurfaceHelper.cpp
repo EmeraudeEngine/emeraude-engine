@@ -159,7 +159,11 @@ namespace EmEn::Saphir::Generator
 		/* Frustum culling: the tile's box, from the ground plane down to the deepest relief, against the four side
 		 * planes and the w > 0 half-space of the clip volume. Never the near and far planes: the depth convention
 		 * and the shadow pass's depth clamp make them unreliable, and they cut little on a ground. A tile is kept
-		 * unless ALL its corners are out on the SAME side: conservative, a kept tile may still be invisible. */
+		 * unless ALL its corners are out on the SAME side: conservative, a kept tile may still be invisible.
+		 * ⚠️ A culled tile still reaches the ONE EmitMeshTasksEXT at the end, with a zero count: no early exit in a
+		 * branch, which the specification allows but leaves the whole workgroup's termination to the driver. */
+		Code{taskShader} << "bool tileCulled = false;" << Line::End;
+
 		if ( !cullingMatrix.empty() )
 		{
 			Code{taskShader} <<
@@ -172,9 +176,7 @@ namespace EmEn::Saphir::Generator
 				"		const vec4 c = cullMatrix * vec4(p, 1.0);" << Line::End <<
 				"		outside &= (c.x < -c.w ? 1u : 0u) | (c.x > c.w ? 2u : 0u) | (c.y < -c.w ? 4u : 0u) | (c.y > c.w ? 8u : 0u) | (c.w <= 0.0 ? 16u : 0u);" << Line::End <<
 				"	}" << Line::End <<
-				"	if ( outside != 0u ) {" << Line::End <<
-				"		EmitMeshTasksEXT(0u, 0u, 0u);" << Line::End <<
-				"	}" << Line::End <<
+				"	tileCulled = outside != 0u;" << Line::End <<
 				"}" << Line::End;
 		}
 
@@ -200,7 +202,7 @@ namespace EmEn::Saphir::Generator
 			"	" << tile << ".quadsPerMeshlet = quadsPerMeshlet;" << Line::End <<
 			"}" << Line::End <<
 			"barrier();" << Line::End <<
-			"EmitMeshTasksEXT(meshletsPerSide * meshletsPerSide, 1u, 1u);";
+			"EmitMeshTasksEXT(tileCulled ? 0u : meshletsPerSide * meshletsPerSide, 1u, 1u);";
 
 		/* ---- MESH: the material's displacement, then the vertex and primitive sources. ---- */
 		std::string displacement;
