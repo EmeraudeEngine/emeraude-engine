@@ -4678,8 +4678,18 @@ because nothing filed more than four levels before.
 
 A renderable flagged `HasVegetationWind` has its vertices displaced in the vertex stage by a
 per-frame wind state, from the four colour channels the emeraude-base tree skinner writes:
-**R** trunk bending weight, **G** branch bending weight, **B** leaf flutter phase, **A** baked
-occlusion.
+**R** trunk bending weight, **G** branch bending weight (cumulative from the trunk), **B** limb
+phase (shared by a first-order branch and all it carries), **A** baked occlusion.
+
+⚠️⚠️ **Continuity is the contract** (2026-09-23): every term of the displacement is a continuous
+function over the tree, so two vertices at a junction move together — `sway = windDir · (R ·
+sin(0.9 t + s) + 0.45 G · sin(2.7 t + s + 2π B)) · amplitude`, with `s` a smooth function of the
+position. The LEAF FLUTTER (`pos.y += (1 − v) · sin(9 t + φ(pos)) · 0.08 · amplitude`) runs only in the
+programs of the renderable's FOLIAGE LAYER (`Renderable::setVegetationFoliageLayer()`, set to
+`TreeMesh::LeafGroup` by `Toolkit::generateTreeRenderable()`; `AbstractVertexStage::enableVegetationFlutter()`,
+in both cache keys), weighted by the card V, which is 1 at the petiole: a petiole never leaves its
+twig. Before, the branch wave took a per-leaf phase and G restarted on every branch: the wind
+dislocated the trees (emeraude-base `VertexFactory/AGENTS.md` § the channels).
 
 **The displacement chain is `skinning → wind → every consumer`.** It follows the skinning
 precedent exactly: a computed variable replaces the position attribute. The nine copies of

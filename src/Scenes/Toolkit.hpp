@@ -1029,6 +1029,8 @@ namespace EmEn::Scenes
 				if ( renderable != nullptr )
 				{
 					renderable->enableVegetationWind(true);
+					/* The leaf cards flutter on top of the sway, weighted by their V (0 at the petiole). */
+					renderable->setVegetationFoliageLayer(Base::VertexFactory::TreeMesh< float >::LeafGroup);
 				}
 
 				return renderable;

@@ -548,6 +548,12 @@ namespace EmEn::Saphir::Generator
 			if ( renderable != nullptr && renderable->hasVegetationWind() && program.setIndexes().isSetEnabled(SetType::PerSceneTransforms) )
 			{
 				vertexShader.enableVegetationWind();
+
+				/* The leaf cards also flutter (weighted by their V, so the petiole stays on its twig). */
+				if ( renderable->isVegetationFoliageLayer(this->layerIndex()) )
+				{
+					vertexShader.enableVegetationFlutter();
+				}
 			}
 		}
 
@@ -1192,8 +1198,9 @@ namespace EmEn::Saphir::Generator
 			{
 				hashCombine(hash, Hash::FNV1a(renderable->name()));
 
-				/* The wind changes the vertex stage, so it changes the program. */
+				/* The wind changes the vertex stage, so it changes the program; so does the flutter of the foliage layer. */
 				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
+				hashCombine(hash, static_cast< size_t >(renderable->isVegetationFoliageLayer(this->layerIndex())));
 			}
 
 			/* So does a heightfield surface: another vertex stage, another fragment prelude, another

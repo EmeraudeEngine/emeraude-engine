@@ -179,7 +179,8 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Declares the renderable as vegetation swaying in the wind.
 			 * @warning ⚠️ The geometry must carry VERTEX COLOURS, and they must mean what the tree
-			 * skinner writes: R trunk bending weight, G branch bending weight, B leaf flutter phase,
+			 * skinner writes: R trunk bending weight, G branch bending weight (cumulative from the trunk,
+			 * continuous across junctions), B limb phase (shared by a first-order branch and all it carries),
 			 * A baked occlusion. Setting this on a mesh whose colours mean anything else displaces it
 			 * by nonsense.
 			 * @param state The state.
@@ -208,6 +209,33 @@ namespace EmEn::Graphics::Renderable
 			{
 				return this->isFlagEnabled(HasVegetationWind);
 			}
+
+			/**
+			 * @brief Declares which layer holds the leaf cards: that layer's programs add the flutter (weighted by the
+			 * card V). A tree's is Base::VertexFactory::TreeMesh::LeafGroup.
+			 * @param layerIndex The layer index, or NoFoliageLayer.
+			 * @return void
+			 */
+			void
+			setVegetationFoliageLayer (uint32_t layerIndex) noexcept
+			{
+				m_vegetationFoliageLayer = layerIndex;
+			}
+
+			/**
+			 * @brief Returns whether a layer holds the leaf cards of a swaying renderable.
+			 * @param layerIndex The layer index.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isVegetationFoliageLayer (uint32_t layerIndex) const noexcept
+			{
+				return this->hasVegetationWind() && m_vegetationFoliageLayer == layerIndex;
+			}
+
+			/** @brief The value of setVegetationFoliageLayer() for "no foliage layer". */
+			static constexpr uint32_t NoFoliageLayer{0xFFFFFFFFU};
 
 			/**
 			 * @brief Returns whether the renderable is a sprite to differentiate it from a regular 3D mesh.
@@ -393,5 +421,6 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Shared mutex protecting the program cache (read-heavy, write-rare). */
 			mutable std::shared_mutex m_programCacheMutex;
 			float m_uniformScale = 1.0F;
+			uint32_t m_vegetationFoliageLayer{NoFoliageLayer};
 	};
 }

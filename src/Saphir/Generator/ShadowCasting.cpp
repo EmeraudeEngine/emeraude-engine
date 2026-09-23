@@ -360,6 +360,12 @@ namespace EmEn::Saphir::Generator
 			}
 
 			vertexShader->enableVegetationWind();
+
+			/* The shadow of a leaf flutters with the leaf. */
+			if ( this->isRenderableInstanceAvailable() && this->getRenderable() != nullptr && this->getRenderable()->isVegetationFoliageLayer(this->layerIndex()) )
+			{
+				vertexShader->enableVegetationFlutter();
+			}
 		}
 
 		/* Skeletal animation: declare bone attributes and SSBO. */
@@ -619,6 +625,7 @@ namespace EmEn::Saphir::Generator
 				 * changes the program. The name alone would already separate a tree from anything
 				 * else, but a key must state what it depends on rather than rely on that. */
 				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
+				hashCombine(hash, static_cast< size_t >(renderable->isVegetationFoliageLayer(this->layerIndex())));
 			}
 
 			/* A heightfield surface: another vertex stage and another PerModel layout. */

@@ -1874,24 +1874,39 @@ namespace EmEn::Saphir
 
 		/* The wind state rides in the instance-transforms SSBO header, beside the previous
 		 * view-projection: per-frame state, and its PREVIOUS value sits where the motion-vector
-		 * pass already reads its own. */
+		 * pass already reads its own.
+		 * ⚠️ CONTINUITY is the contract (owner, 2026-09-23: the wind tore the trees apart): every term is a
+		 * continuous function over the tree, so two vertices at a junction move together. R and G are
+		 * continuous along the skeleton (TreeSkinner), B is shared by a whole limb, the spatial phase is a
+		 * smooth function of the position, and the flutter is 0 at every petiole (card V = 1). */
 		std::string code =
-			"\t" "/* Vegetation wind. R trunk bend, G branch bend, B flutter phase. */" "\n"
+			"\t" "/* Vegetation wind. R trunk bend, G branch bend (cumulative from the trunk), B limb phase. */" "\n"
 			"\t" "vec3 windDirection = ubInstanceTransforms.windDirectionStrength.xyz;" "\n"
 			"\t" "float windAmplitude = ubInstanceTransforms.windDirectionStrength.w * (1.0 + ubInstanceTransforms.windTimes.z);" "\n"
 			"\t" "float windSpatial = dot(" + base + ".xz, vec2(0.27, 0.19));" "\n"
-			"\t" "float windLeafPhase = " + color + ".b * 6.2831853;" "\n";
+			"\t" "float windLimbPhase = " + color + ".b * 6.2831853;" "\n";
 
-		const auto offsetCode = [&color] (const std::string & target, const std::string & timeExpression) {
-			return
+		if ( m_vegetationFlutterEnabled )
+		{
+			code +=
+				"\t" "float windFlutterWeight = 1.0 - " + std::string{Attribute::Primary2DTextureCoordinates} + ".y;" "\n"
+				"\t" "float windFlutterPhase = dot(" + base + ", vec3(5.1, 3.7, 4.3));" "\n";
+		}
+
+		const auto offsetCode = [&color, this] (const std::string & target, const std::string & timeExpression) {
+			std::string offset =
 				"\t" "{" "\n"
 				"\t\t" "float windTime = " + timeExpression + ";" "\n"
 				"\t\t" "float trunkWave = sin(windTime * 0.9 + windSpatial);" "\n"
-				"\t\t" "float branchWave = sin(windTime * 2.7 + windSpatial * 3.1 + windLeafPhase);" "\n"
-				"\t\t" "float flutterWave = sin(windTime * 9.0 + windLeafPhase);" "\n"
-				"\t\t" + target + " += windDirection * (" + color + ".r * trunkWave + " + color + ".g * branchWave * 0.45) * windAmplitude;" "\n"
-				"\t\t" + target + ".y += " + color + ".g * flutterWave * windAmplitude * 0.08;" "\n"
-				"\t" "}" "\n";
+				"\t\t" "float branchWave = sin(windTime * 2.7 + windSpatial + windLimbPhase);" "\n"
+				"\t\t" + target + " += windDirection * (" + color + ".r * trunkWave + " + color + ".g * branchWave * 0.45) * windAmplitude;" "\n";
+
+			if ( m_vegetationFlutterEnabled )
+			{
+				offset += "\t\t" + target + ".y += windFlutterWeight * sin(windTime * 9.0 + windFlutterPhase) * windAmplitude * 0.08;" "\n";
+			}
+
+			return offset + "\t" "}" "\n";
 		};
 
 		/* Two scales, not one sine: the trunk carries everything slowly, the branch beats faster
@@ -2132,6 +2147,12 @@ namespace EmEn::Saphir
 			/* The four channels are what the wind reads; a consumer that never asked for the colour
 			 * would otherwise leave the attribute undeclared and the shader would not compile. */
 			if ( !this->declare(InputAttribute{VertexAttributeType::VertexColor}) )
+			{
+				return false;
+			}
+
+			/* The flutter weight is the leaf card's V. */
+			if ( m_vegetationFlutterEnabled && !this->declare(InputAttribute{VertexAttributeType::Primary2DTextureCoordinates}) )
 			{
 				return false;
 			}

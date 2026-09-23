@@ -445,6 +445,29 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Enables the leaf FLUTTER on top of the wind: this stage draws the renderable's foliage layer.
+			 * @note The flutter is weighted by the card's V (1 at the petiole, 0 at the tip: TreeSkinner's leaf cards), so
+			 * it never pulls a petiole off its twig; its phase comes from the position. Only meaningful with the wind.
+			 * @return void
+			 */
+			void
+			enableVegetationFlutter () noexcept
+			{
+				m_vegetationFlutterEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the leaf flutter is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isVegetationFlutterEnabled () const noexcept
+			{
+				return m_vegetationFlutterEnabled;
+			}
+
+			/**
 			 * @brief Enables the HEIGHTFIELD surface: the vertex is a point of a shared flat patch, placed
 			 * by the per-node push constants and displaced by the height clipmap
 			 * (Graphics::Geometry::HeightfieldSurface).
@@ -911,6 +934,7 @@ namespace EmEn::Saphir
 			bool m_MDIEnabled{false};
 			bool m_skinningEnabled{false};
 			bool m_vegetationWindEnabled{false};
+			bool m_vegetationFlutterEnabled{false};
 			bool m_heightfieldSurfaceEnabled{false};
 			bool m_heightfieldPixelFrameEnabled{false};
 			bool m_heightfieldFrameRequested{false};
