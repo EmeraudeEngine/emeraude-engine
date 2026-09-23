@@ -939,28 +939,18 @@ namespace EmEn::Graphics::Effects::Camera
 		m_currentAdaptIndex = 0;
 	}
 
-	/* ---- Execute ---- */
-
-	const TextureInterface &
-	ToneMapping::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	ToneMapping::ExposureTerms
+	ToneMapping::resolveExposure (const Scenes::Component::Camera * camera) const noexcept
 	{
-		const auto & constants = context.constants;
-
-		const auto frameIndex = this->renderer().currentFrameIndex();
-
-		/* Effective exposure: the ACTIVE CAMERA drives the photographic behaviour when
-		 * present (physical camera model). The exposure compensation is an EV bias:
-		 * each EV doubles/halves the light gathered. */
+		/* The exposure compensation is an EV bias: each EV doubles/halves the light gathered. */
 		float exposure = m_parameters.exposure;
 		float keyValue = m_parameters.keyValue;
 		bool autoExposureEnabled = m_parameters.autoExposureEnabled;
 		auto minExposure = m_parameters.minExposure;
 		auto maxExposure = m_parameters.maxExposure;
 
-		if ( context.camera != nullptr )
+		if ( camera != nullptr )
 		{
-			const auto * camera = context.camera;
-
 			autoExposureEnabled = camera->isAutoExposureEnabled();
 
 			/* ⚠️ The shader multiplies the two terms (`hdrColor *= exposure * autoExposure`), so
@@ -996,6 +986,46 @@ namespace EmEn::Graphics::Effects::Camera
 			minExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->minSensitivity()));
 			maxExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->maxSensitivity()));
 		}
+
+		return {.exposure = exposure, .keyValue = keyValue, .minExposure = minExposure, .maxExposure = maxExposure, .autoExposureEnabled = autoExposureEnabled};
+	}
+
+	float
+	ToneMapping::displayExposure (const Scenes::Component::Camera * camera) const noexcept
+	{
+		const auto terms = this->resolveExposure(camera);
+
+		if ( !terms.autoExposureEnabled )
+		{
+			return terms.exposure;
+		}
+
+		/* The shader's own clamp (keyValue / average luminance, bounded by the sensor range). */
+		if ( m_meteredLuminance > 0.0F )
+		{
+			return terms.exposure * std::clamp(terms.keyValue / m_meteredLuminance, terms.minExposure, terms.maxExposure);
+		}
+
+		return terms.exposure * std::sqrt(terms.minExposure * terms.maxExposure);
+	}
+
+	/* ---- Execute ---- */
+
+	const TextureInterface &
+	ToneMapping::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
+	{
+		const auto & constants = context.constants;
+
+		const auto frameIndex = this->renderer().currentFrameIndex();
+
+		/* Effective exposure: the ACTIVE CAMERA drives the photographic behaviour when
+		 * present (physical camera model), see resolveExposure(). */
+		const auto terms = this->resolveExposure(context.camera);
+		const auto exposure = terms.exposure;
+		const auto keyValue = terms.keyValue;
+		const auto autoExposureEnabled = terms.autoExposureEnabled;
+		const auto minExposure = terms.minExposure;
+		const auto maxExposure = terms.maxExposure;
 
 		/* Glare intensity for the folded bloom application (see setGlareSource()): the
 		 * ACTIVE CAMERA owns it — same per-frame re-read the Bloom composite used to do. */

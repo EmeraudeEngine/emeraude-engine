@@ -86,7 +86,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			{
 				float alpha{0.1F}; /**< Blend weight of the current frame (0.1 = 90% history). */
 				float varianceGamma{1.0F}; /**< Variance clipping AABB half-size, in standard deviations. */
-				bool lumaWeighting{true}; /**< Karis inverse-luminance HDR blend weighting. */
+				bool lumaWeighting{true}; /**< Karis inverse-luminance HDR blend weighting, on the EXPOSED luminance. */
 				bool debugNonFinite{false}; /**< Paint the pixels whose reconstruction holds a NaN/Inf (Core/Graphics/PostProcessing/DebugNonFinite). */
 			};
 

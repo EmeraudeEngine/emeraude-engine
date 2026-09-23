@@ -40,6 +40,7 @@
 #include "IndirectPostProcessEffect.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 #include "PostProcessStack.hpp"
+#include "Effects/Camera/ToneMapping.hpp"
 #include "Renderer.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/PostProcessing.hpp"
@@ -1264,6 +1265,11 @@ namespace EmEn::Graphics
 			.ambientIlluminance = ambientIlluminance,
 			.medium = medium,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
+			.displayExposure = [&stack, activeCamera] {
+				const auto toneMapping = stack.cameraToneMapping();
+
+				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) : 0.0F;
+			}(),
 			.constants = PushConstants{
 				.frameWidth = static_cast< float >(extent.width),
 				.frameHeight = static_cast< float >(extent.height),

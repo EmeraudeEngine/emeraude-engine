@@ -431,6 +431,10 @@ namespace EmEn::Graphics
 				 * centers; no history counterpart is exposed because nothing in the chain has to
 				 * undo a previous-frame offset (the jitter never travels through a matrix). */
 				Base::Math::Vector< 2, float > projectionJitter{};
+				/* The exposure multiplier the tone mapper applies (ToneMapping::displayExposure()), nit -> display
+				 * value, or 0 when the chain has no tone mapper. An effect that weights by luminance BEFORE the tone
+				 * mapping (the TAA's Karis weights) needs a DISPLAY luminance: fed nits, `1 / (1 + L)` is `1 / L`. */
+				float displayExposure{0.0F};
 				PostProcessor::PushConstants constants{};
 			};
 

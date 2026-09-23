@@ -247,6 +247,20 @@ namespace EmEn::Graphics::Effects::Camera
 			}
 
 			/**
+			 * @brief Returns the exposure multiplier this tone mapper applies to the scene luminance for @a camera: what
+			 * turns a nit into a display value (a correctly exposed middle grey lands near 0.1).
+			 * @note Manual exposure: the APEX triad, exact. Auto exposure: the metered multiplier, from the readback
+			 * (`framesInFlight` frames of latency, clamped to the sensor range like the shader does); before the first
+			 * measurement, the middle of that range. The TAA weights its blend with it (Karis' `1/(1+L)` expects a
+			 * DISPLAY luminance: fed nits it becomes a harmonic mean of the samples).
+			 * @warning RENDER THREAD, same contract as meteredSensitivity().
+			 * @param camera The active camera, or null (the effect's own parameters then).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float displayExposure (const Scenes::Component::Camera * camera) const noexcept;
+
+			/**
 			 * @brief Returns the metered scene average luminance, in nits (cd/m²).
 			 * @note Same readback and thread contract as meteredSensitivity(); 0 until valid.
 			 * @return float
@@ -280,6 +294,26 @@ namespace EmEn::Graphics::Effects::Camera
 			}
 
 		private:
+
+			/**
+			 * @brief The exposure terms of a frame, as execute() hands them to the shader.
+			 */
+			struct ExposureTerms
+			{
+				float exposure{1.0F};
+				float keyValue{0.0F};
+				float minExposure{0.0F};
+				float maxExposure{0.0F};
+				bool autoExposureEnabled{false};
+			};
+
+			/**
+			 * @brief Resolves the exposure terms from the active camera (physical camera model) or the parameters.
+			 * @param camera The active camera, or null.
+			 * @return ExposureTerms
+			 */
+			[[nodiscard]]
+			ExposureTerms resolveExposure (const Scenes::Component::Camera * camera) const noexcept;
 
 			/** @brief One host-visible readback slot per frame in flight (metered exposure). */
 			struct MeteredReadbackSlot

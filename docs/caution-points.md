@@ -5255,6 +5255,24 @@ Sponza 0 VUID, emeraude-base 2049/2049, GPU cost in the AGENTS section.
 `Graphics/Renderer.{hpp,cpp}`, `Graphics/BindlessTextureManager.cpp`, `Graphics/Effects/Lighting/RTR.cpp`,
 `SettingKeys.hpp`.
 
+### Fixed: a PARKED camera shimmered under TAA — the colour clip rejected valid history every frame (Sep 2026)
+
+- **Symptom** (owner, `relief`): the far ground shimmers on a still camera on Linux, not on Windows. The
+  Windows machine had `Core/Graphics/PostProcessing/TemporalAA/Enabled = false` (settings diff): no
+  TAA, no jitter, no shimmer. Measured with `temporalCapture(16)` + `tools/temporal-analysis.py`: far
+  band peak-to-peak 21.2/255, 61 % of its pixels > 8; with the jitter off, 0.3. NOT the lighting lane
+  (RT 21.0 vs SS 21.2), NOT the resolution (1280×720 the same), NOT the velocity (probed exactly 0).
+- **Cause 1**: the variance clip compared the history, the filtered accumulation of every jitter
+  phase, with the RAW jittered 3×3 of the frame. On sub-pixel detail the two differ by construction,
+  so the valid history was thrown away every frame.
+- **Cause 2**: the Karis weights were fed NITS. `1/(1+L)` is `1/L` then, and a dark history texel
+  sticks (dark seams appeared on the clouds once the clip was relaxed).
+- **Fix**: the depth decides (`src/Graphics/AGENTS.md` § The TAA resolve): the history keeps its
+  linear depth in alpha and is clipped only where that surface left the 3×3 depth range; the
+  weights use the exposed luminance. Result 0.01 % of pixels > 8 (from 9.5 %), max 12 (from 163).
+- ⚠️ A settings DIFF comes first when two machines disagree: the "Windows does not shimmer" lead was
+  a disabled TAA, and an hour of GPU/driver hypotheses would have been built on it.
+
 ### Fixed: disabling TAA by selection left the projection JITTERING with nothing to resolve it (Sep 2026)
 
 - **Symptom**: `Core.SceneManagerService.PostProcess.disable(TemporalAA)` on a parked camera, and

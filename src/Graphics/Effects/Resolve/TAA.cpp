@@ -27,6 +27,7 @@
 #include "TAA.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <string>
 
 /* Local inclusions. */
@@ -66,9 +67,15 @@ namespace
 		/* > 0.5: paint in red every pixel whose 3x3 reconstruction holds a non-finite scene texel
 		 * (Core/Graphics/PostProcessing/DebugNonFinite). */
 		float debugNonFinite;
+		/* The tone mapper's exposure (FrameContext::displayExposure), 0 when unknown: the Karis weights and the
+		 * anti-flicker contrast are computed on the DISPLAY luminance, never on nits. */
+		float displayExposure;
+		/* The camera clip planes: the history carries the LINEAR depth of its surface in alpha. */
+		float nearPlane;
+		float farPlane;
 	};
 
-	static_assert(sizeof(TAAPushConstants) == 32, "TAAPushConstants must be 32 bytes.");
+	static_assert(sizeof(TAAPushConstants) == 44, "TAAPushConstants must be 44 bytes.");
 
 	/* ---- GLSL Shader Sources ----
 	 *
@@ -87,7 +94,15 @@ namespace
 	 *   Computer Graphics", SIGGRAPH 1988, B = C = 1/3) evaluated at each tap's sub-pixel
 	 *   distance -- cf. A. Tardif, "Temporal Antialiasing Starter Pack" (which also flags
 	 *   folding the current jitter into that distance) and M. Pettineo's reconstruction-filter
-	 *   comparison (Mitchell preferred over Catmull-Rom: less pronounced negative lobes). */
+	 *   comparison (Mitchell preferred over Catmull-Rom: less pronounced negative lobes).
+	 * - History rejection by DEPTH (2026-09-23, owner's design): the colour clip is applied only where the depth the
+	 *   history accumulated is no longer in the 3x3 depth range. Karis 2014 names the defect a colour clip causes on
+	 *   still content ("camera is static but some pixels flicker… history gets clamped"), the TAA survey (Yang, Liu,
+	 *   Salvi, CGF 2020, § 6.3) its cause; depth-based disocclusion tests are the survey's § 4.2 geometric rejection.
+	 * - History deringing: the bicubic result is clamped to its 2x2 bilinear footprint (AMD FidelityFX FSR2,
+	 *   `ffx_fsr2_sample.h`, MIT), so its negative lobes cannot build dark/bright seams frame after frame.
+	 * - Karis weights on the EXPOSED luminance (UE4 `HdrWeight4(C, Exposure)`, FSR2 `PrepareRgb`, HDRP pre-exposure):
+	 *   in nits, `1 / (1 + L)` is `1 / L` and the blend becomes a harmonic mean dominated by the darkest sample. */
 
 	static constexpr auto TAAResolveFragmentShader = R"GLSL(
 #version 450
@@ -110,7 +125,17 @@ layout(push_constant) uniform PushConstants
 	float jitterUVX;
 	float jitterUVY;
 	float debugNonFinite;
+	float displayExposure;
+	float nearPlane;
+	float farPlane;
 };
+
+float linearizeDepth(float depth)
+{
+	float z = depth * 2.0 - 1.0;
+
+	return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
+}
 
 float luminanceOf(vec3 color)
 {
@@ -217,9 +242,19 @@ vec3 sampleHistoryCatmullRom(vec2 uv, vec2 texelSize)
 		texture(historyTex, vec2(texPos12.x, texPos3.y)).rgb  * (w12.x * w3.y) +
 		texture(historyTex, vec2(texPos3.x,  texPos3.y)).rgb  * (w3.x  * w3.y);
 
-	/* The Catmull-Rom negative lobes can undershoot below zero on HDR edges. */
-	return max(result, vec3(0.0));
+	/* DERINGING (FSR2): the result is bounded by its 2x2 bilinear footprint. Without it the negative lobes
+	 * overshoot on an edge, the overshoot becomes next frame's history, and a still image grows dark/bright seams
+	 * along its contrasts (measured on the clouds of `relief` once the clip was relaxed). It also removes the
+	 * HDR undershoot below zero the lobes used to need a max() for. */
+	vec2 footprint = texPos1 * texelSize;
+	vec3 c00 = texture(historyTex, footprint).rgb;
+	vec3 c10 = texture(historyTex, footprint + vec2(texelSize.x, 0.0)).rgb;
+	vec3 c01 = texture(historyTex, footprint + vec2(0.0, texelSize.y)).rgb;
+	vec3 c11 = texture(historyTex, footprint + texelSize).rgb;
+
+	return clamp(result, min(min(c00, c10), min(c01, c11)), max(max(c00, c10), max(c01, c11)));
 }
+
 
 void main()
 {
@@ -275,10 +310,15 @@ void main()
 	 * negative lobes can undershoot below zero on HDR edges. */
 	vec3 current = max(sourceTotal / max(sourceWeightTotal, 1e-6), vec3(0.0));
 
+	/* The history's ALPHA is the linear depth of the surface it accumulated (the TAA output doubles as the
+	 * history; downstream nothing reads that alpha — the tone mapper writes 1). It is what tells a pixel that
+	 * still shows the SAME surface from one an object just uncovered. */
+	float centerDepth = linearizeDepth(texture(depthTex, vUV).r);
+
 	/* First frame after (re)creation: the history image is uninitialized. */
 	if (alpha >= 1.0)
 	{
-		outResolved = vec4(current, 1.0);
+		outResolved = vec4(current, centerDepth);
 		return;
 	}
 
@@ -287,6 +327,10 @@ void main()
 	 * instead of smearing (same convention as the RTGI temporal resolve). */
 	vec2 closestOffset = vec2(0.0);
 	float closestDepth = texture(depthTex, vUV).r;
+	/* The 3x3 depth RANGE of this frame (linearized below): the depth is rasterized with the jitter too, so a
+	 * pixel on an edge sees one surface or the other depending on the phase — its own depth alone would call
+	 * the horizon "changed" every other frame. */
+	float farthestDepth = closestDepth;
 
 	for (int y = -1; y <= 1; y++)
 	{
@@ -300,6 +344,8 @@ void main()
 				closestDepth = d;
 				closestOffset = offset;
 			}
+
+			farthestDepth = max(farthestDepth, d);
 		}
 	}
 
@@ -309,11 +355,13 @@ void main()
 	 * discontinuity invents values that exist on neither surface. */
 	vec2 velocity = texture(velocityTex, vUV + closestOffset).rg;
 	vec2 prevUV = vUV - velocity * 0.5;
+	/* The reprojection distance in PIXELS: 0 on a parked camera (measured exactly 0, sky included). */
+	float motionPixels = length(velocity * 0.5 / texel);
 
 	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
 	{
 		/* Off-screen reprojection: no usable history. */
-		outResolved = vec4(current, 1.0);
+		outResolved = vec4(current, centerDepth);
 		return;
 	}
 
@@ -333,26 +381,53 @@ void main()
 	vec3 mu = m1 / 9.0;
 	vec3 sigma = sqrt(max(m2 / 9.0 - mu * mu, vec3(0.0)));
 
-	vec3 clippedYCoCg = clipToAABB(mu - varianceGamma * sigma, mu + varianceGamma * sigma, RGBToYCoCg(history));
-	history = max(YCoCgToRGB(clippedYCoCg), vec3(0.0));
+	/* THE DEPTH DECIDES (owner, 2026-09-23: "le depth buffer ne se filtre pas par le TAA, pourquoi ne pas l'utiliser
+	 * pour savoir ce qui a bougé ?"). The colour clip compared the history — the filtered accumulation of every
+	 * jitter phase — with the RAW jittered 3x3 of this frame; on sub-pixel detail the two differ by construction,
+	 * and the clip read that difference as a change and threw the history away every frame (21/255 of shimmer on
+	 * a parked camera, with a reprojection measured exactly 0). The depth is never filtered: the history keeps the
+	 * linear depth of the surface it accumulated, and the history is rejected (clipped) only where that surface is
+	 * no longer in this pixel's neighbourhood — a disocclusion, or a reprojection that landed on another surface.
+	 * ⚠️ What the depth cannot see: a SHADING change on unchanged geometry (a moving shadow, a light switched on,
+	 * an animated texture, a reflection, a translucent surface outside the depth buffer). Those now fade over the
+	 * accumulation (~1/alpha frames) instead of snapping. */
+	/* SAME SURFACE: the depth the history accumulated lies within this frame's 3x3 depth range (1 % margin). An
+	 * object that left the pixel fails it (its depth is nowhere in the background's neighbourhood); a jittered
+	 * edge passes it (both surfaces are in the range). */
+	float historyDepth = texture(historyTex, prevUV).a;
+	float nearestLinear = linearizeDepth(closestDepth);
+	float farthestLinear = linearizeDepth(farthestDepth);
+	bool sameSurface = historyDepth >= nearestLinear * 0.99 && historyDepth <= farthestLinear * 1.01;
+
+	if (!sameSurface)
+	{
+		vec3 clippedYCoCg = clipToAABB(mu - varianceGamma * sigma, mu + varianceGamma * sigma, RGBToYCoCg(history));
+		history = max(YCoCgToRGB(clippedYCoCg), vec3(0.0));
+	}
+
+	/* A stationary pixel averages over more frames: at alpha 0.1 the EMA still lets 13.6 % of the first jitter
+	 * harmonic through (8-phase Halton), at 0.05 half of it. One pixel of motion restores the configured alpha. */
+	float blendAlpha = alpha * mix(0.5, 1.0, clamp(motionPixels, 0.0, 1.0));
 
 	vec3 result;
 
-	if (lumaWeighting > 0.5)
+	if (lumaWeighting > 0.5 && displayExposure > 0.0)
 	{
-		/* HDR accumulation guard (Karis): inverse-luminance weights tame fireflies —
-		 * a single very bright jittered sample no longer flashes the whole pixel. */
-		float weightCurrent = alpha / (1.0 + luminanceOf(current));
-		float weightHistory = (1.0 - alpha) / (1.0 + luminanceOf(history));
+		/* HDR accumulation guard (Karis): inverse-luminance weights tame fireflies — a single very bright jittered
+		 * sample no longer flashes the whole pixel. ⚠️ On the EXPOSED luminance: the scene buffer is in nits, and
+		 * `1 / (1 + L)` of a sunlit ground (thousands of nits) is `1 / L`, a harmonic mean that let a dark history
+		 * texel outweigh a bright current one thousands of times (it stuck dark seams in the sky of `relief`). */
+		float weightCurrent = blendAlpha / (1.0 + luminanceOf(current) * displayExposure);
+		float weightHistory = (1.0 - blendAlpha) / (1.0 + luminanceOf(history) * displayExposure);
 
 		result = (current * weightCurrent + history * weightHistory) / max(weightCurrent + weightHistory, 1e-6);
 	}
 	else
 	{
-		result = mix(history, current, alpha);
+		result = mix(history, current, blendAlpha);
 	}
 
-	outResolved = vec4(result, 1.0);
+	outResolved = vec4(result, centerDepth);
 }
 )GLSL";
 
@@ -516,7 +591,10 @@ namespace EmEn::Graphics::Effects::Resolve
 			/* NDC jitter -> UV units (frame-history contract, see the shader note). */
 			.jitterUVX = context.projectionJitter.x() * 0.5F,
 			.jitterUVY = context.projectionJitter.y() * 0.5F,
-			.debugNonFinite = m_parameters.debugNonFinite ? 1.0F : 0.0F
+			.debugNonFinite = m_parameters.debugNonFinite ? 1.0F : 0.0F,
+			.displayExposure = context.displayExposure,
+			.nearPlane = context.constants.nearPlane,
+			.farPlane = context.constants.farPlane
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(

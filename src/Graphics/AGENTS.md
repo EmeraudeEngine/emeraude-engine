@@ -1624,6 +1624,41 @@ resolve and the whole photographic chain into ONE `Framebuffer/` bag of 16. It i
 | `Effects/Style/` | The look — non-physical | the 18 former `Lens/` effects |
 | `Effects/Shared/` | GLSL snippet libraries, NOT effects | CSMSamplingGLSL, MarchDitherGLSL, RTAlphaTestGLSL |
 
+### The TAA resolve: the history is rejected by DEPTH, never by colour on unchanged geometry (Sep 2026)
+
+`Effects/Resolve/TAA.cpp`, owner's design (2026-09-23): *"c'est le buffer de couleur qui doit être
+anti-aliasé, pas le depth buffer"* — the COLOUR buffer is what accumulates, the DEPTH buffer (never
+filtered) decides whether the history is still valid.
+- The history target's **alpha holds the linear depth** of the surface it accumulated (nothing
+  downstream reads that alpha: the tone mapper writes 1). The history is **rejected** (variance
+  clip, `VarianceGamma`) **only where that depth is outside this frame's 3×3 depth range** (±1 %) —
+  a disocclusion, or a reprojection that landed on another surface. The range, not the centre
+  depth: the depth is jittered too, so an edge pixel sees each surface in turn.
+- **Why**: the colour clip compared the history (the filtered accumulation of every jitter phase)
+  with the RAW jittered 3×3; on sub-pixel detail they differ by construction, the clip threw the
+  valid history away every frame, and a PARKED camera shimmered. Measured on `relief` (far ground,
+  16 consecutive frames, `temporalCapture`), per-pixel peak-to-peak: before, mean 3.73, **9.5 %** of
+  pixels > 8/255, max 163, far band 21.2 with 61 % > 8; after, mean 0.69, **0.01 %** > 8, max 12, far
+  band 2.4 with 0.09 % > 8. Jitter off (the reference of a still frame): mean 0.30. A 0.3 m camera
+  jump reconverges in ~15 frames (1.6 % → 0.08 % of pixels > 16 away from the converged image).
+- **Karis weights on the EXPOSED luminance**: `1/(1 + L·E)` with `E` =
+  `ToneMapping::displayExposure()`, carried by `FrameContext::displayExposure` (0 = no tone
+  mapper: plain EMA). In nits `1/(1+L)` is `1/L` — a harmonic mean of the samples that let a DARK
+  history texel outweigh a bright current one thousands of times (it stuck dark seams along the
+  clouds of `relief` as soon as the clip stopped hiding it). UE4 `HdrWeight4(C, Exposure)`, FSR2
+  `PrepareRgb`, HDRP pre-exposure all feed an exposed value.
+- **History deringing** (FSR2): the Catmull-Rom result is clamped to its 2×2 bilinear footprint.
+- **Stationary alpha**: `alpha · mix(0.5, 1, motion in pixels)` — the EMA at 0.1 lets 13.6 % of the
+  8-phase jitter's first harmonic through, 0.05 half of it.
+- ⚠️ **What the depth cannot see**: a SHADING change on unchanged geometry — a moving shadow, a
+  light switched on, an animated texture, a reflection, a translucent surface absent from the depth
+  buffer. Those now FADE over the accumulation (~1/alpha frames) instead of snapping. If one becomes
+  visible, add a colour test reserved to LARGE changes; never bring back a colour clip on still,
+  unchanged geometry.
+- An HDRP-style anti-flicker (the clip widened with stationarity and temporal contrast) was tried
+  the same day and reached far band 11.6 / 7.9 (base gamma 1.0 / 1.5, full strength): it only
+  softens the wrong test. Removed.
+
 > [!CAUTION]
 > **Never read the folder to know how an effect executes.** `Resolve/` holds both mechanisms —
 > TAA is an `IndirectPostProcessEffect`, FXAA/Sharpen/FXAASharpen are `DirectPostProcessEffect`s
