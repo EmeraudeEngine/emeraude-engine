@@ -320,6 +320,35 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Limits shadow casting to a distance from the VIEWER (the main camera): beyond it, the instance is
+			 * left out of every shadow map. 0 means no limit (the default).
+			 * @note The shadow map of a sun can cover kilometres; a forest there puts every tree into it, at a cost
+			 * that can exceed the whole view (measured on `terrain`, 2026-09-23: 3.24 billion shadow triangles for
+			 * 1.09 billion in view). Far trees cast shadows a metre-per-texel map cannot resolve anyway. The
+			 * distance is measured to the instance's ENTITY position, so for a cell of instances it is the cell's.
+			 * @param distance The distance in metres, 0 for no limit.
+			 * @return Abstract *
+			 */
+			Abstract *
+			setShadowCastingDistance (float distance) noexcept
+			{
+				m_shadowCastingDistance = distance > 0.0F ? distance : 0.0F;
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns the distance from the viewer beyond which the instance casts no shadow, 0 for no limit.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			shadowCastingDistance () const noexcept
+			{
+				return m_shadowCastingDistance;
+			}
+
+			/**
 			 * @brief Returns whether shadow casting is enabled for this instance.
 			 * @return bool
 			 */
@@ -531,6 +560,19 @@ namespace EmEn::Graphics::RenderableInstance
 			renderable () const noexcept
 			{
 				return m_renderable.get();
+			}
+
+			/**
+			 * @brief Returns how many instances one draw of this renderable instance submits.
+			 * @note The public face of the protected instanceCount(), for the render statistics
+			 * (Scene::viewRenderStatistics()).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			drawnInstanceCount () const noexcept
+			{
+				return this->instanceCount();
 			}
 
 			/**
@@ -1215,6 +1257,8 @@ namespace EmEn::Graphics::RenderableInstance
 			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */
 			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
 			uint32_t m_instanceTransformsSlot{0};
+			/** @brief Distance from the viewer beyond which the instance casts no shadow, 0 for no limit. */
+			float m_shadowCastingDistance{0.0F};
 			/* Skeletal skinning GPU resources (per-instance).
 			 * The SSBO holds one section per frame in flight; each descriptor set targets its
 			 * section (fixed offset/range, same layout). See createSkinningResources(). */

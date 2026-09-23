@@ -897,6 +897,50 @@ namespace EmEn::Scenes
 			return true;
 		}, "Returns scene information (name, node count, entity count, active camera).");
 
+		this->bindCommand("getRenderStatistics", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const auto print = [] (std::stringstream & output, const char * title, const Scene::RenderListStatistics & statistics) {
+				uint64_t batches = 0;
+				uint64_t instances = 0;
+				uint64_t triangles = 0;
+
+				output << title;
+
+				if ( statistics.targets > 0 )
+				{
+					output << " (" << statistics.targets << " target(s))";
+				}
+
+				output << "\n";
+
+				for ( size_t level = 0; level < statistics.batches.size(); ++level )
+				{
+					output << "  LOD " << level << ": " << statistics.batches[level] << " batches, " << statistics.instances[level] << " instances, " << statistics.triangles[level] << " triangles\n";
+
+					batches += statistics.batches[level];
+					instances += statistics.instances[level];
+					triangles += statistics.triangles[level];
+				}
+
+				output << "  total: " << batches << " batches, " << instances << " instances, " << triangles << " triangles\n";
+			};
+
+			std::stringstream info;
+
+			print(info, "View lists (last frame)", m_activeScene->viewRenderStatistics());
+			print(info, "Shadow lists (last frame)", m_activeScene->shadowRenderStatistics());
+
+			outputs.emplace_back(Severity::Info, info.str());
+
+			return true;
+		}, "Returns what the last frame's render lists submit, per geometry LOD: batches, instances, triangles (view, then shadows).");
+
 		this->bindCommand("getNode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
 			{

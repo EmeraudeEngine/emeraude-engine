@@ -1628,6 +1628,28 @@ ankle height. Moving the collision extent to a **list** of primitives is a separ
 touches the collision model, the broad phase and the narrow phase, all of which assume one shape
 per entity. Owner-identified, not scheduled.
 
+## Render list statistics and the shadow casting distance (2026-09-23)
+
+**`Scene::viewRenderStatistics()` / `shadowRenderStatistics()`** (console
+`Core.SceneManagerService.getRenderStatistics()`): per geometry LOD, the batches, instances and triangles the
+last frame's lists submit, measured on the lists as built (after frustum, distance and LOD selection).
+Triangles = the drawn index count / 3 × the instances. The view record covers every colour list of the
+primary view; the shadow record sums the shadow targets cast before it (`castShadows()` accumulates,
+`prepareRender()` of the View publishes both). First reading, on `terrain` with 209 939 trees: the view drew
+135 090 instances, ALL at LOD 3, 1.09 billion triangles — and the sun's map 419 878 instances, **3.24 billion
+triangles**, three times the view.
+
+**`RenderableInstance::Abstract::setShadowCastingDistance(metres)`** (0 = no limit): beyond that distance
+from the VIEWER (the main render target, published state), the instance enters no shadow map — the test sits
+in `populateShadowCastingRenderList()`, after the light's own distance and frustum tests, for static entities
+and nodes alike. Distance to the instance's ENTITY position: ⚠️⚠️ a cell of instances must stand on the
+ground at its centre, not at ground zero — `terrain`'s cells first sat at y = 0 under a ground 310 m up, and
+the limit dropped every tree. With 250 m: shadows 419 878 → 8 430 instances, frame ~600-900 ms → 46 ms.
+
+⚠️ **The LOD is chosen per ENTITY** (`selectLODLevel(distance, radius)`, one level for every instance of a
+`Multiple`): a 62.5 m cell of trees switches as one, and with the default coverage threshold (0.75) a
+~8 m tree is at LOD 3 beyond ~21 m, so a cell centre 31-44 m away draws even its nearest tree at LOD 3.
+
 ## Instance clustering — `Scenes/InstanceCluster.hpp` (2026-08-09)
 
 `buildInstanceClusters()` splits an instance set into a fixed metric grid, one entity per

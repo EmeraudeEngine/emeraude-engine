@@ -408,6 +408,9 @@ namespace EmEn::Scenes
 			return;
 		}
 
+		Scene::accumulateRenderStatistics(m_renderLists[Shadows], m_pendingShadowRenderStatistics);
+		++m_pendingShadowRenderStatistics.targets;
+
 		/*TraceDebug{ClassId} <<
 			"Shadow map content :" "\n"
 			" - Plain objects : " << m_renderLists[Shadows].size() << "\n";*/
@@ -488,6 +491,24 @@ namespace EmEn::Scenes
 		m_preparedInstanceTransformsDS = m_instanceTransforms.descriptorSet(frameIndex);
 
 		const bool renderListsPopulated = this->populateRenderLists(renderTarget, m_preparedReadStateIndex);
+
+		/* The frame's statistics: the shadow maps were cast BEFORE this (Renderer::renderFrame), so the
+		 * pending shadow record is complete when the primary view closes the frame. */
+		if ( renderTarget->renderType() == RenderTargetType::View )
+		{
+			RenderListStatistics viewStatistics{};
+
+			for ( const auto listIndex : {Opaque, Translucent, OpaqueLighted, TranslucentLighted, TranslucentGB, TranslucentGBLighted} )
+			{
+				Scene::accumulateRenderStatistics(m_renderLists[listIndex], viewStatistics);
+			}
+
+			const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+
+			m_viewRenderStatistics = viewStatistics;
+			m_shadowRenderStatistics = m_pendingShadowRenderStatistics;
+			m_pendingShadowRenderStatistics = {};
+		}
 
 		/* Instance transforms header: current and previous view-projection matrices of the
 		 * primary view target (motion vectors). Render-to-texture/cubemap targets must not
@@ -856,6 +877,58 @@ namespace EmEn::Scenes
 		return std::min(static_cast< uint32_t >(LODf), Renderable::MaxLODLevels - 1);
 	}
 
+	void
+	Scene::accumulateRenderStatistics (const RenderBatch::List & renderList, RenderListStatistics & statistics) noexcept
+	{
+		for ( const auto & batch : std::ranges::views::values(renderList) )
+		{
+			const auto & renderableInstance = batch.renderableInstance();
+
+			if ( renderableInstance == nullptr )
+			{
+				continue;
+			}
+
+			const auto level = std::min(batch.LODLevel(), Renderable::MaxLODLevels - 1);
+			const auto instances = static_cast< uint64_t >(renderableInstance->drawnInstanceCount());
+
+			statistics.batches[level] += 1;
+			statistics.instances[level] += instances;
+
+			const auto * renderable = renderableInstance->renderable();
+
+			if ( renderable == nullptr )
+			{
+				continue;
+			}
+
+			const auto * geometry = renderable->geometry(batch.LODLevel());
+
+			if ( geometry == nullptr )
+			{
+				continue;
+			}
+
+			statistics.triangles[level] += static_cast< uint64_t >(geometry->subGeometryRange(batch.subGeometryIndex())[1] / 3) * instances;
+		}
+	}
+
+	Scene::RenderListStatistics
+	Scene::viewRenderStatistics () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+
+		return m_viewRenderStatistics;
+	}
+
+	Scene::RenderListStatistics
+	Scene::shadowRenderStatistics () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+
+		return m_shadowRenderStatistics;
+	}
+
 	bool
 	Scene::checkRenderableInstanceForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
 	{
@@ -918,6 +991,19 @@ namespace EmEn::Scenes
 		 * dense enough to show it (reflexion-debug is not). */
 		const auto isCascaded = renderTarget->isCascadedShadowMap();
 
+		/* The VIEWER, for the per-instance shadow casting distance (RenderableInstance::setShadowCastingDistance()):
+		 * a caster far from the camera is dropped whatever the light's own frame. Published render state. */
+		const auto mainRenderTarget = m_AVConsoleManager.graphicsRenderer().mainRenderTarget();
+		const auto & viewerPosition = mainRenderTarget != nullptr ?
+			mainRenderTarget->viewMatrices().position(readStateIndex) :
+			cameraPosition;
+
+		const auto beyondShadowCastingDistance = [&viewerPosition] (const RenderableInstance::Abstract & instance, const Vector< 3, float > & position) noexcept {
+			const auto limit = instance.shadowCastingDistance();
+
+			return limit > 0.0F && Vector< 3, float >::distance(viewerPosition, position) > limit;
+		};
+
 		for ( const auto & component : m_sceneVisualComponents )
 		{
 			if ( component == nullptr )
@@ -978,6 +1064,11 @@ namespace EmEn::Scenes
 						return;
 					}
 
+					if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
+					{
+						return;
+					}
+
 					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
 				});
 			}
@@ -1024,6 +1115,11 @@ namespace EmEn::Scenes
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
 					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !isCascaded && !currentNode->isVisibleTo(frustum) ) )
+					{
+						return;
+					}
+
+					if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
 					{
 						return;
 					}

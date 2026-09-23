@@ -57,6 +57,7 @@
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/Renderable/Types.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "DirectionalShadowOptions.hpp"
 #include "GroundLevelInterface.hpp"
@@ -1820,6 +1821,37 @@ namespace EmEn::Scenes
 			void castShadows (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			/**
+			 * @brief What one frame's render lists submit, by geometry level of detail.
+			 * @note Measured on the lists as built — after the frustum and distance tests, with the LOD each batch
+			 * was given — so it answers "which level is drawn, how many instances, how many triangles" without a
+			 * GPU capture. Triangles are the drawn index count divided by three, times the instances.
+			 */
+			struct RenderListStatistics final
+			{
+				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > batches{};
+				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > instances{};
+				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > triangles{};
+				/** @brief How many shadow targets were filled (shadow statistics only). */
+				uint64_t targets{0};
+			};
+
+			/**
+			 * @brief Returns the statistics of the last frame's VIEW render lists (every colour list, the primary view
+			 * only). Thread-safe.
+			 * @return RenderListStatistics
+			 */
+			[[nodiscard]]
+			RenderListStatistics viewRenderStatistics () const noexcept;
+
+			/**
+			 * @brief Returns the statistics of the last frame's SHADOW render lists, summed over its shadow targets.
+			 * Thread-safe.
+			 * @return RenderListStatistics
+			 */
+			[[nodiscard]]
+			RenderListStatistics shadowRenderStatistics () const noexcept;
+
+			/**
 			 * @brief Declares the beginning of a rendered frame on the render thread.
 			 *
 			 * Resets the frame-linear staging of the instance transforms SSBO. The Renderer
@@ -2329,6 +2361,14 @@ namespace EmEn::Scenes
 			uint32_t selectLODLevel (float distance, float objectRadius) const noexcept;
 
 			/**
+			 * @brief Adds a render list to a statistics record.
+			 * @param renderList A reference to the render list.
+			 * @param statistics A reference to the record.
+			 * @return void
+			 */
+			static void accumulateRenderStatistics (const RenderBatch::List & renderList, RenderListStatistics & statistics) noexcept;
+
+			/**
 			 * @brief Saves scene global visual components.
 			 * @return void
 			 */
@@ -2739,6 +2779,14 @@ namespace EmEn::Scenes
 			/** @brief Current main camera view distance for LOD computation. Updated per prepareRendering(). */
 			float m_currentViewDistance{1000.0F};
 			float m_LODScreenCoverageThreshold{DefaultGraphicsLODScreenCoverageThreshold};
+			/** @brief The last frame's view list statistics, published by prepareRender() of the primary view. */
+			RenderListStatistics m_viewRenderStatistics{};
+			/** @brief The last frame's shadow list statistics, published with the view's. */
+			RenderListStatistics m_shadowRenderStatistics{};
+			/** @brief The shadow statistics of the frame being built. Render thread only. */
+			RenderListStatistics m_pendingShadowRenderStatistics{};
+			/** @brief Guards the two published statistics records (render thread writes, console reads). */
+			mutable std::mutex m_renderStatisticsAccess;
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
 			/** @brief Pointer-driven camera orbit controller. Inert without a controlled node. */
