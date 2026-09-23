@@ -62,6 +62,7 @@
 #include "PostProcessor.hpp"
 #include "TextureCache.hpp"
 #include "TextureCompressor.hpp"
+#include "FrameCapture.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -1386,6 +1387,16 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Sampler > getSampler (std::string_view identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
+			 * @brief RENDER THREAD. Records the frame capture's copy of the acquired swap-chain image, with the frame's
+			 * metadata (Graphics::FrameCapture).
+			 * @param scene The scene of the frame, or null.
+			 * @param commandBuffer The frame's command buffer, outside any render pass.
+			 * @param imageIndex The acquired swap-chain image.
+			 * @return bool True when a copy was recorded: the submit must then be confirmed to the capture.
+			 */
+			bool recordFrameCapture (const Scenes::Scene * scene, const Vulkan::CommandBuffer & commandBuffer, uint32_t imageIndex) noexcept;
+
+			/**
 			 * @brief Advances and applies the sub-pixel projection jitter for the frame about to be rendered (TAA).
 			 * @note MUST be called on the render thread BEFORE the scene's video memory update (the view
 			 * UBO upload must carry the jittered projection) and before any frame recording. Applies a
@@ -1406,15 +1417,18 @@ namespace EmEn::Graphics
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
 
 			/**
-			 * @brief Captures the framebuffer.
-			 * @param result Array to fill: [0] = color, [1] = depth (optional), [2] = stencil (optional).
-			 * @param keepAlpha Keep the alpha channel from the GPU memory. Default false.
-			 * @param withDepthBuffer Enable to capture the depth buffer. Default false.
-			 * @param withStencilBuffer Enable to capture the stencil buffer. Default false.
-			 * @param postProcess Enable to swap channels from BGRA to RGBA. Default true.
-			 * @return bool
+			 * @brief Captures the next presented frames into the captures directory and waits for the files (Graphics::FrameCapture).
+			 * @note The copy happens INSIDE each frame, on the acquired swap-chain image, UI overlay included: a
+			 * screenshot is exactly what is presented. A screenshot is `<unix seconds>.png`; a temporal capture of N
+			 * consecutive frames is `<unix seconds>-<n>.png` plus `<unix seconds>.json` (per-frame metadata).
+			 * @warning Never call it from the render thread: it waits for frames the render thread has to produce.
+			 * @param frameCount The number of consecutive frames, 1 for a screenshot.
+			 * @param temporal True for a temporal capture (numbered files and a JSON), false for a screenshot.
+			 * @param timeout The longest wait for the files.
+			 * @return FrameCapture::Result
 			 */
-			bool captureFramebuffer (std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > & result, bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false, bool postProcess = true) noexcept;
+			[[nodiscard]]
+			FrameCapture::Result captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout) noexcept;
 
 			/**
 			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
@@ -1766,6 +1780,9 @@ namespace EmEn::Graphics
 			std::unique_ptr< MDI::BatchBuilder > m_MDIBatchBuilder;
 			/** @brief Per-pass GPU timing service (timestamp queries). Null when disabled. */
 			std::unique_ptr< Vulkan::GPUProfiler > m_GPUProfiler;
+			FrameCapture m_frameCapture;
+			/** @brief Frames recorded by renderFrame() since the start: the frame serial of a capture's metadata. */
+			uint64_t m_renderedFrameSerial{0};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			/** @brief Settings: cut the frame around the translucent pass so a glass transmits the indirect diffuse (see EffectSlot::isPreTranslucencySlot). An A/B switch, default true. */

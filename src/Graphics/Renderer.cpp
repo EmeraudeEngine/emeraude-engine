@@ -828,6 +828,8 @@ namespace EmEn::Graphics
 		/* NOTE: Final device idle to ensure all GPU work is complete. */
 		m_device->waitIdle("Renderer::onTerminate()");
 
+		m_frameCapture.abandon("The renderer is shutting down.");
+
 		/* NOTE: The Vulkan instance owns the device and outlives this service, so the cache is
 		 * still alive here — and every pipeline this run compiled is now in it. */
 		this->savePipelineCache();
@@ -1526,6 +1528,9 @@ namespace EmEn::Graphics
 				m_GPUProfiler->harvest(m_currentFrameIndex);
 			}
 
+			/* The same fence covers the frame captures submitted with this slot. */
+			m_frameCapture.onFrameSlotRetired(m_currentFrameIndex);
+
 			currentFrameScope.prepareForNewFrame();
 		}
 		else
@@ -1568,6 +1573,8 @@ namespace EmEn::Graphics
 
 		/* 5. The new frame rendering is starting now. */
 		m_statistics.start();
+
+		m_renderedFrameSerial++;
 
 		/* Before the shadow maps and the render-to-textures: they are submitted ahead of the main command buffer
 		 * and may record profiling scopes (host query reset only, see GPUProfiler). */
@@ -1773,6 +1780,15 @@ namespace EmEn::Graphics
 			this->mainRenderTarget()->viewMatrices().archiveStateAfterRendering(m_currentReadStateIndex);
 		}
 
+		/* Frame capture (screenshot, temporal capture): the swap-chain image is complete, UI included, and still
+		 * ACQUIRED — the only moment the engine owns what it presents. One atomic load when nothing is armed. */
+		bool frameCaptured = false;
+
+		if ( m_frameCapture.wantsFrame() )
+		{
+			frameCaptured = this->recordFrameCapture(scene.get(), *commandBuffer, imageIndex);
+		}
+
 		if ( m_GPUProfiler != nullptr )
 		{
 			m_GPUProfiler->endFrame(*commandBuffer);
@@ -1780,6 +1796,11 @@ namespace EmEn::Graphics
 
 		if ( !commandBuffer->end() )
 		{
+			if ( frameCaptured )
+			{
+				m_frameCapture.confirmSubmit(false);
+			}
+
 			this->discardAcquiredImage(currentFrameScope, true);
 
 			return;
@@ -1807,9 +1828,19 @@ namespace EmEn::Graphics
 					.withFence(currentFrameScope.inFlightFence()->handle())
 				) )
 			{
+				if ( frameCaptured )
+				{
+					m_frameCapture.confirmSubmit(false);
+				}
+
 				this->discardAcquiredImage(currentFrameScope, true);
 
 				return;
+			}
+
+			if ( frameCaptured )
+			{
+				m_frameCapture.confirmSubmit(true);
 			}
 
 			m_swapChain->present(imageIndex, m_graphicsQueue, presentSemaphoreHandle);
@@ -2556,6 +2587,9 @@ namespace EmEn::Graphics
 		/* NOTE: Wait the device to finish all his work before destroying/recreating the swap-chain. */
 		this->device()->waitIdle("Renderer::recreateSystem()");
 
+		/* A capture's frames must share one extent and have no hole. */
+		m_frameCapture.abandon("The swap-chain was recreated during the capture.");
+
 		/* NOTE: Lock operation to wait a valid size from the OS. */
 		m_window.waitValidWindowSize();
 
@@ -2624,24 +2658,75 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::captureFramebuffer (std::array< Pixmap< uint8_t >, 3 > & result, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, bool postProcess) noexcept
+	Renderer::recordFrameCapture (const Scenes::Scene * scene, const CommandBuffer & commandBuffer, uint32_t imageIndex) noexcept
 	{
-		if ( m_swapChain == nullptr || !m_transferManager.usable() )
+		const auto image = m_swapChain->colorImage(imageIndex);
+
+		if ( image == nullptr )
 		{
 			return false;
 		}
 
-		if ( !m_swapChain->capture(m_transferManager, 0, keepAlpha, withDepthBuffer, withStencilBuffer, result) )
+		/* The frame as the renderer saw it: the read state it rendered, the jitter it applied, the camera it exposed. */
+		FrameCapture::FrameMetadata metadata{};
+		metadata.rendererFrame = m_renderedFrameSerial;
+
+		if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
 		{
-			return false;
+			const auto & viewMatrices = mainTarget->viewMatrices();
+			const auto & jitter = viewMatrices.projectionJitter();
+			const auto & position = viewMatrices.position(m_currentReadStateIndex);
+			const auto & view = viewMatrices.viewMatrix(m_currentReadStateIndex, false, 0);
+
+			metadata.jitterNDC = {jitter[X], jitter[Y]};
+			metadata.cameraPosition = {position[X], position[Y], position[Z]};
+
+			for ( size_t index = 0; index < 16; ++index )
+			{
+				metadata.viewMatrix[index] = view[index];
+			}
 		}
 
-		if ( postProcess && result[0].isValid() )
+		if ( scene != nullptr )
 		{
-			result[0] = Processor< uint8_t >::swapChannels(result[0], false);
+			if ( const auto camera = scene->activeCamera(); camera != nullptr )
+			{
+				metadata.aperture = camera->aperture();
+				metadata.shutterSpeed = camera->shutterSpeed();
+				metadata.sensitivity = camera->sensitivity();
+				metadata.exposureCompensation = camera->exposureCompensation();
+				metadata.autoExposure = camera->isAutoExposureEnabled();
+				metadata.hasCamera = true;
+			}
 		}
 
-		return true;
+		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
+	}
+
+	FrameCapture::Result
+	Renderer::captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout) noexcept
+	{
+		if ( m_swapChain == nullptr )
+		{
+			return {.files = {}, .error = "There is no swap-chain to capture.", .success = false};
+		}
+
+		const auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
+
+		if ( !IO::writable(captureDirectory) )
+		{
+			return {.files = {}, .error = "Unable to write in the captures directory " + captureDirectory.string() + ".", .success = false};
+		}
+
+		const auto & extent = m_swapChain->extent();
+		std::string error;
+
+		if ( !m_frameCapture.arm(m_device, m_primaryServices.threadPool(), extent.width, extent.height, frameCount, captureDirectory, temporal, error) )
+		{
+			return {.files = {}, .error = std::move(error), .success = false};
+		}
+
+		return m_frameCapture.waitForCompletion(timeout);
 	}
 
 	void

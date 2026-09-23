@@ -1756,8 +1756,6 @@ namespace EmEn
 			Notifier m_notifier{m_overlayManager};				  ///< On-screen notifications.
 			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_notifier}; ///< Scene graph management.
-			/* Reusable capture buffer for screenshots. */
-			std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};
 			/* Service tracking. */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;   ///< Enabled primary service pointers.
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled; ///< Enabled secondary service pointers.

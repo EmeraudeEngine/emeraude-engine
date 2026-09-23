@@ -436,6 +436,19 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, VkImageAspectFlags aspectMask) const noexcept
+	{
+		VkBufferImageCopy region{};
+		region.imageSubresource.aspectMask = aspectMask;
+		region.imageSubresource.mipLevel = 0;
+		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.layerCount = 1;
+		region.imageExtent = src.createInfo().extent;
+
+		vkCmdCopyImageToBuffer(m_handle, src.handle(), srcLayout, dst.handle(), 1, &region);
+	}
+
+	void
 	CommandBuffer::blit (const Image & src, const Image & dst) const noexcept
 	{
 		if constexpr ( IsDebug )

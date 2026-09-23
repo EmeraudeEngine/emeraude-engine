@@ -50,41 +50,63 @@ namespace EmEn::Graphics
 	Renderer::onRegisterToConsole () noexcept
 	{
 		this->bindCommand("screenshot", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			/* Gets the capture directory. */
-			auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
+			/* The next presented frame, copied inside that frame (FrameCapture): exactly what reaches the screen. */
+			const auto result = this->captureFrames(1, false, std::chrono::seconds{5});
 
-			if ( !IO::writable(captureDirectory) )
+			if ( !result.success || result.files.empty() )
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write in captures directory " << captureDirectory);
+				outputs.emplace_back(Severity::Error, "Screenshot failed: " + result.error);
 
 				return false;
 			}
 
-			std::array< PixelFactory::Pixmap< uint8_t >, 3 > images{};
-
-			if ( !this->captureFramebuffer(images, false, false) || !images[0].isValid() )
-			{
-				outputs.emplace_back(Severity::Error, "Framebuffer capture failed !");
-
-				return false;
-			}
-
-			std::stringstream filename;
-			filename << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
-
-			const auto filepath = captureDirectory.append(filename.str());
-
-			if ( !PixelFactory::FileIO::write(images[0], filepath) )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write screenshot to " << filepath);
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Screenshot saved: " << filepath);
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Screenshot saved: " << result.files.front());
 
 			return true;
-		}, "Captures the current framebuffer and saves it as a PNG.");
+		}, "Captures the next presented frame (UI included) and saves it as <unix seconds>.png in the captures directory.");
+
+		this->bindCommand("temporalCapture", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			/* DEV tool (owner, 2026-09-23): N CONSECUTIVE presented frames, to see shimmer and temporal artefacts on a
+			 * still camera. The frames pay one GPU copy each and nothing on the CPU until the last one is done. */
+			auto frameCount = FrameCapture::DefaultTemporalFrameCount;
+
+			if ( !arguments.empty() )
+			{
+				const auto requested = arguments[0].asInteger();
+
+				if ( requested < 1 )
+				{
+					outputs.emplace_back(Severity::Error, "Usage: temporalCapture([frameCount >= 1, default 5])");
+
+					return false;
+				}
+
+				frameCount = static_cast< uint32_t >(requested);
+			}
+
+			/* The frames themselves, then one PNG per frame on the thread pool: generous, a slow machine runs at 20 fps. */
+			const auto timeout = std::chrono::seconds{10} + std::chrono::milliseconds{500} * frameCount;
+			const auto result = this->captureFrames(frameCount, true, std::chrono::duration_cast< std::chrono::milliseconds >(timeout));
+
+			if ( !result.success )
+			{
+				outputs.emplace_back(Severity::Error, "Temporal capture failed: " + result.error);
+
+				return false;
+			}
+
+			std::stringstream message;
+			message << "Temporal capture of " << frameCount << " consecutive frames saved:";
+
+			for ( const auto & file : result.files )
+			{
+				message << "\n  " << file.string();
+			}
+
+			outputs.emplace_back(Severity::Success, message.str());
+
+			return true;
+		}, "DEV: captures N consecutive presented frames (default 5) as <unix seconds>-<n>.png, plus <unix seconds>.json with the per-frame metadata (jitter, camera, exposure, timing).");
 
 		this->bindCommand("testVideoFrameConverter", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			/* Self-test of the GPU BGRA->I420 converter (hardware video-encode path):

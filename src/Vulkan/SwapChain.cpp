@@ -1509,9 +1509,6 @@ namespace EmEn::Vulkan
 				return;
 			}
 
-			m_presentedImageIndex = imageIndex;
-			m_framePresented = true;
-
 			return;
 		}
 
@@ -1761,79 +1758,15 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Pixmap< uint8_t >, 3 > & result) const noexcept
+	SwapChain::capture (TransferManager & /*transferManager*/, uint32_t /*layerIndex*/, bool /*keepAlpha*/, bool /*withDepthBuffer*/, bool /*withStencilBuffer*/, std::array< Pixmap< uint8_t >, 3 > & /*result*/) const noexcept
 	{
-		/* SwapChain has only single-layer images (not cubemaps or arrays). */
-		if ( layerIndex > 0 )
-		{
-			TraceWarning{ClassId} << "SwapChain does not support layered images. Layer " << layerIndex << " requested, using layer 0 instead.";
-		}
+		/* ⚠️ A swap-chain image cannot be downloaded from outside its frame: once presented it belongs to the
+		 * presentation engine until it is re-acquired (UNASSIGNED-non-acquired-swapchain-image-used, SYNC-HAZARD-
+		 * WRITE-AFTER-PRESENT). What is presented is captured INSIDE the frame, while acquired, by
+		 * Graphics::FrameCapture (Renderer::captureFrames()) — screenshot and temporal capture alike. */
+		Tracer::error(ClassId, "A swap-chain is captured inside its frame: use Renderer::captureFrames() (Graphics::FrameCapture).");
 
-		/* Headless: the image of the last SUBMITTED frame (present() records it). The acquired one may be the
-		 * frame being recorded right now on the render thread; the download is queued after that submit on the
-		 * same queue, and its barrier's first synchronisation scope covers it. */
-		const uint32_t imageIndex = m_headless ? m_presentedImageIndex.load() : m_acquiredImageIndex;
-
-		if ( imageIndex >= m_frames.size() || (m_headless && !m_framePresented.load()) )
-		{
-			TraceError{ClassId} << "Invalid acquired image index for capture!";
-
-			return false;
-		}
-
-		const auto & frame = m_frames[imageIndex];
-
-		/* NOTE: HEADLESS (window-less run), the image is the engine's and was last written as a color attachment:
-		 * none of what follows applies, the capture is clean.
-		 *
-		 * NOTE: The image captured here is a SWAP-CHAIN image whose last writer is vkQueuePresentKHR.
-		 * The download below transitions it out of PRESENT_SRC — a WRITE — on an image the engine no
-		 * longer owns: a presented image belongs to the presentation engine until it is RE-ACQUIRED.
-		 * The Synchronization Validation layer reports `SYNC-HAZARD-WRITE-AFTER-PRESENT` and refuses
-		 * the submit, so the capture returns nothing.
-		 *
-		 * This is an ownership problem, not a timing one — a host-side drain (vkDeviceWaitIdle) does
-		 * NOT fix it and was tried. The correct fix is to capture inside the frame, right after the
-		 * post-process pass and BEFORE the present, while the image is still acquired: the console
-		 * command would only arm a request and read the result on the following frame.
-		 *
-		 * Capturing SceneRenderTarget instead is not equivalent: it holds the HDR buffer
-		 * (R16G16B16A16_SFLOAT) BEFORE tone mapping, so it cannot show what reaches the screen. */
-
-		/* Capture color buffer. */
-		if ( frame.colorImage )
-		{
-			if ( !transferManager.downloadImage(*frame.colorImage, this->finalColorLayout(), VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
-			{
-				TraceError{ClassId} << "Failed to capture color buffer!";
-
-				return false;
-			}
-
-			if ( !keepAlpha )
-			{
-				result[0] = Processor< uint8_t >::toRGB(result[0]);
-			}
-		}
-
-		/* Capture depth buffer if requested and available. */
-		if ( withDepthBuffer && frame.depthImageView )
-		{
-			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
-			{
-				TraceWarning{ClassId} << "Failed to capture depth buffer!";
-			}
-		}
-
-		/* Capture stencil buffer if requested and available. */
-		if ( withStencilBuffer && frame.stencilImageView )
-		{
-			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
-			{
-				TraceWarning{ClassId} << "Failed to capture stencil buffer!";
-			}
-		}
-
-		return true;
+		return false;
 	}
+
 }

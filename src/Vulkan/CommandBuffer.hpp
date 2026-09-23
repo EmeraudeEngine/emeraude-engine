@@ -332,6 +332,16 @@ namespace EmEn::Vulkan
 			void copy (const Image & src, const Buffer & dst) const noexcept;
 
 			/**
+			 * @brief Registers the copy of an image's first layer and mip, whole extent, into a buffer, tightly packed.
+			 * @param src A reference to the image.
+			 * @param srcLayout The layout the image is in when the copy executes (TRANSFER_SRC_OPTIMAL or GENERAL).
+			 * @param dst A reference to the buffer, at least width × height × texel size bytes.
+			 * @param aspectMask The image aspect to copy. Default color.
+			 * @return void
+			 */
+			void copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) const noexcept;
+
+			/**
 			 * @brief Registers an image to image blit command.
 			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the image.

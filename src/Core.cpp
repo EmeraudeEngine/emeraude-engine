@@ -2272,36 +2272,17 @@ namespace EmEn
 	bool
 	Core::screenshot () noexcept
 	{
-		/* Gets the capture directory. */
-		auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
+		/* The next presented frame, copied inside that frame (Graphics::FrameCapture). */
+		const auto result = m_graphicsRenderer.captureFrames(1, false, std::chrono::seconds{5});
 
-		if ( !IO::writable(captureDirectory) )
+		if ( !result.success || result.files.empty() )
 		{
-			TraceError{ClassId} << "Unable to write in captures directory " << captureDirectory << " !";
+			TraceError{ClassId} << "Unable to take the screenshot: " << result.error;
 
 			return false;
 		}
 
-		if ( !m_graphicsRenderer.captureFramebuffer(m_screenshotImages, false, false) || !m_screenshotImages[0].isValid() )
-		{
-			Tracer::error(ClassId, "Unable to capture the framebuffer !");
-
-			return false;
-		}
-
-		std::stringstream filename;
-		filename << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
-
-		const auto filepath = captureDirectory.append(filename.str());
-
-		if ( !PixelFactory::FileIO::write(m_screenshotImages[0], filepath) )
-		{
-			TraceError{ClassId} << "Unable to write the screenshot " << filepath << " !";
-
-			return false;
-		}
-
-		TraceSuccess{ClassId} << "The screenshot is saved to " << filepath;
+		TraceSuccess{ClassId} << "The screenshot is saved to " << result.files.front();
 
 		return true;
 	}

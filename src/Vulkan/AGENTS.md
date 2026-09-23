@@ -502,10 +502,10 @@ mode avec fenêtre, ce n'est que du traitement vulkan au final, sans presentatio
 | `acquireNextImage()` | `vkAcquireNextImageKHR` | next index in turn + an EMPTY submit signalling the image-available semaphore |
 | `present()` | `vkQueuePresentKHR` | an EMPTY submit consuming the render-finished semaphore |
 | final color layout | `PRESENT_SRC_KHR` | `COLOR_ATTACHMENT_OPTIMAL` — `PRESENT_SRC_KHR` is reserved to presentable images |
-| `capture()` | the ACQUIRED image (defect: `docs/todo/screenshot-non-acquired-swapchain-image.md`) | the last SUBMITTED image — clean |
+| capture | `Graphics::FrameCapture`, INSIDE the frame on the acquired image (both modes, since 2026-09-23); `SwapChain::capture()` refuses | same |
 
 ⚠️ **Every reader of a finished frame starts from `SwapChain::finalColorLayout()`**
-(`Renderer::swapChainFinalColorLayout()`): the capture, the post-processor's grab source, the video
+(`Renderer::swapChainFinalColorLayout()`): the frame capture (`Graphics::FrameCapture`), the post-processor's grab source, the video
 recorder's three read-backs (`Recorder.cpp`, `finalColorState()`: a presented image is left by the
 presentation engine — `MEMORY_READ` at `BOTTOM_OF_PIPE` — a headless one by a color write).
 It replaced a separate 8-bit `WindowLessView` drawn by a one-pass forward `renderOffscreenFrame()`,

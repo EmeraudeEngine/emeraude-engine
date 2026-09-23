@@ -217,6 +217,18 @@ namespace EmEn::Vulkan
 			bool capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Base::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept override;
 
 			/**
+			 * @brief Returns the color image of a swap-chain image index, or null.
+			 * @param imageIndex The image index (from acquireNextImage()).
+			 * @return std::shared_ptr< Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Image >
+			colorImage (uint32_t imageIndex) const noexcept
+			{
+				return imageIndex < m_frames.size() ? m_frames[imageIndex].colorImage : nullptr;
+			}
+
+			/**
 			 * @brief Returns the current frame's color image.
 			 * @return std::shared_ptr< Image >
 			 */
@@ -635,8 +647,6 @@ namespace EmEn::Vulkan
 			std::atomic<SwapChainStatus> m_status{SwapChainStatus::Uninitialized};
 			uint32_t m_imageCount{0};
 			uint32_t m_acquiredImageIndex{0};
-			/** @brief Headless only: the image of the last submitted frame, what a capture reads (render thread writes, console thread reads). */
-			std::atomic< uint32_t > m_presentedImageIndex{0};
 			Base::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
 			Base::Math::CartesianFrame< float > m_worldCoordinates;
@@ -648,7 +658,5 @@ namespace EmEn::Vulkan
 			bool m_VSyncEnabled{false};
 			bool m_sRGBEnabled{false};
 			bool m_headless{false};
-			/** @brief Headless only: a frame was submitted, so m_presentedImageIndex holds a finished image. */
-			std::atomic< bool > m_framePresented{false};
 	};
 }

@@ -457,7 +457,5 @@ before the next:
 
 ## Known issues
 
-- `Core.RendererService.screenshot()` triggers `UNASSIGNED-non-acquired-swapchain-image-used`
-  (the capture path transitions a presentable image outside its acquire window).
-  Pre-existing, only fires on capture, cosmetic for the capture itself — to fix in the
-  `capture()` path.
+- (Fixed 2026-09-23) `screenshot()` no longer triggers `UNASSIGNED-non-acquired-swapchain-image-used`:
+  the capture is recorded inside the frame, on the acquired image (`src/Graphics/AGENTS.md` § 9b).

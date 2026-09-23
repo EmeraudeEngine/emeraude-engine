@@ -176,6 +176,24 @@ Once you've confirmed the ground exists:
 4. Use `setNodeLookAt(Camera, x, y, z)` to orient the camera toward a point in world space
 5. To look at the ground ahead: `setNodeLookAt(Camera, 20.0, 0.0, 0.0)` (target at ground level, ahead)
 
+### Temporal capture: N consecutive frames (shimmer, temporal artefacts)
+
+```bash
+python3 tools/remote-console.py "Core.RendererService.temporalCapture(8)"
+python3 tools/temporal-analysis.py <stem>          # or the .json path it printed
+```
+
+- `screenshot()` and `temporalCapture([N = 5])` both copy the PRESENTED image inside its frame (UI
+  included) and answer once the files are written. A temporal capture writes
+  `<unix seconds>-<n>.png` for n = 0..N-1 and `<unix seconds>.json` (frame serial, timing, TAA
+  jitter, camera, exposure per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
+- ⚠️ Capture **8** frames or more for a TAA question: the jitter cycle is 8 frames.
+- Park the camera, PIN the exposure (`Act.setExposure`) for an A/B, and let the scene converge: the
+  analysis prints the flatness line first and warns when the camera moved or the exposure is auto.
+- The analysis gives the per-pixel temporal peak-to-peak (mean, p99, p99.9, shares > 1/2/4/8/16),
+  horizontal bands (distance on a ground), the worst tiles, the gradient/Laplacian signature and two
+  maps (`-ptp.png` ×16, `-heat.png`). `--crop x,y,w,h`, `--compare other.json`.
+
 ### Understanding what you see in a screenshot
 
 ```
