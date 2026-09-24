@@ -204,6 +204,10 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			const Geometry::Interface * geometry (uint32_t LODLevel) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::levelOfDetailCount() const */
+			[[nodiscard]]
+			uint32_t levelOfDetailCount () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface * material (uint32_t layerIndex) const noexcept override;
@@ -284,7 +288,7 @@ namespace EmEn::Graphics::Renderable
 			 * @warning ⚠️ Every level must expose the SAME number of sub-geometries, because a layer is
 			 * addressed by its index whatever the level drawn. A chain that disagrees is refused rather
 			 * than drawn with a shifted material.
-			 * @param geometryLODs A reference to the geometry resources, finest first, at most MaxLODLevels.
+			 * @param geometryLODs A reference to the geometry resources, finest first, at most Geometry::MaxLODLevels.
 			 * @param materialList A reference to a list of a material resource smart pointer.
 			 * @param rasterizationOptions A reference to a list of rasterization options. Defaults.
 			 * @return bool
@@ -365,7 +369,10 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto IsReadyToSetupGPU{0UL};
 			static constexpr auto IsBroken{1UL};
 
-			Base::StaticVector< std::shared_ptr< Geometry::Interface >, MaxLODLevels > m_geometry;
+			/* ⚠️ Geometry::MaxLODLevels (what a mesh can HOLD), like MeshResource — NOT Renderable::MaxLODLevels (the ladder
+			 * the VIEW selects from), which the unqualified name resolves to in this namespace: that capped a tree at 4 levels
+			 * and refused the coarser, shadow-only ones (RenderableInstance::Abstract::setShadowLevelOfDetailBias()). */
+			Base::StaticVector< std::shared_ptr< Geometry::Interface >, Geometry::MaxLODLevels > m_geometry;
 			std::vector< MeshLayer > m_layers;
 			mutable std::mutex m_geometryMutex;
 	};

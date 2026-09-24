@@ -1089,7 +1089,7 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			const auto level = std::min(batch.LODLevel(), Renderable::MaxLODLevels - 1);
+			const auto level = std::min(batch.LODLevel(), Geometry::MaxLODLevels - 1);
 			const auto instances = static_cast< uint64_t >(renderableInstance->drawnInstanceCount());
 
 			statistics.batches[level] += 1;
@@ -1427,7 +1427,17 @@ namespace EmEn::Scenes
 		 * runs renderShadowMaps() before prepareRender()): the very first shadow list of a scene is
 		 * built against the previous scene's leftover. It only guards a `> 0` test today. */
 		const auto objectRadius = renderable->boundingSphere().radius() * renderable->uniformScale();
-		const auto LODLevel = this->selectLODLevel(distance, objectRadius);
+		auto LODLevel = this->selectLODLevel(distance, objectRadius);
+
+		/* A coarser shadow on request (RenderableInstance::Abstract::setShadowLevelOfDetailBias()), down to the
+		 * coarsest level the renderable HOLDS — which can be past the view ladder (Renderable::MaxLODLevels). */
+		if ( const auto bias = renderableInstance->shadowLevelOfDetailBias(); bias > 0 )
+		{
+			const auto coarsestLevel = std::max(renderable->levelOfDetailCount(), 1U) - 1U;
+
+			LODLevel = std::max(LODLevel, std::min(LODLevel + bias, coarsestLevel));
+		}
+
 		const auto layerCount = renderable->layerCount();
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )

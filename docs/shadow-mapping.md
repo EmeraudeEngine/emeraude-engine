@@ -294,8 +294,24 @@ validation ON, RTX 3070 Ti):
   splitting the pass only pays when the culling removes most of the work. Never split without the
   receiver test.
 - **The cascades are GEOMETRY-bound, not fill-bound**: 2048 px instead of 4096 saved only 15 %
-  (29.6 ms). The next lever is fewer caster triangles (a coarser shadow LOD, a shorter
-  `setShadowCastingDistance()`), not a lower resolution.
+  (29.6 ms). The lever is fewer caster triangles, not a lower resolution — see below.
+
+### Coarser shadow levels of detail — `setShadowLevelOfDetailBias()` (Sep 2026)
+
+`RenderableInstance::Abstract::setShadowLevelOfDetailBias(n)` draws the instance's shadow `n` levels
+coarser than the level the shadow pass selects, down to the coarsest level the renderable HOLDS
+(`Renderable::Abstract::levelOfDetailCount()`). That can be past the view ladder: the view selects from
+`Renderable::MaxLODLevels` (4) levels, a mesh holds up to `Geometry::MaxLODLevels` (8), so a tree grown
+with 6 levels keeps its two coarsest for its shadow alone. 0 (the default) changes nothing.
+
+Measured on `terrain` (trees grown with 6 levels, bias 2, same pose as above): shadow triangles
+84 M → **21 M**, shadow pass 35.5 → **13.9 ms** (6.6 / 4.9 / 1.7 / 0.7) — below the 15.1 ms of the
+blurry classic map it replaced. The cast shadow keeps its shape (the tree generator halves the leaves
+per level and enlarges the survivors to keep the crown's coverage); it is slightly fuller, with fewer
+light holes, than at the view's level 3.
+
+⚠️ The shadow-list statistics now carry every level a geometry can hold: `getRenderStatistics()`
+prints a level past 3 only when something was drawn with it.
 - **The receiver sweep is BOUNDED** (`CascadeReceiverSlice::ReceiverDropAllowance` = 1 caster height below
   its base, sun elevation floored at ~3°): a caster on a ridge throwing a longer shadow into a deep valley
   drops out of the far cascades that would receive it. The scene visual components (a terrain floor) are

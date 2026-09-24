@@ -4652,7 +4652,11 @@ The threshold is read from `ScreenCoverageThreshold` at scene init (cached in `m
 - `Renderable/SimpleMeshResource.cpp:onDependenciesLoaded()` — LOD generation trigger
 - `Renderable/MeshResource.cpp:onDependenciesLoaded()` — Same for multi-layer meshes
 - `Scenes/Scene.rendering.cpp:selectLODLevel()` — Runtime LOD selection
-- `Renderable/Types.hpp` — `MaxLODLevels` (4), legacy constants
+- `Renderable/Types.hpp` — `Renderable::MaxLODLevels` (4): the ladder the VIEW selects from. A mesh can HOLD up to
+  `Geometry::MaxLODLevels` (8, `Geometry/Types.hpp`); the extra levels serve a coarser shadow
+  (`RenderableInstance::Abstract::setShadowLevelOfDetailBias()`, `Renderable::Abstract::levelOfDetailCount()`).
+  ⚠️ Always QUALIFY the name: unqualified inside `namespace Renderable` it is the 4, which once capped a
+  6-level tree and emptied the `terrain` forest (`docs/caution-points.md`).
 
 ### A chain supplied by its producer (Sept 2026)
 
@@ -4684,10 +4688,10 @@ whole back row to it. It belongs in `onDependenciesLoaded()`, where every depend
 guaranteed loaded. The rule generalises to anything `load()` might want to know about a
 dependency's *content*.
 
-⚠️ `m_geometry` is a `StaticVector< …, MaxLODLevels >` and its `emplace_back()` **calls
-`std::abort()`** when full — this build has no exceptions. `setGeometry()` now refuses past the
-ceiling with a trace, in both `MeshResource` and `MultiLayerMeshResource`. It was latent only
-because nothing filed more than four levels before.
+⚠️ `m_geometry` is a `StaticVector< …, Geometry::MaxLODLevels >` (8) and its `emplace_back()` **calls
+`std::abort()`** when full — this build has no exceptions. `setGeometry()` refuses past the
+ceiling with a trace, in both `MeshResource` and `MultiLayerMeshResource`. Until 2026-09-24 the
+multi-layer mesh sized it with the VIEW ladder (4) through the unqualified name; `terrain` files 6.
 
 ## 15c. Vegetation Wind (Sept 2026)
 

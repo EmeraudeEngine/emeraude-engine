@@ -447,6 +447,36 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Draws the instance's SHADOW this many levels of detail coarser than the level the shadow pass
+			 * selects, down to the coarsest level the renderable holds (Renderable::Abstract::levelOfDetailCount()).
+			 * 0 means the selected level (the default).
+			 * @note The shadow cascades are GEOMETRY-bound, not fill-bound (measured on `terrain`, 2026-09-24:
+			 * halving the resolution saved 15 %), so fewer caster triangles is the lever. A renderable can hold
+			 * levels coarser than the view ever selects (the view ladder stops at Renderable::MaxLODLevels) — a
+			 * tree generated with more levels than that keeps its extra ones for its shadow.
+			 * @param bias The number of extra levels.
+			 * @return Abstract *
+			 */
+			Abstract *
+			setShadowLevelOfDetailBias (uint32_t bias) noexcept
+			{
+				m_shadowLevelOfDetailBias = bias;
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns how many levels of detail coarser than the selected one the shadow is drawn with.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			shadowLevelOfDetailBias () const noexcept
+			{
+				return m_shadowLevelOfDetailBias;
+			}
+
+			/**
 			 * @brief Returns whether shadow casting is enabled for this instance.
 			 * @return bool
 			 */
@@ -1359,6 +1389,8 @@ namespace EmEn::Graphics::RenderableInstance
 			uint32_t m_instanceTransformsSlot{0};
 			/** @brief Distance from the viewer beyond which the instance casts no shadow, 0 for no limit. */
 			float m_shadowCastingDistance{0.0F};
+			/** @brief Levels of detail coarser than the selected one the shadow is drawn with, 0 for the selected one. */
+			uint32_t m_shadowLevelOfDetailBias{0};
 			/** @brief Distance from the camera under which the instance is not drawn. */
 			float m_drawNearDistance{0.0F};
 			/** @brief Distance from the camera beyond which the instance is not drawn, 0 for no limit. */

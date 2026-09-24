@@ -345,6 +345,20 @@ namespace EmEn::Graphics::Renderable
 			virtual const Geometry::Interface * geometry (uint32_t LODIndex) const noexcept = 0;
 
 			/**
+			 * @brief Returns how many levels of detail the renderable holds (geometry() clamps past the last one).
+			 * @note May exceed Renderable::MaxLODLevels, the ladder the VIEW selects from: a mesh can carry coarser
+			 * levels the view never reaches, for its shadow (RenderableInstance::Abstract::setShadowLevelOfDetailBias()).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			virtual
+			uint32_t
+			levelOfDetailCount () const noexcept
+			{
+				return 1;
+			}
+
+			/**
 			 * @brief Returns the material of the renderable.
 			 * @note This can be nullptr.
 			 * @param layerIndex The index of the layer.

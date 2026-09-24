@@ -61,6 +61,7 @@
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Renderable/Types.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "DirectionalShadowOptions.hpp"
@@ -1882,9 +1883,11 @@ namespace EmEn::Scenes
 			 */
 			struct RenderListStatistics final
 			{
-				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > batches{};
-				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > instances{};
-				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > triangles{};
+				/* NOTE: Sized by the levels a geometry can HOLD, not by the view ladder: a shadow drawn with a coarser
+				 * level (RenderableInstance::Abstract::setShadowLevelOfDetailBias()) lands past Renderable::MaxLODLevels. */
+				std::array< uint64_t, Graphics::Geometry::MaxLODLevels > batches{};
+				std::array< uint64_t, Graphics::Geometry::MaxLODLevels > instances{};
+				std::array< uint64_t, Graphics::Geometry::MaxLODLevels > triangles{};
 				/** @brief How many shadow PASSES were recorded — one per target, one per CASCADE on a cascaded map (shadow statistics only). */
 				uint64_t targets{0};
 			};

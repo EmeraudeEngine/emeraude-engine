@@ -167,6 +167,10 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			const Geometry::Interface * geometry (uint32_t LODIndex) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::levelOfDetailCount() const */
+			[[nodiscard]]
+			uint32_t levelOfDetailCount () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
 			[[nodiscard]]
 			const Material::Interface *

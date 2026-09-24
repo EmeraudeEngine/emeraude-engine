@@ -62,6 +62,14 @@ namespace EmEn::Graphics::Renderable
 		return m_geometry[clamped].get();
 	}
 
+	uint32_t
+	MeshResource::levelOfDetailCount () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_geometryMutex};
+
+		return static_cast< uint32_t >(m_geometry.size());
+	}
+
 	bool
 	MeshResource::load () noexcept
 	{
@@ -292,13 +300,13 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* ⚠️ m_geometry is a StaticVector of MaxLODLevels: its emplace_back() does not grow, it
+		/* ⚠️ m_geometry is a StaticVector of Geometry::MaxLODLevels: its emplace_back() does not grow, it
 		 * calls std::abort() when full, this build having no exceptions. Refusing here turns a
 		 * process kill into a traced failure. */
-		if ( m_geometry.size() >= MaxLODLevels )
+		if ( m_geometry.size() >= Geometry::MaxLODLevels )
 		{
 			TraceError{ClassId} <<
-				"The renderable object '" << this->name() << "' already holds " << MaxLODLevels <<
+				"The renderable object '" << this->name() << "' already holds " << Geometry::MaxLODLevels <<
 				" levels of detail, the geometry is refused.";
 
 			return false;
@@ -375,7 +383,8 @@ namespace EmEn::Graphics::Renderable
 				uint32_t levelsToGenerate = 0;
 				float ratio = reductionRatio;
 
-				while ( levelsToGenerate < MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= minTriangleCount )
+				/* NOTE: The VIEW ladder: the automatic levels exist for the view to select (Renderable::MaxLODLevels). */
+				while ( levelsToGenerate < Renderable::MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= minTriangleCount )
 				{
 					levelsToGenerate++;
 

@@ -923,6 +923,12 @@ namespace EmEn::Scenes
 
 				for ( size_t level = 0; level < statistics.batches.size(); ++level )
 				{
+					/* The view ladder always prints; a level past it only when something was drawn with it. */
+					if ( level >= Graphics::Renderable::MaxLODLevels && statistics.batches[level] == 0 )
+					{
+						continue;
+					}
+
 					output << "  LOD " << level << ": " << statistics.batches[level] << " batches, " << statistics.instances[level] << " instances, " << statistics.triangles[level] << " triangles\n";
 
 					batches += statistics.batches[level];

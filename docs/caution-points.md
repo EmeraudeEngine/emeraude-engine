@@ -2173,6 +2173,17 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### Fixed: `MaxLODLevels` means TWO things, and the unqualified name picked the wrong one (Sep 2026)
+
+`Graphics::Geometry::MaxLODLevels` = 8 (what a mesh can HOLD) and `Graphics::Renderable::MaxLODLevels`
+= 4 (the ladder the VIEW selects from). Inside `namespace EmEn::Graphics::Renderable` the unqualified name
+resolves to the second one — even in a file with `using namespace Graphics::Geometry`. So
+`MultiLayerMeshResource` stored at most 4 levels and `MeshResource` (storage sized 8) refused its 5th:
+a tree grown with 6 levels failed to load with *"was given 6 levels of detail, the ceiling is 4"* and the
+forest was silently empty (0 VUID — only the log says it). Both now qualify: storage and validation by
+`Geometry::MaxLODLevels`, the automatic LOD generation (for the view) by `Renderable::MaxLODLevels`.
+⚠️ Always qualify `MaxLODLevels`.
+
 ### Fixed: a multiview CSM drew every caster into every cascade — and culling by cascade volume does not fix it (Sep 2026)
 
 > **Symptom:** switching `terrain` from its classic 4096 px map to 4 × 4096 px cascades took the shadow
