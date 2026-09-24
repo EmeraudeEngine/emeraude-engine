@@ -234,6 +234,18 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				return true;
 			}
 
+			/**
+			 * @copydoc EmEn::Graphics::IndirectPostProcessEffect::cloudTransmittanceTexture()
+			 * @note The view transmittance through the clouds, written by the same pass as the colour
+			 * (a second render target, R16F): 1 where no cloud is crossed.
+			 */
+			[[nodiscard]]
+			const Vulkan::TextureInterface *
+			cloudTransmittanceTexture () const noexcept override
+			{
+				return m_framebuffer != nullptr ? &m_transmittanceTarget : nullptr;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresCloudVolumes() */
 			[[nodiscard]]
 			bool
@@ -288,8 +300,21 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			 */
 			bool createDetailNoise () noexcept;
 
+			/**
+			 * @brief Builds the render pass and the framebuffer writing the colour AND the transmittance.
+			 * @note Same conventions as an IntermediateRenderTarget pass (DONT_CARE load, STORE, ends
+			 * SHADER_READ_ONLY, FULL external dependencies: both outputs are sampled non-locally).
+			 * @return bool
+			 */
+			bool createTargetsPass () noexcept;
+
 			Parameters m_parameters;
 			IntermediateRenderTarget m_outputTarget;
+			/* The view transmittance, the second attachment of the pass: handed to the light shafts and
+			 * the lens flare by PostProcessStack::syncSlotPairings(). */
+			IntermediateRenderTarget m_transmittanceTarget;
+			std::shared_ptr< Vulkan::RenderPass > m_targetsRenderPass;
+			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			Variant m_withCascades;
 			Variant m_withoutCascades;
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_frameUBOs;

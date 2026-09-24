@@ -115,6 +115,21 @@ namespace EmEn::Graphics
 		AmbientOcclusion,
 
 		/**
+		 * @brief Volumetric clouds placed in the world (VolumetricClouds, Sep 2026).
+		 * @note A SCENE-DRIVEN slot: its occupant is filed and materialized by
+		 * `PostProcessStack::syncSceneEffects()` the frame the scene holds its first
+		 * `Component::CloudVolume` — an application never adds it, and a scene without clouds pays
+		 * nothing (owner decision, 2026-09-24: "placing a cloud is enough").
+		 * @note It composites `scene · T + L` inside its own pass, like VolumetricScattering, so it
+		 * emits no combine snippet, and it PUBLISHES that T (a second render target) for the light
+		 * shafts and the lens flare, which run after it. BEFORE the fog: the atmosphere attenuates
+		 * the cloud like anything else — at the depth of the SURFACE behind it, the known approximation of compositing a
+		 * volume before a depth-driven fog (a cloud in front of a distant mountain is fogged as the
+		 * mountain is).
+		 */
+		Clouds,
+
+		/**
 		 * @brief Light shafts (VolumetricLight).
 		 * @note BEFORE the fog (moved Sep 2026). Its combine snippet is a pure add and its passes
 		 * never sample the chain, so it is order-insensitive against the other OVERLAY effects —
@@ -122,25 +137,15 @@ namespace EmEn::Graphics
 		 * Added after it, a shaft escaped the very medium it is scattered by and came out at full
 		 * intensity over a fogged background. Added before it, the fog attenuates it like anything
 		 * else at that depth.
-		 * @note Free side effect: being contiguous with the indirect terms it now joins THEIR
-		 * combine group instead of forming one of its own — one less generated full-res pass.
+		 * @note ⚠️ AFTER the clouds (owner decision, 2026-09-24): its occlusion mask multiplies the
+		 * sky it finds in the depth buffer by the clouds' view transmittance, which the cloud pass
+		 * writes this frame (the cloud transmittance pairing, PostProcessStack::syncSlotPairings()).
+		 * Before that, the clouds wrote no depth and the shafts shone straight through them. The
+		 * price: it no longer shares the combine group of the indirect terms — one more generated
+		 * full-res pass. A shaft is no longer attenuated by a cloud in front of it; it can no
+		 * longer START behind one, which is what shows.
 		 */
 		VolumetricLight,
-
-		/**
-		 * @brief Volumetric clouds placed in the world (VolumetricClouds, Sep 2026).
-		 * @note A SCENE-DRIVEN slot: its occupant is filed and materialized by
-		 * `PostProcessStack::syncSceneEffects()` the frame the scene holds its first
-		 * `Component::CloudVolume` — an application never adds it, and a scene without clouds pays
-		 * nothing (owner decision, 2026-09-24: "placing a cloud is enough").
-		 * @note It composites `scene · T + L` inside its own pass, like VolumetricScattering, so it
-		 * emits no combine snippet. AFTER the light shafts, BEFORE the fog: a cloud attenuates what
-		 * lies behind it, shafts included, and the atmosphere then attenuates the cloud like anything
-		 * else — at the depth of the SURFACE behind it, the known approximation of compositing a
-		 * volume before a depth-driven fog (a cloud in front of a distant mountain is fogged as the
-		 * mountain is).
-		 */
-		Clouds,
 
 		/** @brief Participating medium (AtmosphericFog). */
 		Fog,

@@ -102,6 +102,8 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D thresholdTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
+/* The clouds' view transmittance (VolumetricClouds, R), meaningful when cloudTransmittanceEnabled. */
+layout(set = 0, binding = 2) uniform sampler2D cloudTransmittanceTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -115,6 +117,7 @@ layout(push_constant) uniform PushConstants
 	int ghostCount;
 	float occlusionRadiusX;
 	float occlusionRadiusY;
+	float cloudTransmittanceEnabled;
 };
 
 /* Source visibility: the fraction of a 16-tap disk around the projected light that reads the far
@@ -130,7 +133,17 @@ float sourceVisibility (vec2 lightPos)
 		float a = float(i) * 2.39996323;
 		vec2 p = lightPos + vec2(cos(a) * occlusionRadiusX, sin(a) * occlusionRadiusY) * r;
 		p = clamp(p, vec2(0.0), vec2(1.0));
-		visible += texture(depthTex, p).r >= 0.99999 ? 1.0 : 0.0;
+
+		/* A sky tap behind a cloud is worth the cloud's transmittance: the clouds write no depth, so
+		 * the far-plane test alone let the flare shine through them (2026-09-24). */
+		float tap = texture(depthTex, p).r >= 0.99999 ? 1.0 : 0.0;
+
+		if ( cloudTransmittanceEnabled > 0.5 )
+		{
+			tap *= texture(cloudTransmittanceTex, p).r;
+		}
+
+		visible += tap;
 	}
 
 	return visible / 16.0;
@@ -270,11 +283,11 @@ namespace EmEn::Graphics::Effects::Camera
 			return false;
 		}
 
-		/* Dual input layout: the ghost + halo pass reads the threshold target AND the scene depth
-		 * (the source occlusion probe). */
-		auto dualInputLayout = this->getInputLayout(2);
+		/* The ghost + halo pass reads the threshold target, the scene depth (the source occlusion
+		 * probe) and the clouds' transmittance (the same probe, through the clouds). */
+		auto ghostHaloInputLayout = this->getInputLayout(3);
 
-		if ( dualInputLayout == nullptr )
+		if ( ghostHaloInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -291,7 +304,7 @@ namespace EmEn::Graphics::Effects::Camera
 
 				{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(dualInputLayout);
+			sets.emplace_back(ghostHaloInputLayout);
 
 			m_ghostHaloLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GhostHaloPushConstants)}
@@ -353,8 +366,9 @@ namespace EmEn::Graphics::Effects::Camera
 			return false;
 		}
 
-		/* Ghost+Halo: binding 0 = threshold target (fixed), binding 1 = scene depth (per frame). */
-		m_ghostHaloPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "LF_GhostHalo_DescSet");
+		/* Ghost+Halo: binding 0 = threshold target (fixed), binding 1 = scene depth and binding 2 = the
+		 * clouds' transmittance or the depth again (both per frame). */
+		m_ghostHaloPerFrame = this->createPerFrameDescriptorSets(ghostHaloInputLayout, ClassId, "LF_GhostHalo_DescSet");
 
 		if ( m_ghostHaloPerFrame.empty() )
 		{
@@ -462,6 +476,10 @@ namespace EmEn::Graphics::Effects::Camera
 		 * fraction of the screen height, scaled per axis so the disk stays round on screen. */
 		static_cast< void >(m_ghostHaloPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
 
+		/* Binding 2: the clouds' transmittance when the stack paired one this frame; otherwise the
+		 * depth stands in (a valid descriptor), and the flag tells the shader to ignore it. */
+		static_cast< void >(m_ghostHaloPerFrame[frameIndex]->writeCombinedImageSampler(2, m_cloudTransmittance != nullptr ? *m_cloudTransmittance : *context.depth));
+
 		const auto aspect = static_cast< float >(m_ghostHaloTarget.height()) / static_cast< float >(std::max(1U, m_ghostHaloTarget.width()));
 
 		const GhostHaloPushConstants ghostHaloPC{
@@ -474,7 +492,8 @@ namespace EmEn::Graphics::Effects::Camera
 			.intensity = m_parameters.intensity,
 			.ghostCount = m_parameters.ghostCount,
 			.occlusionRadiusX = m_parameters.occlusionRadius * aspect,
-			.occlusionRadiusY = m_parameters.occlusionRadius
+			.occlusionRadiusY = m_parameters.occlusionRadius,
+			.cloudTransmittanceEnabled = m_cloudTransmittance != nullptr ? 1.0F : 0.0F
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(

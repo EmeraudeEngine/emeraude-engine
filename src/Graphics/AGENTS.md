@@ -2606,10 +2606,45 @@ the sky ambient stays), and **1.004** outside any shadow (the control). 0 VUID.
   setting is read once), luminance difference image. The clouds themselves also differ in that image
   (boiling time) — only the ground is the measurement.
 
+#### The light shafts and the lens flare see the clouds — the cloud transmittance pairing (Sep 2026)
+
+**The defect (owner report, 2026-09-24): "god rays and flare pass through the clouds".** Both find
+their occluders in the DEPTH buffer — `VolumetricLight` counts a far-plane pixel as a light source,
+`LensFlare` probes 16 taps around the projected sun — and the clouds write no depth.
+
+**The fix (owner decision: per-pixel transmittance):** the cloud pass already computes the view
+transmittance `T` of every pixel; it now writes it to a SECOND render target (`VC_Transmittance`,
+`R16_SFLOAT`, full resolution, 1 = clear) in the same pass — a two-attachment render pass built on the
+`DenoisePass` model, recorded through the new multiple-target overloads of
+`IndirectPostProcessEffect::createFullscreenPipeline()` / `recordFullscreenPass()`. The consumers
+multiply what they read in the depth by `T` at the same place: `isLit *= T` in the shafts' occlusion
+mask, each sky tap of the flare's probe weighted by `T`.
+
+| Piece | Where |
+|---|---|
+| Protocol | `IndirectPostProcessEffect::cloudTransmittanceTexture()` (producer), `consumesCloudTransmittance()` + `setCloudTransmittanceSource()` (consumers) — the shape of the occlusion lane |
+| Wiring | `PostProcessStack::syncSlotPairings(clouds)`, every frame: the enabled `Clouds` occupant → the enabled `VolumetricLight` and `LensFlare` occupants |
+| Order | `EffectSlot::VolumetricLight` moved AFTER `Clouds` (was before): a consumer must run after the producer. `LensFlare` already did (camera phase) |
+| Fallback | no pairing ⇒ nullptr ⇒ the depth is bound in its place and a push-constant flag keeps the old depth-only test, bit for bit |
+
+⚠️⚠️ **A consumer must never read a transmittance nobody wrote this frame.** Two rules hold it: the
+pairing exists only while the scene holds clouds — the executor's own condition to run the producer
+(`canOccupantRun()` / `PostProcessor::execute()`); and the producer no longer returns early when 0
+clouds are drawn (shapes still growing on the thread pool) — it runs with 0 clouds and writes `T = 1`.
+
+**Measured (forest, 2026-09-24):** with the sun behind `Cloud145`, no flare and no shaft from behind the
+cloud, the shafts come only from the sky between the trees; the earlier build drew both at full
+strength through it. 0 VUID. Costs: one R16F full-res write in the cloud pass, and one more generated
+combine pass — `VolumetricLight` no longer shares the combine group of the indirect terms.
+⚠️ A shaft passing IN FRONT of a cloud is no longer attenuated by it (the shafts are added after the
+clouds); a shaft can no longer START behind one, which is what shows.
+⚠️ The rainbow streaks the flare draws outdoors are NOT this: its bright pass compares a threshold of
+0.8 with the chain colour in NITS, so the whole sky feeds its ghosts (item `lens-flare-threshold-in-nits`).
+
 **Stage 2 lot 1 limits (by decision, see the item):** a cloud does not shadow another (each one's sun
-optical depth is marched inside ITSELF only), the volumetric scattering (shafts) ignores the clouds'
-shadow, a transparent object in front of a cloud is drawn behind it (the fog's limitation), and the
-ray-traced lanes (RTR/RTGI hits, their sun term) see neither the clouds nor their shadow.
+optical depth is marched inside ITSELF only), the volumetric scattering ignores the clouds' shadow, a
+transparent object in front of a cloud is drawn behind it (the fog's limitation), and the ray-traced
+lanes (RTR/RTGI hits, their sun term) see neither the clouds nor their shadow.
 
 ### The irradiance probe volume — the engine's radiance cache (Sep 2026)
 
@@ -4116,7 +4151,7 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
 > **The canonical order (this IS the enum):**
 > ```
 > ContactShadows → IndirectDiffuse → Reflections → AmbientOcclusion
->   → VolumetricLight → Fog → Custom → TemporalAA
+>   → Clouds → VolumetricLight → Fog → Custom → TemporalAA
 >   → [camera: DepthOfField → MotionBlur] → LensFlare → [camera: Glare → ToneMapping]
 >   → PostToneMapping
 > ```

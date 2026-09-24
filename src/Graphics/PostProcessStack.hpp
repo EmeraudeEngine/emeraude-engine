@@ -488,9 +488,14 @@ namespace EmEn::Graphics
 			 * ⚠️ The VeilingGlare → ToneMapping pairing does NOT live here: those two are camera-owned,
 			 * materialized together by syncCameraEffects(), and their pairing is baked into the
 			 * tone mapping's pipeline variant at create() time rather than refreshed per frame.
+			 * @note The CLOUD TRANSMITTANCE pairing (Sep 2026): the enabled Clouds occupant hands its
+			 * view transmittance to the enabled VolumetricLight and LensFlare occupants, while the
+			 * scene holds clouds — the very condition under which the executor runs the producer,
+			 * so a consumer never reads a transmittance nobody wrote this frame.
+			 * @param clouds The scene's clouds, or nullptr.
 			 * @return void
 			 */
-			void syncSlotPairings () const noexcept;
+			void syncSlotPairings (const Scenes::CloudSet * clouds) const noexcept;
 
 			/**
 			 * @brief Returns the camera-materialized tone mapping effect, or nullptr.

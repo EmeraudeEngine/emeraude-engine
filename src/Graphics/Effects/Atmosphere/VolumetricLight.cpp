@@ -61,6 +61,8 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D previousMaskTex;
+/* The clouds' view transmittance (VolumetricClouds, R), meaningful when cloudTransmittanceEnabled. */
+layout(set = 0, binding = 2) uniform sampler2D cloudTransmittanceTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -83,6 +85,7 @@ layout(push_constant) uniform PushConstants
 	float jitterUVX;
 	float jitterUVY;
 	float temporalAlpha;
+	float cloudTransmittanceEnabled;
 };
 
 void main()
@@ -99,6 +102,13 @@ void main()
 	 * TEST results.) */
 	vec4 quad = textureGather(depthTex, sampleUV, 0);
 	float isLit = dot(vec4(greaterThanEqual(quad, vec4(depthThreshold))), vec4(0.25));
+
+	/* The sky behind a cloud is worth what the cloud lets through: the clouds write no depth, so the
+	 * test above alone let the shafts shine straight through them (2026-09-24). */
+	if ( cloudTransmittanceEnabled > 0.5 )
+	{
+		isLit *= texture(cloudTransmittanceTex, sampleUV).r;
+	}
 
 	vec3 lightColor = vec3(lightColorR, lightColorG, lightColorB);
 	vec4 current = vec4(lightColor * lightIntensity * isLit, isLit);
@@ -143,6 +153,7 @@ layout(push_constant) uniform PushConstants
 	float jitterUVX;
 	float jitterUVY;
 	float temporalAlpha;
+	float cloudTransmittanceEnabled;
 };
 
 void main()
@@ -253,11 +264,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Occlusion: depth + previous mask. Radial: occlusion mask. */
-		auto dualInputLayout = this->getInputLayout(2);
+		/* Occlusion: depth + previous mask + the clouds' transmittance. Radial: occlusion mask. */
+		auto occlusionInputLayout = this->getInputLayout(3);
 		auto singleInputLayout = this->getInputLayout(1);
 
-		if ( dualInputLayout == nullptr || singleInputLayout == nullptr )
+		if ( occlusionInputLayout == nullptr || singleInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -265,7 +276,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* ---- Pipeline layouts ---- */
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(dualInputLayout);
+			sets.emplace_back(occlusionInputLayout);
 
 			m_occlusionLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ScatterPushConstants)}
@@ -331,7 +342,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		/* ---- Create descriptor sets (all per-frame: the ping-pong bindings rotate) ---- */
 
-		m_occlusionPerFrame = this->createPerFrameDescriptorSets(dualInputLayout, ClassId, "VL_Occlusion_DescSet");
+		m_occlusionPerFrame = this->createPerFrameDescriptorSets(occlusionInputLayout, ClassId, "VL_Occlusion_DescSet");
 		m_radialPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "VL_Radial_DescSet");
 
 		if ( m_occlusionPerFrame.empty() || m_radialPerFrame.empty() )
@@ -430,6 +441,15 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		}
 
 		static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(1, m_occlusionTargets[readIdx]));
+
+		/* Binding 2: the clouds' transmittance when the stack paired one this frame; otherwise the
+		 * depth stands in (a valid descriptor), and the flag below tells the shader to ignore it. */
+		const auto * cloudTransmittance = m_cloudTransmittance != nullptr ? m_cloudTransmittance : inputDepth;
+
+		if ( cloudTransmittance != nullptr )
+		{
+			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(2, *cloudTransmittance));
+		}
 		static_cast< void >(m_radialPerFrame[frameIndex]->writeCombinedImageSampler(0, m_occlusionTargets[writeIdx]));
 
 		/* Build scatter push constants (shared by occlusion and radial passes). */
@@ -454,7 +474,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.jitterUVX = context.projectionJitter.x() * 0.5F,
 			.jitterUVY = context.projectionJitter.y() * 0.5F,
 			/* First frame after (re)creation: the previous-mask image is uninitialised. */
-			.temporalAlpha = m_historyValid ? m_parameters.temporalAlpha : 1.0F
+			.temporalAlpha = m_historyValid ? m_parameters.temporalAlpha : 1.0F,
+			.cloudTransmittanceEnabled = m_cloudTransmittance != nullptr ? 1.0F : 0.0F
 		};
 
 		/* 4. Pass 1: Occlusion extraction + temporal EMA. */

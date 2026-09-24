@@ -1749,7 +1749,7 @@ namespace EmEn::Graphics
 			 * addEffect()/removeEffect(), so there is no change event to hang it on. */
 			if ( stack != nullptr )
 			{
-				scene->postProcessStack()->syncSlotPairings();
+				scene->postProcessStack()->syncSlotPairings(sceneCloudSet(scene.get()));
 			}
 
 			/* The master switch says the user ALLOWS post-processing; this says there is

@@ -1399,6 +1399,15 @@ parametric gem on a model of another size needs its thickness re-measured, and i
 distance is then a CHOICE: kept, the stone absorbs physically (a 2 m emerald is nearly black); stretched
 by the same factor, it keeps the library's colour. `forest`'s chick keeps it (owner decision, physical).
 
+### Fixed: the clouds were invisible to every depth-based occlusion test (Sep 2026)
+
+The god rays and the lens flare find their occluders in the depth buffer, and the volumetric clouds
+write none: both shone straight through a cloud in front of the sun. The cloud pass now publishes its
+per-pixel view transmittance and both multiply by it (`src/Graphics/AGENTS.md` § *The light shafts and
+the lens flare see the clouds*). ⚠️ Any FUTURE effect that decides visibility from the depth buffer
+(a sun-disc bloom, a sky-occlusion mask) inherits the same blindness: consume the transmittance
+through `consumesCloudTransmittance()`, never re-derive a mask from the depth alone.
+
 ### Fixed: the grab pass was recreated IN PLACE while frames still used it (Sep 2026)
 
 **Symptom:** at the act teardown of a scene holding ONE refracting material (a `Parametrics/Diamond`

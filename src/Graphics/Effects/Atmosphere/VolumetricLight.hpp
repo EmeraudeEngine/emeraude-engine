@@ -123,6 +123,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				float jitterUVY;
 				/* EMA weight of the occlusion mask (forced to 1 on the first frame). */
 				float temporalAlpha;
+				/* 1 when the clouds' view transmittance is bound at the occlusion pass's binding 2 and
+				 * must weight the sky it finds (the cloud transmittance pairing), 0 otherwise. */
+				float cloudTransmittanceEnabled;
 			};
 
 			/**
@@ -192,6 +195,25 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			requiresLightSet () const noexcept override
 			{
 				return true;
+			}
+
+			/**
+			 * @copydoc EmEn::Graphics::IndirectPostProcessEffect::consumesCloudTransmittance()
+			 * @note The occlusion mask counts a sky pixel as a light source; behind a cloud it is only
+			 * worth the cloud's transmittance.
+			 */
+			[[nodiscard]]
+			bool
+			consumesCloudTransmittance () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::setCloudTransmittanceSource() */
+			void
+			setCloudTransmittanceSource (const Vulkan::TextureInterface * texture) noexcept override
+			{
+				m_cloudTransmittance = texture;
 			}
 
 			/**
@@ -276,6 +298,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/* Descriptor sets (all per-frame: the ping-pong bindings rotate). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_occlusionPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_radialPerFrame;
+			/* The clouds' view transmittance for THIS frame, or nullptr (set every frame by the stack). */
+			const Vulkan::TextureInterface * m_cloudTransmittance{nullptr};
 			/* Optional overrides (nullopt = read from LightSet at execute time). */
 			std::optional< Base::PixelFactory::Color<> > m_lightColorOverride;
 			std::optional< float > m_lightIntensityOverride;

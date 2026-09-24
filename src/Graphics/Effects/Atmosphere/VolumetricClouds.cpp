@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -50,11 +51,13 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/RenderPass.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
 
 static constexpr auto TracerTag{"VolumetricCloudsEffect"};
@@ -73,6 +76,8 @@ namespace
 	constexpr auto CloudsFragmentShaderBody = R"GLSL(
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
+/* The view transmittance through the clouds (R16F): read by the light shafts and the lens flare. */
+layout(location = 1) out vec4 outTransmittance;
 
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
@@ -274,6 +279,7 @@ void main()
 	if ( hitCount == 0 )
 	{
 		outColor = vec4(sceneColor, 1.0);
+		outTransmittance = vec4(1.0);
 
 		return;
 	}
@@ -428,6 +434,7 @@ void main()
 	}
 
 	outColor = vec4(sceneColor * transmittance + inscatter, 1.0);
+	outTransmittance = vec4(transmittance);
 }
 )GLSL";
 
@@ -479,6 +486,18 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		{
 			TraceError{TracerTag} << "Failed to create output target !";
 
+			return false;
+		}
+
+		if ( !m_transmittanceTarget.create(this->renderer(), width, height, VK_FORMAT_R16_SFLOAT, "VC_Transmittance") )
+		{
+			TraceError{TracerTag} << "Failed to create the transmittance target !";
+
+			return false;
+		}
+
+		if ( !this->createTargetsPass() )
+		{
 			return false;
 		}
 
@@ -542,7 +561,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			return false;
 		}
 
-		variant.pipeline = this->createFullscreenPipeline(ClassId, name, vertexModule, fragmentModule, variant.layout, m_outputTarget);
+		/* Two attachments: the colour and the transmittance. */
+		variant.pipeline = this->createFullscreenPipeline(ClassId, name, vertexModule, fragmentModule, variant.layout, m_targetsRenderPass, m_outputTarget.width(), m_outputTarget.height(), 2);
 
 		if ( variant.pipeline == nullptr )
 		{
@@ -552,6 +572,85 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		variant.perFrame = this->createPerFrameDescriptorSets(inputLayout, ClassId, name + "_DescSet");
 
 		return !variant.perFrame.empty();
+	}
+
+	bool
+	VolumetricClouds::createTargetsPass () noexcept
+	{
+		auto & renderer = this->renderer();
+
+		auto renderPass = std::make_shared< RenderPass >(renderer.device());
+		renderPass->setIdentifier(ClassId, "VC_Targets", "RenderPass");
+
+		RenderSubPass subPass;
+
+		uint32_t attachmentIndex = 0;
+
+		for ( const auto * target : {&m_outputTarget, &m_transmittanceTarget} )
+		{
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = target->format(),
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			});
+
+			subPass.addColorAttachment(attachmentIndex++, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		}
+
+		renderPass->addSubPass(subPass);
+
+		/* ⚠️ NOT by-region, either way: the next effect samples the colour non-locally, the light
+		 * shafts gather the transmittance at half resolution and the flare probes it around the sun
+		 * (IntermediateRenderTarget::createRenderPass() holds the full reasoning). */
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = VK_SUBPASS_EXTERNAL,
+			.dstSubpass = 0,
+			.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dependencyFlags = 0
+		});
+
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = 0,
+			.dstSubpass = VK_SUBPASS_EXTERNAL,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.dependencyFlags = 0
+		});
+
+		if ( !renderPass->createOnHardware() )
+		{
+			TraceError{TracerTag} << "Failed to create the colour + transmittance render pass !";
+
+			return false;
+		}
+
+		auto framebuffer = std::make_shared< Framebuffer >(renderPass, VkExtent2D{m_outputTarget.width(), m_outputTarget.height()});
+		framebuffer->setIdentifier(ClassId, "VC_Targets", "Framebuffer");
+		framebuffer->addAttachment(m_outputTarget.imageView()->handle());
+		framebuffer->addAttachment(m_transmittanceTarget.imageView()->handle());
+
+		if ( !framebuffer->createOnHardware() )
+		{
+			TraceError{TracerTag} << "Failed to create the colour + transmittance framebuffer !";
+
+			return false;
+		}
+
+		m_targetsRenderPass = std::move(renderPass);
+		m_framebuffer = std::move(framebuffer);
+
+		return true;
 	}
 
 	bool
@@ -675,6 +774,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* NOTE: The sampler belongs to the renderer's shared cache — only release our reference. */
 		m_detailNoiseSampler.reset();
 
+		m_framebuffer.reset();
+		m_targetsRenderPass.reset();
+		m_transmittanceTarget.destroy();
 		m_outputTarget.destroy();
 	}
 
@@ -818,11 +920,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				census.degenerateBox << " with a degenerate box).";
 		}
 
-		if ( cloudCount == 0 )
-		{
-			return inputColor;
-		}
-
+		/* ⚠️ NO early-out on zero clouds drawn (their shapes still growing): the pass runs anyway and
+		 * writes a transmittance of 1. Paired consumers (the light shafts, the lens flare) read that
+		 * target on every frame the scene holds clouds; skipped here, they would read an image
+		 * nobody wrote. */
 		block.cameraPosition = {cameraPosition[X], cameraPosition[Y], cameraPosition[Z], static_cast< float >(cloudCount)};
 
 		/* ---- The sun and the sky. A scene without a sun still has lit clouds: the sky lights them. ---- */
@@ -900,9 +1001,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			static_cast< void >(descriptorSet.writeUniformBufferObject(3, *m_frameUBOs[frameIndex]));
 		}
 
+		const std::array< const IntermediateRenderTarget *, 2 > targets{&m_outputTarget, &m_transmittanceTarget};
+
 		IndirectPostProcessEffect::recordFullscreenPass(
 			commandBuffer,
-			m_outputTarget,
+			*m_framebuffer,
+			targets,
 			*variant.pipeline,
 			*variant.layout,
 			descriptorSet,

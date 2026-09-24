@@ -73,9 +73,12 @@ Described in `src/Graphics/AGENTS.md` § *The clouds' shadow on the world*, `src
 
 ## What remains
 
-1. **Stage 2, the other receivers**: `VolumetricScattering` (the shafts ignore the clouds' shadow),
-   and — to decide — the DDGI probes and RTGI's sun term at its bounce hits (neither reads the map, so
-   the indirect light under a cloud is still the sunlit one).
+1. **Stage 2, the other receivers**: `VolumetricScattering` ignores the clouds' shadow, and — to
+   decide — the DDGI probes and RTGI's sun term at its bounce hits (neither reads the map, so the
+   indirect light under a cloud is still the sunlit one). ✅ The light shafts (`VolumetricLight`) and the
+   lens flare DO see the clouds since 2026-09-24 (owner decision: per-pixel transmittance — the cloud
+   pass publishes its view transmittance, `src/Graphics/AGENTS.md` § *The light shafts and the lens
+   flare see the clouds*).
 2. **Placing from a JSON scene and from the console** (only C++ `Toolkit::generateCloud()` and the
    editor gizmo exist): a JSON component key and a `SceneManagerService` command.
 3. **Cost**: the pass is full resolution. Half resolution + a depth-aware upsample + a temporal

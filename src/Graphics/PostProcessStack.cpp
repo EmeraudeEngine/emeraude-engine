@@ -849,8 +849,28 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessStack::syncSlotPairings () const noexcept
+	PostProcessStack::syncSlotPairings (const Scenes::CloudSet * clouds) const noexcept
 	{
+		/* ---- The cloud transmittance ----
+		 * The producer is the enabled Clouds occupant; the consumers are the enabled light shafts
+		 * and lens flare, which run AFTER it in the chain. ⚠️ Paired only while the scene holds
+		 * clouds: that is the executor's condition to run the producer (canOccupantRun(),
+		 * PostProcessor::execute()), so the texture handed out is always this frame's. Refreshed
+		 * every frame, and cleared otherwise, like the occlusion lane below. */
+		{
+			const auto producer = this->enabledEffect(EffectSlot::Clouds);
+			const bool producing = clouds != nullptr && !clouds->empty() && producer != nullptr && producer->isCreated();
+			const auto * transmittance = producing ? producer->cloudTransmittanceTexture() : nullptr;
+
+			for ( const auto slot : {EffectSlot::VolumetricLight, EffectSlot::LensFlare} )
+			{
+				if ( const auto consumer = this->enabledEffect(slot); consumer != nullptr && consumer->consumesCloudTransmittance() )
+				{
+					consumer->setCloudTransmittanceSource(consumer->isCreated() ? transmittance : nullptr);
+				}
+			}
+		}
+
 		/* ---- The ambient-occlusion lane ----
 		 * The producer is the enabled indirect-diffuse occupant, IF it can publish a lane; the
 		 * consumer is the enabled ambient-occlusion occupant, IF it can read one. Both must hold

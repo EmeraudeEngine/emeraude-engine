@@ -30,6 +30,7 @@
 #include "PostProcessStack.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstring>
 #include <string>
 
@@ -113,6 +114,12 @@ namespace EmEn::Graphics
 	std::shared_ptr< GraphicsPipeline >
 	IndirectPostProcessEffect::createFullscreenPipeline (const char * tracerTag, const std::string & name, const std::shared_ptr< ShaderModule > & vertexModule, const std::shared_ptr< ShaderModule > & fragmentModule, const std::shared_ptr< PipelineLayout > & pipelineLayout, const IntermediateRenderTarget & target) const noexcept
 	{
+		return this->createFullscreenPipeline(tracerTag, name, vertexModule, fragmentModule, pipelineLayout, target.framebuffer().renderPass(), target.width(), target.height(), 1);
+	}
+
+	std::shared_ptr< GraphicsPipeline >
+	IndirectPostProcessEffect::createFullscreenPipeline (const char * tracerTag, const std::string & name, const std::shared_ptr< ShaderModule > & vertexModule, const std::shared_ptr< ShaderModule > & fragmentModule, const std::shared_ptr< PipelineLayout > & pipelineLayout, const std::shared_ptr< const RenderPass > & renderPass, uint32_t width, uint32_t height, uint32_t colorAttachmentCount) const noexcept
+	{
 		auto pipeline = std::make_shared< GraphicsPipeline >(m_renderer.device());
 		pipeline->setIdentifier(tracerTag, name, "GraphicsPipeline");
 
@@ -144,7 +151,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		if ( !pipeline->configureViewportState(target.width(), target.height()) )
+		if ( !pipeline->configureViewportState(width, height) )
 		{
 			return nullptr;
 		}
@@ -179,18 +186,23 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
+		/* One opaque (no blend) state per colour attachment of the render pass. */
 		Base::StaticVector< VkPipelineColorBlendAttachmentState, 8 > attachments;
-		attachments.emplace_back(VkPipelineColorBlendAttachmentState{
-			.blendEnable = VK_FALSE,
-			.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
-			.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
-			.colorBlendOp = VK_BLEND_OP_ADD,
-			.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-			.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-			.alphaBlendOp = VK_BLEND_OP_ADD,
-			.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-							  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-		});
+
+		for ( uint32_t index = 0; index < colorAttachmentCount; ++index )
+		{
+			attachments.emplace_back(VkPipelineColorBlendAttachmentState{
+				.blendEnable = VK_FALSE,
+				.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+				.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+				.colorBlendOp = VK_BLEND_OP_ADD,
+				.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+				.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+				.alphaBlendOp = VK_BLEND_OP_ADD,
+				.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+								  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+			});
+		}
 
 		VkPipelineColorBlendStateCreateInfo colorBlend{};
 		colorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -200,8 +212,6 @@ namespace EmEn::Graphics
 		{
 			return nullptr;
 		}
-
-		const auto renderPass = target.framebuffer().renderPass();
 
 		if ( !pipeline->finalize(renderPass, pipelineLayout, false, false) )
 		{
@@ -216,15 +226,36 @@ namespace EmEn::Graphics
 	void
 	IndirectPostProcessEffect::recordFullscreenPass (const CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const GraphicsPipeline & pipeline, const PipelineLayout & pipelineLayout, const DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const DescriptorSet * bindlessSet) noexcept
 	{
-		target.beginRenderPass(commandBuffer);
+		const std::array< const IntermediateRenderTarget *, 1 > targets{&target};
+
+		recordFullscreenPass(commandBuffer, target.framebuffer(), targets, pipeline, pipelineLayout, descriptorSet, pushConstants, pushConstantsSize, bindlessSet);
+	}
+
+	void
+	IndirectPostProcessEffect::recordFullscreenPass (const CommandBuffer & commandBuffer, const Framebuffer & framebuffer, std::span< const IntermediateRenderTarget * const > targets, const GraphicsPipeline & pipeline, const PipelineLayout & pipelineLayout, const DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const DescriptorSet * bindlessSet) noexcept
+	{
+		if ( targets.empty() )
+		{
+			return;
+		}
+
+		/* Every attachment shares the extent of the first. DONT_CARE loads: no clear value is read. */
+		const auto width = targets.front()->width();
+		const auto height = targets.front()->height();
+
+		constexpr std::array< VkClearValue, 1 > clearValues{
+			VkClearValue{.color = {{0.0F, 0.0F, 0.0F, 0.0F}}}
+		};
+
+		commandBuffer.beginRenderPass(framebuffer, VkRect2D{.offset = {0, 0}, .extent = {width, height}}, clearValues, VK_SUBPASS_CONTENTS_INLINE);
 
 		commandBuffer.bind(pipeline);
 
 		const VkViewport viewport{
 			.x = 0.0F,
 			.y = 0.0F,
-			.width = static_cast< float >(target.width()),
-			.height = static_cast< float >(target.height()),
+			.width = static_cast< float >(width),
+			.height = static_cast< float >(height),
 			.minDepth = 0.0F,
 			.maxDepth = 1.0F
 		};
@@ -232,7 +263,7 @@ namespace EmEn::Graphics
 
 		const VkRect2D scissor{
 			.offset = {0, 0},
-			.extent = {target.width(), target.height()}
+			.extent = {width, height}
 		};
 		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
@@ -259,7 +290,7 @@ namespace EmEn::Graphics
 
 		commandBuffer.draw(3, 1);
 
-		target.endRenderPass(commandBuffer);
+		commandBuffer.endRenderPass();
 
 		/* Explicit write→read barrier between chained post-process passes.
 		 * The IRT render pass already declares this ordering through its VK_SUBPASS_EXTERNAL
@@ -270,15 +301,18 @@ namespace EmEn::Graphics
 		 * bloom chain (macOS-only corruption, suppressed by MTL_DEBUG_LAYER serialization).
 		 * The explicit barrier forces a real inter-encoder fence. No layout change: the pass
 		 * finalLayout is already SHADER_READ_ONLY_OPTIMAL. */
-		const Sync::ImageMemoryBarrier barrier{
-			*target.image(),
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			VK_ACCESS_SHADER_READ_BIT,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
+		for ( const auto * target : targets )
+		{
+			const Sync::ImageMemoryBarrier barrier{
+				*target->image(),
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
 
-		commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+		}
 	}
 
 	/* ---- Shared descriptor set layout helpers ---- */

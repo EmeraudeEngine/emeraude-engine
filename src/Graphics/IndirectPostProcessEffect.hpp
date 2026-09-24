@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -53,8 +54,10 @@ namespace EmEn
 	{
 		class CommandBuffer;
 		class DescriptorSetLayout;
+		class Framebuffer;
 		class GraphicsPipeline;
 		class PipelineLayout;
+		class RenderPass;
 		class ShaderModule;
 		class TextureInterface;
 		class UniformBufferObject;
@@ -671,6 +674,61 @@ namespace EmEn::Graphics
 
 			}
 
+			/* ---- Cloud transmittance protocol (Sep 2026) ----
+			 * A PRODUCER/CONSUMER pairing between slots, wired once per frame by
+			 * `PostProcessStack::syncSlotPairings()`, the shape of the occlusion lane above.
+			 *
+			 * ⚠️⚠️ WHY IT EXISTS: the light shafts and the lens flare find their occluders in the
+			 * DEPTH buffer, and the volumetric clouds write none — both shone straight through a
+			 * cloud in front of the sun (owner report, 2026-09-24). The cloud pass already computes,
+			 * per pixel, the transmittance T of the view ray through the clouds; it now writes it
+			 * to a second render target (R16F, full resolution: 1 = clear, 0 = opaque cloud), and
+			 * the consumers multiply what they read in the depth by it at the same place.
+			 *
+			 * ⚠️ The producer writes T on EVERY frame it executes (0 clouds drawn = T of 1), and the
+			 * pairing exists only while the scene holds clouds — the condition under which the
+			 * executor runs the producer at all. A consumer handed nullptr keeps its depth-only
+			 * behaviour, exactly as before. */
+
+			/**
+			 * @brief Returns the texture holding the clouds' view transmittance (R), or nullptr.
+			 * @note The producer side: valid for the frame it was written in. Consumers run AFTER
+			 * the producer in the chain (EffectSlot order).
+			 * @return const Vulkan::TextureInterface *
+			 */
+			[[nodiscard]]
+			virtual
+			const Vulkan::TextureInterface *
+			cloudTransmittanceTexture () const noexcept
+			{
+				return nullptr;
+			}
+
+			/**
+			 * @brief Returns whether this effect can weight its occluders by the clouds' transmittance.
+			 * @note The consumer side.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			consumesCloudTransmittance () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Hands the consumer the clouds' transmittance, or nullptr when there is none.
+			 * @param texture The producer's texture, valid for this frame only.
+			 * @return void
+			 */
+			virtual
+			void
+			setCloudTransmittanceSource (const Vulkan::TextureInterface * /*texture*/) noexcept
+			{
+
+			}
+
 			/* ---- Shared denoise protocol (phase E) ----
 			 * An overlay effect whose working chain is "trace → separable blur H → blur V"
 			 * can delegate the blur pair to the PostProcessor's shared DenoisePass: the
@@ -830,6 +888,25 @@ void main()
 			std::shared_ptr< Vulkan::GraphicsPipeline > createFullscreenPipeline (const char * tracerTag, const std::string & name, const std::shared_ptr< Vulkan::ShaderModule > & vertexModule, const std::shared_ptr< Vulkan::ShaderModule > & fragmentModule, const std::shared_ptr< Vulkan::PipelineLayout > & pipelineLayout, const IntermediateRenderTarget & target) const noexcept;
 
 			/**
+			 * @brief Creates a standard fullscreen graphics pipeline for a render pass of N colour attachments.
+			 * @note The same configuration as the single-target overload, with one opaque blend state per
+			 * attachment: the multiple-render-target form (VolumetricClouds writes its colour and its
+			 * transmittance in one pass).
+			 * @param tracerTag The tracer tag for debug identification.
+			 * @param name The pipeline name for debug identification.
+			 * @param vertexModule The vertex shader module.
+			 * @param fragmentModule The fragment shader module.
+			 * @param pipelineLayout The pipeline layout.
+			 * @param renderPass The render pass the pipeline draws in.
+			 * @param width The viewport width.
+			 * @param height The viewport height.
+			 * @param colorAttachmentCount The colour attachment count of the render pass.
+			 * @return std::shared_ptr< Vulkan::GraphicsPipeline >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::GraphicsPipeline > createFullscreenPipeline (const char * tracerTag, const std::string & name, const std::shared_ptr< Vulkan::ShaderModule > & vertexModule, const std::shared_ptr< Vulkan::ShaderModule > & fragmentModule, const std::shared_ptr< Vulkan::PipelineLayout > & pipelineLayout, const std::shared_ptr< const Vulkan::RenderPass > & renderPass, uint32_t width, uint32_t height, uint32_t colorAttachmentCount) const noexcept;
+
+			/**
 			 * @brief Records a fullscreen pass into a command buffer.
 			 * @note Performs: beginRenderPass, bind pipeline, set viewport/scissor,
 			 * push constants, bind descriptor set, draw(3,1), endRenderPass.
@@ -845,6 +922,23 @@ void main()
 			 * @return void
 			 */
 			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const Vulkan::DescriptorSet * bindlessSet = nullptr) noexcept;
+
+			/**
+			 * @brief Records a fullscreen pass into a framebuffer of several targets (multiple render targets).
+			 * @note The same recording as the single-target overload; every target gets the write→read
+			 * barrier after the pass. All the targets share the extent of the first.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param framebuffer The framebuffer holding the targets, in attachment order.
+			 * @param targets The targets written by the pass.
+			 * @param pipeline The graphics pipeline to use.
+			 * @param pipelineLayout The pipeline layout for push constants and descriptor binding.
+			 * @param descriptorSet The descriptor set to bind.
+			 * @param pushConstants Pointer to the push constants data.
+			 * @param pushConstantsSize Size of the push constants data in bytes.
+			 * @param bindlessSet The global bindless descriptor set, bound at set 1 when not null.
+			 * @return void
+			 */
+			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Framebuffer & framebuffer, std::span< const IntermediateRenderTarget * const > targets, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const Vulkan::DescriptorSet * bindlessSet = nullptr) noexcept;
 
 			/* ---- Shared descriptor set layout helpers ---- */
 

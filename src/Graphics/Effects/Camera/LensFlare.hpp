@@ -127,6 +127,9 @@ namespace EmEn::Graphics::Effects::Camera
 				/* Occlusion probe radius in UV, per axis (the screen is not square). */
 				float occlusionRadiusX;
 				float occlusionRadiusY;
+				/* 1 when the clouds' view transmittance is bound at binding 2 and weights every probe tap
+				 * that reads the sky (the cloud transmittance pairing), 0 otherwise. */
+				float cloudTransmittanceEnabled;
 			};
 
 			/**
@@ -191,6 +194,25 @@ namespace EmEn::Graphics::Effects::Camera
 				return true;
 			}
 
+			/**
+			 * @copydoc EmEn::Graphics::IndirectPostProcessEffect::consumesCloudTransmittance()
+			 * @note The source probe counts the taps that read the sky; behind a cloud a tap is only worth
+			 * the cloud's transmittance, so a cloud over the sun dims the flare as it covers it.
+			 */
+			[[nodiscard]]
+			bool
+			consumesCloudTransmittance () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::setCloudTransmittanceSource() */
+			void
+			setCloudTransmittanceSource (const Vulkan::TextureInterface * texture) noexcept override
+			{
+				m_cloudTransmittance = texture;
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth()
 			 * @note The ghost + halo pass probes the scene depth around the projected light: the source occlusion. */
 			[[nodiscard]]
@@ -234,6 +256,8 @@ namespace EmEn::Graphics::Effects::Camera
 		private:
 
 			Parameters m_parameters;
+			/* The clouds' view transmittance for THIS frame, or nullptr (set every frame by the stack). */
+			const Vulkan::TextureInterface * m_cloudTransmittance{nullptr};
 			/* Intermediate render targets. */
 			IntermediateRenderTarget m_thresholdTarget;
 			IntermediateRenderTarget m_ghostHaloTarget;
