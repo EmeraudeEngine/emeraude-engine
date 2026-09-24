@@ -4128,8 +4128,10 @@ AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::op
 ### Fixed: the shutdown hung for minutes on Windows — writer starvation on `std::shared_mutex` (Sep 2026)
 
 **Symptom:** on Windows only, `Core.shutdown()` (or closing the window) took 24 s to over 3 minutes,
-sometimes never ended, with the validation layer ON (> 120 s, > 180 s on NVIDIA, > 184 s on the AMD
-iGPU, all killed); 2.0-3.4 s with it OFF. The window turned white and the log stopped after
+sometimes never ended: forest with the validation layer ON 121 s (NVIDIA 616.92), > 180 s (591.74),
+> 184 s (AMD iGPU); ⚠️ and WITHOUT it too — > 180 s on 616.92 (killed): the 2.0 and 3.4 s first
+measured validation-off were lucky draws. The validation layer AGGRAVATES it, it is not a
+precondition. The default demo: 7.2 s. The window turned white and the log stopped after
 `Removing the act …` / `Scene will use environment cubemap …`.
 
 **Diagnosis (the Windows session, symbols + a StackWalk64 walker, 2026-09-24):** the main thread
@@ -4140,15 +4142,18 @@ producing frames inside `withSharedActiveScene` (fence wait, record, present; on
 inside `vkQueuePresentKHR`). MSVC implements `std::shared_mutex` as an SRWLOCK, documented neither fair
 nor FIFO: when the last reader released, the writer was woken, but the render loop's next shared
 acquire found the lock momentarily free and stole it first. The validation layer made the frame —
-the time the shared access is held — longer, so the free window shrank toward zero. Linux never
+the time the shared access is held — longer, so the free window shrank, and the writer won by luck. Linux never
 showed it: libstdc++'s `shared_mutex` is a `pthread_rwlock`, and glibc hands the lock to the waiting
 writer.
 
 **Fix (owner decision: a writer-preference gate):** `Scenes::Manager` counts the ANNOUNCED exclusive
 accesses (`ExclusiveAccessAnnouncement`, built before the `unique_lock`, destroyed after it) and a
 reader waits while one is (`src/Scenes/AGENTS.md` § Writer preference). Every exclusive path benefits,
-the runtime scene switches included, on every OS. Linux after the fix: shutdown 0.82 / 1.28 / 1.30 s,
-0 VUID. Windows measurement pending.
+the runtime scene switches included, on every OS. Measured after the fix, validation ON, 0 VUID:
+Windows NVIDIA 1.8 / 1.5 / 1.5 s (1.5 s validation off), AMD iGPU 1.8 / 1.8 / 1.8 s — against 121 s
+before on the same driver — and the teardown now reaches the Vulkan destruction
+(`VUID-vkDestroyImage-image-01000` absent: the grab pass fix, never observable on Windows before);
+a runtime scene switch from the menu completes in 2.8 s, load included; Linux 0.82 / 1.28 / 1.30 s.
 
 ⚠️ Observed with it, not changed: `Core::stop()` calls `onBeforeCoreStop()` — the whole act teardown —
 BEFORE it clears `m_isRenderingLoopRunning`, so the scene is torn down under a live render loop.

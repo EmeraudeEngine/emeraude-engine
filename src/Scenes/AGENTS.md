@@ -715,7 +715,8 @@ disable, precisely so scene **switching stays seamless**.
 `withExclusiveActiveScene` — first builds an `ExclusiveAccessAnnouncement`, BEFORE its
 `std::unique_lock`, destroyed AFTER it; `withSharedActiveScene()` and `hasActiveScene()` wait
 (`waitForAnnouncedExclusiveAccesses()`, a condition variable, lock-free when nothing is announced)
-while one is. ⚠️⚠️ Without it the Windows shutdown hung 24 s to over 3 min: MSVC's `std::shared_mutex`
+while one is. Measured on Windows: forest shutdown 121 s → 1.5-1.8 s (NVIDIA and AMD, validation ON).
+⚠️⚠️ Without it the Windows shutdown hung 24 s to over 3 min, validation ON or OFF: MSVC's `std::shared_mutex`
 is an SRWLOCK (neither fair nor FIFO), the render loop holds the shared access for a whole frame and
 takes it back microseconds later, and it stole the lock from the woken writer frame after frame
 (diagnosed by the Windows session with symbols, `docs/caution-points.md` § Platform-Specific).
