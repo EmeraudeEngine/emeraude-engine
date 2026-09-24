@@ -512,6 +512,8 @@ namespace EmEn::Saphir::Generator
 			 * onGenerateShadersCode() or later, after generateShaderProgram() has constructed the
 			 * program and run prepareUniformSets() — calling it any earlier dereferences a null
 			 * m_shaderProgram.
+			 * @note IDEMPOTENT: a view block the shader already holds at the same set and binding is left as
+			 * it is and the call succeeds — the lighting and a transmissive material both ask for it.
 			 * @param shader A reference to a shader where to declare the uniform block.
 			 * @param binding The binding point number. Default 0.
 			 * @return bool

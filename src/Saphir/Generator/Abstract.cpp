@@ -27,6 +27,7 @@
 #include "Abstract.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <mutex>
 
 /* Local inclusions. */
@@ -661,6 +662,23 @@ namespace EmEn::Saphir::Generator
 	Abstract::declareViewUniformBlock (AbstractShader & shader, uint32_t binding) const noexcept
 	{
 		const auto setIndex = m_shaderProgram->setIndex(SetType::PerView);
+
+		/* IDEMPOTENT (2026-09-24, owner decision): several parts of one shader need the view block — the
+		 * lighting, a transmissive material's refraction and depth-based opacity — and this helper is the
+		 * ONE place that builds it, so a block already declared at the same set and binding is this very
+		 * block. Declared again, AbstractShader::declare() warned once per program ("'View' already
+		 * exists", 14 lines for one diamond on forest). A view block at ANOTHER place is a real conflict
+		 * and still reaches that warning. */
+		{
+			const auto & declared = shader.uniformBlockDeclarations();
+
+			if ( std::ranges::any_of(declared, [setIndex, binding] (const auto & block) {
+				return block.instanceName() == UniformBlock::View && block.set() == setIndex && block.binding() == binding;
+			}) )
+			{
+				return true;
+			}
+		}
 
 		if ( m_renderTarget->isCubemap() )
 		{

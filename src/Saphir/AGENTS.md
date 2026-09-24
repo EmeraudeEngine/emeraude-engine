@@ -643,6 +643,19 @@ Applying it in both would double-count. ⚠️ And it is deliberately **NOT** ap
 G-buffer attachment written from the same `fragmentColor()` expression: albedo is a reflectance in
 [0,1], and pushing 8000 nits into it poisons every consumer that reads it — RTGI first.
 
+### `declareViewUniformBlock()` is IDEMPOTENT (Sep 2026)
+
+Several parts of ONE shader need the view block: the lighting (`SceneRendering`, before the light
+generator), a transmissive material's grab-pass refraction and its depth-based opacity
+(`StandardResource`). All of them go through `Generator::Abstract::declareViewUniformBlock()`, the one
+place that builds that block (regular / cubemap / CSM layouts, one instance name `ubView`), so the
+helper now returns `true` without declaring when the shader already holds `ubView` at the same set and
+binding. Before (owner decision on WHERE to fix, 2026-09-24: the helper, not Saphir's `declare()` and
+not the material), `AbstractShader::declare()` dropped the duplicate but warned
+`An uniform block declaration named 'View' already exists !` once per lit program — 14 lines for one
+diamond on `forest`, noise that buried a real conflict. ⚠️ A view block at ANOTHER set or binding still
+reaches `declare()` and its warning: that one is a real conflict.
+
 ### Screen-space refraction is done in VIEW space, and `svModelScale` is why (Aug 2026)
 
 `KHR_materials_volume` gives the refraction ray its LENGTH (`thicknessFactor`) and the material's
