@@ -245,6 +245,13 @@ bool onDependenciesLoaded() noexcept override {
 | `getOrCreateUnloadedResource(name)` | Get existing or create empty shell (unloaded state) |
 | `getRandomResource()` | Get random loaded resource |
 | `preloadResource(name)` | Trigger async preload |
+| `localFilepath(name)` | The local file a store entry points to, or `std::nullopt` (direct data, URL, absent) — Sep 2026 |
+
+**Deriving a VARIANT of a store resource** (Sep 2026): read the entry's file through `localFilepath()`
+(`FastJSON::getRootFromFile`), change what differs, and load the result under ANOTHER name with
+`getOrCreateResource(variantName, [data = std::move(json)] (auto & r) { return r.load(data); })` — the JSON
+captured by value, the store entry untouched. Never rebuild the path from the store's directory layout.
+First user: `forest`'s chick, an `Emerald` whose volume thickness is measured on its mesh.
 
 **Note:** `getOrCreateUnloadedResource()` creates a resource in unloaded state, useful when you need to manually load the resource later via custom initialization.
 

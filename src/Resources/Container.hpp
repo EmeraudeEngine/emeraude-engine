@@ -828,6 +828,36 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Returns the local file a store entry points to, when it is one.
+			 * @note For a caller that must derive a VARIANT of a store resource — read its file, change a
+			 * value, load the result under another name — rather than guess the store layout. An entry
+			 * given as direct data, as a URL, or absent from the store answers nothing.
+			 * @param resourceName Name of the resource in the store.
+			 * @return std::optional< std::filesystem::path >
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 */
+			[[nodiscard]]
+			std::optional< std::filesystem::path >
+			localFilepath (const std::string & resourceName) const noexcept
+			{
+				if ( m_localStore == nullptr )
+				{
+					return std::nullopt;
+				}
+
+				const std::scoped_lock scopeLock{m_resourcesAccess};
+
+				const auto resourceIt = m_localStore->find(resourceName);
+
+				if ( resourceIt == m_localStore->cend() || resourceIt->second.sourceType() != SourceType::LocalData || !resourceIt->second.data().isString() )
+				{
+					return std::nullopt;
+				}
+
+				return std::filesystem::path{resourceIt->second.data().asString()};
+			}
+
+			/**
 			 * @brief Returns all available resource names from the store.
 			 *
 			 * Extracts all resource names from the metadata store. This includes both loaded
