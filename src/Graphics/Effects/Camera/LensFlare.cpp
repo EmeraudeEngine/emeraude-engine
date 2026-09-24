@@ -64,6 +64,7 @@ layout(push_constant) uniform PushConstants
 	float texelSizeY;
 	float threshold;
 	float softKnee;
+	float exposure;
 };
 
 void main()
@@ -82,8 +83,12 @@ void main()
 
 	color /= 9.0;
 
-	/* Soft brightness thresholding. */
-	float brightness = max(max(color.r, color.g), color.b);
+	/* Soft brightness thresholding, in DISPLAY units: the chain colour here is an absolute luminance
+	 * in nits (the camera phase runs before the tone mapping), and a threshold compared with nits let
+	 * a whole daylight sky feed the ghosts — rainbow streaks through the leaves (2026-09-24). The
+	 * exposure brings it to what the sensor sees, 1 = its white. The contribution is a RATIO, so the
+	 * extracted colour stays in nits. */
+	float brightness = max(max(color.r, color.g), color.b) * exposure;
 	float kneeWidth = threshold * softKnee;
 	float soft = brightness - threshold + kneeWidth;
 	soft = clamp(soft, 0.0, 2.0 * kneeWidth);
@@ -458,7 +463,8 @@ namespace EmEn::Graphics::Effects::Camera
 			.texelSizeX = 1.0F / static_cast< float >(m_thresholdTarget.width()),
 			.texelSizeY = 1.0F / static_cast< float >(m_thresholdTarget.height()),
 			.threshold = m_parameters.threshold,
-			.softKnee = m_parameters.softKnee
+			.softKnee = m_parameters.softKnee,
+			.exposure = context.displayExposure > 0.0F ? context.displayExposure : 1.0F
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(

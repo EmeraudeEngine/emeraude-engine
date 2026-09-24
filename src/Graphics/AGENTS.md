@@ -2638,8 +2638,8 @@ strength through it. 0 VUID. Costs: one R16F full-res write in the cloud pass, a
 combine pass — `VolumetricLight` no longer shares the combine group of the indirect terms.
 ⚠️ A shaft passing IN FRONT of a cloud is no longer attenuated by it (the shafts are added after the
 clouds); a shaft can no longer START behind one, which is what shows.
-⚠️ The rainbow streaks the flare draws outdoors are NOT this: its bright pass compares a threshold of
-0.8 with the chain colour in NITS, so the whole sky feeds its ghosts (item `lens-flare-threshold-in-nits`).
+⚠️ The rainbow streaks the flare drew outdoors were NOT this: its bright pass compared a threshold of
+0.8 with the chain colour in NITS, so the whole sky fed its ghosts (fixed the same day, § LensFlare).
 
 **Stage 2 lot 1 limits (by decision, see the item):** a cloud does not shadow another (each one's sun
 optical depth is marched inside ITSELF only), the volumetric scattering ignores the clouds' shadow, a
@@ -3863,10 +3863,16 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
   below it, a 1 m cube on the line of sight on option): a diagnostic tint of the visibility read
   **+21/255 on the neutral walls with the sun uncovered, 0.00 with the cube** — the probe sees the
   occluder. A skybox is NOT geometry here (the sky region reads the far plane).
-- ⚠️ **The flare's own stimulus is still open**: `Parameters::threshold` is 0.8 — a leftover of the
-  display-referred era. In a photometric chain the input is in NITS, so every lit texel passes the
-  threshold pass and the "ghosts" are copies of the whole scene, not of the light. Todo
-  `lens-flare-threshold-unit.md`.
+- ⚠️⚠️ **The threshold is EXPOSURE-RELATIVE (fixed 2026-09-24, owner decision over a nits threshold
+  like the VeilingGlare's)**: the bright pass compares `max(r, g, b) × FrameContext::displayExposure`
+  (nit → display value; 1 without a tone mapper) with `Parameters::threshold` = **4** display units
+  (1 = the sensor's white). It was 0.8 compared with NITS, a leftover of the display-referred era: on
+  `forest` the whole 15 380-nit sky fed the ghosts, split into saturated rainbow streaks through the
+  leaves. Measured at the sun pose (`setPosition(30, 0, -40)` + `lookAt(100.5, 48.6, 11.7)`): 0.8
+  display still streaks, 2 faintly, 4 and 8 are clean. ⚠️ And at 4 there is NO flare by day there:
+  the only sun on screen is the one PAINTED in the HDRI, clipped, under 4 once exposed (open-sky pose:
+  the flare adds 0.02/255) — the analytic light is not in the image. A nits threshold was refused
+  because a daylight sky exceeds any sensible value of it (the VeilingGlare's 1000 nits included).
 - ⚠️ A modeled sun DISC (an emissive quad) is geometry: the probe would call it an occluder. A
   directional light's disc belongs in the sky cubemap.
 

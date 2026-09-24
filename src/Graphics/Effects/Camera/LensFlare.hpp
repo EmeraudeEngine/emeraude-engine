@@ -83,7 +83,15 @@ namespace EmEn::Graphics::Effects::Camera
 			 */
 			struct EMEN_API Parameters
 			{
-				float threshold{0.8F};
+				/**
+				 * @brief The brightness a pixel must exceed to feed the ghosts, in DISPLAY units (after the
+				 * camera's exposure: 1 = the sensor's white).
+				 * @note ⚠️ Owner decision 2026-09-24: 4. It was 0.8 compared with NITS (the camera phase runs
+				 * before the tone mapping), so outdoors the whole sky fed the flare. Measured on `forest`:
+				 * 0.8 display still streaks through the leaves, 2 faintly, 4 and 8 are clean — and there, no
+				 * flare at all by day, because the painted sun of the HDRI stays under 4 once exposed.
+				 */
+				float threshold{4.0F};
 				float softKnee{0.5F};
 				int32_t ghostCount{4};
 				float ghostSpacing{0.3F};
@@ -109,6 +117,8 @@ namespace EmEn::Graphics::Effects::Camera
 				float texelSizeY;
 				float threshold;
 				float softKnee;
+				/* nit -> display value (FrameContext::displayExposure), 1 when the chain has no tone mapper. */
+				float exposure;
 			};
 
 			/**
