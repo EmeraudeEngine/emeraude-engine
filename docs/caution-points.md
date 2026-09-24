@@ -1409,7 +1409,8 @@ thickness for both consumers*). ⚠️ The same rule makes a LIBRARY material sc
 its thickness is in the units of the mesh it was tuned on, its attenuation distance in metres. A
 parametric gem on a model of another size needs its thickness re-measured, and its attenuation
 distance is then a CHOICE: kept, the stone absorbs physically (a 2 m emerald is nearly black); stretched
-by the same factor, it keeps the library's colour. `forest`'s chick keeps it (owner decision, physical).
+by the same factor, it keeps the library's colour. `forest`'s chick stretches it (owner decision, after
+the physical version read "just an anthracite block").
 
 ### Fixed: the clouds were invisible to every depth-based occlusion test (Sep 2026)
 
