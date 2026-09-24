@@ -517,6 +517,17 @@ The GLSL struct is generated to match this layout exactly.
 
 These are propagated through `Renderable::Abstract::isOpaque(layerIndex)` and `Renderable::Abstract::requiresGrabPass(layerIndex)` to all concrete renderables, enabling the Scene to dispatch into 3 render categories: Opaque, Translucent, and TranslucentGB.
 
+⚠️⚠️ **The renderer's grab pass is RETIRED, never recreated in place** (fixed 2026-09-24). It is
+pre-allocated for every scene, and its blit runs on every frame whose scene holds a TranslucentGB
+object — so as soon as one refracting material is on screen, the last frames' command buffers
+reference its images. `Renderer::refreshGrabPass()` (called by every scene-target recreation, the act
+teardown included) used to call `GrabPass::recreate()`, which destroyed them on the spot:
+`VUID-vkDestroyImage-image-01000` ×2 + `VUID-vkFreeMemory-memory-00677`, then the same objects
+reported leaked at `vkDestroyDevice`. It now hands the old object to the `DeferredDestructor` and
+creates a fresh one, like `recreateSceneTarget()`; `GrabPass::recreate()` is deleted. Found on
+`forest` once its diamond chick was added: the teardown logged it on every run that recreated the
+scene target (3 of 3), none after the fix (3 of 3 with the recreation).
+
 **Code references:**
 - `Material/Interface.hpp:isOpaque()` — non-virtual, checks blending and grab pass
 - `Material/Interface.hpp:requiresGrabPass()` — virtual, default false

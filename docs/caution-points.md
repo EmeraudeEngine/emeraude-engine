@@ -1380,6 +1380,29 @@ luminance scale; the reflection term always keeps it.
 > Anything read back from the rendered scene (grab pass, and by extension any screen-space capture)
 > is already an absolute luminance.
 
+### Fixed: the grab pass was recreated IN PLACE while frames still used it (Sep 2026)
+
+**Symptom:** at the act teardown of a scene holding ONE refracting material (a `Parametrics/Diamond`
+chick on `forest`), `VUID-vkDestroyImage-image-01000` twice, `VUID-vkFreeMemory-memory-00677`, then the
+same image/memory handles reported LEAKED by `vkDestroyDevice`. Nothing visible, and intermittent from
+the outside: it fired on every run whose teardown recreated the scene render target (the log shows
+`Scene render target created` twice), never on the others.
+
+**Cause:** `Renderer::refreshGrabPass()` — called by every scene-target recreation — used
+`GrabPass::recreate()`, i.e. `destroy()` then `create()` on the spot, while the grab's blit (it runs
+on every frame whose scene holds a TranslucentGB object) was still in flight. `recreateSceneTarget()`,
+three lines above, already retired the target it replaced through the `DeferredDestructor`; the grab
+pass it then refreshed did not.
+
+**Fix:** the previous `GrabPass` is handed to `DeferredDestructor::retireAction()` and a fresh one is
+created; `GrabPass::recreate()` is DELETED so the in-place path cannot come back. Verified: 0 VUID on
+the teardowns that recreate the target (3 of 3), against 3 of 3 before.
+
+⚠️ **The rule it restates:** a GPU object a recorded command buffer may still reference is RETIRED,
+never destroyed — and a "recreate" helper that calls `destroy()` is a destruction. A pre-allocated
+object used only when some content is on screen (here: a refracting material) hides the defect until
+that content shows up; the new content is NOT the cause.
+
 ### Fixed: the legacy specular was PHONG despite being named Blinn-Phong (Jul 2026)
 
 **The trap.** `LightGenerator` dispatches the non-PBR paths to functions called

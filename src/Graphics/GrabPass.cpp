@@ -585,14 +585,6 @@ namespace EmEn::Graphics
 		m_image.reset();
 	}
 
-	bool
-	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat) noexcept
-	{
-		this->destroy();
-
-		return this->create(renderer, width, height, colorFormat, depthFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat);
-	}
-
 	void
 	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage, const Image * srcDepthImage, const Image * srcNormalsImage, const Image * srcMaterialPropertiesImage) const noexcept
 	{

@@ -119,21 +119,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys the grab pass textures from the GPU.
+			 * @note ⚠️ IMMEDIATE: no in-flight command buffer may still reference the images. A grab
+			 * pass that is replaced while frames are in flight is RETIRED through the renderer's
+			 * DeferredDestructor (Renderer::refreshGrabPass()) — there is no in-place recreate on
+			 * purpose, it was a GPU use-after-free (2026-09-24).
 			 * @return void
 			 */
 			void destroy () noexcept;
-
-			/**
-			 * @brief Recreates the grab pass textures with new dimensions.
-			 * @param renderer A reference to the graphics renderer.
-			 * @param width The new width.
-			 * @param height The new height.
-			 * @param colorFormat The image format matching the swapchain color.
-			 * @param depthFormat The image format matching the swapchain depth. VK_FORMAT_UNDEFINED to skip depth.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED, VkFormat velocityFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Records the blit/copy commands from the swapchain images to this grab pass.

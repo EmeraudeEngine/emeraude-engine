@@ -1082,12 +1082,22 @@ namespace EmEn::Graphics
 			m_sceneTarget->depthStencilImage()->createInfo().format :
 			m_swapChain->depthStencilFormat();
 
-		const auto succeeded =
-			m_grabPass->isCreated() ?
-			m_grabPass->recreate(*this, width, height, colorFormat, depthFormat) :
-			m_grabPass->create(*this, width, height, colorFormat, depthFormat);
+		/* ⚠️ The previous images are RETIRED, never destroyed in place: the last frames' command
+		 * buffers may still blit into them and sample them — the grab runs on every frame whose
+		 * scene holds a translucent object. Recreating in place was a GPU use-after-free
+		 * (VUID-vkDestroyImage-image-01000 on the grab's colour and depth images) at every scene
+		 * target recreation, the act teardown included, as soon as a transmissive material was on
+		 * screen (2026-09-24). Same rule as recreateSceneTarget(). */
+		if ( m_grabPass->isCreated() )
+		{
+			m_deferredDestructor.retireAction([previous = std::shared_ptr< GrabPass >{std::move(m_grabPass)}] {
+				previous->destroy();
+			});
 
-		if ( !succeeded )
+			m_grabPass = std::make_unique< GrabPass >();
+		}
+
+		if ( !m_grabPass->create(*this, width, height, colorFormat, depthFormat) )
 		{
 			TraceError{ClassId} << "Unable to create the grab pass texture !";
 
