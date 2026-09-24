@@ -66,7 +66,9 @@ namespace EmEn::Graphics
 	 * @note Owner request 2026-09-23. It replaces the former SwapChain::capture(), which downloaded an image the
 	 * presentation engine owned (UNASSIGNED-non-acquired-swapchain-image-used on MoltenVK and the Windows
 	 * layers). Two uses of the same mechanism:
-	 *  - a SCREENSHOT: one frame, written as `<unix seconds>.png`;
+	 *  - a SCREENSHOT: one frame, written as `<unix seconds>.png`; ⚠️ the stem is UNIQUE per process and on disk
+	 *    (2026-09-24): a capture in a second already used takes the next free second — two screenshots in one
+	 *    second used to collide, and the second failed to write its file;
 	 *  - a TEMPORAL CAPTURE (a development tool against shimmer and temporal artefacts): N CONSECUTIVE presented
 	 *    frames, written as `<unix seconds>-<n>.png` (n from 0), plus `<unix seconds>.json` with the per-frame
 	 *    metadata (frame serial, CPU time, TAA jitter, camera, exposure).
@@ -153,6 +155,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Waits for the armed capture to finish, files written. Thread-safe; never call it on the render thread.
+			 * @note ⚠️ On a TIMEOUT the capture is CANCELLED (2026-09-24): it stops asking for frames, the copies already
+			 * on the GPU drain through their fences, and it goes back to idle without writing anything. It used to stay
+			 * armed: the next request was refused ("A capture is already in progress") and its late result was
+			 * published to nobody (Windows, a screenshot right after a scene switch).
 			 * @param timeout The longest wait.
 			 * @return Result
 			 */
@@ -253,6 +259,21 @@ namespace EmEn::Graphics
 			 */
 			void publish (Result && result) noexcept;
 
+			/**
+			 * @brief Returns whether no recorded copy of the capture can still be read or written by the GPU. The lock
+			 * must be held.
+			 * @note A copy RECORDED but not yet confirmed is in flight too: its command buffer references the buffer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool framesDrained () const noexcept;
+
+			/**
+			 * @brief Finishes a cancelled capture once its frames are drained. The lock must be held.
+			 * @return bool True when the capture was released.
+			 */
+			bool releaseIfCancelledAndDrained () noexcept;
+
 			std::vector< CapturedFrame > m_frames;
 			std::shared_ptr< Base::ThreadPool > m_threadPool;
 			std::filesystem::path m_directory;
@@ -260,6 +281,8 @@ namespace EmEn::Graphics
 			mutable std::mutex m_access;
 			std::condition_variable m_completion;
 			int64_t m_stem{0};
+			/* The last stem handed out: a stem is never reused within a process. */
+			int64_t m_lastStem{0};
 			uint32_t m_width{0};
 			uint32_t m_height{0};
 			uint32_t m_nextFrame{0};
@@ -268,5 +291,7 @@ namespace EmEn::Graphics
 			bool m_swapRedBlue{false};
 			bool m_temporal{false};
 			bool m_resultReady{false};
+			/* The waiter gave up: release the frames once the GPU is done with them, write nothing, publish nothing. */
+			bool m_cancelled{false};
 	};
 }

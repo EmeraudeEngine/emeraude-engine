@@ -71,6 +71,29 @@ namespace EmEn::Graphics
 
 			output << ']';
 		}
+
+		/**
+		 * @brief Returns whether a capture stem already names a file in the directory.
+		 * @param directory The captures directory.
+		 * @param stem The stem.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		stemTaken (const std::filesystem::path & directory, int64_t stem) noexcept
+		{
+			std::error_code error;
+
+			for ( const auto * suffix : {".png", "-0.png", ".json"} )
+			{
+				if ( std::filesystem::exists(directory / (std::to_string(stem) + suffix), error) )
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
 	}
 
 	FrameCapture::FrameCapture () noexcept = default;
@@ -110,7 +133,9 @@ namespace EmEn::Graphics
 
 			if ( m_state != State::Idle )
 			{
-				error = "A capture is already in progress.";
+				error = m_cancelled ?
+					"The previous capture timed out and its frames are still on the GPU: retry in a moment." :
+					"A capture is already in progress.";
 
 				return false;
 			}
@@ -144,7 +169,22 @@ namespace EmEn::Graphics
 		m_frames = std::move(frames);
 		m_threadPool = threadPool;
 		m_directory = directory;
-		m_stem = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+
+		/* ⚠️ A UNIQUE stem, still "<unix seconds>": two captures in one second shared a name, and the second
+		 * failed to write its file ("does it already exist?"). A second already used — by this process or by a
+		 * file on disk — moves the stem to the next free one. */
+		{
+			auto stem = std::max< int64_t >(std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count(), m_lastStem + 1);
+
+			while ( stemTaken(directory, stem) )
+			{
+				++stem;
+			}
+
+			m_stem = stem;
+			m_lastStem = stem;
+		}
+
 		m_width = width;
 		m_height = height;
 		m_nextFrame = 0;
@@ -166,7 +206,23 @@ namespace EmEn::Graphics
 			return m_resultReady;
 		}) )
 		{
-			return {.files = {}, .error = "The capture did not complete in time (is the window rendering?).", .success = false};
+			/* Being encoded: the files will exist, the pool finishes them. */
+			if ( m_state == State::Writing )
+			{
+				return {.files = {}, .error = "The capture did not complete in time: its files are still being written.", .success = false};
+			}
+
+			/* ⚠️ CANCELLED, not left armed: stop asking for frames, let the copies already recorded drain through
+			 * their fences, and go back to idle without writing anything. */
+			if ( m_state == State::Armed )
+			{
+				m_wantsFrames.store(false, std::memory_order_release);
+				m_cancelled = true;
+
+				static_cast< void >(this->releaseIfCancelledAndDrained());
+			}
+
+			return {.files = {}, .error = "The capture did not complete in time and was cancelled (is the window rendering?).", .success = false};
 		}
 
 		m_resultReady = false;
@@ -271,6 +327,25 @@ namespace EmEn::Graphics
 
 		auto & frame = m_frames[m_nextFrame];
 
+		if ( m_cancelled )
+		{
+			/* The waiter is gone: an abandoned copy is simply done, a submitted one drains at its fence. */
+			if ( submitted )
+			{
+				frame.submitted = true;
+			}
+			else
+			{
+				frame.complete = true;
+			}
+
+			m_nextFrame++;
+
+			static_cast< void >(this->releaseIfCancelledAndDrained());
+
+			return;
+		}
+
 		if ( submitted )
 		{
 			frame.submitted = true;
@@ -310,6 +385,13 @@ namespace EmEn::Graphics
 				{
 					frame.complete = true;
 				}
+			}
+
+			if ( m_cancelled )
+			{
+				static_cast< void >(this->releaseIfCancelledAndDrained());
+
+				return;
 			}
 
 			/* Done when no recorded copy is still on the GPU, and either every frame was captured or the capture failed. */
@@ -516,8 +598,37 @@ namespace EmEn::Graphics
 		m_result = std::move(result);
 		m_resultReady = true;
 		m_state = State::Idle;
+		m_cancelled = false;
 		m_wantsFrames.store(false, std::memory_order_release);
 
 		m_completion.notify_all();
+	}
+
+	bool
+	FrameCapture::framesDrained () const noexcept
+	{
+		return std::ranges::all_of(m_frames, [] (const CapturedFrame & frame) {
+			return !frame.recorded || frame.complete;
+		});
+	}
+
+	bool
+	FrameCapture::releaseIfCancelledAndDrained () noexcept
+	{
+		if ( !m_cancelled || !this->framesDrained() )
+		{
+			return false;
+		}
+
+		/* Nobody waits for it any more: release the buffers, write nothing, publish nothing. */
+		m_frames.clear();
+		m_result = {};
+		m_resultReady = false;
+		m_cancelled = false;
+		m_state = State::Idle;
+
+		TraceInfo{ClassId} << "A timed-out capture was cancelled and its frames released.";
+
+		return true;
 	}
 }

@@ -1228,6 +1228,20 @@ refuses) and `Renderer::captureFramebuffer()` (deleted).
   from frame 8): capture ≥ 8 frames to see a whole cycle; the default 5 does not.
 - ⚠️ A swap-chain recreation (resize) abandons a running capture (its frames must share one extent
   and have no hole); so does an abandoned frame (a failed submit).
+- ⚠️⚠️ **The stem is UNIQUE** (fixed 2026-09-24): still an integer `<unix seconds>`, but a second
+  already used — by this process or by a file on disk — moves it to the next free one. Two
+  screenshots in the same second used to share a name and the second failed ("Unable to write …
+  (does it already exist?)"), reproduced by two `screenshot()` 0.3 s apart. A stem may therefore run
+  a few seconds ahead of the clock in a burst: read the path the command answers, never rebuild it.
+- ⚠️⚠️ **A timed-out capture is CANCELLED** (fixed 2026-09-24): `waitForCompletion()` stops asking
+  for frames, lets the copies already RECORDED drain through their fences (a recorded, not yet
+  submitted copy is in flight too: its command buffer references the staging buffer) and goes back
+  to idle, writing and publishing nothing (`A timed-out capture was cancelled and its frames
+  released.`). It used to stay ARMED: the next request was refused "A capture is already in
+  progress" and its late result went to nobody — seen on Windows right after a runtime scene switch
+  (item `screenshot-lost-across-scene-switch`: WHY no frame reached the capture in 5 s there is not
+  reproduced on Linux). Stress-tested with a 20 ms timeout: 20 cancellations in a row, 20 releases,
+  0 VUID. A request while a cancelled capture drains answers "retry in a moment".
 - ⚠️ With MAILBOX presentation a submitted image may be replaced before it is displayed: the capture
   holds what the renderer produced, frame after frame.
 - RushMaker still copies AFTER the present (the same ownership defect): migrating it onto this hook

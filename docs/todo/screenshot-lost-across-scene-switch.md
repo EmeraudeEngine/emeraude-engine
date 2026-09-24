@@ -19,14 +19,22 @@ sent about 0.5 s after the new scene became active, never wrote a file. A retry 
 thread ran normally throughout. So a capture requested across (or just after) a scene switch stays
 pending for several seconds, and its image is dropped.
 
+## Done (2026-09-24, `src/Graphics/AGENTS.md` § 9b)
+
+- A timed-out capture is now CANCELLED instead of staying armed: the next request is no longer
+  refused ("already in progress") and no late result is published to nobody.
+- The stem is unique: two captures in one second no longer collide (the second one failed to write
+  — reproduced on Linux; the other way to lose a capture).
+
 ## What remains
 
-1. Reproduce (any OS): switch scene, request a screenshot within the first second, then retry.
-2. Read how the pending capture is tied to a render target or a frame of the previous scene, and
-   what completes or cancels it when the scene (and its render targets) change.
-3. Fix it in the capture path: either the pending request survives the switch and is served by the
-   next frame, or it fails at once with a reason — never a silent loss followed by "already in
-   progress".
+1. On Windows, with those fixes: switch scene from the menu, request a screenshot within the first
+   second. If it still times out, grab the stacks of the main and render threads DURING the 5 s
+   wait. On Linux a capture right after a viewer switch (`Core.openFiles`) answers in 0.3-0.6 s.
+2. ⚠️ Lead: `screenshot()` runs on the MAIN thread and blocks it until the frame is written. Anything
+   the render thread needs from the main thread in that window — the Windows message pump for the
+   present, a swap-chain recreation waiting for a window size — cannot happen, and the capture waits
+   for a frame that waits for it. Confirm or rule out with the stacks before changing the design.
 
 ## References
 

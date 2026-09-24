@@ -184,7 +184,9 @@ python3 tools/temporal-analysis.py <stem>          # or the .json path it printe
 ```
 
 - `screenshot()` and `temporalCapture([N = 5])` both copy the PRESENTED image inside its frame (UI
-  included) and answer once the files are written. A temporal capture writes
+  included) and answer once the files are written. ⚠️ Read the path they ANSWER: the stem is unique,
+  so a burst of captures moves it past the clock (two screenshots in one second used to collide). A
+  capture that times out is cancelled, and the next one arms normally. A temporal capture writes
   `<unix seconds>-<n>.png` for n = 0..N-1 and `<unix seconds>.json` (frame serial, timing, TAA
   jitter, camera, exposure per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
 - ⚠️ Capture **8** frames or more for a TAA question: the jitter cycle is 8 frames.
