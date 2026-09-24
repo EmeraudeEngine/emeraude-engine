@@ -30,11 +30,14 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <cstddef>
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <utility>
@@ -354,6 +357,8 @@ namespace EmEn::Scenes
 			bool
 			hasActiveScene () const noexcept
 			{
+				this->waitForAnnouncedExclusiveAccesses();
+
 				const std::shared_lock lock{m_activeSceneSharedAccess};
 
 				return m_activeScene != nullptr;
@@ -361,6 +366,15 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Executes a function on the active scene with thread-safe shared access.
+			 * @note ⚠️ WRITER PREFERENCE (2026-09-24): a reader first waits for every ANNOUNCED exclusive
+			 * access to finish (waitForAnnouncedExclusiveAccesses()). The render loop takes this access
+			 * for a whole frame and again microseconds later; on MSVC `std::shared_mutex` is an SRWLOCK,
+			 * neither fair nor FIFO, so it stole the lock back from the woken writer frame after frame —
+			 * a scene deletion (the shutdown) waited 24 s to over 3 minutes on Windows with validation ON.
+			 * @warning Never call it (or hasActiveScene()) from inside a shared or exclusive section on
+			 * the same thread: a re-entrant acquisition was already undefined behaviour, and it is now a
+			 * deadlock on every OS as soon as a writer is announced. The render loop exposes its scene to
+			 * the overlay instead (Core::m_frameScene).
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< Scene > &)
 			 * @param processActiveScene A function to process the active scene.
 			 * @param abortOnNullScene Do not trigger the function if there is no active scene.
@@ -370,6 +384,8 @@ namespace EmEn::Scenes
 			void
 			withSharedActiveScene (function_t && processActiveScene, bool abortOnNullScene) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Scene > & >)
 			{
+				this->waitForAnnouncedExclusiveAccesses();
+
 				const std::shared_lock lock{m_activeSceneSharedAccess};
 
 				if ( abortOnNullScene && m_activeScene == nullptr )
@@ -391,6 +407,8 @@ namespace EmEn::Scenes
 			void
 			withExclusiveActiveScene (function_t && processActiveScene, bool abortOnNullScene) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Scene > & >)
 			{
+				/* Announced BEFORE queuing on the lock, withdrawn AFTER releasing it (reverse destruction order). */
+				const ExclusiveAccessAnnouncement announcement{*this};
 				const std::unique_lock lock{m_activeSceneSharedAccess};
 
 				if ( abortOnNullScene && m_activeScene == nullptr )
@@ -433,6 +451,63 @@ namespace EmEn::Scenes
 
 		private:
 
+			/**
+			 * @brief Announces an exclusive access to the active scene for its whole lifetime (writer preference).
+			 * @note Construct it BEFORE the std::unique_lock on m_activeSceneSharedAccess, so that it is
+			 * destroyed AFTER the lock is released: new readers wait from the moment the writer queues
+			 * until it is done.
+			 */
+			class ExclusiveAccessAnnouncement final
+			{
+				public:
+
+					/**
+					 * @brief Announces the exclusive access.
+					 * @param manager A reference to the scene manager.
+					 */
+					explicit
+					ExclusiveAccessAnnouncement (const Manager & manager) noexcept
+						: m_manager{manager}
+					{
+						m_manager.announceExclusiveAccess();
+					}
+
+					/**
+					 * @brief Withdraws the announcement, and wakes the readers when it was the last one.
+					 */
+					~ExclusiveAccessAnnouncement ()
+					{
+						m_manager.withdrawExclusiveAccess();
+					}
+
+					ExclusiveAccessAnnouncement (const ExclusiveAccessAnnouncement & copy) noexcept = delete;
+					ExclusiveAccessAnnouncement (ExclusiveAccessAnnouncement && copy) noexcept = delete;
+					ExclusiveAccessAnnouncement & operator= (const ExclusiveAccessAnnouncement & copy) noexcept = delete;
+					ExclusiveAccessAnnouncement & operator= (ExclusiveAccessAnnouncement && copy) noexcept = delete;
+
+				private:
+
+					const Manager & m_manager;
+			};
+
+			/**
+			 * @brief Counts one more announced exclusive access.
+			 * @return void
+			 */
+			void announceExclusiveAccess () const noexcept;
+
+			/**
+			 * @brief Counts one announced exclusive access less, and wakes the waiting readers at zero.
+			 * @return void
+			 */
+			void withdrawExclusiveAccess () const noexcept;
+
+			/**
+			 * @brief Blocks a READER while an exclusive access is announced. Lock-free when none is.
+			 * @return void
+			 */
+			void waitForAnnouncedExclusiveAccesses () const noexcept;
+
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
 
@@ -454,5 +529,10 @@ namespace EmEn::Scenes
 			mutable std::mutex m_sceneListAccess;
 			/** @brief Handle a shared thread-safe access to the member 'm_activeScene', when manipulating the content of a scene. 'Readers' can share the access, while 'Writers' can have an exclusive lock.  */
 			mutable std::shared_mutex m_activeSceneSharedAccess;
+			/** @brief The writer-preference gate of 'm_activeSceneSharedAccess': the exclusive accesses announced and not
+			 * finished, and what the readers wait on (see withSharedActiveScene()). */
+			mutable std::atomic< uint32_t > m_announcedExclusiveAccesses{0};
+			mutable std::mutex m_exclusiveAnnouncementAccess;
+			mutable std::condition_variable m_exclusiveAccessesWithdrawn;
 	};
 }

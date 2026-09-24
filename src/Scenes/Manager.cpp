@@ -298,6 +298,45 @@ namespace EmEn::Scenes
 		return nullptr;
 	}
 
+	void
+	Manager::announceExclusiveAccess () const noexcept
+	{
+		m_announcedExclusiveAccesses.fetch_add(1, std::memory_order_acq_rel);
+	}
+
+	void
+	Manager::withdrawExclusiveAccess () const noexcept
+	{
+		if ( m_announcedExclusiveAccesses.fetch_sub(1, std::memory_order_acq_rel) != 1 )
+		{
+			return;
+		}
+
+		/* NOTE: Taking the gate mutex before notifying closes the lost-wakeup window: a reader that
+		 * saw the count at one under that mutex is already waiting when the notification goes out. */
+		{
+			const std::lock_guard< std::mutex > lock{m_exclusiveAnnouncementAccess};
+		}
+
+		m_exclusiveAccessesWithdrawn.notify_all();
+	}
+
+	void
+	Manager::waitForAnnouncedExclusiveAccesses () const noexcept
+	{
+		/* The common case, every frame: no writer announced, no mutex taken. */
+		if ( m_announcedExclusiveAccesses.load(std::memory_order_acquire) == 0 )
+		{
+			return;
+		}
+
+		std::unique_lock< std::mutex > lock{m_exclusiveAnnouncementAccess};
+
+		m_exclusiveAccessesWithdrawn.wait(lock, [this] {
+			return m_announcedExclusiveAccesses.load(std::memory_order_acquire) == 0;
+		});
+	}
+
 	bool
 	Manager::deleteScene (const std::string & sceneName) noexcept
 	{
@@ -331,6 +370,7 @@ namespace EmEn::Scenes
 		 * GPU faults on freed memory (device lost). The stall is paid only here, on the deliberate
 		 * delete; the switch/disable path stays hitch-free. */
 		{
+			const ExclusiveAccessAnnouncement announcement{*this};
 			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
 			sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
@@ -353,7 +393,10 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
+		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
+		 * Announced first: the render loop would otherwise take the shared access back before this
+		 * writer wakes (writer preference, see withSharedActiveScene()). */
+		const ExclusiveAccessAnnouncement announcement{*this};
 		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
 		if ( scene == nullptr )
@@ -410,7 +453,10 @@ namespace EmEn::Scenes
 			m_editorManager.deactivate();
 		}
 
-		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
+		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
+		 * Announced first: the render loop would otherwise take the shared access back before this
+		 * writer wakes (writer preference, see withSharedActiveScene()). */
+		const ExclusiveAccessAnnouncement announcement{*this};
 		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
 		/* NOTE: Drop this scene's textures from the global bindless descriptor table before it stops

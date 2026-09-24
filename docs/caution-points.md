@@ -4125,6 +4125,36 @@ AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::op
 
 ---
 
+### Fixed: the shutdown hung for minutes on Windows — writer starvation on `std::shared_mutex` (Sep 2026)
+
+**Symptom:** on Windows only, `Core.shutdown()` (or closing the window) took 24 s to over 3 minutes,
+sometimes never ended, with the validation layer ON (> 120 s, > 180 s on NVIDIA, > 184 s on the AMD
+iGPU, all killed); 2.0-3.4 s with it OFF. The window turned white and the log stopped after
+`Removing the act …` / `Scene will use environment cubemap …`.
+
+**Diagnosis (the Windows session, symbols + a StackWalk64 walker, 2026-09-24):** the main thread
+waited in `RtlAcquireSRWLockExclusive` ← `Scenes::Manager::disableActiveScene` ← `deleteScene` ←
+projet-alpha `Stage::unloadActiveAct` ← `Application::onBeforeCoreStop` ← `Core::stop`, for minutes;
+the logic thread queued as a shared acquirer behind it; the render thread was NOT stuck — it kept
+producing frames inside `withSharedActiveScene` (fence wait, record, present; on AMD 39 of 40 samples
+inside `vkQueuePresentKHR`). MSVC implements `std::shared_mutex` as an SRWLOCK, documented neither fair
+nor FIFO: when the last reader released, the writer was woken, but the render loop's next shared
+acquire found the lock momentarily free and stole it first. The validation layer made the frame —
+the time the shared access is held — longer, so the free window shrank toward zero. Linux never
+showed it: libstdc++'s `shared_mutex` is a `pthread_rwlock`, and glibc hands the lock to the waiting
+writer.
+
+**Fix (owner decision: a writer-preference gate):** `Scenes::Manager` counts the ANNOUNCED exclusive
+accesses (`ExclusiveAccessAnnouncement`, built before the `unique_lock`, destroyed after it) and a
+reader waits while one is (`src/Scenes/AGENTS.md` § Writer preference). Every exclusive path benefits,
+the runtime scene switches included, on every OS. Linux after the fix: shutdown 0.82 / 1.28 / 1.30 s,
+0 VUID. Windows measurement pending.
+
+⚠️ Observed with it, not changed: `Core::stop()` calls `onBeforeCoreStop()` — the whole act teardown —
+BEFORE it clears `m_isRenderingLoopRunning`, so the scene is torn down under a live render loop.
+⚠️ A re-entrant `withSharedActiveScene()` on the same thread is now a deadlock on every OS once a
+writer is announced (it was undefined behaviour already).
+
 ## Vulkan Validation
 
 ### Fixed: a 3D image uploaded ONE slice, and its mips filtered one slice (Sep 2026)

@@ -606,8 +606,9 @@ RENDER THREAD, inside the frame's `withSharedActiveScene()` scope (Core's render
 scene manager's shared lock for the whole frame). They MUST read the scene through
 `Core::m_frameScene` — the pointer Core publishes for exactly that scope — and NEVER call
 `withSharedActiveScene()` again: re-acquiring a `std::shared_mutex` the thread already
-share-owns is undefined behaviour, and deadlocks on Windows SRWLOCK the moment an exclusive
-writer (pause/resume, scene replacement) is queued. The camera panel is the reference example.
+share-owns is undefined behaviour, and deadlocks the moment an exclusive writer (pause/resume,
+scene replacement) is queued — on Windows SRWLOCK first, and on every OS since the scene manager's
+writer-preference gate (2026-09-24, `src/Scenes/AGENTS.md`). The camera panel is the reference example.
 
 ### Using ImGui for Debug
 

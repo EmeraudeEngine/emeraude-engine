@@ -710,6 +710,19 @@ controller). The scene stays loaded (dormant) unless also deleted.
 referenced the scene's textures/buffers complete before destruction. The drain is on delete, not
 disable, precisely so scene **switching stays seamless**.
 
+**Writer preference** (fixed 2026-09-24, owner decision): every exclusive section on
+`m_activeSceneSharedAccess` — `disableActiveScene`, `enableScene`, `deleteScene`,
+`withExclusiveActiveScene` — first builds an `ExclusiveAccessAnnouncement`, BEFORE its
+`std::unique_lock`, destroyed AFTER it; `withSharedActiveScene()` and `hasActiveScene()` wait
+(`waitForAnnouncedExclusiveAccesses()`, a condition variable, lock-free when nothing is announced)
+while one is. ⚠️⚠️ Without it the Windows shutdown hung 24 s to over 3 min: MSVC's `std::shared_mutex`
+is an SRWLOCK (neither fair nor FIFO), the render loop holds the shared access for a whole frame and
+takes it back microseconds later, and it stole the lock from the woken writer frame after frame
+(diagnosed by the Windows session with symbols, `docs/caution-points.md` § Platform-Specific).
+⚠️ A re-entrant shared acquisition on the same thread is now a deadlock on EVERY OS as soon as a
+writer is announced (it was already undefined behaviour): code running inside the frame reads the
+scene through `Core::m_frameScene`, never through the manager again.
+
 **Jun 2026 audit (from the Scene Manager outward):** no remaining multi-scene-hazardous global
 statics; the cached-shared-resource-destruction class was fully swept (all `TextureResource` types
 + `Overlay::Surface` now release the cache-owned sampler instead of destroying it). Dormant scenes
