@@ -390,6 +390,58 @@ namespace EmEn::Scenes::Component
 			 */
 			void updateCascades (const std::array< Base::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
 
+			/**
+			 * @brief Points this light at the scene's cloud Beer shadow map, centred on the camera [LOGIC THREAD].
+			 * @note The map is seen along THIS light: world → (u, v) over a square of `coverage` metres
+			 * around the camera, snapped to its texels so it does not shimmer as the camera moves, and
+			 * the depth along the light measured from the camera's plane (a small range, which is what
+			 * lets a half float carry it). The same matrix reaches the lit shaders through the light
+			 * block and the map's own render pass through cloudShadowMatrix() — one frame, one matrix.
+			 * Called every tick by Scene::updateCloudShadows(); an unchanged frame publishes nothing.
+			 * @param bindlessIndex The map's slot in the scene's bindless 2D array.
+			 * @param cameraPosition The camera world position.
+			 * @param coverage The side of the map, in metres.
+			 * @param resolution The side of the map, in texels.
+			 * @return void
+			 */
+			void updateCloudShadow (uint32_t bindlessIndex, const Base::Math::Vector< 3, float > & cameraPosition, float coverage, uint32_t resolution) noexcept;
+
+			/**
+			 * @brief Stops this light from reading a cloud shadow map [LOGIC THREAD].
+			 * @return void
+			 */
+			void disableCloudShadow () noexcept;
+
+			/**
+			 * @brief Returns whether the light currently reads a cloud shadow map [LOGIC THREAD].
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasCloudShadow () const noexcept
+			{
+				return m_cloudShadowIndex != NoCloudShadow;
+			}
+
+			/**
+			 * @brief Returns the cloud shadow matrix the frame was published with [RENDER THREAD].
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return Base::Math::Matrix< 4, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Matrix< 4, float > cloudShadowMatrix (uint32_t readStateIndex) const noexcept;
+
+			/**
+			 * @brief Returns the cloud shadow bindless slot the frame was published with, or NoCloudShadow [RENDER THREAD].
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t cloudShadowIndex (uint32_t readStateIndex) const noexcept;
+
+			/** @brief The cloud shadow slot of a light that reads none. */
+			static constexpr uint32_t NoCloudShadow{0xFFFFFFFFU};
+
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
@@ -472,6 +524,10 @@ namespace EmEn::Scenes::Component
 			 *   float PCFRadius: float 28
 			 *   float ShadowBias: float 29
 			 *   float padding: floats 30-31
+			 * Layer 3 (volumetric clouds' shadow, Sep 2026):
+			 *   mat4 CloudShadowMatrix: floats 32-47
+			 *   float CloudShadowIndex: float 48 (bit pattern)
+			 *   float padding: floats 49-51
 			 */
 			/* Classic buffer layout offsets. */
 			static constexpr auto ColorOffset{0UL};
@@ -482,6 +538,9 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ShadowBiasOffset{29UL};
 			static constexpr auto ColorProjectionIndexOffset{9UL};
 			static constexpr auto ColorProjectionBoostOffset{10UL};
+			static constexpr auto CloudShadowMatrixOffset{32UL};
+			static constexpr auto CloudShadowIndexOffset{48UL};
+			static constexpr auto BufferSize{52UL};
 
 			/* CSM buffer layout offsets (matches shader UBO):
 			 * mat4[4] cascadeViewProjectionMatrices: floats 0-63
@@ -492,7 +551,10 @@ namespace EmEn::Scenes::Component
 			 * vec4 color: floats 72-75
 			 * vec4 direction: floats 76-79
 			 * float intensity: float 80
-			 * vec3 padding: floats 81-83 */
+			 * vec3 padding: floats 81-83
+			 * mat4 cloudShadowMatrix: floats 84-99 (Sep 2026)
+			 * float cloudShadowIndex: float 100 (bit pattern)
+			 * vec3 padding: floats 101-103 */
 			static constexpr auto CSM_CascadeMatricesOffset{0UL};
 			static constexpr auto CSM_SplitDistancesOffset{64UL};
 			static constexpr auto CSM_CascadeCountOffset{68UL};
@@ -500,7 +562,11 @@ namespace EmEn::Scenes::Component
 			static constexpr auto CSM_ColorOffset{72UL};
 			static constexpr auto CSM_DirectionOffset{76UL};
 			static constexpr auto CSM_IntensityOffset{80UL};
-			static constexpr auto CSM_BufferSize{84UL};
+			static constexpr auto CSM_CloudShadowMatrixOffset{84UL};
+			static constexpr auto CSM_CloudShadowIndexOffset{100UL};
+			static constexpr auto CSM_BufferSize{104UL};
+
+			static_assert(CSM_BufferSize == AbstractLightEmitter::MaxUniformBlockElementCount, "The CSM block is the largest light block: keep MaxUniformBlockElementCount on it.");
 
 			std::shared_ptr< Graphics::RenderTarget::Abstract > m_shadowMap; /* NOTE: std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > */
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;
@@ -510,7 +576,7 @@ namespace EmEn::Scenes::Component
 			float m_lambda{Graphics::DefaultCascadeLambda};
 			uint32_t m_cascadeCount{Graphics::MaxCascadeCount};
 			float m_CSMScale{1.0F};
-			std::array< float, 4 + 4 + 4 + 16 + 4 > m_buffer{
+			std::array< float, BufferSize > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
 				/* Light direction (Directional). */
@@ -523,9 +589,18 @@ namespace EmEn::Scenes::Component
 				0.0F, 0.0F, 1.0F, 0.0F,
 				0.0F, 0.0F, 0.0F, 1.0F,
 				/* Shadow properties. */
-				m_PCFRadius, m_shadowBias, 0.0F, 0.0F
+				m_PCFRadius, m_shadowBias, 0.0F, 0.0F,
+				/* Cloud shadow matrix (identity) and slot (none) — written by writeCloudShadow(). */
+				1.0F, 0.0F, 0.0F, 0.0F,
+				0.0F, 1.0F, 0.0F, 0.0F,
+				0.0F, 0.0F, 1.0F, 0.0F,
+				0.0F, 0.0F, 0.0F, 1.0F,
+				0.0F, 0.0F, 0.0F, 0.0F
 			};
 			std::array< float, CSM_BufferSize > m_CSMBuffer{}; /**< CSM-specific buffer for cascade data. */
+			/** @brief The cloud shadow matrix, world -> (u, v, depth along the light), column-major. LOGIC THREAD. */
+			std::array< float, 16 > m_cloudShadowMatrix{1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F};
+			uint32_t m_cloudShadowIndex{NoCloudShadow};
 			bool m_useDirectionVector{false};
 			bool m_usesCSM{false};
 	};

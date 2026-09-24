@@ -246,7 +246,7 @@ namespace EmEn::Scenes::Component
 			 * @note Keep in sync with DirectionalLight::CSM_BufferSize — LightSet sizes the shared
 			 * UBO on the same maximum.
 			 */
-			static constexpr auto MaxUniformBlockElementCount{84UL};
+			static constexpr auto MaxUniformBlockElementCount{104UL};
 
 			/**
 			 * @brief Upper bound on frame-in-flight regions a light UBO can be split into.

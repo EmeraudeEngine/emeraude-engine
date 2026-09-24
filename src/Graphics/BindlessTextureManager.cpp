@@ -521,6 +521,15 @@ namespace EmEn::Graphics
 				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeArrayBinding, entry.globalIndex, *texture));
 			}
 		}
+
+		/* 3D textures (volumetric cloud shapes). */
+		for ( const auto & entry : snapshot.textures3D )
+		{
+			if ( const auto * texture = entry.texture.get(); texture != nullptr && texture->isCreated() )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(Texture3DBinding, entry.globalIndex, *texture));
+			}
+		}
 	}
 
 	void

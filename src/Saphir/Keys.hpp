@@ -878,6 +878,10 @@ namespace EmEn::Saphir
 				constexpr auto ColorProjectionIndex{"colorProjectionIndex"};
 				constexpr auto ColorProjectionFrameIndex{"colorProjectionFrameIndex"};
 				constexpr auto ColorProjectionBoost{"colorProjectionBoost"};
+				/* The volumetric clouds' shadow on a directional light (Sep 2026): world -> (u, v, depth
+				 * along the light) of the scene's Beer shadow map, and its bindless 2D slot. */
+				constexpr auto CloudShadowMatrix{"cloudShadowMatrix"};
+				constexpr auto CloudShadowIndex{"cloudShadowIndex"};
 			}
 		}
 

@@ -603,6 +603,28 @@ case DirectionalLightPassColorMap: if (!enableShadowMap) { enableColorProjection
 case DirectionalLightPass: lightType = Directional; break;
 ```
 
+### The volumetric clouds' shadow is a BRANCH in every directional variant, not a pass type (Sep 2026)
+
+The clouds' Beer shadow map (`Graphics::CloudShadowMap`, `src/Graphics/AGENTS.md` § *The clouds'
+shadow on the world*) is read by the PBR directional passes — classic AND CSM — whenever the
+generator has the bindless table (`bindlessTexturesEnabled()`). No `RenderPassType` was added: the
+variants are precompiled per renderable, so a cloud-shadow family would have doubled every
+directional program for a term most scenes never use. Instead:
+
+- **Vertex**: `PositionWorldSpace` is requested `ToNextStage` on every such directional pass (the
+  CSM passes already forwarded it — a second request is harmless).
+- **Fragment**: the bindless `textures2D[]` array is declared (de-duplicated if the colour projection
+  declared it) with `GL_EXT_nonuniform_qualifier`, then `float cloudShadow = 1.0;` and, when the
+  light's `cloudShadowIndex` (a `uint` stored as float bits, `floatBitsToUint`) is not `0xFFFFFFFF`,
+  `exp(-min(B, G · max(d − R, 0)))` from the map at `cloudShadowMatrix · worldPosition` — a UNIFORM
+  branch. `cloudShadow` multiplies the light's radiance next to `projectionColor`.
+- **The light block** (`LightGenerator::getUniformBlock*()`): the Directional block now ALWAYS
+  declares its full layout — colour, direction, intensity, colour-projection index, boost,
+  view-projection matrix, PCF radius, shadow bias, then `cloudShadowMatrix` (float 32) and
+  `cloudShadowIndex` (float 48); the CSM block appends them at 84 and 100. ⚠️ It used to shrink with
+  the variant's features, which would have moved the two cloud members per variant; the C++ side
+  (`DirectionalLight` offsets) writes ONE layout per block kind, and the two must stay in lockstep.
+
 ### Emission on the UNLIT path — `emissionMultiplier()` MULTIPLIES, it does not ADD
 
 Emission is normally applied by `LightGenerator`, which **never runs for an unlit material**.

@@ -265,6 +265,8 @@ namespace EmEn::Scenes
 				SphericalPushModifierDestroyed,   ///< Component::SphericalPushModifier removed.
 				WeightCreated,				///< Component::Weight added.
 				WeightDestroyed,			  ///< Component::Weight removed.
+				CloudVolumeCreated,		   ///< Component::CloudVolume added.
+				CloudVolumeDestroyed,		 ///< Component::CloudVolume removed.
 				/* Enumeration boundary. */
 				MaxEnum					   ///< Total count of notification codes.
 			};

@@ -342,27 +342,22 @@ namespace EmEn::Saphir
 		{
 			case LightType::Directional :
 			{
+				/* ⚠️ The FULL layout, whatever the pass declares it needs (Sep 2026): the clouds' shadow
+				 * members sit at the END of the block, and the C++ side
+				 * (Scenes::Component::DirectionalLight::m_buffer) always carries every field. A block
+				 * that dropped the unused shadow / projection members would move the cloud members to
+				 * another offset than the one the light writes. Declaring an unread member costs nothing. */
 				Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::DirectionalLight, UniformBlock::Light};
 				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Color);
 				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DirectionWorldSpace);
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Intensity);
-
-				if ( useColorProjection )
-				{
-					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
-					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionBoost);
-				}
-
-				if ( useShadowMap || useColorProjection )
-				{
-					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
-				}
-
-				if ( useShadowMap || useColorProjection )
-				{
-					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
-					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
-				}
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionBoost);
+				block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
+				block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CloudShadowMatrix);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::CloudShadowIndex);
 
 				return block;
 			}
@@ -439,6 +434,8 @@ namespace EmEn::Saphir
 		 * vec4 color (16 bytes)
 		 * vec4 directionWorldSpace (16 bytes)
 		 * float intensity (4 bytes + padding to 16)
+		 * mat4 cloudShadowMatrix (64 bytes)
+		 * float cloudShadowIndex (4 bytes + padding to 16)
 		 */
 		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::DirectionalLightCSM, UniformBlock::Light};
 
@@ -456,6 +453,10 @@ namespace EmEn::Saphir
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Color);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DirectionWorldSpace);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Intensity);
+
+		/* The volumetric clouds' shadow (Sep 2026): mat4 at float 84, the bindless slot at float 100. */
+		block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CloudShadowMatrix);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::CloudShadowIndex);
 
 		return block;
 	}

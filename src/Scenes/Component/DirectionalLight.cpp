@@ -522,6 +522,9 @@ namespace EmEn::Scenes::Component
 	{
 		if ( m_usesCSM )
 		{
+			std::copy_n(m_cloudShadowMatrix.data(), m_cloudShadowMatrix.size(), m_CSMBuffer.data() + CSM_CloudShadowMatrixOffset);
+			m_CSMBuffer[CSM_CloudShadowIndexOffset] = std::bit_cast< float >(m_cloudShadowIndex);
+
 			std::copy_n(m_CSMBuffer.data(), m_CSMBuffer.size(), destination);
 
 			return;
@@ -530,7 +533,92 @@ namespace EmEn::Scenes::Component
 		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
 		m_buffer[ColorProjectionBoostOffset] = this->colorProjectionBoost();
 
+		std::copy_n(m_cloudShadowMatrix.data(), m_cloudShadowMatrix.size(), m_buffer.data() + CloudShadowMatrixOffset);
+		m_buffer[CloudShadowIndexOffset] = std::bit_cast< float >(m_cloudShadowIndex);
+
 		std::copy_n(m_buffer.data(), m_buffer.size(), destination);
+	}
+
+	void
+	DirectionalLight::updateCloudShadow (uint32_t bindlessIndex, const Vector< 3, float > & cameraPosition, float coverage, uint32_t resolution) noexcept
+	{
+		if ( coverage <= 0.0F || resolution == 0 )
+		{
+			this->disableCloudShadow();
+
+			return;
+		}
+
+		const auto worldCoordinates = this->getWorldCoordinates();
+
+		/* The direction the light PROPAGATES along — the same rule as the cascades. */
+		const auto lightDirection = (m_useDirectionVector ? worldCoordinates.forwardVector() : -worldCoordinates.position().normalized()).normalized();
+
+		/* An orthonormal frame around the light direction; a sun at the zenith takes X as its reference. */
+		const auto reference = std::abs(lightDirection[Y]) < 0.99F ? Vector< 3, float >{0.0F, 1.0F, 0.0F} : Vector< 3, float >{1.0F, 0.0F, 0.0F};
+		const auto right = Vector< 3, float >::crossProduct(lightDirection, reference).normalized();
+		const auto up = Vector< 3, float >::crossProduct(right, lightDirection);
+
+		/* ⚠️ Snapped to the texel grid: a map that slides with the camera by a fraction of a texel
+		 * re-samples every cloud edge each frame, and the shadows crawl. */
+		const auto texelSize = coverage / static_cast< float >(resolution);
+		const auto centreRight = std::floor(Vector< 3, float >::dotProduct(cameraPosition, right) / texelSize) * texelSize;
+		const auto centreUp = std::floor(Vector< 3, float >::dotProduct(cameraPosition, up) / texelSize) * texelSize;
+		const auto centreDepth = Vector< 3, float >::dotProduct(cameraPosition, lightDirection);
+
+		/* Rows: u = right.P / coverage + 0.5 - centre, v likewise, depth = light.P - camera depth.
+		 * Stored COLUMN-major, as GLSL reads a mat4. */
+		const std::array< float, 16 > matrix{
+			right[X] / coverage, up[X] / coverage, lightDirection[X], 0.0F,
+			right[Y] / coverage, up[Y] / coverage, lightDirection[Y], 0.0F,
+			right[Z] / coverage, up[Z] / coverage, lightDirection[Z], 0.0F,
+			0.5F - centreRight / coverage, 0.5F - centreUp / coverage, -centreDepth, 1.0F
+		};
+
+		/* Nothing to publish when the frame is the one already in the block (a camera inside one texel). */
+		if ( matrix == m_cloudShadowMatrix && bindlessIndex == m_cloudShadowIndex )
+		{
+			return;
+		}
+
+		m_cloudShadowMatrix = matrix;
+		m_cloudShadowIndex = bindlessIndex;
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	DirectionalLight::disableCloudShadow () noexcept
+	{
+		if ( m_cloudShadowIndex == NoCloudShadow )
+		{
+			return;
+		}
+
+		m_cloudShadowIndex = NoCloudShadow;
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	Matrix< 4, float >
+	DirectionalLight::cloudShadowMatrix (uint32_t readStateIndex) const noexcept
+	{
+		const auto & block = this->publishedBlock(readStateIndex);
+		const auto offset = m_usesCSM ? CSM_CloudShadowMatrixOffset : CloudShadowMatrixOffset;
+
+		Matrix< 4, float > matrix;
+
+		std::copy_n(block.data() + offset, 16, matrix.data());
+
+		return matrix;
+	}
+
+	uint32_t
+	DirectionalLight::cloudShadowIndex (uint32_t readStateIndex) const noexcept
+	{
+		const auto & block = this->publishedBlock(readStateIndex);
+
+		return std::bit_cast< uint32_t >(block[m_usesCSM ? CSM_CloudShadowIndexOffset : CloudShadowIndexOffset]);
 	}
 
 	std::ostream &

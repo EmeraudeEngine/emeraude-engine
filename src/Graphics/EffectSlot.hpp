@@ -127,6 +127,21 @@ namespace EmEn::Graphics
 		 */
 		VolumetricLight,
 
+		/**
+		 * @brief Volumetric clouds placed in the world (VolumetricClouds, Sep 2026).
+		 * @note A SCENE-DRIVEN slot: its occupant is filed and materialized by
+		 * `PostProcessStack::syncSceneEffects()` the frame the scene holds its first
+		 * `Component::CloudVolume` — an application never adds it, and a scene without clouds pays
+		 * nothing (owner decision, 2026-09-24: "placing a cloud is enough").
+		 * @note It composites `scene · T + L` inside its own pass, like VolumetricScattering, so it
+		 * emits no combine snippet. AFTER the light shafts, BEFORE the fog: a cloud attenuates what
+		 * lies behind it, shafts included, and the atmosphere then attenuates the cloud like anything
+		 * else — at the depth of the SURFACE behind it, the known approximation of compositing a
+		 * volume before a depth-driven fog (a cloud in front of a distant mountain is fogged as the
+		 * mountain is).
+		 */
+		Clouds,
+
 		/** @brief Participating medium (AtmosphericFog). */
 		Fog,
 
@@ -321,6 +336,7 @@ namespace EmEn::Graphics
 			case EffectSlot::AmbientOcclusion : return "AmbientOcclusion";
 			case EffectSlot::Reflections : return "Reflections";
 			case EffectSlot::ContactShadows : return "ContactShadows";
+			case EffectSlot::Clouds : return "Clouds";
 			case EffectSlot::Fog : return "Fog";
 			case EffectSlot::VolumetricLight : return "VolumetricLight";
 			case EffectSlot::LensFlare : return "LensFlare";

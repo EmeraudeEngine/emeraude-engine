@@ -62,6 +62,7 @@ namespace EmEn
 
 	namespace Scenes
 	{
+		class CloudSet;
 		class LightSet;
 		class ParticipatingMedium;
 
@@ -238,6 +239,21 @@ namespace EmEn::Graphics
 			virtual
 			bool
 			requiresLightSet () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Returns whether this effect draws the scene's volumetric clouds, hence needs some.
+			 * @note Effects returning true are skipped — and never MATERIALIZED — while the scene holds no
+			 * Component::CloudVolume: the same gate as requiresLightSet(), applied by both the executor
+			 * and PostProcessStack::canOccupantRun(), which must agree.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresCloudVolumes () const noexcept
 			{
 				return false;
 			}
@@ -426,6 +442,9 @@ namespace EmEn::Graphics
 				 * private Parameters while AtmosphericFog was used by ONE demo and VolumetricLight by
 				 * EIGHT, so nothing could share it. */
 				const Scenes::ParticipatingMedium * medium{nullptr};
+				/* The scene's volumetric clouds, or null when it holds none — the same "null means
+				 * absent" contract as the medium. Walked under its own mutex (Scenes::CloudSet). */
+				const Scenes::CloudSet * clouds{nullptr};
 				/* Sub-pixel projection jitter of the frame being rendered, in NDC units. Zero when
 				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
 				 * centers; no history counterpart is exposed because nothing in the chain has to

@@ -78,6 +78,7 @@ namespace EmEn::Scenes
 				bindlessTextureManager.maxTextures2D(),
 				bindlessTextureManager.maxTexturesCube(),
 				bindlessTextureManager.maxTexturesCubeArray(),
+				bindlessTextureManager.maxTextures3D(),
 				bindlessTextureManager.firstDynamicSlot()
 			);
 		}
@@ -459,6 +460,9 @@ namespace EmEn::Scenes
 		/* Update Cascaded Shadow Maps for directional lights.
 		 * CSM needs the camera frustum corners to compute tight-fit cascade projections each frame. */
 		this->updateCSMCascades(m_AVConsoleManager.graphicsRenderer().mainRenderTarget());
+
+		/* The clouds' shadow follows the camera too, on the sun that carries it. */
+		this->updateCloudShadows();
 
 		/* Update audio ambience if active. */
 		if ( m_ambience != nullptr && m_ambience->isPlaying() )

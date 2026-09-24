@@ -32,6 +32,7 @@
 /* Local inclusions. */
 #include "NodeCrawler.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/Microphone.hpp"
 
@@ -551,6 +552,16 @@ namespace EmEn::Scenes
 
 			case AbstractEntity::SpotLightDestroyed :
 				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
+
+				return true;
+
+			case AbstractEntity::CloudVolumeCreated :
+				m_cloudSet.add(*this, std::any_cast< std::shared_ptr< Component::CloudVolume > >(data));
+
+				return true;
+
+			case AbstractEntity::CloudVolumeDestroyed :
+				m_cloudSet.remove(std::any_cast< std::shared_ptr< Component::CloudVolume > >(data));
 
 				return true;
 

@@ -258,6 +258,18 @@ namespace EmEn::Saphir
 			}
 		}
 
+		/* The volumetric clouds' shadow (Sep 2026) is looked up in the fragment stage from the WORLD
+		 * position, on every directional pass that can reach the bindless table — the CSM passes
+		 * forward it already, the others get it here. One vec4 varying, and no new program: the
+		 * lookup is a branch on the light's own cloud slot, see generatePBRFragmentShader(). */
+		if ( lightType == LightType::Directional && generator.bindlessTexturesEnabled() )
+		{
+			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::ToNextStage) )
+			{
+				return false;
+			}
+		}
+
 		/* NOTE: Projection coordinates are needed for shadow mapping AND/OR color projection.
 		 * The UBO contains viewProjectionMatrix when shadow mapping or color projection is enabled.
 		 * Point lights use cubemap direction for 3D lookup (shadow and color projection).
@@ -387,6 +399,22 @@ namespace EmEn::Saphir
 				{
 					return false;
 				}
+			}
+		}
+
+		/* The clouds' Beer shadow map is a bindless 2D texture (de-duplicated if the colour projection
+		 * declared the array already). */
+		const bool enableCloudShadow = lightType == LightType::Directional && generator.bindlessTexturesEnabled();
+
+		if ( enableCloudShadow )
+		{
+			const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+			fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+			if ( !fragmentShader.declare(Declaration::Sampler{bindlessSetIndex, BindlessTextureManager::Texture2DBinding, GLSL::Sampler2D, Bindless::Textures2D, Declaration::Sampler::UnboundedArray}) )
+			{
+				return false;
 			}
 		}
 
@@ -780,10 +808,31 @@ namespace EmEn::Saphir
 			}
 		}
 
+		/* ⚠️ THE VOLUMETRIC CLOUDS' SHADOW (Sep 2026) — a Beer shadow map (S. Hillaire, *Physically
+		 * Based Sky, Atmosphere and Cloud Rendering in Frostbite*, SIGGRAPH 2016): per texel of a map
+		 * seen from the sun, the depth along the light where the clouds START, their mean extinction
+		 * and their total optical depth. A receiver at depth d sees
+		 * exp(-min(total, mean * max(d - front, 0))): 1 above the clouds, the full optical depth
+		 * under them, a ramp INSIDE one — a treetop in a low cloud is half shadowed, not black.
+		 * The light carries the map's matrix and bindless slot (Scenes::Component::DirectionalLight);
+		 * a slot of 0xFFFFFFFF (no cloud, or not the main sun) skips the lookup — a uniform branch. */
+		Code{fragmentShader} << "float cloudShadow = 1.0;" << Line::End;
+
+		if ( enableCloudShadow )
+		{
+			Code{fragmentShader} <<
+				"{ const uint csIdx = floatBitsToUint(" << LightUB(UniformBlock::Component::CloudShadowIndex) << ");" << Line::End <<
+				"  if ( csIdx != 0xFFFFFFFFu )" << Line::End <<
+				"  { const vec4 csMap = " << LightUB(UniformBlock::Component::CloudShadowMatrix) << " * vec4(" << ShaderVariable::PositionWorldSpace << ".xyz, 1.0);" << Line::End <<
+				"	if ( all(greaterThanEqual(csMap.xy, vec2(0.0))) && all(lessThanEqual(csMap.xy, vec2(1.0))) )" << Line::End <<
+				"	{ const vec3 beer = textureLod(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(csIdx)], csMap.xy, 0.0).rgb;" << Line::End <<
+				"	  cloudShadow = exp(-min(beer.b, beer.g * max(csMap.z - beer.r, 0.0))); } } }" << Line::End;
+		}
+
 		/* Compute radiance and final output. */
 		Code{fragmentShader} <<
 			"/* Light radiance. */" << Line::End <<
-			"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
+			"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * cloudShadow * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
 
 		/* Fragment color output. */
 		if ( m_fragmentColor.empty() )

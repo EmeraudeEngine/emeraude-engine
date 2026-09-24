@@ -85,6 +85,7 @@ namespace EmEn::Scenes
 				std::vector< Entry > textures2D;
 				std::vector< Entry > texturesCube;
 				std::vector< Entry > texturesCubeArray;
+				std::vector< Entry > textures3D;
 				std::shared_ptr< Vulkan::TextureInterface > environmentCubemap;
 				std::shared_ptr< Vulkan::TextureInterface > irradianceCubemap;
 				std::shared_ptr< Vulkan::TextureInterface > prefilteredCubemap;
@@ -110,10 +111,13 @@ namespace EmEn::Scenes
 			 * @param maxTextures2D The capacity of the 2D array.
 			 * @param maxTexturesCube The capacity of the cubemap array.
 			 * @param maxTexturesCubeArray The capacity of the cube array array.
-			 * @param firstDynamicSlot The first slot available for dynamic textures in every array.
+			 * @param maxTextures3D The capacity of the 3D array.
+			 * @param firstDynamicSlot The first slot available for dynamic textures in the 2D, cube and
+			 * cube array arrays. ⚠️ Not in the 3D one: it carries no reserved slot, so its cursor starts
+			 * at 0 (see Graphics::BindlessTextureManager::MinimalMaxTextures3D).
 			 * @return void
 			 */
-			void setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t firstDynamicSlot) noexcept;
+			void setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t maxTextures3D, uint32_t firstDynamicSlot) noexcept;
 
 			/**
 			 * @brief Registers a 2D texture (deduplicated by texture instance).
@@ -137,6 +141,15 @@ namespace EmEn::Scenes
 			uint32_t registerTextureCubeArray (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept;
 
 			/**
+			 * @brief Registers a 3D texture (deduplicated by texture instance).
+			 * @note The 3D array has no reserved region: the first registration gets slot 0. A volumetric
+			 * cloud shape (Graphics::CloudShapeResource) is the first client of this array.
+			 * @param texture A reference to the texture smart pointer.
+			 * @return The global bindless index, or UINT32_MAX if the table is full.
+			 */
+			uint32_t registerTexture3D (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept;
+
+			/**
 			 * @brief Unregisters a 2D texture by instance.
 			 * @param texture A raw pointer to the texture instance.
 			 * @return void
@@ -156,6 +169,13 @@ namespace EmEn::Scenes
 			 * @return void
 			 */
 			void unregisterTextureCubeArray (const Vulkan::TextureInterface * texture) noexcept;
+
+			/**
+			 * @brief Unregisters a 3D texture by instance.
+			 * @param texture A raw pointer to the texture instance.
+			 * @return void
+			 */
+			void unregisterTexture3D (const Vulkan::TextureInterface * texture) noexcept;
 
 			/**
 			 * @brief Sets the scene environment cubemap (written to the reserved env slot by the manager).
@@ -215,14 +235,17 @@ namespace EmEn::Scenes
 			std::vector< Entry > m_textures2D;
 			std::vector< Entry > m_texturesCube;
 			std::vector< Entry > m_texturesCubeArray;
+			std::vector< Entry > m_textures3D;
 
 			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookup2D;
 			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookupCube;
 			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookupCubeArray;
+			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookup3D;
 
 			std::queue< uint32_t > m_free2D;
 			std::queue< uint32_t > m_freeCube;
 			std::queue< uint32_t > m_freeCubeArray;
+			std::queue< uint32_t > m_free3D;
 
 			/* First dynamic slot of every array, pushed by the owning scene — see setCapacities().
 			 * The compile-time default is only a fallback for a set used before the scene wires it. */
@@ -231,12 +254,15 @@ namespace EmEn::Scenes
 			uint32_t m_next2D{Graphics::BindlessTextureManager::FirstDynamicSlot};
 			uint32_t m_nextCube{Graphics::BindlessTextureManager::FirstDynamicSlot};
 			uint32_t m_nextCubeArray{Graphics::BindlessTextureManager::FirstDynamicSlot};
+			/* The 3D array has no reserved slot: its cursor starts at 0, and a clear() returns it there. */
+			uint32_t m_next3D{0};
 
 			/* Effective table capacities, pushed by the owning scene — see setCapacities(). The
 			 * desired values are only a fallback for a set used before the scene wires them. */
 			uint32_t m_maxTextures2D{Graphics::BindlessTextureManager::DesiredMaxTextures2D};
 			uint32_t m_maxTexturesCube{Graphics::BindlessTextureManager::DesiredMaxTexturesCube};
 			uint32_t m_maxTexturesCubeArray{Graphics::BindlessTextureManager::DesiredMaxTexturesCubeArray};
+			uint32_t m_maxTextures3D{Graphics::BindlessTextureManager::DesiredMaxTextures3D};
 
 			std::shared_ptr< Vulkan::TextureInterface > m_environmentCubemap;
 			std::shared_ptr< Vulkan::TextureInterface > m_irradianceCubemap;

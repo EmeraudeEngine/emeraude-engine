@@ -99,13 +99,14 @@ namespace EmEn::Scenes
 	}
 
 	void
-	BindlessTextureSet::setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t firstDynamicSlot) noexcept
+	BindlessTextureSet::setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t maxTextures3D, uint32_t firstDynamicSlot) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_access};
 
 		m_maxTextures2D = maxTextures2D;
 		m_maxTexturesCube = maxTexturesCube;
 		m_maxTexturesCubeArray = maxTexturesCubeArray;
+		m_maxTextures3D = maxTextures3D;
 
 		/* Called by the scene at construction, before any registration: moving the cursors is safe
 		 * here and nowhere else — a later call would hand out slots already in use. */
@@ -139,6 +140,14 @@ namespace EmEn::Scenes
 		return this->registerInBucket(m_texturesCubeArray, m_lookupCubeArray, m_freeCubeArray, m_nextCubeArray, m_maxTexturesCubeArray, texture);
 	}
 
+	uint32_t
+	BindlessTextureSet::registerTexture3D (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		return this->registerInBucket(m_textures3D, m_lookup3D, m_free3D, m_next3D, m_maxTextures3D, texture);
+	}
+
 	void
 	BindlessTextureSet::unregisterTexture2D (const Vulkan::TextureInterface * texture) noexcept
 	{
@@ -161,6 +170,14 @@ namespace EmEn::Scenes
 		const std::lock_guard< std::mutex > lock{m_access};
 
 		BindlessTextureSet::unregisterFromBucket(m_texturesCubeArray, m_lookupCubeArray, m_freeCubeArray, texture);
+	}
+
+	void
+	BindlessTextureSet::unregisterTexture3D (const Vulkan::TextureInterface * texture) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_access};
+
+		BindlessTextureSet::unregisterFromBucket(m_textures3D, m_lookup3D, m_free3D, texture);
 	}
 
 	void
@@ -204,6 +221,7 @@ namespace EmEn::Scenes
 		snap.textures2D = m_textures2D;
 		snap.texturesCube = m_texturesCube;
 		snap.texturesCubeArray = m_texturesCubeArray;
+		snap.textures3D = m_textures3D;
 		snap.environmentCubemap = m_environmentCubemap;
 		snap.irradianceCubemap = m_irradianceCubemap;
 		snap.prefilteredCubemap = m_prefilteredCubemap;
@@ -219,18 +237,22 @@ namespace EmEn::Scenes
 		m_textures2D.clear();
 		m_texturesCube.clear();
 		m_texturesCubeArray.clear();
+		m_textures3D.clear();
 
 		m_lookup2D.clear();
 		m_lookupCube.clear();
 		m_lookupCubeArray.clear();
+		m_lookup3D.clear();
 
 		m_free2D = {};
 		m_freeCube = {};
 		m_freeCubeArray = {};
+		m_free3D = {};
 
 		m_next2D = m_firstDynamicSlot;
 		m_nextCube = m_firstDynamicSlot;
 		m_nextCubeArray = m_firstDynamicSlot;
+		m_next3D = 0;
 
 		m_environmentCubemap.reset();
 	}

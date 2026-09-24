@@ -57,6 +57,7 @@
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Renderable/TerrainResource.hpp"
+#include "Graphics/CloudShapeResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/AnimatedTextureCubemap.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
@@ -563,6 +564,9 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Renderable::BasicGroundResource), std::make_unique< BasicGrounds >("Basic ground manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::TerrainResource), std::make_unique< Terrains >("Terrain manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::BasicSeaResource), std::make_unique< BasicSeas >("Basic sea manager", m_primaryServices, *this, this->getLocalStore("Seas")));
+			/* Procedural only today (the shapes are grown, never read from disk), filed under the store a
+			 * future imported cloud (VDB) would live in. */
+			m_containers.emplace(typeid(Graphics::CloudShapeResource), std::make_unique< CloudShapes >("Cloud shape manager", m_primaryServices, *this, this->getLocalStore("CloudShapes")));
 			m_containers.emplace(typeid(Scenes::DefinitionResource), std::make_unique< SceneDefinitions >("Scene definition manager", m_primaryServices, *this, this->getLocalStore("Scenes")));
 		}
 

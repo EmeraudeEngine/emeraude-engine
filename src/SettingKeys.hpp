@@ -904,6 +904,36 @@ namespace EmEn
 			constexpr auto GraphicsPPVolumetricLightTemporalAlphaKey{"Core/Graphics/PostProcessing/VolumetricLight/TemporalAlpha"};
 			constexpr auto DefaultGraphicsPPVolumetricLightTemporalAlpha{0.2F};
 
+			/* Volumetric clouds (Graphics::Effects::Atmosphere::VolumetricClouds, Sep 2026) — the pass that
+			 * draws the scene's Scenes::Component::CloudVolume entities. A SCENE-DRIVEN effect: the stack
+			 * files it the first frame the scene holds a cloud (PostProcessStack::syncSceneEffects()), an
+			 * application never adds it. 'Enabled' = false declines that filing for the session. The look
+			 * of a cloud belongs to its component; these are the integrator's cost/quality knobs. */
+			constexpr auto GraphicsPPCloudsEnabledKey{"Core/Graphics/PostProcessing/Clouds/Enabled"};
+			constexpr auto DefaultGraphicsPPCloudsEnabled{true};
+			/* View-ray steps across the DIAGONAL of a cloud box (linear cost). Near the camera the step
+			 * shrinks with the distance, down to an eighth of that. */
+			constexpr auto GraphicsPPCloudsStepCountKey{"Core/Graphics/PostProcessing/Clouds/StepCount"};
+			constexpr auto DefaultGraphicsPPCloudsStepCount{64U};
+			/* Steps toward the sun inside the cloud, per view step: the self-shadowing. */
+			constexpr auto GraphicsPPCloudsLightStepCountKey{"Core/Graphics/PostProcessing/Clouds/LightStepCount"};
+			constexpr auto DefaultGraphicsPPCloudsLightStepCount{6U};
+			/* Lambertian albedo of the ground UNDER the clouds, in [0, 1]: the bounce that lights their
+			 * bottoms (L = albedo · E_ground / pi). An approximation of the integrator, not a scene fact. */
+			constexpr auto GraphicsPPCloudsGroundAlbedoKey{"Core/Graphics/PostProcessing/Clouds/GroundAlbedo"};
+			constexpr auto DefaultGraphicsPPCloudsGroundAlbedo{0.2F};
+			/* The clouds' SHADOW on the world (stage 2, Sep 2026): a Beer shadow map seen from the main
+			 * sun, square, centred on the camera and read by the sun term of every lit material
+			 * (Graphics::CloudShadowMap). 'ShadowsEnabled' = false: the clouds cast nothing. */
+			constexpr auto GraphicsPPCloudsShadowsEnabledKey{"Core/Graphics/PostProcessing/Clouds/ShadowsEnabled"};
+			constexpr auto DefaultGraphicsPPCloudsShadowsEnabled{true};
+			/* Side of the map, in texels. */
+			constexpr auto GraphicsPPCloudsShadowResolutionKey{"Core/Graphics/PostProcessing/Clouds/ShadowResolution"};
+			constexpr auto DefaultGraphicsPPCloudsShadowResolution{1024U};
+			/* Side of the map, in metres: beyond it the clouds cast no shadow. */
+			constexpr auto GraphicsPPCloudsShadowCoverageKey{"Core/Graphics/PostProcessing/Clouds/ShadowCoverage"};
+			constexpr auto DefaultGraphicsPPCloudsShadowCoverage{1024.0F};
+
 			/* Depth of Field — effect QUALITY knobs only. The optical parameters (aperture,
 			 * focal length, focus) belong to the active camera (physical camera model,
 			 * Scenes::Component::Camera), NOT to the settings. */

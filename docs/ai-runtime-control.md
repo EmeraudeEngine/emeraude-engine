@@ -492,8 +492,13 @@ only way to see one, since the fallback is silent by design (a trace would be on
 per frame).
 
 - Slot names are `EffectSlot`'s own (`IndirectDiffuse`, `Reflections`, `AmbientOcclusion`,
-  `ContactShadows`, `Fog`, `VolumetricLight`, `TemporalAA`, `LensFlare`, `Custom`); effect names
-  are the labels `listEffects()` prints (`RTGIEffect`, `SSGIEffect`, …).
+  `ContactShadows`, `Fog`, `VolumetricLight`, `Clouds`, `TemporalAA`, `LensFlare`, `Custom`); effect
+  names are the labels `listEffects()` prints (`RTGIEffect`, `SSGIEffect`, …).
+- `Clouds` (Sep 2026) is SCENE-DRIVEN: its `VolumetricCloudsEffect` appears the first frame the scene
+  holds a `Component::CloudVolume` — no application adds it. `disable(Clouds)` / `select(Clouds,
+  VolumetricCloudsEffect)` work like any slot. ⚠️ Listed is not drawn: the pass traces a census
+  (`Clouds drawn: N of M (…)`) in the LOG when it changes; judge its look at a pinned exposure
+  (`Act.setExposure(...)`).
 - `select()` mixes lanes per slot — `RTGI` + `SSR` + `RTAO` is a legal and useful A/B.
 - ⚠️ **A selection is applied on the NEXT frame, never immediately.** The console runs on the main
   thread and the chain is walked on the render thread; `syncSlotSelection()` applies it at the

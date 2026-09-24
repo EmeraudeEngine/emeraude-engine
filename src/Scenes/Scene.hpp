@@ -70,6 +70,7 @@
 #include "BindlessTextureSet.hpp"
 #include "Debug/Compass.hpp"
 #include "LightSet.hpp"
+#include "CloudSet.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
 #include "OrbitController.hpp"
@@ -96,6 +97,11 @@ namespace EmEn
 		class BindlessTextureManager;
 		class IBLTexture;
 		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class CommandBuffer;
 	}
 
 	namespace Scenes::Component
@@ -751,6 +757,29 @@ namespace EmEn::Scenes
 			{
 				return m_lightSet;
 			}
+
+			/**
+			 * @brief Returns the volumetric clouds of the scene.
+			 * @note Filled from the entities' CloudVolume components; walked by the cloud pass on the
+			 * render thread (see CloudSet for the locking).
+			 * @return const CloudSet &
+			 */
+			[[nodiscard]]
+			const CloudSet &
+			cloudSet () const noexcept
+			{
+				return m_cloudSet;
+			}
+
+			/**
+			 * @brief Records this frame's clouds' shadow map for the main sun [RENDER THREAD].
+			 * @note Called by the Renderer BEFORE the scene pass, outside any render pass: the lit
+			 * materials sample the map in the same frame. A scene without clouds pays one test.
+			 * @param commandBuffer A reference to the frame's command buffer.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return void
+			 */
+			void recordCloudShadowMap (const Vulkan::CommandBuffer & commandBuffer, Graphics::Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Returns the scene's bindless texture set (const).
@@ -2399,6 +2428,15 @@ namespace EmEn::Scenes
 			void updateCSMCascades (const std::shared_ptr< Graphics::RenderTarget::Abstract > & mainRenderTarget) const noexcept;
 
 			/**
+			 * @brief Points the main sun at the clouds' shadow map, centred on the camera [LOGIC THREAD].
+			 * @note Called every tick right after updateCSMCascades(); the frame reaches the lit shaders
+			 * and the map's pass through the sun's published block. Every other directional light reads
+			 * no cloud shadow.
+			 * @return void
+			 */
+			void updateCloudShadows () const noexcept;
+
+			/**
 			 * @brief Builds the scene octrees.
 			 * @param octreeOptions A reference to an octree options struct.
 			 * @return bool
@@ -2863,6 +2901,10 @@ namespace EmEn::Scenes
 			LightSet m_lightSet;
 			/** @brief Per-scene bindless texture description, read by the BindlessTextureManager. */
 			BindlessTextureSet m_bindlessTextureSet;
+			/** @brief The volumetric clouds of the scene.
+			 * @note ⚠️ Declared AFTER the bindless set on purpose: a cloud frees its shape's bindless slot
+			 * when it dies, so the set must outlive every cloud this one may be the last owner of. */
+			CloudSet m_cloudSet;
 			/** @brief Scene metadata manager (TLAS, mesh/material SSBOs for RT). */
 			SceneMetaData m_sceneMetaData;
 			/** @brief Per-instance transforms manager (InstanceTransforms SSBO, non-instanced path). */

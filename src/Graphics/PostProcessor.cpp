@@ -46,6 +46,7 @@
 #include "Saphir/Generator/PostProcessing.hpp"
 #include "Vulkan/GPUProfiler.hpp"
 #include "SceneRenderTarget.hpp"
+#include "Scenes/CloudSet.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Tracer.hpp"
 #include "ViewMatricesInterface.hpp"
@@ -1167,7 +1168,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, ChainPhase phase) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -1264,6 +1265,7 @@ namespace EmEn::Graphics
 			.skyLuminance = skyLuminance,
 			.ambientIlluminance = ambientIlluminance,
 			.medium = medium,
+			.clouds = clouds,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.displayExposure = [&stack, activeCamera] {
 				const auto toneMapping = stack.cameraToneMapping();
@@ -1479,6 +1481,13 @@ namespace EmEn::Graphics
 
 			/* Skip light-dependent effects if no main directional light is available. */
 			if ( effect->requiresLightSet() && (lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr) )
+			{
+				continue;
+			}
+
+			/* Skip the cloud pass when the scene holds no cloud. ⚠️ The same condition as
+			 * PostProcessStack::canOccupantRun(): the two must agree. */
+			if ( effect->requiresCloudVolumes() && (clouds == nullptr || clouds->empty()) )
 			{
 				continue;
 			}

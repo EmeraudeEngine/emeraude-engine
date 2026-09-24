@@ -53,6 +53,7 @@ namespace EmEn::Graphics
 
 namespace EmEn::Scenes
 {
+	class CloudSet;
 	class LightSet;
 }
 
@@ -400,10 +401,11 @@ namespace EmEn::Graphics
 			 * @param effect A reference to the effect.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
+			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			static bool canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet) noexcept;
+			static bool canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept;
 
 			/**
 			 * @brief Applies the pending selection, materializing what it needs.
@@ -421,9 +423,30 @@ namespace EmEn::Graphics
 			 * yet.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
+			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
 			 * @return void
 			 */
-			void syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet) noexcept;
+			void syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept;
+
+			/**
+			 * @brief Files the SCENE-DRIVEN effects the scene's content calls for.
+			 * @note The scene counterpart of syncCameraEffects(): some effects are not an authoring
+			 * choice but a consequence of what the scene holds. Today one — the cloud pass: the first
+			 * frame the scene holds a Component::CloudVolume, a Graphics::Effects::Atmosphere::VolumetricClouds
+			 * is filed into EffectSlot::Clouds, and syncSlotSelection() materializes it (owner decision,
+			 * 2026-09-24: "placing a cloud is enough").
+			 * @note Only the ARRIVAL is handled. Once filed the occupant stays resident, and its gate
+			 * (IndirectPostProcessEffect::requiresCloudVolumes()) keeps it out of the frame while the
+			 * scene holds no cloud. An application that filed its own occupant of the slot is left alone.
+			 * `Core/Graphics/PostProcessing/Clouds/Enabled = false` declines the filing, read once.
+			 * @note ⚠️ RENDER THREAD, once per frame, BEFORE syncSlotSelection().
+			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool Whether the effect set changed (the pipeline must be reconfigured: the new
+			 * occupant brings its G-buffer requirements).
+			 */
+			[[nodiscard]]
+			bool syncSceneEffects (const Scenes::CloudSet * clouds, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Removes an effect from the chain.
@@ -754,5 +777,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraMotionBlur;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraGlare;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
+			/* The scene-driven cloud pass was considered (filed, or declined by the settings): the
+			 * decision is taken once, on the first frame the scene holds a cloud. RENDER THREAD. */
+			bool m_cloudEffectResolved{false};
 	};
 }

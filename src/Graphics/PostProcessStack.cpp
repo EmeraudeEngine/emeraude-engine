@@ -33,6 +33,7 @@
 #include <utility>
 
 /* Local inclusions. */
+#include "Effects/Atmosphere/VolumetricClouds.hpp"
 #include "Effects/Camera/VeilingGlare.hpp"
 #include "Effects/Camera/DepthOfField.hpp"
 #include "Effects/Camera/MotionBlur.hpp"
@@ -49,6 +50,7 @@
 #include "PrimaryServices.hpp"
 #include "Renderer.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/CloudSet.hpp"
 #include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
@@ -561,7 +563,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet) noexcept
+	PostProcessStack::canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept
 	{
 		/* An effect whose creation failed will not start working on its own — and the slot has an
 		 * alternative that might. */
@@ -580,6 +582,13 @@ namespace EmEn::Graphics
 		}
 
 		if ( effect.requiresLightSet() && (lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr) )
+		{
+			return false;
+		}
+
+		/* The cloud pass has nothing to draw without a cloud — and, not running, it is never
+		 * materialized: a scene that never holds a cloud never allocates it. */
+		if ( effect.requiresCloudVolumes() && (clouds == nullptr || clouds->empty()) )
 		{
 			return false;
 		}
@@ -623,7 +632,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessStack::syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet) noexcept
+	PostProcessStack::syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept
 	{
 		for ( size_t index = 0; index < EffectSlotCount; ++index )
 		{
@@ -649,7 +658,7 @@ namespace EmEn::Graphics
 			 * first sibling that can — the automatic lane fallback. */
 			std::shared_ptr< IndirectPostProcessEffect > effective;
 
-			if ( selected != nullptr && canOccupantRun(*selected, renderer, lightSet) )
+			if ( selected != nullptr && canOccupantRun(*selected, renderer, lightSet, clouds) )
 			{
 				effective = selected;
 
@@ -674,7 +683,7 @@ namespace EmEn::Graphics
 
 				for ( const auto & occupant : occupants )
 				{
-					if ( occupant != nullptr && occupant != selected && canOccupantRun(*occupant, renderer, lightSet) )
+					if ( occupant != nullptr && occupant != selected && canOccupantRun(*occupant, renderer, lightSet, clouds) )
 					{
 						effective = occupant;
 
@@ -740,6 +749,47 @@ namespace EmEn::Graphics
 
 			recordEffective(effective);
 		}
+	}
+
+	bool
+	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, Renderer & renderer) noexcept
+	{
+		/* Decided once, the first frame the scene holds a cloud. */
+		if ( m_cloudEffectResolved || clouds == nullptr || clouds->empty() )
+		{
+			return false;
+		}
+
+		m_cloudEffectResolved = true;
+
+		/* An application that filed its own occupant of the concept keeps it. */
+		if ( !m_slots[static_cast< size_t >(EffectSlot::Clouds)].empty() )
+		{
+			return false;
+		}
+
+		auto & settings = renderer.primaryServices().settings();
+
+		if ( !settings.getOrSetDefault< bool >(GraphicsPPCloudsEnabledKey, DefaultGraphicsPPCloudsEnabled) )
+		{
+			TraceInfo{ClassId} << "The scene holds volumetric clouds, but '" << GraphicsPPCloudsEnabledKey << "' is false: they are not drawn.";
+
+			return false;
+		}
+
+		const Effects::Atmosphere::VolumetricClouds::Parameters parameters{
+			.stepCount = std::max(settings.getOrSetDefault< uint32_t >(GraphicsPPCloudsStepCountKey, DefaultGraphicsPPCloudsStepCount), 1U),
+			.lightStepCount = std::max(settings.getOrSetDefault< uint32_t >(GraphicsPPCloudsLightStepCountKey, DefaultGraphicsPPCloudsLightStepCount), 1U),
+			.groundAlbedo = settings.getOrSetDefault< float >(GraphicsPPCloudsGroundAlbedoKey, DefaultGraphicsPPCloudsGroundAlbedo)
+		};
+
+		/* Filed and SELECTED (addEffect() selects the newcomer); syncSlotSelection() materializes it
+		 * right after, on this thread, like any occupant it has to bring into the chain. */
+		this->addEffect(std::make_shared< Effects::Atmosphere::VolumetricClouds >(renderer, parameters));
+
+		TraceInfo{ClassId} << "The scene holds volumetric clouds: the cloud pass joins the chain.";
+
+		return true;
 	}
 
 	void

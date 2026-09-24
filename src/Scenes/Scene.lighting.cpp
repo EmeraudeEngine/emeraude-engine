@@ -222,6 +222,53 @@ namespace EmEn::Scenes
 		}
 	}
 
+	void
+	Scene::updateCloudShadows () const noexcept
+	{
+		const auto sun = m_lightSet.mainDirectionalLight();
+		const auto shadowMapIndex = m_cloudSet.shadowMapBindlessIndex();
+		const auto camera = m_AVConsoleManager.getPrimaryVideoDevice();
+
+		const auto casting = sun != nullptr && camera != nullptr && !m_cloudSet.empty() && shadowMapIndex != CloudSet::NoShadowMap;
+
+		/* ⚠️ The light-set mutex guards the CONTAINER: copy, then work outside it (updateCSMCascades()). */
+		std::vector< std::shared_ptr< Component::DirectionalLight > > directionalLights;
+
+		m_lightSet.forEachDirectionalLight([&directionalLights] (const auto & light) {
+			directionalLights.push_back(light);
+		});
+
+		for ( const auto & light : directionalLights )
+		{
+			if ( casting && light == sun )
+			{
+				light->updateCloudShadow(shadowMapIndex, camera->getWorldCoordinates().position(), m_cloudSet.shadowMapCoverage(), m_cloudSet.shadowMapResolution());
+			}
+			else
+			{
+				light->disableCloudShadow();
+			}
+		}
+	}
+
+	void
+	Scene::recordCloudShadowMap (const Vulkan::CommandBuffer & commandBuffer, Graphics::Renderer & renderer) noexcept
+	{
+		if ( m_cloudSet.empty() )
+		{
+			return;
+		}
+
+		const auto sun = m_lightSet.mainDirectionalLight();
+
+		if ( sun == nullptr || !sun->isEnabled() )
+		{
+			return;
+		}
+
+		m_cloudSet.recordShadowMap(commandBuffer, renderer, m_bindlessTextureSet, *sun, renderer.currentReadStateIndex());
+	}
+
 	float
 	Scene::effectiveAmbientIlluminance () const noexcept
 	{

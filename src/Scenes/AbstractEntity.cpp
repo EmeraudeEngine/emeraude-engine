@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Component/Camera.hpp"
+#include "Component/CloudVolume.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
 #include "Component/Microphone.hpp"
@@ -383,6 +384,10 @@ namespace EmEn::Scenes
 		{
 			this->notify(WeightCreated, std::static_pointer_cast< Component::Weight >(component));
 		}
+		else if ( typeid(*pointer) == typeid(Component::CloudVolume) )
+		{
+			this->notify(CloudVolumeCreated, std::static_pointer_cast< Component::CloudVolume >(component));
+		}
 
 		return true;
 	}
@@ -418,6 +423,10 @@ namespace EmEn::Scenes
 		else if ( typeid(*pointer) == typeid(Component::SpotLight) )
 		{
 			this->notify(SpotLightDestroyed, std::static_pointer_cast< Component::SpotLight >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::CloudVolume) )
+		{
+			this->notify(CloudVolumeDestroyed, std::static_pointer_cast< Component::CloudVolume >(component));
 		}
 
 		this->notify(ComponentDestroyed);

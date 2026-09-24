@@ -870,6 +870,13 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 | 4 | 2D | `GrabPassSlot` | Scene color grab pass | Renderer per frame |
 | 5 | 2D | `GrabPassDepthSlot` | Scene depth grab pass | Renderer per frame |
 | 16+ | all | `FirstDynamicSlot` | Dynamic texture allocation | per-scene `BindlessTextureSet` |
+| 0+ | 3D | — | Volumetric cloud SHAPES (`Graphics::CloudShapeResource`), Sep 2026 — the 3D array has NO reserved region, its cursor starts at 0 | `Scenes::Component::CloudVolume` → `BindlessTextureSet::registerTexture3D()` → `syncTextureSet()` |
+
+> ⚠️ The 3D array had no allocator until the clouds (Sep 2026): `updateTexture3D()` existed and
+> nobody called it. `BindlessTextureSet::setCapacities()` now takes the 3D capacity too, and
+> `clearTextureSet()` does NOT park freed 3D slots on a default (there is no default 3D texture):
+> a stale 3D descriptor is harmless under `PARTIALLY_BOUND` as long as no shader indexes it, which a
+> cloud that left the set guarantees.
 
 ### Usage
 
@@ -1653,7 +1660,7 @@ resolve and the whole photographic chain into ONE `Framebuffer/` bag of 16. It i
 | Folder / namespace | Domain | Members |
 |---|---|---|
 | `Effects/Lighting/` | Light transport off surfaces, from the G-buffer | RTGI, SSGI, RTR, SSR, RTAO, SSAO, ContactShadows |
-| `Effects/Atmosphere/` | Participating medium | AtmosphericFog, VolumetricLight, VolumetricScattering |
+| `Effects/Atmosphere/` | Participating medium | AtmosphericFog, VolumetricLight, VolumetricScattering, VolumetricClouds |
 | `Effects/Resolve/` | Resolution of the sampled image — adds NO light | TAA, FXAA, FXAASharpen, Sharpen |
 | `Effects/Camera/` | The physical imaging chain | DepthOfField, MotionBlur, LensFlare, VeilingGlare, ToneMapping |
 | `Effects/Style/` | The look — non-physical | the 18 former `Lens/` effects |
@@ -1823,8 +1830,14 @@ Core/Graphics/PostProcessing/
 │                                      depth Bias, hemisphere Radius, …)
 ├── DepthOfField/Enabled               user refusal of the two expensive photographic effects;
 ├── MotionBlur/Enabled                 it OVERRIDES the camera (see below)
+├── Clouds/Enabled                     true (default): false DECLINES the scene-driven cloud pass
+│                                      for the session (read once, the first frame a cloud exists)
+├── Clouds/ShadowsEnabled              true (default): the clouds' Beer shadow map on the lit
+│   Clouds/ShadowResolution            materials; 1024 texels over Clouds/ShadowCoverage 1024 m
+│   Clouds/ShadowCoverage              (1 m per texel) — read once, the first frame a cloud exists
 └── <Effect>/<param>                   single-lane effects: TemporalAA, VolumetricLight,
-                                       DepthOfField, MotionBlur
+                                       DepthOfField, MotionBlur, Clouds (StepCount 64,
+                                       LightStepCount 6, GroundAlbedo 0.2)
 ```
 
 This replaced a tree split **by mechanism at the top level** (`Core/Graphics/RayTracing/…` vs
@@ -2009,6 +2022,7 @@ with the UNOCCLUDED sky. See § "Indirect-diffuse OWNERSHIP" and § "The screen-
 > that does not require a rebuild. Every one of these knobs becomes meaningless the day the medium
 > is real.
 | **AtmosphericFog** | `Effects/Atmosphere/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
+| **VolumetricClouds** | `Effects/Atmosphere/VolumetricClouds.hpp/cpp` | 1-pass, FULL-res, two shader variants (with / without cascades) | Depth, HDR, **the scene's `CloudSet`**, bindless (3D shapes + irradiance cubemap), CSM when present — **scene-driven: never added by an application** |
 | **RTR** | `Effects/Lighting/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Lighting/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |
 | **RTAO** | `Effects/Lighting/RTAO.hpp/cpp` | Multi-pass | Depth, Normals, RT (TLAS+SSBOs) |
@@ -2460,6 +2474,142 @@ See `docs/caution-points.md` for the Y-reconstruction pitfall.
 **Code references:**
 - `Effects/Atmosphere/AtmosphericFog.hpp` — Parameters, FogPushConstants, API
 - `Effects/Atmosphere/AtmosphericFog.cpp` — GLSL shaders, pipeline setup, camera extraction
+
+### VolumetricClouds — clouds placed as ENTITIES, drawn by a scene-driven pass (Sep 2026)
+
+**Owner decisions (2026-09-24), do not re-litigate:** fly-through clouds (the VOXEL family, not a
+weather-map sky layer), a cloud is an ENTITY placed by hand, its shape comes from a PROCEDURAL
+generator, a few HERO clouds (≤ 32 drawn), a realistic white-out inside, **scaling a cloud KEEPS
+ITS LOOK**, the pass is a post-process effect in its own slot, it is **automatic** (placing a cloud
+is enough), and the clouds' shadows on the world are **stage 2**. Item:
+`docs/todo/volumetric-cloud-entities.md`.
+
+**The pieces:**
+
+| Piece | Where | Role |
+|---|---|---|
+| `Graphics::CloudShapeResource` | `CloudShapeResource.hpp/cpp`, container `CloudShapes` | A cumulus grown from `Parameters` (seed, resolution, ratios, puffs, billows, flat base, edge softness) into an `R8G8` 3D texture: **R** density, **G** a conservative distance to the nearest density (the skip channel, in units of `MaxSkipDistance`, rounded DOWN). Deduplicated BY NAME (`resourceName(parameters)`), grown on the thread pool, full mip chain, its own CLAMP sampler. |
+| `Scenes::Component::CloudVolume` | `Scenes/Component/CloudVolume.hpp/cpp` | The cloud: a shape + its box half extents + a dimensionless `Look` (optical thickness, erosion, detail frequency, boiling speed, albedo). Registers the shape in the scene's bindless 3D array once it lands; publishes its look per state slot. |
+| `Scenes::CloudSet` | `Scenes/CloudSet.hpp/cpp`, `Scene::cloudSet()` | The scene's registry, filled from `AbstractEntity::CloudVolumeCreated/Destroyed`. Its emptiness is THE switch of the feature. |
+| `PostProcessStack::syncSceneEffects()` | `PostProcessStack.cpp` | The scene counterpart of `syncCameraEffects()`: the first frame the set is not empty, it files a `VolumetricClouds` into `EffectSlot::Clouds` (settings-gated by `Clouds/Enabled`). An application that filed its own occupant is left alone. |
+| `VolumetricClouds` | `Effects/Atmosphere/VolumetricClouds.hpp/cpp` | The march. `requiresCloudVolumes()` keeps it out of the frame — and never materialized — while the scene holds no cloud. |
+| `Toolkit::generateCloud()` | `Scenes/Toolkit.hpp` | The authoring entry point: a NON-collidable entity at the cursor + the component, the shape requested by name. |
+
+**The slot:** `EffectSlot::Clouds`, between `VolumetricLight` and `Fog`. A cloud attenuates what lies
+behind it (shafts included), and the atmosphere then attenuates the cloud at the depth of the
+SURFACE behind it — the known approximation of compositing a volume before a depth-driven fog.
+The pass composites `scene · T + L` itself (the VolumetricScattering pattern): no combine snippet.
+
+**The march, per pixel** — box tests against every drawn cloud (≤ 8 hits kept, front to back),
+then ONE march over the UNION of the intervals, from the first entry to `min(last exit, scene
+depth)` (a tree inside a cloud is buried in it): at every step, every cloud whose interval holds the
+sample adds its extinction and its source — overlapping clouds are one medium. ⚠️⚠️ A first version
+marched the sorted clouds ONE AFTER THE OTHER, and two overlapping clouds swapped their compositing
+order along the line where their box entries meet: a STRAIGHT SEAM through both (owner-reported on
+`forest`, 2026-09-24, once the clouds were 70-130 m and overlapped). Per cloud and per step: empty air skipped by the G channel at mip 0; density = the shape eroded at its shell by a
+32³ tileable billowy Worley texture (`Base::Algorithms::WorleyNoise`, owned by the effect, drifting
+UP — the boiling); the sun = an optical depth marched toward it INSIDE the cloud on mip 1.5 × the
+CSM visibility (the trees shadow the inside of a cloud) × a dual-lobe Henyey-Greenstein (0.8 / −0.3,
+70 %) × 4 multiple-scattering octaves (Wrenninge et al. 2013: energy, extinction and anisotropy
+halved per octave); the ambient = the baked irradiance cubemap's +Y × the sky luminance on top, the
+Lambertian ground bounce (`GroundAlbedo`) underneath, blended by the height in the box; the
+energy-conserving step integration (Hillaire 2016). Nits in, nits out: no gain knob. The origin
+dither is the static `emInterleavedGradientNoise` (MarchDitherGLSL rule).
+
+⚠️⚠️ **"Keep the look" is ONE line of `execute()`:** the extinction at full density is
+`opticalThickness / (2 · world half height)` — recomputed every frame from the ENTITY's published
+scale. A fixed extinction in 1/m would turn a shrunk cumulus into mist (a real cumulus, ~0.05 m⁻¹,
+is opaque over a kilometre and barely there over 15 m). The detail noise coordinates are in SHAPE
+units for the same reason.
+
+⚠️ **The step follows the OPTICAL depth in the dense core** (`MaxStepOpticalDepth` 0.4): the
+distance-driven step (1.5 % of the distance, between an eighth of `baseStep` and `baseStep` =
+diagonal / `StepCount`) stays in the shell where the density varies. Measured on `forest`, camera
+INSIDE a 100 m cloud, 2880×1620, validation on: **13.3 → 5.3 ms**; the opening view 2.0 → 1.8 ms,
+the cloud region unchanged (mean |Δ| 0.35/255).
+
+⚠️ **The shape is a DOME**, never a pile of spheres: an ellipsoid filling the box, cut flat at the
+base, buds grown on its upper surface (Bouthors & Neyret 2004). The sphere-only growth filled 5-8 %
+of the voxels and read 3-5× smaller than its box (a 6.4 m cloud in a ~25 m box); the dome fills
+21-23 %. `CloudShapeResource::occupancy()` is traced at every growth.
+
+**Traps met while building it (all fixed in the engine, 2026-09-24):**
+
+- ⚠️⚠️ **A 3D image uploaded ONE slice**: `ImageTransferOperation` copied `imageExtent.depth = 1`
+  and its mip blit wrote `z = 1` on both ends. Nothing had ever uploaded a 3D image (the
+  `Texture3D` resource path has no registered `VolumetricImages` container): a cloud whose first
+  slice is its empty margin sampled as NOTHING, with no error. Both now use the full depth.
+- ⚠️⚠️ **An occupant filed after the stack was created was never created.** `addEffect()` files an
+  effect ENABLED (every effect is at construction) and `createAll()` covered it only for a stack
+  built before the scene starts; `syncSlotSelection()` saw "selected == enabled" and took its
+  "nothing changes" early-out forever, and the executor skipped the un-created effect in silence —
+  `getStatus()` listed `Clouds: VolumetricCloudsEffect` while nothing was drawn. The early-out now
+  also requires `isCreated()`, so any late-filed occupant is materialized the next frame.
+- ⚠️ **A silent pass cannot be debugged**: the effect traces a CENSUS when it changes —
+  `Clouds drawn: N of M (a without a bindless shape slot yet, b whose shape is not on the GPU, c with
+  a degenerate box)`. No census line at all means `execute()` never ran.
+- ⚠️ The forest demo's AUTO exposure puts the sky and the clouds in the tone mapper's shoulder
+  (cloud 247/255 top AND bottom, sky 232): judge the clouds' shading at a PINNED exposure
+  (`Act.setExposure(16, 0.01, 100)`, sunny-16), never on the auto-exposed frame.
+
+#### The clouds' shadow on the world — a Beer shadow map carried by the sun (stage 2 lot 1, Sep 2026)
+
+**Owner decisions (2026-09-24):** the shadow term is **carried by the light** (its matrix and its
+bindless slot live in the directional light's uniform block), and the **lit materials come first** —
+the volumetric scattering, the clouds among themselves and the ray-traced lanes come later (item).
+
+**The map** — `Graphics::CloudShadowMap` (`CloudShadowMap.hpp/cpp`), a Beer shadow map (S. Hillaire,
+*Physically Based Sky, Atmosphere and Cloud Rendering in Frostbite*, SIGGRAPH 2016): an `RGBA16F`
+square seen along the sun, one texel ray per texel from the sun side to the far side, **R** = the
+depth along the light where the clouds START, **G** = their mean extinction over their thickness,
+**B** = their total optical depth. A receiver at depth `d` sees `exp(-min(B, G · max(d − R, 0)))` —
+1 above the clouds, the whole optical depth under them, a RAMP inside one (a treetop in a low cloud is
+half shadowed, not black — a single transmittance per texel cannot say that). The texel march is the
+view march's union rule (every cloud whose interval holds the sample adds its extinction), 48 steps,
+the shape at **mip 1 without the detail erosion** — a shadow is soft, and the wisps a receiver could
+tell apart are not worth a noise fetch per step. The two passes read ONE description of a cloud:
+`Effects/Shared/CloudVolumeGLSL.hpp` holds the std140 `CloudBlock` and its GLSL twin `EmCloud` plus the
+three box helpers (the `EMEN_CSM_SAMPLING_GLSL` technique), and `VolumetricClouds::gatherClouds()` fills
+the array for both.
+
+**Who does what:**
+
+| Step | Thread | Where |
+|---|---|---|
+| The map's frame: an orthonormal frame around the propagation direction, centred on the camera and **snapped to the texel grid** (a map sliding by a fraction of a texel re-samples every cloud edge each frame, the shadows crawl); depth measured from the camera's plane, so a half float carries it | logic | `DirectionalLight::updateCloudShadow()`, called by `Scene::updateCloudShadows()` after the CSM update — the MAIN sun only, every other directional light gets `disableCloudShadow()` |
+| The matrix and the slot are published with the light block (triple-buffered state) | logic → render | `DirectionalLight` layouts: classic `CloudShadowMatrixOffset` 32 / `CloudShadowIndexOffset` 48 (52 floats), CSM 84 / 100 (104 floats = `AbstractLightEmitter::MaxUniformBlockElementCount`) |
+| The map is created (settings, once), registered in the scene's bindless 2D array, and recorded **before the scene pass**, only on a frame whose PUBLISHED sun block already reads it | render | `CloudSet::recordShadowMap()` via `Scene::recordCloudShadowMap()`, profiler zone `CloudShadowMap`, in both `Renderer::renderFrame*` paths after the TLAS build |
+| The lookup | GPU | every PBR directional pass (classic and CSM) when bindless is on: one `PositionWorldSpace` varying, a UNIFORM branch on `floatBitsToUint(cloudShadowIndex) != 0xFFFFFFFF`, the transmittance multiplies the radiance (`LightGenerator.PBR.cpp`) |
+
+⚠️ **No new pass type, on purpose.** The `RenderPassType` variants are precompiled per renderable, so a
+"directional + cloud shadow" family would have doubled the directional programs. The lookup is a
+branch inside the EXISTING directional variants; a scene without clouds pays one uniform test per
+fragment. ⚠️ The directional block now ALWAYS declares its full layout (colour projection and shadow
+members included) so the two cloud members sit at a fixed offset in every variant.
+
+**Measured (forest, 3070 Ti, 2880×1620, validation ON, 2026-09-24):** the map pass **0.20 ms** (max
+0.27); the lookup is below the run-to-run noise of the scene pass (8.61 ms with, 9.12 ms without). A/B
+from straight above at a pinned sunny-16, `Clouds/ShadowsEnabled` true vs false: the ground in a cloud
+shadow reads **0.31-0.35** of its sunlit luminance (scene-referred: gamma, then the inverse ACES fit —
+the sky ambient stays), and **1.004** outside any shadow (the control). 0 VUID.
+
+- ⚠️⚠️ **A LOW sun draws a cloud shadow as a long band with STRAIGHT, PARALLEL sides** — that is the
+  geometry, not a clipped map. At 29° of elevation a 60 m-high cloud's shadow is stretched ×2 along
+  the sun's horizontal direction, so every bud of its silhouette becomes a streak along it. Checked by
+  projection on `forest`: `Cloud145` (centre (70.7, 72.3, 66.8)) lands exactly on the band the A/B
+  shows. The signature of a real map-edge defect is different: an edge along the sun's horizontal
+  direction at the `u = 0 / 1` bound means a coverage that is too small, an edge PERPENDICULAR to it
+  means the depth comparison (`d` vs `R`) is wrong. Measure the edge's direction before suspecting
+  either.
+- ⚠️ **Judge the shadow by a DIFFERENTIAL capture**, never on one frame: the demo's trees and their
+  CSM shadows hide it. Same pose, same pinned exposure, `ShadowsEnabled` toggled across TWO runs (the
+  setting is read once), luminance difference image. The clouds themselves also differ in that image
+  (boiling time) — only the ground is the measurement.
+
+**Stage 2 lot 1 limits (by decision, see the item):** a cloud does not shadow another (each one's sun
+optical depth is marched inside ITSELF only), the volumetric scattering (shafts) ignores the clouds'
+shadow, a transparent object in front of a cloud is drawn behind it (the fog's limitation), and the
+ray-traced lanes (RTR/RTGI hits, their sun term) see neither the clouds nor their shadow.
 
 ### The irradiance probe volume — the engine's radiance cache (Sep 2026)
 

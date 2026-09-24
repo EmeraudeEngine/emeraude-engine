@@ -44,7 +44,9 @@
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Physics/SphereCollisionModel.hpp"
+#include "Graphics/CloudShapeResource.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/Component/SunCourse.hpp"
 #include "Scenes/EffectsToolkit/CameraPresets.hpp"
@@ -683,6 +685,61 @@ namespace EmEn::Scenes
 						 * 100000, overcast daylight 10000, an office interior ~500. */
 						light.setIlluminance(intensity);
 					}).build(shadowMapResolution, cascadeCount, lambda, csmScale);
+
+				return {entity, component};
+			}
+
+			/**
+			 * @brief Generates a volumetric cloud at the cursor: a NON-COLLIDABLE entity carrying a
+			 * Component::CloudVolume.
+			 * @note The shape is grown on the thread pool and shared BY NAME: two clouds asking for the
+			 * same parameters share one voxel grid (vary the seed to vary the cloud). The cloud appears
+			 * the frame its shape lands; the scene draws it with no other step
+			 * (PostProcessStack::syncSceneEffects()).
+			 * @note ⚠️ Collision off BEFORE the component is linked: its box would otherwise become a
+			 * solid collision model the moment it joins the entity. The bounding primitives stay, which
+			 * is what the editor picks on — a cloud is traversable AND can be grabbed with the gizmo.
+			 * @note The entity's scale stretches the cloud, and KEEPS ITS LOOK (the extinction follows
+			 * the height — owner decision, 2026-09-24).
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @param entityName The name of the entity and of the component.
+			 * @param shapeParameters The generation parameters of the shape.
+			 * @param width The width of the unscaled cloud along its local X, in metres. The height and
+			 * the depth follow the shape's proportions.
+			 * @param look The look. Default a cumulus.
+			 * @return BuiltEntity< entity_t, Component::CloudVolume >
+			 */
+			template< typename entity_t = StaticEntity >
+			BuiltEntity< entity_t, Component::CloudVolume >
+			generateCloud (const std::string & entityName, const Graphics::CloudShapeResource::Parameters & shapeParameters, float width, const Component::CloudVolume::Look & look = {}) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			{
+				if ( width <= 0.0F )
+				{
+					return {};
+				}
+
+				auto entity = this->generateEntity< entity_t >(entityName);
+
+				if ( entity == nullptr )
+				{
+					return {};
+				}
+
+				entity->setCollidable(false);
+
+				/* ⚠️ Captured BY VALUE: the lambda runs on a worker thread, after this frame. */
+				const auto shape = m_resourceManager.container< Graphics::CloudShapeResource >()->getOrCreateResource(
+					Graphics::CloudShapeResource::resourceName(shapeParameters),
+					[shapeParameters] (Graphics::CloudShapeResource & resource) {
+						return resource.load(shapeParameters);
+					}
+				);
+
+				/* Sized from the parameters, not from the shape: it may still be growing. */
+				const auto halfExtents = Graphics::CloudShapeResource::proportionsOf(shapeParameters) * (width * 0.5F);
+
+				auto component = entity->template componentBuilder< Component::CloudVolume >(entityName).build(shape, halfExtents, look);
 
 				return {entity, component};
 			}

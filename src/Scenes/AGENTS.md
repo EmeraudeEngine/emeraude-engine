@@ -33,6 +33,7 @@ See [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architectu
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
 **Animation:** NodeAnimation
 **Utilities:** Camera, ParticlesEmitter
+**Atmosphere:** CloudVolume (a volumetric cloud placed by its entity, Sep 2026)
 
 > `NodeAnimation` plays the clips that move a **node hierarchy** rather than a skeleton — glTF TRS
 > tracks on plain nodes (a rotating bezel, a swinging door). `SceneDataConsumer` installs ONE on the
@@ -70,6 +71,38 @@ See [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architectu
 > background is seen loaded (and again after a sky swap); writes are quantised to 1/1024 so a
 > constant day or night pushes nothing. Its destructor gives the sky its day back. A demo composes
 > the two: `sun.entity()->componentBuilder< SkyFollowsSun >(...).setup(bind(sun.component()))`.
+
+> `CloudVolume` (2026-09-24) is a **volumetric cloud placed by its entity**: the entity's position is
+> the centre of the cloud box, its orientation turns it, its SCALE stretches it — so a cloud is
+> placed, turned and resized like any entity, the editor gizmo included (verified 2026-09-24: the
+> editor selects a cloud and draws its gizmo). It carries a shape (`Graphics::CloudShapeResource`,
+> grown on the thread pool, shared by name), the box half extents in metres, and a DIMENSIONLESS
+> `Look` — ⚠️ owner decision: **scaling a cloud keeps its look**, the renderer derives the extinction
+> from the cloud's current height (`opticalThickness` is a vertical optical depth, not a density).
+> The scene files it in `Scenes::CloudSet` (`Scene::cloudSet()`) on `AbstractEntity::CloudVolumeCreated`,
+> removes it on `CloudVolumeDestroyed`; joining registers the shape in the scene's bindless **3D**
+> array (once loaded — it observes the resource), and the render thread reads the ENTITY's published
+> frame (`getWorldCoordinatesStateForRendering(readStateIndex)`) plus the component's published look.
+> The set's emptiness is the switch of the whole feature: the post-process stack files the cloud
+> pass on the first frame it is not empty (`PostProcessStack::syncSceneEffects()`, owner decision
+> "placing a cloud is enough"). ⚠️ **A cloud is NOT solid**: its render box also becomes the collision
+> model by default — `Toolkit::generateCloud()` calls `setCollidable(false)` BEFORE linking the
+> component, which keeps the bounding primitives the editor picks on. `m_cloudSet` is declared AFTER
+> `m_bindlessTextureSet` in `Scene`: a cloud frees its bindless slot when it dies, so the set must
+> outlive it. Rendering: [`Graphics/AGENTS.md`](../Graphics/AGENTS.md) § VolumetricClouds.
+>
+> **The clouds' shadow (stage 2 lot 1, 2026-09-24)** is split between the set and the sun. The
+> `CloudSet` OWNS the Beer shadow map (`Graphics::CloudShadowMap`, created on the render thread the
+> first frame it is needed, from `Core/Graphics/PostProcessing/Clouds/Shadow*`, registered in the
+> scene's bindless **2D** array — the slot is released by `~CloudSet`) and records it
+> (`Scene::recordCloudShadowMap()`, before the scene pass). The main sun CARRIES it (owner decision:
+> the term belongs to the light): `Scene::updateCloudShadows()`, on the logic thread right after the
+> CSM cascades, calls `DirectionalLight::updateCloudShadow(slot, camera, coverage, resolution)` on
+> `mainDirectionalLight()` and `disableCloudShadow()` on every other directional light — the matrix
+> and the slot then travel in the light's published block like its shadow matrix. ⚠️ The map is
+> recorded ONLY on a frame whose PUBLISHED sun block already names its slot
+> (`DirectionalLight::cloudShadowIndex(readStateIndex)`): before that, the matrix in the block is not
+> the map's, and a lit shader reading the map would disagree with the pass that wrote it.
 
 ### Editor Subsystem
 
@@ -528,6 +561,10 @@ The `Toolkit` class (`Scenes/Toolkit.hpp`) provides high-level entity constructi
 4. Lights: `generateDirectionalLight` / `generatePointLight` / `generateSpotLight`, and since 2026-09-13
    `generateSunCourse(name, SunCourse::Options, DirectionalShadowOptions)` — the ANIMATED sun (see
    `SunCourse` above and [`docs/toolkit-system.md`](../../docs/toolkit-system.md) § Lights)
+5. Clouds (2026-09-24): `generateCloud<entity_t>(name, CloudShapeResource::Parameters, width, look)` —
+   a non-collidable entity at the cursor + a `CloudVolume`; `width` is the unscaled box along local
+   X in metres, the height and depth follow `CloudShapeResource::proportionsOf(parameters)` (computed
+   from the parameters, since the shape may still be growing). Vary the SEED to vary the cloud.
 
 **Generation policies (`GenPolicy`):**
 
@@ -1263,7 +1300,7 @@ the bake identity (`m_IBLBakedStarMask`): a manifest change re-bakes.
 follows the MANIFEST, not the stage, which is what makes the two paths consistent.
 
 ⚠️⚠️ **OPEN — the 28 store manifests' `Direction` vectors are Y-DOWN legacy** (found 2026-09-13,
-not yet fixed, owner-gated with the sky review): `AutumnFieldPureSky`, `Clouds`, `Moon`, … all
+not yet fixed, owner-gated with the sky review): `Clouds`, `Moon`, … all
 declare a negative Y where the doc says "toward the body, UP = +Y"; the derived entity sits BELOW
 the ground and the star shines UPWARD (measured on `basic-scenery --demo-options 1`: 50 klux sun,
 no ground shadow at all). `AxisDebug` (authored after the flip) and `Kloppenheim05` are correct.

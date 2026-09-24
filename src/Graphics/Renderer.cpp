@@ -122,6 +122,25 @@ namespace
 	}
 
 	/**
+	 * @brief Returns the scene's volumetric clouds, or nullptr when it holds none.
+	 * @note Null is the "no cloud" flag, the medium's contract: the cloud pass is skipped on it.
+	 * @param scene A pointer to the scene, may be nullptr.
+	 * @return const EmEn::Scenes::CloudSet *
+	 */
+	const EmEn::Scenes::CloudSet *
+	sceneCloudSet (const EmEn::Scenes::Scene * scene) noexcept
+	{
+		if ( scene == nullptr )
+		{
+			return nullptr;
+		}
+
+		const auto & clouds = scene->cloudSet();
+
+		return clouds.empty() ? nullptr : &clouds;
+	}
+
+	/**
 	 * @brief Composes the effect list of the FINAL fullscreen pass: the scene stack's
 	 * display effects (AA, sharpening) followed by the camera's lens effects.
 	 * @note Returns the camera list unchanged (no allocation) when the stack declares no
@@ -1689,6 +1708,25 @@ namespace EmEn::Graphics
 				});
 			}
 
+			/* The SCENE's contract, the camera's sibling: a scene holding volumetric clouds gets the pass
+			 * that draws them, stack or not (PostProcessStack::syncSceneEffects(); owner decision
+			 * 2026-09-24, "placing a cloud is enough"). The new occupant brings its G-buffer
+			 * requirements, so a change retires the scene target exactly like a camera change does. */
+			if ( const auto * clouds = sceneCloudSet(scene.get()); clouds != nullptr )
+			{
+				if ( stack == nullptr )
+				{
+					stack = &scene->requirePostProcessStack();
+				}
+
+				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, *this) && m_sceneTarget != nullptr )
+				{
+					m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
+						target->destroyRenderTarget();
+					});
+				}
+			}
+
 			/* The owner's SELECTION, applied here and nowhere else.
 			 * ⚠️ This is the single site where a chain effect is enabled or disabled, and that
 			 * is what makes the console switch safe: the console records an intent on the MAIN
@@ -1699,7 +1737,7 @@ namespace EmEn::Graphics
 			 * mirror. */
 			if ( stack != nullptr )
 			{
-				scene->postProcessStack()->syncSlotSelection(*this, &scene->lightSet());
+				scene->postProcessStack()->syncSlotSelection(*this, &scene->lightSet(), sceneCloudSet(scene.get()));
 			}
 
 			/* Producer/consumer pairings BETWEEN slots, refreshed every frame on this thread.
@@ -1884,6 +1922,9 @@ namespace EmEn::Graphics
 			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
 			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
+
+			/* The clouds' shadow map, read by the lit materials of THIS frame. */
+			scenePtr->recordCloudShadowMap(*commandBuffer, *this);
 		}
 
 		/* Render pass 1: Scene rendering (clears buffers). */
@@ -1964,7 +2005,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr));
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2019,9 +2060,20 @@ namespace EmEn::Graphics
 		{
 			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
-			const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
+			{
+				const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
 
-			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
+				scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
+			}
+
+			/* The clouds' shadow map, read by the lit materials of THIS frame: before the scene pass,
+			 * outside any render pass. */
+			if ( !scenePtr->cloudSet().empty() )
+			{
+				const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "CloudShadowMap"};
+
+				scenePtr->recordCloudShadowMap(*commandBuffer, *this);
+			}
 		}
 
 		GPUProfiler * profiler = m_GPUProfiler.get();
@@ -2127,7 +2179,7 @@ namespace EmEn::Graphics
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain/PreTranslucency"};
 
 			m_postProcessor.recordBlit(*commandBuffer);
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), ChainPhase::PreTranslucency);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), ChainPhase::PreTranslucency);
 		}
 
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
@@ -2217,7 +2269,7 @@ namespace EmEn::Graphics
 		{
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen
