@@ -1380,6 +1380,18 @@ luminance scale; the reflection term always keeps it.
 > Anything read back from the rendered scene (grab pass, and by extension any screen-space capture)
 > is already an absolute luminance.
 
+### A half-float target silently turns a physical luminance into NaN (Sep 2026)
+
+**Symptom:** the rewritten lens flare injected the sun as a disc of ~5e7 nits into its `RGBA16F`
+source target and showed NO ghost at all — no VUID, no error, a flat diff. A half float stops at
+65 504: the value became +inf, and bilinear filtering turned `0 · inf` into NaN downstream.
+
+**Rule:** a target that may hold a physical source (the sun, a lamp seen directly, a specular of one)
+is written in DISPLAY units (× the camera's exposure) or clamped — never in raw nits. The scene colour
+buffer escapes it only because nothing physical that bright is ever rasterized there (a painted sun is
+clipped in its HDRI). Suspect it whenever an HDR effect "does nothing" while its inputs trace as large
+numbers: trace the value, compare with 65 504.
+
 ### Fixed: Beer's law absorbed over the MESH thickness, not the world one (Sep 2026)
 
 **Symptom:** a transmissive material whose volume thickness was authored for its mesh turned a strong

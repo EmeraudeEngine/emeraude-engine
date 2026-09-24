@@ -43,15 +43,18 @@
 namespace EmEn::Graphics::Effects::Camera
 {
 	/**
-	 * @brief Light-aware lens flare post-processing effect.
-	 * @note Projects a dominant light source to screen-space, then generates
-	 * ghost copies along the light-to-center axis with chromatic distortion,
-	 * adds a halo ring around the light position, and composites additively
-	 * with the scene.
-	 * @note The source's VISIBILITY is probed in the depth buffer (Aug 2026): 16 taps on a small
-	 * disk around the projected light; a tap that does not read the far plane is geometry hiding
-	 * the source. Until then the flare only knew whether the light was inside the frustum and shone
-	 * through every wall (owner report on Sponza: "il passe à travers la géométrie").
+	 * @brief The ghosts and the halo reflected between the lens elements (Sep 2026 rewrite).
+	 * @note Two half-resolution passes. The SOURCE pass extracts what is bright enough to leave a visible
+	 * ghost — the chain colour above a threshold in DISPLAY units (after the camera's exposure) — and adds
+	 * the ANALYTIC SUN: a soft disc at the main directional light's projected position carrying the light's
+	 * illuminance spread over the disc, times its visibility (a 16-tap depth probe, times the clouds' view
+	 * transmittance). The GHOST pass is John Chapman's "pseudo lens flare" (2013): every bright source is
+	 * reflected through the centre of the screen as a row of ghosts, plus a halo ring, with a chromatic
+	 * distortion; `Parameters::intensity` plays the lens reflectance.
+	 * @note ⚠️ Before the rewrite the "ghosts" were radial streaks: each pixel read the bright image at a
+	 * fixed distance from the light IN ITS OWN DIRECTION, so a point-like sun made nothing and a bright
+	 * sky seen through leaves made rainbow bands. And the painted sun of an HDRI stays under the threshold
+	 * once exposed: without the analytic sun, a daylight scene has no flare at all.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
 	 */
 	class EMEN_API LensFlare final : public IndirectPostProcessEffect
@@ -60,6 +63,12 @@ namespace EmEn::Graphics::Effects::Camera
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"LensFlareEffect"};
+
+			/** @brief The area of the sun disc's soft profile, `1 - smoothstep(0.6, 1, r)`, relative to the full disc. */
+			static constexpr auto SunDiscProfileArea{0.648F};
+
+			/** @brief The ceiling of the injected sun disc, in display units: under a half float's 65 504. */
+			static constexpr auto MaxSunDisplayLuminance{50000.0F};
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
 			 * @note Reads the chain colour for its bright pass: everything that can be bright must have run. */
@@ -88,30 +97,51 @@ namespace EmEn::Graphics::Effects::Camera
 				 * camera's exposure: 1 = the sensor's white).
 				 * @note ⚠️ Owner decision 2026-09-24: 4. It was 0.8 compared with NITS (the camera phase runs
 				 * before the tone mapping), so outdoors the whole sky fed the flare. Measured on `forest`:
-				 * 0.8 display still streaks through the leaves, 2 faintly, 4 and 8 are clean — and there, no
-				 * flare at all by day, because the painted sun of the HDRI stays under 4 once exposed.
+				 * 0.8 display still streaks through the leaves, 2 faintly, 4 and 8 are clean.
 				 */
 				float threshold{4.0F};
+				/** @brief The soft knee of the threshold, as a fraction of it. */
 				float softKnee{0.5F};
-				int32_t ghostCount{4};
-				float ghostSpacing{0.3F};
-				float haloRadius{0.6F};
-				float haloThickness{0.1F};
-				float chromaticDistortion{0.02F};
-				float intensity{1.0F};
+				/** @brief The number of ghosts per bright source. */
+				int32_t ghostCount{6};
+				/** @brief The spacing of the ghosts along the axis through the screen centre (Chapman's dispersal). */
+				float ghostDispersal{0.35F};
+				/** @brief The radius of the halo ring around the screen centre, in UV of the screen height. */
+				float haloWidth{0.45F};
+				/**
+				 * @brief The halo's weight relative to the ghosts.
+				 * @note Flux conservation for the sun: the ring spreads its disc over a circumference, a ring
+				 * area of about 4 · haloWidth / sunDiscRadius ≈ 120 discs — so ~0.008. At 1 (Chapman's sum)
+				 * the ring outshone the sun.
+				 */
+				float haloIntensity{0.01F};
+				/** @brief The chromatic separation of the ghosts and the halo, in UV. */
+				float chromaticDistortion{0.004F};
+				/**
+				 * @brief The lens reflectance: the fraction of a source's luminance its ghosts carry.
+				 * @note A ghost is light reflected twice between coated elements — a small fraction. At this
+				 * value only a source far above the exposure (the sun, a lamp at night) leaves a visible ghost.
+				 */
+				float intensity{5.0e-4F};
+				/**
+				 * @brief The radius of the injected sun disc, as a fraction of the screen HEIGHT.
+				 * @note Wider than the real sun (0.27°): it stands for the defocused image of the source the
+				 * ghosts are copies of. The disc carries the light's whole illuminance, spread over it.
+				 */
+				float sunDiscRadius{0.015F};
 				/**
 				 * @brief Radius, as a fraction of the screen HEIGHT, of the depth-buffer disk probed
 				 * around the light's projected position to decide how much of it the geometry hides.
 				 * @note 16 taps; the fraction of taps that read the far plane is the visibility. A
-				 * source behind a wall produces NO flare; a source half behind an edge, half of it.
+				 * sun behind a wall injects nothing; a sun half behind an edge, half of it.
 				 */
 				float occlusionRadius{0.012F};
 			};
 
 			/**
-			 * @brief Push constants for the threshold pass.
+			 * @brief Push constants of the source pass (bright extraction + the analytic sun).
 			 */
-			struct EMEN_API ThresholdPushConstants
+			struct EMEN_API SourcePushConstants
 			{
 				float texelSizeX;
 				float texelSizeY;
@@ -119,27 +149,39 @@ namespace EmEn::Graphics::Effects::Camera
 				float softKnee;
 				/* nit -> display value (FrameContext::displayExposure), 1 when the chain has no tone mapper. */
 				float exposure;
-			};
-
-			/**
-			 * @brief Push constants for the ghost + halo pass.
-			 */
-			struct EMEN_API GhostHaloPushConstants
-			{
+				/* The light's projected position, in UV. */
 				float lightScreenX;
 				float lightScreenY;
-				float ghostSpacing;
-				float haloRadius;
-				float haloThickness;
-				float chromaticDistortion;
-				float intensity;
-				int32_t ghostCount;
+				/* The sun disc radius in UV, per axis; 0 = no sun injected this frame. */
+				float sunRadiusX;
+				float sunRadiusY;
+				/* The sun disc luminance, in DISPLAY units (the illuminance spread over the disc × the exposure, the
+				 * edge fade applied): the source target holds display units, a sun in nits overflows a half float. */
+				float sunLuminanceR;
+				float sunLuminanceG;
+				float sunLuminanceB;
 				/* Occlusion probe radius in UV, per axis (the screen is not square). */
 				float occlusionRadiusX;
 				float occlusionRadiusY;
-				/* 1 when the clouds' view transmittance is bound at binding 2 and weights every probe tap
-				 * that reads the sky (the cloud transmittance pairing), 0 otherwise. */
+				/* 1 when the clouds' view transmittance is bound at binding 2 (the cloud transmittance pairing). */
 				float cloudTransmittanceEnabled;
+			};
+
+			/**
+			 * @brief Push constants of the ghost pass.
+			 */
+			struct EMEN_API GhostPushConstants
+			{
+				float ghostDispersal;
+				float haloWidth;
+				float chromaticDistortion;
+				float intensity;
+				int32_t ghostCount;
+				/* Width over height of the screen: the halo is a circle, not an ellipse. */
+				float aspect;
+				/* display value -> nit: the ghosts go back to the chain's unit. */
+				float inverseExposure;
+				float haloIntensity;
 			};
 
 			/**
@@ -185,7 +227,7 @@ namespace EmEn::Graphics::Effects::Camera
 			bool
 			readsChainColorUpstream (const FrameContext & /*context*/) const noexcept override
 			{
-				/* The threshold pass samples the chain color to extract bright spots. */
+				/* The source pass samples the chain color to extract the bright spots. */
 				return true;
 			}
 
@@ -197,7 +239,7 @@ namespace EmEn::Graphics::Effects::Camera
 			CombineContribution combineContribution (const FrameContext & context) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresHDR() */
-						[[nodiscard]]
+			[[nodiscard]]
 			bool
 			requiresHDR () const noexcept override
 			{
@@ -206,8 +248,8 @@ namespace EmEn::Graphics::Effects::Camera
 
 			/**
 			 * @copydoc EmEn::Graphics::IndirectPostProcessEffect::consumesCloudTransmittance()
-			 * @note The source probe counts the taps that read the sky; behind a cloud a tap is only worth
-			 * the cloud's transmittance, so a cloud over the sun dims the flare as it covers it.
+			 * @note The sun probe counts the taps that read the sky; behind a cloud a tap is only worth
+			 * the cloud's transmittance, so a cloud over the sun dims its ghosts as it covers it.
 			 */
 			[[nodiscard]]
 			bool
@@ -224,22 +266,13 @@ namespace EmEn::Graphics::Effects::Camera
 			}
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresDepth()
-			 * @note The ghost + halo pass probes the scene depth around the projected light: the source occlusion. */
+			 * @note The source pass probes the scene depth around the projected sun: its occlusion. */
 			[[nodiscard]]
 			bool
 			requiresDepth () const noexcept override
 			{
 				return true;
 			}
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresLightSet() */
-			[[nodiscard]]
-			bool
-			requiresLightSet () const noexcept override
-			{
-				return true;
-			}
-
 
 			/**
 			 * @brief Sets the lens flare parameters.
@@ -268,22 +301,18 @@ namespace EmEn::Graphics::Effects::Camera
 			Parameters m_parameters;
 			/* The clouds' view transmittance for THIS frame, or nullptr (set every frame by the stack). */
 			const Vulkan::TextureInterface * m_cloudTransmittance{nullptr};
-			/* Intermediate render targets. */
-			IntermediateRenderTarget m_thresholdTarget;
-			IntermediateRenderTarget m_ghostHaloTarget;
+			/* Intermediate render targets (half resolution). */
+			IntermediateRenderTarget m_sourceTarget;
+			IntermediateRenderTarget m_ghostTarget;
 			/* Pipelines. */
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_thresholdPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_ghostHaloPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_sourcePipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_ghostPipeline;
 			/* Pipeline layouts. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_thresholdLayout;
-			std::shared_ptr< Vulkan::PipelineLayout > m_ghostHaloLayout;
-			/* Descriptor sets. */
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_thresholdPerFrame;
-			/* Ghost + halo: binding 0 = threshold target (fixed), binding 1 = scene depth (per frame,
-			 * the occlusion probe). */
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_ghostHaloPerFrame;
-			/* Light visibility factor computed by recordOverlayPasses(), consumed by
-			 * combineContribution() as the flare modulation (dynamics0.x). */
-			float m_lastLightOnScreen{0.0F};
+			std::shared_ptr< Vulkan::PipelineLayout > m_sourceLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_ghostLayout;
+			/* Source: binding 0 = chain colour, 1 = scene depth, 2 = the clouds' transmittance or the depth again (all per frame). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_sourcePerFrame;
+			/* Ghost: binding 0 = the source target (fixed). */
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_ghostPerFrame;
 	};
 }

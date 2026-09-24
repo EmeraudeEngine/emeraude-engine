@@ -29,10 +29,12 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -42,7 +44,6 @@
 #include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"LensFlareEffect"};
-/* NOLINTEND(cert-err58-cpp) */
 
 namespace
 {
@@ -50,13 +51,20 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
-	static constexpr auto ThresholdFragmentShader = R"GLSL(
+	/* The SOURCE pass: what is bright enough to leave a visible ghost, plus the analytic sun. ⚠️ The
+	 * output is in DISPLAY units (nits × exposure), NOT nits: the sun's disc carries ~5e7 nits, far past
+	 * the 65 504 of a half float — written in nits it overflowed to infinity, then NaN once filtered, and
+	 * no ghost ever showed. The ghost pass brings its result back to nits. */
+	constexpr auto SourceFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+/* The clouds' view transmittance (VolumetricClouds, R), meaningful when cloudTransmittanceEnabled. */
+layout(set = 0, binding = 2) uniform sampler2D cloudTransmittanceTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -65,82 +73,31 @@ layout(push_constant) uniform PushConstants
 	float threshold;
 	float softKnee;
 	float exposure;
-};
-
-void main()
-{
-	/* 3x3 box blur to soften individual bright pixels before thresholding. */
-	vec2 texelSize = vec2(texelSizeX, texelSizeY);
-	vec3 color = vec3(0.0);
-
-	for (int y = -1; y <= 1; ++y)
-	{
-		for (int x = -1; x <= 1; ++x)
-		{
-			color += texture(sceneTex, vUV + vec2(float(x), float(y)) * texelSize).rgb;
-		}
-	}
-
-	color /= 9.0;
-
-	/* Soft brightness thresholding, in DISPLAY units: the chain colour here is an absolute luminance
-	 * in nits (the camera phase runs before the tone mapping), and a threshold compared with nits let
-	 * a whole daylight sky feed the ghosts — rainbow streaks through the leaves (2026-09-24). The
-	 * exposure brings it to what the sensor sees, 1 = its white. The contribution is a RATIO, so the
-	 * extracted colour stays in nits. */
-	float brightness = max(max(color.r, color.g), color.b) * exposure;
-	float kneeWidth = threshold * softKnee;
-	float soft = brightness - threshold + kneeWidth;
-	soft = clamp(soft, 0.0, 2.0 * kneeWidth);
-	soft = soft * soft / (4.0 * kneeWidth + 0.00001);
-	float contribution = max(soft, brightness - threshold) / max(brightness, 0.00001);
-
-	outColor = vec4(color * max(contribution, 0.0), 1.0);
-}
-)GLSL";
-
-	static constexpr auto GhostHaloFragmentShader = R"GLSL(
-#version 450
-
-layout(location = 0) in vec2 vUV;
-layout(location = 0) out vec4 outColor;
-
-layout(set = 0, binding = 0) uniform sampler2D thresholdTex;
-layout(set = 0, binding = 1) uniform sampler2D depthTex;
-/* The clouds' view transmittance (VolumetricClouds, R), meaningful when cloudTransmittanceEnabled. */
-layout(set = 0, binding = 2) uniform sampler2D cloudTransmittanceTex;
-
-layout(push_constant) uniform PushConstants
-{
 	float lightScreenX;
 	float lightScreenY;
-	float ghostSpacing;
-	float haloRadius;
-	float haloThickness;
-	float chromaticDistortion;
-	float intensity;
-	int ghostCount;
+	float sunRadiusX;
+	float sunRadiusY;
+	float sunLuminanceR;
+	float sunLuminanceG;
+	float sunLuminanceB;
 	float occlusionRadiusX;
 	float occlusionRadiusY;
 	float cloudTransmittanceEnabled;
 };
 
-/* Source visibility: the fraction of a 16-tap disk around the projected light that reads the far
- * plane (a directional source is at infinity — anything written in the depth buffer there hides
- * it). A Vogel spiral, fixed rotation: the same probe every frame, no shimmer. */
-float sourceVisibility (vec2 lightPos)
+/* The sun's visibility: the fraction of a 16-tap disk around its projected position that reads the far
+ * plane (a directional source is at infinity — anything written in the depth buffer there hides it),
+ * each sky tap weighted by the clouds' transmittance. A Vogel spiral, fixed rotation: no shimmer. */
+float sunVisibility (vec2 lightPos)
 {
 	float visible = 0.0;
 
-	for (int i = 0; i < 16; ++i)
+	for ( int i = 0; i < 16; ++i )
 	{
 		float r = sqrt((float(i) + 0.5) / 16.0);
 		float a = float(i) * 2.39996323;
-		vec2 p = lightPos + vec2(cos(a) * occlusionRadiusX, sin(a) * occlusionRadiusY) * r;
-		p = clamp(p, vec2(0.0), vec2(1.0));
+		vec2 p = clamp(lightPos + vec2(cos(a) * occlusionRadiusX, sin(a) * occlusionRadiusY) * r, vec2(0.0), vec2(1.0));
 
-		/* A sky tap behind a cloud is worth the cloud's transmittance: the clouds write no depth, so
-		 * the far-plane test alone let the flare shine through them (2026-09-24). */
 		float tap = texture(depthTex, p).r >= 0.99999 ? 1.0 : 0.0;
 
 		if ( cloudTransmittanceEnabled > 0.5 )
@@ -154,93 +111,150 @@ float sourceVisibility (vec2 lightPos)
 	return visible / 16.0;
 }
 
-/* Sample with chromatic distortion along a radial direction. */
-vec3 chromaticSample(sampler2D tex, vec2 uv, vec2 direction, float distortion)
+void main()
 {
+	/* 3x3 box blur to soften individual bright pixels before thresholding. */
+	vec2 texelSize = vec2(texelSizeX, texelSizeY);
+	vec3 color = vec3(0.0);
+
+	for ( int y = -1; y <= 1; ++y )
+	{
+		for ( int x = -1; x <= 1; ++x )
+		{
+			color += texture(sceneTex, vUV + vec2(float(x), float(y)) * texelSize).rgb;
+		}
+	}
+
+	color /= 9.0;
+
+	/* Soft brightness thresholding, in DISPLAY units: the chain colour here is an absolute luminance
+	 * in nits (the camera phase runs before the tone mapping), and a threshold compared with nits let
+	 * a whole daylight sky feed the ghosts. The contribution is a RATIO, so the colour stays in nits. */
+	float brightness = max(max(color.r, color.g), color.b) * exposure;
+	float kneeWidth = threshold * softKnee;
+	float soft = clamp(brightness - threshold + kneeWidth, 0.0, 2.0 * kneeWidth);
+	soft = soft * soft / (4.0 * kneeWidth + 0.00001);
+	float contribution = max(soft, brightness - threshold) / max(brightness, 0.00001);
+
+	vec3 result = color * max(contribution, 0.0) * exposure;
+
+	/* The ANALYTIC sun: the light is not in the image (a skybox's painted sun is clipped, far under the
+	 * threshold once exposed), so it is injected here as a soft disc carrying the light's illuminance.
+	 * Its visibility is probed only where the disc is drawn. */
+	if ( sunRadiusY > 0.0 )
+	{
+		vec2 lightPos = vec2(lightScreenX, lightScreenY);
+		float r = length((vUV - lightPos) / vec2(sunRadiusX, sunRadiusY));
+
+		if ( r < 1.0 )
+		{
+			result += vec3(sunLuminanceR, sunLuminanceG, sunLuminanceB) * (1.0 - smoothstep(0.6, 1.0, r)) * sunVisibility(lightPos);
+		}
+	}
+
+	/* A half float stops at 65 504. */
+	outColor = vec4(min(result, vec3(60000.0)), 1.0);
+}
+)GLSL";
+
+	/* The GHOST pass: John Chapman's "pseudo lens flare" (2013). Every bright source of the source image
+	 * is reflected through the centre of the screen as a row of ghosts, plus a halo ring. */
+	constexpr auto GhostFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outColor;
+
+layout(set = 0, binding = 0) uniform sampler2D sourceTex;
+
+layout(push_constant) uniform PushConstants
+{
+	float ghostDispersal;
+	float haloWidth;
+	float chromaticDistortion;
+	float intensity;
+	int ghostCount;
+	float aspect;
+	float inverseExposure;
+	float haloIntensity;
+};
+
+/* A sample with its red and blue channels displaced along the ghost direction (the lens dispersion). */
+vec3 chromaticSample (vec2 uv, vec2 direction)
+{
+	vec2 offset = direction * chromaticDistortion;
+
 	return vec3(
-		texture(tex, uv + direction * distortion).r,
-		texture(tex, uv).g,
-		texture(tex, uv - direction * distortion).b
+		texture(sourceTex, uv + offset).r,
+		texture(sourceTex, uv).g,
+		texture(sourceTex, uv - offset).b
 	);
+}
+
+/* Weight of a sample by its distance to the centre: a source far off the optical axis leaves weaker
+ * ghosts. ⚠️ GENTLE on purpose (power 2): Chapman's power 10 was there to damp arbitrary bright pixels,
+ * which the lens reflectance (Parameters::intensity) already does here; with it, a sun a quarter of the
+ * screen off-centre kept 1 % of its ghosts. */
+float centreWeight (vec2 uv, float power)
+{
+	return pow(1.0 - min(length(vec2(0.5) - uv) / length(vec2(0.5)), 1.0), power);
 }
 
 void main()
 {
-		vec2 lightPos = vec2(lightScreenX, lightScreenY);
+	/* The image mirrored through the centre, and the vector from each pixel toward it. */
+	vec2 uv = vec2(1.0) - vUV;
+	vec2 toCentre = vec2(0.5) - uv;
+	vec2 ghostVec = toCentre * ghostDispersal;
 
-	/* A source the geometry hides produces no flare at all. */
-	float visibility = sourceVisibility(lightPos);
+	float toCentreLength = length(toCentre * vec2(aspect, 1.0));
 
-	if (visibility <= 0.0)
+	if ( toCentreLength < 1.0e-5 )
 	{
 		outColor = vec4(0.0);
+
 		return;
 	}
 
-	/* Ghost direction: from light position toward the current pixel.
-	 * Ghosts are placed at increasing offsets along this axis. */
-	vec2 ghostVec = vUV - lightPos;
-	float ghostLen = length(ghostVec);
-
-	if (ghostLen < 0.001)
-	{
-		outColor = vec4(0.0);
-		return;
-	}
-
-	vec2 ghostDir = ghostVec / ghostLen;
+	/* The direction of the dispersion, and of the halo, round on screen. */
+	vec2 direction = (toCentre * vec2(aspect, 1.0)) / toCentreLength;
 
 	vec3 result = vec3(0.0);
 
-	/* ---- Ghost generation ---- */
-	/* Ghosts sample the threshold texture on the mirrored side of the light position.
-	 * Each ghost is placed at increasing distances along the pixel→light→mirror axis. */
-	for (int i = 0; i < ghostCount; ++i)
+	/* ---- Ghosts: samples marching toward the centre, one ghost of every bright source each. ----
+	 * ⚠️ FLUX CONSERVED: ghost i is a copy of the source magnified 1 / |1 - dispersal · i| times, and
+	 * Chapman's sum gives every ghost the source's full luminance — at a dispersal of 0.35 the fourth
+	 * ghost was 20× the sun and carried 400× its flux, a white disc over half the frame. Each ghost is
+	 * weighted by the inverse of its area ratio, (1 - dispersal · i)². */
+	for ( int i = 0; i < ghostCount; ++i )
 	{
-		float offset = float(i + 1) * ghostSpacing;
-		vec2 ghostUV = lightPos + ghostDir * offset;
+		vec2 offset = uv + ghostVec * float(i);
 
-		/* Discard ghosts outside valid texture range. */
-		if (ghostUV.x < 0.0 || ghostUV.x > 1.0 || ghostUV.y < 0.0 || ghostUV.y > 1.0)
+		if ( any(lessThan(offset, vec2(0.0))) || any(greaterThan(offset, vec2(1.0))) )
+		{
 			continue;
+		}
 
-		/* Distance-based weight: ghosts far from light position are dimmer. */
-		float d = distance(ghostUV, lightPos);
-		float weight = 1.0 - smoothstep(0.0, 0.75, d);
-		weight *= weight;
+		float shrink = 1.0 - ghostDispersal * float(i);
 
-		/* Per-ghost falloff: further ghosts are progressively dimmer. */
-		weight *= 1.0 / float(i + 1);
-
-		/* Chromatic distortion along the ghost direction. */
-		result += chromaticSample(thresholdTex, ghostUV, ghostDir, chromaticDistortion) * weight;
+		result += chromaticSample(offset, direction / vec2(aspect, 1.0)) * centreWeight(offset, 2.0) * (shrink * shrink);
 	}
 
-	/* ---- Halo ring ---- */
-	/* The halo forms a ring centered on the light's screen position. */
+	/* ---- Halo: a ring of radius haloWidth around the centre, fed by what lies across it. ---- */
 	{
-		float d = distance(vUV, lightPos);
-		float haloWeight = 1.0 - abs(d - haloRadius) / max(haloThickness, 0.001);
-		haloWeight = clamp(haloWeight, 0.0, 1.0);
-		haloWeight *= haloWeight;
+		vec2 haloUV = uv + (direction / vec2(aspect, 1.0)) * haloWidth;
 
-		if (haloWeight > 0.001)
+		if ( all(greaterThanEqual(haloUV, vec2(0.0))) && all(lessThanEqual(haloUV, vec2(1.0))) )
 		{
-			/* Sample the threshold texture at the current UV (the ring is an overlay). */
-			vec2 haloDir = normalize(vUV - lightPos);
-			vec2 haloUV = lightPos + haloDir * haloRadius;
-
-			if (haloUV.x >= 0.0 && haloUV.x <= 1.0 && haloUV.y >= 0.0 && haloUV.y <= 1.0)
-			{
-				result += chromaticSample(thresholdTex, haloUV, haloDir, chromaticDistortion * 0.5) * haloWeight * 0.5;
-			}
+			/* The ring spreads a source over its whole circumference: haloIntensity conserves the flux. */
+			result += chromaticSample(haloUV, direction / vec2(aspect, 1.0)) * centreWeight(haloUV, 2.0) * haloIntensity;
 		}
 	}
 
-	outColor = vec4(result * intensity * visibility, 1.0);
+	/* Back to nits for the chain (the source was in display units); a half float stops at 65 504. */
+	outColor = vec4(min(result * intensity * inverseExposure, vec3(60000.0)), 1.0);
 }
 )GLSL";
-
 }
 
 namespace EmEn::Graphics::Effects::Camera
@@ -261,18 +275,16 @@ namespace EmEn::Graphics::Effects::Camera
 		const auto halfW = std::max(width / 2, 1U);
 		const auto halfH = std::max(height / 2, 1U);
 
-		/* Create threshold target (half-res). */
-		if ( !m_thresholdTarget.create(renderer, halfW, halfH, format, "LF_Threshold") )
+		if ( !m_sourceTarget.create(renderer, halfW, halfH, format, "LF_Source") )
 		{
-			TraceError{TracerTag} << "Failed to create threshold target !";
+			TraceError{TracerTag} << "Failed to create the source target !";
 
 			return false;
 		}
 
-		/* Create ghost+halo target (half-res). */
-		if ( !m_ghostHaloTarget.create(renderer, halfW, halfH, format, "LF_GhostHalo") )
+		if ( !m_ghostTarget.create(renderer, halfW, halfH, format, "LF_Ghost") )
 		{
-			TraceError{TracerTag} << "Failed to create ghost+halo target !";
+			TraceError{TracerTag} << "Failed to create the ghost target !";
 
 			return false;
 		}
@@ -280,19 +292,12 @@ namespace EmEn::Graphics::Effects::Camera
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-				/* Single input layout (1 combined image sampler): the threshold pass. */
-		auto singleInputLayout = this->getInputLayout(1);
+		/* Source: the chain colour, the scene depth (the sun probe), the clouds' transmittance (the same probe). */
+		auto sourceInputLayout = this->getInputLayout(3);
+		/* Ghost: the source target. */
+		auto ghostInputLayout = this->getInputLayout(1);
 
-		if ( singleInputLayout == nullptr )
-		{
-			return false;
-		}
-
-		/* The ghost + halo pass reads the threshold target, the scene depth (the source occlusion
-		 * probe) and the clouds' transmittance (the same probe, through the clouds). */
-		auto ghostHaloInputLayout = this->getInputLayout(3);
-
-		if ( ghostHaloInputLayout == nullptr )
+		if ( sourceInputLayout == nullptr || ghostInputLayout == nullptr )
 		{
 			return false;
 		}
@@ -300,23 +305,23 @@ namespace EmEn::Graphics::Effects::Camera
 		/* ---- Pipeline layouts ---- */
 		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(singleInputLayout);
+			sets.emplace_back(sourceInputLayout);
 
-			m_thresholdLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ThresholdPushConstants)}
+			m_sourceLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SourcePushConstants)}
 			});
 		}
 
-				{
+		{
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(ghostHaloInputLayout);
+			sets.emplace_back(ghostInputLayout);
 
-			m_ghostHaloLayout = layoutManager.getPipelineLayout(sets, {
-				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GhostHaloPushConstants)}
+			m_ghostLayout = layoutManager.getPipelineLayout(sets, {
+				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GhostPushConstants)}
 			});
 		}
 
-		if ( m_thresholdLayout == nullptr || m_ghostHaloLayout == nullptr )
+		if ( m_sourceLayout == nullptr || m_ghostLayout == nullptr )
 		{
 			return false;
 		}
@@ -334,55 +339,37 @@ namespace EmEn::Graphics::Effects::Camera
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		auto thresholdFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_Threshold_FS", ShaderType::FragmentShader, ThresholdFragmentShader);
+		const auto sourceFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_Source_FS", ShaderType::FragmentShader, SourceFragmentShader);
+		const auto ghostFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_Ghost_FS", ShaderType::FragmentShader, GhostFragmentShader);
 
-		if ( thresholdFragment == nullptr )
+		if ( sourceFragment == nullptr || ghostFragment == nullptr )
 		{
-			TraceError{TracerTag} << "Failed to compile threshold shader !";
-
-			return false;
-		}
-
-		auto ghostHaloFragment = shaderManager.getShaderModuleFromSourceCode(device, "LF_GhostHalo_FS", ShaderType::FragmentShader, GhostHaloFragmentShader);
-
-		if ( ghostHaloFragment == nullptr )
-		{
-			TraceError{TracerTag} << "Failed to compile ghost+halo shader !";
+			TraceError{TracerTag} << "Failed to compile the lens flare shaders !";
 
 			return false;
 		}
 
 		/* ---- Create pipelines ---- */
-		m_thresholdPipeline = this->createFullscreenPipeline(ClassId, "LF_Threshold", vertexModule, thresholdFragment, m_thresholdLayout, m_thresholdTarget);
-		m_ghostHaloPipeline = this->createFullscreenPipeline(ClassId, "LF_GhostHalo", vertexModule, ghostHaloFragment, m_ghostHaloLayout, m_ghostHaloTarget);
+		m_sourcePipeline = this->createFullscreenPipeline(ClassId, "LF_Source", vertexModule, sourceFragment, m_sourceLayout, m_sourceTarget);
+		m_ghostPipeline = this->createFullscreenPipeline(ClassId, "LF_Ghost", vertexModule, ghostFragment, m_ghostLayout, m_ghostTarget);
 
-		if ( m_thresholdPipeline == nullptr || m_ghostHaloPipeline == nullptr )
+		if ( m_sourcePipeline == nullptr || m_ghostPipeline == nullptr )
 		{
 			return false;
 		}
 
 		/* ---- Create descriptor sets ---- */
+		m_sourcePerFrame = this->createPerFrameDescriptorSets(sourceInputLayout, ClassId, "LF_Source_DescSet");
+		m_ghostPerFrame = this->createPerFrameDescriptorSets(ghostInputLayout, ClassId, "LF_Ghost_DescSet");
 
-		/* Threshold: reads scene color (updated per-frame). */
-		m_thresholdPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "LF_Threshold_DescSet");
-
-		if ( m_thresholdPerFrame.empty() )
+		if ( m_sourcePerFrame.empty() || m_ghostPerFrame.empty() )
 		{
 			return false;
 		}
 
-		/* Ghost+Halo: binding 0 = threshold target (fixed), binding 1 = scene depth and binding 2 = the
-		 * clouds' transmittance or the depth again (both per frame). */
-		m_ghostHaloPerFrame = this->createPerFrameDescriptorSets(ghostHaloInputLayout, ClassId, "LF_GhostHalo_DescSet");
-
-		if ( m_ghostHaloPerFrame.empty() )
+		for ( const auto & descriptorSet : m_ghostPerFrame )
 		{
-			return false;
-		}
-
-		for ( const auto & descriptorSet : m_ghostHaloPerFrame )
-		{
-			if ( !descriptorSet->writeCombinedImageSampler(0, m_thresholdTarget) )
+			if ( !descriptorSet->writeCombinedImageSampler(0, m_sourceTarget) )
 			{
 				return false;
 			}
@@ -394,123 +381,114 @@ namespace EmEn::Graphics::Effects::Camera
 	void
 	LensFlare::destroy () noexcept
 	{
-		m_ghostHaloPerFrame.clear();
-		m_thresholdPerFrame.clear();
+		m_ghostPerFrame.clear();
+		m_sourcePerFrame.clear();
 
-		m_ghostHaloPipeline.reset();
-		m_thresholdPipeline.reset();
-		m_ghostHaloLayout.reset();
-		m_thresholdLayout.reset();
+		m_ghostPipeline.reset();
+		m_sourcePipeline.reset();
+		m_ghostLayout.reset();
+		m_sourceLayout.reset();
 
-		m_ghostHaloTarget.destroy();
-		m_thresholdTarget.destroy();
+		m_ghostTarget.destroy();
+		m_sourceTarget.destroy();
 	}
 
 	void
 	LensFlare::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
-		const auto * lightSet = context.lightSet;
-
-
 		const auto frameIndex = this->renderer().currentFrameIndex();
+		const auto aspect = static_cast< float >(m_sourceTarget.height()) / static_cast< float >(std::max(1U, m_sourceTarget.width()));
 
-		/* 1. Project light direction to screen space.
-		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
-		const auto & camPos = viewMatrices.position(readStateIndex);
-
-		/* Light source direction (opposite of emission direction). */
-		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
-		const auto lightSource = (-lightDirection).normalized();
-
-		/* Project a far point along the light source direction. */
-		const auto farPointX = camPos[0] + lightSource.x() * 10000.0F;
-		const auto farPointY = camPos[1] + lightSource.y() * 10000.0F;
-		const auto farPointZ = camPos[2] + lightSource.z() * 10000.0F;
-
-		/* Transform to clip space. */
-		const Math::Vector< 4, float > worldPos{farPointX, farPointY, farPointZ, 1.0F};
-		const auto viewPos = viewMat * worldPos;
-		const auto clipPos = projMat * viewPos;
-
-		auto lightOnScreen = (clipPos[3] > 0.0F) ? 1.0F : 0.0F;
-		auto screenX = 0.5F;
-		auto screenY = 0.5F;
-
-		if ( clipPos[3] > 0.001F )
-		{
-			screenX = (clipPos[0] / clipPos[3]) * 0.5F + 0.5F;
-			screenY = (clipPos[1] / clipPos[3]) * 0.5F + 0.5F;
-		}
-
-		/* Fade when light is near screen edges or off-screen. */
-		const auto dx = screenX - 0.5F;
-		const auto dy = screenY - 0.5F;
-		const auto distFromCenter = std::sqrt(dx * dx + dy * dy);
-		lightOnScreen *= std::max(0.0F, std::min(1.0F, 1.5F - distFromCenter));
-
-		/* Expose the visibility factor to the combine pass (dynamics0.x). */
-		m_lastLightOnScreen = lightOnScreen;
-
-		/* 2. Update per-frame threshold descriptor with scene color. */
-		static_cast< void >(m_thresholdPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
-
-		/* 3. Pass 1: Threshold extraction (half-res). */
-		const ThresholdPushConstants thresholdPC{
-			.texelSizeX = 1.0F / static_cast< float >(m_thresholdTarget.width()),
-			.texelSizeY = 1.0F / static_cast< float >(m_thresholdTarget.height()),
+		SourcePushConstants sourcePC{
+			.texelSizeX = 1.0F / static_cast< float >(m_sourceTarget.width()),
+			.texelSizeY = 1.0F / static_cast< float >(m_sourceTarget.height()),
 			.threshold = m_parameters.threshold,
 			.softKnee = m_parameters.softKnee,
-			.exposure = context.displayExposure > 0.0F ? context.displayExposure : 1.0F
-		};
-
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_thresholdTarget,
-			*m_thresholdPipeline,
-			*m_thresholdLayout,
-			*m_thresholdPerFrame[frameIndex],
-			&thresholdPC,
-			sizeof(ThresholdPushConstants)
-		);
-
-				/* 4. Pass 2: Ghost generation + Halo (half-res), with the source occlusion probe: binding 1
-		 * is the scene depth of THIS frame (requiresDepth() guarantees it); the probe radius is a
-		 * fraction of the screen height, scaled per axis so the disk stays round on screen. */
-		static_cast< void >(m_ghostHaloPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
-
-		/* Binding 2: the clouds' transmittance when the stack paired one this frame; otherwise the
-		 * depth stands in (a valid descriptor), and the flag tells the shader to ignore it. */
-		static_cast< void >(m_ghostHaloPerFrame[frameIndex]->writeCombinedImageSampler(2, m_cloudTransmittance != nullptr ? *m_cloudTransmittance : *context.depth));
-
-		const auto aspect = static_cast< float >(m_ghostHaloTarget.height()) / static_cast< float >(std::max(1U, m_ghostHaloTarget.width()));
-
-		const GhostHaloPushConstants ghostHaloPC{
-			.lightScreenX = screenX,
-			.lightScreenY = screenY,
-			.ghostSpacing = m_parameters.ghostSpacing,
-			.haloRadius = m_parameters.haloRadius,
-			.haloThickness = m_parameters.haloThickness,
-			.chromaticDistortion = m_parameters.chromaticDistortion,
-			.intensity = m_parameters.intensity,
-			.ghostCount = m_parameters.ghostCount,
+			.exposure = context.displayExposure > 0.0F ? context.displayExposure : 1.0F,
+			.lightScreenX = 0.5F,
+			.lightScreenY = 0.5F,
+			.sunRadiusX = 0.0F,
+			.sunRadiusY = 0.0F,
+			.sunLuminanceR = 0.0F,
+			.sunLuminanceG = 0.0F,
+			.sunLuminanceB = 0.0F,
 			.occlusionRadiusX = m_parameters.occlusionRadius * aspect,
 			.occlusionRadiusY = m_parameters.occlusionRadius,
 			.cloudTransmittanceEnabled = m_cloudTransmittance != nullptr ? 1.0F : 0.0F
 		};
 
-		IndirectPostProcessEffect::recordFullscreenPass(
-			commandBuffer,
-			m_ghostHaloTarget,
-						*m_ghostHaloPipeline,
-			*m_ghostHaloLayout,
-			*m_ghostHaloPerFrame[frameIndex],
-			&ghostHaloPC,
-			sizeof(GhostHaloPushConstants)
-		);
+		/* ---- The analytic sun: the main directional light, projected. Without one, the bright pixels
+		 * of the image alone make the ghosts (a lamp at night). ---- */
+		if ( const auto mainLight = context.lightSet != nullptr ? context.lightSet->mainDirectionalLight() : nullptr; mainLight != nullptr && mainLight->isEnabled() )
+		{
+			/* readStateIndex: the view matrices that produced the depth buffer. */
+			const auto readStateIndex = this->renderer().currentReadStateIndex();
+			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
+			const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, false, 0);
+			const auto & projectionMatrix = viewMatrices.projectionMatrix(readStateIndex);
+			const auto & cameraPosition = viewMatrices.position(readStateIndex);
+
+			/* A far point toward the light (opposite of its propagation). */
+			const auto toLight = (-mainLight->direction()).normalized();
+			const Math::Vector< 4, float > farPoint{cameraPosition[0] + toLight[0] * 10000.0F, cameraPosition[1] + toLight[1] * 10000.0F, cameraPosition[2] + toLight[2] * 10000.0F, 1.0F};
+			const auto clipPosition = projectionMatrix * (viewMatrix * farPoint);
+
+			if ( clipPosition[3] > 0.001F )
+			{
+				const auto screenX = (clipPosition[0] / clipPosition[3]) * 0.5F + 0.5F;
+				const auto screenY = (clipPosition[1] / clipPosition[3]) * 0.5F + 0.5F;
+
+				/* Fade near the screen edges: a sun leaving the frame takes its ghosts with it. */
+				const auto distanceFromCentre = std::hypot(screenX - 0.5F, screenY - 0.5F);
+				const auto onScreen = std::clamp(1.5F - distanceFromCentre, 0.0F, 1.0F);
+
+				if ( onScreen > 0.0F && m_parameters.sunDiscRadius > 0.0F )
+				{
+					/* The disc's solid angle: its radius is a fraction of the screen height, which spans
+					 * 2 tan(fovY / 2) in tangent space (small angles). The light's illuminance spread
+					 * over it is the disc's luminance — the flux of the sun, conserved. */
+					const auto tanHalfFovY = 1.0F / std::max(std::abs(projectionMatrix(1, 1)), 1.0e-6F);
+					const auto angularRadius = m_parameters.sunDiscRadius * 2.0F * tanHalfFovY;
+					const auto solidAngle = std::numbers::pi_v< float > * angularRadius * angularRadius * SunDiscProfileArea;
+					/* In DISPLAY units (the source target's unit), bounded under the half-float range. */
+					const auto luminance = std::min(mainLight->illuminance() / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * onScreen, MaxSunDisplayLuminance);
+					const auto & color = mainLight->color();
+
+					sourcePC.lightScreenX = screenX;
+					sourcePC.lightScreenY = screenY;
+					sourcePC.sunRadiusX = m_parameters.sunDiscRadius * aspect;
+					sourcePC.sunRadiusY = m_parameters.sunDiscRadius;
+					sourcePC.sunLuminanceR = color.red() * luminance;
+					sourcePC.sunLuminanceG = color.green() * luminance;
+					sourcePC.sunLuminanceB = color.blue() * luminance;
+				}
+			}
+		}
+
+		/* ---- Pass 1: the source (half resolution). ⚠️ Binding 2 is the clouds' transmittance when the
+		 * stack paired one this frame; otherwise the depth stands in (a valid descriptor) and the flag
+		 * tells the shader to ignore it. requiresDepth() guarantees the depth. ---- */
+		auto & sourceSet = *m_sourcePerFrame[frameIndex];
+
+		static_cast< void >(sourceSet.writeCombinedImageSampler(0, inputColor));
+		static_cast< void >(sourceSet.writeCombinedImageSampler(1, *context.depth));
+		static_cast< void >(sourceSet.writeCombinedImageSampler(2, m_cloudTransmittance != nullptr ? *m_cloudTransmittance : *context.depth));
+
+		IndirectPostProcessEffect::recordFullscreenPass(commandBuffer, m_sourceTarget, *m_sourcePipeline, *m_sourceLayout, sourceSet, &sourcePC, sizeof(SourcePushConstants));
+
+		/* ---- Pass 2: the ghosts and the halo (half resolution). ---- */
+		const GhostPushConstants ghostPC{
+			.ghostDispersal = m_parameters.ghostDispersal,
+			.haloWidth = m_parameters.haloWidth,
+			.chromaticDistortion = m_parameters.chromaticDistortion,
+			.intensity = m_parameters.intensity,
+			.ghostCount = m_parameters.ghostCount,
+			.aspect = 1.0F / aspect,
+			.inverseExposure = 1.0F / sourcePC.exposure,
+			.haloIntensity = m_parameters.haloIntensity
+		};
+
+		IndirectPostProcessEffect::recordFullscreenPass(commandBuffer, m_ghostTarget, *m_ghostPipeline, *m_ghostLayout, *m_ghostPerFrame[frameIndex], &ghostPC, sizeof(GhostPushConstants));
 	}
 
 	IndirectPostProcessEffect::CombineContribution
@@ -518,14 +496,12 @@ namespace EmEn::Graphics::Effects::Camera
 	{
 		CombineContribution contribution;
 		contribution.prefix = "lflare";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_ghostHaloTarget});
-		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_lastLightOnScreen, 0.0F, 0.0F, 0.0F});
+		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_ghostTarget});
 
-		/* Same math as the retired LF_Composite_FS pass: additive flare modulated by
-		 * lightOnScreen (fades out when the light leaves the screen or is behind the
-		 * camera), alpha forced to 1 as the original composite did. */
+		/* A pure additive blend of the ghosts: the sun's edge fade and visibility are already in the
+		 * injected disc, and a bright source of the image needs neither. Alpha forced to 1. */
 		contribution.code =
-			"\tem_Color.rgb += texture(lflareTex, vUV).rgb * emDyn.lflareDynamics0.x;\n"
+			"\tem_Color.rgb += texture(lflareTex, vUV).rgb;\n"
 			"\tem_Color.a = 1.0;\n";
 
 		return contribution;
