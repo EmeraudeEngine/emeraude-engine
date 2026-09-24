@@ -393,6 +393,43 @@ namespace EmEn::Graphics::RenderTarget
 				return m_framebuffer.get();
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::layerPassCount() const */
+			[[nodiscard]]
+			uint32_t
+			layerPassCount () const noexcept override
+			{
+				if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					return m_cascadeCount;
+				}
+				else
+				{
+					return 1;
+				}
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::layerFramebuffer(uint32_t) const */
+			[[nodiscard]]
+			const Vulkan::Framebuffer *
+			layerFramebuffer (uint32_t layerPass) const noexcept override
+			{
+				if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					if ( layerPass >= m_cascadeCount )
+					{
+						Tracer::error(ClassId, "Cascade pass index overflow !");
+
+						return nullptr;
+					}
+
+					return m_cascadeFramebuffers[layerPass].get();
+				}
+				else
+				{
+					return m_framebuffer.get();
+				}
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
 			[[nodiscard]]
 			bool
@@ -639,8 +676,16 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				m_isReadyForRendering = false;
 
-				/* The main framebuffer. */
+				/* The main framebuffer, and the per-cascade ones (cascade only). */
 				m_framebuffer.reset();
+
+				if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					for ( auto & framebuffer : m_cascadeFramebuffers )
+					{
+						framebuffer.reset();
+					}
+				}
 
 				/* The texture sampler. */
 				m_sampler.reset();
@@ -760,7 +805,7 @@ namespace EmEn::Graphics::RenderTarget
 					/* Create the main image view for rendering.
 					 * - 2D: VK_IMAGE_VIEW_TYPE_2D
 					 * - Cubemap: VK_IMAGE_VIEW_TYPE_2D_ARRAY (for multiview rendering)
-					 * - Cascade: VK_IMAGE_VIEW_TYPE_2D_ARRAY (for multiview rendering and sampling) */
+					 * - Cascade: VK_IMAGE_VIEW_TYPE_2D_ARRAY (for sampling; each cascade renders through its own 2D view) */
 					VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
 
 					if constexpr ( IsCubemapViewMatrix< view_matrices_t > || IsCascadedViewMatrix< view_matrices_t > )
@@ -929,14 +974,15 @@ namespace EmEn::Graphics::RenderTarget
 					.dependencyFlags = 0
 				});
 
-				/* Enable multiview for cubemap and cascade rendering (Vulkan 1.1+). */
+				/* Enable multiview for cubemap rendering (Vulkan 1.1+).
+				 * ⚠️⚠️ NOT for the cascades any more (2026-09-24): a multiview pass broadcasts every draw to
+				 * every view, so each caster was rasterised into ALL the cascades — measured on `terrain`, the
+				 * 74 M caster triangles four times over, 57.8 ms of GPU against 15.1 ms for one classic map.
+				 * Each cascade now renders in its own single-view pass into its own layer
+				 * (m_cascadeFramebuffers) with a caster list culled to it. */
 				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					renderPass->enableMultiview();
-				}
-				else if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
-				{
-					renderPass->enableMultiview(m_cascadeCount);
 				}
 
 				if ( !renderPass->createOnHardware() )
@@ -958,10 +1004,44 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			createFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
 			{
+				/* One single-layer framebuffer per cascade, all on the same render pass. The first one is also
+				 * the target's framebuffer(): what a pipeline is built against. */
+				if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					const VkExtent2D extent2D{this->extent().width, this->extent().height};
+
+					for ( uint32_t cascadeIndex = 0; cascadeIndex < m_cascadeCount; ++cascadeIndex )
+					{
+						if ( m_perCascadeImageViews[cascadeIndex] == nullptr )
+						{
+							TraceError{ClassId} << "The image view of cascade " << cascadeIndex << " is not created for shadow map '" << this->id() << "' !";
+
+							return false;
+						}
+
+						auto framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, extent2D, 1);
+						framebuffer->setIdentifier(ClassId, this->id(), ("CascadeFramebuffer" + std::to_string(cascadeIndex)).c_str());
+						framebuffer->addAttachment(m_perCascadeImageViews[cascadeIndex]->handle());
+
+						if ( !framebuffer->createOnHardware() )
+						{
+							TraceError{ClassId} << "Unable to create the framebuffer of cascade " << cascadeIndex << " for shadow map '" << this->id() << "' !";
+
+							return false;
+						}
+
+						m_cascadeFramebuffers[cascadeIndex] = std::move(framebuffer);
+					}
+
+					m_framebuffer = m_cascadeFramebuffers[0];
+
+					return true;
+				}
+
 				/* Prepare the framebuffer.
-				 * NOTE: When using multiview, framebuffer layers = 1.
+				 * NOTE: When using multiview (a cubemap), framebuffer layers = 1.
 				 * The render pass multiview extension handles rendering to multiple array layers. */
-				if constexpr ( IsCubemapViewMatrix< view_matrices_t > || IsCascadedViewMatrix< view_matrices_t > )
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					const VkExtent2D extent2D{this->extent().width, this->extent().height};
 					m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, extent2D, 1);
@@ -995,11 +1075,12 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			std::shared_ptr< Vulkan::Image > m_depthImage;
-			std::shared_ptr< Vulkan::ImageView > m_depthImageView; /* NOTE: In 2D mode, this is used for rendering AND sampling. In cubemap/cascade mode, this is used for rendering. */
+			std::shared_ptr< Vulkan::ImageView > m_depthImageView; /* NOTE: In 2D mode, this is used for rendering AND sampling. In cubemap mode, this is used for rendering; in cascade mode, for sampling (each cascade renders through its own view). */
 			std::shared_ptr< Vulkan::ImageView > m_depthCubeImageView; /* NOTE: In cubemap mode, this is used for sampling. */
-			std::array< std::shared_ptr< Vulkan::ImageView >, MaxCascadeCount > m_perCascadeImageViews{}; /* NOTE: In cascade mode, used for per-cascade rendering. */
+			std::array< std::shared_ptr< Vulkan::ImageView >, MaxCascadeCount > m_perCascadeImageViews{}; /* NOTE: In cascade mode, the attachment of each cascade's framebuffer. */
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
-			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
+			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer; /* NOTE: In cascade mode, the first cascade's (what pipelines are built against). */
+			std::array< std::shared_ptr< Vulkan::Framebuffer >, MaxCascadeCount > m_cascadeFramebuffers{}; /* NOTE: In cascade mode, one single-view pass per cascade. */
 			view_matrices_t m_viewMatrices;
 			Base::Math::CartesianFrame< float > m_worldCoordinates;
 			uint32_t m_cascadeCount{MaxCascadeCount};

@@ -89,7 +89,44 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool isSeeing (const Base::Math::Space3D::AACuboid< float > & aabb) const noexcept;
 
+			/**
+			 * @brief Returns the volume that can CAST a shadow into this (light) frustum: the same frustum
+			 * with its near plane dropped, i.e. extruded toward the light without limit.
+			 * @note ⚠️ The shadow cast pass clamps depth (ShadowCasting.cpp, depthClampEnable): a caster
+			 * standing between the light and the near plane is flattened onto it and still occludes. Culling
+			 * casters with the full frustum drops exactly those — the tallest ones, between the sun and the
+			 * slice — and leaves a shadow-shaped hole. Test casters against this volume, never the frustum.
+			 * @return Frustum
+			 */
+			[[nodiscard]]
+			Frustum shadowCasterVolume () const noexcept;
+
+			/**
+			 * @brief Returns one plane of the frustum (normal pointing INSIDE).
+			 * @param index Right, Left, Bottom, Top, Far or Near.
+			 * @return const Base::Math::Plane< float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Plane< float > &
+			plane (size_t index) const noexcept
+			{
+				return m_planes[index < m_planes.size() ? index : Near];
+			}
+
 		private:
+
+			/**
+			 * @brief How many planes the tests walk: all six, or the first five (every plane but Near,
+			 * which is the LAST index) for a shadow caster volume.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			testedPlaneCount () const noexcept
+			{
+				return m_nearPlaneIgnored ? Near : m_planes.size();
+			}
+
 
 			/**
 			 * @brief STL streams printable object.
@@ -100,6 +137,7 @@ namespace EmEn::Graphics
 			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Frustum & obj);
 
 			std::array< Base::Math::Plane< float >, 6 > m_planes{};
+			bool m_nearPlaneIgnored{false};
 	};
 
 	EMEN_API std::string to_string (const Frustum & obj);

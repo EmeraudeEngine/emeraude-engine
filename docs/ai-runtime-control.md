@@ -719,7 +719,8 @@ echo "Core.RendererService.getGPUTimings(reset)" | nc -q 2 localhost 7777   # cl
   design: their passes are interleaved (this mirrors the actual command stream).
 - **Shadow maps and render-to-textures** (2026-09-23): each gets a TOP-LEVEL line
   `ShadowMap/<target id>` / `RenderToTexture/<target id>`, listed before `Frame` — they are
-  separate submissions, so they are NOT inside `Frame` or `ScenePass`. Needs the device feature
+  separate submissions, so they are NOT inside `Frame` or `ScenePass`. A cascaded map nests one
+  `Cascade/<n>` line per cascade under its `ShadowMap/<id>` (one render pass each, since 2026-09-24). Needs the device feature
   `hostQueryReset` (every desktop driver and MoltenVK advertise it); without it the profiler's
   startup line says "main command buffer only" and those lines are absent.
 - A continuous reflection probe is SUSPENDED while an enabled SSR/RTR is in the stack, so its

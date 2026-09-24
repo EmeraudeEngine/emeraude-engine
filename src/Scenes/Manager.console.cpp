@@ -916,7 +916,7 @@ namespace EmEn::Scenes
 
 				if ( statistics.targets > 0 )
 				{
-					output << " (" << statistics.targets << " target(s))";
+					output << " (" << statistics.targets << " pass(es), one per cascade on a cascaded map)";
 				}
 
 				output << "\n";

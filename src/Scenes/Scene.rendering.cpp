@@ -27,6 +27,9 @@
 #include "Scene.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
+#include <optional>
 #include <ranges>
 
 /* Local inclusions. */
@@ -44,6 +47,104 @@ namespace EmEn::Scenes
 	using namespace Base;
 	using namespace Base::Math;
 	using namespace Graphics;
+
+	namespace
+	{
+		/**
+		 * @brief The RECEIVERS of one shadow cascade: the slice of the main camera frustum whose fragments sample it.
+		 * @note A cascade is fitted with a bounding SPHERE (stable edges, ViewMatricesCascadedUBO), so its light
+		 * volume overlaps the others massively: tested against it, a tree 50 m from the camera belonged to all four
+		 * cascades (measured on `terrain`, 2026-09-24: 3.9 cascades per caster). What matters is whether the
+		 * caster's shadow can LAND on a receiver of the cascade — a fragment whose view depth falls in the
+		 * cascade's split range, the cross-fade band of the previous cascade included, exactly as
+		 * Saphir::LightGenerator selects it. The caster box is swept along the light over the length its own shadow
+		 * can reach, and the swept volume is tested against the slice's planes (conservative per-plane test).
+		 * ⚠️ The sweep is BOUNDED: down to ReceiverDropAllowance caster heights below the caster's base. A caster on
+		 * a ridge throwing a longer shadow into a deep valley drops out of the far cascades that would receive it.
+		 * The scene visual components (the terrain floor) are never culled here, so relief shadows stay whole.
+		 */
+		class CascadeReceiverSlice final
+		{
+			public:
+
+				/** @brief How far below its own base a caster's shadow is followed, in caster heights. */
+				static constexpr auto ReceiverDropAllowance{1.0F};
+				/** @brief The sine of the lowest sun the sweep accounts for (about 3 degrees): a grazing sun would otherwise sweep to infinity. */
+				static constexpr auto MinimumSunElevationSine{0.05F};
+
+				/**
+				 * @brief Constructs the slice.
+				 * @param cameraFrustum The main camera frustum (its four side planes bound the slice).
+				 * @param cameraPosition The main camera position.
+				 * @param cameraForward The main camera forward direction (normalized).
+				 * @param sliceNear The view depth where the slice's receivers start.
+				 * @param sliceFar The view depth where they end. Ignored for the last cascade.
+				 * @param isLastCascade The last cascade also serves every fragment beyond its split.
+				 * @param lightDirection The direction the light travels (normalized).
+				 */
+				CascadeReceiverSlice (const Frustum & cameraFrustum, const Vector< 3, float > & cameraPosition, const Vector< 3, float > & cameraForward, float sliceNear, float sliceFar, bool isLastCascade, const Vector< 3, float > & lightDirection) noexcept
+					: m_lightDirection{lightDirection},
+					m_sweepPerHeight{(1.0F + ReceiverDropAllowance) / std::max(-lightDirection[Y], MinimumSunElevationSine)}
+				{
+					m_planes[0] = cameraFrustum.plane(Frustum::Right);
+					m_planes[1] = cameraFrustum.plane(Frustum::Left);
+					m_planes[2] = cameraFrustum.plane(Frustum::Bottom);
+					m_planes[3] = cameraFrustum.plane(Frustum::Top);
+					m_planes[4] = Plane< float >{cameraForward, cameraPosition + (cameraForward * sliceNear)};
+
+					if ( isLastCascade )
+					{
+						m_planeCount = 5;
+					}
+					else
+					{
+						m_planes[5] = Plane< float >{-cameraForward, cameraPosition + (cameraForward * sliceFar)};
+						m_planeCount = 6;
+					}
+				}
+
+				/**
+				 * @brief Returns whether a caster's shadow can reach a receiver of the slice.
+				 * @param casterBox The caster's world bounding box.
+				 * @return bool
+				 */
+				[[nodiscard]]
+				bool
+				isReachedBy (const Space3D::AACuboid< float > & casterBox) const noexcept
+				{
+					const auto sweepLength = (casterBox.maximum()[Y] - casterBox.minimum()[Y]) * m_sweepPerHeight;
+
+					for ( size_t index = 0; index < m_planeCount; ++index )
+					{
+						const auto & plane = m_planes[index];
+						const auto & normal = plane.normal();
+
+						/* The box corner furthest inside the plane, then the sweep's gain along the plane normal. */
+						const Vector< 3, float > pVertex{
+							normal[X] >= 0.0F ? casterBox.maximum()[X] : casterBox.minimum()[X],
+							normal[Y] >= 0.0F ? casterBox.maximum()[Y] : casterBox.minimum()[Y],
+							normal[Z] >= 0.0F ? casterBox.maximum()[Z] : casterBox.minimum()[Z]
+						};
+
+						const auto sweepGain = std::max(0.0F, sweepLength * Vector< 3, float >::dotProduct(normal, m_lightDirection));
+
+						if ( plane.getSignedDistanceTo(pVertex) + sweepGain < 0.0F )
+						{
+							return false;
+						}
+					}
+
+					return true;
+				}
+
+			private:
+
+				std::array< Plane< float >, 6 > m_planes{};
+				Vector< 3, float > m_lightDirection;
+				float m_sweepPerHeight;
+				size_t m_planeCount{0};
+		};
+	}
 
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
 	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept
@@ -425,7 +526,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	Scene::castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, uint32_t cascadeIndex) noexcept
 	{
 		const uint32_t readStateIndex = m_frameReadStateIndex;
 
@@ -435,7 +536,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Sort the scene according to the point of view. */
-		if ( !this->populateShadowCastingRenderList(renderTarget, readStateIndex) )
+		if ( !this->populateShadowCastingRenderList(renderTarget, readStateIndex, cascadeIndex) )
 		{
 			/* There is nothing to shadow to cast ... */
 			return;
@@ -469,7 +570,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
 		{
-			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, lodViewPosition, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), sceneTransformsDS);
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, lodViewPosition, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, cascadeIndex, renderBatch.LODLevel(), sceneTransformsDS);
 		}
 	}
 
@@ -1061,7 +1162,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::populateShadowCastingRenderList (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex) noexcept
+	Scene::populateShadowCastingRenderList (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, uint32_t cascadeIndex) noexcept
 	{
 		/* NOTE: Clean the render list before. */
 		m_renderLists[Shadows].clear();
@@ -1071,8 +1172,14 @@ namespace EmEn::Scenes
 		 * and a CSM target short-circuits both tests below), but the no-argument overloads are the
 		 * LIVE logic state and have no business being read from the render thread. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position(readStateIndex);
-		const auto & frustum = renderTarget->viewMatrices().frustum(readStateIndex, 0);
 		const auto viewDistance = renderTarget->viewDistance();
+		const auto isCascaded = renderTarget->isCascadedShadowMap();
+
+		/* ⚠️⚠️ The CASTER VOLUME, never the frustum: the cast pass clamps depth, so a caster between the light
+		 * and the near plane still occludes and must stay in the list (Graphics::Frustum::shadowCasterVolume()).
+		 * A cascaded map culls each pass to ITS cascade: it used to take every caster of the scene into one
+		 * multiview pass that rasterised each of them into all the cascades (57.8 ms of GPU on `terrain`). */
+		const auto casterVolume = renderTarget->viewMatrices().frustum(readStateIndex, isCascaded ? cascadeIndex : 0).shadowCasterVolume();
 
 		/* ⚠️⚠️ A CSM shadow map has NO meaningful camera position, so the distance test below must
 		 * not be applied to it — it emptied the map completely and was the third independent reason
@@ -1084,11 +1191,8 @@ namespace EmEn::Scenes
 		 * sits at (457, 762, 457), i.e. 999 m from the scene, against a viewDistance of 500 m
 		 * derived from the camera — so EVERY caster failed `distance > viewDistance` and the map
 		 * was rendered empty, frame after frame.
-		 * TODO(perf): this now walks every caster in the scene for a CSM target. The right filter is
-		 * the union of the per-cascade frustums, which viewMatrices().frustum(index) already
-		 * exposes; it is a pure optimisation and belongs in its own change, measured on a scene
-		 * dense enough to show it (reflexion-debug is not). */
-		const auto isCascaded = renderTarget->isCascadedShadowMap();
+		 * The volume test, on the other hand, IS applied to a CSM target — to the caster volume of
+		 * the cascade this pass renders (2026-09-24). */
 
 		/* The VIEWER, for the per-instance shadow casting distance (RenderableInstance::setShadowCastingDistance()):
 		 * a caster far from the camera is dropped whatever the light's own frame. Published render state. */
@@ -1096,6 +1200,54 @@ namespace EmEn::Scenes
 		const auto & viewerPosition = mainRenderTarget != nullptr ?
 			mainRenderTarget->viewMatrices().position(readStateIndex) :
 			cameraPosition;
+
+		/* A cascaded map keeps, for each cascade, only the casters whose shadow can land on ITS receivers (see
+		 * CascadeReceiverSlice): the cascade volumes overlap, the receiver slices do not. */
+		std::optional< CascadeReceiverSlice > receiverSlice;
+
+		if ( isCascaded && mainRenderTarget != nullptr )
+		{
+			const auto & cascadedViewMatrices = static_cast< const ViewMatricesCascadedUBO & >(renderTarget->viewMatrices());
+			const auto & mainViewMatrices = mainRenderTarget->viewMatrices();
+
+			/* The receivers of cascade c: view depth in [split(c - 1) - band(c - 1), split(c)], the band being the
+			 * cross-fade the shader applies at the end of cascade c - 1 (Saphir::LightGenerator). */
+			float sliceNear = 0.0F;
+
+			if ( cascadeIndex > 0 )
+			{
+				const auto previousEnd = cascadedViewMatrices.splitDistance(readStateIndex, cascadeIndex - 1);
+				const auto previousStart = cascadeIndex > 1 ? cascadedViewMatrices.splitDistance(readStateIndex, cascadeIndex - 2) : 0.0F;
+
+				sliceNear = previousEnd - ((previousEnd - previousStart) * m_cascadeBlendRatio);
+			}
+
+			/* The camera's forward axis: -Z of its frame, i.e. minus the third column of the inverse view matrix. */
+			const auto cameraFrame = mainViewMatrices.viewMatrix(readStateIndex, false, 0).inverse();
+			const auto cameraForward = -Vector< 3, float >{cameraFrame[8], cameraFrame[9], cameraFrame[10]}.normalized();
+
+			receiverSlice.emplace(
+				mainViewMatrices.frustum(readStateIndex, 0),
+				viewerPosition,
+				cameraForward,
+				sliceNear,
+				cascadedViewMatrices.splitDistance(readStateIndex, cascadeIndex),
+				cascadeIndex + 1 >= cascadedViewMatrices.cascadeCount(),
+				cascadedViewMatrices.lightDirection(readStateIndex)
+			);
+		}
+
+		/* NOTE: An entity without a measurable render box is kept (conservative), as the volume test does. */
+		const auto missesCascadeReceivers = [&receiverSlice] (const AbstractEntity & entity) noexcept {
+			if ( !receiverSlice.has_value() )
+			{
+				return false;
+			}
+
+			const auto renderBox = entity.getWorldRenderBoundingBox();
+
+			return renderBox.isValid() && !receiverSlice->isReachedBy(renderBox);
+		};
 
 		const auto beyondShadowCastingDistance = [&viewerPosition] (const RenderableInstance::Abstract & instance, const Vector< 3, float > & position) noexcept {
 			const auto limit = instance.shadowCastingDistance();
@@ -1152,13 +1304,17 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					/* Render-target distance check and frustum culling check.
-				 * NOTE: CSM and cubemap shadow maps skip frustum culling because:
-				 * - Cubemaps render all 6 faces covering all directions
-				 * - CSM uses multiple cascade frustums; objects may be visible in any cascade */
+					/* Render-target distance check and caster-volume culling check.
+					 * NOTE: A cubemap skips the volume test (its 6 faces cover all directions); a CSM skips the
+					 * distance test (see the note at the top) but culls to the cascade of this pass. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !isCascaded && !staticEntity->isVisibleTo(frustum) ) )
+					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(casterVolume) ) )
+					{
+						return;
+					}
+
+					if ( missesCascadeReceivers(*staticEntity) )
 					{
 						return;
 					}
@@ -1207,13 +1363,17 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					/* Render-target distance check and frustum culling check.
-				 * NOTE: CSM and cubemap shadow maps skip frustum culling because:
-				 * - Cubemaps render all 6 faces covering all directions
-				 * - CSM uses multiple cascade frustums; objects may be visible in any cascade */
+					/* Render-target distance check and caster-volume culling check.
+					 * NOTE: A cubemap skips the volume test (its 6 faces cover all directions); a CSM skips the
+					 * distance test (see the note at the top) but culls to the cascade of this pass. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !isCascaded && !currentNode->isVisibleTo(frustum) ) )
+					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !currentNode->isVisibleTo(casterVolume) ) )
+					{
+						return;
+					}
+
+					if ( missesCascadeReceivers(*currentNode) )
 					{
 						return;
 					}

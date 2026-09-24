@@ -1867,10 +1867,12 @@ namespace EmEn::Scenes
 			 * @note Skipped if LightSet is disabled.
 			 * @note Uses the double-buffered render state (read-only access).
 			 *
-			 * @param renderTarget The shadow map render target (2D or cubemap).
+			 * @param renderTarget The shadow map render target (2D, cubemap or cascaded).
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 * @param cascadeIndex The cascade this pass renders — a cascaded shadow map takes one pass per cascade
+			 * (RenderTarget::Abstract::layerPassCount()), each with a caster list culled to that cascade. 0 otherwise.
 			 */
-			void castShadows (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+			void castShadows (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, uint32_t cascadeIndex) noexcept;
 
 			/**
 			 * @brief What one frame's render lists submit, by geometry level of detail.
@@ -1883,7 +1885,7 @@ namespace EmEn::Scenes
 				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > batches{};
 				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > instances{};
 				std::array< uint64_t, Graphics::Renderable::MaxLODLevels > triangles{};
-				/** @brief How many shadow targets were filled (shadow statistics only). */
+				/** @brief How many shadow PASSES were recorded — one per target, one per CASCADE on a cascaded map (shadow statistics only). */
 				uint64_t targets{0};
 			};
 
@@ -2541,9 +2543,10 @@ namespace EmEn::Scenes
 			 * @brief Updates the shadow casting render list from the point of view of a light to prepare only the useful data to make a render with it.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param readStateIndex The render state valid index to read data.
+			 * @param cascadeIndex On a cascaded shadow map, the cascade the list is culled to. Ignored otherwise.
 			 * @return bool
 			 */
-			bool populateShadowCastingRenderList (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex) noexcept;
+			bool populateShadowCastingRenderList (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, uint32_t cascadeIndex) noexcept;
 
 			/**
 			 * @brief Inserts a renderable instance in the render batch list for shadow casting.
@@ -2872,6 +2875,8 @@ namespace EmEn::Scenes
 			/** @brief Current main camera view distance for LOD computation. Updated per prepareRendering(). */
 			float m_currentViewDistance{1000.0F};
 			float m_LODScreenCoverageThreshold{DefaultGraphicsLODScreenCoverageThreshold};
+			/** @brief The CSM cross-fade band, as a fraction of a cascade's depth range (read once, like the shader generator). */
+			float m_cascadeBlendRatio{0.0F};
 			/** @brief The last frame's view list statistics, published by prepareRender() of the primary view. */
 			RenderListStatistics m_viewRenderStatistics{};
 			/** @brief The last frame's shadow list statistics, published with the view's. */

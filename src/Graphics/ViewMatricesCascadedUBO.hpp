@@ -251,6 +251,26 @@ namespace EmEn::Graphics
 			float splitDistance (size_t cascadeIndex) const noexcept;
 
 			/**
+			 * @brief Returns the split distance for a specific cascade, from the PUBLISHED render state.
+			 * @note The far end of the cascade's slice, in view depth of the main camera — what the receiving
+			 * shader compares a fragment's view depth against. Render thread.
+			 * @param readStateIndex The render state slot the frame latched.
+			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float splitDistance (uint32_t readStateIndex, size_t cascadeIndex) const noexcept;
+
+			/**
+			 * @brief Returns the direction the light travels (from the light into the scene), from the PUBLISHED
+			 * render state — the one the cascades were fitted with. Render thread.
+			 * @param readStateIndex The render state slot the frame latched.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > & lightDirection (uint32_t readStateIndex) const noexcept;
+
+			/**
 			 * @brief Returns the view-projection matrix for a specific cascade.
 			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
 			 * @return const Base::Math::Matrix< 4, float > &
@@ -374,6 +394,7 @@ namespace EmEn::Graphics
 				Base::Math::Matrix< 4, float > infinityView; /**< View matrix for infinite distance. */
 				std::array< Base::Math::Matrix< 4, float >, MaxCascadeCount > cascadeViewProjections{}; /**< View-projection matrices per cascade. */
 				Base::Math::Vector< 3, float > position; /**< Camera/light position in world space. */
+				Base::Math::Vector< 3, float > lightDirection{0.0F, -1.0F, 0.0F}; /**< Direction the light travels, as the cascades were fitted. */
 				Frustum mainFrustum; /**< Main frustum for culling. */
 				std::array< Frustum, MaxCascadeCount > cascadeFrustums{}; /**< Per-cascade frustums for culling. */
 				std::array< float, ViewUBOElementCount > bufferData{

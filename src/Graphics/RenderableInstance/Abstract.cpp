@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <array>
 #include <bit>
+#include <optional>
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
@@ -107,13 +108,9 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		void
-		drawAdaptiveGeometry (const Geometry::Interface & geometry, const RenderTarget::Abstract & renderTarget, uint32_t readStateIndex, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance, const PushConstantContext & pushContext, const Saphir::Program & program) noexcept
+		drawAdaptiveGeometry (const Geometry::Interface & geometry, const Frustum * cullingVolume, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance, const PushConstantContext & pushContext, const Saphir::Program & program) noexcept
 		{
-			const auto & viewMatrices = renderTarget.viewMatrices();
-			const auto singleView = !renderTarget.isCubemap() && !renderTarget.isCascadedShadowMap();
-			const auto & frustum = viewMatrices.frustum(readStateIndex, 0);
-
-			geometry.prepareAdaptiveRendering(lodViewPosition, singleView ? &frustum : nullptr, worldCoordinates);
+			geometry.prepareAdaptiveRendering(lodViewPosition, cullingVolume, worldCoordinates);
 
 			const auto drawCallCount = geometry.getAdaptiveDrawCallCount();
 
@@ -1148,7 +1145,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
+	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t cascadeIndex, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
@@ -1182,7 +1179,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: The view UBO is part of the layout when:
 		 * - Renderable instance uses GPU instancing (needs view matrix from UBO)
 		 * - OR render target is a cubemap (multiview needs 6 view matrices from UBO indexed by gl_ViewIndex)
-		 * - OR render target is a CSM (multiview needs N cascade view matrices from UBO indexed by gl_ViewIndex) */
+		 * - OR render target is a CSM (N cascade view matrices from UBO, selected by the pushed cascade index) */
 		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
 		{
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
@@ -1246,6 +1243,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates);
 
+		/* A cascaded shadow map renders one cascade per pass: the program selects the cascade matrix with this
+		 * index (Saphir::Generator::Abstract::declareMatrixPushConstantBlock()). Unpushed, it reads 0 and draws
+		 * every cascade's casters into cascade 0's projection. */
+		if ( passContext.isCSM )
+		{
+			vkCmdPushConstants(commandBuffer.handle(), pipelineLayout->handle(), pushContext.stageFlags, program->cascadeIndexPushConstantOffset(), sizeof(uint32_t), &cascadeIndex);
+		}
+
 		/* ⚠️ The third argument is the SUB-GEOMETRY index, not a frame index. The two coincide
 		 * for a SPRITE only: SpriteResource bakes one quad group per frame AND enables 3D primary
 		 * texture coordinates, so selecting its sub-geometry IS selecting its frame. Every other
@@ -1263,7 +1268,17 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else if ( geometry != nullptr && geometry->isAdaptiveLOD() )
 		{
-			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0, pushContext, *program);
+			/* ⚠️ The CASTER volume of the pass (depth is clamped: see Graphics::Frustum::shadowCasterVolume()). A
+			 * cascade culls the nodes to ITS cascade: with no volume at all — what a cascaded map used to pass,
+			 * multiview forbidding one — the whole 16 km grid was drawn into every cascade. A cubemap has none. */
+			std::optional< Frustum > casterVolume;
+
+			if ( !renderTarget->isCubemap() )
+			{
+				casterVolume = renderTarget->viewMatrices().frustum(readStateIndex, renderTarget->isCascadedShadowMap() ? cascadeIndex : 0).shadowCasterVolume();
+			}
+
+			drawAdaptiveGeometry(*geometry, casterVolume.has_value() ? &casterVolume.value() : nullptr, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0, pushContext, *program);
 		}
 		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
@@ -1434,7 +1449,9 @@ namespace EmEn::Graphics::RenderableInstance
 		else if ( geometry->isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
-			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
+			const bool singleView = !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap();
+
+			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
@@ -1696,7 +1713,9 @@ namespace EmEn::Graphics::RenderableInstance
 		else if ( geometry->isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
-			drawAdaptiveGeometry(*geometry, *renderTarget, readStateIndex, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
+			const bool singleView = !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap();
+
+			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,

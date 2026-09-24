@@ -907,8 +907,9 @@ the previous frame's data.
 >
 > **Why the main image stays stable while shadows do not:** the main pass carries its matrices in
 > **push constants**, baked into the command buffer at record time, so the GPU cannot see them
-> change. CSM and cubemap shadows **cannot** — multiview indexes their matrices by `gl_ViewIndex`
-> from a UBO, read at execution time. That is the entire asymmetry.
+> change. CSM and cubemap shadows **cannot** — their matrices come from a UBO (indexed by
+> `gl_ViewIndex` for a cubemap, by a pushed cascade index for a CSM), read at execution time. That is
+> the entire asymmetry.
 
 ### Rules When Adding New GPU Data
 

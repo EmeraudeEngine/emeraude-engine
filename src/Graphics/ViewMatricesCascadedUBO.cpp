@@ -317,6 +317,39 @@ namespace EmEn::Graphics
 		return m_logicState.bufferData[CascadeSplitDistancesOffset + cascadeIndex];
 	}
 
+	float
+	ViewMatricesCascadedUBO::splitDistance (uint32_t readStateIndex, size_t cascadeIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() )
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return this->splitDistance(cascadeIndex);
+		}
+
+		const auto & state = m_renderState[readStateIndex];
+
+		if ( cascadeIndex >= m_cascadeCount )
+		{
+			return state.bufferData[FarPlaneOffset];
+		}
+
+		return state.bufferData[CascadeSplitDistancesOffset + cascadeIndex];
+	}
+
+	const Vector< 3, float > &
+	ViewMatricesCascadedUBO::lightDirection (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() )
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return m_logicState.lightDirection;
+		}
+
+		return m_renderState[readStateIndex].lightDirection;
+	}
+
 	const Matrix< 4, float > &
 	ViewMatricesCascadedUBO::cascadeViewProjectionMatrix (size_t cascadeIndex) const noexcept
 	{
@@ -364,6 +397,7 @@ namespace EmEn::Graphics
 		 * CSM derives its coverage from the camera frustum. */
 		m_logicState.bufferData[NearPlaneOffset] = nearPlane;
 		m_logicState.bufferData[FarPlaneOffset] = farPlane;
+		m_logicState.lightDirection = lightDirection;
 
 		/* Recompute split distances. */
 		this->computeSplitDistances(nearPlane, farPlane);

@@ -86,12 +86,13 @@ namespace EmEn::Graphics::RenderableInstance
 		bool isCubemap{false};
 
 		/**
-		 * @brief Whether the render target is a Cascaded Shadow Map using multiview rendering.
+		 * @brief Whether the render target is a Cascaded Shadow Map.
 		 *
-		 * When true, the rendering uses Vulkan multiview extension where:
-		 * - All N cascades are rendered in a single pass
-		 * - View/Projection matrices are stored in a UBO array indexed by gl_ViewIndex
-		 * - Push constants only need to provide the Model matrix (Unique) or nothing (Multiple)
+		 * When true:
+		 * - Each cascade is rendered in its OWN single-view pass, with a caster list culled to it
+		 * - The cascade view-projection matrices are stored in a UBO array, selected by the cascade index
+		 *   pushed per pass (Abstract::castShadows()), NOT by gl_ViewIndex
+		 * - Push constants otherwise provide the Model matrix (Unique) or the instanced block (Multiple)
 		 */
 		bool isCSM{false};
 	};

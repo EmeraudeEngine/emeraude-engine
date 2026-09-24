@@ -199,7 +199,7 @@ configurable on purpose — the reasons live with the flag's contract in
 > |---|---|---|
 > | 4a | `updateCascades()` filled `m_CSMBuffer` every frame but **never called `requestVideoMemoryUpdate()`**, and `AbstractLightEmitter::updateVideoMemory()` uploads nothing without that flag | The only upload ever performed was the one from `createOnHardware()`, when the buffer is **all zeros** — black colour, zero intensity, null matrices. Hence "no light at all", permanently, for a static light. Ground mean 16.2 vs 73.7 classic; 69.8 after | **FIXED** `c7eef938` |
 > | 4b | `computeCascadeProjection()` passed `minZ - margin` / `maxZ + margin` as the ortho near/far, but those are **view-space z coordinates** while `orthographicProjection()` expects positive **distances** | Cascade depth outside [0,1]: casters clipped out of the map, and the `projCoords.z` guard failing at sampling time, leaving `shadowFactor = 1.0`. No shadow, ever — independently of 4a | **FIXED** `8c6417f0` — `near = -maxZ - margin`, `far = -minZ + margin`. ⚠️ `frustumCenter` is still computed and never used: the light camera sits at the world origin, contrary to its own comment |
-| 4c | The shadow-pass `distance > viewDistance` culling measured from the light ENTITY while the cascades are fitted to the MAIN CAMERA | On `reflexion-debug` the sun sits 999 m away against a 500 m viewDistance, so EVERY caster was rejected and the map rendered empty. The frustum half of the same condition was already skipped for CSM; the distance half was not | **FIXED** `882e5f29` — ⚠️ TODO(perf): CSM now walks every caster; the right filter is the union of the per-cascade frustums |
+| 4c | The shadow-pass `distance > viewDistance` culling measured from the light ENTITY while the cascades are fitted to the MAIN CAMERA | On `reflexion-debug` the sun sits 999 m away against a 500 m viewDistance, so EVERY caster was rejected and the map rendered empty. The frustum half of the same condition was already skipped for CSM; the distance half was not | **FIXED** `882e5f29` — the perf half is done since 2026-09-24: each cascade culls its casters by RECEIVERS (§ *One pass per cascade*) |
 | 4d | `cascadeScale` (the light's `csmScale`) was unreachable from `BackgroundLightingOptions`, pinning coverage to the whole camera frustum | Shadows present in the map, **sub-texel on screen** — reads as "still broken" once 4a-4c are fixed. Cost this investigation two wrong conclusions | **FIXED** `864e6582` — covered depth = viewDistance / cascadeScale; pick it from the scene |
 > | 4c | The shadow-pass `distance > viewDistance` culling measured from the light ENTITY (999 m away) against a camera-derived 500 m, so EVERY caster was rejected and the map rendered empty. The frustum half was already skipped for CSM; the distance half was not | `882e5f29` |
 > | 4d | `cascadeScale` was unreachable from the sky derivation, pinning the coverage to the whole camera frustum — shadows present in the map, sub-texel on screen | `864e6582` |
@@ -254,6 +254,55 @@ therefore names a shader that **cannot compile**.
 
 Previously, asking for both produced a compile failure that broke the entire renderable instance.
 
+### One pass per cascade, casters culled by RECEIVERS (Sep 2026)
+
+Until 2026-09-24 the cascades were rendered in ONE multiview pass (`viewMask` = all cascades,
+`gl_ViewIndex` selecting the matrix). A multiview pass broadcasts every draw to every view, so each
+caster was rasterised into ALL the cascades. Measured on `terrain` (4 × 4096 px, forest, pinned pose,
+validation ON, RTX 3070 Ti):
+
+| | Shadow pass (GPU) | Casters drawn (sum of passes) |
+|---|---|---|
+| Classic map, 4096 px over ±2000 m | 15.1 ms | 8 431 instances, 74 M triangles |
+| CSM, one multiview pass | 57.8 ms | the same, into each cascade |
+| CSM, one pass per cascade, culled to the cascade VOLUME | **91.6 ms** | 32 882 instances, 291 M triangles |
+| CSM, one pass per cascade, culled by RECEIVERS (shipped) | **34.7 ms** (12.0 / 15.7 / 6.4 / 0.7) | 7 024 instances, 84 M triangles |
+
+**How it works now.**
+- `ShadowMap< ViewMatricesCascadedUBO >` has no multiview: one single-layer framebuffer per cascade
+  (`layerPassCount()` / `layerFramebuffer()`, virtual on `RenderTarget::Abstract`), all on one render
+  pass, and `Renderer::renderShadowMaps()` loops over them.
+- The cascade matrix still lives in the cascaded view UBO; the shader selects it with a `cascadeIndex`
+  **push constant** (`PushConstant::Component::CascadeIndex`, after `frameIndex`, offset recorded on the
+  `Program`), pushed by `RenderableInstance::Abstract::castShadows()` for every draw of the pass.
+- `Scene::populateShadowCastingRenderList(…, cascadeIndex)` keeps a caster in cascade c only if (1) it
+  touches the cascade's **caster volume** (`Frustum::shadowCasterVolume()`: the light frustum without its
+  near plane, because the cast pass clamps depth) AND (2) its shadow can land on a **receiver** of the
+  cascade: its box, swept along the light by `height × (1 + 1) / sin(elevation)`, must touch the slice of
+  the main camera frustum whose fragments sample c — view depth in `[split(c-1) − band(c-1), split(c)]`,
+  the band being the shader's cross-fade (`Core/Graphics/ShadowMapping/CascadeBlendRatio`, read by the
+  scene with the same clamp). The last cascade has no far bound.
+- A terrain (adaptive geometry) selects its nodes against the cascade's caster volume too (it used to
+  get no volume at all under multiview — the whole grid in every cascade).
+- The GPU profiler shows one nested `Cascade/<n>` line per cascade under `ShadowMap/<id>`.
+
+⚠️⚠️ **Traps paid for.**
+- **Culling by the cascade VOLUME does nothing.** A cascade is fitted with a bounding SPHERE (stable
+  edges, § *Cascade fit stability*), so the volumes overlap massively: a tree 50 m from the camera sat in
+  all four (3.9 cascades per caster). Only the receiver slices are disjoint.
+- **At equal work, four passes cost ~1.6× one multiview pass** (91.6 vs 57.8 ms for the same triangles):
+  splitting the pass only pays when the culling removes most of the work. Never split without the
+  receiver test.
+- **The cascades are GEOMETRY-bound, not fill-bound**: 2048 px instead of 4096 saved only 15 %
+  (29.6 ms). The next lever is fewer caster triangles (a coarser shadow LOD, a shorter
+  `setShadowCastingDistance()`), not a lower resolution.
+- **The receiver sweep is BOUNDED** (`CascadeReceiverSlice::ReceiverDropAllowance` = 1 caster height below
+  its base, sun elevation floored at ~3°): a caster on a ridge throwing a longer shadow into a deep valley
+  drops out of the far cascades that would receive it. The scene visual components (a terrain floor) are
+  never culled by it, so relief shadows stay whole.
+- A classic 2D map culls with the caster volume too since that change: it used the full frustum, which
+  dropped the casters standing between the light and its near plane that the depth clamp exists to keep.
+
 ### Resolution budget — CSM coverage comes from the CAMERA, not the scene
 
 Cascade splits are derived from the main camera's near/far (`ViewMatricesCascadedUBO`, practical
@@ -275,9 +324,10 @@ blocks, and **read by nobody on either 2D path** — its only generated consumer
 cubemap ones. Setting it changed nothing at all, silently, for both the classic and the cascaded map.
 
 It is now wired on the CSM path and means **world units — metres**. The rasterizer bias on the cast
-pass cannot do this job: it is per-PIPELINE, and all cascades go through that one pipeline via
-multiview, so it structurally cannot vary per cascade — while cascades differ in texel size by more
-than an order of magnitude.
+pass cannot do this job: it is per-PIPELINE, and all cascades went through that one pipeline via
+multiview, so it structurally could not vary per cascade — while cascades differ in texel size by more
+than an order of magnitude. (Since 2026-09-24 each cascade is its own pass, so a dynamic depth bias per
+pass would now be possible; nothing uses it.)
 
 The per-cascade scale is **derived in the shader** rather than uploaded:
 
@@ -358,9 +408,9 @@ so in `ViewMatrices2DUBO.cpp`:
  * frame races the GPU: the raster of frame N can read what frame N±1 wrote. ... */
 ```
 
-CSM **cannot** use push constants: multiview indexes the cascades by `gl_ViewIndex` from a UBO
-(`RenderableInstance/Abstract.cpp`, the `PerView` set is bound for a CSM target *because* of it). So
-the cascade matrices are read **at GPU execution time**, out of `ViewMatricesCascadedUBO`, whose
+CSM reads its cascade matrices from a UBO — by `gl_ViewIndex` until 2026-09-24, by a pushed cascade
+index since each cascade is its own pass (`RenderableInstance/Abstract.cpp`, the `PerView` set is
+bound for a CSM target *because* of it). So the cascade matrices are read **at GPU execution time**, out of `ViewMatricesCascadedUBO`, whose
 first 256 bytes are `mat4[4] cascadeViewProjectionMatrices` — refit to the camera frustum on every
 logic tick. It is the same single-buffer upload path as the 2D UBO, minus the warning, carrying
 exactly what the warning forbids. Point-light cubemap shadows share the shape (6 views from a UBO).

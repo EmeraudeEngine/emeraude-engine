@@ -586,11 +586,14 @@ namespace EmEn::Saphir
 
 		std::stringstream code;
 
-		/* NOTE: CSM (Cascaded Shadow Map) mode uses multiview rendering with gl_ViewIndex
-		 * to select the correct cascade view-projection matrix from the UBO.
+		/* NOTE: CSM (Cascaded Shadow Map) mode selects the cascade view-projection matrix from the UBO
+		 * with the cascade index pushed by the pass — one single-view pass per cascade, each with its own
+		 * caster list (it used gl_ViewIndex under a multiview pass that drew every caster into every cascade).
 		 * The CSM UBO has mat4[4] cascadeViewProjectionMatrices at offset 0. */
 		if ( this->isCSMModeEnabled() )
 		{
+			const auto cascadeMatrix = std::string{Keys::UniformBlock::View} + "." + Keys::UniformBlock::Component::CascadeViewProjectionMatrices + "[" + MatrixPC(PushConstant::Component::CascadeIndex) + "]";
+
 			if ( this->isInstancingEnabled() )
 			{
 				if ( this->isBillBoardingEnabled() )
@@ -601,7 +604,7 @@ namespace EmEn::Saphir
 					}
 
 					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
-						<< Keys::UniformBlock::View << "." << Keys::UniformBlock::Component::CascadeViewProjectionMatrices << "[gl_ViewIndex] * "
+						<< cascadeMatrix << " * "
 						<< ShaderVariable::SpriteModelMatrix << ";" "\n";
 				}
 				else
@@ -612,14 +615,14 @@ namespace EmEn::Saphir
 					}
 
 					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
-						<< Keys::UniformBlock::View << "." << Keys::UniformBlock::Component::CascadeViewProjectionMatrices << "[gl_ViewIndex] * "
+						<< cascadeMatrix << " * "
 						<< Attribute::ModelMatrix << ";" "\n";
 				}
 			}
 			else
 			{
 				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
-					<< Keys::UniformBlock::View << "." << Keys::UniformBlock::Component::CascadeViewProjectionMatrices << "[gl_ViewIndex] * "
+					<< cascadeMatrix << " * "
 					<< MatrixPC(PushConstant::Component::ModelMatrix) << ";" "\n";
 			}
 		}

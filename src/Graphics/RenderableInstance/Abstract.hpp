@@ -970,6 +970,8 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 * @param cascadeIndex The cascade this pass renders, on a cascaded shadow map (one pass per
+			 * cascade, see RenderTarget::Abstract::layerPassCount()); ignored by every other target.
 			 * @param LODLevel The desired LOD level. Default 0.
 			 *
 			 * @note Shadow maps use depth-only rendering without material/lighting bindings.
@@ -980,7 +982,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see pushMatricesForShadowCasting() For push constant strategy.
 			 * @version 0.8.35
 			 */
-			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Base::Math::Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Base::Math::Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t cascadeIndex, uint32_t LODLevel = 0, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.

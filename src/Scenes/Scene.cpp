@@ -27,6 +27,7 @@
 #include "Scene.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <ranges>
 
 /* Local inclusions. */
@@ -99,6 +100,10 @@ namespace EmEn::Scenes
 		static_cast< void >(m_instanceTransforms.initializePerFrameBuffers(graphicsRenderer));
 
 		m_LODScreenCoverageThreshold = settings.getOrSetDefault< float >(GraphicsLODScreenCoverageThresholdKey, DefaultGraphicsLODScreenCoverageThreshold);
+
+		/* ⚠️ The SAME key and clamp as Saphir::LightGenerator: the receiving shader samples cascade c + 1 over this
+		 * band at the end of cascade c, so the caster list of c + 1 must cover the band too. */
+		m_cascadeBlendRatio = std::clamp(settings.getOrSetDefault< float >(GraphicsShadowMappingCascadeBlendRatioKey, DefaultGraphicsShadowMappingCascadeBlendRatio), 0.0F, 0.5F);
 
 		this->buildOctrees(octreeOptions);
 	}

@@ -107,9 +107,9 @@ namespace EmEn::Graphics
 	{
 		// A point is visible if it's on the positive side of all frustum planes.
 		// The signed distance is positive when the point is on the side of the normal.
-		for ( const auto & plane : m_planes )
+		for ( size_t index = 0; index < this->testedPlaneCount(); ++index )
 		{
-			if ( plane.getSignedDistanceTo(point) < 0.0F )
+			if ( m_planes[index].getSignedDistanceTo(point) < 0.0F )
 			{
 				return false;
 			}
@@ -124,9 +124,9 @@ namespace EmEn::Graphics
 		// A sphere is visible if its center is within radius distance from all planes.
 		// For each plane, we check if: signedDistance(center) >= -radius
 		// This means the sphere intersects or is inside the frustum.
-		for ( const auto & plane : m_planes )
+		for ( size_t index = 0; index < this->testedPlaneCount(); ++index )
 		{
-			if ( plane.getSignedDistanceTo(sphere.position()) < -sphere.radius() )
+			if ( m_planes[index].getSignedDistanceTo(sphere.position()) < -sphere.radius() )
 			{
 				return false;
 			}
@@ -142,8 +142,10 @@ namespace EmEn::Graphics
 		// The p-vertex is chosen based on the plane's normal direction:
 		// - If normal component is positive, use maximum; otherwise use minimum.
 		// If the p-vertex is outside (negative side), the whole AABB is outside.
-		for ( const auto & plane : m_planes )
+		for ( size_t index = 0; index < this->testedPlaneCount(); ++index )
 		{
+			const auto & plane = m_planes[index];
+
 			// Compute the p-vertex (positive vertex) based on plane normal
 			Vector< 3, float > pVertex;
 			pVertex[X] = plane.normal()[X] >= 0.0F ? aabb.maximum()[X] : aabb.minimum()[X];
@@ -160,7 +162,18 @@ namespace EmEn::Graphics
 		return true;
 	}
 
-	std::ostream &
+	Frustum
+	Frustum::shadowCasterVolume () const noexcept
+	{
+		static_assert(Near == 5, "The caster volume drops the LAST plane: Near must stay the last index.");
+
+		Frustum volume{*this};
+		volume.m_nearPlaneIgnored = true;
+
+		return volume;
+	}
+
+		std::ostream &
 	operator<< (std::ostream & out, const Frustum & obj)
 	{
 		return out << "Frustum data :" "\n"

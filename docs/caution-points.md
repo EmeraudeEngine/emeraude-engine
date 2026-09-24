@@ -2173,6 +2173,26 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### Fixed: a multiview CSM drew every caster into every cascade — and culling by cascade volume does not fix it (Sep 2026)
+
+> **Symptom:** switching `terrain` from its classic 4096 px map to 4 × 4096 px cascades took the shadow
+> pass from 15.1 to 57.8 ms of GPU (validation ON, RTX 3070 Ti) for the same 74 M caster triangles.
+
+**Cause.** One multiview pass for all the cascades: multiview broadcasts every draw to every view.
+
+**What did NOT work, measured.** One pass per cascade with casters culled to the cascade's light
+volume: 91.6 ms. The cascades are sphere-fitted, so their volumes overlap and each kept 3.9 cascades'
+worth of casters, and four passes cost ~1.6× one multiview pass at equal work.
+
+**Fix.** One pass per cascade, casters kept only if their shadow can land on the cascade's RECEIVERS
+(the camera-frustum slice between the cascade's splits, cross-fade band included), a terrain culled to
+the cascade's caster volume: **34.7 ms**, 7 024 instances instead of 32 882. Details, the bounded-sweep
+trade-off and the profiler lines: `docs/shadow-mapping.md` § *One pass per cascade*.
+
+⚠️ **Traps.** Never cull shadow casters with the light's full frustum: the cast pass clamps depth, the
+near plane must go (`Frustum::shadowCasterVolume()`). The cascades are geometry-bound — a lower
+resolution saves 15 %, fewer caster triangles is the lever.
+
 ### Fixed: two state slots let the logic LAP the renderer — heavy content slid on the image while the camera turned (Sep 2026)
 
 > **Symptom (owner, 2026-09-24):** on heavy scenes only, some objects seem to *slide* against the rest

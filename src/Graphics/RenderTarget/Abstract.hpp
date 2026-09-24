@@ -580,6 +580,36 @@ namespace EmEn::Graphics::RenderTarget
 			virtual const Vulkan::Framebuffer * framebuffer () const noexcept = 0;
 
 			/**
+			 * @brief Returns how many render passes one refresh of this target takes, one per layer.
+			 * @note 1 for every target but a cascaded shadow map, which renders each cascade in its OWN pass
+			 * so that each one draws only the casters that reach it (Scenes::Scene::castShadows()). A
+			 * multiview target (a cubemap) renders all its layers in ONE pass and answers 1.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			virtual
+			uint32_t
+			layerPassCount () const noexcept
+			{
+				return 1;
+			}
+
+			/**
+			 * @brief Returns the framebuffer of one layer pass (see layerPassCount()).
+			 * @note Every layer framebuffer shares the render pass of framebuffer(), so a pipeline built
+			 * against the target serves all of them.
+			 * @param layerPass The pass index, below layerPassCount().
+			 * @return const Vulkan::Framebuffer *
+			 */
+			[[nodiscard]]
+			virtual
+			const Vulkan::Framebuffer *
+			layerFramebuffer (uint32_t /*layerPass*/) const noexcept
+			{
+				return this->framebuffer();
+			}
+
+			/**
 			 * @brief Returns the post-process framebuffer for single-sample rendering after MSAA resolve.
 			 * @note Only the swap chain provides a post-process framebuffer. Other render targets return nullptr.
 			 * @return const Vulkan::Framebuffer * Pointer to the post-process framebuffer, or nullptr if not available.

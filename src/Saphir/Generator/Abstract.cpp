@@ -486,7 +486,8 @@ namespace EmEn::Saphir::Generator
 		}
 		else
 		{
-			/* NOTE: In cubemap/CSM mode, the projection and view matrices come from the UBO (indexed by gl_ViewIndex).
+			/* NOTE: In cubemap/CSM mode, the projection and view matrices come from the UBO (indexed by gl_ViewIndex
+			 * for a cubemap, by the pushed cascade index for a CSM).
 			 * We only need to push the model matrix (M) alone. The CPU code pushes only the model matrix at offset 0. */
 			if ( m_renderTarget->isCubemap() || m_renderTarget->isCascadedShadowMap() )
 			{
@@ -536,6 +537,17 @@ namespace EmEn::Saphir::Generator
 		/* NOTE: Append the animated texture frame index to every matrix push constant block.
 		 * This allows shaders to construct 3D texture coordinates from 2D UVs + frame index. */
 		pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::FrameIndex);
+
+		/* NOTE: A cascaded shadow map renders each cascade in its OWN pass (per-cascade caster lists), so the
+		 * cascade matrix is selected by an index pushed per pass instead of gl_ViewIndex. 4 B after the frame
+		 * index: 72 B (model matrix) or 80 B (instanced VP + jitter), and the heightfield/mesh-surface vec4
+		 * below realign on 16 bytes — still 112 B at most. */
+		if ( m_renderTarget->isCascadedShadowMap() )
+		{
+			m_shaderProgram->setCascadeIndexPushConstantOffset(pushConstantBlock.bytes());
+
+			pushConstantBlock.addMember(Declaration::VariableType::UnsignedInteger, PushConstant::Component::CascadeIndex);
+		}
 
 		/* NOTE: A heightfield pushes its NODE per draw (and the camera the nodes were selected for),
 		 * after everything else: std430 aligns the vec4 on 16 bytes, so the largest block (76 B) puts

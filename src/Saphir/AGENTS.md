@@ -1220,8 +1220,9 @@ the log says so once.
   `declareMatrixPushConstantBlock()`: P from the view UBO × the pushed V × the InstanceTransforms model in the lit
   passes, the pushed MVP in a classic shadow map. A tile's box, from the plane down to the deepest relief, is
   rejected when all 8 corners are out on the same SIDE plane or behind w = 0; near/far are never tested (depth
-  convention, shadow depth clamp). Multiview targets (cubemap, CSM) are NOT culled: their matrices are per
-  `gl_ViewIndex`. `Abstract::declareInstanceTransformsBlock()` is now the single declaration of that SSBO layout
+  convention, shadow depth clamp). Cubemap and CSM targets are NOT culled: their matrices come from a UBO
+  array (per `gl_ViewIndex` for a cubemap, per the pushed `cascadeIndex` for a CSM — one pass per cascade since
+  2026-09-24, so a CSM task stage could now cull against its cascade; not done). `Abstract::declareInstanceTransformsBlock()` is now the single declaration of that SSBO layout
   (scene pass, shadow pass, task stage).
 - The SHADOW program takes the same stages (`ShadowCasting::generateMeshShadingStages()`, 2026-09-23): the shadow map
   sees the displaced geometry, subdivided for the MAIN camera (the receiver's), like a heightfield's levels. The

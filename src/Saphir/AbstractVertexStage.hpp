@@ -254,7 +254,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Enables CSM (Cascaded Shadow Map) rendering mode.
-			 * @note CSM mode uses multiview with gl_ViewIndex to select the cascade view-projection matrix.
+			 * @note CSM mode selects the cascade view-projection matrix with the cascade index pushed by its pass (one single-view pass per cascade).
 			 * @return void
 			 */
 			void
@@ -358,7 +358,7 @@ namespace EmEn::Saphir
 			 * @note MUST mirror Generator::Abstract::declareMatrixPushConstantBlock(): the
 			 * ProjectionJitter member exists in the instanced and InstanceTransforms blocks only.
 			 * Cubemap/CSM targets are excluded because nothing is pushed for them (their
-			 * view-projection comes from the view UBO indexed by gl_ViewIndex), and MDI plus the
+			 * view-projection comes from the view UBO, indexed by gl_ViewIndex or the pushed cascade index), and MDI plus the
 			 * push-constant-only fallbacks are excluded because they keep the jitter baked in
 			 * their CPU-computed matrices — none of them outputs a velocity.
 			 * @return bool

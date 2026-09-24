@@ -2287,11 +2287,31 @@ namespace EmEn::Graphics
 				GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
 				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "ShadowMap", shadowMap->id().c_str()};
 
-				commandBuffer->beginRenderPass(*shadowMap->framebuffer(), shadowMap->renderArea(), m_shadowMapClearValues, VK_SUBPASS_CONTENTS_INLINE);
+				/* One pass per layer: a cascaded map renders each cascade in its own single-view pass, with the
+				 * casters that reach THAT cascade only (a multiview pass rasterised every caster into every
+				 * cascade). Every other target takes exactly one pass. */
+				for ( uint32_t layerPass = 0; layerPass < shadowMap->layerPassCount(); ++layerPass )
+				{
+					const auto * framebuffer = shadowMap->layerFramebuffer(layerPass);
 
-				scene.castShadows(shadowMap, *commandBuffer);
+					if ( framebuffer == nullptr )
+					{
+						TraceError{ClassId} << "The shadow map '" << shadowMap->id() << "' has no framebuffer for its pass #" << layerPass << " !";
 
-				commandBuffer->endRenderPass();
+						continue;
+					}
+
+					/* One nested line per cascade ("ShadowMap/<id>" then "Cascade/<n>"), so the cost of a cascaded map
+					 * can be read cascade by cascade. A single-pass target gets no nested line. */
+					const auto layerLabel = std::to_string(layerPass);
+					const GPUProfiler::ScopedZone layerZone{shadowMap->layerPassCount() > 1 ? profiler : nullptr, *commandBuffer, "Cascade", layerLabel.c_str()};
+
+					commandBuffer->beginRenderPass(*framebuffer, shadowMap->renderArea(), m_shadowMapClearValues, VK_SUBPASS_CONTENTS_INLINE);
+
+					scene.castShadows(shadowMap, *commandBuffer, layerPass);
+
+					commandBuffer->endRenderPass();
+				}
 			}
 
 			if ( !commandBuffer->end() )

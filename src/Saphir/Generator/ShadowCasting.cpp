@@ -286,12 +286,11 @@ namespace EmEn::Saphir::Generator
 		const auto renderTarget = this->renderTarget();
 		const bool isCubemap = renderTarget->isCubemap();
 		const bool isCSM = renderTarget->isCascadedShadowMap();
-		const bool useMultiview = isCubemap || isCSM;
+		const bool readsViewMatrixArray = isCubemap || isCSM;
 
-		/* NOTE: For cubemap/CSM shadow maps, enable multiview mode which uses gl_ViewIndex.
-		 * The vertex shader will use gl_ViewIndex to select the correct view matrix from the UBO.
-		 * For cubemaps: 6 view matrices for 6 cube faces.
-		 * For CSM: N view matrices for N cascades (different UBO layout). */
+		/* NOTE: Cubemap and CSM shadow maps read their view matrix from an ARRAY in the view UBO:
+		 * a cubemap indexes its 6 faces by gl_ViewIndex (one multiview pass), a CSM its N cascades by the
+		 * cascade index its pass pushes (one single-view pass per cascade, different UBO layout). */
 		auto * vertexShader = program.initVertexShader(
 			this->name() + "VertexShader",
 			this->isFlagEnabled(IsInstancingEnabled),
@@ -325,8 +324,9 @@ namespace EmEn::Saphir::Generator
 			vertexShader->enableCSMMode();
 		}
 
-		/* NOTE: Enable multiview extension for cubemap/CSM rendering to use gl_ViewIndex. */
-		if ( useMultiview )
+		/* NOTE: Enable multiview extension for cubemap rendering to use gl_ViewIndex. A CSM pass is single-view
+		 * (one pass per cascade): it selects its cascade with a pushed index, never gl_ViewIndex. */
+		if ( isCubemap )
 		{
 			vertexShader->setExtensionBehavior("GL_EXT_multiview", "enable");
 		}
@@ -336,12 +336,12 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* For multiview (cubemap/CSM), declare the view UBO with view matrices.
+		/* For cubemap/CSM, declare the view UBO with the view matrix array.
 		 * Instancing also declares it: the billboard path recomposes VP from the view UBO
 		 * projection × the pushed view matrix (the V + VP push block was 132 B, above the
 		 * 128 B Vulkan minimum guarantee). The PerView set is already enabled and bound
 		 * for every instanced shadow program. */
-		if ( useMultiview || this->isFlagEnabled(IsInstancingEnabled) )
+		if ( readsViewMatrixArray || this->isFlagEnabled(IsInstancingEnabled) )
 		{
 			if ( !this->declareViewUniformBlock(*vertexShader) )
 			{

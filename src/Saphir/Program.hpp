@@ -177,6 +177,30 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Records where, in the matrices push-constant block, the cascade index (uint) sits.
+			 * @note Cascaded shadow map programs only, written by the generator while it lays the block out, read by
+			 * the draw that pushes it (Graphics::RenderableInstance::Abstract::castShadows()).
+			 * @param offset The byte offset of the cascade index.
+			 * @return void
+			 */
+			void
+			setCascadeIndexPushConstantOffset (uint32_t offset) noexcept
+			{
+				m_cascadeIndexPushConstantOffset = offset;
+			}
+
+			/**
+			 * @brief Returns the byte offset of the cascade index in the matrices push-constant block.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			cascadeIndexPushConstantOffset () const noexcept
+			{
+				return m_cascadeIndexPushConstantOffset;
+			}
+
+			/**
 			 * @brief Returns the byte offset of the heightfield node vec4 in the matrices push-constant block.
 			 * @return uint32_t
 			 */
@@ -703,6 +727,7 @@ namespace EmEn::Saphir
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_graphicsPipeline;
 			uint32_t m_heightfieldPushConstantOffset{0};
+			uint32_t m_cascadeIndexPushConstantOffset{0};
 			uint32_t m_meshSurfacePushConstantOffset{0};
 			std::map< uint32_t, bool > m_fragmentSpecConstantsBool; // FIXME: Use a cheaper structure here.
 	};

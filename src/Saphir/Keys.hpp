@@ -913,6 +913,10 @@ namespace EmEn::Saphir
 				constexpr auto TransformationMatrix{"transformationMatrix"};
 				/* NOTE : Animated texture frame index. */
 				constexpr auto FrameIndex{"frameIndex"};
+				/* NOTE : Cascaded shadow map, per PASS: the cascade the pass renders (uint). Each cascade is
+				 * its own single-view pass with its own caster list, so the cascade matrix is selected by
+				 * this value instead of gl_ViewIndex (a multiview pass drew every caster into every cascade). */
+				constexpr auto CascadeIndex{"cascadeIndex"};
 				/* NOTE : Heightfield surface (CDLOD), pushed per quadtree node: xy = node origin (world
 				 * XZ, minimum corner), z = node size (m), w = level of detail. See
 				 * Graphics::Geometry::HeightfieldSurface. */
