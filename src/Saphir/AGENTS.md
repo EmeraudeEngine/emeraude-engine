@@ -771,6 +771,18 @@ it once.
 ⚠️ **Depth-based opacity overrides it** with the measured water column from the depth grab — a
 different physical quantity. The map has no say there, by design.
 
+⚠️⚠️ **Beer's law takes the WORLD thickness — `volumeThicknessWorldExpression()` (fixed 2026-09-24).**
+`KHR_materials_volume` gives `thicknessFactor` in the MESH's space and `attenuationDistance` in WORLD
+space. The refraction ray always scaled the factor by `svModelScale`; Beer's law, at all five sites of
+`LightGenerator.cpp`, took the raw mesh-space factor — so a scaled mesh absorbed as if it were its
+unscaled size. It surfaced on a 40-unit model shown 5 m tall (`forest`'s chick): with the thickness
+authored for the chick, the absorption ran over 20 "metres" instead of 2.5, and a near-white diamond
+turned navy blue. The light generator now receives `(thickness · dot(svModelScale, vec3(1/3)))`
+(exact for a uniform scale), and `generateVertexShaderCode()` requests `ModelScale` for EVERY
+transmissive material — both tiers, every transmission path, not only the grab pass
+(`StandardResource::declaresTransmission()`, the one condition both sides share). A mesh at scale 1 is
+unchanged to the bit.
+
 ### One thin-film thickness for every pass — `iridescenceThicknessExpression()` (Aug 2026)
 
 `KHR_materials_iridescence` sets the film thickness as `mix(thicknessMin, thicknessMax, texel.g)`

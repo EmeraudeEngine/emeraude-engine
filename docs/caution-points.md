@@ -1380,6 +1380,23 @@ luminance scale; the reflection term always keeps it.
 > Anything read back from the rendered scene (grab pass, and by extension any screen-space capture)
 > is already an absolute luminance.
 
+### Fixed: Beer's law absorbed over the MESH thickness, not the world one (Sep 2026)
+
+**Symptom:** a transmissive material whose volume thickness was authored for its mesh turned a strong
+colour it does not have once the mesh was scaled — a near-white `Parametrics/Diamond` on a 40-unit
+model shown 5 m tall came out navy blue with `Thickness` = 20 mesh units. At scale 1 (every bench),
+nothing shows.
+
+**Cause:** `KHR_materials_volume` gives `thicknessFactor` in MESH space and `attenuationDistance` in
+WORLD space. The screen-space refraction scaled the factor by `svModelScale`; the five Beer sites of
+`LightGenerator.cpp` did not, and divided a mesh length by a world length.
+
+**Fix:** the light generator receives `StandardResource::volumeThicknessWorldExpression()`, and the
+model scale is synthesized for every transmissive material (`src/Saphir/AGENTS.md` § *One volume
+thickness for both consumers*). ⚠️ The same rule makes a LIBRARY material scale-dependent twice over:
+its thickness is in the units of the mesh it was tuned on, its attenuation distance in metres — a
+parametric gem on a model of another size needs both re-derived (`forest` does it for its chick).
+
 ### Fixed: the grab pass was recreated IN PLACE while frames still used it (Sep 2026)
 
 **Symptom:** at the act teardown of a scene holding ONE refracting material (a `Parametrics/Diamond`

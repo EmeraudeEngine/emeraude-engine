@@ -1126,6 +1126,26 @@ namespace EmEn::Graphics::Material
 			std::string volumeThicknessExpression () const noexcept;
 
 			/**
+			 * @brief Returns the GLSL expression giving the volume thickness at this fragment in WORLD units.
+			 * @note KHR_materials_volume gives `thicknessFactor` in the MESH's space and `attenuationDistance`
+			 * in WORLD space, so Beer's law divides a world thickness by a world distance: the mesh
+			 * thickness times the model scale (`svModelScale`, averaged over its three axes — exact for a
+			 * uniform scale). ⚠️ It needs `ShaderVariable::ModelScale` in the fragment stage, which
+			 * generateVertexShaderCode() requests for every transmissive material (declaresTransmission()).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string volumeThicknessWorldExpression () const noexcept;
+
+			/**
+			 * @brief Returns whether the material transmits light (a transmission component or factor).
+			 * @note The ONE condition shared by the vertex requests and the light generator declaration.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declaresTransmission () const noexcept;
+
+			/**
 			 * @brief Enables or disables depth-based opacity for GrabPass transmission.
 			 * @warning This function is available before creation time.
 			 * @note When enabled, the fragment shader samples the grab pass depth buffer to compute the water

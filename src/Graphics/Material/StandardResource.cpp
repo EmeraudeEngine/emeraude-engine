@@ -2694,7 +2694,7 @@ namespace EmEn::Graphics::Material
 		{
 			const auto componentIt = m_components.find(ComponentType::Transmission);
 
-			if ( componentIt != m_components.cend() || m_materialProperties[TransmissionFactorOffset] > 0.0F )
+			if ( this->declaresTransmission() )
 			{
 				lightGenerator.declareSurfaceTransmission(
 					componentIt != m_components.cend() ? componentIt->second->variableName() : MaterialUB(UniformBlock::Component::TransmissionFactor),
@@ -2702,9 +2702,13 @@ namespace EmEn::Graphics::Material
 					MaterialUB(UniformBlock::Component::AttenuationColor),
 					MaterialUB(UniformBlock::Component::AttenuationDistance),
 					/* ⚠️ Depth-based opacity OVERRIDES the material thickness with the measured
-					 * water column — a different physical quantity, computed from the depth grab.
-					 * The volume thickness map has no say there, by design. */
-					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : this->volumeThicknessExpression(),
+					 * water column — a different physical quantity, computed from the depth grab,
+					 * already in metres. The volume thickness map has no say there, by design.
+					 * ⚠️ Otherwise the WORLD thickness: Beer's law divides it by attenuationDistance,
+					 * a world distance (KHR_materials_volume). The mesh-space factor used to go in
+					 * raw, so a scaled mesh absorbed as if it were its unscaled size — a 40-unit
+					 * model shown 5 m tall absorbed over 8× its real thickness (2026-09-24). */
+					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : this->volumeThicknessWorldExpression(),
 					/* The grab pass hands over the rendered scene in nits; the environment cubemap
 					 * hands over a normalized [0,1] texel. Only the latter needs to be scaled by
 					 * the sky luminance downstream. */
@@ -2951,6 +2955,16 @@ namespace EmEn::Graphics::Material
 			vertexShader.requestSynthesizeInstruction(ShaderVariable::PrimaryVertexColor);
 		}
 
+		/* Beer's law reads the WORLD thickness (volumeThicknessWorldExpression()), on every transmission
+		 * path and both quality tiers: the model scale must reach the fragment stage whenever the
+		 * material transmits. The water column of depth-based opacity is already in metres. */
+		if ( this->declaresTransmission() && !m_isUsingDepthBasedOpacity && !vertexShader.requestSynthesizeInstruction(ShaderVariable::ModelScale) )
+		{
+			TraceError{ClassId} << "Unable to synthesize the model scale for the transmission of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
 		/* Reflection/IBL component setup.
 		 * NOTE: Also setup for automatic reflection using bindless textures.
 		 * GrabPass transmission also needs varyings (PositionWorldSpace, NormalWorldSpace, CameraWorldPosition). */
@@ -2978,10 +2992,10 @@ namespace EmEn::Graphics::Material
 				 * just normalize(positionViewSpace), and the view transform is rigid so a world
 				 * length carries over unchanged.
 				 *
-				 * Only this path needs these — do not hoist the requests. */
+				 * Only this path needs the view-space ones — do not hoist them. (The model scale is
+				 * requested above for every transmissive material: Beer's law needs it too.) */
 				if ( m_isUsingGrabPassForTransmission )
 				{
-					vertexShader.requestSynthesizeInstruction(ShaderVariable::ModelScale);
 					vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionViewSpace);
 
 					if ( this->isComponentPresent(ComponentType::Normal) )
@@ -5972,6 +5986,18 @@ namespace EmEn::Graphics::Material
 		this->setIridescenceThicknessMax(thicknessMax);
 
 		return true;
+	}
+
+	std::string
+	StandardResource::volumeThicknessWorldExpression () const noexcept
+	{
+		return "(" + this->volumeThicknessExpression() + " * dot(" + std::string{ShaderVariable::ModelScale} + ", vec3(1.0 / 3.0)))";
+	}
+
+	bool
+	StandardResource::declaresTransmission () const noexcept
+	{
+		return m_components.contains(ComponentType::Transmission) || m_materialProperties[TransmissionFactorOffset] > 0.0F;
 	}
 
 	std::string
