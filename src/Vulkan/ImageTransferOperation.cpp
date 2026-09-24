@@ -26,6 +26,9 @@
 
 #include "ImageTransferOperation.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+
 /* Local inclusions. */
 #include "Sync/ImageMemoryBarrier.hpp"
 
@@ -147,9 +150,16 @@ namespace EmEn::Vulkan
 			m_transferCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
+		/* ⚠️ A 3D image is ONE layer of `depth` slices: the copy covers the whole extent, depth
+		 * included. It was `depth = 1` until the cloud shapes needed it — only the first slice of a
+		 * 3D image reached the GPU, every other one stayed undefined, and a volume that keeps its
+		 * first slice empty (a cloud's margin) sampled as nothing at all, with no error anywhere.
+		 * A 2D image has a depth of 1, so its copy is unchanged. */
+		const auto & extent = dstImage.createInfo().extent;
+
 		for ( uint32_t layerIndex = 0; layerIndex < dstImage.createInfo().arrayLayers; layerIndex++ )
 		{
-			const uint32_t layerOffset = layerIndex * ( dstImage.createInfo().extent.width * dstImage.createInfo().extent.height * dstImage.pixelBytes());
+			const uint32_t layerOffset = layerIndex * ( extent.width * extent.height * extent.depth * dstImage.pixelBytes());
 
 			VkBufferImageCopy bufferImageCopy{};
 			bufferImageCopy.bufferOffset = layerOffset;
@@ -162,9 +172,9 @@ namespace EmEn::Vulkan
 			bufferImageCopy.imageOffset.x = 0;
 			bufferImageCopy.imageOffset.y = 0;
 			bufferImageCopy.imageOffset.z = 0;
-			bufferImageCopy.imageExtent.width = dstImage.createInfo().extent.width;
-			bufferImageCopy.imageExtent.height = dstImage.createInfo().extent.height;
-			bufferImageCopy.imageExtent.depth = 1;
+			bufferImageCopy.imageExtent.width = extent.width;
+			bufferImageCopy.imageExtent.height = extent.height;
+			bufferImageCopy.imageExtent.depth = extent.depth;
 
 			vkCmdCopyBufferToImage(
 				m_transferCommandBuffer->handle(),
@@ -233,6 +243,17 @@ namespace EmEn::Vulkan
 
 		if ( dstImage.createInfo().mipLevels > 1 )
 		{
+			/* ⚠️ A mip extent never drops below 1 on ANY axis, and a 3D image halves its DEPTH too.
+			 * This blit used to write `z = 1` on both ends: a 3D image got its first slice filtered
+			 * and every other slice of every level left undefined — sampled through a mip filter,
+			 * garbage. The `>>` without a floor was the same defect on a non-square 2D image, whose
+			 * short axis reached 0 before the long one finished its chain. */
+			const auto & extent = dstImage.createInfo().extent;
+
+			const auto mipExtent = [] (uint32_t size, uint32_t level) {
+				return static_cast< int32_t >(std::max(size >> level, 1U));
+			};
+
 			for ( uint32_t layerIndex = 0; layerIndex < dstImage.createInfo().arrayLayers; layerIndex++ )
 			{
 				for ( uint32_t mipLevelIndex = 1; mipLevelIndex < dstImage.createInfo().mipLevels; mipLevelIndex++ )
@@ -244,18 +265,18 @@ namespace EmEn::Vulkan
 					imageBlit.srcSubresource.mipLevel = mipLevelIndex - 1;
 					imageBlit.srcSubresource.baseArrayLayer = layerIndex;
 					imageBlit.srcSubresource.layerCount = 1;
-					imageBlit.srcOffsets[1].x = static_cast< int32_t >(dstImage.createInfo().extent.width >> (mipLevelIndex - 1));
-					imageBlit.srcOffsets[1].y = static_cast< int32_t >(dstImage.createInfo().extent.height >> (mipLevelIndex - 1));
-					imageBlit.srcOffsets[1].z = 1;
+					imageBlit.srcOffsets[1].x = mipExtent(extent.width, mipLevelIndex - 1);
+					imageBlit.srcOffsets[1].y = mipExtent(extent.height, mipLevelIndex - 1);
+					imageBlit.srcOffsets[1].z = mipExtent(extent.depth, mipLevelIndex - 1);
 
 					/* Destination mip-map level. */
 					imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					imageBlit.dstSubresource.mipLevel = mipLevelIndex;
 					imageBlit.dstSubresource.baseArrayLayer = layerIndex;
 					imageBlit.dstSubresource.layerCount = 1;
-					imageBlit.dstOffsets[1].x = static_cast< int32_t >(dstImage.createInfo().extent.width >> mipLevelIndex);
-					imageBlit.dstOffsets[1].y = static_cast< int32_t >(dstImage.createInfo().extent.height >> mipLevelIndex);
-					imageBlit.dstOffsets[1].z  = 1;
+					imageBlit.dstOffsets[1].x = mipExtent(extent.width, mipLevelIndex);
+					imageBlit.dstOffsets[1].y = mipExtent(extent.height, mipLevelIndex);
+					imageBlit.dstOffsets[1].z = mipExtent(extent.depth, mipLevelIndex);
 
 					{
 						Sync::ImageMemoryBarrier barrier{

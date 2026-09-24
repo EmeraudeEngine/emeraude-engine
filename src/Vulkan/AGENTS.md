@@ -558,6 +558,14 @@ image must be read back, **add the flag where it is created**; do not reintroduc
 See `docs/caution-points.md` § Vulkan Validation for the three logged occurrences and the VUID
 cascade a missing flag produces (only the FIRST VUID names the real fault).
 
+#### Full image upload: a 3D image is ONE layer of `depth` slices (Sep 2026)
+
+`ImageTransferOperation::transfer()` copies the WHOLE extent, depth included, each array layer
+offset by `width × height × depth × pixelBytes`; `finalizeForGPU()` blits every mip with
+`max(extent >> level, 1)` on all three axes. ⚠️ Both wrote a depth of 1 until the volumetric cloud
+shapes became the first 3D images ever uploaded — slice 0 only, every other slice undefined, and
+**no VUID** (a copy smaller than the image is legal). `docs/caution-points.md` § Vulkan Validation.
+
 #### Partial image upload: `transferRegion()`, and why it needs its own path
 
 `Image::writeDataRegion()` → `TransferManager::uploadImageRegion()` →

@@ -4056,6 +4056,27 @@ AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::op
 
 ## Vulkan Validation
 
+### Fixed: a 3D image uploaded ONE slice, and its mips filtered one slice (Sep 2026)
+
+**Symptom:** the volumetric clouds' shapes (`Graphics::CloudShapeResource`, `VK_IMAGE_TYPE_3D`)
+sampled as empty — no cloud, no error, **no VUID**.
+
+**Cause:** `ImageTransferOperation::transfer()` copied `imageExtent.depth = 1` (and offset its layers by
+`width × height`), so only slice 0 of a 3D image reached the GPU; `finalizeForGPU()`'s mip blit wrote
+`z = 1` on both ends, and its `extent >> level` had no floor at 1 (a non-square 2D image's short axis
+reached 0 before the long one finished its chain). A cloud keeps its first slice EMPTY (the growth
+margin), so the whole volume read as air. Nothing in the engine had ever uploaded a 3D image: the
+`Texture3D` resource depends on a `VolumetricImages` container that is not even registered.
+
+**Fix:** the copy covers the full extent (depth included, layers offset by the whole slice stack);
+the blit uses `max(extent >> level, 1)` on all three axes, depth included. A 2D image has a depth of 1:
+its path is unchanged.
+
+**Rule:** validation layers do not catch a copy that is merely SMALLER than the image — undefined
+texels are legal. Verify a first-of-its-kind upload by reading it back or by seeing it, never by the
+absence of VUIDs.
+
+
 ### Never assume a device capability — query it, and REQUEST it
 
 > [!CRITICAL]
