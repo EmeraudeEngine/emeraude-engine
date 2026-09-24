@@ -180,17 +180,30 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Checks if enough time has elapsed to capture the next frame.
+			 * @brief Checks whether the current frame should be captured: it opens a CFR slot not served yet.
 			 *
-			 * Uses frame duration based on target FPS to determine if a new frame should
-			 * be captured. This pacing mechanism ensures the recording matches the target
-			 * framerate regardless of game render rate.
+			 * The video timeline is the wall clock cut into slots of 1 / target FPS (cfrSlotAt()). The first
+			 * rendered frame inside a slot is captured, so a game rendering faster than the target fills EVERY
+			 * slot, and a slot with no rendered frame at all becomes a CFR duplicate downstream.
+			 * ⚠️⚠️ It used to wait one frame duration after the LAST CAPTURE: the capture then lagged behind the
+			 * slot grid by up to one render interval every time, drifted to a lower rate (48 FPS rendering →
+			 * ~24 captures/s for a 30 FPS timeline) and every fourth slot came out empty — 21 % of duplicated
+			 * frames on `forest` at 48 FPS, read as hiccups in the video (measured 2026-09-24).
 			 *
 			 * @return True if a frame should be captured now, false otherwise.
 			 * @note Returns false immediately if not recording.
 			 */
 			[[nodiscard]]
 			bool shouldCaptureFrame () const noexcept;
+
+			/**
+			 * @brief Returns the CFR slot (the frame index of the video timeline) a wall-clock instant falls in.
+			 * @note THE single formula of the timeline: the capture gate and every PTS use it, so they cannot disagree.
+			 * @param instant The instant.
+			 * @return int64_t
+			 */
+			[[nodiscard]]
+			int64_t cfrSlotAt (std::chrono::steady_clock::time_point instant) const noexcept;
 
 			/**
 			 * @brief Returns the recommended audio bitrate in kbps based on the current quality preset.
@@ -513,9 +526,8 @@ namespace EmEn::Graphics
 			uint32_t m_targetFramerate{30}; ///< Target recording framerate (default 30 FPS).
 			uint32_t m_maxQueuedFrames{90}; ///< Grab buffer bound; captures are skipped above this depth (RAM guard).
 			int m_adaptedCpuUsed{-1}; ///< Last adapted encoder speed; warm-starts the next session (-1 = none yet).
-			std::chrono::steady_clock::time_point m_lastCaptureTime; ///< Last frame capture timestamp for pacing.
 			std::chrono::steady_clock::time_point m_recordStartTime; ///< Wall-clock time when recording started (PTS origin).
-			std::chrono::nanoseconds m_frameDuration{0}; ///< Duration between frames based on target FPS.
+			int64_t m_lastCapturedSlot{-1}; ///< The CFR slot of the last capture, -1 before the first one (pacing).
 
 			/* Recording parameters (locked at start). */
 			uint32_t m_recordWidth{0}; ///< Recording width in pixels (even, locked at start).

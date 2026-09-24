@@ -2173,6 +2173,22 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### Fixed: RushMaker paced on the last capture, not on the slot grid — 1 frame in 5 duplicated at 48 FPS (Sep 2026)
+
+> **Symptom (owner):** hiccups in every RushMaker video of `forest`, though the demo ran at ~48 FPS
+> with or without the recording (measured: recording costs no frame rate).
+
+**Cause.** `shouldCaptureFrame()` waited one frame duration after the LAST capture, and the PTS was the
+wall clock × FPS. The capture lagged the slot grid by up to one render interval each time: at 48 FPS a
+capture every ~41.6 ms against 33.3 ms slots, so every fourth slot had no frame and received a CFR
+filler (132 out of 626 — `Hardware encoding session finalized: … (132 CFR filler frames …)`). **Fix:** the
+gate captures the first frame of every slot not served yet (`Recorder::cfrSlotAt()`, shared with the
+PTS): 0 fillers at the same load. Details: `src/Graphics/AGENTS.md` § RushMaker pipeline.
+
+⚠️ A filler is still legitimate when the renderer is below the target FPS (owner's CFR model, by design).
+Read the finalisation counter, not a hash of decoded frames: the hardware rate control re-encodes a
+duplicate slightly differently, so identical-frame hashing found only 22 of the 132.
+
 ### Fixed: `MaxLODLevels` means TWO things, and the unqualified name picked the wrong one (Sep 2026)
 
 `Graphics::Geometry::MaxLODLevels` = 8 (what a mesh can HOLD) and `Graphics::Renderable::MaxLODLevels`

@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 /* Third-party inclusions. */
@@ -204,8 +205,6 @@ namespace EmEn::Graphics
 			m_maxQueuedFrames = DefaultRushMakerMaxQueuedFrames;
 		}
 
-		m_frameDuration = std::chrono::nanoseconds{1000000000ULL / m_targetFramerate};
-
 		/* Select the best BGRA-to-I420 conversion path based on CPU features. */
 #if IS_X86_ARCH
 		{
@@ -310,9 +309,15 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		const auto now = std::chrono::steady_clock::now();
+		return this->cfrSlotAt(std::chrono::steady_clock::now()) > m_lastCapturedSlot;
+	}
 
-		return now - m_lastCaptureTime >= m_frameDuration;
+	int64_t
+	Recorder::cfrSlotAt (std::chrono::steady_clock::time_point instant) const noexcept
+	{
+		const auto elapsed = std::chrono::duration< double >(instant - m_recordStartTime);
+
+		return static_cast< int64_t >(std::floor(elapsed.count() * static_cast< double >(m_targetFramerate)));
 	}
 
 	bool
@@ -488,7 +493,7 @@ namespace EmEn::Graphics
 		}
 
 		m_recordStartTime = std::chrono::steady_clock::now();
-		m_lastCaptureTime = m_recordStartTime;
+		m_lastCapturedSlot = -1;
 
 		/* Create async GPU readback resources. */
 		if ( !this->createAsyncResources() )
@@ -614,7 +619,7 @@ namespace EmEn::Graphics
 		{
 			const auto now = std::chrono::steady_clock::now();
 			m_asyncSlots[freeSlot].captureTime = now;
-			m_lastCaptureTime = now;
+			m_lastCapturedSlot = this->cfrSlotAt(now);
 			++m_currentSession->captureCount;
 		}
 	}
@@ -1608,7 +1613,7 @@ namespace EmEn::Graphics
 		std::fwrite(header.data(), 1, header.size(), m_hardwareSession->outputFile);
 
 		m_recordStartTime = std::chrono::steady_clock::now();
-		m_lastCaptureTime = m_recordStartTime;
+		m_lastCapturedSlot = -1;
 		m_isRecording = true;
 		m_hardwareSession->threadRunning = true;
 		m_hardwareSession->encodingThread = std::thread{[this] {
@@ -1741,12 +1746,9 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const auto now = std::chrono::steady_clock::now();
-		const auto elapsed = std::chrono::duration< double >(now - m_recordStartTime);
-
-		slot.cfrSlot = static_cast< int64_t >(elapsed.count() * m_targetFramerate);
+		slot.cfrSlot = this->cfrSlotAt(std::chrono::steady_clock::now());
 		slot.pending = true;
-		m_lastCaptureTime = now;
+		m_lastCapturedSlot = slot.cfrSlot;
 
 		{
 			const std::scoped_lock lock{m_hardwareSession->queueMutex};
@@ -1940,8 +1942,7 @@ namespace EmEn::Graphics
 
 		/* Compute the CFR slot (wall-clock PTS) from the capture timestamp: the video
 		 * timeline is real time, which keeps the separately recorded audio in sync. */
-		const auto elapsed = std::chrono::duration< double >(slot.captureTime - m_recordStartTime);
-		frame.pts = static_cast< vpx_codec_pts_t >(elapsed.count() * m_targetFramerate);
+		frame.pts = static_cast< vpx_codec_pts_t >(this->cfrSlotAt(slot.captureTime));
 
 		{
 			const std::scoped_lock lock{m_currentSession->queueMutex};

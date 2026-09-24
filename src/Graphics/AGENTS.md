@@ -1243,7 +1243,17 @@ not a mode of this recorder.
 
 ### Pipeline
 1. **GPU async readback** (4-slot round-robin) — copies swap-chain image to host-visible staging
-   buffer, paced at the target FPS on the wall clock (`shouldCaptureFrame()`)
+   buffer, paced at the target FPS on the wall clock (`shouldCaptureFrame()`): the wall clock is cut
+   into CFR slots (`cfrSlotAt()`, THE single timeline formula, also every PTS), and the first rendered
+   frame inside a slot not served yet is captured.
+   ⚠️⚠️ **Never pace on "one frame duration since the last capture"** — what it did until 2026-09-24.
+   The capture then lags the slot grid by up to one render interval each time and drifts to a lower
+   rate: `forest` rendering at 48 FPS gave ~24 captures/s for a 30 FPS timeline, every fourth slot
+   empty, **132 CFR fillers out of 626 frames**, seen by the owner as hiccups. On the slot grid: 0
+   fillers at the same load. A filler is legitimate ONLY when no frame was rendered inside a slot
+   (renderer below the target FPS, or a backpressure skip); the finalisation line
+   `N CFR filler frames` is the counter to read — a decoded-frame hash undercounts them on the
+   hardware path, whose rate control re-encodes a duplicate slightly differently.
 2. **Bounded grab buffer** (`Core/RushMaker/MaxQueuedFrames`, default 32) — gives the encoder time
    to write the file; above the bound, captures are **skipped and counted** (backpressure) so a
    slow encode cannot balloon RAM
