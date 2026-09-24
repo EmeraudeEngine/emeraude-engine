@@ -38,6 +38,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ViewMatricesInterface.hpp"
+#include "Constants.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
@@ -416,7 +417,7 @@ namespace EmEn::Graphics
 			};
 
 			DataState m_logicState; /**< Current logic state (write). */
-			std::array< DataState, 2 > m_renderState; /**< Double-buffered render states (read). */
+			std::array< DataState, RenderStateSlotCount > m_renderState; /**< Published render states, one per state slot (triple buffer, see RenderStateSlotCount). */
 			/**
 			 * @brief One GPU region per frame-in-flight, and the descriptor set that addresses it.
 			 * @note ⚠️ This payload STARTS with the four cascade view-projection matrices, refit to the

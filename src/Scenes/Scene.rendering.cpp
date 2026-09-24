@@ -508,7 +508,58 @@ namespace EmEn::Scenes
 		 * This is only EXPRESSIBLE because updateVideoMemory() now runs after beginRenderFrame();
 		 * it used to be called from Core before this function, so a latch set here would have been
 		 * read before it was written. */
-		m_frameReadStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+		/* ⚠️⚠️ [TRIPLE BUFFER] Take the latest publication ONLY by exchanging slots: the frame hands its old slot
+		 * back as the new middle, and from now on the logic thread can reach neither. A plain load of the published
+		 * index (the former two-slot design) left the latched slot writable — the logic's second publication inside
+		 * one frame landed on it, so every frame longer than a 60 Hz tick mixed two ticks (41-66 % of the frames on
+		 * `terrain`, measured 2026-09-24). With no fresh publication the frame keeps its slot: same state, still
+		 * consistent. */
+		if ( ( m_publishedSlot.load(std::memory_order_relaxed) & FreshPublication ) != 0 )
+		{
+			m_frameReadStateIndex = m_publishedSlot.exchange(m_frameReadStateIndex, std::memory_order_acq_rel) & PublishedSlotMask;
+		}
+
+		/* State synchronisation measurement, closed by endRenderFrame(). */
+		m_frameSlotWriteGeneration = m_slotWriteGenerations[m_frameReadStateIndex].load(std::memory_order_seq_cst);
+		m_framePublicationCount = m_publicationCount.load(std::memory_order_seq_cst);
+		m_frameLatchTime = std::chrono::steady_clock::now();
+	}
+
+	void
+	Scene::endRenderFrame () noexcept
+	{
+		const auto slotWriteGeneration = m_slotWriteGenerations[m_frameReadStateIndex].load(std::memory_order_seq_cst);
+		const auto publications = m_publicationCount.load(std::memory_order_seq_cst) - m_framePublicationCount;
+		const auto latchToEndMS = std::chrono::duration< double, std::milli >(std::chrono::steady_clock::now() - m_frameLatchTime).count();
+
+		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+
+		m_stateSyncStatistics.frames++;
+
+		if ( slotWriteGeneration != m_frameSlotWriteGeneration )
+		{
+			m_stateSyncStatistics.overwrittenFrames++;
+		}
+
+		m_stateSyncStatistics.publicationsDuringFrames += publications;
+		m_stateSyncStatistics.maxPublicationsDuringFrame = std::max(m_stateSyncStatistics.maxPublicationsDuringFrame, publications);
+		m_stateSyncStatistics.latchToEndMSSum += latchToEndMS;
+		m_stateSyncStatistics.latchToEndMSMax = std::max(m_stateSyncStatistics.latchToEndMSMax, latchToEndMS);
+	}
+
+	Scene::StateSyncStatistics
+	Scene::stateSyncStatistics (bool reset) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+
+		const auto statistics = m_stateSyncStatistics;
+
+		if ( reset )
+		{
+			m_stateSyncStatistics = {};
+		}
+
+		return statistics;
 	}
 
 	bool
@@ -817,7 +868,11 @@ namespace EmEn::Scenes
 	Scene::publishStateForRendering () noexcept
 	{
 		/* TODO: Check to copy only relevant data to speed up the transfer. */
-		const uint32_t nextTarget = m_renderStateIndex == 0U ? 1U : 0U;
+		/* NOTE: The logic thread's own slot: never the one the render thread latched, never the middle one. */
+		const uint32_t nextTarget = m_writeSlot;
+
+		/* State synchronisation measurement: announced BEFORE the first byte of the slot is written. */
+		m_slotWriteGenerations[nextTarget].fetch_add(1, std::memory_order_seq_cst);
 
 		/* Synchronize static entities. */
 		for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
@@ -850,8 +905,11 @@ namespace EmEn::Scenes
 			});
 		}
 
-		/* NOTE: Declare the new target to read from for the rendering thread. */
-		m_renderStateIndex.store(nextTarget, std::memory_order_release);
+		/* NOTE: Publish the written slot as the middle one and take back the previous middle to write the next tick.
+		 * The release half orders every write above before the render thread's acquiring exchange. */
+		m_writeSlot = m_publishedSlot.exchange(nextTarget | FreshPublication, std::memory_order_acq_rel) & PublishedSlotMask;
+
+		m_publicationCount.fetch_add(1, std::memory_order_seq_cst);
 	}
 
 	void

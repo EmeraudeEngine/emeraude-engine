@@ -33,6 +33,20 @@
 namespace EmEn
 {
 	/**
+	 * @brief How many copies of the published logic state exist (the logic → render hand-off).
+	 * @note ⚠️ THREE, never two. The logic thread publishes at a fixed 60 Hz while the render thread
+	 * reads the state it latched for the whole frame (Scene::beginRenderFrame()). With two slots the
+	 * logic can only alternate, so its SECOND publication inside one frame lands on the slot the frame
+	 * is reading: every frame longer than a logic tick mixed two ticks (the camera of the early draws
+	 * against the camera of the late ones — objects "sliding" on each other while the camera turns).
+	 * Measured on 2026-09-24 before the fix: 41-66 % of the frames on `terrain`, 11-16 % on `sponza`.
+	 * Three slots make it a lock-free triple buffer: the render thread owns one, the logic thread
+	 * writes another, the third holds the latest publication, and the exchanges keep them disjoint
+	 * (Scene::publishStateForRendering(), Scene::beginRenderFrame()).
+	 */
+	constexpr uint32_t RenderStateSlotCount{3};
+
+	/**
 	 * @brief Default ceiling frequency (Hz) of the engine main event loop.
 	 * @note 100 Hz => a 0.010 s waitSystemEvents() timeout. This is an idle tick ceiling,
 	 * not a fixed period: the loop returns earlier when OS events arrive. Overridable via

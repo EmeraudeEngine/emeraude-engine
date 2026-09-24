@@ -2173,6 +2173,48 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### Fixed: two state slots let the logic LAP the renderer — heavy content slid on the image while the camera turned (Sep 2026)
+
+> **Symptom (owner, 2026-09-24):** on heavy scenes only, some objects seem to *slide* against the rest
+> while the camera turns — the `terrain` forest, Sponza's central tree. No VUID, and a still camera
+> looks perfect.
+
+**Cause.** The logic → render hand-off had TWO slots. The logic publishes at a fixed 60 Hz and
+alternated between them; the render thread latched one slot per frame and read it until the end of
+the frame — each draw re-reads the view matrix and holds a POINTER to its node's published frame, so
+the reads are spread over the whole recording. The logic's second publication inside one frame
+therefore landed on the latched slot: every frame whose CPU recording outlasted a tick drew its early
+batches with the camera of tick N and its late ones with the camera of tick N+2 (plus torn matrices:
+the copy was a plain data race). The code documented the opposite — "stable for the whole frame, the
+logic thread publishes to the other index".
+
+**Measured** with the permanent instrument `Core.SceneManagerService.getStateSyncStatistics(true)`
+(write generation per slot, bumped before the logic writes it, compared at the latch and at the
+frame's end): **41-66 % of the frames overwritten on `terrain` (latch-to-end 23-29 ms), 11-16 % on
+`sponza` (19 ms)**. After the fix: **0 %** on both, at the same load (1.6 publications per frame on `terrain`, 1.2 on `sponza`). Owner-validated on screen the same day, on both scenes: no object slides
+on the others any more while the camera turns or moves under heavy load.
+
+**Fix.** `RenderStateSlotCount` = 3 and a lock-free triple buffer: the logic writes its own slot and
+EXCHANGES it with the middle one; `beginRenderFrame()` takes a fresh publication by exchanging its
+slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
+
+⚠️ **Traps.**
+- A frame rate above 60 FPS hides it completely; the symptom needs a CPU recording longer than one
+  tick, which is why only the heaviest scenes showed it.
+- "Camera in motion" is still a CLASS of causes: this one is a pure timing defect and is measured as
+  such — the counter needs no camera motion at all. It also explained the owner's older report of
+  shading "popping in and out" on Sponza while the camera moved (2026-09-13, "only on overloaded
+  scenes"): gone with the fix, owner-confirmed, item deleted. Two RT-lane mechanisms remain
+  camera-dependent BY CONSTRUCTION and are the next suspects if popping ever returns: the
+  `IrradianceProbeVolume` is anchored on the camera's 1.5 m grid cell and RESETS one plane of probes
+  at every cell crossing (re-converging over ~1 s at hysteresis 0.97, `m_resetPlanes`), and the RT
+  denoisers (RTGI/RTAO/RTR) show the raw estimate on disoccluded pixels for a few frames.
+- A console teleport produces ONE frame of velocity, and a screenshot takes ~1.5 s: a capture series
+  after a move measures convergence, never a sub-second event. Measured on Sponza: from +3.3 s on,
+  both lanes matched their settled frame within the noise floor.
+- Never take the published index with a plain load again, and never size a state array with a
+  literal `2`: use `RenderStateSlotCount`.
+
 ### A duplicate ENTITY NAME cost the whole node — `emplace` discarded it and the caller never knew
 
 > **Symptom:** a loaded model renders with objects missing. No VUID, no warning, no failed resource

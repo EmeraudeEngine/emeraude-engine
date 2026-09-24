@@ -407,7 +407,7 @@ namespace EmEn::Scenes::Component
 			virtual bool shouldBeRemoved () const noexcept = 0;
 
 			/**
-			 * @brief Publishes the component's logic state into a render state slot (double-buffering).
+			 * @brief Publishes the component's logic state into a render state slot (triple buffer, see RenderStateSlotCount).
 			 * @note ⚠️ A COMPONENT CAN CARRY RENDER STATE. This hook exists because light emitters
 			 * did — their light-space matrix and their whole uniform block are rebuilt on the logic
 			 * thread on every move() — and nothing was publishing it: the two-state contract covered

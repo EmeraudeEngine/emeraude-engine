@@ -878,15 +878,15 @@ namespace EmEn::Scenes
 			virtual bool isMoving () const noexcept = 0;
 
 			/**
-			 * @brief Publishes current entity state to render buffer (double-buffering).
+			 * @brief Publishes current entity state to a render state slot (triple buffer, see RenderStateSlotCount).
 			 *
 			 * Called at the end of the logic frame to copy logic state (position, orientation)
 			 * to the render-safe buffer. Render thread reads from this buffer without blocking
 			 * logic thread.
 			 *
-			 * @param writeStateIndex The buffer index to write to (0 or 1, alternates each frame).
+			 * @param writeStateIndex The slot to write to (chosen by Scene::publishStateForRendering(), never the one the render thread holds).
 			 *
-			 * @note This implements the double-buffering mechanism for thread-safe rendering.
+			 * @note This implements the logic → render triple buffer (see RenderStateSlotCount).
 			 * @see getWorldCoordinatesStateForRendering()
 			 */
 			void
@@ -911,10 +911,10 @@ namespace EmEn::Scenes
 			 * Called by render thread to retrieve stable position/orientation without blocking
 			 * logic thread. Reads from the buffer NOT currently being written to.
 			 *
-			 * @param readStateIndex The buffer index to read from (0 or 1, opposite of write index).
+			 * @param readStateIndex The slot the frame latched (Scene::beginRenderFrame()).
 			 * @return const Base::Math::CartesianFrame< float > & Reference to stable world coordinates.
 			 *
-			 * @note This implements the double-buffering mechanism for thread-safe rendering.
+			 * @note This implements the logic → render triple buffer (see RenderStateSlotCount).
 			 * @see publishStateForRendering()
 			 */
 			[[nodiscard]]

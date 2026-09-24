@@ -1791,6 +1791,12 @@ namespace EmEn::Graphics
 			frameCaptured = this->recordFrameCapture(scene.get(), *commandBuffer, imageIndex);
 		}
 
+		/* The frame's last read of the published state is behind us (archive, capture). */
+		if ( scene != nullptr )
+		{
+			scene->endRenderFrame();
+		}
+
 		if ( m_GPUProfiler != nullptr )
 		{
 			m_GPUProfiler->endFrame(*commandBuffer);

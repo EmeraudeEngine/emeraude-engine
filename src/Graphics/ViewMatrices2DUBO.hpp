@@ -38,6 +38,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ViewMatricesInterface.hpp"
+#include "Constants.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
@@ -302,7 +303,7 @@ namespace EmEn::Graphics
 			 * @brief Minimal view state of the previously RENDERED frame, for temporal effects.
 			 * @note Written by archiveStateAfterRendering() and read by the previous*Matrix()
 			 * getters, both on the render thread — no locking required. Distinct from the
-			 * logic/render double-buffer: state indices track logic ticks, not rendered frames.
+			 * logic/render triple buffer: state indices track logic ticks, not rendered frames.
 			 * Identity matrices until the first frame has been archived (consumers handle
 			 * their own first-frame invalidation).
 			 */
@@ -323,7 +324,7 @@ namespace EmEn::Graphics
 			static Base::Math::Matrix< 4, float > getJitteredProjection (const Base::Math::Matrix< 4, float > & projection, const Base::Math::Vector< 2, float > & ndcOffset) noexcept;
 
 			DataState m_logicState; /**< Current logic state (write). */
-			std::array< DataState, 2 > m_renderState; /**< Double-buffered render states (read). */
+			std::array< DataState, RenderStateSlotCount > m_renderState; /**< Published render states, one per state slot (triple buffer, see RenderStateSlotCount). */
 			PreviousFrameState m_previousState; /**< View state of the previous rendered frame (render thread only). */
 			Base::Math::Vector< 2, float > m_currentJitter; /**< NDC projection jitter of the frame being rendered (render thread only). */
 			mutable Base::Math::Matrix< 4, float > m_jitteredProjection; /**< Jittered projection served by projectionMatrix(readStateIndex) while jitter is enabled (render thread only). */

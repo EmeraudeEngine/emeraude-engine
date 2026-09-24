@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_export.hpp"
+#include "Constants.hpp"
 
 
 /* Project configuration. */
@@ -650,12 +651,12 @@ namespace EmEn::Scenes
 			Base::Math::CartesianFrame< float > m_logicStateCoordinates;
 
 			/**
-			 * @brief Double-buffered coordinate frames for thread-safe rendering.
+			 * @brief Published coordinate frames, one per render state slot.
 			 *
-			 * Maintains two copies of the coordinate frame to allow the logic system and
-			 * rendering system to operate independently without locking. The logic system
-			 * publishes its state to one buffer while the renderer reads from the other.
+			 * Lets the logic system and the rendering system operate independently without locking:
+			 * the logic publishes into one slot while the renderer reads another (triple buffer, see
+			 * RenderStateSlotCount — two slots were NOT enough, the logic lapped the renderer).
 			 */
-			std::array< Base::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
+			std::array< Base::Math::CartesianFrame< float >, RenderStateSlotCount > m_renderStateCoordinates{};
 	};
 }

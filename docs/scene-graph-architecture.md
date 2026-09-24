@@ -4,7 +4,7 @@ This document provides detailed architecture for the Scene Graph system, the org
 
 ## Quick Reference: Key Terminology
 
-- **Node**: Dynamic entity in the scene graph tree with physics, hierarchy, and double-buffered state. Supports MovableTrait for full physics simulation.
+- **Node**: Dynamic entity in the scene graph tree with physics, hierarchy, and triple-buffered published state. Supports MovableTrait for full physics simulation.
 - **StaticEntity**: Immovable entity stored in a flat map (not a tree). Optimized for static geometry like buildings. No physics overhead, but supports components.
 - **AbstractEntity**: Common base class for Node and StaticEntity. Manages component attachment and lifecycle.
 - **CartesianFrame**: Transformation representation storing position + 3 orthonormal basis vectors (X, Y, Z axes). One axis computed via cross product of the other two.
@@ -143,8 +143,8 @@ Scene scene(
 - Cleans dead nodes from tree
 
 **publishStateForRendering()**: Called after processLogics()
-- Double-buffers all entity states
-- Atomically swaps render state index
+- Copies all entity states into the logic thread's write slot
+- Exchanges it with the published (middle) slot — never the slot the render thread latched
 - Enables lock-free rendering
 
 **disable()**: Called when scene becomes inactive
@@ -195,12 +195,12 @@ The Scene class is designed for multi-threaded operation:
 
 | Resource | Protection | Access Pattern |
 |----------|------------|----------------|
-| Node tree | `m_sceneNodesAccess` mutex | Logic thread writes, render thread reads via double-buffer |
+| Node tree | `m_sceneNodesAccess` mutex | Logic thread writes, render thread reads a published slot (triple buffer) |
 | Static entities | `m_staticEntitiesAccess` mutex | Same as nodes |
 | Rendering octree | `m_renderingOctreeAccess` mutex | Logic thread updates, render thread queries |
 | Physics octree | `m_physicsOctreeAccess` mutex | Logic thread only |
 | Render targets | Per-type mutexes | Creation thread-safe, rendering lock-free |
-| Render state | `m_renderStateIndex` atomic | Lock-free publish/read |
+| Render state | `m_publishedSlot` atomic (+ `m_writeSlot`, `m_frameReadStateIndex`) | Lock-free triple buffer: both threads EXCHANGE slots, so neither reaches the other's (`RenderStateSlotCount`) |
 
 ## Design Philosophy: Generic Containers + Modular Components
 
@@ -275,7 +275,7 @@ AbstractEntity (component management)
 **Characteristics:**
 - ✅ **Hierarchical**: Forms tree structure with parent-child relationships
 - ✅ **Physics-enabled**: MovableTrait provides velocity, forces, mass
-- ✅ **Double-buffered**: Active state (logic) + Render state (rendering)
+- ✅ **Triple-buffered**: Active state (logic) + `RenderStateSlotCount` published states (rendering)
 - ✅ **Movable**: Position changes via physics or direct manipulation
 - ✅ **Recursive updates**: Parent update propagates to children
 
@@ -305,7 +305,7 @@ auto root = scene->root();
 **Characteristics:**
 - ✅ **Flat storage**: No hierarchy, stored in map keyed by name
 - ❌ **No physics**: No MovableTrait (no velocity, forces, integration)
-- ✅ **Double-buffered**: Same as Nodes for thread-safety consistency
+- ✅ **Triple-buffered**: Same as Nodes for thread-safety consistency
 - ✅ **Technically mutable**: Can change position via LocatableInterface, but intended to stay static
 - ✅ **Fast access**: Direct lookup by name (no tree traversal)
 

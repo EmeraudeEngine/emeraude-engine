@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_export.hpp"
+#include "Constants.hpp"
 
 /* STL inclusions. */
 #include <any>
@@ -486,7 +487,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::onPublishStateForRendering(uint32_t) noexcept
-			 * @note Computes world coordinates and stores them in the render state array for double-buffering.
+			 * @note Computes world coordinates and stores them in the render state slot (triple buffer, see RenderStateSlotCount).
 			 */
 			void onPublishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
@@ -930,7 +931,7 @@ namespace EmEn::Scenes
 			std::weak_ptr< Node > m_parent;
 			std::map< std::string, std::shared_ptr< Node >, std::less<> > m_children;
 			Base::Math::CartesianFrame< float > m_logicStateCoordinates;
-			std::array< Base::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
+			std::array< Base::Math::CartesianFrame< float >, RenderStateSlotCount > m_renderStateCoordinates{};
 			uint64_t m_lifetime{0};
 	};
 }

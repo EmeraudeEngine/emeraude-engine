@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "emeraude_export.hpp"
+#include "Constants.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -735,9 +736,9 @@ namespace EmEn::Scenes::Component
 			uint32_t m_shadowMapResolution{0};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;
 			/** @brief Published copies of the uniform block, one per render state slot. */
-			std::array< std::array< float, MaxUniformBlockElementCount >, 2 > m_publishedBlocks{};
+			std::array< std::array< float, MaxUniformBlockElementCount >, RenderStateSlotCount > m_publishedBlocks{};
 			/** @brief Logic generation each published slot was filled from. */
-			std::array< uint32_t, 2 > m_publishedGeneration{};
+			std::array< uint32_t, RenderStateSlotCount > m_publishedGeneration{};
 			/**
 			 * @brief Bumped by requestVideoMemoryUpdate() on the logic thread.
 			 * @note ⚠️ A GENERATION, not a boolean. A single dirty flag consumed by the first

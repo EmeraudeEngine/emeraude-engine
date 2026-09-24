@@ -378,8 +378,10 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* NOTE: The render state at this index is stable for the whole frame (the logic
-		 * thread publishes to the other index), so a plain copy on the render thread is safe. */
+		/* NOTE: The render state at this index is stable for the whole frame: the frame owns
+		 * that slot of the triple buffer until its next latch (see RenderStateSlotCount), so a
+		 * plain copy on the render thread is safe. ⚠️ This used to rest on a two-slot design in
+		 * which the claim was FALSE for any frame longer than a logic tick. */
 		const auto & renderedState = m_renderState[readStateIndex];
 
 		m_previousState.view = renderedState.view;

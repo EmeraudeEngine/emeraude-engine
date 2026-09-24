@@ -943,6 +943,35 @@ namespace EmEn::Scenes
 			return true;
 		}, "Returns what the last frame's render lists submit, per geometry LOD: batches, instances, triangles (view, then shadows).");
 
+		this->bindCommand("getStateSyncStatistics", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( m_activeScene == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, "No active scene !");
+
+				return false;
+			}
+
+			const bool reset = !arguments.empty() && arguments[0].asBoolean();
+			const auto statistics = m_activeScene->stateSyncStatistics(reset);
+
+			std::stringstream info;
+			info << "Logic-to-render state synchronisation" << (reset ? " (window reset)" : "") << "\n";
+			info << "  Frames measured: " << statistics.frames << "\n";
+
+			if ( statistics.frames > 0 )
+			{
+				const auto frames = static_cast< double >(statistics.frames);
+
+				info << "  Frames whose latched state was overwritten: " << statistics.overwrittenFrames << " (" << (100.0 * static_cast< double >(statistics.overwrittenFrames) / frames) << " %)\n";
+				info << "  Logic publications inside a frame: mean " << (static_cast< double >(statistics.publicationsDuringFrames) / frames) << ", max " << statistics.maxPublicationsDuringFrame << "\n";
+				info << "  Latch-to-end: mean " << (statistics.latchToEndMSSum / frames) << " ms, max " << statistics.latchToEndMSMax << " ms\n";
+			}
+
+			outputs.emplace_back(Severity::Info, info.str());
+
+			return true;
+		}, "Returns how often a rendered frame read a logic state the logic thread was rewriting (must be 0). Argument: true resets the window after reading.");
+
 		this->bindCommand("writeImposterAtlases", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			if ( m_activeScene == nullptr )
 			{

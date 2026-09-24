@@ -4883,7 +4883,7 @@ forest 117 186 instances for **234 372 triangles** (1.09 billion at LOD 3 withou
 of the conifer atlas, fixed in emeraude-base (`Processor::downsample()`, `TextureCompressor` `generateMip()`,
 `TextureCache::Version` 3). See `docs/caution-points.md` § *The BC7 mip chain lost the mean*.
 
-## 16. Frame Synchronization — Double-Buffering
+## 16. Frame Synchronization — Double-Buffering (GPU) and the Logic Triple Buffer
 
 > [!CRITICAL]
 > **Read [`src/Scenes/AGENTS.md` → Frame Synchronization](../Scenes/AGENTS.md) BEFORE adding
@@ -4916,9 +4916,9 @@ to the next logic tick → **matrix/depth mismatch → flickering**. See `RTR.cp
 
 ### Rule 3: Frame History ≠ State Indices (Temporal Effects)
 
-The logic/render double-buffer (`readStateIndex`/`writeStateIndex`) tracks **logic ticks**,
-NOT rendered frames — if the logic thread ticks twice between two frames, "the other index"
-is NOT the previous frame. Temporal effects (RTGI reprojection, future TAA) must use the
+The logic/render state slots (`readStateIndex`/`writeStateIndex`, a **triple buffer** since
+2026-09-24, `RenderStateSlotCount`) track **logic ticks**, NOT rendered frames — if the logic
+thread ticks twice between two frames, no slot index is "the previous frame". Temporal effects (RTGI reprojection, future TAA) must use the
 **frame-history contract** instead:
 
 - `ViewMatricesInterface::previousViewMatrix()` / `previousProjectionMatrix()` — the state
@@ -4932,7 +4932,7 @@ is NOT the previous frame. Temporal effects (RTGI reprojection, future TAA) must
 
 **Code references:**
 - `Renderer.hpp:m_currentFrameIndex` — Current frame-in-flight index
-- `Renderer.hpp:m_currentReadStateIndex` — Double-buffer read state index for current frame
+- `Renderer.hpp:m_currentReadStateIndex` — read state slot latched by the current frame (triple buffer: see `src/Scenes/AGENTS.md` → Frame Synchronization)
 - `Renderer.hpp:framesInFlight()` — Number of frames-in-flight
 - `Scenes/SceneMetaData.hpp:initializePerFrameBuffers()` — Reference implementation
 - `ViewMatricesInterface.hpp` — frame-history contract (previous view/projection + archive)
@@ -5130,7 +5130,7 @@ const mat4 M = mat4(PerDrawDataRef(addr)[gl_DrawID].modelMatrix);
 -   **Animated Cubemaps**: See [Section 11](#11-animated-texture-cubemap-system) - CubemapMovieResource + AnimatedTextureCubemap
 -   **Post-Processing**: See [Section 12](#12-post-processing-effects) - RTR, SSR, ContactShadows, SSAO, VeilingGlare, DoF, AtmosphericFog, VolumetricLight, LensFlare, ToneMapping
 -   **Instance Program Cache**: See [Section 15](#15-instance-local-program-cache-renderableinstance) - Per-instance resolved program cache
--   **Frame Sync**: See [Section 16](#16-frame-synchronization--double-buffering) - Per-frame buffers, view matrix state index
+-   **Frame Sync**: See [Section 16](#16-frame-synchronization--double-buffering-gpu-and-the-logic-triple-buffer) - Per-frame buffers, view matrix state index
 -   **Compute Shaders**: See below - GPU compute pipeline for non-rendering workloads
 -   **Raw Geometry**: See [Section 19](#19-raw-geometry-system) - Direct GPU upload from raw buffers
 

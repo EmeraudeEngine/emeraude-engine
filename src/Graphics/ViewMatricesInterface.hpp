@@ -383,7 +383,7 @@ namespace EmEn::Graphics
 			 * rendered frame, on the render thread, AFTER the frame's command buffer is recorded —
 			 * so that during the recording of frame N, previousViewMatrix()/previousProjectionMatrix()
 			 * still expose the state of frame N-1. This is distinct from the logic/render
-			 * double-buffering (publishStateForRendering): state indices track logic ticks,
+			 * triple buffer (publishStateForRendering, RenderStateSlotCount): state indices track logic ticks,
 			 * NOT rendered frames. Default implementation keeps no history.
 			 * @param readStateIndex The render state-valid index the frame was rendered with.
 			 * @return void

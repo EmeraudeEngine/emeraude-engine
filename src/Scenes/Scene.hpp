@@ -34,6 +34,8 @@
 #include <cstdint>
 #include <any>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -49,6 +51,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Audio/Ambience.hpp"
 #include "Component/Visual.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
@@ -411,11 +414,12 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Publishes the current simulation state for the render thread.
 			 *
-			 * Implements double-buffering for thread-safe rendering:
-			 * - Copies StaticEntity states to the next buffer index
+			 * Implements the logic → render triple buffer (see RenderStateSlotCount):
+			 * - Copies StaticEntity states into the logic thread's write slot
 			 * - Copies Node tree states via NodeCrawler traversal
 			 * - Copies render target view matrices
-			 * - Atomically swaps the render state index
+			 * - Exchanges the write slot with the published (middle) slot — never touching the slot the
+			 *   render thread latched, however many ticks one frame lasts
 			 *
 			 * This allows the logic thread to continue simulation while the render
 			 * thread reads a consistent, stable snapshot of the scene.
@@ -1900,6 +1904,37 @@ namespace EmEn::Scenes
 			RenderListStatistics shadowRenderStatistics () const noexcept;
 
 			/**
+			 * @brief How the published logic state held up while the render thread was reading it.
+			 * @note Measured between the frame's latch (beginRenderFrame()) and its last state read
+			 * (endRenderFrame()). A frame is OVERWRITTEN when the logic thread started writing the very
+			 * slot the frame had latched: the frame then mixes two logic ticks (the camera of one draw
+			 * and the camera of the next no longer agree). Must be exactly zero at any frame rate.
+			 */
+			struct StateSyncStatistics final
+			{
+				/** @brief Rendered frames measured. */
+				uint64_t frames{0};
+				/** @brief Frames whose latched slot was written by the logic thread before the frame ended. */
+				uint64_t overwrittenFrames{0};
+				/** @brief Logic publications that happened between a latch and its frame's end, summed. */
+				uint64_t publicationsDuringFrames{0};
+				/** @brief The largest number of publications seen inside one frame. */
+				uint64_t maxPublicationsDuringFrame{0};
+				/** @brief Latch-to-end duration, summed (milliseconds). */
+				double latchToEndMSSum{0.0};
+				/** @brief Latch-to-end duration, largest (milliseconds). */
+				double latchToEndMSMax{0.0};
+			};
+
+			/**
+			 * @brief Returns the state synchronisation statistics accumulated since the last reset. Thread-safe.
+			 * @param reset Clears the accumulation after reading it, to measure a window.
+			 * @return StateSyncStatistics
+			 */
+			[[nodiscard]]
+			StateSyncStatistics stateSyncStatistics (bool reset) noexcept;
+
+			/**
 			 * @brief Declares the beginning of a rendered frame on the render thread.
 			 *
 			 * Resets the frame-linear staging of the instance transforms SSBO. The Renderer
@@ -1907,6 +1942,15 @@ namespace EmEn::Scenes
 			 * (render-to-textures included).
 			 */
 			void beginRenderFrame () noexcept;
+
+			/**
+			 * @brief Declares the end of a rendered frame on the render thread.
+			 *
+			 * The Renderer MUST call this once per rendered frame, after the LAST read of the frame's
+			 * published state (the view-state archive). It closes the state synchronisation measurement
+			 * opened by beginRenderFrame() (see stateSyncStatistics()).
+			 */
+			void endRenderFrame () noexcept;
 
 			/**
 			 * @brief Returns the render state index latched by beginRenderFrame() for the frame being rendered.
@@ -1982,7 +2026,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the double-buffer read state index captured at prepareRender() time.
+			 * @brief Returns the read state slot captured at prepareRender() time.
 			 * @note Use this to read view matrices consistent with the current frame's depth buffer.
 			 * @return uint32_t
 			 */
@@ -2747,10 +2791,11 @@ namespace EmEn::Scenes
 			/** @brief Render list index for translucent objects requiring grab pass (with lighting). */
 			static constexpr auto TranslucentGBLighted{6UL};
 
-			/** @brief Cached double-buffer read index set by prepareRender(). */
+			/** @brief Cached read state slot set by prepareRender() (always m_frameReadStateIndex). */
 			/** @brief Read state index latched ONCE per rendered frame by beginRenderFrame(). Every
-			 * consumer of the frame reads this, never m_renderStateIndex directly — see the note
-			 * there. Render thread only. */
+			 * consumer of the frame reads this, never m_publishedSlot directly — see the note
+			 * there. The render thread OWNS this slot until its next latch: the logic thread never
+			 * writes it (triple buffer). Render thread only. */
 			uint32_t m_frameReadStateIndex{0};
 			uint32_t m_preparedReadStateIndex{0};
 			/** @brief Cached bindless texture manager pointer set by prepareRender(). Null if not usable. */
@@ -2833,7 +2878,15 @@ namespace EmEn::Scenes
 			RenderListStatistics m_shadowRenderStatistics{};
 			/** @brief The shadow statistics of the frame being built. Render thread only. */
 			RenderListStatistics m_pendingShadowRenderStatistics{};
-			/** @brief Guards the two published statistics records (render thread writes, console reads). */
+			/** @brief State synchronisation statistics, accumulated by endRenderFrame(). Guarded by m_renderStatisticsAccess. */
+			StateSyncStatistics m_stateSyncStatistics{};
+			/** @brief The write generation of the latched slot, read at the latch. Render thread only. */
+			uint64_t m_frameSlotWriteGeneration{0};
+			/** @brief The publication count, read at the latch. Render thread only. */
+			uint64_t m_framePublicationCount{0};
+			/** @brief When the frame latched its state. Render thread only. */
+			std::chrono::steady_clock::time_point m_frameLatchTime{};
+			/** @brief Guards the published statistics records (render thread writes, console reads). */
 			mutable std::mutex m_renderStatisticsAccess;
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
@@ -2920,8 +2973,22 @@ namespace EmEn::Scenes
 			 * Mutexes and atomic state.
 			 * ============================================================ */
 
-			/** @brief Double-buffer index for thread-safe render state. Atomic for lock-free swap. */
-			std::atomic_uint32_t m_renderStateIndex;
+			/** @brief Flag carried by m_publishedSlot while its slot holds a publication the render thread has not taken yet. */
+			static constexpr uint32_t FreshPublication{0x80000000U};
+			/** @brief Mask extracting the slot index from m_publishedSlot. */
+			static constexpr uint32_t PublishedSlotMask{~FreshPublication};
+			/**
+			 * @brief The middle slot of the logic → render triple buffer: the latest publication, plus FreshPublication
+			 * while the render thread has not taken it. Exchanged by BOTH threads, so the three slots stay disjoint:
+			 * m_writeSlot (logic), m_frameReadStateIndex (render), this one (in between). See RenderStateSlotCount.
+			 */
+			std::atomic_uint32_t m_publishedSlot{2};
+			/** @brief The slot the next publication writes. Logic thread only. */
+			uint32_t m_writeSlot{1};
+			/** @brief Per state slot, bumped by the logic thread BEFORE it writes the slot (state synchronisation measurement). */
+			std::array< std::atomic_uint64_t, RenderStateSlotCount > m_slotWriteGenerations{};
+			/** @brief Publications since the scene was created (state synchronisation measurement). */
+			std::atomic_uint64_t m_publicationCount{0};
 			/** @brief Mutex protecting node tree operations. */
 			mutable std::mutex m_sceneNodesAccess;
 			/** @brief Mutex protecting static entity map. */

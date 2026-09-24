@@ -820,16 +820,36 @@ The engine uses **frames-in-flight** (typically 2-3) to keep the GPU busy while 
 prepares the next frame. Each frame-in-flight has its own fence, command buffer, and
 descriptor sets. The logic thread and render thread run concurrently.
 
-**Synchronization mechanism:**
-- `m_renderStateIndex` (`std::atomic<uint32_t>`) — Written by the logic thread after
-  updating entity transforms, read by the render thread via `std::memory_order_acquire`.
-- Each entity stores **two copies** of its world coordinates (indexed by state index).
-- The logic thread writes to `activeStateIndex`, the render thread reads from
-  `m_preparedReadStateIndex` (captured at `prepareRender()` time).
+**Synchronization mechanism — a lock-free TRIPLE buffer (since 2026-09-24):**
+- Every published state (node and static-entity frames, the three `ViewMatrices*UBO`, the light
+  emitters' uniform blocks) has **`RenderStateSlotCount` = 3** copies (`Constants.hpp`).
+- Three slot indices are always disjoint: `m_writeSlot` (logic thread only), `m_frameReadStateIndex`
+  (render thread only, latched ONCE per frame by `beginRenderFrame()`) and the middle one,
+  `m_publishedSlot` (atomic, carries `FreshPublication` while the render thread has not taken it).
+- `publishStateForRendering()` writes `m_writeSlot`, then **exchanges** it with the middle slot.
+  `beginRenderFrame()` takes a fresh publication by **exchanging** its own slot with the middle one.
+  Neither thread can ever reach the slot the other holds, however many ticks one frame lasts.
+
+> [!CRITICAL]
+> **Never go back to two slots, and never take the published index with a plain load.** Until
+> 2026-09-24 the state had two slots and the logic alternated between them: its SECOND publication
+> inside one frame landed on the slot the frame was reading. Every frame longer than a 60 Hz tick
+> mixed two ticks — the draws recorded early used one camera, those recorded late the camera two
+> ticks later — so heavy content visibly **slid** on the rest of the image while the camera turned
+> (the `terrain` forest, Sponza's central tree), shadows desynchronised from their casters, and the
+> view-state archive fed TAA/RTGI a "previous" matrix newer than the one rendered. Measured with
+> `Core.SceneManagerService.getStateSyncStatistics(true)`: **41-66 % of the frames overwritten on
+> `terrain`, 11-16 % on `sponza`; 0 % on both after the fix at the same load** (1.6 and 1.2 publications per frame).
+> The comment in `ViewMatrices2DUBO::archiveStateAfterRendering()` claimed the latched slot was
+> "stable for the whole frame" — true only below one tick of CPU recording.
+> **The instrument stays**: `Scene::endRenderFrame()` closes a per-frame check (a write generation
+> per slot, bumped BEFORE the logic writes it). Any value other than 0 is a regression.
 
 **Code references:**
-- `Scene.rendering.cpp:prepareRender()` — `m_preparedReadStateIndex = m_renderStateIndex.load()`
-- `Scene.hpp` — `m_renderStateIndex` atomic, `m_preparedReadStateIndex`
+- `Scene.rendering.cpp:beginRenderFrame()` — the render-side exchange (the latch)
+- `Scene.rendering.cpp:publishStateForRendering()` — the logic-side exchange
+- `Scene.rendering.cpp:endRenderFrame()` / `Scene::stateSyncStatistics()` — the measurement
+- `Scene.hpp` — `m_publishedSlot`, `m_writeSlot`, `m_frameReadStateIndex`, `m_preparedReadStateIndex`
 - `Renderer.hpp` — `m_currentFrameIndex`, `framesInFlight()`
 
 ### Per-Frame GPU Resources
