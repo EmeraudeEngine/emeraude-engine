@@ -2173,6 +2173,26 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### Fixed: a post-process occupant filed AFTER the stack's creation was never created (Sep 2026)
+
+**Symptom:** the scene-driven cloud pass was listed by `getStatus()` as `Clouds: VolumetricCloudsEffect`
+— selected, effective — and drew nothing, with no error and no VUID, for three launches.
+
+**Cause:** `PostProcessStack::addEffect()` files an effect ENABLED (every effect is enabled at
+construction) and creates nothing; `createAll()` creates the selected occupants, but only for a stack
+built before the scene starts. An occupant filed later (`syncSceneEffects()`, or any runtime
+`addEffect()`) reached `syncSlotSelection()` as "selected == enabled" and took its "nothing changes"
+early-out every frame — the materialization below it never ran — while the executor's `isCreated()`
+gate skipped it in silence (a gate that is silent ON PURPOSE, to avoid per-frame spam).
+
+**Fix:** the early-out also requires `isCreated()`; an enabled but un-created occupant is now
+materialized the next frame, then enabled.
+
+**Rule:** "listed as running" is not "running". A pass that can legitimately draw nothing must say
+WHY it drew nothing (the cloud pass traces a census when it changes); the absence of that line is
+itself the diagnosis (`execute()` never ran).
+
+
 ### Fixed: RushMaker paced on the last capture, not on the slot grid — 1 frame in 5 duplicated at 48 FPS (Sep 2026)
 
 > **Symptom (owner):** hiccups in every RushMaker video of `forest`, though the demo ran at ~48 FPS

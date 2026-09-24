@@ -700,8 +700,14 @@ namespace EmEn::Graphics
 				);
 			};
 
-			/* Nothing changes: the common case, every frame, once the scene has settled. */
-			if ( effective == this->enabledEffect(slot) )
+			/* Nothing changes: the common case, every frame, once the scene has settled.
+			 * ⚠️⚠️ "Already enabled" is NOT "already running": addEffect() files an occupant ENABLED
+			 * (every effect is enabled at construction) and creates nothing, which createAll() covers
+			 * for a stack built before the scene starts — and nothing covers for an occupant filed
+			 * AFTER it (the scene-driven cloud pass, a runtime addEffect()). Such an occupant used to
+			 * take this early-out forever: selected, enabled, never created, and skipped in silence by
+			 * the executor's isCreated() gate — the cloud pass was listed as running and drew nothing. */
+			if ( effective == this->enabledEffect(slot) && (effective == nullptr || effective->isCreated()) )
 			{
 				recordEffective(effective);
 
