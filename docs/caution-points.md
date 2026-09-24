@@ -1394,8 +1394,10 @@ WORLD space. The screen-space refraction scaled the factor by `svModelScale`; th
 **Fix:** the light generator receives `StandardResource::volumeThicknessWorldExpression()`, and the
 model scale is synthesized for every transmissive material (`src/Saphir/AGENTS.md` § *One volume
 thickness for both consumers*). ⚠️ The same rule makes a LIBRARY material scale-dependent twice over:
-its thickness is in the units of the mesh it was tuned on, its attenuation distance in metres — a
-parametric gem on a model of another size needs both re-derived (`forest` does it for its chick).
+its thickness is in the units of the mesh it was tuned on, its attenuation distance in metres. A
+parametric gem on a model of another size needs its thickness re-measured, and its attenuation
+distance is then a CHOICE: kept, the stone absorbs physically (a 2 m emerald is nearly black); stretched
+by the same factor, it keeps the library's colour. `forest`'s chick keeps it (owner decision, physical).
 
 ### Fixed: the grab pass was recreated IN PLACE while frames still used it (Sep 2026)
 
