@@ -24,6 +24,16 @@ Aug 2026 flip. Consequence, measured on `basic-scenery --demo-options 1` (Clouds
 ambient alone. `AxisDebug` (authored after the flip, `[0.5, 0.5, 0.5]`) and `Kloppenheim05`
 (measured by `tools/sky-manifest.py`) are correct.
 
+## Done so far
+
+- **`AutumnFieldPureSky` — re-measured 2026-09-24 (owner decision, for `forest`)** with
+  `tools/sky-manifest.py --sun-illuminance 83000 --temperature 5500`: sun `(0.705, 0.4856, 0.517)`,
+  29.05° elevation (the old Y was the only wrong sign), Luminance 31 800 → **15 380** nits,
+  AmbientIlluminance 17 000 → **8 020** lx, AverageColor grey → `(0.386, 0.634, 1.0)`. The picture's
+  own sun/sky ratio on the ground is 5.0; the old manifest put it at 2.4. `forest` lost its hand-made
+  sun the same day and takes this star with its cascades: it had TWO suns (173 klx, one shining up
+  from below the horizon) and an IBL mask over empty sky. 27 manifests remain.
+
 ## What remains
 
 - [ ] Owner decision: negate Y in the 28 `Direction` vectors (a mechanical data fix in
