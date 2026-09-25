@@ -1969,6 +1969,23 @@ namespace EmEn::Scenes
 			StateSyncStatistics stateSyncStatistics (bool reset) noexcept;
 
 			/**
+			 * @brief Returns whether the logic thread has published the scene's state at least once.
+			 * @note ⚠️⚠️ Until then the render thread's slot of the triple buffer (m_frameReadStateIndex, 0) has never
+			 * been written: every entity and render target reads its DEFAULT state — the world origin, a default
+			 * camera — so the distance culls, the draw ranges and the LOD selection all see a distance of zero. The
+			 * first frame of `terrain` drew its whole forest as LOD 0 meshes: 817 745 instances, 55.7 billion
+			 * triangles, ~26 s of GPU on a desktop RTX 3070 Ti and a hung GPU (fence timeout, device loss) on an M2
+			 * and an RTX 3060 Laptop (2026-09-25). Core does not draw a scene before its first publication.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPublishedStateForRendering () const noexcept
+			{
+				return m_publicationCount.load(std::memory_order_acquire) > 0;
+			}
+
+			/**
 			 * @brief Declares the beginning of a rendered frame on the render thread.
 			 *
 			 * Resets the frame-linear staging of the instance transforms SSBO. The Renderer

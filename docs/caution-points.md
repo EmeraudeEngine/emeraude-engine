@@ -2571,6 +2571,30 @@ explodes at one pose only (here, the origin, where the early entities are) is a 
 cost.
 
 
+### Fixed: a scene's first frame read the NEVER-WRITTEN slot of the triple buffer — every entity at the origin (Sep 2026)
+
+> **Symptom:** after the de-duplication above, `terrain` still hung the macOS GPU. Its last statistic before the
+> freeze: **729 457 instances, 48.6 billion triangles** — the whole forest as full-detail meshes. Polling
+> `getRenderStatistics()` every second on Linux showed it too: from the first scene frame (20.7 s) to 46.6 s the
+> view held **42 055 batches, 817 745 instances, 55.7 billion triangles**, then 101 007 instances / 40.6 M.
+
+The logic → render triple buffer (`Scene::publishStateForRendering()` / `beginRenderFrame()`) starts with the render
+thread on slot 0, the logic writing slot 1 and slot 2 published. Slot 0 is written by nobody until the first
+publication has been exchanged, so a frame recorded before it reads every entity's and render target's DEFAULT
+state (`m_renderStateCoordinates{}`: the origin; a default camera at the origin). Every distance is zero: the
+distance culls pass, every mesh visual is inside its [0, 250 m] range, every imposter outside its [250, 6000 m]
+one, and `selectLODLevel()` picks LOD 0. For a small scene that is one invisible wrong frame; for `terrain` it was
+one frame of ~26 s on a 3070 Ti, and a GPU that never finished it (fence timeout, device loss) on an M2 and an RTX
+3060 Laptop.
+
+**Fix:** `Scene::hasPublishedStateForRendering()` (the publication counter > 0), and `Core::renderingTask()` hands
+`renderFrame()` NO scene until it is true — the overlay still draws, the scene appears one logic tick later. Linux:
+the first scene frame is 101 007 instances / 40.6 M triangles, screenshots complete from 23 s (75 s before).
+
+**Rule:** a render-side reader of the triple buffer must never assume a slot was written. And a render statistic
+must be polled from the FIRST frame: sampled at 30 s, this one looked like a "pre-bake" cost for hours.
+
+
 ### Fixed: a post-process occupant filed AFTER the stack's creation was never created (Sep 2026)
 
 **Symptom:** the scene-driven cloud pass was listed by `getStatus()` as `Clouds: VolumetricCloudsEffect`

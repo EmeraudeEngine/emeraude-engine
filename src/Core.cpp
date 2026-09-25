@@ -311,7 +311,14 @@ namespace EmEn
 				 * swap-chain (Vulkan::SwapChain::isHeadless()). */
 				/* NOTE: The RushMaker's copy is recorded inside the frame (Recorder::recordFrameCopy()), never after
 				 * the present. */
-				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager, editorPtr);
+				/* ⚠️⚠️ A scene the logic thread has not published yet is NOT drawn: its render state is the default
+				 * one, every entity at the origin (Scene::hasPublishedStateForRendering()). The frame keeps the
+				 * overlay; the scene appears one logic tick later. */
+				static const std::shared_ptr< Scenes::Scene > NoScene{};
+
+				const auto & frameScene = ( activeScene != nullptr && !activeScene->hasPublishedStateForRendering() ) ? NoScene : activeScene;
+
+				m_graphicsRenderer.renderFrame(frameScene, m_overlayManager, editorPtr);
 
 				/* The frame scope ends with the shared lock: past this point the pointer
 				 * would outlive the guarantee. */

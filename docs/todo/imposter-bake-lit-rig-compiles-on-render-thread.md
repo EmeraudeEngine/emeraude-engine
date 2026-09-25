@@ -15,9 +15,10 @@ tags: [vegetation, imposter, stall, startup]
 By reading (2026-09-25, the terrain hang diagnosis): since the "ImposterCopies" rig is `Lighting::Lit`, each bake
 variant generates an AmbientPass plus the light-pass variants per layer (bark, leaves) — ~28 pipeline and program
 generations, against 2 before — synchronously on the render thread, inside the bake's `prepareRender`. `terrain`
-bakes 20 variants (4 species × (3 + 2 old seeds)), one job per frame, 3 renders each. Measured on Linux with the
-gathers deduplicated: the frames before the last atlas average ~1 s (`getStatus` avg 1003 ms at 30 s, 107 ms
-steady), and no screenshot completes between 23 s and 44 s.
+bakes 20 variants (4 species × (3 + 2 old seeds)), one job per frame, 3 renders each. ⚠️ The slow start first
+blamed on it (frames averaging ~1 s, no screenshot between 23 s and 44 s) was the scene's first frame reading the
+never-written triple-buffer slot (engine `docs/caution-points.md` § *NEVER-WRITTEN slot*, fixed the same day): with
+that fixed, screenshots complete from the first poll. The compile cost itself is UNMEASURED.
 
 ## What remains
 
