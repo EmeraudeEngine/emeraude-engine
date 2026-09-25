@@ -6038,7 +6038,7 @@ Sponza 0 VUID, emeraude-base 2049/2049, GPU cost in the AGENTS section.
 `INSTRUCTION_POINTER_UNKNOWN` addresses, no VUID); with 14 lamps it survived one run out of two,
 with none it never failed. The frames that did render under the ray-traced lane were near black.
 
-**Cause, named by GPU-assisted validation** (`VK_KHRONOS_VALIDATION_VALIDATE_GPU_BASED=GPU_BASED_GPU_ASSISTED`
+**Cause, named by GPU-assisted validation** (`VK_KHRONOS_VALIDATION_GPUAV_ENABLE=1` (⚠️ the former `VK_KHRONOS_VALIDATION_VALIDATE_GPU_BASED=GPU_BASED_GPU_ASSISTED` is SILENTLY IGNORED by the 1.4.357 SDK — measured on Windows and macOS 2026-09-25; check that `- GPU-AV` appears in the layer's enabled list; GPU-AV is unusable on MoltenVK, its instrumented shaders fail to translate to Metal)
 on the launch, the only instrument that saw it): `VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351`,
 *OpRayQueryInitializeKHR operand Ray Origin contains a NaN*, in the RTGI and RTR fragment shaders
 and the probe-volume compute. The hit normal interpolated from the vertex buffer was degenerate on
