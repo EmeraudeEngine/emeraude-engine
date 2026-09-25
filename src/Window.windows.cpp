@@ -228,6 +228,12 @@ namespace EmEn
 		CoUninitialize();
 	}
 
+	void
+	Window::drainDisplayConnection () const noexcept
+	{
+		/* NOTE: A Win32 message queue does not drop its window when it is not pumped for a while. */
+	}
+
 	HWND
 	Window::getWin32Window () const noexcept
 	{

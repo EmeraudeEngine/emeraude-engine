@@ -1523,26 +1523,22 @@ namespace EmEn::Graphics
 		});
 	}
 
-	void
-	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
+	bool
+	Renderer::beginFrame () noexcept
 	{
+		m_acquiredImageIndex.reset();
+
 		/* NOTE: Record frame start time for the optional frame limiter. */
 		if ( this->isSoftwareFrameLimiterEnabled() )
 		{
 			m_frameStartTime = std::chrono::high_resolution_clock::now();
 		}
 
-		/* 1. If the swap-chain was marked degraded, we discard the next frame until we get back a valid swap-chain. */
+		/* 1. A degraded swap-chain drops the frame: renderFrame() recreates it, inside the scene lock (the
+		 * recreation reconfigures the scene target and the post-processor). */
 		if ( this->isSwapChainDegraded() )
 		{
-			/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
-			if ( !this->recreateRenderingSubSystem(false, false) )
-			{
-				Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
-			}
-
-			/* Let this image drop. */
-			return;
+			return false;
 		}
 
 		auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
@@ -1559,8 +1555,9 @@ namespace EmEn::Graphics
 				m_GPUProfiler->harvest(m_currentFrameIndex);
 			}
 
-			/* The same fence covers the frame captures submitted with this slot. */
+			/* The same fence covers the frame captures and the video copies submitted with this slot. */
 			m_frameCapture.onFrameSlotRetired(m_currentFrameIndex);
+			m_recorder.onFrameSlotRetired(m_currentFrameIndex);
 
 			currentFrameScope.prepareForNewFrame();
 		}
@@ -1570,26 +1567,59 @@ namespace EmEn::Graphics
 
 			std::abort();
 
-			return;
+			return false;
 		}
-
-		/* Destroy retired resources once all in-flight frames have completed.
-		 * After framesInFlight() fence waits, every command buffer that could
-		 * reference them has finished execution and been re-recorded. */
-		m_deferredDestructor.tick();
 
 		/* 3. Get the new frame to render to.
 		 * NOTE: The returned index addresses a SWAP-CHAIN IMAGE, in an arbitrary order that has
 		 * nothing to do with m_currentFrameIndex. Everything indexed by it (the present
 		 * semaphore, the framebuffer) must use it, and never the frame index. */
-		const auto imageIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
+		m_acquiredImageIndex = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
 
-		if ( !imageIndexOpt )
+		return m_acquiredImageIndex.has_value();
+	}
+
+	void
+	Renderer::abandonFrame () noexcept
+	{
+		if ( !m_acquiredImageIndex.has_value() )
 		{
 			return;
 		}
 
-		const uint32_t imageIndex = imageIndexOpt.value();
+		m_acquiredImageIndex.reset();
+
+		/* The fence was waited, not reset: the draining batch must not signal it again. */
+		this->discardAcquiredImage(m_rendererFrameScope[m_currentFrameIndex], false);
+	}
+
+	void
+	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
+	{
+		/* Without an image, the frame drops: beginFrame() found the swap-chain degraded, or its acquisition timed out. */
+		if ( !m_acquiredImageIndex.has_value() )
+		{
+			/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
+			if ( this->isSwapChainDegraded() && !this->recreateRenderingSubSystem(false, false) )
+			{
+				Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
+			}
+
+			return;
+		}
+
+		const uint32_t imageIndex = m_acquiredImageIndex.value();
+
+		m_acquiredImageIndex.reset();
+
+		auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
+
+		/* Destroy retired resources once all in-flight frames have completed.
+		 * After framesInFlight() fence waits (beginFrame()), every command buffer that could
+		 * reference them has finished execution and been re-recorded.
+		 * NOTE: Inside the scene lock, as it always was: a scene deletion retires resources from
+		 * the main thread under the exclusive access, never concurrently with this. */
+		m_deferredDestructor.tick();
 
 		/* 4. Reset the fence. */
 		if ( !currentFrameScope.inFlightFence()->reset() )
@@ -1839,6 +1869,19 @@ namespace EmEn::Graphics
 			frameCaptured = this->recordFrameCapture(scene.get(), *commandBuffer, imageIndex);
 		}
 
+		/* RushMaker: the video copy belongs to the same batch, for the same reason. ⚠️⚠️ It used to be a separate
+		 * submit after the present, on another queue of the family (Vulkan::Device::getGraphicsQueue() rotates):
+		 * nothing ordered it after this frame, and the video jumped back 3-4 frames whenever the GPU ran behind. */
+		bool frameRecorded = false;
+
+		if ( m_recorder.wantsFrame() )
+		{
+			if ( const auto image = m_swapChain->colorImage(imageIndex); image != nullptr )
+			{
+				frameRecorded = m_recorder.recordFrameCopy(*commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex);
+			}
+		}
+
 		/* The frame's last read of the published state is behind us (archive, capture). */
 		if ( scene != nullptr )
 		{
@@ -1855,6 +1898,11 @@ namespace EmEn::Graphics
 			if ( frameCaptured )
 			{
 				m_frameCapture.confirmSubmit(false);
+			}
+
+			if ( frameRecorded )
+			{
+				m_recorder.confirmSubmit(false);
 			}
 
 			this->discardAcquiredImage(currentFrameScope, true);
@@ -1889,6 +1937,11 @@ namespace EmEn::Graphics
 					m_frameCapture.confirmSubmit(false);
 				}
 
+				if ( frameRecorded )
+				{
+					m_recorder.confirmSubmit(false);
+				}
+
 				this->discardAcquiredImage(currentFrameScope, true);
 
 				return;
@@ -1897,6 +1950,11 @@ namespace EmEn::Graphics
 			if ( frameCaptured )
 			{
 				m_frameCapture.confirmSubmit(true);
+			}
+
+			if ( frameRecorded )
+			{
+				m_recorder.confirmSubmit(true);
 			}
 
 			m_swapChain->present(imageIndex, m_graphicsQueue, presentSemaphoreHandle);
@@ -2697,6 +2755,9 @@ namespace EmEn::Graphics
 
 		/* A capture's frames must share one extent and have no hole. */
 		m_frameCapture.abandon("The swap-chain was recreated during the capture.");
+
+		/* The frame slots may come back with another count: the video copies they carried are complete now. */
+		m_recorder.onDeviceIdle();
 
 		/* NOTE: Lock operation to wait a valid size from the OS. */
 		m_window.waitValidWindowSize();

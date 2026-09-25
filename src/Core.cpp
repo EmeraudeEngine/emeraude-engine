@@ -268,10 +268,22 @@ namespace EmEn
 				}
 			}
 
+			/* ⚠️⚠️ The frame slot and the swap-chain image are acquired BEFORE the scene lock: the acquisition waits
+			 * on the presentation engine without bound (60 s timeout), and a writer waiting for that lock on the main
+			 * thread — the thread pumping the window's events — deadlocked `terrain` for 60 s at every start
+			 * (2026-09-25, Renderer::beginFrame()). */
+			/* Wayland: the compositor drops a client that leaves its socket unread (1 MiB), and the main thread
+			 * does not read it while it loads a scene — the presents keep sending events (Window::drainDisplayConnection()). */
+			m_window.drainDisplayConnection();
+
+			static_cast< void >(m_graphicsRenderer.beginFrame());
+
 			/* NOTE: Ask for a shared-access to the scene content preventing to lock the "logic thread" and draw the scene. */
 			m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
 				if ( m_graphicsRenderer.isShutdownRequested() )
 				{
+					m_graphicsRenderer.abandonFrame();
+
 					return;
 				}
 
@@ -297,12 +309,9 @@ namespace EmEn
 
 				/* NOTE: The same frame with or without a window: a window-less run renders into a HEADLESS
 				 * swap-chain (Vulkan::SwapChain::isHeadless()). */
+				/* NOTE: The RushMaker's copy is recorded inside the frame (Recorder::recordFrameCopy()), never after
+				 * the present. */
 				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager, editorPtr);
-
-				if ( m_graphicsRenderer.recorder().isRecording() && m_graphicsRenderer.recorder().shouldCaptureFrame() )
-				{
-					m_graphicsRenderer.recorder().captureAndSubmitFrame();
-				}
 
 				/* The frame scope ends with the shared lock: past this point the pointer
 				 * would outlive the guarantee. */
@@ -473,6 +482,8 @@ namespace EmEn
 			else
 			{
 				/* ... If so, we stop nicely here, letting the chance to the user application to save data. */
+				Tracer::warning(ClassId, "Stop requested: the graphics renderer is no longer usable.");
+
 				this->stop();
 			}
 
@@ -2055,6 +2066,8 @@ namespace EmEn
 			switch ( key )
 			{
 				case KeyEscape :
+					Tracer::info(ClassId, "Stop requested by the Escape key.");
+
 					this->stop();
 					return true;
 
@@ -2245,6 +2258,8 @@ namespace EmEn
 					return true;
 
 				case KeyEscape :
+					Tracer::info(ClassId, "Stop requested by the Escape key.");
+
 					this->stop();
 
 					return true;
@@ -2534,6 +2549,8 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Console::Controller::Exit :
+					Tracer::info(ClassId, "Stop requested by the console.");
+
 					this->stop();
 					break;
 
@@ -2621,6 +2638,8 @@ namespace EmEn
 					break;
 
 				case Window::OSRequestsToTerminate :
+					Tracer::info(ClassId, "Stop requested by the window system (close request).");
+
 					this->stop();
 					break;
 

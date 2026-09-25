@@ -518,6 +518,19 @@ namespace EmEn
 			void show () const noexcept;
 
 			/**
+			 * @brief Reads what the display server sent, when the thread that normally does is busy [RENDERING THREAD].
+			 * @note Wayland only (a no-op elsewhere, and under X11): never blocks, never dispatches anything — the
+			 * events join their queues in memory, GLFW's on the main thread's next poll, the driver's own at its next
+			 * present. ⚠️⚠️ Without it, a main thread busy for seconds (a scene loaded before the main loop, 9 s for
+			 * `terrain`) while the swap-chain presents in MAILBOX (13 000 frames per second on a loading screen) let
+			 * the compositor's send buffer fill with one `wl_buffer.release` per present: GNOME dropped the client at
+			 * 1 MiB (`WL: Data too big for buffer`, `error in client communication`), GLFW turned the dead connection
+			 * into a silent close request and the swap-chain never got an image back (2026-09-25).
+			 * @return void
+			 */
+			void drainDisplayConnection () const noexcept;
+
+			/**
 			 * @brief Returns whether the application is currently in fullscreen mode.
 			 * @return bool
 			 */

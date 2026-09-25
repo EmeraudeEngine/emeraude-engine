@@ -2273,6 +2273,44 @@ PTS): 0 fillers at the same load. Details: `src/Graphics/AGENTS.md` § RushMaker
 Read the finalisation counter, not a hash of decoded frames: the hardware rate control re-encodes a
 duplicate slightly differently, so identical-frame hashing found only 22 of the 132.
 
+### Fixed: RushMaker stepped back 3-4 frames — its copy ran on ANOTHER queue, before the frame was drawn (Sep 2026)
+
+> **Symptom (owner):** "the video advances, then abruptly goes back a frame or two — like an online
+> shooter on a bad connection", while the engine on screen had no problem at all.
+
+**Measured** on the owner's 8.7 s hardware rush (decoded at 240×135, mean absolute difference between
+frames): **19 of 260 frames bit-identical (0.0) or near-identical (≤ 0.6) to frame k-3 or k-4** while
+6-25 away from frame k-1, in a periodic pattern (137, 143, 149, 155, then 181, 187, 193, 199). A copy of
+an OLDER image, not a duplicate.
+
+**Cause.** The copy was a separate submit made after `Renderer::renderFrame()` returned (after the
+present), on `m_renderer.device()->getGraphicsQueue(QueuePriority::High)`. ⚠️⚠️
+**`Vulkan::Device::getGraphicsQueue()` does not return "the graphics queue": it ROTATES over every queue
+of the family** (`DeviceQueueConfiguration::queue()`, `nextQueueIndex.fetch_add(1) % size` — 16 queues on
+NVIDIA, all registered High), while the renderer caches one (`m_graphicsQueue`, `Renderer.cpp`). Two queues
+are not ordered by anything, and the copy carried no semaphore: whenever the GPU ran behind, the copy
+executed BEFORE the frame was drawn into the acquired image, and read what that image held — the frame
+presented one swap-chain cycle earlier (3-4 images). The screen was never affected, which is what made it
+look like an encoder or timing defect.
+
+**Fix:** the copy is recorded in the frame's own command buffer (`Recorder::recordFrameCopy()`, the
+`screenshot()` hook, image still acquired) and released by the frame's fence
+(`Recorder::onFrameSlotRetired()`): ordered by construction on any queue selection, and the post-present
+ownership defect went with it. After: **0** stepped-back frame on a 328-frame hardware rush the owner
+filmed by hand ("il n'y a plus de saccades"), 0 on a 358-frame VP9 rush (transfer-queue DMA path), 0 VUID.
+
+**Rules.**
+- Anything that must be ordered with the frame goes INTO the frame's command buffer, or waits on a
+  semaphore the frame signals. Never a later submit on "a graphics queue": `getGraphicsQueue()` is a
+  rotating dispenser. The one-shot users that submit and then wait for their own work (transfers, bakes,
+  the video converter) are fine; a caller that relies on submission order with the renderer is not.
+- Detect a stepped-back video frame by comparing frame k with k-2..k-5, not only with k-1: a duplicate
+  (k == k-1) is a CFR filler, a match with an older frame is a stale capture.
+- ⚠️ A camera driven by console `lookAt()` at 50 Hz shows its own artefact (a single tilted, motion-blurred
+  frame, then back on the pose — 3 in 366 frames): it is NOT a stale capture (no older frame matches it) and
+  a mouse-driven rush has none. Bench the recorder with the mouse or a demo's own motion, not a console
+  burst (item `console-camera-burst-tears-a-frame`).
+
 ### Fixed: `MaxLODLevels` means TWO things, and the unqualified name picked the wrong one (Sep 2026)
 
 `Graphics::Geometry::MaxLODLevels` = 8 (what a mesh can HOLD) and `Graphics::Renderable::MaxLODLevels`
@@ -4084,6 +4122,59 @@ misleading.
 > the same code presents cleanly when the RenderDoc layer is absent.
 
 ## Platform-Specific
+
+### Fixed: GNOME dropped the Wayland connection during a long load — a silent close, a 60 s stall, a crash at exit (Sep 2026)
+
+> **Symptom (owner, 2026-09-25, `terrain` with its 16 km forest):** "the engine fell over" — the window froze
+> ~60 s after the scene loaded, the application closed by itself, sometimes with a segfault at exit. Validation ON
+> or OFF (engine item `terrain-forest-stalls-without-validation`, opened 2026-09-23 for the OFF case only).
+
+**The chain, every link measured.**
+1. The act is loaded ON THE MAIN THREAD, before the main loop (`Stage::loadBuiltInScene()` from
+   `Application::onCoreStarted()`): ~9 s during which nothing polls the window.
+2. Meanwhile the render thread draws the loading screen in MAILBOX (VSync + triple buffering) — nothing throttles
+   it: **129 838 presents** in that window (`WAYLAND_DEBUG=client`, `wl_surface.attach/commit` +
+   `wp_linux_drm_syncobj_surface_v1` points), ~13 000 per second.
+3. The compositor answers each commit with a `wl_buffer.release` (8 bytes). The NVIDIA WSI syncs explicitly and
+   does not read the socket; the main thread does, when it polls — and it does not.
+4. GNOME's send buffer to the client is 1 MiB: `gnome-shell: WL: Data too big for buffer (1048576 + 8 > 1048576)`
+   then `WL: error in client communication (pid …)` — **in the journal for all four runs**
+   (`journalctl --user -b | grep "WL:"`). The traced run survived by a hair: 129 838 × 8 = 1 038 704 bytes.
+5. The client is disconnected: the swap-chain never gets an image back (`vkAcquireNextImageKHR` waits its 60 s),
+   GLFW's `handleEvents()` finds `flushDisplay()` failing and turns the dead connection into a close request for
+   every window **without any error message** (`wl_window.c`), and the teardown runs on a dead display.
+
+**Fix (owner: "be responsive to Wayland natively"):** the render thread reads the connection every frame,
+`Window::drainDisplayConnection()` (`Window.linux.cpp`, a no-op elsewhere and under X11): a private, always empty
+event queue makes `wl_display_prepare_read_queue()` always succeed, a zero-timeout `poll()` reads only what is
+waiting, and `wl_display_read_events()` files the events into their own queues in memory — GLFW's are dispatched
+by the main thread at its next poll, the driver's by the driver. Nothing is dispatched on the render thread.
+libwayland is resolved with `dlopen(RTLD_NOLOAD)` on the module GLFW loaded (the engine never links it).
+After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and OFF.
+
+**Rules.**
+- ⚠️⚠️ On Wayland, **a thread that stops reading the display for seconds while presents run is a disconnection**,
+  whatever it is doing — the loading screen's frame rate sets the delay (1 MiB / 8 B = 131 072 presents).
+- ⚠️ A window that closes by itself: read `Core`'s stop trace first (`Stop requested by the window system (close
+  request)` / `by the Escape key` / `by the console` / `the graphics renderer is no longer usable`, 2026-09-25), then
+  the compositor's journal. A GLFW "close request" can be a dead connection.
+- Still open by design: the main thread is busy for the whole load, so the compositor's `xdg_wm_base.ping` is
+  answered late (GNOME may mark the window unresponsive). Only an asynchronous act load would answer it.
+
+### Fixed: the render thread waited on the compositor while holding the scene lock (Sep 2026)
+
+Seen with the Wayland disconnect above, and a defect of its own: `Core::renderingTask()` called
+`Renderer::renderFrame()` inside `withSharedActiveScene()`, and `renderFrame()` acquired the swap-chain image
+there. Thread stacks during the stall (`gdb -p`, `thread apply all bt`): the render thread in
+`vkAcquireNextImageKHR` → `drmSyncobjTimelineWait` HOLDING the shared lock, the main thread in
+`Scenes::Manager::enableScene()` waiting for the exclusive one, the logic thread in
+`waitForAnnouncedExclusiveAccesses()` behind the announced writer, the GPU at 35 W (idle). **Fix:**
+`Renderer::beginFrame()` (the frame fence + the acquisition) runs BEFORE the scene lock, `renderFrame()` records and
+submits inside it, `abandonFrame()` gives the image back when the frame is dropped (shutdown). The degraded
+swap-chain recreation stays inside the lock (it reconfigures the scene target), and so does the deferred destructor
+tick (a scene deletion retires resources under the exclusive access). Rule: **never hold a lock across a wait on an
+external agent** (compositor, driver, GPU) — the timeout is the only thing that would ever release it.
+
 
 ### String Conversions on Windows
 

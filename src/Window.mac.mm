@@ -114,6 +114,12 @@ namespace EmEn
 
 	}
 
+	void
+	Window::drainDisplayConnection () const noexcept
+	{
+		/* NOTE: The Cocoa event queue does not drop its window when it is not pumped for a while. */
+	}
+
 	id
 	Window::getCocoaWindow () const noexcept
 	{

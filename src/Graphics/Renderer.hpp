@@ -37,6 +37,7 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -1408,7 +1409,28 @@ namespace EmEn::Graphics
 			void prepareFrameJitter (const Scenes::Scene * scene) noexcept;
 
 			/**
-			 * @brief Render a new frame for the active scene.
+			 * @brief Waits for the next frame slot and acquires the swap-chain image it will render to [RENDER THREAD].
+			 * @note ⚠️⚠️ Called OUTSIDE the active scene lock (Core::renderingTask()), and that is the point of it:
+			 * vkAcquireNextImageKHR waits on the PRESENTATION ENGINE, without any bound but its 60 s timeout. Done
+			 * inside the lock (until 2026-09-25) it deadlocked `terrain`: the render thread waited for the compositor
+			 * to release an image while holding the scene lock, the main thread — the one pumping the window's
+			 * events — waited for that lock in Scenes::Manager::enableScene(), and the logic thread behind the
+			 * announced writer; the GPU sat idle (35 W) until the acquisition timed out, 60 s later.
+			 * @return bool True when an image is acquired: renderFrame() records it, or abandonFrame() gives it back.
+			 * False when the frame drops (the swap-chain is degraded: renderFrame() recreates it, or the acquisition
+			 * timed out).
+			 */
+			bool beginFrame () noexcept;
+
+			/**
+			 * @brief Gives back the image beginFrame() acquired when no frame will record it (shutdown requested).
+			 * @return void
+			 */
+			void abandonFrame () noexcept;
+
+			/**
+			 * @brief Render a new frame for the active scene, into the image beginFrame() acquired.
+			 * @note Inside the active scene lock. Without an acquired image it only recreates a degraded swap-chain.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
 			 * @param editorManager
@@ -1746,6 +1768,8 @@ namespace EmEn::Graphics
 				}
 			};
 			uint32_t m_currentFrameIndex{0};
+			/** @brief The swap-chain image beginFrame() acquired, for renderFrame() (render thread only). */
+			std::optional< uint32_t > m_acquiredImageIndex;
 			uint32_t m_currentReadStateIndex{0};
 			/** @brief Position in the Halton (2,3) projection jitter sequence (TAA), advanced once per rendered frame. */
 			uint32_t m_temporalJitterIndex{0};

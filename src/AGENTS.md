@@ -238,6 +238,10 @@ The counter resets to 0 whenever the user chooses "Wait More", so each fresh bat
 
 **Exit code convention**. On POSIX, only `code & 0xFF` reaches the shell — stay in `0–255`. Engine convention: `0` = success (stdout), anything else = error (stderr). The Boot logs the message accordingly. Negative `int` values wrap through truncation and will appear as errors after `& 0xFF`.
 
+**Every stop trigger is traced** (2026-09-25): `Stop requested by the Escape key` / `by the console` /
+`by the window system (close request)` / `the graphics renderer is no longer usable`. Read it first when a
+window closes by itself — a GLFW close request can be a DEAD Wayland connection (`Window` below).
+
 **Threading**. `Core::stop()` is expected to be called from the main thread. The "Force Quit / Wait More" dialog is synchronous and modal on `m_window`, so cross-thread calls to `stop()` may misbehave on Windows in particular.
 
 ### Core - Recording Coordination (RushMaker)
@@ -425,6 +429,19 @@ struct MonitorDevice {
 **Hot-plug**: `refreshMonitorDevices()` called on GLFW monitor callback. Observers receive `OSMonitorConfigurationChanged` notification. Uses static `s_instance` pointer (GLFW monitor callbacks have no user pointer).
 
 **Implementation**: GLFW 3.4+ API (cross-platform: `glfwGetMonitors`, `glfwGetVideoMode`, `glfwGetMonitorContentScale`, `glfwSetMonitorCallback`).
+
+**The rendering thread reads the Wayland connection** (`drainDisplayConnection()`, `Window.linux.cpp`, called every
+frame by `Core::renderingTask()`; a no-op elsewhere and under X11): a private, always empty event queue, a
+zero-timeout `poll()`, `wl_display_read_events()` — nothing dispatched there, the events wait in their queues for
+GLFW (main thread) and the driver. ⚠️⚠️ Without it, a main thread busy for seconds (an act loaded before the main
+loop) while the swap-chain presents in MAILBOX let GNOME's 1 MiB send buffer fill with `wl_buffer.release` events
+and the compositor DROP the client: GLFW turned it into a silent close request, the swap-chain waited 60 s for an
+image (`docs/caution-points.md` § *GNOME dropped the Wayland connection*).
+
+**The frame is acquired outside the scene lock**: `Core::renderingTask()` calls `Renderer::beginFrame()` (frame
+fence + `vkAcquireNextImageKHR`) BEFORE `withSharedActiveScene()`, then `renderFrame()` inside it
+(`abandonFrame()` gives the image back on shutdown). The acquisition waits on the presentation engine without
+bound: held inside the lock, it blocked every writer on the main thread.
 
 **Integration**:
 - Used by Core to create main window

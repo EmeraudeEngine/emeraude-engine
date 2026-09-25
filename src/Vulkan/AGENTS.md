@@ -142,6 +142,19 @@ indexed by frame in flight". `VK_KHR_swapchain_maintenance1` (present fence) is 
 that would supply the missing proof; the engine does not require it, so it relies on
 re-acquisition instead.
 
+**⚠️⚠️ `Device::getGraphicsQueue(priority)` is a ROTATING DISPENSER, not "the graphics queue".**
+Every queue of the family is created and registered High (`Device::installQueues()`), and
+`DeviceQueueConfiguration::queue()` returns `queueList[nextQueueIndex.fetch_add(1) % size]` — 16
+different `VkQueue` on NVIDIA, one per call. The renderer caches ONE (`Renderer::m_graphicsQueue`,
+`Renderer::graphicsQueue()`). Two queues are ordered by nothing: work that must see a frame goes
+INTO the frame's command buffer (the `FrameCapture` and RushMaker hooks) or waits on a semaphore the
+frame signals — never a later submit on "a graphics queue". The RushMaker did that until 2026-09-25
+and its videos stepped back 3-4 frames whenever the GPU ran behind (`docs/caution-points.md`
+§ *RushMaker stepped back 3-4 frames*). The one-shot callers that submit then wait for their own work
+(transfers, bakes) are fine. ⚠️ `Queue::waitIdle()` holds the DEVICE-wide mutex for the whole wait,
+blocking every submit and present on every queue meanwhile (item
+`docs/todo/queue-waitidle-holds-the-device-lock.md`).
+
 **Abandoning a frame is not free.** Once a semaphore has been signaled, something must wait on
 it exactly once. `Queue::submit(const SynchInfo &)` is the engine contract for that: a
 synchronization-only submission (`commandBufferCount = 0`) that drains pending signals and

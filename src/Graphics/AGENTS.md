@@ -1244,8 +1244,8 @@ refuses) and `Renderer::captureFramebuffer()` (deleted).
   0 VUID. A request while a cancelled capture drains answers "retry in a moment".
 - ⚠️ With MAILBOX presentation a submitted image may be replaced before it is displayed: the capture
   holds what the renderer produced, frame after frame.
-- RushMaker still copies AFTER the present (the same ownership defect): migrating it onto this hook
-  is its own item (`docs/todo/rushmaker-capture-inside-the-frame.md`).
+- RushMaker records its video copy on the same hook since 2026-09-25 (§ 10, *Pipeline*): it used to
+  copy AFTER the present, on another queue, and the video jumped back 3-4 frames.
 
 ## 10. Video Recording (Graphics::Recorder — "RushMaker" video track)
 
@@ -1274,10 +1274,34 @@ Should a low-latency capture need ever arise, it will be a **separate concept ("
 not a mode of this recorder.
 
 ### Pipeline
-1. **GPU async readback** (4-slot round-robin) — copies swap-chain image to host-visible staging
-   buffer, paced at the target FPS on the wall clock (`shouldCaptureFrame()`): the wall clock is cut
-   into CFR slots (`cfrSlotAt()`, THE single timeline formula, also every PTS), and the first rendered
-   frame inside a slot not served yet is captured.
+1. **The copy is recorded INSIDE the frame** (2026-09-25) — `Renderer::renderFrame()` asks
+   `Recorder::wantsFrame()` right after the screenshot hook (§ 9b: last pass done, overlay included,
+   image still ACQUIRED) and `recordFrameCopy()` records the swap-chain copy into the frame's own
+   command buffer: to a GPU snapshot slot (hardware path) or to a staging / device-local buffer
+   (software path), 4 slots each. `confirmSubmit()` follows the frame's submit, and the frame slot's
+   in-flight fence releases the copy: `onFrameSlotRetired()` hands the snapshot to the encoding thread,
+   or reads the staging buffer back into the grab buffer. The copy therefore belongs to the batch that
+   rendered the frame and can see no other one.
+   ⚠️⚠️ **It used to be a separate submit made AFTER the present** (`Core::renderingTask()` called
+   `captureAndSubmitFrame()` once `renderFrame()` returned), on the queue
+   `Device::getGraphicsQueue(High)` handed out — and that accessor **ROTATES over every queue of the
+   family** (16 on NVIDIA) while the renderer keeps one. Nothing ordered the copy after the frame:
+   whenever the GPU ran behind, it read the image BEFORE the frame was drawn into it, i.e. the frame
+   presented 3-4 images earlier (the swap-chain image count). The owner saw a video stepping back like a
+   laggy online shooter while the screen stayed perfect; measured on the owner's 8.7 s rush: **19 of 260
+   frames bit-identical to frame k-3 or k-4**, periodic. After: 0 on a 328-frame hardware rush (owner,
+   by hand), 0 on a 358-frame VP9 rush, 0 VUID. It was also the ownership defect `screenshot()` had
+   (a presented image belongs to the presentation engine until re-acquired). `docs/caution-points.md`
+   § *RushMaker stepped back 3-4 frames*.
+   **Stop is deferred while a copy is in flight**: `stopRecording()` records nothing more; the session
+   closes at once if no copy is on the GPU, otherwise on the rendering thread when the last one lands
+   (framesInFlight() frames later). `startRecording()` refuses a new rush meanwhile. A swap-chain
+   recreation completes every submitted copy (`onDeviceIdle()`, after its `waitIdle`: the frame slots
+   may come back with another count), and so does the shutdown. The recording size is locked at
+   start: a resized swap-chain is not copied (traced once), its slots become CFR duplicates.
+   **Pacing**: the capture is paced at the target FPS on the wall clock (`shouldCaptureFrame()`): the
+   wall clock is cut into CFR slots (`cfrSlotAt()`, THE single timeline formula, also every PTS), and
+   the first rendered frame inside a slot not served yet is captured.
    ⚠️⚠️ **Never pace on "one frame duration since the last capture"** — what it did until 2026-09-24.
    The capture then lags the slot grid by up to one render interval each time and drifts to a lower
    rate: `forest` rendering at 48 FPS gave ~24 captures/s for a 30 FPS timeline, every fourth slot
@@ -1386,27 +1410,33 @@ content shift hues on playback.
 
 | Method | Purpose |
 |--------|---------|
-| `startRecording(path)` | Begin recording to IVF file at given path |
-| `stopRecording()` | Stop recording, flush encoder, patch IVF frame count |
+| `startRecording(path)` | Begin recording to IVF file at given path (refused while the previous rush is closing) |
+| `stopRecording()` | Stop capturing; close the session now, or when the last in-flight copy lands |
 | `isRecording()` | Check if recording is active |
-| `shouldCaptureFrame()` | Frame pacing check (target FPS) |
-| `captureAndSubmitFrame()` | Capture current frame via async GPU readback |
+| `shouldCaptureFrame()` | Frame pacing check (target FPS, CFR slot grid) |
+| `wantsFrame()` | Renderer: should THIS frame carry a copy (recording + pacing) |
+| `recordFrameCopy()` / `confirmSubmit()` | Renderer: record the copy in the frame's command buffer, then report its submit |
+| `onFrameSlotRetired()` / `onDeviceIdle()` | Renderer: the frame fence (or the whole device) completed the copies |
 
 Path generation is owned by `Core::startAudioVideoRecording()` — see `src/AGENTS.md` Core section.
 
 ### Transfer Queue Optimization
-When a dedicated transfer queue family is available, uses a two-step copy path:
-1. Graphics queue: swap-chain image → device-local buffer (with layout transitions)
-2. Transfer queue: device-local → host-visible staging (DMA, signaled by semaphore)
+When a dedicated transfer queue family is available, the software path copies in two steps:
+1. In the frame's command buffer: swap-chain image → device-local buffer (with layout transitions)
+2. Once the frame's fence was waited (`onFrameSlotRetired()`): transfer queue, device-local →
+   host-visible staging (DMA, its own fence, polled every frame — the host wait orders it after the
+   frame, no semaphore)
 
 ### Code References
 - `Recorder.hpp` — Full class with Doxygen documentation
 - `Recorder.cpp` (top) — Shared BT.709 conversion coefficients (single source of truth)
 - `Recorder.cpp:startRecording()` — VP9 init (incl. colour-space signalling), async resource creation, thread start
-- `Recorder.cpp:captureAndSubmitFrame()` — Backpressure gate + harvest + GPU copy submit
+- `Recorder.cpp:recordFrameCopy()` — Extent check + slot pick + in-frame copy (`recordHardwareCopy()` / `recordReadbackCopy()`, the latter with the backpressure gate)
+- `Recorder.cpp:retireCopies()` / `harvestTransfers()` — Frame fence retirement: queue the snapshot, read back, or start the DMA
+- `Recorder.cpp:stopRecording()` / `closeSession()` — Deferred stop
 - `Recorder.cpp:encodingThreadFunc()` — CFR filler loop + BGRA→I420 + VP9 encode
 - `Recorder.cpp:EncodingSession::encodeImageAt()` — Encode current image at a given PTS (also duplicates into empty CFR slots)
-- `Recorder.cpp:submitGPUCopy()` / `submitTransferQueueCopy()` — Async readback paths
+- `Renderer.cpp:renderFrame()` — The call sites (after the screenshot hook, the three submit outcomes, the fence wait)
 - `cmake/SetupLibVPX.cmake` — Build configuration for libvpx
 
 ## 11. Animated Texture Cubemap System

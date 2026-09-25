@@ -342,6 +342,18 @@ namespace EmEn::Vulkan
 			void copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) const noexcept;
 
 			/**
+			 * @brief Registers the copy of an explicit region of an image into a buffer.
+			 * @note Same contract as the whole-extent overload, but the caller controls the subresource, the offsets
+			 * and the extent (e.g. an even-sized crop of an odd-sized swap-chain image). No clamping is performed.
+			 * @param src A reference to the image.
+			 * @param srcLayout The layout the image is in when the copy executes (TRANSFER_SRC_OPTIMAL or GENERAL).
+			 * @param dst A reference to the buffer, large enough for the region.
+			 * @param region A reference to the copy region.
+			 * @return void
+			 */
+			void copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, const VkBufferImageCopy & region) const noexcept;
+
+			/**
 			 * @brief Registers an image to image blit command.
 			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the image.

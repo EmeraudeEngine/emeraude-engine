@@ -84,8 +84,9 @@ namespace EmEn::Graphics
 	 * is ONE mode: quality-first, constant frame rate (CFR) on the wall clock — the video
 	 * timeline is real time, so the separately recorded audio tracks stay in sync.
 	 * The recording pipeline operates in three stages:
-	 * 1. GPU async readback (double-buffered) captures BGRA frames from the swap-chain at
-	 *    the target FPS (wall-clock pacing)
+	 * 1. The copy of the finished swap-chain image is recorded INSIDE the frame's own command
+	 *    buffer (Renderer::renderFrame(), recordFrameCopy()) at the target FPS (wall-clock
+	 *    pacing), and the frame's in-flight fence releases it (onFrameSlotRetired())
 	 * 2. Bounded grab buffer accumulates frames for the encoding thread; above the bound,
 	 *    captures are skipped (backpressure) so a slow encode cannot balloon memory
 	 * 3. Dedicated encoding thread drains the buffer, converts BGRA to I420 (BT.709 limited
@@ -133,11 +134,13 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Stops video recording and finalizes the output file.
 			 *
-			 * Waits for pending GPU readbacks, signals the encoding thread to stop, flushes
-			 * the VP9 encoder, patches the IVF frame count, and releases all resources.
+			 * No frame copy is recorded from this call on. The session closes at once when no copy is on the GPU
+			 * any more, otherwise on the rendering thread as soon as the last one lands (within framesInFlight()
+			 * frames): signals the encoding thread to stop, flushes the encoder, finalizes the file, releases the
+			 * GPU resources.
 			 *
 			 * @return True if recording was active and stopped successfully, false if not recording.
-			 * @post All GPU resources released, encoding thread joined, output file closed.
+			 * @post isRecording() returns false; startRecording() refuses a new rush until the session is closed.
 			 */
 			bool stopRecording () noexcept;
 
@@ -148,6 +151,62 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool isRecording () const noexcept;
+
+			/**
+			 * @brief Returns whether the frame being recorded should carry a copy for the video.
+			 * @note Rendering thread, inside Renderer::renderFrame(). The frame qualifies when recording and when it
+			 * opens a CFR slot not served yet (shouldCaptureFrame()). One atomic load when not recording.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			wantsFrame () const noexcept
+			{
+				return m_isRecording.load(std::memory_order_acquire) && this->shouldCaptureFrame();
+			}
+
+			/**
+			 * @brief Records the copy of the finished swap-chain image into the frame's own command buffer.
+			 *
+			 * Called after the last pass (overlay included) and before the command buffer ends, while the image is
+			 * still ACQUIRED: the copy belongs to the very batch that rendered the frame, so it can only see that
+			 * frame. The image is left in its final layout for the present.
+			 * ⚠️⚠️ It used to be a separate submit made after the present, on whatever graphics queue
+			 * Vulkan::Device::getGraphicsQueue() handed out: that accessor ROTATES over every queue of the family
+			 * (16 on NVIDIA) while the renderer keeps one, nothing ordered the two, and a GPU running behind copied
+			 * the image BEFORE the frame was drawn into it — the video jumped back 3-4 frames (the swap-chain image
+			 * count) while the screen stayed perfect (measured 2026-09-25: 19 of 260 frames).
+			 *
+			 * @param commandBuffer The frame's command buffer, recording, outside any render pass.
+			 * @param image The acquired swap-chain image.
+			 * @param finalLayout The layout the frame left the image in (the render pass final layout).
+			 * @param frameSlot The renderer's frame slot (m_currentFrameIndex), whose fence covers this frame.
+			 * @return bool True when a copy was recorded: confirmSubmit() must then follow the frame's submit.
+			 */
+			bool recordFrameCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout, uint32_t frameSlot) noexcept;
+
+			/**
+			 * @brief Tells the recorder whether the frame carrying the copy recorded by recordFrameCopy() reached the GPU.
+			 * @note An abandoned frame frees its slot at once: the CFR timeline fills the gap downstream.
+			 * @param submitted True when the frame's batch was submitted.
+			 */
+			void confirmSubmit (bool submitted) noexcept;
+
+			/**
+			 * @brief The renderer waited the frame slot's in-flight fence: the copies recorded with it are complete.
+			 * @note Rendering thread, every frame. The hardware path hands the snapshot to the encoding thread, the
+			 * software path reads the staging buffer back (or starts its transfer-queue DMA). One atomic load when no
+			 * session is open.
+			 * @param frameSlot The renderer's frame slot whose fence was just waited.
+			 */
+			void onFrameSlotRetired (uint32_t frameSlot) noexcept;
+
+			/**
+			 * @brief The device is idle (swap-chain recreation): every copy submitted with a frame is complete.
+			 * @note The frame slots may be rebuilt with another count behind this call, so a copy cannot wait for the
+			 * fence of a slot that will never be waited again.
+			 */
+			void onDeviceIdle () noexcept;
 
 
 			/**
@@ -213,21 +272,23 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			unsigned int recommendedAudioBitrate () const noexcept;
 
-			/**
-			 * @brief Captures the current swap-chain framebuffer and submits GPU copy operation.
-			 *
-			 * Harvests any completed async readbacks, finds a free async slot (or drops the frame
-			 * if both slots are busy), tags the frame with wall-clock PTS, and submits a GPU
-			 * image-to-buffer copy command. The copy executes asynchronously on the GPU.
-			 *
-			 * @pre shouldCaptureFrame() returned true.
-			 * @note If no async slots are available, the frame is silently dropped. If the
-			 * encoder queue has reached its bound, the capture is skipped and counted
-			 * (backpressure) — wall-clock PTS keeps the video timeline correct.
-			 */
-			void captureAndSubmitFrame () noexcept;
-
 		private:
+
+			/**
+			 * @enum CopyState
+			 * @brief Where the copy held by a capture slot stands.
+			 */
+			enum class CopyState : uint8_t
+			{
+				Free, ///< The slot can take the next copy.
+				Recorded, ///< Recorded in a frame's command buffer, the frame not submitted yet.
+				Submitted, ///< On the GPU with its frame, waiting for the frame slot's fence.
+				Transferring, ///< Software path, transfer queue: the device-local copy is being DMAed to the host.
+				Queued ///< Hardware path: complete and handed to the encoding thread, which frees it.
+			};
+
+			/** @brief No slot recorded in the current frame. */
+			static constexpr size_t NoSlot{static_cast< size_t >(-1)};
 
 			/**
 			 * @brief Initializes video recording configuration from settings.
@@ -255,67 +316,81 @@ namespace EmEn::Graphics
 			void cleanupFinishedSessions () noexcept;
 
 			/**
-			 * @brief Creates async GPU readback resources (command pool, buffers, fences).
+			 * @brief Creates the software path's readback resources (staging buffers, transfer-queue DMA resources).
 			 *
-			 * Allocates a transient command pool and initializes AsyncBufferCount readback slots,
-			 * each with a command buffer, fence (signaled), and host-visible staging buffer sized
-			 * for a full BGRA framebuffer.
+			 * Initializes AsyncBufferCount readback slots, each with a persistently mapped host-visible staging
+			 * buffer sized for a full BGRA framebuffer; with a dedicated transfer queue, also a device-local
+			 * intermediate buffer, a DMA command buffer and its fence.
 			 *
 			 * @return True if all resources created successfully, false otherwise.
-			 * @post m_asyncCommandPool and m_asyncSlots are fully initialized.
+			 * @post m_asyncSlots are fully initialized.
 			 */
 			bool createAsyncResources () noexcept;
 
 			/**
-			 * @brief Destroys async GPU readback resources and waits for pending operations.
+			 * @brief Destroys the software path's readback resources.
 			 *
-			 * Unconditionally waits on all fences (safe for signaled fences), then releases
-			 * command buffers, fences, staging buffers, and the command pool.
+			 * Waits on every DMA fence (safe for signaled fences), then releases command buffers, fences, buffers,
+			 * and the transfer command pool.
 			 *
+			 * @pre No copy is recorded or submitted with a frame (copiesInFlight() is false).
 			 * @post All async resources are released.
 			 */
 			void destroyAsyncResources () noexcept;
 
 			/**
-			 * @brief Submits a GPU copy command to transfer swap-chain image to staging buffer.
-			 *
-			 * Records a command buffer that transitions the swap-chain image to TRANSFER_SRC_OPTIMAL,
-			 * copies it to the staging buffer, then transitions back to PRESENT_SRC_KHR. Submits
-			 * the command buffer with a fence and marks the slot as pending.
-			 *
-			 * @param slotIndex Index of the async readback slot to use (0 or 1).
-			 * @return True if GPU copy submitted successfully, false otherwise.
-			 * @pre Slot is not pending.
-			 * @post Slot fence is reset and marked pending.
+			 * @brief Records the software path's copy: swap-chain image to the staging buffer, or to the
+			 * device-local buffer when the transfer queue does the host copy.
+			 * @param commandBuffer The frame's command buffer.
+			 * @param image The acquired swap-chain image, in its final layout.
+			 * @param finalLayout The layout to leave it in.
+			 * @return size_t The slot index, NoSlot when none is free or the grab buffer is full (backpressure).
 			 */
-			bool submitGPUCopy (size_t slotIndex) noexcept;
+			[[nodiscard]]
+			size_t recordReadbackCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept;
 
 			/**
-			 * @brief Submits a two-step GPU copy using the dedicated transfer queue.
-			 *
-			 * Step 1 (graphics queue): copies swap-chain image to a device-local intermediate
-			 * buffer with layout transitions, signals a semaphore.
-			 * Step 2 (transfer queue): DMA copies device-local buffer to host-visible staging
-			 * buffer on dedicated transfer hardware, signals fence.
-			 *
-			 * @param slotIndex Index of the async readback slot to use (0 or 1).
-			 * @return True if both submissions succeeded, false otherwise.
-			 * @pre m_useTransferQueue is true and slot is not pending.
+			 * @brief Records the hardware path's copy: swap-chain image to a free snapshot slot.
+			 * @param commandBuffer The frame's command buffer.
+			 * @param image The acquired swap-chain image, in its final layout.
+			 * @param finalLayout The layout to leave it in.
+			 * @return size_t The slot index, NoSlot when the encoder still holds every slot.
 			 */
-			bool submitTransferQueueCopy (size_t slotIndex) noexcept;
+			[[nodiscard]]
+			size_t recordHardwareCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept;
 
 			/**
-			 * @brief Harvests a completed async readback and pushes data to the frame queue.
-			 *
-			 * Checks the fence status non-blockingly. If ready, maps the staging buffer, copies
-			 * the BGRA pixel data into a new frame queue entry, and signals the encoding thread
-			 * via condition variable.
-			 *
-			 * @param slotIndex Index of the async readback slot to harvest (0 or 1).
-			 * @return True if readback harvested successfully, false if not pending or not ready.
-			 * @post If successful, frame is in the queue and slot is no longer pending.
+			 * @brief Completes the copies submitted with a frame slot whose fence was waited.
+			 * @param frameSlot The renderer's frame slot.
+			 * @param everyFrameSlot True to complete every submitted copy whatever its slot (the device is idle).
 			 */
-			bool harvestReadback (size_t slotIndex) noexcept;
+			void retireCopies (uint32_t frameSlot, bool everyFrameSlot) noexcept;
+
+			/**
+			 * @brief Harvests the software path's DMA transfers that completed (non-blocking fence checks).
+			 * @param wait True to wait each transfer instead (the session is closing).
+			 */
+			void harvestTransfers (bool wait) noexcept;
+
+			/**
+			 * @brief Reads a completed software readback back into the grab buffer for the encoding thread.
+			 * @param slotIndex Index of the async readback slot, whose staging buffer holds the frame.
+			 */
+			void harvestReadback (size_t slotIndex) noexcept;
+
+			/**
+			 * @brief Returns whether a copy is still recorded in a frame or on the GPU.
+			 * @note A hardware snapshot handed to the encoding thread is not counted: the thread drains it at the join.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool copiesInFlight () const noexcept;
+
+			/**
+			 * @brief Closes the session once no copy is in flight any more (finalizes the file, releases the resources).
+			 * @pre m_captureAccess is held and copiesInFlight() is false.
+			 */
+			void closeSession () noexcept;
 
 			/** @brief Function signature for BGRA-to-I420 conversion implementations. */
 			using BGRAToI420Func = void (*)(const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v);
@@ -327,12 +402,6 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool startHardwareRecording (const std::filesystem::path & outputPath) noexcept;
-
-			/**
-			 * @brief Captures the current swap-chain image into a free hardware slot
-			 * (GPU image copy — the frame never reaches system memory).
-			 */
-			void captureHardwareFrame () noexcept;
 
 			/**
 			 * @brief Hardware encoding thread: converts and encodes captured slots at the
@@ -357,10 +426,9 @@ namespace EmEn::Graphics
 			{
 				std::shared_ptr< Vulkan::Image > image; ///< BGRA snapshot (TRANSFER_DST + SAMPLED).
 				std::shared_ptr< Vulkan::ImageView > view; ///< Sampled view for the converter.
-				std::unique_ptr< Vulkan::CommandBuffer > commandBuffer; ///< Copy command buffer.
-				std::unique_ptr< Vulkan::Sync::Fence > fence; ///< Signaled when the snapshot copy completes.
 				int64_t cfrSlot{0}; ///< Constant-frame-rate slot of this capture.
-				bool pending{false}; ///< True while queued for encoding.
+				uint32_t frameSlot{0}; ///< The renderer's frame slot whose fence covers the copy.
+				std::atomic< CopyState > state{CopyState::Free}; ///< Written back to Free by the encoding thread.
 			};
 
 			/**
@@ -388,16 +456,15 @@ namespace EmEn::Graphics
 			 */
 			struct AsyncReadbackSlot
 			{
-				std::unique_ptr< Vulkan::CommandBuffer > commandBuffer; ///< Command buffer for image-to-buffer copy.
-				std::unique_ptr< Vulkan::Sync::Fence > fence; ///< Fence signaled when GPU copy completes.
 				std::unique_ptr< Vulkan::Buffer > stagingBuffer; ///< Host-visible staging buffer for readback.
 				uint8_t * mappedPtr{nullptr}; ///< Persistently mapped pointer to staging buffer (valid from create to destroy).
 				/* Transfer queue path (only used when m_useTransferQueue is true). */
 				std::unique_ptr< Vulkan::CommandBuffer > transferCommandBuffer; ///< Transfer queue: buffer-to-buffer DMA copy.
-				std::unique_ptr< Vulkan::Sync::Semaphore > transferSemaphore; ///< Signaled after graphics copy, waited by transfer DMA.
+				std::unique_ptr< Vulkan::Sync::Fence > fence; ///< Signaled when the transfer-queue DMA completes.
 				std::unique_ptr< Vulkan::Buffer > deviceLocalBuffer; ///< Device-local intermediate buffer for two-step readback.
-				std::chrono::steady_clock::time_point captureTime; ///< Wall-clock time when GPU copy was submitted.
-				bool pending{false}; ///< True if GPU copy is in flight.
+				int64_t cfrSlot{0}; ///< Constant-frame-rate slot of this capture.
+				uint32_t frameSlot{0}; ///< The renderer's frame slot whose fence covers the copy.
+				CopyState state{CopyState::Free}; ///< Rendering thread only (or the closing thread, under m_captureAccess).
 			};
 
 			/**
@@ -500,11 +567,14 @@ namespace EmEn::Graphics
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem.
 			Renderer & m_renderer; ///< Graphics renderer for swap-chain access.
 
+			/* Capture state shared by the rendering thread (record, submit, retire) and the thread that starts
+			 * and stops the rush. */
+			mutable std::mutex m_captureAccess; ///< Guards the slots, the sessions and the stop.
+			size_t m_recordedSlot{NoSlot}; ///< The slot recorded in the frame being built, until confirmSubmit().
+
 			/* Async GPU readback resources. */
-			std::shared_ptr< Vulkan::CommandPool > m_asyncCommandPool; ///< Transient command pool for async readback.
 			std::shared_ptr< Vulkan::CommandPool > m_transferCommandPool; ///< Command pool for transfer queue operations.
-			std::array< AsyncReadbackSlot, AsyncBufferCount > m_asyncSlots{}; ///< Double-buffered async readback slots.
-			size_t m_currentAsyncSlot{0}; ///< Currently selected async slot index (round-robin).
+			std::array< AsyncReadbackSlot, AsyncBufferCount > m_asyncSlots{}; ///< Async readback slots.
 			uint32_t m_graphicsFamilyIndex{0}; ///< Graphics queue family index for ownership transfers.
 			uint32_t m_transferFamilyIndex{0}; ///< Transfer queue family index for ownership transfers.
 
@@ -515,12 +585,12 @@ namespace EmEn::Graphics
 			/* Hardware (Vulkan Video H.265) path. */
 			std::unique_ptr< VideoFrameConverter > m_frameConverter; ///< GPU BGRA->NV12 converter.
 			std::unique_ptr< Vulkan::VideoEncoderH265 > m_hardwareEncoder; ///< Hardware H.265 encoder.
-			std::shared_ptr< Vulkan::CommandPool > m_hardwareCommandPool; ///< Graphics pool for the snapshot copies.
 			std::array< HardwareSlot, HardwareSlotCount > m_hardwareSlots{}; ///< GPU snapshot slots.
 			std::unique_ptr< HardwareSession > m_hardwareSession; ///< Active hardware session (null on the software path).
 
-			/* Recording state (main thread only). */
-			std::atomic< bool > m_isRecording{false}; ///< True when capture is active on the main thread.
+			/* Recording state. */
+			std::atomic< bool > m_isRecording{false}; ///< True while frames are captured (cleared by stopRecording()).
+			std::atomic< bool > m_sessionOpen{false}; ///< True from startRecording() until the session is closed (drain included).
 
 			/* Timing and frame pacing. */
 			uint32_t m_targetFramerate{30}; ///< Target recording framerate (default 30 FPS).
@@ -533,6 +603,8 @@ namespace EmEn::Graphics
 			uint32_t m_recordWidth{0}; ///< Recording width in pixels (even, locked at start).
 			uint32_t m_recordHeight{0}; ///< Recording height in pixels (even, locked at start).
 			/* State flags. */
+			bool m_stopPending{false}; ///< stopRecording() came while copies were in flight: the last one closes the session.
+			bool m_extentMismatchTraced{false}; ///< The swap-chain no longer matches the recording size (traced once per rush).
 			bool m_useTransferQueue{false}; ///< True when dedicated transfer queue is available and in use.
 			bool m_showStatistics{false}; ///< True to log periodic encoding statistics.
 			bool m_forceCPUEncoding{false}; ///< Force the software VP9 path on a hardware-capable device (A/B lever).

@@ -45,6 +45,7 @@
 #include "VideoColorConversion.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Queue.hpp"
+#include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #if IS_X86_ARCH
 #include "cpu_features/cpuinfo_x86.h"
@@ -54,37 +55,6 @@
 namespace EmEn::Graphics
 {
 	using namespace Base;
-
-	/** @brief How a finished frame's color image is left, for the barriers of a read-back taken from it. */
-	struct FinalColorState
-	{
-		VkImageLayout layout;
-		/** @brief Source access when leaving that layout for the transfer. */
-		VkAccessFlags leaveAccess;
-		/** @brief Destination access when going back to it. */
-		VkAccessFlags returnAccess;
-		/** @brief The stage on the frame's side of both barriers. */
-		VkPipelineStageFlags stage;
-	};
-
-	/**
-	 * @brief Returns the barrier terms of a read-back from a finished frame's color image.
-	 * @note A presented image is handed back by the presentation engine (MEMORY_READ at BOTTOM_OF_PIPE, the
-	 * historical terms). A headless one (window-less run, SwapChain::isHeadless()) was last WRITTEN as a color
-	 * attachment and will be written again by the next frame, so the read-back synchronises on that.
-	 * @param layout The layout the frame left the image in (Renderer::swapChainFinalColorLayout()).
-	 * @return FinalColorState
-	 */
-	static FinalColorState
-	finalColorState (VkImageLayout layout) noexcept
-	{
-		if ( layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR )
-		{
-			return {layout, VK_ACCESS_MEMORY_READ_BIT, static_cast< VkAccessFlags >(0), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT};
-		}
-
-		return {layout, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-	}
 
 	/* Helper to write a little-endian value to a byte buffer. */
 	static void
@@ -248,6 +218,20 @@ namespace EmEn::Graphics
 			this->stopRecording();
 		}
 
+		/* The rendering thread is joined and it waited the device idle on its way out (Core::renderingTask()):
+		 * every copy submitted with a frame is complete, and none is left half recorded. */
+		this->onDeviceIdle();
+
+		{
+			const std::scoped_lock lock{m_captureAccess};
+
+			if ( m_sessionOpen.load(std::memory_order_acquire) )
+			{
+				this->harvestTransfers(true);
+				this->closeSession();
+			}
+		}
+
 		/* Force-join all background encoding sessions at shutdown. */
 		for ( auto & session : m_finishingSessions )
 		{
@@ -330,9 +314,18 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		const std::scoped_lock lock{m_captureAccess};
+
 		if ( m_isRecording )
 		{
 			TraceWarning{ClassId} << "Already recording !";
+
+			return false;
+		}
+
+		if ( m_sessionOpen.load(std::memory_order_acquire) )
+		{
+			TraceWarning{ClassId} << "The previous rush is still closing (its last frame copies are on the GPU): retry in a moment.";
 
 			return false;
 		}
@@ -506,7 +499,11 @@ namespace EmEn::Graphics
 		}
 
 		/* Start encoding thread. */
-		m_isRecording = true;
+		m_recordedSlot = NoSlot;
+		m_stopPending = false;
+		m_extentMismatchTraced = false;
+		m_sessionOpen.store(true, std::memory_order_release);
+		m_isRecording.store(true, std::memory_order_release);
 		m_currentSession->threadRunning = true;
 
 		m_currentSession->encodingThread = std::thread{[session = m_currentSession.get()] {
@@ -521,64 +518,333 @@ namespace EmEn::Graphics
 	bool
 	Recorder::stopRecording () noexcept
 	{
+		const std::scoped_lock lock{m_captureAccess};
+
 		if ( !m_isRecording )
 		{
 			return false;
 		}
 
-		if ( m_hardwareSession != nullptr )
+		/* No frame records a copy from here on. */
+		m_isRecording.store(false, std::memory_order_release);
+
+		/* A copy recorded in a frame, or submitted with one, still has to land: the frame slot's fence releases it on
+		 * the rendering thread, which then closes the session (framesInFlight() frames at most). */
+		if ( this->copiesInFlight() )
 		{
-			this->stopHardwareRecording();
+			m_stopPending = true;
 
 			return true;
 		}
 
-		/* Stop capturing frames on the main thread. */
-		m_isRecording = false;
-
-		/* Wait for and harvest any pending async readbacks into the session's queue. */
-		for ( size_t index = 0; index < AsyncBufferCount; index++ )
-		{
-			if ( m_asyncSlots[index].pending )
-			{
-				static_cast< void >(m_asyncSlots[index].fence->wait());
-
-				this->harvestReadback(index);
-			}
-		}
-
-		/* Destroy async GPU readback resources (capture is done). */
-		this->destroyAsyncResources();
-
-		/* Remember the adapted encoder speed: the next session warm-starts from it
-		 * instead of replaying the ramp-up (machine/resolution have not changed). */
-		m_adaptedCpuUsed = m_currentSession->cpuUsedCurrent.load();
-
-		/* Signal the session's encoding thread to stop (it will drain remaining frames, then finalize). */
-		m_currentSession->threadRunning = false;
-		m_currentSession->queueCV.notify_all();
-
-		/* Detach the session — encoding continues in background. */
-		TraceSuccess{ClassId} << "Recording stopped (encoding continues in background) -> " << m_currentSession->outputPath;
-
-		m_finishingSessions.push_back(std::move(m_currentSession));
+		this->closeSession();
 
 		return true;
 	}
 
 	void
-	Recorder::captureAndSubmitFrame () noexcept
+	Recorder::closeSession () noexcept
+	{
+		m_stopPending = false;
+
+		if ( m_hardwareSession != nullptr )
+		{
+			this->stopHardwareRecording();
+		}
+		else if ( m_currentSession != nullptr )
+		{
+			/* A transfer-queue DMA is a short job of its own: wait it, the frame reaches the grab buffer. */
+			this->harvestTransfers(true);
+
+			/* Destroy async GPU readback resources (capture is done). */
+			this->destroyAsyncResources();
+
+			/* Remember the adapted encoder speed: the next session warm-starts from it
+			 * instead of replaying the ramp-up (machine/resolution have not changed). */
+			m_adaptedCpuUsed = m_currentSession->cpuUsedCurrent.load();
+
+			/* Signal the session's encoding thread to stop (it will drain remaining frames, then finalize). */
+			m_currentSession->threadRunning = false;
+			m_currentSession->queueCV.notify_all();
+
+			/* Detach the session — encoding continues in background. */
+			TraceSuccess{ClassId} << "Recording stopped (encoding continues in background) -> " << m_currentSession->outputPath;
+
+			m_finishingSessions.push_back(std::move(m_currentSession));
+		}
+
+		m_sessionOpen.store(false, std::memory_order_release);
+	}
+
+	bool
+	Recorder::copiesInFlight () const noexcept
 	{
 		if ( m_hardwareSession != nullptr )
 		{
-			this->captureHardwareFrame();
+			return std::ranges::any_of(m_hardwareSlots, [] (const HardwareSlot & slot) {
+				const auto state = slot.state.load(std::memory_order_acquire);
+
+				return state == CopyState::Recorded || state == CopyState::Submitted;
+			});
+		}
+
+		return std::ranges::any_of(m_asyncSlots, [] (const AsyncReadbackSlot & slot) {
+			return slot.state != CopyState::Free;
+		});
+	}
+
+	bool
+	Recorder::recordFrameCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout, uint32_t frameSlot) noexcept
+	{
+		const std::scoped_lock lock{m_captureAccess};
+
+		if ( !m_isRecording || m_recordedSlot != NoSlot )
+		{
+			return false;
+		}
+
+		/* The recording size is locked at start: a resized swap-chain cannot be copied into the slots any more. The
+		 * slots it opens become CFR duplicates of the last good frame. */
+		if ( const auto & extent = image.createInfo().extent; (extent.width & ~1U) != m_recordWidth || (extent.height & ~1U) != m_recordHeight )
+		{
+			if ( !m_extentMismatchTraced )
+			{
+				TraceWarning{ClassId} << "The swap-chain is " << extent.width << "x" << extent.height << " while the rush records " << m_recordWidth << "x" << m_recordHeight << ": frames are no longer captured until it comes back to that size.";
+
+				m_extentMismatchTraced = true;
+			}
+
+			return false;
+		}
+
+		const auto slotIndex = m_hardwareSession != nullptr ?
+			this->recordHardwareCopy(commandBuffer, image, finalLayout) :
+			this->recordReadbackCopy(commandBuffer, image, finalLayout);
+
+		if ( slotIndex == NoSlot )
+		{
+			return false;
+		}
+
+		const auto cfrSlot = this->cfrSlotAt(std::chrono::steady_clock::now());
+
+		if ( m_hardwareSession != nullptr )
+		{
+			auto & slot = m_hardwareSlots[slotIndex];
+			slot.cfrSlot = cfrSlot;
+			slot.frameSlot = frameSlot;
+			slot.state.store(CopyState::Recorded, std::memory_order_release);
+		}
+		else
+		{
+			auto & slot = m_asyncSlots[slotIndex];
+			slot.cfrSlot = cfrSlot;
+			slot.frameSlot = frameSlot;
+			slot.state = CopyState::Recorded;
+		}
+
+		m_lastCapturedSlot = cfrSlot;
+		m_recordedSlot = slotIndex;
+
+		return true;
+	}
+
+	void
+	Recorder::confirmSubmit (bool submitted) noexcept
+	{
+		const std::scoped_lock lock{m_captureAccess};
+
+		if ( m_recordedSlot == NoSlot )
+		{
+			return;
+		}
+
+		/* An abandoned frame never executed its copy: the slot is free again, and its CFR slot is filled downstream. */
+		const auto state = submitted ? CopyState::Submitted : CopyState::Free;
+
+		if ( m_hardwareSession != nullptr )
+		{
+			m_hardwareSlots[m_recordedSlot].state.store(state, std::memory_order_release);
+		}
+		else
+		{
+			m_asyncSlots[m_recordedSlot].state = state;
+
+			if ( submitted && m_currentSession != nullptr )
+			{
+				++m_currentSession->captureCount;
+			}
+		}
+
+		m_recordedSlot = NoSlot;
+
+		if ( m_stopPending && !this->copiesInFlight() )
+		{
+			this->closeSession();
+		}
+	}
+
+	void
+	Recorder::onFrameSlotRetired (uint32_t frameSlot) noexcept
+	{
+		if ( !m_sessionOpen.load(std::memory_order_acquire) )
+		{
+			return;
+		}
+
+		const std::scoped_lock lock{m_captureAccess};
+
+		if ( !m_sessionOpen.load(std::memory_order_acquire) )
+		{
+			return;
+		}
+
+		this->retireCopies(frameSlot, false);
+		this->harvestTransfers(false);
+
+		if ( m_stopPending && !this->copiesInFlight() )
+		{
+			this->closeSession();
+		}
+	}
+
+	void
+	Recorder::onDeviceIdle () noexcept
+	{
+		if ( !m_sessionOpen.load(std::memory_order_acquire) )
+		{
+			return;
+		}
+
+		const std::scoped_lock lock{m_captureAccess};
+
+		if ( !m_sessionOpen.load(std::memory_order_acquire) )
+		{
+			return;
+		}
+
+		this->retireCopies(0, true);
+		this->harvestTransfers(false);
+
+		if ( m_stopPending && !this->copiesInFlight() )
+		{
+			this->closeSession();
+		}
+	}
+
+	void
+	Recorder::retireCopies (uint32_t frameSlot, bool everyFrameSlot) noexcept
+	{
+		if ( m_hardwareSession != nullptr )
+		{
+			for ( size_t index = 0; index < HardwareSlotCount; index++ )
+			{
+				auto & slot = m_hardwareSlots[index];
+
+				if ( slot.state.load(std::memory_order_acquire) != CopyState::Submitted || (!everyFrameSlot && slot.frameSlot != frameSlot) )
+				{
+					continue;
+				}
+
+				/* The snapshot is complete: the encoding thread converts it and frees the slot. A frame slot carries
+				 * one copy at most, and frame slots retire in submission order, so the queue keeps capture order. */
+				slot.state.store(CopyState::Queued, std::memory_order_release);
+
+				{
+					const std::scoped_lock queueLock{m_hardwareSession->queueMutex};
+
+					m_hardwareSession->readySlots.push_back(index);
+				}
+
+				m_hardwareSession->queueCV.notify_one();
+			}
 
 			return;
 		}
 
-		/* 0. Backpressure: when the encoder falls behind, stop harvesting and
-		 * submitting so the grab buffer stays bounded. The skipped slots become
-		 * duplicated frames in the CFR output — the timeline never drifts. */
+		if ( m_currentSession == nullptr )
+		{
+			return;
+		}
+
+		for ( size_t index = 0; index < AsyncBufferCount; index++ )
+		{
+			auto & slot = m_asyncSlots[index];
+
+			if ( slot.state != CopyState::Submitted || (!everyFrameSlot && slot.frameSlot != frameSlot) )
+			{
+				continue;
+			}
+
+			if ( !m_useTransferQueue )
+			{
+				this->harvestReadback(index);
+
+				continue;
+			}
+
+			/* The device-local copy is complete: the transfer queue moves it to the host on the DMA engine. The frame's
+			 * fence was waited on the host, which orders this submit after it. */
+			const auto * transferQueue = m_renderer.device()->getGraphicsTransferQueue(Vulkan::QueuePriority::High);
+			const auto frameBytes = static_cast< VkDeviceSize >(m_recordWidth) * m_recordHeight * 4;
+
+			if ( transferQueue == nullptr ||
+				!slot.transferCommandBuffer->reset() ||
+				!slot.transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			{
+				slot.state = CopyState::Free;
+
+				continue;
+			}
+
+			slot.transferCommandBuffer->copy(*slot.deviceLocalBuffer, *slot.stagingBuffer, 0, 0, frameBytes);
+
+			if ( !slot.transferCommandBuffer->end() || !slot.fence->reset() || !transferQueue->submit(*slot.transferCommandBuffer, Vulkan::SynchInfo{}.withFence(slot.fence->handle())) )
+			{
+				slot.state = CopyState::Free;
+
+				continue;
+			}
+
+			slot.state = CopyState::Transferring;
+		}
+	}
+
+	void
+	Recorder::harvestTransfers (bool wait) noexcept
+	{
+		if ( m_currentSession == nullptr || !m_useTransferQueue )
+		{
+			return;
+		}
+
+		for ( size_t index = 0; index < AsyncBufferCount; index++ )
+		{
+			auto & slot = m_asyncSlots[index];
+
+			if ( slot.state != CopyState::Transferring )
+			{
+				continue;
+			}
+
+			if ( wait )
+			{
+				static_cast< void >(slot.fence->wait());
+			}
+			else if ( slot.fence->getStatus() != Vulkan::Sync::FenceStatus::Ready )
+			{
+				continue;
+			}
+
+			this->harvestReadback(index);
+		}
+	}
+
+	size_t
+	Recorder::recordReadbackCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept
+	{
+		/* Backpressure: when the encoder falls behind, stop capturing so the grab buffer stays bounded. The skipped
+		 * slots become duplicated frames in the CFR output — the timeline never drifts. */
 		{
 			const std::scoped_lock lock{m_currentSession->queueMutex};
 
@@ -586,42 +852,134 @@ namespace EmEn::Graphics
 			{
 				++m_currentSession->skippedCaptures;
 
-				return;
+				return NoSlot;
 			}
 		}
 
-		/* 1. Harvest any completed readbacks from both slots. */
-		for ( size_t index = 0; index < AsyncBufferCount; index++ )
-		{
-			this->harvestReadback(index);
-		}
-
-		/* 2. Find a free slot. */
-		size_t freeSlot = AsyncBufferCount; /* sentinel = none found */
+		size_t slotIndex = NoSlot;
 
 		for ( size_t index = 0; index < AsyncBufferCount; index++ )
 		{
-			if ( !m_asyncSlots[index].pending )
+			if ( m_asyncSlots[index].state == CopyState::Free )
 			{
-				freeSlot = index;
+				slotIndex = index;
 
 				break;
 			}
 		}
 
-		if ( freeSlot == AsyncBufferCount )
+		if ( slotIndex == NoSlot )
 		{
-			return; /* Both slots busy, retry next game frame. */
+			++m_currentSession->skippedCaptures;
+
+			return NoSlot;
 		}
 
-		/* 3. Submit GPU copy and update capture timing only on success. */
-		if ( this->submitGPUCopy(freeSlot) )
+		auto & slot = m_asyncSlots[slotIndex];
+		const auto & destination = m_useTransferQueue ? *slot.deviceLocalBuffer : *slot.stagingBuffer;
+
+		/* The last pass left the image in its final layout: its colour writes are made available to the transfer, then
+		 * the image goes back to that layout for the present, which waits on the semaphore this very submit signals. */
+		commandBuffer.pipelineBarrier(
+			Vulkan::Sync::ImageMemoryBarrier{image, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, finalLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT},
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT
+		);
+
+		VkBufferImageCopy region{};
+		region.imageSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		};
+		region.imageExtent = {
+			.width = m_recordWidth,
+			.height = m_recordHeight,
+			.depth = 1
+		};
+
+		commandBuffer.copyImageToBuffer(image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, destination, region);
+
+		commandBuffer.pipelineBarrier(
+			Vulkan::Sync::ImageMemoryBarrier{image, VK_ACCESS_TRANSFER_READ_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, finalLayout, VK_IMAGE_ASPECT_COLOR_BIT},
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+		);
+
+		/* The copy is made visible to the host reads that follow the fence (the transfer-queue DMA is ordered by the
+		 * host wait of that fence instead). */
+		if ( !m_useTransferQueue )
 		{
-			const auto now = std::chrono::steady_clock::now();
-			m_asyncSlots[freeSlot].captureTime = now;
-			m_lastCapturedSlot = this->cfrSlotAt(now);
-			++m_currentSession->captureCount;
+			commandBuffer.pipelineBarrier(
+				Vulkan::Sync::BufferMemoryBarrier{*slot.stagingBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT},
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_HOST_BIT
+			);
 		}
+
+		return slotIndex;
+	}
+
+	size_t
+	Recorder::recordHardwareCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept
+	{
+		/* Find a free snapshot slot; when the encoder is behind (it should never be — this is silicon), the capture is
+		 * skipped and becomes a CFR duplicate. */
+		size_t slotIndex = NoSlot;
+
+		for ( size_t index = 0; index < HardwareSlotCount; index++ )
+		{
+			if ( m_hardwareSlots[index].state.load(std::memory_order_acquire) == CopyState::Free )
+			{
+				slotIndex = index;
+
+				break;
+			}
+		}
+
+		if ( slotIndex == NoSlot )
+		{
+			++m_hardwareSession->skippedCaptures;
+
+			return NoSlot;
+		}
+
+		const auto & snapshot = *m_hardwareSlots[slotIndex].image;
+
+		/* Swap-chain: final layout -> TRANSFER_SRC, its colour writes made available to the transfer. The snapshot's
+		 * previous content is fully overwritten (UNDEFINED). */
+		{
+			const std::array< VkImageMemoryBarrier, 2 > barriers{
+				Vulkan::Sync::ImageMemoryBarrier{image, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, finalLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT}.get(),
+				Vulkan::Sync::ImageMemoryBarrier{snapshot, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT}.get()
+			};
+
+			commandBuffer.pipelineBarrier({}, {}, barriers, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+		}
+
+		VkImageCopy region{};
+		region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+		region.extent = {m_recordWidth, m_recordHeight, 1};
+
+		commandBuffer.copyImage(image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, snapshot, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
+
+		/* Swap-chain back to its final layout for the present; snapshot to SHADER_READ_ONLY for the converter, which
+		 * reads it after the frame's fence. */
+		commandBuffer.pipelineBarrier(
+			Vulkan::Sync::ImageMemoryBarrier{image, VK_ACCESS_TRANSFER_READ_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, finalLayout, VK_IMAGE_ASPECT_COLOR_BIT},
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+		);
+
+		commandBuffer.pipelineBarrier(
+			Vulkan::Sync::ImageMemoryBarrier{snapshot, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT},
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+
+		return slotIndex;
 	}
 
 	void
@@ -1045,19 +1403,8 @@ namespace EmEn::Graphics
 			m_useTransferQueue = false;
 		}
 
-		/* Create a command pool with transient + reset-per-buffer flags. */
-		m_asyncCommandPool = std::make_shared< Vulkan::CommandPool >(device, m_graphicsFamilyIndex, true, true, false);
-		m_asyncCommandPool->setIdentifier(ClassId, "AsyncReadback", "CommandPool");
-
-		if ( !m_asyncCommandPool->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create async readback command pool !";
-
-			m_asyncCommandPool.reset();
-
-			return false;
-		}
-
+		/* NOTE: The copy of the swap-chain image itself is recorded in the frame's command buffer
+		 * (recordReadbackCopy()): only the transfer-queue DMA needs command buffers of its own. */
 		/* Create transfer command pool if using dedicated transfer queue. */
 		if ( m_useTransferQueue )
 		{
@@ -1080,26 +1427,6 @@ namespace EmEn::Graphics
 		{
 			auto & slot = m_asyncSlots[index];
 
-			/* Allocate a primary command buffer from the pool. */
-			slot.commandBuffer = std::make_unique< Vulkan::CommandBuffer >(m_asyncCommandPool, true);
-
-			if ( !slot.commandBuffer->isCreated() )
-			{
-				TraceError{ClassId} << "Unable to allocate async readback command buffer #" << index << " !";
-
-				return false;
-			}
-
-			/* Create a signaled fence (safe for unconditional wait on destroy). */
-			slot.fence = std::make_unique< Vulkan::Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
-
-			if ( !slot.fence->createOnHardware() )
-			{
-				TraceError{ClassId} << "Unable to create async readback fence #" << index << " !";
-
-				return false;
-			}
-
 			/* Create a host-visible staging buffer with cached memory for fast CPU reads. */
 			slot.stagingBuffer = std::make_unique< Vulkan::Buffer >(device, static_cast< VkBufferCreateFlags >(0), frameBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
 			slot.stagingBuffer->setHostReadable(true);
@@ -1121,7 +1448,7 @@ namespace EmEn::Graphics
 				return false;
 			}
 
-			slot.pending = false;
+			slot.state = CopyState::Free;
 
 			/* Create transfer queue resources per slot. */
 			if ( m_useTransferQueue )
@@ -1146,19 +1473,17 @@ namespace EmEn::Graphics
 					return false;
 				}
 
-				/* Semaphore: graphics signals after image copy, transfer waits before DMA. */
-				slot.transferSemaphore = std::make_unique< Vulkan::Sync::Semaphore >(device);
+				/* Created signaled: safe for an unconditional wait on destroy. */
+				slot.fence = std::make_unique< Vulkan::Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-				if ( !slot.transferSemaphore->createOnHardware() )
+				if ( !slot.fence->createOnHardware() )
 				{
-					TraceError{ClassId} << "Unable to create transfer semaphore #" << index << " !";
+					TraceError{ClassId} << "Unable to create transfer readback fence #" << index << " !";
 
 					return false;
 				}
 			}
 		}
-
-		m_currentAsyncSlot = 0;
 
 		return true;
 	}
@@ -1166,10 +1491,11 @@ namespace EmEn::Graphics
 	void
 	Recorder::destroyAsyncResources () noexcept
 	{
-		/* Unconditionally wait on every fence before destroying.
+		/* Unconditionally wait on every DMA fence before destroying.
 		 * - Never submitted: still SIGNALED from creation → returns immediately.
 		 * - Submitted + completed: SIGNALED by GPU → returns immediately.
-		 * - Submitted + in-flight: blocks until GPU finishes. */
+		 * - Submitted + in-flight: blocks until GPU finishes.
+		 * NOTE: The frame copies are behind the renderer's fences, which closeSession() waited for. */
 		for ( auto & slot : m_asyncSlots )
 		{
 			if ( slot.fence != nullptr )
@@ -1177,7 +1503,7 @@ namespace EmEn::Graphics
 				static_cast< void >(slot.fence->wait());
 			}
 
-			slot.pending = false;
+			slot.state = CopyState::Free;
 		}
 
 		/* Destroy in reverse order: command buffers, fences, staging buffers, then pool. */
@@ -1185,7 +1511,7 @@ namespace EmEn::Graphics
 		{
 			/* Transfer queue resources. */
 			slot.transferCommandBuffer.reset();
-			slot.transferSemaphore.reset();
+			slot.fence.reset();
 			slot.deviceLocalBuffer.reset();
 
 			/* Unmap persistently mapped staging buffer before destroying it. */
@@ -1195,285 +1521,11 @@ namespace EmEn::Graphics
 				slot.mappedPtr = nullptr;
 			}
 
-			/* Standard resources. */
-			slot.commandBuffer.reset();
-			slot.fence.reset();
 			slot.stagingBuffer.reset();
 		}
 
 		m_transferCommandPool.reset();
-		m_asyncCommandPool.reset();
-		m_currentAsyncSlot = 0;
 		m_useTransferQueue = false;
-	}
-
-	bool
-	Recorder::submitGPUCopy (size_t slotIndex) noexcept
-	{
-		/* Use dedicated transfer queue path when available. */
-		if ( m_useTransferQueue )
-		{
-			return this->submitTransferQueueCopy(slotIndex);
-		}
-
-		/* Get the source swap-chain image. */
-		const auto sourceImage = m_renderer.currentSwapChainColorImage();
-		const auto finalState = finalColorState(m_renderer.swapChainFinalColorLayout());
-
-		if ( sourceImage == nullptr )
-		{
-			return false;
-		}
-
-		auto & slot = m_asyncSlots[slotIndex];
-
-		/* Reset and record the command buffer. */
-		if ( !slot.commandBuffer->reset() )
-		{
-			return false;
-		}
-
-		if ( !slot.commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-		{
-			return false;
-		}
-
-		/* Barrier: final layout (PRESENT_SRC_KHR, or COLOR_ATTACHMENT_OPTIMAL headless) -> TRANSFER_SRC_OPTIMAL */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*sourceImage,
-				finalState.leaveAccess,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				finalState.layout,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, finalState.stage, VK_PIPELINE_STAGE_TRANSFER_BIT);
-		}
-
-		/* Copy image to staging buffer. */
-		{
-			VkBufferImageCopy region{};
-			region.bufferOffset = 0;
-			region.bufferRowLength = 0;
-			region.bufferImageHeight = 0;
-			region.imageSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = 0,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			};
-			region.imageOffset = {
-				.x = 0,
-				.y = 0,
-				.z = 0
-			};
-			region.imageExtent = {
-				.width = m_recordWidth,
-				.height = m_recordHeight,
-				.depth = 1
-			};
-
-			vkCmdCopyImageToBuffer(
-				slot.commandBuffer->handle(),
-				sourceImage->handle(),
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				slot.stagingBuffer->handle(),
-				1,
-				&region
-			);
-		}
-
-		/* Barrier: TRANSFER_SRC_OPTIMAL -> back to the final layout */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*sourceImage,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				finalState.returnAccess,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				finalState.layout,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, finalState.stage);
-		}
-
-		if ( !slot.commandBuffer->end() )
-		{
-			return false;
-		}
-
-		/* Reset fence and submit. */
-		if ( !slot.fence->reset() )
-		{
-			return false;
-		}
-
-		const auto * queue = m_renderer.device()->getGraphicsQueue(Vulkan::QueuePriority::High);
-
-		if ( queue == nullptr )
-		{
-			return false;
-		}
-
-		if ( !queue->submit(*slot.commandBuffer, Vulkan::SynchInfo{}.withFence(slot.fence->handle())) )
-		{
-			return false;
-		}
-
-		slot.pending = true;
-
-		return true;
-	}
-
-	bool
-	Recorder::submitTransferQueueCopy (size_t slotIndex) noexcept
-	{
-		const auto sourceImage = m_renderer.currentSwapChainColorImage();
-		const auto finalState = finalColorState(m_renderer.swapChainFinalColorLayout());
-
-		if ( sourceImage == nullptr )
-		{
-			return false;
-		}
-
-		auto & slot = m_asyncSlots[slotIndex];
-		const auto device = m_renderer.device();
-
-		/* === Step 1: Graphics queue — copy swap-chain image to device-local buffer === */
-		if ( !slot.commandBuffer->reset() )
-		{
-			return false;
-		}
-
-		if ( !slot.commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-		{
-			return false;
-		}
-
-		/* Barrier: final layout (PRESENT_SRC_KHR, or COLOR_ATTACHMENT_OPTIMAL headless) → TRANSFER_SRC_OPTIMAL */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*sourceImage,
-				finalState.leaveAccess,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				finalState.layout,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, finalState.stage, VK_PIPELINE_STAGE_TRANSFER_BIT);
-		}
-
-		/* Copy image to device-local intermediate buffer (fast GPU → GPU). */
-		{
-			VkBufferImageCopy region{};
-			region.bufferOffset = 0;
-			region.bufferRowLength = 0;
-			region.bufferImageHeight = 0;
-			region.imageSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = 0,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			};
-			region.imageOffset = {
-				.x = 0,
-				.y = 0,
-				.z = 0
-			};
-			region.imageExtent = {
-				.width = m_recordWidth,
-				.height = m_recordHeight,
-				.depth = 1
-			};
-
-			vkCmdCopyImageToBuffer(
-				slot.commandBuffer->handle(),
-				sourceImage->handle(),
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				slot.deviceLocalBuffer->handle(),
-				1,
-				&region
-			);
-		}
-
-		/* Barrier: TRANSFER_SRC_OPTIMAL → back to the final layout */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*sourceImage,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				finalState.returnAccess,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				finalState.layout,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, finalState.stage);
-		}
-
-		if ( !slot.commandBuffer->end() )
-		{
-			return false;
-		}
-
-		const auto * graphicsQueue = device->getGraphicsQueue(Vulkan::QueuePriority::High);
-
-		if ( graphicsQueue == nullptr )
-		{
-			return false;
-		}
-
-		const VkSemaphore semaphoreHandle = slot.transferSemaphore->handle();
-
-		if ( !graphicsQueue->submit(*slot.commandBuffer, Vulkan::SynchInfo{}.signals({&semaphoreHandle, 1})) )
-		{
-			return false;
-		}
-
-		/* === Step 2: Transfer queue — DMA copy device-local → host-visible === */
-		if ( !slot.transferCommandBuffer->reset() )
-		{
-			return false;
-		}
-
-		if ( !slot.transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-		{
-			return false;
-		}
-
-		const auto frameBytes = static_cast< VkDeviceSize >(m_recordWidth) * m_recordHeight * 4;
-		slot.transferCommandBuffer->copy(*slot.deviceLocalBuffer, *slot.stagingBuffer, 0, 0, frameBytes);
-
-		if ( !slot.transferCommandBuffer->end() )
-		{
-			return false;
-		}
-
-		/* Reset fence and submit: wait on graphics semaphore, signal fence for harvest. */
-		if ( !slot.fence->reset() )
-		{
-			return false;
-		}
-
-		const auto * transferQueue = device->getGraphicsTransferQueue(Vulkan::QueuePriority::High);
-
-		if ( transferQueue == nullptr )
-		{
-			return false;
-		}
-
-		constexpr VkPipelineStageFlags waitStage{VK_PIPELINE_STAGE_TRANSFER_BIT};
-
-		if ( !transferQueue->submit(*slot.transferCommandBuffer, Vulkan::SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(slot.fence->handle())) )
-		{
-			return false;
-		}
-
-		slot.pending = true;
-
-		return true;
 	}
 
 	bool
@@ -1526,19 +1578,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Snapshot slots (GPU-only copies of the swap-chain). */
-		m_hardwareCommandPool = std::make_shared< Vulkan::CommandPool >(device, device->getGraphicsFamilyIndex(), true, true, false);
-
-		if ( !m_hardwareCommandPool->createOnHardware() )
-		{
-			Tracer::error(ClassId, "Unable to create the hardware capture command pool !");
-
-			m_hardwareEncoder.reset();
-			m_frameConverter.reset();
-
-			return false;
-		}
-
+		/* Snapshot slots (GPU-only copies of the swap-chain, recorded in the frame's command buffer). */
 		for ( auto & slot : m_hardwareSlots )
 		{
 			slot.image = std::make_shared< Vulkan::Image >(
@@ -1577,17 +1617,7 @@ namespace EmEn::Graphics
 				return false;
 			}
 
-			slot.commandBuffer = std::make_unique< Vulkan::CommandBuffer >(m_hardwareCommandPool, true);
-			slot.fence = std::make_unique< Vulkan::Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
-
-			if ( !slot.commandBuffer->isCreated() || !slot.fence->createOnHardware() )
-			{
-				Tracer::error(ClassId, "Unable to create a hardware slot command buffer or fence !");
-
-				return false;
-			}
-
-			slot.pending = false;
+			slot.state.store(CopyState::Free, std::memory_order_release);
 		}
 
 		/* Elementary stream file, driver-encoded VPS/SPS/PPS first. */
@@ -1614,149 +1644,20 @@ namespace EmEn::Graphics
 
 		m_recordStartTime = std::chrono::steady_clock::now();
 		m_lastCapturedSlot = -1;
-		m_isRecording = true;
+		m_recordedSlot = NoSlot;
+		m_stopPending = false;
+		m_extentMismatchTraced = false;
 		m_hardwareSession->threadRunning = true;
 		m_hardwareSession->encodingThread = std::thread{[this] {
 			this->hardwareEncodingLoop();
 		}};
 
+		m_sessionOpen.store(true, std::memory_order_release);
+		m_isRecording.store(true, std::memory_order_release);
+
 		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [Hardware H.265 / " << qualityPresetToString(m_qualityPreset) << "] -> " << outputPath;
 
 		return true;
-	}
-
-	void
-	Recorder::captureHardwareFrame () noexcept
-	{
-		/* Find a free snapshot slot; when the encoder is behind (it should never be —
-		 * this is silicon), the capture is skipped and becomes a CFR duplicate. */
-		HardwareSlot * freeSlot = nullptr;
-
-		for ( auto & slot : m_hardwareSlots )
-		{
-			if ( !slot.pending )
-			{
-				freeSlot = &slot;
-
-				break;
-			}
-		}
-
-		if ( freeSlot == nullptr )
-		{
-			++m_hardwareSession->skippedCaptures;
-
-			return;
-		}
-
-		const auto sourceImage = m_renderer.currentSwapChainColorImage();
-		const auto finalState = finalColorState(m_renderer.swapChainFinalColorLayout());
-
-		if ( sourceImage == nullptr )
-		{
-			return;
-		}
-
-		auto & slot = *freeSlot;
-
-		if ( !slot.commandBuffer->reset() || !slot.commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-		{
-			return;
-		}
-
-		/* Swap-chain: final layout -> TRANSFER_SRC. */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*sourceImage,
-				finalState.leaveAccess,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				finalState.layout,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, finalState.stage, VK_PIPELINE_STAGE_TRANSFER_BIT);
-		}
-
-		/* Snapshot: UNDEFINED -> TRANSFER_DST (content fully overwritten). */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*slot.image,
-				0,
-				VK_ACCESS_TRANSFER_WRITE_BIT,
-				VK_IMAGE_LAYOUT_UNDEFINED,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-		}
-
-		{
-			VkImageCopy region{};
-			region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-			region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-			region.extent = {m_recordWidth, m_recordHeight, 1};
-
-			vkCmdCopyImage(
-				slot.commandBuffer->handle(),
-				sourceImage->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				slot.image->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				1, &region
-			);
-		}
-
-		/* Snapshot: TRANSFER_DST -> SHADER_READ_ONLY (converter input). */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*slot.image,
-				VK_ACCESS_TRANSFER_WRITE_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-		}
-
-		/* Swap-chain: back to the final layout. */
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*sourceImage,
-				VK_ACCESS_TRANSFER_READ_BIT,
-				finalState.returnAccess,
-				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				finalState.layout,
-				VK_IMAGE_ASPECT_COLOR_BIT
-			};
-
-			slot.commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, finalState.stage);
-		}
-
-		if ( !slot.commandBuffer->end() || !slot.fence->reset() )
-		{
-			return;
-		}
-
-		const auto * queue = m_renderer.device()->getGraphicsQueue(Vulkan::QueuePriority::High);
-
-		if ( queue == nullptr || !queue->submit(*slot.commandBuffer, Vulkan::SynchInfo{}.withFence(slot.fence->handle())) )
-		{
-			return;
-		}
-
-		slot.cfrSlot = this->cfrSlotAt(std::chrono::steady_clock::now());
-		slot.pending = true;
-		m_lastCapturedSlot = slot.cfrSlot;
-
-		{
-			const std::scoped_lock lock{m_hardwareSession->queueMutex};
-
-			m_hardwareSession->readySlots.push_back(static_cast< size_t >(freeSlot - m_hardwareSlots.data()));
-		}
-
-		m_hardwareSession->queueCV.notify_one();
 	}
 
 	void
@@ -1790,9 +1691,8 @@ namespace EmEn::Graphics
 				session->readySlots.pop_front();
 			}
 
+			/* The frame's fence was waited before the slot was queued (retireCopies()): the snapshot is complete. */
 			auto & slot = m_hardwareSlots[slotIndex];
-
-			static_cast< void >(slot.fence->wait());
 
 			auto cfrSlot = slot.cfrSlot;
 
@@ -1826,7 +1726,7 @@ namespace EmEn::Graphics
 
 			if ( failed )
 			{
-				slot.pending = false;
+				slot.state.store(CopyState::Free, std::memory_order_release);
 
 				break;
 			}
@@ -1836,12 +1736,12 @@ namespace EmEn::Graphics
 			{
 				Tracer::error(ClassId, "Hardware frame conversion failed !");
 
-				slot.pending = false;
+				slot.state.store(CopyState::Free, std::memory_order_release);
 
 				break;
 			}
 
-			slot.pending = false;
+			slot.state.store(CopyState::Free, std::memory_order_release);
 
 			if ( !m_hardwareEncoder->encodeFrame(*m_frameConverter->lumaImage(), *m_frameConverter->chromaImage(), packet, wasIDR) )
 			{
@@ -1867,8 +1767,6 @@ namespace EmEn::Graphics
 	void
 	Recorder::stopHardwareRecording () noexcept
 	{
-		m_isRecording = false;
-
 		/* Wake and drain the encoder thread (hardware: the drain is quasi-instant). */
 		m_hardwareSession->threadRunning = false;
 		m_hardwareSession->queueCV.notify_all();
@@ -1878,22 +1776,15 @@ namespace EmEn::Graphics
 			m_hardwareSession->encodingThread.join();
 		}
 
-		/* Wait any in-flight snapshot copies before releasing the slots. */
+		/* No snapshot copy is on the GPU any more (closeSession() waits for the frames that carried them), and the
+		 * encoding thread converted every queued one before leaving. */
 		for ( auto & slot : m_hardwareSlots )
 		{
-			if ( slot.fence != nullptr )
-			{
-				static_cast< void >(slot.fence->wait());
-			}
-
-			slot.commandBuffer.reset();
-			slot.fence.reset();
 			slot.view.reset();
 			slot.image.reset();
-			slot.pending = false;
+			slot.state.store(CopyState::Free, std::memory_order_release);
 		}
 
-		m_hardwareCommandPool.reset();
 		m_hardwareEncoder.reset();
 		m_frameConverter.reset();
 
@@ -1902,21 +1793,10 @@ namespace EmEn::Graphics
 		m_hardwareSession.reset();
 	}
 
-	bool
+	void
 	Recorder::harvestReadback (size_t slotIndex) noexcept
 	{
 		auto & slot = m_asyncSlots[slotIndex];
-
-		if ( !slot.pending )
-		{
-			return false;
-		}
-
-		/* Non-blocking fence check. */
-		if ( slot.fence->getStatus() != Vulkan::Sync::FenceStatus::Ready )
-		{
-			return false;
-		}
 
 		/* Acquire a frame buffer from the session's recycling pool (avoids allocation + zero-fill). */
 		const auto frameBytes = static_cast< size_t >(m_recordWidth) * m_recordHeight * 4;
@@ -1940,9 +1820,9 @@ namespace EmEn::Graphics
 		/* Copy from persistently mapped staging buffer. */
 		std::memcpy(frame.data.data(), slot.mappedPtr, frameBytes);
 
-		/* Compute the CFR slot (wall-clock PTS) from the capture timestamp: the video
-		 * timeline is real time, which keeps the separately recorded audio in sync. */
-		frame.pts = static_cast< vpx_codec_pts_t >(this->cfrSlotAt(slot.captureTime));
+		/* The CFR slot (wall-clock PTS) of the capture: the video timeline is real time,
+		 * which keeps the separately recorded audio in sync. */
+		frame.pts = static_cast< vpx_codec_pts_t >(slot.cfrSlot);
 
 		{
 			const std::scoped_lock lock{m_currentSession->queueMutex};
@@ -1952,9 +1832,7 @@ namespace EmEn::Graphics
 
 		m_currentSession->queueCV.notify_one();
 
-		slot.pending = false;
-
-		return true;
+		slot.state = CopyState::Free;
 	}
 
 	/* ======================================================================

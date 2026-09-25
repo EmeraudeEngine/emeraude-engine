@@ -449,6 +449,12 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, const VkBufferImageCopy & region) const noexcept
+	{
+		vkCmdCopyImageToBuffer(m_handle, src.handle(), srcLayout, dst.handle(), 1, &region);
+	}
+
+	void
 	CommandBuffer::blit (const Image & src, const Image & dst) const noexcept
 	{
 		if constexpr ( IsDebug )
