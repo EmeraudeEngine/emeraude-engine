@@ -326,7 +326,9 @@ void main ()
 
 			vec3 irradiance = computeDirectIrradiance(hitPos, hitNormal);
 			/* skyAmbient.w = bounce feedback weight (0 = single bounce, 1 = the full DDGI recursion). */
-			vec3 radiance = diffuseAlbedo * (irradiance / PI + probeVolume.ambientColor.rgb + probeIrradiance(hitPos, hitNormal, -direction) * probeVolume.skyAmbient.w);
+			/* The ambient is an ILLUMINANCE in lux: a Lambertian bounce sends back albedo * E / PI, the 1/PI the raster
+			 * and RTR apply (it was missing here until 2026-09-25). */
+			vec3 radiance = diffuseAlbedo * (irradiance / PI + probeVolume.ambientColor.rgb / PI + probeIrradiance(hitPos, hitNormal, -direction) * probeVolume.skyAmbient.w);
 
 			if ((flags & IsEmissive) != 0u)
 			{

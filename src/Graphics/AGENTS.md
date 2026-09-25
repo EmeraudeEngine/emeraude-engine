@@ -2957,7 +2957,8 @@ group past the fourth; `Humans/OldMan` has seven), only a scene total,
 > ⚠️ The probe query and the bindless irradiance cube already store `E/PI` — never divide those
 > again. The raster reference is `Saphir/LightGenerator.PBR.cpp` (`kD * albedo / 3.14159265`)
 > and `LightGenerator.cpp` (`iblBaseColor * 0.3183098862`); RTGI and the probe volume already
-> did it right, RTR was the family's only outlier.
+> did it right for the direct term, RTR was the family's only outlier. ⚠️ The probe volume's flat AMBIENT term
+> lacked its 1/PI (and was clamped to 1 lx by a `Color< float >`) until 2026-09-25.
 
 > [!CAUTION]
 > **The radius falloff is the RASTER curve, verbatim**: `max(1 - dot(d/r, d/r), 0)`, and NO

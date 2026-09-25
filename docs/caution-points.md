@@ -713,7 +713,8 @@ it is the algorithm's, not the exponent's.
 > (`Saphir::LightGenerator::generatePBRFragmentShader`) and `iblBaseColor * 0.3183098862`
 > for the scalar ambient (`LightGenerator.cpp`); RTGI emits `albedo / PI`; the irradiance
 > probe volume divides its gathered irradiance by PI. RTR was the only member of the
-> family without it. ⚠️ The two other irradiance sources it adds — the probe query and the
+> family without it — ⚠️ for the DIRECT term: the probe volume's flat AMBIENT term missed its 1/PI too, until
+> 2026-09-25 (§ *a light's COLOUR dimmed its light*). ⚠️ The two other irradiance sources it adds — the probe query and the
 > bindless irradiance cube — already store `E/PI`, so they must NOT be divided again.
 >
 > **Same change, second divergence:** the radius falloff. The raster uses
