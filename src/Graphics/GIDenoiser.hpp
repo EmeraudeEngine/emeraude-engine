@@ -89,7 +89,7 @@ namespace EmEn::Graphics
 			 */
 			struct EMEN_API FrameUBOData
 			{
-				std::array< float, 16 > invViewProj;
+				std::array< float, 16 > invRelativeViewProj;
 				std::array< float, 16 > prevViewProj;
 				std::array< float, 3 > invViewCol0;
 				float viewPosX;

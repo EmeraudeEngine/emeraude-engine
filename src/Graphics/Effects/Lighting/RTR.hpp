@@ -116,7 +116,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			struct EMEN_API TraceFrameUBOData
 			{
-				std::array< float, 16 > invViewProj;
+				std::array< float, 16 > invRelativeViewProj;
 				std::array< float, 3 > invViewCol0;
 				float viewPosX;
 				std::array< float, 3 > invViewCol1;
@@ -149,7 +149,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * its own. Change a member and the shader reads garbage with NO compile error --
 			 * these assertions are the only guard. */
 			static_assert(sizeof(TraceFrameUBOData) == 148, "The RTR trace UBO must stay 148 bytes.");
-			static_assert(offsetof(TraceFrameUBOData, invViewProj) == 0, "std140: mat4 at 0.");
+			static_assert(offsetof(TraceFrameUBOData, invRelativeViewProj) == 0, "std140: mat4 at 0.");
 			static_assert(offsetof(TraceFrameUBOData, invViewCol0) == 64, "std140: vec3 aligned on 16.");
 			static_assert(offsetof(TraceFrameUBOData, viewPosX) == 76, "std140: float in the vec3 tail.");
 			static_assert(offsetof(TraceFrameUBOData, invViewCol1) == 80, "std140: vec3 aligned on 16.");

@@ -95,8 +95,9 @@ void main()
 	const ivec2 texCoord = ivec2(vUV * vec2(depthSize));
 	const float rawDepth = texelFetch(depthTex, texCoord, 0).r;
 
-	/* Sky pixels (depth at the far plane) are never in contact with anything. */
-	if (rawDepth >= 0.9999)
+	/* Sky pixels (the clear value, 1.0 exactly: a 0.9999 threshold is a DISTANCE in disguise, ~890 m
+	 * with the 0.089 m near plane) are never in contact with anything. */
+	if (rawDepth >= 1.0)
 	{
 		outColor = vec4(1.0, 1.0, 0.0, 1.0);
 		return;
@@ -186,7 +187,7 @@ void main()
 
 		const float sceneDepth = texture(depthTex, sampleUV).r;
 
-		if (sceneDepth >= 0.9999)
+		if (sceneDepth >= 1.0)
 		{
 			continue;
 		}

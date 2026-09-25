@@ -1226,8 +1226,10 @@ namespace EmEn::Graphics
 		 * was wrong: SSAO and SSGI painted large dark blobs unrelated to any geometry, and SSR's
 		 * screen-space march lost most of its hits. Fixed Aug 2026 in SSAO, SSGI, SSR and
 		 * AtmosphericFog. ⚠️ ContactShadows and the RT effects were never affected — they
-		 * reconstruct through `inverseProjViewMatrix`/`invViewProj`, which inherits the flip for
-		 * free. Prefer the matrix form in new code; if you must use this constant, X takes abs(). */
+		 * reconstruct through a matrix (now `inverseRelativeProjViewMatrix`/`invRelativeViewProj`),
+		 * which inherits the flip for free. Prefer the matrix form in new code — CAMERA-RELATIVE, the
+		 * inverse of projection × the infinity view (Graphics AGENTS.md axiom 5c); if you must use this
+		 * constant, X takes abs(). */
 		const auto projectionYSign = mainRT->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 

@@ -97,8 +97,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			struct EMEN_API ShadowFrameUBOData
 			{
-				/** @brief Inverse view-projection matrix, for world position reconstruction. */
-				std::array< float, 16 > inverseProjViewMatrix;
+				/** @brief Inverse of projection × view ROTATION (the infinity view): unprojects to an EYE-RELATIVE offset. */
+				std::array< float, 16 > inverseRelativeProjViewMatrix;
 				/** @brief xyz = inverse view rotation column 0, w = camera world position X. */
 				std::array< float, 4 > invViewCol0;
 				/** @brief xyz = inverse view rotation column 1, w = camera world position Y. */

@@ -140,8 +140,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/** @brief The per-frame uniform block (std140). */
 			struct EMEN_API FrameBlock
 			{
-				/** @brief Column-major inverse view-projection of the frame that produced the depth. */
-				std::array< float, 16 > inverseViewProjection{};
+				/**
+				 * @brief Column-major inverse of projection × view ROTATION (the infinity view) of the
+				 * frame that produced the depth: it unprojects to EYE-RELATIVE offsets, never to world
+				 * positions (the translation, in float, made the rays swim by up to 13 px).
+				 */
+				std::array< float, 16 > inverseRelativeViewProjection{};
 				/** @brief xyz = camera world position, w = cloud count. */
 				std::array< float, 4 > cameraPosition{};
 				/** @brief xyz = camera forward axis, w = step count. */

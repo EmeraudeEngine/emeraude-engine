@@ -76,7 +76,7 @@ layout(set = 1, binding = 1) uniform sampler2D normalTex;
 
 layout(push_constant) uniform PushConstants
 {
-	mat4 invViewProj;
+	mat4 invRelativeViewProj;
 	vec3 invViewCol0; float viewPosX;
 	vec3 invViewCol1; float viewPosY;
 	vec3 invViewCol2; float viewPosZ;
@@ -126,11 +126,16 @@ void main()
 		return;
 	}
 
-	/* Reconstruct world-space position from NDC + depth via inverse VP. */
+	/* Reconstruct the world position from NDC + depth. */
 	vec2 ndc = vUV * 2.0 - 1.0;
 	vec4 clipPos = vec4(ndc, depth, 1.0);
-	vec4 wp = invViewProj * clipPos;
-	vec3 worldPos = wp.xyz / wp.w;
+	/* ⚠️⚠️ CAMERA-RELATIVE: the matrix inverts projection × view ROTATION (the infinity view), so this
+	 * is the offset from the eye and the world position is the camera plus it. The float inverse of
+	 * the FULL view-projection put the surface 4 cm (10 m away) to 4.4 m (200 m away, 7.8 km from the
+	 * world origin) off, differently at every pose (2026-09-25). */
+	vec4 wp = invRelativeViewProj * clipPos;
+	vec3 relativePos = wp.xyz / wp.w;
+	vec3 worldPos = vec3(viewPosX, viewPosY, viewPosZ) + relativePos;
 
 	/* Transform view-space normal to world space. */
 	mat3 invViewRot = mat3(invViewCol0, invViewCol1, invViewCol2);
@@ -148,8 +153,8 @@ void main()
 	/* Adaptive bias: scale with camera distance AND grazing angle.
 	 * Distance: pixel footprint grows → needs larger offset.
 	 * NdotV: at grazing angles, rays easily clip the surface → needs extra offset. */
-	vec3 viewDir = normalize(worldPos - vec3(viewPosX, viewPosY, viewPosZ));
-	float cameraDist = length(worldPos - vec3(viewPosX, viewPosY, viewPosZ));
+	vec3 viewDir = normalize(relativePos);
+	float cameraDist = length(relativePos);
 	float NdotV = max(abs(dot(worldNormal, -viewDir)), 0.001);
 	float grazingFactor = 1.0 / NdotV; /* Grows as view becomes more grazing. */
 	float adaptiveBias = bias * max(1.0, cameraDist) * min(grazingFactor, 10.0);
@@ -468,26 +473,31 @@ namespace EmEn::Graphics::Effects::Lighting
 			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 			const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 			const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
-			const auto invViewProj = (projMat * viewMat).inverse();
-			const auto * ivp = invViewProj.data();
+			/* ⚠️⚠️ CAMERA-RELATIVE: projection × view ROTATION (the infinity view), inverted — the shader
+			 * unprojects an offset from the eye and adds the camera position. The float inverse of the full
+			 * view-projection put the ray origins centimetres to metres off the surface far from the world
+			 * origin (docs/caution-points.md § The float inverse of the full view-projection). */
+			const auto invRelativeViewProj = (projMat * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+			const auto * ivp = invRelativeViewProj.data();
+			const auto & cameraPosition = viewMatrices.position(readStateIndex);
 
 			/* Inverse view rotation for normal transformation (view → world). */
 			const auto invView = viewMat.inverse();
 			const auto * inv = invView.data();
 
 			const TracePushConstants pc{
-				.invViewProj = {
+				.invRelativeViewProj = {
 					ivp[0], ivp[1], ivp[2], ivp[3],
 					ivp[4], ivp[5], ivp[6], ivp[7],
 					ivp[8], ivp[9], ivp[10], ivp[11],
 					ivp[12], ivp[13], ivp[14], ivp[15]
 				},
 				.invViewCol0 = {inv[0], inv[1], inv[2]},
-				.viewPosX = inv[12],
+				.viewPosX = cameraPosition.x(),
 				.invViewCol1 = {inv[4], inv[5], inv[6]},
-				.viewPosY = inv[13],
+				.viewPosY = cameraPosition.y(),
 				.invViewCol2 = {inv[8], inv[9], inv[10]},
-				.viewPosZ = inv[14],
+				.viewPosZ = cameraPosition.z(),
 				.maxDistance = m_parameters.maxDistance,
 				.intensity = m_parameters.intensity,
 				.bias = m_parameters.bias,

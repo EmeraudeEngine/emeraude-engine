@@ -2123,6 +2123,110 @@ engine change it was supposed to police. So it had nothing left to catch, and th
 two silently empty captures instead of a warning. **Keep a guard absolute until the change it guards
 is measured**, then relax it.
 
+### Fixed: a sky test at `depth >= 0.9999` is a DISTANCE — about 890 m (Sep 2026)
+
+> [!CAUTION]
+> **The sky is the depth CLEAR value, `1.0` exactly** — the depth is cleared to 1.0
+> (`Renderer::setClearDepthStencilValues(1.0F, 0)`) and the background is drawn with the depth test
+> and write disabled. Test `depth >= 1.0` / `depth < 1.0`, never a threshold "close to 1".
+
+With a conventional depth (`LESS_OR_EQUAL`, `D32_SFLOAT`, no reversed-Z), `1 - depth ≈ near / z`.
+With the default 0.089 m near plane (previous section), `0.9999` is crossed at **z ≈ 890 m** and
+`0.99999` at **≈ 8.9 km**, so a threshold like that is a camera-distance cut, not a sky test.
+Everything past it read as sky. `terrain` (2026-09-25) is where it showed: its volumetric clouds, at
+1.5-2 km of altitude and several kilometres away, were drawn **over every mountain standing in front
+of them**, because the march took the mountain for sky and ran to the far end of the box (captured
+at the same pose before and after: the ridge now cuts the cloud bases, confirmed by the owner). The
+owner also reported the clouds "sliding" as the camera moved. That was NOT this defect: the sliding
+survived this fix, and its cause is the next section.
+
+Eight sites held the threshold, all fixed the same day:
+- `VolumetricClouds` (the march end);
+- `AtmosphericFog` and `VolumetricScattering` (`isSky`: a far mountain got the SKY's fictive fog
+  length, or none at all with sky fog off);
+- `LensFlare` (0.99999: the sun showed through every mountain past 8.9 km);
+- `VolumetricLight` (the `depthThreshold` parameter, which defaulted to 0.9999: far mountains
+  emitted shafts);
+- `SSContactShadows` (two sites) and `RTContactShadows` (they skipped every pixel past 890 m).
+
+Every other effect (SSR, SSGI, SSAO, RTGI, RTR, RTAO, the GI denoiser, the depth of field) already
+tested `>= 1.0`. D32 keeps a mountain distinct from 1.0 up to z ≈ near / 2⁻²⁴ ≈ 1500 km, so the
+exact test is safe at any drawable distance.
+
+⚠️ **A kilometre-scale scene is the only kind that shows it.** Every indoor bench and `forest` fit
+inside 890 m, which is why the threshold survived. Judge an effect that separates sky from geometry
+on `terrain`, with a mountain in front of the far thing.
+
+### Fixed: the float inverse of the full view-projection made the clouds SLIDE (Sep 2026)
+
+> [!CAUTION]
+> **Never unproject through `(projection * view).inverse()` in float to get a world position or a
+> ray.** Invert `projection * viewMatrix(readStateIndex, true, 0)` — the INFINITY view, same rotation
+> and no translation — and unproject to an EYE-RELATIVE offset. Add the camera position afterwards,
+> only where a world position is really needed.
+
+**Symptom (owner, `terrain`, 2026-09-25):** "the clouds are not in sync with the render, they slide
+when the camera turns or moves". A static camera shows nothing. Four hypotheses were checked and
+cleared first:
+- a frame of delay: none — clouds and terrain change on the same frame, 12 steps out of 12 in a
+  RushMaker clip;
+- a state-index mismatch: none — `m_preparedReadStateIndex == m_frameReadStateIndex`;
+- two camera owners: no — `SceneRenderTarget` DELEGATES its view matrices to the swap chain,
+  `mainRenderTarget()`;
+- the cloud shadow map: snapped to its texels.
+
+**Measurement that found it:** repeated `lookAt` steps recorded with RushMaker (the console runs
+commands one at a time, so a `temporalCapture()` cannot straddle a camera move), then the image
+shift of each region compared with a pure-rotation model. The terrain moved **1.00-1.03×** the
+model; the clouds moved **1.46-1.71×**, identically on all 6 steps. A pure rotation moves near and
+far alike, so that ratio is a defect, not parallax.
+
+**Cause:** `VolumetricClouds` built its rays as `normalize((invVP * (ndc, 1, 1)).xyz / w -
+cameraPosition)`, with `invVP` the float inverse of the full view-projection. That inverse carries a
+translation of kilometres into a projection with near/far ≈ 1e5. The far point's `w` (1/far) is the
+difference of two ±1/near terms, and the coefficient rounding distorts the whole screen smoothly —
+differently at every pose. Reproduced on the CPU with emeraude-base's `Matrix<4, float>`: the ray
+error is **±1-2 px at 1.3 km from the world origin and ±5-13 px at 7.8 km**, jumping between yaw
+steps of 0.25°. With the camera-relative inverse it is 0.00 px at both positions. After the fix, the
+clouds follow the model to within 0.1-0.2 px, like the terrain.
+
+**Why only the clouds showed it:** the raster projects world → clip, which is well conditioned.
+`AtmosphericFog` builds its rays from the camera basis, and SSR/SSGI work in view space.
+
+**Five other passes had the same pattern for SURFACE positions, all fixed the same day**: RTR, RTGI,
+RTAO, RTContactShadows and the GIDenoiser (whose frame UBO RTGI also reads, and which SSGI uses too).
+- Members renamed `invRelativeViewProj` / `inverseRelativeProjViewMatrix`.
+- The shader computes `worldPos = camera + relativePos`, and takes `normalize(relativePos)` /
+  `length(relativePos)` where it used to subtract the camera.
+- The camera position comes from `viewMatrices.position(readStateIndex)` instead of a float inverse
+  of the view.
+
+Their world-position error before the fix (engine `Matrix<4, float>`, worst case over a yaw sweep):
+
+| camera distance to the origin | surface at 10 m | at 50 m | at 200 m |
+|---|---|---|---|
+| 1.3 km | 0.041 m | 0.187 m | 0.736 m |
+| 7.8 km | 0.192 m | 1.138 m | 4.386 m |
+
+**Measured impact, honestly:** a same-pose A/B of the old and new code on the traced lane (`terrain`,
+sun frozen at noon with `--demo-options 100000,25`, sunny-16 pinned, 0 VUID in both runs) is
+**identical except on the animated water**:
+- spawn pose: forest band 0.05/255;
+- 7.8 km from the origin, seen from 1 km up: 0.39/255 mean, all of it on the sea.
+
+The distance-scaled biases of those passes (`bias * max(1, cameraDist) * grazing`) hid the error at
+those distances. The gain is in the exactness of the ray origins (~0.5 mm instead of centimetres to
+metres). It should show in motion, close to the ground, far from the origin — not measured.
+⚠️ The foliage of `terrain` looked dark and flat on the traced lane: that was NOT this fix. The A/B
+proves it was already so. The cause turned out to be the forests built UNLIT (projet-alpha `docs/caution-points.md`
+§ *a visual's lighting state is now a REQUIRED argument*, fixed the same day).
+`ViewMatricesInterface::computeFrustumCornersWorld()` has the same pattern, but it has **no caller**:
+dead code, left untouched.
+
+⚠️ **A precision defect of this kind is invisible on a screenshot and on every indoor bench**: it is a
+plausible-looking distortion that changes with the pose, and it grows with the distance to the world
+origin. Look for it in MOTION, on `terrain`, away from the centre.
+
 ### A UNIT that differs silently: glTF anisotropy rotation is radians, the engine's is turns (Aug 2026)
 
 > [!CAUTION]

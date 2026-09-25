@@ -109,7 +109,8 @@ void main()
 	vec3 rawDir = cameraRight * (ndc.x * abs(t) * aspectRatio) + cameraUp * (ndc.y * t) + cameraForward;
 	vec3 rayDir = normalize(rawDir);
 
-	bool isSky = (depth >= 0.9999);
+	/* ⚠️ The sky is the clear value, 1.0 exactly: 0.9999 read every mountain past ~890 m as sky. */
+	bool isSky = (depth >= 1.0);
 
 	if (isSky && skyFogEnabled < 0.5)
 	{

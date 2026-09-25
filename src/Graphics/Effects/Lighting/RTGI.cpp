@@ -114,7 +114,7 @@ layout(set = 1, binding = 1) uniform sampler2D normalTex;
 
 layout(set = 1, binding = 3, std140) uniform FrameData
 {
-	mat4 invViewProj;
+	mat4 invRelativeViewProj;
 	mat4 prevViewProj;
 	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
@@ -459,11 +459,16 @@ void main()
 		return;
 	}
 
-	/* Reconstruct world-space position from NDC + depth via inverse VP. */
+	/* Reconstruct the world position from NDC + depth. */
 	vec2 ndc = vUV * 2.0 - 1.0;
 	vec4 clipPos = vec4(ndc, depth, 1.0);
-	vec4 wp = invViewProj * clipPos;
-	vec3 worldPos = wp.xyz / wp.w;
+	/* ⚠️⚠️ CAMERA-RELATIVE: the matrix inverts projection × view ROTATION (the infinity view), so this
+	 * is the offset from the eye and the world position is the camera plus it. The float inverse of
+	 * the FULL view-projection put the surface 4 cm (10 m away) to 4.4 m (200 m away, 7.8 km from the
+	 * world origin) off, differently at every pose (2026-09-25). */
+	vec4 wp = invRelativeViewProj * clipPos;
+	vec3 relativePos = wp.xyz / wp.w;
+	vec3 worldPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w) + relativePos;
 
 	/* Unpack the frame UBO scalars. */
 	float maxDistance = traceParams.x;
@@ -471,7 +476,6 @@ void main()
 	uint sampleCount = uint(traceParams.z);
 	/* How far a ray must travel before "nothing hit" may be called sky (see the gather). */
 	float skyDistance = max(skyParams.y, maxDistance);
-	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
 
 	/* Transform view-space normal to world space. */
 	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
@@ -501,8 +505,8 @@ void main()
 	/* Adaptive bias: scale with camera distance AND grazing angle.
 	 * Distance: pixel footprint grows → needs larger offset.
 	 * NdotV: at grazing angles, rays easily clip the surface → needs extra offset. */
-	vec3 viewDir = normalize(worldPos - viewPos);
-	float cameraDist = length(worldPos - viewPos);
+	vec3 viewDir = normalize(relativePos);
+	float cameraDist = length(relativePos);
 	float NdotV = max(abs(dot(worldNormal, -viewDir)), 0.001);
 	float grazingFactor = 1.0 / NdotV;
 	float adaptiveBias = bias * max(1.0, cameraDist) * min(grazingFactor, 10.0);

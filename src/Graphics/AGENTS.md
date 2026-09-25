@@ -52,6 +52,20 @@
     Advanced/cubemap/CSM/shadow paths still push their matrices (B1 milestone 4 pending).
     Contract details: `src/Scenes/AGENTS.md` § "Instance Transforms (SceneInstanceTransforms)"
     and `src/Saphir/AGENTS.md` § "InstanceTransforms SSBO Path".
+5b. **The sky is depth `1.0` EXACTLY** (the clear value; the background writes no depth). An effect
+    separating sky from geometry tests `depth >= 1.0` / `depth < 1.0`, never a "close to 1"
+    threshold: the depth is conventional, so `1 - depth ≈ near / z`, and `0.9999` is a camera
+    distance of ~890 m with the default near plane. Eight sites held one until 2026-09-25 and the
+    `terrain` clouds were drawn over every mountain in front of them: `docs/caution-points.md`
+    § "a sky test at `depth >= 0.9999` is a DISTANCE".
+5c. **Unproject CAMERA-RELATIVE**: invert `projection * viewMatrix(readStateIndex, true, 0)` (the
+    infinity view: rotation, no translation) and add the camera position afterwards. The float
+    inverse of the FULL view-projection distorts the screen by ±1-13 px, differently at each pose —
+    the `terrain` clouds slid against the relief (fixed 2026-09-25). RTR, RTGI, RTAO,
+    RTContactShadows and the GIDenoiser used it too, for SURFACE positions (error up to 4.4 m),
+    and were fixed the same day. Their members are `invRelativeViewProj` /
+    `inverseRelativeProjViewMatrix`, and the shader computes `worldPos = camera + relativePos`.
+    `docs/caution-points.md` § "The float inverse of the full view-projection".
 6.  **`Renderer.hpp` include diet (no regrowth)**: `Graphics/Renderer.hpp` is included by ~77 TUs
     directly and propagates via `Core.hpp` and `Overlay/UIScreen.hpp`, so one `#include` added
     there is paid by most of the engine. `SwapChain`, `Vulkan::Instance`, `Window`,
@@ -3360,7 +3374,7 @@ texture stays native-sharp regardless of `GIBlurRadius`/`PixelDoubling`. Validat
 Sponza (energy ratio 0.996, floor texture gradient ×1.64) and the Cornell GI demo
 (uniform ≤2% run-to-run drift, colour bleed hue preserved, no multi-bounce runaway).
 
-**Frame UBO instead of push constants:** the trace parameters (invViewProj + prevViewProj +
+**Frame UBO instead of push constants:** the trace parameters (invRelativeViewProj + prevViewProj +
 camera data) exceed the **128-byte Vulkan push constant minimum guarantee**
 (`maxPushConstantsSize`). A per-frame UBO (`FrameUBOData`, std140) is shared by the
 trace/temporal/normal-history passes — created via
@@ -4107,7 +4121,7 @@ threshold fixed, a daylight scene had no flare at all.
 >
 > | Member | `offsetof` (C++) | `OpMemberDecorate … Offset` (SPIR-V) |
 > |---|---|---|
-> | `invViewProj` | 0 | 0 |
+> | `invRelativeViewProj` (named `invViewProj` until 2026-09-25) | 0 | 0 |
 > | `invViewCol0` / `viewPosX` | 64 / 76 | 64 / 76 |
 > | `invViewCol1` / `viewPosY` | 80 / 92 | 80 / 92 |
 > | `invViewCol2` / `viewPosZ` | 96 / 108 | 96 / 108 |

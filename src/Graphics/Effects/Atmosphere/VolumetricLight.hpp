@@ -84,7 +84,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				float decay{0.975F};
 				float exposure{0.25F};
 				uint32_t numSamples{64};
-				float depthThreshold{0.9999F};
+				/* ⚠️ The clear value: a lower threshold is a DISTANCE in disguise (0.9999 = ~890 m with the
+				 * 0.089 m near plane), and every mountain past it emitted shafts. */
+				float depthThreshold{1.0F};
 				/* Temporal EMA weight of the occlusion mask (1 = no accumulation).
 				 * A source narrower than a pixel (a door slit) RASTERIZES differently at
 				 * every TAA jitter offset: its flux in the depth buffer genuinely

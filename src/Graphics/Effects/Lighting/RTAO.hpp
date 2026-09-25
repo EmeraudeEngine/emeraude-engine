@@ -93,7 +93,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			struct EMEN_API TracePushConstants
 			{
-				float invViewProj[16];
+				float invRelativeViewProj[16];
 				float invViewCol0[3];
 				float viewPosX;
 				float invViewCol1[3];

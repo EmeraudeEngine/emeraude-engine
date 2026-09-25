@@ -78,7 +78,7 @@ layout(set = 1, binding = 1) uniform sampler2D normalTex;
  * view rotation the block is 132 bytes, above the 128-byte push constant minimum guarantee. */
 layout(set = 1, binding = 2, std140) uniform ShadowParams
 {
-	mat4 inverseProjViewMatrix;
+	mat4 inverseRelativeProjViewMatrix;	/* projection × view ROTATION, inverted: eye-relative. */
 	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
@@ -86,13 +86,16 @@ layout(set = 1, binding = 2, std140) uniform ShadowParams
 	vec4 shadowParameters;	/* x = normalBias, yzw = unused. */
 };
 
-vec3 reconstructWorldPosition(vec2 uv, float depth)
+/* ⚠️⚠️ CAMERA-RELATIVE: returns the offset from the eye, the world position is the camera plus it. The
+ * float inverse of the FULL view-projection put the surface 4 cm (10 m away) to 4.4 m (200 m away, 7.8 km
+ * from the world origin) off, differently at every pose (2026-09-25). */
+vec3 reconstructRelativePosition(vec2 uv, float depth)
 {
 	vec2 ndc = uv * 2.0 - 1.0;
 	vec4 clipPos = vec4(ndc, depth, 1.0);
-	vec4 worldPos = inverseProjViewMatrix * clipPos;
+	vec4 relativePos = inverseRelativeProjViewMatrix * clipPos;
 
-	return worldPos.xyz / worldPos.w;
+	return relativePos.xyz / relativePos.w;
 }
 
 void main()
@@ -109,8 +112,8 @@ void main()
 	const ivec2 fullResCoord = ivec2(vUV * vec2(depthSize));
 	float rawDepth = texelFetch(depthTex, fullResCoord, 0).r;
 
-	/* Skip sky pixels (depth at far plane). */
-	if (rawDepth >= 0.9999)
+	/* Skip sky pixels: the clear value, 1.0 exactly (0.9999 skipped everything past ~890 m). */
+	if (rawDepth >= 1.0)
 	{
 		outColor = vec4(1.0);
 		return;
@@ -132,15 +135,16 @@ void main()
 	 * half resolution the two differ by half a full-res texel, and the ray origin must sit on
 	 * the surface the depth belongs to. */
 	vec2 depthTexelUV = (vec2(fullResCoord) + 0.5) / vec2(depthSize);
-	vec3 worldPos = reconstructWorldPosition(depthTexelUV, rawDepth);
+	vec3 relativePos = reconstructRelativePosition(depthTexelUV, rawDepth);
 
 	/* View-space normal to world space. */
 	mat3 invViewRotation = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
 	vec3 worldNormal = normalize(invViewRotation * normalize(rawN));
 
 	vec3 viewPosition = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
-	vec3 viewDir = normalize(worldPos - viewPosition);
-	float cameraDist = length(worldPos - viewPosition);
+	vec3 worldPos = viewPosition + relativePos;
+	vec3 viewDir = normalize(relativePos);
+	float cameraDist = length(relativePos);
 
 	/* Adaptive bias: scale with camera distance (the pixel footprint grows) AND with the
 	 * grazing angle (a ray leaving a nearly edge-on surface clips its own facets). Same rule
@@ -410,8 +414,12 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
-		const auto viewProjMat = projMat * viewMat;
-		const auto invViewProjMat = viewProjMat.inverse();
+		/* ⚠️⚠️ CAMERA-RELATIVE: projection × view ROTATION (the infinity view), inverted — the shader
+		 * unprojects an offset from the eye and adds the camera position. The float inverse of the full
+		 * view-projection put the ray origins centimetres to metres off the surface far from the world
+		 * origin (docs/caution-points.md § The float inverse of the full view-projection). */
+		const auto invRelativeViewProjMat = (projMat * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+		const auto & cameraPosition = viewMatrices.position(readStateIndex);
 
 		/* 2. Update the per-frame input set (set 1): depth (binding 0), normals (binding 1). */
 		if ( inputDepth != nullptr )
@@ -431,10 +439,10 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* 3. Pass 1: RT shadow query (half-res). */
 		ShadowFrameUBOData shadowData{};
-		std::memcpy(shadowData.inverseProjViewMatrix.data(), invViewProjMat.data(), shadowData.inverseProjViewMatrix.size() * sizeof(float));
-		shadowData.invViewCol0 = {inv[0], inv[1], inv[2], inv[12]};
-		shadowData.invViewCol1 = {inv[4], inv[5], inv[6], inv[13]};
-		shadowData.invViewCol2 = {inv[8], inv[9], inv[10], inv[14]};
+		std::memcpy(shadowData.inverseRelativeProjViewMatrix.data(), invRelativeViewProjMat.data(), shadowData.inverseRelativeProjViewMatrix.size() * sizeof(float));
+		shadowData.invViewCol0 = {inv[0], inv[1], inv[2], cameraPosition.x()};
+		shadowData.invViewCol1 = {inv[4], inv[5], inv[6], cameraPosition.y()};
+		shadowData.invViewCol2 = {inv[8], inv[9], inv[10], cameraPosition.z()};
 		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
 		shadowData.lightParameters = {lightDirection.x(), lightDirection.y(), lightDirection.z(), m_parameters.maxDistance};
 		shadowData.shadowParameters = {m_parameters.normalBias, 0.0F, 0.0F, 0.0F};

@@ -108,7 +108,7 @@ const float EmPi = 3.14159265358979323846;
 
 layout(set = 0, binding = EMEN_CLOUDS_FRAME_BINDING, std140) uniform EmCloudFrame
 {
-	mat4 inverseViewProjection;
+	mat4 inverseRelativeViewProjection;	/* Projection x view ROTATION, inverted: eye-relative, never world. */
 	vec4 cameraPosition;	/* w = cloud count. */
 	vec4 cameraForward;		/* w = step count. */
 	vec4 sunDirection;		/* xyz = direction of PROPAGATION, w = light step count. */
@@ -213,20 +213,30 @@ void main()
 	float depth = texture(depthTex, vUV).r;
 
 	/* ⚠️ The matrix form: the inverse view-projection of the frame that produced this depth buffer
-	 * (read state), so the Y flip of the projection comes for free — no signed tanHalfFovY here. */
+	 * (read state), so the Y flip of the projection comes for free — no signed tanHalfFovY here.
+	 * ⚠️⚠️ CAMERA-RELATIVE (view ROTATION only): the unprojected points are offsets from the eye,
+	 * never world positions. The inverse of the full view-projection, in float, carried the camera
+	 * translation into a near/far = 1e5 projection: the far point's w (1/far) is the difference of
+	 * two ±1/near terms, and its error moved the reconstructed rays by ±1-2 px at 1.3 km from the
+	 * world origin, ±5-13 px at 7.8 km, differently at every pose — the `terrain` clouds slid
+	 * against the relief whenever the camera turned or moved (2026-09-25). */
 	vec2 ndc = vUV * 2.0 - 1.0;
 	vec3 cameraPosition = emFrame.cameraPosition.xyz;
-	vec4 farPoint = emFrame.inverseViewProjection * vec4(ndc, 1.0, 1.0);
-	vec3 rayDirection = normalize(farPoint.xyz / farPoint.w - cameraPosition);
+	vec4 farPoint = emFrame.inverseRelativeViewProjection * vec4(ndc, 1.0, 1.0);
+	vec3 rayDirection = normalize(farPoint.xyz / farPoint.w);
 
-	/* The march stops at the surface: a tree inside a cloud is buried in it, not drawn over it. */
+	/* The march stops at the surface: a tree inside a cloud is buried in it, not drawn over it.
+	 * ⚠️⚠️ The sky is the CLEAR value, 1.0 exactly (the background writes no depth). A threshold
+	 * such as 0.9999 is a DISTANCE in disguise: the depth is conventional, so 1 - depth ≈ near/z,
+	 * and with the 0.089 m near plane everything past ~890 m read as sky — the clouds of `terrain`
+	 * were drawn over every mountain they stood behind (2026-09-25). */
 	float sceneDistance = 3.0e38;
 
-	if ( depth < 0.9999 )
+	if ( depth < 1.0 )
 	{
-		vec4 surface = emFrame.inverseViewProjection * vec4(ndc, depth, 1.0);
+		vec4 surface = emFrame.inverseRelativeViewProjection * vec4(ndc, depth, 1.0);
 
-		sceneDistance = length(surface.xyz / surface.w - cameraPosition);
+		sceneDistance = length(surface.xyz / surface.w);
 	}
 
 	/* ---- The clouds this ray crosses, sorted front to back. ---- */
@@ -885,12 +895,14 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto & viewMatrices = renderer.mainRenderTarget()->viewMatrices();
 		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & projectionMatrix = viewMatrices.projectionMatrix(readStateIndex);
-		const auto inverseViewProjection = (projectionMatrix * viewMatrix).inverse();
+		/* ⚠️⚠️ The INFINITY view: the same rotation, no translation. See the shader's ray setup —
+		 * the full view-projection inverted in float made the rays swim by up to 13 px. */
+		const auto inverseRelativeViewProjection = (projectionMatrix * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
 		const auto & cameraPosition = viewMatrices.position(readStateIndex);
 
 		FrameBlock block{};
 
-		std::memcpy(block.inverseViewProjection.data(), inverseViewProjection.data(), block.inverseViewProjection.size() * sizeof(float));
+		std::memcpy(block.inverseRelativeViewProjection.data(), inverseRelativeViewProjection.data(), block.inverseRelativeViewProjection.size() * sizeof(float));
 
 		/* Forward = the negated row 2 of the view matrix (row 2 stores -forward). */
 		block.cameraForward = {-viewMatrix(2, 0), -viewMatrix(2, 1), -viewMatrix(2, 2), static_cast< float >(m_parameters.stepCount)};

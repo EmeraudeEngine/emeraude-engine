@@ -98,7 +98,8 @@ float sunVisibility (vec2 lightPos)
 		float a = float(i) * 2.39996323;
 		vec2 p = clamp(lightPos + vec2(cos(a) * occlusionRadiusX, sin(a) * occlusionRadiusY) * r, vec2(0.0), vec2(1.0));
 
-		float tap = texture(depthTex, p).r >= 0.99999 ? 1.0 : 0.0;
+		/* ⚠️ The sky is the clear value, 1.0 exactly: 0.99999 let every mountain past ~8.9 km show the sun. */
+		float tap = texture(depthTex, p).r >= 1.0 ? 1.0 : 0.0;
 
 		if ( cloudTransmittanceEnabled > 0.5 )
 		{

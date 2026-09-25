@@ -138,7 +138,8 @@ void main()
 	 * world-space march scatters wherever the medium and the light both reach, including poses
 	 * where the sun is behind the camera. Shafts appearing in such poses are correct, not a
 	 * regression. */
-	bool isSky = (depth >= 0.9999);
+	/* ⚠️ The sky is the clear value, 1.0 exactly: 0.9999 read every mountain past ~890 m as sky. */
+	bool isSky = (depth >= 1.0);
 	float marchLength;
 
 	if (isSky)
