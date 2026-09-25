@@ -2525,6 +2525,34 @@ a scene vanishing from the screen. It now collects every sector's.
   Graphics); a sector IS an `AACuboid`, test it with `Frustum::isSeeing(AACuboid)`.
 
 
+### Fixed: the octree-culled render lists drew an entity once per sector copy (Sep 2026)
+
+> **Symptom (2026-09-25, the day the lists moved to the octree):** `terrain` with its forest HUNG the GPU on the
+> macOS (M2) and Windows (RTX 3060 Laptop, AMD iGPU) peers — one command buffer never finished, `VK_TIMEOUT` on the
+> in-flight fence after 60 s, or `VK_ERROR_DEVICE_LOST` in 2 s on AMD — whatever the lane, the shadow type, the
+> validation layer or the clouds. Bare terrain ran at 13.7 ms. Linux survived: at the spawn, the view listed
+> **61 496 tree meshes at LOD 2 = 1.09 billion triangles**, no screenshot completed for ~50 s, the atlases baked at
+> 72 s / 127 s.
+
+`Scene::gatherRenderingCandidates()` (previous section) assumed "one element, one sector", which
+`OctreeSector::insertWithPrimitive()` enforces. But `OctreeSector::expand()` keeps a splitting sector's elements
+AND files them in the children (`merge()` relies on the parent keeping them), so every entity filed before a split
+sits in several sectors — the split root of `terrain` kept 424 elements (Shift+F1). The walk emitted each copy, and
+nothing downstream de-duplicates (`std::multimap` render lists): the forest cells around the spawn at the origin,
+filed early, were drawn many times over, in the view, in each of the four cascades, in the TLAS and in the imposter
+bake. The lit trees of the same day (two passes per batch) doubled that again.
+
+**Fix:** each gather stamps the entities it collects (`AbstractEntity::markCollectedByRenderingGather()`, a scene
+counter bumped under `m_renderingOctreeAccess`, which already serialises the gathers) and skips an entity already
+stamped. O(n), no allocation. Measured on Linux at the same pose: **1.09 G → 40.6 M triangles, 107 ms per frame**;
+atlases at 49 s / 59 s; screenshots from 55 s instead of 75 s. The octree's own double contract is an item
+(`octree-expand-keeps-parent-elements`: the physics walk has not been audited for the same double visit).
+
+**Rule:** a walker over `OctreeSector` must not assume one element per sector. And a render-statistic that
+explodes at one pose only (here, the origin, where the early entities are) is a duplication before it is a
+cost.
+
+
 ### Fixed: a post-process occupant filed AFTER the stack's creation was never created (Sep 2026)
 
 **Symptom:** the scene-driven cloud pass was listed by `getStatus()` as `Clouds: VolumetricCloudsEffect`

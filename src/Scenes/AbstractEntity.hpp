@@ -764,6 +764,32 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Marks the entity as collected by one rendering gather [RENDER THREAD].
+			 * @note ⚠️⚠️ The rendering octree files an entity in SEVERAL sectors: OctreeSector::expand() keeps its
+			 * elements in the parent AND files them in the children (merge() relies on the parent keeping them), so
+			 * one walk meets an entity once per copy. Scene::gatherRenderingCandidates() stamps each gather and skips
+			 * an entity that already carries the stamp. Without it, every copy was drawn: into the view, each shadow
+			 * cascade, the TLAS and the imposter bake (2026-09-25, `terrain`: 424 elements kept by the split root, the
+			 * forest cells near the origin drawn several times — part of a GPU hang on macOS and Windows).
+			 * @note Called under the scene's rendering octree lock only, which serialises the gathers.
+			 * @param stamp The gather's stamp, never 0.
+			 * @return bool True the first time this gather meets the entity.
+			 */
+			[[nodiscard]]
+			bool
+			markCollectedByRenderingGather (uint64_t stamp) const noexcept
+			{
+				if ( m_renderingGatherStamp == stamp )
+				{
+					return false;
+				}
+
+				m_renderingGatherStamp = stamp;
+
+				return true;
+			}
+
+			/**
 			 * @brief Sets whether this entity participates in collision detection [PHYSICS].
 			 *
 			 * When disabled, the entity will not participate in collision detection even
@@ -1287,6 +1313,7 @@ namespace EmEn::Scenes
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
+			mutable uint64_t m_renderingGatherStamp{0};	 ///< The last rendering gather that collected the entity (markCollectedByRenderingGather()).
 			Base::Math::CartesianFrame< float > m_deferredMoveCoordinates; ///< World coordinates of a move requested from a component's processLogics(), dispatched after the component loop.
 			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).
 			bool m_dispatchingComponentLogics{false};	   ///< True while processLogics() walks the components under m_componentsMutex (logic thread only).

@@ -2483,13 +2483,19 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Collects the renderable entities a volume may see, from the rendering octree [RENDER THREAD].
-			 * @note ⚠️⚠️ THE OCTREE CULLS FIRST (2026-09-25, owner: "use the octree"): every entity is owned by the
-			 * deepest sector that FULLY contains its render box, so a sector the volume misses is skipped with its
-			 * whole subtree — nothing below it can be seen. The render lists used to walk EVERY entity, then every
+			 * @note ⚠️⚠️ THE OCTREE CULLS FIRST (2026-09-25, owner: "use the octree"): an entity lives in a sector that
+			 * contains it, so a sector the volume misses is skipped with its whole subtree — nothing below it can be
+			 * seen. The render lists used to walk EVERY entity, then every
 			 * component, and test the volume last: 12 776 forest cells × 4 cascades × their visuals cost `terrain`
 			 * ~90 ms of CPU per frame (9 FPS for 32 ms of GPU). The sector test is conservative only: the caller
 			 * still tests each entity. The entities outside the octree's bounds (m_renderingOctreeOverflow) are
 			 * always candidates.
+			 * @note ⚠️⚠️ ONE CANDIDATE PER ENTITY, whatever the octree holds. OctreeSector::insertWithPrimitive() files
+			 * an element in ONE sector, but OctreeSector::expand() keeps a splitting sector's elements AND files them
+			 * in its children (merge() relies on it), so an entity filed before a split sits in several sectors. Each
+			 * gather stamps what it collects (AbstractEntity::markCollectedByRenderingGather()); this comment claimed
+			 * "one element, one sector" on 2026-09-25 and every copy was drawn — 424 elements in the split root of
+			 * `terrain`, in the view, each cascade, the TLAS and the imposter bake.
 			 * @note Collects under m_renderingOctreeAccess, then returns: the caller walks the components with no
 			 * octree lock held (an entity's component lock is never taken inside the octree's).
 			 * @tparam accept_t (const Base::Math::Space3D::AACuboid< float > &) -> bool: may the volume see this box.
@@ -2505,14 +2511,19 @@ namespace EmEn::Scenes
 
 				const std::scoped_lock lock{m_renderingOctreeAccess};
 
+				const auto stamp = ++m_renderingGatherStamp;
+
 				if ( m_renderingOctree != nullptr )
 				{
-					Scene::walkRenderingSector(*m_renderingOctree, acceptsBox, candidates);
+					Scene::walkRenderingSector(*m_renderingOctree, acceptsBox, stamp, candidates);
 				}
 
 				for ( const auto & entity : m_renderingOctreeOverflow )
 				{
-					candidates.emplace_back(entity);
+					if ( entity->markCollectedByRenderingGather(stamp) )
+					{
+						candidates.emplace_back(entity);
+					}
 				}
 			}
 
@@ -2521,13 +2532,14 @@ namespace EmEn::Scenes
 			 * @tparam accept_t See gatherRenderingCandidates().
 			 * @param sector A reference to the sector.
 			 * @param acceptsBox Whether the volume touches a sector's box.
+			 * @param stamp The stamp of this gather (AbstractEntity::markCollectedByRenderingGather()).
 			 * @param candidates The output.
 			 * @return void
 			 */
 			template< typename accept_t >
 			static
 			void
-			walkRenderingSector (const OctreeSector< AbstractEntity, false > & sector, const accept_t & acceptsBox, std::vector< std::shared_ptr< AbstractEntity > > & candidates) noexcept
+			walkRenderingSector (const OctreeSector< AbstractEntity, false > & sector, const accept_t & acceptsBox, uint64_t stamp, std::vector< std::shared_ptr< AbstractEntity > > & candidates) noexcept
 			{
 				if ( !acceptsBox(static_cast< const Base::Math::Space3D::AACuboid< float > & >(sector)) )
 				{
@@ -2536,11 +2548,14 @@ namespace EmEn::Scenes
 
 				for ( const auto & entity : sector.elements() )
 				{
-					candidates.emplace_back(entity);
+					if ( entity->markCollectedByRenderingGather(stamp) )
+					{
+						candidates.emplace_back(entity);
+					}
 				}
 
-				/* ⚠️ An empty sector does not prove an empty subtree (elements live at the deepest sector that
-				 * contains them): always descend. */
+				/* ⚠️ An empty sector does not prove an empty subtree (an element inserted after the split lives at
+				 * the deepest sector that contains it): always descend. */
 				if ( sector.isLeaf() )
 				{
 					return;
@@ -2550,7 +2565,7 @@ namespace EmEn::Scenes
 				{
 					if ( subSector != nullptr )
 					{
-						Scene::walkRenderingSector(*subSector, acceptsBox, candidates);
+						Scene::walkRenderingSector(*subSector, acceptsBox, stamp, candidates);
 					}
 				}
 			}
@@ -3029,6 +3044,8 @@ namespace EmEn::Scenes
 			mutable std::unordered_set< std::shared_ptr< AbstractEntity > > m_renderingOctreeOverflow;
 			/** @brief Scratch of the render lists' octree queries (render thread only). */
 			std::vector< std::shared_ptr< AbstractEntity > > m_renderingCandidates;
+			/** @brief The stamp of the last rendering gather (gatherRenderingCandidates()). Guarded by m_renderingOctreeAccess. */
+			mutable uint64_t m_renderingGatherStamp{0};
 			/** @brief Octree for physics broad-phase collision. @note Uses shared_ptr due to enable_shared_from_this. */
 			std::shared_ptr< OctreeSector< AbstractEntity, true > > m_physicsOctree;
 			/** @brief Visual components for background/terrain/water. @bug Should be refactored. */
