@@ -144,8 +144,7 @@ namespace EmEn::Scenes
 		const auto meshInstance = this->componentBuilder< Component::Visual >(label)
 			 .setup([] (auto & component) {
 				 component.setContributesToEntityExtents(false);
-				 component.getRenderableInstance()->enableLighting();
-			 }).build(meshResource);
+			 }).build(meshResource, Graphics::RenderableInstance::Lighting::Lit);
 
 		if ( meshInstance == nullptr )
 		{

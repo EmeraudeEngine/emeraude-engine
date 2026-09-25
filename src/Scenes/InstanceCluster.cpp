@@ -160,18 +160,15 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			/* ⚠️⚠️ A renderable instance is created UNLIT: `EnableLighting` is off until someone
-			 * turns it on. Building the component and stopping there yields cells rendering as pure
-			 * BLACK SILHOUETTES — the very symptom documented for a raw `Component::Visual` builder,
-			 * and it was hit on the first vegetation ever drawn from a USD asset.
+			/* ⚠️⚠️ The lighting state is a REQUIRED constructor argument (2026-09-25). The instance
+			 * used to start UNLIT, and building the component and stopping there yielded cells
+			 * rendering as pure BLACK SILHOUETTES — hit on the first vegetation ever drawn from a
+			 * USD asset.
 			 *
-			 * Not hard-coded to true: content carrying its own baked lighting must stay OFF the lit
+			 * Not hard-coded to Lit: content carrying its own baked lighting must stay OFF the lit
 			 * path, or the ambient and IBL terms double-count what is already in the vertices. */
 			entity->componentBuilder< Component::MultipleVisuals >(entityName + "/Visuals")
-				.setup([lightingEnabled = options.lightingEnabled] (auto & visuals) {
-					visuals.getRenderableInstance()->setLightingState(lightingEnabled);
-				})
-				.build(renderable, localFrames);
+				.build(renderable, localFrames, options.lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 
 			builtCount++;
 		}

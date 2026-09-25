@@ -92,9 +92,10 @@ namespace EmEn::Scenes
 		/**
 		 * @brief Declares whether the instances belong on the LIT path.
 		 *
-		 * @warning ⚠️⚠️ A renderable instance is born UNLIT. Leaving this to the renderer's
-		 * default is what turns a whole forest into black silhouettes, with nothing in the log
-		 * to say so — the geometry, the placement and the materials are all correct.
+		 * @warning ⚠️⚠️ An UNLIT instance turns a whole forest into black silhouettes, with nothing in the
+		 * log to say so — the geometry, the placement and the materials are all correct. The visual
+		 * components take the state as a REQUIRED argument since 2026-09-25
+		 * (Graphics::RenderableInstance::Lighting); this option is what the cluster passes.
 		 *
 		 * @note Default true, matching `MeshDescriptor::lightingEnabled`. Set it to false only
 		 * for content whose lighting is already baked into its vertices, which the ambient and

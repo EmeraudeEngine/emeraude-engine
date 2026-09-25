@@ -143,10 +143,7 @@ namespace EmEn::Scenes::Viewers
 		}
 
 		pictureEntity->componentBuilder< Component::Visual >("Picture")
-			.setup([] (Component::Visual & component) {
-				component.getRenderableInstance()->setLightingState(false);
-			})
-			.build(mesh);
+			.build(mesh, Graphics::RenderableInstance::Lighting::Unlit);
 
 		/* NOTE: The camera node stays a direct child of the scene root, the
 		 * orbit controller positions it in parent space. */

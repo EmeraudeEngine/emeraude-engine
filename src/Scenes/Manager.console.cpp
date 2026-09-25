@@ -547,9 +547,8 @@ namespace EmEn::Scenes
 
 			const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual")
 				.setup([scale] (auto & component) {
-					component.getRenderableInstance()->enableLighting();
 					component.getRenderableInstance()->setTransformationMatrix(Base::Math::Matrix4F::scaling(scale));
-				}).build(mesh);
+				}).build(mesh, Graphics::RenderableInstance::Lighting::Lit);
 
 			if ( visual == nullptr )
 			{
@@ -1165,9 +1164,7 @@ namespace EmEn::Scenes
 
 			/* Lit, like addMesh: a UV check must be readable in the scene it lives in. ⚠️ In a scene
 			 * with no light the shape renders BLACK — that is a missing light, not a broken UV. */
-			if ( entity->componentBuilder< Component::Visual >(entityName + "Visual").setup([] (auto & component) {
-				component.getRenderableInstance()->enableLighting();
-			}).build(mesh) == nullptr )
+			if ( entity->componentBuilder< Component::Visual >(entityName + "Visual").build(mesh, Graphics::RenderableInstance::Lighting::Lit) == nullptr )
 			{
 				outputs.emplace_back(Severity::Error, "Failed to attach the visual !");
 

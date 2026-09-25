@@ -56,12 +56,10 @@ auto light = entity->componentBuilder< Component::PointLight >("MainLight")
     })
     .build(2048);  // shadowMapResolution argument
 
-// Visual component with mesh resource
+// Visual component with mesh resource. ⚠️ The lighting state is a REQUIRED last argument (2026-09-25):
+// the former unlit default blacked out every tree of two demos, lit by the GI alone.
 auto visual = entity->componentBuilder< Component::Visual >("MeshVisual")
-    .setup([] (auto & component) {
-        vis.getRenderableInstance()->enableLighting();
-    })
-    .build(meshResource);
+    .build(meshResource, Graphics::RenderableInstance::Lighting::Lit);
 ```
 
 ---
@@ -270,27 +268,17 @@ auto spotlight = entity->componentBuilder< Component::SpotLight >("Spotlight")
 ### Visual Components
 
 ```cpp
-// Basic mesh
+// A lit mesh (the lighting state is REQUIRED: Lit or Unlit)
 auto mesh = entity->componentBuilder< Component::Visual >("Mesh")
-    .build(meshResource);
+    .build(meshResource, Graphics::RenderableInstance::Lighting::Lit);
 
-// Mesh with physics and lighting
-auto physicsMesh = entity->componentBuilder< Component::Visual >("PhysicsMesh")
-    .setup([] (auto & component) {
-        component.getRenderableInstance()->enableLighting();
-    })
-    .build(meshResource);
-
-// Mesh without physics
-auto staticMesh = entity->componentBuilder< Component::Visual >("StaticMesh")
-    .setup([] (auto & component) {
-        component.getRenderableInstance()->enableLighting();
-    })
-    .build(meshResource);
+// Content that carries its own light (a sky, baked lighting, a debug helper) is UNLIT on purpose
+auto marker = entity->componentBuilder< Component::Visual >("Marker")
+    .build(markerResource, Graphics::RenderableInstance::Lighting::Unlit);
 
 // Multiple visual instances
 std::vector< CartesianFrame< float > > positions = {...};
-auto multiVisual = entity->componentBuilder< Component::MultipleVisuals >("Trees").build(meshResource, positions);
+auto multiVisual = entity->componentBuilder< Component::MultipleVisuals >("Trees").build(meshResource, positions, Graphics::RenderableInstance::Lighting::Lit);
 ```
 
 ### Other Components
@@ -393,12 +381,9 @@ auto camera = entity->componentBuilder< Component::Camera >("MainCamera")
 // OLD
 auto visual = entity->newVisual(meshResource, true, true, "Visual");
 
-// NEW
+// NEW (the lighting state is a required argument since 2026-09-25)
 auto visual = entity->componentBuilder< Component::Visual >("Visual")
-    .setup([] (auto & component) {
-        component.getRenderableInstance()->enableLighting();
-    })
-    .build(meshResource);
+    .build(meshResource, Graphics::RenderableInstance::Lighting::Lit);
 ```
 
 #### newPointLight / newSpotLight / newDirectionalLight

@@ -564,10 +564,7 @@ namespace EmEn::Scenes::Viewers
 		 * an unlit instance would send its raw [0,1] albedo through the photometric
 		 * exposure and read black. */
 		modelEntity->componentBuilder< Component::Visual >("Model")
-			.setup([] (Component::Visual & component) {
-				component.getRenderableInstance()->setLightingState(true);
-			})
-			.build(mesh);
+			.build(mesh, Graphics::RenderableInstance::Lighting::Lit);
 
 		return true;
 	}

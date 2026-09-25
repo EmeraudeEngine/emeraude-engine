@@ -455,9 +455,8 @@ namespace EmEn::Scenes
 								{
 									node->componentBuilder< Component::Visual >(compName)
 										.setup([scale] (auto & component) {
-											component.getRenderableInstance()->enableLighting();
 											component.getRenderableInstance()->setTransformationMatrix(Math::Matrix4F::scaling(scale));
-										}).build(mesh);
+										}).build(mesh, Graphics::RenderableInstance::Lighting::Lit);
 								}
 								else
 								{
@@ -543,9 +542,8 @@ namespace EmEn::Scenes
 								{
 									entity->componentBuilder< Component::Visual >(compName)
 										.setup([scale] (auto & component) {
-											component.getRenderableInstance()->enableLighting();
 											component.getRenderableInstance()->setTransformationMatrix(Math::Matrix4F::scaling(scale));
-										}).build(mesh);
+										}).build(mesh, Graphics::RenderableInstance::Lighting::Lit);
 								}
 								else
 								{

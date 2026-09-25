@@ -62,11 +62,12 @@ namespace EmEn::Scenes::Component
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable A reference to a renderable smart pointer.
+			 * @param lighting Whether the instance is LIT. ⚠️ Required on purpose: see Graphics::RenderableInstance::Lighting.
 			 */
-			Visual (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable) noexcept
+			Visual (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, Graphics::RenderableInstance::Lighting lighting) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, Graphics::RenderableInstance::None)}
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, Graphics::RenderableInstance::lightingFlags(lighting))}
 			{
 				this->observe(renderable.get());
 			}

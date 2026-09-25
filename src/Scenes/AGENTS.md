@@ -27,7 +27,7 @@ See [`../../docs/scene-graph-architecture.md`](../../docs/scene-graph-architectu
 - World space recalculated on demand (no cache currently)
 
 ### Available Components
-**Rendering:** Visual, MultipleVisuals
+**Rendering:** Visual, MultipleVisuals — ⚠️ both take `Graphics::RenderableInstance::Lighting` (Lit/Unlit) as a REQUIRED last constructor argument since 2026-09-25: the former unlit default blacked out three sets of content (the last one every forest tree, lit only by the GI)
 **Lights:** DirectionalLight, PointLight, SpotLight, SunCourse (drives a DirectionalLight along the day), SkyFollowsSun (scales the background's luminance with a SunCourse)
 **Audio:** SoundEmitter, Microphone
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight

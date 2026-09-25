@@ -218,7 +218,7 @@ namespace EmEn::Scenes
 			.setup([] (Component::MultipleVisuals & visuals) {
 				visuals.getRenderableInstance()->setBakeOnly()->disableShadowCasting()->disableRayTracing();
 			})
-			.build(tree, copies);
+			.build(tree, copies, Graphics::RenderableInstance::Lighting::Lit);
 
 		if ( copiesVisual == nullptr || !bakeTarget->enqueue(copiesVisual->getRenderableInstance().get(), atlas) )
 		{

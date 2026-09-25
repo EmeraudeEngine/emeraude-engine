@@ -30,6 +30,12 @@ leaving roughly the ambient term alone. Zero VUID, no warning, no log line: sile
 so the scene cannot build the configuration — that is a workaround in the consumer, and the
 engine-side gap is this item.
 
+**A second route to the same silence (measured 2026-09-25, `terrain`, frozen noon sun, pinned exposure):**
+with `Core/Graphics/ShadowMapping/Enabled = false`, the CSM sun lights NOTHING at all. The sand in direct light
+fell from 112 to 8.6 / 255. So the non-shadow `DirectionalLightPass` of a CSM-built light contributes nothing,
+with no warning and no VUID. That is very likely the same mechanism as resolution 0 (a CSM light with no usable
+map), unverified. Found by the foliage diagnosis workflow of that day.
+
 ## What remains
 
 - [ ] Decide the contract and enforce it in ONE place: either a CSM light with resolution 0 lights

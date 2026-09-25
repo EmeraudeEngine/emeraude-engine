@@ -99,6 +99,22 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
 	constexpr bool MergePushConstants{true};
 
+	/**
+	 * @brief Whether a visual component's instance is LIT: the ambient pass and one pass per light, shadows received.
+	 * @note ⚠️⚠️ A REQUIRED constructor argument of Scenes::Component::Visual and MultipleVisuals (owner decision
+	 * 2026-09-25): the instance used to start with no flag, i.e. UNLIT, and an unlit mesh writes its raw albedo as
+	 * radiance — near black. It struck three times (BasicScenery, USD InstanceCluster, then EVERY tree of `terrain`
+	 * and `forest`, which only SSGI/RTGI were lighting). Unlit is for content that carries its own light (a sky, a
+	 * baked-lighting asset, sprites, particles, debug helpers). setLightingState() still changes it at runtime.
+	 */
+	enum class Lighting : uint8_t
+	{
+		/** @brief Drawn once with its own colour: no light, no shadow received. */
+		Unlit,
+		/** @brief Lit by the scene: ambient/IBL, every light, shadows received. */
+		Lit
+	};
+
 	/** @brief Renderable instance flag bits. */
 	enum EMEN_API RenderableInstanceFlagBits : uint32_t // NOLINT(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	{
@@ -164,6 +180,19 @@ namespace EmEn::Graphics::RenderableInstance
 		 * wrongly facing card. */
 		DisableRayTracing = 1U << 15
 	};
+
+	/**
+	 * @brief Returns the construction flags for a lighting state.
+	 * @param lighting The lighting state.
+	 * @return uint32_t
+	 */
+	[[nodiscard]]
+	constexpr
+	uint32_t
+	lightingFlags (Lighting lighting) noexcept
+	{
+		return lighting == Lighting::Lit ? static_cast< uint32_t >(EnableLighting) : static_cast< uint32_t >(None);
+	}
 
 	/**
 	 * @brief Defines the base of a renderable instance to draw any object in a scene.

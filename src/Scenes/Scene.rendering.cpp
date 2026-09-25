@@ -1018,7 +1018,7 @@ namespace EmEn::Scenes
 	{
 		if ( m_backgroundResource != nullptr )
 		{
-			m_sceneVisualComponents[0] = std::make_unique< Component::Visual >("Background", *m_rootNode, m_backgroundResource);
+			m_sceneVisualComponents[0] = std::make_unique< Component::Visual >("Background", *m_rootNode, m_backgroundResource, Graphics::RenderableInstance::Lighting::Unlit);
 
 			/* NOTE: Disables lighting model and shadows on the background.
 			 * The skybox should not cast or receive shadows. */
@@ -1032,20 +1032,18 @@ namespace EmEn::Scenes
 
 		if ( m_groundLevelRenderable != nullptr )
 		{
-			m_sceneVisualComponents[1] = std::make_unique< Component::Visual >("SceneGround", *m_rootNode, m_groundLevelRenderable);
+			m_sceneVisualComponents[1] = std::make_unique< Component::Visual >("SceneGround", *m_rootNode, m_groundLevelRenderable, Graphics::RenderableInstance::Lighting::Lit);
 
 			const auto renderableInstance = m_sceneVisualComponents[1]->getRenderableInstance();
-			renderableInstance->enableLighting();
 			renderableInstance->disableLightDistanceCheck();
 			renderableInstance->enableDisplayTBNSpace(false);
 		}
 
 		if ( m_seaLevelRenderable != nullptr )
 		{
-			m_sceneVisualComponents[2] = std::make_unique< Component::Visual >("SeaLevel", *m_rootNode, m_seaLevelRenderable);
+			m_sceneVisualComponents[2] = std::make_unique< Component::Visual >("SeaLevel", *m_rootNode, m_seaLevelRenderable, Graphics::RenderableInstance::Lighting::Lit);
 
 			const auto renderableInstance = m_sceneVisualComponents[2]->getRenderableInstance();
-			renderableInstance->enableLighting();
 			renderableInstance->disableLightDistanceCheck();
 			renderableInstance->enableDisplayTBNSpace(false);
 		}

@@ -232,7 +232,7 @@ namespace EmEn::Scenes
 			.setup([] (auto & component) {
 				component.getRenderableInstance()->disableDepthTest(true);
 			})
-			.build(mesh);
+			.build(mesh, Graphics::RenderableInstance::Lighting::Unlit);
 	}
 
 	void
@@ -320,7 +320,7 @@ namespace EmEn::Scenes
 				.setup([] (auto & component) {
 					component.getRenderableInstance()->disableDepthTest(true);
 				})
-				.build(mesh);
+				.build(mesh, Graphics::RenderableInstance::Lighting::Unlit);
 		}
 	}
 

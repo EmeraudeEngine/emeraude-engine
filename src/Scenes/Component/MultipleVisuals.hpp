@@ -66,11 +66,13 @@ namespace EmEn::Scenes::Component
 			 * @param coordinates A list of instance frames, expressed in the parent entity's LOCAL
 			 * space [std::move]. They are kept as given; what reaches the GPU is their composition
 			 * with the entity's world frame.
+			 * @param lighting Whether the instances are LIT. ⚠️ Required on purpose: see Graphics::RenderableInstance::Lighting —
+			 * every forest of `terrain` and `forest` was built unlit by omission and lit by the GI alone.
 			 */
-			MultipleVisuals (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, std::vector< Base::Math::CartesianFrame< float > > coordinates) noexcept
+			MultipleVisuals (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, std::vector< Base::Math::CartesianFrame< float > > coordinates, Graphics::RenderableInstance::Lighting lighting) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, coordinates, Graphics::RenderableInstance::None)},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, coordinates, Graphics::RenderableInstance::lightingFlags(lighting))},
 				m_localCoordinates{std::move(coordinates)}
 			{
 				this->observe(renderable.get());

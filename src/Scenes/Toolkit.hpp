@@ -864,14 +864,9 @@ namespace EmEn::Scenes
 				}
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
-					.setup([&physicalProperties, enableLighting] (auto & visual) {
+					.setup([&physicalProperties] (auto & visual) {
 						visual.bodyPhysicalProperties().setProperties(physicalProperties);
-
-						if ( enableLighting )
-						{
-							visual.getRenderableInstance()->enableLighting();
-						}
-					}).build(renderable);
+					}).build(renderable, enableLighting ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 
 				/* Apply renderable size as entity scale if it differs from 1.0. */
 				if ( renderable != nullptr && renderable->uniformScale() != 1.0F )

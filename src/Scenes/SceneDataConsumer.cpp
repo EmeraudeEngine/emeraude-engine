@@ -116,10 +116,7 @@ namespace EmEn::Scenes
 					if ( firstMesh )
 					{
 						parentNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-							.setup([lightingEnabled = sceneData.meshes[meshIndex].lightingEnabled] (auto & visual) {
-								visual.getRenderableInstance()->setLightingState(lightingEnabled);
-							})
-							.build(sceneData.meshes[meshIndex].renderable);
+							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 
 						firstMesh = false;
 					}
@@ -128,10 +125,7 @@ namespace EmEn::Scenes
 						auto childNode = parentNode->createChild(nodeDesc.name);
 
 						childNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-							.setup([lightingEnabled = sceneData.meshes[meshIndex].lightingEnabled] (auto & visual) {
-								visual.getRenderableInstance()->setLightingState(lightingEnabled);
-							})
-							.build(sceneData.meshes[meshIndex].renderable);
+							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 					}
 				}
 			}
@@ -420,10 +414,7 @@ namespace EmEn::Scenes
 					const auto meshIndex = nodeDesc.meshIndex.value();
 
 					staticEntity->componentBuilder< Component::Visual >(entityName + "/Visual")
-						.setup([lightingEnabled = sceneData.meshes[meshIndex].lightingEnabled] (auto & visual) {
-							visual.getRenderableInstance()->setLightingState(lightingEnabled);
-						})
-						.build(sceneData.meshes[meshIndex].renderable);
+						.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 				}
 
 				this->attachLight(sceneData, nodeDesc, *staticEntity);
@@ -486,10 +477,7 @@ namespace EmEn::Scenes
 			if ( meshIndex < sceneData.meshes.size() && sceneData.meshes[meshIndex].renderable != nullptr )
 			{
 				engineParent->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-					.setup([lightingEnabled = sceneData.meshes[meshIndex].lightingEnabled] (auto & visual) {
-						visual.getRenderableInstance()->setLightingState(lightingEnabled);
-					})
-					.build(sceneData.meshes[meshIndex].renderable);
+					.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 			}
 
 			targetNode = engineParent;
@@ -506,10 +494,7 @@ namespace EmEn::Scenes
 				if ( meshIndex < sceneData.meshes.size() && sceneData.meshes[meshIndex].renderable != nullptr )
 				{
 					targetNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-						.setup([lightingEnabled = sceneData.meshes[meshIndex].lightingEnabled] (auto & visual) {
-							visual.getRenderableInstance()->setLightingState(lightingEnabled);
-						})
-						.build(sceneData.meshes[meshIndex].renderable);
+						.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 				}
 			}
 		}
