@@ -25,3 +25,6 @@ steady), and no screenshot completes between 23 s and 44 s.
   `prepareRender`).
 - If compile-bound: warm the rig's programs off the render thread (the thread pool), or share the tree's own lit
   programs with the rig (same material, same layers), before its first render.
+- Cheaper still (hang diagnosis, verified by reading): record ONLY the AmbientPass in a bake target. The light passes
+  write nothing the atlas copies (the atlas takes colour/normal/albedo from the ambient pass), so the rig's CSM pass,
+  its cloud-shadow reads and most of its program variants are pure cost there.
