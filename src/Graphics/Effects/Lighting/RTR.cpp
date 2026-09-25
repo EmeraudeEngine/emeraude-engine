@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -465,6 +466,7 @@ float specularLobeVisibility (vec3 origin, vec3 mirrorDir, float coneTan, float 
 	return visibility / float(SpecularOcclusionSamples);
 }
 
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
 /* Compute direct lighting at the reflection hit point (Lambert diffuse over all scene lights).
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit point
  * received the light straight through walls — shadows simply did not exist INSIDE the
@@ -504,20 +506,9 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 			L = toLight / max(dist, 0.0001);
 			shadowDistance = dist;
 
-			/* Distance attenuation with radius falloff — the RASTER curve, verbatim:
-			 * `max(1 - dot(d/r, d/r), 0)` (LightGenerator.PBR.cpp). The squared-falloff form
-			 * written here, `clamp(1 - d/r, 0, 1)²`, is a DIFFERENT curve: at half the radius it
-			 * returns 0.25 where the raster returns 0.75, so a reflected surface was lit by a
-			 * third of the light the rendered one received at mid-range and the two images
-			 * diverged with distance. A light with no radius is not attenuated at all in the
-			 * raster, so it is not attenuated here either. */
-			float radius = posRadius.w;
-
-			if (radius > 0.0)
-			{
-				float distanceRatio = dist / radius;
-				attenuation = max(1.0 - distanceRatio * distanceRatio, 0.0);
-			}
+			/* The photometric falloff shared with the raster light pass: windowed inverse square
+			 * (Graphics/Effects/Shared/LightFalloffGLSL.hpp, restored 2026-09-25 — the lanes run ONE curve). */
+			attenuation = emLightFalloff(dist, posRadius.w);
 
 			/* Spot light cone. */
 			if (type > 1.5)

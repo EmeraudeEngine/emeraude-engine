@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 
 /* Local inclusions. */
 #include "Graphics/IrradianceProbeVolume.hpp"
@@ -346,6 +347,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
 /* Compute direct lighting at hit point (Lambert diffuse over all scene lights).
  * lightCount is the frame's RT light count (skyParams.w of the frame block, Renderer::rtLightCount()), capped at 16.
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit
@@ -383,17 +385,9 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 			L = toLight / max(dist, 0.0001);
 			shadowDistance = dist;
 
-			/* The RASTER curve, verbatim: `max(1 - dot(d/r, d/r), 0)` (LightGenerator.PBR.cpp),
-			 * and no attenuation at all without a radius. `clamp(1 - d/r, 0, 1)²` is a different
-			 * curve (0.25 against 0.75 at half the radius) and made the traced bounce disagree
-			 * with the direct lighting it is supposed to extend. Same fix in RTR, 2026-09-13. */
-			float radius = posRadius.w;
-
-			if (radius > 0.0)
-			{
-				float distanceRatio = dist / radius;
-				attenuation = max(1.0 - distanceRatio * distanceRatio, 0.0);
-			}
+			/* The photometric falloff shared with the raster light pass: windowed inverse square
+			 * (Graphics/Effects/Shared/LightFalloffGLSL.hpp, restored 2026-09-25 — the lanes run ONE curve). */
+			attenuation = emLightFalloff(dist, posRadius.w);
 
 			/* Spot light cone. */
 			if (type > 1.5)

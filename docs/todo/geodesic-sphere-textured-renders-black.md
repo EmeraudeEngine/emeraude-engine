@@ -36,6 +36,17 @@ defect sits in the engine's **textured path on this geometry** — what differs 
 spheres from the engine's point of view is vertex/triangle count (2619/5120 vs ~50/32), the
 resource key, and the construction mode the shape came from (`Triangles` vs `TriangleStrip`).
 
+## Second occurrence — `liminal`'s sculpture (2026-09-25)
+
+The central sculpture (`geodesicSphere(2.5F, 4)`, material `Grounds/MarbleOctagon`, textured) rendered black under
+the 16 fill lamps that replaced the hall lights (restored inverse square): pinned exposure f/8 · 1/30 s · ISO 100,
+pose `setPosition(0, 0, 9)` / `lookAt(0, 2, 0)`, sphere crop mean (8.8, 11.8, 28.6), **27.6 % pure-zero pixels**,
+against (148.8, 166.3, 215.8) in the old-law build — and the WHOLE frame fell to 0.54 of the old one (floor, walls,
+ceiling), not only the sphere. At ISO 3200 the sphere was saturated white, no zero pixel. Replaced by a 64 × 32 UV
+sphere (same material, same place, owner request): the frame came back to **1.00** (0.93-1.10 per region). ⚠️ So
+this defect may darken far more than the sphere itself — check a frame-wide level before blaming the lights.
+The same geodesic sculpture under the lost falloff and six lights looked right.
+
 ## What remains
 
 - [ ] **Albedo-texture-only A/B** (a material with an albedo texture and NO normal/height map) on

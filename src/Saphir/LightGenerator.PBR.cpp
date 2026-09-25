@@ -33,6 +33,7 @@
 #include "Declaration/Sampler.hpp"
 #include "Generator/Abstract.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 
 namespace EmEn::Saphir
 {
@@ -438,20 +439,25 @@ namespace EmEn::Saphir
 
 		Code{fragmentShader} << "float " << LightFactor << " = 1.0;" << Line::End;
 
-		/* NOTE: Check the radius influence. */
+		/* NOTE: The photometric falloff [Point+Spot]: the windowed inverse square SHARED with RTGI, RTR and the probes
+		 * (Graphics/Effects/Shared/LightFalloffGLSL.hpp) — `I / d²` lux inside the radius, zero at it. ⚠️ It was
+		 * `max(1 - (d/r)², 0)` here from 2026-08-12 (1c1d94ba deleted the inverse square) to 2026-09-25: a candela was
+		 * not a physical quantity and the radius was the dimmer. */
 		if ( lightType != LightType::Directional )
 		{
-			fragmentShader.addComment("Compute the radius influence over the light factor [Point+Spot].");
+			fragmentShader.addComment("The photometric falloff over the light factor [Point+Spot]: windowed inverse square.");
 
 			const auto lightRadiusVar = this->lightRadius();
 
-			Code{fragmentShader} <<
-				"if ( " << lightRadiusVar << " > 0.0 ) " << Line::End <<
-				'{' << Line::End <<
-				"	const vec3 DR = abs(" << LightGenerator::variable(Distance) << ") / " << lightRadiusVar << ';' << Line::Blank <<
+			Declaration::Function falloff{"emLightFalloff", GLSL::Float};
+			falloff.addInParameter(GLSL::Float, "lightDistance");
+			falloff.addInParameter(GLSL::Float, "lightRadius");
 
-				"	" << LightFactor << " *= max(1.0 - dot(DR, DR), 0.0);" << Line::End <<
-				'}' << Line::End;
+			Code{falloff, Location::Output} << EMEN_LIGHT_FALLOFF_BODY_GLSL;
+
+			fragmentShader.declare(falloff);
+
+			Code{fragmentShader} << LightFactor << " *= emLightFalloff(length(" << LightGenerator::variable(Distance) << "), " << lightRadiusVar << ");" << Line::End;
 
 			if ( m_discardUnlitFragment )
 			{

@@ -29,6 +29,7 @@
 /* The shared GLSL rules this volume's own passes splice. */
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -154,6 +155,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
 /* Direct IRRADIANCE at a hit (no albedo): the RTGI bounce shading, light for light. Only the
  * lights that cast shadows in the raster get a shadow ray — the others shine through geometry on
  * screen and the cached light must match the image. */
@@ -187,16 +189,9 @@ vec3 computeDirectIrradiance (vec3 hitPos, vec3 hitNormal)
 			L = toLight / max(dist, 0.0001);
 			shadowDistance = dist;
 
-			/* The RASTER curve, verbatim: `max(1 - dot(d/r, d/r), 0)` (LightGenerator.PBR.cpp),
-			 * and no attenuation at all without a radius. The cache feeds RTGI and RTR, so it
-			 * must integrate the same lights they do. Same fix in both, 2026-09-13. */
-			float radius = posRadius.w;
-
-			if (radius > 0.0)
-			{
-				float distanceRatio = dist / radius;
-				attenuation = max(1.0 - distanceRatio * distanceRatio, 0.0);
-			}
+			/* The photometric falloff shared with the raster light pass: windowed inverse square
+			 * (Graphics/Effects/Shared/LightFalloffGLSL.hpp, restored 2026-09-25 — the cache integrates the same lights as RTGI and RTR). */
+			attenuation = emLightFalloff(dist, posRadius.w);
 
 			if (type > 1.5)
 			{

@@ -203,10 +203,8 @@ namespace EmEn::Scenes::Component
 			 * take the unit content is actually authored in — `DirectionalLight::setIlluminance()`
 			 * (lux) and `PointLight`/`SpotLight::setLuminousPower()` (lumens, as a bulb is sold) —
 			 * and convert through `Graphics::Photometry`.
-			 * @warning ⚠️ A photometric value is only meaningful with a PHYSICAL (inverse-square)
-			 * attenuation. The point/spot falloff is still the radius-bounded artistic
-			 * `max(1 - (d/r)², 0)`, so these units are currently PROPORTIONAL, not absolute — engine item
-			 * `docs/todo/point-spot-falloff-lost-inverse-square.md`.
+			 * @note A point or spot light falls off as a windowed inverse square (one helper for every lane,
+			 * `Graphics/Effects/Shared/LightFalloffGLSL.hpp`), so a candela is absolute: `I / d²` lux at `d`.
 			 * @param intensity The photometric intensity (lux for directional, candela otherwise).
 			 * @return void
 			 */

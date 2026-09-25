@@ -1382,12 +1382,11 @@ Its keyframes are also the reference shape for a **detonation**, and the reason 
 change nobody sees coming:
 
 > [!CAUTION]
-> ⚠️⚠️ **FALSE since 2026-08-12** (`1c1d94ba` deleted the windowed inverse square): the only falloff generated
-> today is `max(1 - (d/r)^2, 0)`, so the radius DOES dim, and animating it does shape the light (engine item
-> `point-spot-falloff-lost-inverse-square`). The text below describes the lost contract.
-> **Do not shape a light effect with its RADIUS.** Under the windowed inverse square the radius is
-> `saturate(1 - (d/r)^4)^2`, a culling window that sits at 1.0 over almost the whole range; the
-> falloff is `1 / (d^2 + 1)`, distance only. Animating the radius — the natural move under the old
+> **Do not shape a light effect with its RADIUS.** Under the windowed inverse square
+> (`Graphics/Effects/Shared/LightFalloffGLSL.hpp`, the raster and traced lanes alike) the radius is
+> `saturate(1 - (d/r)^4)^2`, a culling window that sits near 1.0 over most of the range; the
+> falloff is `1 / max(d^2, 0.01^2)`, distance only. (It was lost from 2026-08-12 to 2026-09-25, when the radius
+> DID dim.) Animating the radius — the natural move under the old
 > `max(1 - (d/r)^2, 0)` falloff — brightens nothing and just pops the hard cut in and out. The
 > envelope belongs in the intensity. Full write-up in `docs/caution-points.md` § "The light RADIUS
 > is a culling bound, not a dimmer".

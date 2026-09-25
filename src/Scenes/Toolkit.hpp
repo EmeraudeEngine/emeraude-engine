@@ -749,7 +749,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param color The color of the light. Default, white.
-			 * @param radius The influence radius, in METRES. ⚠️ Written for an inverse-square falloff (a CULLING bound only); since 2026-08-12 the only falloff is max(1 - (d/r)², 0), so this radius DIMS the light at every distance (engine item point-spot-falloff-lost-inverse-square).
+			 * @param radius The influence radius, in METRES. With the physical inverse-square falloff this is only a CULLING bound: set it where the contribution becomes negligible (an 800 lm bulb yields 0.16 lx at 20 m).
 			 * @param intensity The LUMINOUS POWER, in lumens — what a bulb is sold as (household bulb 800, ceiling panel 4000, torch 100). Converted to candela internally.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
 			 * @return BuiltEntity< entity_t, Component::PointLight >
@@ -788,7 +788,7 @@ namespace EmEn::Scenes
 			 * @param innerAngle Define the inner border of the light cone where the light will be emitted at 100% inside. Default 35°.
 			 * @param outerAngle Define the outer border of the light cone where no more light will be emitted outside this range. Default 40°.
 			 * @param color The color of the light. White by default.
-			 * @param radius The influence radius, in METRES. ⚠️ Written for an inverse-square falloff (a CULLING bound only); since 2026-08-12 the only falloff is max(1 - (d/r)², 0), so this radius DIMS the light at every distance (engine item point-spot-falloff-lost-inverse-square).
+			 * @param radius The influence radius, in METRES. With the physical inverse-square falloff this is only a CULLING bound: set it where the contribution becomes negligible (an 800 lm bulb yields 0.16 lx at 20 m).
 			 * @param intensity The LUMINOUS POWER, in lumens — what a bulb is sold as (household bulb 800, ceiling panel 4000, torch 100). Converted to candela internally.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
 			 * @return BuiltEntity< entity_t, Component::SpotLight >

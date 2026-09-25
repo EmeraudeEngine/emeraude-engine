@@ -1603,8 +1603,83 @@ Traps met on the way:
   more lights sees only the first 16 in its GI, as before).
 - **RTGI's bounce hits add no flat ambient** (RTR and the probes do): pre-existing, item
   `rtgi-bounce-hits-miss-flat-ambient`.
-- **Also found, NOT fixed (owner decision pending)**: point and spot lights have had no inverse-square falloff since
-  2026-08-12 (item `point-spot-falloff-lost-inverse-square`).
+- **Also found, fixed as a lot of its own the same day**: point and spot lights had had no inverse-square falloff
+  since 2026-08-12 — § *Fixed: point and spot lights had NO inverse square for six weeks*.
+
+### Fixed: point and spot lights had NO inverse square for six weeks (2026-08-12 → 2026-09-25)
+
+> [!CAUTION]
+> **Every lane agreed, and every lane was wrong.** From `1c1d94ba` (2026-08-12, "the Blinn-Phong machinery is
+> gone") to 2026-09-25, a point or spot light fell off as `max(1 - (d/r)², 0)` — no `1/d²` anywhere. That commit
+> deleted `Saphir/LightGenerator.PerFragment.cpp`, the generator of the windowed inverse square of 2026-07-26, and
+> the PBR light pass it left behind carried only the radius curve. On 2026-09-13 RTGI, RTR and the probes were
+> "fixed" to copy the raster curve verbatim, because the traced bounce disagreed with the direct lighting — which
+> made all four lanes consistent AND wrong. Found by the light-colour audit of 2026-09-25, reading the generated
+> shader code: nothing on screen looked wrong, every demo having been tuned against the law it had.
+
+What it cost: a candela meant nothing (a light delivered about its full intensity at any distance well inside its
+radius), the radius was the dimmer, and every point/spot light tuned since then compensated for it. The
+photometric contract of `Graphics::Photometry` — lumens as a bulb is sold, `I / d²` lux, a derived culling radius
+of 1 lx — was void for every punctual light.
+
+**The fix: ONE helper, `Graphics/Effects/Shared/LightFalloffGLSL.hpp`**, spliced into the raster light pass
+(Saphir `LightGenerator.PBR.cpp`, `EMEN_LIGHT_FALLOFF_BODY_GLSL`) and into RTGI, RTR and
+`IrradianceProbeVolume` (`EMEN_LIGHT_FALLOFF_GLSL`), so the lanes cannot drift apart again:
+
+```glsl
+float emLightFalloff (float d, float r) /* saturate(1 - (d/r)^4)^2 / max(d^2, 0.01^2); r <= 0 = inverse square alone */
+```
+
+⚠️ **Not the July version**: it used `1 / (d² + 1)`. Unreal's `+1` is in CENTIMETRES² (its units); in metres it
+halves the illuminance at 1 m and biases everything a camera frames. The helper clamps at 1 cm instead (Frostbite,
+Lagarde & de Rousiers, SIGGRAPH 2014). ⚠️ A light with no radius is now the inverse square alone, unbounded; it
+used to be NO attenuation at all.
+
+**The re-tune (owner decision: keep the looks).** Every point/spot light of projet-alpha's demos was re-powered so
+it delivers, at its SUBJECT, the illuminance it delivered before: `P_new = P_old × (1 - x²) · d² / (1 - x⁴)²`, with
+`d` the light-to-subject distance and `x = d/r` — the ratio of the two laws at `d`. The subject is named in a
+comment at each light (the pin-ups, a room's faces, a spot's target; for `normal-map-debug`, the mean over its quad,
+integrated). The actors' lumens (`Fire`, the flashlight, `Marble`, `Drone`) were authored under the inverse square on
+2026-07-28 and were NOT touched: they are physical again, so a scene lit by actors got darker at a distance, as it
+should. Measured against a build of the old law, same pose, pinned exposure, display luma (0-255):
+
+| Demo | Subject | Old → new |
+|---|---|---|
+| simple-room | floor, walls | floor 212.8 → 212.8 (red channel), walls 0.84-0.92 |
+| sprite | the two pin-ups | 96.3 → 89.5 and 96.4 → 90.7 (0.93-0.94) |
+| light-and-shadow-debug | the object cluster + floor | 0.97-1.03; the floor near the spot +5 to +11 % |
+| global-illumination | the lit cell's walls | 1.00-1.06; the corridor beyond it 0.33-0.37 |
+| global-illumination, traced lane | walls vs the mirror column (RTR) | walls 0.59-0.67, mirror 0.76: the lanes moved together |
+| normal-map-debug | the quad (mean) | 0.89 — the illuminance mean is kept, the tone curve compresses the brighter centre |
+| citadel | the gate, the courtyard behind it | 0.89-1.02; the lintel under the gate torch 1.2-1.4 |
+| game-logic | the poussins (demo spots) | 0.97-1.04; the ground lit by the `Fire` ACTOR 0.12-0.19 (owner: stays physical) |
+| liminal, fill grid | the three halls | north 0.94-1.16, central 0.93-1.10, south 0.76-1.40 |
+| basic-scenery, fills | obelisks, foreground ground, palm belt | 0.97, 0.55, ~0.06 — see the flying lights below |
+
+**A lamp that lit a whole hall evenly cannot keep that look from one point.** Tuned on its nearest subject,
+`Liminal`'s far walls and columns fell to ~10 % and `basic-scenery`'s obelisks to 2-4 %. Those scene fillers were
+replaced by fitted fill lamps (owner decision): non-negative least squares on the former illuminance field, sampled
+over the surfaces and grouped (floor, ceiling, walls, columns, per hall), so each group keeps its mean. A per-sample
+relative fit does NOT work: the ceiling 3 m above a lamp is a hot spot that no power can match, and samples the old
+lamps never reached (beyond their radius) veto any light. ⚠️ `basic-scenery`'s four flying lights (1 000 000 lm,
+radius 500 m, now 64 000 000 lm tuned on the ground 8 m under them) flooded everything within 500 m under the lost
+law — the palm belt and most of the clearing's level came from them whenever one flew within range — and a moving
+light cannot have static fills: under the inverse square each lights a pool of ~20-30 m. That residual is open
+(projet-alpha item `basic-scenery-flying-lights-lost-flood`).
+
+⚠️ The powers this gives are NOT physical references — the former looks were floodlights (`basic-scenery`'s flying
+lights put ~80 000 lx on the ground under them, full sunlight, now 64 000 000 lm each). Physical values live in the
+actors and in imported assets.
+
+⚠️⚠️ **Two lanes that agree prove nothing about the law.** The 2026-09-13 fix compared RTGI with the raster and
+made them agree; neither was compared with `I / d²`. Check a falloff against the physics — the illuminance at
+two distances from a known candela — never only against the other lane.
+
+⚠️ **The measurement needs a build of the OLD law**, not a memory of it: the reference was the committed engine
+(`git archive HEAD`) built in a scratch tree next to the working one. A pinned exposure is mandatory (the
+auto-exposure absorbs a uniform change), the camera pose must be re-applied just before the capture (a physical
+player drifts, and a moved mouse turns it), and an animated scene (the fire sprites, `basic-scenery`'s flying
+lights, `normal-map-debug`'s tint) is compared by masked regions of the subject, never by the whole frame.
 
 ### Fixed: lights added to a DISABLED light set lit nothing, and only an Info line said so (Sep 2026)
 
@@ -1626,10 +1701,10 @@ never does it for you.
 
 ### The light RADIUS is a culling bound, not a dimmer — and an "artistic" emissive is 1 nit (Aug 2026)
 
-> ⚠️⚠️ **The radius half of this section is FALSE since 2026-08-12**: `1c1d94ba` deleted the windowed inverse
-> square it describes, and the only falloff generated today is `max(1 - (d/r)², 0)` — the radius IS the dimmer, and
-> the derived culling radius of an asset light (below) is the distance at which it reaches ZERO, not 1 lx. Engine
-> item `point-spot-falloff-lost-inverse-square`. The emissive half stands.
+> ⚠️ **The radius half of this section was FALSE from 2026-08-12 to 2026-09-25**: `1c1d94ba` had deleted the
+> windowed inverse square it describes. It holds again since the falloff was restored — ONE helper,
+> `Graphics/Effects/Shared/LightFalloffGLSL.hpp`, with `1 / max(d², 0.01²)` in place of the `1 / (d² + 1)` below
+> (§ *Fixed: point and spot lights had NO inverse square for six weeks*).
 
 > [!CAUTION]
 > **Two independent consequences of the photometric migration, both of which make things
@@ -1641,12 +1716,13 @@ never does it for you.
 it was the natural way to animate a flash or a dying fire. The photometric falloff is
 
 ```glsl
-radiusWindow = clamp(1 - (d/r)^4, 0, 1)
-lightFactor *= (radiusWindow * radiusWindow) / (d * d + 1.0)
+/* emLightFalloff(d, r), Graphics/Effects/Shared/LightFalloffGLSL.hpp — the raster AND the traced lanes. */
+window = clamp(1 - (d/r)^4, 0, 1)
+lightFactor *= (window * window) / max(d * d, 1.0e-4)
 ```
 
-The window sits at **1.0 over almost the entire range** and only bites near `d == r`; the whole
-falloff is carried by `1 / (d^2 + 1)`, which depends on the distance alone. So the radius is now a
+The window sits **near 1.0 over most of the range** (0.88 at half the radius) and only bites near `d == r`; the
+whole falloff is carried by `1 / d²`, which depends on the distance alone. So the radius is now a
 **culling bound**: set it where the contribution stops mattering and leave it there. An effect that
 used to breathe by scaling its radius now either does nothing visible or pops its hard edge in and
 out. **Move the envelope to the intensity** — see `EffectsToolkit::FX::createFlashEffect()`, whose
@@ -1718,9 +1794,8 @@ zero-radius light was therefore dropped from **every draw of the scene**.
    `Photometry::CullingIlluminance` (1 lux). Without this half, half one turns every rangeless asset
    light into an unbounded one: bound to every draw, one light pass each. **USD declares no range on
    any light type**, so this is the branch every USD fixture takes — 3751 cd gives ~61 m, against a
-   lobby some 20 m across. ⚠️ Premised on an inverse square, gone since 2026-08-12: under the only falloff
-   left, `max(1 - (d/r)², 0)`, this derived radius is where the light reaches ZERO, and inside it the fixture
-   keeps most of its candela (item `point-spot-falloff-lost-inverse-square`).
+   lobby some 20 m across. (From 2026-08-12 to 2026-09-25, with the inverse square lost, this radius was where
+   the fixture reached ZERO while keeping most of its candela inside it; the premise holds again.)
 
 ⚠️ **Why 1 lux**: it is far below anything an interior scene grades against (a lit room reads
 200-500 lx), so the cut cannot produce a visible boundary, while still bounding reach to something the

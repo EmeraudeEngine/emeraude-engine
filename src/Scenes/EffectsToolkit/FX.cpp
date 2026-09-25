@@ -49,14 +49,11 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 				/* INTENSITY — the detonation envelope, and the ONLY thing that shapes the
 				 * flash in time.
 				 *
-				 * ⚠️⚠️ FALSE since 2026-08-12 (only `max(1 - (d/r)^2, 0)` is generated today, so the radius does
-				 * dim — engine item point-spot-falloff-lost-inverse-square); the rest of this note describes the
-				 * lost contract.
 				 * ⚠️ Animating the RADIUS used to be the way to do this, and it no longer
-				 * works: under the photometric windowed inverse square the radius is
-				 * `saturate(1 - (d/r)^4)^2`, a culling WINDOW that sits at 1.0 over almost the
-				 * whole range and only bites near d == r. The falloff is carried by
-				 * `1 / (d^2 + 1)`, which depends on the distance alone. Growing the radius
+				 * works: under the photometric windowed inverse square (LightFalloffGLSL.hpp) the radius is
+				 * `saturate(1 - (d/r)^4)^2`, a culling WINDOW that sits near 1.0 over most of the
+				 * range and only bites near d == r. The falloff is carried by
+				 * `1 / max(d^2, 0.01^2)`, which depends on the distance alone. Growing the radius
 				 * therefore does not brighten anything — it just moves the hard cut outwards.
 				 *
 				 * Shape: a near-instant peak followed by a fast decay, which is what a
