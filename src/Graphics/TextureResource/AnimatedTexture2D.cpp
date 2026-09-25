@@ -27,10 +27,14 @@
 #include "AnimatedTexture2D.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <ranges>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Resources/Container.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
@@ -73,15 +77,26 @@ namespace EmEn::Graphics::TextureResource
 			}
 		}
 
+		/* ⚠️⚠️ A FULL mip chain, as Texture2D builds (2026-09-25): created with a single level, the animated water
+		 * normal map of `water-world`/`terrain` was sampled at full resolution at every distance — the sea shimmered
+		 * as noise past a few dozen metres, worse once the owner tiled it once per metre. The upload blits the chain
+		 * of EVERY layer (ImageTransferOperation), which is why the image is also a transfer source. */
+		auto & settings = renderer.primaryServices().settings();
+
+		const auto mipLevels = std::min(
+			Image::getMIPLevels(m_localData->width(), m_localData->height()),
+			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
+		);
+
 		/* Create a Vulkan image. */
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
 			Image::getFormat< uint8_t >(m_localData->data(0).colorCount(), this->isSRGB()),
 			VkExtent3D{m_localData->width(), m_localData->height(), 1},
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			0,
-			1,
+			mipLevels,
 			m_localData->frameCount()
 		);
 		m_image->setIdentifier(ClassId, this->name(), "Image");
@@ -120,7 +135,6 @@ namespace EmEn::Graphics::TextureResource
 		 * `sampler2D[]` descriptor can sample a single frame at a time. The main
 		 * imageView (above) is a 2D_ARRAY view used by the rasterization path. */
 		const auto layerCount = m_image->createInfo().arrayLayers;
-		const auto mipLevels = m_image->createInfo().mipLevels;
 		m_frame2DViews.reserve(layerCount);
 
 		for ( uint32_t layer = 0; layer < layerCount; ++layer )

@@ -2956,9 +2956,12 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Beer's law reads the WORLD thickness (volumeThicknessWorldExpression()), on every transmission
-		 * path and both quality tiers: the model scale must reach the fragment stage whenever the
-		 * material transmits. The water column of depth-based opacity is already in metres. */
-		if ( this->declaresTransmission() && !m_isUsingDepthBasedOpacity && !vertexShader.requestSynthesizeInstruction(ShaderVariable::ModelScale) )
+		 * path and both quality tiers, and the grab-pass refraction scales its ray by the model scale
+		 * (gpRayScale): the model scale must reach the fragment stage whenever the material transmits.
+		 * ⚠️ Even with depth-based opacity: its Beer term reads the water column (already in metres), but
+		 * its refraction does not — excluding it (2026-09-24) broke the ocean of `water-world` and
+		 * `terrain` ('svModelScale' : undeclared identifier in the ambient pass). */
+		if ( this->declaresTransmission() && !vertexShader.requestSynthesizeInstruction(ShaderVariable::ModelScale) )
 		{
 			TraceError{ClassId} << "Unable to synthesize the model scale for the transmission of PBR material '" << this->name() << "' !";
 

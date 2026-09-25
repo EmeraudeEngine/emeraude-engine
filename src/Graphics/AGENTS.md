@@ -218,6 +218,15 @@ The `Renderer` maintains global caches for performance optimization:
 > a capture. ⚠️ Do not restore the old rule: putting distinguishing state in the NAME is now
 > pointless, and a name that varies per material fragments nothing but the debug labels.
 
+### Every sampled texture has a mip chain — the animated ones too (Sep 2026)
+
+`Texture2D` builds `min(Image::getMIPLevels(w, h), Core/Graphics/Texture/MipMappingLevels)` levels, and since
+2026-09-25 so does `AnimatedTexture2D` (one chain per frame layer; the upload blits every layer's,
+`ImageTransferOperation`). It had ONE level: the ocean's animated normal map was sampled at full resolution at
+every distance and the sea read as noise past a few dozen metres (owner: "the filtering on the water is
+disgusting"). A good sampler (linear, anisotropy 8) cannot hide a missing chain. ⚠️ `CubemapMovieResource`
+is unchecked.
+
 ### Texture addressing comes from the ASSET, not from a global default
 
 `TextureResource::Abstract` carries a `WrapMode` per axis (`setWrapModes()`, defaults repeat/repeat

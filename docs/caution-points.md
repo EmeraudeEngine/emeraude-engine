@@ -18,6 +18,29 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### Fixed: the ocean stopped compiling — the model scale was requested for transmission EXCEPT depth-based opacity (Sep 2026)
+
+`'svModelScale' : undeclared identifier` in `RenderableInstanceAmbientPassFragmentShader` (the CEF Shader Debugger
+opened by itself on `terrain`): commit `2b7a0060` (Beer's law over the world thickness, 2026-09-24) moved the
+`ShaderVariable::ModelScale` request of the grab-pass path into a block that excluded depth-based opacity, because
+that Beer term reads the water column in metres. But the grab-pass REFRACTION scales its ray by the model scale
+(`gpRayScale`) either way — `water-world`'s ocean (transmission + depth-based opacity) was broken since.
+**Fix:** requested for every transmissive material. ⚠️ Verifying a shader-generation change on the demos one
+already has in mind is not verification: a material combination it did not think of breaks elsewhere.
+The erroneous GLSL is on stderr (`START OF ERRONEOUS GLSL`): a log that redirects stderr elsewhere hides it.
+
+### Fixed: an animated texture had ONE mip level — the sea was noise past a few dozen metres (Sep 2026)
+
+> **Symptom (owner, 2026-09-25):** "the filtering on the water is disgusting", then "is the mipmapping active on the
+> water?" — it was not.
+
+`AnimatedTexture2D::createTexture()` built its image with `mipLevels = 1`: the animated normal map of the ocean was
+sampled at full resolution at every distance (the sampler was right: linear, anisotropy 8, nothing to read), worse
+once `terrain` tiled it once per metre. **Fix:** the full chain, as `Texture2D` builds (`getMIPLevels()` capped by
+`Core/Graphics/Texture/MipMappingLevels`, plus `TRANSFER_SRC` for the blits); the upload already blits every layer's
+chain (`ImageTransferOperation`). 0 VUID. ⚠️ `CubemapMovieResource` (animated cubemaps) has not been checked.
+
+
 ### The UV transform table is INDEXED — the component picks a slot, it does not own one
 
 > **What it replaced (2026-09-14):** six fixed `vec4` pairs in the material UBO, one per component
