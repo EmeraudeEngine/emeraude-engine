@@ -1830,10 +1830,18 @@ the cause of the 104 GB above.
 > once, at its owning sector, against the inherited statics plus `forTouchedSector(aabb)` over the
 > sector's subtree (`Scene::accumulateStaticEntityCorrections()`).
 
-**Rendering is not concerned — and that is itself worth knowing.** `Scene.rendering.cpp` never
-queries the rendering octree: it iterates the entities and tests `distance > viewDistance ||
-!isVisibleTo(frustum)`. The rendering octree is built and maintained for nothing. Culling by
-octree sector remains an open optimization (see "Performance Notes").
+**The render lists QUERY the rendering octree since 2026-09-25** (owner: "use the octree").
+`Scene::gatherRenderingCandidates(acceptsBox, candidates)` walks it with a box test and collects the
+entities the volume may see — a sector is an `AACuboid`, and every entity is owned by the deepest sector
+that FULLY contains its render box, so a missed sector is skipped with its subtree. The raster list uses the
+frustum (the view range for a cubemap), the RT list a sphere of `TLASDistance`, the shadow lists the caster
+volume (the light's range for a cubemap); the entity-level tests then run BEFORE its components are visited.
+Collected under `m_renderingOctreeAccess`, processed after it — an entity's component lock is never taken
+inside the octree's. Entities the octree cannot file (outside its bounds) live in `m_renderingOctreeOverflow`,
+always walked; `rebuildRenderingOctree()` now transfers EVERY sector's elements (it transferred the root's,
+i.e. nearly nothing). Before, the lists walked every entity and component and tested the volume last:
+`terrain`'s 12 776 forest cells cost ~90 ms of CPU per frame (9 FPS for 32 ms of GPU), 22-23 ms after.
+`docs/caution-points.md` § *The render lists walked EVERY entity*.
 
 > [!CAUTION]
 > `StaticEntity::isVisibleTo()` tests the **collision model** AABB, or a bare point when there is

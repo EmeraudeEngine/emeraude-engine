@@ -216,6 +216,7 @@ namespace EmEn::Scenes
 			const std::scoped_lock lock{m_renderingOctreeAccess};
 
 			m_renderingOctree->erase(staticEntity, false);
+			m_renderingOctreeOverflow.erase(staticEntity);
 		}
 
 		if ( m_physicsOctree != nullptr )
@@ -385,7 +386,16 @@ namespace EmEn::Scenes
 		{
 			const std::scoped_lock lockGuard{m_renderingOctreeAccess};
 
-			m_renderingOctree->updateOrInsert(entity);
+			/* An entity outside the octree's bounds is still drawn: the render lists query the octree first
+			 * (gatherRenderingCandidates()), and walk the overflow as it is. */
+			if ( m_renderingOctree->updateOrInsert(entity) )
+			{
+				m_renderingOctreeOverflow.erase(entity);
+			}
+			else
+			{
+				m_renderingOctreeOverflow.insert(entity);
+			}
 		}
 
 		/* Check the entity in the physics octree. */
@@ -443,6 +453,7 @@ namespace EmEn::Scenes
 					const std::scoped_lock lock{m_renderingOctreeAccess};
 
 					m_renderingOctree->erase(node, false);
+					m_renderingOctreeOverflow.erase(node);
 				}
 
 				if ( m_physicsOctree != nullptr )

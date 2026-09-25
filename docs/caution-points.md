@@ -2237,6 +2237,39 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### Fixed: the render lists walked EVERY entity and tested the volume last — 9 FPS for 32 ms of GPU (Sep 2026)
+
+> **Symptom (owner, 2026-09-25):** "a huge perf drop" once `terrain` planted 750 000 trees over its 16 km map
+> (12 776 cells of 62.5 m, ~75 000 instanced visuals).
+
+**Measured** (validation OFF, GPU profiler): frame 121-141 ms, GPU 32 ms; the render thread at 56 % of a core.
+Stack sampling (`gdb -p` × 16, perf is closed to users here — `perf_event_paranoid = 3`): 11 of 16 samples in
+`populateShadowCastingRenderList()` (4 cascades), 4 in `populateRenderLists()`. Both walked every static entity and
+node, locked its components (`forEachComponent`), tested each visual — and only then the distance, the volume, the
+cascade receivers. The scene's rendering octree was maintained on every move and content change, and queried by
+nothing.
+
+**Fix (owner: "use the octree"):** `Scene::gatherRenderingCandidates()` walks the rendering octree with the
+volume's box test — every entity is owned by the deepest sector that FULLY contains its render box, so a missed
+sector is skipped with its subtree — and the lists process only those candidates: the frustum (the view range for
+a cubemap) for the raster, a sphere of `TLASDistance` for the RT list, the caster volume (the light's range for a
+cubemap) for the shadows. The entity-level tests now run BEFORE the components are visited. Candidates are
+collected under the octree lock and processed after it (an entity's component lock is never taken inside the
+octree's). Entities the octree cannot file (outside its bounds) live in `m_renderingOctreeOverflow`, always walked.
+After: **22-23 ms per frame, GPU-bound** (was 123-141), 0 VUID with the validation ON.
+
+**Also fixed on the way:** `Scene::rebuildRenderingOctree()` transferred the ROOT's elements only — since elements
+live at their deepest sector, a rebuild lost nearly all of them, which the octree-driven lists would have turned into
+a scene vanishing from the screen. It now collects every sector's.
+
+**Rules.**
+- A visual's readiness check prepares it (programs, pipelines): with the culling, an entity out of view is prepared
+  when it first enters it. Pipelines are shared per renderable, so the cost is paid once per kind.
+- ⚠️ The octree's box test is conservative only: the per-entity `isVisibleTo()` stays.
+- ⚠️ `OctreeSector`'s doc still says `isColliding()` takes a `Graphics::Frustum`: it does not (Base cannot see
+  Graphics); a sector IS an `AACuboid`, test it with `Frustum::isSeeing(AACuboid)`.
+
+
 ### Fixed: a post-process occupant filed AFTER the stack's creation was never created (Sep 2026)
 
 **Symptom:** the scene-driven cloud pass was listed by `getStatus()` as `Clouds: VolumetricCloudsEffect`

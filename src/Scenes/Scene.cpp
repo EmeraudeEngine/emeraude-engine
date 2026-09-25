@@ -152,6 +152,7 @@ namespace EmEn::Scenes
 			//this->destroyOctrees();
 			m_physicsOctree = nullptr;
 			m_renderingOctree = nullptr;
+			m_renderingOctreeOverflow.clear();
 		}
 
 		/* From 'Managers deeply linked to the scene content' */
@@ -517,15 +518,50 @@ namespace EmEn::Scenes
 			m_renderingOctree->autoCollapseEnabled()
 		);
 
-		/* Transfer all elements from the previous oldOctree (only the root sector) to the new one. */
+		/* Transfer all elements from the previous octree to the new one.
+		 * ⚠️ EVERY sector's own elements, not the root's: an element lives in the deepest sector that contains it,
+		 * so the root owns only what straddles its first split — this transferred almost nothing, and the render
+		 * lists that query the octree would have lost every entity. What the new bounds cannot file joins the
+		 * overflow, which the render lists always walk. */
+		std::vector< std::shared_ptr< AbstractEntity > > elements;
+
 		if ( keepElements )
 		{
-			for ( const auto & element : m_renderingOctree->elements() )
-			{
-				if ( element->isRenderable() )
+			const auto collect = [&elements] (const OctreeSector< AbstractEntity, false > & sector, const auto & self) -> void {
+				for ( const auto & element : sector.elements() )
 				{
-					newOctree->insert(element);
+					elements.emplace_back(element);
 				}
+
+				if ( sector.isLeaf() )
+				{
+					return;
+				}
+
+				for ( const auto & subSector : sector.subSectors() )
+				{
+					if ( subSector != nullptr )
+					{
+						self(*subSector, self);
+					}
+				}
+			};
+
+			collect(*m_renderingOctree, collect);
+
+			for ( const auto & element : m_renderingOctreeOverflow )
+			{
+				elements.emplace_back(element);
+			}
+		}
+
+		m_renderingOctreeOverflow.clear();
+
+		for ( const auto & element : elements )
+		{
+			if ( element->isRenderable() && !newOctree->insert(element) )
+			{
+				m_renderingOctreeOverflow.insert(element);
 			}
 		}
 
@@ -910,6 +946,7 @@ namespace EmEn::Scenes
 			const std::scoped_lock lock{m_renderingOctreeAccess};
 
 			m_renderingOctree = nullptr;
+			m_renderingOctreeOverflow.clear();
 		}
 
 		if ( m_physicsOctree != nullptr )

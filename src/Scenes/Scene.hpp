@@ -2481,6 +2481,80 @@ namespace EmEn::Scenes
 			 */
 			void checkEntityLocationInOctrees (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
+			/**
+			 * @brief Collects the renderable entities a volume may see, from the rendering octree [RENDER THREAD].
+			 * @note ⚠️⚠️ THE OCTREE CULLS FIRST (2026-09-25, owner: "use the octree"): every entity is owned by the
+			 * deepest sector that FULLY contains its render box, so a sector the volume misses is skipped with its
+			 * whole subtree — nothing below it can be seen. The render lists used to walk EVERY entity, then every
+			 * component, and test the volume last: 12 776 forest cells × 4 cascades × their visuals cost `terrain`
+			 * ~90 ms of CPU per frame (9 FPS for 32 ms of GPU). The sector test is conservative only: the caller
+			 * still tests each entity. The entities outside the octree's bounds (m_renderingOctreeOverflow) are
+			 * always candidates.
+			 * @note Collects under m_renderingOctreeAccess, then returns: the caller walks the components with no
+			 * octree lock held (an entity's component lock is never taken inside the octree's).
+			 * @tparam accept_t (const Base::Math::Space3D::AACuboid< float > &) -> bool: may the volume see this box.
+			 * @param acceptsBox Whether the volume touches a sector's box.
+			 * @param candidates The output, cleared first.
+			 * @return void
+			 */
+			template< typename accept_t >
+			void
+			gatherRenderingCandidates (const accept_t & acceptsBox, std::vector< std::shared_ptr< AbstractEntity > > & candidates) const noexcept
+			{
+				candidates.clear();
+
+				const std::scoped_lock lock{m_renderingOctreeAccess};
+
+				if ( m_renderingOctree != nullptr )
+				{
+					Scene::walkRenderingSector(*m_renderingOctree, acceptsBox, candidates);
+				}
+
+				for ( const auto & entity : m_renderingOctreeOverflow )
+				{
+					candidates.emplace_back(entity);
+				}
+			}
+
+			/**
+			 * @brief Recursion of gatherRenderingCandidates().
+			 * @tparam accept_t See gatherRenderingCandidates().
+			 * @param sector A reference to the sector.
+			 * @param acceptsBox Whether the volume touches a sector's box.
+			 * @param candidates The output.
+			 * @return void
+			 */
+			template< typename accept_t >
+			static
+			void
+			walkRenderingSector (const OctreeSector< AbstractEntity, false > & sector, const accept_t & acceptsBox, std::vector< std::shared_ptr< AbstractEntity > > & candidates) noexcept
+			{
+				if ( !acceptsBox(static_cast< const Base::Math::Space3D::AACuboid< float > & >(sector)) )
+				{
+					return;
+				}
+
+				for ( const auto & entity : sector.elements() )
+				{
+					candidates.emplace_back(entity);
+				}
+
+				/* ⚠️ An empty sector does not prove an empty subtree (elements live at the deepest sector that
+				 * contains them): always descend. */
+				if ( sector.isLeaf() )
+				{
+					return;
+				}
+
+				for ( const auto & subSector : sector.subSectors() )
+				{
+					if ( subSector != nullptr )
+					{
+						Scene::walkRenderingSector(*subSector, acceptsBox, candidates);
+					}
+				}
+			}
+
 			/* ============================================================
 			 * [PRIVATE: RENDERING]
 			 * Render list population and GPU pipeline preparation.
@@ -2950,6 +3024,11 @@ namespace EmEn::Scenes
 
 			/** @brief Octree for rendering frustum culling. @note Uses shared_ptr due to enable_shared_from_this. */
 			std::shared_ptr< OctreeSector< AbstractEntity, false > > m_renderingOctree;
+			/** @brief The renderable entities the rendering octree could not file (outside its bounds): always
+			 * rendering candidates. Guarded by m_renderingOctreeAccess. */
+			mutable std::unordered_set< std::shared_ptr< AbstractEntity > > m_renderingOctreeOverflow;
+			/** @brief Scratch of the render lists' octree queries (render thread only). */
+			std::vector< std::shared_ptr< AbstractEntity > > m_renderingCandidates;
 			/** @brief Octree for physics broad-phase collision. @note Uses shared_ptr due to enable_shared_from_this. */
 			std::shared_ptr< OctreeSector< AbstractEntity, true > > m_physicsOctree;
 			/** @brief Visual components for background/terrain/water. @bug Should be refactored. */

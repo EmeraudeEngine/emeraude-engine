@@ -1277,114 +1277,96 @@ namespace EmEn::Scenes
 			this->insertIntoShadowCastingRenderList(renderableInstance, nullptr, 0.0F);
 		}
 
-		/* Sorting renderable objects from scene static entities. */
-		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
-
-			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+		/* One entity, static or node: the tests that depend on the ENTITY alone come first, before any of its
+		 * components is visited (and its component lock taken).
+		 * NOTE: A cubemap skips the volume test (its 6 faces cover all directions); a CSM skips the distance test
+		 * (see the note at the top) but culls to the cascade of this pass. */
+		const auto castFrom = [&] (const AbstractEntity & entity) noexcept {
+			/* Check whether the entity contains something to render. */
+			if ( !entity.isRenderable() )
 			{
-				/* Check whether the static entity contains something to render. */
-				if ( !staticEntity->isRenderable() )
+				return;
+			}
+
+			const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
+			const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+			if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !entity.isVisibleTo(casterVolume) ) )
+			{
+				return;
+			}
+
+			if ( missesCascadeReceivers(entity) )
+			{
+				return;
+			}
+
+			entity.forEachComponent([&] (const Component::Abstract & component) {
+				const auto renderableInstance = component.getRenderableInstance();
+
+				if ( renderableInstance == nullptr )
 				{
-					continue;
+					return;
 				}
 
-				const auto & worldCoordinates = staticEntity->getWorldCoordinatesStateForRendering(readStateIndex);
+				if ( this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
+				{
+					return;
+				}
 
-				staticEntity->forEachComponent([&] (const Component::Abstract & component) {
-					const auto renderableInstance = component.getRenderableInstance();
+				if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
+				{
+					return;
+				}
 
-					if ( renderableInstance == nullptr )
-					{
-						return;
-					}
+				this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
+			});
+		};
 
-					if ( this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
-					{
-						return;
-					}
-
-					/* Render-target distance check and caster-volume culling check.
-					 * NOTE: A cubemap skips the volume test (its 6 faces cover all directions); a CSM skips the
-					 * distance test (see the note at the top) but culls to the cascade of this pass. */
-					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
-
-					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(casterVolume) ) )
-					{
-						return;
-					}
-
-					if ( missesCascadeReceivers(*staticEntity) )
-					{
-						return;
-					}
-
-					if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
-					{
-						return;
-					}
-
-					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
-				});
-			}
-		}
-
-		/* Sorting renderable objects from the scene node tree. */
+		/* The entities: the rendering octree first, culled to the caster volume (the light's range for a cubemap). */
+		if ( m_renderingOctree != nullptr )
 		{
+			if ( renderTarget->isCubemap() )
+			{
+				const Space3D::Sphere< float > lightRange{viewDistance, cameraPosition};
+
+				this->gatherRenderingCandidates([&lightRange] (const Space3D::AACuboid< float > & box) {
+					return Space3D::isColliding(box, lightRange);
+				}, m_renderingCandidates);
+			}
+			else
+			{
+				this->gatherRenderingCandidates([&casterVolume] (const Space3D::AACuboid< float > & box) {
+					return casterVolume.isSeeing(box);
+				}, m_renderingCandidates);
+			}
+
+			for ( const auto & entity : m_renderingCandidates )
+			{
+				castFrom(*entity);
+			}
+
+			m_renderingCandidates.clear();
+		}
+		else
+		{
+			{
+				const std::scoped_lock lock{m_staticEntitiesAccess};
+
+				for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+				{
+					castFrom(*staticEntity);
+				}
+			}
+
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
 			const std::scoped_lock lock{m_sceneNodesAccess};
-
-
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
 			while ( crawler.fetchNextNode() )
 			{
-				const auto & currentNode = crawler.currentNode();
-
-				/* Check whether the scene node contains something to render. */
-				if ( !currentNode->isRenderable() )
-				{
-					continue;
-				}
-
-				const auto & worldCoordinates = currentNode->getWorldCoordinatesStateForRendering(readStateIndex);
-
-				currentNode->forEachComponent([&] (const Component::Abstract & component) {
-					const auto renderableInstance = component.getRenderableInstance();
-
-					if ( renderableInstance == nullptr )
-					{
-						return;
-					}
-
-					if ( this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
-					{
-						return;
-					}
-
-					/* Render-target distance check and caster-volume culling check.
-					 * NOTE: A cubemap skips the volume test (its 6 faces cover all directions); a CSM skips the
-					 * distance test (see the note at the top) but culls to the cascade of this pass. */
-					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
-
-					if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !currentNode->isVisibleTo(casterVolume) ) )
-					{
-						return;
-					}
-
-					if ( missesCascadeReceivers(*currentNode) )
-					{
-						return;
-					}
-
-					if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
-					{
-						return;
-					}
-
-					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
-				});
+				castFrom(*crawler.currentNode());
 			}
 		}
 
@@ -1641,92 +1623,169 @@ namespace EmEn::Scenes
 			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, cameraPosition, advanceModelHistory);
 		}
 
-		/* Sorting renderable objects from scene static entities. */
-		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
-
-			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+		/* The RT list: ONE batch per renderable. Per-sub-geometry materials are looked up by the RT trace shader via
+		 * materialIndices[geometryIndex] (multi-geometry BLAS). Distance-only culling, no frustum: a reflection or a
+		 * bounce reaches what the camera does not see. */
+		const auto traceFrom = [&] (const AbstractEntity & entity) noexcept {
+			if ( !entity.isRenderable() )
 			{
-				/* Check whether the static entity contains something to render. */
-				if ( !staticEntity->isRenderable() )
+				return;
+			}
+
+			const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
+			const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+			if ( distance > m_TLASDistance )
+			{
+				return;
+			}
+
+			entity.forEachComponent([&] (const Component::Abstract & component) {
+				const auto renderableInstance = component.getRenderableInstance();
+
+				if ( renderableInstance == nullptr )
 				{
-					continue;
+					return;
 				}
 
-				const auto & worldCoordinates = staticEntity->getWorldCoordinatesStateForRendering(readStateIndex);
+				if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
+				{
+					return;
+				}
 
-				staticEntity->forEachComponent([&] (const Component::Abstract & component) {
-					const auto renderableInstance = component.getRenderableInstance();
+				if ( renderableInstance->isRayTracingDisabled() || renderableInstance->isBakeOnly() || renderableInstance->isBeyondDrawDistance(distance) )
+				{
+					return;
+				}
 
-					if ( renderableInstance == nullptr )
+				const auto * renderable = renderableInstance->renderable();
+
+				if ( renderable == nullptr )
+				{
+					return;
+				}
+
+				const auto layerCount = renderable->layerCount();
+				bool RTVisible = false;
+
+				for ( uint32_t layer = 0; layer < layerCount; ++layer )
+				{
+					const auto * layerMaterial = renderable->material(layer);
+
+					if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
 					{
-						return;
+						RTVisible = true;
+
+						break;
 					}
+				}
 
-					if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
-					{
-						return;
-					}
+				if ( RTVisible )
+				{
+					const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
 
-					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+					RenderBatch::create(isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList, distance, renderableInstance, &worldCoordinates, 0);
+				}
+			});
+		};
 
-					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
-					 * looked up by the RT trace shader via materialIndices[geometryIndex]
-					 * (multi-geometry BLAS). Distance-only culling, no frustum. */
-					if ( RTEnabled && distance <= m_TLASDistance && !renderableInstance->isRayTracingDisabled() && !renderableInstance->isBakeOnly() && !renderableInstance->isBeyondDrawDistance(distance) )
-					{
-						const auto * renderable = renderableInstance->renderable();
-
-						if ( renderable != nullptr )
-						{
-							const auto layerCount = renderable->layerCount();
-							bool RTVisible = false;
-
-							for ( uint32_t layer = 0; layer < layerCount; ++layer )
-							{
-								const auto * layerMaterial = renderable->material(layer);
-
-								if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
-								{
-									RTVisible = true;
-
-									break;
-								}
-							}
-
-							if ( RTVisible )
-							{
-								const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-
-								RenderBatch::create(
-									isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList,
-									distance,
-									renderableInstance,
-									&worldCoordinates,
-									0
-								);
-							}
-						}
-					}
-
-					/* Raster list: frustum culling + distance check, then the instance's own draw range (mesh vs imposter). */
-					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(frustum) ) )
-					{
-						return;
-					}
-
-					if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
-					{
-						return;
-					}
-
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
-				});
+		/* The raster lists: distance and frustum culling of the ENTITY before any of its components is visited, then
+		 * the instance's own draw range (mesh vs imposter).
+		 * ⚠️ Sprites are culled like everything else since Aug 2026. They used to be exempt on the node branch only,
+		 * because their volume was the flat quad at Z=0, which ignores the billboard rotation done in the vertex
+		 * shader. SpriteResource now returns the SWEPT volume instead, which is rotation-invariant. */
+		const auto rasterFrom = [&] (const AbstractEntity & entity) noexcept {
+			if ( !entity.isRenderable() )
+			{
+				return;
 			}
-		}
 
-		/* Sorting renderable objects from the scene node tree. */
+			const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
+			const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+			if ( distance > viewDistance || ( !renderTarget->isCubemap() && !entity.isVisibleTo(frustum) ) )
+			{
+				return;
+			}
+
+			entity.forEachComponent([&] (const Component::Abstract & component) {
+				const auto renderableInstance = component.getRenderableInstance();
+
+				if ( renderableInstance == nullptr )
+				{
+					return;
+				}
+
+				if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
+				{
+					return;
+				}
+
+				if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
+				{
+					return;
+				}
+
+				this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
+			});
+		};
+
+		/* The entities: the rendering octree first — the frustum (the view range for a cubemap) for the raster, the
+		 * TLAS range for the RT list. */
+		if ( m_renderingOctree != nullptr )
 		{
+			if ( renderTarget->isCubemap() )
+			{
+				const Space3D::Sphere< float > viewRange{viewDistance, cameraPosition};
+
+				this->gatherRenderingCandidates([&viewRange] (const Space3D::AACuboid< float > & box) {
+					return Space3D::isColliding(box, viewRange);
+				}, m_renderingCandidates);
+			}
+			else
+			{
+				this->gatherRenderingCandidates([&frustum] (const Space3D::AACuboid< float > & box) {
+					return frustum.isSeeing(box);
+				}, m_renderingCandidates);
+			}
+
+			for ( const auto & entity : m_renderingCandidates )
+			{
+				rasterFrom(*entity);
+			}
+
+			if ( RTEnabled )
+			{
+				const Space3D::Sphere< float > traceRange{m_TLASDistance, cameraPosition};
+
+				this->gatherRenderingCandidates([&traceRange] (const Space3D::AACuboid< float > & box) {
+					return Space3D::isColliding(box, traceRange);
+				}, m_renderingCandidates);
+
+				for ( const auto & entity : m_renderingCandidates )
+				{
+					traceFrom(*entity);
+				}
+			}
+
+			m_renderingCandidates.clear();
+		}
+		else
+		{
+			{
+				const std::scoped_lock lock{m_staticEntitiesAccess};
+
+				for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+				{
+					if ( RTEnabled )
+					{
+						traceFrom(*staticEntity);
+					}
+
+					rasterFrom(*staticEntity);
+				}
+			}
+
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
 			const std::scoped_lock lock{m_sceneNodesAccess};
 
@@ -1734,87 +1793,12 @@ namespace EmEn::Scenes
 
 			while ( crawler.fetchNextNode() )
 			{
-				const auto & currentNode = crawler.currentNode();
-
-				/* Check whether the scene node contains something to render. */
-				if ( !currentNode->isRenderable() )
+				if ( RTEnabled )
 				{
-					continue;
+					traceFrom(*crawler.currentNode());
 				}
 
-				const auto & worldCoordinates = currentNode->getWorldCoordinatesStateForRendering(readStateIndex);
-
-				currentNode->forEachComponent([&] (const Component::Abstract & component) {
-					const auto renderableInstance = component.getRenderableInstance();
-
-					if ( renderableInstance == nullptr )
-					{
-						return;
-					}
-
-					if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
-					{
-						return;
-					}
-
-					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
-
-					/* RT list: ONE batch per renderable. Per-sub-geometry materials are
-					 * looked up by the RT trace shader via materialIndices[geometryIndex]. */
-					if ( RTEnabled && distance <= m_TLASDistance && !renderableInstance->isRayTracingDisabled() && !renderableInstance->isBakeOnly() && !renderableInstance->isBeyondDrawDistance(distance) )
-					{
-						const auto * renderable = renderableInstance->renderable();
-
-						if ( renderable != nullptr )
-						{
-							const auto layerCount = renderable->layerCount();
-							bool rtVisible = false;
-
-							for ( uint32_t layer = 0; layer < layerCount; ++layer )
-							{
-								const auto * layerMaterial = renderable->material(layer);
-
-								if ( layerMaterial != nullptr && (layerMaterial->isOpaque() || layerMaterial->isAlphaTest()) )
-								{
-									rtVisible = true;
-									break;
-								}
-							}
-
-							if ( rtVisible )
-							{
-								const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
-								auto & rtList = isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList;
-								RenderBatch::create(rtList, distance, renderableInstance, &worldCoordinates, 0);
-							}
-						}
-					}
-
-					/* Raster list: frustum culling + distance check.
-					 * ⚠️ Sprites are culled like everything else since Aug 2026. They used to be exempt
-					 * here — and ONLY here, never on the static-entity branch — because their volume
-					 * was the flat quad at Z=0, which ignores the billboard rotation done in the
-					 * vertex shader. SpriteResource now returns the SWEPT volume instead, which is
-					 * rotation-invariant, so the exemption became both redundant and misleading: it
-					 * protected the path nobody used while the other one culled against a shape that
-					 * cannot be culled correctly, and every sprite vanished at altitude. */
-					if ( distance > viewDistance )
-					{
-						return;
-					}
-
-					if ( !renderTarget->isCubemap() && !currentNode->isVisibleTo(frustum) )
-					{
-						return;
-					}
-
-					if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
-					{
-						return;
-					}
-
-					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
-				});
+				rasterFrom(*crawler.currentNode());
 			}
 		}
 
