@@ -2285,6 +2285,23 @@ clouds went from RGB 175/170/165 to 175/156/119 at the spawn (sunny-16 pinned, n
 StormyDays. It is artistic — a blue sky makes blue clouds — so `forest` keeps 0. It rides in the free
 `albedo.w` of the cloud block and costs a mix per sample.
 
+### Fixed: a lighting input read by the fragment stage must be requested for the vertex stage by the SAME condition (Sep 2026)
+
+The vegetation's baked occlusion (the vertex colour's alpha) is read by the LIGHT generator whenever the
+renderable is vegetation (`hasVegetationWind()`). But the vertex stage requested the `svPrimaryVertexColor`
+varying only when the WIND was on, and the wind also needs the instance-transforms set. The imposter bake
+target has no such set.
+
+The day the bake rig was made lit (2026-09-25, the unlit-forest fix), its ambient fragment shader read
+`svPrimaryVertexColor.a` that no vertex stage wrote: "undeclared identifier", no program, no atlas. EVERY far
+tree of `terrain` became invisible, and the measured "bright canopy" was the sand behind it.
+
+Fixed in `SceneRendering.cpp`: the varying is requested when the wind is on OR when the light generator
+declared the occlusion (`LightGenerator::hasVegetationBakedOcclusion()`).
+
+⚠️ **Read the image before the numbers**: the canopy luminance jumped from 3 to 112, and it was the trees
+being GONE.
+
 ### A UNIT that differs silently: glTF anisotropy rotation is radians, the engine's is turns (Aug 2026)
 
 > [!CAUTION]

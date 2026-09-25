@@ -1109,8 +1109,11 @@ namespace EmEn::Scenes
 			 * sphere, laid on the 8 × 8 grid the camera sees (Scene::imposterBakeTarget()); the target renders it with
 			 * the tree's own programs at LOD 0 and copies the albedo and normals into the atlas. The entity stays: it
 			 * costs nothing once baked, it is drawn nowhere else.
-			 * @note ⚠️ The copies sway in the scene's wind if one is set: the margin (ImposterMargin) absorbs a moderate
-			 * sway; a strong wind during the bake smears the views.
+			 * @note ⚠️⚠️ The copies are built Lighting::Lit (2026-09-25): only the LIT branch of the scene generator writes the
+			 * tree's real view-space normal into the G-buffer; an unlit rig baked a constant (0, 0, 1) normal atlas, and the
+			 * imposters then lit as flat camera-facing cards. The bake target has no instance-transforms set, so the wind
+			 * is OFF there (the copies do not sway) — which is why its programs must request the vertex colour for the
+			 * vegetation's baked occlusion on their own (SceneRendering.cpp; it failed to compile the first time).
 			 * @param label The variant's name (resource names derive from it).
 			 * @param tree A reference to the tree renderable (Toolkit::generateTreeRenderable()).
 			 * @param bounds The tree's bounding sphere, object space (the LOD 0 shape's).

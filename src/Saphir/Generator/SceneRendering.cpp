@@ -585,8 +585,12 @@ namespace EmEn::Saphir::Generator
 		 * material that does multiplies its albedo by the WHOLE vertex color
 		 * (StandardResource.cpp, SurfaceAlbedoFinal), which on a tree would tint every leaf by its
 		 * bending weights. Never enable vertex colors on a vegetation material without revisiting
-		 * that multiply. */
-		if ( vertexShader.isVegetationWindEnabled() && !vertexShader.requestSynthesizeInstruction(ShaderVariable::PrimaryVertexColor, Saphir::VariableScope::ToNextStage) )
+		 * that multiply.
+		 * ⚠️⚠️ Requested whenever the LIGHTING reads it, not only when the wind is on: the wind also needs the
+		 * instance-transforms set, and a render target without it (the imposter bake) got a fragment stage reading
+		 * svPrimaryVertexColor that no vertex stage wrote — 'undeclared identifier', no atlas, every far tree
+		 * invisible, the day the bake rig was made lit (2026-09-25). */
+		if ( (vertexShader.isVegetationWindEnabled() || m_lightGenerator.hasVegetationBakedOcclusion()) && !vertexShader.requestSynthesizeInstruction(ShaderVariable::PrimaryVertexColor, Saphir::VariableScope::ToNextStage) )
 		{
 			return false;
 		}

@@ -279,6 +279,17 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Returns whether the lighting reads the vegetation's baked occlusion, i.e. needs the interstage vertex color.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasVegetationBakedOcclusion () const noexcept
+			{
+				return !m_vegetationVertexColor.empty();
+			}
+
+			/**
 			 * @brief Declares the variable holding the surface's atmospheric-fog response.
 			 * @note Packed into the material-properties G-buffer A channel, high nibble, and read
 			 * by AtmosphericFog. Undeclared means 1.0 — fully fogged.
