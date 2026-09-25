@@ -123,7 +123,7 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = unused (the clamp died with the screen-history feedback), z = variance-clip gamma, w = accumulation cap. */
-	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = unused. */
+	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = RT light count. */
 };
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cubemap array whose
@@ -347,8 +347,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 }
 
 /* Compute direct lighting at hit point (Lambert diffuse over all scene lights).
- * lightCount is derived from push constants but stored in the SSBO header.
- * We pass it via the last push constant field (sampleCount shares the uint slot).
+ * lightCount is the frame's RT light count (skyParams.w of the frame block, Renderer::rtLightCount()), capped at 16.
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit
  * point receives the light straight through walls and the indirect pass floods
  * shadowed areas (the raster direct pass is shadow-mapped, the GI must match). */
@@ -514,12 +513,12 @@ void main()
 	/* Offset ray origin along normal to prevent self-intersection. */
 	vec3 rayOrigin = worldPos + worldNormal * adaptiveBias;
 
-	/* Determine light count from the light SSBO.
-	 * We use the same approach as RTR: lightCount is encoded as an extra push constant
-	 * field. Since RTGI's TracePushConstants doesn't have a separate lightCount field,
-	 * we read the total number of lights from the SSBO length heuristic.
-	 * For simplicity, we hard-limit to 16 lights for GI bounces. */
-	uint lightCount = min(uint(lightSSBO.lights.length()) / 4u, 16u);
+	/* The lights written THIS frame (Renderer::rtLightCount(), as RTR and the probes read it), still capped at 16 for
+	 * the GI bounces (the SSBO holds 128: the cap is a deliberate cost bound, one shadow ray per light per bounce).
+	 * ⚠️ Until 2026-09-25 it walked min(SSBO length, 16) slots whatever the count: the packer never clears the tail,
+	 * so a light disabled since (the sun course at dusk shifts the later lights down one slot) left a stale copy
+	 * counted twice. */
+	uint lightCount = min(min(uint(skyParams.w + 0.5), 16u), uint(lightSSBO.lights.length()) / 4u);
 
 	/* Accumulate indirect radiance. */
 	vec3 indirectLight = vec3(0.0);
@@ -954,7 +953,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			.skyDistance = context.constants.farPlane,
 			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
 			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
-			.occlusionMaxDistance = m_occlusionLaneRange
+			.occlusionMaxDistance = m_occlusionLaneRange,
+			.lightCount = this->renderer().rtLightCount()
 		}));
 
 		/* ---- Pass 1: Ray Trace GI ---- */

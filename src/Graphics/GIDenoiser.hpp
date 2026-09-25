@@ -105,7 +105,7 @@ namespace EmEn::Graphics
 				std::array< float, 4 > temporalParams;
 				/* strength, clamp, variance-clip gamma, accumulation cap N. */
 				std::array< float, 4 > bounceParams;
-				/* sky luminance in nits (0 = no sky), sky ray distance, unused, unused. */
+				/* sky luminance in nits (0 = no sky), sky ray distance, ambient-occlusion lane range, RT light count. */
 				std::array< float, 4 > skyParams;
 			};
 
@@ -178,6 +178,10 @@ namespace EmEn::Graphics
 				 * slot pairing, not by the producer — see
 				 * IndirectPostProcessEffect::providesOcclusionLane(). */
 				float occlusionMaxDistance{0.0F};
+				/* The lights written this frame in the RT light SSBO (Renderer::rtLightCount()): the trace walks
+				 * exactly these. Walking the SSBO's capacity instead counted a stale copy of a disabled light
+				 * twice (the packer never clears the tail). 0 for the screen-space producers. */
+				uint32_t lightCount{0};
 			};
 
 			/**
