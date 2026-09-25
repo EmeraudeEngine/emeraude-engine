@@ -813,8 +813,10 @@ candela = intensity * 2^exposure * area / (4 * pi)
 ```
 
 Verified in the running light set: the 25 ceiling DiskLights (intensity 60000, radius 0.5 m after
-`metersPerUnit`, 4 m above the floor) come out at **3750 cd**, i.e. 234 lux at floor level — the
-real range of a building lobby (200-500 lux). The two rejected readings gave 2945 and 3750 **lux**,
+`metersPerUnit`, 4 m above the floor) come out at **3750 cd**, i.e. 234 lux at floor level UNDER AN INVERSE
+SQUARE — the real range of a building lobby (200-500 lux). ⚠️ The renderer has had no inverse square since
+2026-08-12 (only `max(1 - (d/r)², 0)`, item `point-spot-falloff-lost-inverse-square`): the rendered floor gets far
+more, and the lobby exposure must not be derived from this figure. The two rejected readings gave 2945 and 3750 **lux**,
 outdoor levels.
 
 > [!NOTE]

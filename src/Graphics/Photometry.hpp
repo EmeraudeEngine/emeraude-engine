@@ -51,8 +51,9 @@
  * a monitor 200-300 nits, a candle flame 5-10 nits.
  *
  * @note These conversions are only meaningful with a PHYSICAL attenuation
- * (`illuminanceFromIntensity()` below, i.e. inverse square). A radius-bounded artistic
- * falloff makes a lumen value arbitrary again — see `TODO.md` § "Photometric lighting".
+ * (`illuminanceFromIntensity()` below, i.e. inverse square). ⚠️⚠️ The point/spot falloff has been the
+ * radius-bounded `max(1 - (d/r)², 0)` since 2026-08-12, which makes a lumen value arbitrary again — engine
+ * item `docs/todo/point-spot-falloff-lost-inverse-square.md`.
  */
 namespace EmEn::Graphics::Photometry
 {
@@ -146,6 +147,8 @@ namespace EmEn::Graphics::Photometry
 	 * cannot produce a visible boundary, while still bounding its reach to something the
 	 * culling can actually reject. Chosen over the 0.05 lx photopic floor, which yields radii
 	 * so large that no draw is ever culled, and over 5 lx, which can clip a dim far surface.
+	 * @warning ⚠️ Premised on an inverse-square falloff, gone since 2026-08-12 (item
+	 * `point-spot-falloff-lost-inverse-square`): under `max(1 - (d/r)², 0)` a light reaches ZERO at this radius.
 	 */
 	constexpr float CullingIlluminance{1.0F};
 
@@ -154,9 +157,10 @@ namespace EmEn::Graphics::Photometry
 	 * @note The inverse of illuminanceFromIntensity(): `r = sqrt(I / E)`. This is how a light
 	 * that declares no range of its own gets a CULLING BOUND — a distance past which it is not
 	 * worth shading, derived from its photometry rather than guessed.
-	 * @warning The result is a culling bound, NOT a dimmer: the shader keeps applying the plain
-	 * inverse-square law inside it. Feeding it back as an attenuation range would darken the
-	 * scene twice.
+	 * @warning ⚠️⚠️ FALSE since 2026-08-12: this was written when the shader applied a windowed inverse
+	 * square inside the radius. `1c1d94ba` deleted that generator, and the only falloff left is
+	 * `max(1 - (d/r)², 0)`, so this radius IS the dimmer today (item
+	 * `point-spot-falloff-lost-inverse-square`).
 	 * @param candela The luminous intensity, in candela.
 	 * @param minIlluminanceLux The illuminance considered negligible, in lux. Default CullingIlluminance.
 	 * @return float The culling radius, in meters.

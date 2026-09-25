@@ -47,10 +47,10 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 	 * @note PHOTOMETRIC UNITS. The power is authored in LUMENS, as a light is sold, and
 	 * converted to candela internally — same contract as
 	 * `Scenes::Toolkit::generate{Point,Spot,Directional}Light()`.
-	 * @warning Do NOT try to shape the flash with the radius. Under the windowed inverse square
-	 * the radius is only a culling bound: `saturate(1 - (d/r)^4)^2` sits at 1.0 over almost the
-	 * whole range, while `1 / (d^2 + 1)` carries the falloff. Growing it brightens nothing, it
-	 * moves the hard cut. The envelope lives in the intensity keyframes.
+	 * @warning Shape the flash with the intensity keyframes. ⚠️ The text that stood here ("under the windowed
+	 * inverse square the radius is only a culling bound") is FALSE since 2026-08-12: the only falloff is
+	 * `max(1 - (d/r)², 0)`, so the radius DIMS the flash at every distance (engine item
+	 * `point-spot-falloff-lost-inverse-square`).
 	 * @param node A reference to a scene node.
 	 * @param settlingTint The colour the flash cools DOWN to; it always starts white hot.
 	 * @param cullingRadius The distance at which the contribution becomes negligible, in metres.

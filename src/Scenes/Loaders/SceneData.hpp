@@ -121,8 +121,9 @@ namespace EmEn::Scenes::Loaders
 		float intensity{0.0F};
 		/**
 		 * @brief Culling distance beyond which the contribution is dropped, in engine units.
-		 * @note `0.0F` means the asset declared no range. It is NOT a dimmer: the engine's
-		 * falloff is carried by the inverse square, the radius is a culling window.
+		 * @note `0.0F` means the asset declared no range. ⚠️ Meant as a culling bound under an inverse
+		 * square, but the engine's only falloff since 2026-08-12 is `max(1 - (d/r)², 0)`, so the radius
+		 * IS the dimmer (item `point-spot-falloff-lost-inverse-square`).
 		 */
 		float range{0.0F};
 		/**

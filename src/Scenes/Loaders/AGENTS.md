@@ -404,7 +404,9 @@ texel. Each loader owns the translation from its format's semantics:
 > unit depended on the producing format would defeat the point of a format-agnostic contract.
 >
 > Cone angles are stored in **DEGREES** (glTF authors radians — `GLTFLoader` converts).
-> `range` is a **culling bound, never a dimmer**: the falloff is carried by the inverse square.
+> `range` was meant as a **culling bound, never a dimmer** under an inverse square — ⚠️⚠️ FALSE since
+> 2026-08-12: the only falloff is `max(1 - (d/r)², 0)`, the range IS the dimmer (engine item
+> `point-spot-falloff-lost-inverse-square`).
 > `0.0F` means the asset declared none, and the engine default is left alone.
 >
 > **The node carries the AIM**: a directional or spot light shines along its node's local -Z

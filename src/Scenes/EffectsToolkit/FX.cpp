@@ -49,6 +49,9 @@ namespace EmEn::Scenes::EffectsToolkit::FX
 				/* INTENSITY — the detonation envelope, and the ONLY thing that shapes the
 				 * flash in time.
 				 *
+				 * ⚠️⚠️ FALSE since 2026-08-12 (only `max(1 - (d/r)^2, 0)` is generated today, so the radius does
+				 * dim — engine item point-spot-falloff-lost-inverse-square); the rest of this note describes the
+				 * lost contract.
 				 * ⚠️ Animating the RADIUS used to be the way to do this, and it no longer
 				 * works: under the photometric windowed inverse square the radius is
 				 * `saturate(1 - (d/r)^4)^2`, a culling WINDOW that sits at 1.0 over almost the

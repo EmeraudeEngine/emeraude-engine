@@ -205,8 +205,8 @@ namespace EmEn::Scenes::Component
 			 * and convert through `Graphics::Photometry`.
 			 * @warning ⚠️ A photometric value is only meaningful with a PHYSICAL (inverse-square)
 			 * attenuation. The point/spot falloff is still the radius-bounded artistic
-			 * `max(1 - (d/r)², 0)`, so these units are currently PROPORTIONAL, not absolute — see
-			 * `TODO.md` § "Photometric lighting + absolute exposure", phase 1.
+			 * `max(1 - (d/r)², 0)`, so these units are currently PROPORTIONAL, not absolute — engine item
+			 * `docs/todo/point-spot-falloff-lost-inverse-square.md`.
 			 * @param intensity The photometric intensity (lux for directional, candela otherwise).
 			 * @return void
 			 */

@@ -1626,6 +1626,11 @@ never does it for you.
 
 ### The light RADIUS is a culling bound, not a dimmer — and an "artistic" emissive is 1 nit (Aug 2026)
 
+> ⚠️⚠️ **The radius half of this section is FALSE since 2026-08-12**: `1c1d94ba` deleted the windowed inverse
+> square it describes, and the only falloff generated today is `max(1 - (d/r)², 0)` — the radius IS the dimmer, and
+> the derived culling radius of an asset light (below) is the distance at which it reaches ZERO, not 1 lx. Engine
+> item `point-spot-falloff-lost-inverse-square`. The emissive half stands.
+
 > [!CAUTION]
 > **Two independent consequences of the photometric migration, both of which make things
 > VANISH rather than look wrong.** Found on the `game-logic` fire and explosions, which had been
@@ -1713,7 +1718,9 @@ zero-radius light was therefore dropped from **every draw of the scene**.
    `Photometry::CullingIlluminance` (1 lux). Without this half, half one turns every rangeless asset
    light into an unbounded one: bound to every draw, one light pass each. **USD declares no range on
    any light type**, so this is the branch every USD fixture takes — 3751 cd gives ~61 m, against a
-   lobby some 20 m across.
+   lobby some 20 m across. ⚠️ Premised on an inverse square, gone since 2026-08-12: under the only falloff
+   left, `max(1 - (d/r)², 0)`, this derived radius is where the light reaches ZERO, and inside it the fixture
+   keeps most of its candela (item `point-spot-falloff-lost-inverse-square`).
 
 ⚠️ **Why 1 lux**: it is far below anything an interior scene grades against (a lit room reads
 200-500 lx), so the cut cannot produce a visible boundary, while still bounding reach to something the
