@@ -1465,10 +1465,14 @@ source target and showed NO ghost at all — no VUID, no error, a flat diff. A h
 65 504: the value became +inf, and bilinear filtering turned `0 · inf` into NaN downstream.
 
 **Rule:** a target that may hold a physical source (the sun, a lamp seen directly, a specular of one)
-is written in DISPLAY units (× the camera's exposure) or clamped — never in raw nits. The scene colour
-buffer escapes it only because nothing physical that bright is ever rasterized there (a painted sun is
-clipped in its HDRI). Suspect it whenever an HDR effect "does nothing" while its inputs trace as large
-numbers: trace the value, compare with 65 504.
+is written in DISPLAY units (× the camera's exposure) or clamped — never in raw nits. Suspect it whenever an HDR
+effect "does nothing" while its inputs trace as large numbers: trace the value, compare with 65 504.
+⚠️⚠️ **The scene colour buffer does NOT escape it** (this section said it did until 2026-09-25): it holds absolute
+nits in `RGBA16F`, nothing is pre-exposed and no light pass clamps. `basic-scenery`'s pure-blue flying light puts
+79.6 klx on the ground 8 m under it, and the unit-luminance chromaticity makes pure blue ×13.85 in its channel:
+3.5e5·ρ_b nits, +Inf for any blue albedo above 0.19. A mirror metal under a 100 klx sun overflows as well
+(`SSR.cpp` comment). The fix decided by the owner is PRE-EXPOSURE, to be designed with the owner first:
+[`todo/scene-colour-pre-exposure.md`](todo/scene-colour-pre-exposure.md).
 
 ### Fixed: Beer's law absorbed over the MESH thickness, not the world one (Sep 2026)
 
@@ -1654,18 +1658,24 @@ should. Measured against a build of the old law, same pose, pinned exposure, dis
 | citadel | the gate, the courtyard behind it | 0.89-1.02; the lintel under the gate torch 1.2-1.4 |
 | game-logic | the poussins (demo spots) | 0.97-1.04; the ground lit by the `Fire` ACTOR 0.12-0.19 (owner: stays physical) |
 | liminal, fill grid | the three halls | north 0.94-1.16, central 0.93-1.10, south 0.76-1.40 |
-| basic-scenery, fills | obelisks, foreground ground, palm belt | 0.97, 0.55, ~0.06 — see the flying lights below |
+| basic-scenery, fills | obelisks, foreground ground, palm belt | 0.97, 0.55, ~0.06 display (0.09 linear) — the red Bulb's lost 300 m flood, NOT the flying lights: see below |
 
 **A lamp that lit a whole hall evenly cannot keep that look from one point.** Tuned on its nearest subject,
 `Liminal`'s far walls and columns fell to ~10 % and `basic-scenery`'s obelisks to 2-4 %. Those scene fillers were
 replaced by fitted fill lamps (owner decision): non-negative least squares on the former illuminance field, sampled
 over the surfaces and grouped (floor, ceiling, walls, columns, per hall), so each group keeps its mean. A per-sample
 relative fit does NOT work: the ceiling 3 m above a lamp is a hot spot that no power can match, and samples the old
-lamps never reached (beyond their radius) veto any light. ⚠️ `basic-scenery`'s four flying lights (1 000 000 lm,
-radius 500 m, now 64 000 000 lm tuned on the ground 8 m under them) flooded everything within 500 m under the lost
-law — the palm belt and most of the clearing's level came from them whenever one flew within range — and a moving
-light cannot have static fills: under the inverse square each lights a pool of ~20-30 m. That residual is open
-(projet-alpha item `basic-scenery-flying-lights-lost-flood`).
+lamps never reached (beyond their radius) veto any light.
+
+⚠️⚠️ **Attribute a lost look by switching the suspect OFF on the reference build, never by reasoning on the law.**
+`basic-scenery`'s palm belt (70-500 m, now 0.09 of its former look) was first blamed on its four flying lights
+(1 000 000 lm, radius 500 m under the lost law: on paper they flooded everything within 500 m). Switched off on the
+old-law build, they changed nothing at the spawn (medians ×1.00-1.04 over 30 frames): the belt was the red Bulb's
+300 m flood, and a flood designed for the flying lights would have been built on a false premise — the owner had
+already approved it. The belt waits for the scene-colour pre-exposure (projet-alpha item
+`basic-scenery-palm-belt-lost-bulb-flood`): the high flood tried for it was capped by the fp16 headroom and
+measured at 0.28. ⚠️ That scene's palms are re-drawn at every launch (the scene randomizer is seeded from
+`std::random_device`): compare launch-averaged statistics, never one frame per build.
 
 ⚠️ The powers this gives are NOT physical references — the former looks were floodlights (`basic-scenery`'s flying
 lights put ~80 000 lx on the ground under them, full sunlight, now 64 000 000 lm each). Physical values live in the

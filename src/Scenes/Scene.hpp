@@ -517,7 +517,7 @@ namespace EmEn::Scenes
 			 * @return Random 3D position within [-boundary, +boundary] on all axes.
 			 *
 			 * @see boundary() For scene extent.
-			 * @see randomizer() For deterministic random.
+			 * @see floatRandomizer() For the scene's own Mersenne Twister (this one goes through the process-global std::rand()).
 			 */
 			Base::Math::Vector< 3, float >
 			getRandomPosition () const noexcept
@@ -532,7 +532,9 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Returns the scene's random number generator for floats.
 			 *
-			 * Provides deterministic random values for scene-specific logic.
+			 * ⚠️ NOT deterministic: the generator is seeded from std::random_device when the scene is built, so every launch
+			 * and every scene load draws a different sequence (these comments said "deterministic" until 2026-09-25 — e.g.
+			 * basic-scenery's palms move at every launch). For reproducible content, use a local Base::Randomizer< T >{seed}.
 			 * Use for procedural generation, particle systems, etc.
 			 *
 			 * @return Reference to the scene's float randomizer.
@@ -547,7 +549,9 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Returns the scene's random number generator for integers.
 			 *
-			 * Provides deterministic random values for scene-specific logic.
+			 * ⚠️ NOT deterministic: the generator is seeded from std::random_device when the scene is built, so every launch
+			 * and every scene load draws a different sequence (these comments said "deterministic" until 2026-09-25 — e.g.
+			 * basic-scenery's palms move at every launch). For reproducible content, use a local Base::Randomizer< T >{seed}.
 			 * Use for procedural generation, particle systems, etc.
 			 *
 			 * @return Reference to the scene's integer randomizer.
