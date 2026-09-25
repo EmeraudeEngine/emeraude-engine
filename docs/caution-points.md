@@ -1573,6 +1573,24 @@ truthful, so nothing was renamed.
 > `Shininess` was authored as a glossiness". The retune did NOT become a per-file sweep: the manifest
 > key was re-interpreted at the parse boundary instead.
 
+### Fixed: lights added to a DISABLED light set lit nothing, and only an Info line said so (Sep 2026)
+
+> **Symptom (2026-09-25):** switching the `sprite` demo's pin-ups to `Lighting::Lit` changed NOTHING — measured
+> 7.15 → 7.19 / 255 on their legs, with three 2500 W fire point lights 2-3 m away.
+
+The demo installed a background and created three point lights, but never enabled its light set
+(`enableBasicLighting()` or an `onSetupLighting()` that calls `LightSet::enable()`). A disabled set is not an
+ambient-only mode: `LightSet::initialize()` returns before creating any light on the hardware, and the render lists
+file every instance as unlit (`isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled()`), so
+the instance's own state is ignored. The only trace was `[Info][LightSet] Lighting is not enabled for scene 'sprite'.`
+
+**Fix:** `initialize()` now WARNS when lights were added to a disabled set (`… yet N light(s) were added to it: they
+will light nothing !`), and `sprite` enables its set. Once lit, the pin-ups read 59 / 255, and 59 with
+`IndirectDiffuse` disabled: direct light.
+
+**Rule:** a scene that creates a light enables its light set before the scene is enabled. Installing a background
+never does it for you.
+
 ### The light RADIUS is a culling bound, not a dimmer — and an "artistic" emissive is 1 nit (Aug 2026)
 
 > [!CAUTION]

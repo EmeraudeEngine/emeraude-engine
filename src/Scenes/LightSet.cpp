@@ -95,7 +95,26 @@ namespace EmEn::Scenes
 	{
 		if ( !this->isEnabled() )
 		{
-			TraceInfo{ClassId} << "Lighting is not enabled for scene '" << scene.name() << "'.";
+			/* ⚠️⚠️ A disabled light set creates NO light on the hardware, and the scene files every instance in the
+			 * unlit lists (isLighted = lightSet().isEnabled() && instance->isLightingEnabled()): a light added to it
+			 * lights NOTHING, whatever its instances ask for. `sprite` built three fire point lights and never enabled
+			 * its set — they shaded nothing, and only this Info line said so (2026-09-25). Say it LOUDLY. */
+			size_t lightCount = 0;
+
+			{
+				const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+				lightCount = m_lights.size();
+			}
+
+			if ( lightCount > 0 )
+			{
+				TraceWarning{ClassId} << "Lighting is not enabled for scene '" << scene.name() << "', yet " << lightCount << " light(s) were added to it: they will light nothing ! Enable the light set (LightSet::enable()) before the scene is enabled.";
+			}
+			else
+			{
+				TraceInfo{ClassId} << "Lighting is not enabled for scene '" << scene.name() << "'.";
+			}
 
 			return true;
 		}

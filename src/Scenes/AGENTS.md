@@ -1264,6 +1264,14 @@ is now strictly UNLIT (light set disabled or instance lighting disabled). The `L
 aggregator: lights + photometric ambient (`setAmbientLightColor()` sRGB +
 `setAmbientLightIntensity()` in LUX).
 
+⚠️⚠️ **A DISABLED light set lights NOTHING** — not an ambient-only mode. `LightSet::initialize()` returns early (no
+light is created on the hardware) and the render lists file every instance as unlit
+(`isLighted = lightSet().isEnabled() && instance->isLightingEnabled()`), so a `Lighting::Lit` Visual draws its raw
+albedo. Installing a background does not enable it; `LightSet::enable()` (or `applyBackgroundLighting()`) must run
+BEFORE the scene is enabled. Since 2026-09-25 `initialize()` WARNS when lights were added to a disabled set
+(`… yet N light(s) were added to it: they will light nothing !`) — it used to be one Info line, and a demo's three
+fire lights were dead for an unknown time.
+
 **Light lifetime across the two threads (2026-09-03).** The light-set mutex guards the
 CONTAINERS, nothing else. The render thread (`renderLightedSelection()`) takes it ONCE per call to
 SNAPSHOT the three light lists, then records with the copies; the logic thread
