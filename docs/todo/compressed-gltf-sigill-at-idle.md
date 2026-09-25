@@ -19,6 +19,11 @@ cleared nor incriminated.**
 
 ## Facts for whoever resumes
 
+- ⚠️ **2026-09-25: every SIGILL the kernel logged since 2026-09-23 (9 of them) is ONE Chromium `CHECK` in
+  CEF's `MemoryInfra` thread, at `libcef.so + 0x8e69ec2`** (`journalctl -k | grep traps:`) — projet-alpha item
+  `cef-memoryinfra-check-sigill`. This crash (2026-08-11) predates the journal and cannot be checked; it may
+  well be the same one. On a new occurrence, read the kernel line before anything else.
+
 - A **different** run, with a wrong demo id (`Sponza` instead of `sponza`, so **no glTF parsed at
   all**), died in `*** stack smashing detected ***` / SIGABRT on the "demo not found" path, in the
   main process AND the CEF helper ⇒ **the binary has at least one pre-existing fault**.
