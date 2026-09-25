@@ -3345,11 +3345,13 @@ namespace EmEn::Scenes::Loaders
 				1.0F
 			};
 
-			/* KHR_lights_punctual and the engine's photometric contract agree TERM FOR TERM:
-			 * illuminance in lux for a directional light, luminous intensity in candela for a
-			 * point or a spot. There is deliberately no conversion factor here — if an exporter
-			 * ever writes something else, it will show up as a wrong magnitude, not as a wrong
-			 * model. */
+			/* KHR_lights_punctual and the engine agree on the UNITS: illuminance in lux for a
+			 * directional light, luminous intensity in candela for a point or a spot. There is
+			 * deliberately no unit conversion here. ⚠️ They differ on the COLOUR: KHR's intensity is
+			 * what the light would emit if it were white and its colour multiplies it, while the
+			 * engine's colour is a unit-luminance chromaticity since 2026-09-25 — the descriptor keeps
+			 * the KHR meaning and SceneDataConsumer::attachLight() folds the colour's luminance into the
+			 * intensity. */
 			descriptor.intensity = static_cast< float >(glTFLight.intensity);
 
 			if ( glTFLight.range.has_value() )

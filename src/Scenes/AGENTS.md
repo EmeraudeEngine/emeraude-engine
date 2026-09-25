@@ -144,7 +144,7 @@ names use the manual-resource `+` prefix so Core can recognize (and replace) the
 | Builder | Scene name | Content |
 |---------|------------|---------|
 | `Viewers::ImageViewer` | `+ImageViewer` | Unlit quad at the image aspect ratio, double-sided (mirrored from behind, like a slide). LightSet DISABLED + camera out of HDR ⇒ texels reach the screen unmodified |
-| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, OR raw geometry file (`VertexFactory::FileIO::isReadableExtension()` : OBJ, STL, MDx, ee3d) wearing a neutral clay material (mid-grey, dull, dielectric, EXPLICIT lit path). Neutral lighting (ambient 200 lux + key 100 000 lux + cool fill 15 000 lux opposite, so the orbit shadow side stays readable), HDR camera with **MANUAL sunny-16 exposure**, and a **default sky** (`installBackground()`, setting `Core/Viewers/Background`, default `GreenLandscape`) supplying the background AND the IBL. `ModelViewer::handlesFile()` is the single "can I display this?" decision site |
+| `Viewers::ModelViewer` | `+ModelViewer` | Composite asset imported via `Manager::createSceneLoader()` + `SceneDataConsumer`, OR raw geometry file (`VertexFactory::FileIO::isReadableExtension()` : OBJ, STL, MDx, ee3d) wearing a neutral clay material (mid-grey, dull, dielectric, EXPLICIT lit path). Neutral lighting (ambient 80.72 lux delivered — `Core/Viewers/AmbientIlluminance` — + key 100 000 lux + cool fill 15 000 lux opposite, so the orbit shadow side stays readable), HDR camera with **MANUAL sunny-16 exposure**, and a **default sky** (`installBackground()`, setting `Core/Viewers/Background`, default `GreenLandscape`) supplying the background AND the IBL. `ModelViewer::handlesFile()` is the single "can I display this?" decision site |
 
 ⚠️ Lessons already paid for:
 - **Never rely on auto-exposure in a viewer**: the metering averages the whole frame, and a small
@@ -169,7 +169,7 @@ names use the manual-resource `+` prefix so Core can recognize (and replace) the
   warning, never to a viewer failure. ⚠️ The direct lighting stays manual on purpose: deriving it
   from the sky (`applyBackgroundLighting()`) would make every sky change the SUBJECT's exposure,
   and the viewer exposure is deliberately fixed. The background feeds the reflections, not the key
-  light. The flat 200 lux ambient is only a floor for the no-sky case; a loaded sky's irradiance
+  light. The flat ~80 lux ambient (`Core/Viewers/AmbientIlluminance`, 80.72 lx delivered) is only a floor for the no-sky case; a loaded sky's irradiance
   dominates it by two orders of magnitude.
 
 ### Scene Loader Registry
@@ -1261,8 +1261,9 @@ Apple Silicon that loop is a GPU fault → `DEVICE_LOST`, not a mere artifact. S
 performance shortcut (one forward pass with a single light baked as GLSL literals) predating the
 photometric migration; owner decision: more trouble than it was worth. `RenderPassType::SimplePass`
 is now strictly UNLIT (light set disabled or instance lighting disabled). The `LightSet` is a pure
-aggregator: lights + photometric ambient (`setAmbientLightColor()` sRGB +
-`setAmbientLightIntensity()` in LUX).
+aggregator: lights + photometric ambient (`setAmbientLightColor()` — a CHROMATICITY since 2026-09-25, scaled to unit
+luminance before it reaches the GPU, `ambientEmissionChromaticity()` — + `setAmbientLightIntensity()` in LUX, the
+delivered illuminance whatever the hue; `Graphics/AGENTS.md` § *A light colour is a CHROMATICITY*).
 
 ⚠️⚠️ **A DISABLED light set lights NOTHING** — not an ambient-only mode. `LightSet::initialize()` returns early (no
 light is created on the hardware) and the render lists file every instance as unlit
@@ -1298,8 +1299,8 @@ render thread the moment a barrel exploded):
   still reading. `removeAllLights()` (scene teardown) drops the retired list with the others.
 
 **Sky → LightSet bridge (OPT-IN)**: `Scene::applyBackgroundLighting(BackgroundLightingOptions)`
-derives the scene lighting from the background photometric manifest — ambient = average color ×
-ambient illuminance, plus one `StaticEntity` + `DirectionalLight` per declared celestial body
+derives the scene lighting from the background photometric manifest — ambient = the ambient illuminance
+in the hue of the average colour (a unit-luminance chromaticity since 2026-09-25), plus one `StaticEntity` + `DirectionalLight` per declared celestial body
 (`Graphics::CelestialBody`; the entity sits at `direction × 1000`, the component default shines
 along `-normalize(position)`). The first star becomes `mainDirectionalLight`. Options carry the
 NON-photometric choices only: `applyAmbient`, `applyStars`, and the shadow policy as a

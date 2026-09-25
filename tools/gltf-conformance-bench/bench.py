@@ -252,12 +252,12 @@ ENVIRONMENTS = {
     "SpecularTest": {
         "Core/Viewers/Background": "Kloppenheim05",
         "Core/Viewers/EnvironmentCubemap": "",
-        "Core/Viewers/AmbientIntensity": 0,
+        "Core/Viewers/AmbientIlluminance": 0,
     },
     "AnisotropyStrengthTest": {
         "Core/Viewers/Background": "",
         "Core/Viewers/EnvironmentCubemap": "",
-        "Core/Viewers/AmbientIntensity": 0,
+        "Core/Viewers/AmbientIlluminance": 0,
     },
     # ⚠️ Its README asks for it in as many words: "It is recommended to have an environment with
     # distinctive bright light sources for testing." The coat's Fresnel is 0.04 at normal
@@ -267,16 +267,16 @@ ENVIRONMENTS = {
     "ClearCoatTest": {
         "Core/Viewers/Background": "Kloppenheim05",
         "Core/Viewers/EnvironmentCubemap": "",
-        "Core/Viewers/AmbientIntensity": 0,
+        "Core/Viewers/AmbientIlluminance": 0,
     },
     "SheenCloth": {
         "Core/Viewers/Background": "",
         "Core/Viewers/EnvironmentCubemap": "",
-        "Core/Viewers/AmbientIntensity": 0,
+        "Core/Viewers/AmbientIlluminance": 0,
     },
 }
 
-ENVIRONMENT_KEYS = ("Core/Viewers/Background", "Core/Viewers/EnvironmentCubemap", "Core/Viewers/AmbientIntensity")
+ENVIRONMENT_KEYS = ("Core/Viewers/Background", "Core/Viewers/EnvironmentCubemap", "Core/Viewers/AmbientIlluminance")
 
 # The engine's defaults for those keys (SettingKeys.hpp: DefaultViewerBackground,
 # DefaultViewerEnvironmentCubemap, DefaultViewerAmbientIntensity). A key ABSENT from the session's settings
@@ -285,7 +285,7 @@ ENVIRONMENT_KEYS = ("Core/Viewers/Background", "Core/Viewers/EnvironmentCubemap"
 ENVIRONMENT_DEFAULTS = {
     "Core/Viewers/Background": "GreenLandscape",
     "Core/Viewers/EnvironmentCubemap": "",
-    "Core/Viewers/AmbientIntensity": 200.0,
+    "Core/Viewers/AmbientIlluminance": 80.72,  # the engine default (renamed 2026-09-25; 200 x a dimming colour before)
 }
 
 

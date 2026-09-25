@@ -233,8 +233,9 @@ namespace EmEn::Scenes::Component
 	AbstractLightEmitter::setColor (const Base::PixelFactory::Color< float > & color) noexcept
 	{
 		m_color = color;
+		m_emissionChromaticity = m_color.unitLuminanceChromaticity();
 
-		this->onColorChange(m_color);
+		this->onColorChange(m_emissionChromaticity);
 
 		this->requestVideoMemoryUpdate();
 	}

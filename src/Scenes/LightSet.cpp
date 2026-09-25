@@ -505,6 +505,7 @@ namespace EmEn::Scenes
 		/* Scene teardown: nothing renders any more, the retired lights follow the others. */
 		m_retiredLights.clear();
 		m_ambientLightColor = Black;
+		m_ambientEmissionChromaticity = {0.0F, 0.0F, 0.0F};
 		m_lightPercentToAmbient = DefaultLightPercentToAmbient;
 	}
 
@@ -605,7 +606,7 @@ namespace EmEn::Scenes
 					}
 
 					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
-					const auto & lightColor = light->color();
+					const auto & lightColor = light->emissionChromaticity();
 
 					/* Directional light direction: same logic as DirectionalLight::setDirection(). */
 					const auto direction = light->isUsingDirectionVector() ?
@@ -613,9 +614,9 @@ namespace EmEn::Scenes
 						-worldCoords.position().normalized();
 
 					auto & entry = gpuData[lightIndex];
-					entry.colorR = lightColor.red();
-					entry.colorG = lightColor.green();
-					entry.colorB = lightColor.blue();
+					entry.colorR = lightColor[Math::X];
+					entry.colorG = lightColor[Math::Y];
+					entry.colorB = lightColor[Math::Z];
 					entry.intensity = light->intensity();
 					entry.posX = 0.0F;
 					entry.posY = 0.0F;
@@ -645,12 +646,12 @@ namespace EmEn::Scenes
 
 					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
 					const auto & position = worldCoords.position();
-					const auto & lightColor = light->color();
+					const auto & lightColor = light->emissionChromaticity();
 
 					auto & entry = gpuData[lightIndex];
-					entry.colorR = lightColor.red();
-					entry.colorG = lightColor.green();
-					entry.colorB = lightColor.blue();
+					entry.colorR = lightColor[Math::X];
+					entry.colorG = lightColor[Math::Y];
+					entry.colorB = lightColor[Math::Z];
 					entry.intensity = light->intensity();
 					entry.posX = position.x();
 					entry.posY = position.y();
@@ -681,12 +682,12 @@ namespace EmEn::Scenes
 					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
 					const auto & position = worldCoords.position();
 					const auto direction = worldCoords.forwardVector();
-					const auto & lightColor = light->color();
+					const auto & lightColor = light->emissionChromaticity();
 
 					auto & entry = gpuData[lightIndex];
-					entry.colorR = lightColor.red();
-					entry.colorG = lightColor.green();
-					entry.colorB = lightColor.blue();
+					entry.colorR = lightColor[Math::X];
+					entry.colorG = lightColor[Math::Y];
+					entry.colorB = lightColor[Math::Z];
 					entry.intensity = light->intensity();
 					entry.posX = position.x();
 					entry.posY = position.y();
@@ -724,7 +725,7 @@ namespace EmEn::Scenes
 		const std::lock_guard< std::mutex > lock{obj.m_lightsAccess};
 
 		out <<
-			"Ambient light color : " << obj.m_ambientLightColor << "\n"
+			"Ambient light color : " << obj.m_ambientLightColor << " (emitted " << obj.m_ambientEmissionChromaticity << ")" "\n"
 			"Ambient light intensity : " << obj.m_ambientLightIntensity << "\n";
 
 		if ( obj.m_directionalLights.empty() )
@@ -737,7 +738,7 @@ namespace EmEn::Scenes
 
 			for ( const auto & light : obj.m_directionalLights )
 			{
-				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
+				out << " - light #" << light->UBOIndex() << " color : " << light->authoredColor() << " (emitted " << light->emissionChromaticity() << "), intensity : " << light->intensity() << "\n";
 			}
 		}
 
@@ -751,7 +752,7 @@ namespace EmEn::Scenes
 
 			for ( const auto & light : obj.m_pointLights )
 			{
-				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
+				out << " - light #" << light->UBOIndex() << " color : " << light->authoredColor() << " (emitted " << light->emissionChromaticity() << "), intensity : " << light->intensity() << "\n";
 			}
 		}
 
@@ -765,7 +766,7 @@ namespace EmEn::Scenes
 
 			for ( const auto & light : obj.m_spotLights )
 			{
-				out << " - light #" << light->UBOIndex() << " color : " << light->color() << ", intensity : " << light->intensity() << "\n";
+				out << " - light #" << light->UBOIndex() << " color : " << light->authoredColor() << " (emitted " << light->emissionChromaticity() << "), intensity : " << light->intensity() << "\n";
 			}
 		}
 

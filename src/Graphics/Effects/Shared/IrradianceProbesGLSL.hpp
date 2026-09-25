@@ -71,7 +71,7 @@ layout(set = )GLSL" #setIndex R"GLSL(, binding = 3, std140) uniform IrradiancePr
 	ivec4 resetPlanes;    /* xyz: storage plane index reset this frame per axis (-1 = none); w: frame counter. */
 	vec4 biasHysteresis;  /* x: normal bias (m), y: view bias (m), z: hysteresis, w: max distance stored in the distance atlas (m). */
 	vec4 skyAmbient;      /* x: sky luminance (nits), y: 1 = enabled, z: light count, w: bounce feedback weight. */
-	vec4 ambientColor;    /* rgb: scene ambient colour x effective illuminance (the raster's ambient term); w: the IndirectDiffuse intensity the primary surfaces receive — for the consumers that compose an image (RTR), NOT applied by the query. */
+	vec4 ambientColor;    /* rgb: scene ambient chromaticity (unit luminance, channels may exceed 1) x effective illuminance, in LUX — an illuminance, divided by PI at the hit (the raster's ambient term); w: the IndirectDiffuse intensity the primary surfaces receive — for the consumers that compose an image (RTR), NOT applied by the query. */
 	vec4 rotation0;       /* COLUMNS of the per-frame random rotation of the ray set. */
 	vec4 rotation1;
 	vec4 rotation2;

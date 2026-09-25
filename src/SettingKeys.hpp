@@ -1173,15 +1173,19 @@ namespace EmEn
 		constexpr auto ViewerEnvironmentCubemapKey{"Core/Viewers/EnvironmentCubemap"};
 		constexpr auto DefaultViewerEnvironmentCubemap{""};
 
-		/* The viewer's flat ambient illuminance, in lux.
+		/* The viewer's flat ambient illuminance, in lux — the DELIVERED illuminance (the ambient colour is a
+		 * unit-luminance chromaticity since 2026-09-25).
 		 *
 		 * ⚠️ It exists as a FLOOR for the case where no background resource is available, and the sky
-		 * irradiance dominates it by two orders of magnitude when one is. But 200 lux of flat ambient
+		 * irradiance dominates it by two orders of magnitude when one is. But ~80 lux of flat ambient
 		 * is enough to WASH OUT a sheen rim or an iridescence fringe, which is precisely what the
 		 * tests Khronos shoots on black are measuring. Dropping it to 0 is how those become
-		 * judgeable; leaving the default keeps every existing viewer session identical. */
-		constexpr auto ViewerAmbientIntensityKey{"Core/Viewers/AmbientIntensity"};
-		constexpr auto DefaultViewerAmbientIntensity{200.0F};
+		 * judgeable; leaving the default keeps every existing viewer session identical.
+		 * ⚠️ RENAMED 2026-09-25 from "Core/Viewers/AmbientIntensity": that key held 200 "lux" multiplied by the
+		 * (0.4, 0.4, 0.45) colour, i.e. 80.72 lx delivered. A renamed key is the only way the look survives —
+		 * projet-alpha never resets its settings, and a saved 200 read under the new meaning would be ×2.48. */
+		constexpr auto ViewerAmbientIntensityKey{"Core/Viewers/AmbientIlluminance"};
+		constexpr auto DefaultViewerAmbientIntensity{80.72F};
 
 		/* Physics */
 		/* Enable the spatial acceleration structure for physics. */

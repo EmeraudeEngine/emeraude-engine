@@ -135,8 +135,10 @@ namespace EmEn::Graphics
 			{
 				/** @brief The volume is centred on this position (the active camera). */
 				Base::Math::Vector< 3, float > cameraPosition;
-				/** @brief Scene ambient colour x effective illuminance — the raster's ambient term, added at every hit. */
-				Base::PixelFactory::Color< float > ambient;
+				/** @brief Scene ambient chromaticity x effective illuminance, in lux — the raster's ambient term, added at
+				 * every hit. ⚠️ A vector, never a Color< float >: that type clamps to [0, 1], and it capped every probe
+				 * ambient above 1 lx at 1 until 2026-09-25. */
+				Base::Math::Vector< 3, float > ambient;
 				/** @brief Luminance of the environment cubemap in nits (0 = no sky): a miss becomes this radiance. */
 				float skyLuminance{0.0F};
 				/** @brief Lights in the RT light SSBO. */

@@ -387,8 +387,12 @@ texel. Each loader owns the translation from its format's semantics:
 
 > [!IMPORTANT]
 > `LightDescriptor::intensity` carries the unit **the engine itself uses**, which is also what
-> glTF `KHR_lights_punctual` specifies — they agree term for term, so the glTF path applies **no
-> conversion factor at all**:
+> glTF `KHR_lights_punctual` specifies, so the glTF path applies **no unit conversion**. ⚠️⚠️ **But
+> the colour does NOT mean the same (2026-09-25)**: KHR's intensity is the light's WHITE-equivalent
+> and its colour multiplies it (a grey light is dimmer — `PointLightIntensityTest`), while the
+> engine's light colour is a unit-luminance chromaticity. `SceneDataConsumer::attachLight()` folds
+> `color.luminance()` into the intensity (the culling radius keeps deriving from the white-equivalent
+> intensity), so an asset renders exactly as in the Khronos viewer:
 >
 > | Type | Unit | Engine setter |
 > |------|------|---------------|

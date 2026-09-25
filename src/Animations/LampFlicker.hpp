@@ -149,6 +149,19 @@ namespace EmEn::Animations
 			[[nodiscard]]
 			static Base::PixelFactory::Color< float > colorForHealth (const Base::PixelFactory::Color< float > & healthyColor, float health) noexcept;
 
+			/**
+			 * @brief Returns the luminance factor a lamp loses at a given health, for its INTENSITY.
+			 * @note ⚠️ A light colour is a unit-luminance chromaticity since 2026-09-25
+			 * (AbstractLightEmitter::setColor()): colorForHealth() now only reddens the lamp. The dimming its cooler
+			 * colour used to cost (37 % at health 0 for a white lamp) moves to the intensity: multiply the nominal
+			 * intensity by this factor, 1 in perfect health.
+			 * @param healthyColor The colour of the lamp in perfect health.
+			 * @param health 1 = new, 0 = dead.
+			 * @return float
+			 */
+			[[nodiscard]]
+			static float luminanceForHealth (const Base::PixelFactory::Color< float > & healthyColor, float health) noexcept;
+
 		private:
 
 			/**

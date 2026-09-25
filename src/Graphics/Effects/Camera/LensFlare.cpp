@@ -451,17 +451,22 @@ namespace EmEn::Graphics::Effects::Camera
 					const auto tanHalfFovY = 1.0F / std::max(std::abs(projectionMatrix(1, 1)), 1.0e-6F);
 					const auto angularRadius = m_parameters.sunDiscRadius * 2.0F * tanHalfFovY;
 					const auto solidAngle = std::numbers::pi_v< float > * angularRadius * angularRadius * SunDiscProfileArea;
-					/* In DISPLAY units (the source target's unit), bounded under the half-float range. */
-					const auto luminance = std::min(mainLight->illuminance() / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * onScreen, MaxSunDisplayLuminance);
-					const auto & color = mainLight->color();
+					/* In DISPLAY units (the source target's unit), bounded under the half-float range.
+					 * ⚠️ The ceiling holds on the BRIGHTEST CHANNEL: the emitted chromaticity has unit luminance, so a
+					 * channel exceeds 1 (1.65 in red for a 2000 K sun, 13.85 in blue for a pure blue) and a ceiling on
+					 * the scalar alone let it reach 82 000 at 2000 K, past the 65 504 of a half float — and the hue is
+					 * kept. */
+					const auto & color = mainLight->emissionChromaticity();
+					const auto peakChannel = std::max({color[Base::Math::X], color[Base::Math::Y], color[Base::Math::Z], 1.0F});
+					const auto luminance = std::min(mainLight->illuminance() / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * onScreen, MaxSunDisplayLuminance / peakChannel);
 
 					sourcePC.lightScreenX = screenX;
 					sourcePC.lightScreenY = screenY;
 					sourcePC.sunRadiusX = m_parameters.sunDiscRadius * aspect;
 					sourcePC.sunRadiusY = m_parameters.sunDiscRadius;
-					sourcePC.sunLuminanceR = color.red() * luminance;
-					sourcePC.sunLuminanceG = color.green() * luminance;
-					sourcePC.sunLuminanceB = color.blue() * luminance;
+					sourcePC.sunLuminanceR = color[Base::Math::X] * luminance;
+					sourcePC.sunLuminanceG = color[Base::Math::Y] * luminance;
+					sourcePC.sunLuminanceB = color[Base::Math::Z] * luminance;
 				}
 			}
 		}

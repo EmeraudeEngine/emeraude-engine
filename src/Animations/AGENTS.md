@@ -75,7 +75,11 @@ it is a pure function of the health: `LampFlicker::colorForHealth()`, applied on
 The value it emits is a luminous intensity in CANDELA, matching the `Intensity` animation id:
 
 ```cpp
-light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlicker >(nominalCandela, 0.5F));
+/* ⚠️ Since 2026-09-25 a light colour is a unit-luminance chromaticity: colorForHealth() only REDDENS the lamp, and
+ * the dimming its cooler colour used to cost goes to the intensity through luminanceForHealth(). */
+const auto candela = nominalCandela * LampFlicker::luminanceForHealth(healthyColor, 0.5F);
+
+light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlicker >(candela, 0.5F));
 light->setColor(LampFlicker::colorForHealth(healthyColor, 0.5F));
 ```
 

@@ -983,10 +983,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		{
 			const auto direction = mainLight->direction().normalized();
 			const auto illuminance = mainLight->illuminance();
-			const auto & color = mainLight->color();
+			const auto & color = mainLight->emissionChromaticity();
 
 			block.sunDirection = {direction[X], direction[Y], direction[Z], static_cast< float >(m_parameters.lightStepCount)};
-			block.sunIlluminance = {color.red() * illuminance, color.green() * illuminance, color.blue() * illuminance, mainLight->shadowBias()};
+			block.sunIlluminance = {color[X] * illuminance, color[Y] * illuminance, color[Z] * illuminance, mainLight->shadowBias()};
 
 			const auto & shadowMap = mainLight->shadowMap();
 

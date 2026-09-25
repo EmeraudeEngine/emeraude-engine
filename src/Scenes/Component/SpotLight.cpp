@@ -489,7 +489,7 @@ namespace EmEn::Scenes::Component
 		return out << "Spot light data ;\n"
 			"Position (World Space) : " << worldCoordinates.position() << "\n"
 			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
-			"Color : " << obj.color() << "\n"
+			"Color : " << obj.authoredColor() << " (emitted chromaticity " << obj.emissionChromaticity() << ")" "\n"
 			"Intensity : " << obj.intensity() << "\n"
 			"Radius : " << obj.m_radius << "\n"
 			"Inner angle : " << obj.m_innerAngle << "° (" << Radian(obj.m_innerAngle) << " rad) (cosine : " << std::cos(Radian(obj.m_innerAngle)) << ")\n"

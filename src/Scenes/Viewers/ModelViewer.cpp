@@ -250,7 +250,7 @@ namespace EmEn::Scenes::Viewers
 		/* NOTE: Neutral lighting recipe : a soft ambient and one warm key light.
 		 * The flat ambient is a floor for the case where no background resource is available; the
 		 * sky irradiance dominates it by two orders of magnitude when one is.
-		 * ⚠️ It is a SETTING because 200 lux of flat ambient washes out a sheen rim or an
+		 * ⚠️ It is a SETTING because ~80 lux of flat ambient (Core/Viewers/AmbientIlluminance) washes out a sheen rim or an
 		 * iridescence fringe — exactly what the tests Khronos shoots on black are measuring. */
 		auto & lightSet = scene->lightSet();
 		lightSet.enable();

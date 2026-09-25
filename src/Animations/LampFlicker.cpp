@@ -76,6 +76,19 @@ namespace EmEn::Animations
 	}
 
 	float
+	LampFlicker::luminanceForHealth (const Color< float > & healthyColor, float health) noexcept
+	{
+		const auto healthyLuminance = healthyColor.luminance();
+
+		if ( healthyLuminance <= 1.0e-6F )
+		{
+			return 1.0F;
+		}
+
+		return LampFlicker::colorForHealth(healthyColor, health).luminance() / healthyLuminance;
+	}
+
+	float
 	LampFlicker::nextLevel () noexcept
 	{
 		/* A lamp in perfect health does not flicker at all — skip the machinery entirely so

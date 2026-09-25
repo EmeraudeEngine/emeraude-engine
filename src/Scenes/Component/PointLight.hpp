@@ -279,7 +279,7 @@ namespace EmEn::Scenes::Component
 			void writeUniformBlock (float * destination) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
-			void onColorChange (const Base::PixelFactory::Color< float > & color) noexcept override;
+			void onColorChange (const Base::Math::Vector< 3, float > & chromaticity) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
 			void onIntensityChange (float intensity) noexcept override;
@@ -317,7 +317,8 @@ namespace EmEn::Scenes::Component
 			float m_shadowBias{0.005F}; /**< Shadow bias to prevent shadow acne. */
 			std::array< float, 4 + 4 + 4 + 4 > m_buffer{
 				/* Light color. */
-				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
+				/* The emitted chromaticity (unit luminance), never the authored colour: AbstractLightEmitter::setColor(). */
+				this->emissionChromaticity()[Base::Math::X], this->emissionChromaticity()[Base::Math::Y], this->emissionChromaticity()[Base::Math::Z], 1.0F,
 				/* Light position (Point) */
 				0.0F, 0.0F, 0.0F, 1.0F, // NOTE: Put W to zero and the light will follows the camera.
 				/* Light properties. */

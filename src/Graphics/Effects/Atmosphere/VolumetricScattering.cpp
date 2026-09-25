@@ -439,7 +439,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * composited RESULT, and this pass computes the result instead of assuming it. Honouring it
 		 * would mean inventing a convention the medium's contract does not define. */
 		const auto lightIlluminance = mainLight->illuminance();
-		const auto lightColor = mainLight->color();
+		const auto & lightColor = mainLight->emissionChromaticity();
 
 		/* ---- Upload the cascade block. The four matrices are 256 bytes on their own, well past
 		 * the 128-byte push-constant floor, so they travel in a per-frame UBO. ---- */
@@ -510,9 +510,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.lightDirX = lightDir.x(),
 			.lightDirY = lightDir.y(),
 			.lightDirZ = lightDir.z(),
-			.lightIlluminanceR = lightColor.red() * lightIlluminance,
-			.lightIlluminanceG = lightColor.green() * lightIlluminance,
-			.lightIlluminanceB = lightColor.blue() * lightIlluminance,
+			.lightIlluminanceR = lightColor[Base::Math::X] * lightIlluminance,
+			.lightIlluminanceG = lightColor[Base::Math::Y] * lightIlluminance,
+			.lightIlluminanceB = lightColor[Base::Math::Z] * lightIlluminance,
 			.sampleCount = static_cast< float >(m_parameters.sampleCount),
 			.cascadeCount = static_cast< float >(std::min(mainLight->cascadeCount(), 4U)),
 			.shadowBias = mainLight->shadowBias()

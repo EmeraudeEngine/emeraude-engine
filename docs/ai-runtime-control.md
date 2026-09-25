@@ -401,7 +401,7 @@ reduction the noise floor was 144/5184 cells against 736/5184 for a playing clip
 |---|---|---|
 | `Core/Viewers/Background` | `GreenLandscape` | what is **behind** the subject. **Empty = no backdrop at all**, which renders a bit-exact black |
 | `Core/Viewers/EnvironmentCubemap` | *(empty)* | what the subject **reflects**. Empty = whatever the background installed |
-| `Core/Viewers/AmbientIntensity` | `200.0` | the flat ambient illuminance floor, in lux |
+| `Core/Viewers/AmbientIlluminance` | `80.72` | the flat ambient illuminance floor, in lux, DELIVERED (renamed 2026-09-25 from `AmbientIntensity` = 200 × a (0.4, 0.4, 0.45) colour that dimmed it; the light colour is a unit-luminance chromaticity since) |
 
 > [!IMPORTANT]
 > **The backdrop and the reflected environment are NOT the same axis**, and the engine already
@@ -412,10 +412,10 @@ reduction the noise floor was 144/5184 cells against 736/5184 for a playing clip
 > ⚠️ The override is applied AFTER the background, necessarily — a background installs its own
 > cubemap as the scene's environment, so an explicit choice has to come second.
 
-**Why the ambient is a setting.** 200 lux of flat ambient is enough to wash out a sheen rim or an
+**Why the ambient is a setting.** ~80 lux of flat ambient (200 × the old dimming colour until 2026-09-25) is enough to wash out a sheen rim or an
 iridescence fringe, which is exactly what the tests Khronos shoots on black are measuring. Measured
 on `SheenCloth`: with the defaults the backdrop reads sRGB (23.4, 28.2, 19.7) with a maximum of 44,
-and the rim-to-backdrop contrast is **8.1×**; with `Background = ""` and `AmbientIntensity = 0` the
+and the rim-to-backdrop contrast is **8.1×**; with `Background = ""` and `AmbientIlluminance = 0` the
 backdrop is **exactly (0, 0, 0)**, maximum 0, and the contrast is **390×** — a **48× gain on the
 discriminating figure**, and a backdrop that is a measurement surface rather than a picture.
 
@@ -622,8 +622,8 @@ echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resourc
 | | `Noise.Factor` | float | Perlin noise amplitude (default: 0.5) |
 | | `Noise.Roughness` | float | Diamond-square roughness (default: 0.5) |
 | | `Noise.Seed` | int | Diamond-square seed (default: 0) |
-| **Lighting** | `Ambient.Color` | [r,g,b,a] | Ambient light color (sRGB, default: white) |
-| | `Ambient.Intensity` | float | Ambient ILLUMINANCE in lux (default: 100; open shade 20000, overcast 5000, moonlit night ~1) |
+| **Lighting** | `Ambient.Color` | [r,g,b,a] | Ambient light colour: a CHROMATICITY since 2026-09-25 (raw components scaled to unit luminance — it never dims the ambient; default: white) |
+| | `Ambient.Intensity` | float | Ambient ILLUMINANCE in lux, delivered whatever the hue (default: 100; open shade 20000, overcast 5000, moonlit night ~1) |
 | **Nodes** | `Name` | string | Node name (required) |
 | | `Position` | [x,y,z] | World-space position |
 | | `LookAt` | [x,y,z] | World-space target to look at |

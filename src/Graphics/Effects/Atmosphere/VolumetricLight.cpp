@@ -401,7 +401,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* Light source direction (opposite of emission direction). */
 		const auto mainLight = lightSet->mainDirectionalLight();
 		const auto lightSource = (-mainLight->direction()).normalized();
-		const auto lightColor = m_lightColorOverride.value_or(mainLight->color());
+		/* The emitted chromaticity (unit luminance): the override is normalised the same way. */
+		const auto lightColor = m_lightColorOverride.has_value() ? m_lightColorOverride->unitLuminanceChromaticity() : mainLight->emissionChromaticity();
 		const auto lightIntensity = m_lightIntensityOverride.value_or(mainLight->intensity());
 
 		/* Project a far point along the light source direction. */
@@ -460,9 +461,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.texelSizeY = 1.0F / static_cast< float >(m_occlusionTargets[0].height()),
 			.nearPlane = constants.nearPlane,
 			.farPlane = constants.farPlane,
-			.lightColorR = lightColor.red(),
-			.lightColorG = lightColor.green(),
-			.lightColorB = lightColor.blue(),
+			.lightColorR = lightColor[Base::Math::X],
+			.lightColorG = lightColor[Base::Math::Y],
+			.lightColorB = lightColor[Base::Math::Z],
 			.lightIntensity = lightIntensity,
 			.density = m_parameters.density,
 			.decay = m_parameters.decay,

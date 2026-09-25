@@ -172,11 +172,11 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	DirectionalLight::onColorChange (const PixelFactory::Color< float > & color) noexcept
+	DirectionalLight::onColorChange (const Math::Vector< 3, float > & chromaticity) noexcept
 	{
-		m_buffer[ColorOffset+0] = color.red();
-		m_buffer[ColorOffset+1] = color.green();
-		m_buffer[ColorOffset+2] = color.blue();
+		m_buffer[ColorOffset+0] = chromaticity[Math::X];
+		m_buffer[ColorOffset+1] = chromaticity[Math::Y];
+		m_buffer[ColorOffset+2] = chromaticity[Math::Z];
 	}
 
 	void
@@ -468,9 +468,11 @@ namespace EmEn::Scenes::Component
 		m_CSMBuffer[CSM_ShadowBiasOffset] = m_shadowBias;
 
 		/* Copy light properties. */
-		m_CSMBuffer[CSM_ColorOffset + 0] = this->color().red();
-		m_CSMBuffer[CSM_ColorOffset + 1] = this->color().green();
-		m_CSMBuffer[CSM_ColorOffset + 2] = this->color().blue();
+		/* ⚠️ The SECOND writer of a directional light's colour (onColorChange() fills the classic block only): the
+		 * emitted chromaticity here too, or every CSM sun keeps the old convention. */
+		m_CSMBuffer[CSM_ColorOffset + 0] = this->emissionChromaticity()[Math::X];
+		m_CSMBuffer[CSM_ColorOffset + 1] = this->emissionChromaticity()[Math::Y];
+		m_CSMBuffer[CSM_ColorOffset + 2] = this->emissionChromaticity()[Math::Z];
 		m_CSMBuffer[CSM_ColorOffset + 3] = 1.0F;
 
 		m_CSMBuffer[CSM_DirectionOffset + 0] = lightDirection.x();
@@ -628,7 +630,7 @@ namespace EmEn::Scenes::Component
 
 		return out << "Directional light data ;\n"
 			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
-			"Color : " << obj.color() << "\n"
+			"Color : " << obj.authoredColor() << " (emitted chromaticity " << obj.emissionChromaticity() << ")" "\n"
 			"Intensity : " << obj.intensity() << "\n"
 			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
 			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';

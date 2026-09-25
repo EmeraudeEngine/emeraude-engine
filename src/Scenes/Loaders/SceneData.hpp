@@ -103,10 +103,11 @@ namespace EmEn::Scenes::Loaders
 
 	/**
 	 * @brief Describes a light declared by an asset, in PHOTOMETRIC units.
-	 * @note The unit of @a intensity depends on @a type and follows the engine's photometric
-	 * contract exactly, which is also the glTF `KHR_lights_punctual` contract:
-	 * a directional light carries an ILLUMINANCE in lux, a point or spot light carries a
-	 * LUMINOUS INTENSITY in candela. A loader MUST convert its source unit here, once, rather
+	 * @note The unit of @a intensity depends on @a type and follows the glTF `KHR_lights_punctual`
+	 * contract: a directional light carries an ILLUMINANCE in lux, a point or spot light carries a
+	 * LUMINOUS INTENSITY in candela — the intensity the light would emit if it were WHITE, which its
+	 * @a color multiplies (a grey light is dimmer). ⚠️ The engine's own light colour is a unit-luminance
+	 * chromaticity since 2026-09-25: SceneDataConsumer folds the colour's luminance into the intensity. A loader MUST convert its source unit here, once, rather
 	 * than leaving the consumer to guess — a descriptor whose unit depends on the producing
 	 * format would defeat the whole point of a format-agnostic contract.
 	 */

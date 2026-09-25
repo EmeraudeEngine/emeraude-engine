@@ -1722,9 +1722,10 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * manifest's 17 000 lx. Reading the LightSet here added that flat ambient to every
 			 * hit point ON TOP of the IBL below — the reflected world was brighter than the world
 			 * it reflected, which breaks the "the reflection matches the raster" contract.
-			 * Falls back to the previous neutral 0.15 grey when no light set is available. */
-			const auto ambientColor = lightSet != nullptr ? lightSet->ambientLightColor() : Base::PixelFactory::Color< float >{0.15F, 0.15F, 0.15F, 1.0F};
-			const auto ambientIntensity = lightSet != nullptr ? context.ambientIlluminance : 1.0F;
+			 * Falls back to the previous neutral 0.15 when no light set is available — carried by the INTENSITY now,
+			 * the colour being a unit-luminance chromaticity (LightSet::ambientEmissionChromaticity()). */
+			const auto ambientColor = lightSet != nullptr ? lightSet->ambientEmissionChromaticity() : Base::Math::Vector< 3, float >{1.0F, 1.0F, 1.0F};
+			const auto ambientIntensity = lightSet != nullptr ? context.ambientIlluminance : 0.15F;
 
 			const TraceFrameUBOData traceData{
 				.invRelativeViewProj = {
@@ -1743,9 +1744,9 @@ namespace EmEn::Graphics::Effects::Lighting
 				.intensity = m_parameters.intensity,
 				.fadeScreenEdge = m_parameters.fadeScreenEdge,
 				.lightCount = this->renderer().rtLightCount(),
-				.ambientR = ambientColor.red() * ambientIntensity,
-				.ambientG = ambientColor.green() * ambientIntensity,
-				.ambientB = ambientColor.blue() * ambientIntensity,
+				.ambientR = ambientColor[Base::Math::X] * ambientIntensity,
+				.ambientG = ambientColor[Base::Math::Y] * ambientIntensity,
+				.ambientB = ambientColor[Base::Math::Z] * ambientIntensity,
 				.skyLuminance = context.skyLuminance,
 				/* |P[1][1]| = 1 / tan(vFOV / 2) (column-major, element 5): focal length in trace texels. */
 				.coneScale = std::abs(projMat.data()[5]) * 0.5F * static_cast< float >(m_traceTarget.height())

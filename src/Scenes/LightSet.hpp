@@ -256,8 +256,12 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets a base ambient light for the scene.
+			 * @brief Sets the ambient light colour: a CHROMATICITY, the intensity (lux) stays the photometric quantity.
 			 * @note This will have an effect even if no light is in the scene.
+			 * @note ⚠️⚠️ Same contract as AbstractLightEmitter::setColor() (owner decision, 2026-09-25): the GPU gets
+			 * the colour scaled to unit Rec.709 luminance (raw components), so setAmbientLightIntensity() is the
+			 * delivered illuminance whatever the hue. A colour no longer DIMS the ambient — the hand-lit demos that
+			 * used a DarkBlue at 5000 lx as a ~120 lx ambient were migrated to the intensity they really delivered.
 			 * @param color The color of the global basis ambient light.
 			 * @return void
 			 */
@@ -265,21 +269,7 @@ namespace EmEn::Scenes
 			setAmbientLightColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
 				m_ambientLightColor = color;
-
-				this->notify(AmbientLightChanged);
-			}
-
-			/**
-			 * @brief Sets a base ambient light for the scene using a cubemap for averaging the color.
-			 * @note This will have an effect even if there is no are in the scene.
-			 * @param cubemap Use the average color of the cubemap to set the global base ambient light.
-			 * @param percent Set the amount of the retrieved color (intensity) from the cubemap. Default 20%.
-			 * @return void
-			 */
-			void
-			setAmbientLightColor (const std::shared_ptr< Graphics::TextureResource::TextureCubemap > & cubemap, float percent = 0.2F) noexcept
-			{
-				m_ambientLightColor = cubemap->averageColor() * Base::Math::clampToUnit(percent);
+				m_ambientEmissionChromaticity = color.unitLuminanceChromaticity();
 
 				this->notify(AmbientLightChanged);
 			}
@@ -303,14 +293,27 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the ambient light color.
-			 * @return const Libraries::PixelFactory::Color< float > &
+			 * @brief Returns the ambient colour as it was authored (setAmbientLightColor()).
+			 * @note ⚠️ NOT GPU-facing (traces, UI): the photometric consumers read ambientEmissionChromaticity().
+			 * @return const Base::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
 			const Base::PixelFactory::Color< float > &
-			ambientLightColor () const noexcept
+			ambientLightAuthoredColor () const noexcept
 			{
 				return m_ambientLightColor;
+			}
+
+			/**
+			 * @brief Returns the ambient chromaticity: the colour scaled to unit Rec.709 luminance.
+			 * @note Multiply by the (effective) ambient illuminance. A channel may exceed 1: floats only.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			ambientEmissionChromaticity () const noexcept
+			{
+				return m_ambientEmissionChromaticity;
 			}
 
 			/**
@@ -509,19 +512,6 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Computes the ambient light fraction to add to global ambient light.
-			 * @tparam vectorData_t The data type to use for Vector. Default float.
-			 * @param light The targeted light.
-			 * @return Base::Math::Vector< 4, vectorData_t >
-			 */
-			template< typename vectorData_t = float >
-			Base::Math::Vector< 4, vectorData_t >
-			getLightColorFraction (const std::shared_ptr< Component::AbstractLightEmitter > & light) const noexcept
-			{
-				return light->color().toVector4<vectorData_t>() * this->lightPercentToAmbient();
-			}
-
-			/**
 			 * @brief Removes all lights.
 			 * @return void
 			 */
@@ -637,6 +627,8 @@ namespace EmEn::Scenes
 			/** @brief Render frames drained so far (destroyRetiredLights() calls). Guarded by m_lightsAccess. */
 			uint64_t m_renderFrameCounter{0};
 			Base::PixelFactory::Color< float > m_ambientLightColor{Base::PixelFactory::Black};
+			/** @brief m_ambientLightColor scaled to unit luminance; black gives zero. */
+			Base::Math::Vector< 3, float > m_ambientEmissionChromaticity{0.0F, 0.0F, 0.0F};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
 			bool m_initialized{false};

@@ -121,11 +121,11 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	PointLight::onColorChange (const PixelFactory::Color< float > & color) noexcept
+	PointLight::onColorChange (const Math::Vector< 3, float > & chromaticity) noexcept
 	{
-		m_buffer[ColorOffset+0] = color.red();
-		m_buffer[ColorOffset+1] = color.green();
-		m_buffer[ColorOffset+2] = color.blue();
+		m_buffer[ColorOffset+0] = chromaticity[Math::X];
+		m_buffer[ColorOffset+1] = chromaticity[Math::Y];
+		m_buffer[ColorOffset+2] = chromaticity[Math::Z];
 	}
 
 	void
@@ -418,7 +418,7 @@ namespace EmEn::Scenes::Component
 
 		return out << "Point light data :" "\n"
 			"Position (World Space) : " << worldCoordinates.position() << "\n"
-			"Color : " << obj.color() << "\n"
+			"Color : " << obj.authoredColor() << " (emitted chromaticity " << obj.emissionChromaticity() << ")" "\n"
 			"Intensity : " << obj.intensity() << "\n"
 			"Radius : " << obj.m_radius << "\n"
 			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"

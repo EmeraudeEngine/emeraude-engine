@@ -1165,7 +1165,8 @@ it is the algorithm's, not the exponent's.
 >   carried per light in the RT light SSBO's 4th vec4, slot `.z` (`LightSet.cpp` fill:
 >   `isShadowCastingEnabled()`); both `RTR.cpp` and `RTGI.cpp` gate on it.
 > - The reflection hit lighting includes the ACTUAL scene ambient
->   (`LightSet::ambientLightColor() × ambientLightIntensity()`, via RTR push constants).
+>   (`LightSet::ambientEmissionChromaticity() × FrameContext::ambientIlluminance` since 2026-09-25 — the colour is a
+>   unit-luminance chromaticity, the removed `ambientLightColor()` dimmed it — through RTR's frame UBO).
 >
 > **Files involved:** `Scenes/LightSet.cpp` (flag), `Graphics/Effects/Lighting/RTR.{hpp,cpp}`
 > (shadowRayVisibility + gating + ambient push constants), `RTGI.cpp` (gating).
@@ -1572,6 +1573,37 @@ truthful, so nothing was renamed.
 > exactly as this note asked. See the next entry, "The legacy specular was not energy-normalised, and
 > `Shininess` was authored as a glossiness". The retune did NOT become a per-file sweep: the manifest
 > key was re-interpreted at the parse boundary instead.
+
+### Fixed: a light's COLOUR dimmed its light — it is now a unit-luminance chromaticity (Sep 2026)
+
+The colour multiplied the photometric intensity with no normalisation, everywhere (raster light passes, CSM block,
+RT light SSBO, five effects, the ambient): a tinted light emitted only the Rec.709 luminance of its colour — an
+orange (255, 140, 40) 38 % less than white, a Kelvin sun at 3000 K 24 % less, a `DarkBlue` ambient at 5000 lx
+120 lx. Owner decisions (2026-09-25): the colour becomes a chromaticity scaled to UNIT luminance
+(`Color< float >::unitLuminanceChromaticity()`), the components taken RAW — no sRGB decode, because no colour
+CONSTANT of the engine is decoded (material albedo and emission constants, the view UBOs: decoding only lights
+would have made `Marble`'s ball and its own light drift apart in hue) — and the intensity stays the true lux / cd.
+
+Traps met on the way:
+- **Two directional writers**: `onColorChange()` fills the classic block, `updateCascades()` refills the CSM block
+  from the colour every tick. Normalising only the first would have left every CSM sun on the old convention.
+- **A channel exceeds 1** (pure blue 13.85): any clamping `Color< float >` on the path silently undoes it — the
+  probe-volume ambient (`IrradianceProbeVolume::FrameInputs::ambient`) was one, and ALREADY capped every probe ambient
+  above 1 lx at 1 (fixed, together with its missing 1/π: the raster and RTR divide the ambient illuminance by π, the
+  probes did not). The lens flare capped the scalar before the colour multiply: its ceiling now holds on the
+  brightest channel.
+- **A colour used as a dimmer** loses its dimming: `LampFlicker::colorForHealth()` also cost 37 % of luminance at
+  health 0 — moved to the intensity (`luminanceForHealth()`); the hand-lit demo ambients were migrated to the
+  illuminance they actually delivered (old intensity × old luminance), so their look is preserved.
+- **Same audit, RTGI**: its trace walked min(SSBO length, 16) = 16 slots whatever the frame's light count, while the
+  packer never clears the tail, so a light disabled since (the sun course at dusk shifts the later lights down one
+  slot) was counted twice. It reads `Renderer::rtLightCount()` now (`skyParams.w` of its frame block), as RTR and
+  the probes already did, and KEEPS its deliberate 16-light cap for the GI bounces (the SSBO holds 128: a scene with
+  more lights sees only the first 16 in its GI, as before).
+- **RTGI's bounce hits add no flat ambient** (RTR and the probes do): pre-existing, item
+  `rtgi-bounce-hits-miss-flat-ambient`.
+- **Also found, NOT fixed (owner decision pending)**: point and spot lights have had no inverse-square falloff since
+  2026-08-12 (item `point-spot-falloff-lost-inverse-square`).
 
 ### Fixed: lights added to a DISABLED light set lit nothing, and only an Info line said so (Sep 2026)
 

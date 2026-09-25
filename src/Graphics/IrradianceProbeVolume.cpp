@@ -1039,7 +1039,7 @@ namespace EmEn::Graphics
 			m_parameters.probeSpacing * MaxRayDistanceCellDiagonals * 1.7320508F
 		};
 		block.skyAmbient = {inputs.skyLuminance, m_parameters.enabled ? 1.0F : 0.0F, static_cast< float >(inputs.lightCount), m_parameters.bounceFeedback};
-		block.ambientColor = {inputs.ambient.red(), inputs.ambient.green(), inputs.ambient.blue(), m_parameters.indirectIntensity};
+		block.ambientColor = {inputs.ambient[Base::Math::X], inputs.ambient[Base::Math::Y], inputs.ambient[Base::Math::Z], m_parameters.indirectIntensity};
 		/* Rotation matrix of the quaternion, stored as COLUMNS (GLSL mat3 constructor order). */
 		block.rotation0 = {1.0F - 2.0F * (qy * qy + qz * qz), 2.0F * (qx * qy + qz * qw), 2.0F * (qx * qz - qy * qw), 0.0F};
 		block.rotation1 = {2.0F * (qx * qy - qz * qw), 1.0F - 2.0F * (qx * qx + qz * qz), 2.0F * (qy * qz + qx * qw), 0.0F};

@@ -156,7 +156,7 @@ namespace EmEn::Scenes
 	void
 	Scene::refreshAmbientLightProperties () const noexcept
 	{
-		const auto & color = m_lightSet.ambientLightColor();
+		const auto & color = m_lightSet.ambientEmissionChromaticity();
 		/* ⚠️ THE single site of the rule — see effectiveAmbientIlluminance(). */
 		const auto intensity = this->effectiveAmbientIlluminance();
 

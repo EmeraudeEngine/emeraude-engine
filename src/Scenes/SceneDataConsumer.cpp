@@ -276,8 +276,12 @@ namespace EmEn::Scenes
 				 * (setDirectionalLightShadows()): a runtime budget, never asset data. */
 				if ( const auto component = m_directionalLightShadows.build(entity, componentName, [&light] (auto & component) {
 					component.useDirectionVector(true);
+					/* ⚠️ KHR_lights_punctual (and UsdLux): the intensity is what the light would emit if it were
+					 * WHITE, and the colour multiplies it (a grey light is dimmer — PointLightIntensityTest). The
+					 * engine's colour is a unit-luminance chromaticity since 2026-09-25, so the colour's luminance
+					 * is folded into the intensity here: the asset renders exactly as the Khronos viewer does. */
 					component.setColor(light.color);
-					component.setIlluminance(light.intensity);
+					component.setIlluminance(light.intensity * light.color.luminance());
 				}); component == nullptr )
 				{
 					TraceError{ClassId} << "Unable to create the directional light '" << componentName << "' (entity full) !";
@@ -298,8 +302,10 @@ namespace EmEn::Scenes
 			case Scenes::Loaders::LightType::Point :
 				entity.template componentBuilder< Component::PointLight >(componentName)
 					.setup([&light] (auto & component) {
+						/* The colour's luminance folded into the intensity: see the directional case. The radius
+						 * below keeps deriving from the asset's white-equivalent intensity, as before. */
 						component.setColor(light.color);
-						component.setIntensity(light.intensity);
+						component.setIntensity(light.intensity * light.color.luminance());
 
 						/* The range is a CULLING BOUND, not a dimmer. An asset that declares
 						 * none gets one DERIVED FROM ITS PHOTOMETRY — the distance at which it
@@ -320,8 +326,9 @@ namespace EmEn::Scenes
 			case Scenes::Loaders::LightType::Spot :
 				entity.template componentBuilder< Component::SpotLight >(componentName)
 					.setup([&light] (auto & component) {
+						/* The colour's luminance folded into the intensity: see the directional case. */
 						component.setColor(light.color);
-						component.setIntensity(light.intensity);
+						component.setIntensity(light.intensity * light.color.luminance());
 
 						/* ⚠️ setRadius() is derived from the OUTER cone angle, so the angles
 						 * MUST be set first — reversing these two lines silently yields a

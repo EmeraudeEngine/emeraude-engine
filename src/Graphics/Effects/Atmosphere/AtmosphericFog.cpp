@@ -349,14 +349,15 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		}
 
 		const auto lightDir = mainLight->direction().normalized();
-		const auto inscatterColor = m_inscatterColorOverride.value_or(mainLight->color());
+		/* The emitted chromaticity (unit luminance): the override is normalised the same way. */
+		const auto inscatterColor = m_inscatterColorOverride.has_value() ? m_inscatterColorOverride->unitLuminanceChromaticity() : mainLight->emissionChromaticity();
 
 		/* PHOTOMETRIC SCALE. 'fogColor' and the light colour are CHROMATICITIES; the buffer this
 		 * effect composites into holds ABSOLUTE LUMINANCE in nits. Multiplying the chromaticity in
 		 * raw made the fog ~0.6 nits, which is black once the camera exposure is applied — and for
 		 * a sky pixel the fog amount saturates (the fictive ray length is maxDistance), so the sky
 		 * was REPLACED by that black. Same separation VolumetricLight already makes between
-		 * mainLight->color() and mainLight->intensity().
+		 * mainLight->emissionChromaticity() and mainLight->intensity().
 		 * Default derivation: L = E · ρ / π, the Lambertian relation used everywhere else in the
 		 * engine, with E the illuminance in lux and ρ carried by the chromaticity itself. */
 		const auto fogLuminance = medium->resolveLuminance(mainLight->illuminance());
@@ -400,9 +401,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.lightDirY = lightDir.y(),
 			.lightDirZ = lightDir.z(),
 			.inscatterExponent = m_parameters.inscatterExponent,
-			.inscatterColorR = inscatterColor.red() * fogLuminance,
-			.inscatterColorG = inscatterColor.green() * fogLuminance,
-			.inscatterColorB = inscatterColor.blue() * fogLuminance,
+			.inscatterColorR = inscatterColor[Base::Math::X] * fogLuminance,
+			.inscatterColorG = inscatterColor[Base::Math::Y] * fogLuminance,
+			.inscatterColorB = inscatterColor[Base::Math::Z] * fogLuminance,
 			.inscatterIntensity = m_parameters.inscatterIntensity,
 			.skyFogEnabled = m_parameters.skyFogEnabled ? 1.0F : 0.0F
 		};

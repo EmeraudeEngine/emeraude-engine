@@ -308,10 +308,11 @@ absent row reads as "never tried", which is not the same claim.
   Three settings, and the first two are **independent axes** — what is behind the subject, and what
   the subject reflects:
   `Core/Viewers/Background` (empty = a bit-exact black backdrop), `Core/Viewers/EnvironmentCubemap`
-  (empty = whatever the background installed) and `Core/Viewers/AmbientIntensity` (200 lux by
-  default, and 200 lux of flat ambient washes out a sheen rim).
+  (empty = whatever the background installed) and `Core/Viewers/AmbientIlluminance` (80.72 lux
+  delivered by default — renamed 2026-09-25 from `AmbientIntensity` = 200 × a dimming colour — and that flat
+  ambient washes out a sheen rim).
   Measured on `SheenCloth`: rim-to-backdrop contrast **8.1× with the defaults, 390× with
-  `Background = ""` and `AmbientIntensity = 0`** — a 48× gain, backdrop exactly (0,0,0).
+  `Background = ""` and `AmbientIlluminance = 0`** — a 48× gain, backdrop exactly (0,0,0).
   ⚠️ **Black is not the universal answer**: `SpecularTest` is too DARK, not washed out (F0 ≤ 0.04 on
   a black dielectric), and needs a bright *reflected* environment instead. Read what a test declares
   before choosing its environment.

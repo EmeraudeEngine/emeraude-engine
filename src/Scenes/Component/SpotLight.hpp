@@ -319,11 +319,11 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
 			void
-			onColorChange (const Base::PixelFactory::Color< float > & color) noexcept override
+			onColorChange (const Base::Math::Vector< 3, float > & chromaticity) noexcept override
 			{
-				m_buffer[ColorOffset+0] = color.red();
-				m_buffer[ColorOffset+1] = color.green();
-				m_buffer[ColorOffset+2] = color.blue();
+				m_buffer[ColorOffset+0] = chromaticity[Base::Math::X];
+				m_buffer[ColorOffset+1] = chromaticity[Base::Math::Y];
+				m_buffer[ColorOffset+2] = chromaticity[Base::Math::Z];
 			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
@@ -379,7 +379,8 @@ namespace EmEn::Scenes::Component
 			float m_shadowBias{0.005F}; /**< Shadow bias to prevent shadow acne. */
 			std::array< float, 4 + 4 + 4 + 4 + 16 + 4 > m_buffer{
 				/* Light color. */
-				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
+				/* The emitted chromaticity (unit luminance), never the authored colour: AbstractLightEmitter::setColor(). */
+				this->emissionChromaticity()[Base::Math::X], this->emissionChromaticity()[Base::Math::Y], this->emissionChromaticity()[Base::Math::Z], 1.0F,
 				/* Light position (Spot) */
 				0.0F, 0.0F, 0.0F, 1.0F, // NOTE: Put W to zero and the light will follows the camera.
 				/* Light direction (Spot). */

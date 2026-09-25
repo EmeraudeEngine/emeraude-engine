@@ -183,7 +183,13 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets the light color.
+			 * @brief Sets the light colour: a CHROMATICITY, the intensity stays the photometric quantity.
+			 * @note ⚠️⚠️ Owner decision (2026-09-25): what reaches the GPU is the colour scaled to UNIT Rec.709
+			 * luminance (Color::unitLuminanceChromaticity(), components RAW, no sRGB decode — like every colour
+			 * constant of the engine), so intensity × chromaticity delivers exactly the lux or candela set with
+			 * setIntensity(), whatever the hue. Until then the colour multiplied the intensity as is, and a tinted light
+			 * emitted Y(colour) of its number (an orange (255, 140, 40) 38 % less than white). A colour no longer DIMS a
+			 * light: dim through setIntensity(). Only black (zero luminance) keeps meaning "emits nothing".
 			 * @param color A reference to a color.
 			 * @return void
 			 */
@@ -207,14 +213,29 @@ namespace EmEn::Scenes::Component
 			void setIntensity (float intensity) noexcept;
 
 			/**
-			 * @brief Returns the light color.
-			 * @return const Libraries::PixelFactory::Color< float > &
+			 * @brief Returns the colour as it was authored (setColor()).
+			 * @note ⚠️ NOT GPU-facing: traces, serialisation, UI. Every photometric consumer reads
+			 * emissionChromaticity(). The former `color()` was removed on purpose so the compiler lists them all.
+			 * @return const Base::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
 			const Base::PixelFactory::Color< float > &
-			color () const noexcept
+			authoredColor () const noexcept
 			{
 				return m_color;
+			}
+
+			/**
+			 * @brief Returns the emitted chromaticity: the colour scaled to unit Rec.709 luminance.
+			 * @note Multiply by intensity() for the emitted photometric quantity. A channel may exceed 1 (pure blue:
+			 * 13.85): carry it as floats, never through a clamping Color< float >.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			emissionChromaticity () const noexcept
+			{
+				return m_emissionChromaticity;
 			}
 
 			/**
@@ -550,19 +571,6 @@ namespace EmEn::Scenes::Component
 				return false;
 			}
 
-			/**
-			 * @brief Returns an intensified color by a value.
-			 * @param color A reference to a color.
-			 * @param intensity The intensity value.
-			 * @return Base::Math::Vector< 4, float >
-			 */
-			static
-			Base::Math::Vector< 4, float >
-			intensifiedColor (const Base::PixelFactory::Color< float > & color, float intensity) noexcept
-			{
-				return {color.red() * intensity, color.green() * intensity, color.blue() * intensity, 1.0F};
-			}
-
 		protected:
 
 			/**
@@ -712,11 +720,11 @@ namespace EmEn::Scenes::Component
 			virtual void writeUniformBlock (float * destination) noexcept = 0;
 
 			/**
-			 * @brief Event when the color light changes.
-			 * @param color A reference to a color.
+			 * @brief Event when the light colour changes.
+			 * @param chromaticity The emitted chromaticity (unit luminance, see setColor()).
 			 * @return void
 			 */
-			virtual void onColorChange (const Base::PixelFactory::Color< float > & color) noexcept = 0;
+			virtual void onColorChange (const Base::Math::Vector< 3, float > & chromaticity) noexcept = 0;
 
 			/**
 			 * @brief Event when the color intensity changes.
@@ -732,6 +740,8 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ShadowMapEnabled{UnusedFlag + 2UL};
 
 			Base::PixelFactory::Color< float > m_color{DefaultColor};
+			/** @brief m_color scaled to unit luminance (setColor()); DefaultColor is white, hence (1, 1, 1). */
+			Base::Math::Vector< 3, float > m_emissionChromaticity{1.0F, 1.0F, 1.0F};
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;

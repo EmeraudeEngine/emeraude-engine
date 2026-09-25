@@ -2928,12 +2928,12 @@ namespace EmEn::Graphics
 
 		/* The raster's ambient term, as the traced effects add it at their hits: the EFFECTIVE
 		 * illuminance (zero when the sky drives the ambient), never LightSet::ambientLightIntensity(). */
-		const auto ambientColor = scene->lightSet().ambientLightColor();
+		const auto & ambientColor = scene->lightSet().ambientEmissionChromaticity();
 		const auto ambientIlluminance = scene->effectiveAmbientIlluminance();
 
 		const IrradianceProbeVolume::FrameInputs inputs{
 			.cameraPosition = {inv[12], inv[13], inv[14]},
-			.ambient = {ambientColor.red() * ambientIlluminance, ambientColor.green() * ambientIlluminance, ambientColor.blue() * ambientIlluminance, 1.0F},
+			.ambient = ambientColor * ambientIlluminance,
 			.skyLuminance = sceneSkyLuminance(scene),
 			.lightCount = this->rtLightCount()
 		};

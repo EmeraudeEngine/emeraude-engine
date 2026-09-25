@@ -177,7 +177,7 @@ namespace EmEn::Graphics
 			void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateAmbientLightProperties() */
-			void updateAmbientLightProperties (const Base::PixelFactory::Color< float > & color, float intensity, float environmentLuminance, float IBLDiffuseWeight) noexcept override;
+			void updateAmbientLightProperties (const Base::Math::Vector< 3, float > & chromaticity, float intensity, float environmentLuminance, float IBLDiffuseWeight) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::create() */
 			bool create (Renderer & renderer, const std::string & instanceID, uint32_t frameCount) noexcept override;
