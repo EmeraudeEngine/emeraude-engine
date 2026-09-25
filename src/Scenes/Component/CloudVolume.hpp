@@ -115,6 +115,14 @@ namespace EmEn::Scenes::Component
 				float detailFrequency{4.0F};
 				/** @brief The drift of the detail noise — the "boiling" of a live cumulus — in cells per second. */
 				float boilingSpeed{0.04F};
+				/**
+				 * @brief How much the cloud takes the HUE of the sky's irradiance, in [0, 1] (owner, 2026-09-25).
+				 * @note 0 (the default) is physical: white droplets, lit by a white sun they stay white. At 1 the scattered
+				 * light is multiplied by the zenith irradiance's colour normalised by its brightest channel, so no channel is
+				 * ever boosted (StormyDays: 1.00, 0.82, 0.52 — a warm cloud, ~84 % as bright). It follows the sky, and the
+				 * sky follows the sun course. ⚠️ Artistic: a blue sky makes blue clouds, so `forest` keeps 0.
+				 */
+				float skyTint{0.0F};
 				/** @brief Single-scattering albedo σs/σt, a chromaticity in [0, 1]. Water droplets absorb
 				 * almost nothing in the visible range: 1 is physical. */
 				Base::PixelFactory::Color< float > scatteringAlbedo{1.0F, 1.0F, 1.0F, 1.0F};

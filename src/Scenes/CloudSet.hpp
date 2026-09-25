@@ -83,6 +83,14 @@ namespace EmEn::Scenes
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"CloudSet"};
 
+			/**
+			 * @brief The automatic coverage: the side of the shadow map as a multiple of the clouds' mean width.
+			 * @note Never below `Core/Graphics/PostProcessing/Clouds/ShadowCoverage` (1024 m by default), which keeps
+			 * a scene of small clouds exactly where it was (`forest`: 70-130 m clouds, 1024 m) and lets a landscape of
+			 * cumulus cast over kilometres (`terrain`: 300-1000 m clouds, ~5 km).
+			 */
+			static constexpr float AutomaticCoverageFactor{8.0F};
+
 			/** @brief The bindless slot of a shadow map that does not exist (yet). */
 			static constexpr uint32_t NoShadowMap{UINT32_MAX};
 
@@ -107,6 +115,10 @@ namespace EmEn::Scenes
 			 * read once), registered in the scene's bindless 2D array, and recorded only on a frame whose
 			 * published sun block already reads it — the matrix the pass uses must be the one the lit
 			 * shaders use. Called by Scene::recordCloudShadowMap(), before the scene pass.
+			 * The map SIZES ITSELF on the clouds: its side is AutomaticCoverageFactor times their mean width (the
+			 * `ShadowCoverage` setting is the floor), re-evaluated when the number of drawn clouds changes — never
+			 * every frame, a texel size that breathes would make the shadows crawl; and the range it searches
+			 * along the light encloses every cloud, every frame (CloudShadowMap::MinimumDepthRange is the floor).
 			 * @param commandBuffer A reference to the frame's command buffer, outside any render pass.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param bindlessTextureSet A reference to the scene's bindless set.
@@ -221,6 +233,10 @@ namespace EmEn::Scenes
 			std::atomic< uint32_t > m_shadowMapBindlessIndex{NoShadowMap};
 			std::atomic< float > m_shadowMapCoverage{0.0F};
 			std::atomic< uint32_t > m_shadowMapResolution{0};
+			/* RENDER THREAD only: the floor of the automatic coverage (the setting), and the drawn cloud count the
+			 * current coverage was computed for. */
+			float m_shadowMapMinimumCoverage{0.0F};
+			uint32_t m_shadowMapCoverageCloudCount{0};
 			/* The creation was attempted (or declined by the settings): never retried every frame. */
 			bool m_shadowMapResolved{false};
 	};

@@ -67,6 +67,13 @@ Described in `src/Graphics/AGENTS.md` § *The clouds' shadow on the world*, `src
   uniform branch in every PBR directional variant (no new pass type — signalled to the owner);
   `Effects/Shared/CloudVolumeGLSL.hpp` = the ONE cloud description both passes read;
   `Clouds/ShadowsEnabled|ShadowResolution|ShadowCoverage`.
+- **The map sizes itself on the clouds (2026-09-25, owner: automatic)**: side = `CloudSet::AutomaticCoverageFactor`
+  (8) × the drawn clouds' mean horizontal width, never below `ShadowCoverage` (now the FLOOR, 1024 m — `forest`
+  stays at 1024 m, 1024 px, by construction), re-evaluated when the drawn count changes (never per frame: a
+  breathing texel crawls). The range searched along the light encloses every cloud each frame, never below
+  `CloudShadowMap::MinimumDepthRange` (2000 m): a fixed 2000 m lost the shadow of a cloud 1500 m up once the sun
+  dropped under ~45°. Measured on `terrain` with 20 cumulus of 300-1000 m: 4 930 m, 4.8 m per texel; with its
+  32 cumulus of 1-3 km (2026-09-25, back ON by default, option 10 = 0 removes them): 14 553 m, 14.2 m per texel.
 - Measured on `forest` (3070 Ti, 2880×1620, validation ON, 0 VUID): map pass 0.20 ms; the lookup below
   the scene pass's run-to-run noise; the ground in a cloud shadow at 0.31-0.35 of its sunlit
   luminance, 1.004 outside (A/B across two runs, pinned sunny-16, scene-referred).

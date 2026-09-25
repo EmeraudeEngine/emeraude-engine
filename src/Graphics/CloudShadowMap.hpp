@@ -71,8 +71,12 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"CloudShadowMap"};
 
-			/** @brief How far along the light, either side of the camera's plane, clouds are looked for, in metres. */
-			static constexpr auto DepthRange{2000.0F};
+			/**
+			 * @brief The least distance along the light, either side of the camera's plane, clouds are looked for, in metres.
+			 * @note The range actually used encloses every cloud (Scenes::CloudSet::recordShadowMap()): a fixed 2000 m
+			 * lost the shadow of a cloud 1500 m up as soon as the sun dropped below ~45° (4.4 km along the light at 20°).
+			 */
+			static constexpr auto MinimumDepthRange{2000.0F};
 
 			/** @brief Steps across the clouds a texel's ray crosses. */
 			static constexpr uint32_t StepCount{48};
@@ -138,9 +142,21 @@ namespace EmEn::Graphics
 			 * @param clouds The clouds, as the view march reads them.
 			 * @param cloudCount How many of them are valid.
 			 * @param worldToMap The light's published cloud shadow matrix.
+			 * @param depthRange How far along the light, either side of the camera's plane, clouds are looked for, in metres.
 			 * @return bool
 			 */
-			bool record (const Vulkan::CommandBuffer & commandBuffer, const std::array< CloudBlock, MaxCloudVolumes > & clouds, uint32_t cloudCount, const Base::Math::Matrix< 4, float > & worldToMap) noexcept;
+			bool record (const Vulkan::CommandBuffer & commandBuffer, const std::array< CloudBlock, MaxCloudVolumes > & clouds, uint32_t cloudCount, const Base::Math::Matrix< 4, float > & worldToMap, float depthRange) noexcept;
+
+			/**
+			 * @brief Sets the side of the map, in metres (the automatic coverage follows the clouds).
+			 * @param coverage The side of the map, in metres.
+			 * @return void
+			 */
+			void
+			setCoverage (float coverage) noexcept
+			{
+				m_coverage = coverage;
+			}
 
 			/**
 			 * @brief Returns the map, to register in the scene's bindless 2D array.

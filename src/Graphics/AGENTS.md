@@ -1900,8 +1900,8 @@ Core/Graphics/PostProcessing/
 ├── Clouds/Enabled                     true (default): false DECLINES the scene-driven cloud pass
 │                                      for the session (read once, the first frame a cloud exists)
 ├── Clouds/ShadowsEnabled              true (default): the clouds' Beer shadow map on the lit
-│   Clouds/ShadowResolution            materials; 1024 texels over Clouds/ShadowCoverage 1024 m
-│   Clouds/ShadowCoverage              (1 m per texel) — read once, the first frame a cloud exists
+│   Clouds/ShadowResolution            materials; 1024 texels, read once, the first frame a cloud is drawn
+│   Clouds/ShadowCoverage              the FLOOR of the side (1024 m): the map sizes itself on the clouds
 └── <Effect>/<param>                   single-lane effects: TemporalAA, VolumetricLight,
                                        DepthOfField, MotionBlur, Clouds (StepCount 64,
                                        LightStepCount 6, GroundAlbedo 0.2)
@@ -2544,6 +2544,16 @@ See `docs/caution-points.md` for the Y-reconstruction pitfall.
 
 ### VolumetricClouds — clouds placed as ENTITIES, drawn by a scene-driven pass (Sep 2026)
 
+> [!WARNING]
+> **The distance LOD (2026-09-25)**: past one base step the view step grows to `FarStepScale` (2) base steps and
+> samples the shape's mip log2(k) — −9 % toward the horizon, invisible on a zoom. ⚠️⚠️ Every box entry is DITHERED,
+> including one inside a step: stopping exactly on it re-aligned all pixels and drew contour rings on the far
+> clouds. Dead ends, measured: a pixel-footprint LOD (nothing sub-pixel before ~20 km on 1-3 km clouds), a
+> directional sky ambient (identical colour, +0.6 ms). The cost is the view steps, not the sun march.
+> **Sky tint**: `Look::skyTint` (0-1, default 0) multiplies the scattered light by the sky's hue (zenith irradiance
+> over its brightest channel) — `terrain` sets 1.0 against its StormyDays; a blue sky would make blue clouds.
+> `docs/caution-points.md` § *The cloud march: a distance LOD that works, and two dead ends*.
+
 **Owner decisions (2026-09-24), do not re-litigate:** fly-through clouds (the VOXEL family, not a
 weather-map sky layer), a cloud is an ENTITY placed by hand, its shape comes from a PROCEDURAL
 generator, a few HERO clouds (≤ 32 drawn), a realistic white-out inside, **scaling a cloud KEEPS
@@ -2620,6 +2630,16 @@ of the voxels and read 3-5× smaller than its box (a 6.4 m cloud in a ~25 m box)
   (`Act.setExposure(16, 0.01, 100)`, sunny-16), never on the auto-exposed frame.
 
 #### The clouds' shadow on the world — a Beer shadow map carried by the sun (stage 2 lot 1, Sep 2026)
+
+> **The map sizes itself on the clouds (2026-09-25, owner: automatic).** `Scenes::CloudSet::recordShadowMap()`
+> sets its side to `AutomaticCoverageFactor` (8) × the drawn clouds' mean horizontal width, never below
+> `Clouds/ShadowCoverage` (the floor, 1024 m — `forest`'s 70-130 m clouds keep exactly 1024 m), re-evaluated
+> when the number of drawn clouds changes, never per frame (a texel size that breathes makes the shadows
+> crawl). The range the texel rays search along the light encloses every cloud, recomputed each frame from
+> their boxes, never below `CloudShadowMap::MinimumDepthRange` (2000 m): the fixed ±2000 m lost the shadow of a
+> cloud 1500 m up as soon as the sun dropped under ~45° (4.4 km along the light at 20°). `terrain`, 20 cumulus
+> of 300-1000 m: 4 930 m, 4.8 m per texel. An existing map is recorded every frame even with no cloud drawn
+> (an empty record clears it).
 
 **Owner decisions (2026-09-24):** the shadow term is **carried by the light** (its matrix and its
 bindless slot live in the directional light's uniform block), and the **lit materials come first** —

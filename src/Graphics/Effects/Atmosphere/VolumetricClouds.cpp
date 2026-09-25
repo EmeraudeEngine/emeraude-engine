@@ -96,8 +96,15 @@ const int MaxHits = 8;
 const float DetailNoiseCells = 4.0;
 /* Below this transmittance nothing behind the cloud can show through the tone mapper. */
 const float MinTransmittance = 0.01;
-/* The view step grows with the distance, 1.5 % of it, between an eighth of the base step and the base step. */
+/* The view step grows with the distance, 1.5 % of it, from an eighth of the base step up to FarStepScale base
+ * steps, and a step k base steps long samples the shape's mip log2(k) (viewStepLod()): the DISTANCE LOD, -9 %
+ * toward the horizon on `terrain` (2026-09-25). Band-limited to the step, the field keeps the base step's ratio
+ * to its voxels at any distance. ⚠️ 4x saved no more and showed a dither weave (the dither spans the step).
+ * ⚠️⚠️ The contour rings the first attempt drew were NOT the step: an UNDITHERED box entry inside a step (see the
+ * march) re-aligned every pixel.
+ * docs/caution-points.md § The cloud march: a distance LOD that works. */
 const float DistanceStepFactor = 0.015;
+const float FarStepScale = 2.0;
 /* ⚠️ In the dense part the step follows the OPTICAL depth instead: up to 0.4 per step. Measured on
  * `forest` (2026-09-24), a camera inside a 100 m cloud marched 0.28 m steps with six sun samples
  * each: 13.3 ms for a uniform white-out. The energy-conserving step is exact for a constant source,
@@ -121,6 +128,20 @@ layout(set = 0, binding = EMEN_CLOUDS_FRAME_BINDING, std140) uniform EmCloudFram
 )GLSL" EMEN_CSM_SAMPLING_GLSL(3, 5) R"GLSL(
 #endif
 )GLSL" EMEN_MARCH_DITHER_GLSL R"GLSL(
+
+/* The view step at a distance t along the ray, for a cloud whose base step is baseStep. */
+float
+viewStep (float t, float baseStep)
+{
+	return clamp(t * DistanceStepFactor, baseStep * 0.125, baseStep * FarStepScale);
+}
+
+/* The shape mip a view step samples: 0 up to the base step, log2 of how many base steps it spans beyond. */
+float
+viewStepLod (float step, float baseStep)
+{
+	return log2(max(step / baseStep, 1.0));
+}
 
 /* Henyey-Greenstein phase function, normalised over the sphere.
  * L. G. Henyey & J. L. Greenstein, "Diffuse radiation in the galaxy", 1941. */
@@ -203,7 +224,10 @@ cloudLightRadiance (EmCloud cloud, uint shapeIndex, vec3 box, vec3 worldPosition
 		lightRadiance += sunIlluminance * (visibility * sunScattering);
 	}
 
-	/* The isotropic ambient integrates to itself over the sphere. */
+	/* The isotropic ambient integrates to itself over the sphere. ⚠️ The sky is read at the ZENITH on purpose:
+	 * a directional read (the dome each side of the cloud faces, 2026-09-25) changed NOTHING on `terrain` (cloud
+	 * colour identical to 0.1/255) for +0.6 ms — a store sky's hue barely varies with the direction, and the sun
+	 * dominates a lit cloud ~7:1. docs/caution-points.md § The cloud march: a distance LOD that works. */
 	return lightRadiance + mix(groundRadiance, skyRadiance, clamp(box.y * 0.5 + 0.5, 0.0, 1.0));
 }
 
@@ -317,6 +341,10 @@ void main()
 	float skyLuminance = emFrame.ambient.x;
 	vec3 skyRadiance = skyLuminance > 0.0 ? textureLod(texturesCube[IrradianceCubemapSlot], vec3(0.0, 1.0, 0.0), 0.0).rgb * skyLuminance : vec3(0.0);
 	vec3 groundIrradiance = sunIlluminance * max(-sunDirection.y, 0.0) + skyRadiance * EmPi;
+
+	/* The sky's HUE, normalised by its brightest channel so a tint never boosts one (Look::skyTint). */
+	float skyPeak = max(max(skyRadiance.r, skyRadiance.g), skyRadiance.b);
+	vec3 skyHue = skyPeak > 0.0 ? skyRadiance / skyPeak : vec3(1.0);
 	vec3 groundRadiance = emFrame.ambient.y * groundIrradiance / EmPi;
 
 	int stepCount = max(int(emFrame.cameraForward.w), 1);
@@ -346,7 +374,7 @@ void main()
 	float transmittance = 1.0;
 	vec3 inscatter = vec3(0.0);
 
-	float t = hitEnter[0] + dither * clamp(hitEnter[0] * DistanceStepFactor, hitBaseStep[0] * 0.125, hitBaseStep[0]);
+	float t = hitEnter[0] + dither * viewStep(hitEnter[0], hitBaseStep[0]);
 
 	for ( int iteration = 0; iteration < stepCount * 6 && t < tEnd; ++iteration )
 	{
@@ -382,15 +410,19 @@ void main()
 
 			EmCloud cloud = emFrame.clouds[hitCloud[hit]];
 			uint shapeIndex = uint(cloud.shape.w + 0.5);
-			float cloudStep = clamp(t * DistanceStepFactor, hitBaseStep[hit] * 0.125, hitBaseStep[hit]);
+			float cloudStep = viewStep(t, hitBaseStep[hit]);
+			float shapeLod = viewStepLod(cloudStep, hitBaseStep[hit]);
 			vec3 box = toBox(cloud, samplePosition);
 
-			/* ⚠️ The skip channel at mip 0 ONLY: an average of distances is not a distance. */
-			vec2 shape = textureLod(textures3D[nonuniformEXT(shapeIndex)], box * 0.5 + 0.5, 0.0).rg;
+			vec2 shape = textureLod(textures3D[nonuniformEXT(shapeIndex)], box * 0.5 + 0.5, shapeLod).rg;
 
 			if ( shape.r <= 0.0 )
 			{
-				stepLength = min(stepLength, max(shape.g * MaxSkipDistance * cloud.look.w, cloudStep));
+				/* ⚠️ The skip channel at mip 0 ONLY: an average of distances is not a distance. Empty at a coarse mip is
+				 * empty at mip 0 (every child is), so only the distance is read again, and only in the far field. */
+				float skip = shapeLod > 0.0 ? textureLod(textures3D[nonuniformEXT(shapeIndex)], box * 0.5 + 0.5, 0.0).g : shape.g;
+
+				stepLength = min(stepLength, max(skip * MaxSkipDistance * cloud.look.w, cloudStep));
 
 				continue;
 			}
@@ -406,24 +438,27 @@ void main()
 
 			float cloudSigmaT = density * cloud.centerAndExtinction.w;
 
-			stepLength = min(stepLength, min(max(cloudStep, MaxStepOpticalDepth / cloudSigmaT), hitBaseStep[hit]));
+			stepLength = min(stepLength, min(max(cloudStep, MaxStepOpticalDepth / cloudSigmaT), max(cloudStep, hitBaseStep[hit])));
 
 			sigmaT += cloudSigmaT;
-			source += cloudSigmaT * cloud.albedo.rgb * cloudLightRadiance(cloud, shapeIndex, box, samplePosition, t * viewDepthPerMetre, hasSun, toSun, sunIlluminance, lightStepCount, octavePhase, groundRadiance, skyRadiance);
+			source += cloudSigmaT * cloud.albedo.rgb * mix(vec3(1.0), skyHue, cloud.albedo.w) * cloudLightRadiance(cloud, shapeIndex, box, samplePosition, t * viewDepthPerMetre, hasSun, toSun, sunIlluminance, lightStepCount, octavePhase, groundRadiance, skyRadiance);
 		}
 
 		/* Between two boxes: jump to the next one, dithered like the first entry. */
 		if ( !inside )
 		{
-			t = nextEnter + dither * clamp(nextEnter * DistanceStepFactor, nextEnterStep * 0.125, nextEnterStep);
+			t = nextEnter + dither * viewStep(nextEnter, nextEnterStep);
 
 			continue;
 		}
 
-		/* A box starting inside this step would lose its front: stop at its entry. */
+		/* A box starting inside this step would lose its front: stop at its entry — DITHERED like every other entry.
+		 * ⚠️ Stopping exactly on it re-aligned every pixel on the same sample positions from there on: the dither is a
+		 * phase along the ray, and overlapping boxes (every cloud at the horizon) lost it at each entry, which drew
+		 * contour rings one step apart on the far clouds (2026-09-25). */
 		if ( nextEnter > t )
 		{
-			stepLength = min(stepLength, max(nextEnter - t, 1.0e-3));
+			stepLength = min(stepLength, max(nextEnter - t + dither * viewStep(nextEnter, nextEnterStep), 1.0e-3));
 		}
 
 		if ( sigmaT > 0.0 )
@@ -866,7 +901,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			});
 
 			gpuCloud.look = {std::clamp(state.look.erosion, 0.0F, 1.0F), state.look.detailFrequency, boilingOffset, metresPerUnit};
-			gpuCloud.albedo = {state.look.scatteringAlbedo.red(), state.look.scatteringAlbedo.green(), state.look.scatteringAlbedo.blue(), 0.0F};
+			gpuCloud.albedo = {state.look.scatteringAlbedo.red(), state.look.scatteringAlbedo.green(), state.look.scatteringAlbedo.blue(), std::clamp(state.look.skyTint, 0.0F, 1.0F)};
 
 			++census.drawn;
 		});

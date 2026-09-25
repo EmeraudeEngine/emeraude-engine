@@ -67,7 +67,32 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		if ( !m_shadowMapResolved )
+		/* The clouds as the view march reads them: the map sizes itself and searches along the light on them. */
+		std::array< Graphics::CloudBlock, Graphics::MaxCloudVolumes > blocks{};
+
+		const auto census = Graphics::Effects::Atmosphere::VolumetricClouds::gatherClouds(*this, readStateIndex, 0.0F, blocks);
+
+		/* The mean HORIZONTAL width of the drawn clouds: a shadow is as wide as the cloud seen from above. */
+		const auto automaticCoverage = [&blocks, &census] (float minimum) noexcept {
+			if ( census.drawn == 0 )
+			{
+				return minimum;
+			}
+
+			auto widthSum = 0.0F;
+
+			for ( uint32_t index = 0; index < census.drawn; ++index )
+			{
+				widthSum += 2.0F * std::max(blocks[index].axisX[3], blocks[index].axisZ[3]);
+			}
+
+			return std::max(minimum, AutomaticCoverageFactor * widthSum / static_cast< float >(census.drawn));
+		};
+
+		/* ⚠️ The map is created once the first cloud is DRAWN (its coverage is measured on the clouds), but once
+		 * it exists it is recorded every frame, drawn clouds or not: an empty record clears it, a skipped one would
+		 * leave last frame's shadows under a sun that still casts. */
+		if ( !m_shadowMapResolved && census.drawn > 0 )
 		{
 			m_shadowMapResolved = true;
 
@@ -81,7 +106,11 @@ namespace EmEn::Scenes
 			}
 
 			const auto resolution = std::clamp(settings.getOrSetDefault< uint32_t >(GraphicsPPCloudsShadowResolutionKey, DefaultGraphicsPPCloudsShadowResolution), 64U, 4096U);
-			const auto coverage = std::max(settings.getOrSetDefault< float >(GraphicsPPCloudsShadowCoverageKey, DefaultGraphicsPPCloudsShadowCoverage), 16.0F);
+
+			m_shadowMapMinimumCoverage = std::max(settings.getOrSetDefault< float >(GraphicsPPCloudsShadowCoverageKey, DefaultGraphicsPPCloudsShadowCoverage), 16.0F);
+			m_shadowMapCoverageCloudCount = census.drawn;
+
+			const auto coverage = automaticCoverage(m_shadowMapMinimumCoverage);
 
 			auto shadowMap = std::make_unique< Graphics::CloudShadowMap >(renderer, resolution, coverage);
 
@@ -115,6 +144,23 @@ namespace EmEn::Scenes
 			return;
 		}
 
+		/* Clouds still growing on the thread pool join the census one by one: the coverage follows the set, not
+		 * the frame. The sun reads the new value at its next update, the map at the frame that publishes it. */
+		if ( census.drawn > 0 && census.drawn != m_shadowMapCoverageCloudCount )
+		{
+			m_shadowMapCoverageCloudCount = census.drawn;
+
+			const auto coverage = automaticCoverage(m_shadowMapMinimumCoverage);
+
+			if ( coverage != m_shadowMapCoverage.load(std::memory_order_acquire) )
+			{
+				m_shadowMap->setCoverage(coverage);
+				m_shadowMapCoverage.store(coverage, std::memory_order_release);
+
+				TraceInfo{TracerTag} << "The clouds' shadow map now covers " << coverage << " m for " << census.drawn << " clouds (" << (coverage / static_cast< float >(m_shadowMapResolution.load(std::memory_order_acquire))) << " m per texel).";
+			}
+		}
+
 		/* ⚠️ Only once the sun's PUBLISHED block reads this map: before that (the first ticks) its
 		 * matrix is not the map's, and no lit shader samples the map anyway. */
 		if ( sun.cloudShadowIndex(readStateIndex) != m_shadowMapBindlessIndex.load(std::memory_order_acquire) )
@@ -122,11 +168,27 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		std::array< Graphics::CloudBlock, Graphics::MaxCloudVolumes > blocks{};
+		const auto & worldToMap = sun.cloudShadowMatrix(readStateIndex);
 
-		const auto census = Graphics::Effects::Atmosphere::VolumetricClouds::gatherClouds(*this, readStateIndex, 0.0F, blocks);
+		/* How far along the light the clouds sit from the camera's plane: the third ROW of the matrix is
+		 * depth = light . P - camera depth (column-major, elements 2, 6, 10, 14); a box reaches |light . axis| x
+		 * its half extent on each of its axes. */
+		const auto * matrix = worldToMap.data();
+		auto depthRange = 0.0F;
 
-		static_cast< void >(m_shadowMap->record(commandBuffer, blocks, census.drawn, sun.cloudShadowMatrix(readStateIndex)));
+		for ( uint32_t index = 0; index < census.drawn; ++index )
+		{
+			const auto & cloud = blocks[index];
+			const auto depth = matrix[2] * cloud.centerAndExtinction[0] + matrix[6] * cloud.centerAndExtinction[1] + matrix[10] * cloud.centerAndExtinction[2] + matrix[14];
+			const auto reach =
+				std::abs(matrix[2] * cloud.axisX[0] + matrix[6] * cloud.axisX[1] + matrix[10] * cloud.axisX[2]) * cloud.axisX[3] +
+				std::abs(matrix[2] * cloud.axisY[0] + matrix[6] * cloud.axisY[1] + matrix[10] * cloud.axisY[2]) * cloud.axisY[3] +
+				std::abs(matrix[2] * cloud.axisZ[0] + matrix[6] * cloud.axisZ[1] + matrix[10] * cloud.axisZ[2]) * cloud.axisZ[3];
+
+			depthRange = std::max(depthRange, std::abs(depth) + reach);
+		}
+
+		static_cast< void >(m_shadowMap->record(commandBuffer, blocks, census.drawn, worldToMap, depthRange));
 	}
 
 	void

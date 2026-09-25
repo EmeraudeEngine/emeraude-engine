@@ -2227,6 +2227,64 @@ dead code, left untouched.
 plausible-looking distortion that changes with the pose, and it grows with the distance to the world
 origin. Look for it in MOTION, on `terrain`, away from the centre.
 
+### The cloud march: a distance LOD that works, and two dead ends (Sep 2026)
+
+All measured on `terrain`'s 32 cumulus of 1-3 km: sun frozen at noon (`--demo-options 100000,25`),
+sunny-16 pinned, same poses, GPU profiler, and a ZOOM on a far cloud base.
+
+⚠️⚠️ **Zoom before trusting a mean.** The version with contour rings and the fixed one moved the far
+clouds by the same mean |Δ| (0.32 vs 0.36/255, p99 2.0). Only the crop shows the rings.
+
+**Where the cost is.** The sun march 6 → 2 steps saved nothing (4.83 → 4.71 ms at the spawn). The view
+steps 64 → 32 saved 18 %.
+
+**The distance LOD that shipped (`FarStepScale` 2, `viewStep()` / `viewStepLod()`):**
+- The view step's ceiling grows from one base step to two with the distance (1.5 % of `t`).
+- A step k base steps long reads the shape's mip log2(k), band-limited to the step: the step keeps the
+  base step's ratio to its voxels at any distance.
+- The skip channel is still read at mip 0 (an average of distances is not a distance). Empty at a
+  coarse mip is empty at mip 0.
+- Measured: 6.68 → 6.08 ms (−9 %) from above the deck toward the horizon, nothing at the spawn (the
+  clouds are near).
+- 4× saved no more (6.06 ms) and showed a dither weave: the static dither then spans 256 m.
+
+**The terracing it first produced was NOT the step: the dither lost its PHASE at box entries.** A
+longer step alone drew contour rings one step apart on the far clouds (2× and 4×). Band-limiting the
+shape and quantising the skips did not remove them. The real cause:
+- the march stopped EXACTLY on the entry of a box starting inside a step;
+- the per-pixel dither is a phase along the ray, and every box entry re-aligned all pixels on the same
+  sample positions;
+- the clouds at the horizon overlap, so the far ones crossed several entries.
+
+Dithering that entry like the first one removed the rings. The same fix applies at 1× too, where the
+rings were too fine to see.
+
+**Dead end — a pixel-footprint LOD has nothing to remove here.** Nothing of these clouds falls under a
+pixel before ~20 km:
+- a detail-noise cell is 31-94 m (`metresPerUnit / (4 × detailFrequency)`);
+- a shape voxel is 8-23 m;
+- a light-march step is 100-300 m;
+- against 11 m per pixel at 10 km.
+
+The detail noise already has 6 mips.
+
+**Dead end — a directional sky ambient changes nothing.** The dome each side of the cloud faces was
+tried per sample, then through a per-pixel five-direction "ambient cube" (Mitchell, McTaggart & Green,
+SIGGRAPH 2006). The cloud colour came out identical to 0.1/255 (chroma 10.3 → 10.3), for +0.6 ms both
+times. Why:
+- a store sky's HUE barely varies with the direction. StormyDays irradiance is warm everywhere
+  (R 1.00, G 0.82, B 0.52, ±17 % in level); BlueSky is blue everywhere (chroma 0.77);
+- a lit cloud is dominated by the sun ~7:1 (92.6 klx at 5685 K against π × 4000 nits of sky).
+
+The zenith read already carries the hue: the owner's "white blobs" on `terrain` are the sun.
+
+**What shipped instead — `CloudVolume::Look::skyTint` (0-1, default 0 = physical):** the scattered light is
+multiplied by the zenith irradiance's colour normalised by its brightest channel, so no channel is ever
+boosted, and the tint follows the sky, which follows the sun course. On `terrain` (`CloudSkyTint` 1.0) the
+clouds went from RGB 175/170/165 to 175/156/119 at the spawn (sunny-16 pinned, noon): a warm cloud matching
+StormyDays. It is artistic — a blue sky makes blue clouds — so `forest` keeps 0. It rides in the free
+`albedo.w` of the cloud block and costs a mix per sample.
+
 ### A UNIT that differs silently: glTF anisotropy rotation is radians, the engine's is turns (Aug 2026)
 
 > [!CAUTION]

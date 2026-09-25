@@ -261,7 +261,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CloudShadowMap::record (const CommandBuffer & commandBuffer, const std::array< CloudBlock, MaxCloudVolumes > & clouds, uint32_t cloudCount, const Matrix< 4, float > & worldToMap) noexcept
+	CloudShadowMap::record (const CommandBuffer & commandBuffer, const std::array< CloudBlock, MaxCloudVolumes > & clouds, uint32_t cloudCount, const Matrix< 4, float > & worldToMap, float depthRange) noexcept
 	{
 		if ( m_pipeline == nullptr )
 		{
@@ -282,7 +282,7 @@ namespace EmEn::Graphics
 		const auto * matrix = worldToMap.data();
 
 		block.lightDirection = {matrix[2], matrix[6], matrix[10], static_cast< float >(std::min(cloudCount, MaxCloudVolumes))};
-		block.parameters = {DepthRange, static_cast< float >(StepCount), 0.0F, 0.0F};
+		block.parameters = {std::max(depthRange, MinimumDepthRange), static_cast< float >(StepCount), 0.0F, 0.0F};
 		block.clouds = clouds;
 
 		if ( !updateUniformBufferData(*m_frameUBOs[frameIndex], &block, sizeof(block)) )

@@ -930,7 +930,8 @@ namespace EmEn
 			/* Side of the map, in texels. */
 			constexpr auto GraphicsPPCloudsShadowResolutionKey{"Core/Graphics/PostProcessing/Clouds/ShadowResolution"};
 			constexpr auto DefaultGraphicsPPCloudsShadowResolution{1024U};
-			/* Side of the map, in metres: beyond it the clouds cast no shadow. */
+			/* The LEAST side of the map, in metres: beyond it the clouds cast no shadow. The map sizes itself on the
+			 * clouds (Scenes::CloudSet::AutomaticCoverageFactor times their mean width) and never goes below this. */
 			constexpr auto GraphicsPPCloudsShadowCoverageKey{"Core/Graphics/PostProcessing/Clouds/ShadowCoverage"};
 			constexpr auto DefaultGraphicsPPCloudsShadowCoverage{1024.0F};
 

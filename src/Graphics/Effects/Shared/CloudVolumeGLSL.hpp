@@ -68,7 +68,7 @@ namespace EmEn::Graphics
 		std::array< float, 4 > shape{};
 		/** @brief x = erosion, y = detail cells across the width, z = boiling offset (periods), w = metres per normalised shape unit (smallest axis). */
 		std::array< float, 4 > look{};
-		/** @brief rgb = single-scattering albedo, w = unused. */
+		/** @brief rgb = single-scattering albedo, w = the sky tint (Look::skyTint). */
 		std::array< float, 4 > albedo{};
 	};
 
@@ -95,7 +95,7 @@ struct EmCloud
 	vec4 axisZ;
 	vec4 shape;					/* xyz = normalised shape half extents, w = bindless 3D slot. */
 	vec4 look;					/* x = erosion, y = detail cells across the width, z = boiling offset, w = metres per shape unit. */
-	vec4 albedo;				/* rgb = single-scattering albedo. */
+	vec4 albedo;				/* rgb = single-scattering albedo, w = sky tint (Look::skyTint). */
 };
 
 /* A world point in the cloud's box, [-1, 1] on every axis inside it. */
