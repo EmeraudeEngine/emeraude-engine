@@ -1313,12 +1313,14 @@ the bake identity (`m_IBLBakedStarMask`): a manifest change re-bakes.
 `applyStars = false` (Sponza: the asset's own `SUN` is the sun) still masks the body — the mask
 follows the MANIFEST, not the stage, which is what makes the two paths consistent.
 
-⚠️⚠️ **OPEN — the 28 store manifests' `Direction` vectors are Y-DOWN legacy** (found 2026-09-13,
-not yet fixed, owner-gated with the sky review): `Clouds`, `Moon`, … all
-declare a negative Y where the doc says "toward the body, UP = +Y"; the derived entity sits BELOW
-the ground and the star shines UPWARD (measured on `basic-scenery --demo-options 1`: 50 klux sun,
-no ground shadow at all). `AxisDebug` (authored after the flip) and `Kloppenheim05` are correct.
-Item: `docs/todo/sky-manifests-star-direction-y-down.md`.
+⚠️⚠️ **FIXED 2026-09-25 — the store manifests' `Direction` vectors were Y-DOWN legacy** (found
+2026-09-13): 13 manifests declared a negative Y where the doc says "toward the body, UP = +Y"; the
+derived entity sat BELOW the ground and the star shone UPWARD (measured on `basic-scenery
+--demo-options 1`: 50 klux sun, no ground shadow at all), and the mask of the IBL bake followed the
+same wrong direction — a hole in empty sky while the painted body stayed in. Every body was measured
+in its picture (`tools/sky-manifest.py --locate`), see `src/Graphics/AGENTS.md` § Background
+photometric contract. ⚠️ A demo with `applyStars = false` (`terrain`, `sponza`, `relief`) still
+depends on that direction: the mask is where its own sun stops being doubled by the painted one.
 
 ⚠️ **Threading contract (rewritten Jul 2026 after two live crashes)**: the entry point only
 RAISES a request (`m_backgroundLightingRequested`, atomic) — it may be called from ANY thread

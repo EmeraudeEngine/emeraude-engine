@@ -3527,11 +3527,16 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
   the visible skybox keeps the body. On Kloppenheim 05 the in-texture sun is 80 % of the ground
   illuminance — unmasked it was a second, unshadowed sun. Zero stars is legitimate: pure ambiance
   (overcast, nebula, cave).
-- ⚠️⚠️ **`Direction` is in the WORLD frame, UP = +Y — and 28 of the 30 store manifests still carry
-  the Y-DOWN values of July 2026** (negative Y on every sun and moon): their entity lands below the
-  ground and the star shines upward (measured on `basic-scenery`). `AxisDebug` and `Kloppenheim05`
-  are correct. Owner-gated fix (negate Y in 28 files), item
-  `docs/todo/sky-manifests-star-direction-y-down.md`.
+- ⚠️⚠️ **`Direction` is in the WORLD frame, UP = +Y — every store body was MEASURED in its picture on
+  2026-09-25** (`tools/sky-manifest.py --locate`, owner: "corriger tout ce bordel"). Until then 13
+  manifests carried the Y-DOWN values of July 2026: their entity landed below the ground, the star
+  shone upward (no ground shadow on `basic-scenery`), and the IBL mask sat on empty sky while the
+  painted body stayed in the bake. Negating Y would NOT have been enough: `StormyDays` would have
+  put its sun at 34° for a disc painted at 17.8°, and `ViolentDays`, `Miramar`, `Interstellar` were
+  wrong in azimuth too (up to 138°). `IndustrialSunsetPureSky` had a painted sunset sun and NO
+  star (added: 920 lx, 2400 K, anchored on its sky, see the tool bullet). Which estimate was kept
+  per sky (clipped plateau, unclipped disc, half-hidden glow, the author's intent where nothing is
+  painted): `docs/caution-points.md` § *The sky manifests put their bodies where the pictures do not*.
 - **Authoring an HDR manifest is a MEASUREMENT, not a guess: `tools/sky-manifest.py`** (Sep 2026).
   It reads the equirectangular `.hdr`, finds the sun (brightest texel, radiance-weighted centroid),
   prints its direction in the engine frame and its energy profile, integrates the sky-only and total
@@ -3542,6 +3547,18 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
   Reference run: `Kloppenheim05` (Poly Haven, the Intel Sponza 2022 sky) → `Luminance` 36 910 nits,
   `AmbientIlluminance` 19 590 lx, sun at 74.5° elevation, direction (0.216, 0.964, 0.157), 97.6 % of
   its excess energy within 0.5° — a compact veiled disc, hence the one-diameter mask.
+  ⚠️ **A veiled sun cannot be the anchor**: read the `sun/sky` ratio first. `IndustrialSunsetPureSky`'s
+  sun carries 0.4 % of the picture's horizontal illuminance, and 10 000 lx on it gave a 52 000-nit sky
+  with 163 000 lx of ambient; `--sky-luminance NITS` anchors on the sky instead and DERIVES the sun
+  (4 800 nits → 920 lx).
+  **`--locate NAME --store DIR [--around AZ,EL] [--preview out.png]`** measures where the body of ANY
+  store sky is painted (packed cube or equirectangular, LDR or HDR) and compares it with the manifest.
+  An LDR sun is a CLIPPED plateau whose outline follows the clouds: the centre of its largest
+  inscribed disc is kept, not a centroid (a lit cloud edge hanging off `StormyDays`' disc dragged the
+  centroid 4-7° up, with the threshold); `--around` adds the centroid of an UNCLIPPED disc (a moon) and the peak of the
+  glow smoothed over 2° (a sun half hidden by clouds). The packed-cube face convention of the tool was
+  verified in the engine: aimed at the measured `StormyDays` direction, the painted sun sits on the
+  screen centre.
 
 Parsing is CENTRALIZED in `AbstractBackground::parsePhotometry()` — every background type
 (`SkyBoxResource`, future `DynamicSkyResource`, `ColorBackgroundResource`) goes through it.

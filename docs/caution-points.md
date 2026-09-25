@@ -1291,6 +1291,59 @@ it is the algorithm's, not the exponent's.
 > `IndirectPostProcessEffect::recordFullscreenPass()` gained an optional bindless-set
 > parameter any post effect can reuse.
 
+### Fixed: the sky manifests put their bodies where the pictures do not (Sep 2026)
+
+> **Symptom (owner, 2026-09-24/25):** `forest` had two suns; "check `terrain` for two suns too" —
+> then "fix this whole mess".
+
+**What was wrong.** The `Direction` of 13 store bodies still had the Y-DOWN sign of July 2026: the
+derived sun sat below the ground and lit the scene from beneath (no ground shadow), and the IBL mask
+(`Scene::environmentStarMask()`, which follows the MANIFEST whatever `applyStars` says) sat on empty
+sky while the painted body stayed in the bake. On `terrain` (`applyStars = false`, its own animated
+sun) the painted `StormyDays` sun was therefore still lighting the scene from the IBL. Worse, a sign
+flip would not have fixed them: `StormyDays` → 34° for a disc painted at 17.8°, `ViolentDays` 138°
+off, `Miramar` 103°, `Interstellar` 148°. And `IndustrialSunsetPureSky` had a painted sun and no star.
+
+**Measured, not flipped** (`tools/sky-manifest.py --locate NAME --store DIR --preview P [--around AZ,EL]`,
+every preview LOOKED at):
+
+| Sky | Picture | Estimate kept | Elevation, azimuth atan2(z,x) |
+|---|---|---|---|
+| StormyDays, ViolentDays | packed LDR, clipped | inscribed disc of the plateau | 17.8°, 45.5° / 17.3°, 44.3° |
+| Clouds, GreenLandscape | equirect LDR, clipped | inscribed disc | 37.2°, 113.8° / 15.8°, -110.1° |
+| Miramar, DNSpace, GrimmNight, Moon | disc visible, partly or not clipped | disc centroid (`--around`) | 54.3°, 52.8° / 47.0°, -125.3° / 22.5°, 71.1° / 10.2°, 75.7° |
+| SmallTown, Interstellar | glow half hidden / beside a planet | smoothed glow peak (`--around`) | 8.4°, 170.0° / 49.1°, 68.7° |
+| JeGray, IndustrialSunsetPureSky | equirect HDR | radiance-weighted centroid | 21.3°, 36.1° / 4.1°, 36.5° |
+| Forrest, Mountains | nothing painted | the author's azimuth, Y sign fixed | 30.1°, 20.6° / 82.8°, 174.5° |
+
+Unchanged and verified: `AutumnFieldPureSky`, `Kloppenheim05` (0.0° from the tool), `AxisDebug`, and
+`BlueSky`, whose star is declared NOT in the texture (nothing is painted). The 12 other skies show no body.
+Photometry re-measured for the two HDR skies (owner decisions): `JeGray` 25 500 → 9 250 nits, 5 000 →
+1 840 lx, AverageColor grey → (0.639, 0.773, 1.0); `IndustrialSunsetPureSky` sun 920 lx at 2400 K (the
+engine's Kasten-Young reddening at 4.1°) with 15 010 lx of ambient, ANCHORED ON ITS SKY (4 800 nits).
+Checked in the engine: aimed at the measured `StormyDays` direction, the painted sun sits on the screen
+centre, and the bake logs `masked out … toward (0.66771, 0.305805, 0.67871)`.
+
+**Traps.**
+- ⚠️⚠️ **An LDR sun is a PLATEAU, and its outline follows the clouds.** A centroid of the white texels
+  was dragged 4.4° up by a lit cloud edge hanging off `StormyDays`' disc (6.6° at a 0.99 threshold); a
+  "centre of radial symmetry" was dragged 8.6°. The point of the plateau FARTHEST from its outline (the largest inscribed disc) is not
+  moved by thin appendages. The plateau is the SATURATED white (≥ 0.995 of the peak): at 0.98 it took the
+  whole glow (a 12.9° "disc").
+- ⚠️ **An unclipped disc has no plateau**: a moon's brightest texels are its lit limb (`Moon`: 4.2° off
+  the centre). Take the centroid of the region above half the local peak.
+- ⚠️ **A body is not always the brightest thing in the sky**: `Interstellar`'s global peak is a cloud top;
+  `--around` restricts the analysis to 15° around a hint read on the preview.
+- ⚠️⚠️ **A veiled sun cannot anchor the photometry**: `IndustrialSunsetPureSky`'s sun carries 0.4 % of the
+  horizontal illuminance, and a plausible 10 000 lx on it gave a 52 000-nit sky (the recommendation had
+  been made BEFORE the picture was measured). Read `sun/sky`, then anchor on the sky (`--sky-luminance`).
+- The IBL mask is ONE angular diameter (0.53°): on an LDR sky whose clipped sun spans 9°, it removes
+  almost nothing. That is harmless (the rim it reads is still the plateau) and what remains is sky, not a
+  sun: the `StormyDays` glow is ~1 klx of directional skylight against tens of klx for `terrain`'s sun.
+- ⚠️ A photo sky cannot follow an animated sun: `terrain` keeps `StormyDays` and its painted sun stays
+  VISIBLE at 17.8° while the course moves (owner decision, 2026-09-25) — the lighting is right, the
+  picture is a backdrop. Only a procedural sky would follow.
+
 ### Fixed: SimplePass normal-mapped shader referenced an undeclared `N` — in BOTH quality levels (Jul 2026)
 
 > [!NOTE]
