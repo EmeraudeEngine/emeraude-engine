@@ -1,7 +1,7 @@
 ---
 id: console-command-contract
 title: Console commands — declared typed signatures and typed results
-status: open
+status: in-progress
 priority: unranked
 scope: Console
 opened: 2026-09-27
@@ -24,27 +24,32 @@ of the owner-approved MCP plan (2026-09-27, see `native-mcp-server`): an MCP too
 `inputSchema`, optionally an `outputSchema`, and its result can carry an image inline. A server
 projected from commands with no schema would only be a generic `console_exec` in disguise.
 
+## Done (2026-09-27)
+
+The contract exists and is documented (`src/Console/AGENTS.md` § 3 "every new command is TYPED"
+and § 7; `docs/ai-runtime-control.md` § "Argument syntax and validation"): typed `bindCommand()`
+with types deduced from the lambda (owner choice over a declarative descriptor, 2026-09-27),
+`Parameter` / `CommandSignature` / `CommandResult` / `CommandHint`, `Output` kinds Text / Json /
+Binary, generated usage, per-parameter help lines, quote-aware parser, `listUntypedCommands()`.
+Compile-time guards verified with scratch TUs (arity, return type, parameter type, trailing vector,
+double default). Migrated: `WindowService` (2), `RendererService` (12), `SceneManagerService.PostProcess`
+(6), `SettingsService` (4), `ResourcesManagerService` (4), `Core` (8 incl. aliases), projet-alpha
+`Act` (13) — **52 typed, 85 untyped**.
+
 ## What remains
 
-1. **Declared signature at registration.** Extend `bindCommand` with a signature descriptor:
-   ordered parameters (name, type, one-line description, optional + default value), and the result
-   kind. The existing positional call syntax keeps working — the parser validates against the
-   declaration instead of guessing, and a wrong type or arity is an error that names the parameter.
-2. **Help generated from the signature.** The "Usage: …" part of the help string is produced from
-   the declaration, never typed by hand again, so it can no longer drift from the binding.
-3. **Typed results.** `Output` (or a result object beside it) gains a structured payload (JSON
-   value, via the jsoncpp already vendored) and a binary payload (bytes + MIME type — a PNG
-   capture first). The text rendering stays, for TCP 7777 and the local console.
-4. **Behaviour hints** per command: read-only / destructive / idempotent. MCP carries them as tool
-   annotations; they also say which commands may run without confirmation.
-5. **Incremental migration.** 116 `bindCommand` sites in the engine + 13 in projet-alpha
-   (2026-09-27 count). A command without a declared signature stays callable exactly as today, and
-   is reported as "untyped" by a listing command, so the migration can be tracked to zero.
-   Start with the commands an AI uses in every session: `RendererService.screenshot/temporalCapture`,
-   the camera (`targetActiveScene`, `Act.setPosition/lookAt/setExposure`), `PostProcess.*`,
-   `SettingsService.*`, `ResourcesManagerService.*`.
-6. **Document it**: `src/Console/AGENTS.md` (§ "mandatory help string" becomes the signature
-   rule), `docs/ai-runtime-control.md` (how to add a command).
+1. **Migrate the 85 untyped commands** (`listUntypedCommands()` lists them): `Scenes/Manager.console.cpp`
+   (33 — the scene-creation vocabulary), `Audio/TrackMixer.console.cpp` (16 — `playlist(play, 3)`-style
+   sub-commands: an action string + `std::optional` operands), `Net/APIClient.console.cpp` (12),
+   `Input/Manager.cpp` (6), `Net/Manager.console.cpp` (5), `FileSystem`/`Arguments` (3 each),
+   `Scenes/AVConsole` (2). Then delete the untyped `bindCommand` overload and `listUntypedCommands()`,
+   and close this item.
+2. **Escape the JSON the migrated commands build by hand** (`listResources`, `listContainers`,
+   `remoteConsoleStatus`): a name with a `"` produces invalid JSON, which a machine client will reject.
+3. **Binary result of `screenshot()`** — the kind exists (`CommandResult::binary`, `Output::binary`),
+   no command uses it yet. Decide with `native-mcp-server` where the PNG bytes come from (see Traps).
+4. **Declared result kind / output schema** — not done: results self-describe at runtime. Only worth
+   adding if the MCP server needs an `outputSchema`.
 
 ## ⚠️ Traps
 

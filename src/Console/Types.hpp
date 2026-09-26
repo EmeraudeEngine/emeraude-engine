@@ -43,4 +43,74 @@ namespace EmEn::Console
 		Float,
 		String
 	};
+
+	/**
+	 * @brief Type of a declared command parameter.
+	 * @note Deduced from the C++ type of the callable's argument by a typed bindCommand().
+	 * 'Any' is a parameter declared as a raw Console::Argument: it accepts any scalar.
+	 */
+	enum class EMEN_API ParameterType : uint8_t
+	{
+		Any,
+		Boolean,
+		Integer,
+		Float,
+		String
+	};
+
+	/**
+	 * @brief How many values a declared command parameter takes.
+	 * @note Deduced from the C++ type: T = Required (unless the Parameter declares a default),
+	 * std::optional< T > = Optional, a trailing std::vector< T > = Variadic (zero or more).
+	 */
+	enum class EMEN_API ParameterArity : uint8_t
+	{
+		Required,
+		Optional,
+		Variadic
+	};
+
+	/**
+	 * @brief Behaviour hints of a typed command, combinable with operator|.
+	 * @note They describe the command to a machine client (the MCP tool annotations
+	 * readOnlyHint / destructiveHint / idempotentHint). They are hints, never enforced.
+	 */
+	enum class EMEN_API CommandHint : uint8_t
+	{
+		None = 0,
+		/** @brief The command only reads state. */
+		ReadOnly = 1 << 0,
+		/** @brief The command may destroy state (delete a scene, quit, overwrite a file). */
+		Destructive = 1 << 1,
+		/** @brief Calling the command twice with the same arguments has no further effect. */
+		Idempotent = 1 << 2
+	};
+
+	/**
+	 * @brief Combines two command hints.
+	 * @param left The first hint set.
+	 * @param right The second hint set.
+	 * @return CommandHint
+	 */
+	[[nodiscard]]
+	constexpr
+	CommandHint
+	operator| (CommandHint left, CommandHint right) noexcept
+	{
+		return static_cast< CommandHint >(static_cast< uint8_t >(left) | static_cast< uint8_t >(right));
+	}
+
+	/**
+	 * @brief Returns whether a hint set contains a hint.
+	 * @param hints The hint set.
+	 * @param hint The hint to look for.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	hasHint (CommandHint hints, CommandHint hint) noexcept
+	{
+		return ( static_cast< uint8_t >(hints) & static_cast< uint8_t >(hint) ) != 0;
+	}
 }

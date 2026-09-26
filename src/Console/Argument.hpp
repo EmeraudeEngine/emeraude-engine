@@ -155,10 +155,36 @@ namespace EmEn::Console
 			[[nodiscard]]
 			std::string asString () const noexcept;
 
+			/**
+			 * @brief Returns the text this argument was parsed from, if it came from a command line.
+			 * @note Empty for an argument built from a typed value (a default value, a JSON call).
+			 * A typed String parameter receives this text verbatim, so a bare `01` stays "01"
+			 * instead of travelling through the integer 1.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			source () const noexcept
+			{
+				return m_source;
+			}
+
+			/**
+			 * @brief Records the text this argument was parsed from.
+			 * @param source The unquoted token [std::move].
+			 * @return void
+			 */
+			void
+			setSource (std::string source) noexcept
+			{
+				m_source = std::move(source);
+			}
+
 		private:
 
 			ArgumentType m_type{ArgumentType::Undefined};
 			ArgumentValue m_value;
+			std::string m_source;
 	};
 
 	using Arguments = std::vector< Argument >;

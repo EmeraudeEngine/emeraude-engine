@@ -45,8 +45,33 @@ namespace EmEn::Console
 
 		bool inArgs = false;
 
+		/* NOTE: the quote character of the argument being read, '\0' outside quotes. Inside a quoted
+		 * argument every character is literal: a comma, a parenthesis or a dot in a file path or a
+		 * name must not split it. */
+		char quote = '\0';
+
 		for ( const auto character : command )
 		{
+			if ( quote != '\0' )
+			{
+				buffer += character;
+
+				if ( character == quote )
+				{
+					quote = '\0';
+				}
+
+				continue;
+			}
+
+			if ( inArgs && ( character == '"' || character == '\'' ) && String::trim(buffer).empty() )
+			{
+				quote = character;
+				buffer += character;
+
+				continue;
+			}
+
 			switch ( character )
 			{
 				/* Identifier separator. */
@@ -94,11 +119,12 @@ namespace EmEn::Console
 
 		for ( auto & argument : arguments )
 		{
-			if ( argument.starts_with('"') || argument.starts_with('\'') )
+			if ( argument.length() >= 2 && ( argument.front() == '"' || argument.front() == '\'' ) && argument.back() == argument.front() )
 			{
-				const auto value = argument.substr(1, argument.length() - 2);
+				auto value = argument.substr(1, argument.length() - 2);
 
 				m_arguments.emplace_back(value);
+				m_arguments.back().setSource(std::move(value));
 
 				continue;
 			}
@@ -106,6 +132,7 @@ namespace EmEn::Console
 			if ( argument == "true" )
 			{
 				m_arguments.emplace_back(true);
+				m_arguments.back().setSource(argument);
 
 				continue;
 			}
@@ -113,6 +140,7 @@ namespace EmEn::Console
 			if ( argument == "false" )
 			{
 				m_arguments.emplace_back(false);
+				m_arguments.back().setSource(argument);
 
 				continue;
 			}
@@ -132,6 +160,7 @@ namespace EmEn::Console
 #endif
 				{
 					m_arguments.emplace_back(value);
+					m_arguments.back().setSource(argument);
 
 					continue;
 				}
@@ -144,6 +173,7 @@ namespace EmEn::Console
 				if ( ec == std::errc{} && ptr == argument.data() + argument.size() )
 				{
 					m_arguments.emplace_back(value);
+					m_arguments.back().setSource(argument);
 
 					continue;
 				}
@@ -151,6 +181,7 @@ namespace EmEn::Console
 
 			/* Bare word: treat as string argument. */
 			m_arguments.emplace_back(argument);
+			m_arguments.back().setSource(argument);
 		}
 	}
 

@@ -31,10 +31,12 @@
 
 /* STL inclusions. */
 #include <functional>
+#include <optional>
 #include <string>
 
 /* Local inclusions for usages. */
 #include "Argument.hpp"
+#include "CommandSignature.hpp"
 #include "Output.hpp"
 
 namespace EmEn::Console
@@ -44,19 +46,37 @@ namespace EmEn::Console
 
 	/**
 	 * @brief Container for a specific command.
+	 * @note A command bound by a typed bindCommand() carries its signature (declared parameters and
+	 * hints); a legacy command bound with a raw Binding carries none and is reported as untyped.
+	 * Both run through the same Binding: a typed command's binding validates and converts the
+	 * arguments before calling the author's callable.
 	 */
 	class EMEN_API Command final
 	{
 		public:
 
 			/**
-			 * @brief Constructs a console command.
+			 * @brief Constructs an untyped console command.
 			 * @param binding The command to execute in the container [std::move].
 			 * @param help A way to explain that command [std::move].
 			 */
 			Command (Binding binding, std::string help) noexcept
 				: m_binding{std::move(binding)},
 				m_help{std::move(help)}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a typed console command.
+			 * @param binding The validating binding built by bindCommand() [std::move].
+			 * @param help The description followed by the generated usage [std::move].
+			 * @param signature The declared contract [std::move].
+			 */
+			Command (Binding binding, std::string help, CommandSignature signature) noexcept
+				: m_binding{std::move(binding)},
+				m_help{std::move(help)},
+				m_signature{std::move(signature)}
 			{
 
 			}
@@ -83,9 +103,21 @@ namespace EmEn::Console
 				return m_help;
 			}
 
+			/**
+			 * @brief Returns the declared signature, or nullptr for an untyped (legacy) command.
+			 * @return const CommandSignature *
+			 */
+			[[nodiscard]]
+			const CommandSignature *
+			signature () const noexcept
+			{
+				return m_signature.has_value() ? &m_signature.value() : nullptr;
+			}
+
 		private:
 
 			Binding m_binding;
 			std::string m_help;
+			std::optional< CommandSignature > m_signature;
 	};
 }

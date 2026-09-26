@@ -33,6 +33,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -302,6 +303,16 @@ namespace EmEn::Console
 			 * @param path The dotted path accumulated so far (e.g. "Core.RendererService").
 			 */
 			static void dumpControllable (const ControllableTrait & controllable, std::stringstream & out, const std::string & path) noexcept;
+
+			/**
+			 * @brief Walks a console sub-tree and sorts its commands into typed and untyped (legacy).
+			 * @param controllable The root of the sub-tree.
+			 * @param path The dotted path of that root.
+			 * @param typedCount Incremented for each command with a declared signature.
+			 * @param untypedPaths Receives the full path of each command without one.
+			 * @return void
+			 */
+			static void collectUntypedCommands (const ControllableTrait & controllable, const std::string & path, size_t & typedCount, std::vector< std::string > & untypedPaths) noexcept;
 
 		private:
 

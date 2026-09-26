@@ -183,6 +183,36 @@ namespace EmEn::Console
 	}
 
 	void
+	ControllableTrait::bindTypedCommand (const std::string & commandNames, const std::string & description, Binding binding, CommandSignature signature) noexcept
+	{
+		std::string error;
+
+		if ( !signature.validate(error) )
+		{
+			TraceError{TracerTag} << "Command '" << commandNames << "' not bound: " << error << '.';
+
+			return;
+		}
+
+		const auto commandNamesList = String::explode(commandNames, ',', false);
+
+		for ( const auto & commandName : commandNamesList )
+		{
+			if ( m_commands.contains(commandName) )
+			{
+				TraceError{TracerTag} << "Command '" << commandName << "' already exists !";
+
+				continue;
+			}
+
+			/* NOTE: a command without parameter needs no usage line: its name says it all. */
+			auto help = signature.parameters().empty() ? description : description + " Usage: " + signature.usage(commandName);
+
+			m_commands.emplace(commandName, Command{binding, std::move(help), signature});
+		}
+	}
+
+	void
 	ControllableTrait::unbindCommand (const std::string & commandNames) noexcept
 	{
 		const auto commandNameList = String::explode(commandNames, ',', false);

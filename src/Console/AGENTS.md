@@ -109,6 +109,7 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777
 | `listObjects`, `lsobj()` | List top-level controllable object names only (no recursion) |
 | `exit`, `quit`, `shutdown` | Graceful shutdown (saves settings) |
 | `hardExit` | Immediate shutdown (no save) |
+| `listUntypedCommands()` | Counts typed and untyped commands, lists the untyped (legacy) ones still to migrate |
 
 ### Per-object (available at any depth in the tree)
 
@@ -137,12 +138,41 @@ and any command dispatched to it executed on freed memory (live segfault on
 - `onRegisterToConsole()` (command binding) runs **once per object lifetime**, not per
   registration — re-registering never re-binds (no `Command already exists` spam).
 
-### Rule: mandatory help string at registration
+### Rule: every new command is TYPED (declared signature, 2026-09-27)
 
-`ControllableTrait::bindCommand()` takes **three mandatory arguments** (name, binding, help). There is no default help value — every command must ship a useful one-line description so the `help` dump is never empty. Conventions for the help text:
-- Start with a capital, end with a period.
-- Mention the signature if the command takes arguments (e.g. `"Sets position. Usage: setPosition(x, y, z)"`).
-- If the command is an alias, say so at the end (e.g. `"... Alias: 'cpl'."`).
+A command is registered with a **typed** `bindCommand()`: its parameters are **deduced from the
+lambda's C++ signature**, only their names, descriptions and defaults are written by hand, and the
+lambda returns a `Console::CommandResult`. The declaration can no longer drift from the code that
+runs, the help line and its "Usage: …" are generated, and the same signature is what the future
+MCP server turns into a tool schema (`docs/todo/native-mcp-server.md`). Full pattern in § 7.
+
+- **Parameter types**: `bool`, `int32_t`, `float`, `std::string`, `Console::Argument` (any scalar —
+  `SettingsService.set(key, value)`), by value or const reference; `std::optional< T >` for an
+  omittable argument; a trailing `std::vector< T >` for zero or more (`openFiles`). Anything else,
+  a `Parameter` count that differs from the arity, a non-`CommandResult` return or a vector that is
+  not last **does not compile** (static_assert with a readable message).
+- **Validation happens before the lambda runs**: a missing argument, one too many, or a value that
+  does not convert answers an error naming the parameter (`Argument 'width' expects an integer, got
+  'abc'.`) and the lambda never sees it. Conversions: an integer parameter accepts `5` and `5.0`,
+  refuses `5.5`; a float accepts an integer; a boolean accepts `true`/`false`/`1`/`0` and **refuses
+  any other integer** (the legacy `asBoolean()` read `2` as true); a string parameter receives the
+  token **as typed** (`01` stays `"01"` — `Argument::source()`).
+- **Defaults**: `Parameter{"frameCount", "…", 5}` makes a plain `T` omittable and shows `= 5` in the
+  usage. A `double` literal is refused on purpose (write `1.0F`). A required parameter after an
+  omittable one, a default on an `std::optional`, or a default of the wrong type is refused **at
+  registration** (traced error, command not bound).
+- **Description**: what the command does, capital, final period, no "Usage:" (generated). Each
+  `Parameter` description states the meaning **and the unit** ("in metres", "in EV").
+- **Hints** (`Console::CommandHint::ReadOnly | Destructive | Idempotent`): how a machine client may
+  treat the command. Shown in the `help` dump.
+- **Results**: `CommandResult::success/info/warning/error/json/binary`, `.add(Output)` to append,
+  `fromOutputs(outputs, succeeded)` for a multi-line report with mixed severities. Only `error()`
+  (or `fromOutputs(…, false)`) is a failure. `json()` marks the message as a JSON document — keep it
+  valid JSON (escape names), a machine client will parse it.
+- **Untyped (legacy) commands** — `bindCommand(name, binding, help)` with a raw
+  `(Arguments, Outputs) -> bool` binding — still work and are **being migrated one by one**. The
+  top-level built-in `listUntypedCommands()` counts both kinds and lists the untyped ones: never add
+  a new one. The help string of a legacy command stays mandatory (no default value).
 
 ## 4. Common AI Operations
 
@@ -320,19 +350,35 @@ Controller::executeCommand(string, outputs)
 
 ## 7. Adding New Commands
 
-Commands are registered in `onRegisterToConsole()` overrides using `bindCommand()`:
+Commands are registered in `onRegisterToConsole()` overrides with a **typed** `bindCommand()`
+(rules: § 3 "every new command is TYPED"; machinery: `TypedBinding.hpp`, `Parameter.hpp`,
+`CommandSignature.hpp`, `CommandResult.hpp`):
 
 ```cpp
 // In YourService.console.cpp
 void
 YourService::onRegisterToConsole () noexcept
 {
-    this->bindCommand("doSomething", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-        // arguments[0].asString(), arguments[1].asFloat(), etc.
-        // outputs.emplace_back(Severity::Info, "result message");
-        // outputs.emplace_back(Severity::Info, jsonString); // for JSON responses
-        return true; // success
-    }, "Description of what this command does.");
+	// With parameters: one Parameter per lambda argument, in order.
+	this->bindCommand("setLens", "Sets the lens of the active camera.",
+		{
+			{"focal", "Focal length, in millimetres."},
+			{"sensorWidth", "Sensor width, in millimetres; unchanged when omitted."}
+		},
+		[this] (float focal, std::optional< float > sensorWidth) {
+			if ( !this->hasCamera() )
+			{
+				return Console::CommandResult::error("No active camera !");
+			}
+
+			// ...
+			return Console::CommandResult::success("Lens set.");
+		}, Console::CommandHint::Idempotent);
+
+	// Without parameters: no list at all.
+	this->bindCommand("getState", "Returns the state as JSON.", [this] () {
+		return Console::CommandResult::json(this->stateAsJson());
+	}, Console::CommandHint::ReadOnly);
 }
 ```
 
@@ -340,10 +386,12 @@ YourService::onRegisterToConsole () noexcept
 - Only **services** inherit `ControllableTrait` (not runtime objects like scenes or entities)
 - Services register via `registerToObject(parentService)` to build the hierarchy
 - Commands execute on the **main thread** — safe to access engine state
-- Return `true` for success, `false` for failure
-- For JSON responses, put the JSON string in a single output message
 - Convention: separate `*.console.cpp` file (e.g., `Settings.console.cpp`)
-- **The help string is mandatory.** `bindCommand()` has no default value for `help` — the compiler rejects any call that omits it. This keeps the `help` dump always useful.
+- Layout: the lambda body is indented one level deeper than the `[this] (…) {` line, and the
+  closing `}, hints);` sits at the lambda's level (see `Window.console.cpp`, `Renderer.console.cpp`)
+- A lambda capturing a helper returns errors as `CommandResult::error(reason)` — never write into
+  a shared `Outputs` (see `src/Act.cpp` `activeCamera`)
+- An argument that is out of range is an **error**, not silently clamped (`temporalCapture(0)`)
 
 ## 8. CEF Integration (JavaScript)
 
@@ -385,4 +433,9 @@ TCP lines starting with `{` are routed to a registered JSON handler (not the nor
 - **`accept()` never re-arms blindly** — the error is logged, and a non-transient one (`EMFILE`, out of memory) stops the loop instead of spinning a core at 100 %
 - **Clean responses** — TCP responses contain only command output, no Tracer logs
 - **JSON routing** — lines starting with `{` bypass the command parser and go to the JSON handler
+- **Quoted arguments are literal (2026-09-27)** — inside `"…"` or `'…'` a comma, a parenthesis or a
+  dot no longer splits the argument (`openFiles("/tmp/a,b(1)/x.glb")` is ONE path). Before that,
+  `Expression` cut on every `,` and `)` regardless of quotes
+- **Typed vs untyped** — `listUntypedCommands()` (top-level built-in) reports the migration state;
+  on 2026-09-27: 52 typed, 85 untyped
 - **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) for the complete AI operator reference

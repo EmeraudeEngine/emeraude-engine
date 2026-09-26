@@ -456,6 +456,30 @@ namespace EmEn::Console
 			{
 				out << "  " << path << "." << name << "()\n"
 					<< "	  " << command.help() << "\n";
+
+				if ( const auto * signature = command.signature(); signature != nullptr )
+				{
+					for ( const auto & parameter : signature->parameters() )
+					{
+						out << "	    " << parameter.name() << " (" << to_cstring(parameter.type());
+
+						if ( parameter.arity() == ParameterArity::Variadic )
+						{
+							out << ", zero or more";
+						}
+						else if ( parameter.isOmittable() )
+						{
+							out << ", optional";
+						}
+
+						out << ") " << parameter.description() << "\n";
+					}
+
+					if ( const auto hints = signature->hintsText(); !hints.empty() )
+					{
+						out << "	    [" << hints << "]\n";
+					}
+				}
 			}
 		}
 
@@ -464,6 +488,30 @@ namespace EmEn::Console
 			if ( subPtr != nullptr )
 			{
 				Controller::dumpControllable(*subPtr, out, path + "." + subName);
+			}
+		}
+	}
+
+	void
+	Controller::collectUntypedCommands (const ControllableTrait & controllable, const std::string & path, size_t & typedCount, std::vector< std::string > & untypedPaths) noexcept
+	{
+		for ( const auto & [name, command] : controllable.commands() )
+		{
+			if ( command.signature() != nullptr )
+			{
+				++typedCount;
+			}
+			else
+			{
+				untypedPaths.emplace_back(path + "." + name + "()");
+			}
+		}
+
+		for ( const auto & [subName, subPtr] : controllable.subObjects() )
+		{
+			if ( subPtr != nullptr )
+			{
+				Controller::collectUntypedCommands(*subPtr, path + "." + subName, typedCount, untypedPaths);
 			}
 		}
 	}
@@ -483,6 +531,7 @@ namespace EmEn::Console
 				"  listObjects, lsobj()	List top-level controllable objects\n"
 				"  exit, quit, shutdown	Graceful shutdown (saves settings)\n"
 				"  hardExit				Immediate shutdown (no save)\n"
+				"  listUntypedCommands()   Commands still bound without a declared signature\n"
 				"\n"
 				"Per-object built-ins (any depth):\n"
 				"  <path>.lsfunc()		 List commands bound at that level\n"
@@ -511,6 +560,33 @@ namespace EmEn::Console
 			for ( const auto & objectName : std::ranges::views::keys(m_consoleObjects) )
 			{
 				message << "'" << objectName << "'" "\n";
+			}
+
+			outputs.emplace_back(Severity::Info, message);
+
+			return true;
+		}
+
+		if ( command == "listUntypedCommands" || command == "listUntypedCommands()" )
+		{
+			size_t typedCount = 0;
+			std::vector< std::string > untypedPaths;
+
+			for ( const auto & [name, controllable] : m_consoleObjects )
+			{
+				if ( controllable != nullptr )
+				{
+					Controller::collectUntypedCommands(*controllable, name, typedCount, untypedPaths);
+				}
+			}
+
+			std::stringstream message;
+
+			message << typedCount << " typed, " << untypedPaths.size() << " untyped (bound without a declared signature):\n";
+
+			for ( const auto & untypedPath : untypedPaths )
+			{
+				message << "  " << untypedPath << "\n";
 			}
 
 			outputs.emplace_back(Severity::Info, message);

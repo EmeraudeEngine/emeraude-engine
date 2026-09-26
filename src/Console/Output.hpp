@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -39,8 +40,21 @@
 
 namespace EmEn::Console
 {
+	/** @brief What an output carries beyond its text. */
+	enum class OutputKind : uint8_t
+	{
+		/** @brief Plain text for a human or an AI. */
+		Text,
+		/** @brief The message IS a JSON document (a machine client can parse it as structured data). */
+		Json,
+		/** @brief A binary payload (bytes + MIME type); the message is a one-line description of it. */
+		Binary
+	};
+
 	/**
 	 * @brief Console output class to return command execution info.
+	 * @note Every kind keeps a readable message, so a text channel (TCP console, terminal) prints
+	 * any output as it is; a machine channel can also use the JSON document or the binary payload.
 	 */
 	class EMEN_API Output final
 	{
@@ -55,8 +69,8 @@ namespace EmEn::Console
 			 * @param message A string [std::move].
 			 */
 			Output (Severity severity, std::string message) noexcept
-				: m_severity{severity},
-				m_message{std::move(message)}
+				: m_message{std::move(message)},
+				m_severity{severity}
 			{
 
 			}
@@ -67,10 +81,79 @@ namespace EmEn::Console
 			 * @param message A reference to a string stream.
 			 */
 			Output (Severity severity, const std::stringstream & message) noexcept
-				: m_severity{severity},
-				m_message{message.str()}
+				: m_message{message.str()},
+				m_severity{severity}
 			{
 
+			}
+
+			/**
+			 * @brief Constructs an output whose message is a JSON document.
+			 * @param document A serialized JSON document [std::move].
+			 * @return Output
+			 */
+			[[nodiscard]]
+			static
+			Output
+			json (std::string document) noexcept
+			{
+				Output output{Severity::Info, std::move(document)};
+				output.m_kind = OutputKind::Json;
+
+				return output;
+			}
+
+			/**
+			 * @brief Constructs an output carrying a binary payload.
+			 * @param bytes The payload [std::move].
+			 * @param mimeType The MIME type of the payload, e.g. "image/png" [std::move].
+			 * @param description A one-line description, printed by text channels [std::move].
+			 * @return Output
+			 */
+			[[nodiscard]]
+			static
+			Output
+			binary (std::vector< uint8_t > bytes, std::string mimeType, std::string description) noexcept
+			{
+				Output output{Severity::Info, std::move(description)};
+				output.m_kind = OutputKind::Binary;
+				output.m_mimeType = std::move(mimeType);
+				output.m_bytes = std::move(bytes);
+
+				return output;
+			}
+
+			/**
+			 * @brief Returns what the output carries beyond its text.
+			 * @return OutputKind
+			 */
+			[[nodiscard]]
+			OutputKind
+			kind () const noexcept
+			{
+				return m_kind;
+			}
+
+			/**
+			 * @brief Returns the MIME type of the binary payload (empty unless kind() is Binary).
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			mimeType () const noexcept
+			{
+				return m_mimeType;
+			}
+
+			/**
+			 * @brief Returns the binary payload (empty unless kind() is Binary).
+			 * @return const std::vector< uint8_t > &
+			 */
+			[[nodiscard]]
+			const std::vector< uint8_t > &
+			bytes () const noexcept
+			{
+				return m_bytes;
 			}
 
 			/**
@@ -97,8 +180,11 @@ namespace EmEn::Console
 
 		private:
 
-			Severity m_severity;
 			std::string m_message;
+			std::string m_mimeType;
+			std::vector< uint8_t > m_bytes;
+			Severity m_severity;
+			OutputKind m_kind{OutputKind::Text};
 	};
 
 	using Outputs = std::vector< Output >;

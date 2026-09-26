@@ -30,12 +30,17 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <map>
 #include <string>
+#include <utility>
 
 /* Local inclusions for usages. */
 #include "Command.hpp"
+#include "CommandResult.hpp"
 #include "Expression.hpp"
+#include "Parameter.hpp"
+#include "TypedBinding.hpp"
 
 namespace EmEn::Console
 {
@@ -168,6 +173,86 @@ namespace EmEn::Console
 			void bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help) noexcept;
 
 			/**
+			 * @brief Registers a TYPED command: its parameters are deduced from the callable.
+			 * @note The callable is a non-generic lambda taking bool, int32_t, float, std::string or
+			 * Console::Argument (by value or const reference), std::optional of those for an omittable
+			 * argument, and a trailing std::vector of those for a variadic one; it returns a CommandResult.
+			 * Declare one Parameter per argument, in order — a different count does not compile.
+			 * The arguments are validated and converted before the callable runs: a wrong type or a
+			 * missing argument answers an error naming the parameter, and the callable never sees it.
+			 * The help line is the description followed by a generated "Usage: name(a, b [, c])".
+			 * @code
+			 * this->bindCommand("resize", "Resizes the window.",
+			 * 	{{"width", "Width in screen coordinates."}, {"height", "Height in screen coordinates."}},
+			 * 	[this] (int32_t width, int32_t height) {
+			 * 		...
+			 * 		return Console::CommandResult::success("Window resized.");
+			 * 	}, Console::CommandHint::Idempotent);
+			 * @endcode
+			 * @tparam ParameterCount Deduced from the Parameter list.
+			 * @tparam Callable Deduced from the lambda.
+			 * @param commandNames The way of calling the command (comma-separated aliases supported).
+			 * @param description What the command does, one or two sentences ending with a period.
+			 * @param parameters One declaration per argument of the callable, in order.
+			 * @param callable The code to run [std::move].
+			 * @param hints The behaviour hints. Default none.
+			 */
+			template< size_t ParameterCount, typename Callable >
+			void
+			bindCommand (const std::string & commandNames, const std::string & description, const Parameter (& parameters)[ParameterCount], Callable callable, CommandHint hints = CommandHint::None) noexcept
+			{
+				if constexpr ( !TypedBinding::TypedCommandCallable< Callable > )
+				{
+					static_assert(TypedBinding::AlwaysFalse< Callable >, "bindCommand(): the callable must be a non-generic lambda returning Console::CommandResult.");
+				}
+				else if constexpr ( TypedBinding::CallableTraits< Callable >::Arity != ParameterCount )
+				{
+					static_assert(TypedBinding::AlwaysFalse< Callable >, "bindCommand(): declare exactly one Parameter per argument of the callable, in order.");
+				}
+				else
+				{
+					using ArgumentTypes = typename TypedBinding::CallableTraits< Callable >::ArgumentTypes;
+
+					static_assert(TypedBinding::variadicIsLast< ArgumentTypes >(std::make_index_sequence< ParameterCount >{}), "bindCommand(): only the last parameter may be a std::vector (variadic).");
+
+					CommandSignature signature{TypedBinding::resolveParameters< ArgumentTypes >(parameters, std::make_index_sequence< ParameterCount >{}), hints};
+					auto binding = TypedBinding::makeBinding(std::move(callable), signature);
+
+					this->bindTypedCommand(commandNames, description, std::move(binding), std::move(signature));
+				}
+			}
+
+			/**
+			 * @brief Registers a TYPED command that takes no argument.
+			 * @note Same contract as the overload with parameters; the callable takes nothing.
+			 * @tparam Callable Deduced from the lambda.
+			 * @param commandNames The way of calling the command (comma-separated aliases supported).
+			 * @param description What the command does, one or two sentences ending with a period.
+			 * @param callable The code to run [std::move].
+			 * @param hints The behaviour hints. Default none.
+			 */
+			template< typename Callable >
+			void
+			bindCommand (const std::string & commandNames, const std::string & description, Callable callable, CommandHint hints = CommandHint::None) noexcept
+			{
+				if constexpr ( !TypedBinding::TypedCommandCallable< Callable > )
+				{
+					static_assert(TypedBinding::AlwaysFalse< Callable >, "bindCommand(): the callable must be a non-generic lambda returning Console::CommandResult.");
+				}
+				else if constexpr ( TypedBinding::CallableTraits< Callable >::Arity != 0 )
+				{
+					static_assert(TypedBinding::AlwaysFalse< Callable >, "bindCommand(): a callable that takes arguments needs its Parameter list.");
+				}
+				else
+				{
+					CommandSignature signature{{}, hints};
+					auto binding = TypedBinding::makeBinding(std::move(callable), signature);
+
+					this->bindTypedCommand(commandNames, description, std::move(binding), std::move(signature));
+				}
+			}
+
+			/**
 			 * @brief Removes a command from the console.
 			 * @param commandNames The way of calling the command inside the console.
 			 */
@@ -189,6 +274,17 @@ namespace EmEn::Console
 			 */
 			[[nodiscard]]
 			bool checkBuiltInCommands (const Expression & expression, Outputs & outputs) const noexcept;
+
+			/**
+			 * @brief Registers a typed command once its binding and signature are built.
+			 * @note Refuses (traced error, command not bound) a signature whose declaration is invalid.
+			 * @param commandNames The way of calling the command (comma-separated aliases supported).
+			 * @param description What the command does.
+			 * @param binding The validating binding [std::move].
+			 * @param signature The resolved signature [std::move].
+			 * @return void
+			 */
+			void bindTypedCommand (const std::string & commandNames, const std::string & description, Binding binding, CommandSignature signature) noexcept;
 
 			/**
 			 * @brief Method to override to bind commands.

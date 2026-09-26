@@ -22,7 +22,12 @@ The AI connects to a running engine instance via TCP and sends commands to disco
 >
 > **Rules when adding a command:**
 > - Register it on the service that owns the capability (e.g. rendering commands on `Renderer`).
-> - Keep it self-describing (clear name + help string — it shows up in the command listing).
+> - Register it **typed** (2026-09-27): parameters deduced from the lambda, one `Parameter` (name +
+>   description with its unit) per argument, a `CommandResult` returned, hints set. The help line and
+>   its usage are generated, and the arguments are validated before the lambda runs. Pattern and
+>   rules: [`src/Console/AGENTS.md`](../src/Console/AGENTS.md) § 3 and § 7. Never add an untyped
+>   (`Arguments, Outputs`) command; `listUntypedCommands()` tracks the ones still to migrate.
+> - Keep it self-describing (clear name + description — it shows up in the command listing).
 > - Document it here in the command reference, in the same work session.
 >
 > Example added this way: `Core.RendererService.triggerRenderDocCapture()` (see §6).
@@ -76,6 +81,21 @@ sleep 2
 **For examples in this document**, all `nc` commands use the Linux `-q` flag. On macOS, replace `-q` with `-w`.
 
 **Responses are clean** -- no log prefixes, no ANSI codes. Just the command output, ready for parsing. Each response is sent directly to the requesting client (not broadcast).
+
+### Argument syntax and validation
+
+- Arguments are positional: `Core.WindowService.resize(1920, 1080)`. `<path>.help()` prints, for a
+  **typed** command, one line per parameter with its type, whether it may be omitted, its meaning
+  and unit, then its hints (`[read-only]`, `[idempotent]`, `[destructive]`).
+- A typed command checks its arguments **before** running and answers an error that names the
+  parameter: `Missing argument 'z' (float: Target world Z, in metres.)`,
+  `Argument 'bypassed' expects a boolean, got '2'.`, `Too many arguments: 3 given, at most 2 accepted.`
+  An integer parameter takes `5` or `5.0`, never `5.5`; a boolean takes `true`/`false`/`1`/`0` only.
+- **Quote** a string that contains a comma, a parenthesis or a dot you do not want split:
+  `Core.openFiles("/tmp/a,b(1)/x.glb")` — inside quotes every character is literal (2026-09-27; the
+  parser used to cut a quoted path on its commas).
+- ⚠️ A command whose outputs are empty sends **nothing back**, and the protocol has no end-of-response
+  marker: the client waits for its timeout (`docs/todo/remote-console-response-framing.md`).
 
 ---
 
@@ -1098,6 +1118,7 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777  # List service co
 | | `hardExit` | Immediate shutdown |
 | | `help` / `lsfunc()` | List commands |
 | | `listObjects` / `lsobj()` | List services |
+| | `listUntypedCommands()` | Typed/untyped counts + the untyped commands still to migrate |
 
 ### Service hierarchy
 
