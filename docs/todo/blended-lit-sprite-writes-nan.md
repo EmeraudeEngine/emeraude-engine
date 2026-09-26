@@ -47,5 +47,7 @@ the bisection. Keep this item until one occurrence is caught with the instrument
   the transparent texels also overwrite the G-buffer of what is behind them.
 
 ## References
+
+- 2026-09-26: a whole-frame NaN producer was FIXED in a nearby path — the PostProcessor grab exposed unwritten mips that the DoF setup sampled whenever no scene effect ran (engine `docs/caution-points.md` § *the PostProcessor grab exposed mips nobody wrote*). Rule it out first when re-measuring this item: it is not the blended-sprite path, but it produced NaN in the same chain.
 - `docs/caution-points.md` § "7x7 black squares … under an animated BLENDED sprite".
 - `src/Graphics/Effects/Lighting/SSR.cpp`, the non-finite guard in the resolve.

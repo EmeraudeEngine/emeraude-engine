@@ -3289,6 +3289,33 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 
 ---
 
+### Fixed: the PostProcessor grab exposed mips nobody wrote — whole frame 00FF00 on macOS (Sep 2026)
+
+**Symptom (macOS peer, MoltenVK):** with no scene effect running — `bypassSceneEffects(1)` (KeyPad4) or
+`setLightingMode("None")` on `game-logic` — the frame lost its red and blue channels (R/G/B 0.0/10.9/0.0);
+on `forest` under the bypass it was solid 00FF00. `ToneMapInput` held 3 686 400 NaN (every texel) while
+`SceneColour` held none. Linux/NVIDIA never showed it.
+
+**Cause:** the PostProcessor's `GrabPass` carried a full colour mip chain (view `levelCount` = every level,
+sampler `maxLod` = the chain) while `PostProcessor::recordBlit()` writes level 0 ONLY. The chain's first
+effect samples that image directly whenever no scene effect ran before it; the depth of field's
+half-resolution setup (`texture(colorTex, vUV)`) has an implicit LOD of about 1 and read the unwritten level —
+NaN on MoltenVK, spread over the frame by the gathers. With any overlay effect upstream the chain input is a
+single-mip combine target, which is why it stayed hidden. MotionBlur's reconstruction showed a smaller version
+on the fast-moving sprites (reading, not measured).
+
+**Fix (owner decision: the generic one):** `GrabPass(bool colorMipChain)`; the PostProcessor builds its grab
+with `false` — image, view and sampler at ONE level, so no reader can reach a level nobody writes. The
+refraction grab (the Renderer's, whose `recordBlit()` generates the chain) keeps its pyramid. A local
+`textureLod(…, 0)` in the DoF setup had proven the attribution (macOS peer).
+
+⚠️ A resource whose view exposes more than its writer fills is a trap for EVERY implicit-LOD reader, present
+and future: size the view to what is written, never patch the readers one by one.
+
+**Files:** `Graphics/GrabPass.{hpp,cpp}`, `Graphics/PostProcessor.cpp`.
+
+---
+
 ### Fixed: KeyPad4 broke every lit shader — the direct path had lost its view matrix (Sep 2026)
 
 **Symptom (owner-reported, `game-logic`):** KeyPad4 (then `PostProcessor::enable(false)`, the

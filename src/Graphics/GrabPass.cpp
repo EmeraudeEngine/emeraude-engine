@@ -66,7 +66,7 @@ namespace EmEn::Graphics
 		 *
 		 * The depth/normals/material-property grabs stay single-level on purpose: they are read
 		 * as exact per-pixel values, and a filtered mip of a depth buffer is meaningless. */
-		const auto colorMipLevels = 1U + static_cast< uint32_t >(std::floor(std::log2(std::max(width, height))));
+		const auto colorMipLevels = m_colorMipChain ? 1U + static_cast< uint32_t >(std::floor(std::log2(std::max(width, height)))) : 1U;
 
 		m_colorMipLevels = colorMipLevels;
 

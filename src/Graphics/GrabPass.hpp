@@ -70,9 +70,25 @@ namespace EmEn::Graphics
 			static constexpr auto ClassId{"GrabPass"};
 
 			/**
-			 * @brief Constructs a grab pass texture.
+			 * @brief Constructs a grab pass texture whose colour carries a full mip chain (the refraction grab).
 			 */
 			GrabPass () noexcept = default;
+
+			/**
+			 * @brief Constructs a grab pass texture, choosing whether its colour carries a mip chain.
+			 * @note ⚠️ A grab whose writer fills level 0 ONLY — the PostProcessor's, whose recordBlit() never
+			 * generates the chain — must be built WITHOUT one: its view would expose levels nobody writes, and any
+			 * reader with an implicit LOD below full resolution samples them. MoltenVK returns NaN there, which
+			 * covered the whole frame through the depth of field's half-resolution setup the moment no scene
+			 * effect ran (engine `docs/caution-points.md` § *the PostProcessor grab exposed mips nobody wrote*).
+			 * @param colorMipChain True for a full chain (only when the writer generates it), false for level 0 alone.
+			 */
+			explicit
+			GrabPass (bool colorMipChain) noexcept
+				: m_colorMipChain{colorMipChain}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -453,5 +469,6 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_velocityImage;
 			std::shared_ptr< Vulkan::ImageView > m_velocityImageView;
 			std::shared_ptr< Vulkan::Sampler > m_velocitySampler;
+			bool m_colorMipChain{true}; /* Whether the colour image, its view and its sampler carry a mip chain (the writer must fill it). */
 	};
 }

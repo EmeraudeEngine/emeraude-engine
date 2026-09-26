@@ -602,7 +602,11 @@ namespace EmEn::Graphics
 			m_renderer.deferredDestructor().retireObject(std::move(m_grabPass));
 		}
 
-		m_grabPass = std::make_unique< GrabPass >();
+		/* ⚠️ Level 0 ONLY: recordBlit() writes that level and nothing else, and the chain's first
+		 * effect samples this image directly whenever no scene effect ran before it. A mip chain here
+		 * was a set of levels nobody wrote: the depth of field's half-resolution setup read level 1
+		 * through its implicit LOD, NaN on MoltenVK, and the whole frame went to 00FF00 (2026-09-26). */
+		m_grabPass = std::make_unique< GrabPass >(false);
 
 		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat) )
 		{
