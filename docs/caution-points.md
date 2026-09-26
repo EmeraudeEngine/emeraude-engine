@@ -3307,7 +3307,8 @@ from the Planckian locus, 6500 K = identity, luminance kept) and a SOFT SHOULDER
 clamp. The eight styles re-calibrated with no hue rotation: Golden Hour 3800 K (contrast 1.15, bloom 0.15 at
 0.7), Blue Hour 10500 K (gamma 1.0, brightness -0.01), Super 8 4500 K (contrast 0.95), VHS/Satellite 5600 K,
 Analog 80s 6000 K. Measured on `forest`: Golden Hour dWarm +20.1, clouds 196/165/122 (gold), channels at
-255 0.25 % → 0.013 %, 0 % pure white; Blue Hour dWarm -9.0, crush 6.5 % → 1.6 %; Super 8 dWarm +8.1, dTint
+255 0.25 % → 0.013 %, 0 % pure white (Windows peer, brighter cloud cores: 1.69 % → 0.137 %, every one
+of them the RED channel alone — a saturated warm highlight, not a white; Super 8 0.142 %, same pattern); Blue Hour dWarm -9.0, crush 6.5 % → 1.6 %; Super 8 dWarm +8.1, dTint
 -1.0; VHS/Satellite/Analog clouds near neutral and slightly warm (dWarm +1.3..+1.6).
 
 ⚠️ Golden Hour's sky reads teal (59/84/87): what a warm white balance does to a blue sky (the "teal and
