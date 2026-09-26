@@ -44,6 +44,7 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 
 namespace
@@ -910,6 +911,15 @@ namespace EmEn::Graphics::Effects::Camera
 					slot.buffer->handle(),
 					1,
 					&region
+				);
+
+				/* A fence wait alone does NOT make device writes visible to the host: the copy's TRANSFER_WRITE has
+				 * to be made available to HOST_READ, or the metered focus distance read back later may be a stale
+				 * value (same barrier as the tone mapper's metered exposure). */
+				commandBuffer.pipelineBarrier(
+					Vulkan::Sync::BufferMemoryBarrier{*slot.buffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT},
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_HOST_BIT
 				);
 
 				const Vulkan::Sync::ImageMemoryBarrier toShader{

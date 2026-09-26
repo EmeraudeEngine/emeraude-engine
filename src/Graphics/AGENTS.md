@@ -3795,6 +3795,10 @@ StylePresets:: functions remain the lens-stack building blocks.
   (meters, from the 1x1 RG32F focus history). Access from the panel through
   `PostProcessStack::cameraToneMapping()/cameraDepthOfField()` — RENDER THREAD, inside the
   frame scope, like everything the panel touches.
+  ⚠️ **Both copies end with a TRANSFER → HOST buffer barrier** (`TRANSFER_WRITE` → `HOST_READ`,
+  2026-09-26): a fence wait alone does not make a device write visible to the host, so until then
+  the metered ISO and focus distance could be read stale. The `FrameCapture`, `Recorder` and
+  overflow-census readbacks carry the same barrier; any new readback must too.
 - ⚠️ **Auto and manual expose IDENTICALLY (2026-07-26)**: the auto-exposure keys on
   `Photometry::MeteredMiddleGrey` (K=12.5 / (MeterCalibration=1.2 · 100) ≈ 0.104), the value the
   manual APEX triad lands a correctly metered scene on. The previous key, Reinhard's 0.18, is a
