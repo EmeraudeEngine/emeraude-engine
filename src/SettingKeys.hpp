@@ -828,9 +828,12 @@ namespace EmEn
 			 * ⚠️ `Glare` and `ToneMapping` get no such key on purpose: the tone mapping is not an
 			 * option but the sensor response, and refusing it sends raw photometric radiance to an
 			 * LDR swap chain — measured as a white screen in daylight and a black one at night.
-			 * ⚠️ The defaults are ASYMMETRIC, and deliberately: motion blur was already off by
-			 * default before this key existed, depth of field was always honoured. Both defaults
-			 * preserve the behaviour their effect had. */
+			 * ⚠️ Both default to ON since 2026-09-13 (owner decision): motion blur was off by
+			 * default when the key was introduced, and was switched on on purpose afterwards.
+			 * ⚠️ Camera motion blur smears every silhouette during a camera move BY DESIGN: rule it
+			 * out before blaming the TAA for a trail (a 1/8000 s shutter at the same EV neutralises
+			 * it). Measured 2026-09-26 on basic-scenery, a 1 m sideways step: 25-30 % of the pixels
+			 * near silhouettes above 8/255 with it, 5-7 % without, for ONE frame per moving frame. */
 			/* Post-processing > ContactShadows. The concept had NO settings key at all until Sep
 			 * 2026, in either lane, which meant tuning it required a rebuild — for an effect whose
 			 * whole quality question is "what value do these knobs want".

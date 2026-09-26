@@ -2077,9 +2077,14 @@ two implementations of one thing). Post-processing was also spread over **six** 
 > - ⚠️ **`Glare` and `ToneMapping` get no such key, and must not.** Tone mapping is not an option
 >   but the sensor response; refusing it sends raw photometric radiance to an LDR swap chain —
 >   measured as a white screen in daylight and a black one at night.
-> - ⚠️ The two defaults are **asymmetric on purpose**: `DepthOfField` `true`, `MotionBlur` `false`.
->   Each preserves the behaviour its effect already had, so the keys changed what is *possible*,
->   not what is *rendered*.
+> - ⚠️ **Both default to `true`** since 2026-09-13 (owner decision). `MotionBlur` defaulted to
+>   `false` when the key was introduced, preserving the behaviour of the time, and was switched on
+>   on purpose afterwards; this bullet said `false` until 2026-09-26.
+> - ⚠️ **Camera motion blur smears every silhouette during a camera move, by design.** Rule it out
+>   before blaming the TAA for a trail: pin the same EV at a 1/8000 s shutter. Measured 2026-09-26
+>   on `basic-scenery`, a 1 m sideways step: 25-30 % of the pixels near silhouettes above 8/255 with
+>   it, 5-7 % without, for exactly one frame per moving frame (so on every frame of a continuous
+>   move). The TAA's own residual is the one that outlives the move.
 
 **Switching lanes changes what the frame MEANS**, not merely how fast it was obtained. Verified on
 Sponza (2880×1620, zero VUIDs): the two captures differ on 99.7 % of pixels, mean |Δ| 20/255, while
