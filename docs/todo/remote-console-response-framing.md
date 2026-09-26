@@ -38,6 +38,10 @@ simplest channel for benchmark scripts. It must then become a request/response p
 
 ## ⚠️ Traps
 
+- **A command with no output sends NOTHING** (`Controller::poll()`, `Controller.cpp` — the response is
+  written only `if ( !outputs.empty() )`): the client cannot tell "no answer" from "slow answer" and
+  waits for its whole timeout. The framing must answer every request, even an empty one (seen
+  2026-09-27 while testing `console-command-contract`).
 - The welcome banner and the `ERROR: …` lines written by the network thread
   (`RemoteListener.cpp:74`, `:124`, `:334`, `:410`) must follow the same framing, or a client
   mis-reads them as the answer to its next command.
