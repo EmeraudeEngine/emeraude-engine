@@ -1257,11 +1257,17 @@ namespace EmEn
 
 						if ( toneMapping != nullptr && toneMapping->meteredSensitivity() > 0.0F )
 						{
-							ImGui::Text("metered: ISO %.0f | scene avg %.1f nits", toneMapping->meteredSensitivity(), toneMapping->meteredLuminance());
+							const auto meteredShutter = toneMapping->meteredShutterSpeed();
 
-							if ( toneMapping->meteredSensitivity() <= camera->minSensitivity() || toneMapping->meteredSensitivity() >= camera->maxSensitivity() )
+							ImGui::Text("metered: ISO %.0f at 1/%.0f s | scene avg %.1f nits", toneMapping->meteredSensitivity(), meteredShutter > 0.0F ? 1.0F / meteredShutter : 0.0F, toneMapping->meteredLuminance());
+
+							/* Aperture priority: the ISO floor is no longer a bound (the shutter takes over), the
+							 * fastest shutter at that floor and the ISO ceiling are. */
+							const auto atBrightBound = toneMapping->meteredSensitivity() <= camera->minSensitivity() && meteredShutter <= Scenes::Component::Camera::FastestShutterSpeed * 1.001F;
+
+							if ( atBrightBound || toneMapping->meteredSensitivity() >= camera->maxSensitivity() )
 							{
-								ImGui::TextDisabled("(saturated at the sensor bound — range %.0f-%.0f ISO)", camera->minSensitivity(), camera->maxSensitivity());
+								ImGui::TextDisabled("(saturated at the sensor bound — ISO %.0f-%.0f, fastest shutter 1/%.0f s)", camera->minSensitivity(), camera->maxSensitivity(), 1.0F / Scenes::Component::Camera::FastestShutterSpeed);
 							}
 
 							/* A GROWING count means the luminance chain is sampling implausible

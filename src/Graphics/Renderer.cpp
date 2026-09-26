@@ -2905,6 +2905,7 @@ namespace EmEn::Graphics
 				diagnostics.metering.autoExposure = toneMapping->meteringActive(camera.get());
 				diagnostics.metering.meteredLuminance = toneMapping->meteredLuminance();
 				diagnostics.metering.meteredSensitivity = toneMapping->meteredSensitivity();
+				diagnostics.metering.meteredShutterSpeed = toneMapping->meteredShutterSpeed();
 				diagnostics.metering.rejectedCount = toneMapping->meteredRejectedCount();
 			}
 

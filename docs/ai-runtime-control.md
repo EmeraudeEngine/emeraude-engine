@@ -490,6 +490,10 @@ python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.bypassScen
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.bypassSceneEffects(0)'
 ```
 
+The `Metering:` line of `getStatus()` reads `ISO … at 1/… s` since 2026-09-26: the auto-exposure is
+APERTURE PRIORITY (ISO first, then the shutter once the ISO sits at 100, down to 1/8000 s), and the motion
+blur follows the metered speed. `ISO 100 at 1/8000 s` or `ISO 12800` at the authored speed is a SATURATION.
+
 `bypassSceneEffects(1)` (2026-09-26, projet-alpha's **KeyPad4**) is THE "no effect" A/B: every SCENE
 slot goes dark — lighting family, clouds, light shafts, fog, custom effects, TAA — while the camera
 chain keeps exposing and tone mapping the frame. Nothing selected is written, so `(0)` brings back

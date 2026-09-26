@@ -50,6 +50,7 @@
 #include "Vulkan/GPUProfiler.hpp"
 #include "SceneRenderTarget.hpp"
 #include "Scenes/CloudSet.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
@@ -1330,6 +1331,16 @@ namespace EmEn::Graphics
 				const auto toneMapping = stack.cameraToneMapping();
 
 				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) : 0.0F;
+			}(),
+			.shutterSpeed = [&stack, activeCamera] {
+				if ( activeCamera == nullptr )
+				{
+					return 0.0F;
+				}
+
+				const auto toneMapping = stack.cameraToneMapping();
+
+				return toneMapping != nullptr ? toneMapping->effectiveShutterSpeed(activeCamera) : activeCamera->shutterSpeed();
 			}(),
 			.constants = PushConstants{
 				.frameWidth = static_cast< float >(extent.width),

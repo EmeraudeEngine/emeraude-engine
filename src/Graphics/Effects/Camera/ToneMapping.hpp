@@ -261,6 +261,30 @@ namespace EmEn::Graphics::Effects::Camera
 			float displayExposure (const Scenes::Component::Camera * camera) const noexcept;
 
 			/**
+			 * @brief Returns the shutter speed the auto-exposure landed on, in seconds, 0 until a measurement completed.
+			 * @note Aperture priority (resolveExposure()): equal to the camera's authored speed while the ISO has room,
+			 * shorter once the ISO sits at its floor. Same latency and RENDER THREAD contract as meteredSensitivity().
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			meteredShutterSpeed () const noexcept
+			{
+				return m_meteredShutterSpeed;
+			}
+
+			/**
+			 * @brief Returns the exposure time the frame is taken with, in seconds: what the motion blur must use.
+			 * @note The metered speed under auto-exposure once a measurement exists, the camera's authored speed
+			 * otherwise (manual exposure, first frames). 0 without a camera.
+			 * @warning RENDER THREAD, same contract as meteredSensitivity().
+			 * @param camera The active camera, or null.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float effectiveShutterSpeed (const Scenes::Component::Camera * camera) const noexcept;
+
+			/**
 			 * @brief Returns whether this tone mapper METERS the frame for @a camera: auto exposure with its luminance chain.
 			 * @note The same condition as the branch of execute() that records the luminance passes, so the console's
 			 * "Metering: auto" can never disagree with what runs. Manual exposure (the APEX triad) meters nothing.
@@ -383,6 +407,8 @@ namespace EmEn::Graphics::Effects::Camera
 			 * frames of latency, zero stall. Persistently mapped. RENDER THREAD ONLY. */
 			std::vector< MeteredReadbackSlot > m_meteredReadback;
 			float m_meteredSensitivity{0.0F};
+			/* The shutter speed the aperture-priority metering landed on, in seconds; 0 = no measurement. */
+			float m_meteredShutterSpeed{0.0F};
 			float m_meteredLuminance{0.0F};
 			/* Number of metered frames whose measurement was rejected as implausible — a growing
 			 * value means the luminance chain is reading corrupt data (see meteredRejectedCount()). */

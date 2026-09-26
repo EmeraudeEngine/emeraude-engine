@@ -851,6 +851,7 @@ namespace EmEn::Graphics::Effects::Camera
 			}
 
 			m_meteredSensitivity = 0.0F;
+			m_meteredShutterSpeed = 0.0F;
 			m_meteredLuminance = 0.0F;
 			m_meteredRejectedCount = 0;
 		}
@@ -933,6 +934,7 @@ namespace EmEn::Graphics::Effects::Camera
 
 		m_meteredReadback.clear();
 		m_meteredSensitivity = 0.0F;
+		m_meteredShutterSpeed = 0.0F;
 		m_meteredLuminance = 0.0F;
 		m_meteredRejectedCount = 0;
 
@@ -977,14 +979,21 @@ namespace EmEn::Graphics::Effects::Camera
 				exposure = Photometry::exposureFromValue100(exposureValue) * std::exp2(camera->exposureCompensation());
 			}
 
-			/* AUTO-ISO. The metering is allowed to move the sensitivity and NOTHING else: the
-			 * aperture drives the depth of field and the shutter drives the motion blur, both
-			 * creative controls. So the clamps on the metered multiplier are simply what the
-			 * sensor's ISO range allows at the current aperture and shutter — a real body cannot
-			 * amplify past its sensor. A higher ISO means a lower EV100, hence a larger exposure,
-			 * which is why the bounds cross over. This REPLACES the hand-picked [1e-5, 100]
-			 * range that stood in while the scene was still on arbitrary units. */
-			minExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->minSensitivity()));
+			/* AUTO-ISO, then APERTURE PRIORITY (owner decision, 2026-09-26). The aperture is never
+			 * touched: it drives the depth of field, the look a camera style is chosen for. The
+			 * metering moves the SENSITIVITY first, across the sensor's whole range at the authored
+			 * shutter; once the ISO sits at its floor it shortens the SHUTTER, down to the body's
+			 * fastest speed, instead of overexposing — what a real body does in Av with auto-ISO.
+			 * ⚠️ The ISO-only metering this replaces could not close down at all past ISO 100: once
+			 * the photometric recalibration made a daylight scene bright enough, every wider-aperture
+			 * camera style overexposed by 2.4 to 5.8 EV (f/2.8 at 1/125 s on `forest`, EV100 ≈ 14.3: 4.4 EV),
+			 * and the style effects composited over a white frame.
+			 * The dark end is unchanged: the metering never slows the shutter, the ISO ceiling is the
+			 * bound (a longer exposure would lengthen the motion blur the author set).
+			 * A higher ISO or a longer time means a lower EV100, hence a larger exposure, which is
+			 * why the bounds cross over. The shutter the metering lands on is reported by
+			 * meteredShutterSpeed() and drives the motion blur (FrameContext::shutterSpeed). */
+			minExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), Scenes::Component::Camera::FastestShutterSpeed, camera->minSensitivity()));
 			maxExposure = Photometry::exposureFromValue100(Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->maxSensitivity()));
 		}
 
@@ -1008,6 +1017,23 @@ namespace EmEn::Graphics::Effects::Camera
 		}
 
 		return terms.exposure * std::sqrt(terms.minExposure * terms.maxExposure);
+	}
+
+	float
+	ToneMapping::effectiveShutterSpeed (const Scenes::Component::Camera * camera) const noexcept
+	{
+		if ( camera == nullptr )
+		{
+			return 0.0F;
+		}
+
+		/* Manual exposure, or no measurement yet: the authored speed, which the metering never exceeds. */
+		if ( !camera->isAutoExposureEnabled() || m_meteredShutterSpeed <= 0.0F )
+		{
+			return camera->shutterSpeed();
+		}
+
+		return m_meteredShutterSpeed;
 	}
 
 	/* ---- Execute ---- */
@@ -1163,14 +1189,26 @@ namespace EmEn::Graphics::Effects::Camera
 					{
 						m_meteredLuminance = std::exp(adaptedLogLum);
 
-						/* Reproduce the shader's clamp CPU-side, then convert the effective
-						 * multiplier into the SENSITIVITY that produces it at the current
-						 * aperture and shutter — the exposure scales linearly with the ISO
-						 * (EV100 = log2(N²/t · 100/S)), so S = 100 · exposure / exposure@ISO100. */
+						/* Reproduce the shader's clamp CPU-side, then split the effective multiplier
+						 * into the SENSITIVITY and the SHUTTER that produce it, in the aperture-
+						 * priority order resolveExposure() states: the ISO first, at the authored
+						 * shutter; once it sits at its floor, the shutter. The exposure scales
+						 * linearly with both (EV100 = log2(N²/t · 100/S)). */
 						const auto meteredExposure = std::clamp(keyValue / std::max(m_meteredLuminance, 0.001F), minExposure, maxExposure);
-						const auto exposureAtISO100 = Photometry::exposureFromValue100(Photometry::exposureValue100(context.camera->aperture(), context.camera->shutterSpeed(), 100.0F));
+						const auto authoredShutter = context.camera->shutterSpeed();
+						const auto exposureAtISO100 = Photometry::exposureFromValue100(Photometry::exposureValue100(context.camera->aperture(), authoredShutter, 100.0F));
+						const auto sensitivityAtAuthoredShutter = 100.0F * meteredExposure / std::max(exposureAtISO100, 1.0e-12F);
 
-						m_meteredSensitivity = 100.0F * meteredExposure / std::max(exposureAtISO100, 1.0e-12F);
+						if ( sensitivityAtAuthoredShutter >= context.camera->minSensitivity() )
+						{
+							m_meteredSensitivity = sensitivityAtAuthoredShutter;
+							m_meteredShutterSpeed = authoredShutter;
+						}
+						else
+						{
+							m_meteredSensitivity = context.camera->minSensitivity();
+							m_meteredShutterSpeed = std::max(authoredShutter * sensitivityAtAuthoredShutter / m_meteredSensitivity, Scenes::Component::Camera::FastestShutterSpeed);
+						}
 					}
 				}
 
@@ -1276,6 +1314,7 @@ namespace EmEn::Graphics::Effects::Camera
 
 			/* No metering in manual mode: report nothing rather than a stale value. */
 			m_meteredSensitivity = 0.0F;
+			m_meteredShutterSpeed = 0.0F;
 			m_meteredLuminance = 0.0F;
 
 			/* Tonemap-pass descriptor: binding 0 = HDR input, (bloom variant: binding 1 = glare). */

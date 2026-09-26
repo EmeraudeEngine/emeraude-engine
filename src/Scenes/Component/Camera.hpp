@@ -87,6 +87,10 @@ namespace EmEn::Scenes::Component
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Camera"};
 
+			/** @brief The fastest shutter speed a body offers, in seconds: the clamp of setShutterSpeed() and the floor the
+			 * aperture-priority auto-exposure may reach once the ISO sits at its minimum (ToneMapping::resolveExposure()). */
+			static constexpr auto FastestShutterSpeed{1.0F / 8000.0F};
+
 			/**
 			 * @brief Constructs a camera.
 			 * @param componentName A reference to a string.
@@ -554,13 +558,16 @@ namespace EmEn::Scenes::Component
 			 * effective ceiling being its maximum blur radius in pixels. Expressing it in seconds
 			 * is what makes the blur INDEPENDENT of the framerate: at a fixed shutter speed, a
 			 * frame twice as long simply covers twice the motion, exactly as a real camera would.
+			 * @note ⚠️ This is the AUTHORED speed. Under auto-exposure it is the SLOWEST the metering keeps: once the ISO
+			 * reaches its floor, the aperture-priority metering shortens it (down to FastestShutterSpeed) rather than
+			 * overexpose, and the motion blur follows the METERED speed (FrameContext::shutterSpeed, 2026-09-26).
 			 * @param seconds The exposure time (e.g. 1.0F / 60.0F).
 			 * @return void
 			 */
 			void
 			setShutterSpeed (float seconds) noexcept
 			{
-				m_shutterSpeed = std::clamp(seconds, 1.0F / 8000.0F, 1.0F);
+				m_shutterSpeed = std::clamp(seconds, FastestShutterSpeed, 1.0F);
 			}
 
 			/**

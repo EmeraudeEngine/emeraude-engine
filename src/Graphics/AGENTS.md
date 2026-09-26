@@ -3791,12 +3791,22 @@ StylePresets:: functions remain the lens-stack building blocks.
   `TechnicalProjection`, which **locks the sensor format** (`setSensorWidth()` warns and returns),
   since reframing is precisely what would break the constraint. `isTechnicalCamera()` reports it.
 - Exposure: `setExposureCompensation(EV)`, `setAutoExposure(bool)`.
-- ⚠️ **With auto-ISO on (the default), the aperture is not an exposure control.** The
+- ⚠️ **With auto-exposure on (the default), the aperture is not an exposure control.** The
   metering solves directly for the multiplier that puts the scene on middle grey, and the
-  aperture only enters through the CLAMPS (what the ISO range permits). So f/11 → f/32
-  changes the depth of field and nothing else until the metering saturates — aperture
-  priority, exactly as a real body behaves. The aperture reads as stops of brightness only
-  in manual mode, where the full APEX exposure applies.
+  aperture only enters through the CLAMPS. So f/11 → f/32 changes the depth of field and nothing
+  else until the metering saturates — aperture priority, exactly as a real body behaves. The
+  aperture reads as stops of brightness only in manual mode, where the full APEX exposure applies.
+- ⚠️⚠️ **The metering moves the ISO FIRST, then the SHUTTER (2026-09-26, owner decision)**:
+  `ToneMapping::resolveExposure()` bounds the multiplier by ISO max at the AUTHORED shutter (dark
+  end, unchanged — the shutter never slows) and by ISO min at `Camera::FastestShutterSpeed`
+  (1/8000 s, bright end). The readback splits the result back into `meteredSensitivity()` and
+  `meteredShutterSpeed()`, and `ToneMapping::effectiveShutterSpeed()` → `FrameContext::shutterSpeed`
+  is what `MotionBlur` scales by — never `camera->shutterSpeed()`, the authored (slowest) one.
+  Before, the metering moved the ISO alone and could not close down past ISO 100: after the
+  photometric recalibration, `forest` (EV100 ≈ 14.3) at f/8 1/125 s sat 1.3 EV over, and every wider-aperture
+  camera style (KeyPad5/6) 2.4-5.8 EV over — the style effects composited over a white frame
+  (`docs/caution-points.md` § *every wide-aperture camera style overexposed*). `getStatus()`'s
+  `Metering:` line and `getFrameDiagnostics()` (`meteredShutterSpeed`) report both values.
 - ⚠️ **EV compensation respects the sensor (2026-07-26)**: with auto-ISO on, the bias shifts
   the METERING TARGET (`keyValue × 2^EC`, applied INSIDE the sensor clamp) instead of
   post-amplifying the clamped result — +3 EV saturates at the same ISO ceiling, exactly as a

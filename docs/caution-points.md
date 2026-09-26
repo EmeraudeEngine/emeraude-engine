@@ -3289,6 +3289,45 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 
 ---
 
+### Fixed: every wide-aperture camera style overexposed — the metering could only move the ISO (Sep 2026)
+
+**Symptom (owner-reported):** the KeyPad5/6 camera styles "became overexposed and useless" once the
+lights, the ray-traced and the screen-space lanes were recalibrated. Measured on `forest` (one sweep of
+the 14 presets): High Quality 31.6 % of pure white pixels, Retro 8-Bits 60.7 %, VHS → Pure Signal a mean of
+246/255; Vintage B&W, Super 8, Golden Hour and Blue Hour showed a huge white disc with grey corners (the
+overexposed frame under the vignette — not a broken effect).
+
+**Cause:** the auto-exposure moved the SENSITIVITY alone (ISO 100-12800, aperture and shutter fixed as
+"creative controls"), and a style sets an aperture but never a shutter. `forest`'s daylight is EV100 ≈ 14.3
+(metered 1/308 s at f/8 ISO 100), so at the player's 1/125 s every camera sat at the ISO floor and could not
+close down: f/8 +1.3 EV, f/4 +3.3, f/2.8 +4.4, f/1.8-1.9 (+ their EV bias) +5.8. Before the recalibration the
+scenes were dim enough for the ISO to have room. Retro 8-Bits additionally switched the tone mapping OFF
+(`HDR = false`), i.e. the raw luminance, clipped to white whatever the exposure.
+
+**Fix (owner decisions 2026-09-26):** APERTURE PRIORITY — `ToneMapping::resolveExposure()` lets the
+metering shorten the SHUTTER once the ISO sits at its floor, down to `Camera::FastestShutterSpeed`
+(1/8000 s); the dark end is unchanged (ISO ceiling at the authored shutter, which never slows). The
+readback reports `meteredShutterSpeed()`, and the motion blur scales by `FrameContext::shutterSpeed`
+(the effective speed) instead of the authored one. Retro 8-Bits keeps its tone mapping. Measured after:
+0-0.8 % clipped pixels on every preset (the 1-bit Bitmap is 45 % white by design), mean 55-142/255;
+`game-logic` at night unchanged (ISO 12800 at 1/125 s).
+
+⚠️ **`forest` itself was 1.3 EV over** until this fix (mean 165 → 115/255 at the spawn): a look judged
+before 2026-09-26 on a daylight demo was judged on a clipped frame.
+
+⚠️ **Method trap:** the metered ISO sat at exactly 100 for every preset — a value AT a bound is a
+saturation, not a measurement. `getStatus()` now prints `ISO … at 1/… s`, and the ImGui panel flags the
+bright bound as ISO min AND fastest shutter.
+
+⚠️ `CameraStyle::HDR` still defaults to `false`: a custom style that forgets it renders the raw luminance
+(projet-alpha's Bitmap style sets it).
+
+**Files:** `Graphics/Effects/Camera/ToneMapping.{hpp,cpp}`, `Graphics/Effects/Camera/MotionBlur.cpp`,
+`Graphics/IndirectPostProcessEffect.hpp` (`FrameContext::shutterSpeed`), `Graphics/PostProcessor.cpp`,
+`Scenes/Component/Camera.hpp`, `Scenes/EffectsToolkit/CameraPresets.{hpp,cpp}`.
+
+---
+
 ### Fixed: the PostProcessor grab exposed mips nobody wrote — whole frame 00FF00 on macOS (Sep 2026)
 
 **Symptom (macOS peer, MoltenVK):** with no scene effect running — `bypassSceneEffects(1)` (KeyPad4) or

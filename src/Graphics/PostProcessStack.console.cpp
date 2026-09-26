@@ -127,7 +127,8 @@ namespace EmEn::Graphics
 			}
 
 			outputs.emplace_back(Severity::Info, std::stringstream{} << std::fixed << std::setprecision(1) <<
-				"Metering: auto — scene average " << metering.meteredLuminance << " nits — ISO " << std::setprecision(0) << metering.meteredSensitivity << " — " << rejected << "."
+				"Metering: auto — scene average " << metering.meteredLuminance << " nits — ISO " << std::setprecision(0) << metering.meteredSensitivity <<
+				" at 1/" << ( metering.meteredShutterSpeed > 0.0F ? 1.0F / metering.meteredShutterSpeed : 0.0F ) << " s (aperture priority: the shutter shortens once the ISO sits at its floor) — " << rejected << "."
 			);
 		}
 

@@ -435,6 +435,7 @@ namespace EmEn::Graphics
 				R"("auto":)" << boolean(metering.autoExposure) << "," <<
 				R"("meteredLuminance":)" << number(metering.meteredLuminance) << "," <<
 				R"("meteredSensitivity":)" << number(metering.meteredSensitivity) << "," <<
+				R"("meteredShutterSpeed":)" << number(metering.meteredShutterSpeed) << "," <<
 				R"("rejected":)" << metering.rejectedCount << "},";
 
 			json << R"("census":{)" <<

@@ -81,7 +81,7 @@ namespace EmEn::Scenes::EffectsToolkit
 		GoldenHour,
 		/** @brief Cool cinematic twilight: f/2.8 on full frame, -0.4 EV. */
 		BlueHour,
-		/** @brief Retro 8-bits pixel-art display: raw palette, no photometry at all. */
+		/** @brief Retro 8-bits pixel-art display: the palette over an exposed frame (the tone mapping stays on — the sensor is not a style). */
 		Retro8Bits,
 		/** @brief User-provided style, registered through CameraPresets::setCustomStyle(). */
 		Custom

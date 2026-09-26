@@ -154,6 +154,8 @@ namespace EmEn::Graphics
 		float meteredLuminance{0.0F};
 		/** @brief The ISO the auto-exposure landed on, 0 until a measurement completed or in manual exposure. */
 		float meteredSensitivity{0.0F};
+		/** @brief The shutter speed the aperture-priority auto-exposure landed on, in seconds, 0 until a measurement completed or in manual exposure. */
+		float meteredShutterSpeed{0.0F};
 		/** @brief Measurements the adaptation pass rejected since the tone mapper was created (counted only with a camera). */
 		uint32_t rejectedCount{0};
 		/** @brief Whether the camera tone mapping exists, is enabled and created. */

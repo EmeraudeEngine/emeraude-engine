@@ -587,8 +587,11 @@ namespace EmEn::Graphics::Effects::Camera
 		 * extrapolated linearly over that span, the standard approximation: a curved trajectory
 		 * becomes a straight streak. The upper bound is numerical hygiene only — the real ceiling
 		 * is maxBlurRadiusPixels, applied in the reduction. A missing camera means no
-		 * photographic authority, hence no blur. */
-		const auto shutterSpeed = context.camera != nullptr ? context.camera->shutterSpeed() : 0.0F;
+		 * photographic authority, hence no blur (FrameContext::shutterSpeed is 0 then).
+		 * ⚠️ The EFFECTIVE speed, not the camera's authored one: under the aperture-priority
+		 * auto-exposure (2026-09-26) the metering shortens the shutter once the ISO sits at its
+		 * floor, and a daylight frame taken at 1/1000 s must not smear like one taken at 1/125 s. */
+		const auto shutterSpeed = context.shutterSpeed;
 		const auto shutterAngle = constants.deltaTime > 0.0F ?
 			std::clamp(shutterSpeed / constants.deltaTime, 0.0F, 128.0F) :
 			0.0F;

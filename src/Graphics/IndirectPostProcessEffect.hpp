@@ -457,6 +457,11 @@ namespace EmEn::Graphics
 				 * value, or 0 when the chain has no tone mapper. An effect that weights by luminance BEFORE the tone
 				 * mapping (the TAA's Karis weights) needs a DISPLAY luminance: fed nits, `1 / (1 + L)` is `1 / L`. */
 				float displayExposure{0.0F};
+				/* The exposure time the frame is taken with, in seconds (ToneMapping::effectiveShutterSpeed()): the
+				 * METERED speed under aperture-priority auto-exposure, the camera's authored one otherwise. What the
+				 * motion blur must scale by — the authored speed overstates the smear once the metering shortened it.
+				 * 0 without a camera. */
+				float shutterSpeed{0.0F};
 				PostProcessor::PushConstants constants{};
 			};
 

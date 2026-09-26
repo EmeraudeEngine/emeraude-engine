@@ -433,8 +433,11 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	void
 	Retro8Bits (Component::Camera & camera) noexcept
 	{
-		/* Pixel-art display: raw palette, NO photometry (no DoF, no HDR). */
-		configureCamera(camera, 2.8F, FullFrameFormat, 0.0F, false, false, StylePresets::Retro8Bits());
+		/* Pixel-art display: no depth of field, the palette applied to an EXPOSED frame. ⚠️ The HDR (tone
+		 * mapping) stays ON: it is the sensor, not a style (same rule as Neutral, 2026-07-26). This preset
+		 * switched it off — "no photometry" — and a photometric scene without its sensor is a raw luminance
+		 * clipped to white: the whole frame came out 00FFFFFF on `forest` (owner decision 2026-09-26). */
+		configureCamera(camera, 2.8F, FullFrameFormat, 0.0F, false, true, StylePresets::Retro8Bits());
 	}
 
 	void
