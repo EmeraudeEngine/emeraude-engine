@@ -3289,6 +3289,29 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 
 ---
 
+### Fixed: the model viewer listed a node animation and never played it (Sep 2026)
+
+**Symptom (owner-reported):** the `ChronographWatch`'s second hand did not move on the space bar,
+while the notification read `Animation 1/1: Anim_0`.
+
+**Cause:** `ModelViewer` called `SceneDataConsumer::build(sceneData, scene)` with no parent node, which
+is STATIC mode: every mesh becomes a static entity with its world frame baked, and the consumer drops the
+node clips (`The asset carries node animations, which STATIC mode cannot play`). The viewer still
+collected their names, so the cycle announced a clip that nothing could evaluate. It was never a
+regression: node clips exist since 2026-08-29, the cycle since 2026-08-31, verified on skinned assets
+only — a skeletal clip plays in both modes because its animator lives in the Visual component.
+
+**Fix (owner decision):** node mode for an asset that carries node animations only — built under a
+`ModelRoot` node (`ModelViewer::ModelRootNodeName`), framed on that subtree's render boxes; every other
+asset stays static. Measured: rest 0 % pixels moving, playing the hand moves, OFF 0 %. 0 VUID.
+
+⚠️ **Method trap:** "Animation 1/1" proves the clip was LISTED, not that anything evaluates it. Diff two
+frames 5 s apart, AFTER the notification toast has faded (it alone moves ~10 % of the frame).
+
+**Files:** `Scenes/Viewers/ModelViewer.{hpp,cpp}`.
+
+---
+
 ### Fixed: every wide-aperture camera style overexposed — the metering could only move the ISO (Sep 2026)
 
 **Symptom (owner-reported):** the KeyPad5/6 camera styles "became overexposed and useless" once the

@@ -332,6 +332,15 @@ names. The **space bar** then walks the cycle `OFF -> clip 1 -> ... -> clip N ->
 turn always returns to the rest pose. `Core.cycleAnimation()` is the remote equivalent, calling
 the very same `Core::cycleViewerAnimation()`.
 
+⚠️⚠️ **NODE animations play only since 2026-09-26.** A glTF animation driving plain nodes (no skin —
+the `ChronographWatch`'s second hand) needs a node hierarchy, and the viewer built every asset as
+STATIC entities, which bake their world frame at build time: the space bar announced
+`Animation 1/1: Anim_0` and nothing moved (log: `The asset carries node animations, which STATIC
+mode cannot play`). The viewer now builds such an asset under a `ModelRoot` node (and frames on that
+subtree); every other asset stays static. Measured: second hand still at rest, moving while playing,
+still again after the OFF step. A skeletal clip always played in both modes — the cycle had only been
+verified on skinned assets.
+
 **`Core.resetAnimation()` forces the rest pose in ONE call** (added 2026-09-18), whatever the cycle
 was on. The cycle alone cannot do it: reaching the rest pose from an unknown position takes as many
 calls as the asset has clips, and a caller cannot know how many without tracking the state itself.

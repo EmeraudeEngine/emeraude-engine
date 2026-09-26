@@ -211,7 +211,30 @@ namespace EmEn::Scenes::Viewers
 
 			SceneDataConsumer consumer;
 
-			if ( !consumer.build(sceneData, *scene) )
+			/* ⚠️ NODE MODE when the asset animates plain nodes, STATIC mode otherwise (owner decision,
+			 * 2026-09-26). A static entity bakes its world frame at build time, so the consumer drops the
+			 * node clips in static mode — and it used to be the viewer's only mode: the space bar listed
+			 * the ChronographWatch's `Anim_0` ("Animation 1/1") while its second hand never moved. A
+			 * skeletal clip plays in both modes (its animator lives in the Visual component), which is why
+			 * the cycle had only ever been verified on skinned assets. The static path stays for every
+			 * other asset: it is the lighter one. */
+			std::shared_ptr< Node > modelRoot;
+
+			if ( !sceneData.nodeAnimationClips.empty() )
+			{
+				modelRoot = scene->root()->createChild(ModelRootNodeName);
+
+				if ( modelRoot == nullptr )
+				{
+					TraceError{ClassId} << "Unable to create the model root node for the file '" << IO::toU8String(filepath) << "' !";
+
+					m_sceneManager.deleteScene(SceneName);
+
+					return nullptr;
+				}
+			}
+
+			if ( !consumer.build(sceneData, *scene, modelRoot) )
 			{
 				TraceError{ClassId} << "Unable to build the scene from the file '" << IO::toU8String(filepath) << "' !";
 
@@ -285,6 +308,25 @@ namespace EmEn::Scenes::Viewers
 
 				return true;
 			});
+
+			/* A model built in NODE mode (it animates plain nodes) publishes its extents on the nodes under
+			 * its root, not on static entities: without this walk it would be framed on the fallback box. */
+			if ( const auto modelRoot = scene->root()->findChild(ModelRootNodeName); modelRoot != nullptr )
+			{
+				const std::function< void (const std::shared_ptr< Node > &) > mergeSubtree = [&modelBox, &mergeSubtree] (const std::shared_ptr< Node > & node) {
+					if ( const auto nodeBox = node->getWorldRenderBoundingBox(); nodeBox.isValid() )
+					{
+						modelBox.merge(nodeBox);
+					}
+
+					for ( const auto & child : node->children() | std::views::values )
+					{
+						mergeSubtree(child);
+					}
+				};
+
+				mergeSubtree(modelRoot);
+			}
 
 			const auto allMeshesReady = std::ranges::all_of(sceneData.meshes, [] (const auto & meshDescriptor) {
 				return meshDescriptor.renderable == nullptr || meshDescriptor.renderable->isReadyForInstantiation();

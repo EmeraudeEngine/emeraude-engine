@@ -72,6 +72,9 @@ namespace EmEn::Scenes::Viewers
 			/** @brief Reserved name of the scene built by this viewer. */
 			static constexpr auto SceneName{"+ModelViewer"};
 
+			/** @brief The node an asset that animates plain nodes is built under (node mode; every other asset is built as static entities). */
+			static constexpr auto ModelRootNodeName{"ModelRoot"};
+
 			/**
 			 * @brief Constructs a model viewer.
 			 * @param resourceManager A reference to the resource manager.
