@@ -1855,6 +1855,13 @@ always walked; `rebuildRenderingOctree()` now transfers EVERY sector's elements 
 i.e. nearly nothing). Before, the lists walked every entity and component and tested the volume last:
 `terrain`'s 12 776 forest cells cost ~90 ms of CPU per frame (9 FPS for 32 ms of GPU), 22-23 ms after.
 `docs/caution-points.md` § *The render lists walked EVERY entity*.
+⚠️⚠️ **An entity leaves the octree ONLY through `SubNodeDeleting`** (or `removeStaticEntity()`), and the
+octree holds it by `shared_ptr`: a node removed without that notification is not freed, it stays DRAWN and
+TRACED for the rest of the session. `Node::destroyChild()` was a bare map erase and `destroyChildren()` never
+announced the descendants — a retired explosion sprite pushed `game-logic` from 54 to 202 ms per frame (fixed
+2026-09-26: every removal path now announces every node of the subtree, `trimTree()`'s teardown). Never remove a
+child from a node's map by any other route. `docs/caution-points.md` § *a node removed by `destroyChild()` stayed
+DRAWN and TRACED forever*.
 
 > [!CAUTION]
 > `StaticEntity::isVisibleTo()` tests the **collision model** AABB, or a bare point when there is

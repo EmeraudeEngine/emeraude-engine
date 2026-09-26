@@ -964,9 +964,49 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		m_children.erase(nodeIt);
+		/* ⚠️ Same teardown as trimTree(), never a bare erase: the scene erases a node from its
+		 * octrees on SubNodeDeleting, and the registries holding a component (LightSet,
+		 * AVConsoleManager) release it on the *Destroyed notifications destroyTree() emits.
+		 * A bare erase left the subtree in the rendering octree, which the render lists and the
+		 * TLAS query since the octree culling: a retired explosion sprite stayed drawn and
+		 * traced for the rest of the session, frozen on its last frame. The copy keeps the
+		 * child alive until its teardown is over. */
+		const auto subNode = nodeIt->second;
+
+		this->notify(SubNodeDeleting, subNode);
+
+		subNode->destroyTree();
+
+		m_children.erase(name);
+
+		this->notify(SubNodeDeleted, this->shared_from_this());
 
 		return true;
+	}
+
+	void
+	Node::destroyChildren () noexcept
+	{
+		if ( m_children.empty() )
+		{
+			return;
+		}
+
+		/* ⚠️ Every descendant announces its own removal, not only the subtree's top: the scene
+		 * erases from its octrees exactly the node carried by SubNodeDeleting, so a child left
+		 * unannounced stays in the rendering octree as an orphan. The notification reaches the
+		 * scene through each ancestor's forwarding, which only relays a node still present in
+		 * its parent's children — hence announce and tear down BEFORE clearing the map. */
+		for ( const auto & [name, child] : m_children )
+		{
+			this->notify(SubNodeDeleting, child);
+
+			child->destroyTree();
+		}
+
+		m_children.clear();
+
+		this->notify(SubNodeDeleted, this->shared_from_this());
 	}
 
 	void

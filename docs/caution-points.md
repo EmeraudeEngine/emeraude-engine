@@ -3280,12 +3280,69 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > the logics thread under the registry's mutex, correctly serialized against the
 > rendering thread.
 >
-> **File:** `Scenes/Node.hpp` — `destroyChildren()`.
+> **File:** `Scenes/Node.cpp` — `destroyChildren()` (moved out of the header 2026-09-26).
 >
 > **Takeaway:** the logics/rendering threads run concurrently under a SHARED scene lock
 > and are decoupled by double-buffering; the rendering thread must never outlive-read an
 > entity. A `*Destroyed` notification that drives registry cleanup MUST fire on every
 > teardown path, including deep subtrees — a destructor is not a substitute.
+
+---
+
+### Fixed: a node removed by `destroyChild()` stayed DRAWN and TRACED forever — `game-logic` 54 → 202 ms after one explosion (Sep 2026)
+
+> [!WARNING]
+> **`Node::destroyChild(name)` was a bare `m_children.erase()`**: no `SubNodeDeleting`, no
+> `destroyTree()`. And `destroyChildren()` tore every descendant down WITHOUT announcing it, so the
+> scene — which erases from its octrees exactly the node carried by `SubNodeDeleting` — only ever
+> erased the TOP of a removed subtree. The rendering octree holds its elements by `shared_ptr`:
+> everything below stayed filed there.
+>
+> Harmless while the render lists walked the node tree. **Since 2026-09-25 the render lists and the
+> TLAS are built from the rendering octree** (`gatherRenderingCandidates()`), so an orphan is drawn
+> AND traced.
+
+**Symptom (owner-reported, `game-logic`):** "everything becomes extremely slow once I press X", plus
+"two bright dots stay where the explosion happened". `Actor::Explosion` retires its fireball with
+`baseNode()->destroyChild("Sprite")`: the 60 m alpha-tested sprite quad (radius 30, 10 m in front of
+the spawn) stayed on screen frozen on its last frame — the two dots are its last embers — and stayed
+in the TLAS, where every ray crossing it runs the alpha test.
+
+**Measured** (GPU profiler, RTX 3070 Ti, 2880×1620, RT lane, validation ON, 0 VUID), before X → 30 s
+after X:
+
+| Pass | Before X | After X, defect | After X, fixed |
+|---|---|---|---|
+| Frame | 54 ms | 202 ms | 21 ms |
+| `RTREffect/trace` | 28.8 ms | 136.8 ms | 2.6-5.5 ms |
+| `RTGIEffect/trace` | 11.4 ms | 47.5 ms | 2.7 ms |
+| `IrradianceProbes` | 1.1 ms | 3.8 ms | 0.4 ms |
+| `ScenePass` / shadow maps | 5.5 / 1.1 ms | 5.4 / 1.1 ms | 5.7 / 0.9 ms |
+
+The raster and the shadow maps never moved; the CPU stayed idle (no thread above 10 %). Only the
+ray-traced passes grew — the signature of something added to the TLAS, not of a light or of physics.
+
+**Other victims of the same bare erase:** `Actor::Drone` removes its `effects` node, which carries
+the shadow-casting `DronePulse` point light — it stayed in the `LightSet` as a zombie whose parent
+dangled (the June use-after-free above, through another door) and kept rendering its cube shadow
+map; `asset-loader`'s subject cycle removes `AssetRoot` the same way, so the previous file's
+hierarchy stayed drawn under the next subject; the console `destroyNode()`.
+
+**Fix (owner decision: ONE contract, in `Node`):** `destroyChild()` runs the `trimTree()` teardown —
+`SubNodeDeleting(child)` → `child->destroyTree()` → erase → `SubNodeDeleted(this)` — and
+`destroyChildren()` announces EVERY child with `SubNodeDeleting` before tearing it down, so every
+descendant, at any depth, leaves both octrees. The notification reaches the scene through each
+ancestor's forwarding (`Node::onUnhandledNotification()`), which only relays a node still present in
+its parent's children map: announce and tear down FIRST, clear the map LAST. No new lock order:
+`trimTree()` already reached the same scene handler under `m_sceneNodesAccess`.
+
+⚠️ **Method trap:** "the slowdown starts with the explosion" pointed at the explosion's light, its
+shadow maps or its physics push. The per-pass A/B named none of them in one run — read
+`Core.RendererService.getGPUTimings()` (profiler key `Core/Graphics/GPUProfiler/Enabled`, read at
+launch) before suspecting a subsystem. And a node count that does NOT drop after deaths is not proof
+of a leak: the orphan is invisible to `listNodes()`, it lives in the octree only.
+
+**Files:** `Scenes/Node.cpp` — `destroyChild()`, `destroyChildren()`; `Scenes/Node.hpp`.
 
 ---
 

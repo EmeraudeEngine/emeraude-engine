@@ -729,14 +729,20 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Removes and destroys a child node by name.
 			 *
-			 * Immediately removes the child from this node's children map. The child's
-			 * destructor will be called when all references are released.
+			 * Same teardown as trimTree() applies to a discarded node: emits SubNodeDeleting
+			 * with the child, tears the subtree down with destroyTree() (every descendant
+			 * announces its own removal and runs clearComponents()), removes the child from
+			 * the children map, then emits SubNodeDeleted. The scene erases each announced
+			 * node from its rendering and physics octrees on SubNodeDeleting.
 			 *
+			 * @warning Never reduce this to a bare map erase: the rendering octree holds the
+			 * subtree, and the render lists and the TLAS are built from that octree — the
+			 * removed node would stay drawn and traced for the rest of the session.
 			 * @param name Name of the child to destroy.
 			 * @return True if the child existed and was removed, false if not found.
 			 * @post If true, the child is no longer in the children map.
 			 * @note For deferred destruction, use discard() on the child instead.
-			 * @see discard(), destroyChildren()
+			 * @see discard(), destroyChildren(), trimTree()
 			 */
 			bool destroyChild (const std::string & name) noexcept;
 
@@ -752,19 +758,16 @@ namespace EmEn::Scenes
 			 * whose m_parentEntity dangles after the node is freed — a use-after-free
 			 * read from the rendering thread (LightSet::updateVideoMemory).
 			 *
+			 * Each child is announced with SubNodeDeleting BEFORE its teardown, so every
+			 * descendant — not only the top of a removed subtree — leaves the scene's
+			 * octrees. The ancestors relay a child's notification only while it is still
+			 * in their children map, which is why the map is cleared last. Emits one
+			 * SubNodeDeleted once the map is empty (nothing when there was no child).
+			 *
 			 * @post children() returns an empty map.
 			 * @see destroyTree(), destroyChild()
 			 */
-			void
-			destroyChildren () noexcept
-			{
-				for ( const auto & [name, child] : m_children )
-				{
-					child->destroyTree();
-				}
-
-				m_children.clear();
-			}
+			void destroyChildren () noexcept;
 
 			/**
 			 * @brief Returns how long this node has existed.
