@@ -1,7 +1,7 @@
 ---
 id: scene-colour-pre-exposure
 title: Pre-expose the fp16 scene colour so no target stores absolute nits past 65 504
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics (Renderer, PostProcessor, ToneMapping, Effects/Lighting, Effects/Atmosphere, Effects/Camera, GIDenoiser, IrradianceProbeVolume), Saphir (Generator/SceneRendering, LightGenerator)
 opened: 2026-09-25
@@ -126,6 +126,15 @@ neighbour (same scene).
 ## What remains
 
 ### A. Decisions for the owner
+
+> **DECIDED (owner, 2026-09-26): the recommended package, all ten** — D1 (b) multiply at every writer's output; D2 (b)
+> a new frame-indexed per-frame uniform; D3 (c) the metered exposure quantised to whole stops with hysteresis (manual
+> mode: the exact triad), the tone mapper applying E_display / E_pre; D4 (a) metering divides back; D5 (a) rescale the
+> histories by r, r = 1 after any reset; D6 grab pass ÷ E_pre, render-target reflection sources × E_pre / E_target,
+> Multiply blend exempt, the unlit no-emission branch scaled like the rest; D7 (b) + (b) one fixed cache scale S for
+> the probe volume and the render-target probes, plus the finite guard; D8 mechanical, the glare's Karis weighting
+> MEASURED before any compensation; D9 E_pre written into the capture JSON; D10 the overflow census and the
+> pre-exposure override built FIRST. The option lists below stay as the record of what was weighed.
 
 Each decision lists its options. "→ discuss" marks the audit's recommendation; it is not a
 decision.

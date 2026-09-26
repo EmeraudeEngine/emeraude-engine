@@ -139,7 +139,7 @@ namespace EmEn::Scenes
 	 * @version 0.8.38
 	 */
 	template< typename element_t, bool enable_volume >
-	requires (std::is_base_of_v< Base::NameableTrait, element_t >, std::is_base_of_v< LocatableInterface, element_t >)
+	requires (std::is_base_of_v< Base::NameableTrait, element_t > && std::is_base_of_v< LocatableInterface, element_t >)
 	class OctreeSector final : public std::enable_shared_from_this< OctreeSector< element_t, enable_volume > >, public Base::Math::Space3D::AACuboid< float >
 	{
 		public:

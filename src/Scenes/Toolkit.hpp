@@ -77,7 +77,7 @@ namespace EmEn::Scenes
 	 * @tparam component_t The type of component.
 	 */
 	template< typename entity_t, typename component_t >
-	requires (std::is_base_of_v< AbstractEntity, entity_t >, std::is_base_of_v< Component::Abstract, component_t >)
+	requires (std::is_base_of_v< AbstractEntity, entity_t > && std::is_base_of_v< Component::Abstract, component_t >)
 	class BuiltEntity final
 	{
 		public:
