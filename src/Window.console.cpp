@@ -31,37 +31,26 @@ namespace EmEn
 	void
 	Window::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("resize", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
+		this->bindCommand("resize", "Resizes the window (320x240 minimum).",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: resize(width, height)");
+				{"width", "New window width, in screen coordinates."},
+				{"height", "New window height, in screen coordinates."}
+			},
+			[this] (int32_t width, int32_t height) {
+				if ( width < 320 || height < 240 )
+				{
+					return Console::CommandResult::error("Minimum size is 320x240.");
+				}
 
-				return false;
-			}
+				if ( !this->resize(width, height) )
+				{
+					return Console::CommandResult::error("Failed to resize window !");
+				}
 
-			const auto width = arguments[0].asInteger();
-			const auto height = arguments[1].asInteger();
+				return Console::CommandResult::success("Window resized to " + std::to_string(width) + "x" + std::to_string(height) + ".");
+			}, Console::CommandHint::Idempotent);
 
-			if ( width < 320 || height < 240 )
-			{
-				outputs.emplace_back(Severity::Error, "Minimum size is 320x240.");
-
-				return false;
-			}
-
-			if ( this->resize(width, height) )
-			{
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "Window resized to " << width << "x" << height << ".");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "Failed to resize window !");
-			}
-
-			return true;
-		}, "Resizes the window. Usage: resize(width, height)");
-
-		this->bindCommand("getState", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("getState", "Returns the window state as JSON (size, position, framebuffer, scale).", [this] () {
 			const auto & state = this->state();
 
 			std::stringstream json;
@@ -76,9 +65,7 @@ namespace EmEn
 			json << "\"contentYScale\":" << state.contentYScale;
 			json << "}";
 
-			outputs.emplace_back(Severity::Info, json.str());
-
-			return true;
-		}, "Returns the window state as JSON (size, position, framebuffer, scale).");
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 	}
 }

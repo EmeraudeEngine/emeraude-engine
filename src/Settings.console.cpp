@@ -31,68 +31,55 @@ namespace EmEn
 	void
 	Settings::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("getAll,print", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, std::stringstream{} << *this);
+		this->bindCommand("getAll,print", "Prints all settings.", [this] () {
+			std::stringstream text;
+			text << *this;
 
-			return true;
-		}, "Prints all settings.");
+			return Console::CommandResult::info(text.str());
+		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("getJson", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, this->toJsonString());
+		this->bindCommand("getJson", "Returns all settings as a JSON document.", [this] () {
+			return Console::CommandResult::json(this->toJsonString());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Returns all settings as a JSON string.");
-
-		this->bindCommand("set", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
+		this->bindCommand("set", "Sets a setting value for this session (save() writes it to disk). Most keys are read once at launch.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: set(key, value)");
+				{"key", "The setting path, e.g. 'Core/Graphics/PostProcessing/LightingLane'."},
+				{"value", "The new value; its type (boolean, integer, float, string) is the one stored."}
+			},
+			[this] (const std::string & key, const Console::Argument & value) {
+				switch ( value.type() )
+				{
+					case Console::ArgumentType::Boolean :
+						this->set(key, value.asBoolean());
+						break;
 
-				return false;
+					case Console::ArgumentType::Integer :
+						this->set(key, value.asInteger());
+						break;
+
+					case Console::ArgumentType::Float :
+						this->set(key, static_cast< double >(value.asFloat()));
+						break;
+
+					case Console::ArgumentType::String :
+						this->set(key, value.asString());
+						break;
+
+					case Console::ArgumentType::Undefined :
+						return Console::CommandResult::error("Unsupported value type !");
+				}
+
+				return Console::CommandResult::success("Setting '" + key + "' updated.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("save", "Forces settings save to disk.", [this] () {
+			if ( !this->save() )
+			{
+				return Console::CommandResult::error("Failed to save settings !");
 			}
 
-			const auto key = arguments[0].asString();
-
-			switch ( arguments[1].type() )
-			{
-				case Console::ArgumentType::Boolean :
-					this->set(key, arguments[1].asBoolean());
-					break;
-
-				case Console::ArgumentType::Integer :
-					this->set(key, arguments[1].asInteger());
-					break;
-
-				case Console::ArgumentType::Float :
-					this->set(key, static_cast< double >(arguments[1].asFloat()));
-					break;
-
-				case Console::ArgumentType::String :
-					this->set(key, arguments[1].asString());
-					break;
-
-				default :
-					outputs.emplace_back(Severity::Error, "Unsupported value type !");
-
-					return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Setting '" << key << "' updated.");
-
-			return true;
-		}, "Sets a setting value. Usage: set(key, value)");
-
-		this->bindCommand("save", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			if ( this->save() )
-			{
-				outputs.emplace_back(Severity::Success, "Settings saved.");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "Failed to save settings !");
-			}
-
-			return true;
-		}, "Forces settings save to disk.");
+			return Console::CommandResult::success("Settings saved.");
+		}, Console::CommandHint::Idempotent);
 	}
 }

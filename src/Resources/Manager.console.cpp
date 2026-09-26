@@ -34,7 +34,7 @@ namespace EmEn::Resources
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("listContainers", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("listContainers", "Lists all resource containers with loaded/available counts as JSON.", [this] () {
 			std::stringstream json;
 			json << "[";
 
@@ -54,25 +54,21 @@ namespace EmEn::Resources
 
 			json << "]";
 
-			outputs.emplace_back(Severity::Info, json.str());
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Lists all resource containers with loaded/available counts as JSON.");
-
-		this->bindCommand("listResources", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
+		this->bindCommand("listResources", "Lists the available resources of a container as JSON.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: listResources(containerName)");
-
-				return false;
-			}
-
-			const auto containerName = arguments[0].asString();
-
-			for ( const auto & [typeIndex, container] : m_containers )
-			{
-				if ( containerName == container->resourceClassId() || containerName == container->name() )
+				{"container", "The container id or name (listContainers() lists them), e.g. 'SkyBoxResource'."}
+			},
+			[this] (const std::string & containerName) {
+				for ( const auto & [typeIndex, container] : m_containers )
 				{
+					if ( containerName != container->resourceClassId() && containerName != container->name() )
+					{
+						continue;
+					}
+
 					const auto names = container->availableResourceNames();
 
 					std::stringstream json;
@@ -90,87 +86,60 @@ namespace EmEn::Resources
 
 					json << "]";
 
-					outputs.emplace_back(Severity::Info, json.str());
-
-					return true;
+					return Console::CommandResult::json(json.str());
 				}
-			}
 
-			outputs.emplace_back(Severity::Error, std::stringstream{} << "Container '" << containerName << "' not found !");
+				return Console::CommandResult::error("Container '" + containerName + "' not found !");
+			}, Console::CommandHint::ReadOnly);
 
-			return false;
-		}, "Lists available resources in a container as JSON. Usage: listResources(containerName)");
-
-		this->bindCommand("loadResource", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
+		this->bindCommand("loadResource", "Requests the asynchronous loading of a resource (downloads it first when its source is ExternalData). Poll it with resourceStatus().",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: loadResource(containerName, resourceName)");
+				{"container", "The container id or name (listContainers() lists them)."},
+				{"resource", "The resource name (listResources() lists them)."}
+			},
+			[this] (const std::string & containerName, const std::string & resourceName) {
+				for ( const auto & container : std::views::values(m_containers) )
+				{
+					if ( containerName != container->resourceClassId() && containerName != container->name() )
+					{
+						continue;
+					}
 
-				return false;
-			}
+					if ( !container->requestResource(resourceName) )
+					{
+						return Console::CommandResult::error("No resource '" + resourceName + "' in container '" + containerName + "' !");
+					}
 
-			const auto containerName = arguments[0].asString();
-			const auto resourceName = arguments[1].asString();
+					return Console::CommandResult::success("Loading of '" + resourceName + "' requested. Poll with resourceStatus(" + containerName + ", " + resourceName + ").");
+				}
 
-			for ( const auto & container : std::views::values(m_containers) )
+				return Console::CommandResult::error("Container '" + containerName + "' not found !");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("resourceStatus", "Returns the loading status of a resource: Unloaded, Enqueuing, ManualEnqueuing, Loading, Loaded or Failed.",
 			{
-				if ( containerName != container->resourceClassId() && containerName != container->name() )
+				{"container", "The container id or name (listContainers() lists them)."},
+				{"resource", "The resource name (listResources() lists them)."}
+			},
+			[this] (const std::string & containerName, const std::string & resourceName) {
+				for ( const auto & container : std::views::values(m_containers) )
 				{
-					continue;
+					if ( containerName != container->resourceClassId() && containerName != container->name() )
+					{
+						continue;
+					}
+
+					const auto status = container->resourceStatus(resourceName);
+
+					if ( !status )
+					{
+						return Console::CommandResult::error("No resource '" + resourceName + "' in container '" + containerName + "' !");
+					}
+
+					return Console::CommandResult::info(to_cstring(*status));
 				}
 
-				if ( !container->requestResource(resourceName) )
-				{
-					outputs.emplace_back(Severity::Error, std::stringstream{} << "No resource '" << resourceName << "' in container '" << containerName << "' !");
-
-					return false;
-				}
-
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "Loading of '" << resourceName << "' requested. Poll with resourceStatus(" << containerName << ", " << resourceName << ").");
-
-				return true;
-			}
-
-			outputs.emplace_back(Severity::Error, std::stringstream{} << "Container '" << containerName << "' not found !");
-
-			return false;
-		}, "Requests the asynchronous loading of a resource (downloads it first when its source is ExternalData). Usage: loadResource(containerName, resourceName)");
-
-		this->bindCommand("resourceStatus", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: resourceStatus(containerName, resourceName)");
-
-				return false;
-			}
-
-			const auto containerName = arguments[0].asString();
-			const auto resourceName = arguments[1].asString();
-
-			for ( const auto & container : std::views::values(m_containers) )
-			{
-				if ( containerName != container->resourceClassId() && containerName != container->name() )
-				{
-					continue;
-				}
-
-				const auto status = container->resourceStatus(resourceName);
-
-				if ( !status )
-				{
-					outputs.emplace_back(Severity::Error, std::stringstream{} << "No resource '" << resourceName << "' in container '" << containerName << "' !");
-
-					return false;
-				}
-
-				outputs.emplace_back(Severity::Info, to_cstring(*status));
-
-				return true;
-			}
-
-			outputs.emplace_back(Severity::Error, std::stringstream{} << "Container '" << containerName << "' not found !");
-
-			return false;
-		}, "Returns the loading status of a resource: Unloaded, Enqueuing, ManualEnqueuing, Loading, Loaded or Failed. Usage: resourceStatus(containerName, resourceName)");
+				return Console::CommandResult::error("Container '" + containerName + "' not found !");
+			}, Console::CommandHint::ReadOnly);
 	}
 }

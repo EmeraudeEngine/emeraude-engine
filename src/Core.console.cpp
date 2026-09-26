@@ -42,144 +42,118 @@ namespace EmEn
 	void
 	Core::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("remoteConsoleStatus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("remoteConsoleStatus", "Returns the remote console state as JSON (running, endpoint).", [this] () {
 			if ( m_consoleController.isRemoteListenerRunning() )
 			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "{\"running\":true,\"endpoint\":\"" << m_consoleController.remoteListenerEndpoint() << "\"}");
+				return Console::CommandResult::json("{\"running\":true,\"endpoint\":\"" + m_consoleController.remoteListenerEndpoint() + "\"}");
 			}
-			else
+
+			return Console::CommandResult::json("{\"running\":false}");
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("restartRemoteConsole", "Moves the remote console to another endpoint on the next cycle (this connection is closed).",
 			{
-				outputs.emplace_back(Severity::Info, "{\"running\":false}");
-			}
+				{"endpoint", "A port (1-65535), address:port or [ipv6]:port."}
+			},
+			[this] (const std::string & endpoint) {
+				std::string address;
+				uint16_t port = 0;
 
-			return true;
-		}, "Returns the remote console state as JSON (running, endpoint).");
+				if ( !Console::Controller::parseEndpoint(endpoint, m_consoleController.defaultRemoteListenerAddress(), address, port) )
+				{
+					return Console::CommandResult::error("Invalid endpoint. Expected a port (1-65535), address:port or [ipv6]:port.");
+				}
 
-		this->bindCommand("restartRemoteConsole", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: restartRemoteConsole(port) or restartRemoteConsole(address:port)");
+				m_consoleController.requestRemoteListenerRestart(address, port);
 
-				return false;
-			}
+				return Console::CommandResult::success("The remote console will move to " + address + ':' + std::to_string(port) + " on the next cycle; this connection closes. Reconnect there.");
+			});
 
-			/* NOTE: "7778" reaches the console as an Integer argument, "0.0.0.0:7778" as a String;
-			 * asString() on an Integer is empty, so read the type first. */
-			const auto endpointText = arguments[0].type() == Console::ArgumentType::Integer ? std::to_string(arguments[0].asInteger()) : arguments[0].asString();
-
-			std::string address;
-			uint16_t port = 0;
-
-			if ( !Console::Controller::parseEndpoint(endpointText, m_consoleController.defaultRemoteListenerAddress(), address, port) )
-			{
-				outputs.emplace_back(Severity::Error, "Invalid endpoint. Expected a port (1-65535), address:port or [ipv6]:port.");
-
-				return false;
-			}
-
-			m_consoleController.requestRemoteListenerRestart(address, port);
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "The remote console will move to " << address << ':' << port << " on the next cycle; this connection closes. Reconnect there.");
-
-			return true;
-		}, "Moves the remote console to another endpoint on the next cycle (this connection is closed). Usage: restartRemoteConsole(port | address:port)");
-
-		this->bindCommand("toggleRecording", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("toggleRecording", "Toggles the RushMaker audio/video recording (same as Shift+Ctrl+F12).", [this] () {
 			/* RushMaker toggle (same as Shift+Ctrl+F12), for AI-driven capture sessions. */
 			if ( m_graphicsRenderer.recorder().isRecording() )
 			{
 				this->stopAudioVideoRecording();
 
-				outputs.emplace_back(Severity::Success, "Recording stopped (encoding finishes in background).");
-
-				return true;
+				return Console::CommandResult::success("Recording stopped (encoding finishes in background).");
 			}
 
 			if ( !this->startAudioVideoRecording() )
 			{
-				outputs.emplace_back(Severity::Error, "Unable to start the recording !");
-
-				return false;
+				return Console::CommandResult::error("Unable to start the recording !");
 			}
 
-			outputs.emplace_back(Severity::Success, "Recording started.");
+			return Console::CommandResult::success("Recording started.");
+		});
 
-			return true;
-		}, "Toggles the RushMaker audio/video recording (same as Shift+Ctrl+F12).");
-
-		this->bindCommand("togglePhysicalSimulation", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("togglePhysicalSimulation", "Toggles the physical simulation (collisions, boundaries, ground response) of the active scene.", [this] () {
 			/* Debug affordance: isolates a rendering or logic defect from a physics one without
 			 * a rebuild. Not a pause — entities keep moving, only the collision resolution stops. */
 			const auto state = !this->physicalSimulationEnabled();
 
 			this->enablePhysicalSimulation(state);
 
-			outputs.emplace_back(Severity::Success, state ? "Physical simulation ENABLED." : "Physical simulation DISABLED (entities move, nothing collides).");
+			return Console::CommandResult::success(state ? "Physical simulation ENABLED." : "Physical simulation DISABLED (entities move, nothing collides).");
+		});
 
-			return true;
-		}, "Toggles the physical simulation (collisions, boundaries, ground response) of the active scene.");
-
-		this->bindCommand("openFiles", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			/* NOTE: Exercises the whole dropped-files pipeline without a real drag and drop,
-			 * which cannot be produced from the remote console. */
-			if ( arguments.empty() )
+		this->bindCommand("openFiles", "Opens files as if they were dropped onto the window (viewers, audio, JSON stores or scene). A running demo scene is never disturbed.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: openFiles(filepath[, filepath, ...])");
-
-				return false;
-			}
-
-			std::vector< std::filesystem::path > filepaths;
-			filepaths.reserve(arguments.size());
-
-			for ( const auto & argument : arguments )
-			{
-				auto filepath = IO::u8path(argument.asString());
-
-				if ( !IO::fileExists(filepath) )
+				{"filepaths", "Absolute paths of the files to open; quote a path that contains a comma or a parenthesis."}
+			},
+			[this] (const std::vector< std::string > & paths) {
+				/* NOTE: Exercises the whole dropped-files pipeline without a real drag and drop,
+				 * which cannot be produced from the remote console. */
+				if ( paths.empty() )
 				{
-					outputs.emplace_back(Severity::Warning, "The file '" + argument.asString() + "' doesn't exists! Skipping ...");
-
-					continue;
+					return Console::CommandResult::error("openFiles(): give at least one file path.");
 				}
 
-				filepaths.emplace_back(std::move(filepath));
-			}
+				Console::Outputs outputs;
+				std::vector< std::filesystem::path > filepaths;
+				filepaths.reserve(paths.size());
 
-			if ( filepaths.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "No usable file to open !");
+				for ( const auto & path : paths )
+				{
+					auto filepath = IO::u8path(path);
 
-				return false;
-			}
+					if ( !IO::fileExists(filepath) )
+					{
+						outputs.emplace_back(Severity::Warning, "The file '" + path + "' doesn't exists! Skipping ...");
 
-			const auto fileCount = filepaths.size();
+						continue;
+					}
 
-			this->openFiles(filepaths);
+					filepaths.emplace_back(std::move(filepath));
+				}
 
-			outputs.emplace_back(Severity::Success, std::to_string(fileCount) + " file(s) submitted to the opening pipeline.");
+				if ( filepaths.empty() )
+				{
+					outputs.emplace_back(Severity::Error, "No usable file to open !");
 
-			return true;
-		}, "Opens files as if they were dropped onto the window. Usage: openFiles(filepath[, filepath, ...])");
+					return Console::CommandResult::fromOutputs(std::move(outputs), false);
+				}
 
-		this->bindCommand("cycleAnimation", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			/* NOTE: The remote counterpart of the space bar, calling the very same code. It exists
-			 * because a keyboard event injected through Input::Manager walks the keyboard-listener
-			 * list and never reaches a Core-level binding — without this, the cycle would be
-			 * unreachable from the console and therefore untestable remotely. */
+				const auto fileCount = filepaths.size();
+
+				this->openFiles(filepaths);
+
+				outputs.emplace_back(Severity::Success, std::to_string(fileCount) + " file(s) submitted to the opening pipeline.");
+
+				return Console::CommandResult::fromOutputs(std::move(outputs), true);
+			});
+
+		this->bindCommand("cycleAnimation", "Walks the animations of the model shown by the viewer: OFF -> clip 1 -> ... -> OFF (same as the space bar).", [this] () {
+			/* NOTE: The remote counterpart of the space bar, calling the very same code. It predates the
+			 * console key injection reaching Core-level bindings, and stays the deterministic way in. */
 			if ( !this->cycleViewerAnimation() )
 			{
-				outputs.emplace_back(Severity::Error, "Nothing to cycle: the model viewer must be the active scene and its asset must carry animations.");
-
-				return false;
+				return Console::CommandResult::error("Nothing to cycle: the model viewer must be the active scene and its asset must carry animations.");
 			}
 
-			outputs.emplace_back(Severity::Success, "Animation cycled.");
+			return Console::CommandResult::success("Animation cycled.");
+		});
 
-			return true;
-		}, "Walks the animations of the model shown by the viewer: OFF -> clip 1 -> ... -> OFF (same as the space bar).");
-
-		this->bindCommand("resetAnimation", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("resetAnimation", "Forces the model shown by the viewer back to its rest pose, in one call and without drawing a notification. Use it before an automated capture.", [this] () {
 			/* NOTE: The deterministic counterpart of cycleAnimation(). Reaching the rest pose with
 			 * the cycle alone takes as many calls as the asset has clips, and the caller cannot know
 			 * how many without tracking the state itself — so an automated capture had no way to
@@ -187,22 +161,16 @@ namespace EmEn
 			 * end up burnt into the screenshot. */
 			if ( !this->resetViewerAnimation() )
 			{
-				outputs.emplace_back(Severity::Error, "The model viewer is not the active scene.");
-
-				return false;
+				return Console::CommandResult::error("The model viewer is not the active scene.");
 			}
 
-			outputs.emplace_back(Severity::Success, "Animation reset to the rest pose.");
+			return Console::CommandResult::success("Animation reset to the rest pose.");
+		}, Console::CommandHint::Idempotent);
 
-			return true;
-		}, "Forces the model shown by the viewer back to its rest pose, in one call and without drawing a notification. Use it before an automated capture.");
-
-		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");
-
+		this->bindCommand("exit,quit,shutdown", "Quits the application (settings are saved).", [this] () {
 			this->stop();
 
-			return 0;
-		}, "Quit the application.");
+			return Console::CommandResult::info("Shutdown procedure called from console ...");
+		}, Console::CommandHint::Destructive);
 	}
 }

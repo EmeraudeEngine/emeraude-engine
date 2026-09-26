@@ -274,7 +274,8 @@ namespace EmEn::Graphics
 	void
 	PostProcessStack::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("listEffects", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("listEffects", "List every slot of the chain, its occupants, which one is selected and which one actually runs.", [this] () {
+			Console::Outputs outputs;
 			auto any = false;
 
 			for ( size_t index = 0; index < EffectSlotCount; ++index )
@@ -342,15 +343,17 @@ namespace EmEn::Graphics
 			{
 				outputs.emplace_back(Severity::Warning, "The post-process stack holds no chain effect.");
 
-				return false;
+				return Console::CommandResult::fromOutputs(std::move(outputs), false);
 			}
 
 			outputs.emplace_back(Severity::Info, "Legend: '>' selected by you, '*' running in the last frame.");
 
-			return true;
-		}, "List every slot of the chain, its occupants, which one is selected and which one actually runs.");
+			return Console::CommandResult::fromOutputs(std::move(outputs), true);
+		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("getStatus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("getStatus", "Report, per slot, what runs and whether it is what you selected; then the tone mapper metering and the overflow census of the last frame.", [this] () {
+			Console::Outputs outputs;
+
 			/* ⚠️ The lane header first, because "why is it in screen space?" is the question this
 			 * command is actually asked. A ray-traced lane that is not RESIDENT was never filed
 			 * into any slot, so the per-slot lines below cannot show it at all — the absence
@@ -481,178 +484,143 @@ namespace EmEn::Graphics
 				appendOverflowCensus(diagnostics, outputs);
 			}
 
-			return true;
-		}, "Report, per slot, what runs and whether it is what you selected; then the tone mapper metering and the overflow census of the last frame.");
+			return Console::CommandResult::fromOutputs(std::move(outputs), true);
+		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("select", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
+		this->bindCommand("select", "Select the occupant of a slot (applied on the next frame). A concept switched off is turned back on for the session.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: select(<slot>, <effect>). Use listEffects() for both vocabularies.");
+				{"slot", "The slot name, e.g. 'IndirectDiffuse' (listEffects() lists them)."},
+				{"effect", "The occupant to run in that slot, e.g. 'RTGI' (listEffects() lists them)."}
+			},
+			[this] (const std::string & slotName, const std::string & effectName) {
+				const auto slot = parseSlot(slotName);
 
-				return false;
-			}
+				if ( !slot.has_value() )
+				{
+					return Console::CommandResult::error("'" + slotName + "' is not a chain slot !");
+				}
 
-			const auto slotName = arguments[0].asString();
-			const auto slot = parseSlot(slotName);
+				if ( !this->selectOccupant(slot.value(), effectName) )
+				{
+					return Console::CommandResult::error("The '" + slotName + "' slot holds no occupant named '" + effectName + "' !");
+				}
 
-			if ( !slot.has_value() )
+				/* ⚠️ "Selected", not "enabled". The chain is walked by the RENDER thread and this
+				 * command runs on the main one: the switch is applied by syncSlotSelection() at the
+				 * next frame boundary, which is what keeps it from being a data race. */
+				return Console::CommandResult::success("'" + effectName + "' selected for the '" + slotName + "' slot (applied on the next frame).");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("disable", "Switch a whole concept off, for the session — a lane switch leaves it off.",
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "'" << slotName << "' is not a chain slot !");
+				{"slot", "The slot name, e.g. 'Reflections' (listEffects() lists them)."}
+			},
+			[this] (const std::string & slotName) {
+				const auto slot = parseSlot(slotName);
 
-				return false;
-			}
+				if ( !slot.has_value() )
+				{
+					return Console::CommandResult::error("'" + slotName + "' is not a chain slot !");
+				}
 
-			const auto effectName = arguments[1].asString();
+				this->selectNoOccupant(slot.value());
 
-			if ( !this->selectOccupant(slot.value(), effectName) )
+				return Console::CommandResult::success("The '" + slotName + "' concept is switched off (applied on the next frame). It stays off across lane switches; select(" + slotName + ", <effect>) turns it back on.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("bypassSceneEffects", "Switch every SCENE effect off or back on, keeping the camera's exposure and tone mapping — the no-effect A/B. Selections, concept gates and lane are kept.",
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "The '" << slotName << "' slot holds no occupant named '" << effectName << "' !");
+				{"bypassed", "1 (true) switches every scene effect off, 0 (false) brings them back exactly as selected."}
+			},
+			[this] (bool bypassed) {
+				this->bypassSceneEffects(bypassed);
 
-				return false;
-			}
-
-			/* ⚠️ "Selected", not "enabled". The chain is walked by the RENDER thread and this
-			 * command runs on the main one: the switch is applied by syncSlotSelection() at the
-			 * next frame boundary, which is what keeps it from being a data race. */
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "'" << effectName << "' selected for the '" << slotName << "' slot (applied on the next frame).");
-
-			return true;
-		}, "Select the occupant of a slot. Arguments: slot name, effect name.");
-
-		this->bindCommand("disable", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: disable(<slot>). Use listEffects() for the slot names.");
-
-				return false;
-			}
-
-			const auto slotName = arguments[0].asString();
-			const auto slot = parseSlot(slotName);
-
-			if ( !slot.has_value() )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "'" << slotName << "' is not a chain slot !");
-
-				return false;
-			}
-
-			this->selectNoOccupant(slot.value());
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} <<
-				"The '" << slotName << "' concept is switched off (applied on the next frame). It stays off across lane switches; select(" << slotName << ", <effect>) turns it back on."
-			);
-
-			return true;
-		}, "Switch a whole concept off, for the session — a lane switch leaves it off. Argument: slot name.");
-
-		this->bindCommand("bypassSceneEffects", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: bypassSceneEffects(1) to switch every scene effect off, bypassSceneEffects(0) to bring them back.");
-
-				return false;
-			}
-
-			const auto state = arguments[0].asInteger() != 0;
-
-			this->bypassSceneEffects(state);
-
-			outputs.emplace_back(Severity::Success, state ?
-				"Scene effects BYPASSED (applied on the next frame): lighting family, clouds, light shafts, fog, custom effects and TAA are off; the camera chain keeps running. Nothing selected was changed." :
-				"Scene effects running again (applied on the next frame), exactly as selected before the bypass."
-			);
-
-			return true;
-		}, "Switch every SCENE effect off (1) or back on (0), keeping the camera's exposure and tone mapping — the no-effect A/B. Selections, concept gates and lane are kept.");
-
-		this->bindCommand("setLightingMode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: setLightingMode(\"ScreenSpace\"), setLightingMode(\"RayTracing\") or setLightingMode(\"None\").");
-
-				return false;
-			}
-
-			const auto modeName = arguments[0].asString();
-
-			/* "None" = the whole family off, the concept gates kept — the live twin of the
-			 * `LightingLane = "None"` setting, and the one-command control a "no indirect
-			 * lighting" capture needs. */
-			if ( modeName == GraphicsPPLightingLaneNone )
-			{
-				this->selectNoLightingLane();
-
-				outputs.emplace_back(Severity::Success, "Lighting family switched OFF (applied on the next frame). The concepts keep their switches: the next lane selection brings back exactly those that were on.");
-
-				return true;
-			}
-
-			std::optional< LightingLane > lane;
-
-			if ( modeName == to_cstring(LightingLane::ScreenSpace) )
-			{
-				lane = LightingLane::ScreenSpace;
-			}
-			else if ( modeName == to_cstring(LightingLane::RayTracing) )
-			{
-				lane = LightingLane::RayTracing;
-			}
-
-			if ( !lane.has_value() )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "'" << modeName << "' is not a lighting mode. Expected 'ScreenSpace', 'RayTracing' or 'None'.");
-
-				return false;
-			}
-
-			if ( !this->selectLightingLane(lane.value()) )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} <<
-					"No lighting slot has an occupant in the '" << modeName << "' lane, so nothing was changed. " <<
-					( lane.value() == LightingLane::RayTracing
-						? "The ray-traced lane is not resident this session: either this device cannot ray trace, or "
-						  "'Core/Graphics/PostProcessing/LightingLane' was 'ScreenSpace'/'None' at launch, in which case no "
-						  "acceleration structure was ever built. Set that key to 'Auto' and relaunch."
-						: "The screen-space lane should always be resident — this is a wiring defect, not a configuration one." )
+				return Console::CommandResult::success(bypassed ?
+					"Scene effects BYPASSED (applied on the next frame): lighting family, clouds, light shafts, fog, custom effects and TAA are off; the camera chain keeps running. Nothing selected was changed." :
+					"Scene effects running again (applied on the next frame), exactly as selected before the bypass."
 				);
+			}, Console::CommandHint::Idempotent);
 
-				return false;
-			}
-
-			/* A lighting slot with no occupant in the requested lane is left EMPTY rather than
-			 * kept on the other one, so the reader is told which ones went dark instead of
-			 * discovering it on a capture. */
-			for ( size_t index = 0; index < EffectSlotCount; ++index )
+		this->bindCommand("setLightingMode", "Switch the whole lighting family to one lane, or off. A concept switched off stays off.",
 			{
-				const auto slot = static_cast< EffectSlot >(index);
+				{"mode", "'ScreenSpace', 'RayTracing' (refused when the traced lane is not resident this session) or 'None' (family off, concept switches kept)."}
+			},
+			[this] (const std::string & modeName) {
+				Console::Outputs outputs;
 
-				if ( !isLightingSlot(slot) || m_slots[index].empty() )
+				/* "None" = the whole family off, the concept gates kept — the live twin of the
+				 * `LightingLane = "None"` setting, and the one-command control a "no indirect
+				 * lighting" capture needs. */
+				if ( modeName == GraphicsPPLightingLaneNone )
 				{
-					continue;
+					this->selectNoLightingLane();
+
+					return Console::CommandResult::success("Lighting family switched OFF (applied on the next frame). The concepts keep their switches: the next lane selection brings back exactly those that were on.");
 				}
 
-				if ( this->selectedOccupant(slot) != nullptr )
+				std::optional< LightingLane > lane;
+
+				if ( modeName == to_cstring(LightingLane::ScreenSpace) )
 				{
-					continue;
+					lane = LightingLane::ScreenSpace;
+				}
+				else if ( modeName == to_cstring(LightingLane::RayTracing) )
+				{
+					lane = LightingLane::RayTracing;
 				}
 
-				/* Two reasons for an empty slot, and they must not be confused: the owner's gate
-				 * (honoured, expected) or a lane with no occupant there (a wiring gap, worth a
-				 * warning). */
-				if ( !this->isConceptEnabled(slot) )
+				if ( !lane.has_value() )
 				{
-					outputs.emplace_back(Severity::Info, std::stringstream{} << "The '" << to_cstring(slot) << "' concept stays OFF: it is switched off (setting or disable()); select(" << to_cstring(slot) << ", <effect>) turns it back on.");
+					return Console::CommandResult::error("'" + modeName + "' is not a lighting mode. Expected 'ScreenSpace', 'RayTracing' or 'None'.");
 				}
-				else
+
+				if ( !this->selectLightingLane(lane.value()) )
 				{
-					outputs.emplace_back(Severity::Warning, std::stringstream{} << "The '" << to_cstring(slot) << "' slot has no occupant in the '" << modeName << "' lane: it is now OFF.");
+					std::stringstream message;
+					message <<
+						"No lighting slot has an occupant in the '" << modeName << "' lane, so nothing was changed. " <<
+						( lane.value() == LightingLane::RayTracing
+							? "The ray-traced lane is not resident this session: either this device cannot ray trace, or "
+							  "'Core/Graphics/PostProcessing/LightingLane' was 'ScreenSpace'/'None' at launch, in which case no "
+							  "acceleration structure was ever built. Set that key to 'Auto' and relaunch."
+							: "The screen-space lane should always be resident — this is a wiring defect, not a configuration one." );
+
+					return Console::CommandResult::error(message.str());
 				}
-			}
 
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Lighting lane '" << modeName << "' selected (applied on the next frame).");
+				/* A lighting slot with no occupant in the requested lane is left EMPTY rather than
+				 * kept on the other one, so the reader is told which ones went dark instead of
+				 * discovering it on a capture. */
+				for ( size_t index = 0; index < EffectSlotCount; ++index )
+				{
+					const auto slot = static_cast< EffectSlot >(index);
 
-			return true;
-		}, "Switch the whole lighting family to one lane, or off. Argument: 'ScreenSpace', 'RayTracing' or 'None'. A concept switched off stays off.");
+					if ( !isLightingSlot(slot) || m_slots[index].empty() )
+					{
+						continue;
+					}
+
+					if ( this->selectedOccupant(slot) != nullptr )
+					{
+						continue;
+					}
+
+					/* Two reasons for an empty slot, and they must not be confused: the owner's gate
+					 * (honoured, expected) or a lane with no occupant there (a wiring gap, worth a
+					 * warning). */
+					if ( !this->isConceptEnabled(slot) )
+					{
+						outputs.emplace_back(Severity::Info, std::stringstream{} << "The '" << to_cstring(slot) << "' concept stays OFF: it is switched off (setting or disable()); select(" << to_cstring(slot) << ", <effect>) turns it back on.");
+					}
+					else
+					{
+						outputs.emplace_back(Severity::Warning, std::stringstream{} << "The '" << to_cstring(slot) << "' slot has no occupant in the '" << modeName << "' lane: it is now OFF.");
+					}
+				}
+
+				outputs.emplace_back(Severity::Success, std::stringstream{} << "Lighting lane '" << modeName << "' selected (applied on the next frame).");
+
+				return Console::CommandResult::fromOutputs(std::move(outputs), true);
+			}, Console::CommandHint::Idempotent);
 	}
 }

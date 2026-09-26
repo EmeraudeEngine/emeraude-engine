@@ -53,66 +53,56 @@ namespace EmEn::Graphics
 	void
 	Renderer::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("screenshot", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("screenshot", "Captures the next presented frame (UI included) and saves it as <unix seconds>.png in the captures directory.", [this] () {
 			/* The next presented frame, copied inside that frame (FrameCapture): exactly what reaches the screen. */
 			const auto result = this->captureFrames(1, false, std::chrono::seconds{5});
 
 			if ( !result.success || result.files.empty() )
 			{
-				outputs.emplace_back(Severity::Error, "Screenshot failed: " + result.error);
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Screenshot saved: " << result.files.front());
-
-			return true;
-		}, "Captures the next presented frame (UI included) and saves it as <unix seconds>.png in the captures directory.");
-
-		this->bindCommand("temporalCapture", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			/* DEV tool (owner, 2026-09-23): N CONSECUTIVE presented frames, to see shimmer and temporal artefacts on a
-			 * still camera. The frames pay one GPU copy each and nothing on the CPU until the last one is done. */
-			auto frameCount = FrameCapture::DefaultTemporalFrameCount;
-
-			if ( !arguments.empty() )
-			{
-				const auto requested = arguments[0].asInteger();
-
-				if ( requested < 1 )
-				{
-					outputs.emplace_back(Severity::Error, "Usage: temporalCapture([frameCount >= 1, default 5])");
-
-					return false;
-				}
-
-				frameCount = static_cast< uint32_t >(requested);
-			}
-
-			/* The frames themselves, then one PNG per frame on the thread pool: generous, a slow machine runs at 20 fps. */
-			const auto timeout = std::chrono::seconds{10} + std::chrono::milliseconds{500} * frameCount;
-			const auto result = this->captureFrames(frameCount, true, std::chrono::duration_cast< std::chrono::milliseconds >(timeout));
-
-			if ( !result.success )
-			{
-				outputs.emplace_back(Severity::Error, "Temporal capture failed: " + result.error);
-
-				return false;
+				return Console::CommandResult::error("Screenshot failed: " + result.error);
 			}
 
 			std::stringstream message;
-			message << "Temporal capture of " << frameCount << " consecutive frames saved:";
+			message << "Screenshot saved: " << result.files.front();
 
-			for ( const auto & file : result.files )
+			return Console::CommandResult::success(message.str());
+		});
+
+		this->bindCommand("temporalCapture", "DEV: captures N consecutive presented frames as <unix seconds>-<n>.png, plus <unix seconds>.json with the per-frame metadata (jitter, camera, exposure, timing).",
 			{
-				message << "\n  " << file.string();
-			}
+				{"frameCount", "Number of consecutive frames to capture (at least 1).", static_cast< int32_t >(FrameCapture::DefaultTemporalFrameCount)}
+			},
+			[this] (int32_t requestedFrameCount) {
+				/* DEV tool (owner, 2026-09-23): N CONSECUTIVE presented frames, to see shimmer and temporal artefacts on a
+				 * still camera. The frames pay one GPU copy each and nothing on the CPU until the last one is done. */
+				if ( requestedFrameCount < 1 )
+				{
+					return Console::CommandResult::error("temporalCapture(): frameCount must be at least 1.");
+				}
 
-			outputs.emplace_back(Severity::Success, message.str());
+				const auto frameCount = static_cast< uint32_t >(requestedFrameCount);
 
-			return true;
-		}, "DEV: captures N consecutive presented frames (default 5) as <unix seconds>-<n>.png, plus <unix seconds>.json with the per-frame metadata (jitter, camera, exposure, timing).");
+				/* The frames themselves, then one PNG per frame on the thread pool: generous, a slow machine runs at 20 fps. */
+				const auto timeout = std::chrono::seconds{10} + std::chrono::milliseconds{500} * frameCount;
+				const auto result = this->captureFrames(frameCount, true, std::chrono::duration_cast< std::chrono::milliseconds >(timeout));
 
-		this->bindCommand("testVideoFrameConverter", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+				if ( !result.success )
+				{
+					return Console::CommandResult::error("Temporal capture failed: " + result.error);
+				}
+
+				std::stringstream message;
+				message << "Temporal capture of " << frameCount << " consecutive frames saved:";
+
+				for ( const auto & file : result.files )
+				{
+					message << "\n  " << file.string();
+				}
+
+				return Console::CommandResult::success(message.str());
+			});
+
+		this->bindCommand("testVideoFrameConverter", "Self-tests the GPU BGRA->I420 converter against the CPU reference (hardware video encode path).", [this] () {
 			/* Self-test of the GPU BGRA->I420 converter (hardware video-encode path):
 			 * converts a procedural pattern and compares byte-for-byte against the CPU
 			 * reference running the same shared BT.709 integer math. */
@@ -120,52 +110,40 @@ namespace EmEn::Graphics
 
 			if ( !converter.create(1280U, 720U) )
 			{
-				outputs.emplace_back(Severity::Error, "Unable to create the video frame converter !");
-
-				return false;
+				return Console::CommandResult::error("Unable to create the video frame converter !");
 			}
 
 			uint64_t mismatchedBytes = 0;
 
 			if ( !converter.selfTest(mismatchedBytes) )
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "GPU/CPU conversion mismatch (" << mismatchedBytes << " bytes differ) !");
-
-				return false;
+				return Console::CommandResult::error("GPU/CPU conversion mismatch (" + std::to_string(mismatchedBytes) + " bytes differ) !");
 			}
 
-			outputs.emplace_back(Severity::Success, "GPU BGRA->I420 conversion matches the CPU reference byte-for-byte (1280x720, BT.709 integer path).");
+			return Console::CommandResult::success("GPU BGRA->I420 conversion matches the CPU reference byte-for-byte (1280x720, BT.709 integer path).");
+		});
 
-			return true;
-		}, "Self-tests the GPU BGRA->I420 converter against the CPU reference (hardware video encode path).");
-
-		this->bindCommand("testVideoEncoderH265", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("testVideoEncoderH265", "End-to-end hardware H.265 encode self-test: writes an Annex-B .h265 stream in the captures directory.", [this] () {
 			/* End-to-end hardware encode self-test: converts the procedural pattern once,
 			 * then encodes 90 frames (3 GOPs) through the Vulkan Video session and writes
 			 * an Annex-B .h265 elementary stream — decode it with ffprobe/ffplay. */
 			if ( !this->device()->videoEncodeH265Enabled() )
 			{
-				outputs.emplace_back(Severity::Warning, "No H.265 hardware encode support on this device.");
-
-				return false;
+				return Console::CommandResult::error("No H.265 hardware encode support on this device.");
 			}
 
 			VideoFrameConverter converter{this->device(), this->shaderManager()};
 
 			if ( !converter.create(2880U, 1620U) )
 			{
-				outputs.emplace_back(Severity::Error, "Unable to create the video frame converter !");
-
-				return false;
+				return Console::CommandResult::error("Unable to create the video frame converter !");
 			}
 
 			uint64_t mismatchedBytes = 0;
 
 			if ( !converter.selfTest(mismatchedBytes) )
 			{
-				outputs.emplace_back(Severity::Error, "The converter self-test failed !");
-
-				return false;
+				return Console::CommandResult::error("The converter self-test failed !");
 			}
 
 			Vulkan::VideoEncoderH265 encoder{this->device()};
@@ -179,9 +157,7 @@ namespace EmEn::Graphics
 
 			if ( !encoder.create(settings) )
 			{
-				outputs.emplace_back(Severity::Error, "Unable to create the H.265 hardware encoder !");
-
-				return false;
+				return Console::CommandResult::error("Unable to create the H.265 hardware encoder !");
 			}
 
 			const auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
@@ -191,9 +167,10 @@ namespace EmEn::Graphics
 
 			if ( !stream.is_open() )
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to open " << filepath << " !");
+				std::stringstream message;
+				message << "Unable to open " << filepath << " !";
 
-				return false;
+				return Console::CommandResult::error(message.str());
 			}
 
 			const auto & header = encoder.headerBytes();
@@ -209,9 +186,7 @@ namespace EmEn::Graphics
 
 				if ( !encoder.encodeFrame(*converter.lumaImage(), *converter.chromaImage(), packet, wasIDR) )
 				{
-					outputs.emplace_back(Severity::Error, std::stringstream{} << "Encode failed at frame " << frame << " !");
-
-					return false;
+					return Console::CommandResult::error("Encode failed at frame " + std::to_string(frame) + " !");
 				}
 
 				stream.write(reinterpret_cast< const char * >(packet.data()), static_cast< std::streamsize >(packet.size()));
@@ -224,129 +199,115 @@ namespace EmEn::Graphics
 				}
 			}
 
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "90 frames hardware-encoded (" << totalBytes << " bytes, " << idrCount << " IDR) -> " << filepath);
+			std::stringstream message;
+			message << "90 frames hardware-encoded (" << totalBytes << " bytes, " << idrCount << " IDR) -> " << filepath;
 
-			return true;
-		}, "End-to-end hardware H.265 encode self-test: writes an Annex-B .h265 stream in the captures directory.");
+			return Console::CommandResult::success(message.str());
+		});
 
-		this->bindCommand("getGPUTimings", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( m_GPUProfiler == nullptr )
+		this->bindCommand("getGPUTimings", "Returns the per-pass GPU timings (timestamp queries), or clears their statistics.",
 			{
-				outputs.emplace_back(Severity::Warning, "The GPU profiler is disabled. Set 'Core/Graphics/GPUProfiler/Enabled' to true and restart.");
-
-				return true;
-			}
-
-			/* Optional argument: "reset" clears the accumulated statistics (averages, maxima). */
-			if ( !arguments.empty() && arguments[0].asString() == "reset" )
-			{
-				m_GPUProfiler->resetStatistics();
-
-				outputs.emplace_back(Severity::Success, "GPU timing statistics reset.");
-
-				return true;
-			}
-
-			const auto timings = m_GPUProfiler->snapshot();
-
-			if ( timings.empty() )
-			{
-				outputs.emplace_back(Severity::Info, "No GPU timings harvested yet (needs a few rendered frames).");
-
-				return true;
-			}
-
-			/* Display order = command stream order; the depth column indents nested scopes.
-			 * The averages are ~60-frame rolling values (see GPUProfiler::AverageAlpha). */
-			std::stringstream table;
-			table << "GPU timings (ms):" "\n";
-			table << std::fixed << std::setprecision(3);
-
-			for ( const auto & timing : timings )
-			{
-				table << "  ";
-
-				for ( uint32_t level = 0; level < timing.depth; level++ )
+				{"action", "'reset' clears the accumulated statistics (averages, maxima) instead of reading them."}
+			},
+			[this] (const std::optional< std::string > & action) {
+				if ( action.has_value() && *action != "reset" )
 				{
-					table << "  ";
+					return Console::CommandResult::error("getGPUTimings(): unknown action '" + *action + "' (only 'reset').");
 				}
 
-				table << std::left << std::setw(static_cast< int >(40 - timing.depth * 2)) << timing.label
-					<< " last " << std::setw(8) << timing.lastMS
-					<< " avg " << std::setw(8) << timing.averageMS
-					<< " max " << std::setw(8) << timing.maximumMS
-					<< " samples " << timing.sampleCount << "\n";
-			}
+				if ( m_GPUProfiler == nullptr )
+				{
+					return Console::CommandResult::warning("The GPU profiler is disabled. Set 'Core/Graphics/GPUProfiler/Enabled' to true and restart.");
+				}
 
-			outputs.emplace_back(Severity::Info, table.str());
+				if ( action.has_value() )
+				{
+					m_GPUProfiler->resetStatistics();
 
-			return true;
-		}, "Returns the per-pass GPU timings (timestamp queries). Optional arg: 'reset' to clear the statistics.");
+					return Console::CommandResult::success("GPU timing statistics reset.");
+				}
+
+				const auto timings = m_GPUProfiler->snapshot();
+
+				if ( timings.empty() )
+				{
+					return Console::CommandResult::info("No GPU timings harvested yet (needs a few rendered frames).");
+				}
+
+				/* Display order = command stream order; the depth column indents nested scopes.
+				 * The averages are ~60-frame rolling values (see GPUProfiler::AverageAlpha). */
+				std::stringstream table;
+				table << "GPU timings (ms):" "\n";
+				table << std::fixed << std::setprecision(3);
+
+				for ( const auto & timing : timings )
+				{
+					table << "  ";
+
+					for ( uint32_t level = 0; level < timing.depth; level++ )
+					{
+						table << "  ";
+					}
+
+					table << std::left << std::setw(static_cast< int >(40 - timing.depth * 2)) << timing.label
+						<< " last " << std::setw(8) << timing.lastMS
+						<< " avg " << std::setw(8) << timing.averageMS
+						<< " max " << std::setw(8) << timing.maximumMS
+						<< " samples " << timing.sampleCount << "\n";
+				}
+
+				return Console::CommandResult::info(table.str());
+			});
 
 		/* ---- The overflow census (scene-colour pre-exposure, step B1a). ---- */
 
-		this->bindCommand("setOverflowCensus", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("setOverflowCensus", "Arms or disarms the overflow census: per-frame NaN / Inf / fp16-ceiling texel counts of the scene-radiance images.",
+			{
+				{"armed", "1 (true) arms the census from the next rendered frame, 0 (false) disarms it."}
+			},
+			[this] (bool armed) {
+				auto * census = m_postProcessor.overflowCensus();
+
+				if ( census == nullptr || !census->available() )
+				{
+					return Console::CommandResult::error("The overflow census is unavailable: not created yet, or its creation failed (see the log).");
+				}
+
+				/* Latched by the render thread at the next rendered frame, like any console switch. */
+				census->setArmed(armed);
+
+				if ( armed )
+				{
+					return Console::CommandResult::success("Overflow census available and ARMED from the next rendered frame (the HDR chain only). Read it with getFrameDiagnostics() or Core.SceneManagerService.PostProcess.getStatus(); testOverflowCensus() must have answered PASS on this machine for a count to mean anything.");
+				}
+
+				return Console::CommandResult::success("Overflow census disarmed from the next rendered frame (its last counts and its window are kept).");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("resetOverflowCensus", "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.", [this] () {
 			auto * census = m_postProcessor.overflowCensus();
 
 			if ( census == nullptr || !census->available() )
 			{
-				outputs.emplace_back(Severity::Error, "The overflow census is unavailable: not created yet, or its creation failed (see the log).");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: setOverflowCensus(1) to arm the census, setOverflowCensus(0) to disarm it.");
-
-				return false;
-			}
-
-			const auto state = arguments[0].asBoolean();
-
-			/* Latched by the render thread at the next rendered frame, like any console switch. */
-			census->setArmed(state);
-
-			if ( state )
-			{
-				outputs.emplace_back(Severity::Success, "Overflow census available and ARMED from the next rendered frame (the HDR chain only). Read it with getFrameDiagnostics() or Core.SceneManagerService.PostProcess.getStatus(); testOverflowCensus() must have answered PASS on this machine for a count to mean anything.");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Success, "Overflow census disarmed from the next rendered frame (its last counts and its window are kept).");
-			}
-
-			return true;
-		}, "Arms (1) or disarms (0) the overflow census: per-frame NaN / Inf / fp16-ceiling texel counts of the scene-radiance images.");
-
-		this->bindCommand("resetOverflowCensus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			auto * census = m_postProcessor.overflowCensus();
-
-			if ( census == nullptr || !census->available() )
-			{
-				outputs.emplace_back(Severity::Error, "The overflow census is unavailable: not created yet, or its creation failed (see the log).");
-
-				return false;
+				return Console::CommandResult::error("The overflow census is unavailable: not created yet, or its creation failed (see the log).");
 			}
 
 			const auto startsAfter = census->resetWindow();
 
-			outputs.emplace_back(Severity::Success, std::stringstream{} <<
+			std::stringstream message;
+			message <<
 				"Overflow census window reset: it holds the frames rendered after frame " << startsAfter << "." <<
-				( census->armed() ? "" : " The census is disarmed: nothing is counted until setOverflowCensus(1)." )
-			);
+				( census->armed() ? "" : " The census is disarmed: nothing is counted until setOverflowCensus(1)." );
 
-			return true;
-		}, "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.");
+			return Console::CommandResult::success(message.str());
+		});
 
-		this->bindCommand("testOverflowCensus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("testOverflowCensus", "Positive control of the overflow census: counts a 16x16 image of raw half bit patterns in the next frame (blocks at most 3 s) and answers PASS or FAIL with the expected and measured tuples.", [this] () {
 			auto * census = m_postProcessor.overflowCensus();
 
 			if ( census == nullptr || !census->available() )
 			{
-				outputs.emplace_back(Severity::Error, "FAIL: the overflow census is unavailable (not created yet, or its creation failed: see the log).");
-
-				return false;
+				return Console::CommandResult::error("FAIL: the overflow census is unavailable (not created yet, or its creation failed: see the log).");
 			}
 
 			/* Blocks this (main) thread until a frame counted the self-test image: the render thread produces it. */
@@ -354,9 +315,7 @@ namespace EmEn::Graphics
 
 			if ( !result.ran )
 			{
-				outputs.emplace_back(Severity::Error, "FAIL: no frame counted the self-test image within 3 s. A scene must be rendering through the HDR post-process chain (the census counts nothing else).");
-
-				return false;
+				return Console::CommandResult::error("FAIL: no frame counted the self-test image within 3 s. A scene must be rendering through the HDR post-process chain (the census counts nothing else).");
 			}
 
 			const auto & measured = result.measured;
@@ -368,9 +327,7 @@ namespace EmEn::Graphics
 			{
 				message << "PASS (frame " << result.frameSerial << "): tested " << measured.tested << ", NaN " << measured.nanTexels << ", Inf " << measured.infTexels << ", ceiling " << measured.ceilingTexels << ", peak " << measured.peakFinite << ". The census sees every class on this machine.";
 
-				outputs.emplace_back(Severity::Success, message.str());
-
-				return true;
+				return Console::CommandResult::success(message.str());
 			}
 
 			message <<
@@ -378,12 +335,10 @@ namespace EmEn::Graphics
 				"measured tested " << measured.tested << ", NaN " << measured.nanTexels << ", Inf " << measured.infTexels << ", ceiling " << measured.ceilingTexels << ", peak " << measured.peakFinite << ". "
 				"The census is BLIND on this machine: take no baseline here.";
 
-			outputs.emplace_back(Severity::Error, message.str());
+			return Console::CommandResult::error(message.str());
+		});
 
-			return false;
-		}, "Positive control of the overflow census: counts a 16x16 image of raw half bit patterns in the next frame (blocks at most 3 s) and answers PASS or FAIL with the expected and measured tuples.");
-
-		this->bindCommand("getFrameDiagnostics", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("getFrameDiagnostics", "Returns the diagnostics of the last rendered frame as JSON: the tone mapper metering and the overflow census (last counted frame, statistics window, self-test).", [this] () {
 			const auto diagnostics = this->frameDiagnostics();
 
 			/* JSON has no NaN nor infinity: a non-finite float is written as null. */
@@ -494,52 +449,51 @@ namespace EmEn::Graphics
 				R"("ceiling":)" << selfTest.measured.ceilingTexels << "," <<
 				R"("peakFinite":)" << number(selfTest.measured.peakFinite) << "}}}";
 
-			outputs.emplace_back(Severity::Info, json.str());
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Returns the diagnostics of the last rendered frame as JSON: the tone mapper metering and the overflow census (last counted frame, statistics window, self-test).");
-
-		this->bindCommand("triggerRenderDocCapture", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			auto & renderDoc = m_vulkanInstance.renderDocCapture();
-
-			if ( !renderDoc.isAvailable() )
+		this->bindCommand("triggerRenderDocCapture", "Triggers a RenderDoc frame capture (requires launch under renderdoccmd).",
 			{
-				outputs.emplace_back(Severity::Error, "RenderDoc is not available (launch the app under renderdoccmd to inject it).");
+				{"frameCount", "Number of consecutive frames to capture (at least 1): capturing past the first frame catches per-frame / state-tracking bugs.", 1}
+			},
+			[this] (int32_t requestedFrameCount) {
+				if ( requestedFrameCount < 1 )
+				{
+					return Console::CommandResult::error("triggerRenderDocCapture(): frameCount must be at least 1.");
+				}
 
-				return false;
-			}
+				auto & renderDoc = m_vulkanInstance.renderDocCapture();
 
-			/* Define WHERE captures are written. RenderDoc is never told otherwise, so without this
-			 * the .rdc lands in an undefined default and the autonomous capture workflow produces
-			 * nothing findable. Point it at the user-data RenderDoc directory. */
-			auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("RenderDoc");
+				if ( !renderDoc.isAvailable() )
+				{
+					return Console::CommandResult::error("RenderDoc is not available (launch the app under renderdoccmd to inject it).");
+				}
 
-			if ( IO::writable(captureDirectory) )
-			{
-				renderDoc.setCaptureFilePath(captureDirectory.append("capture").string());
-			}
+				/* Define WHERE captures are written. RenderDoc is never told otherwise, so without this
+				 * the .rdc lands in an undefined default and the autonomous capture workflow produces
+				 * nothing findable. Point it at the user-data RenderDoc directory. */
+				auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("RenderDoc");
 
-			/* Optional first argument: number of consecutive frames to capture (default 1).
-			 * Capturing past the first frame is how per-frame / state-tracking bugs are caught. */
-			const auto frameCount = arguments.empty() ? 1U : static_cast< uint32_t >(std::max(1, arguments[0].asInteger()));
+				if ( IO::writable(captureDirectory) )
+				{
+					renderDoc.setCaptureFilePath(captureDirectory.append("capture").string());
+				}
 
-			if ( frameCount > 1U )
-			{
-				renderDoc.triggerMultiFrameCapture(frameCount);
+				const auto frameCount = static_cast< uint32_t >(requestedFrameCount);
 
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "RenderDoc: " << frameCount << " consecutive frame captures triggered.");
-			}
-			else
-			{
+				if ( frameCount > 1U )
+				{
+					renderDoc.triggerMultiFrameCapture(frameCount);
+
+					return Console::CommandResult::success("RenderDoc: " + std::to_string(frameCount) + " consecutive frame captures triggered.");
+				}
+
 				renderDoc.triggerCapture();
 
-				outputs.emplace_back(Severity::Success, "RenderDoc: frame capture triggered (captured on the next present).");
-			}
+				return Console::CommandResult::success("RenderDoc: frame capture triggered (captured on the next present).");
+			});
 
-			return true;
-		}, "Triggers a RenderDoc frame capture (requires launch under renderdoccmd). Optional arg: frame count.");
-
-		this->bindCommand("getStatus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("getStatus", "Returns renderer statistics (FPS, frame time, resolution).", [this] () {
 			const auto & stats = this->statistics();
 
 			std::stringstream status;
@@ -554,12 +508,10 @@ namespace EmEn::Graphics
 				status << "  Resolution: " << extent.width << "x" << extent.height << "\n";
 			}
 
-			outputs.emplace_back(Severity::Info, status.str());
+			return Console::CommandResult::info(status.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Returns renderer statistics (FPS, frame time, resolution).");
-
-		this->bindCommand("getMDIStats", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("getMDIStats", "Returns Multi-Draw Indirect statistics from the last frame as JSON (batched/fallback/skipped counts, batched ratio %).", [this] () {
 			std::stringstream json;
 
 			if ( !m_MDIEnabled || m_MDIBatchBuilder == nullptr )
@@ -567,9 +519,8 @@ namespace EmEn::Graphics
 				json << R"({"enabled":false,"reason":)"
 					<< ( m_device == nullptr ? R"("no device")" : R"("setting disabled or hardware unsupported")" )
 					<< "}";
-				outputs.emplace_back(Severity::Info, json.str());
 
-				return true;
+				return Console::CommandResult::json(json.str());
 			}
 
 			const auto * builder = m_MDIBatchBuilder.get();
@@ -588,9 +539,7 @@ namespace EmEn::Graphics
 				<< R"("batchedRatio":)" << std::fixed << std::setprecision(2) << batchedRatio
 				<< "}";
 
-			outputs.emplace_back(Severity::Info, json.str());
-
-			return true;
-		}, "Returns Multi-Draw Indirect statistics from the last frame as JSON (batched/fallback/skipped counts, batched ratio %).");
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 	}
 }
