@@ -15,10 +15,10 @@ tags: [hdr, fp16, exposure, photometry, overflow, owner-decision, design]
 > item holds the decisions to take (§ What remains, A), then the build order (§ B). Citations are
 > against engine `223880f4` and projet-alpha `f997201`.
 >
-> **State (2026-09-26):** package D1-D10 decided. **B1a DONE on Linux**: the missing TRANSFER→HOST
-> readback barriers of the tone mapper and of the depth of field (C0) and the **overflow census** (C1)
-> are validated at runtime and their baselines are recorded (§ B.1); the macOS and Windows self-tests
-> (V1) are owed by the peers. B1b (the pre-exposure override) and B2 onward are not started.
+> **State (2026-09-26):** package D1-D10 decided. **B1a DONE** (`2b4e0c04`, `7b03c1df`): the missing
+> TRANSFER→HOST readback barriers of the tone mapper and of the depth of field (C0) and the **overflow
+> census** (C1) are validated at runtime on Linux, macOS and Windows (NVIDIA and AMD), and their
+> baselines are recorded (§ B.1). B1b (the pre-exposure override) and B2 onward are not started.
 
 ## Why
 
@@ -330,8 +330,10 @@ Plumbing:
      (`Core/Graphics/PostProcessing/OverflowCensus/Enabled`, owner-confirmed P8/P15).
      `meteredRejectedCount()` is on the console (`getStatus()` `Metering:` line, `getFrameDiagnostics()`).
    - **Validation (Linux, validation layers ON, 0 VUID in every run):**
-     - V1: `testOverflowCensus()` = `PASS` (tested 256, NaN 21, Inf 12, ceiling 8, peak 65 472).
-       **macOS and Windows: owed by the peers.**
+     - V1: `testOverflowCensus()` = `PASS` (tested 256, NaN 21, Inf 12, ceiling 8, peak 65 472) on Linux
+       (RTX 3070 Ti), macOS (Apple M2, MoltenVK 1.4.1) and Windows (RTX 3060 Laptop, and the forced AMD
+       Radeon iGPU). V4 and V7 hold on the three platforms too (macOS has a single queue, so the overlay
+       hazard below cannot happen there; Windows did not show it either).
      - V2 (`post-processor-effect-debug 0,0`, pinned f/8 · 1/125 s · ISO 100, `Reflections` off): the
        scene is not bit-reproducible frame to frame — the A/A control differs by max 3/255 on 4.0 % of
        the pixels — and armed vs disarmed differs by the same (max 3/255, 4.3 %): no effect beyond the
@@ -352,6 +354,9 @@ Plumbing:
        that window: T1 is not settled — re-take it over a full flight period.
      - T2 `light-and-shadow-debug 0,1`: `SceneColour` overflows by **1 texel** in 53 of 421 frames
        (screen-space lane) and 24 of 191 (traced lane), peak finite 56 288; `ToneMapInput` 0 in both.
+     - T2 on macOS (M2, screen-space lane only, 2560×1440): **every frame** holds 1 NaN in `SceneColour`
+       and **16 NaN in `ToneMapInput`** — the chain between the two does not scrub that NaN, it spreads it
+       over a 4×4 footprint. Not investigated; Linux and Windows read 0 NaN on the same demo.
      - T3 `sponza`, f/8 · 1/125 s · ISO 100: **the premise is false** — `SceneColour` overflows in
        every one of 82 frames (1-3 texels) and **`RTGI_Trace` holds 315-358 texels at the ceiling in
        every frame** (peak finite 65 472); `ToneMapInput`, `RTR_Trace` and the atlas stay clean.

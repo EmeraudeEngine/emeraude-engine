@@ -4838,8 +4838,12 @@ absence of VUIDs.
 > synchronization hazard until proven otherwise.** Re-run with it enabled:
 >
 > ```bash
-> VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT ./projet-alpha …
+> VK_LAYER_VALIDATE_SYNC=1 ./projet-alpha …
 > ```
+>
+> (`VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT` still works but is
+> DEPRECATED since the 1.4.357 SDK, which says so at startup. Proof that it is on: the layer's
+> `Current Validation Enabled` list includes **Synchronization**.)
 >
 > Two things to know when you do. The layer **rejects** the offending submit
 > (`VK_ERROR_VALIDATION_FAILED_EXT`), so features that ride on a hazardous submit appear *broken*

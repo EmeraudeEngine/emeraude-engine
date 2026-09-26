@@ -29,6 +29,9 @@ victim: `Unable to transfer an image (1/2)` → `Unable to update the content of
 the `NotifierScreen` is disabled for the session. Without synchronization validation nothing is reported
 and the notifier works.
 
+Not reproduced on the peers the same day: macOS exposes a single graphics queue (MoltenVK), so no
+two-queue race can exist there; Windows (RTX 3060 Laptop, SDK 1.4.357) reported no hazard at all.
+
 What the message says:
 - The **same transfer command buffer** recorded two uploads into the **same image**, and the two submissions
   went to **two different queues**. `ImageTransferOperation::transferToGPU()` (step 1/2) takes its queue from
