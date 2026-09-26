@@ -33,70 +33,56 @@ namespace EmEn::Scenes::AVConsole
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("listDevices", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			auto deviceType{DeviceType::Both};
-
-			if ( !arguments.empty() )
+		this->bindCommand("listDevices", "Get a list of input/output audio/video devices.",
 			{
-				const auto argument = arguments[0].asString();
+				{"type", "Which devices to list: 'video', 'audio' or 'both'.", "both"}
+			},
+			[this] (const std::string & type) {
+				auto deviceType{DeviceType::Both};
 
-				if ( argument == "video" )
+				if ( type == "video" )
 				{
 					deviceType = DeviceType::Video;
 				}
-				else if ( argument == "audio" )
+				else if ( type == "audio" )
 				{
 					deviceType = DeviceType::Audio;
 				}
-				else if ( argument == "both" )
+				else if ( type != "both" )
 				{
-					deviceType = DeviceType::Both;
+					return Console::CommandResult::error("listDevices(): type must be 'video', 'audio' or 'both', got '" + type + "'.");
 				}
-			}
 
-			outputs.emplace_back(Severity::Info, this->getDeviceList(deviceType));
+				return Console::CommandResult::info(this->getDeviceList(deviceType));
+			}, Console::CommandHint::ReadOnly);
 
-			return 0;
-		}, "Get a list of input/output audio/video devices.");
-
-		this->bindCommand("registerRoute", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() != 3 )
+		this->bindCommand("registerRoute", "Register a route from input device to output device.",
 			{
-				outputs.emplace_back(Severity::Error, "This method need 3 parameters.");
-
-				return 1;
-			}
-
-			const auto type = arguments[0].asString();
-			const auto source = arguments[1].asString();
-			const auto target = arguments[2].asString();
-
-			if ( type == "video" )
-			{
-				if ( !this->connectVideoDevices(source, target) )
+				{"type", "The route kind: 'video' or 'audio'."},
+				{"source", "The name of the input device (listDevices() lists them)."},
+				{"target", "The name of the output device (listDevices() lists them)."}
+			},
+			[this] (const std::string & type, const std::string & source, const std::string & target) {
+				if ( type == "video" )
 				{
-					outputs.emplace_back(Severity::Error, "Unable to connect the video device.");
-
-					return 3;
+					if ( !this->connectVideoDevices(source, target) )
+					{
+						return Console::CommandResult::error("Unable to connect the video device.");
+					}
 				}
-			}
-			else if ( type == "audio" )
-			{
-				if ( !this->connectAudioDevices(source, target) )
+				else if ( type == "audio" )
 				{
-					outputs.emplace_back(Severity::Error, "Unable to connect the audio device.");
-
-					return 3;
+					if ( !this->connectAudioDevices(source, target) )
+					{
+						return Console::CommandResult::error("Unable to connect the audio device.");
+					}
 				}
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "First parameter must be 'video' or 'audio'.");
+				else
+				{
+					return Console::CommandResult::error("First parameter must be 'video' or 'audio'.");
+				}
 
-				return 2;
-			}
-
-			return 0;
-		}, "Register a route from input device to output device.");
+				return Console::CommandResult::success("Route '" + source + "' -> '" + target + "' (" + type + ") registered.");
+			}, Console::CommandHint::Idempotent);
 	}
 }

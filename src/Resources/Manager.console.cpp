@@ -29,32 +29,29 @@
 /* STL inclusions. */
 #include <ranges>
 
+/* Local inclusions. */
+#include "FastJSON.hpp"
+
 namespace EmEn::Resources
 {
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
 		this->bindCommand("listContainers", "Lists all resource containers with loaded/available counts as JSON.", [this] () {
-			std::stringstream json;
-			json << "[";
+			Json::Value containers{Json::arrayValue};
 
-			bool first = true;
-
-			for ( const auto & [typeIndex, container] : m_containers )
+			for ( const auto & container : std::views::values(m_containers) )
 			{
-				if ( !first )
-				{
-					json << ",";
-				}
+				Json::Value entry{Json::objectValue};
+				entry["id"] = container->resourceClassId();
+				entry["name"] = container->name();
+				entry["loaded"] = static_cast< Json::UInt64 >(container->resourceCount());
+				entry["available"] = static_cast< Json::UInt64 >(container->availableResourceNames().size());
 
-				first = false;
-
-				json << "{\"id\":\"" << container->resourceClassId() << "\",\"name\":\"" << container->name() << "\",\"loaded\":" << container->resourceCount() << ",\"available\":" << container->availableResourceNames().size() << "}";
+				containers.append(std::move(entry));
 			}
 
-			json << "]";
-
-			return Console::CommandResult::json(json.str());
+			return Console::CommandResult::json(Base::FastJSON::stringify(containers));
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("listResources", "Lists the available resources of a container as JSON.",
@@ -69,24 +66,14 @@ namespace EmEn::Resources
 						continue;
 					}
 
-					const auto names = container->availableResourceNames();
+					Json::Value names{Json::arrayValue};
 
-					std::stringstream json;
-					json << "[";
-
-					for ( size_t i = 0; i < names.size(); i++ )
+					for ( const auto & name : container->availableResourceNames() )
 					{
-						if ( i > 0 )
-						{
-							json << ",";
-						}
-
-						json << "\"" << names[i] << "\"";
+						names.append(name);
 					}
 
-					json << "]";
-
-					return Console::CommandResult::json(json.str());
+					return Console::CommandResult::json(Base::FastJSON::stringify(names));
 				}
 
 				return Console::CommandResult::error("Container '" + containerName + "' not found !");

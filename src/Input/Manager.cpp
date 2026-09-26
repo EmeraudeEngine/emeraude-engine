@@ -1086,24 +1086,56 @@ namespace EmEn::Input
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("keyPress", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
-			if ( arguments.empty() )
+		/* Injected values reach listeners that may index per-key / per-button state: an out-of-range
+		 * code is refused here rather than handed to them. */
+		const auto checkKey = [] (int32_t key, int32_t modifiers, std::string & error) {
+			if ( key < GLFW_KEY_SPACE || key > GLFW_KEY_LAST )
 			{
-				outputs.emplace_back(Severity::Error, "Usage: keyPress(key, modifiers)");
+				error = "Key code " + std::to_string(key) + " is not a GLFW key (" + std::to_string(GLFW_KEY_SPACE) + " to " + std::to_string(GLFW_KEY_LAST) + ").";
 
 				return false;
 			}
 
-			const auto key = arguments[0].asInteger();
-			const auto modifiers = (arguments.size() >= 2) ? arguments[1].asInteger() : 0;
+			if ( modifiers < 0 || modifiers > ( GLFW_MOD_SHIFT | GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER | GLFW_MOD_CAPS_LOCK | GLFW_MOD_NUM_LOCK ) )
+			{
+				error = "Modifiers " + std::to_string(modifiers) + " is not a GLFW modifier bit mask (0 to 63).";
 
-			Manager::injectKeyEvent(key, modifiers, GLFW_PRESS);
-			Manager::injectKeyEvent(key, modifiers, GLFW_RELEASE);
-
-			outputs.emplace_back(Severity::Success, "Key event injected.");
+				return false;
+			}
 
 			return true;
-		}}, "Inject a key press+release event. Args: key, modifiers");
+		};
+
+		const auto checkButton = [checkKey] (int32_t button, int32_t modifiers, std::string & error) {
+			if ( button < GLFW_MOUSE_BUTTON_1 || button > GLFW_MOUSE_BUTTON_LAST )
+			{
+				error = "Mouse button " + std::to_string(button) + " is not a GLFW button (0 to " + std::to_string(GLFW_MOUSE_BUTTON_LAST) + ").";
+
+				return false;
+			}
+
+			/* NOTE: same modifier rule as a key; GLFW_KEY_SPACE only satisfies the key half of the check. */
+			return checkKey(GLFW_KEY_SPACE, modifiers, error);
+		};
+
+		this->bindCommand("keyPress", "Injects a key press then release. It reaches Core-level bindings, never a focused CEF field (the letters run as application shortcuts).",
+			{
+				{"key", "The GLFW key code (e.g. 298 for F9, 256 for Escape)."},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[checkKey] (int32_t key, int32_t modifiers) {
+				std::string error;
+
+				if ( !checkKey(key, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
+
+				Manager::injectKeyEvent(key, modifiers, GLFW_PRESS);
+				Manager::injectKeyEvent(key, modifiers, GLFW_RELEASE);
+
+				return Console::CommandResult::success("Key event injected.");
+			});
 
 		/* NOTE: Read-only probe. The pointer lock is expressed twice — as m_pointerLocked (which
 		 * selects relative "FPS" dispatch over absolute dispatch, see cursorPositionCallback) and
@@ -1113,12 +1145,10 @@ namespace EmEn::Input
 		 * is "the mouse behaves like an FPS but the cursor is still displayed". This command is the
 		 * only way to observe that state — a screenshot captures the swap chain and never shows the
 		 * OS cursor. */
-		this->bindCommand("pointerState", {[this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) -> bool {
+		this->bindCommand("pointerState", "Reports the pointer lock state and the GLFW cursor mode, and flags a desync between them.", [this] () {
 			if ( m_windowLess || !m_window.usable() )
 			{
-				outputs.emplace_back(Severity::Error, "No usable window — pointer state is meaningless.");
-
-				return false;
+				return Console::CommandResult::error("No usable window — pointer state is meaningless.");
 			}
 
 			const auto cursorMode = glfwGetInputMode(m_window.handle(), GLFW_CURSOR);
@@ -1143,6 +1173,8 @@ namespace EmEn::Input
 				}
 			}();
 
+			Console::Outputs outputs;
+
 			outputs.emplace_back(Severity::Info, std::stringstream{} <<
 				"isPointerLocked(): " << (m_pointerLocked ? "true" : "false") <<
 				" | GLFW cursor mode: " << cursorModeLabel <<
@@ -1154,29 +1186,29 @@ namespace EmEn::Input
 				outputs.emplace_back(Severity::Error, "DESYNC — the lock flag and the GLFW cursor mode disagree. This is the defect, not a display quirk.");
 			}
 
-			return true;
-		}}, "Reports the pointer lock state and the GLFW cursor mode, and flags a desync between them.");
+			return Console::CommandResult::fromOutputs(std::move(outputs), true);
+		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("mouseClick", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
-			if ( arguments.size() < 2 )
+		this->bindCommand("mouseClick", "Injects a mouse click (press then release, so it cannot hold a drag).",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: mouseClick(x, y, button, modifiers)");
+				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
+				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."},
+				{"button", "The GLFW mouse button (0 left, 1 right, 2 middle).", 0},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[checkButton] (float x, float y, int32_t button, int32_t modifiers) {
+				std::string error;
 
-				return false;
-			}
+				if ( !checkButton(button, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
 
-			const auto x = arguments[0].asFloat();
-			const auto y = arguments[1].asFloat();
-			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
-			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
+				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
 
-			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
-			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
-
-			outputs.emplace_back(Severity::Success, "Mouse click injected.");
-
-			return true;
-		}}, "Inject a mouse click event (press then release, so it cannot hold a drag). Args: x, y, button, modifiers");
+				return Console::CommandResult::success("Mouse click injected.");
+			});
 
 		/* ⚠️ mousePress/mouseRelease exist because mouseClick CANNOT express a drag: it releases
 		 * immediately, so any pointer move sent afterwards arrives with the button already up and a
@@ -1186,62 +1218,55 @@ namespace EmEn::Input
 		 *   mousePress(x, y) ; mouseMove(...) ... ; mouseRelease(x, y)
 		 * ⚠️ The press and the release are NOT paired by the engine: a caller that forgets the
 		 * release leaves the control believing the button is still down. */
-		this->bindCommand("mousePress", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
-			if ( arguments.size() < 2 )
+		this->bindCommand("mousePress", "Injects a mouse button PRESS and leaves it down, so a drag can be performed with mouseMove.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: mousePress(x, y, button, modifiers)");
+				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
+				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."},
+				{"button", "The GLFW mouse button (0 left, 1 right, 2 middle).", 0},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[checkButton] (float x, float y, int32_t button, int32_t modifiers) {
+				std::string error;
 
-				return false;
-			}
+				if ( !checkButton(button, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
 
-			const auto x = arguments[0].asFloat();
-			const auto y = arguments[1].asFloat();
-			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
-			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
+				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
 
-			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+				return Console::CommandResult::success("Mouse button press injected (it stays DOWN until mouseRelease).");
+			});
 
-			outputs.emplace_back(Severity::Success, "Mouse button press injected (it stays DOWN until mouseRelease).");
-
-			return true;
-		}}, "Injects a mouse button PRESS and leaves it down, so a drag can be performed with mouseMove. Args: x, y, button, modifiers");
-
-		this->bindCommand("mouseRelease", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
-			if ( arguments.size() < 2 )
+		this->bindCommand("mouseRelease", "Injects a mouse button RELEASE, ending a drag started with mousePress.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: mouseRelease(x, y, button, modifiers)");
+				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
+				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."},
+				{"button", "The GLFW mouse button (0 left, 1 right, 2 middle).", 0},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[checkButton] (float x, float y, int32_t button, int32_t modifiers) {
+				std::string error;
 
-				return false;
-			}
+				if ( !checkButton(button, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
 
-			const auto x = arguments[0].asFloat();
-			const auto y = arguments[1].asFloat();
-			const auto button = (arguments.size() >= 3) ? arguments[2].asInteger() : 0;
-			const auto modifiers = (arguments.size() >= 4) ? arguments[3].asInteger() : 0;
+				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
 
-			Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
+				return Console::CommandResult::success("Mouse button release injected.");
+			});
 
-			outputs.emplace_back(Severity::Success, "Mouse button release injected.");
-
-			return true;
-		}}, "Injects a mouse button RELEASE, ending a drag started with mousePress. Args: x, y, button, modifiers");
-
-		this->bindCommand("mouseMove", {[] (const Console::Arguments & arguments, Console::Outputs & outputs) -> bool {
-			if ( arguments.size() < 2 )
+		this->bindCommand("mouseMove", "Injects a pointer move (absolute dispatch; ignored by a listener in relative mode).",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: mouseMove(x, y)");
+				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
+				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."}
+			},
+			[] (float x, float y) {
+				Manager::injectPointerMoveEvent(x, y);
 
-				return false;
-			}
-
-			const auto x = arguments[0].asFloat();
-			const auto y = arguments[1].asFloat();
-
-			Manager::injectPointerMoveEvent(x, y);
-
-			outputs.emplace_back(Severity::Success, "Mouse move injected.");
-
-			return true;
-		}}, "Inject a pointer move event. Args: x, y");
+				return Console::CommandResult::success("Mouse move injected.");
+			});
 	}
 }

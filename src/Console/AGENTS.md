@@ -170,9 +170,13 @@ MCP server turns into a tool schema (`docs/todo/native-mcp-server.md`). Full pat
   (or `fromOutputs(…, false)`) is a failure. `json()` marks the message as a JSON document — keep it
   valid JSON (escape names), a machine client will parse it.
 - **Untyped (legacy) commands** — `bindCommand(name, binding, help)` with a raw
-  `(Arguments, Outputs) -> bool` binding — still work and are **being migrated one by one**. The
-  top-level built-in `listUntypedCommands()` counts both kinds and lists the untyped ones: never add
-  a new one. The help string of a legacy command stays mandatory (no default value).
+  `(Arguments, Outputs) -> bool` binding — still compile, but **none is left in the engine nor in
+  projet-alpha** (all 137 migrated on 2026-09-27; `listUntypedCommands()` answers `137 typed, 0
+  untyped`). Never add one. Whether the overload itself is deleted is an open owner decision
+  (`docs/todo/console-command-contract.md`): another application built on the engine may still use it.
+- **JSON answers**: build them with `Json::Value` + `Base::FastJSON::stringify()` (escapes every
+  string; ⚠️ it writes floats with 5 significant digits — for coordinates keep a stream and escape
+  only the strings with `Json::valueToQuotedString()`, as `getNode()` does).
 
 ## 4. Common AI Operations
 
@@ -437,5 +441,5 @@ TCP lines starting with `{` are routed to a registered JSON handler (not the nor
   dot no longer splits the argument (`openFiles("/tmp/a,b(1)/x.glb")` is ONE path). Before that,
   `Expression` cut on every `,` and `)` regardless of quotes
 - **Typed vs untyped** — `listUntypedCommands()` (top-level built-in) reports the migration state;
-  on 2026-09-27: 52 typed, 85 untyped
+  on 2026-09-27: 137 typed, 0 untyped
 - **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) for the complete AI operator reference

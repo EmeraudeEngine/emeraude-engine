@@ -26,6 +26,12 @@
 
 #include "TrackMixer.hpp"
 
+/* STL inclusions. */
+#include <charconv>
+#include <optional>
+#include <sstream>
+#include <string>
+
 /* Local inclusions. */
 #include "String.hpp"
 #include "Resources/Manager.hpp"
@@ -37,368 +43,324 @@ namespace EmEn::Audio
 	void
 	TrackMixer::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("play", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
+		/* A refusal that keeps the Warning severity the console has always printed for it. */
+		const auto refuse = [] (const char * message) {
+			return Console::CommandResult::fromOutputs({Console::Output{Severity::Warning, message}}, false);
+		};
 
+		/* The on/off vocabulary of the mode switches: "on"/"1"/"true" and "off"/"0"/"false". */
+		const auto parseSwitch = [] (const std::string & state) -> std::optional< bool > {
+			if ( state == "on" || state == "1" || state == "true" )
+			{
+				return true;
+			}
+
+			if ( state == "off" || state == "0" || state == "false" )
+			{
 				return false;
 			}
 
-			/* No argument: resume current track or start playlist. */
-			if ( arguments.empty() )
+			return std::nullopt;
+		};
+
+		this->bindCommand("play", "Play or resume a music. Without argument: resumes or starts the playlist.",
 			{
-				if ( m_userState == UserState::Paused )
+				{"track", "Exact music resource name OR case-insensitive substring of a playlist entry; omit it to resume or start the playlist."}
+			},
+			[this, refuse] (const std::optional< std::string > & query) {
+				if ( !this->usable() )
 				{
-					this->resume();
-
-					outputs.emplace_back(Severity::Success, "Resumed.");
-
-					return true;
+					return refuse("The track mixer is unavailable !");
 				}
 
-				/* Nothing playing: start the playlist if available. */
-				if ( !m_playlist.empty() )
+				/* No argument: resume current track or start playlist. */
+				if ( !query.has_value() )
 				{
-					if ( this->playIndex(m_musicIndex) )
+					if ( m_userState == UserState::Paused )
 					{
-						outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing track " << (m_musicIndex + 1) << "/" << m_playlist.size() << ".");
+						this->resume();
 
-						return true;
+						return Console::CommandResult::success("Resumed.");
 					}
+
+					/* Nothing playing: start the playlist if available. */
+					if ( !m_playlist.empty() )
+					{
+						if ( this->playIndex(m_musicIndex) )
+						{
+							std::stringstream message;
+							message << "Playing track " << (m_musicIndex + 1) << "/" << m_playlist.size() << ".";
+
+							return Console::CommandResult::success(message.str());
+						}
+					}
+
+					return refuse("Nothing to play !");
 				}
 
-				outputs.emplace_back(Severity::Warning, "Nothing to play !");
+				/* Search the song by name. */
+				auto * container = m_resourceManager.container< MusicResource >();
 
-				return false;
-			}
+				std::shared_ptr< MusicResource > soundtrack;
 
-			/* Search the song by name. */
-			const auto query = arguments[0].asString();
-			auto * container = m_resourceManager.container< MusicResource >();
+				/* 1. Exact resource name lookup — only if actually present in the store.
+				 * Rationale: container->getResource() silently returns the "Default" fallback resource
+				 * when the name is unknown; checking existence first lets us detect a real miss and fall
+				 * through to the fuzzy path. */
+				if ( container->isResourceExists(*query) )
+				{
+					soundtrack = container->getResource(*query);
+				}
 
-			std::shared_ptr< MusicResource > soundtrack;
+				/* 2. Fallback: case-insensitive substring match against the loaded playlist. */
+				if ( soundtrack == nullptr )
+				{
+					soundtrack = this->findPlaylistTrack(*query);
+				}
 
-			/* 1. Exact resource name lookup — only if actually present in the store.
-			 * Rationale: container->getResource() silently returns the "Default" fallback resource
-			 * when the name is unknown; checking existence first lets us detect a real miss and fall
-			 * through to the fuzzy path. */
-			if ( container->isResourceExists(query) )
-			{
-				soundtrack = container->getResource(query);
-			}
+				if ( soundtrack == nullptr )
+				{
+					return Console::CommandResult::error("No track matches '" + *query + "' (exact resource name or substring in current playlist) !");
+				}
 
-			/* 2. Fallback: case-insensitive substring match against the loaded playlist. */
-			if ( soundtrack == nullptr )
-			{
-				soundtrack = this->findPlaylistTrack(query);
-			}
+				this->play(soundtrack);
 
-			if ( soundtrack == nullptr )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "No track matches '" << query << "' (exact resource name or substring in current playlist) !");
+				return Console::CommandResult::success("Playing '" + soundtrack->name() + "' ...");
+			});
 
-				return false;
-			}
-
-			this->play(soundtrack);
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing '" << soundtrack->name() << "' ...");
-
-			return true;
-		}, "Play or resume a music. Argument: exact resource name OR case-insensitive substring of a playlist entry. Without argument: resumes or starts the playlist.");
-
-		this->bindCommand("pause", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("pause", "Pause music playback.", [this, refuse] () {
 			if ( !this->usable() )
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
+				return refuse("The track mixer is unavailable !");
 			}
 
 			if ( m_playingTrack == PlayingTrack::None )
 			{
-				outputs.emplace_back(Severity::Warning, "There is no track playing !");
-
-				return false;
+				return refuse("There is no track playing !");
 			}
 
 			this->pause();
 
-			outputs.emplace_back(Severity::Success, "Paused.");
+			return Console::CommandResult::success("Paused.");
+		});
 
-			return true;
-		}, "Pause music playback.");
-
-		this->bindCommand("stop", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("stop", "Stop music.", [this, refuse] () {
 			if ( !this->usable() )
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
+				return refuse("The track mixer is unavailable !");
 			}
 
 			if ( m_playingTrack == PlayingTrack::None )
 			{
-				outputs.emplace_back(Severity::Warning, "There is no track playing !");
-
-				return false;
+				return refuse("There is no track playing !");
 			}
 
 			this->stop();
 
-			outputs.emplace_back(Severity::Success, "Stopped.");
+			return Console::CommandResult::success("Stopped.");
+		});
 
-			return true;
-		}, "Stop music.");
+		this->bindCommand("volume,vol", "Get or set the music volume.",
+			{
+				{"volume", "The new volume, in percent (0 to 100); omit it to read the current one."}
+			},
+			[this, refuse] (std::optional< float > newVolume) {
+				if ( !this->usable() )
+				{
+					return refuse("The track mixer is unavailable !");
+				}
 
-		this->bindCommand("volume,vol", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+				if ( !newVolume.has_value() )
+				{
+					std::stringstream message;
+					message << "Current volume: " << (m_gain * 100.0F) << "%";
+
+					return Console::CommandResult::info(message.str());
+				}
+
+				if ( *newVolume < 0.0F || *newVolume > 100.0F )
+				{
+					return Console::CommandResult::error("Volume must be between 0 and 100.");
+				}
+
+				this->setVolume(*newVolume / 100.0F);
+
+				std::stringstream message;
+				message << "Volume set to " << *newVolume << "%";
+
+				return Console::CommandResult::success(message.str());
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("next", "Play next track in playlist.", [this, refuse] () {
 			if ( !this->usable() )
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "Current volume: " << (m_gain * 100.0F) << "%");
-
-				return true;
-			}
-
-			const auto newVolume = arguments[0].asFloat();
-
-			if ( newVolume < 0.0F || newVolume > 100.0F )
-			{
-				outputs.emplace_back(Severity::Error, "Volume must be between 0 and 100.");
-
-				return false;
-			}
-
-			this->setVolume(newVolume / 100.0F);
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Volume set to " << newVolume << "%");
-
-			return true;
-		}, "Get or set volume (0-100).");
-
-		this->bindCommand("next", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
+				return refuse("The track mixer is unavailable !");
 			}
 
 			if ( m_playlist.empty() )
 			{
-				outputs.emplace_back(Severity::Warning, "Playlist is empty !");
-
-				return false;
+				return refuse("Playlist is empty !");
 			}
 
-			if ( this->next() )
+			if ( !this->next() )
 			{
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing next track (" << (m_musicIndex + 1) << "/" << m_playlist.size() << ")");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "Unable to play next track !");
+				return Console::CommandResult::error("Unable to play next track !");
 			}
 
-			return true;
-		}, "Play next track in playlist.");
+			std::stringstream message;
+			message << "Playing next track (" << (m_musicIndex + 1) << "/" << m_playlist.size() << ")";
 
-		this->bindCommand("previous,prev", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			return Console::CommandResult::success(message.str());
+		});
+
+		this->bindCommand("previous,prev", "Play previous track in playlist.", [this, refuse] () {
 			if ( !this->usable() )
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
+				return refuse("The track mixer is unavailable !");
 			}
 
 			if ( m_playlist.empty() )
 			{
-				outputs.emplace_back(Severity::Warning, "Playlist is empty !");
-
-				return false;
+				return refuse("Playlist is empty !");
 			}
 
-			if ( this->previous() )
+			if ( !this->previous() )
 			{
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing previous track (" << (m_musicIndex + 1) << "/" << m_playlist.size() << ")");
+				return Console::CommandResult::error("Unable to play previous track !");
 			}
-			else
+
+			std::stringstream message;
+			message << "Playing previous track (" << (m_musicIndex + 1) << "/" << m_playlist.size() << ")";
+
+			return Console::CommandResult::success(message.str());
+		});
+
+		this->bindCommand("shuffle", "Get or set the shuffle mode.",
 			{
-				outputs.emplace_back(Severity::Error, "Unable to play previous track !");
-			}
+				{"state", "'on' (or 1, true) / 'off' (or 0, false); omit it to read the current mode."}
+			},
+			[this, refuse, parseSwitch] (const std::optional< std::string > & state) {
+				if ( !this->usable() )
+				{
+					return refuse("The track mixer is unavailable !");
+				}
 
-			return true;
-		}, "Play previous track in playlist.");
+				if ( !state.has_value() )
+				{
+					return Console::CommandResult::info(std::string{"Shuffle mode: "} + (m_shuffleEnabled ? "ON" : "OFF"));
+				}
 
-		this->bindCommand("shuffle", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+				const auto enabled = parseSwitch(*state);
+
+				if ( !enabled.has_value() )
+				{
+					return Console::CommandResult::error("Invalid argument. Use 'on' or 'off'.");
+				}
+
+				this->enableShuffle(*enabled);
+
+				return Console::CommandResult::success(*enabled ? "Shuffle mode enabled." : "Shuffle mode disabled.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("loop", "Get or set the loop mode.",
+			{
+				{"state", "'on' (or 1, true) / 'off' (or 0, false); omit it to read the current mode."}
+			},
+			[this, refuse, parseSwitch] (const std::optional< std::string > & state) {
+				if ( !this->usable() )
+				{
+					return refuse("The track mixer is unavailable !");
+				}
+
+				if ( !state.has_value() )
+				{
+					return Console::CommandResult::info(std::string{"Loop mode: "} + (m_playMode == PlayMode::Loop ? "ON" : "OFF"));
+				}
+
+				const auto enabled = parseSwitch(*state);
+
+				if ( !enabled.has_value() )
+				{
+					return Console::CommandResult::error("Invalid argument. Use 'on' or 'off'.");
+				}
+
+				this->setPlayMode(*enabled ? PlayMode::Loop : PlayMode::Once);
+
+				return Console::CommandResult::success(*enabled ? "Loop mode enabled." : "Loop mode disabled.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("crossfade", "Get or set the crossfade transition.",
+			{
+				{"state", "'on' (or 1, true) / 'off' (or 0, false); omit it to read the current setting."}
+			},
+			[this, refuse, parseSwitch] (const std::optional< std::string > & state) {
+				if ( !this->usable() )
+				{
+					return refuse("The track mixer is unavailable !");
+				}
+
+				if ( !state.has_value() )
+				{
+					return Console::CommandResult::info(std::string{"Crossfade: "} + (m_crossFaderEnabled ? "ON" : "OFF"));
+				}
+
+				const auto enabled = parseSwitch(*state);
+
+				if ( !enabled.has_value() )
+				{
+					return Console::CommandResult::error("Invalid argument. Use 'on' or 'off'.");
+				}
+
+				this->enableCrossFader(*enabled);
+
+				return Console::CommandResult::success(*enabled ? "Crossfade enabled." : "Crossfade disabled.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("seek", "Get or set the playback position of the current track.",
+			{
+				{"position", "The new position, in seconds from the start of the track; omit it to read the current one."}
+			},
+			[this, refuse] (std::optional< float > position) {
+				if ( !this->usable() )
+				{
+					return refuse("The track mixer is unavailable !");
+				}
+
+				if ( m_playingTrack == PlayingTrack::None )
+				{
+					return refuse("No track is currently playing !");
+				}
+
+				if ( !position.has_value() )
+				{
+					std::stringstream message;
+					message << "Current position: " << this->currentPosition() << "s / " << this->currentDuration() << "s";
+
+					return Console::CommandResult::info(message.str());
+				}
+
+				const auto duration = this->currentDuration();
+
+				if ( *position < 0.0F || *position > duration )
+				{
+					std::stringstream message;
+					message << "Position must be between 0 and " << duration << " seconds.";
+
+					return Console::CommandResult::error(message.str());
+				}
+
+				this->seek(*position);
+
+				std::stringstream message;
+				message << "Seeked to " << *position << "s";
+
+				return Console::CommandResult::success(message.str());
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("status", "Show current track mixer status.", [this, refuse] () {
 			if ( !this->usable() )
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "Shuffle mode: " << (m_shuffleEnabled ? "ON" : "OFF"));
-
-				return true;
-			}
-
-			const auto state = arguments[0].asString();
-
-			if ( state == "on" || state == "1" || state == "true" )
-			{
-				this->enableShuffle(true);
-
-				outputs.emplace_back(Severity::Success, "Shuffle mode enabled.");
-			}
-			else if ( state == "off" || state == "0" || state == "false" )
-			{
-				this->enableShuffle(false);
-
-				outputs.emplace_back(Severity::Success, "Shuffle mode disabled.");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "Invalid argument. Use 'on' or 'off'.");
-
-				return false;
-			}
-
-			return true;
-		}, "Get or set shuffle mode (on/off).");
-
-		this->bindCommand("loop", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "Loop mode: " << (m_playMode == PlayMode::Loop ? "ON" : "OFF"));
-
-				return true;
-			}
-
-			const auto state = arguments[0].asString();
-
-			if ( state == "on" || state == "1" || state == "true" )
-			{
-				this->setPlayMode(PlayMode::Loop);
-
-				outputs.emplace_back(Severity::Success, "Loop mode enabled.");
-			}
-			else if ( state == "off" || state == "0" || state == "false" )
-			{
-				this->setPlayMode(PlayMode::Once);
-
-				outputs.emplace_back(Severity::Success, "Loop mode disabled.");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "Invalid argument. Use 'on' or 'off'.");
-
-				return false;
-			}
-
-			return true;
-		}, "Get or set loop mode (on/off).");
-
-		this->bindCommand("crossfade", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "Crossfade: " << (m_crossFaderEnabled ? "ON" : "OFF"));
-
-				return true;
-			}
-
-			const auto state = arguments[0].asString();
-
-			if ( state == "on" || state == "1" || state == "true" )
-			{
-				this->enableCrossFader(true);
-
-				outputs.emplace_back(Severity::Success, "Crossfade enabled.");
-			}
-			else if ( state == "off" || state == "0" || state == "false" )
-			{
-				this->enableCrossFader(false);
-
-				outputs.emplace_back(Severity::Success, "Crossfade disabled.");
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "Invalid argument. Use 'on' or 'off'.");
-
-				return false;
-			}
-
-			return true;
-		}, "Get or set crossfade transition (on/off).");
-
-		this->bindCommand("seek", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( m_playingTrack == PlayingTrack::None )
-			{
-				outputs.emplace_back(Severity::Warning, "No track is currently playing !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "Current position: " << this->currentPosition() << "s / " << this->currentDuration() << "s");
-
-				return true;
-			}
-
-			const auto position = arguments[0].asFloat();
-			const auto duration = this->currentDuration();
-
-			if ( position < 0.0F || position > duration )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Position must be between 0 and " << duration << " seconds.");
-
-				return false;
-			}
-
-			this->seek(position);
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Seeked to " << position << "s");
-
-			return true;
-		}, "Seek to position in seconds.");
-
-		this->bindCommand("status", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
+				return refuse("The track mixer is unavailable !");
 			}
 
 			std::stringstream status;
@@ -442,40 +404,30 @@ namespace EmEn::Audio
 				status << "Position: " << this->currentPosition() << "s / " << this->currentDuration() << "s" "\n";
 			}
 
-			outputs.emplace_back(Severity::Info, status.str());
+			return Console::CommandResult::info(status.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Show current track mixer status.");
-
-		this->bindCommand("nowPlaying,np", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("nowPlaying,np", "Show the track currently playing (title, artist, position, playlist index).", [this, refuse] () {
 			if ( !this->usable() )
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
+				return refuse("The track mixer is unavailable !");
 			}
 
 			if ( m_playingTrack == PlayingTrack::None )
 			{
-				outputs.emplace_back(Severity::Info, "No track is currently playing.");
-
-				return true;
+				return Console::CommandResult::info("No track is currently playing.");
 			}
 
 			if ( m_playlist.empty() || m_musicIndex >= m_playlist.size() )
 			{
-				outputs.emplace_back(Severity::Warning, "Playing state is inconsistent (no playlist entry at current index) !");
-
-				return false;
+				return refuse("Playing state is inconsistent (no playlist entry at current index) !");
 			}
 
 			const auto & track = m_playlist[m_musicIndex];
 
 			if ( track == nullptr )
 			{
-				outputs.emplace_back(Severity::Error, "Current playlist entry is a null pointer !");
-
-				return false;
+				return Console::CommandResult::error("Current playlist entry is a null pointer !");
 			}
 
 			std::stringstream info;
@@ -485,34 +437,32 @@ namespace EmEn::Audio
 			info << "Position: " << this->currentPosition() << "s / " << this->currentDuration() << "s" "\n";
 			info << "Index: " << (m_musicIndex + 1) << "/" << m_playlist.size();
 
-			outputs.emplace_back(Severity::Info, info.str());
+			return Console::CommandResult::info(info.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Show the track currently playing (title, artist, position, playlist index). Alias: 'np'.");
-
-		this->bindCommand("currentPlaylist,cpl", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("currentPlaylist,cpl", "Show the manifest name currently backing the playlist. Returns 'no manifest' if the playlist was modified ad-hoc via addToPlaylist.", [this] () {
 			const auto & manifest = this->loadedPlaylist();
+
+			std::stringstream message;
 
 			if ( manifest == nullptr )
 			{
-				outputs.emplace_back(Severity::Info, std::stringstream{} << "No playlist manifest loaded (ad-hoc or empty playlist). Tracks: " << m_playlist.size() << ".");
-
-				return true;
+				message << "No playlist manifest loaded (ad-hoc or empty playlist). Tracks: " << m_playlist.size() << ".";
+			}
+			else
+			{
+				message << "Current playlist: '" << manifest->name() << "' (" << m_playlist.size() << " tracks).";
 			}
 
-			outputs.emplace_back(Severity::Info, std::stringstream{} << "Current playlist: '" << manifest->name() << "' (" << m_playlist.size() << " tracks).");
+			return Console::CommandResult::info(message.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Show the manifest name currently backing the playlist. Returns 'no manifest' if the playlist was modified ad-hoc via addToPlaylist. Alias: 'cpl'.");
-
-		this->bindCommand("listPlaylists,lpl", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("listPlaylists,lpl", "List available playlists (store-backed manifests + runtime-created).", [this] () {
 			const auto names = this->availablePlaylistNames();
 
 			if ( names.empty() )
 			{
-				outputs.emplace_back(Severity::Info, "No playlist manifest available.");
-
-				return true;
+				return Console::CommandResult::info("No playlist manifest available.");
 			}
 
 			std::stringstream list;
@@ -523,179 +473,157 @@ namespace EmEn::Audio
 				list << "  " << name << "\n";
 			}
 
-			outputs.emplace_back(Severity::Info, list.str());
+			return Console::CommandResult::info(list.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "List available playlists (store-backed manifests + runtime-created). Alias: 'lpl'.");
-
-		this->bindCommand("loadPlaylist,lp", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
+		this->bindCommand("loadPlaylist,lp", "Swap the current playlist for a manifest from the MusicPlaylists store. If music was playing, restarts from track 1 of the new playlist.",
 			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: loadPlaylist <name>");
-
-				return false;
-			}
-
-			const auto query = arguments[0].asString();
-			auto * playlists = m_resourceManager.container< PlaylistResource >();
-
-			std::shared_ptr< PlaylistResource > manifest;
-
-			/* 1. Exact match guarded by isResourceExists to avoid the Default fallback.
-			 * asyncLoad=false forces the JSON to be parsed synchronously before we touch the playlist. */
-			if ( playlists->isResourceExists(query) )
-			{
-				manifest = playlists->getResource(query, false);
-			}
-
-			/* 2. Fuzzy fallback: case-insensitive substring over available playlist names. */
-			if ( manifest == nullptr )
-			{
-				const auto needle = String::toLower(query);
-
-				for ( const auto & name : playlists->getResourceNames() )
+				{"name", "Exact playlist manifest name OR case-insensitive substring of one (listPlaylists() lists them)."}
+			},
+			[this, refuse] (const std::string & query) {
+				if ( !this->usable() )
 				{
-					if ( String::toLower(name).find(needle) != std::string::npos )
-					{
-						manifest = playlists->getResource(name, false);
+					return refuse("The track mixer is unavailable !");
+				}
 
-						break;
+				auto * playlists = m_resourceManager.container< PlaylistResource >();
+
+				std::shared_ptr< PlaylistResource > manifest;
+
+				/* 1. Exact match guarded by isResourceExists to avoid the Default fallback.
+				 * asyncLoad=false forces the JSON to be parsed synchronously before we touch the playlist. */
+				if ( playlists->isResourceExists(query) )
+				{
+					manifest = playlists->getResource(query, false);
+				}
+
+				/* 2. Fuzzy fallback: case-insensitive substring over available playlist names. */
+				if ( manifest == nullptr )
+				{
+					const auto needle = String::toLower(query);
+
+					for ( const auto & name : playlists->getResourceNames() )
+					{
+						if ( String::toLower(name).find(needle) != std::string::npos )
+						{
+							manifest = playlists->getResource(name, false);
+
+							break;
+						}
 					}
 				}
-			}
 
-			if ( manifest == nullptr )
+				if ( manifest == nullptr )
+				{
+					return Console::CommandResult::error("No playlist manifest matches '" + query + "' !");
+				}
+
+				if ( !this->loadPlaylist(manifest) )
+				{
+					return Console::CommandResult::error("Failed to load playlist '" + manifest->name() + "' (empty or unresolved tracks) !");
+				}
+
+				std::stringstream message;
+				message << "Loaded playlist '" << manifest->name() << "' (" << manifest->trackCount() << " tracks).";
+
+				return Console::CommandResult::success(message.str());
+			});
+
+		this->bindCommand("playlist,pl", "List the playlist, or manage it: clear, add <track>, play <index>.",
 			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "No playlist manifest matches '" << query << "' !");
-
-				return false;
-			}
-
-			if ( !this->loadPlaylist(manifest) )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Failed to load playlist '" << manifest->name() << "' (empty or unresolved tracks) !");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Loaded playlist '" << manifest->name() << "' (" << manifest->trackCount() << " tracks).");
-
-			return true;
-		}, "Swap the current playlist for a manifest from the MusicPlaylists store. Argument: exact name OR substring. If music was playing, restarts from track 1 of the new playlist.");
-
-		this->bindCommand("playlist,pl", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return false;
-			}
-
-			if ( arguments.empty() )
-			{
-				if ( m_playlist.empty() )
+				{"action", "'clear' empties the playlist, 'add' appends a track, 'play' plays an entry; omit it to list the playlist."},
+				{"operand", "For 'add': the music resource name. For 'play': the 1-based playlist index."}
+			},
+			[this, refuse] (const std::optional< std::string > & action, const std::optional< std::string > & operand) {
+				if ( !this->usable() )
 				{
-					outputs.emplace_back(Severity::Info, "Playlist is empty.");
-
-					return true;
+					return refuse("The track mixer is unavailable !");
 				}
 
-				std::stringstream list;
-				list << "=== Playlist (" << m_playlist.size() << " track(s)) ===" "\n";
-
-				size_t index = 0;
-
-				for ( const auto & track : m_playlist )
+				if ( !action.has_value() )
 				{
-					const auto marker = (index == m_musicIndex) ? " > " : "   ";
+					if ( m_playlist.empty() )
+					{
+						return Console::CommandResult::info("Playlist is empty.");
+					}
 
-					list << marker << (index + 1) << ". " << track->name() << "\n";
+					std::stringstream list;
+					list << "=== Playlist (" << m_playlist.size() << " track(s)) ===" "\n";
 
-					index++;
+					size_t index = 0;
+
+					for ( const auto & track : m_playlist )
+					{
+						const auto marker = (index == m_musicIndex) ? " > " : "   ";
+
+						list << marker << (index + 1) << ". " << track->name() << "\n";
+
+						index++;
+					}
+
+					return Console::CommandResult::info(list.str());
 				}
 
-				outputs.emplace_back(Severity::Info, list.str());
-
-				return true;
-			}
-
-			const auto subCommand = arguments[0].asString();
-
-			if ( subCommand == "clear" )
-			{
-				this->clearPlaylist();
-
-				outputs.emplace_back(Severity::Success, "Playlist cleared.");
-
-				return true;
-			}
-
-			if ( subCommand == "add" )
-			{
-				if ( arguments.size() < 2 )
+				if ( *action == "clear" )
 				{
-					outputs.emplace_back(Severity::Error, "Usage: playlist add <track_name>");
+					this->clearPlaylist();
 
-					return false;
+					return Console::CommandResult::success("Playlist cleared.");
 				}
 
-				const auto trackName = arguments[1].asString();
-				const auto track = m_resourceManager.container< MusicResource >()->getResource(trackName);
-
-				if ( track == nullptr )
+				if ( *action == "add" )
 				{
-					outputs.emplace_back(Severity::Error, std::stringstream{} << "Track '" << trackName << "' not found !");
+					if ( !operand.has_value() )
+					{
+						return Console::CommandResult::error("Usage: playlist(add, <track_name>)");
+					}
 
-					return false;
+					const auto track = m_resourceManager.container< MusicResource >()->getResource(*operand);
+
+					if ( track == nullptr )
+					{
+						return Console::CommandResult::error("Track '" + *operand + "' not found !");
+					}
+
+					this->addToPlaylist(track);
+
+					return Console::CommandResult::success("Added '" + *operand + "' to playlist.");
 				}
 
-				this->addToPlaylist(track);
-
-				outputs.emplace_back(Severity::Success, std::stringstream{} << "Added '" << trackName << "' to playlist.");
-
-				return true;
-			}
-
-			if ( subCommand == "play" )
-			{
-				if ( arguments.size() < 2 )
+				if ( *action == "play" )
 				{
-					outputs.emplace_back(Severity::Error, "Usage: playlist play <index>");
+					/* NOTE: the operand is a string because 'add' takes a name; 'play' wants the WHOLE of it
+					 * to be an integer, so "3abc" is refused rather than read as 3. */
+					int32_t index = 0;
 
-					return false;
+					if ( !operand.has_value() )
+					{
+						return Console::CommandResult::error("Usage: playlist(play, <index>)");
+					}
+
+					const auto * first = operand->data();
+					const auto * last = first + operand->size();
+					const auto [end, error] = std::from_chars(first, last, index);
+
+					if ( error != std::errc{} || end != last )
+					{
+						return Console::CommandResult::error("playlist(play, <index>): '" + *operand + "' is not an integer.");
+					}
+
+					if ( index < 1 || static_cast< size_t >(index) > m_playlist.size() )
+					{
+						return Console::CommandResult::error("Invalid index. Must be between 1 and " + std::to_string(m_playlist.size()) + ".");
+					}
+
+					if ( !this->playIndex(static_cast< size_t >(index) - 1) )
+					{
+						return Console::CommandResult::error("Unable to play track !");
+					}
+
+					return Console::CommandResult::success("Playing track " + std::to_string(index) + ".");
 				}
 
-				const auto index = static_cast< size_t >(arguments[1].asInteger());
-
-				if ( index < 1 || index > m_playlist.size() )
-				{
-					outputs.emplace_back(Severity::Error, std::stringstream{} << "Invalid index. Must be between 1 and " << m_playlist.size() << ".");
-
-					return false;
-				}
-
-				if ( this->playIndex(index - 1) )
-				{
-					outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing track " << index << ".");
-				}
-				else
-				{
-					outputs.emplace_back(Severity::Error, "Unable to play track !");
-				}
-
-				return true;
-			}
-
-			outputs.emplace_back(Severity::Error, "Unknown subcommand. Use: clear, add, play");
-
-			return false;
-		}, "Manage playlist. Subcommands: clear, add <track>, play <index>");
+				return Console::CommandResult::error("Unknown subcommand. Use: clear, add, play");
+			});
 	}
 }

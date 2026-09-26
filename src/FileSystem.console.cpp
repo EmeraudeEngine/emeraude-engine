@@ -26,91 +26,78 @@
 
 #include "FileSystem.hpp"
 
+/* Local inclusions. */
+#include "FastJSON.hpp"
+
 namespace EmEn
 {
 	void
 	FileSystem::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("print", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, std::stringstream{} << *this);
+		this->bindCommand("print", "Prints all filesystem paths as text.", [this] () {
+			std::stringstream text;
+			text << *this;
 
-			return true;
-		}, "Prints all filesystem paths as text.");
+			return Console::CommandResult::info(text.str());
+		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("getJson", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			std::stringstream json;
-			json << "{";
+		this->bindCommand("getJson", "Returns all filesystem paths as JSON.", [this] () {
+			Json::Value root{Json::objectValue};
+			root["binaryName"] = m_binaryName;
+			root["binaryDirectory"] = m_binaryDirectory.string();
+			root["userDirectory"] = m_userDirectory.string();
+			root["userDataDirectory"] = m_userDataDirectory.string();
+			root["configDirectory"] = m_configDirectory.string();
+			root["cacheDirectory"] = m_cacheDirectory.string();
 
-			json << "\"binaryName\":\"" << m_binaryName << "\",";
-			json << "\"binaryDirectory\":\"" << m_binaryDirectory.string() << "\",";
-			json << "\"userDirectory\":\"" << m_userDirectory.string() << "\",";
-			json << "\"userDataDirectory\":\"" << m_userDataDirectory.string() << "\",";
-			json << "\"configDirectory\":\"" << m_configDirectory.string() << "\",";
-			json << "\"cacheDirectory\":\"" << m_cacheDirectory.string() << "\",";
+			Json::Value dataDirectories{Json::arrayValue};
 
-			json << "\"dataDirectories\":[";
-
-			for ( size_t i = 0; i < m_dataDirectories.size(); i++ )
+			for ( const auto & dataDirectory : m_dataDirectories )
 			{
-				if ( i > 0 )
+				dataDirectories.append(dataDirectory.string());
+			}
+
+			root["dataDirectories"] = std::move(dataDirectories);
+
+			return Console::CommandResult::json(Base::FastJSON::stringify(root));
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("get", "Returns one filesystem path by its name.",
+			{
+				{"name", "The path name: binaryName, binaryDirectory, userDirectory, userDataDirectory, configDirectory or cacheDirectory."}
+			},
+			[this] (const std::string & name) {
+				if ( name == "binaryName" )
 				{
-					json << ",";
+					return Console::CommandResult::info(m_binaryName);
 				}
 
-				json << "\"" << m_dataDirectories[i].string() << "\"";
-			}
+				if ( name == "binaryDirectory" )
+				{
+					return Console::CommandResult::info(m_binaryDirectory.string());
+				}
 
-			json << "]";
+				if ( name == "userDirectory" )
+				{
+					return Console::CommandResult::info(m_userDirectory.string());
+				}
 
-			json << "}";
+				if ( name == "userDataDirectory" )
+				{
+					return Console::CommandResult::info(m_userDataDirectory.string());
+				}
 
-			outputs.emplace_back(Severity::Info, json.str());
+				if ( name == "configDirectory" )
+				{
+					return Console::CommandResult::info(m_configDirectory.string());
+				}
 
-			return true;
-		}, "Returns all filesystem paths as JSON.");
+				if ( name == "cacheDirectory" )
+				{
+					return Console::CommandResult::info(m_cacheDirectory.string());
+				}
 
-		this->bindCommand("get", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: get(name) — names: binaryName, binaryDirectory, userDirectory, userDataDirectory, configDirectory, cacheDirectory");
-
-				return false;
-			}
-
-			const auto name = arguments[0].asString();
-
-			if ( name == "binaryName" )
-			{
-				outputs.emplace_back(Severity::Info, m_binaryName);
-			}
-			else if ( name == "binaryDirectory" )
-			{
-				outputs.emplace_back(Severity::Info, m_binaryDirectory.string());
-			}
-			else if ( name == "userDirectory" )
-			{
-				outputs.emplace_back(Severity::Info, m_userDirectory.string());
-			}
-			else if ( name == "userDataDirectory" )
-			{
-				outputs.emplace_back(Severity::Info, m_userDataDirectory.string());
-			}
-			else if ( name == "configDirectory" )
-			{
-				outputs.emplace_back(Severity::Info, m_configDirectory.string());
-			}
-			else if ( name == "cacheDirectory" )
-			{
-				outputs.emplace_back(Severity::Info, m_cacheDirectory.string());
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unknown path name '" << name << "'.");
-
-				return false;
-			}
-
-			return true;
-		}, "Returns a specific path. Usage: get(name)");
+				return Console::CommandResult::error("Unknown path name '" + name + "'.");
+			}, Console::CommandHint::ReadOnly);
 	}
 }

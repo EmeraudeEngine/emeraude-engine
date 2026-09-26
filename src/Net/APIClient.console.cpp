@@ -105,153 +105,124 @@ namespace EmEn::Net
 		 * debugging comfort. Do NOT "fix" this into redaction without asking: it is a decision, not
 		 * an oversight. What contains it is that the remote console is closed by default and binds
 		 * 127.0.0.1 (Core/Console/EnableRemoteListener). */
-		this->bindCommand("request", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
+		this->bindCommand("request", R"(Issues an API call and returns a ticket, e.g. request(POST, https://api.example/actors, '{"name":"x"}', application/json).)",
 			{
-				outputs.emplace_back(Severity::Error, R"(Usage: request(METHOD, https://host/path[, body[, contentType]]) - e.g. request(POST, https://api.example/actors, {"name":"x"}, application/json))");
+				{"method", "The HTTP method: GET, POST, PUT, PATCH, DELETE, HEAD or OPTIONS."},
+				{"url", "The https:// URL of the call."},
+				{"body", "The request body, verbatim (quote it when it contains a comma or a parenthesis); none when omitted."},
+				{"contentType", "The Content-Type of the body; application/json when omitted (ignored without a body)."}
+			},
+			[this] (const std::string & methodName, const std::string & url, const std::optional< std::string > & body, const std::optional< std::string > & contentType) {
+				const auto method = Base::Network::HTTPRequest::parseMethod(methodName);
 
-				return false;
-			}
-
-			const auto method = Base::Network::HTTPRequest::parseMethod(arguments[0].asString());
-
-			if ( method == Base::Network::HTTPRequest::Method::NONE )
-			{
-				outputs.emplace_back(Severity::Error, "Unknown HTTP method '" + arguments[0].asString() + "'.");
-
-				return false;
-			}
-
-			Base::Network::HTTPRequestOptions options;
-
-			if ( arguments.size() > 2 )
-			{
-				options.body = arguments[2].asString();
-				options.contentType = arguments.size() > 3 ? arguments[3].asString() : "application/json";
-			}
-
-			const auto ticket = this->request(method, Base::Network::URI{arguments[1].asString()}, std::move(options));
-
-			if ( ticket == InvalidTicket )
-			{
-				outputs.emplace_back(Severity::Error, "Call refused (disabled, not https, malformed header, or no thread pool). See the log.");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Ticket #" << ticket << " (" << to_cstring(this->requestStatus(ticket)) << "). Poll with status(" << ticket << ").");
-
-			return true;
-		}, "Issues an API call and returns a ticket. Usage: request(METHOD, url[, body[, contentType]])");
-
-		this->bindCommand("get", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: get(https://host/path)");
-
-				return false;
-			}
-
-			const auto ticket = this->get(Base::Network::URI{arguments[0].asString()});
-
-			if ( ticket == InvalidTicket )
-			{
-				outputs.emplace_back(Severity::Error, "Call refused (disabled, not https, malformed header, or no thread pool). See the log.");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Ticket #" << ticket << ". Poll with status(" << ticket << ").");
-
-			return true;
-		}, "Issues a GET and returns a ticket. Usage: get(url)");
-
-		this->bindCommand("post", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
-			{
-				outputs.emplace_back(Severity::Error, R"(Usage: post(https://host/path, body[, contentType]) - contentType defaults to application/json)");
-
-				return false;
-			}
-
-			const auto ticket = this->post(
-				Base::Network::URI{arguments[0].asString()},
-				arguments[1].asString(),
-				arguments.size() > 2 ? arguments[2].asString() : std::string{"application/json"}
-			);
-
-			if ( ticket == InvalidTicket )
-			{
-				outputs.emplace_back(Severity::Error, "Call refused (disabled, not https, malformed header, or no thread pool). See the log.");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Ticket #" << ticket << ". Poll with status(" << ticket << ").");
-
-			return true;
-		}, "Issues a POST carrying a body and returns a ticket. Usage: post(url, body[, contentType])");
-
-		this->bindCommand("status", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: status(ticket)");
-
-				return false;
-			}
-
-			const auto ticket = arguments[0].asInteger();
-			const auto status = this->requestStatus(ticket);
-
-			std::stringstream json;
-			json << R"({"ticket":)" << ticket << R"(,"status":")" << to_cstring(status) << '"';
-
-			if ( status == APIRequestStatus::Done )
-			{
-				const auto body = this->responseBody(ticket);
-
-				json << R"(,"httpStatus":)" << this->responseStatusCode(ticket)
-					<< R"(,"contentType":")" << escapeJSON(this->responseHeader(ticket, "Content-Type")) << '"'
-					<< R"(,"bodyBytes":)" << body.size()
-					<< R"(,"jsonParsed":)" << [this, ticket] { Json::Value value; return this->responseJSON(ticket, value) ? "true" : "false"; }()
-					<< R"(,"body":")" << escapeJSON(body) << '"';
-			}
-
-			if ( status == APIRequestStatus::Error )
-			{
-				const auto [outcome, statusCode] = this->requestFailure(ticket);
-
-				json << R"(,"reason":")" << Base::Network::to_cstring(outcome) << '"';
-
-				if ( statusCode > 0 )
+				if ( method == Base::Network::HTTPRequest::Method::NONE )
 				{
-					json << R"(,"httpStatus":)" << statusCode;
+					return Console::CommandResult::error("Unknown HTTP method '" + methodName + "'.");
 				}
-			}
 
-			json << R"(,"inFlight":)" << this->inFlightCount() << R"(,"retained":)" << this->retainedCount() << '}';
+				Base::Network::HTTPRequestOptions options;
 
-			outputs.emplace_back(Severity::Info, json.str());
+				if ( body.has_value() )
+				{
+					options.body = *body;
+					options.contentType = contentType.value_or("application/json");
+				}
 
-			return true;
-		}, "Returns a ticket as JSON (status, httpStatus, contentType, body when Done, reason when Error). Usage: status(ticket)");
+				const auto ticket = this->request(method, Base::Network::URI{url}, std::move(options));
 
-		this->bindCommand("header", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
+				if ( ticket == InvalidTicket )
+				{
+					return Console::CommandResult::error("Call refused (disabled, not https, malformed header, or no thread pool). See the log.");
+				}
+
+				std::stringstream message;
+				message << "Ticket #" << ticket << " (" << to_cstring(this->requestStatus(ticket)) << "). Poll with status(" << ticket << ").";
+
+				return Console::CommandResult::success(message.str());
+			});
+
+		this->bindCommand("get", "Issues a GET and returns a ticket.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: header(ticket, Name)");
+				{"url", "The https:// URL of the call."}
+			},
+			[this] (const std::string & url) {
+				const auto ticket = this->get(Base::Network::URI{url});
 
-				return false;
-			}
+				if ( ticket == InvalidTicket )
+				{
+					return Console::CommandResult::error("Call refused (disabled, not https, malformed header, or no thread pool). See the log.");
+				}
 
-			const auto value = this->responseHeader(arguments[0].asInteger(), arguments[1].asString());
+				return Console::CommandResult::success("Ticket #" + std::to_string(ticket) + ". Poll with status(" + std::to_string(ticket) + ").");
+			});
 
-			outputs.emplace_back(Severity::Info, std::stringstream{} << R"({"name":")" << escapeJSON(arguments[1].asString()) << R"(","value":")" << escapeJSON(value) << R"("})");
+		this->bindCommand("post", "Issues a POST carrying a body and returns a ticket.",
+			{
+				{"url", "The https:// URL of the call."},
+				{"body", "The request body, verbatim (quote it when it contains a comma or a parenthesis)."},
+				{"contentType", "The Content-Type of the body.", "application/json"}
+			},
+			[this] (const std::string & url, const std::string & body, const std::string & contentType) {
+				const auto ticket = this->post(Base::Network::URI{url}, body, contentType);
 
-			return true;
-		}, "Returns one response header of a ticket. Usage: header(ticket, Name)");
+				if ( ticket == InvalidTicket )
+				{
+					return Console::CommandResult::error("Call refused (disabled, not https, malformed header, or no thread pool). See the log.");
+				}
 
-		this->bindCommand("list", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+				return Console::CommandResult::success("Ticket #" + std::to_string(ticket) + ". Poll with status(" + std::to_string(ticket) + ").");
+			});
+
+		this->bindCommand("status", "Returns a ticket as JSON (status, httpStatus, contentType, body when Done, reason when Error). A ticket is Done even on a 404: read httpStatus.",
+			{
+				{"ticket", "The ticket number returned by request(), get() or post()."}
+			},
+			[this] (int32_t ticket) {
+				const auto status = this->requestStatus(ticket);
+
+				std::stringstream json;
+				json << R"({"ticket":)" << ticket << R"(,"status":")" << to_cstring(status) << '"';
+
+				if ( status == APIRequestStatus::Done )
+				{
+					const auto body = this->responseBody(ticket);
+
+					json << R"(,"httpStatus":)" << this->responseStatusCode(ticket)
+						<< R"(,"contentType":")" << escapeJSON(this->responseHeader(ticket, "Content-Type")) << '"'
+						<< R"(,"bodyBytes":)" << body.size()
+						<< R"(,"jsonParsed":)" << [this, ticket] { Json::Value value; return this->responseJSON(ticket, value) ? "true" : "false"; }()
+						<< R"(,"body":")" << escapeJSON(body) << '"';
+				}
+
+				if ( status == APIRequestStatus::Error )
+				{
+					const auto [outcome, statusCode] = this->requestFailure(ticket);
+
+					json << R"(,"reason":")" << Base::Network::to_cstring(outcome) << '"';
+
+					if ( statusCode > 0 )
+					{
+						json << R"(,"httpStatus":)" << statusCode;
+					}
+				}
+
+				json << R"(,"inFlight":)" << this->inFlightCount() << R"(,"retained":)" << this->retainedCount() << '}';
+
+				return Console::CommandResult::json(json.str());
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("header", "Returns one response header of a ticket as JSON (empty value when absent).",
+			{
+				{"ticket", "The ticket number."},
+				{"name", "The header field name, case-insensitive (e.g. Content-Type)."}
+			},
+			[this] (int32_t ticket, const std::string & name) {
+				const auto value = this->responseHeader(ticket, name);
+
+				return Console::CommandResult::json(R"({"name":")" + escapeJSON(name) + R"(","value":")" + escapeJSON(value) + R"("})");
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("list", "Lists every held ticket as JSON (ticket, method, url, status, httpStatus).", [this] () {
 			std::stringstream json;
 			json << '[';
 
@@ -275,93 +246,64 @@ namespace EmEn::Net
 
 			json << ']';
 
-			outputs.emplace_back(Severity::Info, json.str());
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Lists every held ticket as JSON (ticket, method, url, status, httpStatus).");
-
-		this->bindCommand("release", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
+		this->bindCommand("release", "Drops a terminal ticket and the response it holds (a response lives in RAM until released).",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: release(ticket)");
+				{"ticket", "The ticket number; it must be terminal (Done, Error or Cancelled)."}
+			},
+			[this] (int32_t ticket) {
+				if ( !this->release(ticket) )
+				{
+					return Console::CommandResult::error("Unknown ticket, or it is still in flight (cancel it instead).");
+				}
 
-				return false;
-			}
+				return Console::CommandResult::success("Ticket released.");
+			}, Console::CommandHint::Destructive);
 
-			if ( !this->release(arguments[0].asInteger()) )
+		this->bindCommand("cancel", "Abandons a ticket: its result is dropped and no notification is emitted. The exchange itself is NOT interrupted.",
 			{
-				outputs.emplace_back(Severity::Error, "Unknown ticket, or it is still in flight (cancel it instead).");
+				{"ticket", "The ticket number."}
+			},
+			[this] (int32_t ticket) {
+				if ( !this->cancel(ticket) )
+				{
+					return Console::CommandResult::error("Unknown ticket, or it was already cancelled.");
+				}
 
-				return false;
-			}
+				/* Saying "cancelled" alone would suggest the socket was closed. It was not. */
+				return Console::CommandResult::success("Ticket abandoned; a call already on the wire still runs to completion, its response is dropped.");
+			}, Console::CommandHint::Destructive);
 
-			outputs.emplace_back(Severity::Success, "Ticket released.");
-
-			return true;
-		}, "Drops a terminal ticket and the response it holds. Usage: release(ticket)");
-
-		this->bindCommand("cancel", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
+		this->bindCommand("setHeader", "Sets a header sent with every subsequent call (where an Authorization belongs), e.g. setHeader(Authorization, Bearer xxx).",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: cancel(ticket)");
+				{"name", "The header field name."},
+				{"value", "The header value, verbatim (quote it when it contains a comma or a parenthesis)."}
+			},
+			[this] (const std::string & name, const std::string & value) {
+				if ( !this->setDefaultHeader(name, value) )
+				{
+					return Console::CommandResult::error("Header refused: bad field name, control character in the value, or a framing header the HTTPS client owns.");
+				}
 
-				return false;
-			}
+				return Console::CommandResult::success("Default header set; it is sent with every subsequent call.");
+			}, Console::CommandHint::Idempotent);
 
-			if ( !this->cancel(arguments[0].asInteger()) )
+		this->bindCommand("removeHeader", "Removes a default header.",
 			{
-				outputs.emplace_back(Severity::Error, "Unknown ticket, or it was already cancelled.");
+				{"name", "The header field name."}
+			},
+			[this] (const std::string & name) {
+				if ( !this->removeDefaultHeader(name) )
+				{
+					return Console::CommandResult::error("No such default header.");
+				}
 
-				return false;
-			}
+				return Console::CommandResult::success("Default header removed.");
+			});
 
-			/* Saying "cancelled" alone would suggest the socket was closed. It was not. */
-			outputs.emplace_back(Severity::Success, "Ticket abandoned; a call already on the wire still runs to completion, its response is dropped.");
-
-			return true;
-		}, "Abandons a ticket: its result is dropped and no notification is emitted. The exchange itself is NOT interrupted. Usage: cancel(ticket)");
-
-		this->bindCommand("setHeader", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() < 2 )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: setHeader(Name, value) - e.g. setHeader(Authorization, Bearer xxx)");
-
-				return false;
-			}
-
-			if ( !this->setDefaultHeader(arguments[0].asString(), arguments[1].asString()) )
-			{
-				outputs.emplace_back(Severity::Error, "Header refused: bad field name, control character in the value, or a framing header the HTTPS client owns.");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, "Default header set; it is sent with every subsequent call.");
-
-			return true;
-		}, "Sets a header sent with every subsequent call (where an Authorization belongs). Usage: setHeader(Name, value)");
-
-		this->bindCommand("removeHeader", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: removeHeader(Name)");
-
-				return false;
-			}
-
-			if ( !this->removeDefaultHeader(arguments[0].asString()) )
-			{
-				outputs.emplace_back(Severity::Error, "No such default header.");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, "Default header removed.");
-
-			return true;
-		}, "Removes a default header. Usage: removeHeader(Name)");
-
-		this->bindCommand("headers", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("headers", "Lists the default headers, VALUES IN CLEAR (a bearer token shows). Owner decision, not an oversight.", [this] () {
 			/* ⚠️ Values printed IN CLEAR, owner decision — see the note at the top of this file. */
 			std::stringstream json;
 			json << '[';
@@ -382,12 +324,10 @@ namespace EmEn::Net
 
 			json << ']';
 
-			outputs.emplace_back(Severity::Info, json.str());
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 
-			return true;
-		}, "Lists the default headers, VALUES IN CLEAR (a bearer token shows). Owner decision, not an oversight.");
-
-		this->bindCommand("isEnabled", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("isEnabled", "Returns whether API calls are enabled, and the ticket accounting, as JSON.", [this] () {
 			std::stringstream json;
 			json << R"({"enabled":)" << ( this->isEnabled() ? "true" : "false" );
 
@@ -400,9 +340,7 @@ namespace EmEn::Net
 				<< R"(,"retained":)" << this->retainedCount()
 				<< R"(,"inFlight":)" << this->inFlightCount() << '}';
 
-			outputs.emplace_back(Severity::Info, json.str());
-
-			return true;
-		}, "Returns whether API calls are enabled, and the ticket accounting.");
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
 	}
 }

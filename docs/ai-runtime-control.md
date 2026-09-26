@@ -1157,6 +1157,10 @@ Key codes follow GLFW constants (see `Input/Types.hpp`). Common keys:
 
 Modifier flags: Shift=1, Ctrl=2, Alt=4, Super=8
 
+⚠️ Validated since 2026-09-27: a key code outside 32-348 (`GLFW_KEY_SPACE`..`GLFW_KEY_LAST`), a mouse
+button outside 0-7 or a modifier mask outside 0-63 is refused with an error — the listeners index
+per-key / per-button state with these values, and the command used to hand them over unchecked.
+
 ### Mouse events
 
 ```bash

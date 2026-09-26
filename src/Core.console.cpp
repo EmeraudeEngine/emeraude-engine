@@ -33,6 +33,7 @@
 #include <vector>
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "IO/IO.hpp"
 
 namespace EmEn
@@ -43,12 +44,15 @@ namespace EmEn
 	Core::onRegisterToConsole () noexcept
 	{
 		this->bindCommand("remoteConsoleStatus", "Returns the remote console state as JSON (running, endpoint).", [this] () {
+			Json::Value state{Json::objectValue};
+			state["running"] = m_consoleController.isRemoteListenerRunning();
+
 			if ( m_consoleController.isRemoteListenerRunning() )
 			{
-				return Console::CommandResult::json("{\"running\":true,\"endpoint\":\"" + m_consoleController.remoteListenerEndpoint() + "\"}");
+				state["endpoint"] = m_consoleController.remoteListenerEndpoint();
 			}
 
-			return Console::CommandResult::json("{\"running\":false}");
+			return Console::CommandResult::json(FastJSON::stringify(state));
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("restartRemoteConsole", "Moves the remote console to another endpoint on the next cycle (this connection is closed).",

@@ -31,25 +31,30 @@ and § 7; `docs/ai-runtime-control.md` § "Argument syntax and validation"): typ
 with types deduced from the lambda (owner choice over a declarative descriptor, 2026-09-27),
 `Parameter` / `CommandSignature` / `CommandResult` / `CommandHint`, `Output` kinds Text / Json /
 Binary, generated usage, per-parameter help lines, quote-aware parser, `listUntypedCommands()`.
-Compile-time guards verified with scratch TUs (arity, return type, parameter type, trailing vector,
-double default). Migrated: `WindowService` (2), `RendererService` (12), `SceneManagerService.PostProcess`
-(6), `SettingsService` (4), `ResourcesManagerService` (4), `Core` (8 incl. aliases), projet-alpha
-`Act` (13) — **52 typed, 85 untyped**.
+Compile-time guards verified with scratch TUs. **All 137 commands migrated** (engine + projet-alpha
+`Act`): `listUntypedCommands()` answers `137 typed, 0 untyped`. The hand-built JSON answers now
+escape their strings (jsoncpp), checked by parsing every JSON answer at runtime.
 
 ## What remains
 
-1. **Migrate the 85 untyped commands** (`listUntypedCommands()` lists them): `Scenes/Manager.console.cpp`
-   (33 — the scene-creation vocabulary), `Audio/TrackMixer.console.cpp` (16 — `playlist(play, 3)`-style
-   sub-commands: an action string + `std::optional` operands), `Net/APIClient.console.cpp` (12),
-   `Input/Manager.cpp` (6), `Net/Manager.console.cpp` (5), `FileSystem`/`Arguments` (3 each),
-   `Scenes/AVConsole` (2). Then delete the untyped `bindCommand` overload and `listUntypedCommands()`,
-   and close this item.
-2. **Escape the JSON the migrated commands build by hand** (`listResources`, `listContainers`,
-   `remoteConsoleStatus`): a name with a `"` produces invalid JSON, which a machine client will reject.
-3. **Binary result of `screenshot()`** — the kind exists (`CommandResult::binary`, `Output::binary`),
+1. **Owner decisions raised by the migration**:
+   - Delete the untyped `bindCommand(name, Binding, help)` overload and `listUntypedCommands()`?
+     Nothing in the engine or projet-alpha uses it any more, but another application built on the
+     engine may (breaking change for it).
+   - `Scenes/Manager` `targetEntityComponent()` was a no-op answering success; it now answers
+     "not implemented". Implement it, or delete it?
+   - `createScene()` silently ignores an unknown skybox name: warning, error, or keep?
+   - `TrackMixer.playlist(action [, operand])` stays one command with an action string; split it
+     into `playlistClear/Add/Play` for cleaner MCP tools?
+   - `Input.keyPress()` now refuses codes outside `GLFW_KEY_SPACE..GLFW_KEY_LAST` (32-348),
+     `button` outside 0-7 and `modifiers` outside 0-63 (listeners index per-key state with them).
+     Loosen if a bench injects an unusual code on purpose.
+2. **Binary result of `screenshot()`** — the kind exists (`CommandResult::binary`, `Output::binary`),
    no command uses it yet. Decide with `native-mcp-server` where the PNG bytes come from (see Traps).
-4. **Declared result kind / output schema** — not done: results self-describe at runtime. Only worth
+3. **Declared result kind / output schema** — not done: results self-describe at runtime. Only worth
    adding if the MCP server needs an `outputSchema`.
+4. A non-finite float written by a stream-built JSON (`getNode`, `getNodePhysics`,
+   `getFrameDiagnostics` already writes `null`) would still be invalid JSON.
 
 ## ⚠️ Traps
 

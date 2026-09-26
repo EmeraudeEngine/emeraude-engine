@@ -26,106 +26,72 @@
 
 #include "Arguments.hpp"
 
+/* Local inclusions. */
+#include "FastJSON.hpp"
+
 namespace EmEn
 {
 	void
 	Arguments::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("print", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, std::stringstream{} << *this);
+		this->bindCommand("print", "Prints all launch arguments as text.", [this] () {
+			std::stringstream text;
+			text << *this;
 
-			return true;
-		}, "Prints all launch arguments as text.");
+			return Console::CommandResult::info(text.str());
+		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("getJson", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			std::stringstream json;
-			json << "{";
+		this->bindCommand("getJson", "Returns all arguments as JSON.", [this] () {
+			Json::Value root{Json::objectValue};
+			root["binaryFilepath"] = m_binaryFilepath.string();
+			root["isChildProcess"] = m_childProcess;
 
-			json << "\"binaryFilepath\":\"" << m_binaryFilepath.string() << "\",";
-			json << "\"isChildProcess\":" << (m_childProcess ? "true" : "false") << ",";
+			Json::Value rawArguments{Json::arrayValue};
 
-			/* Raw arguments. */
-			json << "\"rawArguments\":[";
-
-			for ( size_t i = 0; i < m_rawArguments.size(); i++ )
+			for ( const auto & rawArgument : m_rawArguments )
 			{
-				if ( i > 0 )
-				{
-					json << ",";
-				}
-
-				json << "\"" << m_rawArguments[i] << "\"";
+				rawArguments.append(rawArgument);
 			}
 
-			json << "],";
+			root["rawArguments"] = std::move(rawArguments);
 
-			/* Switches. */
-			json << "\"switches\":[";
+			Json::Value switches{Json::arrayValue};
 
-			bool first = true;
-
-			this->forEachSwitch([&json, &first] (const std::string & name) {
-				if ( !first )
-				{
-					json << ",";
-				}
-
-				first = false;
-
-				json << "\"" << name << "\"";
+			this->forEachSwitch([&switches] (const std::string & name) {
+				switches.append(name);
 
 				return false;
 			});
 
-			json << "],";
+			root["switches"] = std::move(switches);
 
-			/* Named arguments. */
-			json << "\"arguments\":{";
+			Json::Value namedArguments{Json::objectValue};
 
-			first = true;
-
-			this->forEachArgument([&json, &first] (const std::string & name, const std::string & value) {
-				if ( !first )
-				{
-					json << ",";
-				}
-
-				first = false;
-
-				json << "\"" << name << "\":\"" << value << "\"";
+			this->forEachArgument([&namedArguments] (const std::string & name, const std::string & value) {
+				namedArguments[name] = value;
 
 				return false;
 			});
 
-			json << "}";
+			root["arguments"] = std::move(namedArguments);
 
-			json << "}";
+			return Console::CommandResult::json(Base::FastJSON::stringify(root));
+		}, Console::CommandHint::ReadOnly);
 
-			outputs.emplace_back(Severity::Info, json.str());
-
-			return true;
-		}, "Returns all arguments as JSON.");
-
-		this->bindCommand("get", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
+		this->bindCommand("get", "Returns one raw launch argument by its position.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: get(index)");
+				{"index", "Zero-based position in the raw argument list (0 is the binary path)."}
+			},
+			[this] (int32_t index) {
+				if ( index < 0 || static_cast< size_t >(index) >= m_rawArguments.size() )
+				{
+					std::stringstream message;
+					message << "Index " << index << " out of range (0-" << (m_rawArguments.size() - 1) << ").";
 
-				return false;
-			}
+					return Console::CommandResult::error(message.str());
+				}
 
-			const auto index = static_cast< size_t >(arguments[0].asInteger());
-
-			if ( index >= m_rawArguments.size() )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Index " << index << " out of range (0-" << (m_rawArguments.size() - 1) << ").");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Info, m_rawArguments[index]);
-
-			return true;
-		}, "Returns a specific argument by index. Usage: get(index)");
+				return Console::CommandResult::info(m_rawArguments[static_cast< size_t >(index)]);
+			}, Console::CommandHint::ReadOnly);
 	}
 }

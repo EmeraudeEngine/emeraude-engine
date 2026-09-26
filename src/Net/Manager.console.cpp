@@ -30,128 +30,108 @@
 /* STL inclusions. */
 #include <sstream>
 
+/* Local inclusions. */
+#include "FastJSON.hpp"
+
 namespace EmEn::Net
 {
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("download", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
+		this->bindCommand("download", "Downloads a https URL into the cache and returns a ticket.",
 			{
-				outputs.emplace_back(Severity::Error, "Usage: download(https://host/path/file.ext)");
+				{"url", "The https:// URL of the file to download."}
+			},
+			[this] (const std::string & url) {
+				const auto ticket = this->download(Base::Network::URI{url});
 
-				return false;
-			}
-
-			const auto ticket = this->download(Base::Network::URI{arguments[0].asString()});
-
-			if ( ticket == InvalidTicket )
-			{
-				outputs.emplace_back(Severity::Error, "Download refused (disabled, not https, or no thread pool). See the log.");
-
-				return false;
-			}
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Ticket #" << ticket << " (" << to_cstring(this->downloadStatus(ticket)) << "). Poll with status(" << ticket << ").");
-
-			return true;
-		}, "Downloads a https URL into the cache and returns a ticket. Usage: download(url)");
-
-		this->bindCommand("status", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.empty() )
-			{
-				outputs.emplace_back(Severity::Error, "Usage: status(ticket)");
-
-				return false;
-			}
-
-			const auto ticket = arguments[0].asInteger();
-			const auto status = this->downloadStatus(ticket);
-
-			std::stringstream json;
-			json << "{\"ticket\":" << ticket << ",\"status\":\"" << to_cstring(status) << "\"";
-
-			if ( status == DownloadStatus::Done )
-			{
-				json << ",\"filepath\":\"" << this->downloadedFilepath(ticket).string() << "\"";
-			}
-
-			const auto [received, total] = this->downloadProgress(ticket);
-			json << ",\"bytesReceived\":" << received << ",\"bytesTotal\":" << total;
-
-			if ( status == DownloadStatus::Error )
-			{
-				const auto [outcome, statusCode] = this->downloadFailure(ticket);
-
-				json << ",\"reason\":\"" << Base::Network::to_cstring(outcome) << "\"";
-
-				if ( statusCode > 0 )
+				if ( ticket == InvalidTicket )
 				{
-					json << ",\"httpStatus\":" << statusCode;
+					return Console::CommandResult::error("Download refused (disabled, not https, or no thread pool). See the log.");
 				}
-			}
 
-			json << ",\"remaining\":" << this->fileRemainingCount() << "}";
+				std::stringstream message;
+				message << "Ticket #" << ticket << " (" << to_cstring(this->downloadStatus(ticket)) << "). Poll with status(" << ticket << ").";
 
-			outputs.emplace_back(Severity::Info, json.str());
+				return Console::CommandResult::success(message.str());
+			}, Console::CommandHint::Idempotent);
 
-			return true;
-		}, "Returns a ticket status as JSON (status, filepath when Done, bytesReceived/bytesTotal, reason + httpStatus when Error, transfers remaining). Usage: status(ticket)");
+		this->bindCommand("status", "Returns a ticket status as JSON (status, filepath when Done, bytesReceived/bytesTotal, reason + httpStatus when Error, transfers remaining).",
+			{
+				{"ticket", "The ticket number returned by download()."}
+			},
+			[this] (int32_t ticket) {
+				const auto status = this->downloadStatus(ticket);
 
-		this->bindCommand("listCache", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			std::stringstream json;
-			json << "[";
+				Json::Value json{Json::objectValue};
+				json["ticket"] = ticket;
+				json["status"] = to_cstring(status);
 
-			bool first = true;
+				if ( status == DownloadStatus::Done )
+				{
+					json["filepath"] = this->downloadedFilepath(ticket).string();
+				}
+
+				const auto [received, total] = this->downloadProgress(ticket);
+				json["bytesReceived"] = static_cast< Json::UInt64 >(received);
+				json["bytesTotal"] = static_cast< Json::UInt64 >(total);
+
+				if ( status == DownloadStatus::Error )
+				{
+					const auto [outcome, statusCode] = this->downloadFailure(ticket);
+
+					json["reason"] = Base::Network::to_cstring(outcome);
+
+					if ( statusCode > 0 )
+					{
+						json["httpStatus"] = static_cast< Json::UInt >(statusCode);
+					}
+				}
+
+				json["remaining"] = static_cast< Json::UInt64 >(this->fileRemainingCount());
+
+				return Console::CommandResult::json(Base::FastJSON::stringify(json));
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("listCache", "Lists the download cache as JSON (url, filepath, bytes per entry).", [this] () {
+			Json::Value json{Json::arrayValue};
 
 			for ( const auto & [url, filepath, bytes] : this->cachedFiles() )
 			{
-				if ( !first )
-				{
-					json << ",";
-				}
+				Json::Value entry{Json::objectValue};
+				entry["url"] = url;
+				entry["filepath"] = filepath.string();
+				entry["bytes"] = static_cast< Json::UInt64 >(bytes);
 
-				json << "{\"url\":\"" << url << "\",\"filepath\":\"" << filepath.string() << "\",\"bytes\":" << bytes << "}";
-
-				first = false;
+				json.append(std::move(entry));
 			}
 
-			json << "]";
+			return Console::CommandResult::json(Base::FastJSON::stringify(json));
+		}, Console::CommandHint::ReadOnly);
 
-			outputs.emplace_back(Severity::Info, json.str());
-
-			return true;
-		}, "Lists the download cache as JSON (url, filepath, bytes per entry).");
-
-		this->bindCommand("clearCache", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			if ( this->clearCache() )
+		this->bindCommand("clearCache", "Removes every downloaded file from the cache and rewrites its index.", [this] () {
+			if ( !this->clearCache() )
 			{
-				outputs.emplace_back(Severity::Success, "Download cache cleared.");
-
-				return true;
+				return Console::CommandResult::error("Some cached files could not be removed, see the log.");
 			}
 
-			outputs.emplace_back(Severity::Error, "Some cached files could not be removed, see the log.");
+			return Console::CommandResult::success("Download cache cleared.");
+		}, Console::CommandHint::Destructive | Console::CommandHint::Idempotent);
 
-			return false;
-		}, "Removes every downloaded file from the cache and rewrites its index.");
-
-		this->bindCommand("isEnabled", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+		this->bindCommand("isEnabled", "Returns whether downloads are enabled (setting, cache directory and trust store all OK), as JSON.", [this] () {
 			/* A bare "false" says nothing: the setting, the cache directory and the trust store can
 			 * each disable downloads, and only the log said which. */
-			std::stringstream json;
-			json << "{\"enabled\":" << ( this->isDownloadEnabled() ? "true" : "false" );
+			Json::Value json{Json::objectValue};
+			json["enabled"] = this->isDownloadEnabled();
 
 			if ( !this->isDownloadEnabled() )
 			{
-				json << ",\"reason\":\"" << this->disabledReason() << "\"";
+				json["reason"] = this->disabledReason();
 			}
 
-			json << ",\"cacheBudgetBytes\":" << this->cacheBudget() << "}";
+			json["cacheBudgetBytes"] = static_cast< Json::UInt64 >(this->cacheBudget());
 
-			outputs.emplace_back(Severity::Info, json.str());
-
-			return true;
-		}, "Returns whether downloads are enabled (setting, cache directory and trust store all OK).");
+			return Console::CommandResult::json(Base::FastJSON::stringify(json));
+		}, Console::CommandHint::ReadOnly);
 	}
 }
