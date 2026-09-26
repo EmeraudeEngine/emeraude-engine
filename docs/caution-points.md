@@ -4521,6 +4521,25 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### ⚠️⚠️ Windows: an INCREMENTAL build after a layout change of an exported class corrupted the heap (Sep 2026)
+
+**Symptom (Windows peer):** after pulling `8bb26496` + `3fd571a8`, which added members to the
+`EMEN_API` class `PostProcessStack`, the incrementally rebuilt `.claude-build-release` (111 steps,
+0 warning) crashed 2 times out of 2 with `0xc0000374` (`STATUS_HEAP_CORRUPTION`, `ntdll+0x1181f5`): once
+7 s into the load, before any scene effect ran, and once at teardown. 0 VUID.
+
+**Resolution:** the SAME sources rebuilt CLEAN (build directory deleted, 820 steps) ran 6 times out of 6
+without a fault, 3 of them under a debugger with the NT debug heap. The likely cause is a stale object or
+precompiled header on one side of the `Emeraude.dll` / exe boundary, still seeing the old layout. This is
+supported, not proven: the clean build also added `/Z7 /DEBUG`, and 0/6 against 2/2 is a small sample.
+Linux and macOS never showed it.
+
+⚠️ **Rule:** on Windows, after pulling an engine commit that changes the MEMBERS (the layout) of an
+exported class, rebuild the build directory CLEAN before believing a crash, and before bisecting one. A
+heap corruption that appears right after such a pull, on Windows only, is a build artefact until a clean
+build reproduces it.
+
+
 ### An ext-deps patch hunk that UPSTREAM absorbs as an OPT-IN option silently re-arms what it disabled
 
 > **Symptom:** a feature that worked for weeks stops working after nothing in the cascade changed,
