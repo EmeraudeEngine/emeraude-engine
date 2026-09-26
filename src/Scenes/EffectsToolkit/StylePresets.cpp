@@ -119,18 +119,21 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 		chromaticEffect->enableBarrelDistortion(true);
 		chromaticEffect->setBarrelStrength(0.02F);
 
-		/* 2. Color grading: warm shift, punchy contrast, vibrant colors, lifted shadows. */
+		/* 2. Color grading: a WARM white balance (3800 K — low sun), punchy contrast, vibrant colours.
+		 * ⚠️ The warmth used to be a +0.12 rad hue ROTATION, which turned the sky and the clouds green-cyan
+		 * (clouds 138/144/156 -> 164/190/189 on forest) and clipped them: re-calibrated 2026-09-26 on
+		 * forest, measured against Normal (engine docs/caution-points.md § the camera styles' warm grades). */
 		auto colorGrading = std::make_shared< ColorGrading >();
-		colorGrading->setSaturation(1.2F);
-		colorGrading->setHue(0.12F);
-		colorGrading->setContrast(1.25F);
-		colorGrading->setBrightness(0.04F);
-		colorGrading->setGamma(1.1F);
+		colorGrading->setWhiteBalance(3800.0F);
+		colorGrading->setSaturation(1.15F);
+		colorGrading->setContrast(1.15F);
+		colorGrading->setBrightness(0.02F);
+		colorGrading->setGamma(1.05F);
 
 		/* 3. Phosphor bloom: warm golden halo around sunlit highlights —
 		 * lens flare approximation from direct low-angle sunlight. */
-		auto bloomEffect = std::make_shared< PhosphorBloom >(0.2F);
-		bloomEffect->setThreshold(0.55F);
+		auto bloomEffect = std::make_shared< PhosphorBloom >(0.15F);
+		bloomEffect->setThreshold(0.7F);
 		bloomEffect->setSpread(2.5F);
 
 		/* 4. Vignetting: subtle cinematic framing. */
@@ -157,11 +160,12 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 		 * The blue hour (l'heure bleue) occurs just after sunset / before sunrise:
 		 * indirect skylight dominates, giving a deep blue-cyan cast with crushed shadows. */
 		auto colorGrading = std::make_shared< ColorGrading >();
-		colorGrading->setSaturation(1.05F);
-		colorGrading->setHue(-0.14F);
-		colorGrading->setContrast(1.1F);
-		colorGrading->setBrightness(-0.03F);
-		colorGrading->setGamma(0.9F);
+		/* A COOL white balance (10500 K) instead of a -0.14 rad hue rotation, and no gamma darkening: the
+		 * former 0.9 gamma plus -0.03 brightness crushed 6.5 % of forest to black (re-calibrated 2026-09-26). */
+		colorGrading->setWhiteBalance(10500.0F);
+		colorGrading->setSaturation(1.0F);
+		colorGrading->setContrast(1.05F);
+		colorGrading->setBrightness(-0.01F);
 
 		/* 3. Phosphor bloom: soft cold halo around light sources — streetlamps,
 		 * windows, any emissive surface glowing against the deep blue sky. */
@@ -187,8 +191,9 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 		/* 1. Color grading: washed-out warm tones, lifted blacks, slight desaturation.
 		 * VHS tape degrades the signal — colors lose punch. */
 		auto colorGrading = std::make_shared< ColorGrading >();
+		/* Warmth through the white balance (5600 K), not a hue rotation: +0.08 rad read magenta (2026-09-26). */
+		colorGrading->setWhiteBalance(5600.0F);
 		colorGrading->setSaturation(0.85F);
-		colorGrading->setHue(0.08F);
 		colorGrading->setContrast(0.9F);
 		colorGrading->setBrightness(0.03F);
 		colorGrading->setGamma(1.15F);
@@ -227,8 +232,9 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 
 		/* 2. Color grading: washed-out warm tones, lifted blacks, slight desaturation. */
 		auto colorGrading = std::make_shared< ColorGrading >();
+		/* Warmth through the white balance (5600 K), not a hue rotation: +0.08 rad read magenta (2026-09-26). */
+		colorGrading->setWhiteBalance(5600.0F);
 		colorGrading->setSaturation(0.85F);
-		colorGrading->setHue(0.08F);
 		colorGrading->setContrast(0.9F);
 		colorGrading->setBrightness(0.03F);
 		colorGrading->setGamma(1.15F);
@@ -295,8 +301,9 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 
 		/* 2. Color grading: slight warmth from CRT phosphors, otherwise clean signal. */
 		auto colorGrading = std::make_shared< ColorGrading >();
+		/* The phosphors' slight warmth through the white balance (6000 K), not a hue rotation (2026-09-26). */
+		colorGrading->setWhiteBalance(6000.0F);
 		colorGrading->setSaturation(0.9F);
-		colorGrading->setHue(0.04F);
 		colorGrading->setContrast(0.95F);
 		colorGrading->setBrightness(0.02F);
 		colorGrading->setGamma(1.1F);
@@ -340,8 +347,9 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 	{
 		/* 1. Color grading: washed-out warm tones from satellite signal degradation. */
 		auto colorGrading = std::make_shared< ColorGrading >();
+		/* Warmth through the white balance (5600 K), not a hue rotation: +0.08 rad read magenta (2026-09-26). */
+		colorGrading->setWhiteBalance(5600.0F);
 		colorGrading->setSaturation(0.85F);
-		colorGrading->setHue(0.08F);
 		colorGrading->setContrast(0.9F);
 		colorGrading->setBrightness(0.03F);
 		colorGrading->setGamma(1.15F);
@@ -379,8 +387,9 @@ namespace EmEn::Scenes::EffectsToolkit::StylePresets
 
 		/* 2. Color grading: washed-out warm tones, lifted blacks, slight desaturation. */
 		auto colorGrading = std::make_shared< ColorGrading >();
+		/* Warmth through the white balance (5600 K), not a hue rotation: +0.08 rad read magenta (2026-09-26). */
+		colorGrading->setWhiteBalance(5600.0F);
 		colorGrading->setSaturation(0.85F);
-		colorGrading->setHue(0.08F);
 		colorGrading->setContrast(0.9F);
 		colorGrading->setBrightness(0.03F);
 		colorGrading->setGamma(1.15F);

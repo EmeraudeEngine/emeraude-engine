@@ -76,7 +76,48 @@ namespace EmEn::Graphics::Effects::Style
 			}
 
 			/**
+			 * @brief Sets the white balance: the image is graded as if lit by a black body at @a kelvin.
+			 * @note THE tool for a warm or cool look (2026-09-26). 6500 K is exactly neutral; lower is warmer
+			 * (3500 K reads as a golden hour), higher is cooler (10000 K as a blue hour). Applied FIRST, in
+			 * LINEAR light (the tone mapper's 2.2 is undone, then redone): per-channel gains from
+			 * Photometry::linearColorFromTemperature(), divided by the 6500 K value, normalized to keep the
+			 * Rec.709 luminance — a white balance moves the colour, never the brightness.
+			 * ⚠️ Never warm an image with setHue(): a hue ROTATION turns every colour by the same angle, which
+			 * adds no orange at all — it is what made Golden Hour green-cyan (sky 70/119/167 -> 36/104/123) and
+			 * every "warm" style of the catalogue green or magenta instead.
+			 * @param kelvin The colour temperature, clamped to [1667, 25000] K.
+			 * @param tint The green-magenta axis, Lightroom convention: positive = magenta, negative = green, 0 = none
+			 * (the green gain is scaled by 2^-tint, then the luminance is normalized).
+			 * @return void
+			 */
+			void setWhiteBalance (float kelvin, float tint = 0.0F) noexcept;
+
+			/**
+			 * @brief Returns the white-balance temperature, in kelvins (6500 = neutral).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			whiteBalanceTemperature () const noexcept
+			{
+				return m_temperature;
+			}
+
+			/**
+			 * @brief Returns the white-balance tint (0 = none, positive = magenta).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			whiteBalanceTint () const noexcept
+			{
+				return m_tint;
+			}
+
+			/**
 			 * @brief Sets the hue rotation angle.
+			 * @note A ROTATION of every hue — a creative colour shift (a VHS drift). ⚠️ Not a warm/cool control:
+			 * use setWhiteBalance() for that.
 			 * @param hue Rotation in radians (YIQ color space).
 			 * @return void
 			 */
@@ -162,5 +203,7 @@ namespace EmEn::Graphics::Effects::Style
 			float m_brightness{0.0F};
 			float m_contrast{1.0F};
 			float m_gamma{1.0F};
+			float m_temperature{6500.0F};
+			float m_tint{0.0F};
 	};
 }

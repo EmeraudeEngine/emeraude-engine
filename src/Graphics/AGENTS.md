@@ -3738,12 +3738,26 @@ DEFINITION — `enum class EffectsToolkit::CameraPreset` (13 values: Normal, Hig
 HumanEye, VintageBlackAndWhite, Super8, plus the PROMOTED StylePresets catalog —
 Analog80s, VHSAnalog80s, SatelliteAnalog80s, VHSPureSignal, SatellitePureSignal,
 GoldenHour, BlueHour, Retro8Bits — each with era-consistent optics: video/broadcast =
-deep focus, cinema grades = photographic DoF, Retro8Bits = no photometry). Taken by
+deep focus, cinema grades = photographic DoF; Retro8Bits keeps its tone mapping since 2026-09-26 —
+"no photometry" rendered a raw luminance clipped to white). Taken by
 `Toolkit::generatePerspectiveCamera(..., preset = CameraPreset::Normal)` (perspective
 only: the thin-lens DoF model is meaningless under orthographic projection; cubemap
 capture cameras are never graded). Runtime re-application goes through
 `CameraPresets::Apply(camera, token)` — demo cycle order IS the enum order.
 StylePresets:: functions remain the lens-stack building blocks.
+
+**Lens effects run on DISPLAY-ENCODED values** — after the tone mapping, which applies its 1/2.2 before
+writing to the UNORM swapchain — so `ColorGrading`'s contrast pivots on 0.5 and its `pow` gamma are in
+the right domain. ⚠️⚠️ **A warm or cool look is a WHITE BALANCE, never a hue rotation** (2026-09-26):
+`ColorGrading::setWhiteBalance(kelvin, tint)` grades the image as if lit by a black body at `kelvin`
+(6500 K exactly neutral, `Photometry::linearColorFromTemperature()` gains divided by the 6500 K ones,
+luminance-normalized, applied in LINEAR light). `setHue()` ROTATES every hue by the same angle and adds
+no orange: every "warm" style of the catalogue used it and came out green or magenta — Golden Hour
+turned the sky and the clouds green-cyan. The contrast/brightness step ends on a SOFT SHOULDER (knee
+0.9, continuous value and slope, asymptote 1) instead of a hard clamp at 1. Measured audit and the
+re-calibrated values: `docs/caution-points.md` § *the camera styles' warm grades*.
+⚠️ When measuring a style's tint, a DESATURATING style (VHS, B&W) reads "magenta" on a green scene
+only because the scene's green dominance shrinks: judge the hue on a NEUTRAL surface (a cloud).
 
 **Camera API** (all no-op when the matching effect is absent — the options are retained):
 - `enableDepthOfField(bool)` / `enableMotionBlur(bool)` / `enableBloom(bool)` / `enableHDR(bool)`

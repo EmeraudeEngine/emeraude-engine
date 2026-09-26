@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 
@@ -241,20 +242,22 @@ namespace EmEn::Graphics::Photometry
 	}
 
 	/**
- * @brief Returns the sRGB color of a black body at a given color temperature.
+ * @brief Returns the LINEAR sRGB chromaticity of a black body at a given color temperature, max component 1.
  * @note Planckian locus approximation in CIE 1931 (x, y) after Kang et al., "Design of
 	 * advanced color temperature control system for HDTV applications", J. Korean Phys. Soc. 41
 	 * (2002) — the approximation documented by the Wikipedia "Planckian locus" article. The
-	 * chromaticity goes xyY (Y = 1) -> XYZ -> linear sRGB (D65 matrix), is normalized to a max
-	 * component of 1, then sRGB-encoded ("Color" suffix convention: sRGB). Valid from 1667 K to
-	 * 25000 K, the input is clamped. ~6500 K resolves to white.
+	 * chromaticity goes xyY (Y = 1) -> XYZ -> linear sRGB (D65, IEC 61966-2-1 matrix), negative
+	 * components clamped to 0, then normalized to a max component of 1. Valid from 1667 K to 25000 K,
+	 * the input is clamped. ⚠️ LINEAR, not encoded: a white balance multiplies by it (ColorGrading), an
+	 * sRGB colour is colorFromTemperature(). ~6500 K is near white but not exactly D65 (the Planckian
+	 * locus and the daylight locus differ): divide by the 6500 K value for an exact neutral.
  * @param kelvin The color temperature, in kelvins.
- * @return Base::PixelFactory::Color< float > The color, in sRGB.
+ * @return std::array< float, 3 > Linear red, green, blue.
 	 */
 	[[nodiscard]]
 	inline
-	Base::PixelFactory::Color< float >
-	colorFromTemperature (float kelvin) noexcept
+	std::array< float, 3 >
+	linearColorFromTemperature (float kelvin) noexcept
 	{
 		const auto temperature = std::clamp(kelvin, 1667.0F, 25000.0F);
 
@@ -306,10 +309,27 @@ namespace EmEn::Graphics::Photometry
 			blue /= maxComponent;
 		}
 
+		return {red, green, blue};
+	}
+
+	/**
+ * @brief Returns the sRGB color of a black body at a given color temperature.
+ * @note linearColorFromTemperature(), sRGB-encoded ("Color" suffix convention: sRGB). Valid from 1667 K to
+	 * 25000 K, the input is clamped. ~6500 K resolves to white.
+ * @param kelvin The color temperature, in kelvins.
+ * @return Base::PixelFactory::Color< float > The color, in sRGB.
+	 */
+	[[nodiscard]]
+	inline
+	Base::PixelFactory::Color< float >
+	colorFromTemperature (float kelvin) noexcept
+	{
+		const auto linear = linearColorFromTemperature(kelvin);
+
 		const auto encode = [] (float component) {
 			return component <= 0.0031308F ? 12.92F * component : 1.055F * std::pow(component, 1.0F / 2.4F) - 0.055F;
 		};
 
-		return {encode(red), encode(green), encode(blue), 1.0F};
+		return {encode(linear[0]), encode(linear[1]), encode(linear[2]), 1.0F};
 	}
 }

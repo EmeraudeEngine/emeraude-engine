@@ -471,10 +471,13 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 
 		/* 3. Warm faded reversal stock: lifted blacks, warm hue, muted contrast. */
 		auto colorGrading = std::make_shared< ColorGrading >();
-		colorGrading->setSaturation(1.1F);
-		colorGrading->setHue(0.08F);
-		colorGrading->setContrast(1.1F);
-		colorGrading->setBrightness(0.05F);
+		/* Warm (4500 K white balance) and MUTED (contrast below 1), as the stock is described: the former
+		 * +0.08 rad hue rotation read green and the 1.1 contrast gave 61 of luma deviation against Normal's 47
+		 * on forest (re-calibrated 2026-09-26). */
+		colorGrading->setWhiteBalance(4500.0F);
+		colorGrading->setSaturation(1.05F);
+		colorGrading->setContrast(0.95F);
+		colorGrading->setBrightness(0.04F);
 		colorGrading->setGamma(1.05F);
 
 		/* 4. Coarse grain: 8mm stock grain is much bigger than 35mm. */

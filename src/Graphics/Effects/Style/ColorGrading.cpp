@@ -27,9 +27,11 @@
 #include "ColorGrading.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 
 /* Local inclusions. */
+#include "Graphics/Photometry.hpp"
 #include "Graphics/PostProcessor.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/FragmentShader.hpp"
@@ -44,6 +46,29 @@ namespace EmEn::Graphics::Effects::Style
 	ColorGrading::generateFragmentShaderCode (Generator::Abstract & /*generator*/, FragmentShader & fragmentShader) const noexcept
 	{
 		fragmentShader.addComment("Color grading effect.");
+
+		/* Step 0: White balance, in LINEAR light (only emitted when not neutral). The chain value here is
+		 * DISPLAY-encoded (the tone mapper applied its 1/2.2), so it is linearized, scaled by the per-channel
+		 * gains, and re-encoded. The gains are resolved here, on the CPU: the program cache keys on the source. */
+		if ( std::abs(m_temperature - 6500.0F) > 1.0F || std::abs(m_tint) > 0.001F )
+		{
+			const auto target = Photometry::linearColorFromTemperature(m_temperature);
+			const auto neutral = Photometry::linearColorFromTemperature(6500.0F);
+
+			auto red = target[0] / std::max(neutral[0], 1.0e-6F);
+			auto green = target[1] / std::max(neutral[1], 1.0e-6F) * std::exp2(-m_tint);
+			auto blue = target[2] / std::max(neutral[2], 1.0e-6F);
+
+			/* A white balance moves the colour, not the brightness: keep the Rec.709 luminance. */
+			const auto luminance = std::max(0.2126F * red + 0.7152F * green + 0.0722F * blue, 1.0e-6F);
+
+			red /= luminance;
+			green /= luminance;
+			blue /= luminance;
+
+			Code{fragmentShader} <<
+				PostProcessor::Fragment << ".rgb = pow(pow(max(" << PostProcessor::Fragment << ".rgb, vec3(0.0)), vec3(2.2)) * vec3(" << red << ", " << green << ", " << blue << "), vec3(1.0 / 2.2));";
+		}
 
 		/* Step 1: Saturation (mix between Rec.709 luma grayscale and original color). */
 		Code{fragmentShader} <<
@@ -62,9 +87,16 @@ namespace EmEn::Graphics::Effects::Style
 				PostProcessor::Fragment << ".rgb = cgToRGB * vec3(cgYIQ.x, cgChroma * cos(cgHueAngle), cgChroma * sin(cgHueAngle));";
 		}
 
-		/* Step 3: Contrast and brightness (always emitted, noop when default values). */
+		/* Step 3: Contrast and brightness (always emitted, noop when default values), then a SOFT SHOULDER
+		 * instead of the hard clamp at 1 (2026-09-26): below the 0.9 knee nothing changes; above it the value is
+		 * compressed toward 1 — continuous in value AND slope at the knee, never reaching 1 — so a grade that
+		 * pushes the highlights rolls them off instead of flattening them to white (Golden Hour's clouds).
+		 * The dark end keeps its clamp at 0. */
 		Code{fragmentShader} <<
-			PostProcessor::Fragment << ".rgb = clamp((" << PostProcessor::Fragment << ".rgb - 0.5) * " << m_contrast << " + 0.5 + " << m_brightness << ", 0.0, 1.0);";
+			"vec3 cgGraded = (" << PostProcessor::Fragment << ".rgb - 0.5) * " << m_contrast << " + 0.5 + " << m_brightness << ";" << Line::End <<
+			"const float cgKnee = 0.9;" << Line::End <<
+			"vec3 cgShoulder = cgKnee + (1.0 - cgKnee) * (1.0 - exp(-(cgGraded - cgKnee) / (1.0 - cgKnee)));" << Line::End <<
+			PostProcessor::Fragment << ".rgb = max(mix(cgGraded, cgShoulder, step(vec3(cgKnee), cgGraded)), vec3(0.0));";
 
 		/* Step 4: Gamma correction (only emitted if gamma != 1.0). */
 		if ( std::abs(m_gamma - 1.0F) > 0.001F )
@@ -87,6 +119,13 @@ namespace EmEn::Graphics::Effects::Style
 		}
 
 		m_saturation = saturation;
+	}
+
+	void
+	ColorGrading::setWhiteBalance (float kelvin, float tint) noexcept
+	{
+		m_temperature = std::clamp(kelvin, 1667.0F, 25000.0F);
+		m_tint = std::clamp(tint, -1.0F, 1.0F);
 	}
 
 	void

@@ -3289,6 +3289,40 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 
 ---
 
+### Fixed: the camera styles' warm grades were hue rotations — Golden Hour came out green-cyan (Sep 2026)
+
+**Symptom:** after the exposure fix, Golden Hour still clipped (0.8 % on Linux, 4 % Windows, 10 % macOS)
+and read "teal/cyan, not golden" (macOS peer). Measured on `forest` against Normal: sky 70/119/167 →
+36/104/123, clouds 138/144/156 → 164/190/189 — green-cyan, no orange at all.
+
+**Audit of the 14 styles (owner-requested), intent in the preset comments against the measure:** every
+style whose comment says WARM (Golden Hour, Super 8, Analog 80s, the four VHS/Satellite) implemented the
+warmth as a `ColorGrading::setHue()` ROTATION (+0.04 to +0.12 rad YIQ), which turns every hue by the same
+angle and adds no orange: they read green (Golden Hour dTint +9.6, Super 8 +2.3) or unchanged. Blue Hour
+(-0.14 rad) was cool by luck but its 0.9 gamma and -0.03 brightness crushed 6.5 % of the frame. Super 8,
+"muted contrast", had 61 of luma deviation against Normal's 47. The contrast step hard-clamped at 1.
+
+**Fix (owner decisions 2026-09-26):** `ColorGrading::setWhiteBalance(kelvin, tint)` (linear-light gains
+from the Planckian locus, 6500 K = identity, luminance kept) and a SOFT SHOULDER (knee 0.9) replacing the
+clamp. The eight styles re-calibrated with no hue rotation: Golden Hour 3800 K (contrast 1.15, bloom 0.15 at
+0.7), Blue Hour 10500 K (gamma 1.0, brightness -0.01), Super 8 4500 K (contrast 0.95), VHS/Satellite 5600 K,
+Analog 80s 6000 K. Measured on `forest`: Golden Hour dWarm +20.1, clouds 196/165/122 (gold), channels at
+255 0.25 % → 0.013 %, 0 % pure white; Blue Hour dWarm -9.0, crush 6.5 % → 1.6 %; Super 8 dWarm +8.1, dTint
+-1.0; VHS/Satellite/Analog clouds near neutral and slightly warm (dWarm +1.3..+1.6).
+
+⚠️ Golden Hour's sky reads teal (59/84/87): what a warm white balance does to a blue sky (the "teal and
+orange" look). A +0.12 magenta tint barely moved it and doubled the channels above 250: not kept.
+
+⚠️ **Method traps:** (1) a global green/magenta metric is confounded by SATURATION — a desaturating
+style reads "magenta" on a green forest; judge the hue on a neutral cloud. (2) `game-logic` cannot bench a
+style's colour: its actors and lamps move between captures. (3) "≥ 250 in one channel" is a saturated
+colour, not a white; count the channels AT 255 and the pixels with ALL channels ≥ 254.
+
+**Files:** `Graphics/Effects/Style/ColorGrading.{hpp,cpp}`, `Graphics/Photometry.hpp`
+(`linearColorFromTemperature()`), `Scenes/EffectsToolkit/StylePresets.cpp`, `CameraPresets.cpp` (Super 8).
+
+---
+
 ### Fixed: the model viewer listed a node animation and never played it (Sep 2026)
 
 **Symptom (owner-reported):** the `ChronographWatch`'s second hand did not move on the space bar,
