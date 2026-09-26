@@ -179,9 +179,9 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Returns whether the vertex shader needs separate view and model matrices instead of a single combined MVP.
-			 * @note True for any complex material, for every light pass, and for the ambient/simple
-			 * pass only when either the normals MRT attachment or normal mapping requires the normal
-			 * matrix (view * model). Drives the advanced-rendering flag passed to
+			 * @note True for any complex material, for every light pass, and for every LIT ambient
+			 * pass (it faces its normals toward the viewer in view space, whatever the attachments);
+			 * false for the simple pass and an unlit ambient pass. Drives the advanced-rendering flag passed to
 			 * Program::initVertexShader(), which is part of the program cache key.
 			 * @return bool
 			 */

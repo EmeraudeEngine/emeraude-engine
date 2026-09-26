@@ -3289,6 +3289,41 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 
 ---
 
+### Fixed: KeyPad4 broke every lit shader — the direct path had lost its view matrix (Sep 2026)
+
+**Symptom (owner-reported, `game-logic`):** KeyPad4 (then `PostProcessor::enable(false)`, the
+renderer's master switch) and every lit instance failed to compile its ambient pass for the
+swapchain: `'viewMatrix' : no such field in structure 'pcMatrices'`, 132 failures in one run. Then
+`[Warning][AbstractEntity] Removing automatically a component from entity 'Building…'`: the failure
+latched the instances broken and their `Visual` components were DELETED — pressing KeyPad4 again
+brought the post-processing back, not the city (item `program-failure-destroys-visual`).
+
+**Cause:** since `52f642f9` (2026-09-22, double-sided normals turned toward the viewer) the LIT
+ambient pass always synthesizes `NormalViewSpace`/`PositionViewSpace`, i.e. `svModelViewMatrix`. But
+`SceneRendering::isAdvancedRendering()` still granted the ambient pass separate V and M matrices only
+for a normals MRT attachment or normal mapping. The post-process path ALWAYS carries the normals
+attachment, which hid the gap; on the DIRECT path (no scene target, no MRT) the program was built with
+a VP-only push-constant block and the vertex stage read `pcMatrices.viewMatrix` from it.
+
+**Fix:** a lit ambient pass is always advanced (`return this->isLightingRequested();`). No change on the
+post-process path, which already took that branch. Measured: 0 compile error, 0 VUID, KeyPad4 twice
+restores the scene.
+
+⚠️ **The direct path is NOT a "no effect" picture** in a photometric pipeline: the exposure and the tone
+mapping live in the chain, so it draws a raw luminance clipped to white (statues and fire blown out, 160
+FPS against 21). KeyPad4 now calls `PostProcessStack::bypassSceneEffects()` instead — scene slots off,
+the sensor kept (owner decision 2026-09-26). `PostProcessor::enable(false)` stays as a renderer
+diagnostic; a path nobody exercises rots, and this one did for four days unnoticed.
+
+⚠️ **Method trap:** a program-generation predicate keyed on an ATTACHMENT is tested by the one path
+that always has it. When a shader stage starts consuming a new variable, grep the predicates that
+choose its inputs (`isAdvancedRendering()`, the push-constant block of
+`Generator::Abstract::declareMatrixPushConstantBlock()`) and exercise the path WITHOUT the attachment.
+
+**Files:** `Saphir/Generator/SceneRendering.cpp` — `isAdvancedRendering()`.
+
+---
+
 ### Fixed: a node removed by `destroyChild()` stayed DRAWN and TRACED forever — `game-logic` 54 → 202 ms after one explosion (Sep 2026)
 
 > [!WARNING]

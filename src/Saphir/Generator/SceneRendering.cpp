@@ -269,16 +269,15 @@ namespace EmEn::Saphir::Generator
 				return true;
 
 			case RenderPassType::AmbientPass :
-				/* Advanced matrices are needed when:
-				 * 1. MRT normal output requires view-space normals (normals attachment), OR
-				 * 2. Normal mapping is active (light generator produces TBN code needing V*M).
-				 * Both cases require separate V and M matrices to compute the normal matrix. */
-				if ( this->isLightingRequested() )
-				{
-					return m_hasNormalsAttachment || m_lightGenerator.usesNormalMapping();
-				}
-
-				return false;
+				/* A LIT ambient pass always needs separate V and M matrices: it turns every normal it
+				 * uses toward the viewer, with the view-space normal against -PositionViewSpace
+				 * (LightGenerator::generateAmbientVertexShader(), two-sided since 2026-09-22), on top
+				 * of the MRT normal output and the normal-mapping TBN.
+				 * ⚠️ This used to require the normals attachment or normal mapping. The post-process
+				 * path always carries the attachment, which hid the gap: on the DIRECT path (the
+				 * post-processor switched off) the ambient vertex shader read pcMatrices.viewMatrix
+				 * from a VP-only push-constant block and failed to compile for every lit instance. */
+				return this->isLightingRequested();
 
 			default:
 				return false;
