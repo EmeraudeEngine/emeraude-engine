@@ -32,6 +32,8 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
+#include "RemoteProtocol.hpp"
 #include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
@@ -354,28 +356,23 @@ namespace EmEn::Console
 			while ( m_remoteListener->popCommand(pending) )
 			{
 				Outputs outputs;
+				bool succeeded = false;
 
 				/* JSON input: route to the registered JSON handler. */
 				if ( !pending.command.empty() && pending.command[0] == '{' && m_jsonHandler )
 				{
-					m_jsonHandler(pending.command, outputs);
+					succeeded = m_jsonHandler(pending.command, outputs);
 				}
 				else
 				{
-					this->executeCommand(pending.command, outputs);
+					succeeded = this->executeCommand(pending.command, outputs);
 				}
 
-				/* Send clean response directly to the requesting client. */
-				if ( pending.client != nullptr && !outputs.empty() )
+				/* ⚠️ ALWAYS answer, even with no output: a client waits for exactly one line per request,
+				 * and a silent command used to leave it hanging until its timeout. */
+				if ( pending.client != nullptr )
 				{
-					std::stringstream response;
-
-					for ( const auto & output : outputs )
-					{
-						response << output.message() << "\n";
-					}
-
-					m_remoteListener->respond(pending.client, response.str());
+					m_remoteListener->respond(pending.client, RemoteProtocol::serializeResponse(succeeded, outputs));
 				}
 			}
 		}
@@ -516,6 +513,145 @@ namespace EmEn::Console
 		}
 	}
 
+	namespace
+	{
+		/**
+		 * @brief Converts an argument (a parameter's default value) to its JSON value.
+		 * @param argument The argument.
+		 * @return Json::Value
+		 */
+		[[nodiscard]]
+		Json::Value
+		argumentToJson (const Argument & argument) noexcept
+		{
+			if ( const auto * boolean = std::get_if< bool >(&argument.value()) )
+			{
+				return {*boolean};
+			}
+
+			if ( const auto * integer = std::get_if< int32_t >(&argument.value()) )
+			{
+				return {*integer};
+			}
+
+			if ( const auto * number = std::get_if< float >(&argument.value()) )
+			{
+				return {static_cast< double >(*number)};
+			}
+
+			if ( const auto * text = std::get_if< std::string >(&argument.value()) )
+			{
+				return {*text};
+			}
+
+			return {Json::nullValue};
+		}
+
+		/**
+		 * @brief Appends the description of every command of a sub-tree to a JSON array.
+		 * @param controllable The root of the sub-tree.
+		 * @param path The dotted path of that root.
+		 * @param commands The JSON array.
+		 * @return void
+		 */
+		void
+		describeControllable (const ControllableTrait & controllable, const std::string & path, Json::Value & commands) noexcept
+		{
+			for ( const auto & [name, command] : controllable.commands() )
+			{
+				Json::Value entry{Json::objectValue};
+				entry["path"] = path + "." + name;
+				entry["help"] = command.help();
+
+				const auto * signature = command.signature();
+
+				entry["typed"] = signature != nullptr;
+
+				if ( signature != nullptr )
+				{
+					Json::Value parameters{Json::arrayValue};
+
+					for ( const auto & parameter : signature->parameters() )
+					{
+						Json::Value item{Json::objectValue};
+						item["name"] = parameter.name();
+						item["type"] = to_cstring(parameter.type());
+						item["description"] = parameter.description();
+
+						switch ( parameter.arity() )
+						{
+							case ParameterArity::Required :
+								item["arity"] = parameter.defaultValue().has_value() ? "optional" : "required";
+								break;
+
+							case ParameterArity::Optional :
+								item["arity"] = "optional";
+								break;
+
+							case ParameterArity::Variadic :
+								item["arity"] = "variadic";
+								break;
+						}
+
+						if ( parameter.defaultValue().has_value() )
+						{
+							item["default"] = argumentToJson(*parameter.defaultValue());
+						}
+
+						parameters.append(std::move(item));
+					}
+
+					entry["parameters"] = std::move(parameters);
+
+					Json::Value hints{Json::arrayValue};
+
+					if ( hasHint(signature->hints(), CommandHint::ReadOnly) )
+					{
+						hints.append("readOnly");
+					}
+
+					if ( hasHint(signature->hints(), CommandHint::Destructive) )
+					{
+						hints.append("destructive");
+					}
+
+					if ( hasHint(signature->hints(), CommandHint::Idempotent) )
+					{
+						hints.append("idempotent");
+					}
+
+					entry["hints"] = std::move(hints);
+				}
+
+				commands.append(std::move(entry));
+			}
+
+			for ( const auto & [subName, subPtr] : controllable.subObjects() )
+			{
+				if ( subPtr != nullptr )
+				{
+					describeControllable(*subPtr, path + "." + subName, commands);
+				}
+			}
+		}
+	}
+
+	std::string
+	Controller::describeCommands () const noexcept
+	{
+		Json::Value commands{Json::arrayValue};
+
+		for ( const auto & [name, controllable] : m_consoleObjects )
+		{
+			if ( controllable != nullptr )
+			{
+				describeControllable(*controllable, name, commands);
+			}
+		}
+
+		return FastJSON::stringify(commands);
+	}
+
 	bool
 	Controller::executeBuiltInCommand (const std::string & command, Outputs & outputs) noexcept
 	{
@@ -532,6 +668,7 @@ namespace EmEn::Console
 				"  exit, quit, shutdown	Graceful shutdown (saves settings)\n"
 				"  hardExit				Immediate shutdown (no save)\n"
 				"  listUntypedCommands()   Commands still bound without a declared signature\n"
+				"  describeCommands()      Every command as JSON (parameters, types, hints)\n"
 				"\n"
 				"Per-object built-ins (any depth):\n"
 				"  <path>.lsfunc()		 List commands bound at that level\n"
@@ -563,6 +700,13 @@ namespace EmEn::Console
 			}
 
 			outputs.emplace_back(Severity::Info, message);
+
+			return true;
+		}
+
+		if ( command == "describeCommands" || command == "describeCommands()" )
+		{
+			outputs.emplace_back(Output::json(this->describeCommands()));
 
 			return true;
 		}

@@ -188,14 +188,12 @@ and the AI executes, measures, and iterates at industrial speed.
 > ```bash
 > python3 tools/remote-console.py "COMMAND"
 > ```
-> On Linux/macOS, `nc` (netcat) also works:
-> ```bash
-> # Linux (use -q flag):
-> echo "COMMAND" | nc -q 2 localhost 7777
->
-> # macOS (use -w flag — macOS nc does not support -q):
-> echo "COMMAND" | nc -w 2 localhost 7777
-> ```
+> It prints the text of the answer and exits with status 1 when the command failed (`--json` prints
+> the raw line). **Wire format (2026-09-27): every request gets exactly ONE response, one JSON object on
+> one line** (`{"ok":…,"outputs":[{"severity","kind","message"}]}`), so `nc` still works but shows raw
+> JSON. `describeCommands()` lists every command with its typed parameters, and
+> `tools/console-conformance.py` checks the whole contract against a live instance.
+> Details: [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) § Wire format.
 >
 > **When the user asks "what's on screen?"** → take a screenshot:
 > ```bash

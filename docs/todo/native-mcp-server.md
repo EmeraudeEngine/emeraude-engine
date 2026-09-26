@@ -32,6 +32,16 @@ with captures returned **inline as images** instead of a path to go and read.
 - **Location**: in the engine (LGPLv3), as a capability of the free runtime — functionality, not
   convenience, so it does not belong to projet-alpha.
 
+## Prerequisites delivered (2026-09-27)
+
+- The typed command contract (`console-command-contract`): all 137 commands declare their parameters
+  (types, arity, defaults, descriptions) and hints; `describeCommands()` exports them as JSON — the
+  source the `tools/list` schemas are built from.
+- The framed TCP 7777 (one JSON response per request, in order, per-client queue share, serialized
+  writes — `src/Console/RemoteProtocol.hpp`) and the conformance bench `tools/console-conformance.py`.
+  The MCP server does not go through TCP 7777 (it projects the registry in-process), but it must
+  reuse the same guarantees: one answer per request, never an unsolicited write on a request stream.
+
 ## What remains
 
 1. **Transport: Streamable HTTP on loopback** (stdio is out — the engine is a GUI process started

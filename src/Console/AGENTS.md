@@ -29,38 +29,32 @@ A TCP server listens on a configurable port (default **7777**, setting: `Core/Co
 Once enabled, any AI agent or external tool on an allowed host can connect and:
 
 1. **Send commands** — one per line, newline-terminated (`\n`)
-2. **Receive clean responses** — command outputs are sent directly to the requesting client (no Tracer noise)
+2. **Receive exactly one response per command** — ONE JSON object on ONE line, in request order,
+   even for a failure or a command with no output (no Tracer noise)
 
-**Connection — Cross-platform (Python, recommended):**
+**Wire format (owner decision 2026-09-27, `RemoteProtocol.hpp`):**
+`{"ok":bool,"outputs":[{"severity":"Info","kind":"text|json|binary","message":"…"}]}` — a `binary`
+output adds `mimeType` and a Base64 `data`; the welcome banner is a response with a top-level
+`"protocol":1`. Full description: [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) § Wire format.
 
-Use `tools/remote-console.py` — works on Windows, Linux, and macOS:
-```bash
-# Send a single command
-python tools/remote-console.py "Core.SettingsService.getJson()"
-
-# Interactive mode (REPL)
-python tools/remote-console.py
-```
-
-**Connection — Linux/macOS only (nc):**
-```bash
-# Send a command and get the response (nc -q 1 for quick disconnect)
-echo "Core.SettingsService.getJson()" | nc -q 2 localhost 7777
-
-# Multiple commands in one session
-(
-echo "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, -2.0, 0.0, Miramar)"
-sleep 1
-echo "Core.SceneManagerService.setGround(default)"
-sleep 1
-echo "Core.RendererService.screenshot()"
-sleep 2
-) | nc localhost 7777
-```
-
-**Note:** `nc` (netcat) is not available on Windows. Always use `tools/remote-console.py` for cross-platform compatibility.
-
-**Response format:** Clean text or JSON — no `[Info][...]` prefixes, no ANSI codes. Each command response is terminated by `\n`. The Tracer is NOT broadcast to TCP clients.
+- **Only `RemoteProtocol` writes to a client** (`serializeResponse`, `serializeError`,
+  `serializeWelcome`); `RemoteListener::respond()` appends the newline, nothing else. Never write raw
+  text to a socket, never send anything unsolicited (the former `broadcast()` was deleted: a client
+  matches each line to its request in order).
+- **One write at a time**: `m_writeMutex` serializes the network thread (transport errors) and the main
+  thread (responses) — two interleaved writes corrupt a line. `stop()` deliberately closes the sockets
+  WITHOUT that lock (it must unblock a stuck write; taking it under `m_clientsMutex` would also invert
+  the lock order of `respond()`).
+- **Per-client share of the queue**: `MaxPendingCommandsPerClient` = 256 / 8 = 32. A client above it
+  gets a last error line and is disconnected (`disconnect()`), so it can never make another client's
+  command overflow, and no refusal ever overtakes an answer still queued. A line over 8192 bytes is
+  handled the same way (the socket is now really closed; it used to be only forgotten).
+- **Clients**: `tools/emeraude_console.py` (the one implementation: `Console.call()` → parsed response,
+  `.run()` → text), `tools/remote-console.py` (CLI: text, `--json` for raw lines, exit 1 on failure).
+  `nc` prints the raw JSON lines. ⚠️ An engine built before 2026-09-27 answers raw text: the current
+  client refuses it with a protocol error.
+- **Conformance**: `tools/console-conformance.py` against a live instance checks the wire format and
+  the typed contract of every command (via `describeCommands()`), non-destructively.
 
 **Lifecycle:** The listener starts in `Controller::onInitialize()` and stops in `Controller::onTerminate()`. It runs on a dedicated network thread. Commands are queued and executed on the **main thread**.
 
@@ -90,13 +84,13 @@ Core
 
 ```bash
 # List top-level objects
-echo "listObjects" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "listObjects"
 
 # List sub-objects of Core
-echo "Core.lsobj()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.lsobj()"
 
 # List commands on a service
-echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.RendererService.lsfunc()"
 ```
 
 ## 3. Built-in Commands
@@ -110,6 +104,7 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777
 | `exit`, `quit`, `shutdown` | Graceful shutdown (saves settings) |
 | `hardExit` | Immediate shutdown (no save) |
 | `listUntypedCommands()` | Counts typed and untyped commands, lists the untyped (legacy) ones still to migrate |
+| `describeCommands()` | Every command as JSON: path, help, typed, parameters (name, type, arity, description, default), hints |
 
 ### Per-object (available at any depth in the tree)
 
@@ -182,49 +177,49 @@ MCP server turns into a tool schema (`docs/todo/native-mcp-server.md`). Full pat
 
 ### Query engine state (JSON)
 ```bash
-echo "Core.ArgumentsService.getJson()" | nc -q 2 localhost 7777
-echo "Core.FileSystemService.getJson()" | nc -q 2 localhost 7777
-echo "Core.SettingsService.getJson()" | nc -q 2 localhost 7777
-echo "Core.WindowService.getState()" | nc -q 2 localhost 7777
-echo "Core.RendererService.getStatus()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.ArgumentsService.getJson()"
+python3 tools/remote-console.py "Core.FileSystemService.getJson()"
+python3 tools/remote-console.py "Core.SettingsService.getJson()"
+python3 tools/remote-console.py "Core.WindowService.getState()"
+python3 tools/remote-console.py "Core.RendererService.getStatus()"
 ```
 
 ### Modify settings
 ```bash
-echo "Core.SettingsService.set(Core/Video/Window/Width, 1920)" | nc -q 1 localhost 7777
-echo "Core.SettingsService.save()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SettingsService.set(Core/Video/Window/Width, 1920)"
+python3 tools/remote-console.py "Core.SettingsService.save()"
 ```
 
 ### Window control
 ```bash
-echo "Core.WindowService.resize(1920, 1080)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.WindowService.resize(1920, 1080)"
 ```
 
 ### Music playback
 ```bash
-echo "Core.AudioManagerService.TrackMixerService.play()" | nc -q 1 localhost 7777
-echo "Core.AudioManagerService.TrackMixerService.pause()" | nc -q 1 localhost 7777
-echo "Core.AudioManagerService.TrackMixerService.volume(50)" | nc -q 1 localhost 7777
-echo "Core.AudioManagerService.TrackMixerService.playlist()" | nc -q 1 localhost 7777
-echo "Core.AudioManagerService.TrackMixerService.playlist(play, 3)" | nc -q 1 localhost 7777
-echo "Core.AudioManagerService.TrackMixerService.status()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.play()"
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.pause()"
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.volume(50)"
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist()"
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist(play, 3)"
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.status()"
 ```
 
 ### Resource discovery
 ```bash
 # List all resource containers (skyboxes, meshes, materials, etc.)
-echo "Core.ResourcesManagerService.listContainers()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.ResourcesManagerService.listContainers()"
 # Returns JSON: [{"id":"SkyBoxResource","name":"...","loaded":3,"available":5}, ...]
 
 # List available resources in a specific container
-echo "Core.ResourcesManagerService.listResources(SkyBoxResource)" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.ResourcesManagerService.listResources(SkyBoxResource)"
 # Returns JSON: ["Miramar","DNCity","CloudyDay", ...]
 ```
 
 ### Screenshot and visual verification
 ```bash
 # Take screenshot — returns the file path
-echo "Core.RendererService.screenshot()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.RendererService.screenshot()"
 # Screenshot saved: "/home/user/.local/share/LNIsle/projet-alpha/captures/<timestamp>.png"
 ```
 
@@ -237,13 +232,13 @@ The AI can create complete 3D scenes autonomously via the console. This is the f
 ```bash
 # Step 1: Create the scene with skybox and camera
 # Camera is placed at Y=-2 (below ground level Y=0) to verify ground visibility
-echo "Core.SceneManagerService.createScene(IAScene, 1024.0, Observer, 0.0, -2.0, 0.0, Miramar)" | nc -q 3 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.createScene(IAScene, 1024.0, Observer, 0.0, -2.0, 0.0, Miramar)"
 
 # Step 2: Add ground AFTER scene creation
-echo "Core.SceneManagerService.setGround(default)" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setGround(default)"
 
 # Step 3: Take screenshot to verify the scene
-echo "Core.RendererService.screenshot()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.RendererService.screenshot()"
 # → Read the PNG to visually confirm: ground (grey) should be visible above the camera
 ```
 
@@ -275,31 +270,31 @@ createScene(name, boundary, cameraNodeName, camX, camY, camZ [, backgroundName [
 
 ```bash
 # Create a node at a position
-echo "Core.SceneManagerService.createNode(MyObject, 5.0, 0.0, 5.0)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.createNode(MyObject, 5.0, 0.0, 5.0)"
 
 # Move a node
-echo "Core.SceneManagerService.setNodePosition(Observer, 0.0, 10.0, 20.0)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setNodePosition(Observer, 0.0, 10.0, 20.0)"
 
 # Orient a node to look at a point (convention under investigation)
-echo "Core.SceneManagerService.setNodeLookAt(Observer, 50.0, 0.0, 50.0)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setNodeLookAt(Observer, 50.0, 0.0, 50.0)"
 
 # Inspect a node
-echo "Core.SceneManagerService.getNode(Observer)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.getNode(Observer)"
 
 # Destroy a node
-echo "Core.SceneManagerService.destroyNode(MyObject)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.destroyNode(MyObject)"
 
 # Attach components to nodes
-echo "Core.SceneManagerService.attachCamera(MyNode, MyCamera)" | nc -q 1 localhost 7777
-echo "Core.SceneManagerService.attachMicrophone(MyNode, MyMic)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.attachCamera(MyNode, MyCamera)"
+python3 tools/remote-console.py "Core.SceneManagerService.attachMicrophone(MyNode, MyMic)"
 ```
 
 ### Scene inspection
 
 ```bash
-echo "Core.SceneManagerService.getSceneInfo()" | nc -q 1 localhost 7777
-echo "Core.SceneManagerService.listScenes()" | nc -q 1 localhost 7777
-echo "Core.SceneManagerService.listNodes()" | nc -q 1 localhost 7777  # requires targetActiveScene() first
+python3 tools/remote-console.py "Core.SceneManagerService.getSceneInfo()"
+python3 tools/remote-console.py "Core.SceneManagerService.listScenes()"
+python3 tools/remote-console.py "Core.SceneManagerService.listNodes()"  # requires targetActiveScene() first
 ```
 
 ### Visual verification workflow
@@ -342,7 +337,7 @@ Controller::executeCommand(string, outputs)
                              |
                         Binding callback
                              |
-                        Outputs → respond() directly to requesting TCP client
+                        (succeeded, Outputs) → RemoteProtocol::serializeResponse() → respond() to that client (ALWAYS, one line)
 ```
 
 ### Thread safety
@@ -350,7 +345,7 @@ Controller::executeCommand(string, outputs)
 - `RemoteListener` uses `std::mutex` for the command queue and client list
 - `Controller::poll()` is called on the **main thread** only
 - All command execution happens on the **main thread** — safe to access engine state
-- Responses are sent directly to the requesting client via `respond()`, not broadcast
+- Responses are sent to the requesting client only, one JSON line each, under `m_writeMutex`
 
 ## 7. Adding New Commands
 
@@ -431,7 +426,7 @@ TCP lines starting with `{` are routed to a registered JSON handler (not the nor
 - **Closed by default** — `Core/Console/EnableRemoteListener` (default `false`) gates the whole listener; **bind address** `Core/Console/RemoteListenerAddress` (default `127.0.0.1`); **port** `Core/Console/RemoteListenerPort` (default 7777)
 - **Live control** — `Controller::startRemoteListener(address, port)` / `stopRemoteListener()` / `isRemoteListenerRunning()` / `remoteListenerEndpoint()`; `requestRemoteListenerRestart()` defers to the next `poll()` (never replace the listener while draining its own queue: the response socket dies). `parseEndpoint()` is the single parser for the dialog and the command. Shift+F10 in `Core::toggleRemoteConsoleFromKeyboard()`; the loop is paused around the modal native dialogs like `displayCoreMessages()`
 - **No authentication** — which is exactly why the two defaults above are off and loopback. Anyone who can reach the socket owns the application
-- **Bounded everywhere (2026-08-27 hardening)** — `MaxPendingCommands = 256` (overflow answers the client `ERROR: command queue full`, it is not left waiting), `MaxLineLength = 8192` (the read buffer is capped: an unbounded `streambuf` let a peer that never sends a newline grow the process until the OOM killer fired, on an unauthenticated port; a longer line gets `ERROR: line too long` and is disconnected), `MaxClients = 8` (further connections get `ERROR: too many clients`), `SendTimeoutMilliseconds = 2000` (`SO_SNDTIMEO` on every accepted socket)
+- **Bounded everywhere (2026-08-27 hardening)** — `MaxPendingCommands = 256` shared, `MaxPendingCommandsPerClient = 32` each (2026-09-27: a client above its share gets a last error line and is disconnected — it used to be answered `ERROR: command queue full` and kept, which let its refusal overtake answers still queued and let one client starve the others), `MaxLineLength = 8192` (the read buffer is capped: an unbounded `streambuf` let a peer that never sends a newline grow the process until the OOM killer fired, on an unauthenticated port; a longer line gets a last error line and is disconnected), `MaxClients = 8` (further connections get an error line). Every one of these answers is a `RemoteProtocol` JSON line, `SendTimeoutMilliseconds = 2000` (`SO_SNDTIMEO` on every accepted socket)
 - **Shutdown order is load-bearing** — the acceptor and every client socket are closed **before** `io_context::stop()` and the thread join. `stop()` does not interrupt a handler already running, and a write to a peer that stopped reading only ends when its socket dies: closing after the join made the whole process hang on exit, forever, because of one frozen client. Verified: exit in ~1.6 s with a client that never reads
 - **No blocking write can hang a thread** — the welcome banner runs on the io thread and `respond()` runs on the **main** thread; the send timeout bounds both. (The banner also used to send a stray NUL: `asio::buffer` on a `char[]` includes the terminator — pass a `std::string_view`.)
 - **`accept()` never re-arms blindly** — the error is logged, and a non-transient one (`EMFILE`, out of memory) stops the loop instead of spinning a core at 100 %

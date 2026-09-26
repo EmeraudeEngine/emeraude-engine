@@ -44,43 +44,61 @@ against that instance** — nothing will open the port while it runs, except a h
 `Core.remoteConsoleStatus()` shows the endpoint and `Core.restartRemoteConsole(port | address:port)`
 moves the console (the current connection closes; reconnect on the new endpoint).
 
-**Cross-platform (Python, recommended — required on Windows where `nc` is not available):**
+**The client — `tools/remote-console.py` (Python 3, every OS):**
 ```bash
-# Send a single command
+# Send a single command: prints the text of the response; exit status 1 when it failed
 python3 tools/remote-console.py "command"
+
+# Several commands on ONE connection (the console keeps per-connection state: targetActiveScene, ...)
+printf '%s\n' "Core.SceneManagerService.targetActiveScene()" "Core.SceneManagerService.listNodes()" | python3 tools/remote-console.py
+
+# The raw JSON response lines instead of their text
+python3 tools/remote-console.py --json "Core.WindowService.getState()"
 
 # Interactive mode (REPL)
 python3 tools/remote-console.py
 ```
 
 > **Note:** Always use `python3`, not `python`. On many systems (Linux, Windows), `python` may not exist or may point to Python 2. The script requires Python 3.
+> A Python tool imports `tools/emeraude_console.py` (`Console.call()` returns the parsed response,
+> `Console.run()` its text) — never re-implement the protocol.
 
-**Linux/macOS only (nc / netcat):**
+### Wire format (since 2026-09-27, owner decision)
 
-`nc` behavior differs between Linux and macOS:
-- **Linux**: Use `-q <seconds>` — closes the connection after EOF + timeout
-- **macOS**: Use `-w <seconds>` — macOS `nc` (BSD netcat) does **not** support `-q`
-- **Windows**: `nc` is not available — use the Python client above
+A request is **one command line**. **Every request gets exactly one response**, even a failure and
+even a command with no output, and that response is **one JSON object on one line**
+(`src/Console/RemoteProtocol.hpp`):
 
-```bash
-# Linux — send a single command
-echo "command" | nc -q 1 localhost 7777
-
-# macOS — send a single command
-echo "command" | nc -w 1 localhost 7777
-
-# Send multiple commands in sequence (both platforms, no flag needed)
-(
-echo "command1"
-sleep 1
-echo "command2"
-sleep 2
-) | nc localhost 7777
+```json
+{"ok":false,"outputs":[{"kind":"text","message":"Argument 'width' expects an integer, got 'abc'.","severity":"Error"}]}
 ```
 
-**For examples in this document**, all `nc` commands use the Linux `-q` flag. On macOS, replace `-q` with `-w`.
+- `ok` — whether the command succeeded.
+- `outputs` — in display order, possibly empty; each has `severity` (Debug/Success/Info/Warning/Error/
+  Fatal), `kind` (`text`; `json` = the `message` IS a JSON document to parse; `binary` = adds
+  `mimeType` and a Base64 `data`) and `message`.
+- The **welcome banner** sent on connection is a response too, with a top-level `"protocol": 1`.
+- Responses come **in request order**: requests may be pipelined, the N-th line answers the N-th request.
+- **Transport limits** answer a last error line, then close THAT connection: a line longer than 8192
+  bytes, or more than 32 requests waiting for their answer (a client's share of the 256-command queue,
+  so a flooding client can never starve another one). Nothing is ever sent unsolicited.
+- `describeCommands()` returns every command as JSON — path, description, parameters (name, type,
+  arity, description, default) and hints: the machine-readable twin of `help`.
 
-**Responses are clean** -- no log prefixes, no ANSI codes. Just the command output, ready for parsing. Each response is sent directly to the requesting client (not broadcast).
+Before this format the server wrote raw text with no end marker: clients guessed the end of an
+answer from silence, and a command with no output sent nothing at all, so the client waited for its
+whole timeout. ⚠️ An engine built before 2026-09-27 still speaks raw text; the current client refuses
+it with a protocol error instead of misreading it.
+
+**`nc` / netcat** still works for a quick look, but prints the raw JSON lines
+(`echo "Core.WindowService.getState()" | nc -q 1 localhost 7777` on Linux, `-w 1` on macOS; no `nc` on
+Windows). Use the Python client for anything else.
+
+**The conformance bench — `tools/console-conformance.py`**: run it against a live instance after any
+change to `src/Console/` or to a command. It checks the wire format (banner, one ordered line per
+request, transport limits) and the typed contract of EVERY command (declared, arguments validated
+before running) without executing anything but read-only, argument-less commands. 2090 checks pass
+on Linux (2026-09-27); it has been shown to fail against a server that breaks the contract.
 
 ### Argument syntax and validation
 
@@ -94,8 +112,6 @@ sleep 2
 - **Quote** a string that contains a comma, a parenthesis or a dot you do not want split:
   `Core.openFiles("/tmp/a,b(1)/x.glb")` — inside quotes every character is literal (2026-09-27; the
   parser used to cut a quoted path on its commas).
-- ⚠️ A command whose outputs are empty sends **nothing back**, and the protocol has no end-of-response
-  marker: the client waits for its timeout (`docs/todo/remote-console-response-framing.md`).
 
 ---
 
@@ -106,7 +122,7 @@ Before creating a scene, the AI must know what resources are available. The engi
 ### List all resource containers
 
 ```bash
-echo "Core.ResourcesManagerService.listContainers()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.ResourcesManagerService.listContainers()"
 ```
 
 **Response** (JSON array):
@@ -128,7 +144,7 @@ Each entry contains:
 ### List resources in a container
 
 ```bash
-echo "Core.ResourcesManagerService.listResources(SkyBoxResource)" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.ResourcesManagerService.listResources(SkyBoxResource)"
 ```
 
 **Response** (JSON array of resource names):
@@ -267,7 +283,7 @@ From camera position `(camX, camY, camZ)`:
 ### Minimal scene (skybox only)
 
 ```bash
-echo "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, 2.0, 0.0, Miramar)" | nc -q 3 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, 2.0, 0.0, Miramar)"
 ```
 
 Parameters: `createScene(name, boundary, cameraNodeName, camX, camY, camZ [, skyboxName [, groundMaterial]])`
@@ -278,11 +294,11 @@ The ground can be added inline or after scene creation:
 
 ```bash
 # Option 1: Inline ground material (8th parameter)
-echo "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, -2.0, 0.0, Miramar, default)" | nc -q 3 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, -2.0, 0.0, Miramar, default)"
 
 # Option 2: Add ground AFTER scene creation (recommended for flexibility)
-echo "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, -2.0, 0.0, Miramar)" | nc -q 3 localhost 7777
-echo "Core.SceneManagerService.setGround(default)" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.createScene(MyScene, 1024.0, Camera, 0.0, -2.0, 0.0, Miramar)"
+python3 tools/remote-console.py "Core.SceneManagerService.setGround(default)"
 ```
 
 Ground materials:
@@ -292,7 +308,7 @@ Ground materials:
 ### Scene with specific background
 
 ```bash
-echo "Core.SceneManagerService.setBackground(Miramar)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setBackground(Miramar)"
 ```
 
 Available skyboxes depend on the application's resource store. Use `listResources(SkyBoxResource)` to discover them.
@@ -305,7 +321,7 @@ Available skyboxes depend on the application's resource store. Use `listResource
 
 ```bash
 # addMesh(meshResource, entityName, x, y, z [, scale])
-echo "Core.SceneManagerService.addMesh(Sponza, SponzaEntity, 0.0, 0.0, 0.0, 0.01)" | nc -q 5 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.addMesh(Sponza, SponzaEntity, 0.0, 0.0, 0.0, 0.01)"
 ```
 
 Use `listResources(MeshResource)` to discover available meshes.
@@ -577,7 +593,7 @@ Complete scenes can be built from a single JSON description sent via TCP. Lines 
 ### Sending a JSON scene
 
 ```bash
-echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resource":"Miramar","ApplyLighting":true},"Ground":{"Type":"Basic","Material":{"Type":"Basic"}},"Nodes":[{"Name":"Observer","Position":[0.0,5.0,20.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Name":"MainCam","Primary":true},{"Type":"Microphone","Name":"MainMic","Primary":true}]}],"StaticEntities":[{"Name":"SponzaBuilding","Position":[0.0,0.0,0.0],"Components":[{"Type":"Visual","Mesh":"Sponza","Scale":0.01}]}]}' | nc -q 5 localhost 7777
+python3 tools/remote-console.py '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resource":"Miramar","ApplyLighting":true},"Ground":{"Type":"Basic","Material":{"Type":"Basic"}},"Nodes":[{"Name":"Observer","Position":[0.0,5.0,20.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Name":"MainCam","Primary":true},{"Type":"Microphone","Name":"MainMic","Primary":true}]}],"StaticEntities":[{"Name":"SponzaBuilding","Position":[0.0,0.0,0.0],"Components":[{"Type":"Visual","Mesh":"Sponza","Scale":0.01}]}]}'
 ```
 
 ### JSON Scene Format Specification
@@ -698,13 +714,13 @@ echo '{"Name":"AIScene","Boundary":1024.0,"Background":{"Type":"SkyBox","Resourc
 ### Moving the camera
 
 ```bash
-echo "Core.SceneManagerService.setNodePosition(Camera, 0.0, 10.0, 20.0)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setNodePosition(Camera, 0.0, 10.0, 20.0)"
 ```
 
 ### Orienting the camera
 
 ```bash
-echo "Core.SceneManagerService.setNodeLookAt(Camera, 50.0, 0.0, 50.0)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setNodeLookAt(Camera, 50.0, 0.0, 50.0)"
 ```
 
 ---
@@ -714,7 +730,7 @@ echo "Core.SceneManagerService.setNodeLookAt(Camera, 50.0, 0.0, 50.0)" | nc -q 1
 ### Isolating the physical simulation
 
 ```bash
-echo "Core.togglePhysicalSimulation()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.togglePhysicalSimulation()"
 # Response: Physical simulation ENABLED. / DISABLED (entities move, nothing collides).
 ```
 
@@ -729,7 +745,7 @@ mid-fall makes it resolve a very deep penetration in one step. Toggle before spa
 ### Taking a screenshot
 
 ```bash
-echo "Core.RendererService.screenshot()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.RendererService.screenshot()"
 # Response: Screenshot saved: "/path/to/captures/<timestamp>.png"
 ```
 
@@ -738,7 +754,7 @@ Screenshots are saved to `fileSystem().userDataDirectory("captures")`, i.e. **`<
 ### Dumping a render-to-texture target (probe diagnostics)
 
 ```bash
-echo "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap)" | nc -q 4 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap)"
 # Response: Render target 'MyProbe_...' dumped: "/path/to/captures/rt-dump-<timestamp>.png"
 ```
 
@@ -756,8 +772,8 @@ When enabled, every pass of the main frame command buffer is timed on the GPU an
 results are harvested stall-free (one query pool per frame in flight):
 
 ```bash
-echo "Core.RendererService.getGPUTimings()" | nc -q 2 localhost 7777
-echo "Core.RendererService.getGPUTimings(reset)" | nc -q 2 localhost 7777   # clear avg/max
+python3 tools/remote-console.py "Core.RendererService.getGPUTimings()"
+python3 tools/remote-console.py "Core.RendererService.getGPUTimings(reset)"   # clear avg/max
 ```
 
 - **Gated by the settings key `Core/Graphics/GPUProfiler/Enabled` (default `false`)** —
@@ -840,8 +856,8 @@ For deep GPU analysis (draw calls, bound descriptors, sampled images, pipeline s
 can trigger a [RenderDoc](https://renderdoc.org/) frame capture from the console:
 
 ```bash
-echo "Core.RendererService.triggerRenderDocCapture()"  | nc -q 2 localhost 7777   # next frame
-echo "Core.RendererService.triggerRenderDocCapture(5)" | nc -q 2 localhost 7777   # next 5 frames
+python3 tools/remote-console.py "Core.RendererService.triggerRenderDocCapture()"   # next frame
+python3 tools/remote-console.py "Core.RendererService.triggerRenderDocCapture(5)"   # next 5 frames
 ```
 
 - The optional argument is the number of consecutive frames to capture (default 1). Capturing a
@@ -890,30 +906,30 @@ Everything in a scene is attached to **nodes**. A node is a positioned container
 ### Creating nodes
 
 ```bash
-echo "Core.SceneManagerService.createNode(MyObject, 5.0, 1.0, 5.0)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.createNode(MyObject, 5.0, 1.0, 5.0)"
 ```
 
 ### Attaching components
 
 ```bash
 # Camera + microphone (creates a viewpoint)
-echo "Core.SceneManagerService.attachCamera(MyNode, MyCamera)" | nc -q 1 localhost 7777
-echo "Core.SceneManagerService.attachMicrophone(MyNode, MyMic)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.attachCamera(MyNode, MyCamera)"
+python3 tools/remote-console.py "Core.SceneManagerService.attachMicrophone(MyNode, MyMic)"
 ```
 
 ### Inspecting nodes
 
 ```bash
-echo "Core.SceneManagerService.getNode(MyNode)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.getNode(MyNode)"
 # Returns JSON: {"name":"MyNode","address":"0x...","position":[5,1,5],"childCount":0}
 ```
 
 ### Manipulating nodes
 
 ```bash
-echo "Core.SceneManagerService.setNodePosition(MyNode, 10.0, 0.0, 10.0)" | nc -q 1 localhost 7777
-echo "Core.SceneManagerService.setNodeLookAt(MyNode, 0.0, 0.0, 0.0)" | nc -q 1 localhost 7777
-echo "Core.SceneManagerService.destroyNode(MyNode)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SceneManagerService.setNodePosition(MyNode, 10.0, 0.0, 10.0)"
+python3 tools/remote-console.py "Core.SceneManagerService.setNodeLookAt(MyNode, 0.0, 0.0, 0.0)"
+python3 tools/remote-console.py "Core.SceneManagerService.destroyNode(MyNode)"
 ```
 
 ---
@@ -923,24 +939,24 @@ echo "Core.SceneManagerService.destroyNode(MyNode)" | nc -q 1 localhost 7777
 ### Music playback
 
 ```bash
-echo "Core.AudioManagerService.TrackMixerService.play()" | nc -q 1 localhost 7777       # Play/resume
-echo "Core.AudioManagerService.TrackMixerService.pause()" | nc -q 1 localhost 7777      # Pause
-echo "Core.AudioManagerService.TrackMixerService.stop()" | nc -q 1 localhost 7777       # Stop
-echo "Core.AudioManagerService.TrackMixerService.next()" | nc -q 1 localhost 7777       # Next track
-echo "Core.AudioManagerService.TrackMixerService.previous()" | nc -q 1 localhost 7777   # Previous track
-echo "Core.AudioManagerService.TrackMixerService.volume(50)" | nc -q 1 localhost 7777   # Volume 0-100
-echo "Core.AudioManagerService.TrackMixerService.seek(30.0)" | nc -q 1 localhost 7777   # Seek to 30s
-echo "Core.AudioManagerService.TrackMixerService.shuffle(on)" | nc -q 1 localhost 7777  # Shuffle on/off
-echo "Core.AudioManagerService.TrackMixerService.loop(on)" | nc -q 1 localhost 7777     # Loop on/off
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.play()"       # Play/resume
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.pause()"      # Pause
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.stop()"       # Stop
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.next()"       # Next track
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.previous()"   # Previous track
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.volume(50)"   # Volume 0-100
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.seek(30.0)"   # Seek to 30s
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.shuffle(on)"  # Shuffle on/off
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.loop(on)"     # Loop on/off
 ```
 
 ### Playlist management
 
 ```bash
-echo "Core.AudioManagerService.TrackMixerService.playlist()" | nc -q 1 localhost 7777           # List tracks
-echo "Core.AudioManagerService.TrackMixerService.playlist(play, 3)" | nc -q 1 localhost 7777    # Play track #3
-echo "Core.AudioManagerService.TrackMixerService.playlist(clear)" | nc -q 1 localhost 7777      # Clear playlist
-echo "Core.AudioManagerService.TrackMixerService.status()" | nc -q 1 localhost 7777             # Full status
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist()"           # List tracks
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist(play, 3)"    # Play track #3
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist(clear)"      # Clear playlist
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.status()"             # Full status
 ```
 
 ---
@@ -950,24 +966,24 @@ echo "Core.AudioManagerService.TrackMixerService.status()" | nc -q 1 localhost 7
 ### Reading settings (JSON)
 
 ```bash
-echo "Core.SettingsService.getJson()" | nc -q 2 localhost 7777
-echo "Core.ArgumentsService.getJson()" | nc -q 2 localhost 7777
-echo "Core.FileSystemService.getJson()" | nc -q 2 localhost 7777
+python3 tools/remote-console.py "Core.SettingsService.getJson()"
+python3 tools/remote-console.py "Core.ArgumentsService.getJson()"
+python3 tools/remote-console.py "Core.FileSystemService.getJson()"
 ```
 
 ### Modifying settings
 
 ```bash
-echo "Core.SettingsService.set(Core/Video/Window/Width, 1920)" | nc -q 1 localhost 7777
-echo "Core.SettingsService.set(Core/Video/Window/Height, 1080)" | nc -q 1 localhost 7777
-echo "Core.SettingsService.save()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.SettingsService.set(Core/Video/Window/Width, 1920)"
+python3 tools/remote-console.py "Core.SettingsService.set(Core/Video/Window/Height, 1080)"
+python3 tools/remote-console.py "Core.SettingsService.save()"
 ```
 
 ### Window control
 
 ```bash
-echo "Core.WindowService.resize(1920, 1080)" | nc -q 1 localhost 7777
-echo "Core.WindowService.getState()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.WindowService.resize(1920, 1080)"
+python3 tools/remote-console.py "Core.WindowService.getState()"
 ```
 
 ---
@@ -977,14 +993,14 @@ echo "Core.WindowService.getState()" | nc -q 1 localhost 7777
 ### Graceful shutdown
 
 ```bash
-echo "quit" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "quit"
 # Settings are saved automatically if SavePropertiesAtExit is true
 ```
 
 ### Renderer information
 
 ```bash
-echo "Core.RendererService.getStatus()" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.RendererService.getStatus()"
 ```
 
 ---
@@ -996,7 +1012,9 @@ echo "Core.RendererService.getStatus()" | nc -q 1 localhost 7777
 # AI creates a complete 3D scene from scratch
 
 PORT=7777
-CMD="nc -q 2 localhost $PORT"
+# Every echo opens its own connection here: fine for stateless commands. Use pipe mode (printf ... |)
+# for a sequence that relies on targetActiveScene()/targetNode().
+CMD="python3 tools/remote-console.py --port $PORT"
 
 # Step 1: Discover available resources
 echo "Core.ResourcesManagerService.listContainers()" | $CMD
@@ -1031,13 +1049,13 @@ echo "Core.RendererService.screenshot()" | $CMD
 echo "Core.AudioManagerService.TrackMixerService.play()" | $CMD
 
 # When done
-echo "quit" | nc -q 1 localhost $PORT
+echo "quit" | $CMD
 ```
 
 ### Alternative: JSON scene (single command)
 
 ```bash
-echo '{"Name":"AIScene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar","ApplyLighting":true},"Ground":{"Type":"Basic"},"Nodes":[{"Name":"Observer","Position":[0.0,10.0,30.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Primary":true},{"Type":"Microphone","Primary":true}]}]}' | nc -q 5 localhost 7777
+python3 tools/remote-console.py '{"Name":"AIScene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar","ApplyLighting":true},"Ground":{"Type":"Basic"},"Nodes":[{"Name":"Observer","Position":[0.0,10.0,30.0],"LookAt":[0.0,0.0,0.0],"Components":[{"Type":"Camera","Primary":true},{"Type":"Microphone","Primary":true}]}]}'
 ```
 
 ---
@@ -1047,9 +1065,9 @@ echo '{"Name":"AIScene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource
 ### Discovering commands at runtime
 
 ```bash
-echo "listObjects" | nc -q 1 localhost 7777              # List top-level objects
-echo "Core.lsobj()" | nc -q 1 localhost 7777              # List Core's children
-echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777  # List service commands
+python3 tools/remote-console.py "listObjects"              # List top-level objects
+python3 tools/remote-console.py "Core.lsobj()"              # List Core's children
+python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service commands
 ```
 
 ### Complete command table
@@ -1119,6 +1137,7 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777  # List service co
 | | `help` / `lsfunc()` | List commands |
 | | `listObjects` / `lsobj()` | List services |
 | | `listUntypedCommands()` | Typed/untyped counts + the untyped commands still to migrate |
+| | `describeCommands()` | Every command as JSON (parameters, types, arity, defaults, hints) |
 
 ### Service hierarchy
 
@@ -1146,7 +1165,7 @@ Core
 
 ```bash
 # Inject a key press + release. Args: key_code, modifiers (optional)
-echo "Core.InputManagerService.keyPress(292, 1)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.InputManagerService.keyPress(292, 1)"
 # 292 = F3, 1 = Shift → Shift+F3
 ```
 
@@ -1165,10 +1184,10 @@ per-key / per-button state with these values, and the command used to hand them 
 
 ```bash
 # Click at screen coordinates. Args: x, y, button (0=left), modifiers
-echo "Core.InputManagerService.mouseClick(1920, 1000)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.InputManagerService.mouseClick(1920, 1000)"
 
 # Move pointer to coordinates
-echo "Core.InputManagerService.mouseMove(500, 300)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.InputManagerService.mouseMove(500, 300)"
 ```
 
 **Coordinate space:** injected coordinates are dispatched to listeners **without pointer scaling** — give them in **physical framebuffer pixels** (`framebufferWidth`/`framebufferHeight` from `Core.WindowService.getState()`). All pointer consumers (overlay hit-testing, scene editor picking) work in that space; real cursor events are scaled to it by `Core::updatePointerScaling()` on Wayland/macOS.
@@ -1193,7 +1212,7 @@ This enables fully autonomous testing, debugging, and scene editing.
 
 ```bash
 # Graceful quit (Shift+Escape)
-echo "Core.InputManagerService.keyPress(256, 1)" | nc -q 1 localhost 7777
+python3 tools/remote-console.py "Core.InputManagerService.keyPress(256, 1)"
 ```
 
 Prefer this over `kill` or `timeout` — it lets the engine clean up resources properly (GPU, audio, files).

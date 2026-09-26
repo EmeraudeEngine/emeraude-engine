@@ -13,9 +13,17 @@ Usage:
     # Pipe commands
     echo "Core.SceneManagerService.getSceneInfo()" | python remote-console.py
 
+    # Print the raw JSON response lines instead of their text
+    python remote-console.py --json "Core.WindowService.getState()"
+
+It prints the text of each response (the output messages, one per line). The exit status is 1 when
+a command failed (the response's "ok" is false), in single-command and pipe modes.
+
 The wire protocol lives in `emeraude_console.py` and is shared with every other Python tool
 here — this file is the command-line front end, nothing more.
 """
+
+import json
 
 import socket
 import sys
@@ -25,10 +33,18 @@ from pathlib import Path
 # interpreter's search path does not include that directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console  # noqa: E402
+from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console, ProtocolError, Response  # noqa: E402
 
 
-def interactive_mode(host: str, port: int) -> None:
+def show(response: Response, raw: bool) -> None:
+    """Prints a response: its text, or its JSON document when raw."""
+    if raw:
+        print(json.dumps(response.document, ensure_ascii=False))
+    elif response.text.strip():
+        print(response.text.strip())
+
+
+def interactive_mode(host: str, port: int, raw: bool) -> None:
     """Interactive REPL mode."""
     with Console(host, port) as console:
         print(console.welcome.strip())
@@ -47,10 +63,7 @@ def interactive_mode(host: str, port: int) -> None:
             if command.lower() in ("quit", "exit"):
                 break
 
-            response = console.run(command)
-
-            if response.strip():
-                print(response.strip())
+            show(console.call(command), raw)
 
 
 def main() -> None:
@@ -60,9 +73,14 @@ def main() -> None:
     # Parse optional --host and --port
     args = sys.argv[1:]
     filtered_args = []
+    raw = False
+    succeeded = True
     i = 0
     while i < len(args):
-        if args[i] == "--host" and i + 1 < len(args):
+        if args[i] == "--json":
+            raw = True
+            i += 1
+        elif args[i] == "--host" and i + 1 < len(args):
             host = args[i + 1]
             i += 2
         elif args[i] == "--port" and i + 1 < len(args):
@@ -76,10 +94,10 @@ def main() -> None:
         if filtered_args:
             # Single command mode
             with Console(host, port) as console:
-                response = console.run(" ".join(filtered_args))
+                response = console.call(" ".join(filtered_args))
 
-            if response.strip():
-                print(response.strip())
+            show(response, raw)
+            succeeded = response.ok
         elif not sys.stdin.isatty():
             # Pipe mode. One held connection for the whole stream: the console keeps per-session
             # state (targetActiveScene, targetNode), so a piped sequence that targets a scene and
@@ -91,13 +109,13 @@ def main() -> None:
                     if not line:
                         continue
 
-                    response = console.run(line)
+                    response = console.call(line)
 
-                    if response.strip():
-                        print(response.strip())
+                    show(response, raw)
+                    succeeded = succeeded and response.ok
         else:
             # Interactive mode
-            interactive_mode(host, port)
+            interactive_mode(host, port, raw)
     except ConnectionRefusedError:
         print(f"Error: Cannot connect to {host}:{port}. Is the engine running?", file=sys.stderr)
         print("Note: the remote console is CLOSED BY DEFAULT. It starts only when the setting "
@@ -105,8 +123,15 @@ def main() -> None:
               "default 127.0.0.1). Enable it in the application's settings.json and relaunch; do not retry "
               "against a running instance that never opened the port.", file=sys.stderr)
         sys.exit(1)
-    except (socket.timeout, TimeoutError):
-        print(f"Error: Connection to {host}:{port} timed out.", file=sys.stderr)
+    except (socket.timeout, TimeoutError) as exception:
+        print(f"Error: {host}:{port} timed out ({exception}).", file=sys.stderr)
+        sys.exit(1)
+    except ProtocolError as exception:
+        print(f"Error: {host}:{port} does not speak this protocol ({exception}). An engine built before "
+              "2026-09-27 answers raw text: rebuild it, or use an older copy of this tool.", file=sys.stderr)
+        sys.exit(1)
+
+    if not succeeded:
         sys.exit(1)
 
 

@@ -314,6 +314,16 @@ namespace EmEn::Console
 			 */
 			static void collectUntypedCommands (const ControllableTrait & controllable, const std::string & path, size_t & typedCount, std::vector< std::string > & untypedPaths) noexcept;
 
+			/**
+			 * @brief Returns every command of the console tree as a JSON document: path, description,
+			 * typed or not, parameters (name, type, arity, description, default) and hints.
+			 * @note The machine-readable twin of `help`, answered by the `describeCommands()` built-in.
+			 * It is what a client builds tool schemas from (the MCP server, the conformance bench).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string describeCommands () const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

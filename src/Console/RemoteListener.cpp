@@ -37,6 +37,7 @@
 #endif
 
 /* Local inclusions. */
+#include "RemoteProtocol.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Console
@@ -70,8 +71,10 @@ namespace EmEn::Console
 			{
 				asio::error_code ec;
 
-				/* NOTE: a char-array buffer would send the terminating NUL too. */
-				static_cast< void >(asio::write(*m_socket, asio::buffer(std::string_view{"Welcome to Emeraude-Engine AI Remote Console\n"}), ec));
+				/* The banner is a response line like any other (RemoteProtocol), carrying the protocol version. */
+				const auto banner = RemoteProtocol::serializeWelcome() + '\n';
+
+				static_cast< void >(asio::write(*m_socket, asio::buffer(banner), ec));
 
 				if ( ec )
 				{
@@ -121,7 +124,7 @@ namespace EmEn::Console
 						{
 							TraceWarning{RemoteListener::ClassId} << "A client sent a line longer than " << RemoteListener::MaxLineLength << " bytes, disconnecting it.";
 
-							m_listener.respond(m_socket, "ERROR: line too long");
+							m_listener.disconnect(m_socket, RemoteProtocol::serializeError("Line too long (more than " + std::to_string(RemoteListener::MaxLineLength) + " bytes): disconnected."));
 						}
 
 						m_listener.removeClient(m_socket);
@@ -265,48 +268,44 @@ namespace EmEn::Console
 		outCommand = std::move(m_commandsQueue.front());
 		m_commandsQueue.pop();
 
+		if ( const auto countIt = m_pendingPerClient.find(outCommand.client.get()); countIt != m_pendingPerClient.end() )
+		{
+			if ( --countIt->second == 0 )
+			{
+				m_pendingPerClient.erase(countIt);
+			}
+		}
+
 		return true;
 	}
 
 	void
-	RemoteListener::respond (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & message) noexcept
+	RemoteListener::respond (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & line) noexcept
 	{
-		if ( client == nullptr || !client->is_open() )
+		if ( client == nullptr )
 		{
 			return;
 		}
 
 		asio::error_code ec;
-		static_cast< void >(asio::write(*client, asio::buffer(message + "\n"), ec));
+
+		{
+			const std::lock_guard< std::mutex > writeLock{m_writeMutex};
+
+			/* NOTE: checked under the write lock — disconnect() closes the socket under the same lock. */
+			if ( !client->is_open() )
+			{
+				return;
+			}
+
+			static_cast< void >(asio::write(*client, asio::buffer(line + '\n'), ec));
+		}
 
 		if ( ec )
 		{
 			const std::lock_guard< std::mutex > lock{m_clientsMutex};
 
 			m_clients.erase(client);
-		}
-	}
-
-	void
-	RemoteListener::broadcast (const std::string & message) noexcept
-	{
-		const std::lock_guard< std::mutex > lock{m_clientsMutex};
-
-		const std::string payload = message + "\n";
-
-		for ( auto it = m_clients.begin(); it != m_clients.end(); )
-		{
-			asio::error_code ec;
-			static_cast< void >(asio::write(**it, asio::buffer(payload), ec));
-
-			if ( ec )
-			{
-				it = m_clients.erase(it);
-			}
-			else
-			{
-				++it;
-			}
 		}
 	}
 
@@ -331,7 +330,8 @@ namespace EmEn::Console
 					TraceWarning{ClassId} << "Refusing a client: " << MaxClients << " already connected.";
 
 					asio::error_code ec;
-					static_cast< void >(asio::write(*socket, asio::buffer(std::string_view{"ERROR: too many clients\n"}), ec));
+					const auto refusal = RemoteProtocol::serializeError("Too many clients (" + std::to_string(MaxClients) + " already connected).") + '\n';
+					static_cast< void >(asio::write(*socket, asio::buffer(refusal), ec));
 					socket->close(ec);
 				}
 				else
@@ -386,29 +386,59 @@ namespace EmEn::Console
 	void
 	RemoteListener::enqueueCommand (const std::string & command, const std::shared_ptr< asio::ip::tcp::socket > & client) noexcept
 	{
-		bool dropped = false;
+		bool overflow = false;
 
 		{
 			const std::lock_guard< std::mutex > lock{m_queueMutex};
 
-			if ( m_commandsQueue.size() >= MaxPendingCommands )
+			auto & pendingCount = m_pendingPerClient[client.get()];
+
+			/* NOTE: the global bound is unreachable while every client stays under its share; it remains
+			 * as the memory guarantee (a disconnected client's commands are still queued). */
+			if ( pendingCount >= MaxPendingCommandsPerClient || m_commandsQueue.size() >= MaxPendingCommands )
 			{
-				dropped = true;
+				overflow = true;
 			}
 			else
 			{
 				m_commandsQueue.push({command, client});
+
+				++pendingCount;
 			}
 		}
 
-		if ( dropped )
+		if ( overflow )
 		{
-			TraceWarning{ClassId} << "Command queue full (" << MaxPendingCommands << "), dropping command.";
+			TraceWarning{ClassId} << "A client exceeded " << MaxPendingCommandsPerClient << " pending commands, disconnecting it.";
 
-			/* NOTE: answered outside the queue lock — respond() writes to the socket, and the
-			 * client must not be left waiting for an answer that will never come. */
-			this->respond(client, "ERROR: command queue full, command dropped");
+			/* NOTE: outside the queue lock — disconnect() writes to the socket. The client is dropped
+			 * rather than answered and kept: an answer to this request would overtake the answers to
+			 * its requests still queued, and every later line would be matched to the wrong request. */
+			this->disconnect(client, RemoteProtocol::serializeError("Too many pending commands (more than " + std::to_string(MaxPendingCommandsPerClient) + "): disconnected. Wait for each answer before sending more."));
 		}
+	}
+
+	void
+	RemoteListener::disconnect (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & line) noexcept
+	{
+		if ( client == nullptr )
+		{
+			return;
+		}
+
+		{
+			const std::lock_guard< std::mutex > writeLock{m_writeMutex};
+
+			if ( client->is_open() )
+			{
+				asio::error_code ec;
+				static_cast< void >(asio::write(*client, asio::buffer(line + '\n'), ec));
+				client->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+				client->close(ec);
+			}
+		}
+
+		this->removeClient(client);
 	}
 
 	void

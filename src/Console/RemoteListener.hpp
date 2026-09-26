@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -51,7 +52,7 @@ namespace EmEn::Console
 	 * @brief A TCP listener service for remote AI console control.
 	 * @details Starts a server on a specified port (default 7777).
 	 * Accepts incoming commands (line by line) and stores them in a thread-safe queue.
-	 * Also acts as a hub to broadcast messages back to all connected clients.
+	 * Every request gets exactly one response line (RemoteProtocol); nothing is sent unsolicited.
 	 */
 	class EMEN_API RemoteListener final
 	{
@@ -62,7 +63,7 @@ namespace EmEn::Console
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RemoteListener"};
 
-			/** @brief Maximum number of pending commands in the queue before dropping new ones. */
+			/** @brief Maximum number of pending commands in the queue, all clients together. */
 			static constexpr size_t MaxPendingCommands{256};
 
 			/** @brief Maximum length of a single command line; a longer line disconnects the client. */
@@ -70,6 +71,15 @@ namespace EmEn::Console
 
 			/** @brief Maximum number of simultaneous clients; further connections are refused. */
 			static constexpr size_t MaxClients{8};
+
+			/**
+			 * @brief Maximum number of pending commands of ONE client; exceeding it disconnects that client.
+			 * @note A share of the global queue, so a flooding client can never make another client's
+			 * command overflow it. Disconnecting (after a last error line) rather than answering and
+			 * carrying on keeps the one-response-per-request order: an answer to request N+1 must never
+			 * overtake the answer to request N that is still queued.
+			 */
+			static constexpr size_t MaxPendingCommandsPerClient{MaxPendingCommands / MaxClients};
 
 			/** @brief Send timeout, so a peer that stops reading cannot block a write forever. */
 			static constexpr uint32_t SendTimeoutMilliseconds{2000};
@@ -160,17 +170,14 @@ namespace EmEn::Console
 			bool popCommand (PendingCommand & outCommand) noexcept;
 
 			/**
-			 * @brief Sends a response directly to a specific client (clean, no Tracer prefix).
+			 * @brief Sends one response line to a specific client.
+			 * @note The line must come from RemoteProtocol (one JSON object, no newline inside): this
+			 * method only appends the terminating newline. Nothing is ever sent unsolicited — a
+			 * client matches each line to its request in order, so a broadcast would desynchronize it.
 			 * @param client The client socket to respond to.
-			 * @param message The response message.
+			 * @param line A serialized response, without its terminating newline.
 			 */
-			void respond (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & message) noexcept;
-
-			/**
-			 * @brief Broadcasts a message string to all connected clients.
-			 * @param message A reference to the message to broadcast.
-			 */
-			void broadcast (const std::string & message) noexcept;
+			void respond (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & line) noexcept;
 
 		private:
 
@@ -192,6 +199,15 @@ namespace EmEn::Console
 			 */
 			void removeClient (const std::shared_ptr< asio::ip::tcp::socket > & socket) noexcept;
 
+			/**
+			 * @brief Sends a last response line to a client, then closes its connection.
+			 * @note Called from the network thread for a transport failure (line too long, too many
+			 * pending commands). Everything queued for that client afterwards is dropped by respond().
+			 * @param client The client socket.
+			 * @param line The last line, from RemoteProtocol, without its terminating newline.
+			 */
+			void disconnect (const std::shared_ptr< asio::ip::tcp::socket > & client, const std::string & line) noexcept;
+
 			std::string m_address;
 			uint16_t m_port;
 			asio::io_context m_ioContext;
@@ -199,8 +215,14 @@ namespace EmEn::Console
 			std::thread m_networkThread;
 			std::mutex m_clientsMutex;
 			std::set< std::shared_ptr< asio::ip::tcp::socket > > m_clients;
+			/** @brief Serializes every write and close on the client sockets: the network thread (transport
+			 * errors) and the main thread (responses) both write, and two interleaved writes would corrupt
+			 * a response line. */
+			std::mutex m_writeMutex;
 			std::mutex m_queueMutex;
 			std::queue< PendingCommand > m_commandsQueue;
+			/** @brief Pending commands per client, guarded by m_queueMutex. */
+			std::map< const asio::ip::tcp::socket *, size_t > m_pendingPerClient;
 			std::atomic< bool > m_running{false};
 	};
 }
