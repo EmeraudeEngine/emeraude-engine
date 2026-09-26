@@ -3316,7 +3316,11 @@ orange" look). A +0.12 magenta tint barely moved it and doubled the channels abo
 ⚠️ **Method traps:** (1) a global green/magenta metric is confounded by SATURATION — a desaturating
 style reads "magenta" on a green forest; judge the hue on a neutral cloud. (2) `game-logic` cannot bench a
 style's colour: its actors and lamps move between captures. (3) "≥ 250 in one channel" is a saturated
-colour, not a white; count the channels AT 255 and the pixels with ALL channels ≥ 254.
+colour, not a white; count the channels AT 255 and the pixels with ALL channels ≥ 254. (4) BANDING is
+judged on full-resolution pixels, never on a downscaled view: two sessions reported "strong concentric banding" in
+Golden Hour's sky from contact sheets / the image viewer, and the full-resolution census found none (longest run
+of identical values 4 px, no run ≥ 10 px; Normal's clean gradient steps by 1 level at a time). Posterization = long
+flat runs separated by steps ≥ 2 that the grain cannot hide.
 
 **Files:** `Graphics/Effects/Style/ColorGrading.{hpp,cpp}`, `Graphics/Photometry.hpp`
 (`linearColorFromTemperature()`), `Scenes/EffectsToolkit/StylePresets.cpp`, `CameraPresets.cpp` (Super 8).
