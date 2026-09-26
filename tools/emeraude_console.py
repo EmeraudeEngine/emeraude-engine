@@ -58,7 +58,9 @@ class ProtocolError(RuntimeError):
 class Response:
     """One response of the remote console: whether the command succeeded, and its outputs."""
 
-    def __init__(self, document: dict) -> None:
+    def __init__(self, document: dict, raw: str = "") -> None:
+        #: The line exactly as received (without its newline).
+        self.raw = raw
         self.document = document
         self.ok = bool(document.get("ok", False))
         self.outputs = list(document.get("outputs", []))
@@ -183,7 +185,7 @@ class Console:
         if not isinstance(document, dict) or "ok" not in document:
             raise ProtocolError("not a response object: " + line[:200].decode("utf-8", errors="replace"))
 
-        return Response(document)
+        return Response(document, line.decode("utf-8"))
 
     def close(self) -> None:
         """Closes the connection. Safe to call more than once."""

@@ -23,7 +23,6 @@ The wire protocol lives in `emeraude_console.py` and is shared with every other 
 here — this file is the command-line front end, nothing more.
 """
 
-import json
 
 import socket
 import sys
@@ -37,9 +36,9 @@ from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, Console, ProtocolError,
 
 
 def show(response: Response, raw: bool) -> None:
-    """Prints a response: its text, or its JSON document when raw."""
+    """Prints a response: its text, or the line exactly as received when raw."""
     if raw:
-        print(json.dumps(response.document, ensure_ascii=False))
+        print(response.raw)
     elif response.text.strip():
         print(response.text.strip())
 
