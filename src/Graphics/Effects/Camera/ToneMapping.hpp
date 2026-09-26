@@ -261,6 +261,21 @@ namespace EmEn::Graphics::Effects::Camera
 			float displayExposure (const Scenes::Component::Camera * camera) const noexcept;
 
 			/**
+			 * @brief Returns whether this tone mapper METERS the frame for @a camera: auto exposure with its luminance chain.
+			 * @note The same condition as the branch of execute() that records the luminance passes, so the console's
+			 * "Metering: auto" can never disagree with what runs. Manual exposure (the APEX triad) meters nothing.
+			 * @warning RENDER THREAD, same contract as meteredSensitivity().
+			 * @param camera The active camera, or null (the effect's own parameters then).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			meteringActive (const Scenes::Component::Camera * camera) const noexcept
+			{
+				return this->resolveExposure(camera).autoExposureEnabled && !m_lumTargets.empty();
+			}
+
+			/**
 			 * @brief Returns the metered scene average luminance, in nits (cd/m²).
 			 * @note Same readback and thread contract as meteredSensitivity(); 0 until valid.
 			 * @return float

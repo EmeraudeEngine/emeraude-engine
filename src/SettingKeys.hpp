@@ -643,6 +643,18 @@ namespace EmEn
 			constexpr auto GraphicsPPDebugNonFiniteKey{"Core/Graphics/PostProcessing/DebugNonFinite"};
 			constexpr auto DefaultGraphicsPPDebugNonFinite{false};
 
+			/* Post-processing > the OVERFLOW CENSUS starts ARMED (2026-09-26, scene-colour pre-exposure
+			 * B1). The census counts, per frame, the texels of the scene-radiance images (the grabbed
+			 * scene colour, the tone mapper's input, the traced effects' raw traces, the irradiance
+			 * probe atlas) that are NaN, infinite, or finite at/above the binary16 ceiling (65 504) —
+			 * what an RGBA16F target silently does to a physical luminance. It is ALWAYS created and
+			 * DISARMED by default: disarmed it records nothing (one branch per chain call). Read once,
+			 * when the census is created; `Core.RendererService.setOverflowCensus(1|0)` arms and
+			 * disarms it live, and `Core.RendererService.testOverflowCensus()` is the positive control
+			 * that must answer PASS on a machine before any count read there means anything. */
+			constexpr auto GraphicsPPOverflowCensusEnabledKey{"Core/Graphics/PostProcessing/OverflowCensus/Enabled"};
+			constexpr auto DefaultGraphicsPPOverflowCensusEnabled{false};
+
 			/* Post-processing > which LANE the lighting family starts on: "Auto" (the best lane
 			 * this machine can actually run), "RayTracing", "ScreenSpace", or "None" for no
 			 * indirect lighting at all. Every lighting concept exists in both lanes and both stay

@@ -28,9 +28,11 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <numbers>
+#include <span>
 
 /* Local inclusions. */
 #include "CombinePass.hpp"
@@ -38,6 +40,7 @@
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "OverflowCensus.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 #include "PostProcessStack.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
@@ -48,6 +51,7 @@
 #include "SceneRenderTarget.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/LightSet.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 #include "ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -490,6 +494,12 @@ namespace EmEn::Graphics
 	bool
 	PostProcessor::onTerminate () noexcept
 	{
+		if ( m_overflowCensus != nullptr )
+		{
+			m_overflowCensus->destroy();
+			m_overflowCensus.reset();
+		}
+
 		m_descriptorSets.clear();
 
 		m_quadGeometry.reset();
@@ -520,6 +530,26 @@ namespace EmEn::Graphics
 	bool
 	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo, bool requiresVelocity) noexcept
 	{
+		/* The overflow census, created ONCE and kept for the session. ⚠️ HERE and not in onInitialize(): this
+		 * service is initialized with the renderer's sub-services, BEFORE the frame scopes exist, so the census
+		 * would size its per-frame ring on zero frames in flight. The first configure() runs once they exist. */
+		if ( m_overflowCensus == nullptr && !m_overflowCensusCreationFailed )
+		{
+			auto census = std::make_unique< OverflowCensus >();
+
+			/* Armed BEFORE create(), so its ready trace states the launch state. */
+			census->setArmed(m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPOverflowCensusEnabledKey, DefaultGraphicsPPOverflowCensusEnabled));
+
+			if ( census->create(m_renderer) )
+			{
+				m_overflowCensus = std::move(census);
+			}
+			else
+			{
+				m_overflowCensusCreationFailed = true;
+			}
+		}
+
 		/* Cache the requirements for later use (recordBlit, recreateSceneTarget). */
 		m_cachedRequiresHDR = requiresHDR;
 		m_cachedRequiresDepth = requiresDepth;
@@ -710,6 +740,15 @@ namespace EmEn::Graphics
 		}
 
 		return true;
+	}
+
+	void
+	PostProcessor::onFrameSlotRetired (uint32_t frameIndex) noexcept
+	{
+		if ( m_overflowCensus != nullptr )
+		{
+			m_overflowCensus->harvest(frameIndex);
+		}
 	}
 
 	/* GPU execution — multi-pass scene effects. */
@@ -1180,6 +1219,20 @@ namespace EmEn::Graphics
 		 * scene colour, so it must touch neither. */
 		const bool closesFrame = phase != ChainPhase::PreTranslucency;
 
+		/* The overflow census (see OverflowCensus): ONE batch per frame, in the closing phase, right before the
+		 * tone mapper (or after the last effect when none runs). Only on the HDR chain: the grab pass of an 8-bit
+		 * chain cannot overflow. Both halves of a cut frame share the rendered-frame serial, so the traces the
+		 * pre-translucency half notes are still there for the closing batch. Disarmed: one branch. */
+		auto * const census = ( m_overflowCensus != nullptr && m_cachedRequiresHDR ) ? m_overflowCensus.get() : nullptr;
+
+		if ( census != nullptr )
+		{
+			census->prepareFrame(m_renderer.renderedFrameSerial());
+		}
+
+		const bool censusArmed = census != nullptr && census->frameArmed();
+		bool censusRecorded = false;
+
 		/* Build push constants for the effect chain. */
 		static const auto startTime = std::chrono::steady_clock::now();
 		const auto now = std::chrono::steady_clock::now();
@@ -1494,6 +1547,20 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* Every gate is passed: the effect WILL be recorded this frame, so its radiance targets hold this
+			 * frame's values by the time the census batch reads them. */
+			if ( censusArmed )
+			{
+				const auto targets = effect->radianceTargets();
+
+				census->noteRadianceTargets(std::span< const IndirectPostProcessEffect::RadianceTarget >{targets.data(), targets.size()});
+			}
+
+			/* ⚠️ The ToneMapping occupant must never join the overlay group below: the census batch is recorded
+			 * right before the tone mapper executes, and an overlay is executed later, by the combine pass. Checked
+			 * here, before the overlay branch, so the case it guards is actually reachable. */
+			assert(effect->slot() != EffectSlot::ToneMapping || !effect->producesOverlay());
+
 			if ( m_combinePass != nullptr && effect->producesOverlay() )
 			{
 				if ( !combineGroup.empty() && effect->readsChainColorUpstream(context) )
@@ -1513,6 +1580,16 @@ namespace EmEn::Graphics
 
 			flushCombineGroup();
 
+			/* The census batch, before the first display-referred effect: the tone mapper, or the reserved
+			 * PostToneMapping slot if the tone mapper does not run. Every counted image is final here, the
+			 * overlay group above included. */
+			if ( censusArmed && closesFrame && !censusRecorded && static_cast< size_t >(effect->slot()) >= static_cast< size_t >(EffectSlot::ToneMapping) )
+			{
+				census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, effect->slot() == EffectSlot::ToneMapping, m_renderer.irradianceProbeVolume(), profiler);
+
+				censusRecorded = true;
+			}
+
 			{
 				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label()};
 
@@ -1521,6 +1598,12 @@ namespace EmEn::Graphics
 		}
 
 		flushCombineGroup();
+
+		/* No tone mapper ran in the closing phase: the census counts the chain output as it is. */
+		if ( censusArmed && closesFrame && !censusRecorded )
+		{
+			census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, false, m_renderer.irradianceProbeVolume(), profiler);
+		}
 
 		/* Pre-translucency half: the composited result goes BACK INTO THE SCENE COLOUR, so the
 		 * material grab pass that follows captures a scene lit by its indirect diffuse, and the

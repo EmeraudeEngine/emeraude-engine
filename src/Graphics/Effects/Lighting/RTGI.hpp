@@ -267,6 +267,21 @@ namespace EmEn::Graphics::Effects::Lighting
 				return m_traceTarget.isCreated() ? &m_traceTarget : nullptr;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::radianceTargets()
+			 * @note The RAW trace (demodulated irradiance in RGB, the occlusion lane in alpha, which the
+			 * census never reads): the denoiser and the combine only ever see what the trace wrote. */
+			[[nodiscard]]
+			Base::StaticVector< RadianceTarget, 2 >
+			radianceTargets () const noexcept override
+			{
+				if ( !m_traceTarget.isCreated() )
+				{
+					return {};
+				}
+
+				return {RadianceTarget{.name = "RTGI_Trace", .texture = &m_traceTarget}};
+			}
+
 			/**
 			 * @brief Sets the RTGI parameters.
 			 * @param parameters The new parameters.

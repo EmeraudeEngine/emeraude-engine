@@ -12,8 +12,13 @@ tags: [hdr, fp16, exposure, photometry, overflow, owner-decision, design]
 
 > **Owner decision (2026-09-25):** the fp16 overflow of the scene colour is fixed by
 > **PRE-EXPOSURE**, and the design is settled **with the owner before any code is written**. This
-> item holds the decisions to take (§ What remains, A), then the build order (§ B). Nothing is
-> implemented yet. Citations are against engine `223880f4` and projet-alpha `f997201`.
+> item holds the decisions to take (§ What remains, A), then the build order (§ B). Citations are
+> against engine `223880f4` and projet-alpha `f997201`.
+>
+> **State (2026-09-26):** package D1-D10 decided. **B1a DONE on Linux**: the missing TRANSFER→HOST
+> readback barriers of the tone mapper and of the depth of field (C0) and the **overflow census** (C1)
+> are validated at runtime and their baselines are recorded (§ B.1); the macOS and Windows self-tests
+> (V1) are owed by the peers. B1b (the pre-exposure override) and B2 onward are not started.
 
 ## Why
 
@@ -316,10 +321,49 @@ Plumbing:
 ### B. Implementation, once A is decided (each step has its own gate)
 
 1. **Instruments (D10) first.** Record a baseline for T1-T4 (B8) in this item.
-2. **E_pre plumbing.** Latch E_pre once in `Renderer::renderFrame`, beside `prepareFrameJitter`
-   (`:1665`). That is before the RTT pass (`:1683`), the scene pass and the probe updates (`:2056`,
-   `:2218`). Keep one value per frame in flight plus the previous *rendered* one, and derive r
-   from them.
+   - **B1a, the overflow census — DONE (2026-09-26, Linux, RTX 3070 Ti, 2880×1620).**
+     `Graphics::OverflowCensus` (mechanism, traps, cost: `src/Graphics/AGENTS.md` § "The overflow
+     census"; commands: `docs/ai-runtime-control.md` § 6). Channels `SceneColour` (added: the SSR/TAA
+     guards scrub the tone-map input, owner-confirmed P10), `ToneMapInput`, `RTGI_Trace`, `RTR_Trace`,
+     `ProbeIrradiance`; an integer-only classification of the IEEE bits (not a float range test) into
+     NaN / Inf / ceiling (≥ 65 504) / peak. Created in every session, **disarmed by default**
+     (`Core/Graphics/PostProcessing/OverflowCensus/Enabled`, owner-confirmed P8/P15).
+     `meteredRejectedCount()` is on the console (`getStatus()` `Metering:` line, `getFrameDiagnostics()`).
+   - **Validation (Linux, validation layers ON, 0 VUID in every run):**
+     - V1: `testOverflowCensus()` = `PASS` (tested 256, NaN 21, Inf 12, ceiling 8, peak 65 472).
+       **macOS and Windows: owed by the peers.**
+     - V2 (`post-processor-effect-debug 0,0`, pinned f/8 · 1/125 s · ISO 100, `Reflections` off): the
+       scene is not bit-reproducible frame to frame — the A/A control differs by max 3/255 on 4.0 % of
+       the pixels — and armed vs disarmed differs by the same (max 3/255, 4.3 %): no effect beyond the
+       noise of the reference itself.
+     - V3: `OverflowCensus` inside `PostFXChain`, **0.21 ms avg, 0.42 ms max** (5 channels,
+       `basic-scenery`). The second machine's figure is still to take.
+     - V4: `tested == expected` on every channel (4 665 600 for `SceneColour`, `ToneMapInput` and
+       `RTR_Trace`, 1 166 400 for the half-res `RTGI_Trace`, 131 072 for the atlas).
+     - V7 (`light-and-shadow-debug 0,1`, both lanes, synchronization validation listed as enabled):
+       **0 hazard on the census barriers**. SSR's colour pyramid (F11) did NOT show either. The one
+       hazard of the run is unrelated and pre-existing: a `WRITE_RACING_WRITE` between two uploads of
+       the `Notifier` overlay surface on two round-robined queues (its own item,
+       `overlay-surface-reupload-races-on-two-queues`).
+     - V8: `rejected` stayed at 0 over 3 minutes of auto exposure.
+   - **Baselines (10 s windows):**
+     - T1 `basic-scenery` (default options): **no overflow in any channel** over 143 frames (the GPU
+       profiler was on); `SceneColour` peak 23 232. The BlueLight's pass over the ground did not fall in
+       that window: T1 is not settled — re-take it over a full flight period.
+     - T2 `light-and-shadow-debug 0,1`: `SceneColour` overflows by **1 texel** in 53 of 421 frames
+       (screen-space lane) and 24 of 191 (traced lane), peak finite 56 288; `ToneMapInput` 0 in both.
+     - T3 `sponza`, f/8 · 1/125 s · ISO 100: **the premise is false** — `SceneColour` overflows in
+       every one of 82 frames (1-3 texels) and **`RTGI_Trace` holds 315-358 texels at the ceiling in
+       every frame** (peak finite 65 472); `ToneMapInput`, `RTR_Trace` and the atlas stay clean.
+   - B1b, the pre-exposure override (`Core/Graphics/PostProcessing/PreExposure/Override`,
+     `setPreExposureOverride`): not started.
+2. **E_pre plumbing.** Latch E_pre once in `Renderer::renderFrame`, **right after the scene-target
+   block and before the rendering-strategy dispatch** (`Renderer.cpp:1834`/`:1845` at `a42a7410`) —
+   ⚠️ AMENDED 2026-09-26 (owner-confirmed P18): this text said "beside `prepareFrameJitter` (`:1665`)".
+   Every input is final at the new site (the camera-effect sync, `m_postProcessingActive`, the scene
+   target), and D7(b) removed the only reason to latch before the RTT pass (`:1683`); the probe
+   updates (`:2056`, `:2218`) still come after it. Keep one value per frame in flight plus the
+   previous *rendered* one, and derive r from them.
    *Gate:* with E_pre forced to 1, the PNGs are bit-identical.
 3. **Tone map ÷ E_pre and extract ÷ E_pre (D3, D4).**
    *Gate:* with an override ≠ 1 and no writer changed yet, the image scales by exactly that factor.

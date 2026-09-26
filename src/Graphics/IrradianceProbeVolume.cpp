@@ -671,8 +671,8 @@ namespace EmEn::Graphics
 	bool
 	IrradianceProbeVolume::createResources (Renderer & renderer) noexcept
 	{
-		const auto createAtlas = [this] (uint32_t texels, VkFormat format, const char * name, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & view) {
-			const uint32_t tile = texels + 2;
+		/* A tile is the probe's interior texels plus a one-texel octahedral border on each side. */
+		const auto createAtlas = [this] (uint32_t tile, VkFormat format, const char * name, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & view) {
 			const VkExtent3D extent{m_parameters.probeCountX * tile, m_parameters.probeCountZ * tile, 1};
 
 			image = std::make_shared< Image >(m_device, VK_IMAGE_TYPE_2D, format, extent, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 0, 1, m_parameters.probeCountY);
@@ -698,12 +698,12 @@ namespace EmEn::Graphics
 			return true;
 		};
 
-		if ( !createAtlas(IrradianceTexels, VK_FORMAT_R16G16B16A16_SFLOAT, "IrradianceAtlas", m_irradianceImage, m_irradianceView) )
+		if ( !createAtlas(IrradianceTileTexels, VK_FORMAT_R16G16B16A16_SFLOAT, "IrradianceAtlas", m_irradianceImage, m_irradianceView) )
 		{
 			return false;
 		}
 
-		if ( !createAtlas(DistanceTexels, VK_FORMAT_R16G16_SFLOAT, "DistanceAtlas", m_distanceImage, m_distanceView) )
+		if ( !createAtlas(DistanceTexels + 2, VK_FORMAT_R16G16_SFLOAT, "DistanceAtlas", m_distanceImage, m_distanceView) )
 		{
 			return false;
 		}
@@ -939,6 +939,25 @@ namespace EmEn::Graphics
 		}
 
 		return m_descriptorSets[frameIndex].get();
+	}
+
+	std::optional< IrradianceProbeVolume::CensusView >
+	IrradianceProbeVolume::irradianceCensusView () const noexcept
+	{
+		/* ⚠️ The atlas is UNDEFINED until the first update recorded its initialization: never hand it out before. */
+		if ( !this->usable() || !this->enabled() || !m_atlasesInitialized || m_irradianceView == nullptr )
+		{
+			return std::nullopt;
+		}
+
+		return CensusView{
+			.view = m_irradianceView.get(),
+			.width = m_parameters.probeCountX * IrradianceTileTexels,
+			.height = m_parameters.probeCountZ * IrradianceTileTexels,
+			.layers = m_parameters.probeCountY,
+			.tile = IrradianceTileTexels,
+			.border = 1
+		};
 	}
 
 	void

@@ -28,9 +28,12 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cstddef>
+#include <iomanip>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 /* Local inclusions. */
 #include "IndirectPostProcessEffect.hpp"
@@ -77,6 +80,193 @@ namespace EmEn::Graphics
 		laneName (const IndirectPostProcessEffect & effect) noexcept
 		{
 			return to_cstring(effect.requiresRayTracing() ? LightingLane::RayTracing : LightingLane::ScreenSpace);
+		}
+
+		/**
+		 * @brief Returns a census channel name as a view.
+		 * @param name The copied, zero-terminated name.
+		 * @return std::string_view
+		 */
+		[[nodiscard]]
+		std::string_view
+		channelName (const OverflowCensusChannelName & name) noexcept
+		{
+			return {name.data()};
+		}
+
+		/**
+		 * @brief Appends the "Metering:" line of a frame's diagnostics.
+		 * @param metering The tone mapper metering of the frame.
+		 * @param outputs The console outputs.
+		 * @return void
+		 */
+		void
+		appendMetering (const MeteringReport & metering, Console::Outputs & outputs) noexcept
+		{
+			if ( !metering.toneMapper )
+			{
+				outputs.emplace_back(Severity::Info, "Metering: no tone mapper in this chain (nothing is metered, the chain is not tone mapped).");
+
+				return;
+			}
+
+			const auto rejected = std::to_string(metering.rejectedCount) + " measurement(s) rejected since the tone mapper was created (counted only with a camera)";
+
+			if ( !metering.autoExposure )
+			{
+				outputs.emplace_back(Severity::Info, "Metering: manual — the camera's APEX triad exposes the frame, nothing is metered — " + rejected + ".");
+
+				return;
+			}
+
+			if ( metering.meteredLuminance <= 0.0F )
+			{
+				outputs.emplace_back(Severity::Info, "Metering: auto — no measurement read back yet — " + rejected + ".");
+
+				return;
+			}
+
+			outputs.emplace_back(Severity::Info, std::stringstream{} << std::fixed << std::setprecision(1) <<
+				"Metering: auto — scene average " << metering.meteredLuminance << " nits — ISO " << std::setprecision(0) << metering.meteredSensitivity << " — " << rejected << "."
+			);
+		}
+
+		/**
+		 * @brief Returns the window part of a census channel line.
+		 * @param entry The channel's window entry, or nullptr.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		windowSummary (const OverflowCensusWindowChannel * entry) noexcept
+		{
+			std::stringstream text;
+
+			if ( entry == nullptr )
+			{
+				text << "| window: not counted";
+			}
+			else if ( entry->maxOverflow > 0 )
+			{
+				text << "| window max " << entry->maxOverflow << " (frame " << entry->maxOverflowFrame << "), " << entry->framesOverflowing << "/" << entry->framesCounted << " frames";
+			}
+			else
+			{
+				text << "| window max 0 over " << entry->framesCounted << " frames, peak " << std::fixed << std::setprecision(1) << entry->maxPeakFinite;
+			}
+
+			return text.str();
+		}
+
+		/**
+		 * @brief Appends the "Overflow census:" block of a frame's diagnostics.
+		 * @param diagnostics The frame's diagnostics.
+		 * @param outputs The console outputs.
+		 * @return void
+		 */
+		void
+		appendOverflowCensus (const FrameDiagnostics & diagnostics, Console::Outputs & outputs) noexcept
+		{
+			const auto & census = diagnostics.census;
+
+			if ( !census.available )
+			{
+				outputs.emplace_back(Severity::Warning, "Overflow census: unavailable (creation failed, see the log).");
+
+				return;
+			}
+
+			const auto & latest = census.latest;
+			const auto & window = census.window;
+
+			if ( !census.armed )
+			{
+				outputs.emplace_back(Severity::Info, "Overflow census: disarmed — Core.RendererService.setOverflowCensus(1) (or 'Core/Graphics/PostProcessing/OverflowCensus/Enabled' at launch).");
+			}
+			else if ( !latest.valid )
+			{
+				outputs.emplace_back(Severity::Info, std::stringstream{} << "Overflow census: ARMED — no frame counted yet (rendered " << diagnostics.renderedFrame << "; only the HDR chain is counted).");
+			}
+			else
+			{
+				std::stringstream header;
+				header << "Overflow census: ARMED — last counted frame " << latest.frameSerial << " (rendered " << diagnostics.renderedFrame << ")";
+
+				if ( window.framesCounted > 0 )
+				{
+					header << "; window from frame " << window.firstFrame << ": " << window.framesCounted << " frames counted, " << window.framesWithOverflow << " with an overflow, " << window.staleSlots << " stale";
+				}
+				else
+				{
+					header << "; window opened after frame " << window.startsAfterFrame << ", nothing counted in it yet, " << window.staleSlots << " stale";
+				}
+
+				if ( !latest.toneMapped )
+				{
+					header << " — NO tone mapper ran: ToneMapInput is the chain output";
+				}
+
+				outputs.emplace_back(Severity::Info, header.str());
+
+				const auto findWindowChannel = [&window] (const OverflowCensusChannelName & name) -> const OverflowCensusWindowChannel * {
+					for ( uint32_t index = 0; index < window.channelCount; ++index )
+					{
+						if ( window.channels[index].name == name )
+						{
+							return &window.channels[index];
+						}
+					}
+
+					return nullptr;
+				};
+
+				for ( uint32_t index = 0; index < latest.channelCount; ++index )
+				{
+					const auto & channel = latest.channels[index];
+
+					std::stringstream line;
+					line <<
+						"  " << std::left << std::setw(16) << channelName(channel.name) << " " <<
+						channel.tested << "/" << channel.expectedTexels << " texels  NaN " << channel.nanTexels << "  Inf " << channel.infTexels << "  ceiling " << channel.ceilingTexels <<
+						"  peak " << std::fixed << std::setprecision(1) << channel.peakFinite << "  " << windowSummary(findWindowChannel(channel.name));
+
+					if ( channel.invalid )
+					{
+						line << "  <- INVALID: the census did not test the whole image, these counts cannot be trusted";
+					}
+
+					outputs.emplace_back(channel.invalid ? Severity::Warning : Severity::Info, line.str());
+				}
+
+				/* A channel of the window absent from the last counted frame: its effect did not run in that frame. */
+				for ( uint32_t index = 0; index < window.channelCount; ++index )
+				{
+					const auto & entry = window.channels[index];
+
+					const auto counted = std::any_of(latest.channels.begin(), latest.channels.begin() + static_cast< std::ptrdiff_t >(latest.channelCount), [&entry] (const OverflowCensusChannel & channel) {
+						return channel.name == entry.name;
+					});
+
+					if ( !counted )
+					{
+						outputs.emplace_back(Severity::Info, std::stringstream{} << "  " << std::left << std::setw(16) << channelName(entry.name) << " not counted in that frame (the effect did not run)  " << windowSummary(&entry));
+					}
+				}
+			}
+
+			/* The positive control: a count means something only on a machine where it passed. */
+			if ( !census.selfTest.ran )
+			{
+				outputs.emplace_back(Severity::Info, "Overflow census: a clean count is meaningful only after Core.RendererService.testOverflowCensus() answered PASS on this machine.");
+			}
+			else if ( census.selfTest.passed )
+			{
+				outputs.emplace_back(Severity::Info, std::stringstream{} << "Overflow census: self-test PASSED on frame " << census.selfTest.frameSerial << " this session.");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Warning, std::stringstream{} << "Overflow census: self-test FAILED on frame " << census.selfTest.frameSerial << " — the census is BLIND on this machine, no count it reports can be trusted.");
+			}
 		}
 	}
 
@@ -260,8 +450,20 @@ namespace EmEn::Graphics
 				);
 			}
 
+			/* The frame diagnostics the render thread published with this stack (a copy: nothing here reads
+			 * render-thread state). */
+			if ( const auto diagnostics = this->frameDiagnostics(); diagnostics.renderedFrame == 0 )
+			{
+				outputs.emplace_back(Severity::Info, "Metering / overflow census: no frame rendered with this stack yet.");
+			}
+			else
+			{
+				appendMetering(diagnostics.metering, outputs);
+				appendOverflowCensus(diagnostics, outputs);
+			}
+
 			return true;
-		}, "Report, per slot, what runs and whether it is what you selected.");
+		}, "Report, per slot, what runs and whether it is what you selected; then the tone mapper metering and the overflow census of the last frame.");
 
 		this->bindCommand("select", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.size() < 2 )

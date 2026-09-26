@@ -33,6 +33,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <random>
 #include <vector>
 
@@ -101,10 +102,30 @@ namespace EmEn::Graphics
 
 			/** @brief Interior texels per probe side of the irradiance atlas (octahedral map). */
 			static constexpr uint32_t IrradianceTexels{8};
+			/** @brief Texels per probe side of an irradiance atlas TILE: the interior plus a one-texel octahedral border on each side. */
+			static constexpr uint32_t IrradianceTileTexels{IrradianceTexels + 2};
 			/** @brief Interior texels per probe side of the distance atlas (octahedral map). */
 			static constexpr uint32_t DistanceTexels{16};
 			/** @brief Upper bound of rays per probe (the update passes stage the ray set in shared memory). */
 			static constexpr uint32_t MaxRaysPerProbe{512};
+
+			/**
+			 * @brief What the overflow census needs to count the irradiance atlas.
+			 * @note The atlas is a 2D ARRAY (one layer per probe row in Y) of tiles, and only a tile's
+			 * interior is radiance: its border repeats the octahedral wrap, and would count every texel twice.
+			 */
+			struct CensusView
+			{
+				/** @brief The 2D-array view of the atlas, in GENERAL layout for its whole life. */
+				const Vulkan::ImageView * view{nullptr};
+				uint32_t width{0};
+				uint32_t height{0};
+				uint32_t layers{0};
+				/** @brief Texels per tile side, border included. */
+				uint32_t tile{0};
+				/** @brief Border texels on each side of a tile. */
+				uint32_t border{0};
+			};
 
 			/**
 			 * @brief User-facing parameters, read from the settings at initialization.
@@ -237,6 +258,15 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			const Vulkan::DescriptorSet * descriptorSet (uint32_t frameIndex) const noexcept;
+
+			/**
+			 * @brief Returns the irradiance atlas as the overflow census counts it, or std::nullopt.
+			 * @note A value only when the volume is usable, enabled, and its atlases were initialized
+			 * (they are UNDEFINED before the first update). RENDER THREAD, like the update.
+			 * @return std::optional< CensusView >
+			 */
+			[[nodiscard]]
+			std::optional< CensusView > irradianceCensusView () const noexcept;
 
 			/**
 			 * @brief Records this frame's update: scroll, parameters, trace, blend, borders.

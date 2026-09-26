@@ -222,6 +222,21 @@ namespace EmEn::Graphics::Effects::Lighting
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::radianceTargets()
+			 * @note The RAW trace — the reflected radiance before the temporal accumulation, the shared
+			 * blur and the combine. */
+			[[nodiscard]]
+			Base::StaticVector< RadianceTarget, 2 >
+			radianceTargets () const noexcept override
+			{
+				if ( !m_traceTarget.isCreated() )
+				{
+					return {};
+				}
+
+				return {RadianceTarget{.name = "RTR_Trace", .texture = &m_traceTarget}};
+			}
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::recordPreDenoisePasses() */
 			void recordPreDenoisePasses (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & inputColor, const FrameContext & context) noexcept override;
 

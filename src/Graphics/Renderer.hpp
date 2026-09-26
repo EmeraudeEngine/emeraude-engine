@@ -64,6 +64,7 @@
 #include "TextureCache.hpp"
 #include "TextureCompressor.hpp"
 #include "FrameCapture.hpp"
+#include "FrameDiagnostics.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -1061,6 +1062,19 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the serial of the frame being rendered: 1 for the first one, +1 per frame renderFrame() records.
+			 * @note RENDER THREAD. Both halves of a frame cut around the translucent pass share it, which is what
+			 * lets a per-frame consumer (the overflow census) tell a new frame from the second half of the same one.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			renderedFrameSerial () const noexcept
+			{
+				return m_renderedFrameSerial;
+			}
+
+			/**
 			 * @brief Returns the double-buffer read state index for the current frame.
 			 * @note Set from Scene::preparedReadStateIndex() before post-processing.
 			 *	   Use this in post-process effects (e.g. RTR) to read view matrices
@@ -1453,6 +1467,15 @@ namespace EmEn::Graphics
 			FrameCapture::Result captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout) noexcept;
 
 			/**
+			 * @brief Returns a copy of the diagnostics the render thread published for the last rendered frame.
+			 * @note ANY THREAD. Composed once per rendered frame (overflow census, tone mapper metering) and copied
+			 * out of a mutex: a reader never touches render-thread state. See Graphics/FrameDiagnostics.hpp.
+			 * @return FrameDiagnostics
+			 */
+			[[nodiscard]]
+			FrameDiagnostics frameDiagnostics () const noexcept;
+
+			/**
 			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
 			 * @note Defined out-of-line to keep 'Vulkan/SwapChain.hpp' (and the whole
 			 * Window/Framebuffer/CommandBuffer/ViewMatrices chain it drags in) out of this header.
@@ -1805,6 +1828,10 @@ namespace EmEn::Graphics
 			/** @brief Per-pass GPU timing service (timestamp queries). Null when disabled. */
 			std::unique_ptr< Vulkan::GPUProfiler > m_GPUProfiler;
 			FrameCapture m_frameCapture;
+			/** @brief Guards m_frameDiagnostics (the render thread publishes once per frame, the console reads). */
+			mutable std::mutex m_frameDiagnosticsAccess;
+			/** @brief The diagnostics of the last rendered frame (see publishFrameDiagnostics()). */
+			FrameDiagnostics m_frameDiagnostics;
 			/** @brief Frames recorded by renderFrame() since the start: the frame serial of a capture's metadata. */
 			uint64_t m_renderedFrameSerial{0};
 			bool m_debugMode{false};
@@ -1838,6 +1865,16 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void updateSurfaceGeometries (uint32_t readStateIndex) noexcept;
+
+			/**
+			 * @brief RENDER THREAD. Composes the frame's diagnostics and publishes them to the renderer's board and to
+			 * the scene's post-process stack (Core.SceneManagerService.PostProcess.getStatus() prints them).
+			 * @note Once per rendered frame, after the frame's recording and inside the frame scope: the tone mapper's
+			 * metering is render-thread state (Effects::Camera::ToneMapping, meteredLuminance()).
+			 * @param scene The scene of the frame, or null.
+			 * @return void
+			 */
+			void publishFrameDiagnostics (Scenes::Scene * scene) noexcept;
 
 			std::mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
 			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates; ///< Materials that changed a dynamic property since the last flush.

@@ -75,6 +75,7 @@ namespace EmEn
 		class DenoisePass;
 		class GrabPass;
 		class IndirectPostProcessEffect;
+		class OverflowCensus;
 		class PostProcessStack;
 		class Renderer;
 
@@ -397,6 +398,42 @@ namespace EmEn::Graphics
 			 */
 			bool executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept;
 
+			/* Overflow census (scene-colour pre-exposure, step B1a). */
+
+			/**
+			 * @brief Harvests what the frame slot recorded, once its fence has passed.
+			 * @note RENDER THREAD, from Renderer::beginFrame(), right after the fence wait of @a frameIndex,
+			 * whether or not the chain runs in the frame about to start.
+			 * @param frameIndex The frame in flight index whose fence was just waited.
+			 * @return void
+			 */
+			void onFrameSlotRetired (uint32_t frameIndex) noexcept;
+
+			/**
+			 * @brief Returns the overflow census, or nullptr before the first configure().
+			 * @note Created once, at the first configure() (the frames in flight exist then), and kept for the
+			 * whole session: the frame-counting methods are RENDER THREAD, the arming and the statistics are
+			 * thread-safe (see Graphics::OverflowCensus).
+			 * @return OverflowCensus *
+			 */
+			[[nodiscard]]
+			OverflowCensus *
+			overflowCensus () noexcept
+			{
+				return m_overflowCensus.get();
+			}
+
+			/**
+			 * @brief Returns the overflow census, or nullptr before the first configure().
+			 * @return const OverflowCensus *
+			 */
+			[[nodiscard]]
+			const OverflowCensus *
+			overflowCensus () const noexcept
+			{
+				return m_overflowCensus.get();
+			}
+
 			/* Static. */
 
 			/**
@@ -425,6 +462,10 @@ namespace EmEn::Graphics
 			/* Shared separable-blur pass of the overlay effects (see DenoisePass). Same
 			 * exported-pimpl constraint. */
 			std::unique_ptr< DenoisePass > m_denoisePass;
+			/* The overflow census (see OverflowCensus). Same exported-pimpl constraint: the destructor
+			 * needs the complete type (defined out-of-line). Mutated from the const chain executor through
+			 * the pointer, like the combine pass. */
+			std::unique_ptr< OverflowCensus > m_overflowCensus;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
 			float m_nearPlane{0.1F};
@@ -448,5 +489,7 @@ namespace EmEn::Graphics
 			bool m_cachedRequiresMaterialProperties{false};
 			bool m_cachedRequiresAlbedo{false};
 			bool m_cachedRequiresVelocity{false};
+			/* The census creation failed once: it is never retried (the failure is traced where it happens). */
+			bool m_overflowCensusCreationFailed{false};
 	};
 }

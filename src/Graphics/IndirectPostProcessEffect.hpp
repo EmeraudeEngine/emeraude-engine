@@ -729,6 +729,41 @@ namespace EmEn::Graphics
 
 			}
 
+			/* ---- Radiance targets (the overflow census, Sep 2026) ----
+			 * A PASSIVE hook: the executor asks every effect it is about to record which of its own
+			 * images hold SCENE RADIANCE (the units the chain carries before the tone mapping), and the
+			 * overflow census counts their NaN / Inf / fp16-ceiling texels at the end of the frame. The
+			 * effect is never named by the executor, so no class test is involved. */
+
+			/**
+			 * @brief One image an effect writes in scene-radiance units.
+			 */
+			struct RadianceTarget
+			{
+				/** @brief The census channel name: a STRING LITERAL (it is copied, but must outlive the call). */
+				const char * name{nullptr};
+				/** @brief The image, valid for the frame the effect is recorded in. */
+				const Vulkan::TextureInterface * texture{nullptr};
+			};
+
+			/**
+			 * @brief Returns the images this effect WRITES in scene-radiance units, valid for the frame it is recorded in.
+			 * @note Read by the overflow census (Graphics::OverflowCensus), and only when it is armed: the
+			 * executor collects them once an effect has passed every gate, so an effect that does not run
+			 * in a frame is not counted in it. Every image listed must be RGBA float, sampled in the
+			 * layout its own TextureInterface reports, and must not be rewritten later in the same frame.
+			 * The chain colour itself is counted anyway (the grabbed scene colour and the tone mapper's
+			 * input): list only what the chain colour would not show, typically a raw trace.
+			 * @return Base::StaticVector< RadianceTarget, 2 >
+			 */
+			[[nodiscard]]
+			virtual
+			Base::StaticVector< RadianceTarget, 2 >
+			radianceTargets () const noexcept
+			{
+				return {};
+			}
+
 			/* ---- Shared denoise protocol (phase E) ----
 			 * An overlay effect whose working chain is "trace → separable blur H → blur V"
 			 * can delegate the blur pair to the PostProcessor's shared DenoisePass: the

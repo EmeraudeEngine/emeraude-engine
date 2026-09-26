@@ -519,6 +519,8 @@ per frame).
   never mistaken for a fallback.
 - ⚠️ The four camera-owned slots (`DepthOfField`, `MotionBlur`, `Glare`, `ToneMapping`) are
   reported but **not selectable**: the camera owns them, drive them through the camera.
+- `getStatus()` ends with the last frame's `Metering:` line and `Overflow census:` block (§ 6,
+  "Counting the fp16 overflows") — a copy the render thread published, never a live read.
 - ⚠️⚠️ **A lane switch is invisible to a mean-luminance comparison.** Measured on Sponza: the two
   frames differ on 99.7 % of pixels (mean |Δ| 20/255) while the mean luminance moves by 0.01 — the
   auto-exposure absorbs the change. Read the image, or compare per-pixel.
@@ -735,6 +737,59 @@ echo "Core.RendererService.getGPUTimings(reset)" | nc -q 2 localhost 7777   # cl
   reflection cost ladder, not a profiler gap.
 - This is the FIRST tool for any "the frame is slow" question — reach for RenderDoc only
   when a single pass needs draw-call-level dissection.
+
+### Counting the fp16 overflows (the overflow census, Sep 2026)
+
+How many texels of the scene radiance an RGBA16F target has turned into **NaN**, **Inf**, or the
+largest finite half (**ceiling**, ≥ 65 504), per frame and per image — the instrument of the
+scene-colour pre-exposure work (engine `docs/todo/scene-colour-pre-exposure.md`, step B1a;
+mechanism: `src/Graphics/AGENTS.md` § "The overflow census").
+
+```bash
+python3 tools/remote-console.py "Core.RendererService.testOverflowCensus()"      # positive control, FIRST
+python3 tools/remote-console.py "Core.RendererService.setOverflowCensus(1)"      # arm (0 disarms)
+python3 tools/remote-console.py "Core.RendererService.resetOverflowCensus()"     # new statistics window
+python3 tools/remote-console.py "Core.RendererService.getFrameDiagnostics()"     # JSON, for scripts
+python3 tools/remote-console.py "Core.SceneManagerService.PostProcess.getStatus()"  # same data, for a human
+```
+
+- **Disarmed by default** (it costs one branch then). Arm it live, or at launch with
+  `Core/Graphics/PostProcessing/OverflowCensus/Enabled = true` (read once). Every switch lands on the
+  NEXT rendered frame. It counts the HDR chain only (an 8-bit chain cannot overflow).
+- ⚠️⚠️ **`testOverflowCensus()` must answer `PASS` on a machine before any count read there means
+  anything.** It counts a 16×16 image of raw half bit patterns in the next frame (blocks at most 3 s)
+  and prints the expected tuple — tested 256, NaN 21, Inf 12, ceiling 8, peak 65472 — against the
+  measured one. `FAIL` = the census is blind on that platform: take no baseline there. It needs a scene
+  rendering through the HDR post-process chain (it answers `FAIL: no frame counted…` otherwise).
+- Channels: `SceneColour` (the grabbed scene colour the chain starts from), `ToneMapInput` (what the
+  tone mapper receives; the chain output with `toneMapped: false` when none ran), `RTGI_Trace` /
+  `RTR_Trace` (the raw traces, only on the frames their effect runs), `ProbeIrradiance` (the probe
+  atlas interior). ⚠️ **`ToneMapInput` = 0 does not mean the scene colour is clean**: the TAA and SSR
+  guards scrub non-finite values first — the gap between the two channels IS those guards.
+- `getStatus()` appends a `Metering:` line (auto/manual, scene average in nits, ISO, rejected
+  measurements — counted only with a camera; a GROWING count is the corruption fingerprint of
+  `ToneMapping::meteredRejectedCount()`) and an `Overflow census:` block (last counted frame, the
+  window, one line per channel with `tested/expected`, the classes, the peak, and the window maxima).
+- `getFrameDiagnostics()` schema (one line of JSON; a non-finite float is `null`):
+
+```json
+{"renderedFrame":18342,
+ "metering":{"toneMapper":true,"auto":true,"meteredLuminance":812.4,"meteredSensitivity":3200,"rejected":0},
+ "census":{"available":true,"armed":true,"valid":true,"frame":18339,"toneMapped":true,
+   "channels":[{"name":"SceneColour","tested":4665600,"expected":4665600,"nan":0,"inf":3912,"ceiling":118,
+                "overflow":4030,"peakFinite":65472,"invalid":false}],
+   "window":{"startsAfterFrame":17739,"firstFrame":17740,"lastFrame":18339,"frames":600,"framesWithOverflow":12,
+             "staleSlots":0,
+             "channels":[{"name":"SceneColour","framesCounted":600,"framesOverflowing":12,"maxOverflow":4870,
+                          "maxOverflowFrame":18101,"maxPeakFinite":65472}]},
+   "selfTest":{"ran":true,"passed":true,"frame":17702,"tested":256,"nan":21,"inf":12,"ceiling":8,"peakFinite":65472}}}
+```
+
+- The counts arrive `framesInFlight` frames late (harvested after the slot's fence): `frame` is the
+  frame they belong to, `renderedFrame` the last one rendered. `tested != expected` flags a channel
+  `invalid` (a census defect, never a property of the scene); `staleSlots` counts batches recorded but
+  never executed.
+- Cost: read it in `getGPUTimings()`, the `OverflowCensus` line inside `PostFXChain`.
 
 ### Triggering a RenderDoc GPU frame capture
 
@@ -989,6 +1044,10 @@ echo "Core.RendererService.lsfunc()" | nc -q 1 localhost 7777  # List service co
 | | *(JSON input)* | Send `{...}` to create scene from JSON |
 | **RendererService** | `screenshot()` | Capture framebuffer to PNG |
 | | `getStatus()` | FPS, frame time, resolution |
+| | `setOverflowCensus(1\|0)` | Arm / disarm the overflow census (NaN / Inf / fp16-ceiling counts) |
+| | `resetOverflowCensus()` | Open a new census statistics window |
+| | `testOverflowCensus()` | Census positive control: `PASS` / `FAIL` with both tuples |
+| | `getFrameDiagnostics()` | Last frame's metering + overflow census (JSON) |
 | **WindowService** | `resize(w, h)` | Resize window |
 | | `getState()` | Window state (JSON) |
 | **SettingsService** | `getJson()` | All settings (JSON) |

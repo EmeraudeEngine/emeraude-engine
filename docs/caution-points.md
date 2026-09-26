@@ -1473,6 +1473,29 @@ nits in `RGBA16F`, nothing is pre-exposed and no light pass clamps. `basic-scene
 3.5e5·ρ_b nits, +Inf for any blue albedo above 0.19. A mirror metal under a 100 klx sun overflows as well
 (`SSR.cpp` comment). The fix decided by the owner is PRE-EXPOSURE, to be designed with the owner first:
 [`todo/scene-colour-pre-exposure.md`](todo/scene-colour-pre-exposure.md).
+**Measure it** with the overflow census (next section) before and after any change.
+
+### Reading the overflow census — three ways to draw a false conclusion (Sep 2026)
+
+`Core.RendererService.setOverflowCensus(1)` / `getFrameDiagnostics()` count, per frame and per image, the
+NaN / Inf / fp16-ceiling texels of the scene radiance (`src/Graphics/AGENTS.md` § "The overflow census",
+`docs/ai-runtime-control.md` § 6). Its numbers are easy to misread:
+
+- ⚠️⚠️ **A count means something only once `Core.RendererService.testOverflowCensus()` answered `PASS` on that
+  machine.** The predicate is integer-only on purpose (a fast-math compiler folds `isnan()`/`isinf()` away), but a
+  driver, a translation layer (MoltenVK) or a shader compiler can still break it: the self-test counts a 16×16
+  image of raw half bit patterns with a known answer (tested 256, NaN 21, Inf 12, ceiling 8, peak 65 472). Any
+  other tuple = the census is blind there, a clean 0 proves nothing, take no baseline.
+- ⚠️ **`ToneMapInput` = 0 does NOT mean the scene colour is clean.** The TAA and SSR guards scrub non-finite
+  values out of the chain before the tone mapper (`TAA.cpp`, `SSR.cpp`), so the tone mapper's input can read 0
+  while `SceneColour` — the grabbed scene colour the chain starts from — overflows. The gap between the two
+  channels IS those guards; read `SceneColour` (and the raw traces) for what the renderer produced.
+- ⚠️ **`ceiling` is not `Inf`.** A GPU may round an overflowing float → half conversion to 65 504 instead of +Inf;
+  both are counted apart, and `overflow = NaN + Inf + ceiling` is the figure. A channel whose `peakFinite` sits
+  just under 65 504 with `ceiling` 0 is at the edge, not clean.
+
+Also: the counts arrive `framesInFlight` frames late (`frame` in the JSON, not `renderedFrame`), and a channel
+flagged `invalid` (`tested != expected`) is a census defect, never a property of the scene.
 
 ### Fixed: Beer's law absorbed over the MESH thickness, not the world one (Sep 2026)
 

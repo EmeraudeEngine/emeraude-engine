@@ -43,6 +43,8 @@
 #include "IBLTexture.hpp"
 #include "SkinnedGeometryProcessor.hpp"
 #include "IrradianceProbeVolume.hpp"
+#include "OverflowCensus.hpp"
+#include "Effects/Camera/ToneMapping.hpp"
 #include "Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Material/Interface.hpp"
 #include "MDI/BatchBuilder.hpp"
@@ -1559,6 +1561,9 @@ namespace EmEn::Graphics
 			m_frameCapture.onFrameSlotRetired(m_currentFrameIndex);
 			m_recorder.onFrameSlotRetired(m_currentFrameIndex);
 
+			/* And the overflow census batch recorded into it: harvested whether or not the chain runs this frame. */
+			m_postProcessor.onFrameSlotRetired(m_currentFrameIndex);
+
 			currentFrameScope.prepareForNewFrame();
 		}
 		else
@@ -1850,6 +1855,9 @@ namespace EmEn::Graphics
 		{
 			this->renderFrameDirect(scene, overlayManager, editorManager, currentFrameScope, commandBuffer);
 		}
+
+		/* The frame's diagnostics (overflow census, tone mapper metering), for the console: the chain has run. */
+		this->publishFrameDiagnostics(scene.get());
 
 		/* Archive the view state consumed by this frame (frame-history contract).
 		 * MUST happen after the frame's command buffer is recorded: during the recording of
@@ -2870,6 +2878,50 @@ namespace EmEn::Graphics
 		}
 
 		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
+	}
+
+	void
+	Renderer::publishFrameDiagnostics (Scenes::Scene * scene) noexcept
+	{
+		FrameDiagnostics diagnostics{};
+		diagnostics.renderedFrame = m_renderedFrameSerial;
+
+		if ( const auto * census = m_postProcessor.overflowCensus(); census != nullptr )
+		{
+			diagnostics.census = census->snapshot();
+		}
+
+		PostProcessStack * stack = scene != nullptr ? scene->postProcessStack() : nullptr;
+
+		if ( stack != nullptr )
+		{
+			/* ⚠️ RENDER THREAD, inside the frame scope: the tone mapper is (de)materialized by the camera sync on this
+			 * thread, and its metered values are written by its execute(), on this thread too. */
+			if ( const auto toneMapping = stack->cameraToneMapping(); toneMapping != nullptr && toneMapping->isEnabled() && toneMapping->isCreated() )
+			{
+				const auto camera = scene->activeCamera();
+
+				diagnostics.metering.toneMapper = true;
+				diagnostics.metering.autoExposure = toneMapping->meteringActive(camera.get());
+				diagnostics.metering.meteredLuminance = toneMapping->meteredLuminance();
+				diagnostics.metering.meteredSensitivity = toneMapping->meteredSensitivity();
+				diagnostics.metering.rejectedCount = toneMapping->meteredRejectedCount();
+			}
+
+			stack->publishFrameDiagnostics(diagnostics);
+		}
+
+		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+
+		m_frameDiagnostics = diagnostics;
+	}
+
+	FrameDiagnostics
+	Renderer::frameDiagnostics () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+
+		return m_frameDiagnostics;
 	}
 
 	FrameCapture::Result

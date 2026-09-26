@@ -34,6 +34,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -44,6 +45,7 @@
 /* Local inclusions for usages. */
 #include "DirectPostProcessEffect.hpp"
 #include "EffectSlot.hpp"
+#include "FrameDiagnostics.hpp"
 
 namespace EmEn::Graphics
 {
@@ -714,6 +716,23 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool requiresJitter () const noexcept;
 
+			/**
+			 * @brief Stores the diagnostics of the frame this stack was rendered in (overflow census, tone mapper metering).
+			 * @note RENDER THREAD, once per rendered frame (Renderer::publishFrameDiagnostics()). A copy, behind a mutex:
+			 * the console reads it from the main thread without touching any render-thread state.
+			 * @param diagnostics The frame's diagnostics.
+			 * @return void
+			 */
+			void publishFrameDiagnostics (const FrameDiagnostics & diagnostics) noexcept;
+
+			/**
+			 * @brief Returns a copy of the diagnostics of the last frame this stack was rendered in.
+			 * @note ANY THREAD. Default-constructed (renderedFrame 0) until the stack was rendered once.
+			 * @return FrameDiagnostics
+			 */
+			[[nodiscard]]
+			FrameDiagnostics frameDiagnostics () const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
@@ -782,6 +801,10 @@ namespace EmEn::Graphics
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraMotionBlur;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraGlare;
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
+			/* The diagnostics of the last frame this stack was rendered in: written by the render thread, read by the
+			 * console (getStatus). Guarded by m_frameDiagnosticsAccess. */
+			mutable std::mutex m_frameDiagnosticsAccess;
+			FrameDiagnostics m_frameDiagnostics;
 			/* The scene-driven cloud pass was considered (filed, or declined by the settings): the
 			 * decision is taken once, on the first frame the scene holds a cloud. RENDER THREAD. */
 			bool m_cloudEffectResolved{false};

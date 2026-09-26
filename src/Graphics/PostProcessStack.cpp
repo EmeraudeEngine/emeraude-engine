@@ -1337,4 +1337,20 @@ namespace EmEn::Graphics
 			return effect != nullptr && effect->isEnabled() && effect->requiresJitter();
 		});
 	}
+
+	void
+	PostProcessStack::publishFrameDiagnostics (const FrameDiagnostics & diagnostics) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+
+		m_frameDiagnostics = diagnostics;
+	}
+
+	FrameDiagnostics
+	PostProcessStack::frameDiagnostics () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+
+		return m_frameDiagnostics;
+	}
 }

@@ -28,14 +28,18 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <string>
+#include <string_view>
 
 /* Local inclusions. */
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "MDI/BatchBuilder.hpp"
+#include "OverflowCensus.hpp"
 #include "PrimaryServices.hpp"
 #include "VideoFrameConverter.hpp"
 #include "Vulkan/Instance.hpp"
@@ -278,6 +282,221 @@ namespace EmEn::Graphics
 
 			return true;
 		}, "Returns the per-pass GPU timings (timestamp queries). Optional arg: 'reset' to clear the statistics.");
+
+		/* ---- The overflow census (scene-colour pre-exposure, step B1a). ---- */
+
+		this->bindCommand("setOverflowCensus", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			auto * census = m_postProcessor.overflowCensus();
+
+			if ( census == nullptr || !census->available() )
+			{
+				outputs.emplace_back(Severity::Error, "The overflow census is unavailable: not created yet, or its creation failed (see the log).");
+
+				return false;
+			}
+
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: setOverflowCensus(1) to arm the census, setOverflowCensus(0) to disarm it.");
+
+				return false;
+			}
+
+			const auto state = arguments[0].asBoolean();
+
+			/* Latched by the render thread at the next rendered frame, like any console switch. */
+			census->setArmed(state);
+
+			if ( state )
+			{
+				outputs.emplace_back(Severity::Success, "Overflow census available and ARMED from the next rendered frame (the HDR chain only). Read it with getFrameDiagnostics() or Core.SceneManagerService.PostProcess.getStatus(); testOverflowCensus() must have answered PASS on this machine for a count to mean anything.");
+			}
+			else
+			{
+				outputs.emplace_back(Severity::Success, "Overflow census disarmed from the next rendered frame (its last counts and its window are kept).");
+			}
+
+			return true;
+		}, "Arms (1) or disarms (0) the overflow census: per-frame NaN / Inf / fp16-ceiling texel counts of the scene-radiance images.");
+
+		this->bindCommand("resetOverflowCensus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			auto * census = m_postProcessor.overflowCensus();
+
+			if ( census == nullptr || !census->available() )
+			{
+				outputs.emplace_back(Severity::Error, "The overflow census is unavailable: not created yet, or its creation failed (see the log).");
+
+				return false;
+			}
+
+			const auto startsAfter = census->resetWindow();
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} <<
+				"Overflow census window reset: it holds the frames rendered after frame " << startsAfter << "." <<
+				( census->armed() ? "" : " The census is disarmed: nothing is counted until setOverflowCensus(1)." )
+			);
+
+			return true;
+		}, "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.");
+
+		this->bindCommand("testOverflowCensus", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			auto * census = m_postProcessor.overflowCensus();
+
+			if ( census == nullptr || !census->available() )
+			{
+				outputs.emplace_back(Severity::Error, "FAIL: the overflow census is unavailable (not created yet, or its creation failed: see the log).");
+
+				return false;
+			}
+
+			/* Blocks this (main) thread until a frame counted the self-test image: the render thread produces it. */
+			const auto result = census->runSelfTest(std::chrono::seconds{3});
+
+			if ( !result.ran )
+			{
+				outputs.emplace_back(Severity::Error, "FAIL: no frame counted the self-test image within 3 s. A scene must be rendering through the HDR post-process chain (the census counts nothing else).");
+
+				return false;
+			}
+
+			const auto & measured = result.measured;
+
+			std::stringstream message;
+			message << std::setprecision(9);
+
+			if ( result.passed )
+			{
+				message << "PASS (frame " << result.frameSerial << "): tested " << measured.tested << ", NaN " << measured.nanTexels << ", Inf " << measured.infTexels << ", ceiling " << measured.ceilingTexels << ", peak " << measured.peakFinite << ". The census sees every class on this machine.";
+
+				outputs.emplace_back(Severity::Success, message.str());
+
+				return true;
+			}
+
+			message <<
+				"FAIL (frame " << result.frameSerial << "): expected tested " << OverflowCensus::SelfTestExpectedTested << ", NaN " << OverflowCensus::SelfTestExpectedNaN << ", Inf " << OverflowCensus::SelfTestExpectedInf << ", ceiling " << OverflowCensus::SelfTestExpectedCeiling << ", peak 65472; "
+				"measured tested " << measured.tested << ", NaN " << measured.nanTexels << ", Inf " << measured.infTexels << ", ceiling " << measured.ceilingTexels << ", peak " << measured.peakFinite << ". "
+				"The census is BLIND on this machine: take no baseline here.";
+
+			outputs.emplace_back(Severity::Error, message.str());
+
+			return false;
+		}, "Positive control of the overflow census: counts a 16x16 image of raw half bit patterns in the next frame (blocks at most 3 s) and answers PASS or FAIL with the expected and measured tuples.");
+
+		this->bindCommand("getFrameDiagnostics", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
+			const auto diagnostics = this->frameDiagnostics();
+
+			/* JSON has no NaN nor infinity: a non-finite float is written as null. */
+			const auto number = [] (float value) {
+				if ( !std::isfinite(value) )
+				{
+					return std::string{"null"};
+				}
+
+				std::stringstream text;
+				text << std::setprecision(9) << value;
+
+				return text.str();
+			};
+
+			/* The names are engine identifiers; escape what JSON requires anyway. */
+			const auto name = [] (const OverflowCensusChannelName & value) {
+				std::string text{"\""};
+
+				for ( const char character : std::string_view{value.data()} )
+				{
+					if ( character == '"' || character == '\\' )
+					{
+						text += '\\';
+					}
+
+					text += character;
+				}
+
+				return text + "\"";
+			};
+
+			const auto boolean = [] (bool value) {
+				return value ? "true" : "false";
+			};
+
+			const auto & metering = diagnostics.metering;
+			const auto & census = diagnostics.census;
+			const auto & latest = census.latest;
+			const auto & window = census.window;
+			const auto & selfTest = census.selfTest;
+
+			std::stringstream json;
+
+			json << R"({"renderedFrame":)" << diagnostics.renderedFrame << ",";
+
+			json << R"("metering":{)" <<
+				R"("toneMapper":)" << boolean(metering.toneMapper) << "," <<
+				R"("auto":)" << boolean(metering.autoExposure) << "," <<
+				R"("meteredLuminance":)" << number(metering.meteredLuminance) << "," <<
+				R"("meteredSensitivity":)" << number(metering.meteredSensitivity) << "," <<
+				R"("rejected":)" << metering.rejectedCount << "},";
+
+			json << R"("census":{)" <<
+				R"("available":)" << boolean(census.available) << "," <<
+				R"("armed":)" << boolean(census.armed) << "," <<
+				R"("valid":)" << boolean(latest.valid) << "," <<
+				R"("frame":)" << latest.frameSerial << "," <<
+				R"("toneMapped":)" << boolean(latest.toneMapped) << "," <<
+				R"("channels":[)";
+
+			for ( uint32_t index = 0; index < latest.channelCount; ++index )
+			{
+				const auto & channel = latest.channels[index];
+
+				json << ( index > 0 ? "," : "" ) << "{" <<
+					R"("name":)" << name(channel.name) << "," <<
+					R"("tested":)" << channel.tested << "," <<
+					R"("expected":)" << channel.expectedTexels << "," <<
+					R"("nan":)" << channel.nanTexels << "," <<
+					R"("inf":)" << channel.infTexels << "," <<
+					R"("ceiling":)" << channel.ceilingTexels << "," <<
+					R"("overflow":)" << (static_cast< uint64_t >(channel.nanTexels) + channel.infTexels + channel.ceilingTexels) << "," <<
+					R"("peakFinite":)" << number(channel.peakFinite) << "," <<
+					R"("invalid":)" << boolean(channel.invalid) << "}";
+			}
+
+			json << "]," << R"("window":{)" <<
+				R"("startsAfterFrame":)" << window.startsAfterFrame << "," <<
+				R"("firstFrame":)" << window.firstFrame << "," <<
+				R"("lastFrame":)" << window.lastFrame << "," <<
+				R"("frames":)" << window.framesCounted << "," <<
+				R"("framesWithOverflow":)" << window.framesWithOverflow << "," <<
+				R"("staleSlots":)" << window.staleSlots << "," <<
+				R"("channels":[)";
+
+			for ( uint32_t index = 0; index < window.channelCount; ++index )
+			{
+				const auto & entry = window.channels[index];
+
+				json << ( index > 0 ? "," : "" ) << "{" <<
+					R"("name":)" << name(entry.name) << "," <<
+					R"("framesCounted":)" << entry.framesCounted << "," <<
+					R"("framesOverflowing":)" << entry.framesOverflowing << "," <<
+					R"("maxOverflow":)" << entry.maxOverflow << "," <<
+					R"("maxOverflowFrame":)" << entry.maxOverflowFrame << "," <<
+					R"("maxPeakFinite":)" << number(entry.maxPeakFinite) << "}";
+			}
+
+			json << "]}," << R"("selfTest":{)" <<
+				R"("ran":)" << boolean(selfTest.ran) << "," <<
+				R"("passed":)" << boolean(selfTest.passed) << "," <<
+				R"("frame":)" << selfTest.frameSerial << "," <<
+				R"("tested":)" << selfTest.measured.tested << "," <<
+				R"("nan":)" << selfTest.measured.nanTexels << "," <<
+				R"("inf":)" << selfTest.measured.infTexels << "," <<
+				R"("ceiling":)" << selfTest.measured.ceilingTexels << "," <<
+				R"("peakFinite":)" << number(selfTest.measured.peakFinite) << "}}}";
+
+			outputs.emplace_back(Severity::Info, json.str());
+
+			return true;
+		}, "Returns the diagnostics of the last rendered frame as JSON: the tone mapper metering and the overflow census (last counted frame, statistics window, self-test).");
 
 		this->bindCommand("triggerRenderDocCapture", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			auto & renderDoc = m_vulkanInstance.renderDocCapture();
