@@ -214,10 +214,14 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Enables or disables the post-processor.
-			 * @note USER-level master switch, enabled by default. Turning it off forces the
+			 * @note Renderer-level master switch, enabled by default. Turning it off forces the
 			 * direct rendering path whatever the scene and the camera ask for; turning it on
 			 * only ALLOWS post-processing — the renderer still skips the whole path when there
 			 * is no effect to run.
+			 * @warning ⚠️ NOT a user's "no effect" switch: the direct path has no scene target,
+			 * hence no exposure and no tone mapping, and shows a photometric frame as a raw
+			 * luminance clipped to white. For that A/B use PostProcessStack::bypassSceneEffects(),
+			 * which keeps the sensor (projet-alpha's KeyPad4 since 2026-09-26).
 			 * @param state The desired enabled state.
 			 * @return void
 			 */

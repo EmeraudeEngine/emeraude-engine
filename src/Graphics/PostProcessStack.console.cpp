@@ -396,6 +396,15 @@ namespace EmEn::Graphics
 				outputs.emplace_back(Severity::Info, "Lane selected: none — the lighting family is off (setLightingMode(\"ScreenSpace\"|\"RayTracing\") brings it back, concepts as they were).");
 			}
 
+			/* The bypass overrides every scene slot below: say so BEFORE them, or each "off" reads as a
+			 * fallback. */
+			const auto sceneEffectsBypassed = this->isSceneEffectsBypassed();
+
+			if ( sceneEffectsBypassed )
+			{
+				outputs.emplace_back(Severity::Warning, "Scene effects: BYPASSED — every scene slot is off, the camera chain (exposure, tone mapping) still runs; bypassSceneEffects(0) brings back exactly what ran before.");
+			}
+
 			for ( size_t index = 0; index < EffectSlotCount; ++index )
 			{
 				const auto slot = static_cast< EffectSlot >(index);
@@ -423,6 +432,15 @@ namespace EmEn::Graphics
 
 				const auto selected = this->selectedOccupant(slot);
 				const auto effective = this->effectiveOccupant(slot);
+
+				if ( sceneEffectsBypassed && isSceneEffectSlot(slot) )
+				{
+					outputs.emplace_back(Severity::Info, std::stringstream{} <<
+						to_cstring(slot) << ": off  (bypassed; selected " << ( selected != nullptr ? selected->label() : "off" ) << ")"
+					);
+
+					continue;
+				}
 
 				if ( selected == effective )
 				{
@@ -526,6 +544,26 @@ namespace EmEn::Graphics
 
 			return true;
 		}, "Switch a whole concept off, for the session — a lane switch leaves it off. Argument: slot name.");
+
+		this->bindCommand("bypassSceneEffects", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+			if ( arguments.empty() )
+			{
+				outputs.emplace_back(Severity::Error, "Usage: bypassSceneEffects(1) to switch every scene effect off, bypassSceneEffects(0) to bring them back.");
+
+				return false;
+			}
+
+			const auto state = arguments[0].asInteger() != 0;
+
+			this->bypassSceneEffects(state);
+
+			outputs.emplace_back(Severity::Success, state ?
+				"Scene effects BYPASSED (applied on the next frame): lighting family, clouds, light shafts, fog, custom effects and TAA are off; the camera chain keeps running. Nothing selected was changed." :
+				"Scene effects running again (applied on the next frame), exactly as selected before the bypass."
+			);
+
+			return true;
+		}, "Switch every SCENE effect off (1) or back on (0), keeping the camera's exposure and tone mapping — the no-effect A/B. Selections, concept gates and lane are kept.");
 
 		this->bindCommand("setLightingMode", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )

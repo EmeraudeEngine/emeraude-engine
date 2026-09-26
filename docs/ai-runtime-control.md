@@ -486,7 +486,17 @@ python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightin
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.setLightingMode(None)'
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.select(Reflections, SSREffect)'
 python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.disable(AmbientOcclusion)'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.bypassSceneEffects(1)'
+python3 tools/remote-console.py 'Core.SceneManagerService.PostProcess.bypassSceneEffects(0)'
 ```
+
+`bypassSceneEffects(1)` (2026-09-26, projet-alpha's **KeyPad4**) is THE "no effect" A/B: every SCENE
+slot goes dark — lighting family, clouds, light shafts, fog, custom effects, TAA — while the camera
+chain keeps exposing and tone mapping the frame. Nothing selected is written, so `(0)` brings back
+exactly what ran; `getStatus()` opens with `Scene effects: BYPASSED` and marks each scene slot
+`off (bypassed; selected …)`. ⚠️ Never use `PostProcessor::enable(false)` for that comparison: it
+forces the DIRECT path (no scene target, no exposure, no tone mapping) and shows a raw luminance
+clipped to white — a renderer diagnostic, not a picture.
 
 `listEffects()` prints every slot, its occupants, and two marks: `>` is what you selected, `*` is
 what the **last frame actually ran**. They differ exactly when a fallback is active — which is the

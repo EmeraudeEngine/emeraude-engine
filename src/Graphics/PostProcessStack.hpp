@@ -341,6 +341,44 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Switches the whole SCENE phase of the chain off, or back on — the sensor keeps running.
+			 * @note ⚠️ MAIN THREAD (console, key handlers). Same deferred contract as @ref selectOccupant():
+			 * it records an intent, and @ref syncSlotSelection() applies it on the render thread at the next
+			 * frame boundary.
+			 * @note Every slot of @ref isSceneEffectSlot() goes dark — the lighting family, the clouds,
+			 * the light shafts, the fog, the application's own effects and the TAA — while the camera's
+			 * photographic chain (depth of field, motion blur, lens flare, veiling glare and the tone
+			 * mapping with its exposure) keeps running. That is the only "no effect" picture a photometric
+			 * pipeline can show: without the sensor the frame is a raw luminance, clipped to white.
+			 * @note Nothing the owner chose is written: neither the selected occupants, nor the concept
+			 * gates, nor the lighting lane. Lifting the bypass brings back exactly what ran before, and a
+			 * selection made meanwhile takes effect then. The effects stay resident — no reallocation.
+			 * Everything that reads an ENABLED effect follows by construction: the TAA jitter stops with
+			 * the TAA, the raster's diffuse IBL leg returns with the indirect-diffuse owner gone.
+			 * @warning This is NOT PostProcessor::enable(false): that master switch forces the DIRECT path,
+			 * with no scene target and no camera, and is a renderer diagnostic.
+			 * @param state True to bypass the scene effects, false to run them again.
+			 * @return void
+			 */
+			void
+			bypassSceneEffects (bool state) noexcept
+			{
+				m_sceneEffectsBypassed.store(state, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns whether the scene phase of the chain is bypassed (see @ref bypassSceneEffects()).
+			 * @note The INTENT: the render thread applies it on the next frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSceneEffectsBypassed () const noexcept
+			{
+				return m_sceneEffectsBypassed.load(std::memory_order_relaxed);
+			}
+
+			/**
 			 * @brief Returns whether a lane holds at least one occupant in a lighting slot.
 			 * @note Residency is a SESSION constant (see @ref installLightingFamily()), so this
 			 * answers once and for all whether a lane can be switched to. It says nothing about
@@ -757,6 +795,18 @@ namespace EmEn::Graphics
 			void disableSlotOccupants (EffectSlot slot) const noexcept;
 
 			/**
+			 * @brief Applies the scene-effects bypass to a multi-occupant slot (Custom).
+			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only. Such a slot has no selection: its
+			 * members all run, each with its own enabled flag. Bypassing switches off the ones that are
+			 * on and remembers them; lifting the bypass switches exactly those back on, so a member the
+			 * application had switched off itself stays off.
+			 * @param slot The slot.
+			 * @param bypassed Whether the scene effects are bypassed this frame.
+			 * @return void
+			 */
+			void syncMultiOccupantBypass (EffectSlot slot, bool bypassed) noexcept;
+
+			/**
 			 * @brief Rebuilds the flat, slot-ordered view the chain executor walks.
 			 * @note Rebuilt on every mutation rather than assembled on demand: it is read once
 			 * per frame and mutated a handful of times per scene.
@@ -805,8 +855,14 @@ namespace EmEn::Graphics
 			 * console (getStatus). Guarded by m_frameDiagnosticsAccess. */
 			mutable std::mutex m_frameDiagnosticsAccess;
 			FrameDiagnostics m_frameDiagnostics;
+			/* The members of the multi-occupant Custom slot the scene-effects bypass switched off, to
+			 * switch exactly those back on when it is lifted. RENDER THREAD (syncSlotSelection()). */
+			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_bypassedMultiOccupants;
 			/* The scene-driven cloud pass was considered (filed, or declined by the settings): the
 			 * decision is taken once, on the first frame the scene holds a cloud. RENDER THREAD. */
 			bool m_cloudEffectResolved{false};
+			/* The scene-effects bypass (bypassSceneEffects()): written on the main thread, read by
+			 * syncSlotSelection() on the render thread. */
+			std::atomic< bool > m_sceneEffectsBypassed{false};
 	};
 }

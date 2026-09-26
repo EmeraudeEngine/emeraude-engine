@@ -310,6 +310,42 @@ namespace EmEn::Graphics
 	}
 
 	/**
+	 * @brief Returns whether a slot belongs to the SCENE phase of the chain.
+	 * @note The effects that add, remove or resolve LIGHT in the scene — the lighting family, the
+	 * clouds, the light shafts, the fog, the application's own effects and the TAA that closes the
+	 * phase — as opposed to the camera's photographic chain after it (DepthOfField, MotionBlur,
+	 * LensFlare, Glare, ToneMapping) and the display-referred effects. It is the set
+	 * `PostProcessStack::bypassSceneEffects()` switches off while the SENSOR keeps running: in a
+	 * photometric pipeline the exposure and the tone mapping are not effects, they are what turns
+	 * a luminance into a picture.
+	 * ⚠️ An explicit SET, never a range, for the reason @ref isCameraEffectSlot() states.
+	 * @param slot The slot.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	isSceneEffectSlot (EffectSlot slot) noexcept
+	{
+		switch ( slot )
+		{
+			case EffectSlot::ContactShadows :
+			case EffectSlot::IndirectDiffuse :
+			case EffectSlot::Reflections :
+			case EffectSlot::AmbientOcclusion :
+			case EffectSlot::Clouds :
+			case EffectSlot::VolumetricLight :
+			case EffectSlot::Fog :
+			case EffectSlot::Custom :
+			case EffectSlot::TemporalAA :
+				return true;
+
+			default :
+				return false;
+		}
+	}
+
+	/**
 	 * @brief Returns whether a slot may hold SEVERAL effects at once.
 	 * @note Every other slot holds alternatives of ONE concept, of which the stack keeps at most
 	 * one enabled.

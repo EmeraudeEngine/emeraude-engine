@@ -1866,6 +1866,16 @@ on the render thread, once per frame, between `syncCameraEffects()` and `syncSlo
 split — intent on one thread, application on the other — is what makes a runtime switch safe.
 Calling `enable()` from a key handler or a console command races the chain walk.
 
+**The scene-effects bypass (2026-09-26)** rides the same site: `PostProcessStack::bypassSceneEffects(bool)`
+records an atomic intent, and `syncSlotSelection()` gives every `isSceneEffectSlot()` slot NO effective
+occupant while it holds (the multi-occupant `Custom` slot switches off exactly the members that were on,
+and back). Selections, concept gates and lane are never written, so lifting it restores the chain as it
+was, and every reader of an ENABLED effect follows by construction — `requiresJitter()` stops the TAA
+jitter, `hasEnabledIndirectDiffuseProvider()` gives the raster its diffuse IBL leg back. The camera chain
+(DoF, MotionBlur, LensFlare, Glare, ToneMapping) keeps running: the sensor is not an effect. It replaces
+`PostProcessor::enable(false)` as the user's "no effect" switch — that master switch forces the DIRECT
+path and shows an unexposed frame (`docs/caution-points.md` § *KeyPad4 broke every lit shader*).
+
 **Automatic fallback.** When the selected occupant cannot run, the slot falls back to the first
 sibling that can, and recovers on its own when the selected one becomes runnable again. The
 predicate is `canOccupantRun()`, which carries **the same three ray-tracing conditions the

@@ -634,13 +634,24 @@ namespace EmEn::Graphics
 	void
 	PostProcessStack::syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept
 	{
+		/* Read ONCE per frame: every slot of this frame sees the same answer. */
+		const bool sceneEffectsBypassed = m_sceneEffectsBypassed.load(std::memory_order_relaxed);
+
 		for ( size_t index = 0; index < EffectSlotCount; ++index )
 		{
 			const auto slot = static_cast< EffectSlot >(index);
 
 			/* The Custom slot holds several effects at once, all of them running: there is no
-			 * selection to resolve, and no sibling to fall back to. */
-			if ( !isChainSlot(slot) || isCameraEffectSlot(slot) || isMultiOccupantSlot(slot) )
+			 * selection to resolve, and no sibling to fall back to. The bypass is the one thing it
+			 * answers to. */
+			if ( isMultiOccupantSlot(slot) )
+			{
+				this->syncMultiOccupantBypass(slot, sceneEffectsBypassed);
+
+				continue;
+			}
+
+			if ( !isChainSlot(slot) || isCameraEffectSlot(slot) )
 			{
 				continue;
 			}
@@ -649,6 +660,22 @@ namespace EmEn::Graphics
 
 			if ( occupants.empty() )
 			{
+				continue;
+			}
+
+			/* THE SCENE-EFFECTS BYPASS: no effective occupant, whatever is selected. The selection,
+			 * the concept gate and the lane are not touched, so lifting it resolves the slot exactly
+			 * as before — the occupant is still created, it is simply enabled again. */
+			if ( sceneEffectsBypassed && isSceneEffectSlot(slot) )
+			{
+				if ( this->enabledEffect(slot) != nullptr )
+				{
+					this->disableSlotOccupants(slot);
+				}
+
+				m_selectionStallFrames[index] = 0;
+				m_effectiveOccupant[index].store(NoOccupant, std::memory_order_relaxed);
+
 				continue;
 			}
 
@@ -804,6 +831,45 @@ namespace EmEn::Graphics
 				occupant->setEnabledFlag(false);
 			}
 		}
+	}
+
+	void
+	PostProcessStack::syncMultiOccupantBypass (EffectSlot slot, bool bypassed) noexcept
+	{
+		const auto & occupants = m_slots[static_cast< size_t >(slot)];
+
+		if ( bypassed )
+		{
+			for ( const auto & occupant : occupants )
+			{
+				if ( occupant != nullptr && occupant->isEnabled() )
+				{
+					/* The FLAG: a multi-occupant slot has no sibling to disable anyway. */
+					occupant->setEnabledFlag(false);
+
+					m_bypassedMultiOccupants.emplace_back(occupant);
+				}
+			}
+
+			return;
+		}
+
+		if ( m_bypassedMultiOccupants.empty() )
+		{
+			return;
+		}
+
+		/* Only a member still filed in the slot comes back: removeEffect() may have taken one out
+		 * while the bypass held. */
+		for ( const auto & occupant : m_bypassedMultiOccupants )
+		{
+			if ( std::ranges::find(occupants, occupant) != occupants.end() )
+			{
+				occupant->setEnabledFlag(true);
+			}
+		}
+
+		m_bypassedMultiOccupants.clear();
 	}
 
 	void
