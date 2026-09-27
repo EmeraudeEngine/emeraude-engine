@@ -1,561 +1,67 @@
-# Emeraude Engine - AI Context
-
-## 1. Context
-
-**Core Framework**: Modern C++20 Vulkan 3D Engine.
-**Coordinates**: **Right-Handed Y-UP** — `+X` right, `+Y` up, `-Z` forward (consistent across Physics, Rendering, Scene graph, Audio). Same axes as glTF 2.0, USD and FBX, so imports are the identity. ⚠️ The engine was Y-DOWN until Aug 2026 — any statement to that effect is stale, see [`docs/coordinate-system.md`](docs/coordinate-system.md).
-**Platform**: Windows 11, Linux (Debian/Ubuntu), macOS.
-**Graphics API**: **Vulkan-only** — no D3D11, no D3D12, no Metal, no OpenGL. Single backend, mastered in full.
-
-## 1a. Foundation: emeraude-base
-
-The engine's foundation layer (math, image/audio/mesh factories, hashing, compression,
-threading, traits, I/O — formerly `src/Libs/`, `EmEn::Libs`) now lives in the **standalone
-[emeraude-base](https://github.com/EmeraudeEngine/emeraude-base) library** (`EmEn::Base`),
-pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirectory`).
-
-> [!IMPORTANT]
-> **This is a real split with independent lifecycles.** emeraude-base evolves on its own
-> (its own versioning and roadmap, new formats/capabilities); the engine **builds on a
-> pinned emeraude-base package** and consumes it — it does not drive its evolution.
->
-> emeraude-base is also the **single source of truth for external dependencies**: it owns
-> every `Setup*.cmake` (even libs only the engine uses: ufbx, fastgltf, taglib, bc7enc,
-> cpu_features, hwloc, libvpx), the `ext-deps-generator` resolution (`EMERAUDE_EXT_LIBS_*`),
-> the **project-wide compile policy** (`EMERAUDE_COMPILE_*`, `EMERAUDE_CXX_VERSION`,
-> `EMERAUDE_C_VERSION`), and the **shared STL hot-set precompiled header**
-> (`cmake/STLPrecompiledHeaders.cmake`, which defines the `EMERAUDE_BASE_STL_PCH_HEADERS` list,
-> + `cmake/EnablePrecompiledHeaders.cmake`). The engine inherits all of it via `emeraude::base`
-> and adds `EMERAUDE_BASE_CMAKE_DIR` to its module path.
->
-> **A `Setup<Lib>.cmake` links the TOP of the dependency chain, never the whole chain.** The
-> ext-deps-generator packages ship real CMake config packages, so a wrapper already carries its
-> core through `$<LINK_ONLY:…>` in its exported `INTERFACE_LINK_LIBRARIES`. Naming both in
-> `target_link_libraries()` — and, worse, naming the core *first* — conflicts with the ordering
-> static linking requires: CMake honours the requested position **and** re-emits the entry at the
-> end of the link line, so the archive appears twice. On Apple's linker that surfaces as
-> `ld: warning: ignoring duplicate libraries: '…/libfoo.a'` (harmless, but it hides real ones).
-> Reference case: `cmake/SetupReproc.cmake` linked `reproc reproc++` while the sources only use
-> `reproc++/run.hpp`; fixed 2026-09-07 by linking `reproc++` alone. ⚠️ The `find_package()` for the
-> core must **stay**: `reproc++-config.cmake` does call `find_dependency(reproc)`, but without
-> `PATHS ${EMERAUDE_EXT_LIBS_PATH} NO_DEFAULT_PATH` it cannot reach the ext-deps prefix — the
-> explicit call is what makes the target exist, and `find_dependency()` then sees it as found.
-> To audit a link line: `sed -n '<line>p' build.ninja | tr ' ' '\n' | grep '\.a$' | sort | uniq -c | awk '$1>1'`.
->
-> **Precompiled header:** the engine target applies base's shared STL PCH via
-> `emeraude_base_target_enable_pch(${PROJECT_NAME} "${EMERAUDE_BASE_STL_PCH_HEADERS}")`, like every
-> other target in the cascade — the header list is always passed explicitly, as a CMake list.
-> Turn the
-> switch off periodically (`-DEMERAUDE_ENABLE_PCH=OFF`): the PCH masks missing `#include`s and both
-> configs must stay green. **Windows is resolved (2026-07):** the old
-> `WINDOWS_EXPORT_ALL_SYMBOLS` + PCH incompatibility (PCH marker symbols leaking into the
-> auto-generated `exports.def` → `LNK2001`) was solved by completing the explicit-export
-> migration: the public surface consumed by a consumer application carries `EMEN_LEAN_API`, and
-> C4251/C4275 are disabled cascade-wide (decision "2b": emeraude-base types stay unexported,
-> consumers keep their static base copy). Full MSVC cascade verified (build + link with PCH).
->
-> **Explicit exports are mandatory on MSVC, and the option is now a PAIR (2026-08).** The brief
-> 2026-08 revert to export-all (motivated by the longer consuming-application link and the standing
-> annotation duty) died within days: the engine's symbol surface crossed the **hard PE limit of 65535
-> exported ordinals per DLL** (`exports.def` at ~65.8k symbols → `LNK1189`), so export-all **no
-> longer links on Windows at all**. The single `EMERAUDE_USE_EXPLICIT_EXPORTS` switch was then split
-> into two **mutually exclusive** options (both On is a `FATAL_ERROR`):
-> **`EMERAUDE_USE_FULL_EXPORTS`** (default On on MSVC — exports both `EMEN_LEAN_API` and `EMEN_API`)
-> and **`EMERAUDE_USE_LEAN_EXPORTS`** (default Off — exports `EMEN_LEAN_API` **only**, keeping the
-> ordinal count down to what an embedding application actually references; this is what `app_system`
-> forces). On non-MSVC platforms both are inert (no `.def`; export via symbol visibility), hence Off.
->
-> **Consequence of LEAN, and the trap it sets: `EMEN_API` is a no-op there.** A public symbol a
-> consumer references out-of-line must carry **`EMEN_LEAN_API`**, or the **consumer's** link breaks
-> (`LNK2019`/`LNK2001` on every member of the class) — one repository away from the change, **and on
-> MSVC only**, so Linux and macOS keep building green. Let the linker name what is missing, then
-> promote the class in the engine; never widen a consumer to `FULL` to silence it. Reference case:
-> `Graphics::Material::StandardResource` stayed `EMEN_API` when it replaced `BasicResource` while all
-> its consumed neighbours were `EMEN_LEAN_API` → 38 unresolved externals in `app_system`. The
-> export-all/PCH guard stays at the `emeraude_base_target_enable_pch()` call site in `CMakeLists.txt`
-> for anyone forcing both options `Off` locally (which no longer links on MSVC). **macOS Objective-C++ is handled (2026-07):** the
-> base helper auto-sets `SKIP_PRECOMPILE_HEADERS` on the engine's `.mm` sources (SerialPort,
-> WiFiScanner, StorageInfo, Window, Dialogs, …) — without it clang rejects the pure-C++ PCH in
-> those TUs (`Objective-C was disabled in PCH file but is currently enabled`), because CMake
-> classifies `.mm` as CXX when OBJCXX is not enabled. See `docs/windows-export-api.md` and
-> `dependencies/emeraude-base/AGENTS.md` § 3a.
->
-> **Third-party symbols never leave this library (ELF).** `libEmeraude.so` statically links the
-> vendored archives, and on ELF — flat dynamic namespace — it used to **re-export them**, which made
-> every plugin the process loads bind to our copies instead of theirs: cairo, FreeType and
-> gdk-pixbuf behind CEF all called our libpng **1.6.58** rather than the system **1.6.48**, and
-> libdecor refused its GTK3 plugin over the conflict (`uses conflicting symbol "png_free"`). The
-> engine now calls
-> `emeraude_base_target_hide_third_party_exports(${PROJECT_NAME} EXCEPT jsoncpp)` after its Setup
-> includes — **44127 → 15518 exported symbols**, `EmEn::` and `glfw*` untouched. ⚠️ The consuming
-> **executable must call it too** (an ELF exe exports what a shared object of its link closure asks
-> for), and a third-party-backed codec must never be defined in a header. Full rationale, the
-> measurement and the two-line check: [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) § 3b.
-> Same root cause as the Windows export limit below, seen from the other end.
->
-> **Rule:** a bug or a missing feature in the foundation layer (math, factories, I/O,
-> threading, …) is fixed **in emeraude-base**, never worked around in the engine — the same
-> co-development discipline the engine applies to itself vs projet-alpha.
-
-## 1b. Vision
-
-### Production-Grade Real-Time Runtime
-
-Emeraude Engine targets **production-grade real-time visual quality**. This is not
-about the ecosystem (no editor, no blueprint system, no marketplace). The target is the
-**runtime** — the core that runs on every end-user machine.
-
-Scope: modern PBR renderer, ray-traced effects, virtual shadow maps, temporal upscaling,
-full post-process stack, material system, audio engine, physics. If the developer
-using emeraude-engine has to work harder on tooling — that is an acceptable trade-off.
-The runtime output quality is the non-negotiable imperative.
-
-### Positioning
-
-Emeraude Engine offers developers a real path to production-quality real-time rendering with
-**full source access, LGPLv3, zero royalties, zero contractual dependency.**
-
-The trade-off is honest: less tooling, more code. The target audience is developers who
-**want** to write C++ and understand their engine — not drag-and-drop users. Those who
-accept this trade-off get a runtime that owes nothing to anyone.
-
-### Open-Core Business Model
-
-The engine follows an **open-core** model:
-- **Runtime (emeraude-engine):** LGPLv3, free forever. The community's property.
-- **Studio tooling (proprietary):** Scene editors, asset pipelines, productivity
-  wrappers — paid products built on top of the free runtime.
-
-The distinction is critical: **paid tools add convenience, never functionality.** A
-developer who never pays has the exact same runtime capabilities. No feature gating,
-no crippled free tier, no bait-and-switch. This model funds continued development of
-the free runtime while keeping it permanently open.
-
-### Vulkan-Only by Design
-
-Emeraude Engine is **Vulkan-only**. This is a deliberate architectural decision, not a limitation.
-
-UE5 maintains D3D11, D3D12, Vulkan, Metal — each backend is a compromise. They design
-abstractions to the lowest common denominator. Emeraude Engine speaks directly to the GPU
-through Vulkan, the open standard maintained by the **Khronos Group**. No abstraction layer,
-no backend switching, no compromise.
-
-This means:
-- **Zero backend abstraction overhead** — the code talks directly to the GPU
-- **Vulkan render passes, subpasses, layout transitions** are first-class citizens, not wrapped
-- **Explicit synchronization** — full control over GPU scheduling
-- **One target to optimize** — every microsecond gained benefits 100% of users
-- **Khronos Group standard** — industrial-grade, cross-platform, vendor-neutral
-
-Vulkan runs everywhere: Linux, Windows, Android, macOS/iOS via MoltenVK. The engine must be
-implementable as a **Khronos Group showcase application**.
-
-### AI-Driven Development
-
-Emeraude Engine is developed **with AI and for AI**. The human is the **architect and director**.
-The AI is the **implementor and analyst**.
-
-This means:
-- **The codebase must be AI-readable** — clear naming, consistent patterns, documented contracts
-- **AI diagnostic tools are first-class** — RenderDoc integration, programmatic GPU analysis,
-  automated visual regression testing are part of the engine, not external afterthoughts
-- **Every rendering decision must be measurable** — frame capture, draw call counts, render pass
-  structure, vertex throughput. No blind optimization, no guesswork.
-- **The AI must be able to autonomously diagnose rendering issues** — capture a frame, analyze
-  the GPU pipeline, identify bottlenecks, and propose solutions backed by data
-
-This is a new model of engine development where the human defines the vision and architecture,
-and the AI executes, measures, and iterates at industrial speed.
-
-### AI Runtime Control — GOLD RULE
-
-> [!CRITICAL]
-> **The engine has a Remote Console (TCP port 7777).** Any AI working on this project
-> **MUST** use it. This is not optional — it is the primary tool for understanding what
-> the engine is doing at runtime.
->
-> ⚠️⚠️ **THE PORT IS CLOSED BY DEFAULT (since 2026-08-27).** The listener starts only when the
-> setting **`Core/Console/EnableRemoteListener` is `true`** in the application's `settings.json`,
-> and it then binds to **`Core/Console/RemoteListenerAddress`** (default `127.0.0.1`, loopback
-> only). A `Connection refused` on 7777 means the instance was launched without the key —
-> **enable it and relaunch; do NOT keep retrying, polling or waiting on a running instance that
-> never opened the port.** The engine logs `Remote console disabled (Core/Console/EnableRemoteListener = false)`
-> at startup in that case. A human at the keyboard can open it live with **Shift+F10** (dialog asking
-> the port, session only) — an AI cannot press that key, so it edits the setting and relaunches. Rationale: the console is an unauthenticated command channel
-> (`Core.quit()`, settings, scenes, screenshots) and downstream applications are shipped to end users.
->
-> **Cross-platform tool (required on Windows):** Use `tools/remote-console.py` — works on Windows, Linux, and macOS:
-> ```bash
-> python3 tools/remote-console.py "COMMAND"
-> ```
-> It prints the text of the answer and exits with status 1 when the command failed (`--json` prints
-> the raw line). **Wire format (2026-09-27): every request gets exactly ONE response, one JSON object on
-> one line** (`{"ok":…,"outputs":[{"severity","kind","message"}]}`), so `nc` still works but shows raw
-> JSON. `describeCommands()` lists every command with its typed parameters, and
-> `tools/console-conformance.py` checks the whole contract against a live instance.
-> Details: [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) § Wire format.
->
-> **MCP server (2026-09-27)** — the same typed commands as Model Context Protocol tools, over
-> Streamable HTTP, closed by default: `Core/MCP/Enabled = true` (loopback `127.0.0.1:17778`), then
-> `claude mcp add --transport http emeraude http://127.0.0.1:17778/mcp`. Both protocol eras
-> (2026-07-28 and 2025-11-25), `Renderer_screenshot` returns an inline image, `list_changed` follows the
-> active scene; `tools/mcp-conformance.py` checks it. Details: [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md)
-> § The MCP server, [`src/Console/AGENTS.md`](src/Console/AGENTS.md) § 7b.
->
-> **When the user asks "what's on screen?"** → take a screenshot:
-> ```bash
-> python3 tools/remote-console.py "Core.RendererService.screenshot()"
-> ```
-> Then **read the PNG file** to see the rendering output. You have eyes. Use them.
->
-> **When you need to verify a rendering change** → screenshot before and after — but ⚠️ **a raw
-> `screenshot()` after a fixed `sleep` is NOT comparable between two runs.** A freshly loaded
-> scene keeps moving for tens of seconds (exposure adaptation, TAA/SVGF accumulation, animation
-> start-up), so two scripts whose delays differ compare two different moments and the gap reads
-> exactly like a regression. Use the bench, which waits for the image to CONVERGE first:
-> ```bash
-> python3 tools/demo-capture-bench.py --exe ./projet-alpha --demo reflexion-debug \
->     --demo-options 0,6,0 --camera 0,1.6,4 --look-at 0,1,0 \
->     --crop 300,200,1700,1400 --out /tmp/after.png --control /tmp/after-control.png
-> ```
-> Measured on `reflexion-debug`: two runs agree to **0.229** mean luminance when matched by
-> convergence, against **7.171** when one captures at t~4s and the other at t~8s.
-> `--control` takes a second capture of the SAME run: its difference to `--out` is the noise
-> floor of any pixel diff you draw from that scene. **Shoot it before reading a diff** — on a
-> scene with an animated subject the floor can reach 59 % of pixels, and without it that noise
-> reads as a broken render.
->
-> **When you need to understand the scene** → query it:
-> ```bash
-> python3 tools/remote-console.py "Core.SceneManagerService.getSceneInfo()"
-> ```
->
-> **When you need to know what resources exist** → ask the engine:
-> ```bash
-> python3 tools/remote-console.py "Core.ResourcesManagerService.listResources(MeshResource)"
-> ```
->
-> **The AI can inject keyboard and mouse events** — interact with the running app like a user:
-> ```bash
-> # Inject Shift+F3 key press (key=292, modifiers=1=Shift)
-> python3 tools/remote-console.py "Core.InputManagerService.keyPress(292, 1)"
->
-> # Click at screen coordinates (x, y)
-> python3 tools/remote-console.py "Core.InputManagerService.mouseClick(1920, 1000)"
->
-> # Quit the application gracefully (Shift+Escape)
-> python3 tools/remote-console.py "Core.InputManagerService.keyPress(256, 1)"
-> ```
->
-> **The AI interaction loop**: Screenshot → Analyze → Inject input → Screenshot → Verify.
-> This gives full autonomy: see the app, click on things, verify results, iterate.
->
-> **The AI can create 3D scenes autonomously** — via live commands or JSON:
-> ```bash
-> python3 tools/remote-console.py '{"Name":"Scene","Boundary":512.0,"Background":{"Type":"SkyBox","Resource":"Miramar"},...}'
-> ```
->
-> The complete reference is in [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md).
-> **Read it before any runtime work.**
-
-## 2. Architecture Map
-
-| Category | System | Path | Context |
-|---|---|---|---|
-| **Framework** | Core / Tracer | [`src/AGENTS.md`](src/AGENTS.md) | App lifecycle, Logging. |
-| | **Foundation** (`EmEn::Base`) | [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) | **Extracted to the standalone [emeraude-base](https://github.com/EmeraudeEngine/emeraude-base) library** — math, factories (Pixel/Wave/Vertex), traits, I/O, hashing, threading, skeletal-animation data types. Formerly `src/Libs/` (`EmEn::Libs`). |
-| | Platform | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) | OS implementations. |
-| | Testing | [`dependencies/emeraude-base/src/Testing/AGENTS.md`](dependencies/emeraude-base/src/Testing/AGENTS.md) | Unit tests live in emeraude-base (`EmeraudeBaseUnitTests`). |
-| **Graphics** | **Graphics Layer** | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) | **Start Here**. High-level. |
-| | Vulkan Layer | [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) | Low-level abstraction. |
-| | Saphir (Shader) | [`src/Saphir/AGENTS.md`](src/Saphir/AGENTS.md) | Shader generation. |
-| **Sim** | **Physics** | [`src/Physics/AGENTS.md`](src/Physics/AGENTS.md) | Physics system. |
-| | Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) | OpenAL spatial audio. |
-| | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) | Keyboard/Mouse/Pad. |
-| **Data** | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) | Async loading. |
-| | Scenes::Loaders | [`src/Scenes/Loaders/AGENTS.md`](src/Scenes/Loaders/AGENTS.md) | Composite format loaders (glTF, FBX stub). |
-| | Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) | Scene graph. |
-| | Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) | *In Dev*. Skeletal data types in emeraude-base (`Base::Animation`), runtime eval here. |
-| **Tools/UI** | Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) | UI & Debug. |
-| | Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) | Runtime control (TCP + in-game). |
-| | AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) | Virtual devices. |
-| | Scene Editor | [`src/Scenes/Editor/AGENTS.md`](src/Scenes/Editor/AGENTS.md) | Picking, gizmos, entity manipulation. |
-| | Tool | [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) | Editor tools. |
-| **Net** | Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) | HTTPS download manager (URL-keyed cache, `ExternalData` resources), UDP/multicast/SSDP, interface enumeration, TCP client/server, Serial, WiFi. |
-
-## 3. Core Axioms
-
-### Design
-1.  **POLA:** Principle of Least Astonishment. APIs must be predictable.
-2.  **Pit of Success:** Make the right way easier than the wrong way (e.g. Fail-safe resources).
-3.  **No Gulf:** Avoid complexity in user-facing APIs.
-
-### Constraints
-1.  **Coordinates:** **Y-UP** is absolute law (`+X` right, `+Y` up, `-Z` forward). Gravity is a **vector** pulling toward `-Y` (`EnvironmentPhysicalProperties::DownDirection`), never a signed scalar — read the direction, never assume it.
-2.  **Vulkan:** NEVER call Vulkan directly. Use `Graphics/` abstractions.
-3.  **Memory:** Use **VMA** for GPU. Use **RAII** for CPU. No raw pointers.
-4.  **Frame Sync:** Any GPU buffer (SSBO/UBO) updated per-frame **MUST** be double-buffered (one per frame-in-flight). See [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) → Frame Synchronization.
-5.  **sRGB Convention:** Material variable names ending with `Color` trigger `VK_FORMAT_*_SRGB`. Data textures (normals, roughness) use `_UNORM`. Enforced in `Material::Component::Texture` constructors. See `Material/Component/Texture.hpp`.
-5b. **Normal maps: the KHRONOS convention — right-handed tangent space, +Y = UP in the image (the "OpenGL" sign), as glTF mandates.** The decode is `N = normalize(TBN · (texel · 2 − 1))` with `T` = +U, `B = cross(N, T) · w` (the glTF `TANGENT.w` handedness, or the generator's), and NO sign trick on the texel. This is a property of the FILE, not of the graphics API: Vulkan's top-left UV origin changes nothing, and glTF itself (top-left UVs) mandates this sign. A map baked by a Direct3D-family tool (3ds Max, Unreal: +Y DOWN) is a non-conformant texture, fixed in the TEXTURE — the green channel inverted at authoring (Intel Sponza, re-encoded 2026-09-13), or `"FlipNormalMapY": true` on a store material's normal component (a pixel flip at load; impossible for a block-compressed KTX2) — **never** by a shader or loader flag. Verified 2026-09-13 on the Khronos `NormalTangentMirrorTest` and on projet-alpha's `normal-map-debug` (option 4 = a Khronos-convention control brick). Symptom of the other convention: every relief lit from BELOW.
-6.  **BC7 Compression — two sources, one GPU format:** `Texture2D` reaches BC7 by **two distinct paths**, and which one runs depends on the *source*, not on a setting. (a) From an `ImageResource` (PNG, JPEG, procedural): the RGBA pixmap is compressed on the CPU at load time (bc7enc) when `textureCompressionBC` is available, and the result is cached on disk. `TextureCompressor` and `TextureCache` are **sub-services of `Graphics::Renderer`** (`ServiceInterface`, ClassIds `TextureCompressorService` / `TextureCacheService`) — value members enrolled in `Renderer::initializeSubServices()`, compressor **before** cache since the cache holds a reference to it, terminated in reverse order with every other sub-service. They are reached from outside **only** as `renderer.textureCompressor()` / `renderer.textureCache()`, both returning a **const** reference. **The cache owns the whole path**: `renderer.textureCache().getOrCompress(resourceName, pixmap, maxMipLevels)` does the disk lookup, compresses through the compressor sub-service on a miss, and stores the result — a caller never orchestrates try/compress/store. **No mutable static state remains, and the old static `initialize()` a caller had to remember is gone**: the one-time `bc7enc_compress_block_init()` runs in `onInitialize()` (the sub-service startup above), so no caller can reach a compression method before the encoder is ready. Compression is **sequential per texture** — there is **no thread pool**; parallelism comes from the resource manager loading several textures concurrently. Governed by `Core/Graphics/Texture/EnableTextureCache` (default **true**; it had no setting at all before Aug 2026 — it was active on any GPU reporting `textureCompressionBC`, which is why a `texture-cache/` directory exists on machines where every other cache was off). Disabled, the service stays up with an empty directory: every lookup misses and every texture is re-encoded, which is how you measure the encoding cost. Entries live in `~/.cache/<app>/texture-cache/` with a `.bc7cache` extension and are keyed **by content**: FNV-1a (`Base::Hash::FNV1a`) over the *decoded pixels*, folded with width, height and `colorCount`. Repainting a texture without changing its size therefore invalidates its entry — it did **not** before, the old key reduced to name + dimensions and served the stale blob forever. File format `Version` stays **1** — the format never changed, only the key. ⚠️ Changing a content-addressed key **orphans** existing entries instead of invalidating them (their filenames stop being produced, so nothing reopens them); `--clear-renderer-cache` (ex-`--clear-shader-cache`) is the remedy, and it also clears the shader-binary and pipeline caches. (b) From a `CompressedImageResource` (KTX2 / `KHR_texture_basisu`): the mip chain arrives **already block-compressed**, is uploaded verbatim, and touches neither bc7enc nor `TextureCache` — an uncompressed copy is never materialised. Format in both cases: `VK_FORMAT_BC7_SRGB_BLOCK` or `VK_FORMAT_BC7_UNORM_BLOCK`, **chosen by the texture's sRGB flag, never by the source container** — the blocks are identical, only the interpretation differs. A texture on path (b) cannot answer `isGrayScale()` nor `averageColor()`, and ignores `setFlipNormalMapY()`: all three would require decoding the blocks. See [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) → Compressed image path.
-7.  **Image Format Awareness:** When adding new `VkFormat` variants, update `Image::pixelBytes()` AND `Image::colorCount()` — missing cases return 0, breaking multi-layer uploads silently.
-7b. **`LC_NUMERIC` is `"C"`, always.** `Core::initializeBaseLevel()` calls `Base::Locale::enforceNumericC()` and warns if it had drifted, because the engine serialises floats through the C numeric family (settings, scene files, cache keys, generated shader code) and a comma-decimal locale silently changes every one of them. ⚠️ That call covers the engine's bring-up ONLY — an application initialising a locale-touching library afterwards (CEF/GTK does) **must re-assert it there**. See [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) § 3c.
-8.  **Multi-Scene Resource Ownership:** Several scenes can be loaded at once (one ACTIVE) and are loaded/switched/**deleted at runtime**. A resource **shared across scenes or that outlives a scene** (samplers, pipelines, programs, layouts, the bindless table, the AS builder, default textures) is owned **ONCE** at the Renderer/device level — **never per-scene, never via a global `static`**; consumers **release references, never destroy** cache-owned objects. Per-scene state only **describes/borrows** (cf. `LightSet`, `BindlessTextureSet`); the global service mirrors the active scene and is cleared on disable. **Mandatory read before writing resource code:** [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md).
-
-## 3b. Licensing
-
-**License:** LGPLv3 (GNU Lesser General Public License v3).
-
-1. **No license violation:** Never integrate code that would violate LGPLv3 compatibility.
-   Check the license of any external code before integration.
-2. **Citation required:** All code contributions from open-source projects must be cited
-   with author name, original license, and source URL in a comment at the point of use.
-3. **AI-generated code:** When adapting algorithms from published papers or open-source
-   implementations, cite the original source (paper DOI, repository URL, author name).
-
-## 3c. Open work — `docs/todo/`, one file per idea
-
-> [!IMPORTANT]
-> **The root `TODO.md` is GONE (2026-08-26). Open work lives in `docs/todo/`, one file per idea
-> to do, in the repository the work belongs to.** This is a project-wide rule (projet-alpha,
-> emeraude-engine, emeraude-base, and every other project) — mirrored in the consumer's
-> `.claude/rules/todo-items.md` (this repository carries no `.claude/` directory, deliberately).
->
-> - **One file = one idea.** Never a list of unrelated items in one file.
-> - **Done = file deleted.** No `[x]`, no "DONE" section, no `done/` archive.
-> - **The knowledge does not live there**: measurements, traps and owner decisions that must
->   survive the work go to `docs/caution-points.md`, the `docs/` topic files and the `AGENTS.md`
->   network — write them there **before** deleting the item file.
-> - **Placement follows the dependency direction**: a defect of the foundation gets its item in
->   `dependencies/emeraude-base/docs/todo/`, never here.
-> - Every file carries the YAML front-matter (`id`, `title`, `status`, `priority`, `scope`,
->   `opened`, optional `blocked-by`/`tags`) defined in
->   [`docs/todo/README.md`](docs/todo/README.md).
-> - An inherited item that is ambiguous is **asked about**, never guessed: it may be done,
->   abandoned, or in need of an explanation that belongs in its file.
-
-## 4. Platform-Specific Recommendations
-
-### Linux/NVIDIA/X11 (GNOME, KDE)
-
-**Issue:** VSync causes micro-stuttering due to double synchronization (driver + compositor).
-
-**Solution:**
-```
-Core/Video/EnableVSync = false
-Core/Video/EnableTripleBuffering = true (optional)
-Core/Video/FrameRateLimit = 60  (or monitor refresh rate)
-```
-
-The compositor handles display sync; the app limits its frame rate to avoid wasting resources.
-
-**Details:** See [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) (Present Mode Selection) and [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) (Frame Rate Limiter).
-
-## 5. AI-Friendly Codebase
-
-This engine is developed **with AI and for AI** — AI is not a helper, it is the primary implementor.
-
-**Core principle:** When an AI identifies an unclear concept or confusing interface, it should **STRONGLY SUGGEST refactoring it**. An unclear interface that causes bugs once will cause bugs again.
-
-**AI diagnostic integration:**
-- **RenderDoc in-application API** — programmatic GPU frame capture (`EMERAUDE_ENABLE_RENDERDOC=ON`). ⚠️ RenderDoc is **not a submodule** (Sep 2026): `cmake/SetupRenderDoc.cmake` fetches the sources (`FetchContent`, pinned in `cmake/RenderDocPin.cmake`) **only** when the option is On, and reuses an existing `dependencies/renderdoc` checkout instead of downloading again
-- **RenderDoc Python module** — autonomous .rdc analysis (draw calls, render passes, vertex throughput). `cmake -P cmake/BuildRenderDocPython.cmake` clones the pinned revision on demand (the full tree is needed, the header alone cannot build it) and produces `dependencies/renderdoc/build/lib/renderdoc.so`
-- **Remote Console screenshot** — `Core.RendererService.screenshot()` via TCP console for visual regression testing
-- **RenderDoc CLI capture** — `renderdoccmd capture` for pipeline regression testing
-- **glTF light inventory** — `tools/gltf-lights.py FILE.glb` lists the `KHR_lights_punctual` lights (type, intensity, colour, carrying node) and `--set NAME=VALUE` writes an intensity into the asset (GLB streamed): exporters ship lights at 0 (Intel Sponza, all 24), and the asset — not a demo — is where the value belongs
-- **Sky manifest measurement** — `tools/sky-manifest.py sky.hdr --name X --sun-illuminance 100000` prints the `Cubemaps` and `Backgrounds` manifests of an equirectangular HDR from its texels (sun direction and energy profile, sky-only and total illuminance, `Luminance` anchored on the declared sun — or on the sky, `--sky-luminance`, when the sun is veiled): every number of a sky manifest is measured, none is guessed. `--locate NAME --store DIR --preview out.png` finds where the body of ANY store sky (packed cube or equirect, LDR or HDR) is painted and compares it with its manifest — LOOK at the preview
-- **Wayland protocol trace** — `tools/wayland-protocol-trace.py` (Linux/Wayland): `--capture` reruns a command under `WAYLAND_DEBUG` until a compositor protocol error reproduces and keeps only the failing log; `--analyse` names the offending object, resolves the `wl_surface` it wraps, and prints the requests of the rejected commit with a reading. Use it whenever a window dies on its own or `VK_ERROR_SURFACE_LOST_KHR` shows up — the culprit is a request, not a GPU state
-
-See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions.md#ai-friendly-code-guidelines) for detailed guidelines.
-
-## 6. AI Runtime Control
-
-The engine exposes a **Remote Console** (TCP port 7777) that enables AI agents to control
-a running application autonomously. This is the foundation for AI-driven 3D content creation.
-
-**Capabilities:**
-- **Resource discovery** — query available skyboxes, meshes, materials
-- **Scene creation** — via live commands or JSON scene descriptions
-- **Camera control** — position, orientation, visual verification via screenshots
-- **Audio control** — full TrackMixer playback management
-- **Settings/window** — runtime configuration changes
-
-**Reference:** [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) — **THE complete guide** for
-any AI operating the engine at runtime. Contains the full command reference, JSON scene format
-specification, spatial orientation tutorial, and visual feedback loop methodology.
-
-**Console system:** [`src/Console/AGENTS.md`](src/Console/AGENTS.md) — Architecture, command flow,
-how to add new commands.
-
-## 7. Documentation Index
-
--   **AI Runtime Control:** [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) (**AI operator guide** — resource discovery, scene creation, command reference).
--   **Open work:** [`docs/todo/`](docs/todo/) (one file per idea to do; the rule is in [`docs/todo/README.md`](docs/todo/README.md) — done means the file is DELETED).
--   **Philosophy:** [`docs/architecture-philosophy.md`](docs/architecture-philosophy.md) (Deep dive).
--   **Tracer:** [`docs/tracer-system.md`](docs/tracer-system.md) (Logging rules).
--   **Conventions:** [`docs/cpp-conventions.md`](docs/cpp-conventions.md) (Includes AI-friendly guidelines).
--   **Physics:** [`docs/physics-system.md`](docs/physics-system.md).
--   **Resources:** [`docs/resource-management.md`](docs/resource-management.md).
--   **Coordinates:** [`docs/coordinate-system.md`](docs/coordinate-system.md) (Y-UP convention — absolute law).
--   **Graphics Hub:** [`docs/graphics-system.md`](docs/graphics-system.md) (High-level rendering architecture).
--   **Scene Graph:** [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) (Entity-Component hierarchy).
--   **Multi-Scene Resource Ownership:** [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) (**Code-generation doctrine** — who owns what across scene load/switch/delete; read before writing resource code).
--   **Shadow Mapping:** [`docs/shadow-mapping.md`](docs/shadow-mapping.md) (PCF, color projection, render pass types).
--   **Reflection Pipeline:** [`docs/reflection-pipeline.md`](docs/reflection-pipeline.md) (**the seven reflection paths and how they arbitrate** — reflectivity nibble, normals-buffer alpha packing, `mix()` composite, skinned-geometry BLAS refit. Read before touching SSR/RTR/IBL, any `Reflection` material component, or anything skinned that must appear in ray-traced effects).
--   **Post-Processing Pipeline:** [`docs/post-processing-pipeline.md`](docs/post-processing-pipeline.md) (frame structure, grab-pass batched-barrier contract, the three swap-chain render passes, the pass-merging roadmap — and § 4b, the **MEASURED per-pass GPU cost**, which is what settles where the frame time actually goes: ~70 % of it is one ray trace, and pass merging is finished as a lever. Read before touching `PostProcessor`, `GrabPass`, any `Effects/{Lighting,Atmosphere,Resolve,Camera,Style}/*` effect or the swap-chain passes, and before proposing any optimization — the numbers are there).
--   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
--   **Animation Retargeting:** [`docs/animation-retargeting.md`](docs/animation-retargeting.md) (playing a clip authored for ANOTHER skeleton — the mathematics, a measured worked example, and the naming traps that break legs in silence. **The engine cannot do this today.** Read before touching any cross-skeleton animation or mocap import).
--   **Text-to-Motion (Kimodo):** [`docs/text-to-motion-kimodo.md`](docs/text-to-motion-kimodo.md) (evaluation of an AI motion source: licences, measured cost, and what it cannot do).
--   **Runtime Session:** [`docs/runtime-session.md`](docs/runtime-session.md) (Launch, connect, interact with a running instance).
--   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
--   **Scene Loaders & OpenUSD:** [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) (**design; USD not yet implemented** — the `SceneData` extension to lights/cameras/instancers, tinyusdz, and the **absorption rule**: nothing USD survives `load()`, a missing capability is added to `Scenes`. Also defines the Intel Jungle Ruins scene as the engine's **GOLD GOAL** — the owner's *Saint Graal*, the scene whose completion says the runtime has arrived, and the benchmark it is measured against until then. Read before touching any loader or `SceneData`).
--   **Windows Export API:** [`docs/windows-export-api.md`](docs/windows-export-api.md) (`EMEN_LEAN_API` / `EMEN_API` — required on MSVC; **read § 2 before annotating**: which of the two macros a class gets decides whether a consumer links on Windows).
--   **GLFW Fork:** [`docs/glfw-fork.md`](docs/glfw-fork.md) (`dependencies/glfw` is the fork **EmeraudeEngine/glfw**, not upstream — one patch (`glfwGetKeyboardState()` / `glfwGetMouseButtonState()`, consumed behind `GLFW_EM_CUSTOM_VERSION`) and the `update-glfw.py` procedure that carries it forward. ⚠️ An unpatched GLFW still compiles through the `#else` fallback, so **a successful build is not proof the patch survived** — compare patch-ids, never SHAs).
-
-> [!CRITICAL]
-> **Maintenance:** AI documentation is **MORE IMPORTANT than the code itself.** A code change
-> without its corresponding documentation update is an **incomplete delivery**. After every
-> modification (code, architecture, feature, bugfix, refactor), the AI **MUST**:
-> 1. Update all affected `AGENTS.md` files (subsystem context, architecture maps, patterns).
-> 2. Update affected `docs/` files (patterns, caution points, troubleshooting).
-> 3. **Explicitly signal to the user** which documentation was updated and why.
-> 4. If unsure which docs are affected, ask — never silently skip.
->
-> Undocumented code is **technical debt that compounds**. The AI documentation network is
-> the engine's institutional memory — without it, every future AI session starts blind.
-> Run `/update-docs` when available, but **do not rely on it as a substitute for inline updates.**
-
-## 8. Code Generation Directives
-
-> [!CRITICAL]
-> These rules are **NON-NEGOTIABLE** for any AI-generated code in this engine.
-
-### Professional Standard
-This engine targets **production-grade real-time visual quality** as its benchmark.
-Every generated implementation must meet professional-grade quality. No shortcuts,
-no "good enough" approximations, no deferred-quality patterns. The AI is the primary
-implementor — the human architect directs, the AI executes and measures.
-
-### Architectural Contract Compliance
-All generated code must comply with established contracts:
-- **POLA / Pit of Success / No Gulf** design axioms
-- **Service interfaces** for engine subsystems
-- **Observer/Observable** for loose coupling
-- **RAII** for all resource lifetimes
-- **Vulkan abstraction** (never direct Vulkan calls)
-
-When a contract is missing or insufficient, **the contract must be created or
-improved** as part of the implementation — not bypassed.
-
-### No Workarounds — Industrial-Grade Integration Only
-Emeraude Engine is held to an **industrial standard**. It must be implementable
-as a Khronos Group showcase application. This means **zero tolerance for
-hacks, workarounds, or ad-hoc solutions**.
-
-When integrating with professional tools (RenderDoc, Vulkan Validation Layers,
-profilers, etc.), **use their official integration path** — Vulkan layers,
-documented APIs, proper manifests. Never resort to `LD_PRELOAD` injection,
-manual symbol lookups, environment variable tricks, or any approach that a
-Khronos engineer would reject in a code review.
-
-When something doesn't work, **diagnose the real cause** (missing layer
-manifest, wrong library path, incorrect API usage) instead of piling on
-workarounds. Read the tool's documentation and understand its architecture
-before writing a single line of integration code.
-
-### Mandatory Decision Escalation
-When facing architectural choices (multiple valid approaches, unclear trade-offs,
-or potential contract changes), **ALWAYS escalate to the user** with:
-1. Clear description of each option
-2. Constraints and trade-offs per option
-3. Recommendation with justification
-
-Never make autonomous architectural decisions. The project owner decides.
-
-### Documentation First — No Silent Changes
-
-> [!CRITICAL]
-> **AI documentation maintenance is MORE IMPORTANT than the code.**
-
-Every code change **MUST** be accompanied by its documentation update **in the same
-work session**. This is not optional, not "nice to have" — it is the **highest priority
-deliverable**.
-
-**The rule:**
-- Before reporting a task as complete, verify that all affected `AGENTS.md` and `docs/`
-  files reflect the change.
-- **Explicitly tell the user** what documentation was updated: file paths, what changed, why.
-- If a change affects the Architecture Map, Link Index, or cross-references — update them.
-- If a new subsystem, pattern, or API is introduced — document it immediately.
-- If an existing pattern changes — update every doc that references the old pattern.
-- **Never assume** the user will remember to ask for doc updates. Signal proactively.
-
-**Active enforcement — the AI MUST remind the user:**
-If the user tries to move on to the next task without documentation being updated,
-the AI **MUST push back** and insist. The argument: *"Without this doc update, the
-next AI session will misunderstand this area of the project, make wrong assumptions,
-and waste your time. Updating now takes 2 minutes. Reverse-engineering later costs hours."*
-Do not be passive about this. Actively remind, actively propose doc updates, actively
-flag when documentation is stale or missing after a change.
-
-**Why this is non-negotiable:**
-The `AGENTS.md` network is the **only persistent context** an AI has across sessions.
-Code without documentation forces every future AI session to reverse-engineer intent,
-architecture, and constraints from scratch. This wastes the user's time, introduces
-regression risk, and degrades the quality of AI assistance over time. The documentation
-IS the engine's memory.
-
-## Link Index
-
-All outbound references from this file, grouped by type.
-
-### AGENTS.md — Subsystems
-
-| System | Path |
-|--------|------|
-| Core / Tracer | [`src/AGENTS.md`](src/AGENTS.md) |
-| Foundation (`EmEn::Base`, ex-Libs) | [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) |
-| Platform | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) |
-| Testing | [`dependencies/emeraude-base/src/Testing/AGENTS.md`](dependencies/emeraude-base/src/Testing/AGENTS.md) |
-| Graphics Layer | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) |
-| Vulkan Layer | [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) |
-| Saphir (Shader) | [`src/Saphir/AGENTS.md`](src/Saphir/AGENTS.md) |
-| Physics | [`src/Physics/AGENTS.md`](src/Physics/AGENTS.md) |
-| Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) |
-| Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) |
-| Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) |
-| Scenes::Loaders | [`src/Scenes/Loaders/AGENTS.md`](src/Scenes/Loaders/AGENTS.md) |
-| Scenes | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) |
-| Animations | [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) |
-| Overlay (ImGui) | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md) |
-| Console | [`src/Console/AGENTS.md`](src/Console/AGENTS.md) |
-| AVConsole | [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) |
-| Scene Editor | [`src/Scenes/Editor/AGENTS.md`](src/Scenes/Editor/AGENTS.md) |
-| Tool | [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) |
-| Networking | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) |
-
-### Documentation
-
-| Document | Path |
-|----------|------|
-| AI Runtime Control | [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) |
-| Architecture Philosophy | [`docs/architecture-philosophy.md`](docs/architecture-philosophy.md) |
-| Tracer System | [`docs/tracer-system.md`](docs/tracer-system.md) |
-| C++ Conventions | [`docs/cpp-conventions.md`](docs/cpp-conventions.md) |
-| Coordinate System | [`docs/coordinate-system.md`](docs/coordinate-system.md) |
-| Animation Retargeting | [`docs/animation-retargeting.md`](docs/animation-retargeting.md) |
-| Text-to-Motion (Kimodo) | [`docs/text-to-motion-kimodo.md`](docs/text-to-motion-kimodo.md) |
-| Graphics System | [`docs/graphics-system.md`](docs/graphics-system.md) |
-| Scene Graph Architecture | [`docs/scene-graph-architecture.md`](docs/scene-graph-architecture.md) |
-| Multi-Scene Resource Ownership | [`docs/multi-scene-resource-ownership.md`](docs/multi-scene-resource-ownership.md) |
-| Shadow Mapping | [`docs/shadow-mapping.md`](docs/shadow-mapping.md) |
-| Reflection Pipeline | [`docs/reflection-pipeline.md`](docs/reflection-pipeline.md) |
-| Post-Processing Pipeline | [`docs/post-processing-pipeline.md`](docs/post-processing-pipeline.md) |
-| Physics System | [`docs/physics-system.md`](docs/physics-system.md) |
-| Resource Management | [`docs/resource-management.md`](docs/resource-management.md) |
-| Runtime Session | [`docs/runtime-session.md`](docs/runtime-session.md) |
-| Pipeline Caching | [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) |
-| Toolkit System | [`docs/toolkit-system.md`](docs/toolkit-system.md) |
-| Scene Loaders & OpenUSD | [`docs/scene-loaders-usd.md`](docs/scene-loaders-usd.md) |
-| Windows Export API | [`docs/windows-export-api.md`](docs/windows-export-api.md) |
-| GLFW Fork | [`docs/glfw-fork.md`](docs/glfw-fork.md) |
+# Emeraude Engine — AI router
+
+C++20, **Vulkan-only** real-time 3D engine (LGPLv3), Linux / macOS / Windows. Built on the standalone
+foundation library [emeraude-base](dependencies/emeraude-base/AGENTS.md) (`EmEn::Base`); tested through the
+`projet-alpha` testbed. Target: production-grade real-time visual quality of the RUNTIME.
+
+> ⚠️ **This file is a ROUTER (2026-09-27).** Everything it used to say was moved VERBATIM to `docs/agents/`
+> and every subsystem `AGENTS.md` routes to `docs/subsystems/<area>/`, one file per topic. **Read only the
+> file(s) your task needs.** New knowledge goes into the matching `docs/` file — never back into an
+> `AGENTS.md`, which only grows by one table row when a docs file is added.
+
+## Non-negotiable rules (detail in the linked file)
+
+- **Co-development**: a lack in the foundation is fixed IN emeraude-base; the engine never works around it.
+  → [`docs/agents/02-1a-foundation-emeraude-base.md`](docs/agents/02-1a-foundation-emeraude-base.md)
+- **Y-UP right-handed** (`+X` right, `+Y` up, `-Z` forward); imports are the identity. Never call Vulkan
+  directly (use `Graphics/`); VMA for GPU memory, RAII everywhere; per-frame GPU buffers are one per frame in
+  flight; `…Color` material names are sRGB; normal maps follow the Khronos convention; `LC_NUMERIC` is `"C"`;
+  a resource shared across scenes is owned once at device level.
+  → [`docs/agents/05-3-core-axioms.md`](docs/agents/05-3-core-axioms.md)
+- **Industrial quality, no workaround, escalate architectural choices to the owner, documentation in the same
+  session and signalled to the user.** → [`docs/agents/12-8-code-generation-directives.md`](docs/agents/12-8-code-generation-directives.md)
+- **LGPLv3**: never integrate incompatible code; cite every open-source contribution.
+  → [`docs/agents/06-3b-licensing.md`](docs/agents/06-3b-licensing.md)
+- **Open work** lives in `docs/todo/`, one file per idea, deleted when done.
+  → [`docs/todo/README.md`](docs/todo/README.md)
+- C++ conventions (tabs, braces, `m_` members, UPPERCASE acronyms, no exceptions):
+  [`docs/cpp-conventions.md`](docs/cpp-conventions.md). Pitfalls by area: [`docs/caution-points.md`](docs/caution-points.md)
+  (large: search it, do not read it whole).
+
+## Where to read — by task
+
+| Task touches | Router / file |
+|---|---|
+| Rendering, materials, post-process, lighting lanes, RT effects | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) |
+| Vulkan objects, memory, sync | [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) |
+| Generated shaders (Saphir) | [`src/Saphir/AGENTS.md`](src/Saphir/AGENTS.md) |
+| Scene graph, components, lights, console adapters | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) |
+| glTF / FBX / USD / WAD loaders | [`src/Scenes/Loaders/AGENTS.md`](src/Scenes/Loaders/AGENTS.md) |
+| Editor, AV console (virtual devices) | [`src/Scenes/Editor/AGENTS.md`](src/Scenes/Editor/AGENTS.md), [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) |
+| Physics / Audio / Input / Animations | [`src/Physics/AGENTS.md`](src/Physics/AGENTS.md), [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md), [`src/Input/AGENTS.md`](src/Input/AGENTS.md), [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) |
+| Resources (async loading, stores) | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) |
+| Console, MCP server, remote control | [`src/Console/AGENTS.md`](src/Console/AGENTS.md), operator view [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) |
+| Networking (HTTPS, UDP, TCP, serial) | [`src/Net/AGENTS.md`](src/Net/AGENTS.md) |
+| Overlay (ImGui), Tool | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md), [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) |
+| OS-specific code | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) |
+| Core lifecycle, tracer, source tree | [`src/AGENTS.md`](src/AGENTS.md) |
+| Foundation (math, image/audio/mesh factories, I/O, unit tests) | [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) |
+| Every other topic document (coordinate system, pipeline cache, exports, PCH…) | [`docs/agents/11-7-documentation-index.md`](docs/agents/11-7-documentation-index.md) |
+
+## The former content of this file (`docs/agents/`)
+
+| Section | File |
+|---|---|
+| Context (coordinates, platform, API) | [`01-1-context.md`](docs/agents/01-1-context.md) |
+| Foundation: emeraude-base (build, PCH, exports, symbol hiding) | [`02-1a-foundation-emeraude-base.md`](docs/agents/02-1a-foundation-emeraude-base.md) |
+| Vision | [`03-1b-vision.md`](docs/agents/03-1b-vision.md) |
+| Architecture map | [`04-2-architecture-map.md`](docs/agents/04-2-architecture-map.md) |
+| Core axioms | [`05-3-core-axioms.md`](docs/agents/05-3-core-axioms.md) |
+| Licensing | [`06-3b-licensing.md`](docs/agents/06-3b-licensing.md) |
+| Open work rule | [`07-3c-open-work-docs-todo-one-file-per-idea.md`](docs/agents/07-3c-open-work-docs-todo-one-file-per-idea.md) |
+| Platform-specific recommendations | [`08-4-platform-specific-recommendations.md`](docs/agents/08-4-platform-specific-recommendations.md) |
+| AI-friendly codebase | [`09-5-ai-friendly-codebase.md`](docs/agents/09-5-ai-friendly-codebase.md) |
+| AI runtime control | [`10-6-ai-runtime-control.md`](docs/agents/10-6-ai-runtime-control.md) |
+| Documentation index | [`11-7-documentation-index.md`](docs/agents/11-7-documentation-index.md) |
+| Code generation directives | [`12-8-code-generation-directives.md`](docs/agents/12-8-code-generation-directives.md) |
+| Link index | [`13-link-index.md`](docs/agents/13-link-index.md) |

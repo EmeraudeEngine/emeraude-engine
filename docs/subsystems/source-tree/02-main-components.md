@@ -1,0 +1,614 @@
+## Main Components
+
+### Core - Framework Heart
+**Files**: `Core.cpp/.hpp` (26KB header, 37KB cpp)
+
+**Central role**: Central point of the entire framework, main class to inherit from to produce an application.
+
+**Responsibilities**:
+- **Orchestration**: Coordinates all engine subsystems
+- **Main loops**: Manages three execution loops
+  - Main loop (input/events + `onCoreMainLoopCycle`; idle tick ceiling configurable via the `Core` constructor's `mainLoopFrequencyHz` parameter, default `DefaultMainLoopFrequencyHz` = 100 Hz; external subsystems can tighten the next wake-up via `scheduleMainLoopCycle()` — see § Core - External Main-Loop Cycle Scheduling)
+  - Logic loop (separate thread; fixed timestep at `WorldPhysicsUpdateFrequency` = 60 Hz)
+  - Render loop (separate thread; uncapped in `RenderingMode::Continuous`, sleeps when idle in `RenderingMode::OnDemand` — see § Core - On-Demand Rendering)
+- **Lifecycle**: Entry point for overriding application behavior
+
+**Usage pattern**:
+```cpp
+class MyApplication : public EmEn::Core {
+public:
+    MyApplication(int argc, char** argv) noexcept
+        : Core{argc, argv, "MyApp", {1, 0, 0}, "MyOrg", "example.com"} {}
+
+private:
+    // Required: Setup your scene here
+    bool onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings) noexcept override { return true; }
+
+    // Required: Update game logic here (runs on logic thread)
+    void onCoreProcessLogics(size_t cycle) noexcept override {}
+
+    // Optional overrides: onBeforeCoreSecondaryServicesInitialization(),
+    // onCorePaused(), onCoreResumed(), onBeforeCoreStop(),
+    // onCoreKeyPress(), onCoreKeyRelease(), onCoreCharacterType(),
+    // onCoreNotification(), onCoreOpenFiles(), onCoreSurfaceRefreshed()
+};
+```
+
+**Shutdown**:
+- `stop(int userExitCode = 0)` — Initiates engine shutdown. Calls `onBeforeCoreStop()` first; if the override returns `false`, the stop is deferred without disturbing engine state (loops still running, services still initialized). On accepted shutdown: broadcasts `ExecutionStopping`/`ExecutionStopped`, stops the recorder if running, terminates all loops. See § Core - Shutdown Policy for the veto contract and safety net.
+
+**Mandatory callbacks** (pure virtual):
+- `onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings)` - Scene initialization, return true to continue
+- `onCoreProcessLogics(size_t)` - Game logic (separate thread)
+
+**Optional callbacks** (default implementation):
+- `onBeforeCoreSecondaryServicesInitialization()` - Pre-init (e.g., --help)
+- `onCorePaused()` / `onCoreResumed()` - Pause handling
+- `onBeforeCoreStop()` - Veto-able cleanup hook before shutdown — return `false` to defer, `true` to accept. `[[nodiscard]]`. See § Core - Shutdown Policy.
+- `onCoreKeyPress()` / `onCoreKeyRelease()` - Keyboard input
+- `onCoreCharacterType()` - Unicode text input
+- `onCoreNotification()` - Observer pattern
+- `onCoreOpenFiles(std::vector<std::filesystem::path> &)` - File drag & drop. The application REMOVES from the list every file it consumes; leftovers fall back to the Core default behaviors. Core has already consumed engine-level files (JSON resource store indexes) before this hook. Defaults after the hook: JSON scene definition → `Scenes::Manager::loadScene()`; image → `Scenes::Viewers::ImageViewer` scene; composite asset (per scene-loader `supportsExtension()`) → `Scenes::Viewers::ModelViewer` scene; audio file → ad-hoc `MusicResource` played through the TrackMixer; anything else → on-screen notification. Viewer policy: a regular active scene is NEVER disturbed (notification instead); an active viewer scene is replaced. Console: `Core.openFiles(path[, path...])` exercises the whole pipeline without a real drag & drop.
+- `onCoreSurfaceRefreshed()` - Window resize
+
+### Core - Automatic Settings Reset on Version Change
+
+Opt-in per project via the **last `Core` constructor parameter** `bool resetSettingsOnNewVersion`
+(default `false`, after `applicationDomain`). When `true`, `Core::resetSettingsIfOutdated()` runs
+**early** in `initializeBaseLevel()` — right after `m_primaryServices.initialize()` has loaded the
+settings file, before the console/video services come up, so **no restart is needed**.
+
+The settings header carries two version stamps, written by `Settings::writeFile()`:
+`Settings::EngineVersionKey` (`WrittenByEngineVersion`, the engine `VersionString`) and
+`Settings::ApplicationVersionKey` (`WrittenByApplicationVersion`, the `applicationVersion` passed to
+`Core` — `PrimaryServices` injects it into `Settings` as a pre-formatted string). Both are compared
+via `Base::Version` (`FromString` + `operator<=>`).
+
+- Resets — checked in this order, any hit wins:
+  1. **either stamp missing/unparsable** (a file written before these keys existed — e.g. the legacy
+     `WrittenByAppVersion` files, or the very first launch after this feature);
+  2. **engine version increased** (stored `WrittenByEngineVersion` < `Identification::EngineVersion`);
+  3. **application version increased** (stored `WrittenByApplicationVersion` < `applicationVersion`).
+- On a hit → backup `settings.json.<timestamp>-bck` (same rename as `executeResetSettings()`) **and**
+  `Settings::clear()` the in-memory store, then continue. Services re-generate defaults lazily; the
+  fresh file is written at save-at-exit with the current stamps. An exact match or a **downgrade**
+  (stored newer than current) → kept.
+- No settings file (fresh install) → no-op. Backup failure → store left untouched (no clear, no data loss).
+
+> [!NOTE]
+> The legacy single key was `WrittenByAppVersion` (recorded the engine version despite its name).
+> It was split (2026-07) into `WrittenByEngineVersion` + `WrittenByApplicationVersion`; old files
+> lacking the new keys are migrated by the missing-stamp reset above (one reset on first launch).
+
+Contrast with `--reset-settings` (the `ResetSettingsArg` flag), which backs up then **exits**
+(`willNotRun()`). This feature backs up and **keeps running**. Consumers (e.g. a CEF-based application) pass
+`true`; the default keeps existing behaviour unchanged.
+
+#### What survives a reset — `SettingsKeyRestoration` (2026-09-08)
+
+A reset is not a blank slate any more: the entries declared in a `SettingsKeyRestoration`
+(`src/SettingsKeyRestoration.hpp`) are **read back from the backup file that was just written** and
+re-injected into the fresh store, with the type the file gives them. The class is the second, optional
+`Core` constructor argument after the flag — and the two are deliberately **separate concepts**
+(owner decision, 2026-09-08): the `bool` is the **per-release switch** ("this release deserves a
+clean `settings.json`"), the restoration is the **stable list of what is kept**, and flipping one
+never touches the other.
+
+- **Additive across the cascade.** A default-constructed instance already carries the **engine base**
+  `SettingsKeyRestoration::EngineKeys`: `Core/Permissions/Notifications` (a permission the user
+  answered once), `Core/Console/EnableRemoteListener`, `Core/Console/RemoteListenerAddress` (a
+  closed-by-default door the user opened on purpose), `Core/Video/Window/Width`,
+  `Core/Video/Window/Height`. The application adds its own on top,
+  `forget(path)` withdraws an engine entry a product does not want, `SettingsKeyRestoration::blank()`
+  starts without the base. A consumer that passes only the flag (app_system) therefore gets the engine
+  base restored **without any code change**.
+- **Two granularities.** `keep("A/B/Key")` = one variable **or one array** (an array is restored
+  whole: the target array is cleared first). `keepStore("A/B")` = the whole sub-tree below the path
+  (`Settings::importJSON()`). The report prints a store as `A/B/*`.
+- **Declaration pattern**: constant data above the constructor, not an inline list in the initializer
+  (owner decision) — see § Creating an Application below. `std::array< std::string_view, N >`
+  converts to the `std::span` the constructor takes.
+- **Refused, with a warning**: the empty path, the root store (`keepStore("")`) and the three header
+  stamps `WrittenByEngineVersion` / `WrittenByApplicationVersion` / `WrittenAtDate` — restoring a
+  stamp would defeat the version guard. A `keep()` on a path the backup holds as an **object** is
+  reported `[ABSENT]` with a hint to use `keepStore()`.
+- **Both reset paths use it.** The version guard: clear → restore → keep running; the banner lists
+  `[KEPT]` / `[ABSENT]` entries. `--reset-settings`: backup → clear → restore → when at least one entry
+  was found, **a minimal `settings.json` holding only those entries plus the current stamps is written
+  immediately** (`Settings::save()`, because `onTerminate()` refuses to save under that flag) → exit.
+  Nothing found → no file, fresh defaults on the next launch as before.
+- **Failure policy.** A backup that cannot be re-parsed is traced as an error and the reset **stands**
+  (the file was parsed a moment earlier; restoration is a convenience on top of a reset already done on
+  disk). Same unchanged rule upstream: a **rename** failure aborts the reset and keeps the settings.
+- **Settings API added for it** (`Settings.hpp`): `setValue(path, SettingValue)` /
+  `setValueInArray(path, SettingValue)` (variant-level setters), `importJSON(node, keyPrefix)`
+  (public, locking entry over `readLevel()`), `static jsonToSettingValue(Json::Value)` — the single
+  JSON→`SettingValue` conversion site, extracted from the former lambda inside `readLevel()`.
+
+⚠️ **Measured 2026-09-08** on a scratch file (`--settings-filepath`) stamped `0.1.0`: both paths
+restored the 6 declared entries (engine base of the time + projet-alpha's Vulkan validation pair), the stale
+`Core/Video/Window/XPosition` did **not** survive, and the remote console came up from the restored
+gate — the shutdown of the test instance went through TCP 7777. The first launch after enabling the
+switch on an existing installation **does reset the user's file** (only the declared entries
+survive): say so before flipping the flag on a project.
+
+### Core - External Main-Loop Cycle Scheduling
+
+`onCoreMainLoopCycle()` runs at the loop's own cadence (100 Hz ceiling when active, **only on OS
+events while paused**). Subsystems integrated into that hook whose work is scheduled from other
+threads (typical case: an external message pump such as CEF's
+`CefBrowserProcessHandler::OnScheduleMessagePumpWork()` with `external_message_pump = 1`) need a
+way to control *when* the next cycle runs. That is `scheduleMainLoopCycle()`:
+
+```cpp
+/* Thread-safe, callable from any thread. */
+void Core::scheduleMainLoopCycle (int64_t delayMS) noexcept;
+```
+
+**Contract**:
+- Guarantees a main-loop cycle (thus `onCoreMainLoopCycle()`) runs within `delayMS` milliseconds.
+- `delayMS <= 0` = "as soon as possible": wakes the main loop immediately via
+  `Input::Manager::wakeUpEventsLoop()` (`glfwPostEmptyEvent()`, documented thread-safe).
+- A new request **replaces** any pending one (last call wins) — matches the CEF
+  `OnScheduleMessagePumpWork` contract.
+- Only tightens the next wake-up, never delays it: the regular cadence stays the floor.
+- **Works while paused**: the pause loop's indefinite `waitSystemEvents()` is bounded by the
+  pending deadline, so an external pump (e.g., CEF UI) stays serviced during engine pause.
+
+**Implementation**: atomic monotonic deadline (`m_scheduledCycleDueTimeMS`, sentinel
+`MainLoopCycleNotScheduled`). The cycle body is defined once in the private, non-virtual
+`executeMainLoopCycle()` (console poll → CAS-consume a due request → `onCoreMainLoopCycle()`
+hook), called by both the running and paused loops; both wait sites compute their timeout
+through `mainLoopWaitTimeout()`. Clock: `Base::Time::elapsedMilliseconds()` (steady).
+
+### Core - On-Demand Rendering
+
+By default the render thread (`Core::renderingTask`) loops uninterrupted, presenting a frame
+every iteration (game-style, GPU always busy). This is `RenderingMode::Continuous`.
+
+`RenderingMode::OnDemand` (opt-in via the protected setter `setRenderingMode(RenderingMode::OnDemand)`,
+typically in the sub-application constructor next to `setMainLoopFrequency`) makes the render thread
+**sleep when nothing changed on screen**, so the GPU idles. It suits overlay-centric applications
+(e.g. a CEF UI composited by the Overlay manager) where most frames are identical; keep `Continuous`
+for animated 3D real-time rendering.
+
+**Mechanism** — a single source of truth, `Core::requestRedraw()` (public, thread-safe):
+- Stores a *budget* of frames to render (= `Renderer::framesInFlight()`, i.e. the swap-chain image
+  count) so **every** swap-chain image is refreshed — rendering a single frame per change would leave
+  the other buffers stale on a multi-buffered swap-chain (flicker). Then it wakes the render thread via
+  a condition variable. In `Continuous` mode it is a cheap no-op.
+- The render-thread gate (`Core::renderingTask`) mirrors the existing `m_paused` fast-path: in
+  `OnDemand` **and** with no active 3D scene, it waits on the condition variable (bounded by a hard
+  60 FPS-period safety timeout — a *re-check* granularity, **not** a forced-render floor, so the GPU
+  stays idle) instead of rendering. An **active 3D scene bypasses the gate entirely** (v1 rule: an
+  active scene is treated as always-dirty and renders continuously). One frame of the budget is
+  consumed per rendered frame; when it reaches zero (and no scene) the thread idles again.
+
+**Redraw triggers wired into Core** (all no-ops in `Continuous`):
+- **Overlay change** — `Core` observes `Overlay::Manager`; a `RedrawRequested` notification (emitted on
+  any surface content/geometry/visibility/stack-order change and any screen lifecycle/visibility change,
+  see [`Overlay/AGENTS.md`](../../../src/Overlay/AGENTS.md) § On-Demand Redraw Signal) → `requestRedraw()`.
+- **Scene enable/disable** — `SceneEnabled`/`SceneDisabled` → `requestRedraw()` (start drawing a new
+  scene without latency; render the final bare clear-color frame when the last scene is disabled).
+- **Window** — framebuffer resize / content-scale change (wakes the sleeping render thread so it can
+  recreate the swap-chain that `Renderer::onNotification` just marked degraded — otherwise, idle, it
+  would never notice), surface recreated (`onWindowChanged`), and focus/visibility regained → `requestRedraw()`.
+- **Explicit** — application/native code (or the remote console) may call `requestRedraw()` for changes
+  not covered by the built-in triggers.
+
+**First frame / no scene**: `Renderer::renderFrameDirect` already degenerates to *clear color + overlay*
+when `scene == nullptr`, so the guaranteed initial frame (seeded by a `requestRedraw()` before the loop)
+is just the clear color plus whatever the overlay draws.
+
+**Caveat**: ImGUI overlay screens (immediate-mode, `Overlay::Manager::m_ImGUIScreens`) are **not** covered
+by the redraw signal — a continuously-animating ImGUI screen needs an explicit `requestRedraw()` or
+`Continuous` mode. AppSystem's production UI is WebView-based (`UIScreen` surfaces), which **is** covered.
+
+**Files**: `Core.cpp` (`renderingTask` gate, `requestRedraw`, `onNotification` overlay/scene cases,
+`onWindowChanged`), `Core.hpp` (`RenderingMode`, `setRenderingMode`, redraw members), `Constants.hpp`
+(`OnDemandRenderingSafetyRefreshHz`).
+
+### Core - Shutdown Policy
+
+Shutdown is veto-able. `stop()` calls `onBeforeCoreStop()` first; returning `false` defers the shutdown without disturbing engine state — loops still running, services still initialized. The application is responsible for calling `stop()` again when ready. Typical use: notify a frontend (e.g. a JS layer over IPC), wait for a cleanup ack, then call `stop()` again.
+
+**Safety net — consecutive veto counter**. To prevent the engine from being locked by a buggy or unresponsive application policy, Core counts consecutive vetoes. After `MaxStopVetoCount` (= 3), a synchronous modal `Dialog::CustomMessage` ("Force Quit" / "Wait More") prompts the user:
+- **Force Quit** (button index 0, primary/default) → bypass the veto and proceed to shutdown
+- **Wait More** (any other index, including dismissal) → reset the counter to 0 and return without stopping
+
+The counter resets to 0 whenever the user chooses "Wait More", so each fresh batch of vetoes gets the full tolerance.
+
+**Final cleanup chance on force-quit**. When the user confirms "Force Quit", Core does NOT immediately tear down. It first calls `setAppReadyToQuit(ForceQuitExitCode)` (sets `m_userApplicationReadyToQuit = true` and overrides the exit code with the `ForceQuitExitCode` sentinel `= 99` so the OS can distinguish a force-quit from a clean shutdown), then invokes `onBeforeCoreStop()` one last time with the return value discarded. This gives the application a final opportunity to release resources and save critical state before shutdown — even if its normal policy would still want to veto.
+
+**`onBeforeCoreStop()` two-mode contract**. The override is expected to inspect `isAppSafeToQuit()` to know which mode it's in:
+| `isAppSafeToQuit()` | Mode | Expected behavior |
+|---|---|---|
+| `false` | Normal veto opportunity | Trigger frontend cleanup (e.g. notify JS), return `false` to defer; return `true` once cleanup is complete |
+| `true` | Final cleanup chance (force-quit confirmed) | Do best-effort cleanup; return value is ignored |
+
+**Exit code chain**. `stop(int code)` stores the code in `m_userExitCode`. `terminate()` returns `errors > 0 ? EXIT_FAILURE : m_userExitCode`, propagated unchanged by `run()` to the Boot's `main()` return value. Type uniform `int` across the chain — no narrowing, no implicit conversion. Service termination failures or (in debug builds) leaked Vulkan objects force `EXIT_FAILURE` regardless of the user code.
+
+**Exit code convention**. On POSIX, only `code & 0xFF` reaches the shell — stay in `0–255`. Engine convention: `0` = success (stdout), anything else = error (stderr). The Boot logs the message accordingly. Negative `int` values wrap through truncation and will appear as errors after `& 0xFF`.
+
+**Every stop trigger is traced** (2026-09-25): `Stop requested by the Escape key` / `by the console` /
+`by the window system (close request)` / `the graphics renderer is no longer usable`. Read it first when a
+window closes by itself — a GLFW close request can be a DEAD Wayland connection (`Window` below).
+
+**Threading**. `Core::stop()` is expected to be called from the main thread. The "Force Quit / Wait More" dialog is synchronous and modal on `m_window`, so cross-thread calls to `stop()` may misbehave on Windows in particular.
+
+### Core - Recording Coordination (RushMaker)
+
+Core owns coordinated audio+video+voice-over recording via two protected methods:
+
+| Method | Purpose |
+|--------|---------|
+| `startAudioVideoRecording()` | Generates timestamped paths in `captures/`, starts video, audio, and optionally voice-over |
+| `stopAudioVideoRecording()` | Stops voice-over first, then audio and video recorders |
+
+**Keyboard shortcuts** (handled in `Core::onKeyPress()`):
+- **Shift+F12** — Take a screenshot (`screenshot()`)
+- **Shift+Ctrl+F12** — Toggle audio+video recording
+
+### Core - Remote Console Screenshot
+
+Screenshots are taken via the Remote Console TCP connection using `Renderer.screenshot()`.
+
+**Usage:**
+```bash
+# 1. Launch the application
+./app --load-demo <demo-id>
+
+# 2. From another terminal (or programmatically via TCP socket on port 7777):
+# Cross-platform (recommended, required on Windows):
+python tools/remote-console.py "Core.RendererService.screenshot()"
+# Linux/macOS only:
+echo "Core.RendererService.screenshot()" | nc -w 2 localhost 7777
+```
+
+**Implementation:** See `Graphics/Renderer.console.cpp`. Saves PNG to `{userDataDir}/captures/{unix_timestamp}.png`.
+
+**AI visual analysis workflow:** Launch demo, wait for scene to load, send `Renderer.screenshot()` via TCP, read captured PNG with multimodal AI, evaluate visual quality. This approach is more reliable than a timer because the AI can wait until the scene is fully loaded before capturing.
+
+### Core - Maintenance CLI Arguments
+
+Arguments that perform a maintenance operation and exit immediately, **before** any window, CEF, or rendering initialization. They leverage `Core::willNotRun()` which is checked by `main()` to short-circuit the boot sequence.
+
+#### `--wipe-local-data` / `--wipe-local-data-confirm`
+
+Wipes volatile local data (cache + user data directories) while preserving settings.
+
+- `--wipe-local-data` — **Dry run**: lists all files that would be deleted with sizes, then exits. Does not delete anything.
+- `--wipe-local-data-confirm` — **Actual wipe**: lists files, then deletes cache and user data directories.
+
+**Scope:**
+- **Wiped:** `cacheDirectory` (shader cache, CEF debug log) + `userDataDirectory` (captures, CEF profile)
+- **Preserved:** `configDirectory` (settings.json)
+
+**Implementation:** Detected in `Core::initializeBaseLevel()` after primary services init (FileSystem available). Calls `Core::executeWipeLocalData(bool dryRun)` which builds a single `TraceWarning` report (named variable pattern). Sets `m_willNotRun = true` so `main()` exits before CEF initialization.
+
+**Code references:**
+- `Core.hpp:WipeLocalDataArg`, `Core.hpp:WipeLocalDataConfirmArg`
+- `Core.cpp:initializeBaseLevel()` — detection
+- `Core.cpp:executeWipeLocalData()` — implementation
+
+#### `--reset-settings`
+
+Backs up the current settings file and exits, forcing fresh settings on next launch.
+
+- Renames `settings.json` → `settings.json.<unix_timestamp>-bck`
+- `Settings::onTerminate()` refuses to save under this flag, so the service never re-creates the file at shutdown
+- **Since 2026-09-08**: the entries declared in the `Core` constructor's `SettingsKeyRestoration` are read
+  back from the backup; when at least one is found, a **minimal `settings.json`** holding only them plus
+  the current version stamps is written before exiting (see § Core - Automatic Settings Reset, *What
+  survives a reset*). Nothing found → no file, as before.
+- If no settings file exists, informs the user and exits
+
+**Code references:**
+- `Core.hpp:ResetSettingsArg`
+- `Core.cpp:executeResetSettings()` — implementation
+
+#### `willNotRun()` Pattern
+
+The `Core::willNotRun()` getter (public, set during `initializeBaseLevel()`) allows `main()` to detect that the engine performed a maintenance operation and should exit immediately — **before** initializing CEF, creating windows, or entering the main loop. This prevents CEF from re-creating directories that were just wiped.
+
+```
+Boot sequence: Constructor → initializeBaseLevel() → sets m_willNotRun
+main(): checks willNotRun() → exits before CEF/window/rendering init
+```
+
+**Automatic stop triggers:**
+- Framebuffer resize (`onWindowChanged()`) — recording stops because video dimensions are locked at start
+- Application shutdown (`stop()`) — recording stops cleanly
+
+**Path generation pattern:** `{userDataDir}/captures/{unix_timestamp}.{ivf,wav,-voice.wav}`
+
+Both `Graphics::Recorder` and `Audio::Recorder` share a symmetric API: `startRecording(path)` / `stopRecording()` / `isRecording()`. Core is the only caller that generates paths and coordinates all recorders.
+
+#### Voice-Over Support
+
+When `Core/RushMaker/EnableVoiceOver` is `true` and `Audio::ExternalInput` is usable (requires `Core/Audio/Capture/Enable = true`), the microphone is captured in streaming mode alongside the rush.
+
+**Privacy by design:** `Core/Audio/Capture/Enable` defaults to `false`. The voice-over setting alone is not sufficient — the user must explicitly enable audio capture first. A clear warning is logged if voice-over is enabled but capture is off.
+
+**Stop order:** Voice-over stops first (thread join is quasi-instantaneous), then game audio, then video (non-blocking via detached encoding session).
+
+#### Adaptive FFmpeg Script
+
+The assembly script is generated only when **video is active**. It adapts to available streams:
+
+| Video | Game Audio | Voice-Over | Script |
+|-------|-----------|------------|--------|
+| yes | yes | yes | 3 inputs + `amix` filter |
+| yes | yes | no | 2 inputs (video + audio) |
+| yes | no | yes | 2 inputs (video + voice) |
+| yes | no | no | Video only → webm container |
+| no | * | * | No script generated |
+
+Every variant tags the output container with BT.709 colour metadata
+(`-colorspace bt709 -color_primaries bt709 -color_trc bt709`) — the VP9 bitstream itself
+already carries BT.709 (see `Graphics/AGENTS.md` § Video Recording, Colorimetry).
+
+**Code references:**
+- `Core.cpp:startAudioVideoRecording()` — Path generation, voice-over start, script generation
+- `Core.cpp:stopAudioVideoRecording()` — Voice-over stop, then audio/video stop
+- `Core.hpp:m_rushVoiceOverPath` — Tracks active voice-over path for script generation
+- `Core.cpp:onKeyPress()` — F12 handler (case `KeyF12`)
+- `Core.cpp:onWindowChanged()` — Resize handler stops recording
+- `Core.cpp:stop()` — Shutdown handler stops recording
+- `SettingKeys.hpp:RushMakerEnableVoiceOverKey` — Voice-over setting key
+
+### Tracer - Logging System
+**Files**: `Tracer.cpp/.hpp`
+
+**Role**: Runtime logging system for program execution tracing.
+
+**Architecture**:
+- **Tracer** (singleton): Main console/file logging service. See `Tracer.hpp:297-851`
+- **TracerLogger**: Async logger with dedicated thread for non-blocking file I/O. See `Tracer.hpp:189-295`
+- **TracerEntry**: Single log entry (timestamp, severity, tag, message, location, thread). See `Tracer.hpp:61-187`
+- **T_TraceHelperBase**: CRTP template for RAII helpers. See `Tracer.hpp:857-953`
+
+**Message types**:
+- `info` - General information
+- `warning` - Warnings
+- `error` - Recoverable errors
+- `fatal` - Critical errors (with optional `std::terminate()`)
+- `success` - Successful operations
+- `debug` - Debug (eliminated in Release via zero-overhead dummy class)
+
+**RAII helper classes** (use CRTP via `T_TraceHelperBase`):
+- `TraceInfo`, `TraceSuccess`, `TraceWarning`, `TraceError` - Inherit from `T_TraceHelperBase`
+- `TraceFatal` - Separate class with `terminate` option
+- `TraceAPI` - For tracing external API calls (Vulkan, OpenAL, etc.)
+- `TraceDebug` - Release version = empty dummy class (guaranteed zero-overhead)
+
+**Features**:
+- **Flexible output**: Terminal with ANSI colors + log files (Text/JSON/HTML)
+- **Metadata**: `std::source_location`, thread ID, automatic timestamps
+- **Thread-safe**: Mutex for console, thread-safe queue for file
+- **Performance**: TraceDebug Release eliminated at compilation (zero-cost)
+
+**Usage**: See [`docs/tracer-system.md`](../../tracer-system.md) for complete conventions (3 forms, critical rules, multi-line).
+
+### Window - OS Window Management
+**Files**: `Window.cpp/.hpp` + `Window.{linux,mac,windows}.cpp`
+
+**Role**: Cross-platform window abstraction via GLFW.
+
+**Responsibilities**:
+- **OS Window**: Creation, resize, movement, fullscreen
+- **Events**: OS event handling (close, focus, minimize, etc.)
+- **Vulkan Surface**: SwapChain creation for rendering
+- **Monitor enumeration**: Connected displays with hot-plug support
+- **Platform-specific**: OS-specialized code (Linux/macOS/Windows)
+
+**Monitor Device Info** (`Window::MonitorDevice`):
+```cpp
+struct MonitorDevice {
+    std::string name{"Unknown"};
+    bool primary{false};
+    int32_t physicalWidthMM{0}, physicalHeightMM{0};
+    int32_t currentResolutionX{0}, currentResolutionY{0};
+    int32_t positionX{0}, positionY{0};   // Virtual desktop coordinates
+    int32_t refreshRate{0};                // Hz
+    int32_t colorDepth{0};                 // Sum of R+G+B bits
+    float contentScaleX{1.0F}, contentScaleY{1.0F};  // HiDPI/Retina
+};
+```
+
+**Accessor**: `monitorDevices()` returns `const StaticVector< MonitorDevice, 16 > &` (stack-allocated, no heap pressure during hot-plug).
+
+**Hot-plug**: `refreshMonitorDevices()` called on GLFW monitor callback. Observers receive `OSMonitorConfigurationChanged` notification. Uses static `s_instance` pointer (GLFW monitor callbacks have no user pointer).
+
+**Implementation**: GLFW 3.4+ API (cross-platform: `glfwGetMonitors`, `glfwGetVideoMode`, `glfwGetMonitorContentScale`, `glfwSetMonitorCallback`).
+
+**The rendering thread reads the Wayland connection** (`drainDisplayConnection()`, `Window.linux.cpp`, called every
+frame by `Core::renderingTask()`; a no-op elsewhere and under X11): a private, always empty event queue, a
+zero-timeout `poll()`, `wl_display_read_events()` — nothing dispatched there, the events wait in their queues for
+GLFW (main thread) and the driver. ⚠️⚠️ Without it, a main thread busy for seconds (an act loaded before the main
+loop) while the swap-chain presents in MAILBOX let GNOME's 1 MiB send buffer fill with `wl_buffer.release` events
+and the compositor DROP the client: GLFW turned it into a silent close request, the swap-chain waited 60 s for an
+image (`docs/caution-points.md` § *GNOME dropped the Wayland connection*).
+
+**The frame is acquired outside the scene lock**: `Core::renderingTask()` calls `Renderer::beginFrame()` (frame
+fence + `vkAcquireNextImageKHR`) BEFORE `withSharedActiveScene()`, then `renderFrame()` inside it
+(`abandonFrame()` gives the image back on shutdown). The acquisition waits on the presentation engine without
+bound: held inside the lock, it blocked every writer on the main thread.
+
+**Integration**:
+- Used by Core to create main window
+- Provides Vulkan surface to Renderer
+- No direct link with Input or Overlay
+
+### Settings - Application Configuration
+**Files**: `Settings.cpp/.hpp` (23KB header), `SettingKeys.hpp` (13KB)
+
+**Role**: Global framework configuration system with JSON persistence.
+
+**Features**:
+- **Format**: JSON storage in OS-specific user config folders
+- **Persistence**: Automatic save on application close
+- **Live editing**: SHIFT+F5 opens file in default text editor
+- **SettingKeys**: Defines all available configuration keys
+
+**Parameter types**:
+- Resolution, window mode
+- Graphics quality, vsync
+- Audio volumes
+- Resource paths
+- Debug options
+
+**Hierarchy**:
+Arguments > Settings > Default values
+
+### Arguments - Command Line Parsing
+**Files**: `Arguments.cpp/.hpp` (8KB header)
+
+**Role**: Program argument manager (argc/argv).
+
+**Features**:
+- **Parsing**: Command line argument analysis
+- **Dynamic addition**: Ability to add arguments on the fly
+- **Override Settings**: Arguments stronger than Settings
+- **Distribution**: Arguments passed to relevant subsystems
+
+**Core usage**: Used at startup to configure initialization
+
+**Examples**:
+```bash
+./MyApp --fullscreen --resolution 1920x1080 --debug-renderer
+```
+
+### PrimaryServices - Service Container
+**Files**: `PrimaryServices.cpp/.hpp` (7KB each)
+
+**Role**: Container for easy transport of main engine services.
+
+**Included services**:
+- **Arguments**: Argument parser
+- **FileSystem**: File system
+- **Settings**: Configuration
+- **Net::Manager**: Network manager
+- **ThreadPool**: Worker pool for async work
+
+**Usage**: Simplifies dependency passing between components
+
+### FileSystem - File System Abstraction
+**Files**: `FileSystem.cpp/.hpp` (11KB header, 13KB cpp)
+
+**Role**: Cross-platform abstraction for accessing system directories.
+
+**Managed directories**:
+- **Config**: OS-specific user config folder
+- **Cache**: Application cache folder
+- **Data**: User data folder
+- **Temp**: Temporary folder
+
+**Cross-platform**:
+- Windows: AppData
+- Linux: ~/.config, ~/.cache
+- macOS: ~/Library/Application Support
+
+**Integration**: Used by Settings and Resources to locate files
+
+> [!CAUTION]
+> ⚠️⚠️ **A directory forced from the command line is external UTF-8 — build it with
+> `IO::u8path()`, never by conversion.** `Arguments::get()` hands back a `std::string`, and
+> `registerDirectory()` takes a `const std::filesystem::path &`: passing one to the other looks
+> harmless and **is the ANSI bug**, because the conversion happens *at the parameter* before any
+> function body runs. Same for `std::filesystem::path{someString}` and
+> `vector<path>::emplace_back(someString)` — the spelling changes, the defect does not.
+>
+> Four sites carried it until 2026-08-28 (`--config-directory`, `--cache-directory`,
+> `--data-directory`, `--add-data-directory`) and all four now go through `IO::u8path()`. Measured
+> on Windows: with the entry point already fixed to hand us clean UTF-8 argv, a
+> `--cache-directory=…\Кэш-漢字` pointing at an **existing** directory was still refused — the value
+> survived argv and died one layer down, here. Linux and macOS convert without loss, so the whole
+> path is a no-op there: **this cannot be caught by running it on POSIX**, only by reading, and a
+> green Linux run of the same flag proves only that nothing regressed.
+
+### ServiceInterface - Common Service Interface
+**Files**: `ServiceInterface.hpp` (4KB)
+
+**Role**: Base interface for all framework services.
+
+**Common contract**:
+- **Initialization**: Standardized init protocol
+- **Shutdown**: Clean resource cleanup
+- **Lifecycle**: Uniform service management
+
+**Inheriting services**: Renderer, Physics, Audio, Resources, Net::Manager, etc.
+
+### PlatformManager - Platform Detection
+**Files**: `PlatformManager.cpp/.hpp` (2KB header, 5KB cpp)
+
+**Role**: Runtime platform manager.
+
+**Responsibilities**:
+- **OS Detection**: Dynamically identifies Linux/Windows/macOS/Web
+- **GLFW Initialization**: GLFW framework bootstrap
+- **Coordination**: Coordinates with PlatformSpecific/ folder code
+
+**Usage**: Allows adapting behavior based on OS at runtime
+
+### Notifier - Onscreen Notifications
+**Files**: `Notifier.cpp/.hpp` (5KB each)
+
+**Role**: Visual notification system for end user.
+
+**Features**:
+- **Onscreen messages**: Message display (toasts/popups)
+- **Types**: Info, warning, error, success
+- **Non-blocking**: Doesn't interrupt execution
+
+**Usage**: User feedback for important events
+
+### CursorAtlas - Cursor Management
+**Files**: `CursorAtlas.cpp/.hpp` (4KB each)
+
+**Role**: System and custom cursor manager.
+
+**Features**:
+- **Standard cursors**: Arrow, hand, crosshair, text, etc. (via OS)
+- **Custom cursors**: Loading from images
+- **GLFW wrapper**: GLFW abstraction for cursors
+- **CEF integration**: Cursor transmission to external libraries (CEF)
+
+**Integration**: Used with Window to change cursor based on context
+
+### Help - Command Line Help
+**Files**: `Help.cpp/.hpp` (10KB header)
+
+**Role**: Command line help system (--help).
+
+**Features**:
+- **Arguments**: Displays available argument list with descriptions
+- **Formatting**: Formatted and colored help in terminal
+- **Framework info**: Version, build info, dependencies
+
+**Trigger**: `./MyApp -h` or `./MyApp --help`
+
+### User - User Representation
+**Files**: `User.cpp/.hpp` (2KB header)
+
+**Role**: Optional end user generalization.
+
+**Usage**: Per-user Settings/paths customization (optional)
+
+### Utility Files
+
+**Types.hpp** (4KB):
+- Common types used at engine first level
+- Global enums and typedefs
+- Framework message types
+
+**Constants.hpp** (6KB):
+- Engine constants
+- `WorldPhysicsUpdateFrequency` — logics fixed-timestep cadence (60 Hz). *Renamed from `EngineUpdateFrequency`.*
+- `DefaultMainLoopFrequencyHz` — default main event-loop idle ceiling (100 Hz), overridable via the `Core` constructor's `mainLoopFrequencyHz` parameter
+- Limits and default values
+
+**Identification.hpp** (10KB):
+- Final application identification
+- Name, version, author, copyright
+- Application metadata
