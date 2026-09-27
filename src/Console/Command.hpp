@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <functional>
-#include <optional>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -46,30 +45,16 @@ namespace EmEn::Console
 
 	/**
 	 * @brief Container for a specific command.
-	 * @note A command bound by a typed bindCommand() carries its signature (declared parameters and
-	 * hints); a legacy command bound with a raw Binding carries none and is reported as untyped.
-	 * Both run through the same Binding: a typed command's binding validates and converts the
-	 * arguments before calling the author's callable.
+	 * @note Every command is TYPED (2026-09-27, owner decision: the untyped form was deleted once the
+	 * last of the 137 commands had migrated): it carries its signature — declared parameters and hints —
+	 * and its binding validates and converts the arguments before calling the author's callable.
 	 */
 	class EMEN_API Command final
 	{
 		public:
 
 			/**
-			 * @brief Constructs an untyped console command.
-			 * @param binding The command to execute in the container [std::move].
-			 * @param help A way to explain that command [std::move].
-			 */
-			Command (Binding binding, std::string help) noexcept
-				: m_binding{std::move(binding)},
-				m_help{std::move(help)},
-				m_description{m_help}
-			{
-
-			}
-
-			/**
-			 * @brief Constructs a typed console command.
+			 * @brief Constructs a console command.
 			 * @param binding The validating binding built by bindCommand() [std::move].
 			 * @param help The description followed by the generated usage [std::move].
 			 * @param description The description alone, as the author wrote it [std::move].
@@ -122,7 +107,7 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Returns the first name of the alias list the command was bound with ("exit" for
-			 * "exit,quit,shutdown"), or an empty string for an untyped command.
+			 * "exit,quit,shutdown").
 			 * @note Lets a machine client expose one tool per command instead of one per alias.
 			 * @return const std::string &
 			 */
@@ -134,14 +119,14 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Returns the declared signature, or nullptr for an untyped (legacy) command.
-			 * @return const CommandSignature *
+			 * @brief Returns the declared signature.
+			 * @return const CommandSignature &
 			 */
 			[[nodiscard]]
-			const CommandSignature *
+			const CommandSignature &
 			signature () const noexcept
 			{
-				return m_signature.has_value() ? &m_signature.value() : nullptr;
+				return m_signature;
 			}
 
 		private:
@@ -150,6 +135,6 @@ namespace EmEn::Console
 			std::string m_help;
 			std::string m_description;
 			std::string m_primaryName;
-			std::optional< CommandSignature > m_signature;
+			CommandSignature m_signature;
 	};
 }

@@ -170,7 +170,7 @@ namespace EmEn::Console::MCP
 	bool isValidToolName (const std::string & name) noexcept;
 
 	/**
-	 * @brief Walks the console tree and returns every typed command as a tool, one per command (aliases merged).
+	 * @brief Walks the console tree and returns every command as a tool, one per command (aliases merged).
 	 * @note Main thread only. A name that is invalid or collides is left out and described in rejections.
 	 * @param controller The console controller.
 	 * @param rejections Receives one line per command left out.

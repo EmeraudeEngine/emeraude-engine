@@ -1391,7 +1391,7 @@ namespace EmEn::Console::MCP
 			Outputs outputs;
 			bool succeeded = false;
 
-			if ( jsonToArguments(*toolIt->command()->signature(), member(request.params, "arguments"), arguments, error) )
+			if ( jsonToArguments(toolIt->command()->signature(), member(request.params, "arguments"), arguments, error) )
 			{
 				succeeded = toolIt->command()->binding()(arguments, outputs);
 			}

@@ -136,7 +136,7 @@ Core
 | `Core.AudioManagerService.TrackMixerService.stop()` | Arrêt |
 | `Core.AudioManagerService.TrackMixerService.volume(0-100)` | Volume |
 | `Core.AudioManagerService.TrackMixerService.next()` / `previous()` | Navigation playlist |
-| `Core.AudioManagerService.TrackMixerService.playlist([clear\|play,N\|add,name])` | Gestion playlist |
+| `Core.AudioManagerService.TrackMixerService.playlist()` / `playlistClear()` / `playlistAdd(name)` / `playlistPlay(N)` | Gestion playlist |
 | `Core.AudioManagerService.TrackMixerService.seek(seconds)` | Position de lecture |
 | `Core.AudioManagerService.TrackMixerService.shuffle(on/off)` | Mode aléatoire |
 | `Core.AudioManagerService.TrackMixerService.loop(on/off)` | Mode boucle |

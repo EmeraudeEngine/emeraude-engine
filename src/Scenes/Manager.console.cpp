@@ -69,7 +69,7 @@ namespace EmEn::Scenes
 				{"camX", "Camera world X, in metres."},
 				{"camY", "Camera world Y, in metres (UP is +Y)."},
 				{"camZ", "Camera world Z, in metres."},
-				{"backgroundName", "A skybox resource name (listResources(SkyBoxResource)); no background when omitted."},
+				{"backgroundName", "A skybox resource name (listResources(SkyBoxResource)); an unknown name is an error; no background when omitted."},
 				{"groundMaterial", "A material resource name, or 'default'; no ground when omitted."}
 			},
 			[this] (const std::string & name, float boundary, const std::string & cameraNodeName, float camX, float camY, float camZ, const std::optional< std::string > & backgroundName, const std::optional< std::string > & groundMaterialName) {
@@ -87,10 +87,15 @@ namespace EmEn::Scenes
 				{
 					auto * skyBoxContainer = m_resourceManager.container< Graphics::Renderable::SkyBoxResource >();
 
-					if ( skyBoxContainer != nullptr )
+					/* ⚠️ Checked BEFORE the scene exists (owner decision 2026-09-27): getResource() silently
+					 * answers the "Default" skybox for an unknown name, so a typo used to build a scene with
+					 * the wrong sky and report success. */
+					if ( skyBoxContainer == nullptr || !skyBoxContainer->isResourceExists(*backgroundName) )
 					{
-						background = skyBoxContainer->getResource(*backgroundName);
+						return Console::CommandResult::error("Unknown skybox '" + *backgroundName + "' (listResources(SkyBoxResource) lists them). No scene was created.");
 					}
+
+					background = skyBoxContainer->getResource(*backgroundName);
 				}
 
 				/* Optional ground. */

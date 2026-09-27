@@ -27,7 +27,6 @@
 #include "TrackMixer.hpp"
 
 /* STL inclusions. */
-#include <charconv>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -529,101 +528,88 @@ namespace EmEn::Audio
 				return Console::CommandResult::success(message.str());
 			});
 
-		this->bindCommand("playlist,pl", "List the playlist, or manage it: clear, add <track>, play <index>.",
+		this->bindCommand("playlist,pl", "Lists the playlist (the current entry is marked).", [this, refuse] () {
+			if ( !this->usable() )
 			{
-				{"action", "'clear' empties the playlist, 'add' appends a track, 'play' plays an entry; omit it to list the playlist."},
-				{"operand", "For 'add': the music resource name. For 'play': the 1-based playlist index."}
+				return refuse("The track mixer is unavailable !");
+			}
+
+			if ( m_playlist.empty() )
+			{
+				return Console::CommandResult::info("Playlist is empty.");
+			}
+
+			std::stringstream list;
+			list << "=== Playlist (" << m_playlist.size() << " track(s)) ===" "\n";
+
+			size_t index = 0;
+
+			for ( const auto & track : m_playlist )
+			{
+				const auto marker = (index == m_musicIndex) ? " > " : "   ";
+
+				list << marker << (index + 1) << ". " << track->name() << "\n";
+
+				index++;
+			}
+
+			return Console::CommandResult::info(list.str());
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("playlistClear", "Empties the playlist.", [this, refuse] () {
+			if ( !this->usable() )
+			{
+				return refuse("The track mixer is unavailable !");
+			}
+
+			this->clearPlaylist();
+
+			return Console::CommandResult::success("Playlist cleared.");
+		}, Console::CommandHint::Destructive | Console::CommandHint::Idempotent);
+
+		this->bindCommand("playlistAdd", "Appends a music to the playlist.",
+			{
+				{"track", "The music resource name."}
 			},
-			[this, refuse] (const std::optional< std::string > & action, const std::optional< std::string > & operand) {
+			[this, refuse] (const std::string & trackName) {
 				if ( !this->usable() )
 				{
 					return refuse("The track mixer is unavailable !");
 				}
 
-				if ( !action.has_value() )
+				const auto track = m_resourceManager.container< MusicResource >()->getResource(trackName);
+
+				if ( track == nullptr )
 				{
-					if ( m_playlist.empty() )
-					{
-						return Console::CommandResult::info("Playlist is empty.");
-					}
-
-					std::stringstream list;
-					list << "=== Playlist (" << m_playlist.size() << " track(s)) ===" "\n";
-
-					size_t index = 0;
-
-					for ( const auto & track : m_playlist )
-					{
-						const auto marker = (index == m_musicIndex) ? " > " : "   ";
-
-						list << marker << (index + 1) << ". " << track->name() << "\n";
-
-						index++;
-					}
-
-					return Console::CommandResult::info(list.str());
+					return Console::CommandResult::error("Track '" + trackName + "' not found !");
 				}
 
-				if ( *action == "clear" )
-				{
-					this->clearPlaylist();
+				this->addToPlaylist(track);
 
-					return Console::CommandResult::success("Playlist cleared.");
+				return Console::CommandResult::success("Added '" + trackName + "' to playlist.");
+			});
+
+		this->bindCommand("playlistPlay", "Plays one entry of the playlist.",
+			{
+				{"index", "The 1-based playlist index (playlist() lists them)."}
+			},
+			[this, refuse] (int32_t index) {
+				if ( !this->usable() )
+				{
+					return refuse("The track mixer is unavailable !");
 				}
 
-				if ( *action == "add" )
+				if ( index < 1 || static_cast< size_t >(index) > m_playlist.size() )
 				{
-					if ( !operand.has_value() )
-					{
-						return Console::CommandResult::error("Usage: playlist(add, <track_name>)");
-					}
-
-					const auto track = m_resourceManager.container< MusicResource >()->getResource(*operand);
-
-					if ( track == nullptr )
-					{
-						return Console::CommandResult::error("Track '" + *operand + "' not found !");
-					}
-
-					this->addToPlaylist(track);
-
-					return Console::CommandResult::success("Added '" + *operand + "' to playlist.");
+					return Console::CommandResult::error("Invalid index. Must be between 1 and " + std::to_string(m_playlist.size()) + ".");
 				}
 
-				if ( *action == "play" )
+				if ( !this->playIndex(static_cast< size_t >(index) - 1) )
 				{
-					/* NOTE: the operand is a string because 'add' takes a name; 'play' wants the WHOLE of it
-					 * to be an integer, so "3abc" is refused rather than read as 3. */
-					int32_t index = 0;
-
-					if ( !operand.has_value() )
-					{
-						return Console::CommandResult::error("Usage: playlist(play, <index>)");
-					}
-
-					const auto * first = operand->data();
-					const auto * last = first + operand->size();
-					const auto [end, error] = std::from_chars(first, last, index);
-
-					if ( error != std::errc{} || end != last )
-					{
-						return Console::CommandResult::error("playlist(play, <index>): '" + *operand + "' is not an integer.");
-					}
-
-					if ( index < 1 || static_cast< size_t >(index) > m_playlist.size() )
-					{
-						return Console::CommandResult::error("Invalid index. Must be between 1 and " + std::to_string(m_playlist.size()) + ".");
-					}
-
-					if ( !this->playIndex(static_cast< size_t >(index) - 1) )
-					{
-						return Console::CommandResult::error("Unable to play track !");
-					}
-
-					return Console::CommandResult::success("Playing track " + std::to_string(index) + ".");
+					return Console::CommandResult::error("Unable to play track !");
 				}
 
-				return Console::CommandResult::error("Unknown subcommand. Use: clear, add, play");
+				return Console::CommandResult::success("Playing track " + std::to_string(index) + ".");
 			});
 	}
 }

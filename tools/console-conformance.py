@@ -128,7 +128,6 @@ def test_commands(bench: Bench, console: Console) -> None:
 
     for command in commands:
         path = command.get("path", "?")
-        bench.check(command.get("typed") is True, f"{path} is typed", "bound without a declared signature")
         bench.check(bool(command.get("help")), f"{path} has a description", "empty help")
 
         parameters = command.get("parameters", [])

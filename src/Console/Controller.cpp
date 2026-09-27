@@ -498,28 +498,27 @@ namespace EmEn::Console
 				out << "  " << path << "." << name << "()\n"
 					<< "	  " << command.help() << "\n";
 
-				if ( const auto * signature = command.signature(); signature != nullptr )
+				const auto & signature = command.signature();
+
+				for ( const auto & parameter : signature.parameters() )
 				{
-					for ( const auto & parameter : signature->parameters() )
+					out << "	    " << parameter.name() << " (" << to_cstring(parameter.type());
+
+					if ( parameter.arity() == ParameterArity::Variadic )
 					{
-						out << "	    " << parameter.name() << " (" << to_cstring(parameter.type());
-
-						if ( parameter.arity() == ParameterArity::Variadic )
-						{
-							out << ", zero or more";
-						}
-						else if ( parameter.isOmittable() )
-						{
-							out << ", optional";
-						}
-
-						out << ") " << parameter.description() << "\n";
+						out << ", zero or more";
+					}
+					else if ( parameter.isOmittable() )
+					{
+						out << ", optional";
 					}
 
-					if ( const auto hints = signature->hintsText(); !hints.empty() )
-					{
-						out << "	    [" << hints << "]\n";
-					}
+					out << ") " << parameter.description() << "\n";
+				}
+
+				if ( const auto hints = signature.hintsText(); !hints.empty() )
+				{
+					out << "	    [" << hints << "]\n";
 				}
 			}
 		}
@@ -529,30 +528,6 @@ namespace EmEn::Console
 			if ( subPtr != nullptr )
 			{
 				Controller::dumpControllable(*subPtr, out, path + "." + subName);
-			}
-		}
-	}
-
-	void
-	Controller::collectUntypedCommands (const ControllableTrait & controllable, const std::string & path, size_t & typedCount, std::vector< std::string > & untypedPaths) noexcept
-	{
-		for ( const auto & [name, command] : controllable.commands() )
-		{
-			if ( command.signature() != nullptr )
-			{
-				++typedCount;
-			}
-			else
-			{
-				untypedPaths.emplace_back(path + "." + name + "()");
-			}
-		}
-
-		for ( const auto & [subName, subPtr] : controllable.subObjects() )
-		{
-			if ( subPtr != nullptr )
-			{
-				Controller::collectUntypedCommands(*subPtr, path + "." + subName, typedCount, untypedPaths);
 			}
 		}
 	}
@@ -607,65 +582,61 @@ namespace EmEn::Console
 				entry["path"] = path + "." + name;
 				entry["help"] = command.help();
 
-				const auto * signature = command.signature();
+				const auto & signature = command.signature();
 
-				entry["typed"] = signature != nullptr;
 
-				if ( signature != nullptr )
+				Json::Value parameters{Json::arrayValue};
+
+				for ( const auto & parameter : signature.parameters() )
 				{
-					Json::Value parameters{Json::arrayValue};
+					Json::Value item{Json::objectValue};
+					item["name"] = parameter.name();
+					item["type"] = to_cstring(parameter.type());
+					item["description"] = parameter.description();
 
-					for ( const auto & parameter : signature->parameters() )
+					switch ( parameter.arity() )
 					{
-						Json::Value item{Json::objectValue};
-						item["name"] = parameter.name();
-						item["type"] = to_cstring(parameter.type());
-						item["description"] = parameter.description();
+						case ParameterArity::Required :
+							item["arity"] = parameter.defaultValue().has_value() ? "optional" : "required";
+							break;
 
-						switch ( parameter.arity() )
-						{
-							case ParameterArity::Required :
-								item["arity"] = parameter.defaultValue().has_value() ? "optional" : "required";
-								break;
+						case ParameterArity::Optional :
+							item["arity"] = "optional";
+							break;
 
-							case ParameterArity::Optional :
-								item["arity"] = "optional";
-								break;
-
-							case ParameterArity::Variadic :
-								item["arity"] = "variadic";
-								break;
-						}
-
-						if ( parameter.defaultValue().has_value() )
-						{
-							item["default"] = argumentToJson(*parameter.defaultValue());
-						}
-
-						parameters.append(std::move(item));
+						case ParameterArity::Variadic :
+							item["arity"] = "variadic";
+							break;
 					}
 
-					entry["parameters"] = std::move(parameters);
-
-					Json::Value hints{Json::arrayValue};
-
-					if ( hasHint(signature->hints(), CommandHint::ReadOnly) )
+					if ( parameter.defaultValue().has_value() )
 					{
-						hints.append("readOnly");
+						item["default"] = argumentToJson(*parameter.defaultValue());
 					}
 
-					if ( hasHint(signature->hints(), CommandHint::Destructive) )
-					{
-						hints.append("destructive");
-					}
-
-					if ( hasHint(signature->hints(), CommandHint::Idempotent) )
-					{
-						hints.append("idempotent");
-					}
-
-					entry["hints"] = std::move(hints);
+					parameters.append(std::move(item));
 				}
+
+				entry["parameters"] = std::move(parameters);
+
+				Json::Value hints{Json::arrayValue};
+
+				if ( hasHint(signature.hints(), CommandHint::ReadOnly) )
+				{
+					hints.append("readOnly");
+				}
+
+				if ( hasHint(signature.hints(), CommandHint::Destructive) )
+				{
+					hints.append("destructive");
+				}
+
+				if ( hasHint(signature.hints(), CommandHint::Idempotent) )
+				{
+					hints.append("idempotent");
+				}
+
+				entry["hints"] = std::move(hints);
 
 				commands.append(std::move(entry));
 			}
@@ -711,7 +682,6 @@ namespace EmEn::Console
 				"  listObjects, lsobj()	List top-level controllable objects\n"
 				"  exit, quit, shutdown	Graceful shutdown (saves settings)\n"
 				"  hardExit				Immediate shutdown (no save)\n"
-				"  listUntypedCommands()   Commands still bound without a declared signature\n"
 				"  describeCommands()      Every command as JSON (parameters, types, hints)\n"
 				"\n"
 				"Per-object built-ins (any depth):\n"
@@ -751,33 +721,6 @@ namespace EmEn::Console
 		if ( command == "describeCommands" || command == "describeCommands()" )
 		{
 			outputs.emplace_back(Output::json(this->describeCommands()));
-
-			return true;
-		}
-
-		if ( command == "listUntypedCommands" || command == "listUntypedCommands()" )
-		{
-			size_t typedCount = 0;
-			std::vector< std::string > untypedPaths;
-
-			for ( const auto & [name, controllable] : m_consoleObjects )
-			{
-				if ( controllable != nullptr )
-				{
-					Controller::collectUntypedCommands(*controllable, name, typedCount, untypedPaths);
-				}
-			}
-
-			std::stringstream message;
-
-			message << typedCount << " typed, " << untypedPaths.size() << " untyped (bound without a declared signature):\n";
-
-			for ( const auto & untypedPath : untypedPaths )
-			{
-				message << "  " << untypedPath << "\n";
-			}
-
-			outputs.emplace_back(Severity::Info, message);
 
 			return true;
 		}

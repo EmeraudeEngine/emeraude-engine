@@ -165,28 +165,6 @@ namespace EmEn::Console
 	}
 
 	void
-	ControllableTrait::bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help) noexcept
-	{
-		const auto commandNamesList = String::explode(commandNames, ',', false);
-
-		for ( const auto & commandName : commandNamesList )
-		{
-			const auto commandIt = m_commands.find(commandName);
-
-			if ( commandIt != m_commands.cend() )
-			{
-				TraceError{TracerTag} << "Command '" << commandName << "' already exists !";
-
-				continue;
-			}
-
-			m_commands.emplace(commandName, Command{binding, help});
-		}
-
-		Controller::markConsoleTreeChanged();
-	}
-
-	void
 	ControllableTrait::bindTypedCommand (const std::string & commandNames, const std::string & description, Binding binding, CommandSignature signature) noexcept
 	{
 		std::string error;

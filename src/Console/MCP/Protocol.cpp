@@ -61,7 +61,7 @@ namespace EmEn::Console::MCP
 			for ( const auto & [name, command] : controllable.commands() )
 			{
 				/* One tool per command: an alias (a name other than the first of its list) is skipped. */
-				if ( command.signature() == nullptr || command.primaryName() != name )
+				if ( command.primaryName() != name )
 				{
 					continue;
 				}
@@ -383,7 +383,7 @@ namespace EmEn::Console::MCP
 	toolDefinition (const Tool & tool) noexcept
 	{
 		const auto & command = *tool.command();
-		const auto & signature = *command.signature();
+		const auto & signature = command.signature();
 
 		Json::Value definition{Json::objectValue};
 		definition["name"] = tool.name();

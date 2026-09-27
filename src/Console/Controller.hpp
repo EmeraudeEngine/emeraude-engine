@@ -356,19 +356,10 @@ namespace EmEn::Console
 			 */
 			static void dumpControllable (const ControllableTrait & controllable, std::stringstream & out, const std::string & path) noexcept;
 
-			/**
-			 * @brief Walks a console sub-tree and sorts its commands into typed and untyped (legacy).
-			 * @param controllable The root of the sub-tree.
-			 * @param path The dotted path of that root.
-			 * @param typedCount Incremented for each command with a declared signature.
-			 * @param untypedPaths Receives the full path of each command without one.
-			 * @return void
-			 */
-			static void collectUntypedCommands (const ControllableTrait & controllable, const std::string & path, size_t & typedCount, std::vector< std::string > & untypedPaths) noexcept;
 
 			/**
 			 * @brief Returns every command of the console tree as a JSON document: path, description,
-			 * typed or not, parameters (name, type, arity, description, default) and hints.
+			 * parameters (name, type, arity, description, default) and hints.
 			 * @note The machine-readable twin of `help`, answered by the `describeCommands()` built-in.
 			 * It is what a client builds tool schemas from (the MCP server, the conformance bench).
 			 * @return std::string

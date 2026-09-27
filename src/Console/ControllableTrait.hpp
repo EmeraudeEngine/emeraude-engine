@@ -165,15 +165,8 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Register a command for this console-controllable object.
-			 * @param commandNames The way of calling the command inside the console (comma-separated aliases supported).
-			 * @param binding The binding to execute in the command.
-			 * @param help A human-readable description of the command. Mandatory so the `help` built-in command always has meaningful content to display; use a concise sentence with the expected signature (e.g. "Sets position. Usage: setPosition(x, y, z)").
-			 */
-			void bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help) noexcept;
-
-			/**
-			 * @brief Registers a TYPED command: its parameters are deduced from the callable.
+			 * @brief Registers a command: its parameters are deduced from the callable (the only form — every
+			 * command is typed).
 			 * @note The callable is a non-generic lambda taking bool, int32_t, float, std::string or
 			 * Console::Argument (by value or const reference), std::optional of those for an omittable
 			 * argument, and a trailing std::vector of those for a variadic one; it returns a CommandResult.
@@ -223,7 +216,7 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Registers a TYPED command that takes no argument.
+			 * @brief Registers a command that takes no argument.
 			 * @note Same contract as the overload with parameters; the callable takes nothing.
 			 * @tparam Callable Deduced from the lambda.
 			 * @param commandNames The way of calling the command (comma-separated aliases supported).

@@ -37,18 +37,12 @@ escape their strings (jsoncpp), checked by parsing every JSON answer at runtime.
 
 ## What remains
 
-1. **Owner decisions raised by the migration**:
-   - Delete the untyped `bindCommand(name, Binding, help)` overload and `listUntypedCommands()`?
-     Nothing in the engine or projet-alpha uses it any more, but another application built on the
-     engine may (breaking change for it).
-   - `Scenes/Manager` `targetEntityComponent()` was a no-op answering success; it now answers
-     "not implemented". Implement it, or delete it?
-   - `createScene()` silently ignores an unknown skybox name: warning, error, or keep?
-   - `TrackMixer.playlist(action [, operand])` stays one command with an action string; split it
-     into `playlistClear/Add/Play` for cleaner MCP tools?
-   - `Input.keyPress()` now refuses codes outside `GLFW_KEY_SPACE..GLFW_KEY_LAST` (32-348),
-     `button` outside 0-7 and `modifiers` outside 0-63 (listeners index per-key state with them).
-     Loosen if a bench injects an unusual code on purpose.
+1. **Owner decisions (2026-09-27), applied**: the untyped `bindCommand` form is DELETED (every
+   `Command` carries its signature; `listUntypedCommands()` removed); `createScene()` refuses an unknown
+   skybox before creating anything; `TrackMixer.playlist` is split into `playlist()`, `playlistClear()`,
+   `playlistAdd(track)`, `playlistPlay(index)` (the web mixer page follows); the `keyPress` ranges stay.
+   **Still open**: `targetEntityComponent()` must become real — the owner's intent is to DRIVE an
+   entity's component (a lamp, for instance); design to agree with the owner.
 2. **Binary result of `screenshot()`** — the kind exists (`CommandResult::binary`, `Output::binary`),
    no command uses it yet. Decide with `native-mcp-server` where the PNG bytes come from (see Traps).
 3. **Declared result kind / output schema** — not done: results self-describe at runtime. Only worth

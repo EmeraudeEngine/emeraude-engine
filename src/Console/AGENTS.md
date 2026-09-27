@@ -103,7 +103,6 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"
 | `listObjects`, `lsobj()` | List top-level controllable object names only (no recursion) |
 | `exit`, `quit`, `shutdown` | Graceful shutdown (saves settings) |
 | `hardExit` | Immediate shutdown (no save) |
-| `listUntypedCommands()` | Counts typed and untyped commands, lists the untyped (legacy) ones still to migrate |
 | `describeCommands()` | Every command as JSON: path, help, typed, parameters (name, type, arity, description, default), hints |
 
 ### Per-object (available at any depth in the tree)
@@ -164,11 +163,10 @@ MCP server turns into a tool schema (`docs/todo/native-mcp-server.md`). Full pat
   `fromOutputs(outputs, succeeded)` for a multi-line report with mixed severities. Only `error()`
   (or `fromOutputs(…, false)`) is a failure. `json()` marks the message as a JSON document — keep it
   valid JSON (escape names), a machine client will parse it.
-- **Untyped (legacy) commands** — `bindCommand(name, binding, help)` with a raw
-  `(Arguments, Outputs) -> bool` binding — still compile, but **none is left in the engine nor in
-  projet-alpha** (all 137 migrated on 2026-09-27; `listUntypedCommands()` answers `137 typed, 0
-  untyped`). Never add one. Whether the overload itself is deleted is an open owner decision
-  (`docs/todo/console-command-contract.md`): another application built on the engine may still use it.
+- **There is no untyped form any more** (owner decision 2026-09-27): the raw
+  `bindCommand(name, (Arguments, Outputs) -> bool, help)` overload was deleted once all 137 commands had
+  migrated, and `Command` always carries its `CommandSignature` (`signature()` returns a reference). An
+  application still using the old form fails to compile at the exact call to migrate.
 - **JSON answers**: build them with `Json::Value` + `Base::FastJSON::stringify()` (escapes every
   string; ⚠️ it writes floats with 5 significant digits — for coordinates keep a stream and escape
   only the strings with `Json::valueToQuotedString()`, as `getNode()` does).
@@ -201,7 +199,7 @@ python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.play
 python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.pause()"
 python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.volume(50)"
 python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist()"
-python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist(play, 3)"
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlistPlay(3)"
 python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.status()"
 ```
 
@@ -480,6 +478,6 @@ TCP lines starting with `{` are routed to a registered JSON handler (not the nor
 - **Quoted arguments are literal (2026-09-27)** — inside `"…"` or `'…'` a comma, a parenthesis or a
   dot no longer splits the argument (`openFiles("/tmp/a,b(1)/x.glb")` is ONE path). Before that,
   `Expression` cut on every `,` and `)` regardless of quotes
-- **Typed vs untyped** — `listUntypedCommands()` (top-level built-in) reports the migration state;
-  on 2026-09-27: 137 typed, 0 untyped
+- **Every command is typed** — the untyped form was deleted (2026-09-27); `describeCommands()` exports
+  every signature as JSON
 - **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../docs/ai-runtime-control.md) for the complete AI operator reference

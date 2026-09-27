@@ -26,7 +26,7 @@ The AI connects to a running engine instance via TCP and sends commands to disco
 >   description with its unit) per argument, a `CommandResult` returned, hints set. The help line and
 >   its usage are generated, and the arguments are validated before the lambda runs. Pattern and
 >   rules: [`src/Console/AGENTS.md`](../src/Console/AGENTS.md) § 3 and § 7. Never add an untyped
->   (`Arguments, Outputs`) command; `listUntypedCommands()` tracks the ones still to migrate.
+>   (`Arguments, Outputs`) form: it was DELETED on 2026-09-27 once every command had migrated (owner decision).
 > - Keep it self-describing (clear name + description — it shows up in the command listing).
 > - Document it here in the command reference, in the same work session.
 >
@@ -1023,8 +1023,8 @@ python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.loop
 
 ```bash
 python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist()"           # List tracks
-python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist(play, 3)"    # Play track #3
-python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlist(clear)"      # Clear playlist
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlistPlay(3)"      # Play track #3
+python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.playlistClear()"      # Clear playlist
 python3 tools/remote-console.py "Core.AudioManagerService.TrackMixerService.status()"             # Full status
 ```
 
@@ -1195,7 +1195,7 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 | | `stop()` | Stop |
 | | `volume(0-100)` | Set volume |
 | | `next()` / `previous()` | Navigate playlist |
-| | `playlist([clear\|play,N\|add,name])` | Manage playlist |
+| | `playlist()` / `playlistClear()` / `playlistAdd(name)` / `playlistPlay(N)` | List / manage the playlist (split 2026-09-27: one tool per action) |
 | | `seek(seconds)` | Seek position |
 | | `shuffle(on/off)` | Toggle shuffle |
 | | `loop(on/off)` | Toggle loop |
@@ -1205,7 +1205,6 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 | | `hardExit` | Immediate shutdown |
 | | `help` / `lsfunc()` | List commands |
 | | `listObjects` / `lsobj()` | List services |
-| | `listUntypedCommands()` | Typed/untyped counts + the untyped commands still to migrate |
 | | `describeCommands()` | Every command as JSON (parameters, types, arity, defaults, hints) |
 
 ### Service hierarchy
