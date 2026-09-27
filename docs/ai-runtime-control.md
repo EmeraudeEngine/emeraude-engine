@@ -306,7 +306,7 @@ python3 tools/temporal-analysis.py <stem>          # or the .json path it printe
   `<unix seconds>-<n>.png` for n = 0..N-1 and `<unix seconds>.json` (frame serial, timing, TAA
   jitter, camera, exposure per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
 - ⚠️ Capture **8** frames or more for a TAA question: the jitter cycle is 8 frames.
-- Park the camera, PIN the exposure (`Act.setExposure`) for an A/B, and let the scene converge: the
+- Park the camera, PIN the exposure (`Camera.setExposure`) for an A/B, and let the scene converge: the
   analysis prints the flatness line first and warns when the camera moved or the exposure is auto.
 - The analysis gives the per-pixel temporal peak-to-peak (mean, p99, p99.9, shares > 1/2/4/8/16),
   horizontal bands (distance on a ground), the worst tiles, the gradient/Laplacian signature and two
@@ -597,35 +597,70 @@ This is NOT the download manager: `Core.NetManagerService.*` fetches files into 
 deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
 [`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
 
-### Driving an entity's components — lights (`Core.SceneManagerService.<Type>.*`, 2026-09-27)
+### Driving an entity's components (`Core.SceneManagerService.<Type>.*`, 2026-09-27)
 
 Owner decision: one set of TYPED commands per component type, and **explicit addressing** — every
-command names its `entity` (a node anywhere in the hierarchy, or a static entity, of the ACTIVE scene)
-and its `component` (the name on that entity). No targeting state: two clients cannot steal each
-other's target, as the MCP specification recommends. Discover first, then act:
+command names its `entity` and its `component` (the name on that entity). No targeting state: two
+clients cannot steal each other's target, as the MCP specification recommends. Discover first, then act:
 
 ```bash
-python3 tools/remote-console.py "Core.SceneManagerService.listEntities()"            # JSON: every node + static entity, with components
+python3 tools/remote-console.py "Core.SceneManagerService.listEntities()"            # JSON: every node + static entity, its ADDRESS, its components
 python3 tools/remote-console.py "Core.SceneManagerService.listEntityComponents(Bulb1)"  # JSON: [{"name":"Bulb","type":"PointLight"}]
-python3 tools/remote-console.py "Core.SceneManagerService.PointLight.getState(Bulb1, Bulb)"
 python3 tools/remote-console.py "Core.SceneManagerService.PointLight.setLuminousPower(Bulb1, Bulb, 800)"
-python3 tools/remote-console.py "Core.SceneManagerService.SpotLight.setEnabled(Spot2, Spot, 0)"
+python3 tools/remote-console.py "Core.SceneManagerService.Camera.getActive()"         # the rendering camera: "address" + "name"
 ```
+
+**Addressing** (owner decision, 2026-09-27): `entity` is the entity's ADDRESS — its name when unique in
+the scene, else the shortest suffix of its node path that is (`ACTOR_…06/Head`). Every projet-alpha actor
+carries a `Head` node (camera `Eyes`, microphone `Ears`, `SoundEmitter`): on `animation-debug` six of them,
+and a bare `Head` is **refused** with the six candidate addresses — it used to act silently on the first
+node found. `listEntities()` gives each entity's `address`; `Camera.getActive()` answers the rendering
+camera's `address` and component `name`, ready to pass. A static entity's address is its name.
 
 | Type | Commands (after `entity, component`) |
 |---|---|
-| `PointLight` | `getState` (JSON: enabled, colour, candela, radius), `setEnabled(bool)`, `setColor(r, g, b)` (0-1, a chromaticity), `setLuminousPower(lumens)`, `setRadius(metres, 0 = unbounded)` |
+| `PointLight` | `getState` (JSON: enabled, colour, candela, radius, shadow, colour projection), `setEnabled(bool)`, `setColor(r, g, b)` (0-1, a chromaticity), `setLuminousPower(lumens)`, `setRadius(metres, 0 = unbounded)`, `setPCFRadius(r)`, `setShadowBias(b)`, `setProjectionBoost(k)` |
 | `SpotLight` | the same + `setConeAngles(innerDeg, outerDeg)` (0 ≤ inner ≤ outer ≤ 90; change the cone BEFORE the power: lumens are converted with the current outer angle) |
-| `DirectionalLight` | `getState` (JSON: enabled, colour, lux), `setEnabled`, `setColor`, `setIlluminance(lux)` |
+| `DirectionalLight` | `getState` (+ CSM cascade count/lambda or coverage), `setEnabled`, `setColor`, `setIlluminance(lux)`, `setPCFRadius`, `setShadowBias`, `setProjectionBoost` |
+| `Camera` | `getActive()` (no argument), `getState`, `setLens(focalMm, sensorWidthMm?)`, `setViewDistance(m)`, `setExposure(f, shutterS, iso)` (PINS the triad, auto-exposure off), `setAutoExposure(bool)`, `setExposureCompensation(ev)`, `setSensitivityRange(minIso, maxIso)`, `setFocus(m?)` (omitted = auto focus), `setBloom(thresholdNits, fraction)` |
+| `SunCourse` | `getState` (phase, elevation, lux, kelvins, course), `start`, `stop`, `setPhase(0-1)` (0 sunrise, 0.25 noon), `setCourse(dayDuration?, noonElevation?, zenithIlluminance?, extinction?, zenithTemperature?, horizonTemperature?)` — the phase is kept |
+| `SkyFollowsSun` | `getState` only (factor, day luminance, twilight curve) |
+| `CloudVolume` | `getState`, `setLook(opticalThickness?, erosion?, detailFrequency?, boilingSpeed?, skyTint?, albedoRed?, albedoGreen?, albedoBlue?)` (the albedo: three together) |
+| `NodeAnimation` | `getState` (clips, active, wrap, speed), `play(clip, wrap = "Loop")` (`Once`/`Loop`/`PingPong`), `stop` (rest frame restored), `setSpeed(≥ 0)` |
+| `ParticlesEmitter` | `getState`, `start`, `stop`, `setSpawnRate(perCycle ≤ limit)`, `setLifetime(minCycles, maxCycles?)`, `setSize(min, max?)`, `setSizeDelta(perCycle)`, `setSpreadingRadius(m)`, `setChaos(k)` — cycles are logic cycles, 60 per second |
+| `DirectionalPushModifier` | `getState`, `setEnabled`, `setMagnitude`, `setDirection(x?, y?, z?)` (three = a custom world direction; none = follow the entity again) |
+| `SphericalPushModifier` | `getState`, `setEnabled`, `setMagnitude` |
+| `Weight` | `getState` (mass, drag…, bounds — `null` when unset), `setRadius(m)`, `setBoxSize(x, y?, z?)` |
+| `SoundEmitter` | `getState` (playing, gain, attached sound, loop, Doppler), `setGain`, `setVelocityDistortion(bool)`, `replay`, `stop`, `pause`, `resume`, `rewind` |
+| `Visual`, `MultipleVisuals` | `getState` (renderable, LOD count, instance count, build-time switches, distances), `setDrawDistance(near, far)`, `setShadowDistance(m)`, `setShadowLODBias(levels)` |
 
-Every setter answers its confirmation **and the light's new state as JSON** (MCP `structuredContent`),
-so the applied values are confirmed without a `getState()` call (suggested by Gemini's review of the
-server, 2026-09-27).
+Every setter answers its confirmation **and the component's new state as JSON** (MCP
+`structuredContent`), so the applied values are confirmed without a `getState()` call (suggested by
+Gemini's review of the server, 2026-09-27). MCP names: `SceneManager_<Type>_<command>`,
+`SceneManager_listEntities`, … An error names what is wrong: an unknown or ambiguous entity, a component
+of another type (`is a SpotLight, not a PointLight`), an out-of-range value — nothing is applied then.
+The commands run under EXCLUSIVE access to the active scene, so they wait at most one frame.
 
-MCP names: `SceneManager_PointLight_setLuminousPower`, `SceneManager_listEntities`, … An error names
-what is wrong: an unknown entity or component, a component of another type (`is a SpotLight, not a
-PointLight`), an out-of-range value — nothing is applied then. The commands run under EXCLUSIVE access
-to the active scene (the logic and render threads read the light), so they wait at most one frame.
+**What is deliberately NOT drivable** — a setter that the engine clamps or ignores is REFUSED with the
+reason, never applied halfway:
+- **Shadow on/off**: `enableShadowCasting()` is a creation-time switch. Flipped at runtime it only froze
+  the CSM fitting while the map was still drawn and sampled — the whole `forest` floor went INTO shadow
+  (engine item `light-shadow-runtime-toggle`). `setPCFRadius`/`setShadowBias` refuse a light built
+  without a shadow map; `setProjectionBoost` refuses a light without a projection texture.
+- **Visual lighting / shadow casting / ray tracing**: decided when the instance is built (shader
+  generation, ray-tracing lists) — reported by `getState`, not settable.
+- **Camera DoF / motion blur switches**: `Core/Graphics/PostProcessing/DepthOfField|MotionBlur/Enabled`
+  override the camera; `getState` reports them.
+- `setExposure` refuses an ISO outside the camera's range (the setter clamps: widen it with
+  `setSensitivityRange` first); `setSpawnRate` refuses more than the particle limit; `setShadowLODBias`
+  refuses more levels than the renderable holds.
+- **Loading a sound** by resource name (owner decision 2026-09-27: the emitter's ATTACHED sound only);
+  `ParticlesEmitter.start` takes no timeout (engine item `particles-emitter-timeout-unit`); `Microphone`
+  has nothing to drive or read and has no adapter.
+
+⚠️ **An optional parameter in the MIDDLE is reachable by NAME only (MCP arguments).** The console's
+positional syntax has no hole: `setLook(Cloud044, Cloud0, , , , , , 1, 0.5)` set the optical thickness
+to 1 and the erosion to 0.5. At the console, give every parameter up to the last one you change.
 
 ⚠️ **Let the change reach a frame before capturing.** The light is published by the next logic tick and
 drawn from the following render state: a screenshot taken milliseconds after the command showed the
@@ -676,7 +711,7 @@ per frame).
   holds a `Component::CloudVolume` — no application adds it. `disable(Clouds)` / `select(Clouds,
   VolumetricCloudsEffect)` work like any slot. ⚠️ Listed is not drawn: the pass traces a census
   (`Clouds drawn: N of M (…)`) in the LOG when it changes; judge its look at a pinned exposure
-  (`Act.setExposure(...)`).
+  (`Camera.setExposure(...)`).
 - `select()` mixes lanes per slot — `RTGI` + `SSR` + `RTAO` is a legal and useful A/B.
 - ⚠️ **A selection is applied on the NEXT frame, never immediately.** The console runs on the main
   thread and the chain is walked on the render thread; `syncSlotSelection()` applies it at the

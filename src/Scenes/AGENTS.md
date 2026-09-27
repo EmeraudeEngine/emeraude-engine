@@ -627,22 +627,50 @@ All generators support `<Node>` or `<StaticEntity>` as template parameter (defau
 
 A component type becomes drivable from the console and the MCP server through an ADAPTER — never by
 making the component itself a `ControllableTrait` (the thousands of components never driven must pay
-nothing). Pattern (lights: `Component/LightConsoleAdapters.cpp`):
+nothing). Every type that has something to drive is covered since 2026-09-27; one file per family:
+`LightConsoleAdapters.cpp` (Point/Spot/DirectionalLight), `CameraConsoleAdapter.cpp`,
+`EnvironmentConsoleAdapters.cpp` (SunCourse, SkyFollowsSun, CloudVolume), `AnimationConsoleAdapters.cpp`
+(NodeAnimation, ParticlesEmitter), `PhysicsConsoleAdapters.cpp` (Directional/SphericalPushModifier,
+Weight), `AudioConsoleAdapters.cpp` (SoundEmitter), `VisualConsoleAdapters.cpp` (Visual,
+MultipleVisuals — one template). `Microphone` has nothing to drive. Operator view (every command, what is
+refused and why): `docs/ai-runtime-control.md` § "Driving an entity's components". Pattern:
 
 - Derive `ConsoleAdapter< YourComponent >` (its console identifier is `YourComponent::ClassId`) and bind
-  typed commands whose first two parameters are `entity` and `component`; do the work through
-  `this->act(entity, component, [&] (YourComponent & c) { … return CommandResult…; })`, which resolves
-  the entity in the ACTIVE scene (`resolveComponent()`: node anywhere via `Scene::findNode()`, or static
-  entity; a name used by both is refused), checks the type, and runs under `withExclusiveActiveScene()`.
-- A setter answers `changed(component, message)`-style: the confirmation, then the component's NEW state
-  as a JSON output (the same function `getState` answers), which MCP clients read as `structuredContent`.
+  typed commands whose first two parameters are `entityParameter("the …")` and
+  `componentParameter(ClassId)`; do the work through `this->act(entity, component, [&] (YourComponent & c)
+  { … })`, which resolves the entity in the ACTIVE scene, checks the type, and runs under
+  `withExclusiveActiveScene()`. `sceneManager()` serves a command that addresses no component
+  (`Camera.getActive()`).
+- **Addressing** (owner decision 2026-09-27): `entity` is an ADDRESS — the shortest suffix of the node
+  path that is unique in the scene (`Head`, else `ACTOR_…06/Head`), or a static entity's name.
+  `resolveEntity()` REFUSES an ambiguous address with its candidates (every projet-alpha actor carries a
+  `Head`; the former `Scene::findNode()` lookup acted on the first one found); `entityAddresses()` gives
+  every entity's address (`listEntities()` prints it). Suffixes are built on node boundaries, so a node
+  name containing `/` still resolves. Sibling names are unique (`Node::children()` is a map), so the full
+  path always resolves — except a static entity named like a ROOT node, which stays ambiguous.
+- A setter answers `changedState(message, stateOf(component))`: the confirmation, then the component's
+  NEW state as a JSON output (the same function `getState` answers), which MCP clients read as
+  `structuredContent`.
 - Validate ranges BEFORE `act()` (no exclusive lock taken for a refused call); describe every parameter
   with its unit; hints `ReadOnly` for getters, `Idempotent` for setters.
+- ⚠️ **Refuse, never apply halfway**: a switch decided at creation (a light's shadow map, a visual's
+  lighting/shadow/RT flags) is not exposed, and a value the engine would CLAMP or IGNORE is refused with
+  the reason (ISO outside the camera range, spawn rate above the particle limit, a shadow setting on a
+  light without shadow map, a pause on an emitter without source). Check the setter's body: a
+  `std::clamp`/early `return` there means the command must check first.
+- ⚠️ **Name nothing `near`/`far`**: windef.h defines both as macros (MSVC).
+- An optional parameter in the middle (`std::optional`) is reachable by NAME (MCP) only: the console's
+  positional syntax has no hole.
 - Add an `appendXxxConsoleAdapters()` next to the component and call it from
   `Manager::onRegisterToConsole()` (the manager owns the adapters, `m_componentConsoleAdapters`, and
   registers them as its sub-objects: `Core.SceneManagerService.<Type>.*`, MCP `SceneManager_<Type>_*`).
-- Keep `SceneManager_<Type>_<command>` ≤ 49 characters (MCP tool-name budget).
-- Remaining types are listed in `docs/todo/component-console-adapters.md`.
+- Keep `SceneManager_<Type>_<command>` ≤ 49 characters (MCP tool-name budget: a longer name is DROPPED
+  from `tools/list`). `DirectionalPushModifier` leaves 12 characters for its commands.
+- Engine fixes found while writing them: `DirectionalPushModifier::setCustomDirection()` /
+  `disableCustomDirection()` had their flag calls INVERTED (a custom direction was overwritten by the
+  next `move()`), fixed 2026-09-27; runtime shadow toggle → item `light-shadow-runtime-toggle`;
+  `ParticlesEmitter::start(duration)` unit → item `particles-emitter-timeout-unit`. Entity positions in
+  `listEntities()` → item `list-entities-positions`.
 
 ### Creating a New Component
 0. ⚠️ **A component MAY move or query its own entity from `processLogics()`** (`Node::setPosition()`,

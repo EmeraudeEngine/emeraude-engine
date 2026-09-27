@@ -119,14 +119,14 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets a custom push direction.
-			 * @param direction A reference to a vector.
+			 * @brief Sets a custom push direction, which no longer follows the entity.
+			 * @param direction A reference to a unit vector, in world space.
 			 * @return void
 			 */
 			void setCustomDirection (const Base::Math::Vector< 3, float > & direction) noexcept;
 
 			/**
-			 * @brief Disables the custom push direction.
+			 * @brief Disables the custom push direction: the push follows the entity's backward vector again.
 			 * @return void
 			 */
 			void disableCustomDirection () noexcept;
@@ -140,6 +140,17 @@ namespace EmEn::Scenes::Component
 			direction () const noexcept
 			{
 				return m_direction;
+			}
+
+			/**
+			 * @brief Returns whether the push direction follows the entity (its backward vector) rather than a custom direction.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			followsEntity () const noexcept
+			{
+				return this->isFlagEnabled(UseCoordinatesDirection);
 			}
 
 		private:

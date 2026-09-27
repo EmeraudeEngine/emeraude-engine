@@ -173,7 +173,10 @@ namespace EmEn::Scenes::Component
 	{
 		m_direction = direction;
 
-		this->enableFlag(UseCoordinatesDirection);
+		/* ⚠️ A custom direction STOPS following the entity: move() rewrites m_direction from the entity frame
+		 * while UseCoordinatesDirection is set. The two flag calls of this pair were inverted until 2026-09-27,
+		 * so a custom direction was overwritten by the next move. */
+		this->disableFlag(UseCoordinatesDirection);
 	}
 
 	void
@@ -181,6 +184,6 @@ namespace EmEn::Scenes::Component
 	{
 		m_direction = this->parentEntity().getWorldCoordinates().backwardVector();
 
-		this->disableFlag(UseCoordinatesDirection);
+		this->enableFlag(UseCoordinatesDirection);
 	}
 }

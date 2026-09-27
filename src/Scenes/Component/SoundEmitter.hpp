@@ -167,6 +167,40 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the sound attached for playback (replay() plays it), or nullptr.
+			 * @return const std::shared_ptr< Audio::SoundResource > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Audio::SoundResource > &
+			attachedSound () const noexcept
+			{
+				return m_attachedSound;
+			}
+
+			/**
+			 * @brief Returns whether the attached sound plays in a loop.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isLooping () const noexcept
+			{
+				return this->isFlagEnabled(Loop);
+			}
+
+			/**
+			 * @brief Returns whether the emitter holds an audio source (a sound is playing or paused on it).
+			 * @note pause(), resume() and rewind() act on that source and do nothing without one.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasSource () const noexcept
+			{
+				return m_source != nullptr;
+			}
+
+			/**
 			 * @brief Attaches a sound to the source for further playback.
 			 * @param sound A reference to an audio buffer.
 			 * @param gain Set the gain for playing the sound. Default 1.0.

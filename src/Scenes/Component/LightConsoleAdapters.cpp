@@ -45,8 +45,8 @@ namespace EmEn::Scenes::Component
 	namespace
 	{
 		/* The two parameters every command of this file starts with. */
-		const Console::Parameter EntityParameter{"entity", "The node (anywhere in the hierarchy) or static entity of the active scene that holds the light."};
-		const Console::Parameter ComponentParameter{"component", "The light component's name on that entity (SceneManager listEntityComponents(entity) lists them)."};
+		const Console::Parameter EntityParameter{entityParameter("the light")};
+		const Console::Parameter ComponentParameter{componentParameter("light")};
 
 		/**
 		 * @brief Returns whether three colour components are a valid light colour.
@@ -84,6 +84,19 @@ namespace EmEn::Scenes::Component
 			rgb.append(static_cast< double >(color.green()));
 			rgb.append(static_cast< double >(color.blue()));
 			state["color"] = std::move(rgb);
+
+			/* Shadows: the map exists only if it was requested at creation (resolution 0 = none). */
+			Json::Value shadow{Json::objectValue};
+			shadow["mapResolution"] = light.shadowMapResolution();
+			shadow["casting"] = light.isShadowCastingEnabled();
+			shadow["PCFRadius"] = static_cast< double >(light.PCFRadius());
+			shadow["bias"] = static_cast< double >(light.shadowBias());
+			state["shadow"] = std::move(shadow);
+
+			Json::Value projection{Json::objectValue};
+			projection["texture"] = light.hasColorProjectionTexture();
+			projection["boost"] = static_cast< double >(light.colorProjectionBoost());
+			state["colorProjection"] = std::move(projection);
 
 			return state;
 		}
@@ -134,6 +147,16 @@ namespace EmEn::Scenes::Component
 			auto state = commonState(light, DirectionalLight::ClassId);
 			state["illuminanceLux"] = static_cast< double >(light.intensity());
 
+			if ( light.usesCSM() )
+			{
+				state["shadow"]["cascadeCount"] = light.cascadeCount();
+				state["shadow"]["cascadeLambda"] = static_cast< double >(light.cascadeLambda());
+			}
+			else if ( light.shadowMapResolution() > 0 )
+			{
+				state["shadow"]["coverageSize"] = static_cast< double >(light.coverageSize());
+			}
+
 			return FastJSON::stringify(state);
 		}
 
@@ -151,11 +174,11 @@ namespace EmEn::Scenes::Component
 		Console::CommandResult
 		changed (const light_t & light, std::string message) noexcept
 		{
-			return Console::CommandResult::success(std::move(message)).add(Console::Output::json(stateOf(light)));
+			return changedState(std::move(message), stateOf(light));
 		}
 
 		/**
-		 * @brief The commands every light type shares: enable, colour.
+		 * @brief The commands every light type shares: enable, colour, shadow filtering, colour projection.
 		 * @tparam light_t The light type.
 		 * @param adapter The adapter binding them.
 		 * @return void
@@ -196,6 +219,83 @@ namespace EmEn::Scenes::Component
 						light.setColor(PixelFactory::Color< float >{red, green, blue});
 
 						return changed(light, "Light '" + light.name() + "' colour set.");
+					});
+				}, Console::CommandHint::Idempotent);
+
+			/* ⚠️ The two shadow commands REFUSE a light built without a shadow map: the map is allocated at creation
+			 * only. There is deliberately NO shadow on/off command: AbstractLightEmitter::enableShadowCasting() is a
+			 * creation-time switch — flipped at runtime it only freezes the CSM cascade fitting while the shadow map
+			 * is still drawn and sampled, which put a whole forest floor in shadow (measured 2026-09-27; engine item
+			 * light-shadow-runtime-toggle). */
+			adapter.bindCommand("setPCFRadius", "Sets the soft-edge filter radius of a light's shadow (percentage-closer filtering). Refused for a light built without a shadow map.",
+				{
+					EntityParameter,
+					ComponentParameter,
+					{"radius", "The filter radius, 0 or more: in shadow-map texels for a directional or spot light; a point light scales it by the distance to the light."}
+				},
+				[&adapter] (const std::string & entity, const std::string & component, float radius) {
+					if ( !std::isfinite(radius) || radius < 0.0F )
+					{
+						return Console::CommandResult::error("The filter radius must be a finite number, 0 or more.");
+					}
+
+					return adapter.act(entity, component, [radius] (light_t & light) {
+						if ( light.shadowMapResolution() == 0 )
+						{
+							return Console::CommandResult::error("Light '" + light.name() + "' was built without a shadow map: it has no shadow to filter.");
+						}
+
+						light.setPCFRadius(radius);
+
+						return changed(light, "Light '" + light.name() + "' shadow filter radius set to " + std::to_string(radius) + ".");
+					});
+				}, Console::CommandHint::Idempotent);
+
+			adapter.bindCommand("setShadowBias", "Sets the depth bias of a light's shadow: too small shows acne (self-shadowing stripes), too large detaches the shadow from its caster (peter-panning). Refused for a light built without a shadow map.",
+				{
+					EntityParameter,
+					ComponentParameter,
+					{"bias", "The depth bias, 0 or more (default 0.005)."}
+				},
+				[&adapter] (const std::string & entity, const std::string & component, float bias) {
+					if ( !std::isfinite(bias) || bias < 0.0F )
+					{
+						return Console::CommandResult::error("The shadow bias must be a finite number, 0 or more.");
+					}
+
+					return adapter.act(entity, component, [bias] (light_t & light) {
+						if ( light.shadowMapResolution() == 0 )
+						{
+							return Console::CommandResult::error("Light '" + light.name() + "' was built without a shadow map: it has no shadow to bias.");
+						}
+
+						light.setShadowBias(bias);
+
+						return changed(light, "Light '" + light.name() + "' shadow bias set to " + std::to_string(bias) + ".");
+					});
+				}, Console::CommandHint::Idempotent);
+
+			adapter.bindCommand("setProjectionBoost", "Sets how much the bright areas of a light's colour projection texture (a gobo) amplify it: 0 = the texture only filters the light, above 0 = light × (1 + texture × boost). Refused for a light without a projection texture.",
+				{
+					EntityParameter,
+					ComponentParameter,
+					{"boost", "The boost factor, 0 or more."}
+				},
+				[&adapter] (const std::string & entity, const std::string & component, float boost) {
+					if ( !std::isfinite(boost) || boost < 0.0F )
+					{
+						return Console::CommandResult::error("The projection boost must be a finite number, 0 or more.");
+					}
+
+					return adapter.act(entity, component, [boost] (light_t & light) {
+						if ( !light.hasColorProjectionTexture() )
+						{
+							return Console::CommandResult::error("Light '" + light.name() + "' has no colour projection texture: a boost would change nothing.");
+						}
+
+						light.setColorProjectionBoost(boost);
+
+						return changed(light, "Light '" + light.name() + "' projection boost set to " + std::to_string(boost) + ".");
 					});
 				}, Console::CommandHint::Idempotent);
 		}

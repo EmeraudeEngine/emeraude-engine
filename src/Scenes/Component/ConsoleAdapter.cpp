@@ -26,6 +26,11 @@
 
 #include "ConsoleAdapter.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+#include <unordered_map>
+#include <vector>
+
 /* Local inclusions. */
 #include "Scenes/Manager.hpp"
 #include "Scenes/Node.hpp"
@@ -34,35 +39,193 @@
 
 namespace EmEn::Scenes::Component
 {
-	bool
-	resolveComponent (const Scene & scene, const std::string & entityName, const std::string & componentName, std::shared_ptr< Abstract > & component, std::string & error) noexcept
+	Console::Parameter
+	entityParameter (const std::string & holds) noexcept
 	{
-		const auto node = scene.findNode(entityName);
-		const auto staticEntity = scene.findStaticEntity(entityName);
+		return {"entity", "The address of the entity of the active scene that holds " + holds + ": its name when unique, else the shortest unique path suffix (Parent/Child); SceneManager listEntities() gives every entity's address."};
+	}
 
-		/* NOTE: a node and a static entity may share a name; picking one would act on whichever was
-		 * searched first, which the caller cannot see. */
-		if ( node != nullptr && staticEntity != nullptr )
+	Console::Parameter
+	componentParameter (const std::string & componentType) noexcept
+	{
+		return {"component", "The " + componentType + " component's name on that entity (SceneManager listEntityComponents(entity) lists them)."};
+	}
+
+	Console::CommandResult
+	changedState (std::string message, std::string stateJSON) noexcept
+	{
+		return Console::CommandResult::success(std::move(message)).add(Console::Output::json(std::move(stateJSON)));
+	}
+
+	namespace
+	{
+		/** @brief An entity of the scene and the names on its path from the root (itself last). */
+		struct AddressedEntity
 		{
-			error = "'" + entityName + "' names both a node and a static entity of the scene '" + scene.name() + "': rename one of them.";
+			std::shared_ptr< AbstractEntity > entity;
+			std::vector< std::string > path;
+		};
+
+		/**
+		 * @brief Returns every entity of a scene with its path: the nodes (depth first) then the static entities.
+		 * @param scene The scene.
+		 * @return std::vector< AddressedEntity >
+		 */
+		[[nodiscard]]
+		std::vector< AddressedEntity >
+		collectEntities (const Scene & scene) noexcept
+		{
+			std::vector< AddressedEntity > entities;
+			std::vector< AddressedEntity > pending;
+
+			/* The root itself is not an entity anyone names. */
+			for ( const auto & child : scene.root()->children() | std::views::values )
+			{
+				pending.push_back({child, {child->name()}});
+			}
+
+			while ( !pending.empty() )
+			{
+				auto current = std::move(pending.back());
+				pending.pop_back();
+
+				for ( const auto & child : std::static_pointer_cast< Node >(current.entity)->children() | std::views::values )
+				{
+					auto path = current.path;
+					path.emplace_back(child->name());
+
+					pending.push_back({child, std::move(path)});
+				}
+
+				entities.emplace_back(std::move(current));
+			}
+
+			scene.forEachStaticEntities([&scene, &entities] (const StaticEntity & staticEntity) {
+				entities.push_back({scene.findStaticEntity(staticEntity.name()), {staticEntity.name()}});
+			});
+
+			return entities;
+		}
+
+		/**
+		 * @brief Calls a function on every address of an entity, shortest first: its name, then its parent + its
+		 * name, up to its full path. The function returns false to stop.
+		 * @param path The entity path.
+		 * @param process The function.
+		 * @return void
+		 */
+		template< typename function_t >
+		void
+		forEachSuffix (const std::vector< std::string > & path, function_t && process) noexcept
+		{
+			std::string suffix;
+
+			for ( auto index = path.size(); index > 0; --index )
+			{
+				suffix = suffix.empty() ? path[index - 1] : path[index - 1] + '/' + suffix;
+
+				if ( !process(suffix) )
+				{
+					return;
+				}
+			}
+		}
+	}
+
+	bool
+	resolveEntity (const Scene & scene, const std::string & address, std::shared_ptr< AbstractEntity > & entity, std::string & error) noexcept
+	{
+		std::vector< AddressedEntity > matches;
+
+		for ( auto & candidate : collectEntities(scene) )
+		{
+			bool matched = false;
+
+			/* NOTE: suffixes are built on node boundaries, so a node name that itself contains '/' still matches exactly. */
+			forEachSuffix(candidate.path, [&address, &matched] (const std::string & suffix) {
+				matched = suffix == address;
+
+				return !matched && suffix.size() < address.size();
+			});
+
+			if ( matched )
+			{
+				matches.emplace_back(std::move(candidate));
+			}
+		}
+
+		if ( matches.empty() )
+		{
+			error = "No entity at '" + address + "' in the scene '" + scene.name() + "' (SceneManager listEntities() gives every entity's address).";
 
 			return false;
 		}
 
+		if ( matches.size() > 1 )
+		{
+			const auto addresses = entityAddresses(scene);
+
+			error = "'" + address + "' names " + std::to_string(matches.size()) + " entities of the scene '" + scene.name() + "': give a longer path, one of";
+
+			for ( const auto & match : matches )
+			{
+				const auto addressIt = addresses.find(match.entity.get());
+
+				error += " '" + ( addressIt != addresses.end() ? addressIt->second : match.path.back() ) + "'";
+			}
+
+			error += ".";
+
+			return false;
+		}
+
+		entity = std::move(matches.front().entity);
+
+		return true;
+	}
+
+	std::map< const AbstractEntity *, std::string >
+	entityAddresses (const Scene & scene) noexcept
+	{
+		const auto entities = collectEntities(scene);
+
+		/* How many entities each suffix designates. */
+		std::unordered_map< std::string, size_t > designations;
+
+		for ( const auto & candidate : entities )
+		{
+			forEachSuffix(candidate.path, [&designations] (const std::string & suffix) {
+				++designations[suffix];
+
+				return true;
+			});
+		}
+
+		std::map< const AbstractEntity *, std::string > addresses;
+
+		for ( const auto & candidate : entities )
+		{
+			std::string address;
+
+			forEachSuffix(candidate.path, [&designations, &address] (const std::string & suffix) {
+				address = suffix;
+
+				return designations[suffix] > 1;
+			});
+
+			addresses.emplace(candidate.entity.get(), std::move(address));
+		}
+
+		return addresses;
+	}
+
+	bool
+	resolveComponent (const Scene & scene, const std::string & entityAddress, const std::string & componentName, std::shared_ptr< Abstract > & component, std::string & error) noexcept
+	{
 		std::shared_ptr< AbstractEntity > entity;
 
-		if ( node != nullptr )
+		if ( !resolveEntity(scene, entityAddress, entity, error) )
 		{
-			entity = node;
-		}
-		else if ( staticEntity != nullptr )
-		{
-			entity = staticEntity;
-		}
-		else
-		{
-			error = "No node nor static entity named '" + entityName + "' in the scene '" + scene.name() + "' (SceneManager listEntities() lists them).";
-
 			return false;
 		}
 
@@ -70,7 +233,7 @@ namespace EmEn::Scenes::Component
 
 		if ( component == nullptr )
 		{
-			error = "'" + entityName + "' has no component named '" + componentName + "' (SceneManager listEntityComponents(entity) lists them).";
+			error = "'" + entityAddress + "' has no component named '" + componentName + "' (SceneManager listEntityComponents(entity) lists them).";
 
 			return false;
 		}

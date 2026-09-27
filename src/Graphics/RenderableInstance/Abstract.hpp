@@ -447,6 +447,28 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Returns the distance from the target's camera under which the instance is not drawn, in metres.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			drawNearDistance () const noexcept
+			{
+				return m_drawNearDistance;
+			}
+
+			/**
+			 * @brief Returns the distance from the target's camera beyond which the instance is not drawn, in metres, 0 for none.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			drawFarDistance () const noexcept
+			{
+				return m_drawFarDistance;
+			}
+
+			/**
 			 * @brief Limits shadow casting to a distance from the VIEWER (the main camera): beyond it, the instance is
 			 * left out of every shadow map. 0 means no limit (the default).
 			 * @note The shadow map of a sun can cover kilometres; a forest there puts every tree into it, at a cost

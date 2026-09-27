@@ -389,7 +389,7 @@ Plumbing:
    - **T2**, `light-and-shadow-debug --demo-options 0,1` mirror floor (the documented SSR +Inf).
      No DebugNonFinite square after. The reflected/direct ratio (RTR 0.82, SSR 0.40, projet-alpha
      `.claude/rules/build-and-run.md`) stays unchanged.
-   - **T3**, a scene that never overflowed (`sponza`), exposure pinned with `Act.setExposure`.
+   - **T3**, a scene that never overflowed (`sponza`), exposure pinned with `Camera.setExposure`.
      PNG A/B within 1/255 on ≥ 99.9 % of pixels; in auto mode, the metered luminance is identical
      to within fp16 rounding.
    - **T4**, a step between two pinned triads 4 stops apart. The static region steps in exactly

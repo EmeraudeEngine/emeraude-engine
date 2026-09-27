@@ -2682,7 +2682,7 @@ of the voxels and read 3-5× smaller than its box (a 6.4 m cloud in a ~25 m box)
   a degenerate box)`. No census line at all means `execute()` never ran.
 - ⚠️ The forest demo's AUTO exposure puts the sky and the clouds in the tone mapper's shoulder
   (cloud 247/255 top AND bottom, sky 232): judge the clouds' shading at a PINNED exposure
-  (`Act.setExposure(16, 0.01, 100)`, sunny-16), never on the auto-exposed frame.
+  (`Camera.setExposure(<entity>, <camera>, 16, 0.01, 100)`, sunny-16), never on the auto-exposed frame.
 
 #### The clouds' shadow on the world — a Beer shadow map carried by the sun (stage 2 lot 1, Sep 2026)
 
@@ -2869,7 +2869,7 @@ The miss branch of every traced effect is the remaining follow-up.
 > `texture()`; in a compute pass that resolves to the base level in practice.
 >
 > ⚠️⚠️ **Compare the two indirect estimators (or the two lanes) at a PINNED exposure only** —
-> `Core.SceneManagerService.Act.setExposure(aperture, shutterSeconds, iso)` pins the triad and switches
+> `Core.SceneManagerService.Camera.setExposure(entity, component, aperture, shutterSeconds, iso)` (the pair `Camera.getActive()` answers) pins the triad and switches
 > the metering off. The first probes-vs-RTGI comparison on this bench ("mirror 214 vs direct 64; 107 vs
 > 64 at one bounce, the probes 1.7× RTGI") was taken on TWO auto-exposed frames — the mirror pose and
 > the direct pose meter differently — and its single-bounce half was wrong IN DIRECTION. Re-measured

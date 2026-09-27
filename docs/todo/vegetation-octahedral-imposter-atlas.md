@@ -105,7 +105,7 @@ draw-distance switch and the RT/shadow exclusion; `terrain` draws 117 186 impost
   `docs/caution-points.md` § *The octahedral map is 2-to-1 on the BORDER*.
 - ⚠️ The offscreen pass clears with `m_swapChainClearColors`, an OPAQUE colour. An imposter needs
   alpha 0 behind the tree, or every card shows a rectangle of sky.
-- ⚠️ Bake at a **pinned exposure** (`Core.SceneManagerService.Act.setExposure()`). Baking through
+- ⚠️ Bake at a **pinned exposure** (`Core.SceneManagerService.Camera.setExposure()`). Baking through
   the auto-exposure burns whatever the camera happened to be metering into the atlas, and the
   imposter then never matches the mesh it replaces.
 - ⚠️ The normals in the atlas are in view space of the baking direction. Write down which frame

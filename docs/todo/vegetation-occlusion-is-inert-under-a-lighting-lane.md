@@ -71,7 +71,7 @@ An owner decision, with one branch now closed:
 
 ## Traps
 
-- ⚠️ Measure at a PINNED exposure (`Act.setExposure`), or the auto-exposure absorbs the whole
+- ⚠️ Measure at a PINNED exposure (`Camera.setExposure`), or the auto-exposure absorbs the whole
   effect and the two captures look identical.
 - ⚠️ The A channel is a DENSITY estimate, not ray-traced occlusion — a shading hint, never a
   photometric quantity. Do not let it into anything that claims to be physical.

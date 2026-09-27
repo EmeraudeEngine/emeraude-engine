@@ -66,22 +66,35 @@ namespace EmEn::Scenes
 		/* Component control (owner decision 2026-09-27): one sub-object per component type, every command naming
 		 * its entity and component — no targeting state. */
 		Component::appendLightConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendCameraConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendEnvironmentConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendAnimationConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendPhysicsConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendAudioConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendVisualConsoleAdapters(*this, m_componentConsoleAdapters);
 
 		for ( const auto & adapter : m_componentConsoleAdapters )
 		{
 			adapter->registerToObject(*this);
 		}
 
-		this->bindCommand("listEntities", "Lists the entities of the ACTIVE scene as JSON: every node (whole hierarchy, with its parent) and static entity, with its components (name and type).", [this] () {
+		this->bindCommand("listEntities", "Lists the entities of the ACTIVE scene as JSON: every node (whole hierarchy, with its parent) and static entity, with its ADDRESS (what the component commands take as `entity`: the name when unique, else the shortest unique path suffix Parent/Child) and its components (name and type).", [this] () {
 			auto result = Console::CommandResult::error("No active scene !");
 
 			this->withExclusiveActiveScene([&result] (const std::shared_ptr< Scene > & scene) {
 				Json::Value entities{Json::arrayValue};
 
-				const auto describe = [] (const AbstractEntity & entity, const char * kind) {
+				const auto addresses = Component::entityAddresses(*scene);
+
+				const auto describe = [&addresses] (const AbstractEntity & entity, const char * kind) {
 					Json::Value entry{Json::objectValue};
 					entry["name"] = entity.name();
 					entry["kind"] = kind;
+
+					if ( const auto addressIt = addresses.find(&entity); addressIt != addresses.end() )
+					{
+						entry["address"] = addressIt->second;
+					}
 
 					Json::Value components{Json::arrayValue};
 
@@ -137,27 +150,18 @@ namespace EmEn::Scenes
 
 		this->bindCommand("listEntityComponents", "Lists the components of one entity of the ACTIVE scene as JSON (name and type): the names the component commands take.",
 			{
-				{"entity", "A node (anywhere in the hierarchy) or static entity name (listEntities() lists them)."}
+				{"entity", "The entity address: its name when unique, else the shortest unique path suffix Parent/Child (listEntities() gives every address)."}
 			},
-			[this] (const std::string & entityName) {
+			[this] (const std::string & entityAddress) {
 				auto result = Console::CommandResult::error("No active scene !");
 
-				this->withExclusiveActiveScene([&result, &entityName] (const std::shared_ptr< Scene > & scene) {
-					const auto node = scene->findNode(entityName);
-					const auto staticEntity = scene->findStaticEntity(entityName);
+				this->withExclusiveActiveScene([&result, &entityAddress] (const std::shared_ptr< Scene > & scene) {
+					std::shared_ptr< AbstractEntity > entity;
+					std::string error;
 
-					if ( node != nullptr && staticEntity != nullptr )
+					if ( !Component::resolveEntity(*scene, entityAddress, entity, error) )
 					{
-						result = Console::CommandResult::error("'" + entityName + "' names both a node and a static entity: rename one of them.");
-
-						return;
-					}
-
-					const AbstractEntity * entity = node != nullptr ? static_cast< const AbstractEntity * >(node.get()) : staticEntity.get();
-
-					if ( entity == nullptr )
-					{
-						result = Console::CommandResult::error("No node nor static entity named '" + entityName + "' in the active scene.");
+						result = Console::CommandResult::error(error);
 
 						return;
 					}

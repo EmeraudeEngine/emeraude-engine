@@ -152,6 +152,28 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the playback speed multiplier.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			speed () const noexcept
+			{
+				return m_speed;
+			}
+
+			/**
+			 * @brief Returns the wrap mode of the active (or last played) clip.
+			 * @return Animations::PlaybackWrap
+			 */
+			[[nodiscard]]
+			Animations::PlaybackWrap
+			wrap () const noexcept
+			{
+				return m_wrap;
+			}
+
+			/**
 			 * @brief Returns whether a clip is currently playing.
 			 * @return bool
 			 */

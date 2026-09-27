@@ -98,7 +98,7 @@ def warnings_from_metadata(metadata):
 		warnings.append("the CAMERA MOVED during the capture (view matrices differ): the residual includes that motion")
 
 	if any(frame.get("exposure") and frame["exposure"].get("auto") for frame in frames):
-		warnings.append("AUTO EXPOSURE is on: check the flatness line below, or pin it (Act.setExposure) for an A/B")
+		warnings.append("AUTO EXPOSURE is on: check the flatness line below, or pin it (Camera.setExposure) for an A/B")
 
 	if len(frames) < 8:
 		warnings.append(f"only {len(frames)} frames: the TAA jitter cycle is 8 frames, a shorter capture does not cover it")

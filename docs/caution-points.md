@@ -6307,7 +6307,7 @@ view unchanged at (0, 64, 0). Cost 0.27 ms on that scene, 0.69 ms on Sponza.
 > `writeCombinedImageSampler()` helper writes the image's CURRENT layout (UNDEFINED at creation).
 >
 > ⚠️⚠️ **Two poses are two exposures: compare estimators at a PINNED exposure only**
-> (`Act.setExposure(aperture, shutterSeconds, iso)`). The first reading of this face — "mirror 214 vs
+> (`Camera.setExposure(<entity>, <camera>, aperture, shutterSeconds, iso)`). The first reading of this face — "mirror 214 vs
 > direct 64, 107 vs 64 at one bounce, the probes 1.7× RTGI" — came from two auto-exposed frames and
 > its single-bounce half had the wrong SIGN. At f/2.8 · 1/39 s · ISO 100 (2026-09-12, G channel):
 > probe-fed RTGI **135** vs mirror **118**; RTGI single bounce with the probes recursive (the
@@ -6773,4 +6773,30 @@ coarsest level — the one the imposter replaces). Graphics `AGENTS.md` § 15e.
   7778 (projet-alpha never resets its settings). `MCP::Server` and `RemoteListener` add "the port is most likely taken by another process" to
   a refused bind (`address_in_use` or `access_denied`) and name the setting to change. The engine keeps
   running; only that channel stays closed.
+
+### An entity NAME is not an address: six actors each carry a `Head` (Sep 2026)
+
+- **What happened:** the component commands resolved `entity` with `Scene::findNode(name)`, which returns
+  the FIRST node of that name. Every projet-alpha actor builds a `Head` node (camera `Eyes`, `Ears`,
+  `SoundEmitter`); on `animation-debug` there are six, so `Camera.setExposure(Head, Eyes, …)` drove
+  whichever the crawl met first — not necessarily the rendering camera — and answered success.
+- **Rule:** an entity is addressed by the shortest UNIQUE suffix of its node path (`ACTOR_…06/Head`), and
+  an ambiguous address is refused with its candidates (`Component::resolveEntity()`, owner decision
+  2026-09-27). `listEntities()` prints each `address`; `Camera.getActive()` answers the rendering camera's.
+  Never add a console lookup "by name" that returns the first match.
+
+### A console setter must refuse what the engine would clamp or ignore (Sep 2026)
+
+- **What happens:** many engine setters silently adjust their input — `Camera::setSensitivity()` clamps to
+  the ISO range, `ParticlesEmitter::setParticleGeneratedPerCycle()` to the particle limit,
+  `AbstractLightEmitter::enableShadowCasting()` does nothing without a shadow map, `SoundEmitter::pause()`
+  does nothing without a source. A command forwarding them answers "set to X" while Y (or nothing) was
+  applied — a client (an AI) then reasons on a value the scene never had.
+- **Rule:** read the setter's BODY before exposing it; a clamp or an early `return` becomes a refusal with
+  the reason in the adapter. Each setter answers the component's new state, so a client sees what was
+  applied.
+- **Worse — a creation-time switch flipped live:** `enableShadowCasting(false)` on the `forest` CSM sun put
+  the whole floor INTO shadow (mean 121 → 104 with the lighting family off, zero VUID): the flag only gates
+  the cascade fitting while the map is still drawn and sampled. No shadow on/off command exists; item
+  `light-shadow-runtime-toggle`. Test a new setter on a real scene, both ways, before exposing it.
 
