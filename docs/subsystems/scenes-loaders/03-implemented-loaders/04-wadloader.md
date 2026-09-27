@@ -79,7 +79,7 @@ not a wall: it hangs in the *opening* between the two sectors and whatever of th
 cover stays see-through. This is now materialized, as an **alpha-tested CUTOUT**.
 
 *Engine side — new material contract* (canonical home:
-[`src/Graphics/AGENTS.md`](../../../../AGENTS.md#alpha-test--the-binary-cutout-contract-aug-2026) § 5,
+[`src/Graphics/AGENTS.md`](../../graphics/05-5-material-ubo-system.md#alpha-test--the-binary-cutout-contract-aug-2026) § 5,
 "Alpha Test — the Binary Cutout Contract" — keep the two in sync, and prefer editing that one):
 
 - New flag **`MaterialFlagBits::AlphaTestEnabled = 1U << 16`** (`Graphics/Material/Interface.hpp`) —
