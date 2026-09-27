@@ -47,10 +47,28 @@ Every component block carries a `Type` and, for most types, a `Data`:
 | `Roughness` | Value, Texture… | |
 | `Metalness` | Value, Texture… | |
 | `Normal` | Texture | `Scale` |
-| `Height` | Texture | `Scale` |
+| `Height` | Texture | `Scale`, `ParallaxIterations`, `ParallaxHandover` |
 | `AmbientOcclusion` | Texture | |
 | `Opacity` | Value, Texture | `AlphaThreshold` |
 | `AutoIlluminationColor` | Color, Texture | `Amount` |
+
+`Height` drives the parallax occlusion mapping, and the displacement of a mesh-shading surface
+(`Geometry::MeshShadingSurface`, e.g. `DisplacedGridResource`). Its extra keys (2026-09-27):
+
+- `Scale` — the relief depth in **UV units** (a fraction of one texture repeat), default 0.02.
+- `ParallaxIterations` — integer, clamped to [0, 64]: the POM layers at a grazing view (a view along the
+  normal takes a quarter). When present, the material owns its layer count and the
+  `Core/Graphics/Texture/POMIterations` setting no longer overrides it (`setParallaxIterations()`).
+- `ParallaxHandover` — `[start, end]` in **metres**: the band where a mesh-shading surface hands its relief
+  from real displaced geometry to the POM (`setParallaxHandover()`). Read ONLY by a mesh-shading program; on
+  any other geometry, and on a device without `VK_EXT_mesh_shader`, the material is plain POM.
+
+```json
+"Height": { "Type": "Texture", "Data": { "Name": "Grounds/Sand001-height" }, "Scale": 0.02, "ParallaxIterations": 32, "ParallaxHandover": [2.0, 5.0] }
+```
+
+⚠️ Before 2026-09-27 the layer count and the handover band existed only as C++ setters: a store material
+could not ask for displaced geometry at all.
 
 ### Optics
 

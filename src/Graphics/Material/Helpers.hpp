@@ -85,6 +85,8 @@ namespace EmEn::Graphics::Material
 	static constexpr auto JKAttenuationDistance{"AttenuationDistance"};
 	static constexpr auto JKThickness{"Thickness"};
 	static constexpr auto JKHeight{"Height"};
+	static constexpr auto JKParallaxIterations{"ParallaxIterations"};
+	static constexpr auto JKParallaxHandover{"ParallaxHandover"};
 	static constexpr auto JKScreenSpace{"ScreenSpace"};
 
 	/**

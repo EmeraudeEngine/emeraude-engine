@@ -421,6 +421,32 @@ namespace EmEn::Graphics::Material
 				m_useParallaxOcclusionMapping = true;
 
 				this->setHeightScale(FastJSON::getValue< float >(data[HeightString], JKScale).value_or(DefaultHeightScale));
+
+				/* Optional: the material's own layer count, and the geometry-to-parallax band of a mesh-shading
+				 * surface. Absent keys keep the defaults (the POMIterations setting, no band). */
+				if ( data[HeightString].isMember(JKParallaxIterations) )
+				{
+					if ( const auto iterations = FastJSON::getValue< int32_t >(data[HeightString], JKParallaxIterations) )
+					{
+						this->setParallaxIterations(iterations.value());
+					}
+					else
+					{
+						TraceWarning{ClassId} << "Material '" << this->name() << "' : '" << JKParallaxIterations << "' must be an integer, ignored !";
+					}
+				}
+
+				if ( data[HeightString].isMember(JKParallaxHandover) )
+				{
+					if ( const auto handover = FastJSON::getValue< Math::Vector< 2, float > >(data[HeightString], JKParallaxHandover) )
+					{
+						this->setParallaxHandover(handover->x(), handover->y());
+					}
+					else
+					{
+						TraceWarning{ClassId} << "Material '" << this->name() << "' : '" << JKParallaxHandover << "' must be [start, end] in metres, ignored !";
+					}
+				}
 			}
 				return true;
 
