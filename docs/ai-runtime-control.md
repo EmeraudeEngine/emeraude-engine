@@ -618,6 +618,10 @@ python3 tools/remote-console.py "Core.SceneManagerService.SpotLight.setEnabled(S
 | `SpotLight` | the same + `setConeAngles(innerDeg, outerDeg)` (0 ≤ inner ≤ outer ≤ 90; change the cone BEFORE the power: lumens are converted with the current outer angle) |
 | `DirectionalLight` | `getState` (JSON: enabled, colour, lux), `setEnabled`, `setColor`, `setIlluminance(lux)` |
 
+Every setter answers its confirmation **and the light's new state as JSON** (MCP `structuredContent`),
+so the applied values are confirmed without a `getState()` call (suggested by Gemini's review of the
+server, 2026-09-27).
+
 MCP names: `SceneManager_PointLight_setLuminousPower`, `SceneManager_listEntities`, … An error names
 what is wrong: an unknown entity or component, a component of another type (`is a SpotLight, not a
 PointLight`), an out-of-range value — nothing is applied then. The commands run under EXCLUSIVE access

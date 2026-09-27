@@ -89,6 +89,72 @@ namespace EmEn::Scenes::Component
 		}
 
 		/**
+		 * @brief Returns the full state of a point light as JSON.
+		 * @param light The light.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		stateOf (const PointLight & light) noexcept
+		{
+			auto state = commonState(light, PointLight::ClassId);
+			state["intensityCandela"] = static_cast< double >(light.intensity());
+			state["radius"] = static_cast< double >(light.radius());
+
+			return FastJSON::stringify(state);
+		}
+
+		/**
+		 * @brief Returns the full state of a spot light as JSON.
+		 * @param light The light.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		stateOf (const SpotLight & light) noexcept
+		{
+			auto state = commonState(light, SpotLight::ClassId);
+			state["intensityCandela"] = static_cast< double >(light.intensity());
+			state["radius"] = static_cast< double >(light.radius());
+			state["innerAngle"] = static_cast< double >(light.innerAngle());
+			state["outerAngle"] = static_cast< double >(light.outerAngle());
+
+			return FastJSON::stringify(state);
+		}
+
+		/**
+		 * @brief Returns the full state of a directional light as JSON.
+		 * @param light The light.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		stateOf (const DirectionalLight & light) noexcept
+		{
+			auto state = commonState(light, DirectionalLight::ClassId);
+			state["illuminanceLux"] = static_cast< double >(light.intensity());
+
+			return FastJSON::stringify(state);
+		}
+
+		/**
+		 * @brief The answer of a setter: the confirmation, then the light's NEW state as JSON.
+		 * @note The state is what a machine client reads (MCP structuredContent): it confirms the values
+		 * actually applied without a second getState() call (suggested by Gemini's review, 2026-09-27).
+		 * @tparam light_t The light type.
+		 * @param light The light, after the change.
+		 * @param message The confirmation.
+		 * @return Console::CommandResult
+		 */
+		template< typename light_t >
+		[[nodiscard]]
+		Console::CommandResult
+		changed (const light_t & light, std::string message) noexcept
+		{
+			return Console::CommandResult::success(std::move(message)).add(Console::Output::json(stateOf(light)));
+		}
+
+		/**
 		 * @brief The commands every light type shares: enable, colour.
 		 * @tparam light_t The light type.
 		 * @param adapter The adapter binding them.
@@ -108,7 +174,7 @@ namespace EmEn::Scenes::Component
 					return adapter.act(entity, component, [enabled] (light_t & light) {
 						light.enable(enabled);
 
-						return Console::CommandResult::success(std::string{"Light '"} + light.name() + ( enabled ? "' on." : "' off." ));
+						return changed(light, std::string{"Light '"} + light.name() + ( enabled ? "' on." : "' off." ));
 					});
 				}, Console::CommandHint::Idempotent);
 
@@ -129,7 +195,7 @@ namespace EmEn::Scenes::Component
 					return adapter.act(entity, component, [red, green, blue] (light_t & light) {
 						light.setColor(PixelFactory::Color< float >{red, green, blue});
 
-						return Console::CommandResult::success("Light '" + light.name() + "' colour set.");
+						return changed(light, "Light '" + light.name() + "' colour set.");
 					});
 				}, Console::CommandHint::Idempotent);
 		}
@@ -158,11 +224,7 @@ namespace EmEn::Scenes::Component
 						{EntityParameter, ComponentParameter},
 						[this] (const std::string & entity, const std::string & component) {
 							return this->act(entity, component, [] (PointLight & light) {
-								auto state = commonState(light, PointLight::ClassId);
-								state["intensityCandela"] = static_cast< double >(light.intensity());
-								state["radius"] = static_cast< double >(light.radius());
-
-								return Console::CommandResult::json(FastJSON::stringify(state));
+								return Console::CommandResult::json(stateOf(light));
 							});
 						}, Console::CommandHint::ReadOnly);
 
@@ -183,7 +245,7 @@ namespace EmEn::Scenes::Component
 							return this->act(entity, component, [lumens] (PointLight & light) {
 								light.setLuminousPower(lumens);
 
-								return Console::CommandResult::success("Point light '" + light.name() + "' set to " + std::to_string(lumens) + " lm.");
+								return changed(light, "Point light '" + light.name() + "' set to " + std::to_string(lumens) + " lm.");
 							});
 						}, Console::CommandHint::Idempotent);
 
@@ -202,7 +264,7 @@ namespace EmEn::Scenes::Component
 							return this->act(entity, component, [radius] (PointLight & light) {
 								light.setRadius(radius);
 
-								return Console::CommandResult::success("Point light '" + light.name() + "' radius set to " + std::to_string(radius) + " m.");
+								return changed(light, "Point light '" + light.name() + "' radius set to " + std::to_string(radius) + " m.");
 							});
 						}, Console::CommandHint::Idempotent);
 				}
@@ -232,13 +294,7 @@ namespace EmEn::Scenes::Component
 						{EntityParameter, ComponentParameter},
 						[this] (const std::string & entity, const std::string & component) {
 							return this->act(entity, component, [] (SpotLight & light) {
-								auto state = commonState(light, SpotLight::ClassId);
-								state["intensityCandela"] = static_cast< double >(light.intensity());
-								state["radius"] = static_cast< double >(light.radius());
-								state["innerAngle"] = static_cast< double >(light.innerAngle());
-								state["outerAngle"] = static_cast< double >(light.outerAngle());
-
-								return Console::CommandResult::json(FastJSON::stringify(state));
+								return Console::CommandResult::json(stateOf(light));
 							});
 						}, Console::CommandHint::ReadOnly);
 
@@ -259,7 +315,7 @@ namespace EmEn::Scenes::Component
 							return this->act(entity, component, [lumens] (SpotLight & light) {
 								light.setLuminousPower(lumens);
 
-								return Console::CommandResult::success("Spot light '" + light.name() + "' set to " + std::to_string(lumens) + " lm.");
+								return changed(light, "Spot light '" + light.name() + "' set to " + std::to_string(lumens) + " lm.");
 							});
 						}, Console::CommandHint::Idempotent);
 
@@ -278,7 +334,7 @@ namespace EmEn::Scenes::Component
 							return this->act(entity, component, [radius] (SpotLight & light) {
 								light.setRadius(radius);
 
-								return Console::CommandResult::success("Spot light '" + light.name() + "' radius set to " + std::to_string(radius) + " m.");
+								return changed(light, "Spot light '" + light.name() + "' radius set to " + std::to_string(radius) + " m.");
 							});
 						}, Console::CommandHint::Idempotent);
 
@@ -298,7 +354,7 @@ namespace EmEn::Scenes::Component
 							return this->act(entity, component, [innerAngle, outerAngle] (SpotLight & light) {
 								light.setConeAngles(innerAngle, outerAngle);
 
-								return Console::CommandResult::success("Spot light '" + light.name() + "' cone set to " + std::to_string(innerAngle) + "° / " + std::to_string(outerAngle) + "°.");
+								return changed(light, "Spot light '" + light.name() + "' cone set to " + std::to_string(innerAngle) + "° / " + std::to_string(outerAngle) + "°.");
 							});
 						}, Console::CommandHint::Idempotent);
 				}
@@ -328,10 +384,7 @@ namespace EmEn::Scenes::Component
 						{EntityParameter, ComponentParameter},
 						[this] (const std::string & entity, const std::string & component) {
 							return this->act(entity, component, [] (DirectionalLight & light) {
-								auto state = commonState(light, DirectionalLight::ClassId);
-								state["illuminanceLux"] = static_cast< double >(light.intensity());
-
-								return Console::CommandResult::json(FastJSON::stringify(state));
+								return Console::CommandResult::json(stateOf(light));
 							});
 						}, Console::CommandHint::ReadOnly);
 
@@ -352,7 +405,7 @@ namespace EmEn::Scenes::Component
 							return this->act(entity, component, [lux] (DirectionalLight & light) {
 								light.setIlluminance(lux);
 
-								return Console::CommandResult::success("Directional light '" + light.name() + "' set to " + std::to_string(lux) + " lx.");
+								return changed(light, "Directional light '" + light.name() + "' set to " + std::to_string(lux) + " lx.");
 							});
 						}, Console::CommandHint::Idempotent);
 				}

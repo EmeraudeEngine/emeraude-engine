@@ -634,6 +634,8 @@ nothing). Pattern (lights: `Component/LightConsoleAdapters.cpp`):
   `this->act(entity, component, [&] (YourComponent & c) { … return CommandResult…; })`, which resolves
   the entity in the ACTIVE scene (`resolveComponent()`: node anywhere via `Scene::findNode()`, or static
   entity; a name used by both is refused), checks the type, and runs under `withExclusiveActiveScene()`.
+- A setter answers `changed(component, message)`-style: the confirmation, then the component's NEW state
+  as a JSON output (the same function `getState` answers), which MCP clients read as `structuredContent`.
 - Validate ranges BEFORE `act()` (no exclusive lock taken for a refused call); describe every parameter
   with its unit; hints `ReadOnly` for getters, `Idempotent` for setters.
 - Add an `appendXxxConsoleAdapters()` next to the component and call it from
