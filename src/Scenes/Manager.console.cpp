@@ -35,6 +35,7 @@
 /* Local inclusions. */
 #include "Component/Camera.hpp"
 #include "Component/Microphone.hpp"
+#include "Component/ConsoleAdapter.hpp"
 #include "Component/Visual.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/ImposterAtlas.hpp"
@@ -53,6 +54,7 @@
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "json/json.h"
+#include "FastJSON.hpp"
 
 namespace EmEn::Scenes
 {
@@ -61,6 +63,120 @@ namespace EmEn::Scenes
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
+		/* Component control (owner decision 2026-09-27): one sub-object per component type, every command naming
+		 * its entity and component — no targeting state. */
+		Component::appendLightConsoleAdapters(*this, m_componentConsoleAdapters);
+
+		for ( const auto & adapter : m_componentConsoleAdapters )
+		{
+			adapter->registerToObject(*this);
+		}
+
+		this->bindCommand("listEntities", "Lists the entities of the ACTIVE scene as JSON: every node (whole hierarchy, with its parent) and static entity, with its components (name and type).", [this] () {
+			auto result = Console::CommandResult::error("No active scene !");
+
+			this->withExclusiveActiveScene([&result] (const std::shared_ptr< Scene > & scene) {
+				Json::Value entities{Json::arrayValue};
+
+				const auto describe = [] (const AbstractEntity & entity, const char * kind) {
+					Json::Value entry{Json::objectValue};
+					entry["name"] = entity.name();
+					entry["kind"] = kind;
+
+					Json::Value components{Json::arrayValue};
+
+					entity.forEachComponent([&components] (const Component::Abstract & component) {
+						Json::Value item{Json::objectValue};
+						item["name"] = component.name();
+						item["type"] = component.getComponentType();
+						components.append(std::move(item));
+					});
+
+					entry["components"] = std::move(components);
+
+					return entry;
+				};
+
+				/* Depth first from the root's children: the root itself is not an entity anyone names. */
+				std::vector< std::shared_ptr< Node > > pending;
+
+				for ( const auto & child : scene->root()->children() | std::views::values )
+				{
+					pending.emplace_back(child);
+				}
+
+				while ( !pending.empty() )
+				{
+					const auto node = pending.back();
+					pending.pop_back();
+
+					auto entry = describe(*node, "node");
+
+					if ( const auto parent = node->parent(); parent != nullptr && !parent->isRoot() )
+					{
+						entry["parent"] = parent->name();
+					}
+
+					entities.append(std::move(entry));
+
+					for ( const auto & child : node->children() | std::views::values )
+					{
+						pending.emplace_back(child);
+					}
+				}
+
+				scene->forEachStaticEntities([&entities, &describe] (const StaticEntity & entity) {
+					entities.append(describe(entity, "staticEntity"));
+				});
+
+				result = Console::CommandResult::json(FastJSON::stringify(entities));
+			}, true);
+
+			return result;
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("listEntityComponents", "Lists the components of one entity of the ACTIVE scene as JSON (name and type): the names the component commands take.",
+			{
+				{"entity", "A node (anywhere in the hierarchy) or static entity name (listEntities() lists them)."}
+			},
+			[this] (const std::string & entityName) {
+				auto result = Console::CommandResult::error("No active scene !");
+
+				this->withExclusiveActiveScene([&result, &entityName] (const std::shared_ptr< Scene > & scene) {
+					const auto node = scene->findNode(entityName);
+					const auto staticEntity = scene->findStaticEntity(entityName);
+
+					if ( node != nullptr && staticEntity != nullptr )
+					{
+						result = Console::CommandResult::error("'" + entityName + "' names both a node and a static entity: rename one of them.");
+
+						return;
+					}
+
+					const AbstractEntity * entity = node != nullptr ? static_cast< const AbstractEntity * >(node.get()) : staticEntity.get();
+
+					if ( entity == nullptr )
+					{
+						result = Console::CommandResult::error("No node nor static entity named '" + entityName + "' in the active scene.");
+
+						return;
+					}
+
+					Json::Value components{Json::arrayValue};
+
+					entity->forEachComponent([&components] (const Component::Abstract & component) {
+						Json::Value item{Json::objectValue};
+						item["name"] = component.name();
+						item["type"] = component.getComponentType();
+						components.append(std::move(item));
+					});
+
+					result = Console::CommandResult::json(FastJSON::stringify(components));
+				}, true);
+
+				return result;
+			}, Console::CommandHint::ReadOnly);
+
 		this->bindCommand("createScene", "Creates a scene with a camera + microphone node and a neutral ambient light (5000 lx), then enables it.",
 			{
 				{"name", "The scene name (must not exist yet)."},
@@ -676,64 +792,6 @@ namespace EmEn::Scenes
 
 				return Console::CommandResult::success("Now targeting static entity '" + staticEntity->name() + "' from scene '" + scene->name() + "'.");
 			}, Console::CommandHint::Idempotent);
-
-		this->bindCommand("targetEntityComponent", "NOT IMPLEMENTED: would target a component of the currently targeted entity. Always answers an error.",
-			{
-				{"name", "The component name."}
-			},
-			[] (const std::string & /*name*/) {
-				return Console::CommandResult::error("targetEntityComponent(): not implemented.");
-			}, Console::CommandHint::ReadOnly);
-
-		this->bindCommand("moveNodeTo", "Moves the currently targeted node (targetNode()) to world coordinates.",
-			{
-				{"x", "World X, in metres."},
-				{"y", "World Y, in metres (UP is +Y)."},
-				{"z", "World Z, in metres."}
-			},
-			[this] (float positionX, float positionY, float positionZ) {
-				const auto sceneNode = m_consoleMemory.sceneNode();
-
-				if ( sceneNode == nullptr )
-				{
-					return Console::CommandResult::error("You must target a node before !");
-				}
-
-				sceneNode->setPosition({positionX, positionY, positionZ}, Math::TransformSpace::World);
-
-				std::stringstream message;
-				message << "Node '" << sceneNode->name() << "' moved to (" << positionX << ", " << positionY << ", " << positionZ << ").";
-
-				return Console::CommandResult::success(message.str());
-			}, Console::CommandHint::Idempotent);
-
-		this->bindCommand("getSceneInfo", "Returns scene information (name, node count, entity count, active camera).", [this] () {
-			if ( m_activeScene == nullptr )
-			{
-				return Console::CommandResult::error("No active scene !");
-			}
-
-			const auto & scene = *m_activeScene;
-
-			size_t nodeCount = 0;
-			size_t staticEntityCount = 0;
-
-			nodeCount = scene.root()->children().size();
-
-			scene.forEachStaticEntities([&staticEntityCount] (const auto &) {
-				++staticEntityCount;
-			});
-
-			const auto camera = scene.activeCamera();
-
-			std::stringstream info;
-			info << "Scene: " << scene.name() << "\n";
-			info << "  Nodes: " << nodeCount << "\n";
-			info << "  Static entities: " << staticEntityCount << "\n";
-			info << "  Active camera: " << (camera != nullptr ? camera->name() : "none") << "\n";
-
-			return Console::CommandResult::info(info.str());
-		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("getRenderStatistics", "Returns what the last frame's render lists submit, per geometry LOD: batches, instances, triangles (view, then shadows).", [this] () {
 			if ( m_activeScene == nullptr )

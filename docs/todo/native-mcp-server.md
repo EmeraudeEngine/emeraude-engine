@@ -53,7 +53,7 @@ with captures returned **inline as images** instead of a path to go and read.
 
 ## Prerequisites delivered (2026-09-27)
 
-- The typed command contract (`console-command-contract`): all 137 commands declare their parameters
+- The typed command contract (`console-command-contract`, closed): all 137 commands declare their parameters
   (types, arity, defaults, descriptions) and hints; `describeCommands()` exports them as JSON — the
   source the `tools/list` schemas are built from.
 - The framed TCP 7777 (one JSON response per request, in order, per-client queue share, serialized
@@ -66,7 +66,8 @@ with captures returned **inline as images** instead of a path to go and read.
 `src/Console/MCP/` (Protocol + Server), wired in `Controller`, settings `Core/MCP/*`. Both eras,
 every typed command as a tool (127 on `coordinates-debug`), inline reduced screenshot,
 `list_changed` on both stream kinds, Origin/Host/token checks, bounded sizes and queues, safe JSON
-reads, stale-pointer rebuild. Verified: build with 0 warnings, `tools/mcp-conformance.py` 885 checks
+reads, stale-pointer rebuild. Validated on Linux, macOS (Clang) and Windows (MSVC /W4 /WX): 0 warnings,
+both benches 0 failed. Verified on Linux: `tools/mcp-conformance.py` 885 checks
 (shown to fail against a lying server), the official TypeScript SDK clients v1 1.30.1 (handshake era)
 and v2 2.1.0 (`versionNegotiation: auto` → 2026-07-28) — list, call, image, list_changed —, 0 VUID.
 Documented: `docs/ai-runtime-control.md` § The MCP server, `src/Console/AGENTS.md` § 7b,
@@ -74,18 +75,19 @@ Documented: `docs/ai-runtime-control.md` § The MCP server, `src/Console/AGENTS.
 
 ## What remains
 
-1. **Cross-platform validation** by the macOS (Clang) and Windows (MSVC) peers, conformance bench
-   included — until then this item stays open.
-2. **The owner's first real session** with Claude Code (`claude mcp add --transport http emeraude
+1. **The owner's first real session** with Claude Code (`claude mcp add --transport http emeraude
    http://127.0.0.1:7778/mcp`): check the image reaches the model and the tool search copes with 127
    tools.
-3. **Progress notifications** for long calls (`temporalCapture(N)`, a heavy `openFiles`) — not
+2. **Progress notifications** for long calls (`temporalCapture(N)`, a heavy `openFiles`) — not
    implemented: a `tools/call` answers `application/json` only. Needs an SSE response and a progress
    hook in the command contract. Owner to decide whether it is worth it.
-4. **Resources** (read-only state without a tool call: settings, scene graph, log tail) — not
+3. **Resources** (read-only state without a tool call: settings, scene graph, log tail) — not
    implemented, candidates to confirm with the owner.
-5. The legacy handshake era accepts no `Mcp-Session-Id` (none is minted) — conforming, but a legacy
+4. The legacy handshake era accepts no `Mcp-Session-Id` (none is minted) — conforming, but a legacy
    client that insists on a session is untested.
+5. **Default port**: 7778 is taken by ASUS Armoury Crate on ASUS laptops (Windows peer, 2026-09-27; the
+   log now names the cause). Owner to decide whether to move the default.
+6. Optional `outputSchema` per command (results self-describe today) — only if a client needs it.
 
 ## ⚠️ Traps
 

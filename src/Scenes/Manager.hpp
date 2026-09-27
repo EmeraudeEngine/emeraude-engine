@@ -107,12 +107,6 @@ namespace EmEn::Scenes
 				m_staticEntity = staticEntity;
 			}
 
-			void
-			target (const std::shared_ptr< Component::Abstract > & entityComponent) noexcept
-			{
-				m_entityComponent = entityComponent;
-			}
-
 			[[nodiscard]]
 			std::shared_ptr< Scene >
 			scene () const noexcept
@@ -134,19 +128,11 @@ namespace EmEn::Scenes
 				return m_staticEntity.lock();
 			}
 
-			[[nodiscard]]
-			std::shared_ptr< Component::Abstract >
-			entityComponent () const noexcept
-			{
-				return m_entityComponent.lock();
-			}
-
 		private:
 
 			std::weak_ptr< Scene > m_scene;
 			std::weak_ptr< Node > m_sceneNode;
 			std::weak_ptr< StaticEntity > m_staticEntity;
-			std::weak_ptr< Component::Abstract > m_entityComponent;
 	};
 
 	/**
@@ -524,6 +510,9 @@ namespace EmEn::Scenes
 			std::map< std::string, std::shared_ptr< Scene > > m_scenes;
 			std::shared_ptr< Scene > m_activeScene;
 			ConsoleMemory m_consoleMemory;
+			/** @brief The console adapters of the component types (`SceneManagerService.PointLight`, …), sub-objects
+			 * of this service: every command addresses its component explicitly (Component/ConsoleAdapter.hpp). */
+			std::vector< std::unique_ptr< Console::ControllableTrait > > m_componentConsoleAdapters;
 			Editor::Manager m_editorManager{m_inputManager, m_resourceManager, m_notifier}; ///< Scene editor mode (picking, gizmo).
 			/** @brief Handle the thread-safe access to the member 'm_scenes', when creating, adding, moving a scene. */
 			mutable std::mutex m_sceneListAccess;

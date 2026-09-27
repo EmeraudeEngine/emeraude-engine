@@ -623,6 +623,25 @@ toolkit.clearGenerationParameters();
 
 All generators support `<Node>` or `<StaticEntity>` as template parameter (default: `StaticEntity`).
 
+### Exposing a Component to the Console / MCP (`Component/ConsoleAdapter.hpp`, 2026-09-27)
+
+A component type becomes drivable from the console and the MCP server through an ADAPTER — never by
+making the component itself a `ControllableTrait` (the thousands of components never driven must pay
+nothing). Pattern (lights: `Component/LightConsoleAdapters.cpp`):
+
+- Derive `ConsoleAdapter< YourComponent >` (its console identifier is `YourComponent::ClassId`) and bind
+  typed commands whose first two parameters are `entity` and `component`; do the work through
+  `this->act(entity, component, [&] (YourComponent & c) { … return CommandResult…; })`, which resolves
+  the entity in the ACTIVE scene (`resolveComponent()`: node anywhere via `Scene::findNode()`, or static
+  entity; a name used by both is refused), checks the type, and runs under `withExclusiveActiveScene()`.
+- Validate ranges BEFORE `act()` (no exclusive lock taken for a refused call); describe every parameter
+  with its unit; hints `ReadOnly` for getters, `Idempotent` for setters.
+- Add an `appendXxxConsoleAdapters()` next to the component and call it from
+  `Manager::onRegisterToConsole()` (the manager owns the adapters, `m_componentConsoleAdapters`, and
+  registers them as its sub-objects: `Core.SceneManagerService.<Type>.*`, MCP `SceneManager_<Type>_*`).
+- Keep `SceneManager_<Type>_<command>` ≤ 49 characters (MCP tool-name budget).
+- Remaining types are listed in `docs/todo/component-console-adapters.md`.
+
 ### Creating a New Component
 0. ⚠️ **A component MAY move or query its own entity from `processLogics()`** (`Node::setPosition()`,
    `getComponent()`, `forEachComponent()`…): `m_componentsMutex` is a **recursive mutex** since

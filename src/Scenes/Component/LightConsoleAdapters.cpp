@@ -1,0 +1,369 @@
+/*
+ * src/Scenes/Component/LightConsoleAdapters.cpp
+ * This file is part of Emeraude-Engine
+ *
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ *
+ * Emeraude-Engine is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Emeraude-Engine is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Emeraude-Engine; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * Complete project and additional information can be found at :
+ * https://github.com/EmeraudeEngine/emeraude-engine
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
+
+#include "ConsoleAdapter.hpp"
+
+/* STL inclusions. */
+#include <cmath>
+
+/* Third-party inclusions. */
+#include "json/json.h"
+
+/* Local inclusions. */
+#include "DirectionalLight.hpp"
+#include "FastJSON.hpp"
+#include "PointLight.hpp"
+#include "SpotLight.hpp"
+
+namespace EmEn::Scenes::Component
+{
+	using namespace Base;
+
+	namespace
+	{
+		/* The two parameters every command of this file starts with. */
+		const Console::Parameter EntityParameter{"entity", "The node (anywhere in the hierarchy) or static entity of the active scene that holds the light."};
+		const Console::Parameter ComponentParameter{"component", "The light component's name on that entity (SceneManager listEntityComponents(entity) lists them)."};
+
+		/**
+		 * @brief Returns whether three colour components are a valid light colour.
+		 * @param red The red component.
+		 * @param green The green component.
+		 * @param blue The blue component.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isValidColor (float red, float green, float blue) noexcept
+		{
+			return std::isfinite(red) && std::isfinite(green) && std::isfinite(blue) && red >= 0.0F && green >= 0.0F && blue >= 0.0F && red <= 1.0F && green <= 1.0F && blue <= 1.0F;
+		}
+
+		/**
+		 * @brief Returns the state every light shares, as a JSON object.
+		 * @param light The light.
+		 * @param type The component type.
+		 * @return Json::Value
+		 */
+		[[nodiscard]]
+		Json::Value
+		commonState (const AbstractLightEmitter & light, const char * type) noexcept
+		{
+			const auto & color = light.authoredColor();
+
+			Json::Value state{Json::objectValue};
+			state["name"] = light.name();
+			state["type"] = type;
+			state["enabled"] = light.isEnabled();
+
+			Json::Value rgb{Json::arrayValue};
+			rgb.append(static_cast< double >(color.red()));
+			rgb.append(static_cast< double >(color.green()));
+			rgb.append(static_cast< double >(color.blue()));
+			state["color"] = std::move(rgb);
+
+			return state;
+		}
+
+		/**
+		 * @brief The commands every light type shares: enable, colour.
+		 * @tparam light_t The light type.
+		 * @param adapter The adapter binding them.
+		 * @return void
+		 */
+		template< typename light_t, typename adapter_t >
+		void
+		bindCommonLightCommands (adapter_t & adapter) noexcept
+		{
+			adapter.bindCommand("setEnabled", "Switches the light on or off.",
+				{
+					EntityParameter,
+					ComponentParameter,
+					{"enabled", "1 (true) emits, 0 (false) stops emitting."}
+				},
+				[&adapter] (const std::string & entity, const std::string & component, bool enabled) {
+					return adapter.act(entity, component, [enabled] (light_t & light) {
+						light.enable(enabled);
+
+						return Console::CommandResult::success(std::string{"Light '"} + light.name() + ( enabled ? "' on." : "' off." ));
+					});
+				}, Console::CommandHint::Idempotent);
+
+			adapter.bindCommand("setColor", "Sets the light colour, a CHROMATICITY: the intensity keeps its photometric value whatever the hue (dim through the intensity command).",
+				{
+					EntityParameter,
+					ComponentParameter,
+					{"red", "Red component, 0 to 1."},
+					{"green", "Green component, 0 to 1."},
+					{"blue", "Blue component, 0 to 1."}
+				},
+				[&adapter] (const std::string & entity, const std::string & component, float red, float green, float blue) {
+					if ( !isValidColor(red, green, blue) )
+					{
+						return Console::CommandResult::error("Each colour component must be between 0 and 1.");
+					}
+
+					return adapter.act(entity, component, [red, green, blue] (light_t & light) {
+						light.setColor(PixelFactory::Color< float >{red, green, blue});
+
+						return Console::CommandResult::success("Light '" + light.name() + "' colour set.");
+					});
+				}, Console::CommandHint::Idempotent);
+		}
+
+		/** @brief `Core.SceneManagerService.PointLight.*`. */
+		class PointLightConsoleAdapter final : public ConsoleAdapter< PointLight >
+		{
+			public:
+
+				explicit
+				PointLightConsoleAdapter (const Manager & sceneManager) noexcept
+					: ConsoleAdapter{sceneManager}
+				{
+
+				}
+
+				using ConsoleAdapter::act;
+				using ControllableTrait::bindCommand;
+
+			private:
+
+				void
+				onRegisterToConsole () noexcept override
+				{
+					this->bindCommand("getState", "Returns the state of a point light as JSON: enabled, colour, intensity (candela), radius (metres).",
+						{EntityParameter, ComponentParameter},
+						[this] (const std::string & entity, const std::string & component) {
+							return this->act(entity, component, [] (PointLight & light) {
+								auto state = commonState(light, PointLight::ClassId);
+								state["intensityCandela"] = static_cast< double >(light.intensity());
+								state["radius"] = static_cast< double >(light.radius());
+
+								return Console::CommandResult::json(FastJSON::stringify(state));
+							});
+						}, Console::CommandHint::ReadOnly);
+
+					bindCommonLightCommands< PointLight >(*this);
+
+					this->bindCommand("setLuminousPower", "Sets the luminous power of a point light, in lumens — the unit a bulb is sold in (an 800 lm bulb ≈ a 60 W incandescent).",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"lumens", "The luminous power, in lumens (0 or more)."}
+						},
+						[this] (const std::string & entity, const std::string & component, float lumens) {
+							if ( !std::isfinite(lumens) || lumens < 0.0F )
+							{
+								return Console::CommandResult::error("The luminous power must be a finite number of lumens, 0 or more.");
+							}
+
+							return this->act(entity, component, [lumens] (PointLight & light) {
+								light.setLuminousPower(lumens);
+
+								return Console::CommandResult::success("Point light '" + light.name() + "' set to " + std::to_string(lumens) + " lm.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setRadius", "Sets the influence radius of a point light: its contribution falls smoothly to exactly zero there, and the light is culled beyond.",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"radius", "The radius, in metres; 0 = unbounded (the inverse square alone)."}
+						},
+						[this] (const std::string & entity, const std::string & component, float radius) {
+							if ( !std::isfinite(radius) || radius < 0.0F )
+							{
+								return Console::CommandResult::error("The radius must be a finite number of metres, 0 or more.");
+							}
+
+							return this->act(entity, component, [radius] (PointLight & light) {
+								light.setRadius(radius);
+
+								return Console::CommandResult::success("Point light '" + light.name() + "' radius set to " + std::to_string(radius) + " m.");
+							});
+						}, Console::CommandHint::Idempotent);
+				}
+		};
+
+		/** @brief `Core.SceneManagerService.SpotLight.*`. */
+		class SpotLightConsoleAdapter final : public ConsoleAdapter< SpotLight >
+		{
+			public:
+
+				explicit
+				SpotLightConsoleAdapter (const Manager & sceneManager) noexcept
+					: ConsoleAdapter{sceneManager}
+				{
+
+				}
+
+				using ConsoleAdapter::act;
+				using ControllableTrait::bindCommand;
+
+			private:
+
+				void
+				onRegisterToConsole () noexcept override
+				{
+					this->bindCommand("getState", "Returns the state of a spot light as JSON: enabled, colour, intensity (candela), radius (metres), cone angles (degrees).",
+						{EntityParameter, ComponentParameter},
+						[this] (const std::string & entity, const std::string & component) {
+							return this->act(entity, component, [] (SpotLight & light) {
+								auto state = commonState(light, SpotLight::ClassId);
+								state["intensityCandela"] = static_cast< double >(light.intensity());
+								state["radius"] = static_cast< double >(light.radius());
+								state["innerAngle"] = static_cast< double >(light.innerAngle());
+								state["outerAngle"] = static_cast< double >(light.outerAngle());
+
+								return Console::CommandResult::json(FastJSON::stringify(state));
+							});
+						}, Console::CommandHint::ReadOnly);
+
+					bindCommonLightCommands< SpotLight >(*this);
+
+					this->bindCommand("setLuminousPower", "Sets the luminous power of a spot light, in lumens, spread over its outer cone (change the cone first: the power is converted with the current angle).",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"lumens", "The luminous power, in lumens (0 or more)."}
+						},
+						[this] (const std::string & entity, const std::string & component, float lumens) {
+							if ( !std::isfinite(lumens) || lumens < 0.0F )
+							{
+								return Console::CommandResult::error("The luminous power must be a finite number of lumens, 0 or more.");
+							}
+
+							return this->act(entity, component, [lumens] (SpotLight & light) {
+								light.setLuminousPower(lumens);
+
+								return Console::CommandResult::success("Spot light '" + light.name() + "' set to " + std::to_string(lumens) + " lm.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setRadius", "Sets the influence radius of a spot light: its contribution falls smoothly to exactly zero there.",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"radius", "The radius, in metres; 0 = unbounded (the inverse square alone)."}
+						},
+						[this] (const std::string & entity, const std::string & component, float radius) {
+							if ( !std::isfinite(radius) || radius < 0.0F )
+							{
+								return Console::CommandResult::error("The radius must be a finite number of metres, 0 or more.");
+							}
+
+							return this->act(entity, component, [radius] (SpotLight & light) {
+								light.setRadius(radius);
+
+								return Console::CommandResult::success("Spot light '" + light.name() + "' radius set to " + std::to_string(radius) + " m.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setConeAngles", "Sets the cone of a spot light: full light inside the inner angle, fading to none at the outer angle.",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"innerAngle", "The inner angle, in degrees (0 to 90)."},
+							{"outerAngle", "The outer angle, in degrees (the inner one to 90)."}
+						},
+						[this] (const std::string & entity, const std::string & component, float innerAngle, float outerAngle) {
+							if ( !std::isfinite(innerAngle) || !std::isfinite(outerAngle) || innerAngle < 0.0F || outerAngle > 90.0F || innerAngle > outerAngle )
+							{
+								return Console::CommandResult::error("The angles must satisfy 0 <= innerAngle <= outerAngle <= 90 degrees.");
+							}
+
+							return this->act(entity, component, [innerAngle, outerAngle] (SpotLight & light) {
+								light.setConeAngles(innerAngle, outerAngle);
+
+								return Console::CommandResult::success("Spot light '" + light.name() + "' cone set to " + std::to_string(innerAngle) + "° / " + std::to_string(outerAngle) + "°.");
+							});
+						}, Console::CommandHint::Idempotent);
+				}
+		};
+
+		/** @brief `Core.SceneManagerService.DirectionalLight.*`. */
+		class DirectionalLightConsoleAdapter final : public ConsoleAdapter< DirectionalLight >
+		{
+			public:
+
+				explicit
+				DirectionalLightConsoleAdapter (const Manager & sceneManager) noexcept
+					: ConsoleAdapter{sceneManager}
+				{
+
+				}
+
+				using ConsoleAdapter::act;
+				using ControllableTrait::bindCommand;
+
+			private:
+
+				void
+				onRegisterToConsole () noexcept override
+				{
+					this->bindCommand("getState", "Returns the state of a directional light (a sun) as JSON: enabled, colour, illuminance (lux).",
+						{EntityParameter, ComponentParameter},
+						[this] (const std::string & entity, const std::string & component) {
+							return this->act(entity, component, [] (DirectionalLight & light) {
+								auto state = commonState(light, DirectionalLight::ClassId);
+								state["illuminanceLux"] = static_cast< double >(light.intensity());
+
+								return Console::CommandResult::json(FastJSON::stringify(state));
+							});
+						}, Console::CommandHint::ReadOnly);
+
+					bindCommonLightCommands< DirectionalLight >(*this);
+
+					this->bindCommand("setIlluminance", "Sets the illuminance a directional light casts on a surface facing it, in lux (a clear midday sun ≈ 100 000 lx, an overcast sky ≈ 1 000 lx).",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"lux", "The illuminance, in lux (0 or more)."}
+						},
+						[this] (const std::string & entity, const std::string & component, float lux) {
+							if ( !std::isfinite(lux) || lux < 0.0F )
+							{
+								return Console::CommandResult::error("The illuminance must be a finite number of lux, 0 or more.");
+							}
+
+							return this->act(entity, component, [lux] (DirectionalLight & light) {
+								light.setIlluminance(lux);
+
+								return Console::CommandResult::success("Directional light '" + light.name() + "' set to " + std::to_string(lux) + " lx.");
+							});
+						}, Console::CommandHint::Idempotent);
+				}
+		};
+	}
+
+	void
+	appendLightConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept
+	{
+		adapters.emplace_back(std::make_unique< PointLightConsoleAdapter >(sceneManager));
+		adapters.emplace_back(std::make_unique< SpotLightConsoleAdapter >(sceneManager));
+		adapters.emplace_back(std::make_unique< DirectionalLightConsoleAdapter >(sceneManager));
+	}
+}

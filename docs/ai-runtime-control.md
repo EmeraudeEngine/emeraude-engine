@@ -132,6 +132,10 @@ open without the other — and **closed by default**, like the console.
 
 The startup log says `MCP server listening on http://127.0.0.1:7778/mcp (protocol 2026-07-28 and
 2025-11-25 era).`; `Core.remoteConsoleStatus()` reports the endpoint in its `mcp` field (null when off).
+⚠️ **Port already taken**: ASUS Armoury Crate listens on `127.0.0.1:7778` on ASUS laptops (seen by the
+Windows peer, 2026-09-27), and Windows reports a port held exclusively by another process as ACCESS
+DENIED, not "in use". The log now says so (`the port is most likely taken by another process`); set
+`Core/MCP/Port` to a free port. The engine keeps running, only MCP stays closed.
 
 **Connecting Claude Code** (once the engine runs with `Core/MCP/Enabled = true`):
 ```bash
@@ -585,6 +589,39 @@ default and binds `127.0.0.1`.
 This is NOT the download manager: `Core.NetManagerService.*` fetches files into a disk cache,
 deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
 [`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
+
+### Driving an entity's components — lights (`Core.SceneManagerService.<Type>.*`, 2026-09-27)
+
+Owner decision: one set of TYPED commands per component type, and **explicit addressing** — every
+command names its `entity` (a node anywhere in the hierarchy, or a static entity, of the ACTIVE scene)
+and its `component` (the name on that entity). No targeting state: two clients cannot steal each
+other's target, as the MCP specification recommends. Discover first, then act:
+
+```bash
+python3 tools/remote-console.py "Core.SceneManagerService.listEntities()"            # JSON: every node + static entity, with components
+python3 tools/remote-console.py "Core.SceneManagerService.listEntityComponents(Bulb1)"  # JSON: [{"name":"Bulb","type":"PointLight"}]
+python3 tools/remote-console.py "Core.SceneManagerService.PointLight.getState(Bulb1, Bulb)"
+python3 tools/remote-console.py "Core.SceneManagerService.PointLight.setLuminousPower(Bulb1, Bulb, 800)"
+python3 tools/remote-console.py "Core.SceneManagerService.SpotLight.setEnabled(Spot2, Spot, 0)"
+```
+
+| Type | Commands (after `entity, component`) |
+|---|---|
+| `PointLight` | `getState` (JSON: enabled, colour, candela, radius), `setEnabled(bool)`, `setColor(r, g, b)` (0-1, a chromaticity), `setLuminousPower(lumens)`, `setRadius(metres, 0 = unbounded)` |
+| `SpotLight` | the same + `setConeAngles(innerDeg, outerDeg)` (0 ≤ inner ≤ outer ≤ 90; change the cone BEFORE the power: lumens are converted with the current outer angle) |
+| `DirectionalLight` | `getState` (JSON: enabled, colour, lux), `setEnabled`, `setColor`, `setIlluminance(lux)` |
+
+MCP names: `SceneManager_PointLight_setLuminousPower`, `SceneManager_listEntities`, … An error names
+what is wrong: an unknown entity or component, a component of another type (`is a SpotLight, not a
+PointLight`), an out-of-range value — nothing is applied then. The commands run under EXCLUSIVE access
+to the active scene (the logic and render threads read the light), so they wait at most one frame.
+
+⚠️ **Let the change reach a frame before capturing.** The light is published by the next logic tick and
+drawn from the following render state: a screenshot taken milliseconds after the command showed the
+PREVIOUS image and read as "the command does nothing" (2026-09-27). Wait ~1 s, and measure the HUE of
+the lit area, not the luminance, if the auto-exposure is on (it absorbs a brightness change). Measured
+on `light-and-shadow-debug`: the pink spot's floor patch reads b−g = +3…+9 on, −24 off, both ways, as
+the demo's own KeyPad2 toggle does.
 
 ### Driving the post-process chain (`Core.SceneManagerService.PostProcess.*`)
 
