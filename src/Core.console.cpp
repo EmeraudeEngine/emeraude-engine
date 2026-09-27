@@ -43,7 +43,7 @@ namespace EmEn
 	void
 	Core::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("remoteConsoleStatus", "Returns the remote console state as JSON (running, endpoint).", [this] () {
+		this->bindCommand("remoteConsoleStatus", "Returns the remote console state as JSON (running, endpoint), and the MCP endpoint (null when the MCP server is off).", [this] () {
 			Json::Value state{Json::objectValue};
 			state["running"] = m_consoleController.isRemoteListenerRunning();
 
@@ -51,6 +51,9 @@ namespace EmEn
 			{
 				state["endpoint"] = m_consoleController.remoteListenerEndpoint();
 			}
+
+			const auto MCPEndpoint = m_consoleController.MCPEndpoint();
+			state["mcp"] = MCPEndpoint.empty() ? Json::Value{Json::nullValue} : Json::Value{MCPEndpoint};
 
 			return Console::CommandResult::json(FastJSON::stringify(state));
 		}, Console::CommandHint::ReadOnly);

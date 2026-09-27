@@ -53,6 +53,9 @@ namespace EmEn::Console::RemoteProtocol
 				case OutputKind::Binary :
 					return "binary";
 
+				case OutputKind::Image :
+					return "image";
+
 				case OutputKind::Text :
 					break;
 			}
@@ -86,6 +89,12 @@ namespace EmEn::Console::RemoteProtocol
 				{
 					entry["mimeType"] = output.mimeType();
 					entry["data"] = String::encodeBase64(std::string{output.bytes().begin(), output.bytes().end()});
+				}
+				else if ( output.kind() == OutputKind::Image )
+				{
+					/* NOTE: the path only — a text channel never pays for reading the image. */
+					entry["mimeType"] = output.mimeType();
+					entry["path"] = output.filePath().string();
 				}
 
 				list.append(std::move(entry));

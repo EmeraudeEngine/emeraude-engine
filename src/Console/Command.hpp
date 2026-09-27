@@ -62,7 +62,8 @@ namespace EmEn::Console
 			 */
 			Command (Binding binding, std::string help) noexcept
 				: m_binding{std::move(binding)},
-				m_help{std::move(help)}
+				m_help{std::move(help)},
+				m_description{m_help}
 			{
 
 			}
@@ -71,11 +72,15 @@ namespace EmEn::Console
 			 * @brief Constructs a typed console command.
 			 * @param binding The validating binding built by bindCommand() [std::move].
 			 * @param help The description followed by the generated usage [std::move].
+			 * @param description The description alone, as the author wrote it [std::move].
+			 * @param primaryName The first name of the alias list this command was bound with [std::move].
 			 * @param signature The declared contract [std::move].
 			 */
-			Command (Binding binding, std::string help, CommandSignature signature) noexcept
+			Command (Binding binding, std::string help, std::string description, std::string primaryName, CommandSignature signature) noexcept
 				: m_binding{std::move(binding)},
 				m_help{std::move(help)},
+				m_description{std::move(description)},
+				m_primaryName{std::move(primaryName)},
 				m_signature{std::move(signature)}
 			{
 
@@ -104,6 +109,31 @@ namespace EmEn::Console
 			}
 
 			/**
+			 * @brief Returns the description alone, without the generated usage line.
+			 * @note What a machine client shows next to the declared parameters (an MCP tool description).
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			description () const noexcept
+			{
+				return m_description;
+			}
+
+			/**
+			 * @brief Returns the first name of the alias list the command was bound with ("exit" for
+			 * "exit,quit,shutdown"), or an empty string for an untyped command.
+			 * @note Lets a machine client expose one tool per command instead of one per alias.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			primaryName () const noexcept
+			{
+				return m_primaryName;
+			}
+
+			/**
 			 * @brief Returns the declared signature, or nullptr for an untyped (legacy) command.
 			 * @return const CommandSignature *
 			 */
@@ -118,6 +148,8 @@ namespace EmEn::Console
 
 			Binding m_binding;
 			std::string m_help;
+			std::string m_description;
+			std::string m_primaryName;
 			std::optional< CommandSignature > m_signature;
 	};
 }

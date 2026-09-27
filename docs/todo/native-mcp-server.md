@@ -1,11 +1,10 @@
 ---
 id: native-mcp-server
 title: Native MCP server in the engine, projected from the console command registry
-status: blocked
+status: in-progress
 priority: unranked
 scope: Console
 opened: 2026-09-27
-blocked-by: [console-command-contract]
 tags: [console, mcp, network, ai-runtime]
 ---
 
@@ -32,6 +31,26 @@ with captures returned **inline as images** instead of a path to go and read.
 - **Location**: in the engine (LGPLv3), as a capability of the free runtime — functionality, not
   convenience, so it does not belong to projet-alpha.
 
+## Owner decisions for the server (2026-09-27, second round)
+
+- **Both protocol eras**: 2026-07-28 (stateless, `server/discover`, `subscriptions/listen`) AND the
+  handshake era (2025-11-25 / 2025-06-18: `initialize`, optional GET notification stream). Verified in
+  the Claude Code docs (https://code.claude.com/docs/en/mcp): its v1 client runtime only speaks the
+  handshake era, and its v2 runtime asks an HTTP server for 2026-07-28 and falls back otherwise.
+- **Short tool names**: drop `Core.` and each `Service` suffix, dots become `_`
+  (`Core.SceneManagerService.PostProcess.select` → `SceneManager_PostProcess_select`). Claude Code
+  replaces any character outside `A-Za-z0-9_-` with `_`, and the callable name
+  `mcp__<server>__<tool>` must fit 64 characters: a tool name above 49 characters (server name
+  `emeraude`) or colliding with another is refused at startup, traced. One tool per command: the
+  aliases (`exit,quit,shutdown`) are merged into the first name.
+- **Settings `Core/MCP/*`**, independent of TCP 7777: `Enabled` (false), `Address` (127.0.0.1),
+  `Port` (7778), `BearerToken` (empty; MANDATORY for a non-loopback address — the server refuses to
+  start without it). `Origin` validation always on.
+- **Screenshot over MCP = a reduced image + the path**: a PNG scaled to 1568 px on its long edge
+  (inline image, far below Claude Code's `MAX_MCP_OUTPUT_TOKENS` = 25 000) plus the full-resolution
+  file path for pixel measurement. TCP 7777 keeps answering the path only; the reduction is done
+  only when the channel needs the image.
+
 ## Prerequisites delivered (2026-09-27)
 
 - The typed command contract (`console-command-contract`): all 137 commands declare their parameters
@@ -42,32 +61,31 @@ with captures returned **inline as images** instead of a path to go and read.
   The MCP server does not go through TCP 7777 (it projects the registry in-process), but it must
   reuse the same guarantees: one answer per request, never an unsolicited write on a request stream.
 
+## Delivered (2026-09-27)
+
+`src/Console/MCP/` (Protocol + Server), wired in `Controller`, settings `Core/MCP/*`. Both eras,
+every typed command as a tool (127 on `coordinates-debug`), inline reduced screenshot,
+`list_changed` on both stream kinds, Origin/Host/token checks, bounded sizes and queues, safe JSON
+reads, stale-pointer rebuild. Verified: build with 0 warnings, `tools/mcp-conformance.py` 885 checks
+(shown to fail against a lying server), the official TypeScript SDK clients v1 1.30.1 (handshake era)
+and v2 2.1.0 (`versionNegotiation: auto` → 2026-07-28) — list, call, image, list_changed —, 0 VUID.
+Documented: `docs/ai-runtime-control.md` § The MCP server, `src/Console/AGENTS.md` § 7b,
+`docs/caution-points.md` § Console / MCP.
+
 ## What remains
 
-1. **Transport: Streamable HTTP on loopback** (stdio is out — the engine is a GUI process started
-   on its own, and its stdout carries the logs). Built on what is vendored: standalone asio
-   (`Net::TCPServer`) and jsoncpp. A minimal HTTP/1.1 server (POST, JSON or SSE response) is the
-   only new piece.
-2. **Protocol revision**: implement **2026-07-28** (stateless: no `initialize`, no session,
-   `server/discover` mandatory, version + client capabilities in every request's `_meta`,
-   `Mcp-Method`/`Mcp-Name` headers validated against the body, `resultType` on every result,
-   `ttlMs`/`cacheScope` on list results). Decide whether to also answer the **2025-11-25**
-   handshake era (`initialize`, GET → 405, no session minted) — required as long as the clients in
-   use have not moved to 2026-07-28; **check what Claude Code speaks before writing the server.**
-3. **Tools** from the registry: name = the command path (`Core.RendererService.screenshot` — dots
-   are valid), `inputSchema` from the declared signature, annotations from the behaviour hints,
-   deterministic order. Results: text + `structuredContent` + image content (`screenshot`,
-   `temporalCapture`).
-4. **Dynamic tree**: `SceneManagerService.PostProcess` appears and disappears with the active
-   scene → `notifications/tools/list_changed` on a `subscriptions/listen` stream.
-5. **Long operations** (scene load, `temporalCapture(N)`): `notifications/progress` on the
-   request's SSE stream; closing that stream = cancellation.
-6. **Resources** (read-only state, no tool call needed): settings JSON, active scene graph,
-   post-process status, recent log lines — candidates to confirm with the owner.
-7. **Settings keys** beside the console ones (`Core/Console/…` or a `Core/MCP/…` section — owner
-   to decide), and the Shift+F10-style live activation question.
-8. **Docs**: `docs/ai-runtime-control.md` (connection via MCP, `claude mcp add --transport http …`),
-   `src/Console/AGENTS.md`, projet-alpha `AGENTS.md` § 3b, and the `.claude/rules/` mirror.
+1. **Cross-platform validation** by the macOS (Clang) and Windows (MSVC) peers, conformance bench
+   included — until then this item stays open.
+2. **The owner's first real session** with Claude Code (`claude mcp add --transport http emeraude
+   http://127.0.0.1:7778/mcp`): check the image reaches the model and the tool search copes with 127
+   tools.
+3. **Progress notifications** for long calls (`temporalCapture(N)`, a heavy `openFiles`) — not
+   implemented: a `tools/call` answers `application/json` only. Needs an SSE response and a progress
+   hook in the command contract. Owner to decide whether it is worth it.
+4. **Resources** (read-only state without a tool call: settings, scene graph, log tail) — not
+   implemented, candidates to confirm with the owner.
+5. The legacy handshake era accepts no `Mcp-Session-Id` (none is minted) — conforming, but a legacy
+   client that insists on a session is untested.
 
 ## ⚠️ Traps
 

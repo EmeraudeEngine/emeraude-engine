@@ -30,6 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -44,6 +46,7 @@
 #include "ControllableTrait.hpp"
 #include "Output.hpp"
 #include "RemoteListener.hpp"
+#include "MCP/Server.hpp"
 
 /* Forward declarations */
 namespace EmEn
@@ -275,6 +278,55 @@ namespace EmEn::Console
 			 * @todo This method must be removed!
 			 * @return Controller *
 			 */
+			/**
+			 * @brief Returns the MCP endpoint URL, or an empty string when the MCP server is not running.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			MCPEndpoint () const noexcept
+			{
+				return m_MCPServer != nullptr ? m_MCPServer->endpoint() : std::string{};
+			}
+
+			/**
+			 * @brief Returns the top-level console objects (the roots of the command tree).
+			 * @note Main thread only, like every access to the tree.
+			 * @return const std::map< std::string, ControllableTrait * > &
+			 */
+			[[nodiscard]]
+			const std::map< std::string, ControllableTrait * > &
+			objects () const noexcept
+			{
+				return m_consoleObjects;
+			}
+
+			/**
+			 * @brief Records that the console tree changed: an object or a command appeared or vanished.
+			 * @note Called by ControllableTrait and by add()/remove(), on the main thread. A machine client
+			 * (MCP) compares consoleTreeRevision() between two frames to announce `tools/list_changed`
+			 * (the active scene's `PostProcess` node comes and goes with the scene).
+			 * @return void
+			 */
+			static
+			void
+			markConsoleTreeChanged () noexcept
+			{
+				s_consoleTreeRevision.fetch_add(1, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns the console tree revision, incremented at every change of the tree.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			static
+			uint64_t
+			consoleTreeRevision () noexcept
+			{
+				return s_consoleTreeRevision.load(std::memory_order_relaxed);
+			}
+
 			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
@@ -345,11 +397,14 @@ namespace EmEn::Console
 			static constexpr auto OutputTextName{"Output"};
 
 			static Controller * s_instance;
+			static std::atomic< uint64_t > s_consoleTreeRevision;
 
 			PrimaryServices & m_primaryServices;
 			std::map< std::string, ControllableTrait * > m_consoleObjects;
 			std::vector< std::string > m_history;
 			std::unique_ptr< RemoteListener > m_remoteListener;
+			/** @brief The MCP server (Core/MCP/Enabled), independent of the TCP console. */
+			std::unique_ptr< MCP::Server > m_MCPServer;
 			std::string m_remoteListenerAddress;
 			std::optional< std::pair< std::string, uint16_t > > m_pendingRemoteListenerRestart;
 			JsonHandler m_jsonHandler;

@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -48,7 +49,11 @@ namespace EmEn::Console
 		/** @brief The message IS a JSON document (a machine client can parse it as structured data). */
 		Json,
 		/** @brief A binary payload (bytes + MIME type); the message is a one-line description of it. */
-		Binary
+		Binary,
+		/** @brief An image FILE on disk (path + MIME type); the message is a one-line description of it.
+		 * The bytes are only read by a channel that shows the image (MCP, reduced there): a text channel
+		 * prints the message and the path, and a screenshot costs nothing more than before. */
+		Image
 	};
 
 	/**
@@ -124,6 +129,37 @@ namespace EmEn::Console
 			}
 
 			/**
+			 * @brief Constructs an output referencing an image file on disk.
+			 * @param filePath The image file [std::move].
+			 * @param mimeType The MIME type of the file, e.g. "image/png" [std::move].
+			 * @param description A one-line description, printed by text channels [std::move].
+			 * @return Output
+			 */
+			[[nodiscard]]
+			static
+			Output
+			image (std::filesystem::path filePath, std::string mimeType, std::string description) noexcept
+			{
+				Output output{Severity::Success, std::move(description)};
+				output.m_kind = OutputKind::Image;
+				output.m_mimeType = std::move(mimeType);
+				output.m_filePath = std::move(filePath);
+
+				return output;
+			}
+
+			/**
+			 * @brief Returns the image file (empty unless kind() is Image).
+			 * @return const std::filesystem::path &
+			 */
+			[[nodiscard]]
+			const std::filesystem::path &
+			filePath () const noexcept
+			{
+				return m_filePath;
+			}
+
+			/**
 			 * @brief Returns what the output carries beyond its text.
 			 * @return OutputKind
 			 */
@@ -135,7 +171,7 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Returns the MIME type of the binary payload (empty unless kind() is Binary).
+			 * @brief Returns the MIME type of the binary payload or of the image file (empty for Text and Json).
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
@@ -183,6 +219,7 @@ namespace EmEn::Console
 			std::string m_message;
 			std::string m_mimeType;
 			std::vector< uint8_t > m_bytes;
+			std::filesystem::path m_filePath;
 			Severity m_severity;
 			OutputKind m_kind{OutputKind::Text};
 	};

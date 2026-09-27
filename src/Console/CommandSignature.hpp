@@ -125,6 +125,8 @@ namespace EmEn::Console
 
 	/**
 	 * @brief Returns the supplied argument at an index, else the parameter's default value, else nullptr.
+	 * @note An argument of type ArgumentType::Undefined counts as NOT supplied (a hole left by a caller
+	 * that names its arguments and skips an optional one).
 	 * @param arguments The supplied arguments.
 	 * @param index The index of the parameter.
 	 * @param parameter The resolved parameter.

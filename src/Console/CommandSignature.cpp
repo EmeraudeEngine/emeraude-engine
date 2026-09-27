@@ -239,7 +239,9 @@ namespace EmEn::Console
 	const Argument *
 	selectArgument (const Arguments & arguments, size_t index, const Parameter & parameter) noexcept
 	{
-		if ( index < arguments.size() )
+		/* NOTE: an Undefined argument is a positional HOLE — "not supplied" — left by a caller that names
+		 * its arguments (MCP) and omits one before a later one; the command line never produces it. */
+		if ( index < arguments.size() && arguments[index].type() != ArgumentType::Undefined )
 		{
 			return &arguments[index];
 		}

@@ -13,6 +13,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 - [Build / Compiler](#build--compiler)
 - [Platform-Specific](#platform-specific)
 - [Vulkan Validation](#vulkan-validation)
+- [Console / MCP](#console--mcp)
 
 ---
 
@@ -6726,3 +6727,40 @@ coarsest level — the one the imposter replaces). Graphics `AGENTS.md` § 15e.
 - `@src/PlatformSpecific/AGENTS.md` - Platform-specific system details
 - `@src/Graphics/AGENTS.md` - Graphics system
 - `@src/Saphir/AGENTS.md` - Shader generation system
+
+---
+
+## Console / MCP
+
+### ⚠️ jsoncpp is built WITHOUT exceptions: a type-mismatched read of client JSON calls abort() (Sep 2026)
+
+- **What happens:** `JSON_USE_EXCEPTION=Off`, so jsoncpp's `JSON_FAIL_MESSAGE` is `assert` + `abort()`.
+  `value.asString()` on an object, `value.get(…)`/`operator[]`/`isMember()` on an array or a string —
+  every one of them KILLS THE PROCESS. On a network endpoint that is a one-request denial of service:
+  `{"jsonrpc":{}}` would have stopped the engine.
+- **Found:** reviewing the MCP server before its first build (2026-09-27); the first draft read
+  `message.get("jsonrpc", "").asString()` and `params["_meta"].get(…)` straight from the client.
+- **Rule:** read client JSON ONLY through `Console::MCP::member()` / `stringMember()` / `boolMember()`
+  (`src/Console/MCP/Protocol.hpp`), or check `isObject()`/`isString()`/… before every access. Our own
+  JSON (built by the engine) is safe. `tools/mcp-conformance.py` sends 16 malformed shapes and checks the
+  engine is still alive after each.
+
+### A console command may change the console tree: never keep a Command pointer across executions (Sep 2026)
+
+- **What happens:** a command that switches scenes or unloads an act unregisters controllables — the
+  active scene's `PostProcess` node, projet-alpha's `Act` — and destroys their `Command` objects.
+- **Where it bites:** the MCP server runs a batch of queued `tools/call` in one main-thread pass with a
+  tool list built at its start; the second call would have used a dangling pointer if the first one
+  switched scenes.
+- **Rule:** compare `Controller::consoleTreeRevision()` before using pointers gathered earlier, and
+  rebuild (`Server::processPendingRequests()` does). The same revision drives
+  `notifications/tools/list_changed`.
+
+### The console tree is main-thread state; a network thread must never read it (Sep 2026)
+
+- The TCP console and the MCP server both run their sockets on a network thread. The tree
+  (`ControllableTrait`, `Command`) is only read on the main thread: requests are queued and executed in
+  `Controller::poll()`, and the answer is handed back. The MCP server goes further — every socket
+  operation happens on its own network thread (answers are `asio::post`ed there), so no socket is ever
+  touched by two threads. `RemoteListener` writes from both threads and needs `m_writeMutex` for it.
+

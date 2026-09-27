@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -101,6 +102,17 @@ namespace EmEn::Console
 			 */
 			[[nodiscard]]
 			static CommandResult binary (std::vector< uint8_t > bytes, std::string mimeType, std::string description) noexcept;
+
+			/**
+			 * @brief A success that produced an image file (a capture): the channel decides whether to show
+			 * the image (MCP, reduced) or only the path (text console).
+			 * @param filePath The image file [std::move].
+			 * @param mimeType The MIME type of the file, e.g. "image/png" [std::move].
+			 * @param description A one-line description with the path, printed by text channels [std::move].
+			 * @return CommandResult
+			 */
+			[[nodiscard]]
+			static CommandResult image (std::filesystem::path filePath, std::string mimeType, std::string description) noexcept;
 
 			/**
 			 * @brief A result made of a prepared output list, for a report of several lines with mixed

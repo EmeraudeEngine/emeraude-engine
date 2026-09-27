@@ -86,6 +86,12 @@ namespace EmEn::Console
 		return {Output::binary(std::move(bytes), std::move(mimeType), std::move(description)), true};
 	}
 
+	CommandResult
+	CommandResult::image (std::filesystem::path filePath, std::string mimeType, std::string description) noexcept
+	{
+		return {Output::image(std::move(filePath), std::move(mimeType), std::move(description)), true};
+	}
+
 	CommandResult &
 	CommandResult::add (Output output) & noexcept
 	{

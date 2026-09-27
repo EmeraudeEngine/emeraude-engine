@@ -45,6 +45,7 @@ namespace EmEn::Console
 	using namespace Base;
 
 	Controller * Controller::s_instance{nullptr};
+	std::atomic< uint64_t > Controller::s_consoleTreeRevision{0};
 
 	bool
 	Controller::onInitialize () noexcept
@@ -53,6 +54,30 @@ namespace EmEn::Console
 
 		/* NOTE: all three keys are read (and written on first run) even when the listener stays
 		 * off, so an operator finds them in settings.json without reading the source. */
+		/* NOTE: like the console keys, the MCP keys are written on first run even when the server stays off. */
+		const auto MCPEnabled = settings.getOrSetDefault< bool >(MCPEnabledKey, DefaultMCPEnabled);
+		const auto MCPAddress = settings.getOrSetDefault< std::string >(MCPAddressKey, DefaultMCPAddress);
+		const auto MCPPort = settings.getOrSetDefault< uint16_t >(MCPPortKey, DefaultMCPPort);
+		auto MCPBearerToken = settings.getOrSetDefault< std::string >(MCPBearerTokenKey, DefaultMCPBearerToken);
+
+		if ( MCPEnabled )
+		{
+			auto server = std::make_unique< MCP::Server >(MCPAddress, MCPPort, std::move(MCPBearerToken));
+
+			if ( server->isRunning() )
+			{
+				m_MCPServer = std::move(server);
+			}
+			else
+			{
+				TraceWarning{ClassId} << "The MCP server failed to start (see above); MCP clients will be refused.";
+			}
+		}
+		else
+		{
+			TraceInfo{ClassId} << "MCP server disabled (" << MCPEnabledKey << " = false).";
+		}
+
 		const auto remoteListenerEnabled = settings.getOrSetDefault< bool >(ConsoleEnableRemoteListenerKey, DefaultConsoleEnableRemoteListener);
 		m_remoteListenerAddress = settings.getOrSetDefault< std::string >(ConsoleRemoteListenerAddressKey, DefaultConsoleRemoteListenerAddress);
 		m_remoteListenerPort = settings.getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
@@ -199,6 +224,9 @@ namespace EmEn::Console
 	bool
 	Controller::onTerminate () noexcept
 	{
+		/* The MCP server first: its pending requests reference the console tree cleared below. */
+		m_MCPServer.reset();
+
 		if ( m_remoteListener != nullptr )
 		{
 			m_remoteListener.reset();
@@ -219,7 +247,14 @@ namespace EmEn::Console
 			return false;
 		}
 
-		return m_consoleObjects.emplace(controllable.identifier(), &controllable).second;
+		const auto inserted = m_consoleObjects.emplace(controllable.identifier(), &controllable).second;
+
+		if ( inserted )
+		{
+			Controller::markConsoleTreeChanged();
+		}
+
+		return inserted;
 	}
 
 	bool
@@ -234,6 +269,8 @@ namespace EmEn::Console
 
 		m_consoleObjects.erase(objectIt);
 
+		Controller::markConsoleTreeChanged();
+
 		return true;
 	}
 
@@ -245,6 +282,8 @@ namespace EmEn::Console
 			if ( it->second == &pointer )
 			{
 				m_consoleObjects.erase(it);
+
+				Controller::markConsoleTreeChanged();
 
 				return true;
 			}
@@ -331,6 +370,11 @@ namespace EmEn::Console
 	void
 	Controller::poll () noexcept
 	{
+		if ( m_MCPServer != nullptr )
+		{
+			m_MCPServer->processPendingRequests(*this);
+		}
+
 		/* A restart asked by a console command is applied here, before draining: the command's
 		 * response already left on the previous listener. */
 		if ( m_pendingRemoteListenerRestart )

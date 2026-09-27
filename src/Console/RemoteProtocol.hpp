@@ -42,8 +42,9 @@
  *
  * - `ok`: whether the command succeeded (a failed command still answers, with `ok` false).
  * - `outputs`: in display order, possibly empty. Each has `severity` (Debug/Success/Info/Warning/
- *   Error/Fatal), `kind` (`text`, `json` — the message IS a JSON document —, or `binary`) and
- *   `message`; a `binary` output adds `mimeType` and `data` (standard Base64).
+ *   Error/Fatal), `kind` (`text`, `json` — the message IS a JSON document —, `binary` or `image`) and
+ *   `message`; a `binary` output adds `mimeType` and `data` (standard Base64), an `image` output (a
+ *   file on disk, e.g. a screenshot) adds `mimeType` and `path`.
  * - The welcome banner sent on connection is a response too, with a top-level `protocol` version.
  *
  * Before this format the server wrote raw text and never said where an answer ended, so clients

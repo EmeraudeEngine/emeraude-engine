@@ -78,6 +78,8 @@ namespace EmEn::Console
 		if ( objectIt != m_parentObject->m_consoleObjects.end() && objectIt->second == this )
 		{
 			m_parentObject->m_consoleObjects.erase(objectIt);
+
+			Controller::markConsoleTreeChanged();
 		}
 
 		m_parentObject = nullptr;
@@ -180,6 +182,8 @@ namespace EmEn::Console
 
 			m_commands.emplace(commandName, Command{binding, help});
 		}
+
+		Controller::markConsoleTreeChanged();
 	}
 
 	void
@@ -196,6 +200,15 @@ namespace EmEn::Console
 
 		const auto commandNamesList = String::explode(commandNames, ',', false);
 
+		if ( commandNamesList.empty() )
+		{
+			TraceError{TracerTag} << "A typed command was bound without a name !";
+
+			return;
+		}
+
+		const auto & primaryName = commandNamesList.front();
+
 		for ( const auto & commandName : commandNamesList )
 		{
 			if ( m_commands.contains(commandName) )
@@ -208,8 +221,10 @@ namespace EmEn::Console
 			/* NOTE: a command without parameter needs no usage line: its name says it all. */
 			auto help = signature.parameters().empty() ? description : description + " Usage: " + signature.usage(commandName);
 
-			m_commands.emplace(commandName, Command{binding, std::move(help), signature});
+			m_commands.emplace(commandName, Command{binding, std::move(help), description, primaryName, signature});
 		}
+
+		Controller::markConsoleTreeChanged();
 	}
 
 	void
@@ -224,6 +239,8 @@ namespace EmEn::Console
 			if ( commandIt != m_commands.end() )
 			{
 				m_commands.erase(commandIt);
+
+				Controller::markConsoleTreeChanged();
 			}
 		}
 	}
@@ -279,6 +296,8 @@ namespace EmEn::Console
 		object.m_consoleObjects.emplace(m_identifier, this);
 
 		m_parentObject = &object;
+
+		Controller::markConsoleTreeChanged();
 
 		if ( !m_commandsBound )
 		{

@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from emeraude_console import DEFAULT_HOST, DEFAULT_PORT, PROTOCOL_VERSION, Console, ProtocolError, Response  # noqa: E402
 
 SEVERITIES = {"Debug", "Success", "Info", "Warning", "Error", "Fatal"}
-KINDS = {"text", "json", "binary"}
+KINDS = {"text", "json", "binary", "image"}
 TYPES = {"boolean", "integer", "float", "string", "any"}
 ARITIES = {"required", "optional", "variadic"}
 HINTS = {"readOnly", "destructive", "idempotent"}
@@ -79,6 +79,9 @@ def validate_response(bench: Bench, response: Response, context: str) -> None:
                 bench.check(True, f"{where} JSON parses")
             except (json.JSONDecodeError, KeyError) as exception:
                 bench.check(False, f"{where} JSON parses", f"{exception}: {output.get('message', '')[:200]}")
+
+        if output.get("kind") == "image":
+            bench.check(bool(output.get("mimeType")) and isinstance(output.get("path"), str), f"{where} image has mimeType and path", repr(output)[:200])
 
         if output.get("kind") == "binary":
             bench.check(bool(output.get("mimeType")) and isinstance(output.get("data"), str), f"{where} binary has mimeType and data", repr(output)[:200])

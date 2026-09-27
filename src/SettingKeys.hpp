@@ -120,6 +120,24 @@ namespace EmEn
 		constexpr auto ConsoleRemoteListenerPortKey{"Core/Console/RemoteListenerPort"};
 		constexpr auto DefaultConsoleRemoteListenerPort{static_cast< uint16_t >(7777)};
 
+		/* MCP server (Model Context Protocol over Streamable HTTP: every typed console command as a tool).
+		 * Independent of the TCP console above: either can be open without the other. */
+		/* Whether the MCP server is started at all. Default FALSE, for the same reason as the console:
+		 * it reaches quit, settings, scene loading and screenshots. */
+		constexpr auto MCPEnabledKey{"Core/MCP/Enabled"};
+		constexpr auto DefaultMCPEnabled{false};
+		/* Address the MCP server binds to. Default loopback. A non-loopback address REQUIRES a bearer token:
+		 * the server refuses to start without one. */
+		constexpr auto MCPAddressKey{"Core/MCP/Address"};
+		constexpr auto DefaultMCPAddress{"127.0.0.1"};
+		/* TCP port of the MCP endpoint (http://<address>:<port>/mcp). */
+		constexpr auto MCPPortKey{"Core/MCP/Port"};
+		constexpr auto DefaultMCPPort{static_cast< uint16_t >(7778)};
+		/* Bearer token every request must carry ("Authorization: Bearer <token>"). Empty = none, which is
+		 * only accepted on a loopback address. */
+		constexpr auto MCPBearerTokenKey{"Core/MCP/BearerToken"};
+		constexpr auto DefaultMCPBearerToken{""};
+
 		/* Input manager */
 		/* Log input-device (keyboard/mouse/gamepad) detection details. Also "--show-input-infos". */
 		constexpr auto InputShowInformationKey{"Core/Input/ShowInformation"};

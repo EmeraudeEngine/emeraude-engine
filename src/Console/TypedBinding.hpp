@@ -155,7 +155,8 @@ namespace EmEn::Console::TypedBinding
 		bool
 		extract (const Arguments & arguments, size_t index, const Parameter & parameter, std::optional< Type > & value, std::string & error) noexcept
 		{
-			if ( index >= arguments.size() )
+			/* NOTE: an Undefined argument is a hole ("not supplied"), see selectArgument(). */
+			if ( index >= arguments.size() || arguments[index].type() == ArgumentType::Undefined )
 			{
 				value.reset();
 

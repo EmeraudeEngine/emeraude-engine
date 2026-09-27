@@ -65,7 +65,8 @@ namespace EmEn::Graphics
 			std::stringstream message;
 			message << "Screenshot saved: " << result.files.front();
 
-			return Console::CommandResult::success(message.str());
+			/* An IMAGE result: the MCP channel shows it (reduced), the text console prints this message. */
+			return Console::CommandResult::image(result.files.front(), "image/png", message.str());
 		});
 
 		this->bindCommand("temporalCapture", "DEV: captures N consecutive presented frames as <unix seconds>-<n>.png, plus <unix seconds>.json with the per-frame metadata (jitter, camera, exposure, timing).",

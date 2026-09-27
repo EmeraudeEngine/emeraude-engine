@@ -76,7 +76,8 @@ even a command with no output, and that response is **one JSON object on one lin
 - `ok` — whether the command succeeded.
 - `outputs` — in display order, possibly empty; each has `severity` (Debug/Success/Info/Warning/Error/
   Fatal), `kind` (`text`; `json` = the `message` IS a JSON document to parse; `binary` = adds
-  `mimeType` and a Base64 `data`) and `message`.
+  `mimeType` and a Base64 `data`; `image` = an image FILE, adds `mimeType` and `path` — a screenshot)
+  and `message`.
 - The **welcome banner** sent on connection is a response too, with a top-level `"protocol": 1`.
 - Responses come **in request order**: requests may be pipelined, the N-th line answers the N-th request.
 - **Transport limits** answer a last error line, then close THAT connection: a line longer than 8192
@@ -112,6 +113,74 @@ on Linux (2026-09-27); it has been shown to fail against a server that breaks th
 - **Quote** a string that contains a comma, a parenthesis or a dot you do not want split:
   `Core.openFiles("/tmp/a,b(1)/x.glb")` — inside quotes every character is literal (2026-09-27; the
   parser used to cut a quoted path on its commas).
+
+### The MCP server — every typed command as a tool (2026-09-27)
+
+The engine embeds a **Model Context Protocol server** (`src/Console/MCP/`): an MCP client (Claude
+Code first) discovers every typed console command as a tool with its JSON schema, calls it with named
+arguments, and receives captures **inline as images**. It is independent of TCP 7777 — either can be
+open without the other — and **closed by default**, like the console.
+
+**Settings** (`settings.json`, read at launch; written with their defaults on first run):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Core/MCP/Enabled` | `false` | Start the server at all |
+| `Core/MCP/Address` | `127.0.0.1` | Bind address. ⚠️ A non-loopback address REFUSES to start without a token |
+| `Core/MCP/Port` | `7778` | Endpoint `http://<address>:<port>/mcp` |
+| `Core/MCP/BearerToken` | `""` | Every request must carry `Authorization: Bearer <token>` when set |
+
+The startup log says `MCP server listening on http://127.0.0.1:7778/mcp (protocol 2026-07-28 and
+2025-11-25 era).`; `Core.remoteConsoleStatus()` reports the endpoint in its `mcp` field (null when off).
+
+**Connecting Claude Code** (once the engine runs with `Core/MCP/Enabled = true`):
+```bash
+claude mcp add --transport http emeraude http://127.0.0.1:7778/mcp
+# with a token: --header "Authorization: Bearer <token>"
+```
+Keep the server name short (`emeraude`): Claude Code calls a tool `mcp__<server>__<tool>`, which must
+fit 64 characters, and the tool names are budgeted for that prefix (≤ 49 characters). A long capture
+(`Renderer_temporalCapture`) may need a larger per-server `timeout` in `.mcp.json` (milliseconds).
+
+**Tools**: one per typed command, aliases merged — 127 on `coordinates-debug`, 108 with no act loaded.
+Names drop `Core.` and each `Service` suffix, dots become `_`:
+`Core.SceneManagerService.PostProcess.select` → `SceneManager_PostProcess_select`,
+`Core.RendererService.screenshot` → `Renderer_screenshot`. Each tool's `inputSchema` comes from the
+declared signature (types, integer range, defaults, descriptions with units, `required`,
+`additionalProperties: false`); its annotations from the hints (`readOnlyHint`, `destructiveHint`,
+`idempotentHint`; `openWorldHint` is always false). An omitted optional argument before a supplied one
+is fine (named arguments). A wrong or unknown argument answers a tool result with `isError: true`
+naming it — the model can correct itself — and the command never runs. A `json` output is also given
+as `structuredContent`.
+
+**`Renderer_screenshot`** returns the next presented frame as an inline PNG **reduced to 1568 px** on
+its long edge (area filter), plus the path of the full-resolution file for pixel measurement (owner
+decision). TCP 7777 keeps answering only the path: the image is read and reduced only by the channel
+that shows it (`OutputKind::Image`).
+
+**Both protocol eras** (owner decision): 2026-07-28 (stateless; `server/discover`, per-request
+`_meta` checked against the `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name` headers,
+`subscriptions/listen`) and the handshake era (2025-11-25 / 2025-06-18 / 2025-03-26: `initialize`,
+a GET notification stream). ⚠️ Claude Code's v1 client runtime only speaks the handshake era; its v2
+runtime asks for 2026-07-28 (`MCP_SDK_GENERATION`, `MCP_PROTOCOL_NEGOTIATION`); the official v2
+TypeScript client only tries it with `versionNegotiation: { mode: "auto" }`. Measured 2026-09-27: SDK
+v1 (1.30.1) negotiates 2025-11-25, SDK v2 (2.1.0, auto) negotiates 2026-07-28, both list the tools,
+call them, get the image and receive `list_changed`.
+
+**`notifications/tools/list_changed`** is sent on every open notification stream when the console tree
+changes (the active scene's `PostProcess` node and projet-alpha's `Act` node come and go: F4 unloads the
+act, 127 → 108 tools).
+
+**Security**: `Origin` (DNS rebinding — CEF renders web pages inside this very process) and `Host`
+(loopback binding) are validated on every request (403 otherwise); bearer token; request head
+≤ 16 KiB, body ≤ 1 MiB (refused on the declared length), no chunked encoding, duplicated framing
+headers refused (request smuggling); 16 connections, 64 requests waiting for the main thread, 120 s
+idle, 30 s per request. Malformed JSON of any shape answers a JSON-RPC error and never stops the engine.
+
+**The conformance bench — `tools/mcp-conformance.py`** (no SDK needed, plain HTTP): run it after any
+change to `src/Console/` or to a command, with `--trigger-list-change` to press F4 and check the
+notifications. 885 checks pass on `coordinates-debug` (2026-09-27); it has been shown to fail against
+a server that breaks the contract.
 
 ---
 
