@@ -452,6 +452,18 @@ ray-tracing proxy (`src/Graphics/AGENTS.md` § "Adaptive geometries"). It replac
 
 Traps of the CDLOD work itself:
 
+- ⚠️⚠️⚠️ **The ray-tracing proxy must split its cells along the DRAWN patch's diagonal** (fixed 2026-09-27):
+  the patch splits each quad along (x, z)–(x + 1, z + 1) — imposed by the geomorph, which collapses odd vertices
+  onto even ones — while the proxy used the Grid convention, (x, z + 1)–(x + 1, z). The two surfaces then part by
+  |(h00 + h11) − (h10 + h01)| / 2 at every cell centre: metres on `water-world`'s diamond-square (`factor` 75 on
+  1 m cells). Wherever the drawn triangle sinks under the traced one, RTAO, RTGI and RTContactShadows start their
+  rays INSIDE the proxy and all three blacken the same region — large, textured, stair-edged patches (the stairs
+  are the RT buffers' resolution) that read like pits, and vanish in the screen-space lane. Measured at a replayed
+  pose: crop mean 27.2 → 103.3/255 (105.7 in the screen-space lane), pixels below 30/255 11.0 % → 2.4 %.
+  **Bisect such a patch by LANE first** (`PostProcess.setLightingMode(ScreenSpace)` on the same instance): a
+  patch that only the RT lane draws is a traced-vs-drawn geometry mismatch, not a G-buffer defect.
+  ⚠️ At step > 1 (the `terrain` demo: 8 m proxy cells) the proxy cannot match the drawn 1 m surface at all; the
+  sub-step relief is missing from what the rays hit, so the same kind of self-occlusion remains possible there.
 - ⚠️⚠️⚠️ **`PushConstantBlock::bytes()` counted a `vec2` as 16 bytes** (it summed `size_bytes()`, the
   PADDED size) while std430 packs it in 8. The range only grew, so nothing ever failed — until the
   heightfield computed its node offset from it: the CPU pushed the node at **96** while the shader read it

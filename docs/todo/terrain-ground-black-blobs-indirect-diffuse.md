@@ -36,6 +36,12 @@ pixel is killed — the signature of a non-finite value reaching the tone mapper
 ⚠️ Regression status UNKNOWN: `GIDenoiser` (shared by SSGI and RTGI) was made camera-relative on 2026-09-25
 (`27cb4df9`), the same day the peers saw the blobs; nobody had looked at this ground before.
 
+⚠️ Related (2026-09-27): the terrain's ray-tracing proxy was split along the other diagonal than the drawn patch,
+which made RTAO/RTGI/RTContactShadows blacken large patches on `water-world` (fixed; `docs/caution-points.md`
+§ CDLOD terrain). That does NOT explain these blobs — they also appear in the screen-space lane — but on `terrain`
+the proxy is 8 m cells against a 1 m drawn surface, so re-check the TRACED-lane reports (the Windows peer's) after
+that fix, and bisect by lane first.
+
 ## What remains
 
 1. Instrument SSGI / RTGI / GIDenoiser outputs with the `DebugNonFinite` colouring, and name the buffer.

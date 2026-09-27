@@ -1464,6 +1464,11 @@ namespace EmEn::Graphics::Geometry
 			*out = uv[Y];
 		}
 
+		/* ⚠️ The SAME diagonal as the drawn patch (topLeft-bottomRight, see the patch index buffer): the traced
+		 * surface must be the rasterized one. Split along the other diagonal, the two surfaces part by
+		 * |(h00 + h11) - (h10 + h01)| / 2 at every cell centre — metres on a rough relief — and the RT effects,
+		 * whose rays then start BELOW the proxy, blacken the triangles where the drawn surface sinks under it
+		 * (docs/caution-points.md § CDLOD terrain, 2026-09-27). Same winding as before. */
 		const auto quads = window.squaredQuadCount();
 		std::vector< uint32_t > indices;
 		indices.reserve(static_cast< size_t >(quads) * quads * 6);
@@ -1479,9 +1484,9 @@ namespace EmEn::Graphics::Geometry
 
 				indices.push_back(topLeft);
 				indices.push_back(bottomLeft);
-				indices.push_back(topRight);
+				indices.push_back(bottomRight);
 
-				indices.push_back(bottomLeft);
+				indices.push_back(topLeft);
 				indices.push_back(bottomRight);
 				indices.push_back(topRight);
 			}
