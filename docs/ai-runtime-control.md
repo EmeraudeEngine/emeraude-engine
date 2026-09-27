@@ -148,6 +148,11 @@ Keep the server name short (`emeraude`): Claude Code calls a tool `mcp__<server>
 fit 64 characters, and the tool names are budgeted for that prefix (≤ 49 characters). A long capture
 (`Renderer_temporalCapture`) may need a larger per-server `timeout` in `.mcp.json` (milliseconds).
 
+**An application adds its own tools** by registering its own console objects: projet-alpha's top-level
+`Stage` object gives `Stage_listDemos`, `Stage_loadDemo`, `Stage_unloadAct`, … (projet-alpha
+`src/AGENTS.md` § 3a). A client should find a command for what it wants before resorting to
+`InputManager_mouseClick` on a web UI.
+
 **Tools**: one per typed command, aliases merged — 127 on `coordinates-debug`, 108 with no act loaded.
 Names drop `Core.` and each `Service` suffix, dots become `_`:
 `Core.SceneManagerService.PostProcess.select` → `SceneManager_PostProcess_select`,
