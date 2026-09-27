@@ -139,7 +139,7 @@ namespace EmEn::Console::MCP
 			bool isRunning () const noexcept;
 
 			/**
-			 * @brief Returns the endpoint URL, e.g. "http://127.0.0.1:7778/mcp" (empty when not running).
+			 * @brief Returns the endpoint URL, e.g. "http://127.0.0.1:17778/mcp" (empty when not running).
 			 * @return std::string
 			 */
 			[[nodiscard]]

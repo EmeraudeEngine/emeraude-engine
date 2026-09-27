@@ -6769,7 +6769,8 @@ coarsest level — the one the imposter replaces). Graphics `AGENTS.md` § 15e.
 - **Seen:** the Windows peer's MCP server could not listen on `127.0.0.1:7778` — ASUS Armoury Crate
   (preinstalled on ASUS laptops) holds it with `SO_EXCLUSIVEADDRUSE`, which Windows reports as
   `WSAEACCES` ("access forbidden by its access permissions"), sending the reader toward permissions.
-- **Now:** `MCP::Server` and `RemoteListener` add "the port is most likely taken by another process" to
+- **Now:** the MCP default port moved to 17778 (owner decision); a settings file written before keeps
+  7778 (projet-alpha never resets its settings). `MCP::Server` and `RemoteListener` add "the port is most likely taken by another process" to
   a refused bind (`address_in_use` or `access_denied`) and name the setting to change. The engine keeps
   running; only that channel stays closed.
 

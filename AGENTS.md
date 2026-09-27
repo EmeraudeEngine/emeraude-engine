@@ -196,8 +196,8 @@ and the AI executes, measures, and iterates at industrial speed.
 > Details: [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) § Wire format.
 >
 > **MCP server (2026-09-27)** — the same typed commands as Model Context Protocol tools, over
-> Streamable HTTP, closed by default: `Core/MCP/Enabled = true` (loopback `127.0.0.1:7778`), then
-> `claude mcp add --transport http emeraude http://127.0.0.1:7778/mcp`. Both protocol eras
+> Streamable HTTP, closed by default: `Core/MCP/Enabled = true` (loopback `127.0.0.1:17778`), then
+> `claude mcp add --transport http emeraude http://127.0.0.1:17778/mcp`. Both protocol eras
 > (2026-07-28 and 2025-11-25), `Renderer_screenshot` returns an inline image, `list_changed` follows the
 > active scene; `tools/mcp-conformance.py` checks it. Details: [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md)
 > § The MCP server, [`src/Console/AGENTS.md`](src/Console/AGENTS.md) § 7b.

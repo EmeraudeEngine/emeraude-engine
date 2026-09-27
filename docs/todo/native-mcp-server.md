@@ -44,7 +44,7 @@ with captures returned **inline as images** instead of a path to go and read.
   `emeraude`) or colliding with another is refused at startup, traced. One tool per command: the
   aliases (`exit,quit,shutdown`) are merged into the first name.
 - **Settings `Core/MCP/*`**, independent of TCP 7777: `Enabled` (false), `Address` (127.0.0.1),
-  `Port` (7778), `BearerToken` (empty; MANDATORY for a non-loopback address — the server refuses to
+  `Port` (17778 — 7778 until the ASUS conflict, see Traps), `BearerToken` (empty; MANDATORY for a non-loopback address — the server refuses to
   start without it). `Origin` validation always on.
 - **Screenshot over MCP = a reduced image + the path**: a PNG scaled to 1568 px on its long edge
   (inline image, far below Claude Code's `MAX_MCP_OUTPUT_TOKENS` = 25 000) plus the full-resolution
@@ -76,7 +76,7 @@ Documented: `docs/ai-runtime-control.md` § The MCP server, `src/Console/AGENTS.
 ## What remains
 
 1. **The owner's first real session** with Claude Code (`claude mcp add --transport http emeraude
-   http://127.0.0.1:7778/mcp`): check the image reaches the model and the tool search copes with 127
+   http://127.0.0.1:17778/mcp`): check the image reaches the model and the tool search copes with 127
    tools.
 2. **Progress notifications** for long calls (`temporalCapture(N)`, a heavy `openFiles`) — not
    implemented: a `tools/call` answers `application/json` only. Needs an SSE response and a progress
@@ -85,11 +85,12 @@ Documented: `docs/ai-runtime-control.md` § The MCP server, `src/Console/AGENTS.
    implemented, candidates to confirm with the owner.
 4. The legacy handshake era accepts no `Mcp-Session-Id` (none is minted) — conforming, but a legacy
    client that insists on a session is untested.
-5. **Default port**: 7778 is taken by ASUS Armoury Crate on ASUS laptops (Windows peer, 2026-09-27; the
-   log now names the cause). Owner to decide whether to move the default.
-6. Optional `outputSchema` per command (results self-describe today) — only if a client needs it.
+5. Optional `outputSchema` per command (results self-describe today) — only if a client needs it.
 
 ## ⚠️ Traps
+
+- The default port was 7778 until ASUS Armoury Crate (preinstalled on ASUS laptops) was found listening
+  there; it is 17778 since 2026-09-27. A `settings.json` written before keeps 7778 (no settings reset).
 
 - **`Origin` MUST be validated** on every request (HTTP 403 otherwise) — DNS rebinding. CEF runs
   inside the same process and renders web pages: no page may be able to POST to the endpoint and

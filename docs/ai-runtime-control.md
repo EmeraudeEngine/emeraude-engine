@@ -127,19 +127,21 @@ open without the other — and **closed by default**, like the console.
 |---|---|---|
 | `Core/MCP/Enabled` | `false` | Start the server at all |
 | `Core/MCP/Address` | `127.0.0.1` | Bind address. ⚠️ A non-loopback address REFUSES to start without a token |
-| `Core/MCP/Port` | `7778` | Endpoint `http://<address>:<port>/mcp` |
+| `Core/MCP/Port` | `17778` | Endpoint `http://<address>:<port>/mcp` (7778 until 2026-09-27, see below) |
 | `Core/MCP/BearerToken` | `""` | Every request must carry `Authorization: Bearer <token>` when set |
 
-The startup log says `MCP server listening on http://127.0.0.1:7778/mcp (protocol 2026-07-28 and
+The startup log says `MCP server listening on http://127.0.0.1:17778/mcp (protocol 2026-07-28 and
 2025-11-25 era).`; `Core.remoteConsoleStatus()` reports the endpoint in its `mcp` field (null when off).
 ⚠️ **Port already taken**: ASUS Armoury Crate listens on `127.0.0.1:7778` on ASUS laptops (seen by the
 Windows peer, 2026-09-27), and Windows reports a port held exclusively by another process as ACCESS
 DENIED, not "in use". The log now says so (`the port is most likely taken by another process`); set
-`Core/MCP/Port` to a free port. The engine keeps running, only MCP stays closed.
+`Core/MCP/Port` to a free port. The engine keeps running, only MCP stays closed. That conflict is why
+the default moved from 7778 to **17778** (owner decision, 2026-09-27). ⚠️ projet-alpha never resets its
+settings: a `settings.json` written by an earlier build keeps `Core/MCP/Port = 7778` — change it by hand.
 
 **Connecting Claude Code** (once the engine runs with `Core/MCP/Enabled = true`):
 ```bash
-claude mcp add --transport http emeraude http://127.0.0.1:7778/mcp
+claude mcp add --transport http emeraude http://127.0.0.1:17778/mcp
 # with a token: --header "Authorization: Bearer <token>"
 ```
 Keep the server name short (`emeraude`): Claude Code calls a tool `mcp__<server>__<tool>`, which must

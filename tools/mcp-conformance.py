@@ -2,12 +2,12 @@
 """
 Emeraude Engine - MCP server conformance bench.
 
-Drives a RUNNING engine's MCP endpoint (Core/MCP/Enabled, default http://127.0.0.1:7778/mcp) and checks
+Drives a RUNNING engine's MCP endpoint (Core/MCP/Enabled, default http://127.0.0.1:17778/mcp) and checks
 it against the Model Context Protocol, BOTH eras the server speaks: 2026-07-28 (stateless) and the
 handshake era (2025-11-25: initialize). Run it after any change to src/Console/ (MCP/, the command
 contract) or to a command, on every OS.
 
-    python3 tools/mcp-conformance.py [--port 7778] [--verbose] [--trigger-list-change]
+    python3 tools/mcp-conformance.py [--port 17778] [--verbose] [--trigger-list-change]
 
 NON-DESTRUCTIVE by default: a tool is only EXECUTED when it declares readOnlyHint and needs no argument
 (plus Renderer_screenshot, which only writes a capture file); every other tool is only sent calls its
@@ -454,7 +454,7 @@ def test_concurrency(bench: Bench, endpoint: Endpoint) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--port", type=int, default=7778)
+    parser.add_argument("--port", type=int, default=17778)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--trigger-list-change", action="store_true", help="press F4 (projet-alpha: unload the act) to check list_changed")
     arguments = parser.parse_args()

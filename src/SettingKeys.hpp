@@ -130,9 +130,10 @@ namespace EmEn
 		 * the server refuses to start without one. */
 		constexpr auto MCPAddressKey{"Core/MCP/Address"};
 		constexpr auto DefaultMCPAddress{"127.0.0.1"};
-		/* TCP port of the MCP endpoint (http://<address>:<port>/mcp). */
+		/* TCP port of the MCP endpoint (http://<address>:<port>/mcp). 17778, not 7778 (owner decision 2026-09-27):
+		 * ASUS Armoury Crate, preinstalled on ASUS laptops, listens on 127.0.0.1:7778. */
 		constexpr auto MCPPortKey{"Core/MCP/Port"};
-		constexpr auto DefaultMCPPort{static_cast< uint16_t >(7778)};
+		constexpr auto DefaultMCPPort{static_cast< uint16_t >(17778)};
 		/* Bearer token every request must carry ("Authorization: Bearer <token>"). Empty = none, which is
 		 * only accepted on a loopback address. */
 		constexpr auto MCPBearerTokenKey{"Core/MCP/BearerToken"};
