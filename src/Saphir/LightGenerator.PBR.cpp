@@ -575,12 +575,19 @@ namespace EmEn::Saphir
 		if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
 		{
 			Code{fragmentShader} <<
-				"vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");" << Line::End <<
+				"const mat3 pbrTangentToView = transpose(" << ShaderVariable::ViewTBNMatrix << ");" << Line::End <<
+				"vec3 N = normalize(pbrTangentToView * " << m_surfaceNormalVector << ");" << Line::End <<
 				"const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
 				/* Two-sided lighting: orient the shading normal toward the viewer. Unlike a
-				 * gl_FrontFacing test (winding-dependent), dot(N,V) uses the actual geometry,
-				 * so a back-facing surface with a correct normal (e.g. a ground) stays lit. */
-				"N = dot(N, V) < 0.0 ? -N : N;" << Line::End <<
+				 * gl_FrontFacing test (winding-dependent), a dot product with V uses the actual geometry,
+				 * so a back-facing surface with a correct normal (e.g. a ground) stays lit.
+				 * ⚠️⚠️ The side is decided by the GEOMETRIC normal (the frame's third column), then applied
+				 * to the perturbed one. Decided by the perturbed normal itself, every texel whose normal map
+				 * leans away from a grazing view was turned UPSIDE DOWN on a front face — NdotL <= 0 whatever
+				 * the light — and the direct light left hard black texel blobs on the `terrain` ground
+				 * (docs/caution-points.md § Two-sided normals, 2026-09-28). A texel facing away on a front
+				 * face is legitimate: it keeps its normal, the BRDF clamps its NdotV. */
+				"N = dot(pbrTangentToView[2], V) < 0.0 ? -N : N;" << Line::End <<
 				"const vec3 L = -" << rayDirectionViewSpace << ";" << Line::End <<
 				"const vec3 H = normalize(V + L);" << Line::Blank;
 		}

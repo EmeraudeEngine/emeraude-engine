@@ -614,10 +614,14 @@ namespace EmEn::Saphir
 		 * statement always sees it. */
 		if ( m_renderPassType == RenderPassType::AmbientPass && m_useNormalMapping && !m_surfaceNormalVector.empty() )
 		{
-			/* Turned toward the viewer, like the light passes' N (faceforward(N, I, N) = N facing -I). */
+			/* Turned toward the viewer by the light passes' rule: the side is decided by the GEOMETRIC normal (the
+			 * frame's third column) and applied to the perturbed one — never faceforward(N, I, N), which flipped
+			 * every texel leaning away from a grazing view upside down in the G-buffer every post-process effect
+			 * reads (docs/caution-points.md § Two-sided normals, 2026-09-28). */
 			Code{fragmentShader} <<
-				"const vec3 ambientPerturbedNormal = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");" << Line::End <<
-				"const vec3 N = faceforward(ambientPerturbedNormal, " << ShaderVariable::PositionViewSpace << ".xyz, ambientPerturbedNormal);";
+				"const mat3 ambientTangentToView = transpose(" << ShaderVariable::ViewTBNMatrix << ");" << Line::End <<
+				"const vec3 ambientPerturbedNormal = normalize(ambientTangentToView * " << m_surfaceNormalVector << ");" << Line::End <<
+				"const vec3 N = dot(ambientTangentToView[2], " << ShaderVariable::PositionViewSpace << ".xyz) > 0.0 ? -ambientPerturbedNormal : ambientPerturbedNormal;";
 		}
 
 		switch ( m_renderPassType )

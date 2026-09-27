@@ -4285,7 +4285,8 @@ two-sided lighting, `5bec23db`). Every other normal kept pointing away on a back
 - the G-buffer normal the post-process effects read.
 
 It was found by the macOS bench and reproduced on Linux. Now every normal a term uses faces the viewer,
-by the same rule (`faceforward(N, I, N)`, view vector `-I`). The environment normal is built ONCE by
+by the same rule (`faceforward(N, I, N)`, view vector `-I`). ⚠️ That rule was itself WRONG with a normal map
+and was corrected on 2026-09-28 — see § Two-sided normals below: the side is the GEOMETRIC normal's. The environment normal is built ONCE by
 `StandardResource::declareEnvironmentFrame()`: it was redeclared by seven sites, and it also mixed spaces
 (`TangentToWorldMatrix[0..1]` is a VIEW-space frame, `NormalWorldSpace` a world one). It is now
 `WorldTBNMatrix · n`, in world space end to end.
@@ -4294,6 +4295,48 @@ Measured on the glTF bench (Linux, ScreenSpace lane, 16 captures): only the two 
 double-sided tests move (12 % and 9 % of their pixels). Every front view is unchanged to 0.01/255. That
 proves the old space mix was invisible from those FRONT poses (view ≈ world rotation), and bench poses
 cannot vouch for it elsewhere.
+
+### Two-sided normals: the SIDE is the geometric normal's, the sign goes on the perturbed one (fixed 2026-09-28)
+
+Symptom: hard-edged near-black texel blobs on the `terrain` ground (`Grounds/Mud001`, normal + height maps), denser
+toward the horizon. Reported by the macOS and Windows peers on 2026-09-25 (item
+`terrain-ground-black-blobs-indirect-diffuse`, now deleted), reproduced on Linux: 2850 relatively dark pixels (255
+blobs) in the near-ground crop of the spawn frame (`terrain --demo-options 100000,25,0,0,1`) — **7** after the fix,
+0 VUID.
+
+Cause: the two-sided rule decided the side from the PERTURBED normal itself — `N = dot(N, V) < 0.0 ? -N : N` in the
+light passes, `faceforward(N, I, N)` for the ambient pass's G-buffer normal, the same test for the environment normal
+(`declareEnvironmentFrame()`). At a grazing view a normal-mapped texel legitimately leans away from the camera on a
+FRONT face; the rule turned it upside down, so NdotL <= 0 whatever the light. Read on a blob pixel in a RenderDoc
+capture: perturbed view normal (-0.017, 0.782, -0.623) turned into (0.017, -0.782, 0.623), while the geometric normal
+faced the camera (dot with the view position -1.64). Now the three sites decide with the frame's third column
+(`transpose(ViewTBNMatrix)[2]`, `WorldTBNMatrix[2]` — the geometric normal in both the vertex and the heightfield
+paths, no extra varying) and apply the sign to the perturbed normal, as the IBL diffuse normal already did. That is
+also what three.js and Filament do (a flip for the back face of a double-sided material, never from the texel).
+
+What the bisect taught — every step that LOOKED conclusive and was not:
+- ⚠️⚠️ **Disabling `Core/Graphics/ShadowMapping/Enabled` also switched the SUN off on `terrain`** (flat frame, no
+  modelling, crop mean 98 → 41): the blobs "vanished" because every pixel lost the sun. A shadow A/B must first prove
+  the light still lights.
+- Not NaN: the overflow census counted 0 NaN / Inf over 399 frames (positive control PASS). The blob pixels carry
+  the albedo's hue (18, 14, 7): a finite, sun-less value.
+- Not shadow acne: `setShadowBias` 0.005 → 0.5 and `NormalOffsetScale` 1 changed nothing; the classic map (1 m texels)
+  showed the same cm-sized blobs.
+- Not the sun's height: identical counts at 45, 60, 75 and 90 degrees of elevation. The normal map's largest tilt is
+  45.5 degrees, so no texel can face away from a zenith sun on a slope under 44 degrees — a light-independent,
+  normal-map-dependent darkening is a VIEW-dependent one.
+- The decisive steps: the material without its normal map (0 blobs), then RenderDoc pixel history (both terrain draws
+  output exactly 0 at a blob pixel and pass the depth test) and a shader debug trace of that pixel.
+  ⚠️ The build had RenderDoc OFF: a capture was triggered anyway through the replay module's target control
+  (`EnumerateRemoteTargets` + `CreateTargetControl(...).TriggerCapture(1)`), no rebuild needed.
+
+glTF bench, fix against the previous code (Linux, 12 captures): the double-sided BACK views of `NormalTangentTest`
+and `NormalTangentMirrorTest` — the 2026-09-22 case — are unchanged (max 1/255); 0.3-0.5 % of the pixels move in the
+grazing views (top-down, `BoomBox`, `ClearCoatTest` front): the rim of a bump leaning away from the camera is no
+longer lit as if it faced it, and a spurious bright rim on a `BoomBox` edge is gone.
+⚠️ Open question, not a regression: a texel facing away reflects a direction BELOW its surface (the green ground on
+`NormalTangentTest`'s far rims). Engines fade that term (specular horizon occlusion, Jimenez et al., "Practical
+Real-Time Strategies for Accurate Indirect Occlusion", SIGGRAPH 2016 course).
 
 ### A "BROKEN" POM WAS THREE DEFECTS AND ONE BAD TEXTURE (fixed 2026-09-22)
 

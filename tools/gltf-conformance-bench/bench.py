@@ -551,17 +551,30 @@ def build_plan(assets: Path, only: set, with_draco: bool = True) -> list:
 
 
 def wait_for_viewer(console: Console, model: str, budget: float = VIEWER_BUDGET_S) -> int:
-    """Waits until +ModelViewer is active AND holds at least one entity."""
+    """
+    Waits until +ModelViewer is active AND holds the model: at least one static entity with a visual.
+
+    ⚠️ `getSceneInfo()` is gone (engine 22aa687f, 2026-09): the bench polled it for ever and captured
+    nothing, reporting every model as "never came up". The viewer's own key and fill lights are static
+    entities too, so an entity counts only when it carries a Visual or MultipleVisuals component.
+    """
     deadline = time.monotonic() + budget
 
     while time.monotonic() < deadline:
-        answer = console.run("Core.SceneManagerService.getSceneInfo()", timeout=6.0)
+        if "+ModelViewer" in console.run("Core.SceneManagerService.getActiveSceneName()", timeout=6.0):
+            try:
+                entities = json.loads(console.run("Core.SceneManagerService.listEntities()", timeout=6.0))
+            except ValueError:
+                entities = []
 
-        if "+ModelViewer" in answer:
-            entities = re.search(r"Static entities:\s*(\d+)", answer)
+            visuals = sum(
+                1 for entity in entities
+                if entity.get("kind") == "staticEntity"
+                and any(component.get("type") in ("Visual", "MultipleVisuals") for component in entity.get("components", []))
+            )
 
-            if entities and int(entities.group(1)) > 0:
-                return int(entities.group(1))
+            if visuals > 0:
+                return visuals
 
         time.sleep(0.5)
 

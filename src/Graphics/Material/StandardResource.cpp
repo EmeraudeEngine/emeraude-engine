@@ -3204,7 +3204,12 @@ namespace EmEn::Graphics::Material
 			"const vec3 reflectionNormalRaw = " << (this->isComponentPresent(ComponentType::Normal)
 				? std::string{"normalize("} + ShaderVariable::WorldTBNMatrix + " * " + SurfaceNormalVector + ")"
 				: std::string{"normalize("} + ShaderVariable::NormalWorldSpace + ")") << ";" << Line::End <<
-			"const vec3 reflectionNormal = dot(reflectionNormalRaw, reflectionI) > 0.0 ? -reflectionNormalRaw : reflectionNormalRaw;";
+			/* ⚠️ The side is the GEOMETRIC normal's (the world frame's third column), the sign goes on the perturbed
+			 * one: decided by the perturbed normal, a texel leaning away from a grazing view was mirrored on a front
+			 * face (docs/caution-points.md § Two-sided normals, 2026-09-28). */
+			"const vec3 reflectionNormal = dot(" << (this->isComponentPresent(ComponentType::Normal)
+				? std::string{ShaderVariable::WorldTBNMatrix} + "[2]"
+				: std::string{"reflectionNormalRaw"}) << ", reflectionI) > 0.0 ? -reflectionNormalRaw : reflectionNormalRaw;";
 	}
 
 	const char *
