@@ -1087,7 +1087,13 @@ namespace EmEn::Console::MCP
 
 		if ( ec )
 		{
-			TraceError{ClassId} << "Unable to listen on " << address << ':' << port << ": " << ec.message() << ". The MCP server stays closed.";
+			/* ⚠️ Windows reports a port another process holds exclusively (SO_EXCLUSIVEADDRUSE) as ACCESS DENIED,
+			 * not "address in use": measured on an ASUS laptop whose Armoury Crate listens on 127.0.0.1:7778. */
+			const auto hint = ( ec == asio::error::address_in_use || ec == asio::error::access_denied ) ?
+				" — the port is most likely taken by another process (Windows reports that as access denied); choose another one in Core/MCP/Port" :
+				"";
+
+			TraceError{ClassId} << "Unable to listen on " << address << ':' << port << ": " << ec.message() << hint << ". The MCP server stays closed.";
 
 			m_acceptor.reset();
 

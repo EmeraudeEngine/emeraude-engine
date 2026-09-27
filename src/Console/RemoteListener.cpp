@@ -183,7 +183,12 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceError{ClassId} << "Failed to bind to " << m_address << ':' << m_port << ": " << ec.message();
+			/* ⚠️ Windows reports a port another process holds exclusively as ACCESS DENIED, not "address in use". */
+			const auto hint = ( ec == asio::error::address_in_use || ec == asio::error::access_denied ) ?
+				" — the port is most likely taken by another process (Windows reports that as access denied); choose another one in Core/Console/RemoteListenerPort" :
+				"";
+
+			TraceError{ClassId} << "Failed to bind to " << m_address << ':' << m_port << ": " << ec.message() << hint;
 
 			return;
 		}
