@@ -1293,7 +1293,7 @@ namespace EmEn::Graphics::Geometry
 			barriers[1].image = m_normalImage->handle();
 			barriers[1].subresourceRange = allLevels;
 
-			vkCmdPipelineBarrier(handle, full ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : readers, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, static_cast< uint32_t >(barriers.size()), barriers.data());
+			vkCmdPipelineBarrier(handle, full ? static_cast< VkPipelineStageFlags >(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) : readers, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, static_cast< uint32_t >(barriers.size()), barriers.data());
 		}
 
 		/* 2. The strips. */

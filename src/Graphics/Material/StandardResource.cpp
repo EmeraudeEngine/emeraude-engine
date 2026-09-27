@@ -1654,7 +1654,7 @@ namespace EmEn::Graphics::Material
 			{
 				if ( component->type() == Type::Texture )
 				{
-					newLayout->declareCombinedImageSampler(bindingPoint++, componentType == ComponentType::Displacement ? VK_SHADER_STAGE_FRAGMENT_BIT | meshStages : VK_SHADER_STAGE_FRAGMENT_BIT);
+					newLayout->declareCombinedImageSampler(bindingPoint++, componentType == ComponentType::Displacement ? VK_SHADER_STAGE_FRAGMENT_BIT | meshStages : static_cast< VkShaderStageFlags >(VK_SHADER_STAGE_FRAGMENT_BIT));
 				}
 			}
 

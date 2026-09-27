@@ -164,7 +164,7 @@ namespace EmEn::Saphir::Generator
 		/* NOTE: The per-vertex stage owns the push constants: the vertex shader (VERTEX, unchanged), or the mesh
 		 * shader of a mesh-shading program, whose task stage reads them too (MESH | TASK). */
 		const auto & program = this->shaderProgram();
-		Abstract::generatePushConstantRanges(program->perVertexStage()->pushConstantBlockDeclarations(), pushConstantRanges, program->hasMeshShader() ? program->perVertexStageFlags() : VK_SHADER_STAGE_VERTEX_BIT);
+		Abstract::generatePushConstantRanges(program->perVertexStage()->pushConstantBlockDeclarations(), pushConstantRanges, program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(VK_SHADER_STAGE_VERTEX_BIT));
 
 		const bool needsAlphaTest = this->needsAlphaTestedShadows();
 
