@@ -131,6 +131,36 @@ namespace EmEn::Saphir
 		return function;
 	}
 
+	Function
+	AbstractVertexStage::generateGetUprightBillBoardModelMatrixFunction () noexcept
+	{
+		std::stringstream functionCode;
+
+		/* Turned around +Y only; straight above or below (no horizontal offset) it faces +Z. */
+		functionCode <<
+			"\t" "vec3 toCamera = cameraPosition - modelPosition;" "\n"
+			"\t" "toCamera.y = 0.0;" "\n"
+			"\t" "const vec3 backward = dot(toCamera, toCamera) > 1.0e-12 ? normalize(toCamera) : vec3(0.0, 0.0, 1.0);" "\n"
+			"\t" "const vec3 upward = vec3(0.0, 1.0, 0.0);" "\n"
+			"\t" "const vec3 right = cross(upward, backward);" "\n"
+			"\t" "const mat4 scalingMatrix = mat4(" "\n"
+			"\t\t" "vec4(modelScaling.x, 0.0, 0.0, 0.0), " "\n"
+			"\t\t" "vec4(0.0, modelScaling.y, 0.0, 0.0), " "\n"
+			"\t\t" "vec4(0.0, 0.0, modelScaling.z, 0.0), " "\n"
+			"\t\t" "vec4(0.0, 0.0, 0.0, 1.0)" "\n"
+			"\t" ");" "\n\n"
+
+			"\t" "return mat4(vec4(right, 0.0), vec4(upward, 0.0), vec4(backward, 0.0), vec4(modelPosition, 1.0)) * scalingMatrix;" "\n";
+
+		Function function{"getUprightBillBoardModelMatrix", GLSL::Matrix4};
+		function.addInParameter(GLSL::ConstFloatVector3, "cameraPosition");
+		function.addInParameter(GLSL::ConstFloatVector3, "modelPosition");
+		function.addInParameter(GLSL::ConstFloatVector3, "modelScaling");
+		function.addInstruction(functionCode.str());
+
+		return function;
+	}
+
 	bool
 	AbstractVertexStage::declare (const InputAttribute & declaration) noexcept
 	{
@@ -254,8 +284,15 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		this->declare(AbstractVertexStage::generateComputeUpwardVectorFunction());
-		this->declare(AbstractVertexStage::generateGetBillBoardModelMatrixFunction());
+		if ( this->isUprightBillBoardingEnabled() )
+		{
+			this->declare(AbstractVertexStage::generateGetUprightBillBoardModelMatrixFunction());
+		}
+		else
+		{
+			this->declare(AbstractVertexStage::generateComputeUpwardVectorFunction());
+			this->declare(AbstractVertexStage::generateGetBillBoardModelMatrixFunction());
+		}
 
 		/* NOTE: In cubemap mode, the view matrix comes from the UBO indexed by gl_ViewIndex,
 		 * not from the push constant. */
@@ -266,7 +303,7 @@ namespace EmEn::Saphir
 		/* TODO: Find a way to get the camera world position directly (View UBO is not constantly updated for now) */
 		code <<
 			"\t" "const mat4 InvView = inverse(" << viewMatrixSource << ");" "\n"
-			"\t" "const mat4 " << ShaderVariable::SpriteModelMatrix << " = getBillBoardModelMatrix(InvView[3].xyz, " << Attribute::ModelPosition << ", " << Attribute::ModelScaling << ");" "\n\n";
+			"\t" "const mat4 " << ShaderVariable::SpriteModelMatrix << " = " << (this->isUprightBillBoardingEnabled() ? "getUprightBillBoardModelMatrix" : "getBillBoardModelMatrix") << "(InvView[3].xyz, " << Attribute::ModelPosition << ", " << Attribute::ModelScaling << ");" "\n\n";
 
 		m_uniquePreparations.emplace_back(ShaderVariable::SpriteModelMatrix, code.str());
 

@@ -110,3 +110,27 @@ photometric exposure.
 ⚠️ A sprite billboards because of the `Renderable::IsSprite` FLAG, not because of the SpriteResource
 class — a `MultiLayerMeshResource` created with that flag faces the camera too. Facing the camera and
 being lit were always separable; only the material choice tied them together.
+
+## Sprite billboard — `"Billboard": "Upright"` (2026-09-28)
+
+A sprite faces the camera in one of two ways, declared in its manifest:
+
+- `"Spherical"` (default): the quad turns to face the camera on BOTH axes
+  (`CartesianFrame::getSpriteModelMatrix()`, GLSL `getBillBoardModelMatrix()`). Right for a puff, a spark,
+  a flare — anything without an "up".
+- `"Upright"`: the quad turns around the world vertical ONLY (`getUprightSpriteModelMatrix()`, GLSL
+  `getUprightBillBoardModelMatrix()`): its up stays +Y. Right for anything that stands — a flame, a
+  pin-up, a tree impostor. An unknown value warns and falls back to spherical.
+
+Why it exists: a spherical `CenterAtBottom` flame TILTS towards a camera looking at it from above or
+below, pivoting on its base — close to a torch the flame visibly "walks away" from its cup. Measured on
+`citadel`'s torches (owner report, 2026-09-28).
+
+The path: `SpriteResource` reads the key → `Renderable::IsUprightSprite` → the generators
+(`Saphir::Generator::Abstract`, `ShadowCasting`) raise `IsRenderableUpright` (part of the program cache
+key) → `AbstractVertexStage::enableUprightBillBoarding()` for the GPU instanced path; the CPU path
+(`RenderableInstance::Abstract::worldModelMatrix()`, used by the instance staging and `Unique`) picks the
+matching `CartesianFrame` method. The ray-tracing TLAS was ALREADY cylindrical for every sprite
+(`SceneMetaData`), so it is untouched.
+
+⚠️ Open: a sprite vanishes from some viewing angles — `docs/todo/sprite-disappears-at-some-angles.md`.

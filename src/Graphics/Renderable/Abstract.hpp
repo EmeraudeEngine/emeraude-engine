@@ -86,7 +86,11 @@ namespace EmEn::Graphics::Renderable
 		 * vertices by the per-frame wind state, reading the four colour channels a tree skinner
 		 * fills. It is a property of the OBJECT, not of its materials — the same bark material
 		 * stays still on a palm asset and sways on a generated tree. */
-		HasVegetationWind = 1U << 3
+		HasVegetationWind = 1U << 3,
+		/** @brief A sprite that faces the camera around the world's vertical (+Y) ONLY — an upright billboard, for
+		 * what stands on the ground (a flame, a figure). Without it a sprite faces the camera fully and, anchored at
+		 * its foot, leans back as the camera rises. Declared by a sprite manifest: "Billboard": "Upright". */
+		IsUprightSprite = 1U << 4
 	};
 
 	/**
@@ -247,6 +251,17 @@ namespace EmEn::Graphics::Renderable
 			isSprite () const noexcept
 			{
 				return this->isFlagEnabled(IsSprite);
+			}
+
+			/**
+			 * @brief Returns whether this sprite is an UPRIGHT billboard (it turns around +Y only).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUprightSprite () const noexcept
+			{
+				return this->isFlagEnabled(IsUprightSprite);
 			}
 
 			/**

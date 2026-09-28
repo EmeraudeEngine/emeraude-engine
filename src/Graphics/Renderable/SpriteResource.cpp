@@ -209,6 +209,15 @@ namespace EmEn::Graphics::Renderable
 		const auto centerAtBottom = FastJSON::getValue< bool >(data, JKCenterAtBottom).value_or(false);
 		const auto flip = FastJSON::getValue< bool >(data, JKFlip).value_or(false);
 
+		if ( const auto billboard = FastJSON::getValue< std::string >(data, JKBillboard).value_or("Spherical"); billboard == "Upright" )
+		{
+			this->enableFlag(IsUprightSprite);
+		}
+		else if ( billboard != "Spherical" )
+		{
+			TraceWarning{ClassId} << "Unknown billboard mode '" << billboard << "' (Spherical or Upright): spherical !";
+		}
+
 		if ( !this->prepareGeometry(isAnimated, centerAtBottom, flip) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");

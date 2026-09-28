@@ -1023,6 +1023,18 @@ namespace EmEn::Graphics::RenderableInstance
 			void applyLocalTransformation (Base::Math::Matrix< 4, float > & modelMatrix) const noexcept;
 
 			/**
+			 * @brief Returns the WORLD model matrix of this instance at a world frame: the frame's own matrix, or for a
+			 * sprite a billboard facing the camera — fully, or around +Y only for an upright sprite
+			 * (Renderable::Abstract::isUprightSprite()). THE single choice of the push-constant paths and the
+			 * instance-transforms SSBO.
+			 * @param worldCoordinates The world frame of the instance.
+			 * @param cameraPosition The camera world position (the billboard's target).
+			 * @return Base::Math::Matrix< 4, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Matrix< 4, float > worldModelMatrix (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition) const noexcept;
+
+			/**
 			 * @brief Stages this instance's transforms into the scene instance transforms SSBO and retains the slot.
 			 * @note Non-instanced path only (instanced renderables carry their model matrices in a VBO).
 			 * Called by Scene::prepareRender() during render list population; the retained slot is

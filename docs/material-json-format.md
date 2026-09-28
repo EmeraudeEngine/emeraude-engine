@@ -56,6 +56,11 @@ Every component block carries a `Type` and, for most types, a `Data`:
 (`Geometry::MeshShadingSurface`, e.g. `DisplacedGridResource`). Its extra keys (2026-09-27):
 
 - `Scale` — the relief depth in **UV units** (a fraction of one texture repeat), default 0.02.
+  ⚠️ Because it is in UV units, the depth in metres is `Scale × metres per texture repeat`: a 1.0 on a
+  texture tiled every 3 m is 3 m of relief, which cuts every sprite and object standing on it. The data
+  store's convention (audit 2026-09-28, every legacy 1.0 replaced): **`Scale` = the relief in metres for
+  a 1 m repeat** — rocks 0.03, pavements and roofs 0.02, walls 0.015, wall tiles 0.005, other grounds 0.01,
+  woods 0.004, metals/biologicals 0.003, fabrics 0.002; terrain heightmaps are left alone.
 - `ParallaxIterations` — integer, clamped to [0, 64]: the POM layers at a grazing view (a view along the
   normal takes a quarter). When present, the material owns its layer count and the
   `Core/Graphics/Texture/POMIterations` setting no longer overrides it (`setParallaxIterations()`).

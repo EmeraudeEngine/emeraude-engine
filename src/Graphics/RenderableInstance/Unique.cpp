@@ -51,9 +51,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
 		if ( worldCoordinates != nullptr )
 		{
-			modelMatrix = this->renderable()->isSprite() ?
-				worldCoordinates->getSpriteModelMatrix(passContext.viewMatrices->position(passContext.readStateIndex)) :
-				worldCoordinates->getModelMatrix();
+			modelMatrix = this->worldModelMatrix(*worldCoordinates, passContext.viewMatrices->position(passContext.readStateIndex));
 		}
 
 		this->applyLocalTransformation(modelMatrix);
@@ -138,9 +136,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
 		if ( worldCoordinates != nullptr )
 		{
-			modelMatrix = this->renderable()->isSprite() ?
-				worldCoordinates->getSpriteModelMatrix(passContext.viewMatrices->position(passContext.readStateIndex)) :
-				worldCoordinates->getModelMatrix();
+			modelMatrix = this->worldModelMatrix(*worldCoordinates, passContext.viewMatrices->position(passContext.readStateIndex));
 		}
 
 		this->applyLocalTransformation(modelMatrix);

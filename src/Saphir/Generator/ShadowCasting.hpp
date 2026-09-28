@@ -62,6 +62,11 @@ namespace EmEn::Saphir::Generator
 				if ( renderableInstance->renderable()->isSprite() )
 				{
 					this->enableFlag(IsRenderableFacingCamera);
+
+					if ( renderableInstance->renderable()->isUprightSprite() )
+					{
+						this->enableFlag(IsRenderableUpright);
+					}
 				}
 			}
 

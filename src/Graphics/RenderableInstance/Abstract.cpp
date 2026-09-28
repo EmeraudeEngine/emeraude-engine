@@ -212,6 +212,19 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 	}
 
+	Matrix< 4, float >
+	Abstract::worldModelMatrix (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & cameraPosition) const noexcept
+	{
+		if ( !m_renderable->isSprite() )
+		{
+			return worldCoordinates.getModelMatrix();
+		}
+
+		return m_renderable->isUprightSprite() ?
+			worldCoordinates.getUprightSpriteModelMatrix(cameraPosition) :
+			worldCoordinates.getSpriteModelMatrix(cameraPosition);
+	}
+
 	void
 	Abstract::applyLocalTransformation (Matrix< 4, float > & modelMatrix) const noexcept
 	{
@@ -242,9 +255,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
 		if ( worldCoordinates != nullptr )
 		{
-			modelMatrix = m_renderable->isSprite() ?
-				worldCoordinates->getSpriteModelMatrix(cameraPosition) :
-				worldCoordinates->getModelMatrix();
+			modelMatrix = this->worldModelMatrix(*worldCoordinates, cameraPosition);
 		}
 
 		this->applyLocalTransformation(modelMatrix);

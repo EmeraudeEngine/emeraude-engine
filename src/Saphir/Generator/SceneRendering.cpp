@@ -394,6 +394,12 @@ namespace EmEn::Saphir::Generator
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
+		/* An upright sprite turns toward the camera around the world's vertical only. */
+		if ( this->isFlagEnabled(IsRenderableUpright) )
+		{
+			vertexShader->enableUprightBillBoarding();
+		}
+
 		if ( !this->configurePerVertexStage(program, *vertexShader) )
 		{
 			return false;

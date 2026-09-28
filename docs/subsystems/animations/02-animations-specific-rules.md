@@ -40,6 +40,7 @@ The animation system is split into three layers:
 | `ConstantValue` | `ConstantValue.hpp` | Always returns the same value |
 | `RandomValue` | `RandomValue.hpp/.cpp` | Random value within range |
 | `LampFlicker` | `LampFlicker.hpp/.cpp` | An ailing lamp: sag, breathing and dropout bursts, driven by a single `health` |
+| `FlameFlicker` | `FlameFlicker.hpp/.cpp` | An open flame: buoyant puffing at a frequency set by its base diameter, turbulence, gusts |
 
 ### LampFlicker — why `RandomValue` is not enough (Aug 2026)
 
@@ -74,6 +75,24 @@ const auto candela = nominalCandela * LampFlicker::luminanceForHealth(healthyCol
 light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlicker >(candela, 0.5F));
 light->setColor(LampFlicker::colorForHealth(healthyColor, 0.5F));
 ```
+
+### FlameFlicker — a flame is not a failing lamp (2026-09-28)
+
+`LampFlicker` models a bad contact: steady, then cuts. An open flame never cuts; it BREATHES, at a
+rhythm fixed by its size. `FlameFlicker (nominalCandela, baseDiameter, seed)` emits a candela value
+(the `Intensity` animation id) = nominal × a level in [0.2, 1.5]:
+
+- **Puffing**: a buoyant diffusion flame oscillates at f ≈ 1.5 / √D Hz, D the base diameter in metres
+  (Cetegen & Ahmed, *Experiments on the periodic instability of buoyant plumes and pool fires*,
+  Combustion and Flame 93, 1993) — a torch (0.08 m) ~5.3 Hz, a brazier (0.4 m) ~2.4 Hz, a bonfire
+  (2 m) ~1 Hz. `puffingFrequency()` exposes it. Amplitude 10 %; the phase DIFFUSES (Wiener increment),
+  so two identical fires drift apart and the puffing never reads as a sine.
+- **Turbulence**: an Ornstein-Uhlenbeck process (8 %, τ 0.15 s), discretised exactly (no accumulation
+  of a first-order error at a variable time step).
+- **Gusts**: rare (0.08 / s) half-sine dips of 25-50 % over 0.4-1.2 s — a draught.
+- The seed makes each fire independent and reproducible (`Base::Randomizer`, Box-Muller gaussians).
+
+Cost: measured free — 18 animated lights in `citadel`, 12.3 ms per frame with it vs 12.9 without (noise).
 
 ### Complete Data Flow
 ```

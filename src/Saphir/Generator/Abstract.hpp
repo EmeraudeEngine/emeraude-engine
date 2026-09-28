@@ -101,7 +101,10 @@ namespace EmEn::Saphir::Generator
 		IsInstanceMotionHistoryEnabled = 1U << 8,
 		/** @brief The renderable uses the INFINITY view (translation-free, e.g. the sky background):
 		 * its velocity must be built from the previous INFINITY view-projection, not the regular one. */
-		IsUsingInfinityView = 1U << 9
+		IsUsingInfinityView = 1U << 9,
+		/** @brief The sprite is an UPRIGHT billboard (Renderable::Abstract::isUprightSprite()): it turns toward the
+		 * camera around the world's vertical only. Reaches the program cache key through flags(). */
+		IsRenderableUpright = 1U << 10
 	};
 
 	/**
@@ -691,6 +694,11 @@ namespace EmEn::Saphir::Generator
 				if ( renderableInstance->renderable()->isSprite() )
 				{
 					this->enableFlag(IsRenderableFacingCamera);
+
+					if ( renderableInstance->renderable()->isUprightSprite() )
+					{
+						this->enableFlag(IsRenderableUpright);
+					}
 				}
 
 				/* NOTE: The infinity view drops the camera translation, so a velocity built

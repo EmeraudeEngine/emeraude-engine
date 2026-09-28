@@ -58,6 +58,11 @@ namespace EmEn::Graphics::Renderable
 	 */
 	static constexpr auto JKLit{"Lit"};
 	static constexpr auto JKFlip{"Flip"};
+	/**
+	 * @brief How a sprite faces the camera: "Spherical" (the default, it faces it fully) or "Upright" (it turns
+	 * around the world's vertical only — for what stands on the ground: a flame, a figure).
+	 */
+	static constexpr auto JKBillboard{"Billboard"};
 	static constexpr auto JKGridSize{"GridSize"};
 	static constexpr auto JKGridDivision{"GridDivision"};
 	/* CDLOD terrain (Graphics::Geometry::CDLODTerrainParameters). */

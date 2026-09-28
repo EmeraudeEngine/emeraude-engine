@@ -232,6 +232,28 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Makes the bill boards UPRIGHT: they turn toward the camera around the world's vertical only
+			 * (Renderable::Abstract::isUprightSprite()). Meaningful with enableBillBoarding().
+			 * @return void
+			 */
+			void
+			enableUprightBillBoarding () noexcept
+			{
+				m_uprightBillBoardingEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the bill boards are upright.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUprightBillBoardingEnabled () const noexcept
+			{
+				return m_uprightBillBoardingEnabled;
+			}
+
+			/**
 			 * @brief Enables cubemap rendering mode (multiview with gl_ViewIndex).
 			 * @return void
 			 */
@@ -1036,6 +1058,15 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static Declaration::Function generateGetBillBoardModelMatrixFunction () noexcept;
 
+			/**
+			 * @brief Builds the "getUprightBillBoardModelMatrix" GLSL helper: the same model matrix, turned toward the
+			 * camera around the world's vertical only (the GPU twin of CartesianFrame::getUprightSpriteModelMatrix()).
+			 * @note Used exclusively by prepareSpriteModelMatrix(), for an upright sprite.
+			 * @return Declaration::Function
+			 */
+			[[nodiscard]]
+			static Declaration::Function generateGetUprightBillBoardModelMatrixFunction () noexcept;
+
 			/** @brief Deduplicated {variable name, generated GLSL declaration line} pairs, e.g. the normal matrix for VBO; emitted once at the top of main() regardless of how many synthesis paths needed them. */
 			std::vector< std::pair< const char *, std::string > > m_uniquePreparations;
 			/** @brief Pending {variable name, scope} synthesis requests queued by requestSynthesizeInstruction(), consumed by synthesizeRequestInstructions(). */
@@ -1051,6 +1082,7 @@ namespace EmEn::Saphir
 			bool m_instancingEnabled{false};
 			bool m_advancedMatricesEnabled{false};
 			bool m_billBoardingEnabled{false};
+			bool m_uprightBillBoardingEnabled{false};
 			bool m_cubemapModeEnabled{false};
 			bool m_csmModeEnabled{false};
 			bool m_MDIEnabled{false};
