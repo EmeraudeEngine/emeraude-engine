@@ -423,6 +423,20 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
+			 * @brief Returns whether the synthesized surface is an OCEAN (Geometry::OceanSurfaceResource): with
+			 * isHeightfieldSurfaceEnabled(), the FFT cascades instead of the CDLOD clipmap.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isOceanSurfaceEnabled () const noexcept
+			{
+				const auto * geometry = this->getGeometryInterface();
+
+				return geometry != nullptr && geometry->heightfieldSurfaceEnabled() && geometry->oceanSurfaceEnabled();
+			}
+
+			/**
 			 * @brief Returns whether this program draws a MESH-SHADING surface through task + mesh stages
 			 * (Graphics::Geometry::MeshShadingSurface): the geometry is one, a material displaces it, and the device
 			 * enabled VK_EXT_mesh_shader. Otherwise the same geometry draws its flat grid through the vertex stage.

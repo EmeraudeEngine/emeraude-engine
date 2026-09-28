@@ -534,6 +534,33 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Turns the heightfield surface into an OCEAN (Geometry::OceanSurface): the same CDLOD patch, node push
+			 * constants and geomorph as a terrain, on an infinite plane, displaced by the FFT cascades
+			 * (Graphics::OceanWaves) instead of lifted from a clipmap. The same hfPosition / hfNormal / hfTangent /
+			 * hfBinormal / hfTextureCoordinates, the same per-pixel frame — fed with the UNDISPLACED lattice XZ, which is
+			 * what the cascades are indexed by.
+			 * @note Implies enableHeightfieldSurface().
+			 * @return void
+			 */
+			void
+			enableOceanSurface () noexcept
+			{
+				m_heightfieldSurfaceEnabled = true;
+				m_oceanSurfaceEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the heightfield surface is an ocean.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isOceanSurfaceEnabled () const noexcept
+			{
+				return m_oceanSurfaceEnabled;
+			}
+
+			/**
 			 * @brief Declares that the stage stands on a heightfield it does not BUILD: a mesh-shading detail
 			 * surface over a terrain (engine item mesh-shading-surface-on-heightfield). The stage's own source
 			 * places the vertices and defines `hfPosition`; the CDLOD vertex program (node, geomorph) is NOT
@@ -1032,6 +1059,7 @@ namespace EmEn::Saphir
 			bool m_vegetationFlutterEnabled{false};
 			bool m_heightfieldSurfaceEnabled{false};
 			bool m_heightfieldBaseEnabled{false};
+			bool m_oceanSurfaceEnabled{false};
 			bool m_imposterBillboardEnabled{false};
 			bool m_heightfieldPixelFrameEnabled{false};
 			bool m_heightfieldFrameRequested{false};

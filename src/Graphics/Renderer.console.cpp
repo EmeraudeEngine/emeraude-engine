@@ -39,6 +39,7 @@
 #include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "MDI/BatchBuilder.hpp"
+#include "OceanWaves.hpp"
 #include "OverflowCensus.hpp"
 #include "PrimaryServices.hpp"
 #include "VideoFrameConverter.hpp"
@@ -122,6 +123,26 @@ namespace EmEn::Graphics
 			}
 
 			return Console::CommandResult::success("GPU BGRA->I420 conversion matches the CPU reference byte-for-byte (1280x720, BT.709 integer path).");
+		});
+
+		this->bindCommand("testOceanWaves", "Self-tests the GPU FFT ocean waves (JONSWAP spectrum, 3 cascades of 256²) against a CPU reference FFT of the same spectrum.", [this] () {
+			/* Engine item ocean-fft-surface, step 1: the GPU evolution + Stockham FFT + resolve, read back and compared
+			 * field by field with a double-precision Cooley-Tukey reference. */
+			OceanWaves waves{this->device(), this->shaderManager()};
+
+			if ( !waves.create(OceanWaveParameters{}) )
+			{
+				return Console::CommandResult::error("Unable to create the ocean wave generator !");
+			}
+
+			std::string report;
+
+			if ( !waves.selfTest(3.7F, report) )
+			{
+				return Console::CommandResult::error("GPU/CPU ocean mismatch: " + report);
+			}
+
+			return Console::CommandResult::success("GPU ocean waves match the CPU reference: " + report);
 		});
 
 		this->bindCommand("testVideoEncoderH265", "End-to-end hardware H.265 encode self-test: writes an Annex-B .h265 stream in the captures directory.", [this] () {

@@ -36,6 +36,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
 #include "HeightfieldSurfaceHelper.hpp"
+#include "OceanSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "SkinningLayoutHelper.hpp"
@@ -304,9 +305,20 @@ namespace EmEn::Saphir::Generator
 		 * depth pass needs positions only: no pixel frame. */
 		if ( this->isHeightfieldSurfaceEnabled() )
 		{
-			vertexShader->enableHeightfieldSurface();
+			if ( this->isOceanSurfaceEnabled() )
+			{
+				vertexShader->enableOceanSurface();
+			}
+			else
+			{
+				vertexShader->enableHeightfieldSurface();
+			}
 
-			if ( !declareHeightfieldSurface(*vertexShader, program.setIndexes().set(SetType::PerModel), false) )
+			const auto declared = this->isOceanSurfaceEnabled() ?
+				declareOceanSurface(*vertexShader, program.setIndexes().set(SetType::PerModel), false) :
+				declareHeightfieldSurface(*vertexShader, program.setIndexes().set(SetType::PerModel), false);
+
+			if ( !declared )
 			{
 				return false;
 			}
@@ -642,6 +654,7 @@ namespace EmEn::Saphir::Generator
 
 			/* A heightfield surface: another vertex stage and another PerModel layout. */
 			hashCombine(hash, static_cast< size_t >(this->isHeightfieldSurfaceEnabled()));
+			hashCombine(hash, static_cast< size_t >(this->isOceanSurfaceEnabled()));
 
 			/* A mesh-shading surface: task + mesh stages and the material set. */
 			hashCombine(hash, static_cast< size_t >(this->isMeshShadingSurfaceEnabled()));

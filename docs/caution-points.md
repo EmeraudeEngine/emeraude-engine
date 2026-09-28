@@ -408,6 +408,17 @@ if ( materialType == StandardResource::ClassId )
 
 ---
 
+### FFT ocean: the Nyquist bins break the two-by-two packing, and the amplitude is a QUARTER (2026-09-28)
+
+`Graphics::OceanWaves` packs two real fields per complex inverse FFT (IFFT(A + iB) = a + ib only when a and b are real,
+i.e. A and B Hermitian). The Nyquist row and column (index N/2) are their own mirror in the FFT's native order: under an
+ODD operator (i kx, −i kx / |k|) the Hermitian symmetry breaks there, the field turns complex and its imaginary part
+lands in its partner — measured by the self-test (`Core.RendererService.testOceanWaves()`) as 1-3 % errors on exactly the
+three fields whose partner carried an odd factor. The initial spectrum is zero on those bins. Second trap of the same
+test: h(k, t) = h₀(k) e^(iωt) + conj(h₀(−k)) e^(−iωt) sums two independent draws, and a complex draw of unit Gaussians
+already carries E|ξ|² = 2, so E|h|² = S(k) Δk² needs an amplitude of sqrt(S Δk² / 4); a half doubled the variance.
+Engine item `ocean-fft-surface`.
+
 ## Ray Tracing / Acceleration Structures
 
 ### CDLOD terrain — what the adaptive grid taught, and the traps of its replacement (2026-09-22)

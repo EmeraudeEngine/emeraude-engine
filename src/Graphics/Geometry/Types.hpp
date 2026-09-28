@@ -85,7 +85,13 @@ namespace EmEn::Graphics::Geometry
 		 * @note It changes nothing in the vertex buffer: the flat grid stays complete, for the fallback, the
 		 * ray tracing and the physics.
 		 */
-		EnableMeshShadingSurface = 1U << 13U
+		EnableMeshShadingSurface = 1U << 13U,
+		/**
+		 * @brief With EnableHeightfieldSurface: the synthesized surface is an OCEAN (Geometry::OceanSurfaceResource) —
+		 * a CDLOD quadtree on an infinite plane displaced by the FFT wave cascades (Graphics::OceanWaves) instead of a
+		 * height clipmap. Same descriptor set layout, same per-node push constants, same per-pixel frame.
+		 */
+		EnableOceanSurface = 1U << 14U
 	};
 
 	/**

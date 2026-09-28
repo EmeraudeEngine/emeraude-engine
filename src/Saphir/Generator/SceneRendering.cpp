@@ -37,6 +37,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
 #include "HeightfieldSurfaceHelper.hpp"
+#include "OceanSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
 #include "Scenes/Scene.hpp"
 #include "SkinningLayoutHelper.hpp"
@@ -489,6 +490,11 @@ namespace EmEn::Saphir::Generator
 			{
 				vertexShader.enableHeightfieldBase();
 			}
+			else if ( this->isOceanSurfaceEnabled() )
+			{
+				/* An ocean: LOD rings displaced by the FFT cascades (engine item ocean-fft-surface). */
+				vertexShader.enableOceanSurface();
+			}
 			else
 			{
 				vertexShader.enableHeightfieldSurface();
@@ -496,7 +502,11 @@ namespace EmEn::Saphir::Generator
 
 			vertexShader.enableHeightfieldPixelFrame();
 
-			if ( !declareHeightfieldSurface(vertexShader, program.setIndexes().set(SetType::PerModel), false) )
+			const auto declared = this->isOceanSurfaceEnabled() ?
+				declareOceanSurface(vertexShader, program.setIndexes().set(SetType::PerModel), false) :
+				declareHeightfieldSurface(vertexShader, program.setIndexes().set(SetType::PerModel), false);
+
+			if ( !declared )
 			{
 				return false;
 			}
@@ -670,7 +680,11 @@ namespace EmEn::Saphir::Generator
 		{
 			fragmentShader->enableHeightfieldPixelFrame();
 
-			if ( !declareHeightfieldSurface(*fragmentShader, program.setIndexes().set(SetType::PerModel), true) )
+			const auto declared = this->isOceanSurfaceEnabled() ?
+				declareOceanSurface(*fragmentShader, program.setIndexes().set(SetType::PerModel), true) :
+				declareHeightfieldSurface(*fragmentShader, program.setIndexes().set(SetType::PerModel), true);
+
+			if ( !declared )
 			{
 				return false;
 			}
@@ -1226,6 +1240,7 @@ namespace EmEn::Saphir::Generator
 			/* So does a heightfield surface: another vertex stage, another fragment prelude, another
 			 * PerModel layout. */
 			hashCombine(hash, static_cast< size_t >(this->isHeightfieldSurfaceEnabled()));
+			hashCombine(hash, static_cast< size_t >(this->isOceanSurfaceEnabled()));
 			hashCombine(hash, static_cast< size_t >(this->isMeshShadingSurfaceEnabled()));
 		}
 

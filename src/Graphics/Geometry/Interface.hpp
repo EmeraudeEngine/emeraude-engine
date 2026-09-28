@@ -255,6 +255,18 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Returns whether this heightfield-style surface is an OCEAN (FFT waves on LOD rings) rather than a
+			 * CDLOD terrain.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			oceanSurfaceEnabled () const noexcept
+			{
+				return this->isFlagEnabled(EnableOceanSurface);
+			}
+
+			/**
 			 * @brief Returns the tiling a mesh-shading surface is drawn with.
 			 * @return const MeshShadingSurface * Null for every other geometry.
 			 */

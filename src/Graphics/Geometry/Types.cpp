@@ -94,7 +94,9 @@ namespace EmEn::Graphics::Geometry
 			"EnableDynamicVertexBuffer : " << ( (geometryFlagBits & EnableDynamicVertexBuffer) != 0 ? "yes" : "no" ) << "\n"
 			"EnableAbsolutePosition : " << ( (geometryFlagBits & EnableAbsolutePosition) != 0 ? "yes" : "no" ) << "\n"
 			"EnablePrimitiveRestart : " << ( (geometryFlagBits & EnablePrimitiveRestart) != 0 ? "yes" : "no" ) << "\n"
-			"EnableHeightfieldSurface : " << ( (geometryFlagBits & EnableHeightfieldSurface) != 0 ? "yes" : "no" ) << "\n";
+			"EnableHeightfieldSurface : " << ( (geometryFlagBits & EnableHeightfieldSurface) != 0 ? "yes" : "no" ) << "\n"
+			"EnableMeshShadingSurface : " << ( (geometryFlagBits & EnableMeshShadingSurface) != 0 ? "yes" : "no" ) << "\n"
+			"EnableOceanSurface : " << ( (geometryFlagBits & EnableOceanSurface) != 0 ? "yes" : "no" ) << "\n";
 
 		return output.str();
 	}

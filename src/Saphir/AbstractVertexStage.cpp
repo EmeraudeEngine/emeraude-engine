@@ -44,6 +44,7 @@
 #include "Declaration/StageOutput.hpp"
 #include "Generator/Abstract.hpp"
 #include "Graphics/Geometry/HeightfieldSurface.hpp"
+#include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/Types.hpp"
 #include "ImposterGLSL.hpp"
 #include "Keys.hpp"
@@ -1788,6 +1789,48 @@ namespace EmEn::Saphir
 	{
 		using namespace Graphics::Geometry;
 
+		/* An ocean (Geometry::OceanSurface): the CDLOD patch on an infinite plane — placed in its node, geomorphed
+		 * toward the next level exactly as a terrain's (Strugar, JGT 2009, § 3.3) — then displaced by the FFT cascades,
+		 * read at the UNDISPLACED lattice point (Tessendorf's choppy waves move the vertex sideways), each cascade faded
+		 * where the vertex spacing cannot hold it. */
+		if ( m_oceanSurfaceEnabled )
+		{
+			const std::string node{MatrixPC(PushConstant::Component::HeightfieldNode)};
+			const std::string camera{MatrixPC(PushConstant::Component::HeightfieldCamera)};
+			const std::string lattice{OceanSurface::LatticePositionVariable};
+			std::string code =
+				"\t" "/* Ocean surface: CDLOD patch on the sea plane, displaced by the FFT cascades. */" "\n"
+				"\t" "const vec4 hfNode = " + node + ";" "\n"
+				"\t" "const vec3 hfEye = " + camera + ".xyz;" "\n"
+				"\t" "const float hfStep = hfNode.z / ocSurface.grid.w;" "\n"
+				"\t" "const int hfLOD = int(hfNode.w);" "\n"
+				"\t" "const vec2 hfGrid = " + std::string{Attribute::Position} + ".xz;" "\n"
+				"\t" "const vec2 hfFlat = hfNode.xy + (hfGrid * hfStep);" "\n"
+				"\t" "const vec4 hfRange = ocSurface.levelsOfDetail[hfLOD];" "\n"
+				"\t" "const float hfMorph = clamp((distance(hfEye, vec3(hfFlat.x, ocSurface.level.x, hfFlat.y)) - hfRange.x) * hfRange.y, 0.0, 1.0);" "\n"
+				"\t" "const vec2 " + lattice + " = hfNode.xy + ((hfGrid - (mod(hfGrid, 2.0) * hfMorph)) * hfStep);" "\n"
+				"\t" "const float ocSpacing = hfStep * (1.0 + hfMorph);" "\n"
+				"\t" "const vec3 ocDisplacementHere = ocDisplacementAt(" + lattice + ", ocSpacing);" "\n"
+				"\t" "const vec3 hfPosition = vec3(" + lattice + ".x + ocDisplacementHere.x, ocSurface.level.x + ocDisplacementHere.y, " + lattice + ".y + ocDisplacementHere.z);" "\n";
+
+			if ( m_heightfieldFrameRequested )
+			{
+				code +=
+					"\t" "const vec3 hfNormal = ocNormalAt(" + lattice + ", ocSpacing);" "\n"
+					"\t" "const vec3 hfTangent = normalize(vec3(hfNormal.y, -hfNormal.x, 0.0));" "\n"
+					"\t" "const vec3 hfBinormal = cross(hfNormal, hfTangent);" "\n";
+			}
+
+			if ( m_heightfieldTextureCoordinatesRequested )
+			{
+				code += "\t" "const vec2 hfTextureCoordinates = (" + lattice + " * ocSurface.textureCoordinates.xy) + ocSurface.textureCoordinates.zw;" "\n";
+			}
+
+			code += "\n";
+
+			return code;
+		}
+
 		const std::string surface{HeightfieldSurface::UniformBlockInstance};
 		const std::string node{MatrixPC(PushConstant::Component::HeightfieldNode)};
 		const std::string camera{MatrixPC(PushConstant::Component::HeightfieldCamera)};
@@ -1867,7 +1910,8 @@ namespace EmEn::Saphir
 		 * (synthesizeVertexVectorInWorldSpace() / synthesizeVertexVectorInViewSpace()), handed flat so
 		 * the fragment stage applies them to the vector of ITS pixel. */
 		outputInstructions.append((std::stringstream{} <<
-			'\t' << HeightfieldSurface::PixelPositionVarying << " = hfPosition.xz;" "\n" <<
+			/* An ocean's frame is a function of the UNDISPLACED lattice point: the choppy waves move the vertex sideways. */
+			'\t' << HeightfieldSurface::PixelPositionVarying << " = " << (m_oceanSurfaceEnabled ? Graphics::Geometry::OceanSurface::LatticePositionVariable : "hfPosition.xz") << ";" "\n" <<
 			'\t' << HeightfieldSurface::PixelToWorldVarying << " = mat3(" << modelMatrix << ");" "\n" <<
 			'\t' << HeightfieldSurface::PixelToViewVarying << " = " << ShaderVariable::NormalMatrix << ";" "\n"
 		).str());

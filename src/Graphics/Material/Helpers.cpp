@@ -291,10 +291,19 @@ namespace EmEn::Graphics::Material
 	bool
 	addVolumetricTextureFallback (Generator::Abstract & generator, AbstractVertexStage & vertexShader, const Geometry::Interface & geometry) noexcept
 	{
-		/* If geometry already has 3D UVs or has no UVs at all, nothing to do. */
-		if ( geometry.primaryTextureCoordinates3DEnabled() || !geometry.primaryTextureCoordinatesEnabled() )
+		/* If geometry already has 3D UVs or has no UVs at all, nothing to do.
+		 * ⚠️ A SYNTHESIZED surface (a heightfield terrain, an ocean) has no UV attribute but provides UVs: asking the
+		 * vertex BUFFER (primaryTextureCoordinatesEnabled()) left its animated textures without sv3DTexCoord0 — an
+		 * undeclared identifier in the fragment stage (found on the FFT ocean's animated normal map, 2026-09-28). */
+		if ( geometry.primaryTextureCoordinates3DEnabled() || !geometry.surfaceProvidesPrimaryTextureCoordinates() )
 		{
 			return true;
+		}
+
+		/* The 2D coordinates the 3D ones are built from (idempotent; a synthesized surface only emits them on request). */
+		if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::Primary2DTextureCoordinates) )
+		{
+			return false;
 		}
 
 		/* Declare the 3D texture coordinate output. */
