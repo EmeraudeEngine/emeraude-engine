@@ -409,12 +409,42 @@ void main()
 	/* SAME SURFACE: the depth the history accumulated lies within this frame's 3x3 depth range (1 % margin). An
 	 * object that left the pixel fails it (its depth is nowhere in the background's neighbourhood); a jittered
 	 * edge passes it (both surfaces are in the range). */
-	float historyDepth = texture(historyTex, prevUV).a;
+	/* The history alpha is the SIGNED linear depth: negative = the history holds MOVING content (below). Read with a
+	 * gather and blended by hand on the magnitudes, which is exactly the bilinear read of an unsigned depth: a
+	 * filtered signed value would average a marked and an unmarked texel of the same surface towards 0. */
+	vec2 historyTexel = prevUV / texel - 0.5;
+	vec2 historyFraction = fract(historyTexel);
+	vec4 historyTags = textureGather(historyTex, (floor(historyTexel) + 1.0) * texel, 3);
+	vec4 historyMagnitudes = abs(historyTags);
+	float historyDepth = mix(
+		mix(historyMagnitudes.w, historyMagnitudes.z, historyFraction.x),
+		mix(historyMagnitudes.x, historyMagnitudes.y, historyFraction.x),
+		historyFraction.y
+	);
+	bool historyMarked = any(lessThan(historyTags, vec4(0.0)));
 	float nearestLinear = linearizeDepth(closestDepth);
 	float farthestLinear = linearizeDepth(farthestDepth);
 	bool sameSurface = historyDepth >= nearestLinear * 0.99 && historyDepth <= farthestLinear * 1.01;
 
-	if (!sameSurface)
+	/* MOTION MARKER (owner decision, 2026-09-28, option B): the depth cannot separate a thin moving object from the
+	 * ground it stands on (at a grazing angle the ground's 3x3 range holds the object's depth), and a 1-3 px blade is
+	 * a jittered edge almost everywhere, so its colour entered the history tagged with the ground's depth and was
+	 * never rejected once the blade had gone — 1-px lines, one per logic tick. The history is therefore MARKED
+	 * where the dilation brought a FOREIGN motion (a neighbour's velocity more than half a pixel away from this
+	 * pixel's own: a moving object over or next to this pixel), and the mark lasts while the pixel stays on an EDGE
+	 * (3x3 depth range above 5 %) — between two logic ticks nothing moves, the blade stands still and its edge
+	 * pixels keep their mark. A marked history whose neighbourhood is no longer an edge has lost the object: it is
+	 * rejected (clipped) like a disocclusion. A still scene never marks anything, so the 2026-09-23 depth rule — no
+	 * colour clip on unchanged geometry — is untouched by construction. */
+	vec2 ownVelocity = texture(velocityTex, vUV).rg;
+	float dilationPixels = length((velocity - ownVelocity) * 0.5 / texel);
+	bool foreignMotion = dilationPixels > 0.5;
+	bool edge = farthestLinear > nearestLinear * 1.05;
+	bool objectLeft = historyMarked && !edge;
+	bool rejected = !sameSurface || objectLeft;
+	bool markOut = foreignMotion || (historyMarked && edge);
+
+	if (rejected)
 	{
 		vec3 clippedYCoCg = clipToAABB(mu - varianceGamma * sigma, mu + varianceGamma * sigma, RGBToYCoCg(history));
 		history = max(YCoCgToRGB(clippedYCoCg), vec3(0.0));
@@ -448,15 +478,13 @@ void main()
 
 		if (debugView < 1.5)
 		{
-			/* 1 — THE DECISION: red = history rejected (clipped), green = what the dilation changed (the velocity
-			 * taken from the nearest 3x3 neighbour against the pixel's own, 1 px = full — on a grazing ground the
-			 * nearest neighbour is always another pixel, so "a neighbour was taken" alone lights everything),
-			 * blue = reprojection length (8 px = full). */
-			vec2 ownVelocity = texture(velocityTex, vUV).rg;
-			float dilationPixels = length((velocity - ownVelocity) * 0.5 / texel);
-
+			/* 1 — THE DECISION: red = history rejected (clipped, by the depth or by the motion marker), green = what
+			 * the dilation changed (the velocity taken from the nearest 3x3 neighbour against the pixel's own, 1 px =
+			 * full — on a grazing ground the nearest neighbour is always another pixel, so "a neighbour was taken"
+			 * alone lights everything; above half a pixel it marks the history), blue = reprojection length (8 px =
+			 * full). */
 			colour = vec3(
-				sameSurface ? 0.0 : 1.0,
+				rejected ? 1.0 : 0.0,
 				clamp(dilationPixels, 0.0, 1.0),
 				clamp(motionPixels / 8.0, 0.0, 1.0)
 			);
@@ -464,8 +492,11 @@ void main()
 		else if (debugView < 2.5)
 		{
 			/* 2 — THE HISTORY DEPTH against this frame's 3x3 range: red = nearer than the nearest, blue = farther
-			 * than the farthest, uncoloured = inside (the history is kept as is). */
+			 * than the farthest, uncoloured = inside; green = the history carries the MOTION MARKER (yellow = marked
+			 * and rejected because its neighbourhood is no longer an edge). */
 			colour = historyDepth < nearestLinear * 0.99 ? vec3(1.0, 0.0, 0.0) : (historyDepth > farthestLinear * 1.01 ? vec3(0.0, 0.0, 1.0) : vec3(0.0));
+			colour.g = historyMarked ? 1.0 : 0.0;
+			colour.r = objectLeft ? 1.0 : colour.r;
 		}
 		else
 		{
@@ -482,7 +513,7 @@ void main()
 		return;
 	}
 
-	outResolved = vec4(result, centerDepth);
+	outResolved = vec4(result, markOut ? -centerDepth : centerDepth);
 }
 )GLSL";
 

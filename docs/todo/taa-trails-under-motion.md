@@ -40,9 +40,10 @@ unless stated):
   capped at 60 fps the sword comb vanished. Fix: previous pose = the previous RENDERED frame's
   (`RenderableInstance::Abstract::flushSkinningMatrices()`, engine `docs/subsystems/scenes/13-instance-transforms.md`).
   On no-tick frames the crop's frame-to-frame change fell from 1.4/255 to 0.1/255, the static floor.
-  **What remains of it**: thin 1-px lines behind the blade, over the sky and the ground, that persist
-  unchanged across frames — one per tick position. That is the resolve (What remains, point 1), not the
-  velocity any more.
+  The thin 1-px lines left behind the blade (one per tick position, laundered through the centre-depth tag)
+  are gone too since the resolve's MOTION MARKER (owner decision, 2026-09-28): the measurements, the three
+  depth-only variants that failed and why, in
+  `docs/subsystems/graphics/13-12-post-processing-effects/06-the-taa-resolve-the-history-is-rejected-by-depth-never-by-co.md`.
 - **Foliage in the wind** (`forest --demo-options 0,0,0`, camera parked): the canopy smears into brush
   strokes that bleed into the sky; with the TAA off the leaves are sharp (and aliased).
 - *Not this item, but the first check for any new report:* the FFT ocean's whitecaps smeared into vertical streaks
@@ -73,42 +74,14 @@ the renderer shows, or not what dominates it.
 
 ## What remains
 
-1. **The 1-px lines behind the Paladin's blade — an OWNER DECISION, measured 2026-09-28.** The debug view
-   exists (`Core/Graphics/PostProcessing/TemporalAA/DebugView`,
-   `docs/subsystems/graphics/13-12-post-processing-effects/06-the-taa-resolve-the-history-is-rejected-by-depth-never-by-co.md`). What it showed on `animation-debug` (lane `None`, exposure pinned f/8 · 1/325 · ISO 100):
-   - View 1: the lines are NEVER rejected; view 3: they are kept history that differs from the frame — two
-     fans of 1-px lines, one per tick position, behind both swords (over the ground and over the red cube).
-   - Metric (`ridges`: 1-2 px crests of the view-3 red excess on the bright ground, 16 frames, mean per
-     frame): current resolve **11 500-12 400**.
-   Three resolve variants were built and measured, each against the `relief` parked gate (spawn pose,
-   f/8 · 1/125 · ISO 100, lane ScreenSpace, 16 frames; current: mean 0.437, **0.00 % > 8, max 7**, horizon
-   band 0.633):
-
-   | variant | ridges | `relief` |
-   |---|---|---|
-   | at a motion boundary (dilated velocity differs > 0.5 px), test the history against the pixel's OWN depth | 11 500 — no effect | — |
-   | history tagged with the NEAREST 3×3 depth instead of the centre one | **4 600-5 700 (-60 %)** | 0.05 % > 8, **max 39**, horizon band 0.46 % > 8 |
-   | nearest tag + acceptance over a 5×5 range | 12 000-23 000 — no effect | identical to current |
-
-   Reading: the centre-depth tag LAUNDERS the blade — a 1-3 px blade makes almost every blade pixel a jittered
-   edge whose centre sample is the ground half the time, so the blade's colour enters the history tagged
-   "ground" and is never rejected once the blade is gone (the nearest tag proves it: -60 %). But the nearest
-   tag rejects a parked silhouette's own history at every other jitter phase (the sky pixel above the horizon
-   is tagged "ground", then the ground leaves its 3×3), and widening the test to 5×5 to absorb the jitter lets
-   the blade back in: **at a grazing angle the ground's depth range contains the depth of an object standing
-   on it** — no depth test separates the blade from the ground behind it (it does over the sky). All three
-   reverted, never committed.
-   What is left needs a signal other than the depth — colour (the rectification the 2026-09-23 depth rule
-   removed on unchanged geometry) or a motion history (was this pixel's history built from moving content?) —
-   and trades against the parked-camera shimmer: **owner decision**. ⚠️ `relief` only has one silhouette (the
-   horizon): a variant that touches the edge ring must also be gated on a scene full of silhouettes (a parked
-   `forest`), where it would cost far more.
-2. **Foliage**: inside a canopy the 3×3 depth range always spans leaf to sky, so the history is almost
-   never clipped there (the 2026-09-23 depth rule, by design). Colour rectification while moving (the
+1. **Foliage**: inside a canopy the 3×3 depth range always spans leaf to sky, so the history is almost
+   never clipped there (the 2026-09-23 depth rule, by design). The motion marker does not reach it: the wind
+   moves the leaves by less than its 0.5 px foreign-motion threshold per frame (`forest` in its wind: canopy
+   gradient 16.3 with the marker, 15.5 without, 41.8 with the TAA off). Colour rectification while moving (the
    "GATE" option: the clip blended back with the motion) or an FSR2-style lock are the known answers; both
    trade against the parked-camera shimmer the depth rule fixed — an owner decision, to be taken on
    measurements.
-3. Found by the same analysis, not reported by the owner yet: particles report zero object motion
+2. Found by the same analysis, not reported by the owner yet: particles report zero object motion
    (`ParticlesEmitter.hpp:86`, sprites excluded from motion history `Multiple.cpp:74`); translucent surfaces
    overwrite the velocity and depth of what is behind them (G-buffer blending off,
    `Saphir/Generator/SceneRendering.cpp:1104-1113`).

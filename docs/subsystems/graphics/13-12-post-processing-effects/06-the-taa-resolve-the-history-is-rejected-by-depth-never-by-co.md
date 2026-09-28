@@ -39,9 +39,10 @@ filtered) decides whether the history is still valid.
   fix; not visible to the owner). Both Windows and macOS had `TemporalAA/Enabled = false` in their
   settings: that, not the machine, is why they "did not shimmer".
 - **Debug view of the resolve's decision (2026-09-28)**: `Core/Graphics/PostProcessing/TemporalAA/DebugView`, read
-  at creation (0 = off). **1** red = history rejected (clipped), green = what the velocity dilation changed (the
-  nearest neighbour's velocity against the pixel's own, 1 px = full), blue = reprojection length (8 px = full);
-  **2** the history depth nearer (red) or farther (blue) than the 3×3 range; **3** the exposed luminance gap
+  at creation (0 = off). **1** red = history rejected (clipped, by the depth or by the motion marker), green =
+  what the velocity dilation changed (the nearest neighbour's velocity against the pixel's own, 1 px = full),
+  blue = reprojection length (8 px = full); **2** the history depth nearer (red) or farther (blue) than the 3×3
+  range, green = the history carries the motion marker, yellow = marked and rejected; **3** the exposed luminance gap
   between the history the blend keeps and the current reconstruction (1/8 of the display range = full red).
   Magenta = off-screen reprojection. It is the SAME resolve recorded a second time into its own target
   (`TAA_DebugView`) and shown instead: the history keeps accumulating for real, so the view explains the
@@ -56,7 +57,27 @@ filtered) decides whether the history is still valid.
   the time, and it is never rejected once the blade has gone (1-px lines, one per logic tick). Tagging the
   nearest 3×3 depth cuts those lines by 60 % but rejects a parked silhouette's own history every other jitter
   phase (`relief` horizon: max 7 → 39); a 5×5 acceptance range removes that cost and the benefit with it.
-  Numbers and the open owner decision: `docs/todo/taa-trails-under-motion.md`.
+- **The motion marker (owner decision 2026-09-28, "option B")** answers it without a colour test. The history
+  alpha is the SIGNED linear depth: **negative = the history holds moving content**. Written negative where the
+  dilation brought a FOREIGN motion (the nearest neighbour's velocity more than 0.5 px away from the pixel's
+  own), and kept negative while the pixel stays on an EDGE (3×3 depth range above 5 %) — between two logic
+  ticks nothing moves, so the mark must survive them. A marked history whose 3×3 is no longer an edge has lost
+  its object: rejected (clipped) like a disocclusion. A still scene never writes a mark, so the rule above (no
+  colour clip on unchanged geometry) holds by construction. ⚠️ The alpha is read with a `textureGather` and
+  blended by hand on the MAGNITUDES (the exact bilinear read of an unsigned depth): a filtered signed value
+  would average a marked and an unmarked texel of the same surface towards 0 and reject it. Nothing downstream
+  reads the TAA output's alpha (the DoF's `extractFromAlpha` reads its OWN setup target).
+  Measured (Linux, RTX 3070 Ti, 2880×1620, 16 frames, exposure pinned):
+  - `animation-debug` (lane `None`, DebugView 3, 1-2 px crests of the kept-history gap on the ground): the fans of
+    1-px lines behind both swords are gone; crests 11 500-12 400 → 6 800-8 600 per frame (the rest is ground
+    texture and actor outlines).
+  - `relief` parked (f/8 · 1/125 · ISO 100, ScreenSpace): mean 0.436, 0.00 % > 8, max 7 — unchanged.
+  - `forest --demo-options 0,0,0`, parked, wind set to 0 for the bench: mean 1.180 / 1.83 % > 8 / max 116
+    against 1.176 / 1.82 % / 119 — unchanged on thousands of silhouettes (TAA off: 2.48 / 8.3 %, the scene has
+    temporal noise of its own).
+  - Same forest in its wind: canopy gradient 16.3 against 15.5 (TAA off 41.8), temporal ptp 9.96 against 8.34 —
+    the image follows the motion a little better; the canopy smear itself is NOT solved (wind motion stays
+    under the 0.5 px foreign-motion threshold): `docs/todo/taa-trails-under-motion.md`, foliage.
 - An HDRP-style anti-flicker (the clip widened with stationarity and temporal contrast) was tried
   the same day and reached far band 11.6 / 7.9 (base gamma 1.0 / 1.5, full strength): it only
   softens the wrong test. Removed.
