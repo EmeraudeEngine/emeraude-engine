@@ -625,6 +625,31 @@ namespace EmEn::Graphics::Geometry
 		/* The finest level, or entirely beyond the next finer level's range: the whole node, at this level. */
 		if ( levelOfDetail == 0 || distance > m_lodRanges[levelOfDetail - 1] )
 		{
+			/* The detail window is cut out at level 0, quarter by quarter: the patch index buffer is sorted by quarter,
+			 * and the window is made of whole quarters. The window always lies within the level-0 range
+			 * (enableDetailWindow()), so no coarser node ever overlaps it. */
+			if ( levelOfDetail == 0 && m_passWindow.has_value() )
+			{
+				const auto & window = m_passWindow.value();
+				const auto quarterIndexCount = m_patchIndexCount / 4U;
+
+				for ( uint32_t quarter = 0; quarter < 4; ++quarter )
+				{
+					const auto quarterX = (nodeX * 2U) + (quarter % 2U);
+					const auto quarterZ = (nodeZ * 2U) + (quarter / 2U);
+					const bool insideWindow =
+						quarterX >= window.firstQuarterX && quarterX < window.firstQuarterX + 2U &&
+						quarterZ >= window.firstQuarterZ && quarterZ < window.firstQuarterZ + 2U;
+
+					if ( !insideWindow )
+					{
+						m_selection.push_back({{quarter * quarterIndexCount, quarterIndexCount}, node});
+					}
+				}
+
+				return true;
+			}
+
 			m_selection.push_back({{0, m_patchIndexCount}, node});
 
 			return true;
@@ -648,10 +673,81 @@ namespace EmEn::Graphics::Geometry
 		return true;
 	}
 
+	bool
+	CDLODTerrainResource::enableDetailWindow (bool state) noexcept
+	{
+		if ( !state )
+		{
+			m_detailWindowEnabled = false;
+
+			return true;
+		}
+
+		const auto quarterCells = m_parameters.patchQuads / 2U;
+
+		if ( quarterCells == 0 || m_cellCount / quarterCells < 2U || m_levelOfDetailCount == 0 )
+		{
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': too small for a detail window (load() it first; two level-0 quarters per side at least) !";
+
+			return false;
+		}
+
+		/* The camera is never more than half a quarter from the window's centre per axis, so the farthest corner is
+		 * 1.5 quarters away per axis. The level-0 geomorph must start beyond it: an unmorphed window edge against a
+		 * morphing neighbour would crack by the height difference between the levels. A single-level terrain never
+		 * morphs (its start is infinite). */
+		const auto quarterSize = static_cast< float >(quarterCells) * m_cellSize;
+		const auto farthestCorner = std::sqrt(2.0F) * 1.5F * quarterSize;
+
+		if ( m_morphTable[0][0] < farthestCorner || m_lodRanges[0] < farthestCorner )
+		{
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': no detail window — the level-0 geomorph starts at " << m_morphTable[0][0] << " m, closer than the window's farthest corner (" << farthestCorner << " m). Raise the detail distance or lower the patch size.";
+
+			return false;
+		}
+
+		m_detailWindowEnabled = true;
+
+		return true;
+	}
+
+	std::optional< CDLODDetailWindow >
+	CDLODTerrainResource::detailWindowFor (const Vector< 3, float > & eye) const noexcept
+	{
+		if ( !m_detailWindowEnabled )
+		{
+			return std::nullopt;
+		}
+
+		const auto quarterCells = m_parameters.patchQuads / 2U;
+		const auto quarterSize = static_cast< float >(quarterCells) * m_cellSize;
+		const auto lastFirstQuarter = static_cast< int64_t >(m_cellCount / quarterCells) - 2;
+		const auto halfGrid = static_cast< float >(m_cellCount) * m_cellSize * 0.5F;
+
+		/* The quarter corner nearest to the camera is the window's centre; against the grid's border the window stops
+		 * following the camera, like the clip levels. */
+		const auto firstQuarter = [quarterSize, lastFirstQuarter, halfGrid] (float coordinate) {
+			const auto nearestCorner = static_cast< int64_t >(std::lround((coordinate + halfGrid) / quarterSize));
+
+			return static_cast< uint32_t >(std::clamp< int64_t >(nearestCorner - 1, 0, lastFirstQuarter));
+		};
+
+		CDLODDetailWindow window;
+		window.firstQuarterX = firstQuarter(eye[X]);
+		window.firstQuarterZ = firstQuarter(eye[Z]);
+		window.originX = -halfGrid + (static_cast< float >(window.firstQuarterX) * quarterSize);
+		window.originZ = -halfGrid + (static_cast< float >(window.firstQuarterZ) * quarterSize);
+		window.size = 2.0F * quarterSize;
+
+		return window;
+	}
+
 	void
 	CDLODTerrainResource::prepareAdaptiveRendering (const Vector< 3, float > & lodViewPosition, const Frustum * cullingFrustum, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
 	{
 		m_selection.clear();
+		/* The window of THIS pass's camera: the detail surface is drawn around the same position. */
+		m_passWindow = this->detailWindowFor(lodViewPosition);
 
 		if ( m_nodeHeightRanges.empty() || m_patchIndexCount == 0 )
 		{

@@ -4732,6 +4732,21 @@ namespace EmEn::Graphics::Material
 		this->markVideoMemoryDirty();
 	}
 
+	float
+	StandardResource::meshShadingReliefReach () const noexcept
+	{
+		/* No height map, or no handover band (a mesh-shading surface is then geometry at every distance). */
+		if ( !m_useParallaxOcclusionMapping )
+		{
+			return 0.0F;
+		}
+
+		const auto start = m_materialProperties[ParallaxHandoverOffset];
+		const auto end = m_materialProperties[ParallaxHandoverOffset + 1];
+
+		return end > start ? end : 0.0F;
+	}
+
 	void
 	StandardResource::setParallaxFadeDistances (float start, float end) noexcept
 	{

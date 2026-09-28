@@ -656,6 +656,20 @@ namespace EmEn::Graphics::Material
 			}
 
 			/**
+			 * @brief Returns how far from the camera this material's relief is still real GEOMETRY on a mesh-shading
+			 * surface: the end of its geometry-to-parallax handover band, beyond which the surface is flat.
+			 * @note A terrain's detail window needs a flat border to meet the CDLOD: it is only cut out when this reach
+			 * fits inside the window (Renderable::TerrainResource, engine item mesh-shading-surface-on-heightfield).
+			 * @return float In metres; 0 when the material displaces nothing or declares no handover band.
+			 */
+			[[nodiscard]]
+			virtual float
+			meshShadingReliefReach () const noexcept
+			{
+				return 0.0F;
+			}
+
+			/**
 			 * @brief Generates the displacement of a MESH-SHADING surface's vertex by this material's relief
 			 * (Geometry::MeshShadingSurface): the same height map, scale and UV transform the material's parallax
 			 * uses, so the two techniques draw ONE relief.

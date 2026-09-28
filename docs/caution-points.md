@@ -500,6 +500,10 @@ slopes: vertex-frequency curvature **0.44 m → 0.083 (1.25) → 0.017 (1.5) →
 0.25 → 0.19 → 0.16 → 0.15. `terrain` runs at 1.25: 1.5 read as a flat sheet up close. ⚠️ The
 generator's other signature, straight subdivision creases along the grid axes, remains at every H —
 it is the algorithm's, not the exponent's.
+⚠️ Fixed 2026-09-28 in emeraude-base (its `docs/caution-points.md` § Diamond-square): those creases and a CONE TIP
+at every coarse point came from the LINEAR averages of midpoint displacement; the generator now takes the 4-point
+cubic rule. A higher hurst had made them MORE visible, by removing the fine noise that hid them (water-world's spawn
+sat on one).
 
 **Files**: `src/Graphics/Geometry/{Interface,CDLODTerrainResource}.{hpp,cpp}`, `src/Graphics/Geometry/HeightfieldSurface.hpp`, `src/Saphir/Generator/HeightfieldSurfaceHelper.{hpp,cpp}`, `src/Saphir/{VertexShader,FragmentShader}.{hpp,cpp}`, `src/Saphir/Declaration/PushConstantBlock.cpp`, `src/Graphics/Renderable/TerrainResource.{hpp,cpp}`, `src/Graphics/RenderableInstance/Abstract.{hpp,cpp}`, `src/Graphics/Renderer.{hpp,cpp}`, `src/Scenes/Scene.rendering.cpp`, `src/SettingKeys.hpp`; emeraude-base `Math/Space3D/AACuboid.hpp`, `Algorithms/DiamondSquare.hpp`, `VertexFactory/Grid.hpp`.
 

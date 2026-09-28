@@ -501,6 +501,10 @@ namespace EmEn::Graphics::Material
 			 */
 			void setParallaxHandover (float start, float end) noexcept;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::meshShadingReliefReach() const */
+			[[nodiscard]]
+			float meshShadingReliefReach () const noexcept override;
+
 			/**
 			 * @brief Sets the reflection/IBL component as a cubemap texture.
 			 * @warning This function is available before creation time.

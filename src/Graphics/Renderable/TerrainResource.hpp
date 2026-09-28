@@ -39,6 +39,8 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/CDLODTerrainResource.hpp"
+#include "Graphics/Geometry/HeightfieldDetailSurfaceResource.hpp"
+#include "MeshResource.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -236,6 +238,10 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::updateVisibility() */
 			void updateVisibility (const Base::Math::Vector< 3, float > & worldPosition) noexcept override;
 
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::detailRenderable() const */
+			[[nodiscard]]
+			std::shared_ptr< Abstract > detailRenderable () const noexcept override;
+
 			/**
 			 * @brief Sets the knobs of the CDLOD geometry, before loading.
 			 * @param parameters The parameters (patch, clip levels, detail distance, morph, ray-tracing proxy).
@@ -373,7 +379,19 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			bool createGeometryFromLocalData () noexcept;
 
+			/**
+			 * @brief Cuts the DETAIL WINDOW out of the CDLOD and creates its companion renderable, where the device draws
+			 * mesh shaders (engine item mesh-shading-surface-on-heightfield, owner decisions 2026-09-28).
+			 * @note Created early, before the material is known, so the scene sees the companion when it registers its
+			 * visuals; onDependenciesLoaded() cancels the window when the material turns out to have no relief to
+			 * displace, or a relief reaching past the window's border.
+			 * @return void
+			 */
+			void prepareDetailWindow () noexcept;
+
 			std::shared_ptr< Geometry::CDLODTerrainResource > m_geometry;
+			std::shared_ptr< Geometry::HeightfieldDetailSurfaceResource > m_detailGeometry; ///< The detail window, null without mesh shaders.
+			std::shared_ptr< MeshResource > m_detailRenderable; ///< Its companion renderable (GroundLevelInterface::detailRenderable()).
 			std::shared_ptr< Material::Interface > m_material;
 			std::shared_ptr< Base::VertexFactory::Grid< float > > m_localData; ///< The whole grid; read-only once loaded, shared with the geometry.
 			RasterizationOptions m_rasterizationOptions;

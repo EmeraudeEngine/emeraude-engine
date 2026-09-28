@@ -34,3 +34,33 @@ the log says so once.
 - ⚠️ The first run failed on `pcMatrices.viewMatrix`: a mesh stage created without `enableAdvancedMatrices()` gets
   the classic VP-only block while the lit passes synthesize view-space vectors. Any new per-vertex mode the vertex
   shader takes from `initVertexShader()` must be mirrored in `generateMeshShadingStages()`.
+
+### Over a terrain: the heightfield BASE mode and the detail window (2026-09-28)
+
+A geometry carrying BOTH `EnableMeshShadingSurface` and `EnableHeightfieldSurface` — `Geometry::HeightfieldDetailSurfaceResource`,
+a terrain's detail window (engine item `mesh-shading-surface-on-heightfield`) — stands on a heightfield it does not
+build:
+- `configurePerVertexStage()` gives the MESH stage `AbstractVertexStage::enableHeightfieldBase()` instead of
+  `enableHeightfieldSurface()`: the terrain's set is declared (`declareHeightfieldSurface()`, on the task stage too), the
+  mesh source defines `hfPosition` for the per-pixel frame outputs (`providesHeightfieldPixelFrame()`), and the CDLOD
+  vertex program (node push constant, geomorph) is NOT emitted — the program takes the mesh-surface push block only.
+- `MeshShadingSurfaceHelper` (`heightfieldBase`): the base height is `msBaseHeight()` — the lattice heights of clip
+  level 0 interpolated on the CDLOD's TWO TRIANGLES per cell (split along (x, z)–(x + 1, z + 1)), never bilinearly, so the
+  window IS the surface the ray-tracing proxy traces; the relief is pushed along the clipmap normal; UV = the terrain's
+  `hfSurface.textureCoordinates` (no jump at the window's border); quads split along the CDLOD diagonal; the task stage's
+  box and distance use the cell's four lattice heights.
+- The heightfield set layout carries `Device::meshShadingStages()`.
+- The tiling FOLLOWS the camera of each pass: `Geometry::Interface::meshShadingSurfaceFor(camera)`, the static
+  `meshShadingSurface()` for a flat grid. The window is `CDLODTerrainResource::detailWindowFor(camera)` — the 2 × 2
+  level-0 quarters nearest to the camera — and the CDLOD skips exactly those quarters in `selectNode()`: a pure function
+  of the pass's camera, no shared state. `enableDetailWindow()` refuses a window whose border the level-0 geomorph could
+  reach; `TerrainResource` cancels it when the material's relief (`Material::Interface::meshShadingReliefReach()`, the end
+  of its handover band) does not fit inside `detailWindowSafeRadius()`.
+- The companion renderable (`TerrainResource::detailRenderable()`, a `MeshResource`) is created only with
+  `VK_EXT_mesh_shader` — its placeholder grid would draw flat — and registered by the scene as a fourth scene visual, out
+  of the ray-tracing lists (the scene-visual RT branch now honours `isRayTracingDisabled()`).
+
+⚠️ **Skirts only toward a COARSER neighbour** (both modes, 2026-09-28): the task stage evaluates its four neighbours'
+subdivision with the same functions (`msNeighbourSubdivision()`) and hangs a skirt only on an edge it shares with a
+coarser tile — the only edges that can crack. Skirts on every edge showed as bright one-pixel lines along convex folds:
+the skirt's top ties in depth with the fold and its vertical strip has degenerate UV derivatives.

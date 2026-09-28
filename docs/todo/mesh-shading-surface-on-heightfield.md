@@ -1,7 +1,7 @@
 ---
 id: mesh-shading-surface-on-heightfield
 title: Real displaced micro-geometry on a heightfield terrain (TerrainResource) through task + mesh shaders
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics/Geometry (CDLODTerrainResource, MeshShadingSurface), Saphir/Generator (HeightfieldSurfaceHelper, MeshShadingSurfaceHelper)
 opened: 2026-09-27
@@ -25,25 +25,76 @@ Owner (2026-09-27): projet-alpha's `water-world` island moved to a `TerrainResou
 
 Owner decision (2026-09-27, AskUserQuestion): deliver `water-world` with POM first, then design this item together.
 
-## What remains
+## Owner decisions (2026-09-28, AskUserQuestion)
 
-Everything — this is a design item. Questions to put to the owner before any code:
+1. **A camera-following mesh-shading WINDOW plus a HOLE in the CDLOD** (chosen over "near nodes switch pipeline
+   inside the CDLOD draw" and over "a DisplacedGridResource with a base height texture, small terrains only"): the
+   window is made of whole level-0 CDLOD nodes around the camera; the CDLOD skips exactly those nodes. The window
+   reads the terrain's height clipmap as its base height and adds the material's displacement on top. Its border lies
+   beyond the geometry-to-parallax handover, where the relief is flat, so it meets the CDLOD on the lattice heights
+   (skirts against the residual cracks). Without `VK_EXT_mesh_shader`: no window, CDLOD + POM everywhere. It must
+   hold for `terrain`'s 16 km too, not only `water-world`.
+2. **Deepen `Grounds/Sand001`** so the result is visible on `water-world`: its 3.4 mm relief is 2-3 px at 2 m, which
+   POM already shows; raise `Height.Scale` AND `Normal.Scale` together (the lighting must keep describing the same
+   relief), measure, the owner judges the image.
 
-1. **Where the mesh path lives**: the CDLOD nodes closer than the handover band re-emitted by a task + mesh
-   program that samples the clipmap height AND adds the material's displacement, the far nodes staying on the
-   vertex path (two programs, one terrain) — or a dedicated near-camera mesh-shading patch laid over the
-   heightfield (a second renderable: z-fight and seams to solve).
-2. **Crack handling** between a re-tessellated node and its CDLOD neighbours: the flat surface chose SKIRTS
-   (owner, 2026-09-23); the heightfield already geomorphs — which one wins at the band?
-3. **The frame**: the heightfield rebuilds T/B/N per pixel from its normal clipmap
-   (`FragmentShader`, `HeightfieldFrameOverrides`); the mesh stage must hand over the same position varying so
-   the fragment code stays shared.
-4. **Shadows**: the flat surface's shadow program is subdivided for the MAIN camera
-   (`ShadowCasting::generateMeshShadingStages()`); the same has to hold for the heightfield.
-5. **Cost**: the flat surface still costs +3.2 ms colour / +0.5 ms shadow on an RTX 3070 Ti after culling
-   (`mesh-shader-displaced-surface`); a terrain covers far more ground — measure before choosing.
+3. **The window is a COMPANION renderable** (chosen over generalising `Renderable::Abstract` to one geometry per
+   layer): `TerrainResource` owns it (mesh-shading geometry + the same material) and exposes it through
+   `GroundLevelInterface` (optional, null without `VK_EXT_mesh_shader`); the scene registers it as a fourth scene
+   visual beside the ground. The `Renderable` contract, `RenderableInstance` and the program cache are untouched.
+
+⚠️ Data trap found while sizing: `Grounds/Mud001` (the `terrain` ground) has `Height.Scale = 1.0` — a relief one whole
+texture repeat deep (8 m at `terrain`'s tiling). Harmless while `POMIterations = 0` skips its POM; a mesh-shading
+window would displace it by metres. Fix the data before `terrain` gets the window.
+
+## What remains — the plan (2026-09-28)
+
+The window is a PURE FUNCTION of the pass's camera position: the 2 × 2 block of level-0 node QUARTERS nearest to the
+camera (32 m quarters at 1 m cells, so a 64 m window whose centre is never more than 16 m from the camera — the 5 m
+handover disc always fits). The CDLOD hole and the window are both computed from that function with the camera of
+the pass (`lodViewPosition`, the MAIN camera in a shadow pass), so no state is shared between the two geometries and
+no thread has to publish anything.
+
+1. **The hole** (`CDLODTerrainResource`): when the detail window is enabled, `selectNode()` pushes a level-0 node
+   quarter by quarter (the patch index buffer is already sorted by quarter) and skips the quarters inside the window.
+   Testable alone: a 64 m hole that follows the camera.
+2. **The window geometry** (new `Graphics::Geometry` class): `EnableMeshShadingSurface` over the window rectangle,
+   whose origin moves with the camera — `drawMeshShadingSurface()` needs the rectangle per draw (a per-camera
+   accessor on `Geometry::Interface`, the static `meshShadingSurface()` for a flat grid).
+3. **Saphir** (`MeshShadingSurfaceHelper`): a base height from the terrain's clipmap (`hfHeight()`, level 0, the
+   heightfield set bound as the program's `PerModel` set with TASK | MESH stages), the material's displacement on top,
+   the heightfield per-pixel frame in the fragment stage; tiles split along the CDLOD diagonal; the flat tiles near
+   the window border reproduce the level-0 GEOMORPH so they meet a morphing CDLOD neighbour exactly.
+4. **The companion renderable**: `TerrainResource` creates it only when the device has `VK_EXT_mesh_shader` (the
+   mesh-shading geometry's own vertex fallback would draw a flat grid without the terrain's heights); exposed by
+   `GroundLevelInterface`, registered by the scene as a fourth scene visual.
+5. **Shadows**: the mesh shadow program with the heightfield set; the CSM passes (terrain's default) — the mesh task
+   stage does not cull against a cascade today.
+6. **`water-world` + Sand001 deepened**: measure the frame and the GPU cost against the POM, the owner judges.
+
+## Progress (2026-09-28)
+
+Steps 1-4 are implemented and run on `water-world` (RTX 3070 Ti, validation ON, 0 VUID, no shader error): the hole
+follows the camera, the companion window fills it, the aerial view is identical to the pure CDLOD on the terrain
+(shadows included), the spawn frame differs from CDLOD + POM on 1.18 % of the pixels. Skirts are hung only toward a
+COARSER neighbour: on every edge they drew bright one-pixel lines along the convex folds (1.40 % → 1.18 %).
+`Sand001` deepened ×5 (`Height.Scale` 0.017, `Normal.Scale` 5): the ripples read in both modes.
+
+OPEN: at a close pose with the deepened sand, the window shows darker, straight-edged blocks inside the ray-traced
+cast shadow, absent in POM mode and gone with shadow mapping disabled. A shadow bias of 0.05 (10×) lightens them without
+removing them: shadow acne of the 17 mm relief on 14 cm texels is NOT established — a real cast shadow of the
+neighbouring displaced geometry, quantised by the texels, is as likely. Captures `1790552389` (mesh), `1790552410` (POM),
+`1790552495` (mesh, no shadow map).
 
 ## ⚠️ Traps
+
+- ⚠️⚠️ The mesh tiles split their quads along (x, z + 1)–(x + 1, z) (`MeshShadingSurfaceHelper`, the Grid
+  convention), the CDLOD along (x, z)–(x + 1, z + 1). Over a base heightfield they MUST take the CDLOD's diagonal:
+  the ray-tracing proxy is split that way, and a traced surface that parts from the drawn one blackens RTAO / RTGI /
+  RTContactShadows (docs/caution-points.md § CDLOD terrain, fixed 2026-09-27 for the proxy itself).
+- The CDLOD's level-0 geomorph may be active at the window border (its morph starts at 0.66 of the level-0 range):
+  an unmorphed window edge against a morphing neighbour cracks by the height difference between the levels —
+  metres on a rough relief — far more than a skirt should hide.
 
 - POM on the CDLOD path has never been judged before 2026-09-27 (`water-world` is the first heightfield with a
   height map): check it against a flat `DisplacedGridResource` with the same material before blaming the mesh path.

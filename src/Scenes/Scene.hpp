@@ -3076,8 +3076,10 @@ namespace EmEn::Scenes
 			static constexpr size_t BackgroundVisualIndex{0};
 			static constexpr size_t GroundVisualIndex{1};
 			static constexpr size_t SeaLevelVisualIndex{2};
+			/** @brief The ground's detail window (GroundLevelInterface::detailRenderable()), out of the ray-tracing lists. */
+			static constexpr size_t GroundDetailVisualIndex{3};
 
-			std::array< std::unique_ptr< Component::Visual >, 3 > m_sceneVisualComponents{nullptr, nullptr, nullptr};
+			std::array< std::unique_ptr< Component::Visual >, 4 > m_sceneVisualComponents{nullptr, nullptr, nullptr, nullptr};
 			/** @brief The orientation compass. Deliberately NOT a scene entity: it is drawn after
 			 * the post-process chain so the camera exposure cannot touch its colors. */
 			Debug::Compass m_compass;

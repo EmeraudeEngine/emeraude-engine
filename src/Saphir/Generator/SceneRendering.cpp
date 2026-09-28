@@ -448,6 +448,12 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* A detail surface over a terrain: the task stage reads the base heights too (the tile's box, its distance). */
+		if ( this->isHeightfieldSurfaceEnabled() && !declareHeightfieldSurface(*taskShader, program.setIndexes().set(SetType::PerModel), false) )
+		{
+			return false;
+		}
+
 		/* The task stage culls the tiles against the camera's clip volume. */
 		std::string cullingMatrix;
 
@@ -476,7 +482,18 @@ namespace EmEn::Saphir::Generator
 		 * stage hands it the world XZ and its rotations. */
 		if ( this->isHeightfieldSurfaceEnabled() )
 		{
-			vertexShader.enableHeightfieldSurface();
+			/* A mesh-shading DETAIL surface stands on the terrain's heightfield: its mesh source places the
+			 * vertices on the clipmap, the CDLOD vertex program is not emitted (engine item
+			 * mesh-shading-surface-on-heightfield). */
+			if ( program.hasMeshShader() )
+			{
+				vertexShader.enableHeightfieldBase();
+			}
+			else
+			{
+				vertexShader.enableHeightfieldSurface();
+			}
+
 			vertexShader.enableHeightfieldPixelFrame();
 
 			if ( !declareHeightfieldSurface(vertexShader, program.setIndexes().set(SetType::PerModel), false) )
@@ -649,7 +666,7 @@ namespace EmEn::Saphir::Generator
 
 		/* A heightfield's frame is rebuilt per pixel: armed BEFORE the connection, which is where the
 		 * interpolated frame variables are received under other names. */
-		if ( program.perVertexStage()->isHeightfieldSurfaceEnabled() )
+		if ( program.perVertexStage()->providesHeightfieldPixelFrame() )
 		{
 			fragmentShader->enableHeightfieldPixelFrame();
 

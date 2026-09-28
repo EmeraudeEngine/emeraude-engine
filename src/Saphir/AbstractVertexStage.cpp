@@ -2213,7 +2213,7 @@ namespace EmEn::Saphir
 		/* ⚠️ BEFORE the unique instructions: these outputs prepare the normal matrix and the model
 		 * matrix, and generateMainUniqueInstructions() is what emits every preparation — asked after
 		 * it, they would name variables nothing declares. */
-		if ( m_heightfieldSurfaceEnabled && m_heightfieldPixelFrameEnabled && !this->declareHeightfieldPixelFrameOutputs(generator, outputInstructions) )
+		if ( this->providesHeightfieldPixelFrame() && !this->declareHeightfieldPixelFrameOutputs(generator, outputInstructions) )
 		{
 			return false;
 		}

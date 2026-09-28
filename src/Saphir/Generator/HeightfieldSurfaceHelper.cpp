@@ -34,6 +34,7 @@
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/Keys.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/LayoutManager.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -49,7 +50,9 @@ namespace EmEn::Saphir::Generator
 
 		if ( descriptorSetLayout == nullptr )
 		{
-			constexpr VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			/* The TASK and MESH stages read it too, where the device has them: a mesh-shading detail surface over a
+			 * terrain samples the height clipmap for its base (engine item mesh-shading-surface-on-heightfield). */
+			const VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | layoutManager.device()->meshShadingStages();
 
 			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(UUID);
 			descriptorSetLayout->setIdentifier("HeightfieldSurface", "Clipmap", "DescriptorSetLayout");

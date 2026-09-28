@@ -90,9 +90,10 @@ namespace EmEn::Graphics::RenderableInstance
 		void
 		drawMeshShadingSurface (const Geometry::Interface & geometry, const CommandBuffer & commandBuffer, const PushConstantContext & pushContext, const Saphir::Program & program, const Vector< 3, float > & cameraPosition, uint32_t instanceSlot) noexcept
 		{
-			const auto * surface = geometry.meshShadingSurface();
+			/* A detail window follows the camera of the pass: its tiling is asked for that camera. */
+			const auto surface = geometry.meshShadingSurfaceFor(cameraPosition);
 
-			if ( surface == nullptr || surface->tileCountX == 0 || surface->tileCountZ == 0 || pushContext.pipelineLayout == nullptr )
+			if ( !surface.has_value() || surface->tileCountX == 0 || surface->tileCountZ == 0 || pushContext.pipelineLayout == nullptr )
 			{
 				return;
 			}

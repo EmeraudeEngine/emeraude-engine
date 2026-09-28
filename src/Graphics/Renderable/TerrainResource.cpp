@@ -39,10 +39,12 @@
 #include "FastJSON.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "ThreadPool.hpp"
 #include "Types.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -66,6 +68,16 @@ namespace EmEn::Graphics::Renderable
 		/* Change the material. */
 		m_material = materialResource;
 
+		/* The detail window draws the terrain's own material, with the terrain's rasterization. */
+		if ( m_detailRenderable != nullptr && !m_detailRenderable->load(m_detailGeometry, m_material, m_rasterizationOptions) )
+		{
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': unable to load its detail window, the CDLOD draws the whole ground.";
+
+			m_geometry->enableDetailWindow(false);
+			m_detailRenderable.reset();
+			m_detailGeometry.reset();
+		}
+
 		/* Checks if all is loaded */
 		return this->addDependency(m_material);
 	}
@@ -82,7 +94,50 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
+		this->prepareDetailWindow();
+
 		return true;
+	}
+
+	void
+	TerrainResource::prepareDetailWindow () noexcept
+	{
+		/* A reload starts from a whole terrain. */
+		m_detailRenderable.reset();
+		m_detailGeometry.reset();
+		m_geometry->enableDetailWindow(false);
+
+		const auto & device = this->serviceProvider().graphicsRenderer().device();
+
+		/* Without VK_EXT_mesh_shader the detail surface would draw its placeholder grid, flat: the CDLOD and its
+		 * parallax draw the whole ground. */
+		if ( device == nullptr || !device->meshShadersEnabled() )
+		{
+			return;
+		}
+
+		if ( !m_geometry->enableDetailWindow(true) )
+		{
+			return;
+		}
+
+		m_detailGeometry = std::make_shared< Geometry::HeightfieldDetailSurfaceResource >(this->serviceProvider(), this->name() + "DetailWindow", m_geometry);
+
+		if ( !m_detailGeometry->loadFromTerrain() )
+		{
+			m_detailGeometry.reset();
+			m_geometry->enableDetailWindow(false);
+
+			return;
+		}
+
+		m_detailRenderable = std::make_shared< MeshResource >(this->serviceProvider(), this->name() + "DetailWindow");
+	}
+
+	std::shared_ptr< Abstract >
+	TerrainResource::detailRenderable () const noexcept
+	{
+		return m_detailRenderable;
 	}
 
 	void
@@ -501,6 +556,26 @@ namespace EmEn::Graphics::Renderable
 				TraceError{ClassId} << "The material for '" << this->name() << "' (" << this->classLabel() << ") is not created!";
 
 				return false;
+			}
+		}
+
+		/* The detail window needs a flat border to meet the CDLOD: the material's relief must fade to parallax inside
+		 * the disc the window always contains. Otherwise (no relief, no handover band, or a band reaching past it) the
+		 * window is cancelled — the CDLOD is whole again and the detail surface draws nothing (detailWindowFor()). */
+		if ( m_detailRenderable != nullptr )
+		{
+			const auto reliefReach = m_material->meshShadingReliefReach();
+			const auto windowRadius = m_geometry->detailWindowSafeRadius();
+
+			if ( reliefReach <= 0.0F || reliefReach > windowRadius )
+			{
+				TraceInfo{ClassId} << "Terrain '" << this->name() << "': no detail window — the material's relief reaches " << reliefReach << " m (0 = no handover band), the window guarantees " << windowRadius << " m. The CDLOD and its parallax draw the whole ground.";
+
+				m_geometry->enableDetailWindow(false);
+			}
+			else
+			{
+				TraceInfo{ClassId} << "Terrain '" << this->name() << "': mesh-shading detail window enabled, relief as geometry up to " << reliefReach << " m.";
 			}
 		}
 

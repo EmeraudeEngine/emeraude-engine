@@ -1037,6 +1037,18 @@ namespace EmEn::Scenes
 			const auto renderableInstance = m_sceneVisualComponents[1]->getRenderableInstance();
 			renderableInstance->disableLightDistanceCheck();
 			renderableInstance->enableDisplayTBNSpace(false);
+
+			/* The ground's detail window (a terrain on a mesh-shading device): drawn where the CDLOD leaves its hole.
+			 * Out of the ray-tracing lists — the terrain's own ray-tracing proxy already covers that ground. */
+			if ( const auto detail = m_groundLevel != nullptr ? m_groundLevel->detailRenderable() : nullptr; detail != nullptr )
+			{
+				m_sceneVisualComponents[GroundDetailVisualIndex] = std::make_unique< Component::Visual >("SceneGroundDetail", *m_rootNode, detail, Graphics::RenderableInstance::Lighting::Lit);
+
+				const auto detailInstance = m_sceneVisualComponents[GroundDetailVisualIndex]->getRenderableInstance();
+				detailInstance->disableLightDistanceCheck();
+				detailInstance->enableDisplayTBNSpace(false);
+				detailInstance->disableRayTracing();
+			}
 		}
 
 		if ( m_seaLevelRenderable != nullptr )
@@ -1583,7 +1595,7 @@ namespace EmEn::Scenes
 			 * everywhere. Measured before this exclusion (Sponza, gallery): the ray-outcome
 			 * visualization was ENTIRELY red, i.e. every single ray hit the skybox shell beyond
 			 * the bounce range and contributed nothing, which is why shadows were pitch black. */
-			if ( RTEnabled && component != m_sceneVisualComponents[BackgroundVisualIndex] )
+			if ( RTEnabled && component != m_sceneVisualComponents[BackgroundVisualIndex] && !renderableInstance->isRayTracingDisabled() )
 			{
 				const auto * renderable = renderableInstance->renderable();
 

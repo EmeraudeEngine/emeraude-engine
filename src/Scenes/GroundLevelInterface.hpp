@@ -29,8 +29,17 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <memory>
+
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics::Renderable
+{
+	class Abstract;
+}
 
 namespace EmEn::Scenes
 {
@@ -77,6 +86,21 @@ namespace EmEn::Scenes
 			 * @note This is not frustum-culling, but help the ground to know where the point of view is located.
 			 */
 			virtual void updateVisibility (const Base::Math::Vector< 3, float > & worldPosition) noexcept = 0;
+
+			/**
+			 * @brief Returns a renderable the scene draws BESIDE the ground, or null.
+			 * @note A terrain's DETAIL WINDOW (Renderable::TerrainResource): a mesh-shading surface around the camera
+			 * where the CDLOD leaves a hole (engine item mesh-shading-surface-on-heightfield). The scene registers it
+			 * as a scene visual next to the ground, lit, out of the ray-tracing lists.
+			 * @return std::shared_ptr< Graphics::Renderable::Abstract >
+			 */
+			[[nodiscard]]
+			virtual
+			std::shared_ptr< Graphics::Renderable::Abstract >
+			detailRenderable () const noexcept
+			{
+				return nullptr;
+			}
 
 		protected:
 

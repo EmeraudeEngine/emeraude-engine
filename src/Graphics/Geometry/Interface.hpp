@@ -34,6 +34,7 @@
 
 /* STL inclusions. */
 #include <atomic>
+#include <optional>
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
@@ -263,6 +264,27 @@ namespace EmEn::Graphics::Geometry
 			meshShadingSurface () const noexcept
 			{
 				return nullptr;
+			}
+
+			/**
+			 * @brief Returns the tiling a mesh-shading surface is drawn with, for the camera of one pass.
+			 * @note A fixed surface answers meshShadingSurface(). A surface that FOLLOWS the camera — a terrain's detail
+			 * window (HeightfieldDetailSurfaceResource) — moves its tiling with the pass's camera, the one the draw
+			 * pushes (the main camera in a shadow pass).
+			 * @param cameraPosition The camera of the pass, world space.
+			 * @return std::optional< MeshShadingSurface > Nothing for every other geometry.
+			 */
+			[[nodiscard]]
+			virtual
+			std::optional< MeshShadingSurface >
+			meshShadingSurfaceFor (const Base::Math::Vector< 3, float > & /*cameraPosition*/) const noexcept
+			{
+				if ( const auto * surface = this->meshShadingSurface(); surface != nullptr )
+				{
+					return *surface;
+				}
+
+				return std::nullopt;
 			}
 
 			/**

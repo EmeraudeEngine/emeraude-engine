@@ -459,6 +459,18 @@ namespace EmEn::Saphir::Generator
 
 		meshShader->setInstanceIndexExpression(meshSurfaceInstanceIndexExpression());
 
+		/* A detail surface over a terrain stands on its heightfield: both stages read the base heights (the depth
+		 * pass needs positions only, no pixel frame). */
+		if ( this->isHeightfieldSurfaceEnabled() )
+		{
+			meshShader->enableHeightfieldBase();
+
+			if ( !declareHeightfieldSurface(*meshShader, program.setIndexes().set(SetType::PerModel), false) || !declareHeightfieldSurface(*taskShader, program.setIndexes().set(SetType::PerModel), false) )
+			{
+				return false;
+			}
+		}
+
 		if ( !this->declareMatrixPushConstantBlock(*meshShader) || !this->declareMatrixPushConstantBlock(*taskShader) )
 		{
 			return false;

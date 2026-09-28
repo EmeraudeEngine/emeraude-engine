@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -91,6 +92,27 @@ namespace EmEn::Graphics::Geometry
 		float rayTracingProxySize{4096.0F};
 		/** @brief The proxy is rebuilt when less than this (m) is left to its edge. */
 		float rayTracingProxyMargin{1500.0F};
+	};
+
+	/**
+	 * @brief The square a mesh-shading DETAIL surface draws instead of the CDLOD, around one camera.
+	 * @note The 2 × 2 block of level-0 node QUARTERS nearest to the camera: its centre is the quarter corner nearest
+	 * to the camera, never farther than half a quarter per axis, so a disc of half a quarter around the camera
+	 * always lies inside. A pure function of the camera position (CDLODTerrainResource::detailWindowFor()): the
+	 * CDLOD's hole and the detail surface compute it from the same camera, and share no state.
+	 */
+	struct CDLODDetailWindow
+	{
+		/** @brief World X of the window's first corner. */
+		float originX{0.0F};
+		/** @brief World Z of the window's first corner. */
+		float originZ{0.0F};
+		/** @brief Side of the window, in metres (two level-0 quarters). */
+		float size{0.0F};
+		/** @brief Index of the window's first level-0 quarter along X (quarter lattice from the grid's corner). */
+		uint32_t firstQuarterX{0};
+		/** @brief Index of the window's first level-0 quarter along Z. */
+		uint32_t firstQuarterZ{0};
 	};
 
 	/**
@@ -284,6 +306,71 @@ namespace EmEn::Graphics::Geometry
 			{
 				return RayTracingProxyFlags;
 			}
+
+			/**
+			 * @brief Returns the side of one terrain cell, in metres (the finest lattice step).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			cellSize () const noexcept
+			{
+				return m_cellSize;
+			}
+
+			/**
+			 * @brief Returns the texture U per metre of the terrain (the V scale is its twin on a square grid).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			textureUPerMetre () const noexcept
+			{
+				return m_textureCoordinates[0];
+			}
+
+			/**
+			 * @brief Cuts the DETAIL WINDOW out of the terrain: the level-0 quarters around the camera of each pass are
+			 * left to a mesh-shading detail surface (TerrainResource's companion). Call it after load().
+			 * @note Refused when the window cannot be drawn at level 0 without a geomorph at its border: the level-0
+			 * morph must start beyond the window's farthest corner, or the CDLOD neighbours would slide away from the
+			 * window's unmorphed edge (engine item mesh-shading-surface-on-heightfield). Also refused on a grid of
+			 * fewer than two quarters per side.
+			 * @param state The state.
+			 * @return bool False when the window was asked for and refused (it stays disabled).
+			 */
+			bool enableDetailWindow (bool state) noexcept;
+
+			/**
+			 * @brief Returns the radius of the disc around the camera the detail window always contains: half a level-0
+			 * quarter (the window's centre is never farther than that from the camera, per axis).
+			 * @return float In metres.
+			 */
+			[[nodiscard]]
+			float
+			detailWindowSafeRadius () const noexcept
+			{
+				return static_cast< float >(m_parameters.patchQuads / 2U) * m_cellSize * 0.5F;
+			}
+
+			/**
+			 * @brief Returns whether the detail window is cut out of the terrain.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDetailWindowEnabled () const noexcept
+			{
+				return m_detailWindowEnabled;
+			}
+
+			/**
+			 * @brief Returns the detail window around a camera, or nothing when the window is disabled.
+			 * @param eye The camera position, world space (the terrain's object space is the world).
+			 * @return std::optional< CDLODDetailWindow >
+			 */
+			[[nodiscard]]
+			std::optional< CDLODDetailWindow > detailWindowFor (const Base::Math::Vector< 3, float > & eye) const noexcept;
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::isAdaptiveLOD() const */
 			[[nodiscard]]
@@ -535,6 +622,7 @@ namespace EmEn::Graphics::Geometry
 
 			/* Selection (render thread, one pass at a time). */
 			mutable std::vector< Selection > m_selection;
+			mutable std::optional< CDLODDetailWindow > m_passWindow; ///< The detail window of the pass being selected.
 
 			/* Ray-tracing proxy. */
 			std::unique_ptr< Vulkan::VertexBufferObject > m_rtVertexBufferObject;
@@ -545,5 +633,6 @@ namespace EmEn::Graphics::Geometry
 			std::atomic< bool > m_rtProxyUpdating{false};
 			bool m_hasPendingProxy{false};
 			bool m_surfaceUploaded{false};
+			bool m_detailWindowEnabled{false}; ///< Loading thread, before the terrain is rendered.
 	};
 }

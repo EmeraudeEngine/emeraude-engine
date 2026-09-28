@@ -534,10 +534,47 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares that the stage stands on a heightfield it does not BUILD: a mesh-shading detail
+			 * surface over a terrain (engine item mesh-shading-surface-on-heightfield). The stage's own source
+			 * places the vertices and defines `hfPosition`; the CDLOD vertex program (node, geomorph) is NOT
+			 * emitted, and the stage takes no heightfield push constant.
+			 * @note Exclusive with enableHeightfieldSurface(). With enableHeightfieldPixelFrame(), the per-pixel
+			 * frame outputs are written from the stage's `hfPosition`.
+			 * @return void
+			 */
+			void
+			enableHeightfieldBase () noexcept
+			{
+				m_heightfieldBaseEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the stage stands on a heightfield it does not build.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHeightfieldBaseEnabled () const noexcept
+			{
+				return m_heightfieldBaseEnabled;
+			}
+
+			/**
+			 * @brief Returns whether the stage hands the fragment stage a heightfield per-pixel frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			providesHeightfieldPixelFrame () const noexcept
+			{
+				return m_heightfieldPixelFrameEnabled && (m_heightfieldSurfaceEnabled || m_heightfieldBaseEnabled);
+			}
+
+			/**
 			 * @brief Hands the fragment stage what it needs to rebuild the surface frame PER PIXEL: the
 			 * world XZ, and the flat rotations the vertex stage applies to a surface vector (object to
 			 * world, and the normal matrix, object to view).
-			 * @note Only with enableHeightfieldSurface(). The fragment side is
+			 * @note Only with enableHeightfieldSurface() or enableHeightfieldBase(). The fragment side is
 			 * FragmentShader::enableHeightfieldPixelFrame().
 			 * @return void
 			 */
@@ -994,6 +1031,7 @@ namespace EmEn::Saphir
 			bool m_vegetationWindEnabled{false};
 			bool m_vegetationFlutterEnabled{false};
 			bool m_heightfieldSurfaceEnabled{false};
+			bool m_heightfieldBaseEnabled{false};
 			bool m_imposterBillboardEnabled{false};
 			bool m_heightfieldPixelFrameEnabled{false};
 			bool m_heightfieldFrameRequested{false};
