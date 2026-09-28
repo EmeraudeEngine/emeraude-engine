@@ -38,6 +38,25 @@ filtered) decides whether the history is still valid.
   traced effects vary with the jitter phase and the EMA does not fully average it (was 65 % before the
   fix; not visible to the owner). Both Windows and macOS had `TemporalAA/Enabled = false` in their
   settings: that, not the machine, is why they "did not shimmer".
+- **Debug view of the resolve's decision (2026-09-28)**: `Core/Graphics/PostProcessing/TemporalAA/DebugView`, read
+  at creation (0 = off). **1** red = history rejected (clipped), green = what the velocity dilation changed (the
+  nearest neighbour's velocity against the pixel's own, 1 px = full), blue = reprojection length (8 px = full);
+  **2** the history depth nearer (red) or farther (blue) than the 3×3 range; **3** the exposed luminance gap
+  between the history the blend keeps and the current reconstruction (1/8 of the display range = full red).
+  Magenta = off-screen reprojection. It is the SAME resolve recorded a second time into its own target
+  (`TAA_DebugView`) and shown instead: the history keeps accumulating for real, so the view explains the
+  actual feedback loop. ⚠️ Painting the decision into the resolve's output would feed the colours back as
+  history — the output IS the history.
+  ⚠️ "A neighbour's velocity was taken" is not a signal: on a grazing ground the nearest 3×3 depth is
+  always another pixel, so the whole ground lit up. Only the velocity DIFFERENCE is.
+- ⚠️ **What the depth cannot separate (measured 2026-09-28, `animation-debug`)**: an object from the ground it
+  stands on, at a grazing angle — the ground's depth range over a 3×3 (and more so a 5×5) contains the depth of
+  the object's feet, blade, shadow-caster. The centre-depth tag also LAUNDERS thin moving objects: a 1-3 px
+  blade is a jittered edge almost everywhere, its colour enters the history tagged with the ground's depth half
+  the time, and it is never rejected once the blade has gone (1-px lines, one per logic tick). Tagging the
+  nearest 3×3 depth cuts those lines by 60 % but rejects a parked silhouette's own history every other jitter
+  phase (`relief` horizon: max 7 → 39); a 5×5 acceptance range removes that cost and the benefit with it.
+  Numbers and the open owner decision: `docs/todo/taa-trails-under-motion.md`.
 - An HDRP-style anti-flicker (the clip widened with stationarity and temporal contrast) was tried
   the same day and reached far band 11.6 / 7.9 (base gamma 1.0 / 1.5, full strength): it only
   softens the wrong test. Removed.

@@ -86,6 +86,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			{
 				float alpha{0.1F}; /**< Blend weight of the current frame (0.1 = 90% history). */
 				float varianceGamma{1.0F}; /**< Variance clipping AABB half-size, in standard deviations. */
+				uint32_t debugView{0}; /**< 0 = off; 1 decision, 2 history depth vs the 3x3 range, 3 kept-history gap (Core/Graphics/PostProcessing/TemporalAA/DebugView). */
 				bool lumaWeighting{true}; /**< Karis inverse-luminance HDR blend weighting, on the EXPOSED luminance. */
 				bool debugNonFinite{false}; /**< Paint the pixels whose reconstruction holds a NaN/Inf (Core/Graphics/PostProcessing/DebugNonFinite). */
 			};
@@ -171,6 +172,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			Parameters m_parameters;
 			/** @brief Full-resolution RGBA16F ping-pong: the resolve writes one while reading the other; the written image is both the effect output and the next frame's history. */
 			std::array< IntermediateRenderTarget, 2 > m_historyTargets;
+			/** @brief The debug view's output (created only when Parameters::debugView != 0): never part of the history. */
+			IntermediateRenderTarget m_debugTarget;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;

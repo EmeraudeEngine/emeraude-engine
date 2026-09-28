@@ -907,6 +907,12 @@ namespace EmEn
 			/* Karis inverse-luminance blend weighting (HDR anti-firefly / anti-flicker). */
 			constexpr auto GraphicsPPTemporalAALumaWeightingKey{"Core/Graphics/PostProcessing/TemporalAA/LumaWeighting"};
 			constexpr auto DefaultGraphicsPPTemporalAALumaWeighting{true};
+			/* DEBUG VIEW of the resolve's decision, read at creation (0 = off): 1 = rejected (red) / velocity dilated
+			 * from a neighbour (green) / reprojection length (blue); 2 = history depth nearer (red) or farther (blue)
+			 * than the 3x3 range; 3 = exposed luminance gap between the kept history and the current frame (red).
+			 * A second pass into its own target: the history keeps accumulating for real. */
+			constexpr auto GraphicsPPTemporalAADebugViewKey{"Core/Graphics/PostProcessing/TemporalAA/DebugView"};
+			constexpr auto DefaultGraphicsPPTemporalAADebugView{0U};
 
 			/* Motion Blur — effect QUALITY knobs only. The blur LENGTH is photographic and
 			 * belongs to the active camera: shutter speed / frame duration = shutter angle

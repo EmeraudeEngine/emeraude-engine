@@ -73,9 +73,12 @@ namespace
 		/* The camera clip planes: the history carries the LINEAR depth of its surface in alpha. */
 		float nearPlane;
 		float farPlane;
+		/* 0 for the resolve itself. 1-3 only in the SECOND pass the debug view records into its own target
+		 * (Core/Graphics/PostProcessing/TemporalAA/DebugView): the history stays the real one. */
+		float debugView;
 	};
 
-	static_assert(sizeof(TAAPushConstants) == 44, "TAAPushConstants must be 44 bytes.");
+	static_assert(sizeof(TAAPushConstants) == 48, "TAAPushConstants must be 48 bytes.");
 
 	/* ---- GLSL Shader Sources ----
 	 *
@@ -128,6 +131,7 @@ layout(push_constant) uniform PushConstants
 	float displayExposure;
 	float nearPlane;
 	float farPlane;
+	float debugView;
 };
 
 float linearizeDepth(float depth)
@@ -140,6 +144,17 @@ float linearizeDepth(float depth)
 float luminanceOf(vec3 color)
 {
 	return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+/* DEBUG VIEW of the resolve's decision (Core/Graphics/PostProcessing/TemporalAA/DebugView). Recorded by a SECOND pass
+ * into its own target, never into the history: the pixels it explains are those of the real feedback loop. `colour` is
+ * display-referred (0-1 after the exposure), laid over a dim grey of the scene so the silhouettes stay readable. */
+vec4 debugOutput(vec3 colour, vec3 current)
+{
+	float exposure = displayExposure > 0.0 ? displayExposure : 1.0;
+	float context = 0.25 * clamp(luminanceOf(current) * exposure, 0.0, 1.0);
+
+	return vec4((vec3(context) + colour) / exposure, 1.0);
 }
 
 vec3 RGBToYCoCg(vec3 c)
@@ -360,8 +375,8 @@ void main()
 
 	if (any(lessThan(prevUV, vec2(0.0))) || any(greaterThan(prevUV, vec2(1.0))))
 	{
-		/* Off-screen reprojection: no usable history. */
-		outResolved = vec4(current, centerDepth);
+		/* Off-screen reprojection: no usable history (magenta in every debug view). */
+		outResolved = debugView > 0.5 ? debugOutput(vec3(1.0, 0.0, 1.0), current) : vec4(current, centerDepth);
 		return;
 	}
 
@@ -427,6 +442,46 @@ void main()
 		result = mix(history, current, blendAlpha);
 	}
 
+	if (debugView > 0.5)
+	{
+		vec3 colour;
+
+		if (debugView < 1.5)
+		{
+			/* 1 — THE DECISION: red = history rejected (clipped), green = what the dilation changed (the velocity
+			 * taken from the nearest 3x3 neighbour against the pixel's own, 1 px = full — on a grazing ground the
+			 * nearest neighbour is always another pixel, so "a neighbour was taken" alone lights everything),
+			 * blue = reprojection length (8 px = full). */
+			vec2 ownVelocity = texture(velocityTex, vUV).rg;
+			float dilationPixels = length((velocity - ownVelocity) * 0.5 / texel);
+
+			colour = vec3(
+				sameSurface ? 0.0 : 1.0,
+				clamp(dilationPixels, 0.0, 1.0),
+				clamp(motionPixels / 8.0, 0.0, 1.0)
+			);
+		}
+		else if (debugView < 2.5)
+		{
+			/* 2 — THE HISTORY DEPTH against this frame's 3x3 range: red = nearer than the nearest, blue = farther
+			 * than the farthest, uncoloured = inside (the history is kept as is). */
+			colour = historyDepth < nearestLinear * 0.99 ? vec3(1.0, 0.0, 0.0) : (historyDepth > farthestLinear * 1.01 ? vec3(0.0, 0.0, 1.0) : vec3(0.0));
+		}
+		else
+		{
+			/* 3 — WHAT THE BLEND KEEPS: the exposed luminance gap between the history it blends (after the
+			 * rectification) and this frame's reconstruction; 1/8 of the display range = full red. A ghost is a
+			 * lasting gap on a pixel whose history is not rejected. */
+			float exposure = displayExposure > 0.0 ? displayExposure : 1.0;
+			float gap = abs(luminanceOf(history) - luminanceOf(current)) * exposure;
+
+			colour = vec3(clamp(gap * 8.0, 0.0, 1.0), 0.0, 0.0);
+		}
+
+		outResolved = debugOutput(colour, current);
+		return;
+	}
+
 	outResolved = vec4(result, centerDepth);
 }
 )GLSL";
@@ -451,6 +506,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		m_parameters.varianceGamma = settings.getOrSetDefault< float >(GraphicsPPTemporalAAVarianceGammaKey, DefaultGraphicsPPTemporalAAVarianceGamma);
 		m_parameters.lumaWeighting = settings.getOrSetDefault< bool >(GraphicsPPTemporalAALumaWeightingKey, DefaultGraphicsPPTemporalAALumaWeighting);
 		m_parameters.debugNonFinite = settings.getOrSetDefault< bool >(GraphicsPPDebugNonFiniteKey, DefaultGraphicsPPDebugNonFinite);
+		m_parameters.debugView = std::min(settings.getOrSetDefault< uint32_t >(GraphicsPPTemporalAADebugViewKey, DefaultGraphicsPPTemporalAADebugView), 3U);
 
 		/* History starts invalid: the first frame after (re)creation must not read the
 		 * uninitialized ping-pong images (alpha forced to 1). The default resize()
@@ -467,6 +523,14 @@ namespace EmEn::Graphics::Effects::Resolve
 
 				return false;
 			}
+		}
+
+		/* The debug view's own target: the second pass writes there, the history is never painted. */
+		if ( m_parameters.debugView != 0U && !m_debugTarget.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, "TAA_DebugView") )
+		{
+			TraceError{TracerTag} << "Failed to create the TAA debug view target !";
+
+			return false;
 		}
 
 		/* Compile shaders. */
@@ -549,6 +613,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			target.destroy();
 		}
 
+		m_debugTarget.destroy();
+
 		m_historyValid = false;
 		m_historyWriteIndex = 0;
 	}
@@ -594,7 +660,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			.debugNonFinite = m_parameters.debugNonFinite ? 1.0F : 0.0F,
 			.displayExposure = context.displayExposure,
 			.nearPlane = context.constants.nearPlane,
-			.farPlane = context.constants.farPlane
+			.farPlane = context.constants.farPlane,
+			.debugView = 0.0F
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(
@@ -610,6 +677,28 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* Flip the ping-pong: the freshly resolved image becomes next frame's history. */
 		m_historyWriteIndex = readIdx;
 		m_historyValid = true;
+
+		/* DEBUG VIEW: the same resolve recorded a second time with the same inputs (the history read above is
+		 * untouched by the first pass, which wrote the other ping-pong image), painting its decision into its own
+		 * target — shown instead of the resolve, while the history keeps accumulating for real. Same format as the
+		 * history: the pipeline created against it is render-pass compatible. */
+		if ( m_parameters.debugView != 0U )
+		{
+			auto debugPushConstants = pc;
+			debugPushConstants.debugView = static_cast< float >(m_parameters.debugView);
+
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				m_debugTarget,
+				*m_pipeline,
+				*m_pipelineLayout,
+				*m_descriptorSets[frameIndex],
+				&debugPushConstants,
+				sizeof(debugPushConstants)
+			);
+
+			return m_debugTarget;
+		}
 
 		return m_historyTargets[writeIdx];
 	}

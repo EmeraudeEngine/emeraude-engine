@@ -73,15 +73,36 @@ the renderer shows, or not what dominates it.
 
 ## What remains
 
-1. **Instrument before designing**: a debug view of the resolve's per-pixel decision (clip or not, which
-   neighbour's velocity the dilation took, the history depth against the 3×3 range), to see WHY a comb
-   tooth survives 16 frames over a sky whose 3×3 holds no sword. Every fix so far was designed from code
-   reading and a model; the one that was built did nothing. First target since 2026-09-28: the 1-px lines
-   left behind the Paladin's blade (`animation-debug`, lane `None`, exposure pinned), now that its velocity
-   is right. Hypothesis to check, not a result: a sky pixel next to the blade takes the blade's velocity by
-   dilation and its history, and passes the depth test because the blade is in its 3×3; once the blade has
-   gone, its written alpha is the SKY's centre depth and nothing ever clips it (the colour only fades at the
-   parked alpha, ~0.05).
+1. **The 1-px lines behind the Paladin's blade — an OWNER DECISION, measured 2026-09-28.** The debug view
+   exists (`Core/Graphics/PostProcessing/TemporalAA/DebugView`,
+   `docs/subsystems/graphics/13-12-post-processing-effects/06-the-taa-resolve-the-history-is-rejected-by-depth-never-by-co.md`). What it showed on `animation-debug` (lane `None`, exposure pinned f/8 · 1/325 · ISO 100):
+   - View 1: the lines are NEVER rejected; view 3: they are kept history that differs from the frame — two
+     fans of 1-px lines, one per tick position, behind both swords (over the ground and over the red cube).
+   - Metric (`ridges`: 1-2 px crests of the view-3 red excess on the bright ground, 16 frames, mean per
+     frame): current resolve **11 500-12 400**.
+   Three resolve variants were built and measured, each against the `relief` parked gate (spawn pose,
+   f/8 · 1/125 · ISO 100, lane ScreenSpace, 16 frames; current: mean 0.437, **0.00 % > 8, max 7**, horizon
+   band 0.633):
+
+   | variant | ridges | `relief` |
+   |---|---|---|
+   | at a motion boundary (dilated velocity differs > 0.5 px), test the history against the pixel's OWN depth | 11 500 — no effect | — |
+   | history tagged with the NEAREST 3×3 depth instead of the centre one | **4 600-5 700 (-60 %)** | 0.05 % > 8, **max 39**, horizon band 0.46 % > 8 |
+   | nearest tag + acceptance over a 5×5 range | 12 000-23 000 — no effect | identical to current |
+
+   Reading: the centre-depth tag LAUNDERS the blade — a 1-3 px blade makes almost every blade pixel a jittered
+   edge whose centre sample is the ground half the time, so the blade's colour enters the history tagged
+   "ground" and is never rejected once the blade is gone (the nearest tag proves it: -60 %). But the nearest
+   tag rejects a parked silhouette's own history at every other jitter phase (the sky pixel above the horizon
+   is tagged "ground", then the ground leaves its 3×3), and widening the test to 5×5 to absorb the jitter lets
+   the blade back in: **at a grazing angle the ground's depth range contains the depth of an object standing
+   on it** — no depth test separates the blade from the ground behind it (it does over the sky). All three
+   reverted, never committed.
+   What is left needs a signal other than the depth — colour (the rectification the 2026-09-23 depth rule
+   removed on unchanged geometry) or a motion history (was this pixel's history built from moving content?) —
+   and trades against the parked-camera shimmer: **owner decision**. ⚠️ `relief` only has one silhouette (the
+   horizon): a variant that touches the edge ring must also be gated on a scene full of silhouettes (a parked
+   `forest`), where it would cost far more.
 2. **Foliage**: inside a canopy the 3×3 depth range always spans leaf to sky, so the history is almost
    never clipped there (the 2026-09-23 depth rule, by design). Colour rectification while moving (the
    "GATE" option: the clip blended back with the motion) or an FSR2-style lock are the known answers; both
