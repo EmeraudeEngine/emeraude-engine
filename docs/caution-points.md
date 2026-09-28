@@ -456,10 +456,13 @@ under a threshold (owner decision: accumulated, not instantaneous). What the fir
 3. **Bilinear coverage draws polygons.** The 512 m cascade stores foam at 2 m per texel; a bilinear field compared to a
    threshold (or to a noise) has straight contours — paper-scrap whitecaps. Read through a cubic B-spline in four
    bilinear taps (Sigg & Hadwiger, GPU Gems 2 ch. 20), frayed by the foam pattern three times finer than the shore's.
-4. **⚠️ TAA smears them into streaks** — not motion blur, not depth of field (both ruled out by disabling them): the
-   ocean's vertex stage reports its current position as the previous one, so TAA reprojects the moving surface with a
-   zero velocity. With `PostProcess.disable(TemporalAA)` the whitecaps have ragged, organic outlines. The velocity of
-   the displaced surface is the fix (engine item `ocean-fft-surface`).
+4. **TAA smeared them into streaks — fixed the same day.** Not motion blur, not depth of field (both ruled out by
+   disabling them): the ocean's vertex stage reported its current position as the previous one, so TAA reprojected
+   the moving surface with a zero velocity. `Graphics::OceanWaves` now copies the displacement it is about to
+   overwrite into a PREVIOUS displacement (binding 4), and the vertex stage displaces the same lattice point by it
+   (`ocPreviousPosition`, requested only when the velocity is); the first update copies its own result (zero
+   velocity, never an undefined one). Measured at the same pose: foam gradient anisotropy 0.52 before, 0.43 after,
+   0.42 with the TAA off.
 
 ## Ray Tracing / Acceleration Structures
 

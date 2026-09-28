@@ -413,6 +413,14 @@ namespace EmEn::Saphir
 			m_previousWindRequired = true;
 		}
 
+		/* An ocean moves too: its previous position is the lattice point displaced by the PREVIOUS frame's cascades
+		 * (Graphics::OceanWaves keeps them). Reported as the current one, the waves and their whitecaps smeared into
+		 * streaks under TAA. */
+		if ( m_oceanSurfaceEnabled )
+		{
+			m_previousOceanRequired = true;
+		}
+
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
 		/* The INFINITY view drops the camera translation: an object rendered with it (the sky
 		 * background) must have its previous clip position built from the previous INFINITY
@@ -1813,6 +1821,17 @@ namespace EmEn::Saphir
 				"\t" "const vec3 ocDisplacementHere = ocDisplacementAt(" + lattice + ", ocSpacing);" "\n"
 				"\t" "const vec3 hfPosition = vec3(" + lattice + ".x + ocDisplacementHere.x, ocSurface.level.x + ocDisplacementHere.y, " + lattice + ".y + ocDisplacementHere.z);" "\n";
 
+			/* The velocity's previous position: the same lattice point, the previous frame's waves. The geomorph is the
+			 * current one — as the terrain's, the camera-driven slide is left out of the velocity. */
+			if ( m_previousOceanRequired )
+			{
+				const std::string previous{OceanSurface::PreviousPositionVariable};
+
+				code +=
+					"\t" "const vec3 ocDisplacementBefore = ocPreviousDisplacementAt(" + lattice + ", ocSpacing);" "\n"
+					"\t" "const vec3 " + previous + " = vec3(" + lattice + ".x + ocDisplacementBefore.x, ocSurface.level.x + ocDisplacementBefore.y, " + lattice + ".y + ocDisplacementBefore.z);" "\n";
+			}
+
 			if ( m_heightfieldFrameRequested )
 			{
 				code +=
@@ -1952,9 +1971,15 @@ namespace EmEn::Saphir
 	const char *
 	AbstractVertexStage::previousVertexPositionExpression () const noexcept
 	{
-		/* The ground does not move: a vertex's previous position is its current one. The geomorph does
+		/* An ocean: the lattice point displaced by the previous frame's cascades (generateHeightfieldSurfaceCode()).
+		 * The ground does not move: a vertex's previous position is its current one. The geomorph does
 		 * slide a vertex as the camera moves, by a fraction of a cell over the morph range — a motion
 		 * the velocity buffer deliberately ignores rather than tracking the previous camera. */
+		if ( m_oceanSurfaceEnabled )
+		{
+			return Graphics::Geometry::OceanSurface::PreviousPositionVariable;
+		}
+
 		if ( m_heightfieldSurfaceEnabled )
 		{
 			return "hfPosition";

@@ -1065,6 +1065,7 @@ namespace EmEn::Saphir
 			bool m_heightfieldFrameRequested{false};
 			bool m_heightfieldTextureCoordinatesRequested{false};
 			bool m_previousWindRequired{false};
+			bool m_previousOceanRequired{false};
 			bool m_instanceTransformsEnabled{false};
 			bool m_infinityViewEnabled{false};
 			bool m_instanceMotionHistoryEnabled{false};

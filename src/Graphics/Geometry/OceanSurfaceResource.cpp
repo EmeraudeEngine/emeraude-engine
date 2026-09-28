@@ -422,7 +422,7 @@ namespace EmEn::Graphics::Geometry
 		m_descriptorPool = std::make_shared< DescriptorPool >(
 			device,
 			std::vector< VkDescriptorPoolSize >{
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3U * framesInFlight},
+				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4U * framesInFlight},
 				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, framesInFlight}
 			},
 			framesInFlight,
@@ -437,7 +437,7 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* Displacement, slopes, uniforms and whitecap foam (Geometry::OceanSurface). */
+		/* Displacement, slopes, uniforms, whitecap foam and previous displacement (Geometry::OceanSurface). */
 		const auto surfaceLayout = Saphir::Generator::getOceanSurfaceDescriptorSetLayout(renderer.layoutManager());
 
 		if ( surfaceLayout == nullptr )
@@ -464,6 +464,7 @@ namespace EmEn::Graphics::Geometry
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::DisplacementBinding, *m_waves->displacementView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::SlopesBinding, *m_waves->slopeView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::FoamBinding, *m_waves->foamView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
+				!descriptorSet->writeCombinedImageSampler(OceanSurface::PreviousDisplacementBinding, *m_waves->previousDisplacementView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeUniformBuffer(OceanSurface::UniformsBinding, uniforms)
 			)
 			{

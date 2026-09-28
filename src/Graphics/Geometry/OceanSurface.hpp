@@ -40,7 +40,8 @@
  * instead of lifted from a height clipmap. The fragment stage rebuilds the choppy surface's normal per pixel from the
  * slopes, through the heightfield per-pixel frame.
  * @note Its descriptor set layout is the heightfield's plus one binding (Saphir::Generator::getOceanSurfaceDescriptorSetLayout()):
- * binding 0 is the displacement, binding 1 the slopes, binding 2 the Uniforms below, binding 3 the whitecap foam.
+ * binding 0 is the displacement, binding 1 the slopes, binding 2 the Uniforms below, binding 3 the whitecap foam, binding
+ * 4 the previous frame's displacement (the velocity of the displaced surface).
  * @note Everything both sides must agree on lives HERE.
  */
 namespace EmEn::Graphics::Geometry::OceanSurface
@@ -53,6 +54,8 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 	static constexpr uint32_t UniformsBinding{2};
 	/** @brief Binding of the whitecap foam cascades (sampler2DArray): coverage 0-1 in the red channel. */
 	static constexpr uint32_t FoamBinding{3};
+	/** @brief Binding of the PREVIOUS frame's displacement cascades (sampler2DArray, same layout as the displacement). */
+	static constexpr uint32_t PreviousDisplacementBinding{4};
 	/** @brief Maximum number of levels of detail (quadtree depth) the uniform block describes. */
 	static constexpr uint32_t MaxLevelsOfDetail{16};
 
@@ -78,6 +81,10 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 	static constexpr auto DisplacementSamplerName{"ocDisplacement"};
 	/** @brief GLSL name of the slope sampler. */
 	static constexpr auto SlopesSamplerName{"ocSlopes"};
+	/** @brief GLSL name of the previous displacement sampler. */
+	static constexpr auto PreviousDisplacementSamplerName{"ocPreviousDisplacement"};
+	/** @brief GLSL name of the vertex stage's previous displaced world position (the velocity's previous position). */
+	static constexpr auto PreviousPositionVariable{"ocPreviousPosition"};
 	/** @brief GLSL name of the whitecap foam sampler. */
 	static constexpr auto FoamSamplerName{"ocFoam"};
 	/** @brief GLSL name of the fragment-stage function returning the whitecap coverage at a lattice XZ: `float ocWhitecapAt(vec2)`. */

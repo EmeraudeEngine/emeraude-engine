@@ -112,10 +112,12 @@ whitecapMinimumWavelength` (defaults 0.78 / 10 / 2.5 s / 2 m, measured — docs/
 per cascade (R16F, RGBA16F fallback) updated by the resolve pass with the frame's step; the ocean's own descriptor layout
 (`getOceanSurfaceDescriptorSetLayout()`, binding 3); `ocWhitecapAt()` (cubic B-spline, cascades united) folded with the
 shore foam in `StandardResource`. An ocean shows whitecaps only if its material enables the foam (`enableShoreFoam()`).
-⚠️ Under TAA they smear into streaks until the surface reports its velocity (next).
+**Velocity done (2026-09-28)**: the previous frame's displacement is kept (`OceanWaves::previousDisplacementView()`,
+binding 4 of the ocean layout) and the vertex stage builds the previous position from it
+(`OceanSurface::PreviousPositionVariable`); the whitecaps no longer smear under TAA — docs/caution-points.md § Whitecaps,
+item 4. The camera-driven geomorph slide stays out of the velocity, as the terrain's.
 
-Still to do: the GPU cost (the profiler was off), the velocity of a moving surface (the vertex stage still reports
-hfPosition as the previous position — TAA smears the waves and, visibly, the whitecaps), mipmaps of the cascades (the
+Still to do: the GPU cost (the profiler was off), mipmaps of the cascades (the
 far pixels fade the small cascades instead), the shore (depth-based opacity with waves), MoltenVK on the macOS peer,
 the CPU level for buoyancy (step 6), the docs.
 

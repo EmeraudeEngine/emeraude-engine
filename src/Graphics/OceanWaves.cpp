@@ -541,7 +541,8 @@ void main ()
 			!createImage(m_fieldImages[1], m_fieldViews[1], VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT, "Field1") ||
 			!createImage(m_displacementImage, m_displacementView, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "Displacement") ||
 			!createImage(m_slopeImage, m_slopeView, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "Slopes") ||
-			!createImage(m_foamImage, m_foamView, foamFormat, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "Foam")
+			!createImage(m_foamImage, m_foamView, foamFormat, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "Foam") ||
+			!createImage(m_previousDisplacementImage, m_previousDisplacementView, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "PreviousDisplacement")
 		)
 		{
 			Tracer::error(ClassId, "Unable to create the ocean images !");
@@ -667,18 +668,21 @@ void main ()
 		m_evolvePipeline.reset();
 		m_pipelineLayout.reset();
 		m_descriptorSetLayout.reset();
+		m_previousDisplacementView.reset();
 		m_foamView.reset();
 		m_slopeView.reset();
 		m_displacementView.reset();
 		m_fieldViews[1].reset();
 		m_fieldViews[0].reset();
 		m_spectrumView.reset();
+		m_previousDisplacementImage.reset();
 		m_foamImage.reset();
 		m_slopeImage.reset();
 		m_displacementImage.reset();
 		m_fieldImages[1].reset();
 		m_fieldImages[0].reset();
 		m_spectrumImage.reset();
+		m_previousDisplacementValid = false;
 	}
 
 	bool
@@ -722,14 +726,14 @@ void main ()
 		/* Every image to GENERAL (the storage layout), the spectrum through TRANSFER_DST for its upload, the foam cleared
 		 * (a transfer, in GENERAL) — the resolve pass reads the previous foam before it writes. */
 		{
-			std::array< VkImageMemoryBarrier, 6 > barriers{};
-			const std::array< Vulkan::Image *, 6 > images{m_spectrumImage.get(), m_fieldImages[0].get(), m_fieldImages[1].get(), m_displacementImage.get(), m_slopeImage.get(), m_foamImage.get()};
+			std::array< VkImageMemoryBarrier, 7 > barriers{};
+			const std::array< Vulkan::Image *, 7 > images{m_spectrumImage.get(), m_fieldImages[0].get(), m_fieldImages[1].get(), m_displacementImage.get(), m_slopeImage.get(), m_foamImage.get(), m_previousDisplacementImage.get()};
 
 			for ( size_t index = 0; index < barriers.size(); ++index )
 			{
 				barriers[index].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 				barriers[index].srcAccessMask = 0;
-				barriers[index].dstAccessMask = index == 0 || index == 5 ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT;
+				barriers[index].dstAccessMask = index == 0 || index >= 5 ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT;
 				barriers[index].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 				barriers[index].newLayout = index == 0 ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
 				barriers[index].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -787,7 +791,7 @@ void main ()
 			return false;
 		}
 
-		for ( const auto & image : {m_spectrumImage, m_fieldImages[0], m_fieldImages[1], m_displacementImage, m_slopeImage, m_foamImage} )
+		for ( const auto & image : {m_spectrumImage, m_fieldImages[0], m_fieldImages[1], m_displacementImage, m_slopeImage, m_foamImage, m_previousDisplacementImage} )
 		{
 			image->setCurrentImageLayout(VK_IMAGE_LAYOUT_GENERAL);
 		}
@@ -796,7 +800,7 @@ void main ()
 	}
 
 	void
-	OceanWaves::recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) const noexcept
+	OceanWaves::recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) noexcept
 	{
 		const auto handle = commandBuffer.handle();
 		const auto descriptorSet = m_descriptorSet->handle();
@@ -833,6 +837,38 @@ void main ()
 
 		computeToCompute(VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT);
 
+		/* The displacement the previous frames were drawn with becomes the PREVIOUS displacement (the velocity of the
+		 * displaced surface). The previous frame's vertex stages are done with both images (the barrier above); the
+		 * copy must be done before the resolve overwrites the displacement, and its result visible to this frame's
+		 * vertex stages. The first update has no displacement yet: it copies its own result after the resolve. */
+		const auto copyDisplacement = [this, handle] (VkPipelineStageFlags sourceStages, VkAccessFlags sourceAccess) {
+			VkMemoryBarrier before{};
+			before.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+			before.srcAccessMask = sourceAccess;
+			before.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			vkCmdPipelineBarrier(handle, sourceStages, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &before, 0, nullptr, 0, nullptr);
+
+			VkImageCopy region{};
+			region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, CascadeCount};
+			region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, CascadeCount};
+			region.extent = CascadeExtent;
+
+			vkCmdCopyImage(handle, m_displacementImage->handle(), VK_IMAGE_LAYOUT_GENERAL, m_previousDisplacementImage->handle(), VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+
+			VkMemoryBarrier after{};
+			after.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+			after.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			after.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+
+			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 1, &after, 0, nullptr, 0, nullptr);
+		};
+
+		if ( m_previousDisplacementValid )
+		{
+			copyDisplacement(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+		}
+
 		vkCmdBindDescriptorSets(handle, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipelineLayout->handle(), 0, 1, &descriptorSet, 0, nullptr);
 
 		/* 1. h(k, t) and the eight fields. */
@@ -859,6 +895,13 @@ void main ()
 		vkCmdBindPipeline(handle, VK_PIPELINE_BIND_POINT_COMPUTE, m_resolvePipeline->handle());
 		vkCmdPushConstants(handle, m_pipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(constants), &constants);
 		vkCmdDispatch(handle, Resolution / 16, Resolution / 16, CascadeCount);
+
+		if ( !m_previousDisplacementValid )
+		{
+			copyDisplacement(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+
+			m_previousDisplacementValid = true;
+		}
 
 		/* The outputs, visible to whoever samples or copies them. */
 		{

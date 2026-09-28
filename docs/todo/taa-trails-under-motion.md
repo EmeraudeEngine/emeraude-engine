@@ -36,6 +36,11 @@ unless stated):
   60 Hz logic.
 - **Foliage in the wind** (`forest --demo-options 0,0,0`, camera parked): the canopy smears into brush
   strokes that bleed into the sky; with the TAA off the leaves are sharp (and aliased).
+- *Not this item, but the first check for any new report:* the FFT ocean's whitecaps smeared into vertical streaks
+  (`water-world`, 2026-09-28) because the ocean reported its CURRENT position as the previous one — a missing velocity
+  SOURCE, not a resolve defect. Fixed the same day (the previous frame's displacement, `Graphics::OceanWaves`);
+  foam gradient anisotropy 0.52 → 0.43, the TAA-off value 0.42. Before instrumenting the resolve, check that the
+  moving thing reports a previous position at all.
 
 ## What was tried and FAILED — do not retry blindly
 

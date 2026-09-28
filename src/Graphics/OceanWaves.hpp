@@ -158,12 +158,15 @@ namespace EmEn::Graphics
 			 * @brief Records the evolution, the FFTs and the resolve for a time into a command buffer.
 			 * @note The outputs are left in GENERAL layout, their writes made visible to the vertex, fragment and compute
 			 * stages and to transfers.
+			 * @note The displacement it is about to overwrite is copied to the PREVIOUS displacement first (the velocity of
+			 * the displaced surface, for TAA and motion blur); the first update copies its own result instead, a zero
+			 * velocity rather than an undefined one.
 			 * @param commandBuffer A recording command buffer of a queue with compute.
 			 * @param time The simulation time, in seconds.
 			 * @param deltaTime The seconds since the previous update (the foam decay); 0 on the first one.
 			 * @return void
 			 */
-			void recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) const noexcept;
+			void recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) noexcept;
 
 			/**
 			 * @brief Runs the GPU generator once and compares its outputs with a CPU reference of the same spectrum.
@@ -195,6 +198,17 @@ namespace EmEn::Graphics
 			slopeView () const noexcept
 			{
 				return m_slopeView.get();
+			}
+
+			/**
+			 * @brief Returns the PREVIOUS update's displacement view (2D array, same layout as displacementView()).
+			 * @return const Vulkan::ImageView *
+			 */
+			[[nodiscard]]
+			const Vulkan::ImageView *
+			previousDisplacementView () const noexcept
+			{
+				return m_previousDisplacementView.get();
 			}
 
 			/**
@@ -253,11 +267,13 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_displacementImage;
 			std::shared_ptr< Vulkan::Image > m_slopeImage;
 			std::shared_ptr< Vulkan::Image > m_foamImage;
+			std::shared_ptr< Vulkan::Image > m_previousDisplacementImage;
 			std::shared_ptr< Vulkan::ImageView > m_spectrumView;
 			std::array< std::shared_ptr< Vulkan::ImageView >, 2 > m_fieldViews;
 			std::shared_ptr< Vulkan::ImageView > m_displacementView;
 			std::shared_ptr< Vulkan::ImageView > m_slopeView;
 			std::shared_ptr< Vulkan::ImageView > m_foamView;
+			std::shared_ptr< Vulkan::ImageView > m_previousDisplacementView;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
@@ -265,5 +281,6 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::ComputePipeline > m_evolvePipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_fftPipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_resolvePipeline;
+			bool m_previousDisplacementValid{false};
 	};
 }

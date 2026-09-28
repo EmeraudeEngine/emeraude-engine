@@ -48,7 +48,8 @@ namespace EmEn::Saphir::Generator
 {
 	/**
 	 * @brief Declares an ocean surface's resources and functions in a shader (Graphics::Geometry::OceanSurface): the
-	 * displacement, slope and foam cascades, the per-frame uniform block, `ocDisplacementAt()` and `ocNormalAt()`, and —
+	 * displacement, slope and foam cascades (and, in a vertex stage, the previous displacement with
+	 * `ocPreviousDisplacementAt()`), the per-frame uniform block, `ocDisplacementAt()` and `ocNormalAt()`, and —
 	 * in a fragment stage — `hfPixelNormalAt()`, the normal the heightfield per-pixel frame rebuilds, and
 	 * `ocWhitecapAt()`, the whitecap coverage.
 	 * @note The set layout is getOceanSurfaceDescriptorSetLayout().
@@ -61,7 +62,8 @@ namespace EmEn::Saphir::Generator
 
 	/**
 	 * @brief Returns the descriptor set layout of an ocean surface (Graphics::Geometry::OceanSurface): the heightfield's
-	 * three bindings (displacement, slopes, uniforms) and the whitecap foam at binding 3.
+	 * three bindings (displacement, slopes, uniforms), the whitecap foam at binding 3 and the previous frame's
+	 * displacement at binding 4 (the velocity).
 	 * @param layoutManager The layout manager.
 	 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 	 */

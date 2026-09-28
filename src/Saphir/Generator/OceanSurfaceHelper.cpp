@@ -62,6 +62,7 @@ namespace EmEn::Saphir::Generator
 			descriptorSetLayout->declareCombinedImageSampler(OceanSurface::SlopesBinding, Stages);
 			descriptorSetLayout->declareUniformBuffer(OceanSurface::UniformsBinding, Stages);
 			descriptorSetLayout->declareCombinedImageSampler(OceanSurface::FoamBinding, Stages);
+			descriptorSetLayout->declareCombinedImageSampler(OceanSurface::PreviousDisplacementBinding, Stages);
 
 			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
 			{
@@ -92,6 +93,11 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		if ( !fragmentStage && !shader.declare(Declaration::Sampler{setIndex, OceanSurface::PreviousDisplacementBinding, GLSL::Sampler2DArray, OceanSurface::PreviousDisplacementSamplerName}) )
+		{
+			return false;
+		}
+
 		/* Mirror of Graphics::Geometry::OceanSurface::Uniforms (std140, vec4 members only). */
 		Declaration::UniformBlock block{setIndex, OceanSurface::UniformsBinding, Declaration::MemoryLayout::Std140, OceanSurface::UniformBlockName, OceanSurface::UniformBlockInstance};
 		block.addMember(Declaration::VariableType::FloatVector4, "grid");
@@ -116,6 +122,27 @@ namespace EmEn::Saphir::Generator
 			function.addInstruction(
 				"\t" "const float texel = ocSurface.cascades[cascade] / " + texels + ";" "\n"
 				"\t" "return 1.0 - smoothstep(2.0 * texel, 4.0 * texel, step);" "\n"
+			);
+
+			if ( !shader.declare(function) )
+			{
+				return false;
+			}
+		}
+
+		/* The PREVIOUS frame's displacement, the same sum: the velocity's previous position (vertex stage only). */
+		if ( !fragmentStage )
+		{
+			Declaration::Function function{"ocPreviousDisplacementAt", GLSL::FloatVector3};
+			function.addInParameter(GLSL::FloatVector2, "xz");
+			function.addInParameter(GLSL::Float, "step");
+			function.addInstruction(
+				"\t" "vec3 sum = vec3(0.0);" "\n"
+				"\t" "for ( int cascade = 0; cascade < int(ocSurface.cascades.w); ++cascade )" "\n"
+				"\t" "{" "\n"
+				"\t\t" "sum += ocCascadeWeight(cascade, step) * textureLod(ocPreviousDisplacement, vec3(xz / ocSurface.cascades[cascade], float(cascade)), 0.0).xyz;" "\n"
+				"\t" "}" "\n"
+				"\t" "return sum;" "\n"
 			);
 
 			if ( !shader.declare(function) )
