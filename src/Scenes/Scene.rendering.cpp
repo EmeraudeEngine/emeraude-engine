@@ -1058,6 +1058,12 @@ namespace EmEn::Scenes
 			const auto renderableInstance = m_sceneVisualComponents[2]->getRenderableInstance();
 			renderableInstance->disableLightDistanceCheck();
 			renderableInstance->enableDisplayTBNSpace(false);
+
+			/* ⚠️ A water surface does not block the sun: the light goes through it and lights the seabed, which the
+			 * grab-pass transmission then shows. Casting shadows, the sea left the whole seabed in its own shadow —
+			 * ambient only, so dark that no water colour could make a shallow lagoon look clear (water-world,
+			 * 2026-09-28). The sea only ever shadows what lies under it, so nothing above the water loses a shadow. */
+			renderableInstance->disableShadowCasting();
 		}
 	}
 

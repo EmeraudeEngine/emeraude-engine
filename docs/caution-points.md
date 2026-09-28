@@ -419,6 +419,23 @@ test: h(k, t) = h₀(k) e^(iωt) + conj(h₀(−k)) e^(−iωt) sums two indepen
 already carries E|ξ|² = 2, so E|h|² = S(k) Δk² needs an amplitude of sqrt(S Δk² / 4); a half doubled the variance.
 Engine item `ocean-fft-surface`.
 
+---
+
+### Clear water: the BASE colour filters the transmission at every depth, and the sea must not cast shadows (2026-09-28)
+
+Two causes stacked to keep `water-world`'s shallow lagoon opaque dark blue, whatever the Beer-Lambert settings (fully
+clear attenuation — white over 1000 m — changed nothing visible):
+1. **KHR_materials_transmission tints the transmitted light by the base colour** (`LightGenerator.cpp`, the reflection +
+   transmission branch: `grab × Beer × albedo`). The demo ocean's base colour {0.02, 0.15, 0.20} multiplied the seabed by
+   ~0.15 at ANY depth: a fixed dark filter the attenuation cannot lift. Clear water needs a near-white base colour, its
+   colour coming from the attenuation over the measured water column (projet-alpha `OceanWaterBody::albedoColor`).
+2. **The sea-level surface cast shadows onto its own seabed**: the whole underwater terrain was lit by the ambient term
+   only. The scene's sea visual now disables shadow casting (`Scene.rendering.cpp`, next to the background's): a water
+   surface lets the sun through, and it only ever shadowed what lies under it. Found by elimination — with both fixes
+   the sand shows through a few metres of water, turquoise deeper.
+Where the terrain ends the grab pass has no seabed behind the water (unbounded column, full absorption): a hard edge
+between lagoon and open sea that only a seabed beyond the island removes.
+
 ## Ray Tracing / Acceleration Structures
 
 ### CDLOD terrain — what the adaptive grid taught, and the traps of its replacement (2026-09-22)

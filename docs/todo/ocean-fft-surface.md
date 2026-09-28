@@ -86,6 +86,13 @@ geomorph and per-node draw path:
 - Measured on `water-world` (RTX 3070 Ti, validation on): 0 VUID, no shader error; the sea reaches the horizon (the
   256 m plane's hard edge is gone); 30 % of the sea pixels move by more than 10/255 in one second.
 
+**Clear water (owner, 2026-09-28: "une belle plage claire", then "1 puis 2"), step 1 done — material only, then two
+causes found**: projet-alpha `OceanWaterBody` (base colour, attenuation colour and distance; `DeepOceanWater` the
+former look, `LagoonWater` white base, {0.30, 0.75, 0.80} kept after 12 m) for `water-world`. The absorption alone
+changed nothing visible: the dark base colour filtered the transmission at every depth, and the sea cast its shadow on
+the seabed (the scene's sea visual no longer casts shadows) — docs/caution-points.md § Clear water. Awaiting the owner's
+verdict on the image. **Step 2 next**: shore foam along the zero-thickness line of the water column, parameterizable.
+
 Still to do: the GPU cost (the profiler was off), the velocity of a moving surface (the vertex stage still reports
 hfPosition as the previous position — TAA will smear the waves), foam from the Jacobian, mipmaps of the cascades (the
 far pixels fade the small cascades instead), the shore (depth-based opacity with waves), MoltenVK on the macOS peer,
