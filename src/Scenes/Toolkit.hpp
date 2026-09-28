@@ -868,12 +868,9 @@ namespace EmEn::Scenes
 						visual.bodyPhysicalProperties().setProperties(physicalProperties);
 					}).build(renderable, enableLighting ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 
-				/* Apply renderable size as entity scale if it differs from 1.0. */
-				if ( renderable != nullptr && renderable->uniformScale() != 1.0F )
-				{
-					entity->scale(renderable->uniformScale(), Base::Math::TransformSpace::Local);
-				}
-
+				/* NOTE: A mesh's uniform scale is NOT put on the entity any more (2026-09-28): the instance draws it
+				 * (Graphics::RenderableInstance::Abstract::applyLocalTransformation()) and the Visual bounds it,
+				 * whatever built the component. The entity's frame stays the author's. */
 				return {entity, component};
 			}
 

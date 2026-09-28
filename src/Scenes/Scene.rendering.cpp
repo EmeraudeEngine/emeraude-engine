@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <optional>
 #include <ranges>
 
@@ -50,6 +51,39 @@ namespace EmEn::Scenes
 
 	namespace
 	{
+		/**
+		 * @brief The WORLD radius of a renderable instance, what the level-of-detail selection weighs: the
+		 * renderable's bounding radius, times the mesh's uniform scale the instance draws
+		 * (RenderableInstance::Abstract::applyLocalTransformation(), not for a sprite), times the largest
+		 * component of the world frame's scale.
+		 * @note Until 2026-09-28 the frame's scale was ignored here, which is why callers used to set the SAME
+		 * scale on the renderable AND on the entity: the renderable one fed this radius, the frame one the
+		 * drawing. Now that the instance DRAWS the renderable's scale, that doubled it.
+		 * @param renderable A reference to the renderable.
+		 * @param worldCoordinates The world frame of the instance, or nullptr at the origin.
+		 * @return float
+		 */
+		[[nodiscard]]
+		float
+		worldRadius (const Renderable::Abstract & renderable, const CartesianFrame< float > * worldCoordinates) noexcept
+		{
+			auto radius = renderable.boundingSphere().radius();
+
+			if ( !renderable.isSprite() )
+			{
+				radius *= renderable.uniformScale();
+			}
+
+			if ( worldCoordinates != nullptr )
+			{
+				const auto & scaling = worldCoordinates->scalingFactor();
+
+				radius *= std::max({std::abs(scaling[X]), std::abs(scaling[Y]), std::abs(scaling[Z])});
+			}
+
+			return radius;
+		}
+
 		/**
 		 * @brief The RECEIVERS of one shadow cascade: the slice of the main camera frustum whose fragments sample it.
 		 * @note A cascade is fitted with a bounding SPHERE (stable edges, ViewMatricesCascadedUBO), so its light
@@ -1424,7 +1458,7 @@ namespace EmEn::Scenes
 		 * which the shadow pass reads BEFORE it on the first frame of a scene (Renderer::renderFrame
 		 * runs renderShadowMaps() before prepareRender()): the very first shadow list of a scene is
 		 * built against the previous scene's leftover. It only guards a `> 0` test today. */
-		const auto objectRadius = renderable->boundingSphere().radius() * renderable->uniformScale();
+		const auto objectRadius = worldRadius(*renderable, worldCoordinates);
 		auto LODLevel = this->selectLODLevel(distance, objectRadius);
 
 		/* A coarser shadow on request (RenderableInstance::Abstract::setShadowLevelOfDetailBias()), down to the
@@ -1862,7 +1896,7 @@ namespace EmEn::Scenes
 
 		/* Compute LOD level from screen-space coverage (distance + object size).
 		 * LOD 0 = full detail (large on screen), MaxLODLevels-1 = minimum detail (small on screen). */
-		const auto objectRadius = renderable->boundingSphere().radius() * renderable->uniformScale();
+		const auto objectRadius = worldRadius(*renderable, worldCoordinates);
 		const auto LODLevel = this->selectLODLevel(distance, objectRadius);
 
 		const auto layerCount = renderable->layerCount();

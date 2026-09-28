@@ -277,6 +277,6 @@ auto scene = toolkit.scene();
 
 - **Template parameter defaults to `StaticEntity`** — always specify `<Node>` explicitly for dynamic entities
 - **`generateSphereInstance`** auto-creates a `SphereCollisionModel` — other generators do not auto-create collision models
-- **Renderable scale**: If a renderable has `uniformScale() != 1.0`, the toolkit automatically applies it to the entity's local scale
+- **Renderable scale** (changed 2026-09-28): a mesh's `uniformScale()` — its definition's `UniformScale`, the mesh's own UNIT — is drawn by the instance (`RenderableInstance::Abstract::applyLocalTransformation()`) and bounded by the `Visual`, whatever built the component. The toolkit NO LONGER scales the entity with it (that doubled it once the instance drew it); the entity frame is the author's scale. See `docs/caution-points.md` § A mesh's uniform scale.
 - **Sub-geometry dispatch**: Geometries with `subGeometryCount() > 1` get wrapped in `MeshResource`, others in `SimpleMeshResource`
 - **Cursor reset**: `setCursor()` resets the cursor's orientation to identity (only position changes). Use the `CartesianFrame` overload to set both position and orientation.

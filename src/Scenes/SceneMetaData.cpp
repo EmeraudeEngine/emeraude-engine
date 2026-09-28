@@ -376,19 +376,22 @@ namespace EmEn::Scenes
 
 				{
 					/* Build the TLAS instance transform by combining the entity's world
-					 * coordinates (position + rotation) with the renderable instance's
-					 * transformation matrix (which contains the uniform scale from
-					 * setUniformScale / setTransformationMatrix).
+					 * coordinates (position + rotation) with the renderable instance's LOCAL
+					 * transform — the author's transformation matrix, then the mesh's uniform
+					 * scale (RenderableInstance::Abstract::applyLocalTransformation(), the one
+					 * composition the rasterizer uses too).
 					 *
 					 * Without this, the BLAS geometry remains at its raw object-space size
 					 * in the acceleration structure, causing RT effects to trace against
 					 * un-scaled geometry while the rasterizer renders the scaled version. */
-					auto finalMatrix = batch.renderableInstance()->transformationMatrix();
+					Base::Math::Matrix< 4, float > finalMatrix;
 
 					if ( const auto * worldCoordinates = batch.worldCoordinates(); worldCoordinates != nullptr )
 					{
-						finalMatrix = worldCoordinates->getModelMatrix() * finalMatrix;
+						finalMatrix = worldCoordinates->getModelMatrix();
 					}
+
+					batch.renderableInstance()->applyLocalTransformation(finalMatrix);
 
 					const auto * m = finalMatrix.data();
 

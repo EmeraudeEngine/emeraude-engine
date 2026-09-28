@@ -70,6 +70,9 @@ namespace EmEn::Scenes::Component
 				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, Graphics::RenderableInstance::lightingFlags(lighting))}
 			{
 				this->observe(renderable.get());
+
+				/* A renderable already loaded never sends LoadFinished to this new observer. */
+				this->refreshScaledBounds();
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
@@ -120,6 +123,12 @@ namespace EmEn::Scenes::Component
 					return m_animatedBoundingBox;
 				}
 
+				/* A mesh drawn at its uniform scale is bounded at it too (refreshScaledBounds()). */
+				if ( m_scaledBoundingBox.isValid() )
+				{
+					return m_scaledBoundingBox;
+				}
+
 				return m_renderableInstance->renderable()->boundingBox();
 			}
 
@@ -128,6 +137,11 @@ namespace EmEn::Scenes::Component
 			const Base::Math::Space3D::Sphere< float > &
 			renderBoundingSphere () const noexcept override
 			{
+				if ( m_scaledBoundingBox.isValid() )
+				{
+					return m_scaledBoundingSphere;
+				}
+
 				return m_renderableInstance->renderable()->boundingSphere();
 			}
 
@@ -173,10 +187,29 @@ namespace EmEn::Scenes::Component
 			 */
 			void updateAnimatedBoundingBox () noexcept;
 
+			/**
+			 * @brief Scales the renderable's bounds by the MESH's uniform scale (the unit of its definition, drawn by
+			 * RenderableInstance::Abstract::applyLocalTransformation()), so the collision model and the culling
+			 * follow what is drawn. Leaves them invalid for a unit scale, a sprite, or a renderable not loaded yet.
+			 * @return void
+			 */
+			void refreshScaledBounds () noexcept;
+
+			/**
+			 * @brief Returns the mesh's uniform scale, 1 for a sprite (whose scale is not drawn, see
+			 * RenderableInstance::Abstract::applyLocalTransformation()).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float meshScale () const noexcept;
+
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 			std::unique_ptr< Animations::SkeletalAnimator > m_skeletalAnimator;
 			/** @brief Bounding box following the animated pose (invalid until the first pose). */
 			Base::Math::Space3D::AACuboid< float > m_animatedBoundingBox;
+			/** @brief The renderable's bounds at the mesh's uniform scale (invalid at a unit scale). */
+			Base::Math::Space3D::AACuboid< float > m_scaledBoundingBox;
+			Base::Math::Space3D::Sphere< float > m_scaledBoundingSphere;
 			/** @brief Per-axis flesh margin beyond the joints, measured once on the asset. */
 			Base::Math::Vector< 3, float > m_fleshMargin;
 			bool m_fleshMarginComputed{false};

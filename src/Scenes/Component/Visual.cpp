@@ -149,10 +149,46 @@ namespace EmEn::Scenes::Component
 			m_fleshMarginComputed = true;
 		}
 
-		m_animatedBoundingBox.set(jointsBox.maximum() + m_fleshMargin, jointsBox.minimum() - m_fleshMargin);
+		/* The joints live in the mesh's own unit: the box is scaled like the drawn mesh. */
+		const auto scale = this->meshScale();
+
+		m_animatedBoundingBox.set((jointsBox.maximum() + m_fleshMargin) * scale, (jointsBox.minimum() - m_fleshMargin) * scale);
 
 		/* The entity refreshes its collision model shape (the frustum culling volume). */
 		this->notify(ComponentBoundariesModified);
+	}
+
+	float
+	Visual::meshScale () const noexcept
+	{
+		const auto & renderable = m_renderableInstance->renderable();
+
+		if ( renderable == nullptr || renderable->isSprite() )
+		{
+			return 1.0F;
+		}
+
+		return renderable->uniformScale();
+	}
+
+	void
+	Visual::refreshScaledBounds () noexcept
+	{
+		const auto scale = this->meshScale();
+		const auto & renderable = m_renderableInstance->renderable();
+
+		if ( scale == 1.0F || renderable == nullptr || !renderable->boundingBox().isValid() )
+		{
+			m_scaledBoundingBox.reset();
+
+			return;
+		}
+
+		const auto & box = renderable->boundingBox();
+		const auto & sphere = renderable->boundingSphere();
+
+		m_scaledBoundingBox.set(box.maximum() * scale, box.minimum() * scale);
+		m_scaledBoundingSphere = Space3D::Sphere< float >{sphere.radius() * scale, sphere.position() * scale};
 	}
 
 	bool
@@ -168,6 +204,9 @@ namespace EmEn::Scenes::Component
 		{
 			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
+				/* The mesh's uniform scale is only known once its definition is loaded. */
+				this->refreshScaledBounds();
+
 				this->notify(ComponentContentModified);
 			}
 

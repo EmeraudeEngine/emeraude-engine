@@ -213,6 +213,25 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
+	Abstract::applyLocalTransformation (Matrix< 4, float > & modelMatrix) const noexcept
+	{
+		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
+		{
+			modelMatrix *= m_transformationMatrix;
+		}
+
+		if ( m_renderable->isSprite() )
+		{
+			return;
+		}
+
+		if ( const auto scale = m_renderable->uniformScale(); scale != 1.0F )
+		{
+			modelMatrix *= Matrix< 4, float >::scaling(scale);
+		}
+	}
+
+	void
 	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept
 	{
 		/* Prepare the model matrix (M).
@@ -228,10 +247,7 @@ namespace EmEn::Graphics::RenderableInstance
 				worldCoordinates->getModelMatrix();
 		}
 
-		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
-		{
-			modelMatrix *= this->transformationMatrix();
-		}
+		this->applyLocalTransformation(modelMatrix);
 
 		/* Previous model matrix: the matrix staged at the previous rendered frame by the
 		 * primary view. Before the first primary staging (or after a long culling gap, an

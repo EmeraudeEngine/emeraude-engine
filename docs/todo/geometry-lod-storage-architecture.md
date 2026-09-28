@@ -34,7 +34,9 @@ variants into the resource lifecycle.
 
 ## ⚠️ Traps
 
-- `uniformScale` on `Renderable` MUST be set, or the screen-space LOD selection is wrong.
+- The screen-space LOD selection reads the WORLD radius: renderable radius × the mesh's `uniformScale` × the
+  entity frame's largest scale (`Scene.rendering.cpp` `worldRadius()`, 2026-09-28). Setting the SAME scale on
+  the renderable AND on the entity — the former way to feed this radius — now doubles it.
 
 ## Why it matters now
 

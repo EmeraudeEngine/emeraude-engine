@@ -1008,6 +1008,21 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Multiplies a model matrix by this instance's LOCAL transform: the author's transformation matrix
+			 * (when one was set), then the unit of the MESH it draws — its renderable's uniform scale, the
+			 * `UniformScale` of a mesh definition.
+			 * @note THE single site of that composition: the push-constant paths, the instance-transforms SSBO and
+			 * the ray-tracing TLAS all go through it, so the rasterized and the traced geometry cannot disagree.
+			 * Before 2026-09-28 a mesh's uniform scale was applied by Toolkit::generateRenderableInstance() alone, on
+			 * the ENTITY (lost by every Visual built through a component builder, and mixed with the author's scale).
+			 * @note ⚠️ A SPRITE's uniform scale is NOT applied: the store's sprite definitions carry values (×64) that
+			 * were never drawn — only the culling radius used them. Engine item `sprite-uniform-scale`.
+			 * @param modelMatrix The world model matrix of the instance, multiplied in place.
+			 * @return void
+			 */
+			void applyLocalTransformation (Base::Math::Matrix< 4, float > & modelMatrix) const noexcept;
+
+			/**
 			 * @brief Stages this instance's transforms into the scene instance transforms SSBO and retains the slot.
 			 * @note Non-instanced path only (instanced renderables carry their model matrices in a VBO).
 			 * Called by Scene::prepareRender() during render list population; the retained slot is

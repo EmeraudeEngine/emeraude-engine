@@ -563,6 +563,26 @@ sat on one).
 
 **Files**: `src/Graphics/Geometry/{Interface,CDLODTerrainResource}.{hpp,cpp}`, `src/Graphics/Geometry/HeightfieldSurface.hpp`, `src/Saphir/Generator/HeightfieldSurfaceHelper.{hpp,cpp}`, `src/Saphir/{VertexShader,FragmentShader}.{hpp,cpp}`, `src/Saphir/Declaration/PushConstantBlock.cpp`, `src/Graphics/Renderable/TerrainResource.{hpp,cpp}`, `src/Graphics/RenderableInstance/Abstract.{hpp,cpp}`, `src/Graphics/Renderer.{hpp,cpp}`, `src/Scenes/Scene.rendering.cpp`, `src/SettingKeys.hpp`; emeraude-base `Math/Space3D/AACuboid.hpp`, `Algorithms/DiamondSquare.hpp`, `VertexFactory/Grid.hpp`.
 
+### A mesh's uniform scale: the instance draws it, the Visual bounds it (2026-09-28)
+
+> [!CRITICAL]
+> **`Renderable::uniformScale()` is the MESH's own unit** — its definition's `UniformScale` key (a mesh
+> authored in centimetres carries 0.01). Since 2026-09-28 the instance DRAWS it in every path through
+> `RenderableInstance::Abstract::applyLocalTransformation()` (world × author matrix × mesh scale: push
+> constants, instance-transforms SSBO, TLAS), the `Visual` bounds it (collision model, culling, rendering
+> octree), and the LOD radius includes it together with the entity frame's scale.
+>
+> - **The AUTHOR's scale goes on the entity frame** — never on the renderable (a shared resource: every
+>   instance, and the unit lost) and not in addition to it on the instance matrix.
+> - ⚠️ **Before**: only `Toolkit::generateRenderableInstance()` applied it, on the ENTITY; every Visual built
+>   through a component builder drew the raw geometry, so callers set the scale TWICE (renderable, for the
+>   LOD radius, + instance matrix or entity frame, for the drawing). Those doubles were removed with the
+>   change — any new one draws the mesh at the square of its scale.
+> - ⚠️ The definitions' former key `BaseSize` was never read by anything (35 store meshes carried it, 10
+>   with a value ≠ 1, several of them wrong); the key is `UniformScale`.
+> - ⚠️ A SPRITE's uniform scale is NOT drawn (its store values, ×64, never were; only the culling radius
+>   used them). Item `docs/todo/sprite-uniform-scale.md`.
+
 ### Fixed: TLAS Instance Transform Must Include Renderable Scale (Apr 2026)
 
 > [!CRITICAL]

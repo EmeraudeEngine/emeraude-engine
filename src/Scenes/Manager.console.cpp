@@ -571,20 +571,19 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("Mesh '" + meshName + "' not found !");
 				}
 
-				mesh->setUniformScale(scale);
-
+				/* The requested scale is the AUTHOR's: it goes on the entity frame. It used to be written into the
+				 * SHARED resource's uniform scale (every instance of the mesh, and its definition's own unit lost)
+				 * and into the instance matrix; since the instance draws the mesh's unit (2026-09-28,
+				 * RenderableInstance::Abstract::applyLocalTransformation()), that doubled it. */
 				const Base::Math::Vector< 3, float > position{x, y, z};
-				auto entity = m_activeScene->createStaticEntity(entityName, position);
+				auto entity = m_activeScene->createStaticEntity(entityName, Base::Math::CartesianFrame< float >{position, scale});
 
 				if ( entity == nullptr )
 				{
 					return Console::CommandResult::error("Failed to create entity '" + entityName + "' !");
 				}
 
-				const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual")
-					.setup([scale] (auto & component) {
-						component.getRenderableInstance()->setTransformationMatrix(Base::Math::Matrix4F::scaling(scale));
-					}).build(mesh, Graphics::RenderableInstance::Lighting::Lit);
+				const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual").build(mesh, Graphics::RenderableInstance::Lighting::Lit);
 
 				if ( visual == nullptr )
 				{

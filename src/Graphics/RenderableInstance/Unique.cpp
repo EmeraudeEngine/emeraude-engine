@@ -56,10 +56,7 @@ namespace EmEn::Graphics::RenderableInstance
 				worldCoordinates->getModelMatrix();
 		}
 
-		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
-		{
-			modelMatrix *= this->transformationMatrix();
-		}
+		this->applyLocalTransformation(modelMatrix);
 
 		/* For cubemap/CSM rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
 		 * We only push the Model matrix. */
@@ -146,10 +143,7 @@ namespace EmEn::Graphics::RenderableInstance
 				worldCoordinates->getModelMatrix();
 		}
 
-		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
-		{
-			modelMatrix *= this->transformationMatrix();
-		}
+		this->applyLocalTransformation(modelMatrix);
 
 		const auto handle = passContext.commandBuffer->handle();
 		const auto layout = pushContext.pipelineLayout->handle();
