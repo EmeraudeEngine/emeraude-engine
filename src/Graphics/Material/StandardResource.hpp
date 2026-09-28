@@ -136,6 +136,11 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceOpacityAmount{"SurfaceOpacityAmount"};
 			/** @brief The albedo AFTER the vertex-colour modulation; the single name every consumer reads. */
 			static constexpr auto SurfaceAlbedoFinal{"SurfaceAlbedoFinal"};
+			/** @brief Shore foam: the coverage (0-1) and the three inputs it folds into the lighting. */
+			static constexpr auto SurfaceShoreFoam{"SurfaceShoreFoam"};
+			static constexpr auto SurfaceAlbedoFoamed{"SurfaceAlbedoFoamed"};
+			static constexpr auto SurfaceRoughnessFoamed{"SurfaceRoughnessFoamed"};
+			static constexpr auto SurfaceTransmissionFoamed{"SurfaceTransmissionFoamed"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
@@ -1160,6 +1165,27 @@ namespace EmEn::Graphics::Material
 			 */
 			void enableDepthBasedOpacity (bool state) noexcept;
 
+			/**
+			 * @brief Enables a foam band along the shore line: where the water column measured by the depth-based opacity
+			 * thins to nothing, the surface turns to a lit, rough, opaque foam.
+			 * @warning This function is available before creation time. Needs enableDepthBasedOpacity(true) and the grab-pass
+			 * transmission; without them (or in the low-quality tier, which has no grab pass) the foam is absent.
+			 * @note The band follows the VERTICAL water depth under the surface (the view ray's column projected on the world
+			 * up), so it keeps its width whatever the viewing angle, and it moves with a displaced surface (ocean waves
+			 * running up the beach). Its edge is broken by a procedural world-space noise, faded to its mean where a pattern
+			 * cell gets smaller than a pixel. The foam folds into the lighting inputs — albedo toward the foam colour,
+			 * roughness toward the foam roughness, transmission toward zero — so the sun, the shadows and the sky light it
+			 * like any other surface. Technique: W. Toman, "Rendering Water as a Post-process Effect", 2010 (foam from the
+			 * depth difference against the scene), the shoreline foam of Crest (MIT, wave-harmonic/crest).
+			 * @param color The foam colour (linear).
+			 * @param width The water depth, in metres, at which the band has faded out. Default 1.5.
+			 * @param coverage The foam amount at the water line (0-1). Default 1.
+			 * @param patternScale The noise cells per metre (larger = finer foam patches). Default 1.
+			 * @param roughness The foam roughness. Default 0.9.
+			 * @return void
+			 */
+			void enableShoreFoam (const Base::PixelFactory::Color< float > & color, float width = 1.5F, float coverage = 1.0F, float patternScale = 1.0F, float roughness = 0.9F) noexcept;
+
 			/* ==================== Iridescence Component Setters (Pre-creation) ==================== */
 
 			/**
@@ -1665,6 +1691,34 @@ namespace EmEn::Graphics::Material
 			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component, const std::string & coordinates = {}) const noexcept;
 
 			/**
+			 * @brief Returns the GLSL name of the material's roughness BEFORE the shore foam: the roughness component's
+			 * variable, or the UBO value.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string roughnessInputExpression () const noexcept;
+
+			/**
+			 * @brief Returns the GLSL name of the material's transmission factor BEFORE the shore foam: the transmission
+			 * component's variable, or the UBO value.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string transmissionFactorExpression () const noexcept;
+
+			/**
+			 * @brief Generates the shore foam (enableShoreFoam()): its coverage and the albedo, roughness and transmission
+			 * it folds, under the names setupLightGenerator() declared.
+			 * @note Called LAST by generateFragmentShaderCode(): it reads the water column of the grab-pass code and every
+			 * component variable. Where the column is not measured (no depth-based opacity, low-quality tier, no bindless),
+			 * the coverage is zero and the folds pass the inputs through.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @return bool
+			 */
+			bool generateShoreFoamFragmentShader (Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
+
+			/**
 			 * @brief Returns the texture component feeding the alpha test, if any.
 			 * @note The alpha source is the opacity texture component when present, the albedo
 			 * texture (alpha channel) otherwise. Used by the cutout codegen and the alpha-tested
@@ -1799,6 +1853,8 @@ namespace EmEn::Graphics::Material
 			 * vec4 parallaxHandover		(offset 120-123) - geometry-to-parallax handover (start, end) of a mesh-shading surface
 			 * vec4 imposterBounds		  (offset 124-127) - octahedral imposter: bounding sphere (centre.xyz, radius), object space
 			 * vec4 imposterGrid			(offset 128-131) - octahedral imposter: (views per side, 1 / views per side, unused, unused)
+			 * vec4 shoreFoamColor		  (offset 132-135) - shore foam (colour.rgb linear, coverage)
+			 * vec4 shoreFoamParameters	 (offset 136-139) - shore foam (band width m, pattern cells per metre, roughness, unused)
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -1859,8 +1915,12 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ImposterBoundsOffset{124UL};
 			/** @brief Octahedral imposter vec4: (views per side, 1 / views per side, unused, unused). */
 			static constexpr auto ImposterGridOffset{128UL};
+			/** @brief Shore foam vec4: (colour.rgb linear, coverage 0-1). */
+			static constexpr auto ShoreFoamColorOffset{132UL};
+			/** @brief Shore foam vec4: (band width in metres of water, pattern cells per metre, foam roughness, unused). */
+			static constexpr auto ShoreFoamParametersOffset{136UL};
 			/** @brief Float count of the material UBO. */
-			static constexpr auto MaterialPropertiesSize{132UL};
+			static constexpr auto MaterialPropertiesSize{140UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo

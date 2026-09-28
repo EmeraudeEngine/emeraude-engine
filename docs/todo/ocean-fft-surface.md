@@ -91,7 +91,12 @@ causes found**: projet-alpha `OceanWaterBody` (base colour, attenuation colour a
 former look, `LagoonWater` white base, {0.30, 0.75, 0.80} kept after 12 m) for `water-world`. The absorption alone
 changed nothing visible: the dark base colour filtered the transmission at every depth, and the sea cast its shadow on
 the seabed (the scene's sea visual no longer casts shadows) — docs/caution-points.md § Clear water. Awaiting the owner's
-verdict on the image. **Step 2 next**: shore foam along the zero-thickness line of the water column, parameterizable.
+verdict on the image (approved, "C'est bien, passe à l'écume"). **Step 2 done**: `StandardResource::enableShoreFoam()`
+(colour, band width in metres of water, coverage, pattern cells per metre, roughness) — a material feature on the
+depth-based opacity, so the lake (`BasicSeaResource`) gets it too; `LagoonWater` enables it. Design and traps:
+docs/subsystems/graphics/05-5-material-ubo-system.md § Depth-based opacity and shore foam. Not done: no time
+animation of its own (it moves only with the waves' depth — a flat lake's foam is still), no foam texture (none in the
+store; the pattern is procedural), whitecaps from the Jacobian (below).
 
 Still to do: the GPU cost (the profiler was off), the velocity of a moving surface (the vertex stage still reports
 hfPosition as the previous position — TAA will smear the waves), foam from the Jacobian, mipmaps of the cascades (the

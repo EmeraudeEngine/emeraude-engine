@@ -435,6 +435,10 @@ clear attenuation — white over 1000 m — changed nothing visible):
    the sand shows through a few metres of water, turquoise deeper.
 Where the terrain ends the grab pass has no seabed behind the water (unbounded column, full absorption): a hard edge
 between lagoon and open sea that only a seabed beyond the island removes.
+Shore foam on top of the same measure (`enableShoreFoam()`, docs/subsystems/graphics/05-5-material-ubo-system.md
+§ Depth-based opacity and shore foam): the band must use the VERTICAL depth, or it widens toward the horizon; and the
+far-plane depth the sky leaves must be rejected on the raw depth — water near the far plane reads as a thin column
+there, which drew a dotted foam line along the whole horizon.
 
 ## Ray Tracing / Acceleration Structures
 

@@ -1849,7 +1849,11 @@ namespace EmEn::Graphics::Material
 				/* Octahedral imposter bounds (centre.xyz, radius) and grid (views per side, 1 / views, unused,
 				 * unused). Read only by an imposter material (setImposterAtlas()). */
 				0.0F, 0.0F, 0.0F, 1.0F,
-				2.0F, 0.5F, 0.0F, 0.0F
+				2.0F, 0.5F, 0.0F, 0.0F,
+				/* Shore foam colour (rgb, coverage) and parameters (band width m, cells per metre, roughness, unused). Read only
+				 * with ShoreFoamEnabled (enableShoreFoam()). */
+				1.0F, 1.0F, 1.0F, 1.0F,
+				1.5F, 1.0F, 0.9F, 0.0F
 					};
 
 		return properties;
@@ -2107,6 +2111,32 @@ namespace EmEn::Graphics::Material
 		}
 
 		return MaterialUB(UniformBlock::Component::AlbedoColor);
+	}
+
+	std::string
+	StandardResource::roughnessInputExpression () const noexcept
+	{
+		const auto componentIt = m_components.find(ComponentType::Roughness);
+
+		if ( componentIt != m_components.cend() )
+		{
+			return std::string{componentIt->second->variableName()};
+		}
+
+		return MaterialUB(UniformBlock::Component::Roughness);
+	}
+
+	std::string
+	StandardResource::transmissionFactorExpression () const noexcept
+	{
+		const auto componentIt = m_components.find(ComponentType::Transmission);
+
+		if ( componentIt != m_components.cend() )
+		{
+			return std::string{componentIt->second->variableName()};
+		}
+
+		return MaterialUB(UniformBlock::Component::TransmissionFactor);
 	}
 
 	void
@@ -2415,7 +2445,8 @@ namespace EmEn::Graphics::Material
 		 * swizzles onto this string (".rgb", ".a"), which is why it must be a NAME — never a
 		 * compound expression, or the swizzle would land on the last operand and still compile. */
 		{
-			const auto albedo = this->albedoExpression();
+			/* Shore foam folds the albedo, the roughness and the transmission (generateShoreFoamFragmentShader()). */
+			const auto albedo = this->isFlagEnabled(ShoreFoamEnabled) ? std::string{SurfaceAlbedoFoamed} : this->albedoExpression();
 
 			lightGenerator.declareSurfaceAlbedo(albedo);
 
@@ -2427,6 +2458,11 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Roughness component */
+		if ( this->isFlagEnabled(ShoreFoamEnabled) )
+		{
+			lightGenerator.declareSurfaceRoughness(SurfaceRoughnessFoamed);
+		}
+		else
 		{
 			const auto componentIt = m_components.find(ComponentType::Roughness);
 
@@ -2723,7 +2759,7 @@ namespace EmEn::Graphics::Material
 			if ( this->declaresTransmission() )
 			{
 				lightGenerator.declareSurfaceTransmission(
-					componentIt != m_components.cend() ? componentIt->second->variableName() : MaterialUB(UniformBlock::Component::TransmissionFactor),
+					this->isFlagEnabled(ShoreFoamEnabled) ? std::string{SurfaceTransmissionFoamed} : this->transmissionFactorExpression(),
 					std::string{SurfaceTransmissionColor},
 					MaterialUB(UniformBlock::Component::AttenuationColor),
 					MaterialUB(UniformBlock::Component::AttenuationDistance),
@@ -2889,6 +2925,8 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ParallaxHandover);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ImposterBounds);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ImposterGrid);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamColor);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamParameters);
 
 		return block;
 	}
@@ -4359,6 +4397,15 @@ namespace EmEn::Graphics::Material
 
 				return false;
 			}
+
+			/* ⚠️ No grab pass here, so no measured water column — yet setupLightGenerator() names gpWaterColumnThickness
+			 * as the Beer thickness of every depth-based material, whatever the tier: undeclared, the program did not
+			 * compile. One attenuation distance stands in for it: the water keeps its attenuation colour, once. */
+			if ( m_isUsingDepthBasedOpacity )
+			{
+				Code{fragmentShader, Location::Top} <<
+					"const float gpWaterColumnThickness = " << MaterialUB(UniformBlock::Component::AttenuationDistance) << ";";
+			}
 		}
 
 		/* Transmission factor component (texture-based). */
@@ -4399,6 +4446,120 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
+
+		/* Shore foam: LAST, it reads the water column and the component variables above. */
+		if ( this->isFlagEnabled(ShoreFoamEnabled) && !this->generateShoreFoamFragmentShader(generator, fragmentShader) )
+		{
+			TraceError{ClassId} << "Unable to generate the shore foam of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::generateShoreFoamFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		const auto albedo = this->albedoExpression();
+		const auto roughness = this->roughnessInputExpression();
+		const auto transmission = this->transmissionFactorExpression();
+		const auto foamColor = std::string{MaterialUB(UniformBlock::Component::ShoreFoamColor)};
+		const auto foamParameters = std::string{MaterialUB(UniformBlock::Component::ShoreFoamParameters)};
+
+		/* The water column exists only where the grab-pass code measured it (generateGrabPassTransmissionFragmentShader()). */
+		const bool columnMeasured = m_isUsingDepthBasedOpacity && m_isUsingGrabPassForTransmission && generator.bindlessTexturesEnabled() && generator.highQualityEnabled();
+
+		if ( !columnMeasured )
+		{
+			Code{fragmentShader, Location::Top} <<
+				"const float " << SurfaceShoreFoam << " = 0.0;";
+		}
+		else
+		{
+			/* Value noise over a PCG hash (M. Jarzynski, M. Olano, "Hash Functions for GPU Rendering", JCGT 2020, pcg2d). */
+			{
+				Declaration::Function function{"sfHash", GLSL::Float};
+				function.addInParameter(GLSL::FloatVector2, "cell");
+				Code{function, Location::Output} <<
+					"uvec2 v = uvec2(ivec2(cell)) * 1664525u + 1013904223u;" << Line::End <<
+					"v.x += v.y * 1664525u; v.y += v.x * 1664525u;" << Line::End <<
+					"v ^= v >> 16u;" << Line::End <<
+					"v.x += v.y * 1664525u; v.y += v.x * 1664525u;" << Line::End <<
+					"v ^= v >> 16u;" << Line::End <<
+					"return float(v.x) * (1.0 / 4294967296.0);";
+
+				if ( !fragmentShader.declare(function) )
+				{
+					return false;
+				}
+			}
+
+			{
+				Declaration::Function function{"sfValueNoise", GLSL::Float};
+				function.addInParameter(GLSL::FloatVector2, "p");
+				Code{function, Location::Output} <<
+					"const vec2 cell = floor(p);" << Line::End <<
+					"const vec2 f = p - cell;" << Line::End <<
+					"const vec2 u = f * f * (3.0 - 2.0 * f);" << Line::End <<
+					"return mix(mix(sfHash(cell), sfHash(cell + vec2(1.0, 0.0)), u.x), mix(sfHash(cell + vec2(0.0, 1.0)), sfHash(cell + vec2(1.0, 1.0)), u.x), u.y);";
+
+				if ( !fragmentShader.declare(function) )
+				{
+					return false;
+				}
+			}
+
+			/* Four octaves; an octave whose cell falls under a pixel fades to its mean (0.5) instead of aliasing into
+			 * sparkles — `footprint` is the cells of the first octave per pixel. */
+			{
+				Declaration::Function function{"sfFoamPattern", GLSL::Float};
+				function.addInParameter(GLSL::FloatVector2, "p");
+				function.addInParameter(GLSL::Float, "footprint");
+				Code{function, Location::Output} <<
+					"float sum = 0.0;" << Line::End <<
+					"float amplitude = 0.5;" << Line::End <<
+					"float weights = 0.0;" << Line::End <<
+					"for ( int octave = 0; octave < 4; ++octave )" << Line::End <<
+					"{" << Line::End <<
+					"\t" "sum += amplitude * mix(sfValueNoise(p), 0.5, smoothstep(0.5, 1.0, footprint));" << Line::End <<
+					"\t" "weights += amplitude;" << Line::End <<
+					"\t" "p = p * 2.03 + vec2(17.1, 5.7);" << Line::End <<
+					"\t" "footprint *= 2.03;" << Line::End <<
+					"\t" "amplitude *= 0.5;" << Line::End <<
+					"}" << Line::End <<
+					"return sum / weights;";
+
+				if ( !fragmentShader.declare(function) )
+				{
+					return false;
+				}
+			}
+
+			/* ⚠️ The VERTICAL depth, not the column along the view: the scene point behind the pixel lies on the same ray,
+			 * at gpLinearSceneDepth / gpLinearWaterDepth times the camera-to-surface vector, so the depth under the surface
+			 * is that vector's downward component times (ratio − 1). Along the view the band would widen toward the
+			 * horizon. A camera under the surface: no foam (the measure means nothing there).
+			 * ⚠️ No sea bed behind — the sky leaves the depth at the far plane — is tested on the raw depth: the ratio alone
+			 * does not reject it, since water drawn near the far plane (the horizon) sits right in front of that cleared
+			 * depth and read as a thin column (a dotted foam line along the horizon, water-world 2026-09-28). */
+			Code{fragmentShader, Location::Top} <<
+				Line::End <<
+				"/* Shore foam */" << Line::End <<
+				"const vec3 sfToSurface = " << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition;" << Line::End <<
+				"const float sfColumnRatio = max(gpLinearSceneDepth / max(gpLinearWaterDepth, 0.0001) - 1.0, 0.0);" << Line::End <<
+				"const float sfWaterDepth = max(-sfToSurface.y, 0.0) * sfColumnRatio;" << Line::End <<
+				"const float sfBand = (1.0 - smoothstep(0.0, " << foamParameters << ".x, sfWaterDepth)) * float(sfToSurface.y < 0.0) * float(gpSceneDepth < 0.99999);" << Line::End <<
+				"const vec2 sfCell = " << ShaderVariable::PositionWorldSpace << ".xz * " << foamParameters << ".y;" << Line::End <<
+				"const float sfPattern = sfFoamPattern(sfCell, length(fwidth(sfCell)));" << Line::End <<
+				"/* The band against the pattern: solid at the water line, broken into patches toward its outer edge. */" << Line::End <<
+				"const float " << SurfaceShoreFoam << " = smoothstep(sfPattern - 0.06, sfPattern + 0.06, sfBand) * " << foamColor << ".a;";
+		}
+
+		Code{fragmentShader, Location::Top} <<
+			"const vec4 " << SurfaceAlbedoFoamed << " = vec4(mix((" << albedo << ").rgb, " << foamColor << ".rgb, " << SurfaceShoreFoam << "), (" << albedo << ").a);" << Line::End <<
+			"const float " << SurfaceRoughnessFoamed << " = mix(" << roughness << ", " << foamParameters << ".z, " << SurfaceShoreFoam << ");" << Line::End <<
+			"const float " << SurfaceTransmissionFoamed << " = " << transmission << " * (1.0 - " << SurfaceShoreFoam << ");";
 
 		return true;
 	}
@@ -5939,6 +6100,38 @@ namespace EmEn::Graphics::Material
 	StandardResource::enableDepthBasedOpacity (bool state) noexcept
 	{
 		m_isUsingDepthBasedOpacity = state;
+
+		if ( state )
+		{
+			this->enableFlag(DepthBasedOpacityEnabled);
+		}
+		else
+		{
+			this->disableFlag(DepthBasedOpacityEnabled);
+		}
+	}
+
+	void
+	StandardResource::enableShoreFoam (const PixelFactory::Color< float > & color, float width, float coverage, float patternScale, float roughness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to enable the shore foam.";
+
+			return;
+		}
+
+		m_materialProperties[ShoreFoamColorOffset] = color.red();
+		m_materialProperties[ShoreFoamColorOffset + 1] = color.green();
+		m_materialProperties[ShoreFoamColorOffset + 2] = color.blue();
+		m_materialProperties[ShoreFoamColorOffset + 3] = clampToUnit(coverage);
+		m_materialProperties[ShoreFoamParametersOffset] = std::max(width, 0.001F);
+		m_materialProperties[ShoreFoamParametersOffset + 1] = std::max(patternScale, 0.0F);
+		m_materialProperties[ShoreFoamParametersOffset + 2] = clampToUnit(roughness);
+
+		this->enableFlag(ShoreFoamEnabled);
 	}
 
 	/* ==================== Transmission Dynamic Property Setters ==================== */

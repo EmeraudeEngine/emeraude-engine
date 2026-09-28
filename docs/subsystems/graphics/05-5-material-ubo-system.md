@@ -83,9 +83,10 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 ### Material Property Layout (std140)
 
 **StandardResource** — the ONE lit material (Cook-Torrance metallic-roughness) — stores properties
-in a 120-float array (480 bytes, std140; `StandardResource::MaterialPropertiesSize`, one neutral list in
+in a 140-float array (560 bytes, std140; `StandardResource::MaterialPropertiesSize`, one neutral list in
 `neutralMaterialProperties()`). ⚠️ This line said "80 floats" until 2026-09-22 — the layout had already
-grown to 116 with the indexed UV tables, and the table below had not followed:
+grown to 116 with the indexed UV tables, and the table below had not followed; it said 120 until 2026-09-28,
+the imposter slots having gone in without it:
 
 | Offset | Property | Type | Range/Default |
 |--------|----------|------|---------------|
@@ -131,6 +132,11 @@ grown to 116 with the indexed UV tables, and the table below had not followed:
 | 72-87 | uvwRotation[4] | 4 × vec4 | same slots, `(cos, sin, 0, 0)`, neutral **(1,0,0,0)** — KHR_texture_transform's `rotation`, trig resolved once on the CPU |
 | 88-115 | uvwIndex[7] | 7 × vec4 | one float per ComponentType, four to a vec4: which table slot that component reads |
 | 116-119 | parallaxParameters | vec4 | POM (max layers 0-64, fade start 8 m, fade end 18 m, unused) — see § Parallax Occlusion Mapping |
+| 120-123 | parallaxHandover | vec4 | geometry-to-parallax handover of a mesh-shading surface (start, end, unused, unused); (0, 0) = none |
+| 124-127 | imposterBounds | vec4 | octahedral imposter: bounding sphere (centre.xyz, radius), object space |
+| 128-131 | imposterGrid | vec4 | octahedral imposter: (views per side, 1 / views per side, unused, unused) |
+| 132-135 | shoreFoamColor | vec4 | shore foam (colour.rgb linear, coverage 0-1) — (1, 1, 1, 1); read only with `ShoreFoamEnabled` |
+| 136-139 | shoreFoamParameters | vec4 | shore foam (band width m 1.5, pattern cells per metre 1, roughness 0.9, unused) |
 
 The GLSL struct is generated to match this layout exactly.
 
@@ -186,6 +192,37 @@ scene target (3 of 3), none after the fix (3 of 3 with the recreation).
 - `Material/Interface.hpp:requiresGrabPass()` — virtual, default false
 - `Material/StandardResource.hpp:requiresGrabPass()` — override
 - `Renderable/Abstract.hpp:requiresGrabPass()` — pure virtual
+
+### Depth-based opacity and shore foam (Sep 2026)
+
+`enableDepthBasedOpacity(true)` (a grab-pass transmission material: water) replaces the Beer thickness with the
+**water column** measured per pixel: the grab pass depth (the scene BEHIND the translucent pass) linearised against
+the fragment's own depth, `gpWaterColumnThickness`. `enableShoreFoam(colour, width, coverage, patternScale,
+roughness)` adds a foam band where that column thins to nothing:
+
+- **Vertical depth, not the column along the view.** The scene point behind the pixel is on the same ray at
+  `sceneDepth / waterDepth` times the camera-to-surface vector, so the depth under the surface is that vector's
+  downward component times `(ratio − 1)` — the band keeps its width at every viewing angle, and follows a displaced
+  surface (ocean waves running up the beach move it).
+- **Folded into the lighting inputs**, never painted over the result: the albedo goes toward the foam colour, the
+  roughness toward the foam roughness and the transmission toward zero, under the names `SurfaceAlbedoFoamed`,
+  `SurfaceRoughnessFoamed`, `SurfaceTransmissionFoamed` that `setupLightGenerator()` hands to the light generator.
+  The foam is therefore lit, shadowed and sky-lit like any diffuse surface, and the G-buffers see it.
+- **Broken edge**: the band is compared to a procedural world-XZ value noise (PCG hash, M. Jarzynski & M. Olano,
+  JCGT 2020), four octaves, each faded to its mean where its cell falls under a pixel (no sparkle at distance).
+  Solid at the water line, patches toward the outer edge.
+- **Flags**: `DepthBasedOpacityEnabled` and `ShoreFoamEnabled` are material flag bits, because the program caches key on
+  the descriptor layout and the flags only; before 2026-09-28 a depth-based material could share a program with a
+  plain grab-pass one. The foam's parameters are UBO values (one program for every foam setting).
+- **Where the column is not measured** (low-quality tier, no bindless): no foam (coverage 0, the folds pass the inputs
+  through), and the Beer thickness is one attenuation distance — `gpWaterColumnThickness` used to be named by the light
+  generator in that tier without ever being declared.
+- ⚠️ The sky leaves the depth at the far plane: water drawn near the far plane (the horizon) sits right in front of it
+  and reads as a thin column, so the foam also requires the raw scene depth to be below the far plane.
+
+References: W. Toman, "Rendering Water as a Post-process Effect", 2010 (foam from the depth difference against the
+scene); Crest's shoreline foam (MIT). Demo: projet-alpha `water-world` (`OceanWaterBody` `LagoonWater`).
+Traps: [`caution-points.md`](../../caution-points.md) § *Clear water*.
 
 ### Alpha Test — the Binary Cutout Contract (Aug 2026)
 

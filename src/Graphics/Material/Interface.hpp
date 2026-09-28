@@ -156,9 +156,20 @@ namespace EmEn::Graphics::Material
 		 * (StandardResource::setImposterAtlas()). A flag, so the imposter programs never share a cache entry with
 		 * the mesh ones.
 		 */
-		ImposterAtlasEnabled = 1U << 20
+		ImposterAtlasEnabled = 1U << 20,
+		/**
+		 * @brief The grab-pass transmission measures the WATER COLUMN behind the surface (the grab pass depth) and uses it as
+		 * Beer's law thickness (StandardResource::enableDepthBasedOpacity()). A flag, so a depth-based program never shares a
+		 * cache entry with a plain grab-pass one (same descriptor layout, different GLSL).
+		 */
+		DepthBasedOpacityEnabled = 1U << 21,
+		/**
+		 * @brief A foam band along the shore line, where the measured water column thins to nothing
+		 * (StandardResource::enableShoreFoam()). Needs DepthBasedOpacityEnabled; its parameters are material UBO values.
+		 */
+		ShoreFoamEnabled = 1U << 22
 
-		/* ⚠️ NEXT FREE BIT: 21. Keep this marker up to date and add new bits HERE, at the end.
+		/* ⚠️ NEXT FREE BIT: 23. Keep this marker up to date and add new bits HERE, at the end.
 		 * Nothing checks these values: a duplicate compiles silently and every enableFlag() of one
 		 * name then sets the other. That happened — PostProcessReflectivityEnabled was first written
 		 * as `1U << 17`, the value UnlitEnabled already had, so declaring a post-process reflectivity

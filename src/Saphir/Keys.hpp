@@ -851,6 +851,10 @@ namespace EmEn::Saphir
 				constexpr auto ParallaxParameters{"parallaxParameters"};
 				/** @brief Mesh-shading surface: the geometry-to-parallax handover band (start, end, unused, unused). */
 				constexpr auto ParallaxHandover{"parallaxHandover"};
+				/** @brief Shore foam: (colour.rgb linear, coverage 0-1). */
+				constexpr auto ShoreFoamColor{"shoreFoamColor"};
+				/** @brief Shore foam: (band width in metres of water, pattern cells per metre, foam roughness, unused). */
+				constexpr auto ShoreFoamParameters{"shoreFoamParameters"};
 				/** @brief Octahedral imposter: the object's bounding sphere (centre.xyz, radius), object space. */
 				constexpr auto ImposterBounds{"imposterBounds"};
 				/** @brief Octahedral imposter: (views per side, 1 / views per side, unused, unused). */
