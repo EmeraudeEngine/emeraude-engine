@@ -18,7 +18,7 @@ resolution from the jittered frames, the depth and the motion vectors. That buys
 screen is 2880×1620), and each of the three also runs at a 1:1 ratio as an anti-aliasing mode (FSR "Native
 AA", DLAA, XeSS native).
 
-Owner decision the same day: **the in-house TAA is improved first** (`taa-trails-under-motion`). This item
+Owner decision the same day: **the in-house TAA is improved first** (done: the TAA resolve doc, § Trails under motion). This item
 does not replace it: the TAA stays the default and the fallback on every machine. UE5's TSR was discussed
 too; its code is under the Unreal EULA (ideas only, never code) and it is not part of this item.
 
@@ -59,7 +59,7 @@ too; its code is under the Unreal EULA (ideas only, never code) and it is not pa
    - **Depth**: its convention (reversed-Z or not, infinite far) and its format.
    - **Reactive / transparency masks** for what has no correct velocity. ⚠️ Known gaps: particles report
      zero motion, and translucent surfaces overwrite the velocity and depth behind them
-     (`taa-trails-under-motion`, What remains point 3). An upscaler ghosts on them exactly like the TAA.
+     (`particles-and-translucents-report-no-motion`). An upscaler ghosts on them exactly like the TAA.
    - **Negative texture LOD bias** at a reduced render resolution (`log2(render / output)`, the SDKs give
      their value). The samplers set no `mipLodBias` today.
    - **Exposure / pre-exposure** input.
@@ -87,6 +87,6 @@ too; its code is under the Unreal EULA (ideas only, never code) and it is not pa
 - `src/Graphics/Effects/Resolve/TAA.cpp` (the resolve an upscaler would replace; FSR 2 citations in it).
 - `src/Graphics/EffectSlot.hpp`, `src/Graphics/PostProcessStack.hpp` (the slot and jitter polling).
 - `src/Graphics/Renderer.hpp` (Halton (2,3) jitter applied to the main view).
-- Items: `taa-trails-under-motion`, `scene-colour-pre-exposure`.
+- Items: `particles-and-translucents-report-no-motion`, `scene-colour-pre-exposure`.
 - External, to verify and cite at step 1: AMD FidelityFX SDK (FSR 2 / 3) documentation, the Intel XeSS
   SDK developer guide, the NVIDIA DLSS programming guide and Streamline documentation.

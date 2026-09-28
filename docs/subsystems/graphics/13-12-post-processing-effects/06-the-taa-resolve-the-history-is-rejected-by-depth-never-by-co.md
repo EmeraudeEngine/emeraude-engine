@@ -76,8 +76,28 @@ filtered) decides whether the history is still valid.
     against 1.176 / 1.82 % / 119 — unchanged on thousands of silhouettes (TAA off: 2.48 / 8.3 %, the scene has
     temporal noise of its own).
   - Same forest in its wind: canopy gradient 16.3 against 15.5 (TAA off 41.8), temporal ptp 9.96 against 8.34 —
-    the image follows the motion a little better; the canopy smear itself is NOT solved (wind motion stays
-    under the 0.5 px foreign-motion threshold): `docs/todo/taa-trails-under-motion.md`, foliage.
+    the image follows the motion a little better; the canopy stays softer than with the TAA off (wind motion
+    stays under the 0.5 px foreign-motion threshold).
+- **Foliage in the wind — owner decision 2026-09-28: "le feuillage est bon visuellement".** No colour
+  rectification while moving ("GATE") and no FSR2-style lock: both would trade against the parked shimmer, and
+  the owner judges the canopy fine as it is. Do not reopen without a new owner report.
+- **Trails under motion (owner report 2026-09-26, closed 2026-09-28) — what each one was:**
+  - Camera turns: mostly the camera's MOTION BLUR (on by default since 2026-09-13, an owner decision): a
+    camera step puts 25-30 % of the pixels near silhouettes above 8/255 for one frame with it, 5-7 % without.
+  - A pure camera rotation (1°, 5°) leaves no ghost: the residual is symmetric (trailing/leading 0.59) and
+    decays at 0.95 per frame — the history softened by the resampling, re-sharpened over ~10 frames.
+  - A sideways step (`basic-scenery --demo-options 1`, 1 m) leaves a TAA-only residual: 5 % of the edge band
+    above 8/255 right after the step, 2.3 % eight frames later (floor from the next frame with the TAA off).
+    Not treated: judged acceptable after the fixes below.
+  - The Paladin's sword comb: a velocity SOURCE, the skinned pose history advanced per logic tick (fixed,
+    `docs/subsystems/scenes/13-instance-transforms.md`), then the 1-px lines: the motion marker above.
+  - The FFT ocean's streaked whitecaps: another velocity source (`Graphics::OceanWaves` reported its current
+    position as the previous one). **First check for any new trail report: does the moving thing report a
+    previous position at all?** Then the debug view.
+  - ⚠️ The first "provenance tag" (TAG, 2026-09-26: the history alpha = the depth its colour came from, 1 % and
+    5 % separation) measured NO effect on camera steps (sideways 1 m: 2.30 / 2.31 / 2.39 % of the edge band
+    above 8/255; forward 2 m: 3.18 / 3.12 / 3.15 %) — it was designed from a 1D scanline model, exact only for
+    a vertical edge. Treat a model's ranking as a hypothesis to measure, never as a result.
 - An HDRP-style anti-flicker (the clip widened with stationarity and temporal contrast) was tried
   the same day and reached far band 11.6 / 7.9 (base gamma 1.0 / 1.5, full strength): it only
   softens the wrong test. Removed.
