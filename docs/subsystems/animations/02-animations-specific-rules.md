@@ -203,6 +203,22 @@ through all 49 clips, and the watch's second hand snaps back to 12.
 - Pipeline order: Images → Materials → Meshes → Skins → Animations → **Attach skeletal data** → Nodes
 - Bone influences detected from vertex data: `shape->vertices()[0].influences()[0] >= 0` sets `EnableInfluence | EnableWeight` geometry flags
 
+**⚠️ glTF clips are rebased to t = 0 (2026-09-28, owner decision).** glTF keyframe times are absolute,
+and an exporter may lay EVERY clip on one shared timeline — Sketchfab does: `Dragon.glb`'s
+`Qishilong_fly2` runs from 31.6 s to 68.2 s. The clip's duration is its LAST keyframe
+(`AnimationChannel::duration()`), so such a clip used to hold its first pose for 31.6 s before moving,
+at every loop. `GLTFLoader::loadAnimations()` now shifts every animation so that its earliest keyframe
+sits at 0 — both halves (joint and node channels) by the same amount, so they stay in step. The price:
+a clip whose delay before its first key was DELIBERATE loses it — a rare case against a very common
+export. A debug trace names every rebased clip. (FBX clips are resampled from their stack's own start
+and never had the problem.)
+
+**⚠️ `stripRootMotion` does not exist for glTF**, and the asset above shows why a single rule would not
+fit: Mixamo's in-place strip zeroes the root's horizontal X/Z, but the dragon's moving bone is
+`Bip001` (below two static roots), in a Z-up parent space, and it TURNS the whole body as well as
+translating it. `citadel`'s dragon uses the flight as authored (its own trajectory, landing back on
+its start) instead.
+
 **FBX split-animation workflow** — `FBXLoader::loadAnimationClipsOnly(path, skeleton, output)` resamples a standalone animation FBX against an externally-loaded skeleton, resolving bones by **joint name**. Used for Mixamo / Maya / Blender per-action exports where the rig and each animation live in separate files. See `Scenes/Loaders/AGENTS.md` for the full recipe.
 
 **MD5** (`VertexFactory/FileFormatMDx.hpp`):

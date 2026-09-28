@@ -234,6 +234,67 @@ namespace
 
 		return name;
 	}
+
+	/**
+	 * @brief Moves an animation's keyframes so that its earliest one sits at t = 0.
+	 * @note glTF times are absolute, and an exporter may lay every clip on ONE shared timeline
+	 * (Sketchfab does: the dragon's "fly2" starts at 31.6 s). Played as is, such a clip holds its
+	 * first pose for all the time before it, at every loop. Every clip is therefore rebased on its
+	 * own earliest keyframe (owner decision, 2026-09-28), which a deliberate initial delay would
+	 * lose — a rare case, against a very common export.
+	 * @param jointChannels The skeletal half of ONE glTF animation.
+	 * @param nodeChannels The node half of the same animation, rebased by the same amount so
+	 * that both halves stay in step.
+	 * @return float The time removed, in seconds.
+	 */
+	float
+	rebaseAnimationTime (std::vector< EmEn::Base::Animation::AnimationChannel< float > > & jointChannels, std::vector< EmEn::Base::Animation::AnimationChannel< float > > & nodeChannels) noexcept
+	{
+		auto earliest = std::numeric_limits< float >::max();
+
+		const auto findEarliest = [&earliest] (const auto & channels) {
+			for ( const auto & channel : channels )
+			{
+				if ( !channel.vectorKeyFrames.empty() )
+				{
+					earliest = std::min(earliest, channel.vectorKeyFrames.front().time);
+				}
+
+				if ( !channel.quaternionKeyFrames.empty() )
+				{
+					earliest = std::min(earliest, channel.quaternionKeyFrames.front().time);
+				}
+			}
+		};
+
+		findEarliest(jointChannels);
+		findEarliest(nodeChannels);
+
+		if ( earliest == std::numeric_limits< float >::max() || earliest <= 0.0F )
+		{
+			return 0.0F;
+		}
+
+		const auto shift = [earliest] (auto & channels) {
+			for ( auto & channel : channels )
+			{
+				for ( auto & keyFrame : channel.vectorKeyFrames )
+				{
+					keyFrame.time -= earliest;
+				}
+
+				for ( auto & keyFrame : channel.quaternionKeyFrames )
+				{
+					keyFrame.time -= earliest;
+				}
+			}
+		};
+
+		shift(jointChannels);
+		shift(nodeChannels);
+
+		return earliest;
+	}
 }
 
 namespace EmEn::Scenes::Loaders
@@ -3204,6 +3265,11 @@ namespace EmEn::Scenes::Loaders
 				{
 					nodeChannels.push_back(std::move(channel));
 				}
+			}
+
+			if ( const auto removed = rebaseAnimationTime(channels, nodeChannels); removed > 0.0F )
+			{
+				TraceDebug{ClassId} << "Animation '" << clipName << "' rebased to t = 0 (it started at " << removed << " s).";
 			}
 
 			/* ⚠️ The fallback name belongs to the CLIP, not only to its resource key: the animator
