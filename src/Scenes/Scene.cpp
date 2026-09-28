@@ -764,7 +764,7 @@ namespace EmEn::Scenes
 			{
 				const auto staticEntity = std::any_cast< std::shared_ptr< StaticEntity > >(data);
 
-				this->checkEntityLocationInOctrees(staticEntity);
+				this->onEntityContentModified(staticEntity);
 			}
 			else
 			{
@@ -781,7 +781,7 @@ namespace EmEn::Scenes
 			{
 				const auto node = std::any_cast< std::shared_ptr< Node > >(data);
 
-				this->checkEntityLocationInOctrees(node);
+				this->onEntityContentModified(node);
 			}
 			else if ( !this->checkRootNodeNotification(notificationCode, data) )
 			{

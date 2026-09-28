@@ -204,7 +204,7 @@ namespace EmEn::Scenes
 	 *	   of content changes (ObservableTrait). This enables automatic registration with Scene subsystems
 	 *	   (Graphics, Audio, Physics) when components are added/removed.
 	 *
-	 * @extends EmEn::Base::FlagArrayTrait< 8 > Provides 8 boolean flags, with 6 used by this base class.
+	 * @extends EmEn::Base::FlagArrayTrait< 8 > Provides 8 boolean flags, with 4 used by this base class.
 	 * @extends EmEn::Base::NameableTrait An entity has a unique name for identification and debugging.
 	 * @extends EmEn::Scenes::LocatableInterface An entity is insertable to octree spatial partitioning systems.
 	 * @extends EmEn::Base::ObserverTrait An entity observes its components for ComponentContentModified notifications.
@@ -790,30 +790,46 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets whether this entity participates in collision detection [PHYSICS].
+			 * @brief Decides whether this entity participates in collision detection [PHYSICS].
 			 *
-			 * When disabled, the entity will not participate in collision detection even
-			 * if it has valid bounding primitives. Use for non-solid visuals, triggers, etc.
+			 * This is the AUTHOR's decision and it is final: onComponentsUpdated() no longer derives
+			 * the state once it has been called. Disable it for non-solid visuals (clouds, foliage,
+			 * triggers); enable it for a solid STATIC entity that declares no mass — the constraint
+			 * solver treats every non-movable body as infinitely heavy, so a building, a wall or a
+			 * rock needs no mass to be solid, only this call.
+			 * A change re-evaluates the entity's place in the physics octree (onContentModified()).
 			 *
 			 * @param state True to enable collision detection, false to disable.
 			 *
+			 * @note ⚠️ Call it on an entity already owned by a shared pointer (the notification uses
+			 * shared_from_this()), i.e. after the Toolkit or the scene created it.
 			 * @see isCollidable()
 			 */
 			void
 			setCollidable (bool state) noexcept
 			{
+				this->setFlag(IsCollisionAuthored, true);
+
+				if ( this->isCollidable() == state )
+				{
+					return;
+				}
+
 				this->setFlag(IsCollisionDisabled, !state);
+
+				this->onContentModified();
 			}
 
 			/**
 			 * @brief Returns whether the entity participates in collision detection [PHYSICS].
 			 *
-			 * An entity is collidable by default. Collidable entities participate in
-			 * physics collision detection.
+			 * Until setCollidable() decides it, the state is DERIVED from the components by
+			 * onComponentsUpdated(): collidable when at least one component declares a non-null mass.
+			 * A static entity built with the default BodyPhysicalProperties{} is therefore
+			 * walk-through unless its author calls setCollidable(true).
 			 *
 			 * @return bool True if collision is enabled, false if disabled.
 			 *
-			 * @note Entities are collidable by default. Use setCollidable(false) to disable.
 			 * @see setCollidable()
 			 */
 			[[nodiscard]]
@@ -966,13 +982,14 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Flag indices for FlagArrayTrait< 8 >.
 			 *
-			 * AbstractEntity uses 5 of the 8 available flags. Derived classes can use flags
+			 * AbstractEntity uses 4 of the 8 available flags. Derived classes can use flags
 			 * starting from NextFlag (currently 4).
 			 */
 			static constexpr auto IsRenderable{0UL};				 ///< Entity has at least one renderable component.
-			static constexpr auto IsCollisionDisabled{1UL};		  ///< Collision detection disabled (default: false = collidable).
+			static constexpr auto IsCollisionDisabled{1UL};		  ///< Collision detection disabled (derived from the mass until IsCollisionAuthored).
 			static constexpr auto IsSimulationPaused{2UL};		   ///< Physics simulation paused (no gravity/drag).
-			static constexpr auto NextFlag{3UL};					 ///< First available flag for derived classes (Node, StaticEntity).
+			static constexpr auto IsCollisionAuthored{3UL};		  ///< setCollidable() decided the collision state: onComponentsUpdated() no longer derives it.
+			static constexpr auto NextFlag{4UL};					 ///< First available flag for derived classes (Node, StaticEntity).
 
 			/**
 			 * @brief Constructs an abstract entity.

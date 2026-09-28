@@ -111,7 +111,7 @@ namespace EmEn::Physics
 			explicit
 			BodyPhysicalProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness, const Base::Math::Matrix< 3, float > & inertiaTensor = Base::Math::Matrix< 3, float >::identity()) noexcept
 				: m_mass{mass},
-				m_inverseMass{1.0F / m_mass},
+				m_inverseMass{mass > 0.0F ? 1.0F / mass : 0.0F},
 				m_surface{surface},
 				m_dragCoefficient{dragCoefficient},
 				m_angularDragCoefficient{angularDragCoefficient},
@@ -120,6 +120,25 @@ namespace EmEn::Physics
 				m_inertiaTensor{inertiaTensor}
 			{
 
+			}
+
+			/**
+			 * @brief Builds the properties of a MASSLESS surface: only its contact material.
+			 * @note For a static solid (a wall, a rock, a building): the solver treats a non-movable
+			 * body as infinitely heavy, so a mass would only be fiction. The entity is made solid by
+			 * AbstractEntity::setCollidable(true); these properties give its contacts their feel.
+			 * AbstractEntity::onComponentsUpdated() reads the contact material of a massless entity
+			 * from the components that shape its collider.
+			 * @param bounciness A scalar of the bounciness of the surface when hit.
+			 * @param stickiness A scalar of the stickiness of the surface when hit.
+			 * @return BodyPhysicalProperties
+			 */
+			[[nodiscard]]
+			static
+			BodyPhysicalProperties
+			contactMaterial (float bounciness, float stickiness) noexcept
+			{
+				return BodyPhysicalProperties{DefaultMass, DefaultSurface, DefaultDragCoefficient, DefaultAngularDragCoefficient, bounciness, stickiness};
 			}
 
 			/**

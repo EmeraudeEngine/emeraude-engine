@@ -2503,6 +2503,15 @@ namespace EmEn::Scenes
 			void checkEntityLocationInOctrees (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
 			/**
+			 * @brief Reacts to an entity's content notification (components, collision state): erases it
+			 * from the physics octree when it is no longer collidable, then checks its location.
+			 * @note Not on the per-frame path: the erasure walks the whole physics octree.
+			 * @param entity A reference to an entity smart pointer.
+			 * @return void
+			 */
+			void onEntityContentModified (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
+
+			/**
 			 * @brief Collects the renderable entities a volume may see, from the rendering octree [RENDER THREAD].
 			 * @note ⚠️⚠️ THE OCTREE CULLS FIRST (2026-09-25, owner: "use the octree"): an entity lives in a sector that
 			 * contains it, so a sector the volume misses is skipped with its whole subtree — nothing below it can be

@@ -422,6 +422,25 @@ namespace EmEn::Scenes
 		}
 	}
 
+	void
+	Scene::onEntityContentModified (const std::shared_ptr< AbstractEntity > & entity) const noexcept
+	{
+		/* An entity made non-collidable (AbstractEntity::setCollidable(false), or components that no
+		 * longer declare a mass) leaves the physics octree: the collision pass does not re-check the
+		 * flag per pair, so it would keep colliding. Done HERE, on the rare content notification,
+		 * and not in checkEntityLocationInOctrees(), which runs on every frame for every moving
+		 * node: erase() walks the whole tree (an expanded root holds no element to test first).
+		 * Only an entity with a collision model can have been inserted. */
+		if ( m_physicsOctree != nullptr && !entity->isCollidable() && entity->collisionModel() != nullptr )
+		{
+			const std::scoped_lock lock{m_physicsOctreeAccess};
+
+			m_physicsOctree->erase(entity, false);
+		}
+
+		this->checkEntityLocationInOctrees(entity);
+	}
+
 	bool
 	Scene::checkRootNodeNotification (int notificationCode, const std::any & data) noexcept
 	{

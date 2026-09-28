@@ -56,7 +56,9 @@ namespace EmEn::Physics
 		}
 
 		m_mass = value;
-		m_inverseMass = 1.0F / m_mass;
+		/* A null mass has a null inverse (reset() agrees): 1/0 was +inf, and a massless contact
+		 * material (see contactMaterial()) goes through here. */
+		m_inverseMass = m_mass > 0.0F ? 1.0F / m_mass : 0.0F;
 
 		if ( fireEvents )
 		{

@@ -119,6 +119,10 @@ namespace EmEn::Scenes
 		auto stickiness = 0.0F;
 		auto inertiaTensor = Matrix< 3, float >::identity();
 
+		auto masslessShapeCount = 0;
+		auto masslessBounciness = 0.0F;
+		auto masslessStickiness = 0.0F;
+
 		this->setRenderingAbilityState(false);
 
 		/* NOTE: If bounding primitives are overridden, we don't recompute them. */
@@ -129,9 +133,8 @@ namespace EmEn::Scenes
 
 		m_renderBoundingBox.reset();
 
-		/* NOTE: Reset flags. */
+		/* NOTE: Reset flags. The collision state is derived at the end, unless the author decided it. */
 		this->setRenderingAbilityState(false);
-		this->setCollidable(false);
 
 		{
 			const std::scoped_lock lock{m_componentsMutex};
@@ -179,6 +182,17 @@ namespace EmEn::Scenes
 					continue;
 				}
 
+				/* The contact material of a MASSLESS shape (BodyPhysicalProperties::contactMaterial()):
+				 * a static solid has no mass to declare, but its contacts still have a feel. Only the
+				 * components that shape the collider speak for its surface. */
+				if ( const auto & physicalProperties = component->bodyPhysicalProperties(); physicalProperties.isMassNull() )
+				{
+					masslessBounciness += physicalProperties.bounciness();
+					masslessStickiness += physicalProperties.stickiness();
+
+					masslessShapeCount++;
+				}
+
 				/* NOTE: If no collision model we create a default AABB. */
 				if ( m_collisionModel == nullptr )
 				{
@@ -218,12 +232,30 @@ namespace EmEn::Scenes
 				clampToUnit(stickiness / div),
 				inertiaTensor // FIXME: Incorrect !
 			);
-
-			this->setCollidable(true);
 		}
 		else
 		{
 			m_bodyPhysicalProperties.reset();
+
+			/* No mass anywhere: the contact material comes from the massless shapes. It used to stay
+			 * at the defaults (bounciness and stickiness 0.5), whatever the author declared — a stone
+			 * wall could only feel like stone by carrying a fictitious mass. */
+			if ( masslessShapeCount > 0 )
+			{
+				const auto div = static_cast< float >(masslessShapeCount);
+
+				m_bodyPhysicalProperties.setBounciness(clampToUnit(masslessBounciness / div), false);
+				m_bodyPhysicalProperties.setStickiness(clampToUnit(masslessStickiness / div), false);
+			}
+		}
+
+		/* The DERIVED collision state: a component with a mass makes the entity collidable. It never
+		 * overrides the author's setCollidable() — that used to be reset here on every component
+		 * update, both ways: a cloud made non-solid became solid again the moment a component with a
+		 * mass joined it, and a static wall could only be solid by declaring a fictitious mass. */
+		if ( !this->isFlagEnabled(IsCollisionAuthored) )
+		{
+			this->setFlag(IsCollisionDisabled, physicalEntityCount == 0);
 		}
 
 		/* NOTE: Update bounding primitive visual representations. */
