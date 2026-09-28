@@ -220,6 +220,10 @@ roughness)` adds a foam band where that column thins to nothing:
 - ⚠️ The sky leaves the depth at the far plane: water drawn near the far plane (the horizon) sits right in front of it
   and reads as a thin column, so the foam also requires the raw scene depth to be below the far plane.
 
+- **Whitecaps**: on an OCEAN geometry the same fold also carries the whitecaps (`ocWhitecapAt()` at the pixel's lattice
+  point, frayed by the same pattern three times finer): the coverage is max(shore band, whitecaps), the colour and
+  roughness the material's foam. The sea state births them (`Graphics::OceanWaveParameters::whitecap*`).
+
 References: W. Toman, "Rendering Water as a Post-process Effect", 2010 (foam from the depth difference against the
 scene); Crest's shoreline foam (MIT). Demo: projet-alpha `water-world` (`OceanWaterBody` `LagoonWater`).
 Traps: [`caution-points.md`](../../caution-points.md) § *Clear water*.

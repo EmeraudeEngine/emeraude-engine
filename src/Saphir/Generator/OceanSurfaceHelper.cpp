@@ -37,10 +37,40 @@
 #include "Saphir/Declaration/Sampler.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/Keys.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/LayoutManager.hpp"
 
 namespace EmEn::Saphir::Generator
 {
 	using namespace Graphics::Geometry;
+
+	std::shared_ptr< Vulkan::DescriptorSetLayout >
+	getOceanSurfaceDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept
+	{
+		static constexpr auto UUID{"OceanSurface"};
+
+		auto descriptorSetLayout = layoutManager.getDescriptorSetLayout(UUID);
+
+		if ( descriptorSetLayout == nullptr )
+		{
+			constexpr VkShaderStageFlags Stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(UUID);
+			descriptorSetLayout->setIdentifier("OceanSurface", "Cascades", "DescriptorSetLayout");
+			descriptorSetLayout->declareCombinedImageSampler(OceanSurface::DisplacementBinding, Stages);
+			descriptorSetLayout->declareCombinedImageSampler(OceanSurface::SlopesBinding, Stages);
+			descriptorSetLayout->declareUniformBuffer(OceanSurface::UniformsBinding, Stages);
+			descriptorSetLayout->declareCombinedImageSampler(OceanSurface::FoamBinding, Stages);
+
+			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
+			{
+				return nullptr;
+			}
+		}
+
+		return descriptorSetLayout;
+	}
 
 	bool
 	declareOceanSurface (AbstractShader & shader, uint32_t setIndex, bool fragmentStage) noexcept
@@ -53,6 +83,11 @@ namespace EmEn::Saphir::Generator
 		}
 
 		if ( !shader.declare(Declaration::Sampler{setIndex, OceanSurface::SlopesBinding, GLSL::Sampler2DArray, OceanSurface::SlopesSamplerName}) )
+		{
+			return false;
+		}
+
+		if ( fragmentStage && !shader.declare(Declaration::Sampler{setIndex, OceanSurface::FoamBinding, GLSL::Sampler2DArray, OceanSurface::FoamSamplerName}) )
 		{
 			return false;
 		}
@@ -144,6 +179,61 @@ namespace EmEn::Saphir::Generator
 			function.addInstruction(
 				"\t" "const vec2 footprint = max(abs(dFdx(xz)), abs(dFdy(xz)));" "\n"
 				"\t" "return ocNormalAt(xz, max(footprint.x, footprint.y));" "\n"
+			);
+
+			if ( !shader.declare(function) )
+			{
+				return false;
+			}
+		}
+
+		if ( fragmentStage )
+		{
+			/* ⚠️ The foam is read through a cubic B-spline, not the sampler's bilinear filter: the 512 m cascade stores it at
+			 * 2 m per texel, and a bilinear field compared to a threshold draws POLYGONS — the close whitecaps were
+			 * straight-edged scraps. Third-order filtering in four bilinear taps (C. Sigg, M. Hadwiger, "Fast Third-Order
+			 * Texture Filtering", GPU Gems 2, ch. 20, 2005); the REPEAT sampler wraps the taps. */
+			Declaration::Function function{"ocFoamBSpline", GLSL::Float};
+			function.addInParameter(GLSL::FloatVector3, "uvw");
+			function.addInstruction(
+				"\t" "const vec2 size = vec2(textureSize(ocFoam, 0).xy);" "\n"
+				"\t" "const vec2 st = uvw.xy * size - 0.5;" "\n"
+				"\t" "const vec2 i = floor(st);" "\n"
+				"\t" "const vec2 f = st - i;" "\n"
+				"\t" "const vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;" "\n"
+				"\t" "const vec2 w1 = (3.0 * f * f * f - 6.0 * f * f + 4.0) / 6.0;" "\n"
+				"\t" "const vec2 w3 = f * f * f / 6.0;" "\n"
+				"\t" "const vec2 w2 = 1.0 - w0 - w1 - w3;" "\n"
+				"\t" "const vec2 g0 = w0 + w1;" "\n"
+				"\t" "const vec2 g1 = w2 + w3;" "\n"
+				"\t" "const vec2 p0 = (i - 0.5 + w1 / g0) / size;" "\n"
+				"\t" "const vec2 p1 = (i + 1.5 + w3 / g1) / size;" "\n"
+				"\t" "return g0.y * (g0.x * textureLod(ocFoam, vec3(p0.x, p0.y, uvw.z), 0.0).r + g1.x * textureLod(ocFoam, vec3(p1.x, p0.y, uvw.z), 0.0).r)" "\n"
+				"\t" "     + g1.y * (g0.x * textureLod(ocFoam, vec3(p0.x, p1.y, uvw.z), 0.0).r + g1.x * textureLod(ocFoam, vec3(p1.x, p1.y, uvw.z), 0.0).r);" "\n"
+			);
+
+			if ( !shader.declare(function) )
+			{
+				return false;
+			}
+		}
+
+		if ( fragmentStage )
+		{
+			/* The whitecap coverage: each cascade's accumulated foam (Graphics::OceanWaves), faded like its waves where the
+			 * pixel cannot hold it, the cascades united as independent coverages: 1 − Π (1 − foam). */
+			Declaration::Function function{OceanSurface::WhitecapFunction, GLSL::Float};
+			function.addInParameter(GLSL::FloatVector2, "xz");
+			function.addInstruction(
+				"\t" "const vec2 footprint = max(abs(dFdx(xz)), abs(dFdy(xz)));" "\n"
+				"\t" "const float step = max(footprint.x, footprint.y);" "\n"
+				"\t" "float clear = 1.0;" "\n"
+				"\t" "for ( int cascade = 0; cascade < int(ocSurface.cascades.w); ++cascade )" "\n"
+				"\t" "{" "\n"
+				"\t\t" "const float foam = ocFoamBSpline(vec3(xz / ocSurface.cascades[cascade], float(cascade)));" "\n"
+				"\t\t" "clear *= 1.0 - clamp(ocCascadeWeight(cascade, step) * foam, 0.0, 1.0);" "\n"
+				"\t" "}" "\n"
+				"\t" "return 1.0 - clear;" "\n"
 			);
 
 			if ( !shader.declare(function) )

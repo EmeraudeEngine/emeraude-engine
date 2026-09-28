@@ -98,8 +98,24 @@ docs/subsystems/graphics/05-5-material-ubo-system.md § Depth-based opacity and 
 animation of its own (it moves only with the waves' depth — a flat lake's foam is still), no foam texture (none in the
 store; the pattern is procedural), whitecaps from the Jacobian (below).
 
+**Whitecaps (owner decisions 2026-09-28, AskUserQuestion, "on attaque l'écume au large avec le Jacobien")**:
+- **Accumulated foam** (chosen over an instantaneous per-pixel Jacobian): the resolve pass keeps a foam texture per
+  cascade that grows where the Jacobian of the horizontal displacement falls under a threshold (the crest folds) and
+  decays exponentially with time — the foam trails behind the breaking crests (Crest, GodotOceanWaves, HDRP water).
+  One more R16F image; the ocean gets its own descriptor layout (binding 3) instead of the heightfield's.
+- **Settings split**: threshold, growth and decay in `OceanWaveParameters` (the sea state — the wind makes the
+  whitecaps, Monahan & O'Muircheartaigh 1980); the look (colour, roughness) is the material's foam, one foam fold in
+  `StandardResource`, max(shore, whitecaps), active when the geometry is an ocean.
+
+**Whitecaps done (2026-09-28)**: `OceanWaveParameters::whitecapThreshold / whitecapSharpness / whitecapLifetime /
+whitecapMinimumWavelength` (defaults 0.78 / 10 / 2.5 s / 2 m, measured — docs/caution-points.md § Whitecaps); a foam image
+per cascade (R16F, RGBA16F fallback) updated by the resolve pass with the frame's step; the ocean's own descriptor layout
+(`getOceanSurfaceDescriptorSetLayout()`, binding 3); `ocWhitecapAt()` (cubic B-spline, cascades united) folded with the
+shore foam in `StandardResource`. An ocean shows whitecaps only if its material enables the foam (`enableShoreFoam()`).
+⚠️ Under TAA they smear into streaks until the surface reports its velocity (next).
+
 Still to do: the GPU cost (the profiler was off), the velocity of a moving surface (the vertex stage still reports
-hfPosition as the previous position — TAA will smear the waves), foam from the Jacobian, mipmaps of the cascades (the
+hfPosition as the previous position — TAA smears the waves and, visibly, the whitecaps), mipmaps of the cascades (the
 far pixels fade the small cascades instead), the shore (depth-based opacity with waves), MoltenVK on the macOS peer,
 the CPU level for buoyancy (step 6), the docs.
 

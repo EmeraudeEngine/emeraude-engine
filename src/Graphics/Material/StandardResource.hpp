@@ -138,6 +138,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceAlbedoFinal{"SurfaceAlbedoFinal"};
 			/** @brief Shore foam: the coverage (0-1) and the three inputs it folds into the lighting. */
 			static constexpr auto SurfaceShoreFoam{"SurfaceShoreFoam"};
+			static constexpr auto SurfaceFoamCoverage{"SurfaceFoamCoverage"};
 			static constexpr auto SurfaceAlbedoFoamed{"SurfaceAlbedoFoamed"};
 			static constexpr auto SurfaceRoughnessFoamed{"SurfaceRoughnessFoamed"};
 			static constexpr auto SurfaceTransmissionFoamed{"SurfaceTransmissionFoamed"};
@@ -1177,6 +1178,9 @@ namespace EmEn::Graphics::Material
 			 * roughness toward the foam roughness, transmission toward zero — so the sun, the shadows and the sky light it
 			 * like any other surface. Technique: W. Toman, "Rendering Water as a Post-process Effect", 2010 (foam from the
 			 * depth difference against the scene), the shoreline foam of Crest (MIT, wave-harmonic/crest).
+			 * @note On an OCEAN geometry (Geometry::OceanSurfaceResource) the colour and the roughness also dress the
+			 * whitecaps the sea state produces (Graphics::OceanWaveParameters::whitecapThreshold…): the foam coverage is
+			 * max(shore band, whitecaps). Without enableShoreFoam() an ocean shows no whitecaps.
 			 * @param color The foam colour (linear).
 			 * @param width The water depth, in metres, at which the band has faded out. Default 1.5.
 			 * @param coverage The foam amount at the water line (0-1). Default 1.

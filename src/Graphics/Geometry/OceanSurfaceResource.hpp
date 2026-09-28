@@ -277,6 +277,8 @@ namespace EmEn::Graphics::Geometry
 			VkDeviceSize m_uniformSectionSize{0};
 			uint32_t m_patchIndexCount{0};
 			uint32_t m_currentFrameIndex{0};
+			/** @brief The previous FFT's time (the whitecaps decay over the step); negative before the first one. */
+			double m_previousTime{-1.0};
 			mutable std::vector< Selection > m_selection; ///< Render thread, one pass at a time.
 			bool m_surfaceUpdated{false};
 	};

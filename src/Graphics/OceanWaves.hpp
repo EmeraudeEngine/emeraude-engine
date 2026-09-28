@@ -76,6 +76,22 @@ namespace EmEn::Graphics
 		float choppiness{1.0F};
 		/** @brief Seed of the spectrum's Gaussian draws (deterministic). */
 		uint32_t seed{1};
+		/** @brief Whitecaps: foam is born where a cascade's Jacobian of the horizontal displacement falls below this value
+		 * (1 = flat, 0 = the crest folds over itself). Higher = more foam.
+		 * @note Each cascade holds a band of the spectrum, so its own Jacobian rarely folds: measured on the default sea
+		 * (testOceanWaves(), 10 m/s), the minima are 0.53-0.66 and the 1 % quantiles 0.73-0.80. 0.78 births foam on
+		 * about 1 % of the surface — the whitecap cover observed at 10 m/s (Monahan & O'Muircheartaigh 1980). */
+		float whitecapThreshold{0.78F};
+		/** @brief Whitecaps: how fast the birth saturates below the threshold (full foam at threshold − 1 / sharpness,
+		 * 0.68 by default — near the measured minima). */
+		float whitecapSharpness{10.0F};
+		/** @brief Whitecaps: seconds for the foam left behind a crest to fall to 1/e. */
+		float whitecapLifetime{2.5F};
+		/** @brief Whitecaps: only a cascade whose band holds waves at least this long (m) births foam. Shorter waves break
+		 * without entraining air (microscale breaking, M. L. Banner & O. M. Phillips 1974): on the default cascades the
+		 * 8 m one (waves under 1.33 m, periods under a second) re-foamed faster than its foam decayed and carpeted the
+		 * sea near the camera in grey. */
+		float whitecapMinimumWavelength{2.0F};
 	};
 
 	/**
@@ -88,7 +104,14 @@ namespace EmEn::Graphics
 	 * two into four complex signals: an inverse FFT of A + iB is a + ib when a and b are real), a 256-point Stockham FFT per
 	 * row then per column, each entirely in one workgroup's shared memory, and a resolve pass.
 	 * @note Outputs (RGBA16F, 2D arrays, GENERAL layout after recordUpdate()): displacement = (λ Dx, h, λ Dz, λ ∂Dx/∂z),
-	 * slopes = (∂h/∂x, ∂h/∂z, λ ∂Dx/∂x, λ ∂Dz/∂z) — enough for the choppy surface's normal and its Jacobian (foam).
+	 * slopes = (∂h/∂x, ∂h/∂z, λ ∂Dx/∂x, λ ∂Dz/∂z) — enough for the choppy surface's normal and its Jacobian.
+	 * @note Whitecaps (owner decision 2026-09-28: ACCUMULATED foam): the resolve pass also keeps a foam coverage per
+	 * cascade (R16F, RGBA16F where the device cannot write R16F): born where the cascade's Jacobian
+	 * J = (1 + λ ∂Dx/∂x)(1 + λ ∂Dz/∂z) − (λ ∂Dx/∂z)² falls below the threshold (the crest folds), decaying
+	 * exponentially with time — so it trails behind the breaking crests. Stored at the undisplaced lattice point, like
+	 * every output: the foam stays with the water, not with the moving crest. References: Tessendorf 2001 § 4.4.3 (the
+	 * Jacobian), J. Dupuy & E. Bruneton, "Real-time Animation and Rendering of Ocean Whitecaps", SIGGRAPH Asia 2012
+	 * (whitecaps from the Jacobian), the accumulate-and-decay of Crest and GodotOceanWaves (MIT).
 	 */
 	class OceanWaves final
 	{
@@ -137,9 +160,10 @@ namespace EmEn::Graphics
 			 * stages and to transfers.
 			 * @param commandBuffer A recording command buffer of a queue with compute.
 			 * @param time The simulation time, in seconds.
+			 * @param deltaTime The seconds since the previous update (the foam decay); 0 on the first one.
 			 * @return void
 			 */
-			void recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time) const noexcept;
+			void recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) const noexcept;
 
 			/**
 			 * @brief Runs the GPU generator once and compares its outputs with a CPU reference of the same spectrum.
@@ -171,6 +195,17 @@ namespace EmEn::Graphics
 			slopeView () const noexcept
 			{
 				return m_slopeView.get();
+			}
+
+			/**
+			 * @brief Returns the whitecap foam view (2D array, one layer per cascade, coverage 0-1 in the red channel).
+			 * @return const Vulkan::ImageView *
+			 */
+			[[nodiscard]]
+			const Vulkan::ImageView *
+			foamView () const noexcept
+			{
+				return m_foamView.get();
 			}
 
 			/**
@@ -217,10 +252,12 @@ namespace EmEn::Graphics
 			std::array< std::shared_ptr< Vulkan::Image >, 2 > m_fieldImages;
 			std::shared_ptr< Vulkan::Image > m_displacementImage;
 			std::shared_ptr< Vulkan::Image > m_slopeImage;
+			std::shared_ptr< Vulkan::Image > m_foamImage;
 			std::shared_ptr< Vulkan::ImageView > m_spectrumView;
 			std::array< std::shared_ptr< Vulkan::ImageView >, 2 > m_fieldViews;
 			std::shared_ptr< Vulkan::ImageView > m_displacementView;
 			std::shared_ptr< Vulkan::ImageView > m_slopeView;
+			std::shared_ptr< Vulkan::ImageView > m_foamView;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;

@@ -39,8 +39,8 @@
  * geomorphed onto the even ones toward the next level — displaced by the FFT wave cascades (Graphics::OceanWaves)
  * instead of lifted from a height clipmap. The fragment stage rebuilds the choppy surface's normal per pixel from the
  * slopes, through the heightfield per-pixel frame.
- * @note It shares the heightfield's descriptor set layout (binding 0 and 1: sampler2DArray, binding 2: uniform block):
- * binding 0 is the displacement, binding 1 the slopes, binding 2 the Uniforms below.
+ * @note Its descriptor set layout is the heightfield's plus one binding (Saphir::Generator::getOceanSurfaceDescriptorSetLayout()):
+ * binding 0 is the displacement, binding 1 the slopes, binding 2 the Uniforms below, binding 3 the whitecap foam.
  * @note Everything both sides must agree on lives HERE.
  */
 namespace EmEn::Graphics::Geometry::OceanSurface
@@ -51,6 +51,8 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 	static constexpr uint32_t SlopesBinding{1};
 	/** @brief Binding of the per-frame uniform block. */
 	static constexpr uint32_t UniformsBinding{2};
+	/** @brief Binding of the whitecap foam cascades (sampler2DArray): coverage 0-1 in the red channel. */
+	static constexpr uint32_t FoamBinding{3};
 	/** @brief Maximum number of levels of detail (quadtree depth) the uniform block describes. */
 	static constexpr uint32_t MaxLevelsOfDetail{16};
 
@@ -76,6 +78,10 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 	static constexpr auto DisplacementSamplerName{"ocDisplacement"};
 	/** @brief GLSL name of the slope sampler. */
 	static constexpr auto SlopesSamplerName{"ocSlopes"};
+	/** @brief GLSL name of the whitecap foam sampler. */
+	static constexpr auto FoamSamplerName{"ocFoam"};
+	/** @brief GLSL name of the fragment-stage function returning the whitecap coverage at a lattice XZ: `float ocWhitecapAt(vec2)`. */
+	static constexpr auto WhitecapFunction{"ocWhitecapAt"};
 	/** @brief GLSL block type name of the uniforms. */
 	static constexpr auto UniformBlockName{"OceanSurface"};
 	/** @brief GLSL instance name of the uniforms. */

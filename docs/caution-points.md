@@ -440,6 +440,27 @@ Shore foam on top of the same measure (`enableShoreFoam()`, docs/subsystems/grap
 far-plane depth the sky leaves must be rejected on the raw depth — water near the far plane reads as a thin column
 there, which drew a dotted foam line along the whole horizon.
 
+---
+
+### Whitecaps from the Jacobian: four traps between the first image and a sea that looks right (2026-09-28)
+
+`Graphics::OceanWaves` accumulates a foam coverage per cascade where the Jacobian of the horizontal displacement falls
+under a threshold (owner decision: accumulated, not instantaneous). What the first images got wrong:
+1. **A cascade's own Jacobian rarely folds.** Each cascade holds one band of the spectrum; on the default sea (10 m/s)
+   `testOceanWaves()` measured per-cascade minima of 0.53-0.66 and 1 % quantiles of 0.73-0.80, so a textbook threshold
+   below 0.5 never births anything. The default 0.78 births on ~1 % of the surface, the whitecap cover observed at
+   10 m/s (Monahan & O'Muircheartaigh 1980); the self-test reports the quantiles for any other sea.
+2. **The short-wave cascade saturates.** The 8 m cascade (waves under 1.33 m, periods under a second) re-foamed faster
+   than a 2.5 s lifetime decays: a grey carpet on the whole near sea. Waves that short break without air entrainment
+   (microscale breaking): a cascade births foam only when its band's longest wave reaches `whitecapMinimumWavelength` (2 m).
+3. **Bilinear coverage draws polygons.** The 512 m cascade stores foam at 2 m per texel; a bilinear field compared to a
+   threshold (or to a noise) has straight contours — paper-scrap whitecaps. Read through a cubic B-spline in four
+   bilinear taps (Sigg & Hadwiger, GPU Gems 2 ch. 20), frayed by the foam pattern three times finer than the shore's.
+4. **⚠️ TAA smears them into streaks** — not motion blur, not depth of field (both ruled out by disabling them): the
+   ocean's vertex stage reports its current position as the previous one, so TAA reprojects the moving surface with a
+   zero velocity. With `PostProcess.disable(TemporalAA)` the whitecaps have ragged, organic outlines. The velocity of
+   the displaced surface is the fix (engine item `ocean-fft-surface`).
+
 ## Ray Tracing / Acceleration Structures
 
 ### CDLOD terrain — what the adaptive grid taught, and the traps of its replacement (2026-09-22)

@@ -29,7 +29,16 @@
 /* STL inclusions. */
 #include <cstdint>
 
+/* STL inclusions. */
+#include <memory>
+
 /* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+	class LayoutManager;
+}
+
 namespace EmEn::Saphir
 {
 	class AbstractShader;
@@ -39,13 +48,23 @@ namespace EmEn::Saphir::Generator
 {
 	/**
 	 * @brief Declares an ocean surface's resources and functions in a shader (Graphics::Geometry::OceanSurface): the
-	 * displacement and slope cascades, the per-frame uniform block, `ocDisplacementAt()` and `ocNormalAt()`, and — in a
-	 * fragment stage — `hfPixelNormalAt()`, the normal the heightfield per-pixel frame rebuilds.
-	 * @note The set layout is the heightfield's (getHeightfieldSurfaceDescriptorSetLayout()).
+	 * displacement, slope and foam cascades, the per-frame uniform block, `ocDisplacementAt()` and `ocNormalAt()`, and —
+	 * in a fragment stage — `hfPixelNormalAt()`, the normal the heightfield per-pixel frame rebuilds, and
+	 * `ocWhitecapAt()`, the whitecap coverage.
+	 * @note The set layout is getOceanSurfaceDescriptorSetLayout().
 	 * @param shader The shader.
 	 * @param setIndex The PerModel set index of the program.
 	 * @param fragmentStage True in a fragment stage (adds the per-pixel normal).
 	 * @return bool
 	 */
 	bool declareOceanSurface (AbstractShader & shader, uint32_t setIndex, bool fragmentStage) noexcept;
+
+	/**
+	 * @brief Returns the descriptor set layout of an ocean surface (Graphics::Geometry::OceanSurface): the heightfield's
+	 * three bindings (displacement, slopes, uniforms) and the whitecap foam at binding 3.
+	 * @param layoutManager The layout manager.
+	 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
+	 */
+	[[nodiscard]]
+	std::shared_ptr< Vulkan::DescriptorSetLayout > getOceanSurfaceDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
 }

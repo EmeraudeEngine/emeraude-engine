@@ -42,6 +42,8 @@
 #include "Component/Texture.hpp"
 #include "Component/Value.hpp"
 #include "GPURTMaterialData.hpp"
+#include "Graphics/Geometry/HeightfieldSurface.hpp"
+#include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/IBLTexture.hpp"
 #include "Graphics/ImposterAtlas.hpp"
@@ -4469,13 +4471,10 @@ namespace EmEn::Graphics::Material
 
 		/* The water column exists only where the grab-pass code measured it (generateGrabPassTransmissionFragmentShader()). */
 		const bool columnMeasured = m_isUsingDepthBasedOpacity && m_isUsingGrabPassForTransmission && generator.bindlessTexturesEnabled() && generator.highQualityEnabled();
+		const bool oceanGeometry = generator.isOceanSurfaceEnabled();
 
-		if ( !columnMeasured )
-		{
-			Code{fragmentShader, Location::Top} <<
-				"const float " << SurfaceShoreFoam << " = 0.0;";
-		}
-		else
+		/* The foam pattern breaks the shore band's edge and the whitecaps' blocks alike. */
+		if ( columnMeasured || oceanGeometry )
 		{
 			/* Value noise over a PCG hash (M. Jarzynski, M. Olano, "Hash Functions for GPU Rendering", JCGT 2020, pcg2d). */
 			{
@@ -4535,7 +4534,15 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 			}
+		}
 
+		if ( !columnMeasured )
+		{
+			Code{fragmentShader, Location::Top} <<
+				"const float " << SurfaceShoreFoam << " = 0.0;";
+		}
+		else
+		{
 			/* ⚠️ The VERTICAL depth, not the column along the view: the scene point behind the pixel lies on the same ray,
 			 * at gpLinearSceneDepth / gpLinearWaterDepth times the camera-to-surface vector, so the depth under the surface
 			 * is that vector's downward component times (ratio − 1). Along the view the band would widen toward the
@@ -4556,10 +4563,33 @@ namespace EmEn::Graphics::Material
 				"const float " << SurfaceShoreFoam << " = smoothstep(sfPattern - 0.06, sfPattern + 0.06, sfBand) * " << foamColor << ".a;";
 		}
 
+		/* On an OCEAN geometry the whitecaps join the shore foam (owner decision 2026-09-28: the sea state makes them, the
+		 * material dresses them): the geometry's accumulated coverage at the pixel's lattice point. */
+		if ( oceanGeometry )
+		{
+			/* ⚠️ The accumulated coverage is stored at 25 cm per texel on the 64 m cascade and filtered bilinearly: shown
+			 * raw, the close whitecaps were soft SQUARES. Compared to the foam pattern — at the lattice point, so the lace
+			 * follows the water — it keeps its dense cores and frays at its edges. The pattern runs three times finer than
+			 * the shore's (its cells must be smaller than the coverage texels, or the contours stay polygonal: paper-scrap
+			 * whitecaps with the shore scale and a narrow smoothstep) and the edge ramps over a quarter of the pattern. */
+			const std::string lattice{Geometry::HeightfieldSurface::PixelPositionVarying};
+
+			Code{fragmentShader, Location::Top} <<
+				"const vec2 wcCell = " << lattice << " * (3.0 * " << foamParameters << ".y);" << Line::End <<
+				"const float wcPattern = sfFoamPattern(wcCell, length(fwidth(wcCell)));" << Line::End <<
+				"const float wcCoverage = " << Geometry::OceanSurface::WhitecapFunction << "(" << lattice << ");" << Line::End <<
+				"const float " << SurfaceFoamCoverage << " = max(" << SurfaceShoreFoam << ", clamp((wcCoverage - wcPattern) * 4.0, 0.0, 1.0));";
+		}
+		else
+		{
+			Code{fragmentShader, Location::Top} <<
+				"const float " << SurfaceFoamCoverage << " = " << SurfaceShoreFoam << ";";
+		}
+
 		Code{fragmentShader, Location::Top} <<
-			"const vec4 " << SurfaceAlbedoFoamed << " = vec4(mix((" << albedo << ").rgb, " << foamColor << ".rgb, " << SurfaceShoreFoam << "), (" << albedo << ").a);" << Line::End <<
-			"const float " << SurfaceRoughnessFoamed << " = mix(" << roughness << ", " << foamParameters << ".z, " << SurfaceShoreFoam << ");" << Line::End <<
-			"const float " << SurfaceTransmissionFoamed << " = " << transmission << " * (1.0 - " << SurfaceShoreFoam << ");";
+			"const vec4 " << SurfaceAlbedoFoamed << " = vec4(mix((" << albedo << ").rgb, " << foamColor << ".rgb, " << SurfaceFoamCoverage << "), (" << albedo << ").a);" << Line::End <<
+			"const float " << SurfaceRoughnessFoamed << " = mix(" << roughness << ", " << foamParameters << ".z, " << SurfaceFoamCoverage << ");" << Line::End <<
+			"const float " << SurfaceTransmissionFoamed << " = " << transmission << " * (1.0 - " << SurfaceFoamCoverage << ");";
 
 		return true;
 	}

@@ -58,17 +58,22 @@ namespace EmEn::Graphics
 
 	namespace
 	{
-		/** @brief The push constants every pass reads (32 bytes). */
+		/** @brief The push constants every pass reads (64 bytes). */
 		struct PushConstants
 		{
 			std::array< float, 4 > cascadeSizes{};
+			std::array< float, 4 > whitecapCascades{};
 			float time{0.0F};
 			float gravity{9.81F};
 			float choppiness{1.0F};
 			int32_t vertical{0};
+			float deltaTime{0.0F};
+			float whitecapThreshold{0.78F};
+			float whitecapSharpness{10.0F};
+			float whitecapLifetime{2.5F};
 		};
 
-		static_assert(sizeof(PushConstants) == 32);
+		static_assert(sizeof(PushConstants) == 64);
 
 		/** @brief One cascade layer's extent, and the range of every cascade layer. */
 		constexpr VkExtent3D CascadeExtent{OceanWaves::Resolution, OceanWaves::Resolution, 1};
@@ -79,10 +84,15 @@ namespace EmEn::Graphics
 layout(push_constant) uniform Ocean
 {
 	vec4 cascadeSizes;
+	vec4 whitecapCascades;
 	float time;
 	float gravity;
 	float choppiness;
 	int vertical;
+	float deltaTime;
+	float whitecapThreshold;
+	float whitecapSharpness;
+	float whitecapLifetime;
 } pc;
 )GLSL";
 
@@ -227,7 +237,8 @@ void main ()
 }
 )GLSL";
 
-		/* The real fields out of the packed transforms, the choppiness applied. */
+		/* The real fields out of the packed transforms, the choppiness applied; then the whitecaps, accumulated.
+		 * FOAM_FORMAT is r16f, or rgba16f where the device cannot write R16F (defined by create()). */
 		constexpr auto ResolveShaderBody = R"GLSL(
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -235,6 +246,7 @@ layout(set = 0, binding = 1, rgba32f) uniform readonly image2DArray field0;
 layout(set = 0, binding = 2, rgba32f) uniform readonly image2DArray field1;
 layout(set = 0, binding = 3, rgba16f) uniform writeonly image2DArray displacement;
 layout(set = 0, binding = 4, rgba16f) uniform writeonly image2DArray slopes;
+layout(set = 0, binding = 5, FOAM_FORMAT) uniform image2DArray foam;
 
 void main ()
 {
@@ -248,8 +260,20 @@ void main ()
 	const vec4 f0 = imageLoad(field0, id);
 	const vec4 f1 = imageLoad(field1, id);
 
-	imageStore(displacement, id, vec4(pc.choppiness * f0.x, f0.y, pc.choppiness * f0.z, pc.choppiness * f1.w));
-	imageStore(slopes, id, vec4(f0.w, f1.x, pc.choppiness * f1.y, pc.choppiness * f1.z));
+	const vec4 displaced = vec4(pc.choppiness * f0.x, f0.y, pc.choppiness * f0.z, pc.choppiness * f1.w);
+	const vec4 slope = vec4(f0.w, f1.x, pc.choppiness * f1.y, pc.choppiness * f1.z);
+
+	imageStore(displacement, id, displaced);
+	imageStore(slopes, id, slope);
+
+	/* The Jacobian of the horizontal displacement (Tessendorf § 4.4.3): below 1 the surface is compressed, below 0 the
+	 * crest folds over itself. Foam is born under the threshold and decays exponentially — max(), so a crest that keeps
+	 * breaking holds its foam at the birth value and the frame rate never changes the look. */
+	const float jacobian = (1.0 + slope.z) * (1.0 + slope.w) - displaced.w * displaced.w;
+	const float birth = clamp((pc.whitecapThreshold - jacobian) * pc.whitecapSharpness, 0.0, 1.0) * pc.whitecapCascades[id.z];
+	const float left = imageLoad(foam, id).r * exp(-pc.deltaTime / max(pc.whitecapLifetime, 0.001));
+
+	imageStore(foam, id, vec4(max(left, birth), 0.0, 0.0, 0.0));
 }
 )GLSL";
 
@@ -483,6 +507,19 @@ void main ()
 
 		m_parameters = parameters;
 
+		/* The foam is one channel: R16F where the device can write it from a compute shader and filter it (an extended
+		 * storage format), RGBA16F otherwise (core for both) — MoltenVK included either way. */
+		VkFormat foamFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+		{
+			const auto properties = m_device->physicalDevice()->getFormatProperties(VK_FORMAT_R16_SFLOAT);
+			constexpr VkFormatFeatureFlags Needs = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+
+			if ( (properties.optimalTilingFeatures & Needs) == Needs && m_device->physicalDevice()->featuresVK10().shaderStorageImageExtendedFormats == VK_TRUE )
+			{
+				foamFormat = VK_FORMAT_R16_SFLOAT;
+			}
+		}
+
 		const auto createImage = [this] (std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & view, VkFormat format, VkImageUsageFlags usage, const char * label) {
 			image = std::make_shared< Vulkan::Image >(m_device, VK_IMAGE_TYPE_2D, format, CascadeExtent, usage, 0, 1, CascadeCount);
 			image->setIdentifier(ClassId, label, "Image");
@@ -503,7 +540,8 @@ void main ()
 			!createImage(m_fieldImages[0], m_fieldViews[0], VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT, "Field0") ||
 			!createImage(m_fieldImages[1], m_fieldViews[1], VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT, "Field1") ||
 			!createImage(m_displacementImage, m_displacementView, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "Displacement") ||
-			!createImage(m_slopeImage, m_slopeView, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "Slopes")
+			!createImage(m_slopeImage, m_slopeView, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "Slopes") ||
+			!createImage(m_foamImage, m_foamView, foamFormat, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "Foam")
 		)
 		{
 			Tracer::error(ClassId, "Unable to create the ocean images !");
@@ -516,7 +554,7 @@ void main ()
 		/* One set for every pass: each shader declares the bindings it uses. */
 		m_descriptorSetLayout = std::make_shared< Vulkan::DescriptorSetLayout >(m_device, "OceanWavesDSLayout");
 
-		for ( uint32_t binding = 0; binding < 5; ++binding )
+		for ( uint32_t binding = 0; binding < 6; ++binding )
 		{
 			m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr});
 		}
@@ -545,7 +583,7 @@ void main ()
 			return false;
 		}
 
-		const std::string header = std::string{"#version 450\n#define N "} + std::to_string(Resolution) + "\n" + PushConstantBlock;
+		const std::string header = std::string{"#version 450\n#define N "} + std::to_string(Resolution) + "\n#define FOAM_FORMAT " + (foamFormat == VK_FORMAT_R16_SFLOAT ? "r16f" : "rgba16f") + "\n" + PushConstantBlock;
 
 		const auto createPipeline = [this, &header] (std::unique_ptr< Vulkan::ComputePipeline > & pipeline, const char * name, const char * body) {
 			const auto shaderModule = m_shaderManager->getShaderModuleFromSourceCode(m_device, name, Saphir::ShaderType::ComputeShader, header + body);
@@ -577,7 +615,7 @@ void main ()
 		}
 
 		/* NOTE: FREE_DESCRIPTOR_SET_BIT is mandatory, Vulkan::DescriptorSet frees its set individually. */
-		m_descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 5}}, 1, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+		m_descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 6}}, 1, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !m_descriptorPool->createOnHardware() )
 		{
@@ -596,7 +634,8 @@ void main ()
 			!m_descriptorSet->writeStorageImage(1, *m_fieldViews[0]) ||
 			!m_descriptorSet->writeStorageImage(2, *m_fieldViews[1]) ||
 			!m_descriptorSet->writeStorageImage(3, *m_displacementView) ||
-			!m_descriptorSet->writeStorageImage(4, *m_slopeView)
+			!m_descriptorSet->writeStorageImage(4, *m_slopeView) ||
+			!m_descriptorSet->writeStorageImage(5, *m_foamView)
 		)
 		{
 			Tracer::error(ClassId, "Unable to create the descriptor set !");
@@ -628,11 +667,13 @@ void main ()
 		m_evolvePipeline.reset();
 		m_pipelineLayout.reset();
 		m_descriptorSetLayout.reset();
+		m_foamView.reset();
 		m_slopeView.reset();
 		m_displacementView.reset();
 		m_fieldViews[1].reset();
 		m_fieldViews[0].reset();
 		m_spectrumView.reset();
+		m_foamImage.reset();
 		m_slopeImage.reset();
 		m_displacementImage.reset();
 		m_fieldImages[1].reset();
@@ -678,16 +719,17 @@ void main ()
 
 		const auto handle = commandBuffer->handle();
 
-		/* Every image to GENERAL (the storage layout), the spectrum through TRANSFER_DST for its upload. */
+		/* Every image to GENERAL (the storage layout), the spectrum through TRANSFER_DST for its upload, the foam cleared
+		 * (a transfer, in GENERAL) — the resolve pass reads the previous foam before it writes. */
 		{
-			std::array< VkImageMemoryBarrier, 5 > barriers{};
-			const std::array< Vulkan::Image *, 5 > images{m_spectrumImage.get(), m_fieldImages[0].get(), m_fieldImages[1].get(), m_displacementImage.get(), m_slopeImage.get()};
+			std::array< VkImageMemoryBarrier, 6 > barriers{};
+			const std::array< Vulkan::Image *, 6 > images{m_spectrumImage.get(), m_fieldImages[0].get(), m_fieldImages[1].get(), m_displacementImage.get(), m_slopeImage.get(), m_foamImage.get()};
 
 			for ( size_t index = 0; index < barriers.size(); ++index )
 			{
 				barriers[index].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 				barriers[index].srcAccessMask = 0;
-				barriers[index].dstAccessMask = index == 0 ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT;
+				barriers[index].dstAccessMask = index == 0 || index == 5 ? VK_ACCESS_TRANSFER_WRITE_BIT : VK_ACCESS_SHADER_WRITE_BIT;
 				barriers[index].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 				barriers[index].newLayout = index == 0 ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
 				barriers[index].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -705,21 +747,32 @@ void main ()
 			region.imageExtent = {Resolution, Resolution, 1};
 
 			vkCmdCopyBufferToImage(handle, staging->handle(), m_spectrumImage->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+			constexpr VkClearColorValue NoFoam{};
+
+			vkCmdClearColorImage(handle, m_foamImage->handle(), VK_IMAGE_LAYOUT_GENERAL, &NoFoam, 1, &AllCascades);
 		}
 
 		{
-			VkImageMemoryBarrier barrier{};
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image = m_spectrumImage->handle();
-			barrier.subresourceRange = AllCascades;
+			std::array< VkImageMemoryBarrier, 2 > barriers{};
 
-			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+			for ( auto & barrier : barriers )
+			{
+				barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+				barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+				barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				barrier.subresourceRange = AllCascades;
+			}
+
+			barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			barriers[0].image = m_spectrumImage->handle();
+			barriers[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barriers[1].image = m_foamImage->handle();
+
+			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, static_cast< uint32_t >(barriers.size()), barriers.data());
 		}
 
 		if ( !commandBuffer->end() )
@@ -734,7 +787,7 @@ void main ()
 			return false;
 		}
 
-		for ( const auto & image : {m_spectrumImage, m_fieldImages[0], m_fieldImages[1], m_displacementImage, m_slopeImage} )
+		for ( const auto & image : {m_spectrumImage, m_fieldImages[0], m_fieldImages[1], m_displacementImage, m_slopeImage, m_foamImage} )
 		{
 			image->setCurrentImageLayout(VK_IMAGE_LAYOUT_GENERAL);
 		}
@@ -743,7 +796,7 @@ void main ()
 	}
 
 	void
-	OceanWaves::recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time) const noexcept
+	OceanWaves::recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) const noexcept
 	{
 		const auto handle = commandBuffer.handle();
 		const auto descriptorSet = m_descriptorSet->handle();
@@ -753,6 +806,19 @@ void main ()
 		constants.time = time;
 		constants.gravity = m_parameters.gravity;
 		constants.choppiness = m_parameters.choppiness;
+		constants.deltaTime = std::max(deltaTime, 0.0F);
+		constants.whitecapThreshold = m_parameters.whitecapThreshold;
+		constants.whitecapSharpness = m_parameters.whitecapSharpness;
+		constants.whitecapLifetime = m_parameters.whitecapLifetime;
+
+		/* A cascade births whitecaps when its band's LONGEST wave reaches the minimum wavelength. buildInitialSpectrum()
+		 * starts the band of cascade c > 0 at 6 fundamentals of its own tile: its longest wave is the tile / 6. */
+		for ( uint32_t cascade = 0; cascade < CascadeCount; ++cascade )
+		{
+			const auto longest = cascade == 0 ? m_parameters.cascadeSizes[0] : m_parameters.cascadeSizes[cascade] / 6.0F;
+
+			constants.whitecapCascades[cascade] = longest >= m_parameters.whitecapMinimumWavelength ? 1.0F : 0.0F;
+		}
 
 		/* Every pass reads what the previous one wrote; the first one overwrites the fields the previous frame's
 		 * resolve and the vertex/fragment stages read. */
@@ -789,7 +855,7 @@ void main ()
 			computeToCompute(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT);
 		}
 
-		/* 3. The real fields, the choppiness applied. */
+		/* 3. The real fields, the choppiness applied, and the whitecaps. */
 		vkCmdBindPipeline(handle, VK_PIPELINE_BIND_POINT_COMPUTE, m_resolvePipeline->handle());
 		vkCmdPushConstants(handle, m_pipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(constants), &constants);
 		vkCmdDispatch(handle, Resolution / 16, Resolution / 16, CascadeCount);
@@ -908,7 +974,7 @@ void main ()
 				return false;
 			}
 
-			this->recordUpdate(*commandBuffer, time);
+			this->recordUpdate(*commandBuffer, time, 0.0F);
 
 			auto * queue = m_device->getGraphicsQueue(Vulkan::QueuePriority::High);
 
@@ -1047,7 +1113,31 @@ void main ()
 			stream << Names[fieldIndex] << " err " << maxError[fieldIndex] << " / peak " << peak[fieldIndex] << "; ";
 		}
 
-		stream << "RMS height per cascade: " << rmsHeight[0] << ", " << rmsHeight[1] << ", " << rmsHeight[2] << " m (Hs ~ 4 sigma of the sum).";
+		stream << "RMS height per cascade: " << rmsHeight[0] << ", " << rmsHeight[1] << ", " << rmsHeight[2] << " m (Hs ~ 4 sigma of the sum). ";
+
+		/* The whitecap tuning data: each cascade's Jacobian (the foam is born below the threshold). */
+		std::vector< double > jacobians(N * N);
+
+		for ( uint32_t cascade = 0; cascade < CascadeCount; ++cascade )
+		{
+			size_t below = 0;
+
+			for ( size_t texel = 0; texel < N * N; ++texel )
+			{
+				const auto base = ((cascade * N * N) + texel) * 4;
+
+				jacobians[texel] = ((1.0 + gpuSlopes[base + 2]) * (1.0 + gpuSlopes[base + 3])) - (gpuDisplacement[base + 3] * gpuDisplacement[base + 3]);
+
+				if ( jacobians[texel] < static_cast< double >(m_parameters.whitecapThreshold) )
+				{
+					++below;
+				}
+			}
+
+			std::ranges::sort(jacobians);
+
+			stream << "J cascade " << cascade << ": min " << jacobians.front() << ", 1 % " << jacobians[(N * N) / 100] << ", 5 % " << jacobians[(N * N) / 20] << ", " << (100.0 * static_cast< double >(below) / static_cast< double >(N * N)) << " % below " << m_parameters.whitecapThreshold << "; ";
+		}
 
 		report = stream.str();
 

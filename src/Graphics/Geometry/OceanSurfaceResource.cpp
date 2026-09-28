@@ -34,7 +34,7 @@
 /* Local inclusions. */
 #include "Graphics/Frustum.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Saphir/Generator/HeightfieldSurfaceHelper.hpp"
+#include "Saphir/Generator/OceanSurfaceHelper.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
@@ -422,7 +422,7 @@ namespace EmEn::Graphics::Geometry
 		m_descriptorPool = std::make_shared< DescriptorPool >(
 			device,
 			std::vector< VkDescriptorPoolSize >{
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2U * framesInFlight},
+				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3U * framesInFlight},
 				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, framesInFlight}
 			},
 			framesInFlight,
@@ -437,8 +437,8 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* The heightfield's layout: the ocean reads it as displacement, slopes, uniforms (Geometry::OceanSurface). */
-		const auto surfaceLayout = Saphir::Generator::getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager());
+		/* Displacement, slopes, uniforms and whitecap foam (Geometry::OceanSurface). */
+		const auto surfaceLayout = Saphir::Generator::getOceanSurfaceDescriptorSetLayout(renderer.layoutManager());
 
 		if ( surfaceLayout == nullptr )
 		{
@@ -463,6 +463,7 @@ namespace EmEn::Graphics::Geometry
 				!descriptorSet->create() ||
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::DisplacementBinding, *m_waves->displacementView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::SlopesBinding, *m_waves->slopeView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
+				!descriptorSet->writeCombinedImageSampler(OceanSurface::FoamBinding, *m_waves->foamView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeUniformBuffer(OceanSurface::UniformsBinding, uniforms)
 			)
 			{
@@ -519,6 +520,7 @@ namespace EmEn::Graphics::Geometry
 		m_indexBufferObject.reset();
 		m_vertexBufferObject.reset();
 		m_surfaceUpdated = false;
+		m_previousTime = -1.0;
 
 		if ( clearLocalData )
 		{
@@ -588,7 +590,12 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		m_waves->recordUpdate(*commandBuffer, time);
+		/* The whitecaps decay over the real step: none on the first update, and none across the clock wrap. */
+		const auto deltaTime = m_previousTime >= 0.0 && elapsed >= m_previousTime ? static_cast< float >(std::min(elapsed - m_previousTime, 0.25)) : 0.0F;
+
+		m_previousTime = elapsed;
+
+		m_waves->recordUpdate(*commandBuffer, time, deltaTime);
 
 		if ( !commandBuffer->end() )
 		{

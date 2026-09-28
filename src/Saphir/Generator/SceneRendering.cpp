@@ -324,9 +324,11 @@ namespace EmEn::Saphir::Generator
 		/* Prepare the descriptor set layout for skeletal animation bone matrices, or for a heightfield surface. */
 		if ( setIndexes.isSetEnabled(SetType::PerModel) )
 		{
-			auto descriptorSetLayout = this->isHeightfieldSurfaceEnabled() ?
-				getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
-				getSkinningDescriptorSetLayout(renderer.layoutManager());
+			auto descriptorSetLayout = this->isOceanSurfaceEnabled() ?
+				getOceanSurfaceDescriptorSetLayout(renderer.layoutManager()) :
+				(this->isHeightfieldSurfaceEnabled() ?
+					getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
+					getSkinningDescriptorSetLayout(renderer.layoutManager()));
 
 			if ( descriptorSetLayout == nullptr )
 			{

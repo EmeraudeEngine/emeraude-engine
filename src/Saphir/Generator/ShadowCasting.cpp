@@ -199,9 +199,11 @@ namespace EmEn::Saphir::Generator
 		/* Add the skinning SSBO descriptor set layout for skeletal meshes, or the heightfield surface's. */
 		if ( setIndexes.isSetEnabled(SetType::PerModel) )
 		{
-			auto descriptorSetLayout = this->isHeightfieldSurfaceEnabled() ?
-				getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
-				getSkinningDescriptorSetLayout(renderer.layoutManager());
+			auto descriptorSetLayout = this->isOceanSurfaceEnabled() ?
+				getOceanSurfaceDescriptorSetLayout(renderer.layoutManager()) :
+				(this->isHeightfieldSurfaceEnabled() ?
+					getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
+					getSkinningDescriptorSetLayout(renderer.layoutManager()));
 
 			if ( descriptorSetLayout == nullptr )
 			{
