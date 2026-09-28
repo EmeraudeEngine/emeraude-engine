@@ -30,6 +30,7 @@
 #include "Physics/CollisionDetection.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <span>
 
 namespace EmEn::Scenes
@@ -1133,6 +1134,11 @@ namespace EmEn::Scenes
 		const auto * entityModel = entity->collisionModel();
 		const auto entityWorldCoords = entity->getWorldCoordinates();
 
+		/* STEP UP (MovableTrait::setStepHeight()): only for a grounded body that declares a step height. */
+		const auto * movable = entity->getMovableTrait();
+		const auto stepHeight = movable != nullptr && movable->isGrounded() ? movable->stepHeight() : 0.0F;
+		const auto feetY = stepHeight > 0.0F ? entityModel->getAABB(entityWorldCoords).minimum(Y) : 0.0F;
+
 		const auto accumulate = [&] (const AbstractEntity & otherEntity) {
 			/* Skip self. */
 			if ( entity.get() == &otherEntity )
@@ -1169,14 +1175,35 @@ namespace EmEn::Scenes
 			if ( results.m_collisionDetected && results.m_depth > 0.0F )
 			{
 				/* MTV points in the direction to move the entity OUT of collision. */
-				positionCorrection += results.m_MTV;
+				auto correction = results.m_MTV;
+				auto depth = results.m_depth;
+				/* Normal points INTO the static entity (for bounce calculation). */
+				auto normal = -results.m_impactNormal;
+
+				/* STEP UP: pushed back SIDEWAYS by a static whose top stands no higher than the step height above
+				 * the feet, the body is lifted onto it instead — the normal then points down into it, so the
+				 * response keeps the horizontal velocity and grounds the body on the step. */
+				if ( stepHeight > 0.0F && std::abs(correction[Y]) < 0.3F * depth )
+				{
+					const auto rise = otherModel->getAABB(otherWorldCoords).maximum(Y) - feetY;
+
+					if ( rise > 0.0F && rise <= stepHeight )
+					{
+						constexpr auto Clearance{0.001F};
+
+						correction = {0.0F, rise + Clearance, 0.0F};
+						depth = rise;
+						normal = {0.0F, -1.0F, 0.0F};
+					}
+				}
+
+				positionCorrection += correction;
 
 				/* Track dominant collision for velocity bounce. */
-				if ( results.m_depth > maxPenetration )
+				if ( depth > maxPenetration )
 				{
-					maxPenetration = results.m_depth;
-					/* Normal points INTO the static entity (for bounce calculation). */
-					dominantNormal = -results.m_impactNormal;
+					maxPenetration = depth;
+					dominantNormal = normal;
 					/* Track the entity we collided with (for grounded source). */
 					collidedEntity = otherEntity.getMovableTrait();
 				}

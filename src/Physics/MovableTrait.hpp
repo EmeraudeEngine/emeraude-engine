@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 
 /* Local inclusions for usages. */
@@ -563,6 +564,33 @@ namespace EmEn::Physics
 			[[nodiscard]]
 			GroundedSource groundedSource () const noexcept;
 
+			/**
+			 * @brief Sets the tallest step this body climbs by walking into it — a character controller's step
+			 * offset (Unity `CharacterController.stepOffset`, Godot's floor snapping).
+			 * @note While GROUNDED, a body pushed back SIDEWAYS by a static entity whose top stands at most this
+			 * high above its feet is lifted onto it instead (Scene::accumulateStaticEntityCorrections()): stairs,
+			 * kerbs, a low wall. Without it an axis-aligned body stops dead against any step, the solver
+			 * resolving along the smallest penetration, the horizontal one.
+			 * @param height The height in metres. 0 (the default) disables it.
+			 * @return void
+			 */
+			void
+			setStepHeight (float height) noexcept
+			{
+				m_stepHeight = std::max(0.0F, height);
+			}
+
+			/**
+			 * @brief Returns the tallest step this body climbs.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			stepHeight () const noexcept
+			{
+				return m_stepHeight;
+			}
+
 		protected:
 
 			/**
@@ -591,6 +619,7 @@ namespace EmEn::Physics
 			const MovableTrait * m_groundedOn{nullptr}; ///< Entity we're grounded on (if source is Entity).
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};
+			float m_stepHeight{0.0F}; ///< Tallest step climbed by walking into it (0 = none).
 			GroundedSource m_groundedSource{GroundedSource::None}; ///< Type of surface we're grounded on.
 			uint8_t m_groundedFrames{0}; ///< Grace period countdown.
 			uint8_t m_stableFrames{0}; ///< Consecutive frames with negligible velocity.

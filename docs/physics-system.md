@@ -147,6 +147,15 @@ For each movable entity, once, at the sector that OWNS it:
       → the statics of the sector's subtree that intersect the movable's AABB
         (OctreeSector::forTouchedSector) — a body straddling two child sectors
         must meet the small statics of BOTH
+      → STEP UP (2026-09-28): a GROUNDED body with a step height
+        (MovableTrait::setStepHeight(), 0 = off, the default) pushed back
+        SIDEWAYS by a static whose top stands at most that high above its feet
+        is lifted onto it instead (correction straight up, normal pointing
+        down into the step: the horizontal velocity is kept, the body grounds
+        on it). Without it an AABB body stops dead against any step — the
+        solver resolves along the smallest penetration, the horizontal one.
+        ⚠️ First version: stairs climb, "with problems" (owner, not yet
+        characterized) — docs/todo/physics-step-up-pass.md.
 
 2. Track dominant collision source:
    → Which source had deepest penetration?
