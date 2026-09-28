@@ -368,24 +368,18 @@ namespace EmEn::Graphics::RenderableInstance
 
 		const std::lock_guard< std::mutex > lock{m_skinningStagingMutex};
 
-		/* First pose (or bone count change): previous == current, zero pose velocity. */
-		if ( m_previousSkinningMatrices.size() != matrices.size() )
-		{
-			m_previousSkinningMatrices = matrices;
-		}
-
-		/* Interleave {current, previous} (stride 2) — matches the vertex shader layout
-		 * (double skinning for the motion vectors). */
+		/* Interleaved {current, previous} (stride 2) — matches the vertex shader layout
+		 * (double skinning for the motion vectors). The logic thread writes the CURRENT slots only:
+		 * the previous pose is the one the PREVIOUS RENDERED FRAME skinned with, known only to the
+		 * render thread (flushSkinningMatrices). Archiving it here, once per logic tick, reported the
+		 * last tick's motion on every frame rendered between two ticks while the geometry stood
+		 * still — the TAA reprojected along it and combed the Paladin's sword (2026-09-28). */
 		m_skinningStaging.resize(matrices.size() * 2UL);
 
 		for ( size_t index = 0; index < matrices.size(); ++index )
 		{
-			m_skinningStaging[(index * 2UL) + 0UL] = matrices[index];
-			m_skinningStaging[(index * 2UL) + 1UL] = m_previousSkinningMatrices[index];
+			m_skinningStaging[index * 2UL] = matrices[index];
 		}
-
-		/* Archive the pose for the next update (one history step per logic update). */
-		m_previousSkinningMatrices = matrices;
 
 		/* NOTE: No GPU write here — the logic thread only STAGES. The render thread uploads
 		 * once per rendered frame into the section of the frame being recorded
@@ -414,6 +408,28 @@ namespace EmEn::Graphics::RenderableInstance
 			 * written at creation, binding the section as-is is correct. */
 			if ( !m_skinningStaging.empty() )
 			{
+				const auto boneCount = m_skinningStaging.size() / 2UL;
+
+				/* The previous pose is the one the previous rendered frame skinned with, so the motion
+				 * vectors match what reached the screen: zero between two logic ticks, one tick when one
+				 * landed, two when two did. An instance not uploaded on the immediately previous frame
+				 * (culled, first frame, bone count change) has no such pose: zero pose velocity. */
+				if ( m_skinningUploadedFrame + 1 != frameCursor || m_previousRenderedSkinningMatrices.size() != boneCount )
+				{
+					m_previousRenderedSkinningMatrices.resize(boneCount);
+
+					for ( size_t index = 0; index < boneCount; ++index )
+					{
+						m_previousRenderedSkinningMatrices[index] = m_skinningStaging[index * 2UL];
+					}
+				}
+
+				for ( size_t index = 0; index < boneCount; ++index )
+				{
+					m_skinningStaging[(index * 2UL) + 1UL] = m_previousRenderedSkinningMatrices[index];
+					m_previousRenderedSkinningMatrices[index] = m_skinningStaging[index * 2UL];
+				}
+
 				m_skinningSSBO->writeData(MemoryRegion{
 					m_skinningStaging.data(),
 					m_skinningStaging.size() * sizeof(Matrix< 4, float >),

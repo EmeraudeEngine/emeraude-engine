@@ -3,7 +3,7 @@ id: taa-trails-under-motion
 title: The TAA leaves trails behind moving foliage and animated characters
 status: open
 priority: unranked
-scope: Graphics/Effects/Resolve/TAA, Graphics/RenderableInstance (skinning history), Scenes/Component/Visual
+scope: Graphics/Effects/Resolve/TAA
 opened: 2026-09-26
 tags: [taa, temporal, ghosting, velocity, skinning, foliage, owner-report]
 ---
@@ -34,6 +34,15 @@ unless stated):
   ~100 px long, trails the Paladin's sword over the sky, over all 16 captured frames. None with the TAA
   off. Over the white ground it is hidden by the tone mapper's shoulder. The render ran at ~94 fps for a
   60 Hz logic.
+  **Root cause found and fixed 2026-09-28**: the skinned pose history advanced per LOGIC tick, so every
+  frame rendered between two ticks reported the last tick's motion over a pose that stood still (with the
+  TAA off the actor crop changes on 1 frame in 4-5 of a `temporalCapture`, exactly 0 on the others). Test:
+  capped at 60 fps the sword comb vanished. Fix: previous pose = the previous RENDERED frame's
+  (`RenderableInstance::Abstract::flushSkinningMatrices()`, engine `docs/subsystems/scenes/13-instance-transforms.md`).
+  On no-tick frames the crop's frame-to-frame change fell from 1.4/255 to 0.1/255, the static floor.
+  **What remains of it**: thin 1-px lines behind the blade, over the sky and the ground, that persist
+  unchanged across frames — one per tick position. That is the resolve (What remains, point 1), not the
+  velocity any more.
 - **Foliage in the wind** (`forest --demo-options 0,0,0`, camera parked): the canopy smears into brush
   strokes that bleed into the sky; with the TAA off the leaves are sharp (and aliased).
 - *Not this item, but the first check for any new report:* the FFT ocean's whitecaps smeared into vertical streaks
@@ -67,26 +76,27 @@ the renderer shows, or not what dominates it.
 1. **Instrument before designing**: a debug view of the resolve's per-pixel decision (clip or not, which
    neighbour's velocity the dilation took, the history depth against the 3×3 range), to see WHY a comb
    tooth survives 16 frames over a sky whose 3×3 holds no sword. Every fix so far was designed from code
-   reading and a model; the one that was built did nothing.
-2. **The skinned pose history is archived per LOGIC tick, not per rendered frame** (owner-approved fix,
-   2026-09-26, "after the TAA"): the previous pose is archived on each logic update
-   (`RenderableInstance/Abstract.cpp:386-387`), staged from the logic thread
-   (`Scenes/Component/Visual.cpp:57-65`) and uploaded per frame outside the triple-buffer latch
-   (`Abstract.cpp:396-425`). Between two frames with no tick the full tick delta is still reported; with two
-   ticks, half of it. Candidate cause of the sword comb (its teeth look stroboscopic). Cheap attribution
-   test first: run `animation-debug` capped at the logic rate and see whether the comb goes.
-3. **Foliage**: inside a canopy the 3×3 depth range always spans leaf to sky, so the history is almost
+   reading and a model; the one that was built did nothing. First target since 2026-09-28: the 1-px lines
+   left behind the Paladin's blade (`animation-debug`, lane `None`, exposure pinned), now that its velocity
+   is right. Hypothesis to check, not a result: a sky pixel next to the blade takes the blade's velocity by
+   dilation and its history, and passes the depth test because the blade is in its 3×3; once the blade has
+   gone, its written alpha is the SKY's centre depth and nothing ever clips it (the colour only fades at the
+   parked alpha, ~0.05).
+2. **Foliage**: inside a canopy the 3×3 depth range always spans leaf to sky, so the history is almost
    never clipped there (the 2026-09-23 depth rule, by design). Colour rectification while moving (the
    "GATE" option: the clip blended back with the motion) or an FSR2-style lock are the known answers; both
    trade against the parked-camera shimmer the depth rule fixed — an owner decision, to be taken on
    measurements.
-4. Found by the same analysis, not reported by the owner yet: particles report zero object motion
+3. Found by the same analysis, not reported by the owner yet: particles report zero object motion
    (`ParticlesEmitter.hpp:86`, sprites excluded from motion history `Multiple.cpp:74`); translucent surfaces
    overwrite the velocity and depth of what is behind them (G-buffer blending off,
    `Saphir/Generator/SceneRendering.cpp:1104-1113`).
 
 ## ⚠️ Traps
 
+- **`temporalCapture` renders at ~290 fps** (lane `None`, 2880×1620), a logic tick landing every 4-5
+  frames: anything tied to the logic rate is amplified against normal play (94 fps). Read `deltaMS` in the
+  capture's JSON before comparing two series.
 - **`basic-scenery` re-draws its palms at every launch** (the scene randomizer is seeded from
   `std::random_device`, `Scenes/Scene.hpp`): an A/B across two launches compares two different forests.
   The first TAG readings "improved" parallax by 40 % and "worsened" the forward step by 70 % — both were

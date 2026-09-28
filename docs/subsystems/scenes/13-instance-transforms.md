@@ -88,6 +88,19 @@ M4 BIT-IDENTICAL to M3 (deterministic console camera), `basic-scenery` (skybox i
   `VertexBufferFormatManager` (declare-or-jump `PreviousModelMatrixR0..R3`) →
   `ProgramCacheKey::isInstanceMotionHistory`. Breaking ANY link desynchronizes the pipeline
   vertex input stride from the actual VBO. No demo content uses it yet.
+- **Skinned poses (double skinning, 2026-09-28)**: the previous pose is the one the PREVIOUS
+  RENDERED FRAME skinned with, never the previous logic tick's. The logic thread stages the
+  current pose only (`Abstract::updateSkinningMatrices()`, even slots of the stride-2 staging);
+  the render thread fills the previous slots at the once-per-frame upload
+  (`flushSkinningMatrices()`, `m_previousRenderedSkinningMatrices`). An instance not uploaded on
+  the immediately previous frame (first frame, culled, bone count change) gets
+  `previous == current`. ⚠️ Why: the logic runs at 60 Hz and nothing interpolates the pose between
+  ticks, so the renderer draws the same pose on several frames (94 fps on the owner's screen, ~290
+  during a `temporalCapture`); archiving per tick reported the last tick's motion on every one of
+  them while the geometry stood still, and the TAA combed the whole Paladin (`animation-debug`,
+  frame-to-frame change of the actor crop on no-tick frames 1.4/255 → 0.1/255 = the static floor).
+  ⚠️ The instanced history above still archives per logic update — the same defect if a demo
+  ever enables it.
 - ⚠️ **A/B capture protocol**: the RTGI accumulation converges asymptotically after a
   camera move — A/B pixel diffs are only valid at IDENTICAL post-placement timing
   (a 0.5-1 s window difference showed up as ~3/255 RMSE of pure reconvergence residual).

@@ -777,8 +777,8 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param matrices The skinning matrices to stage.
 			 * @return bool
 			 */
-			/* NOTE: Non-const — archives the previous pose for the motion-vectors double
-			 * skinning (the staging interleaves {current, previous} matrices, stride 2). */
+			/* NOTE: Stages the CURRENT pose only (the staging interleaves {current, previous} matrices,
+			 * stride 2): the previous pose is the previous RENDERED frame's, filled by flushSkinningMatrices(). */
 			bool updateSkinningMatrices (const std::vector< Base::Math::Matrix< 4, float > > & matrices) noexcept;
 
 			/**
@@ -899,6 +899,9 @@ namespace EmEn::Graphics::RenderableInstance
 			 * dedup guarantees RT and raster skin with the exact same pose.
 			 * @note Uploading once per frame is the WHOLE fix: every pass of a frame then reads
 			 * the same section, whatever the logic thread stages meanwhile.
+			 * @note It also fills the previous-pose half of the staging with the pose the previous
+			 * rendered frame skinned with (zero pose velocity when the instance was not uploaded on
+			 * the immediately previous frame): motion vectors per RENDERED frame, never per logic tick.
 			 * @return const Vulkan::DescriptorSet *
 			 */
 			[[nodiscard]]
@@ -1450,10 +1453,11 @@ namespace EmEn::Graphics::RenderableInstance
 			 * The SSBO holds one section per frame in flight; each descriptor set targets its
 			 * section (fixed offset/range, same layout). See createSkinningResources(). */
 			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_skinningSSBO;
-			/** @brief Previous-pose bone matrices (motion vectors double skinning). */
-			std::vector< Base::Math::Matrix< 4, float > > m_previousSkinningMatrices;
-			/** @brief Interleaved {current, previous} staging reused across updates (guarded by m_skinningStagingMutex). */
-			std::vector< Base::Math::Matrix< 4, float > > m_skinningStaging;
+			/** @brief Bone matrices the previous rendered frame skinned with (motion vectors double skinning; render thread only). */
+			mutable std::vector< Base::Math::Matrix< 4, float > > m_previousRenderedSkinningMatrices;
+			/** @brief Interleaved {current, previous} staging reused across updates (guarded by m_skinningStagingMutex):
+			 * the logic thread writes the current slots, the render thread the previous ones at upload. */
+			mutable std::vector< Base::Math::Matrix< 4, float > > m_skinningStaging;
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
 			/** @brief One descriptor set per SSBO section (frame in flight). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_skinningDescriptorSets;
