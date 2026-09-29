@@ -53,7 +53,8 @@ namespace EmEn::Scenes::Component
 	}
 
 	Beam::Beam (const std::string & componentName, const AbstractEntity & parentEntity, Resources::Manager & resources, uint32_t segmentCount) noexcept
-		: Abstract{componentName, parentEntity}
+		: Abstract{componentName, parentEntity},
+		m_segmentCount{std::max(segmentCount, 1U)}
 	{
 		const auto resourceName = "Beam#" + std::to_string(s_beamCount.fetch_add(1)) + '/' + componentName;
 
@@ -70,7 +71,7 @@ namespace EmEn::Scenes::Component
 
 		const Geometry::ResourceGenerator generator{resources, Geometry::None};
 
-		const auto strip = generator.beamStrip(segmentCount);
+		const auto strip = generator.beamStrip(m_segmentCount);
 
 		if ( strip == nullptr )
 		{

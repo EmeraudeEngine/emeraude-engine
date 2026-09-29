@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <string>
 
 /* Third-party inclusions. */
 #include "json/json.h"
@@ -77,6 +78,7 @@ namespace EmEn::Scenes::Component
 			state["entity"] = beam.parentEntity().name();
 			state["type"] = Beam::ClassId;
 			state["enabled"] = beam.isEnabled();
+			state["segmentCount"] = beam.segmentCount();
 			state["start"] = toJSON(beam.start());
 			state["end"] = toJSON(beam.end());
 
@@ -323,7 +325,7 @@ namespace EmEn::Scenes::Component
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("setArc", "Sets how far and how finely a Beam wanders across its line: an amplitude of 0 is a straight laser.",
+					this->bindCommand("setArc", "Sets how far and how finely a Beam wanders across its line: an amplitude of 0 is a straight laser. Refused on a beam of 1 segment (getState's segmentCount), which cannot wander.",
 						{entity, component, {"amplitude", "The largest offset across the beam, in entity units, 0 or more."}, {"frequency", "Noise cycles along the whole beam, 0 or more."}, {"octaves", "Noise octaves (the detail), 1-8."}},
 						[this] (const std::string & entityName, const std::string & componentName, float amplitude, float frequency, int32_t octaves) {
 							if ( !std::isfinite(amplitude) || !std::isfinite(frequency) || amplitude < 0.0F || frequency < 0.0F || octaves < 1 )
@@ -332,6 +334,12 @@ namespace EmEn::Scenes::Component
 							}
 
 							return this->withMaterial(entityName, componentName, [amplitude, frequency, octaves] (Beam & beam, Graphics::Material::BeamResource & material) {
+								/* One segment has no interior vertex to displace: the arc would be accepted and never drawn. */
+								if ( amplitude > 0.0F && beam.segmentCount() < 2 )
+								{
+									return Console::CommandResult::error("Beam '" + beam.name() + "' has 1 segment: it cannot wander. Build it with more segments (Beam::DefaultSegmentCount is " + std::to_string(Beam::DefaultSegmentCount) + ").");
+								}
+
 								material.setArc(amplitude, frequency, static_cast< uint32_t >(octaves));
 
 								return changed(beam, "Beam '" + beam.name() + "' arc set.");

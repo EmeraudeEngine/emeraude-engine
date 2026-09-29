@@ -83,8 +83,8 @@ namespace EmEn::Scenes::Component
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param resources A reference to the resource manager.
-			 * @param segmentCount The number of segments along the beam. A straight laser needs 1; an arc wants
-			 * enough to show its finest octave. Default 64.
+			 * @param segmentCount The number of segments along the beam (at least 1). A straight laser needs 1 — and
+			 * then CANNOT wander: its arc amplitude is ignored; an arc wants enough to show its finest octave. Default 64.
 			 */
 			Beam (const std::string & componentName, const AbstractEntity & parentEntity, Resources::Manager & resources, uint32_t segmentCount = DefaultSegmentCount) noexcept;
 
@@ -259,6 +259,18 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the number of segments along the beam, fixed at construction.
+			 * @note A beam of ONE segment has no interior vertex: it cannot wander, whatever its arc amplitude.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			segmentCount () const noexcept
+			{
+				return m_segmentCount;
+			}
+
+			/**
 			 * @brief Shows or hides the beam (a laser switched off, an arc between two strikes of a longer cycle).
 			 * @param state The state.
 			 * @return void
@@ -320,6 +332,7 @@ namespace EmEn::Scenes::Component
 			Base::Math::Vector< 3, float > m_start;
 			Base::Math::Vector< 3, float > m_end{0.0F, 0.0F, 1.0F};
 			Base::Math::Vector< 3, float > m_endTargetOffset;
+			uint32_t m_segmentCount;
 			bool m_enabled{true};
 	};
 }

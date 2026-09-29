@@ -93,6 +93,12 @@ message.
 
 ### ⚠️ Traps
 
+- **A beam of ONE segment cannot wander.** The segment count is fixed at construction (`build(resources, n)`,
+  `Beam::segmentCount()`); with 1 there is no interior vertex to displace, so an arc amplitude is ignored. The
+  console `Beam.setArc` refuses it (`getState` shows `segmentCount`); the C++ `material()->setArc()` does not
+  know the beam and stays silent. Found by the macOS and Windows peers on 2026-09-29: the Linux capture of a
+  "wandering" 1-segment laser was a straight line, validated too fast.
+
 - One program set per beam: the renderable name enters the program cache key and every beam owns its material
   (tens of beams: fine; hundreds: batch them in a `Multiple` — the rejected alternative).
 - The material UBO lives in ONE frame region: only the look goes there. Endpoints never — they would race the
