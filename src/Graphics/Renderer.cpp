@@ -2281,6 +2281,7 @@ namespace EmEn::Graphics
 			if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
 			{
 				const auto & sceneExtent = m_sceneTarget->extent();
+				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SelectionDepth"};
 
 				selectionOutlined = m_selectionOutline.recordDepth(*commandBuffer, *scenePtr, sceneExtent.width, sceneExtent.height, mainTarget->viewMatrices());
 			}
@@ -2333,6 +2334,7 @@ namespace EmEn::Graphics
 			if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
 			{
 				const auto & compositeExtent = m_swapChain->extent();
+				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SelectionOutline"};
 
 				m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->offscreenCompositeFramebuffer(), compositeExtent.width, compositeExtent.height, m_postProcessor.grabPass(), mainTarget->viewMatrices(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
 			}

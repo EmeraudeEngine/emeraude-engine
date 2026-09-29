@@ -48,7 +48,7 @@ mask and `docs/subsystems/scenes/13-instance-transforms.md` (per-slot local tran
 Screen-space "custom depth" outline: graphics doc 34 (`docs/subsystems/graphics/34-the-selection-outline-custom-depth.md`).
 Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where visible, dimmed across the occluder,
 0 validation message. What remains:
-- Measure the composite's cost; scissor it to the entity's projected bounds.
+- ~~Measure the composite's cost; scissor it~~ DONE 2026-09-29: graphics doc 34 § Cost and the scissor.
 - Several entities at once; the direct swap-chain frame path (no scene target there).
 - B.1, the geometric silhouette (`VertexFactory::Silhouette` + primitive A), for debug / wireframe tools — later.
 

@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 
 /* Local inclusions. */
 #include "Graphics/GrabPass.hpp"
@@ -54,6 +55,7 @@
 namespace EmEn::Graphics
 {
 	using namespace Base;
+	using namespace Base::Math;
 	using namespace Vulkan;
 
 	namespace
@@ -466,7 +468,99 @@ void main()
 
 		commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
+		if ( drawn )
+		{
+			this->updateScreenArea(scene.highlightedWorldBoundingBox(), mainViewMatrices, scene.frameReadStateIndex());
+		}
+
 		return drawn;
+	}
+
+	void
+	SelectionOutline::updateScreenArea (const Space3D::AACuboid< float > & worldBoundingBox, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept
+	{
+		/* The whole screen: always correct, only slower (the box is unknown). */
+		m_screenArea = {0.0F, 0.0F, 1.0F, 1.0F};
+
+		if ( !worldBoundingBox.isValid() )
+		{
+			return;
+		}
+
+		/* The camera the selection depth was drawn with (unjittered: the shadow-casting path). */
+		const auto viewProjection = mainViewMatrices.unjitteredProjectionMatrix(readStateIndex) * mainViewMatrices.viewMatrix(readStateIndex, false, 0);
+		const auto & minimum = worldBoundingBox.minimum();
+		const auto & maximum = worldBoundingBox.maximum();
+
+		/* Corner i takes its X from bit 0, Y from bit 1, Z from bit 2 (set = maximum): an edge joins two corners one bit apart. */
+		std::array< Vector< 4, float >, 8 > clip{};
+
+		for ( uint32_t index = 0; index < 8; ++index )
+		{
+			const Vector< 3, float > corner{
+				(index & 1U) != 0 ? maximum[X] : minimum[X],
+				(index & 2U) != 0 ? maximum[Y] : minimum[Y],
+				(index & 4U) != 0 ? maximum[Z] : minimum[Z]
+			};
+
+			clip[index] = viewProjection * Vector< 4, float >{corner, 1.0F};
+		}
+
+		/* Points at or behind the eye have no screen position: the box is clipped against the plane w = NearW, like the
+		 * rasteriser clips the triangles (Blinn & Newell, "Clipping using homogeneous coordinates", SIGGRAPH 1978). */
+		constexpr auto NearW{1.0E-4F};
+
+		std::array< float, 4 > area{1.0F, 1.0F, 0.0F, 0.0F};
+		bool anyInFront = false;
+
+		const auto include = [&area, &anyInFront] (const Vector< 4, float > & point) noexcept {
+			/* NDC [-1, 1] to the texture space the composite samples: row 0 is NDC y = -1, like the depth pass viewport. */
+			const auto u = (point[X] / point[W]) * 0.5F + 0.5F;
+			const auto v = (point[Y] / point[W]) * 0.5F + 0.5F;
+
+			area[0] = std::min(area[0], u);
+			area[1] = std::min(area[1], v);
+			area[2] = std::max(area[2], u);
+			area[3] = std::max(area[3], v);
+			anyInFront = true;
+		};
+
+		for ( uint32_t index = 0; index < 8; ++index )
+		{
+			if ( clip[index][W] > NearW )
+			{
+				include(clip[index]);
+			}
+
+			for ( const uint32_t bit : {1U, 2U, 4U} )
+			{
+				if ( (index & bit) != 0 )
+				{
+					continue;
+				}
+
+				const auto & from = clip[index];
+				const auto & to = clip[index | bit];
+
+				/* An edge crossing the plane contributes its crossing point. */
+				if ( (from[W] > NearW) != (to[W] > NearW) )
+				{
+					const auto t = (NearW - from[W]) / (to[W] - from[W]);
+
+					include(from + (to - from) * t);
+				}
+			}
+		}
+
+		/* The whole box behind the eye: nothing of it, nor of its outline, can be on screen. */
+		if ( !anyInFront )
+		{
+			m_screenArea = {1.0F, 1.0F, 0.0F, 0.0F};
+
+			return;
+		}
+
+		m_screenArea = area;
 	}
 
 	void
@@ -486,6 +580,34 @@ void main()
 		{
 			return;
 		}
+
+		/* The pixels that may be outline: the projected entity box grown by the width (and one pixel for the edge
+		 * coverage). The normalised area is clamped first, a corner near the eye can project very far away. */
+		/* An empty area (minimum above maximum): the whole box is behind the eye. */
+		if ( m_screenArea[2] < m_screenArea[0] || m_screenArea[3] < m_screenArea[1] )
+		{
+			return;
+		}
+
+		const auto margin = static_cast< int32_t >(std::ceil(m_width)) + 1;
+		const auto toPixel = [] (float normalised, uint32_t extent) noexcept {
+			return std::clamp(normalised, -1.0F, 2.0F) * static_cast< float >(extent);
+		};
+		const auto left = std::clamp(static_cast< int32_t >(std::floor(toPixel(m_screenArea[0], width))) - margin, 0, static_cast< int32_t >(width));
+		const auto top = std::clamp(static_cast< int32_t >(std::floor(toPixel(m_screenArea[1], height))) - margin, 0, static_cast< int32_t >(height));
+		const auto right = std::clamp(static_cast< int32_t >(std::ceil(toPixel(m_screenArea[2], width))) + margin, 0, static_cast< int32_t >(width));
+		const auto bottom = std::clamp(static_cast< int32_t >(std::ceil(toPixel(m_screenArea[3], height))) + margin, 0, static_cast< int32_t >(height));
+
+		/* The entity and its outline are off screen. */
+		if ( right <= left || bottom <= top )
+		{
+			return;
+		}
+
+		const VkRect2D scissor{
+			.offset = {left, top},
+			.extent = {static_cast< uint32_t >(right - left), static_cast< uint32_t >(bottom - top)}
+		};
 
 		const auto & descriptorSet = *m_descriptorSets[m_renderer.currentFrameIndex() % m_descriptorSets.size()];
 		const bool hasSceneDepth = grabPass != nullptr && grabPass->hasDepth();
@@ -534,10 +656,6 @@ void main()
 		};
 		vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
 
-		const VkRect2D scissor{
-			.offset = {0, 0},
-			.extent = {width, height}
-		};
 		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
 		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstants), &pushConstants);

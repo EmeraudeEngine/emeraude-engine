@@ -41,10 +41,44 @@ architecture = Unreal's CustomDepth. Open work: engine `docs/todo/segment-render
 - An emissive overlay (a beam, `Material::Interface::writesGeometryBuffer()` false) is skipped by the custom depth: it
   is no surface, and these programs cannot build its ribbon.
 
+### Cost and the scissor (2026-09-29)
+
+GPU zones `SelectionDepth` and `SelectionOutline` (inside `FinalComposite`), read with
+`Core.RendererService.getGPUTimings()` (`Core/Graphics/GPUProfiler/Enabled`). The disk search costs ~width² taps per
+pixel it covers. RTX 3070 Ti, 2880x1620, `geometry-generator`:
+
+| Width | Full screen (before) | Scissored, figurine half (~1/4 of the screen) |
+|---|---|---|
+| 1 px | 0.096 ms | — |
+| 2 px (default) | 0.195 ms | 0.072 ms |
+| 4 px | 0.56 ms | 0.06 ms (object high on screen) |
+| 8 px | 1.81 ms | 0.66 ms |
+
+`SelectionDepth` stays ~0.04-0.1 ms (one entity drawn depth-only). Owner decision: the scissor only, no cheaper search
+— a full-screen selection still pays the full-screen price, and wide lines stay quadratic.
+
+**How the scissor is found** (owner decision: the scene publishes the box):
+- `Scene::publishStateForRendering()` (logic thread) copies the highlighted entity's `getWorldRenderBoundingBox()`
+  into the logic slot, TAGGED with the entity (`m_publishedHighlights`). The render thread reads it through
+  `Scene::highlightedWorldBoundingBox()` for the frame's read slot: the same pose the scene pass draws, no race.
+- `SelectionOutline::updateScreenArea()` projects the box with the unjittered main camera. The 12 edges are clipped
+  against `w = 1e-4` (Blinn & Newell, "Clipping using homogeneous coordinates", SIGGRAPH 1978): a box straddling the
+  eye still gives the exact screen area, a box entirely behind the eye gives an EMPTY one (the pass is skipped — 0 ms
+  when looking away).
+- `recordComposite()` grows the area by `ceil(width) + 1` px and scissors the fullscreen triangle to it.
+
+⚠️ Traps:
+- **Whole screen when the box is unknown**: the slot still tags the PREVIOUS selection (1-2 frames after a change), or
+  the logic is PAUSED (no publication since the change: `Core.cpp` skips `publishStateForRendering()`). Always
+  correct, only slower.
+- **The render box must cover what the GPU draws.** A vertex that leaves `m_renderBoundingBox` (skinning beyond the
+  bind-pose bounds, strong wind) is outlined only inside the scissor — the same box the octree culls with, so such an
+  entity would already pop. Grow the component's bounds, never the margin.
+- The camera INSIDE the box legitimately covers the whole screen (0.61 ms at 4 px).
+
 ### ⚠️ Limits (first pass)
 
 - Internal-target frames only (`Renderer::renderFrameWithInternal()`): the direct swap-chain path has no scene target.
-- One entity. The composite runs FULLSCREEN whenever an entity is highlighted: `(2·width + 1)²` depth taps per pixel at
-  most (81 at 4 px). Not measured yet; scissoring it to the entity's projected bounds is the obvious saving.
+- One entity (multi-selection: next item of `docs/todo/segment-rendering-beams-curves-outlines.md`).
 - The style setters are called from the logic/console thread and read by the render thread (plain floats, like the
   material look setters) — the same exposure as the rest of the engine's "look" setters.

@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -38,6 +39,7 @@
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
+#include "Math/Space3D/AACuboid.hpp"
 #include "PixelFactory/Color.hpp"
 
 namespace EmEn
@@ -79,6 +81,9 @@ namespace EmEn::Graphics
 	 * 2. recordComposite() — in the final composite pass, AFTER the tone mapping (neither exposed nor blurred by the
 	 *    TAA): each pixel outside the entity looks for the nearest entity pixel within the width; found, it is outline,
 	 *    and its opacity says whether that entity pixel is the scene's front-most surface (the grab pass depth).
+	 *    The disk search costs ~width² taps per pixel (RTX 3070 Ti, 2880x1620, full screen: 1 px 0.10 ms, 2 px
+	 *    0.20 ms, 4 px 0.56 ms, 8 px 1.81 ms), so the pass is SCISSORED to the entity's projected world render box
+	 *    (Scenes::Scene::highlightedWorldBoundingBox()) grown by the width: only the pixels that may be outline pay.
 	 * @note Owned by the Renderer; internal-target frames only (no scene depth copy in the direct swap-chain path).
 	 */
 	class EMEN_API SelectionOutline final
@@ -185,6 +190,17 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool createPipeline (const Vulkan::Framebuffer & framebuffer, uint32_t width, uint32_t height) noexcept;
 
+			/**
+			 * @brief Projects the highlighted entity's world render box with the main camera into the normalised screen
+			 * area the composite is scissored to. Falls back to the whole screen when the box is unknown or a corner lies
+			 * behind the eye.
+			 * @param worldBoundingBox The published world render box (invalid when unknown).
+			 * @param mainViewMatrices A reference to the main camera's view matrices.
+			 * @param readStateIndex The render state slot the frame draws.
+			 * @return void
+			 */
+			void updateScreenArea (const Base::Math::Space3D::AACuboid< float > & worldBoundingBox, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept;
+
 			Renderer & m_renderer;
 			std::shared_ptr< SelectionDepthTarget > m_depthTarget;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
@@ -195,6 +211,9 @@ namespace EmEn::Graphics
 			/** @brief The render pass the pipeline was sealed against: a recreated swap chain brings a new one. */
 			VkRenderPass m_pipelineRenderPass{VK_NULL_HANDLE};
 			Base::PixelFactory::Color< float > m_color{1.0F, 0.6F, 0.1F, 1.0F};
+			/** @brief The composite's screen area, normalised [0, 1]: minimum U, minimum V, maximum U, maximum V; a minimum
+			 * above its maximum = empty (nothing to draw). */
+			std::array< float, 4 > m_screenArea{0.0F, 0.0F, 1.0F, 1.0F};
 			float m_width{2.0F};
 			float m_hiddenOpacity{0.35F};
 			bool m_sharedResourcesCreated{false};

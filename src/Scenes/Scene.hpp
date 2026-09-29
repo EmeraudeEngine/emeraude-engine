@@ -2134,6 +2134,16 @@ namespace EmEn::Scenes
 			std::shared_ptr< AbstractEntity > highlightedEntity () const noexcept;
 
 			/**
+			 * @brief Returns the world render bounding box of the highlighted entity, as published for the frame being drawn.
+			 * @note Render thread. publishStateForRendering() (logic thread) copies the box together with the entity it was
+			 * taken from, so it matches the pose the scene pass draws. An INVALID box means none is known for the CURRENT
+			 * highlighted entity (it just changed, or the logic has been paused since): the caller covers the whole screen.
+			 * @return Base::Math::Space3D::AACuboid< float >
+			 */
+			[[nodiscard]]
+			Base::Math::Space3D::AACuboid< float > highlightedWorldBoundingBox () const noexcept;
+
+			/**
 			 * @brief Draws the depth of the highlighted entity alone into the selection depth target ("custom depth").
 			 * @note Render thread, INSIDE the target's render pass (the Renderer opens it, depth cleared), after
 			 * prepareRender(). Uses the depth-only shadow-casting programs, generated for this target on first use. An emissive overlay (a beam:
@@ -3215,6 +3225,16 @@ namespace EmEn::Scenes
 			std::weak_ptr< AbstractEntity > m_highlightedEntity;
 			/** @brief Mutex protecting m_highlightedEntity (set from any thread, read by the render thread). */
 			mutable std::mutex m_highlightedEntityAccess;
+
+			/** @brief The highlighted entity's world render box of one render state slot, tagged with the entity it belongs to. */
+			struct PublishedHighlight final
+			{
+				std::weak_ptr< AbstractEntity > entity;
+				Base::Math::Space3D::AACuboid< float > worldBoundingBox;
+			};
+
+			/** @brief Written by publishStateForRendering() into the logic slot, read by highlightedWorldBoundingBox(). */
+			std::array< PublishedHighlight, RenderStateSlotCount > m_publishedHighlights{};
 			/** @brief Raised from any thread (setBackground), consumed by processLogics()
 			 * (logic thread) to push the background photometry to the view UBOs. */
 			std::atomic_bool m_backgroundPhotometryDirty{false};

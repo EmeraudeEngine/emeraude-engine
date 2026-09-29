@@ -626,6 +626,27 @@ namespace EmEn::Scenes
 		return m_highlightedEntity.lock();
 	}
 
+	Base::Math::Space3D::AACuboid< float >
+	Scene::highlightedWorldBoundingBox () const noexcept
+	{
+		const auto entity = this->highlightedEntity();
+
+		if ( entity == nullptr )
+		{
+			return {};
+		}
+
+		const auto & published = m_publishedHighlights[m_frameReadStateIndex];
+
+		/* The slot may still hold the previous selection: its box would clip the new one. */
+		if ( published.entity.lock() != entity )
+		{
+			return {};
+		}
+
+		return published.worldBoundingBox;
+	}
+
 	bool
 	Scene::renderSelectionDepth (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
 	{
@@ -1126,6 +1147,15 @@ namespace EmEn::Scenes
 			this->forEachRenderToView([&nextTarget] (const auto & renderTarget){
 				renderTarget->viewMatrices().publishStateForRendering(nextTarget);
 			});
+		}
+
+		/* The highlighted entity's extent (the selection outline's scissor), taken on this thread with the entity. */
+		{
+			auto & highlight = m_publishedHighlights[nextTarget];
+			const auto entity = this->highlightedEntity();
+
+			highlight.entity = entity;
+			highlight.worldBoundingBox = entity != nullptr ? entity->getWorldRenderBoundingBox() : Base::Math::Space3D::AACuboid< float >{};
 		}
 
 		/* NOTE: Publish the written slot as the middle one and take back the previous middle to write the next tick.
