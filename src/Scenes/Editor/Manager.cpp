@@ -26,9 +26,18 @@
 
 #include "Manager.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <ranges>
+
+/* Third-party inclusions. */
+#ifdef IMGUI_ENABLED
+#include "imgui.h"
+#endif
 
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
@@ -59,6 +68,59 @@ namespace EmEn::Scenes::Editor
 	using namespace Input;
 	using namespace Physics;
 
+	namespace
+	{
+		/**
+		 * @brief Returns the shared owner of a picked entity (both concrete entity types share themselves).
+		 * @param entity A pointer to the entity.
+		 * @return std::shared_ptr< AbstractEntity >
+		 */
+		[[nodiscard]]
+		std::shared_ptr< AbstractEntity >
+		shareEntity (AbstractEntity * entity) noexcept
+		{
+			if ( auto * node = dynamic_cast< Node * >(entity) )
+			{
+				return node->shared_from_this();
+			}
+
+			if ( auto * staticEntity = dynamic_cast< StaticEntity * >(entity) )
+			{
+				return staticEntity->shared_from_this();
+			}
+
+			return nullptr;
+		}
+
+		/**
+		 * @brief Returns whether one of the entity's ancestors is in a set (a node only: a static entity has none).
+		 * @param entity A reference to the entity.
+		 * @param entities The set.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		hasSelectedAncestor (const AbstractEntity & entity, const std::vector< std::shared_ptr< AbstractEntity > > & entities) noexcept
+		{
+			const auto * node = dynamic_cast< const Node * >(&entity);
+
+			if ( node == nullptr )
+			{
+				return false;
+			}
+
+			for ( auto parent = node->parent(); parent != nullptr; parent = parent->parent() )
+			{
+				if ( std::ranges::any_of(entities, [&parent] (const auto & selected) { return selected.get() == parent.get(); }) )
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+	}
+
 	Manager::Manager (Input::Manager & inputManager, Resources::Manager & resourceManager, Notifier & notifier) noexcept
 		: KeyboardListenerInterface{false, false},
 		PointerListenerInterface{false, false, false},
@@ -69,6 +131,160 @@ namespace EmEn::Scenes::Editor
 		/* NOTE: Register once. Listening is controlled by enableKeyboardListening/enablePointerListening. */
 		m_inputManager.addKeyboardListener(this);
 		m_inputManager.addPointerListener(this);
+
+#ifdef IMGUI_ENABLED
+		m_panel = [this] {
+			this->drawDefaultPanel();
+		};
+#endif
+	}
+
+	void
+	Manager::setPanel (std::function< void () > drawFunction) noexcept
+	{
+		m_panel = std::move(drawFunction);
+	}
+
+	void
+	Manager::drawDefaultPanel () noexcept
+	{
+#ifdef IMGUI_ENABLED
+		ImGui::SetNextWindowPos(ImVec2{16.0F, 16.0F}, ImGuiCond_FirstUseEver);
+
+		/* The content grows and shrinks with the selection: the window follows it. */
+		if ( !ImGui::Begin("Scene editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize) )
+		{
+			ImGui::End();
+
+			return;
+		}
+
+		/* The four tools: the Selection state, or the Transformation state with one gizmo. */
+		const EditorState state = m_state;
+		const GizmoMode gizmoMode = m_gizmoMode;
+
+		const auto toolButton = [] (const char * label, const char * shortcut, bool current) noexcept {
+			if ( current )
+			{
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+			}
+
+			const bool pressed = ImGui::Button(label);
+
+			if ( current )
+			{
+				ImGui::PopStyleColor();
+			}
+
+			if ( ImGui::IsItemHovered() )
+			{
+				ImGui::SetTooltip("%s", shortcut);
+			}
+
+			return pressed;
+		};
+
+		if ( toolButton("Select", "Shift+Q", state == EditorState::Selection) )
+		{
+			this->setState(EditorState::Selection);
+		}
+
+		ImGui::SameLine();
+
+		if ( toolButton("Move", "Shift+T", state == EditorState::Transformation && gizmoMode == GizmoMode::Translate) )
+		{
+			this->setGizmoMode(GizmoMode::Translate);
+			this->setState(EditorState::Transformation);
+		}
+
+		ImGui::SameLine();
+
+		if ( toolButton("Rotate", "Shift+R", state == EditorState::Transformation && gizmoMode == GizmoMode::Rotate) )
+		{
+			this->setGizmoMode(GizmoMode::Rotate);
+			this->setState(EditorState::Transformation);
+		}
+
+		ImGui::SameLine();
+
+		if ( toolButton("Scale", "Shift+S", state == EditorState::Transformation && gizmoMode == GizmoMode::Scale) )
+		{
+			this->setGizmoMode(GizmoMode::Scale);
+			this->setState(EditorState::Transformation);
+		}
+
+		/* The transform space (Shift+G). */
+		{
+			int space = m_transformSpace == TransformSpace::World ? 1 : 0;
+
+			ImGui::TextUnformatted("Space");
+			ImGui::SameLine();
+
+			const bool localPressed = ImGui::RadioButton("Local", &space, 0);
+
+			ImGui::SameLine();
+
+			const bool worldPressed = ImGui::RadioButton("World", &space, 1);
+
+			if ( localPressed || worldPressed )
+			{
+				this->setTransformSpace(space == 1 ? TransformSpace::World : TransformSpace::Local);
+			}
+		}
+
+		ImGui::Separator();
+
+		/* The selection: every entity, the active one (the last selected) marked. */
+		const auto entities = this->selection();
+
+		if ( entities.empty() )
+		{
+			ImGui::TextDisabled("Nothing selected (click an entity; Shift+click adds or removes).");
+		}
+		else
+		{
+			ImGui::Text("%zu selected", entities.size());
+
+			for ( size_t index = 0; index < entities.size(); ++index )
+			{
+				const bool active = index + 1 == entities.size();
+
+				if ( active )
+				{
+					ImGui::BulletText("%s (active)", entities[index]->name().c_str());
+				}
+				else
+				{
+					ImGui::BulletText("%s", entities[index]->name().c_str());
+				}
+			}
+
+			/* The active entity's world transform, read-only: the gizmo transforms. */
+			ImGui::Separator();
+
+			const auto frame = entities.back()->getWorldCoordinates();
+			const auto & position = frame.position();
+			const auto & scaling = frame.scalingFactor();
+
+			ImGui::Text("Position  %.3f  %.3f  %.3f", static_cast< double >(position[X]), static_cast< double >(position[Y]), static_cast< double >(position[Z]));
+			/* ZYX Tait-Bryan angles (Quaternion::eulerAngles()). ⚠️ NOT CartesianFrame::getPitchAngle()/getYawAngle()/
+			 * getRollAngle(): those are the angles between the backward axis and -Z/+X/+Y (180/90/90 for an untouched
+			 * entity), whatever their names say. */
+			const auto euler = frame.toQuaternion().eulerAngles();
+
+			ImGui::Text("Rotation  %.1f  %.1f  %.1f deg", static_cast< double >(Degree(euler[X])), static_cast< double >(Degree(euler[Y])), static_cast< double >(Degree(euler[Z])));
+			ImGui::Text("Scale     %.3f  %.3f  %.3f", static_cast< double >(scaling[X]), static_cast< double >(scaling[Y]), static_cast< double >(scaling[Z]));
+
+			if ( entities.size() > 1 )
+			{
+				const auto pivot = selectionPivot(entities);
+
+				ImGui::TextDisabled("Centre    %.3f  %.3f  %.3f", static_cast< double >(pivot[X]), static_cast< double >(pivot[Y]), static_cast< double >(pivot[Z]));
+			}
+		}
+
+		ImGui::End();
+#endif
 	}
 
 	Manager::~Manager ()
@@ -155,13 +371,26 @@ namespace EmEn::Scenes::Editor
 	void
 	Manager::processLogics () noexcept
 	{
-		if ( !m_active || m_selectedEntity == nullptr || m_viewMatrices == nullptr )
+		if ( !m_active || m_viewMatrices == nullptr )
 		{
+			m_gizmoShown = false;
+
 			return;
 		}
 
-		/* NOTE: Update gizmo position (and rotation in Local mode) to follow the selected entity. */
-		auto worldFrame = m_selectedEntity->getWorldCoordinates();
+		const auto entities = this->selection();
+
+		/* The gizmo is a tool on the selection, not its marker (the outline marks it): Transformation state only. */
+		if ( m_state != EditorState::Transformation || entities.empty() )
+		{
+			m_gizmoShown = false;
+
+			return;
+		}
+
+		/* NOTE: The gizmo sits at the centre of the selection, oriented like the ACTIVE entity in Local mode. */
+		auto worldFrame = entities.back()->getWorldCoordinates();
+		worldFrame.setPosition(selectionPivot(entities));
 
 		if ( m_transformSpace == TransformSpace::World )
 		{
@@ -173,16 +402,23 @@ namespace EmEn::Scenes::Editor
 		m_rotateGizmo.setWorldFrame(worldFrame);
 		m_scaleGizmo.setWorldFrame(worldFrame);
 
-		/* NOTE: Update gizmo scale for constant screen size (uses configurable ratio). */
-		m_translateGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
-		m_rotateGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
-		m_scaleGizmo.updateScreenScale(m_viewMatrices->position(), m_viewMatrices->fieldOfView(), m_gizmoScreenRatio);
+		/* NOTE: Update gizmo scale for constant screen size (uses configurable ratio).
+		 * ⚠️ ViewMatricesInterface::fieldOfView() is in DEGREES, updateScreenScale() takes radians. Fed raw until
+		 * Sep 2026, tan(42.5 rad) = -11.3 at 85°: a NEGATIVE scale that point-mirrored the whole gizmo (X and Y arrows
+		 * reversed on screen, so a drag moved against the arrow held) and made its size swing with the FOV. */
+		const auto fieldOfView = Radian(m_viewMatrices->fieldOfView());
+
+		m_translateGizmo.updateScreenScale(m_viewMatrices->position(), fieldOfView, m_gizmoScreenRatio);
+		m_rotateGizmo.updateScreenScale(m_viewMatrices->position(), fieldOfView, m_gizmoScreenRatio);
+		m_scaleGizmo.updateScreenScale(m_viewMatrices->position(), fieldOfView, m_gizmoScreenRatio);
+
+		m_gizmoShown = true;
 	}
 
 	void
 	Manager::render (const Vulkan::CommandBuffer & commandBuffer) const noexcept
 	{
-		if ( !m_active || m_selectedEntity == nullptr || m_viewMatrices == nullptr )
+		if ( !m_active || !m_gizmoShown || m_viewMatrices == nullptr )
 		{
 			return;
 		}
@@ -431,51 +667,175 @@ namespace EmEn::Scenes::Editor
 	}
 
 	void
-	Manager::setSelection (AbstractEntity * entity) noexcept
+	Manager::setState (EditorState state) noexcept
 	{
-		if ( m_selectedEntity == entity )
+		if ( m_state == state )
 		{
 			return;
 		}
 
-		this->clearSelection();
+		m_state = state;
 
-		m_selectedEntity = entity;
+		m_notifier.push(state == EditorState::Selection ? "Editor: selection" : "Editor: transformation");
+	}
 
-		if ( m_selectedEntity != nullptr )
+	std::vector< std::shared_ptr< AbstractEntity > >
+	Manager::selection () const noexcept
+	{
+		const std::scoped_lock lock{m_selectionAccess};
+
+		std::vector< std::shared_ptr< AbstractEntity > > entities;
+		entities.reserve(m_selection.size());
+
+		for ( const auto & held : m_selection )
 		{
-			/* NOTE: Position the gizmo at the entity. */
-			m_translateGizmo.setWorldFrame(m_selectedEntity->getWorldCoordinates());
-
-			/* The scene outlines it (Graphics::SelectionOutline), holding it weakly: the concrete entity shares itself. */
-			if ( m_scene != nullptr )
+			if ( auto entity = held.lock(); entity != nullptr )
 			{
-				std::shared_ptr< AbstractEntity > sharedEntity;
+				entities.emplace_back(std::move(entity));
+			}
+		}
 
-				if ( auto * node = dynamic_cast< Node * >(m_selectedEntity) )
-				{
-					sharedEntity = node->shared_from_this();
-				}
-				else if ( auto * staticEntity = dynamic_cast< StaticEntity * >(m_selectedEntity) )
-				{
-					sharedEntity = staticEntity->shared_from_this();
-				}
+		return entities;
+	}
 
-				m_scene->setHighlightedEntity(sharedEntity);
+	std::shared_ptr< AbstractEntity >
+	Manager::activeEntity () const noexcept
+	{
+		const std::scoped_lock lock{m_selectionAccess};
+
+		for ( const auto & held : std::views::reverse(m_selection) )
+		{
+			if ( auto entity = held.lock(); entity != nullptr )
+			{
+				return entity;
+			}
+		}
+
+		return nullptr;
+	}
+
+	void
+	Manager::setSelection (AbstractEntity * entity) noexcept
+	{
+		auto shared = shareEntity(entity);
+
+		if ( shared == nullptr )
+		{
+			this->clearSelection();
+
+			return;
+		}
+
+		{
+			const std::scoped_lock lock{m_selectionAccess};
+
+			m_selection.clear();
+			m_selection.emplace_back(shared);
+		}
+
+		this->publishSelection();
+
+		m_notifier.push("Selected entity: '" + shared->name() + "'");
+	}
+
+	void
+	Manager::toggleSelection (AbstractEntity * entity) noexcept
+	{
+		const auto shared = shareEntity(entity);
+
+		if ( shared == nullptr )
+		{
+			return;
+		}
+
+		bool removed = false;
+		size_t count = 0;
+
+		{
+			const std::scoped_lock lock{m_selectionAccess};
+
+			/* The dead are dropped on the way. */
+			const auto sizeBefore = m_selection.size();
+
+			std::erase_if(m_selection, [&shared] (const auto & held) { return held.lock() == shared; });
+
+			removed = m_selection.size() < sizeBefore;
+
+			std::erase_if(m_selection, [] (const auto & held) { return held.expired(); });
+
+			if ( !removed )
+			{
+				/* Last = active: the entity just added becomes the one the Local axes follow. */
+				m_selection.emplace_back(shared);
 			}
 
-			m_notifier.push("Selected entity: '" + m_selectedEntity->name() + "'");
+			count = m_selection.size();
 		}
+
+		this->publishSelection();
+
+		m_notifier.push((removed ? "Deselected '" : "Added '") + shared->name() + "' (" + std::to_string(count) + " selected)");
 	}
 
 	void
 	Manager::clearSelection () noexcept
 	{
-		m_selectedEntity = nullptr;
+		{
+			const std::scoped_lock lock{m_selectionAccess};
 
+			m_selection.clear();
+		}
+
+		this->publishSelection();
+	}
+
+	void
+	Manager::publishSelection () noexcept
+	{
+		/* The scene outlines the selection (Graphics::SelectionOutline), in one step. */
 		if ( m_scene != nullptr )
 		{
-			m_scene->setHighlightedEntity(nullptr);
+			m_scene->setHighlightedEntities(this->selection());
+		}
+	}
+
+	Vector< 3, float >
+	Manager::selectionPivot (const std::vector< std::shared_ptr< AbstractEntity > > & entities) noexcept
+	{
+		Vector< 3, float > sum;
+
+		for ( const auto & entity : entities )
+		{
+			sum += entity->getWorldCoordinates().position();
+		}
+
+		return sum / static_cast< float >(entities.size());
+	}
+
+	void
+	Manager::beginDrag () noexcept
+	{
+		const auto entities = this->selection();
+
+		m_dragTargets.clear();
+
+		if ( entities.empty() )
+		{
+			return;
+		}
+
+		m_dragPivot = selectionPivot(entities);
+
+		for ( const auto & entity : entities )
+		{
+			if ( hasSelectedAncestor(*entity, entities) )
+			{
+				continue;
+			}
+
+			const auto & frame = entity->getWorldCoordinates();
+
+			m_dragTargets.push_back({entity, frame.position(), frame.scalingFactor()});
 		}
 	}
 
@@ -561,14 +921,14 @@ namespace EmEn::Scenes::Editor
 	bool
 	Manager::onPointerMove (float positionX, float positionY) noexcept
 	{
-		/* NOTE: Handle drag if active. */
-		if ( m_dragActive && m_selectedEntity != nullptr )
+		/* NOTE: Handle drag if active. Every drag target moves around the pivot captured at the drag start. */
+		if ( m_dragActive )
 		{
 			m_dragMoved = true;
 
 			if ( m_gizmoMode == GizmoMode::Translate )
 			{
-				const float currentT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+				const float currentT = this->projectMouseOnAxis(positionX, positionY, m_dragPivot, m_dragAxisDirection);
 				float delta = (m_dragInitialT - currentT) * m_moveRatio;
 
 				if ( m_moveStep > 0.0F )
@@ -576,13 +936,20 @@ namespace EmEn::Scenes::Editor
 					delta = std::round(delta / m_moveStep) * m_moveStep;
 				}
 
-				const auto newPosition = m_dragInitialEntityPos + m_dragAxisDirection * delta;
+				/* Absolute from the drag start: no accumulation. */
+				const auto offset = m_dragAxisDirection * delta;
 
-				m_selectedEntity->setPosition(newPosition, Base::Math::TransformSpace::World);
+				for ( const auto & target : m_dragTargets )
+				{
+					if ( const auto entity = target.entity.lock(); entity != nullptr )
+					{
+						entity->setPosition(target.initialPosition + offset, Base::Math::TransformSpace::World);
+					}
+				}
 			}
 			else if ( m_gizmoMode == GizmoMode::Rotate )
 			{
-				const float currentAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
+				const float currentAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragPivot, m_dragAxisDirection);
 				float deltaAngle = (currentAngle - m_dragInitialAngle);
 
 				if ( m_rotateStep > 0.0F )
@@ -590,32 +957,46 @@ namespace EmEn::Scenes::Editor
 					deltaAngle = std::round(deltaAngle / m_rotateStep) * m_rotateStep;
 				}
 
-				/* NOTE: Apply rotation around the axis, centered on the entity (not orbiting).
-				 * World mode: axis is in world space, rotate orientation only (save/restore position).
-				 * Local mode: axis is already in entity's local directions, use Local transform. */
-				if ( m_transformSpace == TransformSpace::Local )
-				{
-					/* NOTE: Local mode: pass unit axis + TransformSpace::Local.
-					 * The CartesianFrame will convert from local to world internally. */
-					Vector< 3, float > localAxis{0.0F, 0.0F, 0.0F};
+				/* NOTE: Each entity turns ON ITSELF around the axis (rotate() + its position restored), then its offset from
+				 * the pivot turns by the same matrix CartesianFrame::rotate() uses: a group orbits its centre, a single
+				 * entity (offset 0) turns in place as before.
+				 * ⚠️ Node::rotate(World) turns the node's LOCAL frame, i.e. in its parent's space: exact for a child of the
+				 * root node only (docs/todo: editor-world-rotation-of-nested-nodes). */
+				const auto rotation = Matrix< 3, float >::rotation(deltaAngle, m_dragAxisDirection);
 
-					switch ( m_dragAxis )
+				/* One entity in Local mode keeps the exact local-space path (a nested node included). */
+				const bool localSingle = m_transformSpace == TransformSpace::Local && m_dragTargets.size() == 1;
+
+				for ( const auto & target : m_dragTargets )
+				{
+					const auto entity = target.entity.lock();
+
+					if ( entity == nullptr )
 					{
-						case Gizmo::AxisID::X : localAxis = {1.0F, 0.0F, 0.0F}; break;
-						case Gizmo::AxisID::Y : localAxis = {0.0F, 1.0F, 0.0F}; break;
-						case Gizmo::AxisID::Z : localAxis = {0.0F, 0.0F, 1.0F}; break;
-						default : break;
+						continue;
 					}
 
-					m_selectedEntity->rotate(deltaAngle, localAxis, Base::Math::TransformSpace::Local);
-				}
-				else
-				{
-					/* NOTE: World mode: save/restore position to rotate in-place. */
-					const auto savedPos = m_selectedEntity->getWorldCoordinates().position();
+					if ( localSingle )
+					{
+						Vector< 3, float > localAxis{0.0F, 0.0F, 0.0F};
 
-					m_selectedEntity->rotate(deltaAngle, m_dragAxisDirection, Base::Math::TransformSpace::World);
-					m_selectedEntity->setPosition(savedPos, Base::Math::TransformSpace::World);
+						switch ( m_dragAxis )
+						{
+							case Gizmo::AxisID::X : localAxis = {1.0F, 0.0F, 0.0F}; break;
+							case Gizmo::AxisID::Y : localAxis = {0.0F, 1.0F, 0.0F}; break;
+							case Gizmo::AxisID::Z : localAxis = {0.0F, 0.0F, 1.0F}; break;
+							default : break;
+						}
+
+						entity->rotate(deltaAngle, localAxis, Base::Math::TransformSpace::Local);
+
+						continue;
+					}
+
+					const auto position = entity->getWorldCoordinates().position();
+
+					entity->rotate(deltaAngle, m_dragAxisDirection, Base::Math::TransformSpace::World);
+					entity->setPosition(m_dragPivot + rotation * (position - m_dragPivot), Base::Math::TransformSpace::World);
 				}
 
 				/* NOTE: Update initial angle for next delta. */
@@ -628,24 +1009,47 @@ namespace EmEn::Scenes::Editor
 				const float pixelDelta = (positionX - m_dragInitialMouseX) - (positionY - m_dragInitialT);
 				const float factor = std::max(0.01F, 1.0F + (pixelDelta * 0.003F * m_moveRatio));
 
-				auto newScaling = m_dragInitialScaling;
-
-				switch ( m_dragAxis )
+				for ( const auto & target : m_dragTargets )
 				{
-					case Gizmo::AxisID::X : newScaling[0] = m_dragInitialScaling[0] * factor; break;
-					case Gizmo::AxisID::Y : newScaling[1] = m_dragInitialScaling[1] * factor; break;
-					case Gizmo::AxisID::Z : newScaling[2] = m_dragInitialScaling[2] * factor; break;
-					default : newScaling = m_dragInitialScaling * factor; break;
-				}
+					const auto entity = target.entity.lock();
 
-				m_selectedEntity->setScalingFactor(newScaling);
+					if ( entity == nullptr )
+					{
+						continue;
+					}
+
+					auto newScaling = target.initialScaling;
+					const auto offset = target.initialPosition - m_dragPivot;
+					Vector< 3, float > newOffset;
+
+					/* The entity scales on its own axis; its offset from the pivot along the dragged direction. */
+					switch ( m_dragAxis )
+					{
+						case Gizmo::AxisID::X : newScaling[0] = target.initialScaling[0] * factor; break;
+						case Gizmo::AxisID::Y : newScaling[1] = target.initialScaling[1] * factor; break;
+						case Gizmo::AxisID::Z : newScaling[2] = target.initialScaling[2] * factor; break;
+						default : newScaling = target.initialScaling * factor; break;
+					}
+
+					if ( m_dragAxis == Gizmo::AxisID::X || m_dragAxis == Gizmo::AxisID::Y || m_dragAxis == Gizmo::AxisID::Z )
+					{
+						newOffset = offset + m_dragAxisDirection * (Vector< 3, float >::dotProduct(offset, m_dragAxisDirection) * (factor - 1.0F));
+					}
+					else
+					{
+						newOffset = offset * factor;
+					}
+
+					entity->setScalingFactor(newScaling);
+					entity->setPosition(m_dragPivot + newOffset, Base::Math::TransformSpace::World);
+				}
 			}
 
 			return true;
 		}
 
 		/* NOTE: Update gizmo hover highlight on the active gizmo. */
-		if ( m_selectedEntity != nullptr )
+		if ( m_gizmoShown )
 		{
 			const auto ray = this->screenToWorldRay(positionX, positionY);
 
@@ -681,14 +1085,38 @@ namespace EmEn::Scenes::Editor
 	}
 
 	bool
-	Manager::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
+	Manager::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
 	{
 		if ( buttonNumber != Button1Left )
 		{
 			return false;
 		}
 
-		/* NOTE: If a gizmo is active, test it first (priority over scene picking). */
+		/* NOTE: Selection state: a click selects, Shift+click adds or removes, a click on nothing clears. */
+		if ( m_state == EditorState::Selection )
+		{
+			auto * entity = this->pickEntity(positionX, positionY);
+
+			if ( isKeyboardModifierPressed(ModKeyShift, modifiers) )
+			{
+				if ( entity != nullptr )
+				{
+					this->toggleSelection(entity);
+				}
+			}
+			else if ( entity != nullptr )
+			{
+				this->setSelection(entity);
+			}
+			else
+			{
+				this->clearSelection();
+			}
+
+			return true;
+		}
+
+		/* NOTE: Transformation state: only the gizmo reacts; a click away from it changes nothing (owner decision). */
 		Gizmo::Abstract * activeGizmo = nullptr;
 
 		switch ( m_gizmoMode )
@@ -706,87 +1134,88 @@ namespace EmEn::Scenes::Editor
 				break;
 		}
 
-		if ( m_selectedEntity != nullptr && activeGizmo != nullptr )
+		const auto active = this->activeEntity();
+
+		if ( !m_gizmoShown || active == nullptr || activeGizmo == nullptr )
 		{
-			const auto ray = this->screenToWorldRay(positionX, positionY);
-
-			if ( ray.isValid() )
-			{
-				const auto hitAxis = activeGizmo->hitTest(ray);
-
-				if ( hitAxis != Gizmo::AxisID::None )
-				{
-					/* NOTE: Start drag operation. */
-					m_dragActive = true;
-					m_dragMoved = false;
-					m_dragStartX = positionX;
-					m_dragStartY = positionY;
-					m_dragAxis = hitAxis;
-					m_dragInitialEntityPos = m_selectedEntity->getWorldCoordinates().position();
-
-					/* NOTE: Determine axis direction based on transform space. */
-					const auto & entityFrame = m_selectedEntity->getWorldCoordinates();
-
-					switch ( hitAxis )
-					{
-						case Gizmo::AxisID::X :
-							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
-								? entityFrame.rightVector()
-								: Vector< 3, float >{1.0F, 0.0F, 0.0F};
-							break;
-
-						case Gizmo::AxisID::Y :
-							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
-								? entityFrame.localYAxis()
-								: Vector< 3, float >{0.0F, 1.0F, 0.0F};
-							break;
-
-						case Gizmo::AxisID::Z :
-							m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
-								? entityFrame.backwardVector()
-								: Vector< 3, float >{0.0F, 0.0F, 1.0F};
-							break;
-
-						default :
-							break;
-					}
-
-					/* NOTE: Initialize mode-specific drag state. */
-					if ( m_gizmoMode == GizmoMode::Translate )
-					{
-						m_dragInitialT = this->projectMouseOnAxis(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
-					}
-					else if ( m_gizmoMode == GizmoMode::Rotate )
-					{
-						m_dragInitialAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragInitialEntityPos, m_dragAxisDirection);
-					}
-					else if ( m_gizmoMode == GizmoMode::Scale )
-					{
-						m_dragInitialMouseX = positionX;
-						m_dragInitialT = positionY;
-						m_dragInitialScaling = m_selectedEntity->getWorldCoordinates().scalingFactor();
-					}
-
-					return true;
-				}
-			}
+			return true;
 		}
 
-		/* NOTE: Gizmo not hit — fall through to scene picking. */
-		if ( auto * entity = this->pickEntity(positionX, positionY); entity != nullptr )
+		const auto ray = this->screenToWorldRay(positionX, positionY);
+
+		if ( !ray.isValid() )
 		{
-			this->setSelection(entity);
+			return true;
 		}
-		else
+
+		const auto hitAxis = activeGizmo->hitTest(ray);
+
+		if ( hitAxis == Gizmo::AxisID::None )
 		{
-			this->clearSelection();
+			return true;
+		}
+
+		/* NOTE: Start drag operation, around the centre of the selection. */
+		this->beginDrag();
+
+		if ( m_dragTargets.empty() )
+		{
+			return true;
+		}
+
+		m_dragActive = true;
+		m_dragMoved = false;
+		m_dragStartX = positionX;
+		m_dragStartY = positionY;
+		m_dragAxis = hitAxis;
+
+		/* NOTE: Determine axis direction based on transform space: Local follows the ACTIVE entity. */
+		const auto & entityFrame = active->getWorldCoordinates();
+
+		switch ( hitAxis )
+		{
+			case Gizmo::AxisID::X :
+				m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
+					? entityFrame.rightVector()
+					: Vector< 3, float >{1.0F, 0.0F, 0.0F};
+				break;
+
+			case Gizmo::AxisID::Y :
+				m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
+					? entityFrame.localYAxis()
+					: Vector< 3, float >{0.0F, 1.0F, 0.0F};
+				break;
+
+			case Gizmo::AxisID::Z :
+				m_dragAxisDirection = (m_transformSpace == TransformSpace::Local)
+					? entityFrame.backwardVector()
+					: Vector< 3, float >{0.0F, 0.0F, 1.0F};
+				break;
+
+			default :
+				break;
+		}
+
+		/* NOTE: Initialize mode-specific drag state. */
+		if ( m_gizmoMode == GizmoMode::Translate )
+		{
+			m_dragInitialT = this->projectMouseOnAxis(positionX, positionY, m_dragPivot, m_dragAxisDirection);
+		}
+		else if ( m_gizmoMode == GizmoMode::Rotate )
+		{
+			m_dragInitialAngle = this->projectMouseAngleOnPlane(positionX, positionY, m_dragPivot, m_dragAxisDirection);
+		}
+		else if ( m_gizmoMode == GizmoMode::Scale )
+		{
+			m_dragInitialMouseX = positionX;
+			m_dragInitialT = positionY;
 		}
 
 		return true;
 	}
 
 	bool
-	Manager::onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
+	Manager::onButtonRelease (float /*positionX*/, float /*positionY*/, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
 	{
 		if ( buttonNumber != Button1Left )
 		{
@@ -795,25 +1224,10 @@ namespace EmEn::Scenes::Editor
 
 		if ( m_dragActive )
 		{
-			const bool wasDrag = m_dragMoved;
-
 			m_dragActive = false;
 			m_dragMoved = false;
 			m_dragAxis = Gizmo::AxisID::None;
-
-			/* NOTE: If the user clicked on a gizmo but didn't actually drag (just a click),
-			 * fall through to scene picking so they can change target. */
-			if ( !wasDrag )
-			{
-				if ( auto * entity = this->pickEntity(positionX, positionY); entity != nullptr )
-				{
-					this->setSelection(entity);
-				}
-				else
-				{
-					this->clearSelection();
-				}
-			}
+			m_dragTargets.clear();
 
 			return true;
 		}
@@ -829,10 +1243,10 @@ namespace EmEn::Scenes::Editor
 			return false;
 		}
 
-		/* NOTE: Escape key deselects the current entity. */
+		/* NOTE: Escape key clears the selection. */
 		if ( key == KeyEscape )
 		{
-			if ( m_selectedEntity != nullptr )
+			if ( !this->selection().empty() )
 			{
 				this->clearSelection();
 
@@ -869,17 +1283,25 @@ namespace EmEn::Scenes::Editor
 					return true;
 				}
 
-				/* Shift+T/R/S: gizmo mode switching. */
+				/* Shift+Q: the Selection state. */
+				case KeyQ :
+					this->setState(EditorState::Selection);
+					return true;
+
+				/* Shift+T/R/S: the Transformation state, with that gizmo. */
 				case KeyT :
 					this->setGizmoMode(GizmoMode::Translate);
+					this->setState(EditorState::Transformation);
 					return true;
 
 				case KeyR :
 					this->setGizmoMode(GizmoMode::Rotate);
+					this->setState(EditorState::Transformation);
 					return true;
 
 				case KeyS :
 					this->setGizmoMode(GizmoMode::Scale);
+					this->setState(EditorState::Transformation);
 					return true;
 
 				default :

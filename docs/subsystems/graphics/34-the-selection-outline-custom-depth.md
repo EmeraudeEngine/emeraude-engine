@@ -6,11 +6,15 @@ architecture = Unreal's CustomDepth. Open work: engine `docs/todo/segment-render
 
 ### Using it
 
-- `Scenes::Scene::setHighlightedEntity(entity)` / `setHighlightedEntity(nullptr)` — any thread, held weakly (a dead
-  entity just stops being outlined). One entity at a time.
-- The editor drives it: `Scenes::Editor::Manager::setSelection()` / `clearSelection()` (the concrete `Node` /
-  `StaticEntity` shares itself through `shared_from_this()`).
-- Console / MCP: `highlightEntity(<address>)`, `clearHighlight()`, `setHighlightStyle(r, g, b, width, hiddenOpacity)`
+- A SET of entities, one style (owner decision 2026-09-29): `Scenes::Scene::setHighlightedEntities(entities)` (one
+  step), `addHighlightedEntity()`, `removeHighlightedEntity()`, `clearHighlightedEntities()`, `highlightedEntities()`;
+  `setHighlightedEntity(entity)` replaces the set by one (nullptr clears). Any thread, held weakly (a dead entity just
+  stops being outlined). Touching entities share ONE silhouette: the whole set is one depth.
+- The editor drives it: its selection (Shift+click adds or removes) is published whole on every change
+  (`docs/subsystems/scenes/25-editor-selection-states-group-transform-panel.md`).
+- Console / MCP: `highlightEntity(<address>)` (replaces the set), `addHighlight(<address>)`,
+  `removeHighlight(<address>)`, `clearHighlight()`, `getHighlights()` (JSON array of addresses, in insertion order),
+  `setHighlightStyle(r, g, b, width, hiddenOpacity)`
   (colour as DISPLAYED, sRGB; width 1-8 px; hidden opacity 0 = visible parts only, 1 = x-ray). Defaults: orange
   (1, 0.6, 0.1), 2 px, 0.35. `Renderer::selectionOutline()` for code.
 
@@ -58,10 +62,11 @@ pixel it covers. RTX 3070 Ti, 2880x1620, `geometry-generator`:
 — a full-screen selection still pays the full-screen price, and wide lines stay quadratic.
 
 **How the scissor is found** (owner decision: the scene publishes the box):
-- `Scene::publishStateForRendering()` (logic thread) copies the highlighted entity's `getWorldRenderBoundingBox()`
-  into the logic slot, TAGGED with the entity (`m_publishedHighlights`). The render thread reads it through
-  `Scene::highlightedWorldBoundingBox()` for the frame's read slot: the same pose the scene pass draws, no race.
-- `SelectionOutline::updateScreenArea()` projects the box with the unjittered main camera. The 12 edges are clipped
+- `Scene::publishStateForRendering()` (logic thread) copies each highlighted entity's `getWorldRenderBoundingBox()`
+  into the logic slot, TAGGED with its entity (`m_publishedHighlights`). The render thread reads them through
+  `Scene::highlightedWorldBoundingBoxes()` for the frame's read slot: the same pose the scene pass draws, no race.
+- `SelectionOutline::updateScreenArea()` projects each box with the unjittered main camera (`projectedArea()`) and
+  keeps the UNION. The 12 edges are clipped
   against `w = 1e-4` (Blinn & Newell, "Clipping using homogeneous coordinates", SIGGRAPH 1978): a box straddling the
   eye still gives the exact screen area, a box entirely behind the eye gives an EMPTY one (the pass is skipped — 0 ms
   when looking away).
@@ -79,6 +84,8 @@ pixel it covers. RTX 3070 Ti, 2880x1620, `geometry-generator`:
 ### ⚠️ Limits (first pass)
 
 - Internal-target frames only (`Renderer::renderFrameWithInternal()`): the direct swap-chain path has no scene target.
-- One entity (multi-selection: next item of `docs/todo/segment-rendering-beams-curves-outlines.md`).
+- The scissor of a set is the UNION of the entities' projected boxes (`Scene::highlightedWorldBoundingBoxes()`, one box
+  per live entity published per slot): two entities at opposite corners scissor nearly the whole screen. Measured:
+  both `geometry-generator` halves, 2 px, 0.119 ms.
 - The style setters are called from the logic/console thread and read by the render thread (plain floats, like the
   material look setters) — the same exposure as the rest of the engine's "look" setters.

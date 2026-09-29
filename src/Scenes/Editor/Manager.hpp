@@ -30,7 +30,12 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
@@ -91,6 +96,18 @@ namespace EmEn::Scenes::Editor
 		Scale
 	};
 
+	/**
+	 * @brief The two states of the editor (owner decision 2026-09-29): the selection is kept apart from the gizmo.
+	 * @note Selection: a click selects (Shift+click adds or removes), no gizmo is shown. Transformation: the gizmo of the
+	 * current GizmoMode (translate, rotate, scale) acts on the WHOLE selection, around the centre of the selected
+	 * entities; a click away from the gizmo changes nothing.
+	 */
+	enum class EMEN_API EditorState : uint8_t
+	{
+		Selection,
+		Transformation
+	};
+
 	/** @brief The transform space for gizmo operations. */
 	enum class EMEN_API TransformSpace : uint8_t
 	{
@@ -103,8 +120,9 @@ namespace EmEn::Scenes::Editor
 	 * @brief The scene editor manager. Handles entity selection via mouse picking and gizmo display.
 	 *
 	 * When activated, this manager registers itself as a keyboard and pointer listener
-	 * with the input manager. Clicking on entities in the scene selects them, and a
-	 * standalone gizmo is rendered at the selected entity's position.
+	 * with the input manager. In the Selection state, clicking on entities selects them (the scene outlines the
+	 * selection: Scenes::Scene::setHighlightedEntities()); in the Transformation state, a standalone gizmo at the
+	 * centre of the selection transforms it (EditorState).
 	 *
 	 * @extends EmEn::Input::KeyboardListenerInterface Listens to keyboard events when active.
 	 * @extends EmEn::Input::PointerListenerInterface Listens to pointer events when active.
@@ -177,6 +195,63 @@ namespace EmEn::Scenes::Editor
 			void render (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
+			 * @brief Replaces the editor PANEL, drawn while the editor is active (Core's "SceneEditorScreen").
+			 * @note Render thread (the overlay pass). The engine's default is an ImGUI window — the four tools, the transform
+			 * space, the selection and the active entity's transform, read-only (owner decision 2026-09-29) — compiled with
+			 * IMGUI_ENABLED only. An application replaces it by its own draw function, or removes it with nullptr; every
+			 * panel drives the editor through the same public API (setState(), setGizmoMode(), setTransformSpace(),
+			 * selection()).
+			 * @warning Call it at setup (before the editor is first activated) or from the render thread: the overlay pass
+			 * calls the function without a lock.
+			 * @param drawFunction The function emitting the panel's ImGUI widgets, or nullptr for no panel.
+			 * @return void
+			 */
+			void setPanel (std::function< void () > drawFunction) noexcept;
+
+			/**
+			 * @brief Returns whether a panel is set.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPanel () const noexcept
+			{
+				return m_panel != nullptr;
+			}
+
+			/**
+			 * @brief Draws the panel, if any.
+			 * @note Render thread, inside the overlay's ImGUI frame.
+			 * @return void
+			 */
+			void
+			drawPanel () const noexcept
+			{
+				if ( m_panel != nullptr )
+				{
+					m_panel();
+				}
+			}
+
+			/**
+			 * @brief Sets the editor state: selecting, or transforming the selection with the gizmo.
+			 * @param state The state.
+			 * @return void
+			 */
+			void setState (EditorState state) noexcept;
+
+			/**
+			 * @brief Returns the editor state.
+			 * @return EditorState
+			 */
+			[[nodiscard]]
+			EditorState
+			state () const noexcept
+			{
+				return m_state;
+			}
+
+			/**
 			 * @brief Sets the gizmo editing mode.
 			 * @param mode The gizmo mode.
 			 * @return void
@@ -217,19 +292,22 @@ namespace EmEn::Scenes::Editor
 			}
 
 			/**
-			 * @brief Returns the currently selected entity, or nullptr if none.
-			 * @return AbstractEntity *
+			 * @brief Returns the live selected entities, in the order they were selected (the last one is the active one).
+			 * @return std::vector< std::shared_ptr< AbstractEntity > >
 			 */
 			[[nodiscard]]
-			AbstractEntity *
-			selectedEntity () const noexcept
-			{
-				return m_selectedEntity;
-			}
+			std::vector< std::shared_ptr< AbstractEntity > > selection () const noexcept;
+
+			/**
+			 * @brief Returns the ACTIVE entity — the last one selected, whose axes the Local transform space uses — or nullptr.
+			 * @return std::shared_ptr< AbstractEntity >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< AbstractEntity > activeEntity () const noexcept;
 
 			/**
 			 * @brief Sets the gizmo screen size ratio (fraction of viewport height).
-			 * @param ratio The ratio. Default is 0.025.
+			 * @param ratio The ratio. Default is Gizmo::Abstract::DefaultScreenRatio (0.3).
 			 * @return void
 			 */
 			void
@@ -292,17 +370,52 @@ namespace EmEn::Scenes::Editor
 			AbstractEntity * pickEntity (float screenX, float screenY) const noexcept;
 
 			/**
-			 * @brief Sets the selection to the given entity and shows the gizmo.
+			 * @brief Replaces the selection by one entity.
 			 * @param entity A pointer to the entity to select.
 			 * @return void
 			 */
 			void setSelection (AbstractEntity * entity) noexcept;
 
 			/**
-			 * @brief Clears the current selection and hides the gizmo.
+			 * @brief Adds an entity to the selection, or removes it when it is already selected (Shift+click).
+			 * @param entity A pointer to the entity.
+			 * @return void
+			 */
+			void toggleSelection (AbstractEntity * entity) noexcept;
+
+			/**
+			 * @brief Clears the selection.
 			 * @return void
 			 */
 			void clearSelection () noexcept;
+
+			/**
+			 * @brief The engine's default panel (ImGUI): the four tools, the transform space, the selection and the active
+			 * entity's transform, read-only.
+			 * @return void
+			 */
+			void drawDefaultPanel () noexcept;
+
+			/**
+			 * @brief Hands the selection to the scene, which outlines it.
+			 * @return void
+			 */
+			void publishSelection () noexcept;
+
+			/**
+			 * @brief Returns the centre the gizmo transforms around: the mean of the selected entities' world positions.
+			 * @param entities The live selection (not empty).
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			static Base::Math::Vector< 3, float > selectionPivot (const std::vector< std::shared_ptr< AbstractEntity > > & entities) noexcept;
+
+			/**
+			 * @brief Starts a gizmo drag: captures the pivot and the initial state of every entity it moves.
+			 * @note An entity whose ancestor is also selected is left out: it follows its parent, it must not move twice.
+			 * @return void
+			 */
+			void beginDrag () noexcept;
 
 			/**
 			 * @brief Creates the gizmo for the current mode if not already created.
@@ -356,22 +469,40 @@ namespace EmEn::Scenes::Editor
 			Scene * m_scene{nullptr};
 			const Graphics::ViewMatricesInterface * m_viewMatrices{nullptr};
 
-			/* Selection state. */
-			AbstractEntity * m_selectedEntity{nullptr};
+			/** @brief One entity a gizmo drag moves, and its state when the drag started. */
+			struct DragTarget final
+			{
+				std::weak_ptr< AbstractEntity > entity;
+				Base::Math::Vector< 3, float > initialPosition;
+				Base::Math::Vector< 3, float > initialScaling;
+			};
+
+			/* Selection state: held weakly (an entity may die while selected), the last one is the active one.
+			 * Written by the input (main) thread, read by the logic thread: guarded. */
+			std::vector< std::weak_ptr< AbstractEntity > > m_selection;
+			mutable std::mutex m_selectionAccess;
+			/** @brief Whether the gizmo is drawn (Transformation state with a selection), set by processLogics(), read by render(). */
+			std::atomic_bool m_gizmoShown{false};
 
 			/* Gizmos. */
 			Gizmo::Translate m_translateGizmo;
 			Gizmo::Rotate m_rotateGizmo;
 			Gizmo::Scale m_scaleGizmo;
 
-			/* Editing modes. */
-			GizmoMode m_gizmoMode{GizmoMode::Translate};
-			TransformSpace m_transformSpace{TransformSpace::Local};
+			/** @brief The panel draw function (setPanel()); the default one with IMGUI_ENABLED, else none. */
+			std::function< void () > m_panel;
+
+			/* Editing modes: set by the keys (main thread) and the panel (render thread), read by the logic thread. */
+			std::atomic< EditorState > m_state{EditorState::Selection};
+			std::atomic< GizmoMode > m_gizmoMode{GizmoMode::Translate};
+			std::atomic< TransformSpace > m_transformSpace{TransformSpace::Local};
 			float m_gizmoScreenRatio{Gizmo::Abstract::DefaultScreenRatio};
 
 			/* Drag state (shared). */
+			std::vector< DragTarget > m_dragTargets;
 			Base::Math::Vector< 3, float > m_dragAxisDirection;
-			Base::Math::Vector< 3, float > m_dragInitialEntityPos;
+			/** @brief The centre of the selection when the drag started: the point every entity is moved, turned and scaled around. */
+			Base::Math::Vector< 3, float > m_dragPivot;
 			Gizmo::AxisID m_dragAxis{Gizmo::AxisID::None};
 
 			/* Drag state (translation). */
@@ -382,7 +513,6 @@ namespace EmEn::Scenes::Editor
 
 			/* Drag state (scale). */
 			float m_dragInitialMouseX{0.0F};
-			Base::Math::Vector< 3, float > m_dragInitialScaling{1.0F, 1.0F, 1.0F};
 
 			/* Movement options. */
 			float m_moveRatio{1.0F};

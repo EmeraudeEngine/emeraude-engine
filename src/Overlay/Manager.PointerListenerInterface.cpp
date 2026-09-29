@@ -77,6 +77,15 @@ namespace EmEn::Overlay
 			Tracer::debug(ClassId, "Received a dispatchable pointer button press event!");
 		}
 
+#ifdef IMGUI_ENABLED
+		/* An ImGUI window under the pointer takes the event: the scene and the editor behind it must not. A RELEASE is
+		 * never consumed — a drag started in the scene must still end over a window. */
+		if ( m_ImGUICapturesPointer )
+		{
+			return true;
+		}
+#endif
+
 		if ( m_screens.empty() )
 		{
 			return false;
@@ -146,6 +155,15 @@ namespace EmEn::Overlay
 		{
 			Tracer::debug(ClassId, "Received a dispatchable mouse wheel event!");
 		}
+
+#ifdef IMGUI_ENABLED
+		/* An ImGUI window under the pointer takes the event: the scene and the editor behind it must not. A RELEASE is
+		 * never consumed — a drag started in the scene must still end over a window. */
+		if ( m_ImGUICapturesPointer )
+		{
+			return true;
+		}
+#endif
 
 		if ( m_screens.empty() )
 		{

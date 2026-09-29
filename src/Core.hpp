@@ -1784,6 +1784,8 @@ namespace EmEn
 #ifdef IMGUI_ENABLED
 			/** @brief The physical camera panel, toggled with Shift+F2. */
 			std::shared_ptr< Overlay::ImGUIScreen > m_cameraScreen;
+			/** @brief The scene editor panel (Scenes::Editor::Manager::drawPanel()), visible while the editor is active. */
+			std::shared_ptr< Overlay::ImGUIScreen > m_editorScreen;
 #endif
 			/** @brief The scene of the frame BEING RECORDED, exposed to overlay screens.
 			 * @warning RENDER THREAD ONLY, and only valid inside the shared-scene frame scope:

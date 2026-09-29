@@ -55,6 +55,12 @@ Scene (opaque → translucent) → Post-process → Editor Gizmos → Overlay (I
 - **Priority**: Active gizmo hit-test checked BEFORE scene picking
 - **Camera-carrier exclusion**: Any entity whose collision volume CONTAINS the camera position is skipped (`isColliding(point, volume)` from `Base/Math/Space3D/Collisions/`). Without this, the entity carrying the active camera (e.g., the player actor) catches every click at near-zero distance since the ray origin sits inside its AABB
 
+## Selection, editor states, group transformation, panel (2026-09-29)
+
+→ [`docs/subsystems/scenes/25-editor-selection-states-group-transform-panel.md`](../../../docs/subsystems/scenes/25-editor-selection-states-group-transform-panel.md):
+Selection / Transformation states (Shift+Q, Shift+T/R/S), the multi-selection (Shift+click) outlined by the scene,
+transformation around the centre of the selection, the replaceable ImGUI panel (`setPanel()`) and its click-through.
+
 ## Gizmo System
 
 ### Three Gizmo Types
@@ -77,8 +83,14 @@ Scene (opaque → translucent) → Post-process → Editor Gizmos → Overlay (I
 ```
 scaleFactor = screenRatio * distance * tan(FOV/2)
 ```
-- `screenRatio`: configurable via `Editor::Manager::setGizmoScreenRatio()` (default: 0.025)
-- Updated every frame in `processLogics()`
+- `screenRatio`: configurable via `Editor::Manager::setGizmoScreenRatio()` (default `Gizmo::Abstract::DefaultScreenRatio`
+  = 0.3: one unit of gizmo length over that fraction of the viewport half-height)
+- Updated every frame in `processLogics()`, with the FOV in RADIANS
+- ⚠️⚠️ `ViewMatricesInterface::fieldOfView()` returns DEGREES. Fed raw until Sep 2026: tan(42.5 rad) = −11.3 at 85°, a
+  NEGATIVE scale that point-mirrored the whole gizmo (X and Y arrows reversed on screen, against the compass; the
+  hit-test used the same scale, so the reversed arrows were the clickable ones, but a drag moved AGAINST the arrow
+  held) and made its size swing with the FOV. The old default 0.025 × |tan(42.5 rad)| / tan(42.5°) = 0.307 → 0.3
+  keeps the size it had at 85°.
 
 ### Hit-Test
 - **Translate/Scale**: World-space AABBs built from gizmo position + screenScale per axis
@@ -86,8 +98,10 @@ scaleFactor = screenRatio * distance * tan(FOV/2)
 - **Scale center cube**: `AxisID::All` — highlights entire gizmo, triggers uniform scale
 
 ### Transform Spaces
-- **Local** (default): Gizmo aligns with entity's orientation. Rotation uses `TransformSpace::Local` with unit axes.
-- **World**: Gizmo aligned to world axes. Rotation uses `TransformSpace::World` + save/restore position (avoids orbit).
+- **Local** (default): Gizmo aligns with the ACTIVE entity's orientation. One target: rotation uses
+  `TransformSpace::Local` with unit axes; a group: see § Group transformation.
+- **World**: Gizmo aligned to world axes. Rotation uses `TransformSpace::World` + save/restore position (avoids
+  orbit), then the offset from the pivot turns.
 - **Parent**: Enum exists, implementation pending.
 
 ### Drag Mechanics
@@ -105,16 +119,18 @@ scaleFactor = screenRatio * distance * tan(FOV/2)
 |-----|--------|
 | Shift+F3 | Toggle editor mode (handled at Core level) |
 | Shift+G | Toggle transform space (Local ↔ World) |
-| Shift+T | Switch to Translation gizmo |
-| Shift+R | Switch to Rotation gizmo |
-| Shift+S | Switch to Scale gizmo |
-| Escape | Deselect current entity |
+| Shift+Q | Selection state (no gizmo) |
+| Shift+T | Transformation state, Translation gizmo |
+| Shift+R | Transformation state, Rotation gizmo |
+| Shift+S | Transformation state, Scale gizmo |
+| Escape | Clear the selection |
 
 ### Mouse
-- **Hover**: `onPointerMove()` does lightweight hit-test on active gizmo, updates `highlightedAxis`
-- **Click on gizmo**: Starts drag operation (axis-specific or uniform for scale center)
-- **Click on scene**: Picks entity via CPU raycasting
-- **Click on void**: Deselects current entity
+- **Hover**: `onPointerMove()` does lightweight hit-test on active gizmo, updates `highlightedAxis` (gizmo shown only)
+- **Selection state**: click picks (CPU raycasting) and replaces the selection, Shift+click adds / removes, a click on
+  the void clears
+- **Transformation state**: a click on the gizmo starts a drag of the whole selection (axis-specific, or uniform for
+  the scale centre); anywhere else, nothing
 - **Drag**: Applies transformation based on active gizmo mode
 - **Release**: Ends drag
 
@@ -133,7 +149,7 @@ scaleFactor = screenRatio * distance * tan(FOV/2)
 5. **GizmoRendering generator needs geometry flags** — Must pass `Topology::TriangleList` + `EnableVertexColor`
 6. **World rotation save/restore position** — `rotate(TransformSpace::World)` orbits; save position before, restore after
 7. **Local rotation uses unit axes** — Pass `(1,0,0)` with `TransformSpace::Local`, NOT the already-transformed world vector
-8. **Arrow directions are POSITIVE** — the gizmo arrows are authored along +X/+Y/+Z, and the hit-test AABBs extend in positive directions. The mirror-era negative-axis compensation ("projection pipeline inversion") died with the Y-up flip (stage 4): the renderer is no longer orientation-reversing, so what is authored positive DISPLAYS positive, aligned with the compass reference spheres.
+8. **Arrow directions are POSITIVE** — the gizmo arrows are authored along +X/+Y/+Z, and the hit-test AABBs extend in positive directions. The mirror-era negative-axis compensation ("projection pipeline inversion") died with the Y-up flip (stage 4). ⚠️ They did NOT display positive until Sep 2026: the degrees-as-radians FOV gave a negative screen scale (§ Constant Screen Size). Verified since against the compass (`toggleCompass`): red X+ arrow toward the red sphere, green Y+ up.
 
 ## Future Work
 - Plane handles for 2-axis translation (XY, YZ, XZ)

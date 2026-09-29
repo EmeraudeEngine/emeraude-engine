@@ -49,7 +49,8 @@ Screen-space "custom depth" outline: graphics doc 34 (`docs/subsystems/graphics/
 Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where visible, dimmed across the occluder,
 0 validation message. What remains:
 - ~~Measure the composite's cost; scissor it~~ DONE 2026-09-29: graphics doc 34 § Cost and the scissor.
-- Several entities at once; the direct swap-chain frame path (no scene target there).
+- ~~Several entities at once~~ DONE 2026-09-29 (a set, one style; editor Shift+click): graphics doc 34, scenes doc 25.
+- The direct swap-chain frame path (no scene target there).
 - B.1, the geometric silhouette (`VertexFactory::Silhouette` + primitive A), for debug / wireframe tools — later.
 
 ### C. Paths and Bézier curves

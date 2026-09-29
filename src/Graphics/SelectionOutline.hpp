@@ -72,18 +72,18 @@ namespace EmEn
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief Draws the OUTLINE of the highlighted entity (Scenes::Scene::setHighlightedEntity()): a thin line of constant
+	 * @brief Draws the OUTLINE of the highlighted entities (Scenes::Scene::setHighlightedEntities()): a thin line of constant
 	 * pixel width around it, FULL where the entity is visible, DIMMED where other geometry hides it.
 	 * @note Screen-space, the "custom depth" scheme (Unreal's CustomDepth; owner decisions 2026-09-28):
-	 * 1. recordDepth() — after the scene pass, the highlighted entity alone is drawn into a SelectionDepthTarget with
+	 * 1. recordDepth() — after the scene pass, the highlighted entities alone are drawn into a SelectionDepthTarget with
 	 *    the main camera, unjittered, through the depth-only shadow-casting programs (skinning, alpha test and wind
 	 *    included: the outline follows what the GPU drew);
 	 * 2. recordComposite() — in the final composite pass, AFTER the tone mapping (neither exposed nor blurred by the
 	 *    TAA): each pixel outside the entity looks for the nearest entity pixel within the width; found, it is outline,
 	 *    and its opacity says whether that entity pixel is the scene's front-most surface (the grab pass depth).
 	 *    The disk search costs ~width² taps per pixel (RTX 3070 Ti, 2880x1620, full screen: 1 px 0.10 ms, 2 px
-	 *    0.20 ms, 4 px 0.56 ms, 8 px 1.81 ms), so the pass is SCISSORED to the entity's projected world render box
-	 *    (Scenes::Scene::highlightedWorldBoundingBox()) grown by the width: only the pixels that may be outline pay.
+	 *    0.20 ms, 4 px 0.56 ms, 8 px 1.81 ms), so the pass is SCISSORED to the entities' projected world render boxes
+	 *    (Scenes::Scene::highlightedWorldBoundingBoxes(), their union) grown by the width: only the pixels that may be outline pay.
 	 * @note Owned by the Renderer; internal-target frames only (no scene depth copy in the direct swap-chain path).
 	 */
 	class EMEN_API SelectionOutline final
@@ -138,7 +138,7 @@ namespace EmEn::Graphics
 			void setHiddenOpacity (float opacity) noexcept;
 
 			/**
-			 * @brief Draws the highlighted entity's depth into the selection depth target.
+			 * @brief Draws the highlighted entities' depth into the selection depth target.
 			 * @note Render thread, outside any render pass, after the scene's prepareRender(). Creates the target on
 			 * first use and recreates it when the scene extent changes.
 			 * @param commandBuffer A reference to the frame's command buffer.
@@ -191,15 +191,26 @@ namespace EmEn::Graphics
 			bool createPipeline (const Vulkan::Framebuffer & framebuffer, uint32_t width, uint32_t height) noexcept;
 
 			/**
-			 * @brief Projects the highlighted entity's world render box with the main camera into the normalised screen
-			 * area the composite is scissored to. Falls back to the whole screen when the box is unknown or a corner lies
+			 * @brief Computes the normalised screen area the composite is scissored to: the union of the highlighted
+			 * entities' projected world render boxes. The whole screen when one box is unknown; empty when every entity is
 			 * behind the eye.
-			 * @param worldBoundingBox The published world render box (invalid when unknown).
+			 * @param worldBoundingBoxes The published world render boxes (an invalid one = unknown).
 			 * @param mainViewMatrices A reference to the main camera's view matrices.
 			 * @param readStateIndex The render state slot the frame draws.
 			 * @return void
 			 */
-			void updateScreenArea (const Base::Math::Space3D::AACuboid< float > & worldBoundingBox, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept;
+			void updateScreenArea (const std::vector< Base::Math::Space3D::AACuboid< float > > & worldBoundingBoxes, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept;
+
+			/**
+			 * @brief Projects one world box with the main camera, clipped against the eye plane.
+			 * @param worldBoundingBox A reference to a valid world box.
+			 * @param mainViewMatrices A reference to the main camera's view matrices.
+			 * @param readStateIndex The render state slot the frame draws.
+			 * @return std::array< float, 4 > Minimum U, minimum V, maximum U, maximum V; empty (minimum above maximum) when
+			 * the whole box is behind the eye.
+			 */
+			[[nodiscard]]
+			static std::array< float, 4 > projectedArea (const Base::Math::Space3D::AACuboid< float > & worldBoundingBox, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept;
 
 			Renderer & m_renderer;
 			std::shared_ptr< SelectionDepthTarget > m_depthTarget;

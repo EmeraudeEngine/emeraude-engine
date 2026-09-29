@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <any>
+#include <atomic>
 #include <chrono>
 #include <array>
 #include <memory>
@@ -516,6 +517,11 @@ namespace EmEn::Overlay
 #ifdef IMGUI_ENABLED
 			/** @brief False in a window-less run: ImGUI's platform backend needs a GLFW window. */
 			bool m_ImGUIInitialized{false};
+			/** @brief Whether an ImGUI window is under the pointer (io.WantCaptureMouse), latched by the render thread at
+			 * each ImGUI frame (mutable: the const render pass latches it), read by the input thread: such a press or wheel
+			 * event is consumed, it must not reach the scene or the editor behind the window (ImGUI reads the event through
+			 * its own GLFW callbacks). */
+			mutable std::atomic_bool m_ImGUICapturesPointer{false};
 #endif
 
 			/* NOTE: Diagnostic only, render thread. @see Surface::UploadStatistics and the setting

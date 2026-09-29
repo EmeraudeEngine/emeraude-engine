@@ -307,6 +307,14 @@ namespace EmEn
 				/* Render the scene (optional), editor gizmos, and the overlay on top. */
 				const auto * editorPtr = m_sceneManager.editorManager().isActive() ? &m_sceneManager.editorManager() : nullptr;
 
+#ifdef IMGUI_ENABLED
+				/* The editor panel follows the editor, whoever toggled it (a key, a scene change, the console). */
+				if ( m_editorScreen != nullptr )
+				{
+					m_editorScreen->setVisibility(editorPtr != nullptr && editorPtr->hasPanel());
+				}
+#endif
+
 				/* NOTE: The same frame with or without a window: a window-less run renders into a HEADLESS
 				 * swap-chain (Vulkan::SwapChain::isHeadless()). */
 				/* NOTE: The RushMaker's copy is recorded inside the frame (Recorder::recordFrameCopy()), never after
@@ -1371,6 +1379,17 @@ namespace EmEn
 		if ( m_cameraScreen != nullptr )
 		{
 			m_cameraScreen->setVisibility(false);
+		}
+
+		/* SCENE EDITOR panel: whatever Scenes::Editor::Manager::setPanel() holds (the engine's default one unless the
+		 * application replaced or removed it), shown while the editor is active (see the render loop). */
+		m_editorScreen = m_overlayManager.createImGUIScreen("SceneEditorScreen", [this] {
+			m_sceneManager.editorManager().drawPanel();
+		});
+
+		if ( m_editorScreen != nullptr )
+		{
+			m_editorScreen->setVisibility(false);
 		}
 #else
 		const auto screen = m_overlayManager.createScreen("CoreScreen", false, false);

@@ -182,43 +182,91 @@ namespace EmEn::Scenes
 				return result;
 			}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("highlightEntity", "Outlines one entity of the ACTIVE scene (the selection outline: full where visible, dimmed where hidden) — what the editor's selection does. One entity at a time.",
-			{
-				{"entity", "The entity address: its name when unique, else the shortest unique path suffix Parent/Child (listEntities() gives every address)."}
-			},
-			[this] (const std::string & entityAddress) {
-				auto result = Console::CommandResult::error("No active scene !");
+		/* The selection outline's SET (one style for all): a command resolves the entity and applies one change. */
+		const auto changeHighlight = [this] (const std::string & entityAddress, const auto & change) {
+			auto result = Console::CommandResult::error("No active scene !");
 
-				this->withExclusiveActiveScene([&result, &entityAddress] (const std::shared_ptr< Scene > & scene) {
-					std::shared_ptr< AbstractEntity > entity;
-					std::string error;
+			this->withExclusiveActiveScene([&result, &entityAddress, &change] (const std::shared_ptr< Scene > & scene) {
+				std::shared_ptr< AbstractEntity > entity;
+				std::string error;
 
-					if ( !Component::resolveEntity(*scene, entityAddress, entity, error) )
-					{
-						result = Console::CommandResult::error(error);
+				if ( !Component::resolveEntity(*scene, entityAddress, entity, error) )
+				{
+					result = Console::CommandResult::error(error);
 
-						return;
-					}
+					return;
+				}
 
-					scene->setHighlightedEntity(entity);
+				result = change(*scene, entity);
+			}, true);
 
-					result = Console::CommandResult::success("Entity '" + entityAddress + "' highlighted.");
-				}, true);
+			return result;
+		};
 
-				return result;
+		const Console::Parameter highlightEntityParameter{"entity", "The entity address: its name when unique, else the shortest unique path suffix Parent/Child (listEntities() gives every address)."};
+
+		this->bindCommand("highlightEntity", "Outlines ONE entity of the ACTIVE scene (the selection outline: full where visible, dimmed where hidden), replacing the highlighted set.",
+			{highlightEntityParameter},
+			[changeHighlight] (const std::string & entityAddress) {
+				return changeHighlight(entityAddress, [&entityAddress] (Scene & scene, const std::shared_ptr< AbstractEntity > & entity) {
+					scene.setHighlightedEntity(entity);
+
+					return Console::CommandResult::success("Entity '" + entityAddress + "' highlighted.");
+				});
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("clearHighlight", "Removes the selection outline of the ACTIVE scene.", [this] () {
+		this->bindCommand("addHighlight", "Adds an entity of the ACTIVE scene to the highlighted set (one outline style for the whole set).",
+			{highlightEntityParameter},
+			[changeHighlight] (const std::string & entityAddress) {
+				return changeHighlight(entityAddress, [&entityAddress] (Scene & scene, const std::shared_ptr< AbstractEntity > & entity) {
+					return scene.addHighlightedEntity(entity) ?
+						Console::CommandResult::success("Entity '" + entityAddress + "' added to the highlight.") :
+						Console::CommandResult::success("Entity '" + entityAddress + "' was already highlighted.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("removeHighlight", "Removes an entity of the ACTIVE scene from the highlighted set.",
+			{highlightEntityParameter},
+			[changeHighlight] (const std::string & entityAddress) {
+				return changeHighlight(entityAddress, [&entityAddress] (Scene & scene, const std::shared_ptr< AbstractEntity > & entity) {
+					return scene.removeHighlightedEntity(entity) ?
+						Console::CommandResult::success("Entity '" + entityAddress + "' removed from the highlight.") :
+						Console::CommandResult::success("Entity '" + entityAddress + "' was not highlighted.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("clearHighlight", "Removes the selection outline of the ACTIVE scene (empties the highlighted set).", [this] () {
 			auto result = Console::CommandResult::error("No active scene !");
 
 			this->withExclusiveActiveScene([&result] (const std::shared_ptr< Scene > & scene) {
-				scene->setHighlightedEntity(nullptr);
+				scene->clearHighlightedEntities();
 
 				result = Console::CommandResult::success("Highlight cleared.");
 			}, true);
 
 			return result;
 		}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("getHighlights", "Returns the addresses of the highlighted entities of the ACTIVE scene, as a JSON array (in the order they were added).", [this] () {
+			auto result = Console::CommandResult::error("No active scene !");
+
+			this->withExclusiveActiveScene([&result] (const std::shared_ptr< Scene > & scene) {
+				const auto addresses = Component::entityAddresses(*scene);
+
+				Json::Value list{Json::arrayValue};
+
+				for ( const auto & entity : scene->highlightedEntities() )
+				{
+					const auto found = addresses.find(entity.get());
+
+					list.append(found != addresses.end() ? found->second : entity->name());
+				}
+
+				result = Console::CommandResult::json(FastJSON::stringify(list));
+			}, true);
+
+			return result;
+		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("setHighlightStyle", "Sets the look of the selection outline (engine-wide).",
 			{

@@ -615,102 +615,197 @@ namespace EmEn::Scenes
 	{
 		const std::scoped_lock lock{m_highlightedEntityAccess};
 
-		m_highlightedEntity = entity;
+		m_highlightedEntities.clear();
+
+		if ( entity != nullptr )
+		{
+			m_highlightedEntities.emplace_back(entity);
+		}
 	}
 
-	std::shared_ptr< AbstractEntity >
-	Scene::highlightedEntity () const noexcept
+	void
+	Scene::setHighlightedEntities (const std::vector< std::shared_ptr< AbstractEntity > > & entities) noexcept
 	{
+		std::vector< std::weak_ptr< AbstractEntity > > set;
+		set.reserve(entities.size());
+
+		for ( const auto & entity : entities )
+		{
+			if ( entity == nullptr )
+			{
+				continue;
+			}
+
+			if ( std::ranges::none_of(set, [&entity] (const auto & held) { return held.lock() == entity; }) )
+			{
+				set.emplace_back(entity);
+			}
+		}
+
 		const std::scoped_lock lock{m_highlightedEntityAccess};
 
-		return m_highlightedEntity.lock();
-	}
-
-	Base::Math::Space3D::AACuboid< float >
-	Scene::highlightedWorldBoundingBox () const noexcept
-	{
-		const auto entity = this->highlightedEntity();
-
-		if ( entity == nullptr )
-		{
-			return {};
-		}
-
-		const auto & published = m_publishedHighlights[m_frameReadStateIndex];
-
-		/* The slot may still hold the previous selection: its box would clip the new one. */
-		if ( published.entity.lock() != entity )
-		{
-			return {};
-		}
-
-		return published.worldBoundingBox;
+		m_highlightedEntities = std::move(set);
 	}
 
 	bool
-	Scene::renderSelectionDepth (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	Scene::addHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept
 	{
-		const auto entity = this->highlightedEntity();
-
 		if ( entity == nullptr )
 		{
 			return false;
 		}
 
-		/* Collected under the entity's component lock, drawn outside it. */
-		std::vector< std::shared_ptr< RenderableInstance::Abstract > > instances;
+		const std::scoped_lock lock{m_highlightedEntityAccess};
 
-		entity->forEachComponent([&instances] (const Component::Abstract & component) {
-			auto instance = component.getRenderableInstance();
+		/* The dead are dropped on the way. */
+		std::erase_if(m_highlightedEntities, [] (const auto & held) { return held.expired(); });
 
-			if ( instance != nullptr && !instance->isBroken() )
-			{
-				instances.emplace_back(std::move(instance));
-			}
+		if ( std::ranges::any_of(m_highlightedEntities, [&entity] (const auto & held) { return held.lock() == entity; }) )
+		{
+			return false;
+		}
+
+		m_highlightedEntities.emplace_back(entity);
+
+		return true;
+	}
+
+	bool
+	Scene::removeHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept
+	{
+		if ( entity == nullptr )
+		{
+			return false;
+		}
+
+		const std::scoped_lock lock{m_highlightedEntityAccess};
+
+		const bool found = std::ranges::any_of(m_highlightedEntities, [&entity] (const auto & held) { return held.lock() == entity; });
+
+		/* The dead are dropped on the way. */
+		std::erase_if(m_highlightedEntities, [&entity] (const auto & held) {
+			const auto live = held.lock();
+
+			return live == nullptr || live == entity;
 		});
 
-		if ( instances.empty() )
+		return found;
+	}
+
+	void
+	Scene::clearHighlightedEntities () noexcept
+	{
+		const std::scoped_lock lock{m_highlightedEntityAccess};
+
+		m_highlightedEntities.clear();
+	}
+
+	std::vector< std::shared_ptr< AbstractEntity > >
+	Scene::highlightedEntities () const noexcept
+	{
+		const std::scoped_lock lock{m_highlightedEntityAccess};
+
+		std::vector< std::shared_ptr< AbstractEntity > > entities;
+		entities.reserve(m_highlightedEntities.size());
+
+		for ( const auto & held : m_highlightedEntities )
+		{
+			if ( auto entity = held.lock(); entity != nullptr )
+			{
+				entities.emplace_back(std::move(entity));
+			}
+		}
+
+		return entities;
+	}
+
+	std::vector< Base::Math::Space3D::AACuboid< float > >
+	Scene::highlightedWorldBoundingBoxes () const noexcept
+	{
+		const auto entities = this->highlightedEntities();
+		const auto & published = m_publishedHighlights[m_frameReadStateIndex];
+
+		std::vector< Base::Math::Space3D::AACuboid< float > > boxes;
+		boxes.reserve(entities.size());
+
+		for ( const auto & entity : entities )
+		{
+			/* The slot may predate this entity's selection: no box for it then (invalid = unknown). */
+			const auto found = std::ranges::find_if(published, [&entity] (const PublishedHighlight & highlight) {
+				return highlight.entity.lock() == entity;
+			});
+
+			boxes.emplace_back(found != published.end() ? found->worldBoundingBox : Base::Math::Space3D::AACuboid< float >{});
+		}
+
+		return boxes;
+	}
+
+	bool
+	Scene::renderSelectionDepth (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		const auto entities = this->highlightedEntities();
+
+		if ( entities.empty() )
 		{
 			return false;
 		}
 
 		auto & renderer = m_AVConsoleManager.graphicsRenderer();
 		const uint32_t readStateIndex = m_frameReadStateIndex;
-		/* Published render state, like everything a frame draws: the entity where the scene pass drew it. */
-		const auto & worldCoordinates = entity->getWorldCoordinatesStateForRendering(readStateIndex);
 		/* The CURRENT frame's set (see castShadows()): the wind of a vegetation program. */
 		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(renderer.currentFrameIndex());
 		/* The target borrows the main camera: an adaptive geometry picks the level the scene pass drew. */
 		const auto & lodViewPosition = renderTarget->viewMatrices().position(readStateIndex);
 
+		/* One depth for the whole set: touching entities share one silhouette (one style, owner decision). */
+		std::vector< std::shared_ptr< RenderableInstance::Abstract > > instances;
 		bool drawn = false;
 
-		for ( const auto & instance : instances )
+		for ( const auto & entity : entities )
 		{
-			const auto * renderable = instance->renderable();
+			/* Collected under the entity's component lock, drawn outside it. */
+			instances.clear();
 
-			if ( renderable == nullptr || !renderable->isReadyForInstantiation() )
-			{
-				continue;
-			}
+			entity->forEachComponent([&instances] (const Component::Abstract & component) {
+				auto instance = component.getRenderableInstance();
 
-			/* The depth-only programs of THIS target are generated on first use, here, on the render thread. */
-			if ( !instance->isReadyToCastShadows(renderTarget) && (!instance->getReadyForShadowCasting(renderTarget, renderer) || !instance->isReadyToCastShadows(renderTarget)) )
-			{
-				continue;
-			}
+				if ( instance != nullptr && !instance->isBroken() )
+				{
+					instances.emplace_back(std::move(instance));
+				}
+			});
 
-			for ( uint32_t layerIndex = 0; layerIndex < renderable->layerCount(); ++layerIndex )
+			/* Published render state, like everything a frame draws: the entity where the scene pass drew it. */
+			const auto & worldCoordinates = entity->getWorldCoordinatesStateForRendering(readStateIndex);
+
+			for ( const auto & instance : instances )
 			{
-				/* An emissive overlay (a beam) is no surface, and these programs cannot build its ribbon. */
-				if ( const auto * material = renderable->material(layerIndex); material != nullptr && !material->writesGeometryBuffer() )
+				const auto * renderable = instance->renderable();
+
+				if ( renderable == nullptr || !renderable->isReadyForInstantiation() )
 				{
 					continue;
 				}
 
-				instance->castShadows(readStateIndex, renderTarget, lodViewPosition, layerIndex, &worldCoordinates, commandBuffer, 0, 0, sceneTransformsDS);
+				/* The depth-only programs of THIS target are generated on first use, here, on the render thread. */
+				if ( !instance->isReadyToCastShadows(renderTarget) && (!instance->getReadyForShadowCasting(renderTarget, renderer) || !instance->isReadyToCastShadows(renderTarget)) )
+				{
+					continue;
+				}
 
-				drawn = true;
+				for ( uint32_t layerIndex = 0; layerIndex < renderable->layerCount(); ++layerIndex )
+				{
+					/* An emissive overlay (a beam) is no surface, and these programs cannot build its ribbon. */
+					if ( const auto * material = renderable->material(layerIndex); material != nullptr && !material->writesGeometryBuffer() )
+					{
+						continue;
+					}
+
+					instance->castShadows(readStateIndex, renderTarget, lodViewPosition, layerIndex, &worldCoordinates, commandBuffer, 0, 0, sceneTransformsDS);
+
+					drawn = true;
+				}
 			}
 		}
 
@@ -1149,13 +1244,17 @@ namespace EmEn::Scenes
 			});
 		}
 
-		/* The highlighted entity's extent (the selection outline's scissor), taken on this thread with the entity. */
+		/* The highlighted entities' extents (the selection outline's scissor), taken on this thread with each entity.
+		 * clear() keeps the slot's capacity; nothing is allocated while the set is empty. */
 		{
-			auto & highlight = m_publishedHighlights[nextTarget];
-			const auto entity = this->highlightedEntity();
+			auto & highlights = m_publishedHighlights[nextTarget];
 
-			highlight.entity = entity;
-			highlight.worldBoundingBox = entity != nullptr ? entity->getWorldRenderBoundingBox() : Base::Math::Space3D::AACuboid< float >{};
+			highlights.clear();
+
+			for ( const auto & entity : this->highlightedEntities() )
+			{
+				highlights.push_back({entity, entity->getWorldRenderBoundingBox()});
+			}
 		}
 
 		/* NOTE: Publish the written slot as the middle one and take back the previous middle to write the next tick.

@@ -648,7 +648,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the selection outline (its look: colour, width, hidden opacity).
-			 * @note What it outlines is the SCENE's highlighted entity (Scenes::Scene::setHighlightedEntity()).
+			 * @note What it outlines is the SCENE's highlighted set (Scenes::Scene::setHighlightedEntities()).
 			 * @return SelectionOutline &
 			 */
 			[[nodiscard]]
@@ -1754,7 +1754,7 @@ namespace EmEn::Graphics
 			/* NOTE: Declared AFTER the compressor: it binds a reference to it. */
 			TextureCache m_textureCache{m_primaryServices, m_textureCompressor};
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
-			/** @brief The outline of the scene's highlighted entity (internal-target frames). */
+			/** @brief The outline of the scene's highlighted entities (internal-target frames). */
 			SelectionOutline m_selectionOutline{*this};
 			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};

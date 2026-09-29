@@ -212,8 +212,13 @@ namespace EmEn::Scenes::Editor::Gizmo
 				return m_created;
 			}
 
-			/** @brief Default screen ratio for gizmo size (fraction of viewport height). */
-			static constexpr float DefaultScreenRatio{0.025F};
+			/**
+			 * @brief Default screen ratio for gizmo size: one unit of gizmo length spans this fraction of the viewport
+			 * HALF-height (scale = ratio · distance · tan(fov / 2)).
+			 * @note 0.3 keeps the size the gizmo had at 85° while the FOV was fed in degrees (0.025 · |tan(42.5 rad)| /
+			 * tan(42.5°) = 0.307): see Editor::Manager::processLogics().
+			 */
+			static constexpr float DefaultScreenRatio{0.3F};
 
 		protected:
 

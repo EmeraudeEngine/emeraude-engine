@@ -766,6 +766,9 @@ namespace EmEn::Overlay
 			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
 
+			/* Computed by NewFrame() from the windows the previous frame drew. */
+			m_ImGUICapturesPointer = ImGui::GetIO().WantCaptureMouse;
+
 			for ( const auto & screen : m_ImGUIScreens | std::views::values )
 			{
 				if ( screen->isVisible() )
@@ -777,6 +780,10 @@ namespace EmEn::Overlay
 			ImGui::Render();
 
 			ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer.handle());
+		}
+		else
+		{
+			m_ImGUICapturesPointer = false;
 		}
 #endif
 	}

@@ -2117,34 +2117,67 @@ namespace EmEn::Scenes
 			void renderTranslucentGB (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			/**
-			 * @brief Highlights an entity: the renderer draws its selection OUTLINE (Graphics::SelectionOutline) — full
-			 * where it is visible, dimmed where other geometry hides it.
+			 * @brief Replaces the highlighted SET by one entity: the renderer draws the selection OUTLINE
+			 * (Graphics::SelectionOutline) — full where it is visible, dimmed where other geometry hides it.
 			 * @note Any thread. Held weakly: an entity that dies simply stops being outlined. The editor's selection drives
-			 * it (Scenes::Editor::Manager::setSelection()), so does the console (`highlightEntity`).
-			 * @param entity A reference to the entity smart pointer, or nullptr to clear the highlight.
+			 * the set (Scenes::Editor::Manager), so does the console (`highlightEntity`, `addHighlight`, …).
+			 * @param entity A reference to the entity smart pointer, or nullptr to clear the set.
 			 * @return void
 			 */
 			void setHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept;
 
 			/**
-			 * @brief Returns the highlighted entity, or nullptr (none, or dead).
-			 * @return std::shared_ptr< AbstractEntity >
+			 * @brief Replaces the highlighted set, in one step (the render thread never sees half of it).
+			 * @note Any thread. Null pointers and duplicates are ignored. One style for the whole set (owner decision
+			 * 2026-09-29): touching entities share one silhouette.
+			 * @param entities A reference to the entities.
+			 * @return void
 			 */
-			[[nodiscard]]
-			std::shared_ptr< AbstractEntity > highlightedEntity () const noexcept;
+			void setHighlightedEntities (const std::vector< std::shared_ptr< AbstractEntity > > & entities) noexcept;
 
 			/**
-			 * @brief Returns the world render bounding box of the highlighted entity, as published for the frame being drawn.
-			 * @note Render thread. publishStateForRendering() (logic thread) copies the box together with the entity it was
-			 * taken from, so it matches the pose the scene pass draws. An INVALID box means none is known for the CURRENT
-			 * highlighted entity (it just changed, or the logic has been paused since): the caller covers the whole screen.
-			 * @return Base::Math::Space3D::AACuboid< float >
+			 * @brief Adds an entity to the highlighted set.
+			 * @note Any thread.
+			 * @param entity A reference to the entity smart pointer.
+			 * @return bool False when it was null or already highlighted.
 			 */
-			[[nodiscard]]
-			Base::Math::Space3D::AACuboid< float > highlightedWorldBoundingBox () const noexcept;
+			bool addHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept;
 
 			/**
-			 * @brief Draws the depth of the highlighted entity alone into the selection depth target ("custom depth").
+			 * @brief Removes an entity from the highlighted set.
+			 * @note Any thread.
+			 * @param entity A reference to the entity smart pointer.
+			 * @return bool False when it was not highlighted.
+			 */
+			bool removeHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept;
+
+			/**
+			 * @brief Empties the highlighted set.
+			 * @note Any thread.
+			 * @return void
+			 */
+			void clearHighlightedEntities () noexcept;
+
+			/**
+			 * @brief Returns the live highlighted entities (the dead ones are skipped), in the order they were added.
+			 * @return std::vector< std::shared_ptr< AbstractEntity > >
+			 */
+			[[nodiscard]]
+			std::vector< std::shared_ptr< AbstractEntity > > highlightedEntities () const noexcept;
+
+			/**
+			 * @brief Returns the world render bounding box of each highlighted entity, as published for the frame being drawn.
+			 * @note Render thread. publishStateForRendering() (logic thread) copies each box together with the entity it was
+			 * taken from, so it matches the pose the scene pass draws. One box per live highlighted entity; an INVALID one
+			 * means none is known for that entity (just added, or the logic has been paused since): the caller then covers
+			 * the whole screen.
+			 * @return std::vector< Base::Math::Space3D::AACuboid< float > >
+			 */
+			[[nodiscard]]
+			std::vector< Base::Math::Space3D::AACuboid< float > > highlightedWorldBoundingBoxes () const noexcept;
+
+			/**
+			 * @brief Draws the depth of the highlighted entities alone into the selection depth target ("custom depth").
 			 * @note Render thread, INSIDE the target's render pass (the Renderer opens it, depth cleared), after
 			 * prepareRender(). Uses the depth-only shadow-casting programs, generated for this target on first use. An emissive overlay (a beam:
 			 * Material::Interface::writesGeometryBuffer() false) is skipped: it is no surface.
@@ -3221,20 +3254,20 @@ namespace EmEn::Scenes
 			mutable std::mutex m_renderToViewAccess;
 			/** @brief Mutex for double-buffer state copy operation. */
 			mutable std::mutex m_stateCopyLock;
-			/** @brief The entity the selection outline shows (setHighlightedEntity()), held weakly. */
-			std::weak_ptr< AbstractEntity > m_highlightedEntity;
-			/** @brief Mutex protecting m_highlightedEntity (set from any thread, read by the render thread). */
+			/** @brief The entities the selection outline shows (setHighlightedEntities()), held weakly, in insertion order. */
+			std::vector< std::weak_ptr< AbstractEntity > > m_highlightedEntities;
+			/** @brief Mutex protecting m_highlightedEntities (set from any thread, read by the logic and render threads). */
 			mutable std::mutex m_highlightedEntityAccess;
 
-			/** @brief The highlighted entity's world render box of one render state slot, tagged with the entity it belongs to. */
+			/** @brief A highlighted entity's world render box in one render state slot, tagged with the entity it belongs to. */
 			struct PublishedHighlight final
 			{
 				std::weak_ptr< AbstractEntity > entity;
 				Base::Math::Space3D::AACuboid< float > worldBoundingBox;
 			};
 
-			/** @brief Written by publishStateForRendering() into the logic slot, read by highlightedWorldBoundingBox(). */
-			std::array< PublishedHighlight, RenderStateSlotCount > m_publishedHighlights{};
+			/** @brief Written by publishStateForRendering() into the logic slot, read by highlightedWorldBoundingBoxes(). */
+			std::array< std::vector< PublishedHighlight >, RenderStateSlotCount > m_publishedHighlights{};
 			/** @brief Raised from any thread (setBackground), consumed by processLogics()
 			 * (logic thread) to push the background photometry to the view UBOs. */
 			std::atomic_bool m_backgroundPhotometryDirty{false};

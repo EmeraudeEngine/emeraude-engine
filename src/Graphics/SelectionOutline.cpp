@@ -414,7 +414,7 @@ void main()
 	bool
 	SelectionOutline::recordDepth (const CommandBuffer & commandBuffer, Scenes::Scene & scene, uint32_t width, uint32_t height, ViewMatricesInterface & mainViewMatrices) noexcept
 	{
-		if ( scene.highlightedEntity() == nullptr || width == 0 || height == 0 )
+		if ( scene.highlightedEntities().empty() || width == 0 || height == 0 )
 		{
 			return false;
 		}
@@ -470,23 +470,48 @@ void main()
 
 		if ( drawn )
 		{
-			this->updateScreenArea(scene.highlightedWorldBoundingBox(), mainViewMatrices, scene.frameReadStateIndex());
+			this->updateScreenArea(scene.highlightedWorldBoundingBoxes(), mainViewMatrices, scene.frameReadStateIndex());
 		}
 
 		return drawn;
 	}
 
 	void
-	SelectionOutline::updateScreenArea (const Space3D::AACuboid< float > & worldBoundingBox, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept
+	SelectionOutline::updateScreenArea (const std::vector< Space3D::AACuboid< float > > & worldBoundingBoxes, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept
 	{
-		/* The whole screen: always correct, only slower (the box is unknown). */
-		m_screenArea = {0.0F, 0.0F, 1.0F, 1.0F};
+		/* The union of every entity's area; empty (minimum above maximum) until one is on screen. */
+		std::array< float, 4 > area{1.0F, 1.0F, 0.0F, 0.0F};
 
-		if ( !worldBoundingBox.isValid() )
+		for ( const auto & worldBoundingBox : worldBoundingBoxes )
 		{
-			return;
+			/* The whole screen when one box is unknown: always correct, only slower. */
+			if ( !worldBoundingBox.isValid() )
+			{
+				m_screenArea = {0.0F, 0.0F, 1.0F, 1.0F};
+
+				return;
+			}
+
+			const auto entityArea = projectedArea(worldBoundingBox, mainViewMatrices, readStateIndex);
+
+			/* An entity entirely behind the eye adds nothing. */
+			if ( entityArea[2] < entityArea[0] || entityArea[3] < entityArea[1] )
+			{
+				continue;
+			}
+
+			area[0] = std::min(area[0], entityArea[0]);
+			area[1] = std::min(area[1], entityArea[1]);
+			area[2] = std::max(area[2], entityArea[2]);
+			area[3] = std::max(area[3], entityArea[3]);
 		}
 
+		m_screenArea = area;
+	}
+
+	std::array< float, 4 >
+	SelectionOutline::projectedArea (const Space3D::AACuboid< float > & worldBoundingBox, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept
+	{
 		/* The camera the selection depth was drawn with (unjittered: the shadow-casting path). */
 		const auto viewProjection = mainViewMatrices.unjitteredProjectionMatrix(readStateIndex) * mainViewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & minimum = worldBoundingBox.minimum();
@@ -555,12 +580,10 @@ void main()
 		/* The whole box behind the eye: nothing of it, nor of its outline, can be on screen. */
 		if ( !anyInFront )
 		{
-			m_screenArea = {1.0F, 1.0F, 0.0F, 0.0F};
-
-			return;
+			return {1.0F, 1.0F, 0.0F, 0.0F};
 		}
 
-		m_screenArea = area;
+		return area;
 	}
 
 	void
