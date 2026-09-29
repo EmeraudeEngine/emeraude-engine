@@ -802,9 +802,24 @@ namespace EmEn::Saphir
 	}
 
 	bool
+	AbstractVertexStage::declarePositionAttribute () noexcept
+	{
+		/* ⚠️ A pulled-vertex source (the path ribbon) has NO position attribute: its position is built from the path SSBO
+		 * (preparePathRibbon()). Declared anyway, the attribute went into the vertex format and the pipeline declared
+		 * binding 0 — reading whatever buffer the previous draw had bound, and VUID-vkCmdDraw-None-04007 whenever none
+		 * was (the macOS peer, 2026-09-29: until the ground's first draw of the frame). */
+		if ( m_pathRibbonEnabled )
+		{
+			return true;
+		}
+
+		return this->declare(InputAttribute{VertexAttributeType::Position});
+	}
+
+	bool
 	AbstractVertexStage::synthesizeVertexPositionInWorldSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope, bool asGLStandardPosition) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		if ( !this->declarePositionAttribute() )
 		{
 			return false;
 		}
@@ -949,7 +964,7 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::synthesizeRestPositionInModelSpace (Generator::Abstract & generator, std::string & outputInstructions) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		if ( !this->declarePositionAttribute() )
 		{
 			return false;
 		}
@@ -961,7 +976,8 @@ namespace EmEn::Saphir
 
 		std::stringstream code{};
 
-		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << Attribute::Position << ";" "\n";
+		/* A path ribbon has no position attribute: its rest position is the pulled one. */
+		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << (m_pathRibbonEnabled ? "pathPosition" : Attribute::Position) << ";" "\n";
 
 		outputInstructions.append(code.str());
 
@@ -971,7 +987,7 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::synthesizeVertexPositionInViewSpace (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		if ( !this->declarePositionAttribute() )
 		{
 			return false;
 		}
@@ -1013,7 +1029,7 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::synthesizeVertexPositionInScreenSpace (std::string & outputInstructions) noexcept
 	{
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		if ( !this->declarePositionAttribute() )
 		{
 			return false;
 		}
@@ -2367,10 +2383,13 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* One pixel at a distance of 1 (perspective) or anywhere (orthographic): 2 / (viewport height · P[1][1]), like the
-		 * beam's clamp. */
-		const auto projection = ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false);
-		const std::string pixel{"vec2(2.0 / max(" + ViewUB(Keys::UniformBlock::Component::ViewProperties, false) + ".y * abs(" + projection + "[1][1]), 1.0e-6), " + projection + "[2][3] != 0.0 ? 1.0 : 0.0)"};
+		/* The pixel mode projects the points: the view, the projection (unjittered: the TAA jitter is a push constant
+		 * applied to gl_Position) and the viewport in pixels. ⚠️ The view block has NO view matrix: the advanced path pushes
+		 * V, the classic one pushes VP only — V = P⁻¹ · VP there (the block's projection is the one VP was built with). */
+		const auto projectionMatrix = ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false);
+		const std::string viewMatrix = this->isAdvancedMatricesEnabled() ?
+			std::string{MatrixPC(PushConstant::Component::ViewMatrix)} :
+			"(inverse(" + projectionMatrix + ") * " + MatrixPC(PushConstant::Component::ViewProjectionMatrix) + ")";
 		const std::string span{"ubPathDirectory.pathSpans[" + std::string{m_instanceIndexExpression} + "]"};
 
 		std::stringstream code;
@@ -2380,10 +2399,12 @@ namespace EmEn::Saphir
 			"\t" "const mat4 pathModel = " << modelMatrix << ";" "\n"
 			"\t" "const uvec4 pathSpan = " << span << ";" "\n"
 			"\t" "const vec3 pathEye = " << ViewUB(Keys::UniformBlock::Component::PositionWorldSpace, false) << ".xyz;" "\n"
-			"\t" "const vec2 pathPixel = " << pixel << ";" "\n"
+			"\t" "const mat4 pathView = " << viewMatrix << ";" "\n"
+			"\t" "const mat4 pathProjection = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << ";" "\n"
+			"\t" "const vec2 pathViewport = " << ViewUB(Keys::UniformBlock::Component::ViewProperties, false) << ".xy;" "\n"
 			"\t" "const vec4 pathStyle = " << m_pathStyleExpression << ";" "\n"
 			"\t" "vec4 pathCoordinates;" "\n"
-			"\t" "const vec3 pathPosition = pathCorner(pathModel, pathSpan, gl_VertexIndex, false, pathStyle, pathEye, pathPixel, pathCoordinates);" "\n"
+			"\t" "const vec3 pathPosition = pathCorner(pathModel, pathSpan, gl_VertexIndex, false, pathStyle, pathEye, pathView, pathProjection, pathViewport, pathCoordinates);" "\n"
 			"\t" "const vec3 pathTangent = vec3(1.0, 0.0, 0.0);" "\n"
 			"\t" "const vec3 pathBinormal = vec3(0.0, 1.0, 0.0);" "\n"
 			"\t" "const vec3 pathNormal = vec3(0.0, 0.0, 1.0);" "\n"
@@ -2397,7 +2418,7 @@ namespace EmEn::Saphir
 
 			code <<
 				"\t" "vec4 previousPathCoordinates;" "\n"
-				"\t" "const vec3 previousPathPosition = pathCorner(" << previousModelMatrix << ", pathSpan, gl_VertexIndex, true, pathStyle, pathEye, pathPixel, previousPathCoordinates);" "\n";
+				"\t" "const vec3 previousPathPosition = pathCorner(" << previousModelMatrix << ", pathSpan, gl_VertexIndex, true, pathStyle, pathEye, pathView, pathProjection, pathViewport, previousPathCoordinates);" "\n";
 		}
 
 		code << "\n";

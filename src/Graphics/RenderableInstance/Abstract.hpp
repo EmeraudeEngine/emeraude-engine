@@ -1100,6 +1100,16 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Returns whether the scene pass has something to draw for this instance in a render state slot: always,
+			 * except a pulled-vertex instance (a path) that is hidden, empty or drawn by the debug overlay.
+			 * @note Render thread. Its instance-transforms staging still happens (the debug overlay's copy comes from it).
+			 * @param readStateIndex The frame's read slot.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isDrawnInScene (uint32_t readStateIndex) const noexcept;
+
+			/**
 			 * @brief Returns the instance transforms SSBO slot staged for the current render pass.
 			 * @note Only meaningful on the non-instanced path, between two Scene::prepareRender() calls.
 			 * @return uint32_t

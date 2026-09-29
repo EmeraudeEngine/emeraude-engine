@@ -824,6 +824,14 @@ namespace EmEn::Saphir
 			bool preparePathRibbon (Generator::Abstract & generator) noexcept;
 
 			/**
+			 * @brief Declares the position attribute a position synthesis reads — except for a pulled-vertex source (the path
+			 * ribbon), which has none.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declarePositionAttribute () noexcept;
+
+			/**
 			 * @brief Declares a tangent-frame attribute — unless the heightfield synthesizes it.
 			 * @note Records that the heightfield must emit its frame (it is otherwise skipped, the shadow
 			 * pass needs positions only).

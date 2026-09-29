@@ -283,6 +283,12 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
+	Abstract::isDrawnInScene (uint32_t readStateIndex) const noexcept
+	{
+		return m_pathPoints == nullptr || m_pathPoints->isDrawnInScene(readStateIndex);
+	}
+
+	bool
 	Abstract::createSkinningResources (const std::shared_ptr< Device > & device, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout, uint32_t boneCount, uint32_t sectionCount) noexcept
 	{
 		if ( boneCount == 0 || sectionCount == 0 || device == nullptr || descriptorSetLayout == nullptr )

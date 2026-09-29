@@ -107,6 +107,21 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Returns whether the scene pass draws this path in a slot: points to draw (2 at least) and not in debug
+			 * mode (the overlay draws that one).
+			 * @param readStateIndex The slot.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDrawnInScene (uint32_t readStateIndex) const noexcept
+			{
+				const auto slot = readStateIndex % RenderStateSlotCount;
+
+				return !m_debug[slot].enabled && m_published[slot].size() >= 2;
+			}
+
+			/**
 			 * @brief Stages the frame's points (and their previous positions) for the entry slot the instance just took.
 			 * @note Render thread, from Abstract::stageInstanceTransforms().
 			 * @param instanceTransforms A reference to the scene's instance transforms.

@@ -69,8 +69,8 @@ namespace EmEn::Graphics
 
 		static_assert(sizeof(PathPushConstants) == 64, "PathPushConstants must be 64 bytes.");
 
-		/** @brief The buffer header: view-projection (16 floats), eye (4), pixel (4) — then the {point, point} pairs. */
-		constexpr size_t HeaderFloats{24};
+		/** @brief The buffer header: view (16 floats), projection (16), eye (4), viewport (4) — then the {point, point} pairs. */
+		constexpr size_t HeaderFloats{40};
 
 		/** @brief The initial buffer size: the header and 1024 points. */
 		constexpr VkDeviceSize InitialBytes{(HeaderFloats + 1024 * 8) * sizeof(float)};
@@ -79,9 +79,10 @@ namespace EmEn::Graphics
 
 layout(std430, set = 0, binding = 0) readonly buffer PathPoints
 {
-	mat4 viewProjection;
+	mat4 view;
+	mat4 projection;
 	vec4 eye;
-	vec4 pixel;
+	vec4 viewport;
 	vec4 pathPoints[];
 } ubPathPoints;
 
@@ -101,10 +102,10 @@ layout(location = 0) out vec4 vCoordinates;
 void main()
 {
 	vec4 coordinates;
-	const vec3 world = pathCorner(mat4(1.0), pc.span, gl_VertexIndex, false, pc.style, ubPathPoints.eye.xyz, ubPathPoints.pixel.xy, coordinates);
+	const vec3 world = pathCorner(mat4(1.0), pc.span, gl_VertexIndex, false, pc.style, ubPathPoints.eye.xyz, ubPathPoints.view, ubPathPoints.projection, ubPathPoints.viewport.xy, coordinates);
 
 	vCoordinates = coordinates;
-	gl_Position = ubPathPoints.viewProjection * vec4(world, 1.0);
+	gl_Position = ubPathPoints.projection * ubPathPoints.view * vec4(world, 1.0);
 }
 )GLSL";
 
@@ -393,19 +394,18 @@ void main()
 		}
 
 		/* The header: the camera the points were staged for (unjittered: the final image carries no jitter), the eye, and
-		 * one pixel at a distance of 1 (perspective) or anywhere (orthographic) on THIS target. */
+		 * THIS target's size in pixels (the pixel mode projects the points onto it). */
 		const auto & projection = mainViewMatrices.unjitteredProjectionMatrix(readStateIndex);
-		const auto viewProjection = projection * mainViewMatrices.viewMatrix(readStateIndex, false, 0);
+		const auto & view = mainViewMatrices.viewMatrix(readStateIndex, false, 0);
 		const auto & eye = mainViewMatrices.position(readStateIndex);
-		const auto perspective = projection[M4x4Col2Row3] != 0.0F;
-		const auto pixel = 2.0F / std::max(static_cast< float >(height) * std::abs(projection[M4x4Col1Row1]), 1.0e-6F);
 
 		const auto & points = instanceTransforms.debugPathPoints();
 
 		m_staging.clear();
 		m_staging.reserve(HeaderFloats + points.size() * 8);
-		m_staging.insert(m_staging.end(), viewProjection.data(), viewProjection.data() + 16);
-		m_staging.insert(m_staging.end(), {eye[X], eye[Y], eye[Z], 1.0F, pixel, perspective ? 1.0F : 0.0F, 0.0F, 0.0F});
+		m_staging.insert(m_staging.end(), view.data(), view.data() + 16);
+		m_staging.insert(m_staging.end(), projection.data(), projection.data() + 16);
+		m_staging.insert(m_staging.end(), {eye[X], eye[Y], eye[Z], 1.0F, static_cast< float >(width), static_cast< float >(height), 0.0F, 0.0F});
 
 		/* {current, previous} pairs, the layout pathPoint() reads: the overlay has no velocity, previous = current. */
 		for ( const auto & point : points )

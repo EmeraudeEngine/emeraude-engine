@@ -204,7 +204,12 @@ namespace EmEn::Saphir::Generator
 		{
 			const auto & vertexBufferFormat = *m_shaderProgram->vertexBufferFormat();
 
-			if ( !graphicsPipeline->configureVertexInputState(vertexBufferFormat) )
+			/* A geometry without a vertex buffer (Geometry::PulledVertexResource) gets NO vertex input: nothing is bound
+			 * for it, a declared binding would read the previous draw's buffer. */
+			const auto * geometry = this->isRenderableInstanceAvailable() ? this->getGeometryInterface() : nullptr;
+			const bool pulledVertices = geometry != nullptr && geometry->vertexBufferObject() == nullptr;
+
+			if ( !(pulledVertices ? graphicsPipeline->configureEmptyVertexInputState() : graphicsPipeline->configureVertexInputState(vertexBufferFormat)) )
 			{
 				Tracer::error(TracerTag, "Unable to configure the graphics pipeline vertex input state !");
 

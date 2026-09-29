@@ -2118,6 +2118,12 @@ namespace EmEn::Scenes
 			renderableInstance->stageInstanceTransforms(m_instanceTransforms, worldCoordinates, cameraPosition, m_frameReadStateIndex, advanceModelHistory);
 		}
 
+		/* A hidden, empty or debug-drawn path: staged (the debug overlay reads that copy), but no draw of collapsed vertices. */
+		if ( !renderableInstance->isDrawnInScene(m_frameReadStateIndex) )
+		{
+			return;
+		}
+
 		/* Compute LOD level from screen-space coverage (distance + object size).
 		 * LOD 0 = full detail (large on screen), MaxLODLevels-1 = minimum detail (small on screen). */
 		const auto objectRadius = worldRadius(*renderable, worldCoordinates);

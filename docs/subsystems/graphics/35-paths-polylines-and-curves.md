@@ -43,7 +43,7 @@ closed)` (Polyline / UniformBSpline / CatmullRom; a Bézier path is set from cod
 | `Saphir::PathGLSL` | the ribbon: 9 vertices per segment, shared by the Saphir scene program and the debug overlay's hand-written shader (`rawFunctions()`) |
 | `AbstractVertexStage::enablePathRibbon()` | the vertex source `pathPosition` / `previousPathPosition`, the path blocks, `svPathCoordinates` |
 | `Material::PathResource` | the look UBO (radiance, style), opaque unlit, the round-cap discard |
-| `Graphics::PathDebugOverlay` | the debug mode: its own per-frame SSBO (VP, eye, pixel, world points), no depth, alpha blended, after the outline |
+| `Graphics::PathDebugOverlay` | the debug mode: its own per-frame SSBO (view, projection, eye, viewport, world points), no depth, alpha blended, after the outline |
 
 ### The ribbon (PathGLSL)
 
@@ -56,8 +56,16 @@ closed)` (Polyline / UniformBSpline / CatmullRom; a Bézier path is set from cod
   a miter on the gentle one, butt caps).
 - Round: the quad grows by the half width at both ends and the fragment discards outside the capsule
   (`PathGLSL::roundDiscard()`): round joins AND caps for no extra geometry.
-- Width: `style.x × model scale` (metres), or `style.x × pixel × distance` (pixels; `pixel` = 2 / (viewport
-  height · |P[1][1]|), the beam's clamp).
+- Width in METRES: `style.x × model scale`, the ribbon built in world space as above.
+- Width in PIXELS: built in SCREEN space (Rougier's screen-space polyline). The segment ends go to view space (clipped
+  to z = −1 mm in front of the eye), are projected to pixels (`pathScreen()`: clip.xy / w × viewport / 2), the 2D
+  normals and the miter are computed there, and the corner offset in pixels is LIFTED back to view space at the
+  point's own depth (`pathLift()`: ndc × w / P[0][0], ndc × w / P[1][1]), then to world through the view rotation.
+  The half width is `style.x` pixels at ANY distance and slope (the first version scaled a world offset by the
+  distance to the eye: 11.5 px near, 6.5 px far for 6 requested — Windows peer, 2026-09-29). The view matrix is the
+  advanced path's push constant, or `inverse(P) × VP` on the classic path (the view UBO carries no view matrix);
+  the viewport is `ViewProperties.xy`.
+  Measured (Linux, TAA off, half width 3): 6.0 px at 7, 14, 28 and 50 m; the 1-pixel mast 2.0 px at every distance.
 - The velocity pass rebuilds the ribbon from the PREVIOUS points (the render-side history) and the previous model
   matrix: a turning path (the `paths` loop) stays crisp under TAA.
 
@@ -71,6 +79,26 @@ CPU copy by a frame).
 
 ### ⚠️ Traps and limits
 
+- ⚠️⚠️ **A pulled-vertex pipeline must declare NO vertex input** (found by the macOS peer, 2026-09-29, fixed the same
+  day). Two independent leaks: the position syntheses (`synthesizeVertexPositionIn*Space()`, the rest position)
+  declared the position attribute UNCONDITIONALLY — `vaVertex`, declared and never read — and `Generator::Abstract`
+  built every pipeline's vertex input from the vertex format, so the path pipeline declared binding 0 (stride 12,
+  location 0). Nothing is bound for a path: the pipeline read the PREVIOUS draw's buffer, and
+  `VUID-vkCmdDraw-None-04007` fired only while no draw had bound one yet in the command buffer — on the M2 until the
+  ground loaded (300-390 messages), on Linux never (the ground loads first): latent everywhere, visible on one
+  machine. Now: `AbstractVertexStage::declarePositionAttribute()` declares nothing for the path ribbon, and a geometry
+  without a vertex buffer gets `configureEmptyVertexInputState()`. ⚠️ Checking a dumped shader for inputs: the
+  generator writes `layout (location = N) in` WITH a space — a grep for `layout(location` finds nothing and lies
+  (it did, the day of the finding).
+- **A hidden, empty or debug-drawn path issues no draw**: `RenderableInstance::Abstract::isDrawnInScene()` keeps it
+  out of the render lists AFTER its staging (the overlay's copy comes from that staging).
+
+- ⚠️ **Measuring a pixel width**: switch TemporalAA OFF (`PostProcess.disable(TemporalAA)`) — the resolve softens
+  the edges and a saturated line (250 nits at a night exposure clips to white) turns that softening into +1.5-2 px
+  at half maximum (7.8 px measured for 6). And lift the path off the ground: a camera-facing ribbon lying ON a
+  surface sinks its lower half into it at grazing angles — the paths demo's zigzags (5 cm above the ground) lose a
+  row at 28 m and two at 50 m to the DEPTH TEST, not to the width (lifted 60 cm: 6.0 px at 50 m). Depth, not a
+  defect; a path drawn on a surface needs a small lift (a depth bias is not implemented).
 - **The directory entry must always exist.** A path with no point (hidden, or drawn by the overlay) still stages an
   EMPTY entry: its vertex stage reads `pathSpans[slot]` whatever, and a slot past the end of the directory is an
   out-of-bounds read. And the collapse returns `vec3(0)` WITHOUT calling `pathPoint()`: `clamp(i, 0, count − 1)` is
