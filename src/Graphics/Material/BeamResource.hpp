@@ -433,6 +433,72 @@ namespace EmEn::Graphics::Material
 				return m_properties[ShapeOffset + 1];
 			}
 
+			/**
+			 * @brief Returns the arc frequency, in noise cycles along the whole beam.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			arcFrequency () const noexcept
+			{
+				return m_properties[ShapeOffset + 2];
+			}
+
+			/**
+			 * @brief Returns the number of noise octaves of the arc.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			arcOctaves () const noexcept
+			{
+				return static_cast< uint32_t >(m_properties[ShapeOffset + 3]);
+			}
+
+			/**
+			 * @brief Returns the cross-section exponent.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			coreExponent () const noexcept
+			{
+				return m_properties[RadianceOffset + 3];
+			}
+
+			/**
+			 * @brief Returns the arc seed.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			arcSeed () const noexcept
+			{
+				return static_cast< uint32_t >(m_properties[MotionOffset]);
+			}
+
+			/**
+			 * @brief Returns the arc re-strike rate, in Hz (0 = never).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			arcRestrikeRate () const noexcept
+			{
+				return m_properties[MotionOffset + 1];
+			}
+
+			/**
+			 * @brief Returns the arc drift, in noise cycles per second.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			arcDrift () const noexcept
+			{
+				return m_properties[MotionOffset + 2];
+			}
+
 		private:
 
 			/** @copydoc EmEn::Graphics::Material::Interface::create() */

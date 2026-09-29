@@ -59,8 +59,9 @@ Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where vi
 
 ### D. Beams — what the first pass left out
 
-- **Console / MCP adapter** for the component (it was in the design, it is not done): set endpoints, target,
-  look, enable from `SceneManager_Beam_*`.
+- ~~Console / MCP adapter~~ DONE 2026-09-29 (`BeamConsoleAdapter.cpp`, 10 `SceneManager_Beam_*` tools, MCP
+  conformance 1511/0): graphics doc 33 § Using it, `docs/ai-runtime-control.md`.
+- A beam that lights the scene: "not now" (owner, 2026-09-29).
 - A texture scrolled along the beam, a life / fade-out, HL's "strike again time" (random interval between
   arcs), JSON declaration of a beam in a scene definition.
 - A beam that lights the scene — separate owner decision (point light at the impact, or a line light).
@@ -90,7 +91,11 @@ Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where vi
   handled); a final effect AFTER the tone mapping draws the N-pixel edge and compares that depth with the scene's —
   full where visible, dimmed where hidden. Rejected: a stencil bit in the scene pass (no hidden parts), a
   render-to-texture of the subject (a second fully shaded render + a camera rig).
-- Still open: how a beam lights the scene.
+- 2026-09-29: order = bugs, then finish (beam console adapter, outline cost + scissor, multi-selection), then new
+  (polyline + curves). **A beam does NOT light the scene — not now** (still emissive only). **Multi-selection = a
+  SET of highlighted entities, one style** (add / remove / clear, console; Shift+click in the editor). **Paths and
+  curves = a world `Component::Path`** (polyline, Bézier, B-spline as a camera-facing ribbon, depth tested, width in
+  metres or pixels, proper joins) **plus an always-on-top debug mode**.
 
 ## References
 

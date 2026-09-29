@@ -23,6 +23,12 @@ entity->componentBuilder< Scenes::Component::Beam >("Arc")
 
 A beam does NOT light the scene (owner decision): pair it with a light component when it must.
 
+**Live, from the console or an MCP client** (`src/Scenes/Component/BeamConsoleAdapter.cpp`): every setter above is a
+command of `Core.SceneManagerService.Beam` (MCP `SceneManager_Beam_*`), addressed by `entity, component` and answering
+the beam's NEW state as JSON — e.g. `Beam.setArc(ArcPylons, Arc, 0.35, 3, 6)`, `Beam.setEndTarget(LaserTurret, Laser,
+Head, 0, -0.5, 0)`. The list: `docs/ai-runtime-control.md` § Driving an entity's components. `setEndTarget` resolves the
+beam and its target under ONE exclusive access to the scene (never a second lock inside `act()`).
+
 ### How it is built — five pieces, each with one job
 
 | Piece | Job |

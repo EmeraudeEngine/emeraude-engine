@@ -62,6 +62,7 @@ Each of these was worked around locally instead of being recognised as one root 
 | `ShapeGenerator` mirror-wound faces (16 sites + 8 loop-driven generators) | rewound CCW around each declared outward normal |
 | **Point-light shadow cubemap lookup** `vec3(-d.x, d.y, d.z)` (`LightGenerator::generate3DShadowMapCode()` + its PCF twin) | **MISSED at migration time, fixed Aug 2026** — now the plain `-d` |
 | **RTR environment fallback** `vec3(reflDir.x, -reflDir.y, reflDir.z)` (`Effects/Lighting/RTR.cpp`) | **MISSED at migration time, fixed Aug 2026** — now the raw world direction |
+| **`ShapeProcessor::sealBoundaryLoop()` cap winding** — cap triangles emitted C/B/A (emeraude-base) | **MISSED at migration time, fixed Sep 2026** — natural A/B/C order; every sealed split cap was culled and showed the model's inside. Gate `VertexFactoryShapeSplitter.sealedCapsWindCCWAndFaceOutOfTheirPart` |
 | **AtmosphericFog recomputing `tanHalfFovY` locally**, without `projectionYSign` (`Effects/Atmosphere/AtmosphericFog.cpp::execute()`) | **MISSED at migration time, fixed Aug 2026** — now forwards `constants.tanHalfFovY` like every other consumer. Harmless before the flip (`projectionYSign` was `+1`), wrong from the flip onward: `rayDir.y` inverted, so the height fog grew denser with ALTITUDE and `exp()` overflowed to `+inf` over the whole sky |
 
 > [!NOTE]

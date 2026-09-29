@@ -259,4 +259,12 @@ namespace EmEn::Scenes::Component
 	 * @return void
 	 */
 	void appendVisualConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
+
+	/**
+	 * @brief Creates the console adapter of the Beam component (lasers, electric arcs).
+	 * @param sceneManager The scene manager.
+	 * @param adapters Receives the adapters (the caller registers and owns them).
+	 * @return void
+	 */
+	void appendBeamConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 }

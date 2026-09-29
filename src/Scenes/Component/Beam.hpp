@@ -237,6 +237,28 @@ namespace EmEn::Scenes::Component
 			void setEndTarget (const std::shared_ptr< const AbstractEntity > & target, const Base::Math::Vector< 3, float > & offset = {}) noexcept;
 
 			/**
+			 * @brief Returns the entity the end follows, or nullptr (none, or gone).
+			 * @return std::shared_ptr< const AbstractEntity >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< const AbstractEntity >
+			endTarget () const noexcept
+			{
+				return m_endTarget.lock();
+			}
+
+			/**
+			 * @brief Returns the offset from the followed entity's origin, in the target's space.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			endTargetOffset () const noexcept
+			{
+				return m_endTargetOffset;
+			}
+
+			/**
 			 * @brief Shows or hides the beam (a laser switched off, an arc between two strikes of a longer cycle).
 			 * @param state The state.
 			 * @return void
