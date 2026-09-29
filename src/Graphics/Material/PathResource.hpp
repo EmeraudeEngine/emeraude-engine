@@ -198,6 +198,26 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateFragmentShaderCode (Saphir::Generator::Abstract & generator, Saphir::LightGenerator & lightGenerator, Saphir::FragmentShader & fragmentShader) const noexcept override;
 
+			/**
+			 * @copydoc EmEn::Graphics::Material::Interface::requiresAlphaTestedShadows()
+			 * @note Always: the depth-only programs (the SELECTION depth pass — a path casts no shadow) must build the ribbon
+			 * in their vertex stage and discard outside the round capsule, exactly as the scene pass does.
+			 */
+			[[nodiscard]]
+			bool
+			requiresAlphaTestedShadows () const noexcept override
+			{
+				return true;
+			}
+
+			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowVertexCode() */
+			[[nodiscard]]
+			bool generateShadowVertexCode (const Saphir::Generator::Abstract & generator, Saphir::AbstractVertexStage & vertexShader) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowAlphaTestCode() */
+			[[nodiscard]]
+			bool generateShadowAlphaTestCode (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::surfacePhysicalProperties() const */
 			[[nodiscard]]
 			const Physics::SurfacePhysicalProperties &

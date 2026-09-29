@@ -45,6 +45,24 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Unique::pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const CartesianFrame< float > * worldCoordinates) const noexcept
 	{
+		if ( pushContext.useInstanceTransforms )
+		{
+			/* A pulled-vertex geometry (a path, the selection depth pass only): the model matrix is the instance's entry in
+			 * the instance-transforms SSBO. VP + jitter + frameIndex, the layout of pushMatricesForRendering(); UNJITTERED
+			 * (see below), so the jitter is zero. */
+			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
+			const auto & projectionMatrix = passContext.viewMatrices->unjitteredProjectionMatrix(passContext.readStateIndex);
+			const auto viewProjectionMatrix = projectionMatrix * viewMatrix;
+
+			std::array< float, Matrix4Alignment + 3 > buffer{};
+			std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
+			buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
+
+			vkCmdPushConstants(passContext.commandBuffer->handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, 0, MatrixBytes + (3 * sizeof(float)), buffer.data());
+
+			return;
+		}
+
 		/* Prepare the model matrix (M). */
 		Matrix< 4, float > modelMatrix;
 

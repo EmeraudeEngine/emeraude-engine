@@ -1122,6 +1122,19 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Returns whether instanceTransformsSlot() was staged in the frame being rendered.
+			 * @note False for an instance culled this frame: its slot, from an older frame, names another entry now.
+			 * @param frameSerial The frame's serial number (Scenes::SceneInstanceTransforms::frameSerial()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isInstanceTransformsSlotStaged (uint64_t frameSerial) const noexcept
+			{
+				return m_instanceTransformsFrameSerial == frameSerial;
+			}
+
+			/**
 			 * @brief Draws the instance into a shadow map.
 			 *
 			 * Renders the instance for shadow casting using a simplified pipeline:
@@ -1524,6 +1537,8 @@ namespace EmEn::Graphics::RenderableInstance
 			Base::Math::Matrix< 4, float > m_lastModelMatrix;
 			/** @brief The points a pulled-vertex instance draws (setPathPoints()), nullptr for any other instance. */
 			std::shared_ptr< PathPoints > m_pathPoints;
+			/** @brief The frame serial m_instanceTransformsSlot was staged in (isInstanceTransformsSlotStaged()). */
+			uint64_t m_instanceTransformsFrameSerial{0};
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */

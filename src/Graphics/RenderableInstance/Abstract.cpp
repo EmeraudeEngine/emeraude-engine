@@ -266,6 +266,7 @@ namespace EmEn::Graphics::RenderableInstance
 		 * accepted approximation), fall back to the current matrix — zero object velocity
 		 * beats a bogus one on the first visible frame. */
 		m_instanceTransformsSlot = instanceTransforms.stageEntry(modelMatrix, m_hasModelHistory ? m_lastModelMatrix : modelMatrix);
+		m_instanceTransformsFrameSerial = instanceTransforms.frameSerial();
 
 		/* A pulled-vertex instance (a path): its points go with the entry, under the same slot. */
 		if ( m_pathPoints != nullptr )
@@ -1295,7 +1296,10 @@ namespace EmEn::Graphics::RenderableInstance
 			.layerIndex = layerIndex,
 			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
-			.useBillboarding = program->wasBillBoardingEnabled()
+			.useBillboarding = program->wasBillBoardingEnabled(),
+			/* A pulled-vertex geometry (a path, drawn by the selection depth pass): its model matrix and its points are
+			 * the instance's entry in the instance-transforms SSBO (Saphir::Generator::ShadowCasting). */
+			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
 		};
 
 		this->pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates);
@@ -1340,6 +1344,18 @@ namespace EmEn::Graphics::RenderableInstance
 		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
 			commandBuffer.draw(*geometry, this->frameIndexFor(layerIndex), this->instanceCount());
+		}
+		else if ( pushContext.useInstanceTransforms )
+		{
+			/* The entry slot travels through firstInstance (gl_InstanceIndex), as in render(). */
+			if ( m_renderable->layerCount() == 1 )
+			{
+				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), this->instanceCount());
+			}
+			else
+			{
+				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), layerIndex, this->instanceCount());
+			}
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{

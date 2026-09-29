@@ -334,6 +334,39 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
+	bool
+	PathResource::generateShadowVertexCode (const Generator::Abstract & generator, AbstractVertexStage & vertexShader) const noexcept
+	{
+		/* The same ribbon as the scene pass (the generator switched the stage to the instance-transforms path and
+		 * declared the view block, Generator::ShadowCasting::isPulledVertexGeometry()). */
+		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle));
+
+		if ( !vertexShader.declare(this->getUniformBlock(generator.shaderProgram()->setIndex(SetType::PerModelLayer), 0)) )
+		{
+			TraceError{ClassId} << "Unable to declare the material uniform block in the depth-only vertex stage of the path '" << this->name() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	PathResource::generateShadowAlphaTestCode (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		if ( !fragmentShader.declare(this->getUniformBlock(generator.shaderProgram()->setIndex(SetType::PerModelLayer), 0)) )
+		{
+			TraceError{ClassId} << "Unable to declare the material uniform block in the depth-only fragment stage of the path '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* The silhouette of a round path is its capsule, like its colour. */
+		Code{fragmentShader, Location::Top} << PathGLSL::roundDiscard(ShaderVariable::PathCoordinates, MaterialUB(UniformBlock::Component::PathStyle));
+
+		return true;
+	}
+
 	std::string
 	PathResource::fragmentColor () const noexcept
 	{

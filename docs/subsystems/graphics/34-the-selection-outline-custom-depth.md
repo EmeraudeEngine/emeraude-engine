@@ -44,6 +44,9 @@ architecture = Unreal's CustomDepth. Open work: engine `docs/todo/segment-render
   here, where the view is the main camera's, or the outline trembles by half a pixel every frame.
 - An emissive overlay (a beam, `Material::Interface::writesGeometryBuffer()` false) is skipped by the custom depth: it
   is no surface, and these programs cannot build its ribbon.
+- A PATH (a pulled-vertex geometry) IS outlined since 2026-09-30: its depth-only program builds the ribbon on the
+  instance-transforms path and is drawn at the instance's entry slot — only when that slot was staged this frame
+  (graphics doc 35 § The selection outline).
 
 ### Cost and the scissor (2026-09-29)
 

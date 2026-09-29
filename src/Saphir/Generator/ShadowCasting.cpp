@@ -61,15 +61,39 @@ namespace EmEn::Saphir::Generator
 		return material != nullptr && material->requiresAlphaTestedShadows();
 	}
 
+	bool
+	ShadowCasting::isPulledVertexGeometry () const noexcept
+	{
+		if ( !this->isRenderableInstanceAvailable() )
+		{
+			return false;
+		}
+
+		const auto * renderable = this->getRenderable();
+
+		if ( renderable == nullptr )
+		{
+			return false;
+		}
+
+		const auto * geometry = renderable->geometry(0);
+
+		return geometry != nullptr && geometry->vertexBufferObject() == nullptr;
+	}
+
 	void
 	ShadowCasting::prepareUniformSets (SetIndexes & setIndexes) noexcept
 	{
 		/* NOTE: Enable PerView set for instancing OR multiview rendering (cubemap or CSM).
 		 * Cubemap shadow maps require the UBO with 6 view matrices indexed by gl_ViewIndex.
 		 * CSM shadow maps require the UBO with N (up to 4) cascade view matrices indexed by gl_ViewIndex.
+		 * A pulled-vertex geometry (a path) needs it too: its pixel width reads the projection, the eye and the viewport.
+		 * ⚠️ The ENABLING order is the set index order, and onCreateDataLayouts() appends the layouts in that order.
 		 * The render target is fetched once: renderTarget() returns a shared_ptr by value,
 		 * so each call pays for an atomic refcount increment/decrement. */
-		if ( this->isFlagEnabled(IsInstancingEnabled) )
+		const bool pulledVertices = this->isPulledVertexGeometry();
+
+		if ( this->isFlagEnabled(IsInstancingEnabled) || pulledVertices )
 		{
 			setIndexes.enableSet(SetType::PerView);
 		}
@@ -85,12 +109,13 @@ namespace EmEn::Saphir::Generator
 
 		/* Vegetation wind: the shadow map must hold the DISPLACED tree, or a swaying canopy casts
 		 * a frozen shadow. The set is enabled per renderable, exactly like the skinning one below,
-		 * so the sealed pipeline layout of every OTHER shadow caster is untouched. */
+		 * so the sealed pipeline layout of every OTHER shadow caster is untouched. A path reads its points, and its model
+		 * matrix, in the same set. */
 		if ( this->isRenderableInstanceAvailable() )
 		{
 			const auto * renderable = this->getRenderable();
 
-			if ( renderable != nullptr && renderable->hasVegetationWind() )
+			if ( (renderable != nullptr && renderable->hasVegetationWind()) || pulledVertices )
 			{
 				setIndexes.enableSet(SetType::PerSceneTransforms);
 			}
@@ -351,6 +376,15 @@ namespace EmEn::Saphir::Generator
 			vertexShader->setExtensionBehavior("GL_EXT_multiview", "enable");
 		}
 
+		/* A pulled-vertex geometry (a path): the model matrix comes from the instance's entry in the instance-transforms
+		 * SSBO (the slot is the draw's firstInstance), which selects the VP + jitter push block — BEFORE its declaration. */
+		const bool pulledVertices = this->isPulledVertexGeometry();
+
+		if ( pulledVertices )
+		{
+			vertexShader->enableInstanceTransforms();
+		}
+
 		if ( !this->declareMatrixPushConstantBlock(*vertexShader) )
 		{
 			return false;
@@ -361,7 +395,7 @@ namespace EmEn::Saphir::Generator
 		 * projection × the pushed view matrix (the V + VP push block was 132 B, above the
 		 * 128 B Vulkan minimum guarantee). The PerView set is already enabled and bound
 		 * for every instanced shadow program. */
-		if ( readsViewMatrixArray || this->isFlagEnabled(IsInstancingEnabled) )
+		if ( readsViewMatrixArray || this->isFlagEnabled(IsInstancingEnabled) || pulledVertices )
 		{
 			if ( !this->declareViewUniformBlock(*vertexShader) )
 			{
@@ -379,12 +413,16 @@ namespace EmEn::Saphir::Generator
 				return false;
 			}
 
-			vertexShader->enableVegetationWind();
-
-			/* The shadow of a leaf flutters with the leaf. */
-			if ( this->isRenderableInstanceAvailable() && this->getRenderable() != nullptr && this->getRenderable()->isVegetationFoliageLayer(this->layerIndex()) )
+			/* The set also carries a path's points: the wind is the vegetation's only. */
+			if ( !pulledVertices )
 			{
-				vertexShader->enableVegetationFlutter();
+				vertexShader->enableVegetationWind();
+
+				/* The shadow of a leaf flutters with the leaf. */
+				if ( this->isRenderableInstanceAvailable() && this->getRenderable() != nullptr && this->getRenderable()->isVegetationFoliageLayer(this->layerIndex()) )
+				{
+					vertexShader->enableVegetationFlutter();
+				}
 			}
 		}
 
@@ -673,6 +711,9 @@ namespace EmEn::Saphir::Generator
 
 			/* A mesh-shading surface: task + mesh stages and the material set. */
 			hashCombine(hash, static_cast< size_t >(this->isMeshShadingSurfaceEnabled()));
+
+			/* A pulled-vertex geometry (a path): the ribbon, the view and instance-transforms sets. */
+			hashCombine(hash, static_cast< size_t >(this->isPulledVertexGeometry()));
 		}
 
 		/* 4. Layer index. */

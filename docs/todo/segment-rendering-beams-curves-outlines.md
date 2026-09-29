@@ -71,9 +71,8 @@ References: Rougier, "Shader-Based Antialiased, Dashed, Stroked Polylines", JCGT
 `LineSegments2`/`LineMaterial` (`worldUnits`); A. Klein, "Rendering thick lines with dashes".
 The colour (owner decision 2026-09-29): a linear hue × a luminance in nits (250 default), like the beams; a colour
 exact on screen is the debug mode's. What remains:
-- A path cannot be OUTLINED (the shadow-casting programs do not build the ribbon: skipped in
-  `renderSelectionDepth()`), casts no shadow, is absent from reflection cubemaps (the directory needs the
-  instance-transforms SSBO path).
+- ~~A path cannot be OUTLINED~~ DONE 2026-09-30 (graphics doc 35 § The selection outline). A path still casts no
+  shadow and is absent from reflection cubemaps (the directory needs the instance-transforms SSBO path).
 - The debug overlay on the direct swap-chain frame path (no scene target there).
 - A point-count change pairs no previous points (velocity 0) but sets no reactive tag yet.
 - Dashes (the arc length is already in w), arrows, per-vertex colour; a Bézier path from the console.

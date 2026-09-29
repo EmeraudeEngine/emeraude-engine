@@ -241,6 +241,7 @@ namespace EmEn::Scenes
 			void
 			beginFrame (uint32_t frameIndex) noexcept
 			{
+				++m_frameSerial;
 				m_stagedFrameIndex = frameIndex;
 				m_stagedEntries.clear();
 				m_stagedPathDirectory.clear();
@@ -283,6 +284,18 @@ namespace EmEn::Scenes
 			{
 				m_stagedHeader.windDirectionStrength = {direction[Base::Math::X], direction[Base::Math::Y], direction[Base::Math::Z], strength};
 				m_stagedHeader.windTimes = {time, previousTime, gust, 0.0F};
+			}
+
+			/**
+			 * @brief Returns the serial number of the frame being staged (incremented by beginFrame(), never 0 once staging began).
+			 * @note An instance records it with its slot: a slot from an older frame names ANOTHER instance's entry now.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			frameSerial () const noexcept
+			{
+				return m_frameSerial;
 			}
 
 			/**
@@ -448,6 +461,8 @@ namespace EmEn::Scenes
 			std::vector< Base::Math::Vector< 4, float > > m_stagedDebugPoints;
 			/** @brief Staged header for the current frame (primary view target matrices). */
 			Header m_stagedHeader{};
+			/** @brief Serial number of the frame being staged, incremented by beginFrame(). */
+			uint64_t m_frameSerial{0};
 			/** @brief Frame-in-flight index targeted by the staging, set by beginFrame(). */
 			uint32_t m_stagedFrameIndex{0};
 	};

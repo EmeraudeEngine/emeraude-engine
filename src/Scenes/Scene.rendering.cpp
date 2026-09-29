@@ -788,11 +788,15 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				/* A pulled-vertex geometry (a path) has no vertex buffer: the depth-only programs expect one — they would
-				 * draw garbage. Not outlined (docs/todo: segment-rendering § C). */
+				/* A pulled-vertex geometry (a path): its depth-only program reads the instance's entry in the instance-transforms
+				 * SSBO (Saphir::Generator::ShadowCasting). Drawn only when the scene pass drew it — staged THIS frame (a culled
+				 * path's slot names another instance's entry now), neither hidden, empty nor left to the debug overlay. */
 				if ( const auto * geometry = renderable->geometry(0); geometry != nullptr && geometry->vertexBufferObject() == nullptr )
 				{
-					continue;
+					if ( !instance->isInstanceTransformsSlotStaged(m_instanceTransforms.frameSerial()) || !instance->isDrawnInScene(readStateIndex) )
+					{
+						continue;
+					}
 				}
 
 				/* The depth-only programs of THIS target are generated on first use, here, on the render thread. */

@@ -77,6 +77,27 @@ it like any emitter — brilliant at night, modest in full sun. A colour exact O
 debug mode's (the exposure is not in the shaders; putting it there was rejected — the GPU auto-exposure would lag a
 CPU copy by a frame).
 
+### The selection outline (2026-09-30)
+
+A highlighted path is outlined like any entity (graphics doc 34): the custom depth pass draws it with the depth-only
+shadow-casting program, which builds the SAME ribbon.
+- `Saphir::Generator::ShadowCasting::isPulledVertexGeometry()` (a geometry without a vertex buffer) switches the vertex
+  stage to the INSTANCE-TRANSFORMS path (`enableInstanceTransforms()` before the push block: VP + jitter + frameIndex),
+  and adds the view set (projection, eye, viewport for the pixel width) and the instance-transforms set (the model
+  matrix, the directory, the points). In the program key.
+- `Material::PathResource::requiresAlphaTestedShadows()` is ALWAYS true: the material set joins the layout,
+  `generateShadowVertexCode()` enables the ribbon and declares the style UBO, `generateShadowAlphaTestCode()` discards
+  outside the round capsule — the silhouette of a round path has round caps and joins.
+- `castShadows()` passes `useInstanceTransforms`: `Unique::pushMatricesForShadowCasting()` pushes the UNJITTERED VP
+  (zero jitter) and the draw's firstInstance is the instance's entry slot, as in `render()`.
+- ⚠️ **Only a path staged THIS frame is outlined**: the slot is frame-linear, and a culled path keeps the one of an
+  older frame, which names ANOTHER instance's entry now. `SceneInstanceTransforms::frameSerial()` (incremented by
+  `beginFrame()`) is recorded with the slot; `RenderableInstance::Abstract::isInstanceTransformsSlotStaged()` gates
+  `Scene::renderSelectionDepth()`, with `isDrawnInScene()` (a hidden, empty or debug-drawn path has no outline).
+- Verified (Linux, `paths`, 2026-09-30): the six paths outlined, the 2-pixel mast and the pixel zigzags included, round
+  caps round, the turning loop followed; nothing drawn with every path behind the camera; a hidden and a debug-drawn
+  path not outlined; `geometry-generator`'s figurine unchanged; 0 VUID. The dumped depth program has no vertex input.
+
 ### ⚠️ Traps and limits
 
 - ⚠️⚠️ **A pulled-vertex pipeline must declare NO vertex input** (found by the macOS peer, 2026-09-29, fixed the same
@@ -103,10 +124,9 @@ CPU copy by a frame).
   EMPTY entry: its vertex stage reads `pathSpans[slot]` whatever, and a slot past the end of the directory is an
   out-of-bounds read. And the collapse returns `vec3(0)` WITHOUT calling `pathPoint()`: `clamp(i, 0, count − 1)` is
   undefined in GLSL for count 0. Both found in review before any symptom.
-- **The shadow-casting programs never call `prepareVertexStage()`**: they would draw a path as an ordinary mesh —
-  a position attribute with no vertex buffer, garbage (seen as a spurious outline when a path was highlighted,
-  0 VUID). Hence: paths cast no shadow (`disableShadowCasting()`), and `Scene::renderSelectionDepth()` skips a
-  geometry without a vertex buffer — **a path cannot be outlined yet**.
+- **The shadow-casting programs never call `prepareVertexStage()`**: before 2026-09-30 they drew a path as an
+  ordinary mesh — a position attribute with no vertex buffer, garbage (a spurious outline, 0 VUID). A path casts no
+  shadow (`disableShadowCasting()`); the selection outline now builds its ribbon (§ The selection outline below).
 - **Instance-transforms SSBO path only**: `preparePathRibbon()` refuses instancing, MDI, cubemap and CSM (the
   directory is indexed by the instance slot, `gl_InstanceIndex`). A path is absent from reflection cubemaps.
 - **The vertex capacity only grows** (the render thread reads it while the logic publishes more points); the

@@ -2180,7 +2180,8 @@ namespace EmEn::Scenes
 			 * @brief Draws the depth of the highlighted entities alone into the selection depth target ("custom depth").
 			 * @note Render thread, INSIDE the target's render pass (the Renderer opens it, depth cleared), after
 			 * prepareRender(). Uses the depth-only shadow-casting programs, generated for this target on first use. An emissive overlay (a beam:
-			 * Material::Interface::writesGeometryBuffer() false) is skipped: it is no surface.
+			 * Material::Interface::writesGeometryBuffer() false) is skipped: it is no surface. A path builds its ribbon from
+			 * its entry in the instance-transforms SSBO, so it is drawn only when the scene pass staged it this frame.
 			 * @param renderTarget The selection depth target.
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
 			 * @return bool True when something was drawn (the outline has a source this frame).

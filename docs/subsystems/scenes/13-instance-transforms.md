@@ -38,6 +38,9 @@ jitter to also sit in the single-buffered view UBO, which raced the GPU; see eng
 3. The instance retains its slot (`instanceTransformsSlot()`) for the draws recorded until the
    next `prepareRender()`. The same instance may hold a different slot per render target within
    one frame — REQUIRED for sprites, whose model matrix depends on the camera position.
+   ⚠️ A CULLED instance is not staged: its slot is an older frame's and names another entry now. A draw outside
+   the scene pass that reads the entry (the selection depth pass, for a path) checks
+   `isInstanceTransformsSlotStaged(frameSerial())` first — `beginFrame()` increments the serial.
 4. Buffers grow on demand (power of two); the old buffer is retired through the
    `Vulkan::DeferredDestructor`.
 

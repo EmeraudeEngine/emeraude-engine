@@ -107,6 +107,16 @@ namespace EmEn::Saphir::Generator
 			bool needsAlphaTestedShadows () const noexcept;
 
 			/**
+			 * @brief Checks if the geometry is pulled by the vertex stage (a path, Geometry::PulledVertexResource): no
+			 * vertex buffer, the ribbon is built from the path SSBOs of the instance-transforms set.
+			 * @note Drawn by the SELECTION depth pass only (a path casts no shadow): the view UBO, the instance-transforms
+			 * set and the material set join the layout, and the model matrix comes from the instance's entry.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isPulledVertexGeometry () const noexcept;
+
+			/**
 			 * @brief Generates the vertex shader stage of the graphics pipeline.
 			 * @note For cubemap shadow maps, the vertex shader uses multiview rendering with gl_ViewIndex
 			 *	   to select the correct view matrix from the UBO, instead of using a geometry shader.
