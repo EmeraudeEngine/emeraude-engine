@@ -419,6 +419,15 @@ void main()
 			return false;
 		}
 
+		/* The screen area first: every selected entity behind the eye draws neither depth nor outline (measured by the
+		 * Windows peer: the depth pass still cost 0.043 ms there). */
+		this->updateScreenArea(scene.highlightedWorldBoundingBoxes(), mainViewMatrices, scene.frameReadStateIndex());
+
+		if ( m_screenArea[2] < m_screenArea[0] || m_screenArea[3] < m_screenArea[1] )
+		{
+			return false;
+		}
+
 		/* The target follows the scene extent: a resized one is retired, in-flight frames may still sample it. */
 		if ( m_depthTarget != nullptr && (m_depthTarget->extent().width != width || m_depthTarget->extent().height != height) )
 		{
@@ -467,11 +476,6 @@ void main()
 		};
 
 		commandBuffer.pipelineBarrier(barrier, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-
-		if ( drawn )
-		{
-			this->updateScreenArea(scene.highlightedWorldBoundingBoxes(), mainViewMatrices, scene.frameReadStateIndex());
-		}
 
 		return drawn;
 	}
