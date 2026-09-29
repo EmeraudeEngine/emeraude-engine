@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/RenderableInstance/PathPoints.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderer.hpp"
@@ -265,6 +266,12 @@ namespace EmEn::Graphics::RenderableInstance
 		 * accepted approximation), fall back to the current matrix — zero object velocity
 		 * beats a bogus one on the first visible frame. */
 		m_instanceTransformsSlot = instanceTransforms.stageEntry(modelMatrix, m_hasModelHistory ? m_lastModelMatrix : modelMatrix);
+
+		/* A pulled-vertex instance (a path): its points go with the entry, under the same slot. */
+		if ( m_pathPoints != nullptr )
+		{
+			m_pathPoints->stage(instanceTransforms, m_instanceTransformsSlot, readStateIndex, advanceHistory, modelMatrix);
+		}
 
 		/* NOTE: Only the primary view staging advances the history (once per rendered
 		 * frame); render-to-texture stagings would otherwise zero the motion. */

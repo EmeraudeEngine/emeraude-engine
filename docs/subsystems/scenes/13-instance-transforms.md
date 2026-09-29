@@ -51,6 +51,17 @@ lifecycles; same reasoning as the skinning SSBO's dedicated PerModel set). On bu
 the current frame's set is rewritten in place (legal: the frame fence guarantees no in-flight
 reference).
 
+**Path bindings 1-2 (2026-09-29, `Scenes::Component::Path`):** the same set carries, for the instances that PULL
+their vertices (`RenderableInstance::PathPoints` attached), binding 1 the path DIRECTORY — a `uvec4 {first point,
+count, 0, 0}` per entry SLOT (zeros for every other slot) — and binding 2 the POINTS as {current, previous} vec4
+pairs (xyz in the entity's space, w the arc length). `PathPoints::stage()` runs right after the instance's
+`stageEntry()` in `stageInstanceTransforms()`, with the same slot; `stagePath()` ALWAYS writes the entry, empty or
+not (an unwritten slot past the directory's end would be an out-of-bounds read). Both buffers are created at init
+(never empty descriptors), grow as powers of two with the entries, and upload only what was staged. The previous
+points are a render-side history (primary view only), like `m_lastModelMatrix`. Also staged here, CPU side only:
+the DEBUG paths of the primary view in world space (`stageDebugPath()`, `debugPaths()`), which
+`Graphics::PathDebugOverlay` draws after the tone mapping. Graphics doc 35.
+
 **Consumption (milestone 3):** the classic non-instanced scene path (non-MDI, non-cubemap,
 non-advanced) READS the SSBO: push constants shrink to VP + jitter + frameIndex (76 B, or
 68 B before the TAA jitter member), the model

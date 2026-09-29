@@ -98,6 +98,8 @@ namespace EmEn
 
 namespace EmEn::Graphics::RenderableInstance
 {
+	class PathPoints;
+
 	constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
 	constexpr bool MergePushConstants{true};
 
@@ -1085,6 +1087,19 @@ namespace EmEn::Graphics::RenderableInstance
 			void stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const Base::Math::CartesianFrame< float > * worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition, uint32_t readStateIndex, bool advanceHistory) noexcept;
 
 			/**
+			 * @brief Attaches the points this instance's vertex stage pulls (a Scenes::Component::Path), staged right after
+			 * its instance-transforms entry. nullptr (the default) for every instance with vertices of its own.
+			 * @note Call it before the instance is linked to a scene: the render thread reads it without a lock.
+			 * @param pathPoints A reference to the points holder smart pointer.
+			 * @return void
+			 */
+			void
+			setPathPoints (const std::shared_ptr< PathPoints > & pathPoints) noexcept
+			{
+				m_pathPoints = pathPoints;
+			}
+
+			/**
 			 * @brief Returns the instance transforms SSBO slot staged for the current render pass.
 			 * @note Only meaningful on the non-instanced path, between two Scene::prepareRender() calls.
 			 * @return uint32_t
@@ -1497,6 +1512,8 @@ namespace EmEn::Graphics::RenderableInstance
 			std::array< Base::Math::Matrix< 4, float >, RenderStateSlotCount > m_transformationMatrices{};
 			/** @brief Model matrix staged at the previous rendered frame (primary view), for motion vectors. */
 			Base::Math::Matrix< 4, float > m_lastModelMatrix;
+			/** @brief The points a pulled-vertex instance draws (setPathPoints()), nullptr for any other instance. */
+			std::shared_ptr< PathPoints > m_pathPoints;
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
 			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */

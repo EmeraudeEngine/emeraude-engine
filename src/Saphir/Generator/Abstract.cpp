@@ -659,6 +659,22 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
+	Abstract::declarePathBlocks (AbstractShader & shader) const noexcept
+	{
+		const auto setIndex = m_shaderProgram->setIndex(SetType::PerSceneTransforms);
+
+		Declaration::ShaderStorageBlock directory{setIndex, 1, Declaration::MemoryLayout::Std430, "PathDirectory", "ubPathDirectory"};
+		directory.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
+		directory.addMember(Declaration::VariableType::UIntVector4, "pathSpans[]");
+
+		Declaration::ShaderStorageBlock points{setIndex, 2, Declaration::MemoryLayout::Std430, "PathPoints", "ubPathPoints"};
+		points.setAccessQualifier(Declaration::AccessQualifier::ReadOnly);
+		points.addMember(Declaration::VariableType::FloatVector4, "pathPoints[]");
+
+		return shader.declare(directory) && shader.declare(points);
+	}
+
+	bool
 	Abstract::declareViewUniformBlock (AbstractShader & shader, uint32_t binding) const noexcept
 	{
 		const auto setIndex = m_shaderProgram->setIndex(SetType::PerView);

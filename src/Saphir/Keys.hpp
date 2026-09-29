@@ -754,6 +754,7 @@ namespace EmEn::Saphir
 				constexpr auto StandardMaterial{"StandardMaterial"};
 				constexpr auto PBRMaterial{"PBRMaterial"};
 				constexpr auto BeamMaterial{"BeamMaterial"};
+				constexpr auto PathMaterial{"PathMaterial"};
 				constexpr auto DirectionalLight{"DirectionalLight"};
 				constexpr auto DirectionalLightCSM{"DirectionalLightCSM"};
 				constexpr auto PointLight{"PointLight"};
@@ -866,6 +867,10 @@ namespace EmEn::Saphir
 				constexpr auto BeamShape{"beamShape"};
 				/** @brief Beam: (seed, re-strike rate in Hz — 0 = never, drift in noise cycles per second, unused). */
 				constexpr auto BeamMotion{"beamMotion"};
+				/** @brief Path (Material::PathResource): (radiance.rgb = linear colour × luminance in nits, unused). */
+				constexpr auto PathRadiance{"pathRadiance"};
+				/** @brief Path: (half width — entity units or pixels —, 1 if in pixels, 1 if round joins and caps, miter limit). */
+				constexpr auto PathStyle{"pathStyle"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};
@@ -993,6 +998,9 @@ namespace EmEn::Saphir
 			 * and the coverage of a beam thinner than a pixel (its drawn width is clamped, its light scaled down). */
 			constexpr auto BeamCoordinates{"svBeamCoordinates"};
 			constexpr auto BeamCoverage{"svBeamCoverage"};
+			/* Path ribbon (AbstractVertexStage::enablePathRibbon()): (along the segment from its start, across it from
+			 * the centre line, the segment length, the half width), world units — the round joins and caps' distance. */
+			constexpr auto PathCoordinates{"svPathCoordinates"};
 			constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
 			constexpr auto MDIModelMatrix{"svMDIModelMatrix"};
 			constexpr auto InstanceModelMatrix{"svInstanceModelMatrix"};

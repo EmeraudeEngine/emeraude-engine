@@ -578,6 +578,33 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Builds every vertex of a PATH ribbon by vertex pulling (Saphir PathGLSL): no vertex attribute, the
+			 * points read from the scene's path SSBO through the instance slot's directory entry.
+			 * @note Must be switched on BEFORE the velocity synthesis (Material::Interface::prepareVertexStage()).
+			 * Needs the instance-transforms SSBO path (the directory is indexed by the instance slot): a program without
+			 * it (instanced, MDI, cubemap, CSM) refuses the ribbon. Exclusive with every other vertex source.
+			 * @param styleExpression A GLSL vec4 expression: (half width, 1 if in pixels, 1 if round, miter limit).
+			 * @return void
+			 */
+			void
+			enablePathRibbon (std::string styleExpression) noexcept
+			{
+				m_pathStyleExpression = std::move(styleExpression);
+				m_pathRibbonEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the path ribbon is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPathRibbonEnabled () const noexcept
+			{
+				return m_pathRibbonEnabled;
+			}
+
+			/**
 			 * @brief Returns whether the heightfield surface is enabled.
 			 * @return bool
 			 */
@@ -786,6 +813,15 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			bool prepareBeamRibbon (Generator::Abstract & generator) noexcept;
+
+			/**
+			 * @brief Registers the path ribbon block as a unique preparation, AFTER the model matrix it reads, declares the
+			 * path SSBO blocks, the functions and the stage outputs (enablePathRibbon()).
+			 * @param generator A reference to the shader generator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool preparePathRibbon (Generator::Abstract & generator) noexcept;
 
 			/**
 			 * @brief Declares a tangent-frame attribute — unless the heightfield synthesizes it.
@@ -1121,6 +1157,7 @@ namespace EmEn::Saphir
 			std::string m_imposterGridExpression;
 			std::string m_beamShapeExpression;
 			std::string m_beamMotionExpression;
+			std::string m_pathStyleExpression;
 			const char * m_positionOutput{"gl_Position"};
 			const char * m_instanceIndexExpression{"gl_InstanceIndex"};
 			bool m_instancingEnabled{false};
@@ -1140,6 +1177,9 @@ namespace EmEn::Saphir
 			bool m_beamRibbonEnabled{false};
 			/** @brief Whether the velocity outputs need the previous beam ribbon position (set by the velocity synthesis). */
 			bool m_previousBeamRequired{false};
+			bool m_pathRibbonEnabled{false};
+			/** @brief Whether the velocity outputs need the previous path ribbon position (set by the velocity synthesis). */
+			bool m_previousPathRequired{false};
 			bool m_heightfieldPixelFrameEnabled{false};
 			bool m_heightfieldFrameRequested{false};
 			bool m_heightfieldTextureCoordinatesRequested{false};

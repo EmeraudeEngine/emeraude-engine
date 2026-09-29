@@ -576,6 +576,17 @@ namespace EmEn::Saphir::Generator
 			bool declareInstanceTransformsBlock (AbstractShader & shader) const noexcept;
 
 			/**
+			 * @brief Declares the PATH storage blocks of the instance-transforms set: binding 1 the directory (a uvec4
+			 * {first point, point count, 0, 0} per instance slot), binding 2 the points ({current, previous} vec4 pairs).
+			 * @note Must match Scenes::SceneInstanceTransforms::PathSpan / PathPoint. Read by the path ribbon
+			 * (AbstractVertexStage::preparePathRibbon()).
+			 * @param shader A reference to a shader where to declare the storage blocks.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declarePathBlocks (AbstractShader & shader) const noexcept;
+
+			/**
 			 * @brief Generates the shader program.
 			 * @note Looks up computeProgramCacheKey() in the renderer's program cache first. On a hit,
 			 * the cached program's Set 1 (material) descriptor layout hash is checked against the

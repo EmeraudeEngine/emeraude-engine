@@ -31,9 +31,13 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <span>
 #include <memory>
 #include <type_traits>
 #include <vector>
+
+/* Third-party inclusions. */
+#include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
@@ -129,7 +133,51 @@ namespace EmEn::Scenes
 				Base::Math::Matrix< 4, float > previousModelMatrix;
 			};
 
+			/**
+			 * @brief GPU layout of one PATH directory entry (std430 uvec4, binding 1), indexed by the same slot as the
+			 * instance's Entry: where its points start in the point buffer and how many there are.
+			 * @note Written for the instances that pull their vertices (Graphics::RenderableInstance::Path) only; any
+			 * other slot holds zeros.
+			 */
+			struct PathSpan
+			{
+				uint32_t firstPoint;
+				uint32_t pointCount;
+				uint32_t reserved0;
+				uint32_t reserved1;
+			};
+
+			/**
+			 * @brief GPU layout of one path point (std430, binding 2), in the entity's space.
+			 * @note current.w: the arc length from the first point (metres). previous: the same point one published
+			 * tick earlier (the velocity of a moving path), w unused.
+			 */
+			struct PathPoint
+			{
+				Base::Math::Vector< 4, float > current;
+				Base::Math::Vector< 4, float > previous;
+			};
+
+			/**
+			 * @brief A path the DEBUG overlay draws this frame (Graphics::PathDebugOverlay): its range in debugPathPoints()
+			 * and its look. CPU side only: the overlay uploads it into its own buffer.
+			 */
+			struct DebugPath
+			{
+				uint32_t firstPoint;
+				uint32_t pointCount;
+				/** @brief The colour as displayed (sRGB) and the opacity. */
+				Base::Math::Vector< 4, float > color;
+				/** @brief (half width, 1 if in pixels, 1 if round, miter limit). */
+				Base::Math::Vector< 4, float > style;
+			};
+
+			/** @brief Initial per-frame path point capacity. Grows on demand (power of two), like the entries. */
+			static constexpr uint32_t InitialPathPointCapacity{256};
+
 			static_assert(sizeof(Header) == 160, "InstanceTransforms header must match the GPU layout (2 x mat4 + 2 x vec4).");
+			static_assert(sizeof(PathSpan) == 16, "A path directory entry must match the GPU layout (uvec4).");
+			static_assert(sizeof(PathPoint) == 32, "A path point must match the GPU layout (2 x vec4).");
 
 			static_assert(sizeof(Entry) == 128, "InstanceTransforms entry must match the GPU layout (2 x mat4).");
 			static_assert(std::is_trivially_copyable_v< Header > && std::is_trivially_copyable_v< Entry >, "InstanceTransforms structures must be trivially copyable (raw memcpy upload).");
@@ -195,6 +243,10 @@ namespace EmEn::Scenes
 			{
 				m_stagedFrameIndex = frameIndex;
 				m_stagedEntries.clear();
+				m_stagedPathDirectory.clear();
+				m_stagedPathPoints.clear();
+				m_stagedDebugPaths.clear();
+				m_stagedDebugPoints.clear();
 			}
 
 			/**
@@ -258,6 +310,52 @@ namespace EmEn::Scenes
 			 * capacity, retiring the previous buffer through the deferred destructor.
 			 * @return bool
 			 */
+			/**
+			 * @brief Stages the points of a path drawn through the entry `slot` (the one stageEntry() just returned).
+			 * @note Render thread, inside prepareRender(), like stageEntry(). The vertex stage finds them through
+			 * pathDirectory[gl_InstanceIndex] (Saphir, the path ribbon).
+			 * @param slot The instance's entry slot.
+			 * @note A path with no point is still staged (an empty entry): its vertex stage reads the entry whatever.
+			 * @param current The points of the frame (xyz in the entity's space, w the arc length); may be empty.
+			 * @param previous The same points at the previous rendered frame, or an empty span for none (previous =
+			 * current: no velocity). Otherwise as many as `current`.
+			 * @return void
+			 */
+			void stagePath (uint32_t slot, std::span< const Base::Math::Vector< 4, float > > current, std::span< const Base::Math::Vector< 4, float > > previous) noexcept;
+
+			/**
+			 * @brief Stages a path for the DEBUG overlay, in world space.
+			 * @note Render thread, from the primary view's prepareRender().
+			 * @param modelMatrix The path instance's model matrix.
+			 * @param points Its points in its entity's space (w the arc length).
+			 * @param color The colour as displayed (sRGB) and the opacity.
+			 * @param style (half width, 1 if in pixels, 1 if round, miter limit).
+			 * @return void
+			 */
+			void stageDebugPath (const Base::Math::Matrix< 4, float > & modelMatrix, std::span< const Base::Math::Vector< 4, float > > points, const Base::Math::Vector< 4, float > & color, const Base::Math::Vector< 4, float > & style) noexcept;
+
+			/**
+			 * @brief Returns the paths the debug overlay draws this frame.
+			 * @return const std::vector< DebugPath > &
+			 */
+			[[nodiscard]]
+			const std::vector< DebugPath > &
+			debugPaths () const noexcept
+			{
+				return m_stagedDebugPaths;
+			}
+
+			/**
+			 * @brief Returns their points: world xyz, w the arc length.
+			 * @return const std::vector< Base::Math::Vector< 4, float > > &
+			 */
+			[[nodiscard]]
+			const std::vector< Base::Math::Vector< 4, float > > &
+			debugPathPoints () const noexcept
+			{
+				return m_stagedDebugPoints;
+			}
+
 			[[nodiscard]]
 			bool updateVideoMemory () noexcept;
 
@@ -317,16 +415,37 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			bool writeBufferToDescriptorSet (uint32_t frameIndex) noexcept;
 
+			/**
+			 * @brief Makes a frame buffer hold at least `requiredBytes`, retiring the old one (power-of-two growth).
+			 * @param buffer The frame's buffer.
+			 * @param requiredBytes The size needed.
+			 * @param initialBytes The size of a first buffer.
+			 * @param grown Set true when the buffer was replaced (its descriptor must be rewritten).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool ensureCapacity (std::unique_ptr< Vulkan::ShaderStorageBufferObject > & buffer, VkDeviceSize requiredBytes, VkDeviceSize initialBytes, bool & grown) noexcept;
+
 			/** @brief Reference to the Vulkan device for SSBO creation. */
 			std::shared_ptr< Vulkan::Device > m_device;
 			/** @brief Deferred-destruction queue for in-flight-safe buffer retirement. */
 			Vulkan::DeferredDestructor * m_deferredDestructor{nullptr};
 			/** @brief Per-frame instance transforms SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_buffers;
-			/** @brief Per-frame descriptor sets (binding 0 = the frame's SSBO); rewritten on buffer growth. */
+			/** @brief Per-frame descriptor sets (binding 0 = the frame's SSBO, 1 = the path directory, 2 = the path points); rewritten on buffer growth. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			/** @brief Per-frame path directory SSBOs (binding 1: a PathSpan per entry slot). */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_pathDirectoryBuffers;
+			/** @brief Per-frame path point SSBOs (binding 2). */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_pathPointBuffers;
 			/** @brief Staged entries for the current frame (persistent capacity, cleared by beginFrame()). */
 			std::vector< Entry > m_stagedEntries;
+			/** @brief Staged path directory (indexed by entry slot) and points for the current frame. */
+			std::vector< PathSpan > m_stagedPathDirectory;
+			std::vector< PathPoint > m_stagedPathPoints;
+			/** @brief The debug overlay's paths of the current frame (CPU side only). */
+			std::vector< DebugPath > m_stagedDebugPaths;
+			std::vector< Base::Math::Vector< 4, float > > m_stagedDebugPoints;
 			/** @brief Staged header for the current frame (primary view target matrices). */
 			Header m_stagedHeader{};
 			/** @brief Frame-in-flight index targeted by the staging, set by beginFrame(). */

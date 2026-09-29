@@ -934,6 +934,14 @@ namespace EmEn::Graphics
 
 		output << "\n" "Total element count: " << elementCount << "\n";
 
+		/* A pulled-vertex geometry has no vertex buffer to compare with. */
+		if ( geometry.vertexBufferObject() == nullptr )
+		{
+			output << "No vertex buffer (pulled vertices)." "\n";
+
+			return output.str();
+		}
+
 		const auto VBOElementCount = geometry.vertexBufferObject()->vertexElementCount();
 
 		if ( VBOElementCount != elementCount )

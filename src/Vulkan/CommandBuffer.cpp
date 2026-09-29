@@ -1299,8 +1299,10 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* A pulled-vertex geometry (Geometry::PulledVertexResource) has no vertex buffer: nothing to bind. */
+		if ( const auto * vertexBufferObject = geometry.vertexBufferObject(); vertexBufferObject != nullptr )
 		{
-			auto * vertexBufferObjectHandle = geometry.vertexBufferObject()->handle();
+			auto * vertexBufferObjectHandle = vertexBufferObject->handle();
 			constexpr VkDeviceSize offset = 0;
 
 			vkCmdBindVertexBuffers(
@@ -1432,7 +1434,7 @@ namespace EmEn::Vulkan
 
 			vkCmdDraw(
 				m_handle,
-				geometry.vertexBufferObject()->vertexCount(),
+				geometry.vertexBufferObject() != nullptr ? geometry.vertexBufferObject()->vertexCount() : geometry.subGeometryRange(0)[1],
 				instanceCount,
 				firstVertex,
 				firstInstance
@@ -1489,7 +1491,7 @@ namespace EmEn::Vulkan
 
 			vkCmdDraw(
 				m_handle,
-				geometry.vertexBufferObject()->vertexCount(),
+				geometry.vertexBufferObject() != nullptr ? geometry.vertexBufferObject()->vertexCount() : geometry.subGeometryRange(0)[1],
 				instanceCount,
 				firstVertex,
 				firstInstance
@@ -1641,7 +1643,7 @@ namespace EmEn::Vulkan
 
 			vkCmdDraw(
 				m_handle,
-				geometry.vertexBufferObject()->vertexCount(),
+				geometry.vertexBufferObject() != nullptr ? geometry.vertexBufferObject()->vertexCount() : geometry.subGeometryRange(0)[1],
 				instanceCount,
 				firstVertex,
 				firstInstance

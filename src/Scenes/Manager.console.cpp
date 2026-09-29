@@ -73,6 +73,7 @@ namespace EmEn::Scenes
 		Component::appendAudioConsoleAdapters(*this, m_componentConsoleAdapters);
 		Component::appendVisualConsoleAdapters(*this, m_componentConsoleAdapters);
 		Component::appendBeamConsoleAdapters(*this, m_componentConsoleAdapters);
+		Component::appendPathConsoleAdapters(*this, m_componentConsoleAdapters);
 
 		for ( const auto & adapter : m_componentConsoleAdapters )
 		{

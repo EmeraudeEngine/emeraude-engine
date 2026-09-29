@@ -267,4 +267,12 @@ namespace EmEn::Scenes::Component
 	 * @return void
 	 */
 	void appendBeamConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
+
+	/**
+	 * @brief Creates the console adapter of the Path component (polylines and curves).
+	 * @param sceneManager The scene manager.
+	 * @param adapters Receives the adapters (the caller registers and owns them).
+	 * @return void
+	 */
+	void appendPathConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 }

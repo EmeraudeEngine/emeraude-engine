@@ -788,6 +788,13 @@ namespace EmEn::Scenes
 					continue;
 				}
 
+				/* A pulled-vertex geometry (a path) has no vertex buffer: the depth-only programs expect one — they would
+				 * draw garbage. Not outlined (docs/todo: segment-rendering § C). */
+				if ( const auto * geometry = renderable->geometry(0); geometry != nullptr && geometry->vertexBufferObject() == nullptr )
+				{
+					continue;
+				}
+
 				/* The depth-only programs of THIS target are generated on first use, here, on the render thread. */
 				if ( !instance->isReadyToCastShadows(renderTarget) && (!instance->getReadyForShadowCasting(renderTarget, renderer) || !instance->isReadyToCastShadows(renderTarget)) )
 				{

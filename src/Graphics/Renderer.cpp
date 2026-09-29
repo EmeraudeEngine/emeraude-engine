@@ -902,6 +902,7 @@ namespace EmEn::Graphics
 
 		/* Its descriptor sets come from the pool released below. */
 		m_selectionOutline.destroy();
+		m_pathDebugOverlay.destroy();
 
 		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
@@ -2337,6 +2338,18 @@ namespace EmEn::Graphics
 				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SelectionOutline"};
 
 				m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->offscreenCompositeFramebuffer(), compositeExtent.width, compositeExtent.height, m_postProcessor.grabPass(), mainTarget->viewMatrices(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
+			}
+		}
+
+		/* The paths in debug mode: always on top of everything the scene drew, the outline included. */
+		if ( scenePtr != nullptr && !scenePtr->instanceTransforms().debugPaths().empty() )
+		{
+			if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
+			{
+				const auto & compositeExtent = m_swapChain->extent();
+				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PathDebugOverlay"};
+
+				m_pathDebugOverlay.record(*commandBuffer, *m_swapChain->offscreenCompositeFramebuffer(), compositeExtent.width, compositeExtent.height, scenePtr->instanceTransforms(), mainTarget->viewMatrices(), scenePtr->frameReadStateIndex(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
 			}
 		}
 

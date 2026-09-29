@@ -39,6 +39,7 @@
 /* Local inclusions. */
 #include "AbstractShader.hpp"
 #include "BeamGLSL.hpp"
+#include "PathGLSL.hpp"
 #include "Code.hpp"
 #include "Declaration/InputAttribute.hpp"
 #include "Declaration/OutputBlock.hpp"
@@ -463,6 +464,12 @@ namespace EmEn::Saphir
 		if ( m_beamRibbonEnabled )
 		{
 			m_previousBeamRequired = true;
+		}
+
+		/* A path moves with its points and its entity: the ribbon rebuilt from the previous points and model. */
+		if ( m_pathRibbonEnabled )
+		{
+			m_previousPathRequired = true;
 		}
 
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
@@ -1734,6 +1741,25 @@ namespace EmEn::Saphir
 	AbstractVertexStage::vertexFrameExpression (VertexAttributeType vectorType) const noexcept
 	{
 		/* A beam is an unlit emissive ribbon: its frame is the unit segment's own axes, declared by prepareBeamRibbon(). */
+		/* A path is an unlit ribbon facing the eye, like the beam: its frame is declared by preparePathRibbon(). */
+		if ( m_pathRibbonEnabled )
+		{
+			switch ( vectorType )
+			{
+				case VertexAttributeType::Tangent :
+					return "pathTangent";
+
+				case VertexAttributeType::Binormal :
+					return "pathBinormal";
+
+				case VertexAttributeType::Normal :
+					return "pathNormal";
+
+				default :
+					return nullptr;
+			}
+		}
+
 		if ( m_beamRibbonEnabled )
 		{
 			switch ( vectorType )
@@ -1802,7 +1828,7 @@ namespace EmEn::Saphir
 	AbstractVertexStage::declareFrameAttribute (VertexAttributeType vectorType) noexcept
 	{
 		/* The billboard and the beam ribbon synthesize their frame (prepareImposterBillboard(), prepareBeamRibbon()). */
-		if ( m_imposterBillboardEnabled || m_beamRibbonEnabled )
+		if ( m_imposterBillboardEnabled || m_beamRibbonEnabled || m_pathRibbonEnabled )
 		{
 			return true;
 		}
@@ -2010,6 +2036,12 @@ namespace EmEn::Saphir
 			return "beamPosition";
 		}
 
+		/* A path ribbon: the vertex pulled from the path's points, placed across its segment (PathGLSL). */
+		if ( m_pathRibbonEnabled )
+		{
+			return "pathPosition";
+		}
+
 		/* An imposter billboard: the quad corner placed in object space, facing the eye. */
 		if ( m_imposterBillboardEnabled )
 		{
@@ -2065,6 +2097,12 @@ namespace EmEn::Saphir
 		if ( m_beamRibbonEnabled )
 		{
 			return "previousBeamPosition";
+		}
+
+		/* A path: rebuilt from the points staged at the previous frame and the previous model matrix. */
+		if ( m_pathRibbonEnabled )
+		{
+			return "previousPathPosition";
 		}
 
 		if ( m_vegetationWindEnabled )
@@ -2282,6 +2320,93 @@ namespace EmEn::Saphir
 		return true;
 	}
 
+	bool
+	AbstractVertexStage::preparePathRibbon (Generator::Abstract & generator) noexcept
+	{
+		if ( this->preparationAlreadyDone("pathPosition") )
+		{
+			return true;
+		}
+
+		if ( m_skinningEnabled || m_vegetationWindEnabled || m_heightfieldSurfaceEnabled || m_imposterBillboardEnabled || m_beamRibbonEnabled )
+		{
+			Tracer::error(ClassId, "A path ribbon cannot be skinned, blown by the wind, a heightfield, an imposter or a beam !");
+
+			return false;
+		}
+
+		/* The directory is indexed by the instance slot: the instance-transforms SSBO path only. */
+		if ( this->isInstancingEnabled() || this->isMDIEnabled() || !this->isInstanceTransformsEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
+		{
+			Tracer::error(ClassId, "A path ribbon is drawn through a unique instance on the instance-transforms SSBO path only (never instanced, MDI, cubemap nor CSM) !");
+
+			return false;
+		}
+
+		/* Registers the model matrix's own preparation (instance-transforms SSBO) BEFORE this one. No vertex attribute:
+		 * every vertex is pulled from the path SSBO by gl_VertexIndex. */
+		std::string modelMatrix;
+
+		if ( !this->resolveWorldModelMatrix(modelMatrix) )
+		{
+			return false;
+		}
+
+		if ( !generator.declarePathBlocks(*this) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::PathCoordinates, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		if ( !PathGLSL::declareFunctions(*this) )
+		{
+			return false;
+		}
+
+		/* One pixel at a distance of 1 (perspective) or anywhere (orthographic): 2 / (viewport height · P[1][1]), like the
+		 * beam's clamp. */
+		const auto projection = ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false);
+		const std::string pixel{"vec2(2.0 / max(" + ViewUB(Keys::UniformBlock::Component::ViewProperties, false) + ".y * abs(" + projection + "[1][1]), 1.0e-6), " + projection + "[2][3] != 0.0 ? 1.0 : 0.0)"};
+		const std::string span{"ubPathDirectory.pathSpans[" + std::string{m_instanceIndexExpression} + "]"};
+
+		std::stringstream code;
+
+		code <<
+			"\t" "/* Path ribbon, pulled from the path SSBO, built in world space and brought back to the object space (Saphir PathGLSL). */" "\n"
+			"\t" "const mat4 pathModel = " << modelMatrix << ";" "\n"
+			"\t" "const uvec4 pathSpan = " << span << ";" "\n"
+			"\t" "const vec3 pathEye = " << ViewUB(Keys::UniformBlock::Component::PositionWorldSpace, false) << ".xyz;" "\n"
+			"\t" "const vec2 pathPixel = " << pixel << ";" "\n"
+			"\t" "const vec4 pathStyle = " << m_pathStyleExpression << ";" "\n"
+			"\t" "vec4 pathCoordinates;" "\n"
+			"\t" "const vec3 pathPosition = pathCorner(pathModel, pathSpan, gl_VertexIndex, false, pathStyle, pathEye, pathPixel, pathCoordinates);" "\n"
+			"\t" "const vec3 pathTangent = vec3(1.0, 0.0, 0.0);" "\n"
+			"\t" "const vec3 pathBinormal = vec3(0.0, 1.0, 0.0);" "\n"
+			"\t" "const vec3 pathNormal = vec3(0.0, 0.0, 1.0);" "\n"
+			"\t" << ShaderVariable::PathCoordinates << " = pathCoordinates;" "\n";
+
+		/* The velocity pass: the same ribbon from the PREVIOUS points (the render-side history staged beside the current
+		 * ones) and the previous model matrix (the instance-transforms entry, odd slot). It faces the CURRENT eye. */
+		if ( m_previousPathRequired )
+		{
+			const auto previousModelMatrix = "ubInstanceTransforms.instanceMatrices[" + std::string{m_instanceIndexExpression} + " * 2 + 1]";
+
+			code <<
+				"\t" "vec4 previousPathCoordinates;" "\n"
+				"\t" "const vec3 previousPathPosition = pathCorner(" << previousModelMatrix << ", pathSpan, gl_VertexIndex, true, pathStyle, pathEye, pathPixel, previousPathCoordinates);" "\n";
+		}
+
+		code << "\n";
+
+		m_uniquePreparations.emplace_back("pathPosition", code.str());
+
+		return true;
+	}
+
 	std::string
 	AbstractVertexStage::generateVegetationWindCode (const char * baseExpression) const noexcept
 	{
@@ -2477,6 +2602,12 @@ namespace EmEn::Saphir
 
 		/* The beam ribbon too, for the same reason. */
 		if ( m_beamRibbonEnabled && !this->prepareBeamRibbon(generator) )
+		{
+			return false;
+		}
+
+		/* And the path ribbon. */
+		if ( m_pathRibbonEnabled && !this->preparePathRibbon(generator) )
 		{
 			return false;
 		}

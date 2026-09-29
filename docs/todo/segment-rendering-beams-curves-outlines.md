@@ -53,7 +53,7 @@ Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where vi
 - The direct swap-chain frame path (no scene target there).
 - B.1, the geometric silhouette (`VertexFactory::Silhouette` + primitive A), for debug / wireframe tools — later.
 
-### C. Paths and curves — `Component::Path` (IN PROGRESS 2026-09-29, design validated by the owner)
+### C. Paths and curves — `Component::Path` — first pass DONE 2026-09-29 (graphics doc 35)
 
 Owner decisions (2026-09-29): points reach the GPU through an SSBO read by VERTEX PULLING (no VBO: a new VBO-less
 geometry); the scene holds ONE packed path SSBO per frame in flight, staged in `prepareRender()` from each path's
@@ -69,7 +69,14 @@ class); uniform cubic B-spline; centripetal Catmull-Rom (Yuksel, Schaefer, Keyse
 cubic Bézier spans, subdivided by de Casteljau until flat (`Math/CurveTessellation.hpp`, emeraude-base).
 References: Rougier, "Shader-Based Antialiased, Dashed, Stroked Polylines", JCGT 2013; three.js
 `LineSegments2`/`LineMaterial` (`worldUnits`); A. Klein, "Rendering thick lines with dashes".
-Later: dashes, arrows, per-vertex colour.
+The colour (owner decision 2026-09-29): a linear hue × a luminance in nits (250 default), like the beams; a colour
+exact on screen is the debug mode's. What remains:
+- A path cannot be OUTLINED (the shadow-casting programs do not build the ribbon: skipped in
+  `renderSelectionDepth()`), casts no shadow, is absent from reflection cubemaps (the directory needs the
+  instance-transforms SSBO path).
+- The debug overlay on the direct swap-chain frame path (no scene target there).
+- A point-count change pairs no previous points (velocity 0) but sets no reactive tag yet.
+- Dashes (the arc length is already in w), arrows, per-vertex colour; a Bézier path from the console.
 
 ### D. Beams — what the first pass left out
 

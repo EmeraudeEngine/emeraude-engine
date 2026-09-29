@@ -61,6 +61,7 @@
 #include "StaticVector.hpp"
 #include "Time/Statistics/RealTime.hpp"
 #include "PostProcessor.hpp"
+#include "PathDebugOverlay.hpp"
 #include "SelectionOutline.hpp"
 #include "TextureCache.hpp"
 #include "TextureCompressor.hpp"
@@ -1756,6 +1757,8 @@ namespace EmEn::Graphics
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
 			/** @brief The outline of the scene's highlighted entities (internal-target frames). */
 			SelectionOutline m_selectionOutline{*this};
+			/** @brief The paths in debug mode, always on top after the tone mapping (internal-target frames). */
+			PathDebugOverlay m_pathDebugOverlay{*this};
 			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};
 			std::vector< ServiceInterface * > m_subServicesEnabled;
