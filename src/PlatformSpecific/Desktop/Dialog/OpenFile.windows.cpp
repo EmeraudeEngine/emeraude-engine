@@ -377,18 +377,28 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 		}
 
-		/* NOTE: Set default directory. */
+		/* NOTE: Set default directory. SHCreateItemFromParsingName rejects forward
+		 * slashes on Windows; make_preferred() normalises separators to backslashes so
+		 * paths coming from cross-platform sources (JS, POSIX-style config) are accepted. */
 		if ( !m_defaultDirectory.empty() )
 		{
 			IShellItem * folderItem = nullptr;
-			const auto dirWide = m_defaultDirectory.wstring();
+			const auto dirWide = std::filesystem::path{m_defaultDirectory}.make_preferred().wstring();
 			HRESULT hr2 = SHCreateItemFromParsingName(dirWide.c_str(), nullptr, IID_IShellItem, reinterpret_cast< void * * >(&folderItem));
 
 			if ( SUCCEEDED(hr2) && folderItem != nullptr )
 			{
-				dialogHandle->SetFolder(folderItem);
+				HRESULT hr3 = dialogHandle->SetFolder(folderItem);
+				if ( FAILED(hr3) )
+				{
+					Tracer::error(ClassId, "SetFolder failed on the dialog instance !");
+				}
 
 				folderItem->Release();
+			}
+			else
+			{
+				Tracer::error(ClassId, "SHCreateItemFromParsingName failed for the default directory !");
 			}
 		}
 
