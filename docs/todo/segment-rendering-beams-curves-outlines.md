@@ -53,10 +53,23 @@ Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where vi
 - The direct swap-chain frame path (no scene target there).
 - B.1, the geometric silhouette (`VertexFactory::Silhouette` + primitive A), for debug / wireframe tools — later.
 
-### C. Paths and Bézier curves
+### C. Paths and curves — `Component::Path` (IN PROGRESS 2026-09-29, design validated by the owner)
 
-- Tessellate `BezierCurve` / `BSpline` (tested) on the CPU, adaptive by screen-space error, into primitive A.
-  Optional dashes, arrows, per-vertex colour.
+Owner decisions (2026-09-29): points reach the GPU through an SSBO read by VERTEX PULLING (no VBO: a new VBO-less
+geometry); the scene holds ONE packed path SSBO per frame in flight, staged in `prepareRender()` from each path's
+published state (the `SceneInstanceTransforms` model), each draw pushing `{firstPoint, pointCount}`; every point
+carries `{current, previous}` (a path that moves every tick has a real velocity; a point-count change = velocity 0
++ the reactive tag that frame); the world path is an unlit OPAQUE solid colour, depth tested and written, in the
+scene pass, casting no shadow; joins miter falling back to bevel past the SVG miter limit (4), round joins/caps as a
+per-path option (distance in the fragment shader, Rougier); width in metres or in pixels; a DEBUG mode drawn after
+the tone mapping (no depth test, display colour, translucent allowed, neither exposed nor TAA'd — like the outline).
+Curves, all tessellated on the CPU into a polyline, adaptively, by a chord tolerance in metres (1 cm default):
+polyline; piecewise cubic Bézier (the existing `Math::BSpline`, anchors + handles — consolidation, not a parallel
+class); uniform cubic B-spline; centripetal Catmull-Rom (Yuksel, Schaefer, Keyser 2011) — every kind converted to
+cubic Bézier spans, subdivided by de Casteljau until flat (`Math/CurveTessellation.hpp`, emeraude-base).
+References: Rougier, "Shader-Based Antialiased, Dashed, Stroked Polylines", JCGT 2013; three.js
+`LineSegments2`/`LineMaterial` (`worldUnits`); A. Klein, "Rendering thick lines with dashes".
+Later: dashes, arrows, per-vertex colour.
 
 ### D. Beams — what the first pass left out
 

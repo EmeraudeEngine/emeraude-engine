@@ -34,6 +34,7 @@
 #include <array>
 #include <cmath>
 #include <iterator>
+#include <mutex>
 #include <ranges>
 
 /* Third-party inclusions. */
@@ -43,6 +44,7 @@
 #include "backends/imgui_impl_glfw.h"
 
 #include "IO/IO.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
@@ -779,7 +781,29 @@ namespace EmEn::Overlay
 
 			ImGui::Render();
 
-			ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer.handle());
+			auto * drawData = ImGui::GetDrawData();
+
+			/* ⚠️ ImGUI 1.92 (ImGuiBackendFlags_RendererHasTextures) uploads its textures — the font atlas on the first
+			 * frame, then whenever glyphs are added — INSIDE RenderDrawData(), with its own vkQueueSubmit() +
+			 * vkQueueWaitIdle() on the graphics queue it was given, outside the device lock every engine queue access
+			 * takes (Vulkan/Queue.cpp). On a single queue family (Apple GPUs) the loaders' uploads share that queue:
+			 * UNASSIGNED-Threading-MultipleThreads-Write (macOS, 2026-09-29, the editor panel's first frame racing the
+			 * gizmo uploads). The pending textures are therefore updated HERE, under that lock; RenderDrawData() skips
+			 * a texture whose status is already OK. */
+			if ( drawData != nullptr && drawData->Textures != nullptr )
+			{
+				for ( auto * texture : *drawData->Textures )
+				{
+					if ( texture->Status != ImTextureStatus_OK )
+					{
+						const std::lock_guard< Vulkan::Device > deviceLock{*m_ImGUIDescriptorPool->device()};
+
+						ImGui_ImplVulkan_UpdateTexture(texture);
+					}
+				}
+			}
+
+			ImGui_ImplVulkan_RenderDrawData(drawData, commandBuffer.handle());
 		}
 		else
 		{

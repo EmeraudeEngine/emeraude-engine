@@ -507,3 +507,23 @@ repaints again, and whether the gap between `bandBytes` and `regionBytes` justif
 > ⚠️ The **dump** is gated by the setting; the **accounting** is not. It costs a handful of integer
 > additions and two clock reads per upload, at most once per painted frame — negligible, but not
 > literally zero.
+
+### ImGUI — two threading and input rules (2026-09-29)
+
+> ⚠️⚠️ **ImGUI uploads its textures behind the engine's back.** ImGUI 1.92 (`ImGuiBackendFlags_RendererHasTextures`)
+> updates the font atlas — on the first ImGUI frame, then whenever glyphs are added — INSIDE
+> `ImGui_ImplVulkan_RenderDrawData()`, with its own `vkQueueSubmit()` + `vkQueueWaitIdle()` on the graphics queue
+> given at init, and NOT under the `Vulkan::Device` lock every engine queue access takes (`Vulkan/Queue.cpp`). On a
+> single queue family (the Apple M2) the resource loaders' uploads share that queue: macOS reported 11-12
+> `UNASSIGNED-Threading-MultipleThreads-Write` (`vkQueueSubmit` from two threads) the moment the editor panel drew its
+> first frame while the gizmos uploaded. Linux (NVIDIA, a separate transfer family) showed 0 — a Linux pass proves
+> nothing here. `Overlay::Manager::render()` now calls `ImGui_ImplVulkan_UpdateTexture()` itself for every texture
+> whose status is not `OK`, under the device lock, before `RenderDrawData()` (which skips an `OK` texture). Any other
+> ImGUI backend call that submits must take the same lock. (`ImGui_ImplVulkanH_*` also submits, but only serves
+> secondary platform windows — viewports are not enabled.)
+>
+> **ImGUI reads the pointer through its own GLFW callbacks**, in parallel with the engine's listeners. The overlay
+> latches `io.WantCaptureMouse` after each `NewFrame()` (`m_ImGUICapturesPointer`) and CONSUMES a button press or a
+> wheel event over an ImGUI window, so the scene and the editor behind it never see it. A RELEASE is never consumed:
+> a drag started in the scene must end even over a window. An INJECTED event (`InputManagerService.mouseClick`,
+> `keyPress`) reaches the engine callbacks only: it never presses an ImGUI widget.
