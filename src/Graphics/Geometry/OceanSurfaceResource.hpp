@@ -96,6 +96,8 @@ namespace EmEn::Graphics::Geometry
 	 */
 	class EMEN_API OceanSurfaceResource final : public Interface
 	{
+		using ResourceTrait::load;
+
 		public:
 
 			/** @brief Class identifier. */

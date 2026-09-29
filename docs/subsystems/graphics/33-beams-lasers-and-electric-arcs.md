@@ -72,6 +72,16 @@ line between the two fixed ends, saturated blobs at the ends, ghosts, the real a
   UNCONDITIONALLY. ⚠️ The motion marker (negative depth) was not enough: it is kept on a depth EDGE, and the ghost
   line survived exactly on the horizon. With the zero tag: TAA on and TAA off leave the same persistent light
   (20 116 vs 20 461 pixels lit in all of 5 captures 1.1 s apart, glare camera-owned in both).
+⚠️⚠️ **Two rules found by the macOS peer (2026-09-29), both needed** — the first version protected the beam's CURRENT
+pixels only, and a sweeping laser left a fan of red streaks under TAA (macOS, then reproduced on Linux on the
+ScreenSpace lane; the 2026-09-28 measurement above looked at the arc only and could not see it):
+1. **The mask is read over the SAME 3x3 footprint as the reconstruction** (max of the 9 taps): the resolve's current
+   colour is a Mitchell-Netravali blend of the 3x3, so a pixel NEXT to the beam borrows its light; read at the centre
+   only, that pixel accumulated the light into an untagged history nothing ever rejected.
+2. **A reactive-tagged history is REPLACED (blendAlpha = 1), not clipped**: a pixel next to the beam's new position has
+   the beam in its 3x3 neighbourhood, the variance box spans it, and the old light survived the clip.
+Validated: 10 captures over a full turn of the laser (ScreenSpace lane, TAA on), no streak, no trail, 0 validation
+message.
 - `SceneRenderTarget::clearValues(palette)` builds the clear values of the target's own attachments; the two
   hand-written ladders of `Renderer.cpp` (one branch per attachment combination, twice) are gone.
 

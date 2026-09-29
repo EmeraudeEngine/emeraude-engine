@@ -109,6 +109,8 @@ namespace
 	 * - Karis weights on the EXPOSED luminance (UE4 `HdrWeight4(C, Exposure)`, FSR2 `PrepareRgb`, HDRP pre-exposure):
 	 *   in nits, `1 / (1 + L)` is `1 / L` and the blend becomes a harmonic mean dominated by the darkest sample. */
 
+	/* ⚠️ Split into adjacent raw literals (byte-identical once concatenated): MSVC caps ONE literal at 16380 bytes
+	 * (C2026, docs/caution-points.md). Keep every piece well under it when the shader grows. */
 	static constexpr auto TAAResolveFragmentShader = R"GLSL(
 #version 450
 
@@ -274,7 +276,7 @@ vec3 sampleHistoryCatmullRom(vec2 uv, vec2 texelSize)
 	return clamp(result, min(min(c00, c10), min(c01, c11)), max(max(c00, c10), max(c01, c11)));
 }
 
-
+)GLSL" R"GLSL(
 void main()
 {
 	vec2 texel = vec2(texelSizeX, texelSizeY);
@@ -297,11 +299,20 @@ void main()
 	float sourceWeightTotal = 0.0;
 	vec3 m1 = vec3(0.0);
 	vec3 m2 = vec3(0.0);
+	/* The REACTIVE mask over the SAME 3x3 footprint as the reconstruction: a pixel whose current colour borrows a
+	 * reactive neighbour's light is reactive too. Read at the centre only, the neighbours of a sweeping laser took a
+	 * share of its light into an untagged history that nothing ever rejected — a fan of red streaks (2026-09-29). */
+	float reactive = 0.0;
 
 	for (int y = -1; y <= 1; y++)
 	{
 		for (int x = -1; x <= 1; x++)
 		{
+			if (reactiveEnabled > 0.5)
+			{
+				reactive = max(reactive, texture(reactiveTex, vUV + vec2(x, y) * texel).r);
+			}
+
 			vec3 tap = texture(sceneTex, vUV + vec2(x, y) * texel).rgb;
 
 			vec3 tapYCoCg = RGBToYCoCg(tap);
@@ -391,7 +402,7 @@ void main()
 	{
 		history = current;
 	}
-
+)GLSL" R"GLSL(
 	/* History rectification: VARIANCE CLIPPING in YCoCg (Salvi). The 3x3 first and
 	 * second moments build a statistical AABB (mu +/- gamma * sigma) that follows the
 	 * local signal much tighter than a min/max hull — stale history gets pulled in
@@ -455,7 +466,6 @@ void main()
 	 * motion marker, even on a depth edge. Averaged instead, twelve re-strikes a second converged to a straight white
 	 * line between the arc's fixed ends; with the motion marker alone, the line survived exactly on the HORIZON, the
 	 * edge band the marker keeps (measured 2026-09-28, `beams`). */
-	float reactive = reactiveEnabled > 0.5 ? texture(reactiveTex, vUV).r : 0.0;
 	bool reactiveOut = reactive > 0.5;
 	bool rejected = !sameSurface || objectLeft || historyReactive;
 	bool markOut = foreignMotion || (historyMarked && edge);
@@ -470,8 +480,12 @@ void main()
 	 * harmonic through (8-phase Halton), at 0.05 half of it. One pixel of motion restores the configured alpha. */
 	float blendAlpha = alpha * mix(0.5, 1.0, clamp(motionPixels, 0.0, 1.0));
 
-	/* The reactive mask overrides it: at 1 the history is ignored. */
-	blendAlpha = mix(blendAlpha, 1.0, clamp(reactive, 0.0, 1.0));
+	/* The reactive mask overrides it: at 1 the history is ignored — where the overlay IS, and where it WAS (a history
+	 * tagged reactive). ⚠️ The second half is not a clip: a pixel next to the overlay's NEW position has that overlay in
+	 * its 3x3 neighbourhood, so the variance box spans it and the old light survived the clip; untagged the next frame,
+	 * it then decayed at the accumulation rate — a sweeping laser left a fan of red streaks (measured 2026-09-29 on
+	 * `beams`, macOS and Linux, ScreenSpace lane). */
+	blendAlpha = mix(blendAlpha, 1.0, historyReactive ? 1.0 : clamp(reactive, 0.0, 1.0));
 
 	vec3 result;
 
