@@ -128,7 +128,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureSet * bindlessTextureSet, uint32_t frameIndex, const Base::Math::Vector< 3, float > & cameraPosition) noexcept
+	SceneMetaData::rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureSet * bindlessTextureSet, uint32_t frameIndex, uint32_t readStateIndex, const Base::Math::Vector< 3, float > & cameraPosition) noexcept
 	{
 		if ( m_accelerationStructureBuilder == nullptr )
 		{
@@ -391,7 +391,7 @@ namespace EmEn::Scenes
 						finalMatrix = worldCoordinates->getModelMatrix();
 					}
 
-					batch.renderableInstance()->applyLocalTransformation(finalMatrix);
+					batch.renderableInstance()->applyLocalTransformation(finalMatrix, readStateIndex);
 
 					const auto * m = finalMatrix.data();
 

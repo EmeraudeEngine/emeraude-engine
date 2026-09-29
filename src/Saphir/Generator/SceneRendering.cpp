@@ -629,6 +629,15 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* ⚠️ BEFORE the velocity synthesis: a material whose vertex stage builds the position (the beam ribbon)
+		 * switches that mode on here, and the synthesis below captures the position expressions as it runs. */
+		if ( this->materialEnabled() && !this->getMaterialInterface()->prepareVertexStage(*this, vertexShader) )
+		{
+			TraceError{ClassId} << "Unable to prepare the vertex stage for material '" << this->getMaterialInterface()->name() << "' !";
+
+			return false;
+		}
+
 		/* Velocity outputs (motion vectors): current and previous clip-space positions,
 		 * turned into an NDC delta by the fragment shader. Requires the InstanceTransforms
 		 * SSBO header (previousViewProjection). */
@@ -729,6 +738,16 @@ namespace EmEn::Saphir::Generator
 		if ( m_hasVelocityAttachment )
 		{
 			fragmentShader->declare(Declaration::OutputFragment{4, Keys::GLSL::FloatVector2, Keys::ShaderVariable::OutputVelocity});
+		}
+
+		/* The reactive mask output, only for a material that writes one (Material::Interface::reactiveMaskExpression()):
+		 * every other pipeline masks the attachment (onGraphicsPipelineConfiguration()), which keeps its clear value. */
+		const auto reactiveMask = this->materialEnabled() ? this->getMaterialInterface()->reactiveMaskExpression() : std::string{};
+		const bool writesReactive = m_hasReactiveAttachment && !reactiveMask.empty();
+
+		if ( writesReactive )
+		{
+			fragmentShader->declare(Declaration::OutputFragment{5, Keys::GLSL::Float, Keys::ShaderVariable::OutputReactive});
 		}
 
 		/* If a material is present, generate the shader code (optional). */
@@ -1074,6 +1093,11 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
+		if ( writesReactive )
+		{
+			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputReactive << " = clamp(" << reactiveMask << ", 0.0, 1.0);";
+		}
+
 		return fragmentShader->generateSourceCode(*this);
 	}
 	
@@ -1136,7 +1160,11 @@ namespace EmEn::Saphir::Generator
 		{
 			auto gBufferState = graphicsPipeline.colorBlendAttachments()[0];
 
-			if ( Graphics::renderPassIsLightPass(m_renderPassType) )
+			/* An emissive overlay (Material::Interface::writesGeometryBuffer(), a beam) adds light and is no surface:
+			 * the G-buffer keeps the geometry behind it, exactly as under a light pass. */
+			const auto * material = renderable->material(this->layerIndex());
+
+			if ( Graphics::renderPassIsLightPass(m_renderPassType) || (material != nullptr && !material->writesGeometryBuffer()) )
 			{
 				gBufferState.colorWriteMask = 0;
 			}
@@ -1206,6 +1234,27 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasVelocityAttachment )
 			{
 				graphicsPipeline.appendColorBlendAttachment(gBufferState);
+			}
+
+			/* The reactive mask: REPLACED (red channel) by a material that declares one, outside a light pass; masked for
+			 * every other pipeline, so the attachment keeps its clear value (0: trust the history). ⚠️ Independent of
+			 * writesGeometryBuffer(): the beam masks the whole G-buffer and still writes this. */
+			if ( m_hasReactiveAttachment )
+			{
+				auto reactiveState = gBufferState;
+				reactiveState.blendEnable = VK_FALSE;
+				reactiveState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+				reactiveState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+				reactiveState.colorBlendOp = VK_BLEND_OP_ADD;
+				reactiveState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				reactiveState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+				reactiveState.alphaBlendOp = VK_BLEND_OP_ADD;
+
+				const bool writesReactive = !Graphics::renderPassIsLightPass(m_renderPassType) && material != nullptr && !material->reactiveMaskExpression().empty();
+
+				reactiveState.colorWriteMask = writesReactive ? static_cast< VkColorComponentFlags >(VK_COLOR_COMPONENT_R_BIT) : 0;
+
+				graphicsPipeline.appendColorBlendAttachment(reactiveState);
 			}
 		}
 

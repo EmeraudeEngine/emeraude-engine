@@ -316,6 +316,19 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the post-process grab pass: this frame's copies of the scene attachments (colour, depth,
+			 * G-buffer), left in SHADER_READ_ONLY_OPTIMAL by recordBlit(). nullptr before configure().
+			 * @note Read by Graphics::SelectionOutline for the scene depth it compares the selection's with.
+			 * @return const GrabPass *
+			 */
+			[[nodiscard]]
+			const GrabPass *
+			grabPass () const noexcept
+			{
+				return m_grabPass.get();
+			}
+
+			/**
 			 * @brief Updates the cached requirements without reconfiguring GPU resources.
 			 * @note Call this before recreateSceneTarget() so it picks up correct formats.
 			 * @param requiresHDR Whether the scene effects require HDR.

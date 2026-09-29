@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -43,6 +44,7 @@
 #include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/SkinnedGeometryProcessor.hpp"
@@ -984,27 +986,55 @@ namespace EmEn::Graphics::RenderableInstance
 			void setBroken (const std::string & errorMessage, const std::source_location & location = std::source_location::current()) noexcept;
 
 			/**
-			 * @brief Sets a local transformation matrix to apply just before render.
+			 * @brief Sets a CONSTANT local transformation matrix to apply just before render, in every render state slot.
+			 * @note For a transform set once while the scene is built (a debug helper's scale, a definition's scale). A
+			 * transform that changes while the scene runs goes through publishTransformationMatrix(): this one writes the
+			 * slot the render thread may be reading.
 			 * @param transformationMatrix A reference to a matrix 4x4.
 			 * @return void
 			 */
 			void
 			setTransformationMatrix (const Base::Math::Matrix< 4, float > & transformationMatrix) noexcept
 			{
-				m_transformationMatrix = transformationMatrix;
+				m_transformationMatrices.fill(transformationMatrix);
 
 				this->enableFlag(ApplyTransformationMatrix);
 			}
 
 			/**
-			 * @brief Returns the local transformation matrix.
+			 * @brief Publishes the local transformation matrix of one logic tick, for the render thread.
+			 * @note ⚠️ LOGIC thread only, from a component's publishStateForRendering(): the slot is the one the logic
+			 * writes, never the one a frame reads (Scene::publishStateForRendering(), the render state triple buffer).
+			 * This is what lets a transform change every tick without racing the frame and, through the
+			 * instance-transforms SSBO, report a real previous model matrix (Scenes::Component::Beam places its unit
+			 * segment this way).
+			 * @param writeStateIndex The render state slot to write.
+			 * @param transformationMatrix A reference to a matrix 4x4.
+			 * @return void
+			 */
+			void
+			publishTransformationMatrix (uint32_t writeStateIndex, const Base::Math::Matrix< 4, float > & transformationMatrix) noexcept
+			{
+				if ( writeStateIndex >= m_transformationMatrices.size() ) [[unlikely]]
+				{
+					return;
+				}
+
+				m_transformationMatrices[writeStateIndex] = transformationMatrix;
+
+				this->enableFlag(ApplyTransformationMatrix);
+			}
+
+			/**
+			 * @brief Returns the local transformation matrix of a render state slot.
+			 * @param readStateIndex The render state slot the frame reads.
 			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > &
-			transformationMatrix () const noexcept
+			transformationMatrix (uint32_t readStateIndex) const noexcept
 			{
-				return m_transformationMatrix;
+				return m_transformationMatrices[readStateIndex % m_transformationMatrices.size()];
 			}
 
 			/**
@@ -1018,9 +1048,11 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @note ⚠️ A SPRITE's uniform scale is NOT applied: the store's sprite definitions carry values (×64) that
 			 * were never drawn — only the culling radius used them. Engine item `sprite-uniform-scale`.
 			 * @param modelMatrix The world model matrix of the instance, multiplied in place.
+			 * @param readStateIndex The render state slot the frame reads (the author's transformation matrix is
+			 * published per slot, publishTransformationMatrix()).
 			 * @return void
 			 */
-			void applyLocalTransformation (Base::Math::Matrix< 4, float > & modelMatrix) const noexcept;
+			void applyLocalTransformation (Base::Math::Matrix< 4, float > & modelMatrix, uint32_t readStateIndex) const noexcept;
 
 			/**
 			 * @brief Returns the WORLD model matrix of this instance at a world frame: the frame's own matrix, or for a
@@ -1043,13 +1075,14 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param instanceTransforms A reference to the scene instance transforms manager.
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
+			 * @param readStateIndex The render state slot the frame reads (the published local transformation).
 			 * @param advanceHistory Whether this staging advances the model matrix history
 			 * (motion vectors). Only the PRIMARY view target staging advances it — one advance
 			 * per rendered frame, so previousModel is the matrix of the previous rendered frame.
 			 * Render-to-texture stagings must pass false.
 			 * @return void
 			 */
-			void stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const Base::Math::CartesianFrame< float > * worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept;
+			void stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const Base::Math::CartesianFrame< float > * worldCoordinates, const Base::Math::Vector< 3, float > & cameraPosition, uint32_t readStateIndex, bool advanceHistory) noexcept;
 
 			/**
 			 * @brief Returns the instance transforms SSBO slot staged for the current render pass.
@@ -1460,7 +1493,8 @@ namespace EmEn::Graphics::RenderableInstance
 			static constexpr size_t MaxResolvedPrograms{16};
 
 			const std::shared_ptr< Renderable::Abstract > m_renderable;
-			Base::Math::Matrix< 4, float > m_transformationMatrix;
+			/** @brief The author's local transformation, one per render state slot (publishTransformationMatrix()). */
+			std::array< Base::Math::Matrix< 4, float >, RenderStateSlotCount > m_transformationMatrices{};
 			/** @brief Model matrix staged at the previous rendered frame (primary view), for motion vectors. */
 			Base::Math::Matrix< 4, float > m_lastModelMatrix;
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */

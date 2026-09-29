@@ -900,6 +900,9 @@ namespace EmEn::Graphics
 		m_irradianceProbeVolume.reset();
 		m_skinnedGeometryProcessor.reset();
 
+		/* Its descriptor sets come from the pool released below. */
+		m_selectionOutline.destroy();
+
 		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
 		m_rtDescriptorSetLayout.reset();
@@ -1072,6 +1075,17 @@ namespace EmEn::Graphics
 		return nullptr;
 	}
 
+	std::shared_ptr< Image >
+	Renderer::currentSceneReactiveImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->reactiveImage();
+		}
+
+		return nullptr;
+	}
+
 	bool
 	Renderer::refreshGrabPass () noexcept
 	{
@@ -1222,10 +1236,17 @@ namespace EmEn::Graphics
 			? VK_FORMAT_R16G16_SFLOAT
 			: VK_FORMAT_UNDEFINED;
 
+		/* Reactive mask for MRT: how far the temporal passes must distrust their history at a pixel (an emissive
+		 * overlay whose light the velocity cannot explain — a beam re-striking its arc). Its consumers are the
+		 * velocity's, so it lives with it. R8: the FSR 2 / DLSS layout, handed as is to a future upscaler. */
+		const auto reactiveFormat = needsVelocity
+			? VK_FORMAT_R8_UNORM
+			: VK_FORMAT_UNDEFINED;
+
 		m_sceneTarget = std::make_shared< SceneRenderTarget >(
 			"SceneRenderTarget",
 			width, height,
-			colorFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat, depthFormat,
+			colorFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat, reactiveFormat, depthFormat,
 			m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance)
 		);
 
@@ -2150,44 +2171,20 @@ namespace EmEn::Graphics
 		}
 
 		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
-		 * Clear values must match the actual attachment layout which depends on which
-		 * MRT attachments are present. m_clearColors layout: [0]=color, [1]=normals,
-		 * [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth/stencil. Build the matching
-		 * subset for beginRenderPass. Albedo implies normals+materialProperties (fixed MRT
-		 * order), and the depth/stencil clear value is ALWAYS the last element of the subset. */
-		const bool sceneTargetHasNormals = m_sceneTarget->normalsFormat() != VK_FORMAT_UNDEFINED;
-		const bool sceneTargetHasMaterialProperties = m_sceneTarget->materialPropertiesFormat() != VK_FORMAT_UNDEFINED;
-		const bool sceneTargetHasAlbedo = m_sceneTarget->albedoFormat() != VK_FORMAT_UNDEFINED;
-		const bool sceneTargetHasVelocity = m_sceneTarget->velocityFormat() != VK_FORMAT_UNDEFINED;
+		 * One clear value per attachment the target actually has, in its attachment order: the target builds the
+		 * subset (SceneRenderTarget::clearValues()) — it used to be rebuilt here by hand, one branch per combination. */
+		const SceneRenderTarget::ClearPalette clearPalette{
+			.color = m_clearColors[0],
+			.normals = m_clearColors[1],
+			.materialProperties = m_clearColors[2],
+			.albedo = m_clearColors[3],
+			.velocity = m_clearColors[4],
+			.reactive = m_clearColors[6],
+			.depthStencil = m_clearColors[5]
+		};
+		const auto sceneClearValues = m_sceneTarget->clearValues(clearPalette);
 
-		if ( sceneTargetHasAlbedo && sceneTargetHasVelocity )
-		{
-			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-		}
-		else if ( sceneTargetHasAlbedo )
-		{
-			const std::array< VkClearValue, 5 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[3], m_clearColors[5]};
-			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-		}
-		else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
-		{
-			const std::array< VkClearValue, 4 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[2], m_clearColors[5]};
-			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-		}
-		else if ( sceneTargetHasNormals )
-		{
-			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[1], m_clearColors[5]};
-			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-		}
-		else if ( sceneTargetHasMaterialProperties )
-		{
-			const std::array< VkClearValue, 3 > cv{m_clearColors[0], m_clearColors[2], m_clearColors[5]};
-			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-		}
-		else
-		{
-			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
-		}
+		commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
 
 		if ( sceneHasContent )
 		{
@@ -2267,61 +2264,26 @@ namespace EmEn::Graphics
 		{
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "TranslucentGBPass"};
 
-			if ( sceneTargetHasAlbedo && sceneTargetHasVelocity )
-			{
-				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-			}
-			else if ( sceneTargetHasAlbedo )
-			{
-				const std::array< VkClearValue, 5 > cv{
-					m_clearColors[0],
-					m_clearColors[1],
-					m_clearColors[2],
-					m_clearColors[3],
-					m_clearColors[5]
-				};
-
-				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-			}
-			else if ( sceneTargetHasNormals && sceneTargetHasMaterialProperties )
-			{
-				const std::array< VkClearValue, 4 > cv{
-					m_clearColors[0],
-					m_clearColors[1],
-					m_clearColors[2],
-					m_clearColors[5]
-				};
-
-				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-			}
-			else if ( sceneTargetHasNormals )
-			{
-				const std::array< VkClearValue, 3 > cv{
-					m_clearColors[0],
-					m_clearColors[1],
-					m_clearColors[5]
-				};
-
-				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-			}
-			else if ( sceneTargetHasMaterialProperties )
-			{
-				const std::array< VkClearValue, 3 > cv{
-					m_clearColors[0],
-					m_clearColors[2],
-					m_clearColors[5]
-				};
-
-				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), cv, VK_SUBPASS_CONTENTS_INLINE);
-			}
-			else
-			{
-				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
-			}
+			/* Every attachment LOADS here: the values are unused, but one is owed per attachment. */
+			commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
 
 			scenePtr->renderTranslucentGB(m_sceneTarget, *commandBuffer);
 
 			commandBuffer->endRenderPass();
+		}
+
+		/* The selection outline's source: the highlighted entity's depth alone, through the main camera ("custom
+		 * depth"). Outside any render pass; composited in the final pass below, after the tone mapping. */
+		bool selectionOutlined = false;
+
+		if ( scenePtr != nullptr && sceneHasContent )
+		{
+			if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
+			{
+				const auto & sceneExtent = m_sceneTarget->extent();
+
+				selectionOutlined = m_selectionOutline.recordDepth(*commandBuffer, *scenePtr, sceneExtent.width, sceneExtent.height, mainTarget->viewMatrices());
+			}
 		}
 
 		/* Post-processor: blit the complete scene (with TranslucentGB) into PP's grab pass.
@@ -2363,6 +2325,17 @@ namespace EmEn::Graphics
 		{
 			/* TODO: What we need to really do here, when it occurs? */
 			Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+		}
+
+		/* The selection outline, over the tone-mapped image: display colours, neither exposed nor blurred by the TAA. */
+		if ( selectionOutlined )
+		{
+			if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
+			{
+				const auto & compositeExtent = m_swapChain->extent();
+
+				m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->offscreenCompositeFramebuffer(), compositeExtent.width, compositeExtent.height, m_postProcessor.grabPass(), mainTarget->viewMatrices(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
+			}
 		}
 
 		/* Render the scene debug helpers (compass) over the post-processed scene.

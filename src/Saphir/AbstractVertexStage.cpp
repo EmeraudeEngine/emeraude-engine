@@ -38,6 +38,7 @@
 
 /* Local inclusions. */
 #include "AbstractShader.hpp"
+#include "BeamGLSL.hpp"
 #include "Code.hpp"
 #include "Declaration/InputAttribute.hpp"
 #include "Declaration/OutputBlock.hpp"
@@ -456,6 +457,12 @@ namespace EmEn::Saphir
 		if ( m_oceanSurfaceEnabled )
 		{
 			m_previousOceanRequired = true;
+		}
+
+		/* A beam moves with its endpoints and its arc: the ribbon re-evaluated at the previous frame. */
+		if ( m_beamRibbonEnabled )
+		{
+			m_previousBeamRequired = true;
 		}
 
 		Code{*this, Location::Output} << ShaderVariable::ClipPositionCurrent << " = " << ShaderVariable::ModelViewProjectionMatrix << " * vec4(" << posExpr << ", 1.0);";
@@ -1726,6 +1733,25 @@ namespace EmEn::Saphir
 	const char *
 	AbstractVertexStage::vertexFrameExpression (VertexAttributeType vectorType) const noexcept
 	{
+		/* A beam is an unlit emissive ribbon: its frame is the unit segment's own axes, declared by prepareBeamRibbon(). */
+		if ( m_beamRibbonEnabled )
+		{
+			switch ( vectorType )
+			{
+				case VertexAttributeType::Tangent :
+					return "beamTangent";
+
+				case VertexAttributeType::Binormal :
+					return "beamBinormal";
+
+				case VertexAttributeType::Normal :
+					return "beamNormal";
+
+				default :
+					return nullptr;
+			}
+		}
+
 		switch ( vectorType )
 		{
 			case VertexAttributeType::Tangent :
@@ -1775,8 +1801,8 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::declareFrameAttribute (VertexAttributeType vectorType) noexcept
 	{
-		/* The billboard synthesizes its frame (prepareImposterBillboard()). */
-		if ( m_imposterBillboardEnabled )
+		/* The billboard and the beam ribbon synthesize their frame (prepareImposterBillboard(), prepareBeamRibbon()). */
+		if ( m_imposterBillboardEnabled || m_beamRibbonEnabled )
 		{
 			return true;
 		}
@@ -1978,6 +2004,12 @@ namespace EmEn::Saphir
 	const char *
 	AbstractVertexStage::vertexPositionExpression () const noexcept
 	{
+		/* A beam ribbon: the strip point placed on the beam, across it, facing the eye (BeamGLSL). */
+		if ( m_beamRibbonEnabled )
+		{
+			return "beamPosition";
+		}
+
 		/* An imposter billboard: the quad corner placed in object space, facing the eye. */
 		if ( m_imposterBillboardEnabled )
 		{
@@ -2026,6 +2058,13 @@ namespace EmEn::Saphir
 		if ( m_imposterBillboardEnabled )
 		{
 			return "imposterPosition";
+		}
+
+		/* A beam moves with its endpoints AND with time (the arc): the ribbon re-evaluated with the previous model
+		 * matrix and the previous scene time (prepareBeamRibbon()). It faces the CURRENT eye, like the billboard. */
+		if ( m_beamRibbonEnabled )
+		{
+			return "previousBeamPosition";
 		}
 
 		if ( m_vegetationWindEnabled )
@@ -2134,6 +2173,111 @@ namespace EmEn::Saphir
 			"\t" << ShaderVariable::ImposterAtlasCoordinates2 << " = imposterAtlasCoordinates(" << ShaderVariable::ImposterCell2 << ", imposterOffset, imposterBounds.w, imposterGridSize);" "\n\n";
 
 		m_uniquePreparations.emplace_back("imposterPosition", code.str());
+
+		return true;
+	}
+
+	bool
+	AbstractVertexStage::prepareBeamRibbon (Generator::Abstract & generator) noexcept
+	{
+		if ( this->preparationAlreadyDone("beamPosition") )
+		{
+			return true;
+		}
+
+		if ( m_skinningEnabled || m_vegetationWindEnabled || m_heightfieldSurfaceEnabled || m_imposterBillboardEnabled )
+		{
+			Tracer::error(ClassId, "A beam ribbon cannot be skinned, blown by the wind, a heightfield or an imposter !");
+
+			return false;
+		}
+
+		/* The endpoints ARE the model matrix of the instance: one beam, one matrix, one draw. */
+		if ( this->isInstancingEnabled() || this->isMDIEnabled() )
+		{
+			Tracer::error(ClassId, "A beam ribbon is drawn through a unique instance, never instanced nor through MDI !");
+
+			return false;
+		}
+
+		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
+		{
+			return false;
+		}
+
+		/* Registers the model matrix's own preparation (instance-transforms SSBO) BEFORE this one. */
+		std::string modelMatrix;
+
+		if ( !this->resolveWorldModelMatrix(modelMatrix) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector2, ShaderVariable::BeamCoordinates, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(), GLSL::Float, ShaderVariable::BeamCoverage, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		if ( !BeamGLSL::declareFunctions(*this) )
+		{
+			return false;
+		}
+
+		/* The scene clock rides in the instance-transforms header (x this frame, y the previous one), which exists on
+		 * the non-instanced SSBO path only; elsewhere (cubemap, CSM) the arc is frozen at t = 0. */
+		const auto hasClock = this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled();
+		const std::string time{hasClock ? "ubInstanceTransforms.windTimes.x" : "0.0"};
+		const std::string previousTime{hasClock ? "ubInstanceTransforms.windTimes.y" : "0.0"};
+
+		/* One pixel at a distance of 1 (perspective) or anywhere (orthographic): 2 / (viewport height · P[1][1]). A
+		 * cascade view has no projection in its block, and no beam casts a shadow: no clamp there. */
+		std::string pixel{"vec2(0.0)"};
+
+		if ( !this->isCSMModeEnabled() )
+		{
+			const auto projection = ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false);
+
+			pixel = "vec2(2.0 / max(" + ViewUB(Keys::UniformBlock::Component::ViewProperties, false) + ".y * abs(" + projection + "[1][1]), 1.0e-6), " + projection + "[2][3] != 0.0 ? 1.0 : 0.0)";
+		}
+
+		const std::string position{Attribute::Position};
+
+		std::stringstream code;
+
+		code <<
+			"\t" "/* Beam ribbon, built in world space and brought back to the unit segment space (Saphir BeamGLSL). */" "\n"
+			"\t" "const mat4 beamModel = " << modelMatrix << ";" "\n"
+			"\t" "const vec3 beamEye = " << ViewUB(Keys::UniformBlock::Component::PositionWorldSpace, false) << ".xyz;" "\n"
+			"\t" "const vec2 beamPixel = " << pixel << ";" "\n"
+			"\t" "const vec4 beamShapeParameters = " << m_beamShapeExpression << ";" "\n"
+			"\t" "const vec4 beamMotionParameters = " << m_beamMotionExpression << ";" "\n"
+			"\t" "const vec4 beamCurrentCorner = beamCorner(beamModel, " << position << ".xy, " << time << ", beamShapeParameters, beamMotionParameters, beamEye, beamPixel);" "\n"
+			"\t" "const vec3 beamPosition = beamCurrentCorner.xyz;" "\n"
+			"\t" "const vec3 beamTangent = vec3(1.0, 0.0, 0.0);" "\n"
+			"\t" "const vec3 beamBinormal = vec3(0.0, 1.0, 0.0);" "\n"
+			"\t" "const vec3 beamNormal = vec3(0.0, 0.0, 1.0);" "\n"
+			"\t" << ShaderVariable::BeamCoordinates << " = " << position << ".xy;" "\n"
+			"\t" << ShaderVariable::BeamCoverage << " = beamCurrentCorner.w;" "\n";
+
+		/* The velocity pass: the same ribbon with the previous model matrix (the instance-transforms entry, odd slot —
+		 * the one synthesizeVelocityClipPositions() multiplies it by) and the previous scene time. */
+		if ( m_previousBeamRequired )
+		{
+			const auto previousModelMatrix = this->isInstanceTransformsEnabled() ?
+				"ubInstanceTransforms.instanceMatrices[" + std::string{m_instanceIndexExpression} + " * 2 + 1]" :
+				modelMatrix;
+
+			code << "\t" "const vec3 previousBeamPosition = beamCorner(" << previousModelMatrix << ", " << position << ".xy, " << previousTime << ", beamShapeParameters, beamMotionParameters, beamEye, beamPixel).xyz;" "\n";
+		}
+
+		code << "\n";
+
+		m_uniquePreparations.emplace_back("beamPosition", code.str());
 
 		return true;
 	}
@@ -2327,6 +2471,12 @@ namespace EmEn::Saphir
 		/* ⚠️ BEFORE the unique instructions too: the billboard is itself a preparation, registered right after
 		 * the model matrix it reads, so it is emitted after it and before every synthesis that reads its position. */
 		if ( m_imposterBillboardEnabled && !this->prepareImposterBillboard(generator) )
+		{
+			return false;
+		}
+
+		/* The beam ribbon too, for the same reason. */
+		if ( m_beamRibbonEnabled && !this->prepareBeamRibbon(generator) )
 		{
 			return false;
 		}

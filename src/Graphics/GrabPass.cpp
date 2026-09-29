@@ -43,7 +43,7 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	bool
-	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat) noexcept
+	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat reactiveFormat) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -559,12 +559,84 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Create the reactive mask grab pass image (optional: how far the temporal passes distrust their history). */
+		if ( reactiveFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_reactiveImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				reactiveFormat,
+				VkExtent3D{width, height, 1},
+				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_reactiveImage->setIdentifier(ClassId, "Reactive", "Image");
+
+			if ( !m_reactiveImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass reactive mask image !";
+
+				return false;
+			}
+
+			if ( !renderer.transferManager().transitionImageLayout(*m_reactiveImage, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
+			{
+				TraceError{ClassId} << "Unable to transition grab pass reactive mask image to shader read layout !";
+
+				return false;
+			}
+
+			m_reactiveImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			m_reactiveImageView = std::make_shared< ImageView >(
+				m_reactiveImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_reactiveImageView->setIdentifier(ClassId, "Reactive", "ImageView");
+
+			if ( !m_reactiveImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass reactive mask image view !";
+
+				return false;
+			}
+
+			/* Nearest, clamp-to-edge, like the velocity it goes with: a mask is read per pixel. */
+			m_reactiveSampler = renderer.getSampler("GrabPassReactive", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				createInfo.magFilter = VK_FILTER_NEAREST;
+				createInfo.minFilter = VK_FILTER_NEAREST;
+				createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.compareEnable = VK_FALSE;
+				createInfo.minLod = 0.0F;
+				createInfo.maxLod = 1.0F;
+			});
+
+			if ( m_reactiveSampler == nullptr )
+			{
+				TraceError{ClassId} << "Unable to get the sampler for grab pass reactive mask !";
+
+				return false;
+			}
+		}
+
 		return true;
 	}
 
 	void
 	GrabPass::destroy () noexcept
 	{
+		m_reactiveSampler.reset();
+		m_reactiveImageView.reset();
+		m_reactiveImage.reset();
 		m_velocitySampler.reset();
 		m_velocityImageView.reset();
 		m_velocityImage.reset();

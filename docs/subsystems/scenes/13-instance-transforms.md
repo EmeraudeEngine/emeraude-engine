@@ -104,3 +104,10 @@ M4 BIT-IDENTICAL to M3 (deterministic console camera), `basic-scenery` (skybox i
 - ⚠️ **A/B capture protocol**: the RTGI accumulation converges asymptotically after a
   camera move — A/B pixel diffs are only valid at IDENTICAL post-placement timing
   (a 0.5-1 s window difference showed up as ~3/255 RMSE of pure reconvergence residual).
+- **A local transformation that changes every tick** (2026-09-28): `RenderableInstance::Abstract::publishTransformationMatrix(writeStateIndex, m)`
+  stores the author's local transformation PER RENDER-STATE SLOT; `applyLocalTransformation(model, readStateIndex)`
+  (staging, push path, TLAS via `SceneMetaData::rebuild(..., readStateIndex, ...)`) reads the frame's slot. It used to be
+  one plain member written by the logic thread and read by the render thread — a race the day it moves. Staged here
+  like any model matrix, it gets a REAL previous model matrix for free: `Scenes::Component::Beam` places its unit
+  segment this way (its endpoints ARE its model matrix). `setTransformationMatrix()` still writes every slot (constants
+  set at build time).

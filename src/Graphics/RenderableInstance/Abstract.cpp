@@ -226,11 +226,11 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::applyLocalTransformation (Matrix< 4, float > & modelMatrix) const noexcept
+	Abstract::applyLocalTransformation (Matrix< 4, float > & modelMatrix, uint32_t readStateIndex) const noexcept
 	{
 		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
 		{
-			modelMatrix *= m_transformationMatrix;
+			modelMatrix *= this->transformationMatrix(readStateIndex);
 		}
 
 		if ( m_renderable->isSprite() )
@@ -245,7 +245,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition, bool advanceHistory) noexcept
+	Abstract::stageInstanceTransforms (Scenes::SceneInstanceTransforms & instanceTransforms, const CartesianFrame< float > * worldCoordinates, const Vector< 3, float > & cameraPosition, uint32_t readStateIndex, bool advanceHistory) noexcept
 	{
 		/* Prepare the model matrix (M).
 		 * NOTE: Mirror of Unique::pushMatricesForRendering() — the staged matrix must be
@@ -258,7 +258,7 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix = this->worldModelMatrix(*worldCoordinates, cameraPosition);
 		}
 
-		this->applyLocalTransformation(modelMatrix);
+		this->applyLocalTransformation(modelMatrix, readStateIndex);
 
 		/* Previous model matrix: the matrix staged at the previous rendered frame by the
 		 * primary view. Before the first primary staging (or after a long culling gap, an

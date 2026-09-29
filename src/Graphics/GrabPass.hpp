@@ -128,10 +128,15 @@ namespace EmEn::Graphics
 			 * @param height The height of the texture.
 			 * @param colorFormat The image format matching the swapchain color.
 			 * @param depthFormat The image format matching the swapchain depth. VK_FORMAT_UNDEFINED to skip depth.
+			 * @param normalsFormat The normals copy format. VK_FORMAT_UNDEFINED to skip.
+			 * @param materialPropertiesFormat The material properties copy format. VK_FORMAT_UNDEFINED to skip.
+			 * @param albedoFormat The albedo copy format. VK_FORMAT_UNDEFINED to skip.
+			 * @param velocityFormat The velocity copy format. VK_FORMAT_UNDEFINED to skip.
+			 * @param reactiveFormat The reactive mask copy format. VK_FORMAT_UNDEFINED to skip.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED, VkFormat velocityFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED, VkFormat materialPropertiesFormat = VK_FORMAT_UNDEFINED, VkFormat albedoFormat = VK_FORMAT_UNDEFINED, VkFormat velocityFormat = VK_FORMAT_UNDEFINED, VkFormat reactiveFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Destroys the grab pass textures from the GPU.
@@ -408,6 +413,50 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			VkDescriptorImageInfo velocityDescriptorInfo () const noexcept;
 
+			/**
+			 * @brief Returns whether the reactive mask texture is available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasReactive () const noexcept
+			{
+				return m_reactiveImage != nullptr && m_reactiveImage->isCreated();
+			}
+
+			/**
+			 * @brief Returns the reactive mask image.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			reactiveImage () const noexcept
+			{
+				return m_reactiveImage;
+			}
+
+			/**
+			 * @brief Returns the reactive mask image view.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			reactiveImageView () const noexcept
+			{
+				return m_reactiveImageView;
+			}
+
+			/**
+			 * @brief Returns the reactive mask sampler.
+			 * @return std::shared_ptr< Vulkan::Sampler >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			reactiveSampler () const noexcept
+			{
+				return m_reactiveSampler;
+			}
+
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
 			[[nodiscard]]
 			bool isCreated () const noexcept override;
@@ -469,6 +518,9 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_velocityImage;
 			std::shared_ptr< Vulkan::ImageView > m_velocityImageView;
 			std::shared_ptr< Vulkan::Sampler > m_velocitySampler;
+			std::shared_ptr< Vulkan::Image > m_reactiveImage;
+			std::shared_ptr< Vulkan::ImageView > m_reactiveImageView;
+			std::shared_ptr< Vulkan::Sampler > m_reactiveSampler;
 			bool m_colorMipChain{true}; /* Whether the colour image, its view and its sampler carry a mip chain (the writer must fill it). */
 	};
 }

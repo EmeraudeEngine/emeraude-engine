@@ -167,8 +167,10 @@ namespace EmEn::Scenes
 			 *		is a flat XY in object space, the rasterizer billboards it via vertex
 			 *		shader, and the RT side needs the equivalent rotation baked into the
 			 *		TLAS instance transform so reflection rays hit the correct quad face.
+			 * @param readStateIndex The render state slot the frame reads (an instance's published local transformation,
+			 *		RenderableInstance::Abstract::applyLocalTransformation()).
 			 */
-			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureSet * bindlessTextureSet, uint32_t frameIndex, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
+			void rebuild (const RenderBatch::List & opaqueList, const RenderBatch::List & opaqueLightedList, BindlessTextureSet * bindlessTextureSet, uint32_t frameIndex, uint32_t readStateIndex, const Base::Math::Vector< 3, float > & cameraPosition) noexcept;
 
 			/**
 			 * @brief Records the pending TLAS build into an external command buffer.

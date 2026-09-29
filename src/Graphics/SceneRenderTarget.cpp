@@ -37,7 +37,7 @@
 
 namespace EmEn::Graphics
 {
-	SceneRenderTarget::SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat depthFormat, float viewDistance) noexcept
+	SceneRenderTarget::SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat reactiveFormat, VkFormat depthFormat, float viewDistance) noexcept
 		: Abstract{
 			name,
 			FramebufferPrecisions{8, 8, 8, 8, 24, 0, 1},
@@ -53,9 +53,50 @@ namespace EmEn::Graphics
 		m_materialPropertiesFormat{materialPropertiesFormat},
 		m_albedoFormat{albedoFormat},
 		m_velocityFormat{velocityFormat},
+		m_reactiveFormat{reactiveFormat},
 		m_depthFormat{depthFormat}
 	{
 
+	}
+
+	Base::StaticVector< VkClearValue, 7 >
+	SceneRenderTarget::clearValues (const ClearPalette & palette) const noexcept
+	{
+		Base::StaticVector< VkClearValue, 7 > values;
+
+		values.emplace_back(palette.color);
+
+		if ( m_normalsFormat != VK_FORMAT_UNDEFINED )
+		{
+			values.emplace_back(palette.normals);
+		}
+
+		if ( m_materialPropertiesFormat != VK_FORMAT_UNDEFINED )
+		{
+			values.emplace_back(palette.materialProperties);
+		}
+
+		if ( m_albedoFormat != VK_FORMAT_UNDEFINED )
+		{
+			values.emplace_back(palette.albedo);
+		}
+
+		if ( m_velocityFormat != VK_FORMAT_UNDEFINED )
+		{
+			values.emplace_back(palette.velocity);
+		}
+
+		if ( m_reactiveFormat != VK_FORMAT_UNDEFINED )
+		{
+			values.emplace_back(palette.reactive);
+		}
+
+		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
+		{
+			values.emplace_back(palette.depthStencil);
+		}
+
+		return values;
 	}
 
 	void
@@ -342,6 +383,26 @@ namespace EmEn::Graphics
 			++nextAttachment;
 		}
 
+		/* Attachment N: Reactive mask (MRT). Cleared to 0: every pixel trusts its history until an emissive
+		 * overlay (a beam) says otherwise. */
+		if ( m_reactiveFormat != VK_FORMAT_UNDEFINED )
+		{
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = m_reactiveFormat,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			});
+
+			subPass.addColorAttachment(nextAttachment, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			++nextAttachment;
+		}
+
 		/* Attachment N: Depth buffer. */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
@@ -473,6 +534,25 @@ namespace EmEn::Graphics
 			++nextAttachment;
 		}
 
+		/* Attachment N: Reactive mask with LOAD_OP_LOAD to preserve what the opaque pass wrote. */
+		if ( m_reactiveFormat != VK_FORMAT_UNDEFINED )
+		{
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = m_reactiveFormat,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			});
+
+			subPass.addColorAttachment(nextAttachment, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			++nextAttachment;
+		}
+
 		/* Attachment N: Depth buffer with LOAD_OP_LOAD for depth testing. */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
@@ -552,6 +632,11 @@ namespace EmEn::Graphics
 			m_postProcessFramebuffer->addAttachment(m_velocityImageView->handle());
 		}
 
+		if ( m_reactiveImageView != nullptr )
+		{
+			m_postProcessFramebuffer->addAttachment(m_reactiveImageView->handle());
+		}
+
 		if ( m_depthImageView != nullptr )
 		{
 			m_postProcessFramebuffer->addAttachment(m_depthImageView->handle());
@@ -612,6 +697,8 @@ namespace EmEn::Graphics
 		m_framebuffer.reset();
 		m_depthImageView.reset();
 		m_depthStencilImage.reset();
+		m_reactiveImageView.reset();
+		m_reactiveImage.reset();
 		m_velocityImageView.reset();
 		m_velocityImage.reset();
 		m_albedoImageView.reset();
@@ -821,6 +908,45 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Reactive mask image: color attachment + transfer source + sampleable (copied to the grab pass, where the
+		 * temporal resolve reads it — the velocity's path). */
+		if ( m_reactiveFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_reactiveImage = std::make_shared< Vulkan::Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				m_reactiveFormat,
+				this->extent(),
+				VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_reactiveImage->setIdentifier(ClassId, this->id(), "ReactiveImage");
+
+			if ( !m_reactiveImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the reactive mask image for '" << this->id() << "' !";
+				return false;
+			}
+
+			m_reactiveImageView = std::make_shared< Vulkan::ImageView >(
+				m_reactiveImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_reactiveImageView->setIdentifier(ClassId, this->id(), "ReactiveImageView");
+
+			if ( !m_reactiveImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the reactive mask image view for '" << this->id() << "' !";
+				return false;
+			}
+		}
+
 		/* Depth image: depth attachment + transfer source (for depth blit to grab pass). */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
@@ -888,6 +1014,11 @@ namespace EmEn::Graphics
 		if ( m_velocityImageView != nullptr )
 		{
 			m_framebuffer->addAttachment(m_velocityImageView->handle());
+		}
+
+		if ( m_reactiveImageView != nullptr )
+		{
+			m_framebuffer->addAttachment(m_reactiveImageView->handle());
 		}
 
 		if ( m_depthImageView != nullptr )

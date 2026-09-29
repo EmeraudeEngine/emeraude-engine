@@ -423,7 +423,6 @@ namespace EmEn::Graphics::RenderableInstance
 		 * neither a cubemap nor a CSM target) and would otherwise offset gl_Position by
 		 * uninitialized push-constant memory. */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
-		const auto & projectionJitter = passContext.viewMatrices->projectionJitter();
 
 		std::array< float, Matrix4Alignment + 3 > buffer{};
 
@@ -441,8 +440,11 @@ namespace EmEn::Graphics::RenderableInstance
 			std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
 		}
 
-		buffer[Matrix4Alignment] = projectionJitter.x();
-		buffer[Matrix4Alignment + 1] = projectionJitter.y();
+		/* The jitter is ZERO, whatever the view: this depth-only pass never jitters. A shadow map's view has no jitter
+		 * anyway; the selection depth pass (Graphics::SelectionDepthTarget) draws through the MAIN camera's view, whose
+		 * jitter would make the selection outline tremble by half a pixel every frame. */
+		buffer[Matrix4Alignment] = 0.0F;
+		buffer[Matrix4Alignment + 1] = 0.0F;
 		buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
 
 		vkCmdPushConstants(

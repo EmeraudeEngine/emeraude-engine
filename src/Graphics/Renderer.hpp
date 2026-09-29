@@ -61,6 +61,7 @@
 #include "StaticVector.hpp"
 #include "Time/Statistics/RealTime.hpp"
 #include "PostProcessor.hpp"
+#include "SelectionOutline.hpp"
 #include "TextureCache.hpp"
 #include "TextureCompressor.hpp"
 #include "FrameCapture.hpp"
@@ -646,6 +647,18 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the selection outline (its look: colour, width, hidden opacity).
+			 * @note What it outlines is the SCENE's highlighted entity (Scenes::Scene::setHighlightedEntity()).
+			 * @return SelectionOutline &
+			 */
+			[[nodiscard]]
+			SelectionOutline &
+			selectionOutline () noexcept
+			{
+				return m_selectionOutline;
+			}
+
+			/**
 			 * @brief Returns the reference to the post-processor service.
 			 * @return const PostProcessor &
 			 */
@@ -1049,6 +1062,13 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Vulkan::Image > currentSceneVelocityImage () const noexcept;
+
+			/**
+			 * @brief Returns the scene render target reactive mask image, or nullptr.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSceneReactiveImage () const noexcept;
 
 			/**
 			 * @brief Returns the current frame-in-flight index.
@@ -1734,6 +1754,8 @@ namespace EmEn::Graphics
 			/* NOTE: Declared AFTER the compressor: it binds a reference to it. */
 			TextureCache m_textureCache{m_primaryServices, m_textureCompressor};
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
+			/** @brief The outline of the scene's highlighted entity (internal-target frames). */
+			SelectionOutline m_selectionOutline{*this};
 			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};
 			std::vector< ServiceInterface * > m_subServicesEnabled;
@@ -1768,11 +1790,14 @@ namespace EmEn::Graphics
 			 * getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
-			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth. */
-			std::array< VkClearValue, 6 > m_clearColors{
+			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth, [6]=reactive
+			 * (appended last so the depth keeps its index). The scene target picks its own subset, in attachment order
+			 * (SceneRenderTarget::clearValues()). */
+			std::array< VkClearValue, 7 > m_clearColors{
 				VkClearValue{},
 				VkClearValue{},
 				VkClearValue{.color = {.float32 = {0.0F, 1.0F, 240.0F / 255.0F, 1.0F}}},
+				VkClearValue{},
 				VkClearValue{},
 				VkClearValue{},
 				VkClearValue{}

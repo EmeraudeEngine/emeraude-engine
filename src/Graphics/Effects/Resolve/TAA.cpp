@@ -76,9 +76,11 @@ namespace
 		/* 0 for the resolve itself. 1-3 only in the SECOND pass the debug view records into its own target
 		 * (Core/Graphics/PostProcessing/TemporalAA/DebugView): the history stays the real one. */
 		float debugView;
+		/* 1 when the reactive mask (binding 4) is the real one, 0 when the scene has none and a stand-in is bound. */
+		float reactiveEnabled;
 	};
 
-	static_assert(sizeof(TAAPushConstants) == 48, "TAAPushConstants must be 48 bytes.");
+	static_assert(sizeof(TAAPushConstants) == 52, "TAAPushConstants must be 52 bytes.");
 
 	/* ---- GLSL Shader Sources ----
 	 *
@@ -117,6 +119,7 @@ layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D velocityTex;
 layout(set = 0, binding = 3) uniform sampler2D historyTex;
+layout(set = 0, binding = 4) uniform sampler2D reactiveTex;
 
 layout(push_constant) uniform PushConstants
 {
@@ -132,6 +135,7 @@ layout(push_constant) uniform PushConstants
 	float nearPlane;
 	float farPlane;
 	float debugView;
+	float reactiveEnabled;
 };
 
 float linearizeDepth(float depth)
@@ -422,6 +426,9 @@ void main()
 		historyFraction.y
 	);
 	bool historyMarked = any(lessThan(historyTags, vec4(0.0)));
+	/* A ZERO tag is the REACTIVE mark (below): a linear depth is never 0 (at least the near plane), so it costs the depth
+	 * nothing. */
+	bool historyReactive = any(equal(historyTags, vec4(0.0)));
 	float nearestLinear = linearizeDepth(closestDepth);
 	float farthestLinear = linearizeDepth(farthestDepth);
 	bool sameSurface = historyDepth >= nearestLinear * 0.99 && historyDepth <= farthestLinear * 1.01;
@@ -441,7 +448,16 @@ void main()
 	bool foreignMotion = dilationPixels > 0.5;
 	bool edge = farthestLinear > nearestLinear * 1.05;
 	bool objectLeft = historyMarked && !edge;
-	bool rejected = !sameSurface || objectLeft;
+	/* The REACTIVE mask (FSR 2's reactive mask, UE's responsive AA): light the velocity cannot explain — a beam that
+	 * re-strikes its arc draws a new shape in place, with no motion to reproject. Where it is set the current frame
+	 * wins (blendAlpha -> 1 below), and the history is tagged REACTIVE (alpha 0, see the output): next frame, when the
+	 * arc has struck elsewhere, that history holds a light no longer there and is rejected UNCONDITIONALLY — unlike the
+	 * motion marker, even on a depth edge. Averaged instead, twelve re-strikes a second converged to a straight white
+	 * line between the arc's fixed ends; with the motion marker alone, the line survived exactly on the HORIZON, the
+	 * edge band the marker keeps (measured 2026-09-28, `beams`). */
+	float reactive = reactiveEnabled > 0.5 ? texture(reactiveTex, vUV).r : 0.0;
+	bool reactiveOut = reactive > 0.5;
+	bool rejected = !sameSurface || objectLeft || historyReactive;
 	bool markOut = foreignMotion || (historyMarked && edge);
 
 	if (rejected)
@@ -453,6 +469,9 @@ void main()
 	/* A stationary pixel averages over more frames: at alpha 0.1 the EMA still lets 13.6 % of the first jitter
 	 * harmonic through (8-phase Halton), at 0.05 half of it. One pixel of motion restores the configured alpha. */
 	float blendAlpha = alpha * mix(0.5, 1.0, clamp(motionPixels, 0.0, 1.0));
+
+	/* The reactive mask overrides it: at 1 the history is ignored. */
+	blendAlpha = mix(blendAlpha, 1.0, clamp(reactive, 0.0, 1.0));
 
 	vec3 result;
 
@@ -513,7 +532,8 @@ void main()
 		return;
 	}
 
-	outResolved = vec4(result, markOut ? -centerDepth : centerDepth);
+	/* History alpha: the signed linear depth (negative = motion mark), or 0 = the reactive mark (one frame long). */
+	outResolved = vec4(result, reactiveOut ? 0.0 : (markOut ? -centerDepth : centerDepth));
 }
 )GLSL";
 
@@ -576,8 +596,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			return false;
 		}
 
-		/* Descriptor set layout: scene color + depth + velocity + history samplers. */
-		auto descriptorSetLayout = this->getInputLayout(4);
+		/* Descriptor set layout: scene color + depth + velocity + history + reactive mask samplers. */
+		auto descriptorSetLayout = this->getInputLayout(5);
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -675,6 +695,10 @@ namespace EmEn::Graphics::Effects::Resolve
 
 		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(3, m_historyTargets[readIdx]));
 
+		/* The reactive mask, or the input colour as a stand-in the shader never reads (reactiveEnabled = 0): the binding
+		 * is statically used, so it must always hold a valid image. */
+		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(4, context.reactive != nullptr ? *context.reactive : inputColor));
+
 		/* Without velocity there is no valid reprojection: pass the input through
 		 * (alpha 1) rather than accumulating a smear. */
 		const bool historyUsable = m_historyValid && context.velocity != nullptr && context.depth != nullptr;
@@ -692,7 +716,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			.displayExposure = context.displayExposure,
 			.nearPlane = context.constants.nearPlane,
 			.farPlane = context.constants.farPlane,
-			.debugView = 0.0F
+			.debugView = 0.0F,
+			.reactiveEnabled = context.reactive != nullptr ? 1.0F : 0.0F
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(

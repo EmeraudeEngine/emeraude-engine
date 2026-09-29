@@ -442,6 +442,82 @@ namespace
 
 			const EmEn::Graphics::GrabPass & m_grabPass;
 	};
+
+	/**
+	 * @brief Adapter exposing the grab pass reactive mask texture as a TextureInterface.
+	 * @note Stack-allocated in executeIndirectPostProcessEffects(); lives for the duration of the chain.
+	 */
+	class GrabPassReactiveAdapter final : public EmEn::Vulkan::TextureInterface
+	{
+		public:
+
+			explicit
+			GrabPassReactiveAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+				: m_grabPass{grabPass}
+			{
+
+			}
+
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept override
+			{
+				return m_grabPass.hasReactive();
+			}
+
+			[[nodiscard]]
+			EmEn::Vulkan::TextureType
+			type () const noexcept override
+			{
+				return EmEn::Vulkan::TextureType::Texture2D;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 2;
+			}
+
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return false;
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_grabPass.reactiveImage();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_grabPass.reactiveImageView();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_grabPass.reactiveSampler();
+			}
+
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				return false;
+			}
+
+		private:
+
+			const EmEn::Graphics::GrabPass & m_grabPass;
+	};
 }
 
 namespace EmEn::Graphics
@@ -595,6 +671,11 @@ namespace EmEn::Graphics
 			? m_renderer.sceneTarget()->velocityFormat()
 			: VK_FORMAT_UNDEFINED;
 
+		/* Reactive mask format: matches the scene render target's reactive MRT attachment. */
+		const auto reactiveFormat = m_renderer.sceneTarget() != nullptr
+			? m_renderer.sceneTarget()->reactiveFormat()
+			: VK_FORMAT_UNDEFINED;
+
 		/* Retire the previous grab pass: in-flight command buffers may still reference
 		 * its images; the deferred destructor destroys it once every frame in flight
 		 * has completed — no device stall, no use-after-free. */
@@ -609,7 +690,7 @@ namespace EmEn::Graphics
 		 * through its implicit LOD, NaN on MoltenVK, and the whole frame went to 00FF00 (2026-09-26). */
 		m_grabPass = std::make_unique< GrabPass >(false);
 
-		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat) )
+		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat, materialPropertiesFormat, albedoFormat, velocityFormat, reactiveFormat) )
 		{
 			TraceError{ClassId} << "Unable to create the post-processor grab pass !";
 
@@ -861,12 +942,14 @@ namespace EmEn::Graphics
 		const auto srcMaterialPropertiesImage = m_renderer.currentSceneMaterialPropertiesImage();
 		const auto srcAlbedoImage = m_renderer.currentSceneAlbedoImage();
 		const auto srcVelocityImage = m_renderer.currentSceneVelocityImage();
+		const auto srcReactiveImage = m_renderer.currentSceneReactiveImage();
 
 		const bool copyDepth = srcDepthImage != nullptr && m_grabPass->hasDepth();
 		const bool copyNormals = srcNormalsImage != nullptr && m_grabPass->hasNormals();
 		const bool copyMaterialProperties = srcMaterialPropertiesImage != nullptr && m_grabPass->hasMaterialProperties();
 		const bool copyAlbedo = srcAlbedoImage != nullptr && m_grabPass->hasAlbedo();
 		const bool copyVelocity = srcVelocityImage != nullptr && m_grabPass->hasVelocity();
+		const bool copyReactive = srcReactiveImage != nullptr && m_grabPass->hasReactive();
 
 		/* The whole G-buffer grab is expressed as TWO batched barriers around the copies
 		 * instead of one pipelineBarrier() per transition (which serialized the GPU up to
@@ -875,7 +958,7 @@ namespace EmEn::Graphics
 		 * everything. The stage masks are the union of the per-image stages — per-image
 		 * precision is preserved by the access masks carried by each VkImageMemoryBarrier. */
 		std::vector< VkImageMemoryBarrier > barriers;
-		barriers.reserve(12);
+		barriers.reserve(14);
 
 		/* === Pre-copy batch: sources -> TRANSFER_SRC, destinations -> TRANSFER_DST. === */
 
@@ -992,6 +1075,25 @@ namespace EmEn::Graphics
 			}.get());
 		}
 
+		if ( copyReactive )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcReactiveImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->reactiveImage(),
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			}.get());
+		}
+
 		{
 			/* Destinations were last sampled by fragment shaders; color sources were last
 			 * written as color attachments; the depth source by the late fragment tests. */
@@ -1067,6 +1169,15 @@ namespace EmEn::Graphics
 			commandBuffer.copyImage(
 				*srcVelocityImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				*m_grabPass->velocityImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+		}
+
+		if ( copyReactive )
+		{
+			commandBuffer.copyImage(
+				*srcReactiveImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_grabPass->reactiveImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_IMAGE_ASPECT_COLOR_BIT
 			);
 		}
@@ -1182,6 +1293,25 @@ namespace EmEn::Graphics
 
 			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
 				*srcVelocityImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			}.get());
+		}
+
+		if ( copyReactive )
+		{
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*m_grabPass->reactiveImage(),
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			}.get());
+
+			barriers.push_back(Vulkan::Sync::ImageMemoryBarrier{
+				*srcReactiveImage,
 				VK_ACCESS_TRANSFER_READ_BIT,
 				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -1312,6 +1442,9 @@ namespace EmEn::Graphics
 		const GrabPassVelocityAdapter velocityAdapter{*m_grabPass};
 		const Vulkan::TextureInterface * velocityTexture = m_grabPass->hasVelocity() ? &velocityAdapter : nullptr;
 
+		const GrabPassReactiveAdapter reactiveAdapter{*m_grabPass};
+		const Vulkan::TextureInterface * reactiveTexture = m_grabPass->hasReactive() ? &reactiveAdapter : nullptr;
+
 		/* Per-frame chain context: G-buffers, scene lighting, the active camera (single
 		 * source of truth for the photographic options) and the frame push constants. */
 		const IndirectPostProcessEffect::FrameContext context{
@@ -1320,6 +1453,7 @@ namespace EmEn::Graphics
 			.materialProperties = materialPropertiesTexture,
 			.albedo = albedoTexture,
 			.velocity = velocityTexture,
+			.reactive = reactiveTexture,
 			.lightSet = lightSet,
 			.camera = activeCamera,
 			.skyLuminance = skyLuminance,

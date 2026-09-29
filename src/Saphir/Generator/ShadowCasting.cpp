@@ -548,6 +548,11 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* The SELECTION depth pass (Graphics::SelectionDepthTarget) borrows these depth-only programs: its depth is
+		 * compared with the scene's, pixel for pixel, so neither the caster bias nor the near-plane clamp belong there —
+		 * biased, every visible part of the selection read "behind the scene" and was drawn dimmed. */
+		const bool isSelectionDepth = this->renderTarget()->renderType() == Graphics::RenderTargetType::SelectionDepth;
+
 		/* Configure the rasterizer */
 		{
 			VkPipelineRasterizationStateCreateInfo createInfo{};
@@ -563,12 +568,12 @@ namespace EmEn::Saphir::Generator
 			 * below, and requested in Instance.cpp alongside it.
 			 * The far side needs no such care: past the far plane a clamped fragment writes 1.0,
 			 * which is the clear value anyway. */
-			createInfo.depthClampEnable = VK_TRUE;
+			createInfo.depthClampEnable = isSelectionDepth ? VK_FALSE : VK_TRUE;
 			createInfo.rasterizerDiscardEnable = VK_FALSE;
 			createInfo.polygonMode = VK_POLYGON_MODE_FILL;
 			createInfo.cullMode = VK_CULL_MODE_NONE;
 			createInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-			createInfo.depthBiasEnable = VK_TRUE;
+			createInfo.depthBiasEnable = isSelectionDepth ? VK_FALSE : VK_TRUE;
 			createInfo.depthBiasConstantFactor = 3.0F;
 			createInfo.depthBiasClamp = 0.07F;
 			createInfo.depthBiasSlopeFactor = 3.5F;
@@ -643,6 +648,8 @@ namespace EmEn::Saphir::Generator
 		/* 2. Render target type (cubemap vs single layer vs CSM). */
 		hashCombine(hash, static_cast< size_t >(renderTarget->isCubemap()));
 		hashCombine(hash, static_cast< size_t >(renderTarget->isCascadedShadowMap()));
+		/* The selection depth drops the bias and the clamp (onGraphicsPipelineConfiguration()). */
+		hashCombine(hash, static_cast< size_t >(renderTarget->renderType()));
 
 		/* 3. Renderable identity (geometry combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )

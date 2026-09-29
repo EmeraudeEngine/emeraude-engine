@@ -608,7 +608,13 @@ python3 tools/remote-console.py "Core.SceneManagerService.listEntities()"       
 python3 tools/remote-console.py "Core.SceneManagerService.listEntityComponents(Bulb1)"  # JSON: [{"name":"Bulb","type":"PointLight"}]
 python3 tools/remote-console.py "Core.SceneManagerService.PointLight.setLuminousPower(Bulb1, Bulb, 800)"
 python3 tools/remote-console.py "Core.SceneManagerService.Camera.getActive()"         # the rendering camera: "address" + "name"
+python3 tools/remote-console.py "Core.SceneManagerService.highlightEntity(Bulb1)"      # the selection OUTLINE (full visible, dimmed hidden)
+python3 tools/remote-console.py "Core.SceneManagerService.setHighlightStyle(1, 0.6, 0.1, 2, 0.35)"  # sRGB colour, px, hidden opacity
+python3 tools/remote-console.py "Core.SceneManagerService.clearHighlight()"
 ```
+
+The outline is the editor's selection feedback, usable to POINT at an entity in a screenshot: graphics
+`docs/subsystems/graphics/34-the-selection-outline-custom-depth.md`.
 
 **Addressing** (owner decision, 2026-09-27): `entity` is the entity's ADDRESS — its name when unique in
 the scene, else the shortest suffix of its node path that is (`ACTOR_…06/Head`). Every projet-alpha actor

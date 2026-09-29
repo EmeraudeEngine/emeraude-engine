@@ -447,6 +447,23 @@ namespace EmEn::Scenes::Editor
 			/* NOTE: Position the gizmo at the entity. */
 			m_translateGizmo.setWorldFrame(m_selectedEntity->getWorldCoordinates());
 
+			/* The scene outlines it (Graphics::SelectionOutline), holding it weakly: the concrete entity shares itself. */
+			if ( m_scene != nullptr )
+			{
+				std::shared_ptr< AbstractEntity > sharedEntity;
+
+				if ( auto * node = dynamic_cast< Node * >(m_selectedEntity) )
+				{
+					sharedEntity = node->shared_from_this();
+				}
+				else if ( auto * staticEntity = dynamic_cast< StaticEntity * >(m_selectedEntity) )
+				{
+					sharedEntity = staticEntity->shared_from_this();
+				}
+
+				m_scene->setHighlightedEntity(sharedEntity);
+			}
+
 			m_notifier.push("Selected entity: '" + m_selectedEntity->name() + "'");
 		}
 	}
@@ -455,6 +472,11 @@ namespace EmEn::Scenes::Editor
 	Manager::clearSelection () noexcept
 	{
 		m_selectedEntity = nullptr;
+
+		if ( m_scene != nullptr )
+		{
+			m_scene->setHighlightedEntity(nullptr);
+		}
 	}
 
 	float

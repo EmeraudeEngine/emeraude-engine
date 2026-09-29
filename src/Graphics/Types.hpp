@@ -55,7 +55,10 @@ namespace EmEn::Graphics
 		ShadowMap,
 		ShadowCubemap,
 		Texture,
-		Cubemap
+		Cubemap,
+		/** @brief The depth of the SELECTED instances alone, through the main camera (Graphics::SelectionDepthTarget):
+		 * the source of the selection outline. Drawn with the depth-only shadow-casting programs, without their bias. */
+		SelectionDepth
 	};
 
 	constexpr auto ViewString{"View"};
@@ -64,6 +67,7 @@ namespace EmEn::Graphics
 	constexpr auto ShadowCubemapString{"ShadowCubemap"};
 	constexpr auto TextureString{"Texture"};
 	constexpr auto CubemapString{"Cubemap"};
+	constexpr auto SelectionDepthString{"SelectionDepth"};
 
 	/**
 	 * @brief Converts a render target type enumeration value to the corresponding string.

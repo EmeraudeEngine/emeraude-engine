@@ -99,7 +99,7 @@ namespace EmEn::Saphir::Generator
 
 				/* Detect whether the render target supports MRT outputs
 				 * by checking the render pass color attachment count.
-				 * Attachment order: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo.
+				 * Attachment order: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=reactive.
 				 * Each MRT attachment requires every one before it (enforced by Renderer). */
 				if ( const auto * fb = renderTarget->framebuffer(); fb != nullptr )
 				{
@@ -110,6 +110,7 @@ namespace EmEn::Saphir::Generator
 						m_hasMaterialPropertiesAttachment = colorCount > 2;
 						m_hasAlbedoAttachment = colorCount > 3;
 						m_hasVelocityAttachment = colorCount > 4;
+						m_hasReactiveAttachment = colorCount > 5;
 					}
 				}
 			}
@@ -267,6 +268,7 @@ namespace EmEn::Saphir::Generator
 			bool m_hasMaterialPropertiesAttachment{false};
 			bool m_hasAlbedoAttachment{false};
 			bool m_hasVelocityAttachment{false};
+			bool m_hasReactiveAttachment{false};
 			/** @brief Whether the vertex shader emitted the velocity clip-position outputs. */
 			bool m_velocityOutputsEmitted{false};
 	};

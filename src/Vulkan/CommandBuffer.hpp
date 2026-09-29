@@ -266,6 +266,30 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Registers a render pass begin with clear values counted at run time (a target that builds the list
+			 * of its own attachments, SceneRenderTarget::clearValues()).
+			 * @param framebuffer A reference to a framebuffer.
+			 * @param renderArea The render area.
+			 * @param clearValues The framebuffer clear values, one per attachment.
+			 * @param subpassContents
+			 * @return void
+			 */
+			void
+			beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, std::span< const VkClearValue > clearValues, VkSubpassContents subpassContents) const noexcept
+			{
+				VkRenderPassBeginInfo renderPassBeginInfo{};
+				renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				renderPassBeginInfo.pNext = nullptr;
+				renderPassBeginInfo.renderPass = framebuffer.renderPass()->handle();
+				renderPassBeginInfo.framebuffer = framebuffer.handle();
+				renderPassBeginInfo.renderArea = renderArea;
+				renderPassBeginInfo.clearValueCount = static_cast< uint32_t >(clearValues.size());
+				renderPassBeginInfo.pClearValues = clearValues.data();
+
+				vkCmdBeginRenderPass(m_handle, &renderPassBeginInfo, subpassContents);
+			}
+
+			/**
 			 * @brief Registers a render pass end.
 			 * @return void
 			 */

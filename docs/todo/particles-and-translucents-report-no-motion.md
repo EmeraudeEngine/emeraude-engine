@@ -30,6 +30,11 @@ kinds of content write a wrong one:
 2. The known answers, to present to the owner with measurements:
    - particles: a real per-particle previous position (the emitter knows it), or a "reactive" mask that
      lowers the history weight where they are drawn (FSR 2's reactive mask);
+   - ⚠️ BOTH MECHANISMS EXIST SINCE 2026-09-28 (the beams needed them): `Material::Interface::writesGeometryBuffer()`
+     (false = the G-buffer, velocity included, is masked — the surface behind keeps its own) and the REACTIVE MASK
+     (`Material::Interface::reactiveMaskExpression()`, `R8_UNORM` attachment, read by the TAA; graphics doc 33). What
+     is left for this item is to decide WHICH particles / translucents use them (StandardResource has neither yet),
+     and to measure;
    - translucents: do not write velocity/depth at all (keep the opaque surface's), plus the same reactive
      mask for their own colour.
 

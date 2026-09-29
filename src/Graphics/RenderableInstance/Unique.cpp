@@ -54,7 +54,7 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix = this->worldModelMatrix(*worldCoordinates, passContext.viewMatrices->position(passContext.readStateIndex));
 		}
 
-		this->applyLocalTransformation(modelMatrix);
+		this->applyLocalTransformation(modelMatrix, passContext.readStateIndex);
 
 		/* For cubemap/CSM rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
 		 * We only push the Model matrix. */
@@ -71,9 +71,11 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			/* Classic 2D rendering: compute and push MVP. */
+			/* Classic 2D rendering: compute and push MVP. UNJITTERED: this depth-only pass never jitters — a shadow map's
+			 * view has no jitter, and the selection depth pass (Graphics::SelectionDepthTarget) draws through the MAIN
+			 * camera's view, whose jitter would make the selection outline tremble. */
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
-			const auto & projectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex);
+			const auto & projectionMatrix = passContext.viewMatrices->unjitteredProjectionMatrix(passContext.readStateIndex);
 			const auto modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
 			vkCmdPushConstants(
@@ -139,7 +141,7 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix = this->worldModelMatrix(*worldCoordinates, passContext.viewMatrices->position(passContext.readStateIndex));
 		}
 
-		this->applyLocalTransformation(modelMatrix);
+		this->applyLocalTransformation(modelMatrix, passContext.readStateIndex);
 
 		const auto handle = passContext.commandBuffer->handle();
 		const auto layout = pushContext.pipelineLayout->handle();

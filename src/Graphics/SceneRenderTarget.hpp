@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/ViewMatrices2DUBO.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -75,10 +76,39 @@ namespace EmEn::Graphics
 			 * @param materialPropertiesFormat The Vulkan format for the material properties MRT attachment. VK_FORMAT_UNDEFINED to skip.
 			 * @param albedoFormat The Vulkan format for the albedo MRT attachment. VK_FORMAT_UNDEFINED to skip.
 			 * @param velocityFormat The Vulkan format for the velocity MRT attachment (motion vectors). VK_FORMAT_UNDEFINED to skip.
+			 * @param reactiveFormat The Vulkan format for the REACTIVE MASK MRT attachment (how far the temporal
+			 * passes must distrust their history at a pixel: an emissive overlay the velocity cannot explain, a beam's
+			 * arc). VK_FORMAT_UNDEFINED to skip.
 			 * @param depthFormat The Vulkan depth format (e.g. VK_FORMAT_D24_UNORM_S8_UINT).
 			 * @param viewDistance The max viewable distance in meters.
 			 */
-			SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat depthFormat, float viewDistance) noexcept;
+			SceneRenderTarget (const std::string & name, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat normalsFormat, VkFormat materialPropertiesFormat, VkFormat albedoFormat, VkFormat velocityFormat, VkFormat reactiveFormat, VkFormat depthFormat, float viewDistance) noexcept;
+
+			/**
+			 * @brief The clear values of every attachment, one per slot, whether the target has it or not: the palette
+			 * clearValues() picks from.
+			 */
+			struct ClearPalette final
+			{
+				VkClearValue color{};
+				VkClearValue normals{};
+				VkClearValue materialProperties{};
+				VkClearValue albedo{};
+				VkClearValue velocity{};
+				VkClearValue reactive{};
+				VkClearValue depthStencil{};
+			};
+
+			/**
+			 * @brief Returns the clear values of THIS target's attachments, in attachment order (the one the render passes
+			 * are built in: colour, normals, material properties, albedo, velocity, reactive, depth).
+			 * @note The single place that knows which attachments exist: the callers used to rebuild the subset by hand,
+			 * one branch per combination, twice.
+			 * @param palette A reference to the clear values of every possible attachment.
+			 * @return Base::StaticVector< VkClearValue, 7 >
+			 */
+			[[nodiscard]]
+			Base::StaticVector< VkClearValue, 7 > clearValues (const ClearPalette & palette) const noexcept;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
 			void setViewDistance (float meters) noexcept override;
@@ -280,6 +310,39 @@ namespace EmEn::Graphics
 				return m_velocityImageView;
 			}
 
+			/**
+			 * @brief Returns the reactive mask format used by this render target.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat
+			reactiveFormat () const noexcept
+			{
+				return m_reactiveFormat;
+			}
+
+			/**
+			 * @brief Returns the reactive mask image (0 = trust the history, 1 = ignore it).
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			reactiveImage () const noexcept
+			{
+				return m_reactiveImage;
+			}
+
+			/**
+			 * @brief Returns the reactive mask image view for sampling operations.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			reactiveImageView () const noexcept
+			{
+				return m_reactiveImageView;
+			}
+
 		protected:
 
 			/**
@@ -362,6 +425,7 @@ namespace EmEn::Graphics
 			VkFormat m_materialPropertiesFormat;
 			VkFormat m_albedoFormat;
 			VkFormat m_velocityFormat;
+			VkFormat m_reactiveFormat;
 			VkFormat m_depthFormat;
 			std::shared_ptr< Vulkan::Image > m_colorImage;
 			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
@@ -373,6 +437,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::ImageView > m_albedoImageView;
 			std::shared_ptr< Vulkan::Image > m_velocityImage;
 			std::shared_ptr< Vulkan::ImageView > m_velocityImageView;
+			std::shared_ptr< Vulkan::Image > m_reactiveImage;
+			std::shared_ptr< Vulkan::ImageView > m_reactiveImageView;
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;

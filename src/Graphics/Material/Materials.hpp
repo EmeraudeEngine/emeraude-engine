@@ -35,8 +35,9 @@
 
 namespace EmEn::Graphics::Material
 {
-	/* One concrete material remains: StandardResource (Cook-Torrance). Material::Interface
-	 * survives only as the extension contract for future, structurally different models. */
+	/* The materials a MESH may be built with: StandardResource (Cook-Torrance) alone. Material::Interface is the
+	 * extension contract for structurally different models; BeamResource is one (its vertex stage builds the
+	 * geometry), drawn by Scenes::Component::Beam only, hence absent from this list. */
 	constexpr auto Types = std::array< std::string_view, 1 >{
 		StandardResource::ClassId
 	};

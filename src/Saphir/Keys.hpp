@@ -753,6 +753,7 @@ namespace EmEn::Saphir
 				constexpr auto BasicMaterial{"BasicMaterial"};
 				constexpr auto StandardMaterial{"StandardMaterial"};
 				constexpr auto PBRMaterial{"PBRMaterial"};
+				constexpr auto BeamMaterial{"BeamMaterial"};
 				constexpr auto DirectionalLight{"DirectionalLight"};
 				constexpr auto DirectionalLightCSM{"DirectionalLightCSM"};
 				constexpr auto PointLight{"PointLight"};
@@ -859,6 +860,12 @@ namespace EmEn::Saphir
 				constexpr auto ImposterBounds{"imposterBounds"};
 				/** @brief Octahedral imposter: (views per side, 1 / views per side, unused, unused). */
 				constexpr auto ImposterGrid{"imposterGrid"};
+				/** @brief Beam (Material::BeamResource): (radiance.rgb = linear colour × luminance in nits, core exponent). */
+				constexpr auto BeamRadiance{"beamRadiance"};
+				/** @brief Beam: (half width, arc amplitude, arc frequency in noise cycles along the beam, octaves), entity units. */
+				constexpr auto BeamShape{"beamShape"};
+				/** @brief Beam: (seed, re-strike rate in Hz — 0 = never, drift in noise cycles per second, unused). */
+				constexpr auto BeamMotion{"beamMotion"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};
@@ -982,6 +989,10 @@ namespace EmEn::Saphir
 			constexpr auto ImposterFrameRight{"svImposterRight"};
 			constexpr auto ImposterFrameUp{"svImposterUp"};
 			constexpr auto ImposterFrameBack{"svImposterBack"};
+			/* Beam ribbon (AbstractVertexStage::enableBeamRibbon()): (t along the beam, side across it in [-1, 1]),
+			 * and the coverage of a beam thinner than a pixel (its drawn width is clamped, its light scaled down). */
+			constexpr auto BeamCoordinates{"svBeamCoordinates"};
+			constexpr auto BeamCoverage{"svBeamCoverage"};
 			constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
 			constexpr auto MDIModelMatrix{"svMDIModelMatrix"};
 			constexpr auto InstanceModelMatrix{"svInstanceModelMatrix"};
@@ -997,6 +1008,9 @@ namespace EmEn::Saphir
 			constexpr auto OutputMaterialProperties{"svOutputMaterialProperties"};
 			constexpr auto OutputAlbedo{"svOutputAlbedo"};
 			constexpr auto OutputVelocity{"svOutputVelocity"};
+			/* The reactive mask output (location 5, after the velocity): written only by a material that declares one
+			 * (Material::Interface::reactiveMaskExpression()). */
+			constexpr auto OutputReactive{"svOutputReactive"};
 			constexpr auto ClipPositionCurrent{"svClipPositionCurrent"};
 			constexpr auto ClipPositionPrevious{"svClipPositionPrevious"};
 			constexpr auto FragCoord{"svFragCoord"};

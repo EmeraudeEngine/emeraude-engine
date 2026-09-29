@@ -53,6 +53,9 @@ namespace EmEn::Graphics
 
 			case RenderTargetType::Cubemap :
 				return CubemapString;
+
+			case RenderTargetType::SelectionDepth :
+				return SelectionDepthString;
 		}
 
 		return nullptr;

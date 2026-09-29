@@ -24,6 +24,9 @@ too; its code is under the Unreal EULA (ideas only, never code) and it is not pa
 
 ## What remains
 
+0. ⚠️ Input already available (2026-09-28): a REACTIVE MASK, `R8_UNORM`, the FSR 2 / DLSS layout, in the scene target
+   and the post-process grab pass (`SceneRenderTarget::reactiveImage()`, `FrameContext::reactive`; graphics doc 33).
+   Written today by the beams only.
 1. **State of the art and licences first** (`AGENTS.md`, research before any non-trivial addition). Verify
    and cite, for each SDK: its current version, its Vulkan backend, Linux / Windows / macOS (MoltenVK)
    support, which GPUs it runs on, its licence, and its redistribution terms (can the binaries ship next to

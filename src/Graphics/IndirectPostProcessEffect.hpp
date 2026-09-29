@@ -417,6 +417,10 @@ namespace EmEn::Graphics
 				const Vulkan::TextureInterface * materialProperties{nullptr};
 				const Vulkan::TextureInterface * albedo{nullptr};
 				const Vulkan::TextureInterface * velocity{nullptr};
+				/* The REACTIVE MASK (R8, 0-1): how far a temporal pass must distrust its history at a pixel — an
+				 * emissive overlay whose light the velocity cannot explain (a beam re-striking its arc). nullptr
+				 * without a velocity buffer: the two live together. */
+				const Vulkan::TextureInterface * reactive{nullptr};
 				const Scenes::LightSet * lightSet{nullptr};
 				const Scenes::Component::Camera * camera{nullptr};
 				/* Luminance of the scene background, in nits (cd/m²), or 0 when the scene has no

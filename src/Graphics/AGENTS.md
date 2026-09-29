@@ -90,3 +90,5 @@
 | Compressed image path (KTX2 / `KHR_texture_basisu`, Aug 2026) | [`docs/subsystems/graphics/30-compressed-image-path.md`](../../docs/subsystems/graphics/30-compressed-image-path.md) | 12 KB |
 | Alpha COVERAGE: a mask is not a gradient (Sep 2026) | [`docs/subsystems/graphics/31-alpha-coverage-a-mask-is-not-a-gradient.md`](../../docs/subsystems/graphics/31-alpha-coverage-a-mask-is-not-a-gradient.md) | 4 KB |
 | The reflection effects owed the ENVIRONMENT BRDF, not a Fresnel (Sep 2026) | [`docs/subsystems/graphics/32-the-reflection-effects-owed-the-environment-brdf-not-a-fresn.md`](../../docs/subsystems/graphics/32-the-reflection-effects-owed-the-environment-brdf-not-a-fresn.md) | 3 KB |
+| Beams — lasers and electric arcs; the reactive mask (Sep 2026) | [`docs/subsystems/graphics/33-beams-lasers-and-electric-arcs.md`](../../docs/subsystems/graphics/33-beams-lasers-and-electric-arcs.md) | 6 KB |
+| The selection outline — a "custom depth" pass (Sep 2026) | [`docs/subsystems/graphics/34-the-selection-outline-custom-depth.md`](../../docs/subsystems/graphics/34-the-selection-outline-custom-depth.md) | 4 KB |

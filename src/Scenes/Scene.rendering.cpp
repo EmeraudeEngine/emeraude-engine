@@ -32,9 +32,11 @@
 #include <cmath>
 #include <optional>
 #include <ranges>
+#include <vector>
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/MDI/BatchBuilder.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/RenderStateTracker.hpp"
@@ -609,6 +611,92 @@ namespace EmEn::Scenes
 	}
 
 	void
+	Scene::setHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept
+	{
+		const std::scoped_lock lock{m_highlightedEntityAccess};
+
+		m_highlightedEntity = entity;
+	}
+
+	std::shared_ptr< AbstractEntity >
+	Scene::highlightedEntity () const noexcept
+	{
+		const std::scoped_lock lock{m_highlightedEntityAccess};
+
+		return m_highlightedEntity.lock();
+	}
+
+	bool
+	Scene::renderSelectionDepth (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		const auto entity = this->highlightedEntity();
+
+		if ( entity == nullptr )
+		{
+			return false;
+		}
+
+		/* Collected under the entity's component lock, drawn outside it. */
+		std::vector< std::shared_ptr< RenderableInstance::Abstract > > instances;
+
+		entity->forEachComponent([&instances] (const Component::Abstract & component) {
+			auto instance = component.getRenderableInstance();
+
+			if ( instance != nullptr && !instance->isBroken() )
+			{
+				instances.emplace_back(std::move(instance));
+			}
+		});
+
+		if ( instances.empty() )
+		{
+			return false;
+		}
+
+		auto & renderer = m_AVConsoleManager.graphicsRenderer();
+		const uint32_t readStateIndex = m_frameReadStateIndex;
+		/* Published render state, like everything a frame draws: the entity where the scene pass drew it. */
+		const auto & worldCoordinates = entity->getWorldCoordinatesStateForRendering(readStateIndex);
+		/* The CURRENT frame's set (see castShadows()): the wind of a vegetation program. */
+		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(renderer.currentFrameIndex());
+		/* The target borrows the main camera: an adaptive geometry picks the level the scene pass drew. */
+		const auto & lodViewPosition = renderTarget->viewMatrices().position(readStateIndex);
+
+		bool drawn = false;
+
+		for ( const auto & instance : instances )
+		{
+			const auto * renderable = instance->renderable();
+
+			if ( renderable == nullptr || !renderable->isReadyForInstantiation() )
+			{
+				continue;
+			}
+
+			/* The depth-only programs of THIS target are generated on first use, here, on the render thread. */
+			if ( !instance->isReadyToCastShadows(renderTarget) && (!instance->getReadyForShadowCasting(renderTarget, renderer) || !instance->isReadyToCastShadows(renderTarget)) )
+			{
+				continue;
+			}
+
+			for ( uint32_t layerIndex = 0; layerIndex < renderable->layerCount(); ++layerIndex )
+			{
+				/* An emissive overlay (a beam) is no surface, and these programs cannot build its ribbon. */
+				if ( const auto * material = renderable->material(layerIndex); material != nullptr && !material->writesGeometryBuffer() )
+				{
+					continue;
+				}
+
+				instance->castShadows(readStateIndex, renderTarget, lodViewPosition, layerIndex, &worldCoordinates, commandBuffer, 0, 0, sceneTransformsDS);
+
+				drawn = true;
+			}
+		}
+
+		return drawn;
+	}
+
+	void
 	Scene::beginRenderFrame () noexcept
 	{
 		/* Deferred on-demand refresh (owner contract): consumed here, before any render
@@ -780,7 +868,7 @@ namespace EmEn::Scenes
 		if ( renderTarget->bakeSubject() == nullptr )
 		{
 			auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
-			m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, renderTarget->viewMatrices().position());
+			m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, m_frameReadStateIndex, renderTarget->viewMatrices().position());
 		}
 
 		return true;
@@ -1891,7 +1979,7 @@ namespace EmEn::Scenes
 		 * frame-linear slot for the draws recorded until the next prepareRender(). */
 		if ( !renderableInstance->useModelVertexBufferObject() )
 		{
-			renderableInstance->stageInstanceTransforms(m_instanceTransforms, worldCoordinates, cameraPosition, advanceModelHistory);
+			renderableInstance->stageInstanceTransforms(m_instanceTransforms, worldCoordinates, cameraPosition, m_frameReadStateIndex, advanceModelHistory);
 		}
 
 		/* Compute LOD level from screen-space coverage (distance + object size).

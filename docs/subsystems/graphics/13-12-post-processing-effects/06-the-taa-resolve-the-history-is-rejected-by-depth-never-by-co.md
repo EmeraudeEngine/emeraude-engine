@@ -119,3 +119,20 @@ filtered) decides whether the history is still valid.
 > `bloomThreshold()`, `bloomIntensity()` — because it is the user-facing API and it names the
 > *intent*, not the class. `Scenes::EffectsToolkit::LensPresets` became `StylePresets` in the
 > same pass, since it composes `Effects::Style::*`.
+
+### The REACTIVE mask — light the velocity cannot explain (2026-09-28)
+
+The depth rule cannot see a SHADING change on unchanged geometry, and an additive overlay outside the depth buffer
+is exactly that: a beam that re-strikes its arc draws a new shape in place. The scene target carries a reactive
+mask (`R8_UNORM`, location 5, copied to the grab pass, `FrameContext::reactive`, binding 4), written by a material
+with `Material::Interface::reactiveMaskExpression()`. The resolve:
+
+- `blendAlpha = mix(blendAlpha, 1, reactive)`: the current frame wins where the mask is set;
+- the history ALPHA of that pixel is written **0** — the REACTIVE tag (a linear depth is never 0; negative is still
+  the motion marker). A history carrying a 0 tag is rejected UNCONDITIONALLY next frame, edge or not.
+
+⚠️ Why a tag of its own: marking reactive pixels with the motion marker left the ghost line EXACTLY on the horizon —
+the marker is deliberately kept on a depth edge (the sword-comb fix), and the horizon is one. Measured on `beams`:
+before the mask, twelve re-strikes a second averaged into a straight white line between the arc's fixed ends; with
+the zero tag, TAA on and TAA off leave the same persistent light (20 116 vs 20 461 pixels lit in all of 5 captures).
+Details: `docs/subsystems/graphics/33-beams-lasers-and-electric-arcs.md`.

@@ -570,6 +570,59 @@ namespace EmEn::Graphics::Material
 			virtual bool setupLightGenerator (Saphir::LightGenerator & lightGenerator) const noexcept = 0;
 
 			/**
+			 * @brief Returns whether the material writes the G-buffer attachments (normals, material properties,
+			 * albedo, velocity) beside the colour.
+			 * @note An emissive OVERLAY that adds light over the scene (Material::BeamResource: a laser, an electric
+			 * arc) is not a surface: stamping its normal, albedo and velocity over the geometry behind it hands the
+			 * reflections, the global illumination and the TAA a flat wall where the beam passes. Returning false
+			 * masks those attachments (write mask 0, as the light passes do) in Saphir::Generator::SceneRendering;
+			 * the colour attachment keeps the material's blending.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			writesGeometryBuffer () const noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief Returns a GLSL float expression in [0, 1] for the REACTIVE MASK at this fragment, or an empty string
+			 * when the material leaves it alone (the default: the attachment keeps its clear value, 0).
+			 * @note The reactive mask tells the temporal passes how far to distrust their history at a pixel: light the
+			 * velocity cannot explain (a beam re-striking its arc). 1 = ignore the history, and the TAA marks the pixel
+			 * so the next frame rejects a history that still holds that light (Effects/Resolve/TAA.cpp). FSR 2's
+			 * reactive mask, UE's responsive AA.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			virtual
+			std::string
+			reactiveMaskExpression () const noexcept
+			{
+				return {};
+			}
+
+			/**
+			 * @brief Configures the vertex stage BEFORE any synthesis reads the vertex position.
+			 * @note Called by the scene generator before the velocity outputs are synthesized: a material whose vertex
+			 * stage BUILDS the position (Material::BeamResource and its beam ribbon) must switch that mode on here,
+			 * because the velocity synthesis captures vertexPositionExpression() and
+			 * previousVertexPositionExpression() at the moment it runs. generateVertexShaderCode() runs after it.
+			 * @param generator A reference to the graphics shader generator.
+			 * @param vertexShader A reference to the vertex stage.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			prepareVertexStage ([[maybe_unused]] Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::AbstractVertexStage & vertexShader) const noexcept
+			{
+				return true;
+			}
+
+			/**
 			 * @brief Generates the code responsible for the vertex shader.
 			 * @param generator A reference to the graphics shader generator.
 			 * @param vertexShader A reference to the vertex shader.

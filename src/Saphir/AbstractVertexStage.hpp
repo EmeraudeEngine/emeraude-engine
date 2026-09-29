@@ -545,6 +545,39 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Turns the geometry into a BEAM RIBBON (a laser, an electric arc): each vertex is a
+			 * (t, side, 0) point of a shared strip, t ∈ [0, 1] along the beam and side = ±1 across it, and the stage
+			 * places it on the beam's centre line — displaced by the arc noise — then across it, facing the eye.
+			 * @note The model matrix maps the unit segment onto the beam (Saphir `BeamGLSL.hpp`); the previous
+			 * position re-evaluates the ribbon with the PREVIOUS model matrix and the previous scene time, so a moving
+			 * or re-striking beam reports its real velocity. The clock is the scene time pair of the instance-transforms
+			 * header (`windTimes.xy`); without that block the arc is frozen at t = 0.
+			 * @note Must be switched on BEFORE the velocity synthesis (Material::Interface::prepareVertexStage()).
+			 * Exclusive with skinning, the vegetation wind, a heightfield surface and the imposter billboard.
+			 * @param shapeExpression A GLSL vec4 expression: (half width, arc amplitude, arc frequency, octaves).
+			 * @param motionExpression A GLSL vec4 expression: (seed, re-strike rate in Hz, drift, unused).
+			 * @return void
+			 */
+			void
+			enableBeamRibbon (std::string shapeExpression, std::string motionExpression) noexcept
+			{
+				m_beamShapeExpression = std::move(shapeExpression);
+				m_beamMotionExpression = std::move(motionExpression);
+				m_beamRibbonEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the beam ribbon is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isBeamRibbonEnabled () const noexcept
+			{
+				return m_beamRibbonEnabled;
+			}
+
+			/**
 			 * @brief Returns whether the heightfield surface is enabled.
 			 * @return bool
 			 */
@@ -744,6 +777,15 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			bool prepareImposterBillboard (Generator::Abstract & generator) noexcept;
+
+			/**
+			 * @brief Registers the beam ribbon block as a unique preparation, AFTER the model matrix it reads, and
+			 * declares its stage outputs (enableBeamRibbon()).
+			 * @param generator A reference to the shader generator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool prepareBeamRibbon (Generator::Abstract & generator) noexcept;
 
 			/**
 			 * @brief Declares a tangent-frame attribute — unless the heightfield synthesizes it.
@@ -1077,6 +1119,8 @@ namespace EmEn::Saphir
 			std::set< Graphics::VertexAttributeType > m_vertexAttributes;
 			std::string m_imposterBoundsExpression;
 			std::string m_imposterGridExpression;
+			std::string m_beamShapeExpression;
+			std::string m_beamMotionExpression;
 			const char * m_positionOutput{"gl_Position"};
 			const char * m_instanceIndexExpression{"gl_InstanceIndex"};
 			bool m_instancingEnabled{false};
@@ -1093,6 +1137,9 @@ namespace EmEn::Saphir
 			bool m_heightfieldBaseEnabled{false};
 			bool m_oceanSurfaceEnabled{false};
 			bool m_imposterBillboardEnabled{false};
+			bool m_beamRibbonEnabled{false};
+			/** @brief Whether the velocity outputs need the previous beam ribbon position (set by the velocity synthesis). */
+			bool m_previousBeamRequired{false};
 			bool m_heightfieldPixelFrameEnabled{false};
 			bool m_heightfieldFrameRequested{false};
 			bool m_heightfieldTextureCoordinatesRequested{false};

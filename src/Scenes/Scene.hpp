@@ -2117,6 +2117,34 @@ namespace EmEn::Scenes
 			void renderTranslucentGB (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			/**
+			 * @brief Highlights an entity: the renderer draws its selection OUTLINE (Graphics::SelectionOutline) — full
+			 * where it is visible, dimmed where other geometry hides it.
+			 * @note Any thread. Held weakly: an entity that dies simply stops being outlined. The editor's selection drives
+			 * it (Scenes::Editor::Manager::setSelection()), so does the console (`highlightEntity`).
+			 * @param entity A reference to the entity smart pointer, or nullptr to clear the highlight.
+			 * @return void
+			 */
+			void setHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept;
+
+			/**
+			 * @brief Returns the highlighted entity, or nullptr (none, or dead).
+			 * @return std::shared_ptr< AbstractEntity >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< AbstractEntity > highlightedEntity () const noexcept;
+
+			/**
+			 * @brief Draws the depth of the highlighted entity alone into the selection depth target ("custom depth").
+			 * @note Render thread, INSIDE the target's render pass (the Renderer opens it, depth cleared), after
+			 * prepareRender(). Uses the depth-only shadow-casting programs, generated for this target on first use. An emissive overlay (a beam:
+			 * Material::Interface::writesGeometryBuffer() false) is skipped: it is no surface.
+			 * @param renderTarget The selection depth target.
+			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 * @return bool True when something was drawn (the outline has a source this frame).
+			 */
+			bool renderSelectionDepth (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+
+			/**
 			 * @brief Checks whether any translucent grab-pass objects are queued for rendering.
 			 * @note Only meaningful after prepareRender() has been called.
 			 * @return True if TranslucentGB or TranslucentGBLighted render lists are non-empty.
@@ -3183,6 +3211,10 @@ namespace EmEn::Scenes
 			mutable std::mutex m_renderToViewAccess;
 			/** @brief Mutex for double-buffer state copy operation. */
 			mutable std::mutex m_stateCopyLock;
+			/** @brief The entity the selection outline shows (setHighlightedEntity()), held weakly. */
+			std::weak_ptr< AbstractEntity > m_highlightedEntity;
+			/** @brief Mutex protecting m_highlightedEntity (set from any thread, read by the render thread). */
+			mutable std::mutex m_highlightedEntityAccess;
 			/** @brief Raised from any thread (setBackground), consumed by processLogics()
 			 * (logic thread) to push the background photometry to the view UBOs. */
 			std::atomic_bool m_backgroundPhotometryDirty{false};

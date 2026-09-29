@@ -26,6 +26,9 @@
 
 #include "ResourceGenerator.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+
 /* Local inclusions. */
 #include "VertexFactory/ShapeAssembler.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
@@ -91,6 +94,42 @@ namespace EmEn::Graphics::Geometry
 
 				return geometryResource.load(shape);
 			}, m_generationParameters.geometryFlags());
+	}
+
+	std::shared_ptr< IndexedVertexResource >
+	ResourceGenerator::beamStrip (uint32_t segmentCount, std::string resourceName) const noexcept
+	{
+		segmentCount = std::max(segmentCount, 1U);
+
+		if ( resourceName.empty() )
+		{
+			resourceName = this->generateResourceName("BeamStrip", std::to_string(segmentCount));
+		}
+
+		/* Position only, whatever this generator was set up with: the vertex stage reads nothing else. */
+		return m_resources.container< IndexedVertexResource >()
+			->getOrCreateResource(resourceName, [segmentCount] (auto & geometryResource) {
+				Shape< float > shape{segmentCount * 2};
+
+				ShapeBuilder< float > builder{shape, ShapeBuilderOptions< float >{}};
+
+				builder.beginConstruction(ConstructionMode::TriangleStrip);
+
+				for ( uint32_t station = 0; station <= segmentCount; ++station )
+				{
+					const auto t = static_cast< float >(station) / static_cast< float >(segmentCount);
+
+					builder.setPosition(t, -1.0F, 0.0F);
+					builder.newVertex();
+
+					builder.setPosition(t, 1.0F, 0.0F);
+					builder.newVertex();
+				}
+
+				builder.endConstruction();
+
+				return geometryResource.load(shape);
+			}, None);
 	}
 
 	std::shared_ptr< IndexedVertexResource >

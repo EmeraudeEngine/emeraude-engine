@@ -181,6 +181,62 @@ namespace EmEn::Scenes
 				return result;
 			}, Console::CommandHint::ReadOnly);
 
+		this->bindCommand("highlightEntity", "Outlines one entity of the ACTIVE scene (the selection outline: full where visible, dimmed where hidden) — what the editor's selection does. One entity at a time.",
+			{
+				{"entity", "The entity address: its name when unique, else the shortest unique path suffix Parent/Child (listEntities() gives every address)."}
+			},
+			[this] (const std::string & entityAddress) {
+				auto result = Console::CommandResult::error("No active scene !");
+
+				this->withExclusiveActiveScene([&result, &entityAddress] (const std::shared_ptr< Scene > & scene) {
+					std::shared_ptr< AbstractEntity > entity;
+					std::string error;
+
+					if ( !Component::resolveEntity(*scene, entityAddress, entity, error) )
+					{
+						result = Console::CommandResult::error(error);
+
+						return;
+					}
+
+					scene->setHighlightedEntity(entity);
+
+					result = Console::CommandResult::success("Entity '" + entityAddress + "' highlighted.");
+				}, true);
+
+				return result;
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("clearHighlight", "Removes the selection outline of the ACTIVE scene.", [this] () {
+			auto result = Console::CommandResult::error("No active scene !");
+
+			this->withExclusiveActiveScene([&result] (const std::shared_ptr< Scene > & scene) {
+				scene->setHighlightedEntity(nullptr);
+
+				result = Console::CommandResult::success("Highlight cleared.");
+			}, true);
+
+			return result;
+		}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setHighlightStyle", "Sets the look of the selection outline (engine-wide).",
+			{
+				{"red", "Displayed (sRGB) red, 0-1."},
+				{"green", "Displayed (sRGB) green, 0-1."},
+				{"blue", "Displayed (sRGB) blue, 0-1."},
+				{"width", "The line width, in pixels (1-8)."},
+				{"hiddenOpacity", "The opacity where the entity is hidden behind other geometry, 0-1 (0 = visible parts only, 1 = x-ray)."}
+			},
+			[this] (float red, float green, float blue, float width, float hiddenOpacity) {
+				auto & outline = m_resourceManager.graphicsRenderer().selectionOutline();
+
+				outline.setColor(Base::PixelFactory::Color< float >{red, green, blue, 1.0F});
+				outline.setWidth(width);
+				outline.setHiddenOpacity(hiddenOpacity);
+
+				return Console::CommandResult::success("Highlight style set.");
+			}, Console::CommandHint::Idempotent);
+
 		this->bindCommand("createScene", "Creates a scene with a camera + microphone node and a neutral ambient light (5000 lx), then enables it.",
 			{
 				{"name", "The scene name (must not exist yet)."},
