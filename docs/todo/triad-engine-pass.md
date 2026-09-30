@@ -56,7 +56,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 3 | `src/Scenes/Loaders` | 11 292 | ✅ pushed 2026-09-30 (engine `bf5f901c`); VALIDATED Windows NVIDIA + macOS M2 (glTF hostile set + samples + FBX demos, 0 VUID; the WAD step skipped on both: no IWAD — proven on Linux) |
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
-| 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | 🟠 6a + 6b + 6c ✅, 6d next |
+| 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | 🟠 6a + 6b + 6c ✅, 6d started |
 | 7 | `src/Graphics` (by sub-group) | 137 872 | ⬜ |
 | 8 | `src/Saphir` | 31 645 | ⬜ |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
@@ -342,7 +342,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 6a | Scene graph core: `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | ✅ pushed `23f04e76`; VALIDATED macOS M2 + Windows NVIDIA (1 MiB stack) — hostile refused, engine alive, watch + RecursiveSkeletons render, 0 VUID |
 | 6b | Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ✅ pushed base `33dc712`, engine `53116abe`, alpha `e8c7f692` (+ fixes base `f4319cc`, engine `7a3e540c`, alpha `805095b0`); VALIDATED macOS M2 + Windows NVIDIA |
 | 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ✅ pushed base `9636ea0`, engine `e8dd6016`, alpha `e5b8ce2b`; VALIDATED macOS M2 + Windows NVIDIA/AMD |
-| 6d | `Component/` | 18 617 | ⬜ |
+| 6d | `Component/` | 18 617 | 🟠 started 2026-09-30 |
 | 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
 
 Lead carried from section 3: `SceneDataConsumer::processNodeAsNode()` can build a DEEP `Node` chain from a file (a
@@ -533,6 +533,10 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
     are named per scene with the atlas retired at the bake (the pre-existing 20× `vkEndCommandBuffer-00059` after
     citadel → beams → terrain gone). Linux: citadel → beams → terrain → citadel → delete/create → shutdown, 0 VUID,
     0 error. Engine caution-points § Scene Rendering (both entries).
+    Pushed engine `f3c5284f`. macOS M2 VALIDATED 2026-09-30 (AppleClang 0 warning; the full sequence 0 VUID, 0
+    UNASSIGNED, 0 [Error], exit 0 — was 31 VUIDs + 2 errors; 20 'Imposter/terrain/…' atlases baked). Windows
+    VALIDATED 2026-09-30 (MSVC /W4 /WX 0 warning): NVIDIA RTX 3060 Laptop 0 teardown VUID (was 25; only the known
+    12325 mesh-shader one), AMD iGPU 0 VUID 0 error (was 5); terrain pixel-close NVIDIA vs AMD.
   - Windows peer (RTX 3060 Laptop + AMD iGPU, MSVC /W4 /WX 0 warning): PASS on steps 1-4 (2170 = 2167 + 3 skipped,
     the 5 hostile definitions alive with the exact warnings, collision-debug 21 entities — ChildA at the 6 m offset
     from the screenshot geometry —, MCP 1707/0, console 4457/0). The same delete/create teardown defect (fixed above): NVIDIA 25
@@ -543,4 +547,40 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
   (`VertexGridResource::load(float, uint32_t, float)`) and its `load(path)` / `load(json)` call `setLoadSuccess()`
   without `beginLoading()` (section 7); `SoundfontResource` opens the JSON `file` path unconfined (section 10);
   Core tools mode `arguments().get(…).value()` (section 15).
+
+### 6d — `Component/` (started 2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline (31 TUs, the `Component/` files only): **75**: 22 constant-array-index, 12
+  math-missing-parentheses, 9 use-enum-class, 8 implicit-widening, 5 missing-std-forward, 3 non-private members, 3
+  special-member-functions, 2 non-const globals, 2 designated-initializers, 2 inconsistent parameter names, and
+  singles: mt-unsafe (`std::lgamma`), scoped-lock, string concatenation, const-ref member, static-cast downcast,
+  nested conditional, a dead store.
+- [x] (2) Review. The console / MCP boundary is sound: every component adapter validates its numbers (finite, sign,
+  range) and `parsePointList()` refuses a non-finite point. Findings:
+  - C1 **the component setters (public engine API) accept NaN / infinity**: ~45 with no check at all, others only a
+    sign policy (`std::abs`) or a clamp NaN may cross; `SunCourse::setPhase(NaN)` feeds `std::lround()` (undefined).
+  - C2 `ParticlesEmitter`: a respawned particle sets `newLocation = true`, then the physics `switch` overwrites the flag
+    in every case (clang-analyzer dead store): a respawned particle whose physics reports "no move" is not written.
+  - On purpose (ledger): the static name counters are atomics; `std::lgamma` (`Beam::equivalentTubeLuminance()`) has
+    one caller, on the logic thread; the light emitters' protected projection state is shared by the derived lights;
+    the subscripts are bounded (slots, cascades, the line light's ≤ 9 points).
+- [x] (3) Mechanical (2026-09-30): parentheses, `size_t` before the multiplications used as offsets, designated
+  initializers, scoped_lock, the nested conditional of `LineLight::updateWorldPoints` as an `if`, `*points` instead of
+  `.value()` ×3, `std::forward` of the callables invoked once (4; `forEachSuffix` calls in a loop: kept), the suffix
+  built without temporaries, copy / move deleted on CloudVolume, SkyFollowsSun, SoundEmitter. ⚠️ clang-tidy `--fix`
+  REFORMATS the lines it touches (a mangled `bindCommand` in PathConsoleAdapter): three files redone by hand. Builds
+  clean.
+- [x] (3b) Owner rulings (2026-09-30): C1 **refuse a non-finite value, keep the previous one, log an error** (the sign
+  / range policies stay; the adapters keep their explicit replies); C2 **fix** (write a particle respawned OR moved).
+  APPLIED 2026-09-30: `Component::Abstract::acceptsFinite(setter, values…)` (floats, vectors, colours, spans of points;
+  the refusal logged by `traceNonFiniteValue()`) as the first line of 68 setters; `ParticlesEmitter` writes a particle
+  respawned OR moved. Contract: `docs/subsystems/scenes/02-scenes-specific-rules.md`.
+- [x] (4) Verified 2026-09-30 (Linux): cascade builds (0 warning), clangcheck 125 TUs 0, `-Wfloat-conversion` 0 on the
+  Component TUs but a PRE-EXISTING base one (`Animation/AnimationChannel.hpp:277`, a `0.05` double into
+  `Quaternion< float >::slerp()`, instantiated from `NodeAnimation.cpp`; base 72cb8c9, 2026-08-29 — lead for the base);
+  clang-tidy 75 → 40 (on purpose, ledger). Proof of the refusal: a TEMPORARY `setParticleSize(NaN)` +
+  `setChaos(inf)` in projet-alpha's particles demo logged both refusals, then was reverted. Demos particles, beams
+  (MCP 1707/0, console 4448/0), terrain, lighten-marbles, animation-debug: 0 VUID, 0 error, 0 refusal on the legitimate
+  paths.
+- [ ] (5) Commit + push on the owner's order; then the peers.
 

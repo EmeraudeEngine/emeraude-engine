@@ -542,6 +542,11 @@ namespace EmEn::Scenes::Component
 			void
 			setColorProjectionBoost (float boost) noexcept
 			{
+				if ( !this->acceptsFinite("setColorProjectionBoost", boost) )
+				{
+					return;
+				}
+
 				m_colorProjectionBoost = std::max(0.0F, boost);
 			}
 

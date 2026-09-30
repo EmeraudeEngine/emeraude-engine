@@ -106,6 +106,11 @@ namespace EmEn::Scenes::Component
 			void
 			setMagnitude (float magnitude) noexcept
 			{
+				if ( !this->acceptsFinite("setMagnitude", magnitude) )
+				{
+					return;
+				}
+
 				m_magnitude = std::abs(magnitude);
 			}
 

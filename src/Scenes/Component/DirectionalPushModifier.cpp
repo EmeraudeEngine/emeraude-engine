@@ -171,6 +171,11 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalPushModifier::setCustomDirection (const Vector< 3, float > & direction) noexcept
 	{
+		if ( !this->acceptsFinite("setCustomDirection", direction) )
+		{
+			return;
+		}
+
 		m_direction = direction;
 
 		/* ⚠️ A custom direction STOPS following the entity: move() rewrites m_direction from the entity frame

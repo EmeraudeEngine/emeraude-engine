@@ -49,9 +49,9 @@ namespace EmEn::Scenes::Component
 	using namespace Saphir;
 
 	bool
-	PointLight::playAnimation (uint8_t identifier, const Variant & value, size_t /*cycle*/) noexcept
+	PointLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
-		switch ( identifier )
+		switch ( animationID )
 		{
 			case EmittingState :
 				this->enable(value.asBool());
@@ -137,6 +137,11 @@ namespace EmEn::Scenes::Component
 	void
 	PointLight::setPCFRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setPCFRadius", radius) )
+		{
+			return;
+		}
+
 		m_PCFRadius = std::abs(radius);
 
 		m_buffer[PCFRadiusOffset] = m_PCFRadius;
@@ -147,6 +152,11 @@ namespace EmEn::Scenes::Component
 	void
 	PointLight::setShadowBias (float bias) noexcept
 	{
+		if ( !this->acceptsFinite("setShadowBias", bias) )
+		{
+			return;
+		}
+
 		m_shadowBias = bias;
 
 		m_buffer[ShadowBiasOffset] = m_shadowBias;
@@ -325,6 +335,11 @@ namespace EmEn::Scenes::Component
 	void
 	PointLight::setRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setRadius", radius) )
+		{
+			return;
+		}
+
 		m_radius = std::abs(radius);
 
 		m_buffer[RadiusOffset] = m_radius;

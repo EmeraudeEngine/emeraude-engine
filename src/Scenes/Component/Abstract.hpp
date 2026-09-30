@@ -30,9 +30,12 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -45,6 +48,8 @@
 #include "CoreTypes.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Physics/MovableTrait.hpp"
 #include "json/json.h"
 
@@ -467,7 +472,86 @@ namespace EmEn::Scenes::Component
 
 			}
 
+			/**
+			 * @brief Returns whether a setter may take these values: a non-finite number (NaN, infinity) is REFUSED — the
+			 * setter keeps its previous value — with an error naming the component and the setter.
+			 * @note Owner ruling 2026-09-30 (plan Ave Robustus): the component setters are public engine API, a trust
+			 * boundary. Their sign / range policies stay their own; the console adapters refuse earlier, with a reply.
+			 * @tparam values_t Floats, vectors, colours or spans of 3D vectors.
+			 * @param setter The name of the setter, for the error.
+			 * @param values The values the setter received.
+			 * @return bool
+			 */
+			template< typename... values_t >
+			[[nodiscard]]
+			bool
+			acceptsFinite (const char * setter, const values_t &... values) const noexcept
+			{
+				if ( (isFiniteValue(values) && ...) )
+				{
+					return true;
+				}
+
+				this->traceNonFiniteValue(setter);
+
+				return false;
+			}
+
 		private:
+
+			/** @brief Whether a number is finite. */
+			[[nodiscard]]
+			static
+			bool
+			isFiniteValue (float value) noexcept
+			{
+				return std::isfinite(value);
+			}
+
+			/** @brief Whether every component of a vector is finite. */
+			template< size_t dim_t >
+			[[nodiscard]]
+			static
+			bool
+			isFiniteValue (const Base::Math::Vector< dim_t, float > & vector) noexcept
+			{
+				for ( size_t index = 0; index < dim_t; ++index )
+				{
+					if ( !std::isfinite(vector[index]) )
+					{
+						return false;
+					}
+				}
+
+				return true;
+			}
+
+			/** @brief Whether every channel of a colour is finite. */
+			[[nodiscard]]
+			static
+			bool
+			isFiniteValue (const Base::PixelFactory::Color< float > & color) noexcept
+			{
+				return std::isfinite(color.red()) && std::isfinite(color.green()) && std::isfinite(color.blue()) && std::isfinite(color.alpha());
+			}
+
+			/** @brief Whether every point of a list is finite. */
+			[[nodiscard]]
+			static
+			bool
+			isFiniteValue (std::span< const Base::Math::Vector< 3, float > > points) noexcept
+			{
+				return std::ranges::all_of(points, [] (const Base::Math::Vector< 3, float > & point) {
+					return isFiniteValue(point);
+				});
+			}
+
+			/**
+			 * @brief Logs the refusal of acceptsFinite().
+			 * @param setter The name of the setter.
+			 * @return void
+			 */
+			void traceNonFiniteValue (const char * setter) const noexcept;
 
 			/* Allow AbstractEntity to call onSuspend()/onWakeup() on components. */
 			friend class Scenes::AbstractEntity;

@@ -112,6 +112,32 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SkyFollowsSun (const SkyFollowsSun & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SkyFollowsSun (SkyFollowsSun && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SkyFollowsSun &
+			 */
+			SkyFollowsSun & operator= (const SkyFollowsSun & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SkyFollowsSun &
+			 */
+			SkyFollowsSun & operator= (SkyFollowsSun && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the component, giving the background its day luminance back.
 			 * @note The view buffers are not refreshed here (no scene at hand): the next
 			 * Scene::refreshAmbientLightProperties() picks the value up.

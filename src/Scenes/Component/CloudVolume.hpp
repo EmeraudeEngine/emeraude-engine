@@ -161,6 +161,32 @@ namespace EmEn::Scenes::Component
 			CloudVolume (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::CloudShapeResource > & shape, const Base::Math::Vector< 3, float > & halfExtents, const Look & look) noexcept;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			CloudVolume (const CloudVolume & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			CloudVolume (CloudVolume && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return CloudVolume &
+			 */
+			CloudVolume & operator= (const CloudVolume & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return CloudVolume &
+			 */
+			CloudVolume & operator= (CloudVolume && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the volumetric cloud.
 			 */
 			~CloudVolume () override;

@@ -159,6 +159,11 @@ namespace EmEn::Scenes::Component
 			void
 			setParticlePhysicalProperties (float mass, float surface, float dragCoefficient, float angularDrag, float bounciness = 0.5F, float stickiness = 0.5F) noexcept
 			{
+				if ( !this->acceptsFinite("setParticlePhysicalProperties", mass, surface, dragCoefficient, angularDrag, bounciness, stickiness) )
+				{
+					return;
+				}
+
 				m_particlePhysicalProperties.setProperties(mass, surface, dragCoefficient, angularDrag, bounciness, stickiness, {});
 			}
 
@@ -193,6 +198,11 @@ namespace EmEn::Scenes::Component
 			void
 			setParticleGenerationRate (float rate) noexcept
 			{
+				if ( !this->acceptsFinite("setParticleGenerationRate", rate) )
+				{
+					return;
+				}
+
 				m_particleGeneratedPerCycle = static_cast< uint32_t >(std::round(static_cast< float >(m_particleLimit) * std::abs(rate)));
 			}
 
@@ -252,6 +262,11 @@ namespace EmEn::Scenes::Component
 			void
 			setParticleSize (float size) noexcept
 			{
+				if ( !this->acceptsFinite("setParticleSize", size) )
+				{
+					return;
+				}
+
 				m_minimumParticleSize = size;
 				m_maximumParticleSize = size;
 			}
@@ -265,6 +280,11 @@ namespace EmEn::Scenes::Component
 			void
 			setParticleSize (float minimumSize, float maximumSize) noexcept
 			{
+				if ( !this->acceptsFinite("setParticleSize", minimumSize, maximumSize) )
+				{
+					return;
+				}
+
 				if ( minimumSize < maximumSize )
 				{
 					m_minimumParticleSize = minimumSize;
@@ -307,6 +327,11 @@ namespace EmEn::Scenes::Component
 			void
 			setParticleSizeDeltaPerCycle (float delta) noexcept
 			{
+				if ( !this->acceptsFinite("setParticleSizeDeltaPerCycle", delta) )
+				{
+					return;
+				}
+
 				m_particleSizeDeltaPerCycle = delta;
 			}
 
@@ -329,6 +354,11 @@ namespace EmEn::Scenes::Component
 			void
 			setSpreadingRadius (float radius) noexcept
 			{
+				if ( !this->acceptsFinite("setSpreadingRadius", radius) )
+				{
+					return;
+				}
+
 				m_spreadingRadius = std::abs(radius);
 			}
 
@@ -351,6 +381,11 @@ namespace EmEn::Scenes::Component
 			void
 			setChaos (float magnitude) noexcept
 			{
+				if ( !this->acceptsFinite("setChaos", magnitude) )
+				{
+					return;
+				}
+
 				m_chaosMagnitude = magnitude;
 			}
 

@@ -163,7 +163,15 @@ namespace EmEn::Scenes::Component
 
 			for ( auto index = path.size(); index > 0; --index )
 			{
-				suffix = suffix.empty() ? path[index - 1] : path[index - 1] + '/' + suffix;
+				if ( suffix.empty() )
+				{
+					suffix = path[index - 1];
+				}
+				else
+				{
+					suffix.insert(0, 1, '/');
+					suffix.insert(0, path[index - 1]);
+				}
 
 				if ( !process(suffix) )
 				{

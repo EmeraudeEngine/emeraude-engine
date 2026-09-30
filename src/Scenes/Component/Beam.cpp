@@ -121,6 +121,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setStart (const Vector< 3, float > & position) noexcept
 	{
+		if ( !this->acceptsFinite("setStart", position) )
+		{
+			return;
+		}
+
 		m_curve.setFirstPoint(position);
 
 		this->rebuild();
@@ -129,6 +134,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setEnd (const Vector< 3, float > & position) noexcept
 	{
+		if ( !this->acceptsFinite("setEnd", position) )
+		{
+			return;
+		}
+
 		m_endTarget.reset();
 		m_curve.setLastPoint(position);
 
@@ -138,6 +148,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setEndTarget (const std::shared_ptr< const AbstractEntity > & target, const Vector< 3, float > & offset) noexcept
 	{
+		if ( !this->acceptsFinite("setEndTarget", offset) )
+		{
+			return;
+		}
+
 		m_endTarget = target;
 		m_endTargetOffset = offset;
 	}
@@ -145,6 +160,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setPolyline (std::span< const Vector< 3, float > > points, bool closed) noexcept
 	{
+		if ( !this->acceptsFinite("setPolyline", points) )
+		{
+			return;
+		}
+
 		m_curve.setPolyline(points, closed);
 
 		this->rebuild();
@@ -161,6 +181,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setUniformBSpline (std::span< const Vector< 3, float > > controlPoints, bool closed) noexcept
 	{
+		if ( !this->acceptsFinite("setUniformBSpline", controlPoints) )
+		{
+			return;
+		}
+
 		m_curve.setUniformBSpline(controlPoints, closed);
 
 		this->rebuild();
@@ -169,6 +194,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setCatmullRom (std::span< const Vector< 3, float > > points, bool closed, float alpha) noexcept
 	{
+		if ( !this->acceptsFinite("setCatmullRom", points, alpha) )
+		{
+			return;
+		}
+
 		m_curve.setCatmullRom(points, closed, alpha);
 
 		this->rebuild();
@@ -177,6 +207,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setTolerance (float tolerance) noexcept
 	{
+		if ( !this->acceptsFinite("setTolerance", tolerance) )
+		{
+			return;
+		}
+
 		m_tolerance = std::max(tolerance, 1.0e-5F);
 
 		this->rebuild();
@@ -230,6 +265,11 @@ namespace EmEn::Scenes::Component
 	void
 	Beam::setLight (const std::shared_ptr< LineLight > & light, float scale) noexcept
 	{
+		if ( !this->acceptsFinite("setLight", scale) )
+		{
+			return;
+		}
+
 		m_light = light;
 		m_lightScale = std::isfinite(scale) ? std::max(0.0F, scale) : 1.0F;
 
@@ -255,7 +295,7 @@ namespace EmEn::Scenes::Component
 
 		/* The luminance of the colour: the beam's radiance is colour × luminance (Material::BeamResource). */
 		const auto & color = m_material->color();
-		const auto colorLuminance = 0.2126F * color.red() + 0.7152F * color.green() + 0.0722F * color.blue();
+		const auto colorLuminance = (0.2126F * color.red()) + (0.7152F * color.green()) + (0.0722F * color.blue());
 
 		return m_material->luminance() * colorLuminance * static_cast< float >(profileMean);
 	}

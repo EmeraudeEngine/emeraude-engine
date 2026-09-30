@@ -182,7 +182,7 @@ namespace EmEn::Scenes::Component
 							return Console::CommandResult::error("Beam '" + beam.name() + "' has no material.");
 						}
 
-						return action(beam, *material);
+						return std::forward< action_t >(action)(beam, *material);
 					});
 				}
 
@@ -222,7 +222,7 @@ namespace EmEn::Scenes::Component
 							}
 
 							return this->act(entityName, componentName, [&kind, &points, closed] (Beam & beam) {
-								const std::span< const Vector< 3, float > > source{points.value()};
+								const std::span< const Vector< 3, float > > source{*points};
 
 								if ( kind == "Polyline" )
 								{

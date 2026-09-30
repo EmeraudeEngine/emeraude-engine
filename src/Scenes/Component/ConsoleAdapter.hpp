@@ -194,7 +194,7 @@ namespace EmEn::Scenes::Component
 						return Console::CommandResult::error("The component '" + componentName + "' of '" + entityName + "' is a " + component.getComponentType() + ", not a " + component_t::ClassId + ".");
 					}
 
-					return action(*typed);
+					return std::forward< action_t >(action)(*typed);
 				});
 			}
 

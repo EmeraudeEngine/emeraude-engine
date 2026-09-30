@@ -232,6 +232,11 @@ namespace EmEn::Scenes::Component
 	void
 	AbstractLightEmitter::setColor (const Base::PixelFactory::Color< float > & color) noexcept
 	{
+		if ( !this->acceptsFinite("setColor", color) )
+		{
+			return;
+		}
+
 		m_color = color;
 		m_emissionChromaticity = m_color.unitLuminanceChromaticity();
 
@@ -243,6 +248,11 @@ namespace EmEn::Scenes::Component
 	void
 	AbstractLightEmitter::setIntensity (float intensity) noexcept
 	{
+		if ( !this->acceptsFinite("setIntensity", intensity) )
+		{
+			return;
+		}
+
 		m_intensity = intensity;
 
 		this->onIntensityChange(m_intensity);

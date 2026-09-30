@@ -18,6 +18,17 @@ See [`../../docs/scene-graph-architecture.md`](../../scene-graph-architecture.md
 - Local transforms for Nodes (parent-relative)
 - World space recalculated on demand (no cache currently)
 
+### Component setters refuse a non-finite value (2026-09-30)
+
+Every numeric setter of `Scenes/Component/` (68 of them: intensities, radii, biases, camera optics, particle
+sizes / rates, beam and path points, weights, the sun's phase…) starts with `Abstract::acceptsFinite(name, values…)`:
+a NaN or an infinity is **refused**, the setter keeps its previous value and logs `Component '<name>': <setter>()
+refused a non-finite value …` (owner ruling, plan Ave Robustus — the setters are public engine API). Each setter's own
+sign / range policy (`std::abs`, clamps) is unchanged. The console / MCP adapters refuse such values earlier, with an
+explicit reply. Checked types: `float`, `Vector< N, float >`, `Color< float >`, `std::span< const Vector< 3, float > >`;
+not the setters taking a spline or a `CartesianFrame` (`setBezierPath`, `DirectionalLight::setDirection`,
+`MultipleVisuals::setLocalCoordinates`). A new numeric setter adds the same first line.
+
 ### Available Components
 **Rendering:** Visual, MultipleVisuals — ⚠️ both take `Graphics::RenderableInstance::Lighting` (Lit/Unlit) as a REQUIRED last constructor argument since 2026-09-25: the former unlit default blacked out three sets of content (the last one every forest tree, lit only by the GI)
 **Lights:** DirectionalLight, PointLight, SpotLight, SunCourse (drives a DirectionalLight along the day), SkyFollowsSun (scales the background's luminance with a SunCourse)

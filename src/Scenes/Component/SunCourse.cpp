@@ -147,6 +147,11 @@ namespace EmEn::Scenes::Component
 	void
 	SunCourse::setPhase (float phase) noexcept
 	{
+		if ( !this->acceptsFinite("setPhase", phase) )
+		{
+			return;
+		}
+
 		const auto wrapped = phase - std::floor(phase);
 
 		m_cycle = static_cast< uint32_t >(std::lround(wrapped * static_cast< float >(m_revolutionCycles))) % m_revolutionCycles;
@@ -226,7 +231,7 @@ namespace EmEn::Scenes::Component
 		const auto airMassExcess = SunCourse::airMass(m_elevation) - 1.0F;
 
 		m_illuminance = m_options.zenithIlluminance * std::exp(-m_options.extinction * airMassExcess);
-		m_temperature = m_options.horizonTemperature + (m_options.zenithTemperature - m_options.horizonTemperature) * std::exp(-ReddeningRate * airMassExcess);
+		m_temperature = m_options.horizonTemperature + ((m_options.zenithTemperature - m_options.horizonTemperature) * std::exp(-ReddeningRate * airMassExcess));
 
 		light->setIlluminance(m_illuminance);
 		light->setColor(Graphics::Photometry::colorFromTemperature(m_temperature));

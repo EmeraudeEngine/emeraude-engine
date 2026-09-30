@@ -144,6 +144,11 @@ namespace EmEn::Scenes::Component
 			void
 			setRadius (float radius) noexcept
 			{
+				if ( !this->acceptsFinite("setRadius", radius) )
+				{
+					return;
+				}
+
 				m_boundingSphere.setRadius(radius);
 
 				this->notify(ComponentContentModified);
@@ -157,6 +162,11 @@ namespace EmEn::Scenes::Component
 			void
 			setBoxSize (float size) noexcept
 			{
+				if ( !this->acceptsFinite("setBoxSize", size) )
+				{
+					return;
+				}
+
 				m_boundingBox.set(size * 0.5F);
 
 				this->notify(ComponentContentModified);
@@ -172,6 +182,11 @@ namespace EmEn::Scenes::Component
 			void
 			setBoxSize (float xSize, float ySize, float zSize) noexcept
 			{
+				if ( !this->acceptsFinite("setBoxSize", xSize, ySize, zSize) )
+				{
+					return;
+				}
+
 				m_boundingBox.set({xSize * 0.5F, ySize * 0.5F, zSize * 0.5F}, {-xSize * 0.5F, -ySize * 0.5F, -zSize * 0.5F});
 
 				this->notify(ComponentContentModified);

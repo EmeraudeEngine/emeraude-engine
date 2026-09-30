@@ -152,6 +152,11 @@ namespace EmEn::Scenes::Component
 			void
 			setIlluminance (float lux) noexcept
 			{
+				if ( !this->acceptsFinite("setIlluminance", lux) )
+				{
+					return;
+				}
+
 				this->setIntensity(lux);
 			}
 
@@ -355,6 +360,11 @@ namespace EmEn::Scenes::Component
 			void
 			setCoverageSize (float size) noexcept
 			{
+				if ( !this->acceptsFinite("setCoverageSize", size) )
+				{
+					return;
+				}
+
 				m_coverageSize = std::max(0.0F, size);
 			}
 
@@ -377,6 +387,11 @@ namespace EmEn::Scenes::Component
 			void
 			setCascadeLambda (float lambda) noexcept
 			{
+				if ( !this->acceptsFinite("setCascadeLambda", lambda) )
+				{
+					return;
+				}
+
 				m_lambda = std::clamp(lambda, 0.0F, 1.0F);
 			}
 

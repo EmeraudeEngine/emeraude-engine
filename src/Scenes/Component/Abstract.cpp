@@ -34,6 +34,12 @@
 
 namespace EmEn::Scenes::Component
 {
+	void
+	Abstract::traceNonFiniteValue (const char * setter) const noexcept
+	{
+		TraceError{this->getComponentType()} << "Component '" << this->name() << "': " << setter << "() refused a non-finite value (NaN or infinity), the previous one is kept.";
+	}
+
 	using namespace Base;
 	using namespace Base::Math;
 	using namespace Audio;

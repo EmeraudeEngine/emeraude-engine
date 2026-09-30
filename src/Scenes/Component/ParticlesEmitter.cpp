@@ -63,6 +63,9 @@ namespace EmEn::Scenes::Component
 		for ( auto & particle : m_particles )
 		{
 			bool newLocation = false;
+			/* A respawned particle is written even when its physics reports no move (the switch below sets newLocation
+			 * in every case: this flag used to be one more assignment it overwrote, triad 2026-09-30). */
+			bool respawned = false;
 
 			/* If the particle is dead, we plan a possible reset. */
 			if ( particle.isDead() )
@@ -81,7 +84,7 @@ namespace EmEn::Scenes::Component
 
 					newParticles--;
 
-					newLocation = true;
+					respawned = true;
 				}
 				else
 				{
@@ -124,7 +127,7 @@ namespace EmEn::Scenes::Component
 			}
 
 			/* Update the buffer if requested. */
-			if ( newLocation )
+			if ( newLocation || respawned )
 			{
 				/* Update the particle. */
 				particle.update(particle.linearVelocity(), m_particleSizeDeltaPerCycle, m_chaosMagnitude);

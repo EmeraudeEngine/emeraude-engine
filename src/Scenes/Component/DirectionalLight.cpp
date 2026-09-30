@@ -188,6 +188,11 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::setPCFRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setPCFRadius", radius) )
+		{
+			return;
+		}
+
 		m_PCFRadius = std::abs(radius);
 
 		m_buffer[PCFRadiusOffset] = m_PCFRadius;
@@ -198,6 +203,11 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::setShadowBias (float bias) noexcept
 	{
+		if ( !this->acceptsFinite("setShadowBias", bias) )
+		{
+			return;
+		}
+
 		m_shadowBias = bias;
 
 		m_buffer[ShadowBiasOffset] = m_shadowBias;
@@ -454,7 +464,7 @@ namespace EmEn::Scenes::Component
 		{
 			const auto & matrix = viewMatrices.cascadeViewProjectionMatrix(cascadeIndex);
 
-			std::memcpy(&m_CSMBuffer[CSM_CascadeMatricesOffset + (cascadeIndex * 16)], matrix.data(), 16 * sizeof(float));
+			std::memcpy(&m_CSMBuffer[CSM_CascadeMatricesOffset + (static_cast< size_t >(cascadeIndex) * 16)], matrix.data(), 16 * sizeof(float));
 		}
 
 		/* Copy split distances. */
@@ -574,7 +584,7 @@ namespace EmEn::Scenes::Component
 			right[X] / coverage, up[X] / coverage, lightDirection[X], 0.0F,
 			right[Y] / coverage, up[Y] / coverage, lightDirection[Y], 0.0F,
 			right[Z] / coverage, up[Z] / coverage, lightDirection[Z], 0.0F,
-			0.5F - centreRight / coverage, 0.5F - centreUp / coverage, -centreDepth, 1.0F
+			0.5F - (centreRight / coverage), 0.5F - (centreUp / coverage), -centreDepth, 1.0F
 		};
 
 		/* Nothing to publish when the frame is the one already in the block (a camera inside one texel). */

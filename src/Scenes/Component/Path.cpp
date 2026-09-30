@@ -109,6 +109,11 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setPolyline (std::span< const Vector< 3, float > > points, bool closed) noexcept
 	{
+		if ( !this->acceptsFinite("setPolyline", points) )
+		{
+			return;
+		}
+
 		m_curve.setPolyline(points, closed);
 
 		this->rebuild();
@@ -125,6 +130,11 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setUniformBSpline (std::span< const Vector< 3, float > > controlPoints, bool closed) noexcept
 	{
+		if ( !this->acceptsFinite("setUniformBSpline", controlPoints) )
+		{
+			return;
+		}
+
 		m_curve.setUniformBSpline(controlPoints, closed);
 
 		this->rebuild();
@@ -133,6 +143,11 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setCatmullRom (std::span< const Vector< 3, float > > points, bool closed, float alpha) noexcept
 	{
+		if ( !this->acceptsFinite("setCatmullRom", points, alpha) )
+		{
+			return;
+		}
+
 		m_curve.setCatmullRom(points, closed, alpha);
 
 		this->rebuild();
@@ -141,6 +156,11 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setTolerance (float tolerance) noexcept
 	{
+		if ( !this->acceptsFinite("setTolerance", tolerance) )
+		{
+			return;
+		}
+
 		m_tolerance = std::max(tolerance, 1.0e-5F);
 
 		this->rebuild();
@@ -176,6 +196,11 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setDebugColor (const PixelFactory::Color< float > & color) noexcept
 	{
+		if ( !this->acceptsFinite("setDebugColor", color) )
+		{
+			return;
+		}
+
 		m_debugColor = color;
 
 		++m_version;

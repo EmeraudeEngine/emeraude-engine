@@ -426,6 +426,11 @@ namespace EmEn::Scenes::Component
 			void
 			setBloomThreshold (float nits) noexcept
 			{
+				if ( !this->acceptsFinite("setBloomThreshold", nits) )
+				{
+					return;
+				}
+
 				m_bloomThreshold = std::max(0.0F, nits);
 			}
 
@@ -453,6 +458,11 @@ namespace EmEn::Scenes::Component
 			void
 			setBloomIntensity (float intensity) noexcept
 			{
+				if ( !this->acceptsFinite("setBloomIntensity", intensity) )
+				{
+					return;
+				}
+
 				m_bloomIntensity = std::max(0.0F, intensity);
 			}
 
@@ -512,6 +522,11 @@ namespace EmEn::Scenes::Component
 			void
 			setAperture (float fStop) noexcept
 			{
+				if ( !this->acceptsFinite("setAperture", fStop) )
+				{
+					return;
+				}
+
 				m_aperture = std::max(fStop, 0.5F);
 			}
 
@@ -567,6 +582,11 @@ namespace EmEn::Scenes::Component
 			void
 			setShutterSpeed (float seconds) noexcept
 			{
+				if ( !this->acceptsFinite("setShutterSpeed", seconds) )
+				{
+					return;
+				}
+
 				m_shutterSpeed = std::clamp(seconds, FastestShutterSpeed, 1.0F);
 			}
 
@@ -640,6 +660,11 @@ namespace EmEn::Scenes::Component
 			void
 			setSensitivity (float iso) noexcept
 			{
+				if ( !this->acceptsFinite("setSensitivity", iso) )
+				{
+					return;
+				}
+
 				m_sensitivity = std::clamp(iso, m_minSensitivity, m_maxSensitivity);
 			}
 
@@ -666,6 +691,11 @@ namespace EmEn::Scenes::Component
 			void
 			setSensitivityRange (float minimum, float maximum) noexcept
 			{
+				if ( !this->acceptsFinite("setSensitivityRange", minimum, maximum) )
+				{
+					return;
+				}
+
 				m_minSensitivity = std::max(1.0F, minimum);
 				m_maxSensitivity = std::max(m_minSensitivity, maximum);
 				m_sensitivity = std::clamp(m_sensitivity, m_minSensitivity, m_maxSensitivity);
@@ -703,6 +733,11 @@ namespace EmEn::Scenes::Component
 			void
 			setFocusDistance (float meters) noexcept
 			{
+				if ( !this->acceptsFinite("setFocusDistance", meters) )
+				{
+					return;
+				}
+
 				m_focusDistance = std::max(meters, 0.01F);
 
 				this->disableFlag(AutoFocusEnabled);
@@ -753,6 +788,11 @@ namespace EmEn::Scenes::Component
 			void
 			setExposureCompensation (float exposureValue) noexcept
 			{
+				if ( !this->acceptsFinite("setExposureCompensation", exposureValue) )
+				{
+					return;
+				}
+
 				m_exposureCompensation = exposureValue;
 			}
 
@@ -803,7 +843,7 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< const Graphics::DirectEffectList >
 			lensEffects () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_lensEffectsAccess};
+				const std::scoped_lock lock{m_lensEffectsAccess};
 
 				return m_lensEffects;
 			}

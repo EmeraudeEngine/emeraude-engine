@@ -79,6 +79,32 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SoundEmitter (const SoundEmitter & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SoundEmitter (SoundEmitter && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SoundEmitter &
+			 */
+			SoundEmitter & operator= (const SoundEmitter & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SoundEmitter &
+			 */
+			SoundEmitter & operator= (SoundEmitter && copy) noexcept = delete;
+
+			/**
 			 * @brief Destroys the sound emitter.
 			 * @note Takes care there is no loading sound or playing sound.
 			 */
@@ -147,6 +173,11 @@ namespace EmEn::Scenes::Component
 			void
 			setGain (float gain) noexcept
 			{
+				if ( !this->acceptsFinite("setGain", gain) )
+				{
+					return;
+				}
+
 				m_gain = std::abs(gain);
 
 				if ( this->isPlaying() )

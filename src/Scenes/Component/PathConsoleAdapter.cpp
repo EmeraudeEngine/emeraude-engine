@@ -155,7 +155,7 @@ namespace EmEn::Scenes::Component
 							return Console::CommandResult::error("Path '" + path.name() + "' has no material.");
 						}
 
-						action(*material);
+						std::forward< action_t >(action)(*material);
 
 						path.markLookChanged();
 
@@ -199,7 +199,7 @@ namespace EmEn::Scenes::Component
 							}
 
 							return this->act(entityName, componentName, [&kind, &points, closed] (Path & path) {
-								const std::span< const Vector< 3, float > > source{points.value()};
+								const std::span< const Vector< 3, float > > source{*points};
 
 								if ( kind == "Polyline" )
 								{
@@ -301,7 +301,7 @@ namespace EmEn::Scenes::Component
 					this->bindCommand("setFlat", "Makes a Path's ribbon lie flat in the surface an up vector is normal to (a trail on the ground) instead of facing the eye; widths in entity units only.",
 						{entity, component, {"state", "true to lie flat, false to face the eye."}, {"x", "The surface's up X, in the entity's space.", 0.0F}, {"y", "Up Y (UP is +Y).", 1.0F}, {"z", "Up Z.", 0.0F}},
 						[this] (const std::string & entityName, const std::string & componentName, bool state, float x, float y, float z) {
-							if ( state && (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || x * x + y * y + z * z < 1.0e-12F) )
+							if ( state && (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || (x * x) + (y * y) + (z * z) < 1.0e-12F) )
 							{
 								return Console::CommandResult::error("The up vector must be finite and non-zero.");
 							}

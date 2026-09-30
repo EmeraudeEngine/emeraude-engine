@@ -100,6 +100,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setPerspectiveProjection (float distance) noexcept
 	{
+		if ( !this->acceptsFinite("setPerspectiveProjection", distance) )
+		{
+			return;
+		}
+
 		this->enableFlag(PerspectiveProjection);
 
 		/* NOTE: No field of view here. The framing belongs to the optics and the lens already
@@ -120,6 +125,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setFocalLength (float millimeters) noexcept
 	{
+		if ( !this->acceptsFinite("setFocalLength", millimeters) )
+		{
+			return;
+		}
+
 		/* THE single framing writer. The field of view is derived from this and the sensor
 		 * (`fieldOfView()`), so there is nothing to keep in sync — the previous design stored both
 		 * and had FOUR writers, one of which (setPerspectiveProjection) updated only the angle and
@@ -137,6 +147,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setSensorWidth (float millimeters) noexcept
 	{
+		if ( !this->acceptsFinite("setSensorWidth", millimeters) )
+		{
+			return;
+		}
+
 		if ( this->isTechnicalCamera() )
 		{
 			TraceWarning{ClassId} << "Camera '" << this->name() << "' is a technical camera: its "
@@ -159,6 +174,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setTechnicalFieldOfView (float degrees) noexcept
 	{
+		if ( !this->acceptsFinite("setTechnicalFieldOfView", degrees) )
+		{
+			return;
+		}
+
 		this->enableFlag(TechnicalProjection);
 
 		const auto clamped = std::clamp(std::abs(degrees), 1.0F, 179.0F);
@@ -177,6 +197,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setNearestObjectDistance (float distance) noexcept
 	{
+		if ( !this->acceptsFinite("setNearestObjectDistance", distance) )
+		{
+			return;
+		}
+
 		if ( distance > 0.0F )
 		{
 			m_nearestObjectDistance = distance;
@@ -191,6 +216,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setDistance (float distance) noexcept
 	{
+		if ( !this->acceptsFinite("setDistance", distance) )
+		{
+			return;
+		}
+
 		if ( distance >= 0.0F )
 		{
 			m_distance = distance;
@@ -206,6 +236,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setOrthographicProjection (float near, float far) noexcept
 	{
+		if ( !this->acceptsFinite("setOrthographicProjection", near, far) )
+		{
+			return;
+		}
+
 		this->disableFlag(PerspectiveProjection);
 
 		m_near = std::min(0.0F, near);
@@ -221,6 +256,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setNear (float distance) noexcept
 	{
+		if ( !this->acceptsFinite("setNear", distance) )
+		{
+			return;
+		}
+
 		m_near = std::min(0.0F, distance);
 
 		/* Update existing connected render targets (only for orthographic projection is enabled). */
@@ -233,6 +273,11 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::setFar (float distance) noexcept
 	{
+		if ( !this->acceptsFinite("setFar", distance) )
+		{
+			return;
+		}
+
 		m_far = std::max(0.0F, distance);
 
 		/* Update existing connected render targets (only for orthographic projection is enabled). */

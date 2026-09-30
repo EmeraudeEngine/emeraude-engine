@@ -60,7 +60,7 @@ namespace EmEn::Scenes::Component
 		distanceToBlockPolyline (const float * block, size_t pointsOffset, uint32_t count, const Vector< 3, float > & position) noexcept
 		{
 			const auto point = [block, pointsOffset] (uint32_t index) noexcept {
-				const auto * p = block + pointsOffset + 4 * index;
+				const auto * p = block + pointsOffset + (4 * static_cast< size_t >(index));
 
 				return Vector< 3, float >{p[0], p[1], p[2]};
 			};
@@ -101,9 +101,9 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	LineLight::playAnimation (uint8_t identifier, const Variant & value, size_t /*cycle*/) noexcept
+	LineLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
-		switch ( identifier )
+		switch ( animationID )
 		{
 			case EmittingState :
 				this->enable(value.asBool());
@@ -147,6 +147,11 @@ namespace EmEn::Scenes::Component
 	void
 	LineLight::setPolyline (std::span< const Vector< 3, float > > points) noexcept
 	{
+		if ( !this->acceptsFinite("setPolyline", points) )
+		{
+			return;
+		}
+
 		m_localPoints.assign(points.begin(), points.end());
 
 		/* More points than the block carries: resampled by arc length, the ends kept. */
@@ -196,13 +201,20 @@ namespace EmEn::Scenes::Component
 		for ( uint32_t index = 0; index < MaxPoints; ++index )
 		{
 			/* The unused tail repeats the last point (never read: the shader stops at the count); no point at all, zeros. */
-			const auto local = m_localPoints.empty() ? Vector< 3, float >{} : (index < count ? m_localPoints[index] : m_localPoints.back());
+			Vector< 3, float > local{};
+
+			if ( !m_localPoints.empty() )
+			{
+				local = index < count ? m_localPoints[index] : m_localPoints.back();
+			}
 			const auto world = model * Vector< 4, float >{local[X], local[Y], local[Z], 1.0F};
 
-			m_buffer[PointsOffset + 4 * index + 0] = world[X];
-			m_buffer[PointsOffset + 4 * index + 1] = world[Y];
-			m_buffer[PointsOffset + 4 * index + 2] = world[Z];
-			m_buffer[PointsOffset + 4 * index + 3] = 1.0F;
+			const auto slot = PointsOffset + (4 * static_cast< size_t >(index));
+
+			m_buffer[slot + 0] = world[X];
+			m_buffer[slot + 1] = world[Y];
+			m_buffer[slot + 2] = world[Z];
+			m_buffer[slot + 3] = 1.0F;
 		}
 
 		m_buffer[PointCountOffset] = static_cast< float >(count);
@@ -213,6 +225,11 @@ namespace EmEn::Scenes::Component
 	void
 	LineLight::setLuminousFluxPerMetre (float lumensPerMetre) noexcept
 	{
+		if ( !this->acceptsFinite("setLuminousFluxPerMetre", lumensPerMetre) )
+		{
+			return;
+		}
+
 		/* A Lambertian tube: exitance π L over 2π R square metres per metre. */
 		const auto perimeter = 2.0F * std::numbers::pi_v< float > * this->tubeRadius();
 
@@ -228,6 +245,11 @@ namespace EmEn::Scenes::Component
 	void
 	LineLight::setTubeRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setTubeRadius", radius) )
+		{
+			return;
+		}
+
 		m_buffer[TubeRadiusOffset] = std::max(radius, 1.0e-5F);
 
 		this->requestVideoMemoryUpdate();
@@ -236,6 +258,11 @@ namespace EmEn::Scenes::Component
 	void
 	LineLight::setRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setRadius", radius) )
+		{
+			return;
+		}
+
 		m_buffer[RadiusOffset] = std::abs(radius);
 
 		this->requestVideoMemoryUpdate();
@@ -330,7 +357,7 @@ namespace EmEn::Scenes::Component
 
 		for ( uint32_t index = 0; index < line.pointCount; ++index )
 		{
-			const auto * point = block.data() + PointsOffset + 4 * index;
+			const auto * point = block.data() + PointsOffset + (4 * static_cast< size_t >(index));
 
 			line.points[index] = {point[0], point[1], point[2]};
 		}

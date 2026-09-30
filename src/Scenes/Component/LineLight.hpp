@@ -207,6 +207,11 @@ namespace EmEn::Scenes::Component
 			void
 			setLuminance (float nits) noexcept
 			{
+				if ( !this->acceptsFinite("setLuminance", nits) )
+				{
+					return;
+				}
+
 				this->setIntensity(std::max(0.0F, nits));
 			}
 
@@ -343,6 +348,6 @@ namespace EmEn::Scenes::Component
 			static constexpr auto PointsOffset{8UL};
 
 			std::vector< Base::Math::Vector< 3, float > > m_localPoints;
-			std::array< float, PointsOffset + 4 * MaxPoints > m_buffer{};
+			std::array< float, PointsOffset + (4 * static_cast< size_t >(MaxPoints)) > m_buffer{};
 	};
 }

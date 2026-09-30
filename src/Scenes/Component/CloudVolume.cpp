@@ -54,7 +54,7 @@ namespace EmEn::Scenes::Component
 		m_boundingBox.set(m_halfExtents, -m_halfExtents);
 
 		/* Every slot starts valid: the render thread may read one before the first publication. */
-		m_renderStates.fill(RenderState{m_look, m_halfExtents});
+		m_renderStates.fill(RenderState{.look = m_look, .halfExtents = m_halfExtents});
 	}
 
 	CloudVolume::~CloudVolume ()
@@ -71,7 +71,7 @@ namespace EmEn::Scenes::Component
 	void
 	CloudVolume::publishStateForRendering (uint32_t writeStateIndex) noexcept
 	{
-		m_renderStates[writeStateIndex] = RenderState{m_look, m_halfExtents};
+		m_renderStates[writeStateIndex] = RenderState{.look = m_look, .halfExtents = m_halfExtents};
 	}
 
 	void

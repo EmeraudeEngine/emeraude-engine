@@ -148,6 +148,11 @@ namespace EmEn::Scenes::Component
 			void
 			setSpeed (float speed) noexcept
 			{
+				if ( !this->acceptsFinite("setSpeed", speed) )
+				{
+					return;
+				}
+
 				m_speed = speed;
 			}
 

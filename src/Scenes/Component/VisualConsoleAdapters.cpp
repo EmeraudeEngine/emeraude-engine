@@ -171,7 +171,7 @@ namespace EmEn::Scenes::Component
 							return Console::CommandResult::error("Visual '" + visual.name() + "' has no renderable instance.");
 						}
 
-						return action(visual, *instance);
+						return std::forward< action_t >(action)(visual, *instance);
 					});
 				}
 

@@ -33,6 +33,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Scenes` 6a (scene graph core: Node, AbstractEntity, StaticEntity, controllers, OctreeSector, Scene.cpp / entities) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 13 misc-no-recursion, 6 missing-std-forward, 4 use-enum-class, 4 constant-array-index, 2 static-cast-downcast, 1 avoid-const-or-ref-data-members. Before: 48. | Triad sub-section 6a |
 | `src/Scenes` 6b (Scene rendering / lighting / physics / debug, LightSet, SceneInstanceTransforms, SceneMetaData, RenderBatch, InstanceCluster, BindlessTextureSet, CloudSet, influence areas, interfaces) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 21 constant-array-index, 3 avoid-const-or-ref-data-members, 2 missing-std-forward, 2 reinterpret-cast, 2 const-cast, 1 use-enum-class, 1 static-cast-downcast. Before: 98. | Triad sub-section 6b |
 | `src/Scenes` 6c (Manager + console, Toolkit, DefinitionResource) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 7, all ON PURPOSE (below) — 5 constant-array-index, 1 misc-no-recursion, 1 use-enum-class. Before: 20. `Scene.hpp`'s 3 use-after-move (seen only from these TUs) fixed. The cascade-wide checked-JSON migration's touched TUs: 0 new finding on the changed lines but the one below (`Material/Helpers.cpp`). | Triad sub-section 6c |
+| `src/Scenes` 6d (`Component/`) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 40, all ON PURPOSE (below) — 22 constant-array-index, 9 use-enum-class, 3 non-private members, 2 non-const globals, 1 each mt-unsafe, missing-std-forward, const-ref member, static-cast downcast. Before: 75. | Triad sub-section 6d |
 
 ## Findings kept ON PURPOSE
 
@@ -135,4 +136,19 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **use-enum-class ×1** — `NotificationCode` (the Observer convention).
 - **pro-bounds-constant-array-index ×1** — `Graphics/Material/Helpers.cpp` `parseColorComponent()`: `index <
   min(4, size)` into a 4-slot array (it was a throwing `.at()` before the triad).
+
+### `src/Scenes` 6d — `Component/` (2026-09-30)
+
+- **pro-bounds-constant-array-index ×22** — bounded by construction: the triple-buffered render states (the frame
+  slot), the cascade index (`< CascadeCount`), a light's colour-projection frame slot, the line light's ≤ 9 points,
+  a beam's / path's station arrays walked by their own size.
+- **use-enum-class ×9** — `NotificationCode` / `AnimationID` (the Observer and animation conventions).
+- **non-private-member-variables ×3** — `AbstractLightEmitter`'s colour-projection state (bindless set, frame slot,
+  cube-array flag), written by the derived lights; accessors would add nothing.
+- **avoid-non-const-global-variables ×2** — `s_beamCount`, `s_pathCount`: `std::atomic` name counters.
+- **concurrency-mt-unsafe ×1** — `std::lgamma` in `Beam::equivalentTubeLuminance()`: its only caller in the engine,
+  on the logic thread (the non-thread-safe part is the `signgam` write, never read).
+- **missing-std-forward ×1** — `forEachSuffix()` calls its callable in a loop.
+- **avoid-const-or-ref-data-members ×1** — the console adapter's reference to the scene manager, by design.
+- **pro-type-static-cast-downcast ×1** — `DirectionalLight`: after a type check (RTTI avoided).
 

@@ -238,6 +238,11 @@ namespace EmEn::Scenes::Component
 			void
 			setLuminousPower (float lumens) noexcept
 			{
+				if ( !this->acceptsFinite("setLuminousPower", lumens) )
+				{
+					return;
+				}
+
 				this->setIntensity(Graphics::Photometry::candelaFromSpotLumens(lumens, m_outerAngle));
 			}
 

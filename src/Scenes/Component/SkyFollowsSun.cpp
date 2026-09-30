@@ -87,7 +87,7 @@ namespace EmEn::Scenes::Component
 		const auto t = std::clamp((elevationDegrees - m_options.duskElevation) / (m_options.dayElevation - m_options.duskElevation), 0.0F, 1.0F);
 		const auto smooth = t * t * (3.0F - 2.0F * t);
 
-		return m_options.nightFactor + (1.0F - m_options.nightFactor) * smooth;
+		return m_options.nightFactor + ((1.0F - m_options.nightFactor) * smooth);
 	}
 
 	void

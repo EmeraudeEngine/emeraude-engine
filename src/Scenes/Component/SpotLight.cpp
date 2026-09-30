@@ -308,6 +308,11 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::setRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setRadius", radius) )
+		{
+			return;
+		}
+
 		m_radius = std::abs(radius);
 
 		m_buffer[RadiusOffset] = m_radius;
@@ -328,6 +333,11 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::setConeAngles (float innerAngle, float outerAngle) noexcept
 	{
+		if ( !this->acceptsFinite("setConeAngles", innerAngle, outerAngle) )
+		{
+			return;
+		}
+
 		if ( outerAngle <= 0.0F )
 		{
 			outerAngle = innerAngle;
@@ -359,6 +369,11 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::setPCFRadius (float radius) noexcept
 	{
+		if ( !this->acceptsFinite("setPCFRadius", radius) )
+		{
+			return;
+		}
+
 		m_PCFRadius = std::abs(radius);
 
 		m_buffer[PCFRadiusOffset] = m_PCFRadius;
@@ -369,6 +384,11 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::setShadowBias (float bias) noexcept
 	{
+		if ( !this->acceptsFinite("setShadowBias", bias) )
+		{
+			return;
+		}
+
 		m_shadowBias = bias;
 
 		m_buffer[ShadowBiasOffset] = m_shadowBias;

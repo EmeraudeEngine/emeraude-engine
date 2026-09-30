@@ -539,7 +539,7 @@ namespace EmEn::Scenes::Component
 							}
 
 							return this->act(entity, component, [&points] (LineLight & light) {
-								light.setPolyline(std::span< const Math::Vector< 3, float > >{points.value()});
+								light.setPolyline(std::span< const Math::Vector< 3, float > >{*points});
 
 								return changed(light, "Line light '" + light.name() + "' polyline set.");
 							});
