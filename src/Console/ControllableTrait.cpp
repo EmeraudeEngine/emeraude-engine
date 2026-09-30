@@ -165,7 +165,7 @@ namespace EmEn::Console
 	}
 
 	void
-	ControllableTrait::bindTypedCommand (const std::string & commandNames, const std::string & description, Binding binding, CommandSignature signature) noexcept
+	ControllableTrait::bindTypedCommand (const std::string & commandNames, const std::string & description, const Binding & binding, const CommandSignature & signature) noexcept
 	{
 		std::string error;
 

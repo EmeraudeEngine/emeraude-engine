@@ -27,7 +27,8 @@ material half width) and the equivalent tube luminance `equivalentTubeLuminance(
 the mean of the ribbon's cross-section profile `(1 − s²)^k` (0.406 at k = 4, 0.457 at k = 3) times the luminance of
 its colour (Rec. 709). Measured on `beams`: `ArcPylons` 50 000 nits, colour (0.55, 0.7, 1), k = 4 → 14 014 nits,
 3 320 lm/m at a 12 mm half width; `CoilArc` 40 000 nits, k = 3 → 12 613 nits, 9 points. Hiding the beam switches the
-light off (`LineLight.getState` → `enabled: false`).
+light off (`LineLight.getState` → `enabled: false`) — on the beam's NEXT logic tick (`Beam::processLogics()` pushes
+the state): a `getState` sent in the same instant may still answer `true` (seen on the Windows peer, 2026-09-30).
 
 Console / MCP: `Core.SceneManagerService.LineLight.*` (`getState`, `setEnabled`, `setColor`, `setPoints("x y z; x y z;
 ...")`, `setLuminance`, `setLuminousFluxPerMetre`, `setTubeRadius`, `setRadius`) — `docs/ai-runtime-control.md`

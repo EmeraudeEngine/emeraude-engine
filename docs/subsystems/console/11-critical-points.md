@@ -15,4 +15,13 @@
   `Expression` cut on every `,` and `)` regardless of quotes
 - **Every command is typed** — the untyped form was deleted (2026-09-27); `describeCommands()` exports
   every signature as JSON
+- **A float argument is FINITE and in range, on every OS (triad, 2026-09-30)** — `convertArgument(float)` refuses a
+  NaN / an infinity (the single choke point of every typed float); the MCP bridge refuses a JSON number beyond the
+  float range (`1e300`: "outside the 32-bit floating point range" — converting it was UB); the macOS `strtof` branch
+  of `Expression` refuses an overflow (`1.0e999`, ERANGE) like `from_chars` elsewhere; `Argument::asInteger()` answers
+  a warning and 0 for a float outside the int32 range. Measured: 1e300 / 3.5e38 refused, 20000 accepted, `1.0e999`
+  refused on the TCP console
+- **asio error codes: the out-parameter only (`ASIO_NO_DEPRECATED`, 2026-09-30)** — the synchronous asio calls return
+  `void`; every setup step reads its `ec` (a failed `reuse_address`, `SO_SNDTIMEO` or `TCP_NODELAY` is a warning, no
+  longer overwritten or dropped); a best-effort teardown close says so in a comment
 - **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../ai-runtime-control.md) for the complete AI operator reference

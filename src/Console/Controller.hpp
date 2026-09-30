@@ -99,6 +99,32 @@ namespace EmEn::Console
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Controller (const Controller & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Controller (Controller && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Controller &
+			 */
+			Controller & operator= (const Controller & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Controller &
+			 */
+			Controller & operator= (Controller && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the console controller.
 			 */
 			~Controller () override
@@ -400,7 +426,5 @@ namespace EmEn::Console
 			std::optional< std::pair< std::string, uint16_t > > m_pendingRemoteListenerRestart;
 			JsonHandler m_jsonHandler;
 			uint16_t m_remoteListenerPort{0};
-			bool m_directInputWasEnabled{false};
-			bool m_pointerWasLocked{false};
 	};
 }

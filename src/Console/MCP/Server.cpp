@@ -462,7 +462,7 @@ namespace EmEn::Console::MCP
 						return;
 					}
 
-					std::string head{asio::buffers_begin(self->m_buffer.data()), asio::buffers_begin(self->m_buffer.data()) + static_cast< std::ptrdiff_t >(headBytes)};
+					const std::string head{asio::buffers_begin(self->m_buffer.data()), asio::buffers_begin(self->m_buffer.data()) + static_cast< std::ptrdiff_t >(headBytes)};
 					self->m_buffer.consume(headBytes);
 
 					self->m_request = HTTPRequest{};
@@ -502,7 +502,7 @@ namespace EmEn::Console::MCP
 
 						for ( const auto character : lengthText )
 						{
-							parsed = parsed * 10 + static_cast< uint64_t >(character - '0');
+							parsed = (parsed * 10) + static_cast< uint64_t >(character - '0');
 						}
 
 						if ( parsed > Server::MaxBodyBytes )
@@ -1076,7 +1076,16 @@ namespace EmEn::Console::MCP
 
 		if ( !ec )
 		{
+			/* NOTE: a failure here only costs the fast restart on the same port: a warning, then bind. */
 			m_acceptor->set_option(asio::socket_base::reuse_address(true), ec);
+
+			if ( ec )
+			{
+				TraceWarning{ClassId} << "Unable to set reuse_address on the MCP acceptor: " << ec.message();
+
+				ec.clear();
+			}
+
 			m_acceptor->bind(endpoint, ec);
 		}
 
@@ -1089,7 +1098,7 @@ namespace EmEn::Console::MCP
 		{
 			/* ⚠️ Windows reports a port another process holds exclusively (SO_EXCLUSIVEADDRUSE) as ACCESS DENIED,
 			 * not "address in use": measured on an ASUS laptop whose Armoury Crate listens on 127.0.0.1:7778. */
-			const auto hint = ( ec == asio::error::address_in_use || ec == asio::error::access_denied ) ?
+			const auto * const hint = ( ec == asio::error::address_in_use || ec == asio::error::access_denied ) ?
 				" — the port is most likely taken by another process (Windows reports that as access denied); choose another one in Core/MCP/Port" :
 				"";
 
@@ -1143,7 +1152,7 @@ namespace EmEn::Console::MCP
 			}
 
 			{
-				const std::lock_guard< std::mutex > lock{doneMutex};
+				const std::scoped_lock lock{doneMutex};
 
 				done = true;
 			}
@@ -1219,6 +1228,11 @@ namespace EmEn::Console::MCP
 			asio::error_code optionError;
 			socket.set_option(asio::ip::tcp::no_delay{true}, optionError);
 
+			if ( optionError )
+			{
+				TraceWarning{ClassId} << "Unable to disable Nagle's algorithm for an MCP client: " << optionError.message();
+			}
+
 			if ( m_connections.size() >= MaxConnections )
 			{
 				constexpr std::string_view Refusal{"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"};
@@ -1243,7 +1257,7 @@ namespace EmEn::Console::MCP
 	bool
 	Server::enqueue (PendingRequest request) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_queueMutex};
+		const std::scoped_lock lock{m_queueMutex};
 
 		if ( m_pendingRequests.size() >= MaxPendingRequests )
 		{
@@ -1305,7 +1319,7 @@ namespace EmEn::Console::MCP
 		std::vector< PendingRequest > requests;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_queueMutex};
+			const std::scoped_lock lock{m_queueMutex};
 
 			requests.swap(m_pendingRequests);
 		}

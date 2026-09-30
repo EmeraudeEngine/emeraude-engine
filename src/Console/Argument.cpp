@@ -62,7 +62,17 @@ namespace EmEn::Console
 	{
 		if ( const auto * p = std::get_if< float >(&m_value) )
 		{
-			return static_cast< int32_t >(std::round(*p));
+			/* NOTE: converting a float outside the int32 range (or a NaN) is undefined behaviour ([conv.fpint]). */
+			const auto rounded = std::round(*p);
+
+			if ( std::isfinite(rounded) && rounded >= -2147483648.0F && rounded < 2147483648.0F )
+			{
+				return static_cast< int32_t >(rounded);
+			}
+
+			TraceWarning{ClassId} << "This argument (" << *p << ") is outside the 32-bit integer range !";
+
+			return 0;
 		}
 
 		if ( const auto * p = std::get_if< int32_t >(&m_value) )

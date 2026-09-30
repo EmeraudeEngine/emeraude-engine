@@ -139,8 +139,8 @@ namespace EmEn::Console
 			asio::streambuf m_buffer{RemoteListener::MaxLineLength};
 	};
 
-	RemoteListener::RemoteListener (const std::string & address, uint16_t port) noexcept
-		: m_address{address},
+	RemoteListener::RemoteListener (std::string address, uint16_t port) noexcept
+		: m_address{std::move(address)},
 		m_port{port},
 		m_acceptor{std::make_unique< asio::ip::tcp::acceptor >(m_ioContext)}
 	{
@@ -184,7 +184,7 @@ namespace EmEn::Console
 		if ( ec )
 		{
 			/* ⚠️ Windows reports a port another process holds exclusively as ACCESS DENIED, not "address in use". */
-			const auto hint = ( ec == asio::error::address_in_use || ec == asio::error::access_denied ) ?
+			const auto * const hint = ( ec == asio::error::address_in_use || ec == asio::error::access_denied ) ?
 				" — the port is most likely taken by another process (Windows reports that as access denied); choose another one in Core/Console/RemoteListenerPort" :
 				"";
 
@@ -232,17 +232,19 @@ namespace EmEn::Console
 		{
 			asio::error_code ec;
 
+			/* NOTE: best effort — the acceptor is going away, a failure leaves nothing to do. */
 			m_acceptor->cancel(ec);
 			m_acceptor->close(ec);
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_clientsMutex};
+			const std::scoped_lock lock{m_clientsMutex};
 
-			for ( auto & client : m_clients )
+			for ( const auto & client : m_clients )
 			{
 				asio::error_code ec;
 
+				/* NOTE: best effort — the client is dropped either way. */
 				client->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 				client->close(ec);
 			}
@@ -263,7 +265,7 @@ namespace EmEn::Console
 	bool
 	RemoteListener::popCommand (PendingCommand & outCommand) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_queueMutex};
+		const std::scoped_lock lock{m_queueMutex};
 
 		if ( m_commandsQueue.empty() )
 		{
@@ -295,7 +297,7 @@ namespace EmEn::Console
 		asio::error_code ec;
 
 		{
-			const std::lock_guard< std::mutex > writeLock{m_writeMutex};
+			const std::scoped_lock writeLock{m_writeMutex};
 
 			/* NOTE: checked under the write lock — disconnect() closes the socket under the same lock. */
 			if ( !client->is_open() )
@@ -308,7 +310,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			const std::lock_guard< std::mutex > lock{m_clientsMutex};
+			const std::scoped_lock lock{m_clientsMutex};
 
 			m_clients.erase(client);
 		}
@@ -325,7 +327,7 @@ namespace EmEn::Console
 				size_t clientCount = 0;
 
 				{
-					const std::lock_guard< std::mutex > lock{m_clientsMutex};
+					const std::scoped_lock lock{m_clientsMutex};
 
 					clientCount = m_clients.size();
 				}
@@ -337,6 +339,7 @@ namespace EmEn::Console
 					asio::error_code ec;
 					const auto refusal = RemoteProtocol::serializeError("Too many clients (" + std::to_string(MaxClients) + " already connected).") + '\n';
 					static_cast< void >(asio::write(*socket, asio::buffer(refusal), ec));
+					/* NOTE: best effort — the refused socket is dropped either way. */
 					socket->close(ec);
 				}
 				else
@@ -352,14 +355,22 @@ namespace EmEn::Console
 					sendTimeout.tv_sec = static_cast< time_t >(SendTimeoutMilliseconds / 1000);
 					sendTimeout.tv_usec = 0;
 #endif
-					static_cast< void >(::setsockopt(socket->native_handle(), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast< const char * >(&sendTimeout), sizeof(sendTimeout)));
+					if ( ::setsockopt(socket->native_handle(), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast< const char * >(&sendTimeout), sizeof(sendTimeout)) != 0 )
+					{
+						TraceWarning{ClassId} << "Unable to set the send timeout of a client: a peer that stops reading may block its writer.";
+					}
 
 					socket->set_option(asio::ip::tcp::no_delay{true}, optionError);
+
+					if ( optionError )
+					{
+						TraceWarning{ClassId} << "Unable to disable Nagle's algorithm for a client: " << optionError.message();
+					}
 
 					TraceInfo{ClassId} << "New AI client connected to Remote Console.";
 
 					{
-						const std::lock_guard< std::mutex > lock{m_clientsMutex};
+						const std::scoped_lock lock{m_clientsMutex};
 
 						m_clients.insert(socket);
 					}
@@ -394,7 +405,7 @@ namespace EmEn::Console
 		bool overflow = false;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_queueMutex};
+			const std::scoped_lock lock{m_queueMutex};
 
 			auto & pendingCount = m_pendingPerClient[client.get()];
 
@@ -432,12 +443,13 @@ namespace EmEn::Console
 		}
 
 		{
-			const std::lock_guard< std::mutex > writeLock{m_writeMutex};
+			const std::scoped_lock writeLock{m_writeMutex};
 
 			if ( client->is_open() )
 			{
 				asio::error_code ec;
 				static_cast< void >(asio::write(*client, asio::buffer(line + '\n'), ec));
+				/* NOTE: best effort — the client is disconnected either way. */
 				client->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
 				client->close(ec);
 			}
@@ -449,7 +461,7 @@ namespace EmEn::Console
 	void
 	RemoteListener::removeClient (const std::shared_ptr< asio::ip::tcp::socket > & socket) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_clientsMutex};
+		const std::scoped_lock lock{m_clientsMutex};
 
 		m_clients.erase(socket);
 	}

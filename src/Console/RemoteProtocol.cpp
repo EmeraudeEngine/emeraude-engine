@@ -88,7 +88,7 @@ namespace EmEn::Console::RemoteProtocol
 				if ( output.kind() == OutputKind::Binary )
 				{
 					entry["mimeType"] = output.mimeType();
-					entry["data"] = String::encodeBase64(std::string{output.bytes().begin(), output.bytes().end()});
+					entry["data"] = String::encodeBase64(std::span< const uint8_t >{output.bytes()});
 				}
 				else if ( output.kind() == OutputKind::Image )
 				{

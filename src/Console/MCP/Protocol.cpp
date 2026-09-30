@@ -32,6 +32,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <span>
 
 /* Local inclusions. */
 #include "emeraude_config.hpp"
@@ -66,7 +67,7 @@ namespace EmEn::Console::MCP
 					continue;
 				}
 
-				const auto consolePath = path + "." + name;
+				const auto consolePath = String::concatenate(path, ".", name);
 
 				tools.emplace_back(toolName(consolePath), consolePath, &command);
 			}
@@ -75,7 +76,7 @@ namespace EmEn::Console::MCP
 			{
 				if ( subPtr != nullptr )
 				{
-					appendTools(*subPtr, path + "." + subName, tools);
+					appendTools(*subPtr, String::concatenate(path, ".", subName), tools);
 				}
 			}
 		}
@@ -202,6 +203,14 @@ namespace EmEn::Console::MCP
 					return false;
 				}
 
+				/* NOTE: converting a double beyond the float range is undefined behaviour ([conv.double]). */
+				if ( std::abs(number) > static_cast< double >(std::numeric_limits< float >::max()) )
+				{
+					error = "Argument '" + name + "' is outside the 32-bit floating point range.";
+
+					return false;
+				}
+
 				argument = Argument{static_cast< float >(number)};
 
 				return true;
@@ -262,13 +271,13 @@ namespace EmEn::Console::MCP
 
 		/**
 		 * @brief Returns an image content item.
-		 * @param bytes The encoded image.
+		 * @param bytes The encoded image (read in place: no copy).
 		 * @param mimeType The MIME type.
 		 * @return Json::Value
 		 */
 		[[nodiscard]]
 		Json::Value
-		imageContent (const std::string & bytes, const std::string & mimeType) noexcept
+		imageContent (std::span< const std::byte > bytes, const std::string & mimeType) noexcept
 		{
 			Json::Value content{Json::objectValue};
 			content["type"] = "image";
@@ -412,9 +421,9 @@ namespace EmEn::Console::MCP
 
 			property["description"] = parameter.description();
 
-			if ( parameter.defaultValue().has_value() )
+			if ( const auto & defaultValue = parameter.defaultValue(); defaultValue.has_value() )
 			{
-				property["default"] = argumentValue(*parameter.defaultValue());
+				property["default"] = argumentValue(*defaultValue);
 			}
 
 			if ( !parameter.isOmittable() )
@@ -478,10 +487,8 @@ namespace EmEn::Console::MCP
 			}
 		}
 
-		for ( size_t index = 0; index < parameters.size(); ++index )
+		for ( const auto & parameter : parameters )
 		{
-			const auto & parameter = parameters[index];
-
 			const auto & value = member(arguments, parameter.name().c_str());
 
 			if ( value.isNull() )
@@ -623,7 +630,7 @@ namespace EmEn::Console::MCP
 				case OutputKind::Binary :
 					if ( output.mimeType().starts_with("image/") )
 					{
-						content.append(imageContent(std::string{output.bytes().begin(), output.bytes().end()}, output.mimeType()));
+						content.append(imageContent(std::as_bytes(std::span< const uint8_t >{output.bytes()}), output.mimeType()));
 					}
 
 					content.append(textContent(text));
@@ -636,12 +643,12 @@ namespace EmEn::Console::MCP
 
 					if ( reducedPNG(output.filePath(), ReducedImageMaxEdge, png, error) )
 					{
-						content.append(imageContent(std::string{reinterpret_cast< const char * >(png.data()), png.size()}, "image/png"));
-						content.append(textContent(text + " (shown reduced to " + std::to_string(ReducedImageMaxEdge) + " px on its long edge; the file is full resolution)"));
+						content.append(imageContent(png, "image/png"));
+						content.append(textContent(String::concatenate(text, " (shown reduced to ", std::to_string(ReducedImageMaxEdge), " px on its long edge; the file is full resolution)")));
 					}
 					else
 					{
-						content.append(textContent(text + " (the image could not be attached: " + error + ")"));
+						content.append(textContent(String::concatenate(text, " (the image could not be attached: ", error, ")")));
 					}
 				}
 					break;

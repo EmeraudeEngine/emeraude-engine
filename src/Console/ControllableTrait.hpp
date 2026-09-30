@@ -208,10 +208,10 @@ namespace EmEn::Console
 
 					static_assert(TypedBinding::variadicIsLast< ArgumentTypes >(std::make_index_sequence< ParameterCount >{}), "bindCommand(): only the last parameter may be a std::vector (variadic).");
 
-					CommandSignature signature{TypedBinding::resolveParameters< ArgumentTypes >(parameters, std::make_index_sequence< ParameterCount >{}), hints};
-					auto binding = TypedBinding::makeBinding(std::move(callable), signature);
+					const CommandSignature signature{TypedBinding::resolveParameters< ArgumentTypes >(parameters, std::make_index_sequence< ParameterCount >{}), hints};
+					const auto binding = TypedBinding::makeBinding(std::move(callable), signature);
 
-					this->bindTypedCommand(commandNames, description, std::move(binding), std::move(signature));
+					this->bindTypedCommand(commandNames, description, binding, signature);
 				}
 			}
 
@@ -239,9 +239,9 @@ namespace EmEn::Console
 				else
 				{
 					CommandSignature signature{{}, hints};
-					auto binding = TypedBinding::makeBinding(std::move(callable), signature);
+					const auto binding = TypedBinding::makeBinding(std::move(callable), signature);
 
-					this->bindTypedCommand(commandNames, description, std::move(binding), std::move(signature));
+					this->bindTypedCommand(commandNames, description, binding, signature);
 				}
 			}
 
@@ -277,7 +277,7 @@ namespace EmEn::Console
 			 * @param signature The resolved signature [std::move].
 			 * @return void
 			 */
-			void bindTypedCommand (const std::string & commandNames, const std::string & description, Binding binding, CommandSignature signature) noexcept;
+			void bindTypedCommand (const std::string & commandNames, const std::string & description, const Binding & binding, const CommandSignature & signature) noexcept;
 
 			/**
 			 * @brief Method to override to bind commands.

@@ -92,7 +92,7 @@ namespace EmEn::Console
 			 * @param address The IP address to bind to. Default "127.0.0.1".
 			 * @param port The TCP port to listen on. Default 7777.
 			 */
-			explicit RemoteListener (const std::string & address = DefaultConsoleRemoteListenerAddress, uint16_t port = DefaultConsoleRemoteListenerPort) noexcept;
+			explicit RemoteListener (std::string address = DefaultConsoleRemoteListenerAddress, uint16_t port = DefaultConsoleRemoteListenerPort) noexcept;
 
 			/**
 			 * @brief Copy constructor.

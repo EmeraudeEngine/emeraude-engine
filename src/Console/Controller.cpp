@@ -527,7 +527,7 @@ namespace EmEn::Console
 		{
 			if ( subPtr != nullptr )
 			{
-				Controller::dumpControllable(*subPtr, out, path + "." + subName);
+				Controller::dumpControllable(*subPtr, out, String::concatenate(path, ".", subName));
 			}
 		}
 	}
@@ -579,7 +579,7 @@ namespace EmEn::Console
 			for ( const auto & [name, command] : controllable.commands() )
 			{
 				Json::Value entry{Json::objectValue};
-				entry["path"] = path + "." + name;
+				entry["path"] = String::concatenate(path, ".", name);
 				entry["help"] = command.help();
 
 				const auto & signature = command.signature();
@@ -609,9 +609,9 @@ namespace EmEn::Console
 							break;
 					}
 
-					if ( parameter.defaultValue().has_value() )
+					if ( const auto & defaultValue = parameter.defaultValue(); defaultValue.has_value() )
 					{
-						item["default"] = argumentToJson(*parameter.defaultValue());
+						item["default"] = argumentToJson(*defaultValue);
 					}
 
 					parameters.append(std::move(item));
@@ -645,7 +645,7 @@ namespace EmEn::Console
 			{
 				if ( subPtr != nullptr )
 				{
-					describeControllable(*subPtr, path + "." + subName, commands);
+					describeControllable(*subPtr, String::concatenate(path, ".", subName), commands);
 				}
 			}
 		}

@@ -27,7 +27,9 @@
 #include "Expression.hpp"
 
 /* STL inclusions. */
+#include <cerrno>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 
 /* Local inclusions. */
@@ -148,10 +150,13 @@ namespace EmEn::Console
 			if ( argument.find('.') != std::string::npos )
 			{
 #ifdef __APPLE__
+				/* NOTE: strtof() reports an overflow (±HUGE_VALF) or an underflow through errno only: refused, as
+				 * std::from_chars() refuses them on the other platforms. */
 				char * end = nullptr;
+				errno = 0;
 				const float value = std::strtof(argument.data(), &end);
 
-				if ( end == argument.data() + argument.size() )
+				if ( end == argument.data() + argument.size() && errno != ERANGE && std::isfinite(value) )
 #else
 				float value = 0.0F;
 				auto [ptr, ec] = std::from_chars(argument.data(), argument.data() + argument.size(), value);

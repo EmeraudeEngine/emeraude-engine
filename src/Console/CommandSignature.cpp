@@ -113,7 +113,7 @@ namespace EmEn::Console
 				return false;
 			}
 
-			if ( parameter.defaultValue().has_value() )
+			if ( const auto & defaultValue = parameter.defaultValue(); defaultValue.has_value() )
 			{
 				if ( parameter.arity() != ParameterArity::Required )
 				{
@@ -122,7 +122,7 @@ namespace EmEn::Console
 					return false;
 				}
 
-				if ( !isConvertible(*parameter.defaultValue(), parameter.type()) )
+				if ( !isConvertible(*defaultValue, parameter.type()) )
 				{
 					error = "the default value of '" + parameter.name() + "' is not a " + to_cstring(parameter.type());
 
@@ -246,9 +246,9 @@ namespace EmEn::Console
 			return &arguments[index];
 		}
 
-		if ( parameter.defaultValue().has_value() )
+		if ( const auto & defaultValue = parameter.defaultValue(); defaultValue.has_value() )
 		{
-			return &parameter.defaultValue().value();
+			return &*defaultValue;
 		}
 
 		return nullptr;
@@ -354,6 +354,12 @@ namespace EmEn::Console
 	{
 		if ( const auto * number = std::get_if< float >(&argument.value()) )
 		{
+			/* NOTE: the single choke point of every typed float: an infinity or a NaN never reaches a command. */
+			if ( !std::isfinite(*number) )
+			{
+				return false;
+			}
+
 			value = *number;
 
 			return true;
