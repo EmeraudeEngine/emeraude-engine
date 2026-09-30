@@ -2769,6 +2769,23 @@ duplicate or invent one. Now `std::ranges::find`.
 
 ## Scene Rendering
 
+### A surface geometry (FFT ocean, CDLOD terrain) must RETIRE its GPU objects, never free them — fixed 2026-09-30
+
+> [!CAUTION]
+> **The renderer updates every REGISTERED surface geometry every frame, whichever scene is active**
+> (`Renderer::registerSurfaceGeometry()` / `updateSurfaceGeometries()`: an engine-wide list of weak pointers). The
+> ocean's FFT and the terrain's clipmap update are submitted on the graphics queue with no fence of their own. So a
+> surface that belongs to an INACTIVE scene is still in flight in the frames of the active one, and its destruction
+> must go through `Renderer::deferredDestructor()` (like a BLAS, `Geometry::Interface`). `OceanSurfaceResource` and
+> `CDLODTerrainResource::destroyFromHardware()` destroyed in place: `citadel` → console `deleteScene(citadel)` →
+> `createScene(Fresh…)` → shutdown gave 20 to 31 "in use" VUIDs on Linux, macOS and Windows (NVIDIA + AMD) — the act
+> still held the citadel scene, which died at act removal while Fresh rendered. Found with gdb on
+> `DebugMessenger::debugCallback if $rdi == 0x1000` (errors only): the stack showed `~OceanSurfaceResource` under
+> `~Scene` under `~Act`. ⚠️ A `waitIdle()` in `~Scene` does NOT help (tried): the next frame resubmits the surface
+> before its destruction. ⚠️ The Tracer and the validation callback interleave out of order in the log: bracketing a
+> destructor with log lines misplaces the VUIDs; use the debugger.
+> Still open: an inactive scene's surfaces are simulated every frame (item `surface-geometries-updated-for-inactive-scenes`).
+
 ### Fixed: the render lists walked EVERY entity and tested the volume last — 9 FPS for 32 ms of GPU (Sep 2026)
 
 > **Symptom (owner, 2026-09-25):** "a huge perf drop" once `terrain` planted 750 000 trees over its 16 km map

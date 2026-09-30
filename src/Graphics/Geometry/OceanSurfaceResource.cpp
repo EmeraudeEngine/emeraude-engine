@@ -34,6 +34,7 @@
 /* Local inclusions. */
 #include "Graphics/Frustum.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Saphir/Generator/OceanSurfaceHelper.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -511,15 +512,33 @@ namespace EmEn::Graphics::Geometry
 	void
 	OceanSurfaceResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
+		/* NOTE: The FFT is submitted every frame (Renderer::updateSurfaceGeometries()) and the surface is drawn by the
+		 * frames in flight, with no fence of its own: its GPU objects are RETIRED, destroyed once those frames are done,
+		 * never freed here. Measured 2026-09-30: an inactive scene's ocean destroyed while another scene rendered —
+		 * 20 to 31 "in use" VUIDs on Linux, macOS and Windows (item scene-destroyed-outside-manager-without-gpu-drain).
+		 * FIFO order: the command buffers leave before their pool, the descriptor sets before theirs. */
+		auto & deferredDestructor = this->serviceProvider().graphicsRenderer().deferredDestructor();
+
+		for ( auto & commandBuffer : m_commandBuffers )
+		{
+			deferredDestructor.retireObject(std::move(commandBuffer));
+		}
+
 		m_commandBuffers.clear();
-		m_commandPool.reset();
+		deferredDestructor.retireObject(std::move(m_commandPool));
+
+		for ( auto & descriptorSet : m_descriptorSets )
+		{
+			deferredDestructor.retireObject(std::move(descriptorSet));
+		}
+
 		m_descriptorSets.clear();
-		m_descriptorPool.reset();
-		m_uniformBuffer.reset();
-		m_sampler.reset();
-		m_waves.reset();
-		m_indexBufferObject.reset();
-		m_vertexBufferObject.reset();
+		deferredDestructor.retireObject(std::move(m_descriptorPool));
+		deferredDestructor.retireObject(std::move(m_uniformBuffer));
+		deferredDestructor.retireObject(std::move(m_sampler));
+		deferredDestructor.retireObject(std::move(m_waves));
+		deferredDestructor.retireObject(std::move(m_indexBufferObject));
+		deferredDestructor.retireObject(std::move(m_vertexBufferObject));
 		m_surfaceUpdated = false;
 		m_previousTime = -1.0;
 

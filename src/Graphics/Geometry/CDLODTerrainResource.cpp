@@ -1730,25 +1730,40 @@ namespace EmEn::Graphics::Geometry
 
 		m_rtProxyUpdating.store(false, std::memory_order_release);
 
-		m_stagingBuffers.clear();
-		m_commandBuffers.clear();
-		m_commandPool.reset();
-		m_bakeDescriptorSet.reset();
-		m_bakePipeline.reset();
-		m_bakePipelineLayout.reset();
-		m_bakeSetLayout.reset();
-		m_descriptorSets.clear();
-		m_descriptorPool.reset();
-		m_uniformBuffer.reset();
-		m_sampler.reset();
-		m_normalView.reset();
-		m_normalImage.reset();
-		m_heightView.reset();
-		m_heightImage.reset();
-		m_rtVertexBufferObject.reset();
-		m_rtIndexBufferObjectProxy.reset();
-		m_indexBufferObject.reset();
-		m_vertexBufferObject.reset();
+		/* NOTE: The clipmap update is submitted every frame (Renderer::updateSurfaceGeometries()) and the surface is drawn
+		 * and ray traced by the frames in flight, with no fence of its own: its GPU objects are RETIRED, destroyed once
+		 * those frames are done, never freed here (the same defect as the ocean's, item
+		 * scene-destroyed-outside-manager-without-gpu-drain). FIFO order: children before the pools they come from. */
+		auto & deferredDestructor = this->serviceProvider().graphicsRenderer().deferredDestructor();
+
+		const auto retireAll = [&deferredDestructor] (auto & objects) {
+			for ( auto & object : objects )
+			{
+				deferredDestructor.retireObject(std::move(object));
+			}
+
+			objects.clear();
+		};
+
+		retireAll(m_stagingBuffers);
+		retireAll(m_commandBuffers);
+		deferredDestructor.retireObject(std::move(m_commandPool));
+		deferredDestructor.retireObject(std::move(m_bakeDescriptorSet));
+		deferredDestructor.retireObject(std::move(m_bakePipeline));
+		deferredDestructor.retireObject(std::move(m_bakePipelineLayout));
+		deferredDestructor.retireObject(std::move(m_bakeSetLayout));
+		retireAll(m_descriptorSets);
+		deferredDestructor.retireObject(std::move(m_descriptorPool));
+		deferredDestructor.retireObject(std::move(m_uniformBuffer));
+		deferredDestructor.retireObject(std::move(m_sampler));
+		deferredDestructor.retireObject(std::move(m_normalView));
+		deferredDestructor.retireObject(std::move(m_normalImage));
+		deferredDestructor.retireObject(std::move(m_heightView));
+		deferredDestructor.retireObject(std::move(m_heightImage));
+		deferredDestructor.retireObject(std::move(m_rtVertexBufferObject));
+		deferredDestructor.retireObject(std::move(m_rtIndexBufferObjectProxy));
+		deferredDestructor.retireObject(std::move(m_indexBufferObject));
+		deferredDestructor.retireObject(std::move(m_vertexBufferObject));
 		m_selection.clear();
 		m_surfaceUploaded = false;
 		m_patchIndexCount = 0;
