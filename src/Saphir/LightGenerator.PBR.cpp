@@ -34,6 +34,7 @@
 #include "Generator/Abstract.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
+#include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 
 namespace EmEn::Saphir
 {
@@ -43,6 +44,41 @@ namespace EmEn::Saphir
 	using namespace Graphics;
 	using namespace Saphir::Keys;
 	using namespace Vulkan;
+
+	bool
+	LightGenerator::generateLineLightFunctions (FragmentShader & fragmentShader) noexcept
+	{
+		/* Heitz & Hill 2017, the analytic line integral of the cosine distribution D = cos θ / π — the ONE copy shared with
+		 * RTGI, RTR and the probes (Graphics/Effects/Shared/LineLightGLSL.hpp). */
+		Declaration::Function fpo{"ltcFpo", GLSL::Float};
+		fpo.addInParameter(GLSL::Float, "d");
+		fpo.addInParameter(GLSL::Float, "l");
+		Code{fpo, Location::Output} << EMEN_LTC_FPO_BODY_GLSL;
+
+		Declaration::Function fwt{"ltcFwt", GLSL::Float};
+		fwt.addInParameter(GLSL::Float, "d");
+		fwt.addInParameter(GLSL::Float, "l");
+		Code{fwt, Location::Output} << EMEN_LTC_FWT_BODY_GLSL;
+
+		Declaration::Function diffuse{"ltcLineDiffuse", GLSL::Float};
+		diffuse.addInParameter(GLSL::FloatVector3, "a");
+		diffuse.addInParameter(GLSL::FloatVector3, "b");
+		Code{diffuse, Location::Output} << EMEN_LTC_LINE_DIFFUSE_BODY_GLSL;
+
+		Declaration::Function integral{"ltcLineIntegral", GLSL::Float};
+		integral.addInParameter(GLSL::Matrix3, "inverseMatrix");
+		integral.addInParameter(GLSL::Matrix3, "cofactor");
+		integral.addInParameter(GLSL::FloatVector3, "p1");
+		integral.addInParameter(GLSL::FloatVector3, "p2");
+		Code{integral, Location::Output} <<
+			/* The segment in the cosine's configuration, and the width factor the transform applies across it. */
+			"const vec3 orthogonal = cross(p1, p2);" << Line::End <<
+			"const float orthogonalLength = length(orthogonal);" << Line::End <<
+			"if ( orthogonalLength < 1.0e-8 ) { return 0.0; }" << Line::End <<
+			"return ltcLineDiffuse(inverseMatrix * p1, inverseMatrix * p2) / length(cofactor * (orthogonal / orthogonalLength));";
+
+		return fragmentShader.declare(fpo) && fragmentShader.declare(fwt) && fragmentShader.declare(diffuse) && fragmentShader.declare(integral);
+	}
 
 	void
 	LightGenerator::generatePBRBRDFFunctions (FragmentShader & fragmentShader) const noexcept
@@ -188,7 +224,10 @@ namespace EmEn::Saphir
 	bool
 	LightGenerator::generatePBRVertexShader (Generator::Abstract & generator, AbstractVertexStage & vertexShader, LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept
 	{
-		Declaration::OutputBlock lightBlock{LightBlock, generator.getNextShaderVariableLocation(lightType == LightType::Spot ? 2 : 1), ShaderVariable::Light};
+		/* A line light passes its flat view matrix (4 locations), a spot its cone axis besides the distance vector. */
+		const uint32_t lightBlockLocations = lightType == LightType::Line ? 4 : (lightType == LightType::Spot ? 2 : 1);
+
+		Declaration::OutputBlock lightBlock{LightBlock, generator.getNextShaderVariableLocation(lightBlockLocations), ShaderVariable::Light};
 
 		/* NOTE: In cubemap mode, the view matrix comes from the UBO indexed by gl_ViewIndex,
 		 * not from the push constant. */
@@ -196,7 +235,22 @@ namespace EmEn::Saphir
 			ViewUB(UniformBlock::Component::ViewMatrix, true) :
 			MatrixPC(PushConstant::Component::ViewMatrix);
 
-		if ( lightType == LightType::Directional )
+		if ( lightType == LightType::Line )
+		{
+			/* The polyline is integrated in VIEW space, per fragment: the fragment stage has no view matrix on the main
+			 * render target (a push constant, vertex stage only), so it travels flat. */
+			vertexShader.addComment("The line light: the view matrix its polyline is brought to view space with, per fragment.");
+
+			lightBlock.addMember(Declaration::VariableType::Matrix4, LineViewMatrix, GLSL::Flat);
+
+			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionViewSpace, VariableScope::Both) )
+			{
+				return false;
+			}
+
+			Code{vertexShader, Location::Output} << LightGenerator::variable(LineViewMatrix) << " = " << viewMatrixSource << ";";
+		}
+		else if ( lightType == LightType::Directional )
 		{
 			vertexShader.addComment("Compute the light direction in view space (Normalized vector).");
 
@@ -374,6 +428,12 @@ namespace EmEn::Saphir
 			}
 		}
 
+		/* The line light's LTC tables (Graphics::LTCTexture) at binding 1 of its set — where a shadowed light has its map. */
+		if ( lightType == LightType::Line && !fragmentShader.declare(Declaration::Sampler{lightSetIndex, 1, GLSL::Sampler2DArray, LTCTablesSampler}) )
+		{
+			return false;
+		}
+
 		/* NOTE: Color projection uses bindless textures. When enabled, declare the appropriate
 		 * bindless sampler array and enable the nonuniform qualifier extension. */
 		if ( enableColorProjection )
@@ -424,7 +484,37 @@ namespace EmEn::Saphir
 
 		std::string rayDirectionViewSpace;
 
-		if ( lightType != LightType::Directional )
+		if ( lightType == LightType::Line )
+		{
+			if ( !generateLineLightFunctions(fragmentShader) )
+			{
+				return false;
+			}
+
+			/* The polyline in view space, and its point closest to the fragment: the representative direction of the
+			 * secondary lobes (clear coat, sheen, subsurface) and the distance of the reach window. */
+			fragmentShader.addComment("Line light: the polyline in view space and its point closest to the fragment.");
+
+			Code{fragmentShader} <<
+				"const int linePointCount = clamp(int(" << LightUB(UniformBlock::Component::PointCount) << "), 0, " << LineLightMaxPoints << ");" << Line::End <<
+				"const vec3 lineFragment = " << ShaderVariable::PositionViewSpace << ".xyz;" << Line::End <<
+				"vec3 linePoints[" << LineLightMaxPoints << "];" << Line::End <<
+				"for ( int index = 0; index < " << LineLightMaxPoints << "; ++index ) { linePoints[index] = (" << LightGenerator::variable(LineViewMatrix) << " * vec4(" << LightUB(UniformBlock::Component::Points) << "[index].xyz, 1.0)).xyz; }" << Line::End <<
+				"vec3 lineClosest = linePoints[0];" << Line::End <<
+				"float lineClosestDistance = 3.4e38;" << Line::End <<
+				"for ( int index = 0; index + 1 < linePointCount; ++index )" << Line::End <<
+				"{" << Line::End <<
+				"	const vec3 segmentStart = linePoints[index];" << Line::End <<
+				"	const vec3 segment = linePoints[index + 1] - segmentStart;" << Line::End <<
+				"	const vec3 candidate = segmentStart + segment * clamp(dot(lineFragment - segmentStart, segment) / max(dot(segment, segment), 1.0e-12), 0.0, 1.0);" << Line::End <<
+				"	const float candidateDistance = length(lineFragment - candidate);" << Line::End <<
+				"	if ( candidateDistance < lineClosestDistance ) { lineClosestDistance = candidateDistance; lineClosest = candidate; }" << Line::End <<
+				"}" << Line::End <<
+				"const vec3 " << RayDirectionViewSpace << " = lineClosestDistance > 1.0e-6 ? (lineFragment - lineClosest) / lineClosestDistance : vec3(0.0, 0.0, 1.0);" << Line::End;
+
+			rayDirectionViewSpace = RayDirectionViewSpace;
+		}
+		else if ( lightType != LightType::Directional )
 		{
 			fragmentShader.addComment("Compute the ray direction in view space.");
 
@@ -443,7 +533,26 @@ namespace EmEn::Saphir
 		 * (Graphics/Effects/Shared/LightFalloffGLSL.hpp) — `I / d²` lux inside the radius, zero at it. ⚠️ It was
 		 * `max(1 - (d/r)², 0)` here from 2026-08-12 (1c1d94ba deleted the inverse square) to 2026-09-25: a candela was
 		 * not a physical quantity and the radius was the dimmer. */
-		if ( lightType != LightType::Directional )
+		/* A line light's distance falloff is in its integral (the line subtends less solid angle further away): only the
+		 * reach window applies, the inverse square's own window (docs: light attenuation, one helper for every lane). */
+		if ( lightType == LightType::Line )
+		{
+			fragmentShader.addComment("The reach window over the light factor [Line]: the integral carries the falloff.");
+
+			Code{fragmentShader} <<
+				"if ( " << this->lightRadius() << " > 0.0 )" << Line::End <<
+				"{" << Line::End <<
+				"	const float lineReach = clamp(1.0 - pow(lineClosestDistance / " << this->lightRadius() << ", 4.0), 0.0, 1.0);" << Line::End <<
+				"	" << LightFactor << " *= lineReach * lineReach;" << Line::End <<
+				"}" << Line::End <<
+				"if ( linePointCount < 2 ) { " << LightFactor << " = 0.0; }" << Line::End;
+
+			if ( m_discardUnlitFragment )
+			{
+				Code{fragmentShader} << "if ( " << LightFactor << " <= 0.0 ) { discard; }" << Line::End;
+			}
+		}
+		else if ( lightType != LightType::Directional )
 		{
 			fragmentShader.addComment("The photometric falloff over the light factor [Point+Spot]: windowed inverse square.");
 
@@ -555,6 +664,12 @@ namespace EmEn::Saphir
 					{
 						Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::End;
 					}
+					break;
+
+				case LightType::Line :
+					/* NOTE: A line light casts no shadow (no LineLightPass shadow variant exists), so this is never
+					 * reached; the neutral factor keeps the program valid if a variant is ever requested. */
+					Code{fragmentShader} << "const float shadowFactor = 1.0;" << Line::End;
 					break;
 			}
 
@@ -843,9 +958,52 @@ namespace EmEn::Saphir
 		}
 
 		/* Compute radiance and final output. */
-		Code{fragmentShader} <<
-			"/* Light radiance. */" << Line::End <<
-			"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * cloudShadow * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
+		if ( lightType == LightType::Line )
+		{
+			/* ⚠️ THE LINE LIGHT'S INTEGRALS — Linearly Transformed Cosines (Heitz, Dupuy, Hill, Neubelt, SIGGRAPH 2016) over
+			 * line segments (Heitz & Hill, SIGGRAPH 2017 course): for a thin Lambertian tube of radius R and radiance Le, the
+			 * solid-angle integral of a clamped cosine lobe over the tube is R × the closed-form line integral (verified
+			 * against a brute-force cylinder integral to 0.2 %, 2026-09-30). The reflected radiance of the BASE lobe is
+			 * therefore Le × (kD × albedo × Idiffuse + Ispecular × (F0 × magnitude + (1 − F0) × Fresnel)) — exact up to the
+			 * LTC fit, summed over the polyline's segments. The tables are indexed by the perceptual roughness (√α) and
+			 * √(1 − N·V). */
+			fragmentShader.addComment("Line light: the LTC integrals over the polyline (base lobe).");
+
+			Code{fragmentShader} <<
+				"const float ltcNdotV = clamp(dot(N, V), 0.0, 1.0);" << Line::End <<
+				"const vec2 ltcUV = vec2(clamp(" << roughness << ", 0.0, 1.0), sqrt(1.0 - ltcNdotV)) * (63.0 / 64.0) + vec2(0.5 / 64.0);" << Line::End <<
+				"const vec4 ltcMatrix = texture(" << LTCTablesSampler << ", vec3(ltcUV, 0.0));" << Line::End <<
+				"const vec4 ltcAmplitude = texture(" << LTCTablesSampler << ", vec3(ltcUV, 1.0));" << Line::End <<
+				"const mat3 ltcInverse = mat3(vec3(ltcMatrix.x, 0.0, ltcMatrix.y), vec3(0.0, 1.0, 0.0), vec3(ltcMatrix.z, 0.0, ltcMatrix.w));" << Line::End <<
+				"const mat3 ltcCofactor = inverse(transpose(ltcInverse));" << Line::End <<
+				/* The frame of the fit: N up, the view in its x-z plane (any tangent when V is along N). */
+				"vec3 ltcTangent = V - N * dot(V, N);" << Line::End <<
+				"ltcTangent = dot(ltcTangent, ltcTangent) > 1.0e-8 ? normalize(ltcTangent) : normalize(cross(N, abs(N.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));" << Line::End <<
+				"const mat3 ltcFrame = transpose(mat3(ltcTangent, cross(N, ltcTangent), N));" << Line::End <<
+				"float lineDiffuse = 0.0;" << Line::End <<
+				"float lineSpecular = 0.0;" << Line::End <<
+				"for ( int index = 0; index + 1 < linePointCount; ++index )" << Line::End <<
+				"{" << Line::End <<
+				"	const vec3 p1 = ltcFrame * (linePoints[index] - lineFragment);" << Line::End <<
+				"	const vec3 p2 = ltcFrame * (linePoints[index + 1] - lineFragment);" << Line::End <<
+				"	lineDiffuse += ltcLineDiffuse(p1, p2);" << Line::End <<
+				"	lineSpecular += ltcLineIntegral(ltcInverse, ltcCofactor, p1, p2);" << Line::End <<
+				"}" << Line::End <<
+				"lineDiffuse *= " << LightUB(UniformBlock::Component::TubeRadius) << ";" << Line::End <<
+				"lineSpecular *= " << LightUB(UniformBlock::Component::TubeRadius) << ";" << Line::End <<
+				"const vec3 lineSpecularColor = lineSpecular * (F0 * ltcAmplitude.x + (vec3(1.0) - F0) * ltcAmplitude.y);" << Line::End <<
+				"const vec3 lineRadiance = " << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::End <<
+				/* The secondary lobes (clear coat, sheen, subsurface, anisotropy) are punctual formulas `BRDF × radiance ×
+				 * N·L` along the representative direction: this radiance makes their diffuse part equal to the integral.
+				 * The ratio is capped where the closest point grazes the horizon. */
+				"const vec3 radiance = lineRadiance * (3.14159265 * lineDiffuse / max(NdotL, 0.05));" << Line::Blank;
+		}
+		else
+		{
+			Code{fragmentShader} <<
+				"/* Light radiance. */" << Line::End <<
+				"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * cloudShadow * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
+		}
 
 		/* Fragment color output. */
 		if ( m_fragmentColor.empty() )
@@ -940,6 +1098,12 @@ namespace EmEn::Saphir
 				"/* Apply PBR lighting with clear coat energy conservation. */" << Line::End <<
 				"const vec3 baseLighting = (kD * " << albedo << " / 3.14159265 + specular) * (vec3(1.0) - ccFactor * Fc);" << Line::End <<
 				m_fragmentColor << ".rgb += (baseLighting + ccFactor * ccSpec) * radiance * NdotL;";
+		}
+		else if ( lightType == LightType::Line )
+		{
+			Code{fragmentShader} <<
+				"/* Apply the line light: the LTC integrals (exact base lobe). */" << Line::End <<
+				m_fragmentColor << ".rgb += (kD * " << albedo << " * lineDiffuse + lineSpecularColor) * lineRadiance;";
 		}
 		else
 		{

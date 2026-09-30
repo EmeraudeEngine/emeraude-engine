@@ -30,6 +30,7 @@
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
+#include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 
 /* Local inclusions. */
 #include "Graphics/IrradianceProbeVolume.hpp"
@@ -347,7 +348,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
 /* Compute direct lighting at hit point (Lambert diffuse over all scene lights).
  * lightCount is the frame's RT light count (skyParams.w of the frame block, Renderer::rtLightCount()), capped at 16.
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit
@@ -366,6 +367,19 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 
 		vec3 lightColor = colorIntensity.rgb * colorIntensity.a;
 		float type = dirType.w;
+
+		/* A line segment (Scenes::Component::LineLight, one entry per segment): the analytic integral of the tube
+		 * (Graphics/Effects/Shared/LineLightGLSL.hpp) — an illuminance, like the punctual terms below. No shadow ray: a
+		 * line light casts no shadow yet. */
+		if (type > 2.5)
+		{
+			vec3 lineEnd = posRadius.xyz + dirType.xyz;
+			float lineReach = emLineReach(length(hitPos - emLineClosest(posRadius.xyz, lineEnd, hitPos)), posRadius.w);
+
+			totalLight += lightColor * emLineIrradiance(posRadius.xyz, lineEnd, hitPos, hitNormal, lightSSBO.lights[base + 3u].x) * lineReach;
+
+			continue;
+		}
 
 		vec3 L;
 		float attenuation = 1.0;

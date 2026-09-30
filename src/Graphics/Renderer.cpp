@@ -39,6 +39,7 @@
 #include "Arguments.hpp"
 #include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
+#include "LTCTexture.hpp"
 #include "GrabPass.hpp"
 #include "IBLTexture.hpp"
 #include "SkinnedGeometryProcessor.hpp"
@@ -431,6 +432,16 @@ namespace EmEn::Graphics
 			m_dummyShadowTextureCube.reset();
 		}
 
+		/* The LTC tables of the line lights (Heitz et al. 2016). */
+		m_LTCTables = std::make_shared< LTCTexture >();
+
+		if ( !m_LTCTables->create(*this) )
+		{
+			TraceError{ClassId} << "Unable to create the LTC tables texture: line lights will not light anything !";
+
+			m_LTCTables.reset();
+		}
+
 		/* Create dummy color projection textures for unified descriptor set layouts. */
 		m_dummyColorProjectionTexture2D = std::make_shared< DummyColorProjectionTexture >(false);
 
@@ -482,6 +493,12 @@ namespace EmEn::Graphics
 		{
 			m_dummyShadowTexture2D->destroy();
 			m_dummyShadowTexture2D.reset();
+		}
+
+		if ( m_LTCTables != nullptr )
+		{
+			m_LTCTables->destroy();
+			m_LTCTables.reset();
 		}
 
 		if ( m_brdfLUT != nullptr )
@@ -2049,7 +2066,7 @@ namespace EmEn::Graphics
 		 * force-on. ⚠️ The flag alone used to gate this blit and NOTHING ever set it: the
 		 * machinery was pre-allocated but dead, and every grab-pass material sampled an
 		 * unfilled slot (measured on CarConcept: uniform sky-blue glass, no interior). */
-		/* The outline needs the SCENE's depth too (full where visible, dimmed where hidden): the only sampleable copy of
+		/* The outline needs the SCENE's depth too (full where visible, dimmed where hidden): the only sample-able copy of
 		 * it on this path is this grab (the swap-chain depth is an attachment of the pass the outline draws in). */
 		const bool grabbed = ( m_grabPassEnabled || selectionOutlined || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated();
 
@@ -2932,7 +2949,7 @@ namespace EmEn::Graphics
 			stack->publishFrameDiagnostics(diagnostics);
 		}
 
-		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+		const std::scoped_lock lock{m_frameDiagnosticsAccess};
 
 		m_frameDiagnostics = diagnostics;
 	}
@@ -2940,7 +2957,7 @@ namespace EmEn::Graphics
 	FrameDiagnostics
 	Renderer::frameDiagnostics () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+		const std::scoped_lock lock{m_frameDiagnosticsAccess};
 
 		return m_frameDiagnostics;
 	}
@@ -2972,7 +2989,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::recordIrradianceProbeUpdate (const std::shared_ptr< CommandBuffer > & commandBuffer, Scenes::Scene * scene) noexcept
+	Renderer::recordIrradianceProbeUpdate (const std::shared_ptr< CommandBuffer > & commandBuffer, Scenes::Scene * scene) const noexcept
 	{
 		if ( m_irradianceProbeVolume == nullptr || !m_irradianceProbeVolume->usable() || scene == nullptr || !this->isRayTracingReady() )
 		{
@@ -3392,7 +3409,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_materialUpdatesAccess};
+		const std::scoped_lock lock{m_materialUpdatesAccess};
 
 		m_pendingMaterialUpdates.emplace_back(std::move(material));
 	}
@@ -3405,7 +3422,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_geometryUpdatesAccess};
+		const std::scoped_lock lock{m_geometryUpdatesAccess};
 
 		m_pendingGeometryUpdates.emplace_back(std::move(geometry));
 	}
@@ -3416,7 +3433,7 @@ namespace EmEn::Graphics
 		std::vector< std::weak_ptr< Geometry::Interface > > pending;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_geometryUpdatesAccess};
+			const std::scoped_lock lock{m_geometryUpdatesAccess};
 
 			if ( m_pendingGeometryUpdates.empty() )
 			{
@@ -3446,7 +3463,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_surfaceGeometriesAccess};
+		const std::scoped_lock lock{m_surfaceGeometriesAccess};
 
 		m_surfaceGeometries.emplace_back(std::move(geometry));
 	}
@@ -3457,7 +3474,7 @@ namespace EmEn::Graphics
 		std::vector< std::shared_ptr< Geometry::Interface > > alive;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_surfaceGeometriesAccess};
+			const std::scoped_lock lock{m_surfaceGeometriesAccess};
 
 			if ( m_surfaceGeometries.empty() )
 			{
@@ -3505,7 +3522,7 @@ namespace EmEn::Graphics
 		std::vector< std::weak_ptr< Material::Interface > > pending;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_materialUpdatesAccess};
+			const std::scoped_lock lock{m_materialUpdatesAccess};
 
 			if ( m_pendingMaterialUpdates.empty() )
 			{

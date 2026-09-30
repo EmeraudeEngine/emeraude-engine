@@ -585,6 +585,16 @@ namespace EmEn::Scenes
 
 				return true;
 
+			case AbstractEntity::LineLightCreated :
+				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::LineLight > >(data));
+
+				return true;
+
+			case AbstractEntity::LineLightDestroyed :
+				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::LineLight > >(data));
+
+				return true;
+
 			case AbstractEntity::CloudVolumeCreated :
 				m_cloudSet.add(*this, std::any_cast< std::shared_ptr< Component::CloudVolume > >(data));
 

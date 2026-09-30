@@ -372,6 +372,7 @@ namespace EmEn::Vulkan
 			case RenderPassType::SpotLightPassShadowMap:
 			case RenderPassType::SpotLightPassColorMap:
 			case RenderPassType::SpotLightPassFull:
+			case RenderPassType::LineLightPass:
 				if ( options != nullptr && options->isDepthBiasEnabled() )
 				{
 					m_rasterizationState.depthBiasEnable = VK_TRUE;
@@ -508,6 +509,7 @@ namespace EmEn::Vulkan
 			case RenderPassType::SpotLightPassShadowMap:
 			case RenderPassType::SpotLightPassColorMap:
 			case RenderPassType::SpotLightPassFull:
+			case RenderPassType::LineLightPass:
 				m_depthStencilState.depthTestEnable = VK_TRUE;
 				m_depthStencilState.depthWriteEnable = VK_FALSE;
 				m_depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
@@ -671,6 +673,7 @@ namespace EmEn::Vulkan
 				case RenderPassType::SpotLightPassShadowMap:
 				case RenderPassType::SpotLightPassColorMap:
 				case RenderPassType::SpotLightPassFull:
+				case RenderPassType::LineLightPass:
 					m_colorBlendAttachments[0].blendEnable = VK_TRUE;
 
 					if ( material.isOpaque() )

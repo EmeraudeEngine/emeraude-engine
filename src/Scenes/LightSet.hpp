@@ -44,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "Component/DirectionalLight.hpp"
+#include "Component/LineLight.hpp"
 #include "Component/PointLight.hpp"
 #include "Component/SpotLight.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
@@ -108,6 +109,8 @@ namespace EmEn::Scenes
 				PointLightRemoved,
 				SpotLightRemoved,
 				AmbientLightChanged,
+				LineLightAdded,
+				LineLightRemoved,
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -256,6 +259,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the shared buffer uniform for line light buffer (its descriptor sets bind the LTC tables).
+			 * @return std::shared_ptr< Graphics::SharedUniformBuffer >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::SharedUniformBuffer >
+			lineLightBuffer () const noexcept
+			{
+				return m_lineLightUBO;
+			}
+
+			/**
 			 * @brief Sets the ambient light colour: a CHROMATICITY, the intensity (lux) stays the photometric quantity.
 			 * @note This will have an effect even if no light is in the scene.
 			 * @note ⚠️⚠️ Same contract as AbstractLightEmitter::setColor() (owner decision, 2026-09-25): the GPU gets
@@ -378,6 +392,14 @@ namespace EmEn::Scenes
 			void add (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept;
 
 			/**
+			 * @brief Adds a line light to the light set for the scene.
+			 * @param scene A reference to a scene.
+			 * @param light A smart pointer to the scene line light.
+			 * @return void
+			 */
+			void add (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept;
+
+			/**
 			 * @brief Removes a directional light from the light set of the scene.
 			 * @note ⚠️ The light is RETIRED, not destroyed: the render thread iterates a snapshot of the
 			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
@@ -406,6 +428,15 @@ namespace EmEn::Scenes
 			 * @return void
 			 */
 			void remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept;
+
+			/**
+			 * @brief Removes a line light from the light set of the scene.
+			 * @note ⚠️ Retired, not destroyed (see remove(PointLight)).
+			 * @param scene A reference to a scene.
+			 * @param light A smart pointer to the scene line light.
+			 * @return void
+			 */
+			void remove (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept;
 
 			/**
 			 * @brief Returns the light emitter list.
@@ -475,6 +506,17 @@ namespace EmEn::Scenes
 			spotLights () const noexcept
 			{
 				return m_spotLights;
+			}
+
+			/**
+			 * @brief Returns the line light list.
+			 * @return const std::set< std::shared_ptr< Component::LineLight > > &
+			 */
+			[[nodiscard]]
+			const std::set< std::shared_ptr< Component::LineLight > > &
+			lineLights () const noexcept
+			{
+				return m_lineLights;
 			}
 
 			/**
@@ -597,6 +639,16 @@ namespace EmEn::Scenes
 			static std::unique_ptr< Vulkan::DescriptorSet > createDescriptorSet (Graphics::Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept;
 
 			/**
+			 * @brief Creates the descriptor set of a LINE light within the shared uniform buffer object: the same unified
+			 * layout, the LTC tables (Graphics::LTCTexture) at binding 1 instead of the dummy shadow map.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param uniformBufferObject A reference to the uniform buffer object.
+			 * @return std::unique_ptr< Vulkan::DescriptorSet >
+			 */
+			[[nodiscard]]
+			static std::unique_ptr< Vulkan::DescriptorSet > createLineLightDescriptorSet (Graphics::Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept;
+
+			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
 			 * @param obj A reference to the object to print.
@@ -615,10 +667,12 @@ namespace EmEn::Scenes
 			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
 			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights;
+			std::set< std::shared_ptr< Component::LineLight > > m_lineLights;
 			std::weak_ptr< Component::DirectionalLight > m_mainDirectionalLight;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightUBO;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_lineLightUBO;
 			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTLightSSBO;
 			mutable uint32_t m_RTLightCount{0};
 			mutable std::mutex m_lightsAccess;

@@ -111,8 +111,9 @@ namespace EmEn::Graphics
 		SpotLightPassShadowMap = 14, /* Direct lighting + Shadow mapping (2d). */
 		SpotLightPassColorMap = 13, /* Direct lighting + Color projection mapping (2d). */
 		SpotLightPassFull = 15, /* Direct lighting + Shadow mapping (2d) + Color projection mapping (2d). */
+		LineLightPass = 16, /* Direct lighting from a line (a polyline tube) integrated by LTC; no shadow. */
 		/* Enum value for invalid type. */
-		None = 16
+		None = 17
 	};
 
 	constexpr auto MaxPassCount = static_cast< size_t >(RenderPassType::None);
@@ -133,6 +134,7 @@ namespace EmEn::Graphics
 	constexpr auto SpotLightPassShadowMapString{"SpotLightPassShadowMap"};
 	constexpr auto SpotLightPassColorMapString{"SpotLightPassColorMap"};
 	constexpr auto SpotLightPassFullString{"SpotLightPassFull"};
+	constexpr auto LineLightPassString{"LineLightPass"};
 
 	/**
 	 * @brief Converts a light pass type enumeration value to the corresponding string.
@@ -252,6 +254,7 @@ namespace EmEn::Graphics
 			case RenderPassType::SpotLightPassShadowMap :
 			case RenderPassType::SpotLightPassColorMap :
 			case RenderPassType::SpotLightPassFull :
+			case RenderPassType::LineLightPass :
 				return true;
 
 			default:
@@ -1044,12 +1047,15 @@ namespace EmEn::Graphics
 	{
 		Directional = 0,
 		Point = 1,
-		Spot = 2
+		Spot = 2,
+		/** @brief A line: a polyline tube of emitting surface (Scenes::Component::LineLight), integrated by LTC. */
+		Line = 3
 	};
 
 	constexpr auto DirectionalLightString{"DirectionalLight"};
 	constexpr auto PointLightString{"PointLight"};
 	constexpr auto SpotLightString{"SpotLight"};
+	constexpr auto LineLightString{"LineLight"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.

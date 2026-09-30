@@ -30,6 +30,7 @@
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
+#include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -466,7 +467,7 @@ float specularLobeVisibility (vec3 origin, vec3 mirrorDir, float coneTan, float 
 	return visibility / float(SpecularOcclusionSamples);
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
 /* Compute direct lighting at the reflection hit point (Lambert diffuse over all scene lights).
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit point
  * received the light straight through walls — shadows simply did not exist INSIDE the
@@ -487,6 +488,35 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 
 		vec3 lightColor = colorIntensity.rgb * colorIntensity.a;
 		float type = dirType.w;
+
+		/* A line segment (Scenes::Component::LineLight, one entry per segment): its illuminance is the analytic integral
+		 * of the tube (Graphics/Effects/Shared/LineLightGLSL.hpp) — exact for the Lambert term; the GGX term is evaluated
+		 * toward the segment's closest point. No shadow ray: a line light casts no shadow yet. */
+		if (type > 2.5)
+		{
+			vec3 lineEnd = posRadius.xyz + dirType.xyz;
+			vec3 lineClosest = emLineClosest(posRadius.xyz, lineEnd, hitPos);
+			float lineIlluminance = emLineIrradiance(posRadius.xyz, lineEnd, hitPos, hitNormal, lightSSBO.lights[base + 3u].x) * emLineReach(length(hitPos - lineClosest), posRadius.w);
+
+			if (lineIlluminance <= 0.0)
+			{
+				continue;
+			}
+
+			vec3 lineL = normalize(lineClosest - hitPos);
+			vec3 lineH = normalize(lineL + V);
+			float lineNdotL = max(dot(hitNormal, lineL), 0.05);
+			float lineNdotV = max(dot(hitNormal, V), 0.0001);
+			float lineD = distributionGGX(max(dot(hitNormal, lineH), 0.0), roughnessHit);
+			float lineG = geometrySmith(lineNdotV, lineNdotL, roughnessHit);
+			vec3 lineF = fresnelSchlick(max(dot(V, lineH), 0.0), F0);
+			vec3 lineSpecular = (lineD * lineG * lineF) / max(4.0 * lineNdotV * lineNdotL, 0.0001);
+			vec3 lineDiffuse = albedo * (1.0 - metalnessHit) * (vec3(1.0) - lineF) / PI;
+
+			totalLight += lightColor * (lineDiffuse + lineSpecular) * lineIlluminance;
+
+			continue;
+		}
 
 		vec3 L;
 		float attenuation = 1.0;

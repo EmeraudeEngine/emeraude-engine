@@ -84,6 +84,7 @@ namespace EmEn::Saphir::Generator
 				case RenderPassType::SpotLightPassShadowMap :
 				case RenderPassType::SpotLightPassColorMap :
 				case RenderPassType::SpotLightPassFull :
+				case RenderPassType::LineLightPass :
 					setIndexes.enableSet(SetType::PerLight);
 					break;
 
@@ -267,6 +268,7 @@ namespace EmEn::Saphir::Generator
 			case RenderPassType::SpotLightPassShadowMap :
 			case RenderPassType::SpotLightPassColorMap :
 			case RenderPassType::SpotLightPassFull :
+			case RenderPassType::LineLightPass :
 				return true;
 
 			case RenderPassType::AmbientPass :

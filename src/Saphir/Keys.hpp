@@ -759,6 +759,7 @@ namespace EmEn::Saphir
 				constexpr auto DirectionalLightCSM{"DirectionalLightCSM"};
 				constexpr auto PointLight{"PointLight"};
 				constexpr auto SpotLight{"SpotLight"};
+				constexpr auto LineLight{"LineLight"};
 			}
 
 			namespace Component
@@ -891,6 +892,12 @@ namespace EmEn::Saphir
 				constexpr auto Radius{"radius"};
 				constexpr auto InnerCosAngle{"innerCosAngle"};
 				constexpr auto OuterCosAngle{"outerCosAngle"};
+				/** @brief Line light: the radius of its emitting tube, in metres (Scenes::Component::LineLight). */
+				constexpr auto TubeRadius{"tubeRadius"};
+				/** @brief Line light: the number of points of its polyline (a float, 2 to LineLight::MaxPoints). */
+				constexpr auto PointCount{"pointCount"};
+				/** @brief Line light: its polyline, world space (xyz; w unused). */
+				constexpr auto Points{"points"};
 				constexpr auto PCFRadius{"pcfRadius"};
 				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
 				constexpr auto ColorProjectionIndex{"colorProjectionIndex"};

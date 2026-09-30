@@ -46,6 +46,7 @@
 #include "Graphics/Material/BeamResource.hpp"
 #include "Graphics/RenderableInstance/PathPoints.hpp"
 #include "Graphics/RenderableInstance/Unique.hpp"
+#include "LineLight.hpp"
 #include "Math/BSpline.hpp"
 #include "Math/CurveShape.hpp"
 #include "Math/Vector.hpp"
@@ -386,6 +387,49 @@ namespace EmEn::Scenes::Component
 				return m_enabled;
 			}
 
+			/**
+			 * @brief Makes the beam LIGHT the scene through a line light (owner decisions 2026-09-30: a true linear light,
+			 * its intensity derived from the beam, the beam driving it).
+			 * @note The light lives on the same entity (its polyline is in the entity's space). On every change the beam
+			 * copies into it its curve WITHOUT the arc noise (resampled by the light to its 9 points), its colour, and the
+			 * luminance of an equivalent uniform tube: the beam's luminance × the luminance of its colour × the mean of its
+			 * cross-section profile (1 − s²)^k over the width (√π Γ(k + 1) / (2 Γ(k + 3/2)), k the core exponent) × scale;
+			 * the tube radius is the beam's half width. A hidden beam switches the light off.
+			 * @param light The line light (held weakly), or nullptr to stop driving one.
+			 * @param scale A factor on the derived luminance (1 = physical). Default 1.
+			 * @return void
+			 */
+			void setLight (const std::shared_ptr< LineLight > & light, float scale = 1.0F) noexcept;
+
+			/**
+			 * @brief Returns the line light the beam drives, or nullptr.
+			 * @return std::shared_ptr< LineLight >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< LineLight >
+			light () const noexcept
+			{
+				return m_light.lock();
+			}
+
+			/**
+			 * @brief Returns the factor on the luminance the beam derives for its light.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			lightScale () const noexcept
+			{
+				return m_lightScale;
+			}
+
+			/**
+			 * @brief Returns the luminance of the uniform tube equivalent to the beam (its light's, before the scale), in nits.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float equivalentTubeLuminance () const noexcept;
+
 			/** @brief The vec4 records per station in the path SSBO: (position, t), then (normal, 0). */
 			static constexpr size_t RecordsPerStation{2};
 
@@ -412,6 +456,12 @@ namespace EmEn::Scenes::Component
 			void rebuild () noexcept;
 
 			/**
+			 * @brief Copies the curve, the colour and the derived luminance into the driven light, when they changed.
+			 * @return void
+			 */
+			void updateLight () noexcept;
+
+			/**
 			 * @brief Refreshes the render bounds from the stations, the width and the arc amplitude, and notifies the entity
 			 * when they changed.
 			 * @return void
@@ -423,6 +473,9 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 			std::shared_ptr< Graphics::RenderableInstance::PathPoints > m_pathPoints;
 			std::weak_ptr< const AbstractEntity > m_endTarget;
+			std::weak_ptr< LineLight > m_light;
+			/** @brief The tessellated curve (no subdivision, no arc): the driven light's polyline. */
+			std::vector< Base::Math::Vector< 3, float > > m_lightPolyline;
 			Base::Math::CurveShape< float > m_curve;
 			/** @brief RecordsPerStation vec4 per station, in the entity's space. */
 			std::vector< Base::Math::Vector< 4, float > > m_stations;
@@ -437,6 +490,12 @@ namespace EmEn::Scenes::Component
 			uint64_t m_version{1};
 			float m_tolerance{DefaultTolerance};
 			float m_length{0.0F};
+			float m_lightScale{1.0F};
+			/** @brief What the driven light last received: the curve version, the luminance, the colour, the radius. */
+			uint64_t m_lightCurveVersion{0};
+			float m_lightLuminance{-1.0F};
+			float m_lightTubeRadius{-1.0F};
+			Base::PixelFactory::Color< float > m_lightColor{0.0F, 0.0F, 0.0F, 0.0F};
 			uint32_t m_segmentCount;
 			bool m_enabled{true};
 	};

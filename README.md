@@ -453,6 +453,9 @@ cross-platform strict) and keep warnings clean: they are errors by default.
 engine in open-source **and** commercial projects, link against it without opening your own
 code, and modify the engine itself (modifications stay LGPLv3).
 
+A few third-party notices must travel with a binary distribution (the LTC tables, BSD style):
+[`docs/third-party-notices.md`](docs/third-party-notices.md).
+
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/EmeraudeEngine/emeraude-engine/issues)

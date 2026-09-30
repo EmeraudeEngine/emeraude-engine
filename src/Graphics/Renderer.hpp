@@ -110,6 +110,7 @@ namespace EmEn
 		class DummyColorProjectionTexture;
 		class DummyShadowTexture;
 		class IBLTexture;
+		class LTCTexture;
 		class GrabPass;
 		class SceneRenderTarget;
 		class SkinnedGeometryProcessor;
@@ -1225,7 +1226,7 @@ namespace EmEn::Graphics
 			 * @param scene The active scene (its camera, light set and sky feed the update).
 			 * @return void
 			 */
-			void recordIrradianceProbeUpdate (const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer, Scenes::Scene * scene) noexcept;
+			void recordIrradianceProbeUpdate (const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer, Scenes::Scene * scene) const noexcept;
 
 			/**
 			 * @brief Returns the descriptor pool.
@@ -1330,6 +1331,17 @@ namespace EmEn::Graphics
 			getDummyShadowTextureCube () const noexcept
 			{
 				return m_dummyShadowTextureCube;
+			}
+
+			/**
+			 * @brief Returns the LTC tables of the GGX BRDF (Graphics::LTCTexture), bound by every line light.
+			 * @return const std::shared_ptr< LTCTexture > & Null when their creation failed.
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< LTCTexture > &
+			LTCTables () const noexcept
+			{
+				return m_LTCTables;
 			}
 
 			/**
@@ -1837,6 +1849,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< TextureResource::TextureCubemap > m_defaultTextureCubemap;
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTexture2D;
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTextureCube;
+			std::shared_ptr< LTCTexture > m_LTCTables;
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTexture2D;
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTextureCube;
 			std::shared_ptr< IBLTexture > m_brdfLUT;

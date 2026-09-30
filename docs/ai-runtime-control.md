@@ -628,6 +628,7 @@ camera's `address` and component `name`, ready to pass. A static entity's addres
 |---|---|
 | `PointLight` | `getState` (JSON: enabled, colour, candela, radius, shadow, colour projection), `setEnabled(bool)`, `setColor(r, g, b)` (0-1, a chromaticity), `setLuminousPower(lumens)`, `setRadius(metres, 0 = unbounded)`, `setPCFRadius(r)`, `setShadowBias(b)`, `setProjectionBoost(k)` |
 | `SpotLight` | the same + `setConeAngles(innerDeg, outerDeg)` (0 ≤ inner ≤ outer ≤ 90; change the cone BEFORE the power: lumens are converted with the current outer angle) |
+| `LineLight` | `getState` (JSON: enabled, colour, nits, lm/m, tube radius, reach, points), `setEnabled`, `setColor`, `setPoints("x y z; x y z; ...")` (entity space, 2-9 points, more resampled), `setLuminance(nits)`, `setLuminousFluxPerMetre(lm/m)`, `setTubeRadius(m)`, `setRadius(m, 0 = unbounded)`; the shadow commands are refused (no shadow map). ⚠️ A light driven by a beam (`Beam::setLight`) is overwritten by the beam: drive the `Beam`. Graphics doc 36 |
 | `DirectionalLight` | `getState` (+ CSM cascade count/lambda or coverage), `setEnabled`, `setColor`, `setIlluminance(lux)`, `setPCFRadius`, `setShadowBias`, `setProjectionBoost` |
 | `Camera` | `getActive()` (no argument), `getState`, `setLens(focalMm, sensorWidthMm?)`, `setViewDistance(m)`, `setExposure(f, shutterS, iso)` (PINS the triad, auto-exposure off), `setAutoExposure(bool)`, `setExposureCompensation(ev)`, `setSensitivityRange(minIso, maxIso)`, `setFocus(m?)` (omitted = auto focus), `setBloom(thresholdNits, fraction)` |
 | `SunCourse` | `getState` (phase, elevation, lux, kelvins, course), `start`, `stop`, `setPhase(0-1)` (0 sunrise, 0.25 noon), `setCourse(dayDuration?, noonElevation?, zenithIlluminance?, extinction?, zenithTemperature?, horizonTemperature?)` — the phase is kept |
@@ -1092,6 +1093,13 @@ python3 tools/remote-console.py "Core.SceneManagerService.setNodePosition(MyNode
 python3 tools/remote-console.py "Core.SceneManagerService.setNodeLookAt(MyNode, 0.0, 0.0, 0.0)"
 python3 tools/remote-console.py "Core.SceneManagerService.destroyNode(MyNode)"
 ```
+
+⚠️ **A PHYSICAL node teleported in the air FALLS** (the demos' player actor, movable and grounded): after
+`setNodePosition(ACTOR_…01, 0, 6, 4)` it keeps `grounded` for 70-250 ms (a few logic ticks), then free-falls
+(≈ 1.1 s from 6 m) and lands at ground + its head offset. A pose protocol "teleport, look at, wait, screenshot" therefore
+captures from wherever the fall is — and each `remote-console.py` call costs its own start-up (≈ 2.1 s measured on the
+Windows peer, 2026-09-30), so a slow client always captures from the ground. For a height-dependent measurement (grazing
+angles), time the capture from one persistent console connection, or pose a non-physical camera.
 
 ---
 

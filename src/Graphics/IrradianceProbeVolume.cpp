@@ -30,6 +30,7 @@
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
+#include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
@@ -155,7 +156,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
 /* Direct IRRADIANCE at a hit (no albedo): the RTGI bounce shading, light for light. Only the
  * lights that cast shadows in the raster get a shadow ray — the others shine through geometry on
  * screen and the cached light must match the image. */
@@ -173,6 +174,19 @@ vec3 computeDirectIrradiance (vec3 hitPos, vec3 hitNormal)
 
 		vec3 lightColor = colorIntensity.rgb * colorIntensity.a;
 		float type = dirType.w;
+
+		/* A line segment (Scenes::Component::LineLight, one entry per segment): the analytic integral of the tube
+		 * (Graphics/Effects/Shared/LineLightGLSL.hpp) — an illuminance, like the punctual terms below. No shadow ray: a
+		 * line light casts no shadow yet. */
+		if (type > 2.5)
+		{
+			vec3 lineEnd = posRadius.xyz + dirType.xyz;
+			float lineReach = emLineReach(length(hitPos - emLineClosest(posRadius.xyz, lineEnd, hitPos)), posRadius.w);
+
+			totalLight += lightColor * emLineIrradiance(posRadius.xyz, lineEnd, hitPos, hitNormal, lightSSBO.lights[base + 3u].x) * lineReach;
+
+			continue;
+		}
 
 		vec3 L;
 		float attenuation = 1.0;

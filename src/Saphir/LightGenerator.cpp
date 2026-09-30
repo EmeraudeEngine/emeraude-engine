@@ -417,6 +417,21 @@ namespace EmEn::Saphir
 				return block;
 			}
 
+			case LightType::Line :
+			{
+				/* std140: the colour, four floats (luminance, reach, tube radius, point count), then the polyline — the
+				 * layout of Scenes::Component::LineLight::m_buffer. No shadow, no colour projection. */
+				Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::LineLight, UniformBlock::Light};
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Color);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Intensity);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Radius);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::TubeRadius);
+				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PointCount);
+				block.addArrayMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Points, LineLightMaxPoints);
+
+				return block;
+			}
+
 			default:
 				/* TODO: Fix this! */
 				return {0, 0, Declaration::MemoryLayout::Std140, nullptr, nullptr};
@@ -566,6 +581,10 @@ namespace EmEn::Saphir
 				lightType = LightType::Spot;
 				break;
 
+			case RenderPassType::LineLightPass :
+				lightType = LightType::Line;
+				break;
+
 			case RenderPassType::None :
 			case RenderPassType::SimplePass :
 			default:
@@ -698,6 +717,10 @@ namespace EmEn::Saphir
 				[[fallthrough]];
 			case RenderPassType::SpotLightPass :
 				lightType = LightType::Spot;
+				break;
+
+			case RenderPassType::LineLightPass :
+				lightType = LightType::Line;
 				break;
 
 			default :

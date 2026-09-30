@@ -41,6 +41,7 @@
 #include "Component/SoundEmitter.hpp"
 #include "Component/SphericalPushModifier.hpp"
 #include "Component/SpotLight.hpp"
+#include "Component/LineLight.hpp"
 #include "Component/Visual.hpp"
 #include "Component/Weight.hpp"
 #include "Physics/AABBCollisionModel.hpp"
@@ -396,6 +397,10 @@ namespace EmEn::Scenes
 		{
 			this->notify(SpotLightCreated, std::static_pointer_cast< Component::SpotLight >(component));
 		}
+		else if ( typeid(*pointer) == typeid(Component::LineLight) )
+		{
+			this->notify(LineLightCreated, std::static_pointer_cast< Component::LineLight >(component));
+		}
 		else if ( typeid(*pointer) == typeid(Component::SoundEmitter) )
 		{
 			this->notify(SoundEmitterCreated, std::static_pointer_cast< Component::SoundEmitter >(component));
@@ -455,6 +460,10 @@ namespace EmEn::Scenes
 		else if ( typeid(*pointer) == typeid(Component::SpotLight) )
 		{
 			this->notify(SpotLightDestroyed, std::static_pointer_cast< Component::SpotLight >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::LineLight) )
+		{
+			this->notify(LineLightDestroyed, std::static_pointer_cast< Component::LineLight >(component));
 		}
 		else if ( typeid(*pointer) == typeid(Component::CloudVolume) )
 		{

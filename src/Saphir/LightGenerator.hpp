@@ -95,6 +95,9 @@ namespace EmEn::Saphir
 		return PCFMethod::VogelDisk;
 	}
 
+	/** @brief The most points a line light's polyline carries (8 segments): its UBO block is sized for them. */
+	constexpr uint32_t LineLightMaxPoints{9};
+
 	/**
 	 * @brief The light model generator is responsible for generating GLSL lighting code independently of a light processor.
 	 * @note Usage contract: the render pass type (ambient, or one directional/point/spot variant,
@@ -1037,6 +1040,16 @@ namespace EmEn::Saphir
 			void generatePBRBRDFFunctions (FragmentShader & fragmentShader) const noexcept;
 
 			/**
+			 * @brief Declares the line light's integrals: ltcLineDiffuse(p1, p2), the closed-form integral of a clamped
+			 * cosine over a segment in the shading frame, and ltcLineIntegral(M⁻¹, cof, p1, p2), the same through an LTC
+			 * (Heitz & Hill, "Real-Time Line- and Disk-Light Shading with Linearly Transformed Cosines", SIGGRAPH 2017).
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool generateLineLightFunctions (FragmentShader & fragmentShader) noexcept;
+
+			/**
 			 * @brief Generates the single-sample (no PCF) shadow test for a 2D shadow map (directional or spot light).
 			 * @note Skips the test (shadowFactor = 1.0, fully lit) when the projected fragment position
 			 * falls outside the shadow map's clip-space depth range [0, w]. When m_discardUnlitFragment
@@ -1213,6 +1226,10 @@ namespace EmEn::Saphir
 			static constexpr auto RayDirectionTextureSpace{"rayDirectionTextureSpace"};
 			/** @brief Interstage member name for the un-normalized view-space vector from the fragment to the light (its length is the light distance). */
 			static constexpr auto Distance{"distance"};
+			/** @brief Interstage member name (flat) for the view matrix a line light's polyline is brought to view space with. */
+			static constexpr auto LineViewMatrix{"lineViewMatrix"};
+			/** @brief The line light's sampler: the LTC tables as a 2D array (Graphics::LTCTexture), binding 1 of its set. */
+			static constexpr auto LTCTablesSampler{"ltcTables"};
 
 			Graphics::RenderPassType m_renderPassType;
 			uint32_t m_PCFSample{0};

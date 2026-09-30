@@ -83,10 +83,11 @@ exact on screen is the debug mode's. What remains:
 
 - ~~Console / MCP adapter~~ DONE 2026-09-29 (`BeamConsoleAdapter.cpp`, 10 `SceneManager_Beam_*` tools, MCP
   conformance 1511/0): graphics doc 33 § Using it, `docs/ai-runtime-control.md`.
-- A beam that lights the scene: "not now" (owner, 2026-09-29).
+- ~~A beam that lights the scene~~ DONE 2026-09-30: a LINE LIGHT (`Scenes::Component::LineLight`, LTC diffuse + GGX
+  specular, RTGI / RTR / probes), driven by the beam (`Beam::setLight`) — graphics doc 36. Left: its shadows; the light
+  follows the curve, not the arc's GPU wander.
 - A texture scrolled along the beam, a life / fade-out, HL's "strike again time" (random interval between
   arcs), JSON declaration of a beam in a scene definition.
-- A beam that lights the scene — separate owner decision (point light at the impact, or a line light).
 - The reactive history tag lasts one frame: a beam over a depth edge that STAYS still keeps rejecting its own
   history there (by design — it is reactive), and a sparse speckle remained around the arc in the `beams`
   captures (bilinear gather mixing tagged and untagged texels). Measure it on a scene with detail behind a beam.
@@ -113,6 +114,9 @@ exact on screen is the debug mode's. What remains:
   handled); a final effect AFTER the tone mapping draws the N-pixel edge and compares that depth with the scene's —
   full where visible, dimmed where hidden. Rejected: a stencil bit in the scene pass (no hidden parts), a
   render-to-texture of the subject (a second fully shaded render + a camera rig).
+- 2026-09-30 (evening): a beam LIGHTS the scene through a true line light — full LTC (Heitz et al.), the intensity
+  derived from the beam, no shadow in the first pass, a polyline seen by the RT effects too, the beam DRIVES a
+  `LineLight` (rejected: a point light at the impact, a representative-point tube light).
 - 2026-09-30: curved beams = the Path's curve kinds (not a single Bézier, not a chain of straight arcs); the Beam
   moves to vertex pulling (a straight beam is a 2-point curve, one ribbon code); the arc is pinned at the two ENDS of
   the whole curve only (not at each control point). No depth bias for paths lying on a surface, for now.

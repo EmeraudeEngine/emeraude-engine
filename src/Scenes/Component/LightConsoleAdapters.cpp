@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <span>
 
 /* Third-party inclusions. */
 #include "json/json.h"
@@ -35,6 +36,7 @@
 /* Local inclusions. */
 #include "DirectionalLight.hpp"
 #include "FastJSON.hpp"
+#include "LineLight.hpp"
 #include "PointLight.hpp"
 #include "SpotLight.hpp"
 
@@ -156,6 +158,38 @@ namespace EmEn::Scenes::Component
 			{
 				state["shadow"]["coverageSize"] = static_cast< double >(light.coverageSize());
 			}
+
+			return FastJSON::stringify(state);
+		}
+
+		/**
+		 * @brief Returns the state of a line light as JSON.
+		 * @param light The light.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		stateOf (const LineLight & light) noexcept
+		{
+			auto state = commonState(light, LineLight::ClassId);
+			state["luminanceNits"] = static_cast< double >(light.intensity());
+			state["luminousFluxPerMetreLumens"] = static_cast< double >(light.luminousFluxPerMetre());
+			state["tubeRadius"] = static_cast< double >(light.tubeRadius());
+			state["radius"] = static_cast< double >(light.radius());
+
+			Json::Value points{Json::arrayValue};
+
+			for ( const auto & point : light.polyline() )
+			{
+				Json::Value coordinates{Json::arrayValue};
+				coordinates.append(static_cast< double >(point[Math::X]));
+				coordinates.append(static_cast< double >(point[Math::Y]));
+				coordinates.append(static_cast< double >(point[Math::Z]));
+
+				points.append(coordinates);
+			}
+
+			state["points"] = points;
 
 			return FastJSON::stringify(state);
 		}
@@ -460,6 +494,119 @@ namespace EmEn::Scenes::Component
 				}
 		};
 
+		/** @brief `Core.SceneManagerService.LineLight.*`. */
+		class LineLightConsoleAdapter final : public ConsoleAdapter< LineLight >
+		{
+			public:
+
+				explicit
+				LineLightConsoleAdapter (const Manager & sceneManager) noexcept
+					: ConsoleAdapter{sceneManager}
+				{
+
+				}
+
+				using ConsoleAdapter::act;
+				using ControllableTrait::bindCommand;
+
+			private:
+
+				void
+				onRegisterToConsole () noexcept override
+				{
+					this->bindCommand("getState", "Returns the state of a line light (a tube of light along a polyline) as JSON: enabled, colour, luminance (nits), flux per metre (lumens), tube radius and reach (metres), points (entity space).",
+						{EntityParameter, ComponentParameter},
+						[this] (const std::string & entity, const std::string & component) {
+							return this->act(entity, component, [] (LineLight & light) {
+								return Console::CommandResult::json(stateOf(light));
+							});
+						}, Console::CommandHint::ReadOnly);
+
+					bindCommonLightCommands< LineLight >(*this);
+
+					this->bindCommand("setPoints", "Sets the polyline a line light emits along, in its entity's space: \"x y z; x y z; ...\" (2 points at least; more than 9 are resampled by arc length).",
+						{
+							EntityParameter,
+							ComponentParameter,
+							{"points", "The points, \"x y z; x y z; ...\" (metres, UP is +Y)."}
+						},
+						[this] (const std::string & entity, const std::string & component, const std::string & text) {
+							const auto points = parsePointList(text);
+
+							if ( !points.has_value() || points->size() < 2 )
+							{
+								return Console::CommandResult::error("Malformed points: \"x y z; x y z; ...\", finite numbers, 2 points at least.");
+							}
+
+							return this->act(entity, component, [&points] (LineLight & light) {
+								light.setPolyline(std::span< const Math::Vector< 3, float > >{points.value()});
+
+								return changed(light, "Line light '" + light.name() + "' polyline set.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setLuminance", "Sets the luminance of a line light's tube, in nits (cd/m²) — a fluorescent tube ≈ 10 000, an electric arc ≈ 10⁵ to 10⁷.",
+						{EntityParameter, ComponentParameter, {"nits", "The luminance, 0 or more."}},
+						[this] (const std::string & entity, const std::string & component, float nits) {
+							if ( !std::isfinite(nits) || nits < 0.0F )
+							{
+								return Console::CommandResult::error("The luminance must be a finite number of nits, 0 or more.");
+							}
+
+							return this->act(entity, component, [nits] (LineLight & light) {
+								light.setLuminance(nits);
+
+								return changed(light, "Line light '" + light.name() + "' luminance set to " + std::to_string(nits) + " nits.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setLuminousFluxPerMetre", "Sets a line light from the luminous flux a metre of its tube emits, in lumens (a 1.2 m, 36 W fluorescent tube ≈ 2 800 lm/m).",
+						{EntityParameter, ComponentParameter, {"lumens", "The flux per metre, 0 or more."}},
+						[this] (const std::string & entity, const std::string & component, float lumens) {
+							if ( !std::isfinite(lumens) || lumens < 0.0F )
+							{
+								return Console::CommandResult::error("The flux must be a finite number of lumens, 0 or more.");
+							}
+
+							return this->act(entity, component, [lumens] (LineLight & light) {
+								light.setLuminousFluxPerMetre(lumens);
+
+								return changed(light, "Line light '" + light.name() + "' set to " + std::to_string(lumens) + " lm/m.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setTubeRadius", "Sets the radius of a line light's emitting tube, in metres (the luminance stays: the flux per metre follows).",
+						{EntityParameter, ComponentParameter, {"radius", "The radius, above 0."}},
+						[this] (const std::string & entity, const std::string & component, float radius) {
+							if ( !std::isfinite(radius) || radius <= 0.0F )
+							{
+								return Console::CommandResult::error("The tube radius must be a finite number of metres, above 0.");
+							}
+
+							return this->act(entity, component, [radius] (LineLight & light) {
+								light.setTubeRadius(radius);
+
+								return changed(light, "Line light '" + light.name() + "' tube radius set to " + std::to_string(radius) + " m.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setRadius", "Sets the reach of a line light: its contribution falls smoothly to zero at that distance from the polyline, and the light is culled beyond.",
+						{EntityParameter, ComponentParameter, {"radius", "The reach, in metres; 0 = unbounded."}},
+						[this] (const std::string & entity, const std::string & component, float radius) {
+							if ( !std::isfinite(radius) || radius < 0.0F )
+							{
+								return Console::CommandResult::error("The reach must be a finite number of metres, 0 or more.");
+							}
+
+							return this->act(entity, component, [radius] (LineLight & light) {
+								light.setRadius(radius);
+
+								return changed(light, "Line light '" + light.name() + "' reach set to " + std::to_string(radius) + " m.");
+							});
+						}, Console::CommandHint::Idempotent);
+				}
+		};
+
 		/** @brief `Core.SceneManagerService.DirectionalLight.*`. */
 		class DirectionalLightConsoleAdapter final : public ConsoleAdapter< DirectionalLight >
 		{
@@ -518,5 +665,6 @@ namespace EmEn::Scenes::Component
 		adapters.emplace_back(std::make_unique< PointLightConsoleAdapter >(sceneManager));
 		adapters.emplace_back(std::make_unique< SpotLightConsoleAdapter >(sceneManager));
 		adapters.emplace_back(std::make_unique< DirectionalLightConsoleAdapter >(sceneManager));
+		adapters.emplace_back(std::make_unique< LineLightConsoleAdapter >(sceneManager));
 	}
 }

@@ -384,6 +384,9 @@ class AbstractEntity {
    - Position, direction, color, intensity, cone angle, falloff
    - Directional attenuation
 
+   **LineLight** - A tube of light along a polyline (neon, fluorescent tube, electric arc; LTC, no shadow yet)
+   - Points (2-9), colour, luminance (nits), tube radius, reach — graphics doc 36
+
 **Audio Components:**
 6. **SoundEmitter** - 3D positional audio source
    - Audio buffer, volume, pitch, loop

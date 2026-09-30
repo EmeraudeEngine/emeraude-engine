@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "Graphics/DummyShadowTexture.hpp"
+#include "Graphics/LTCTexture.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scene.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -85,6 +86,39 @@ namespace EmEn::Scenes
 		else
 		{
 			Tracer::warning(ClassId, "No dummy shadow texture available, binding 1 will be uninitialized !");
+		}
+
+		return descriptorSet;
+	}
+
+	std::unique_ptr< DescriptorSet >
+	LightSet::createLineLightDescriptorSet (Renderer & renderer, const UniformBufferObject & uniformBufferObject) noexcept
+	{
+		auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), getDescriptorSetLayout(renderer.layoutManager()));
+
+		if ( !descriptorSet->create() )
+		{
+			Tracer::error(ClassId, "Unable to create the line light descriptor set !");
+
+			return nullptr;
+		}
+
+		/* Binding 0: Light UBO with dynamic offset. */
+		if ( !descriptorSet->writeUniformBufferObjectDynamic(0, uniformBufferObject) )
+		{
+			Tracer::error(ClassId, "Unable to write the uniform buffer object to the line light descriptor set !");
+
+			return nullptr;
+		}
+
+		/* Binding 1: the LTC tables, where a shadowed light has its map (the unified layout binds one sampler there). */
+		const auto & tables = renderer.LTCTables();
+
+		if ( tables == nullptr || !descriptorSet->writeCombinedImageSampler(1, *tables) )
+		{
+			Tracer::error(ClassId, "Unable to bind the LTC tables to the line light descriptor set !");
+
+			return nullptr;
 		}
 
 		return descriptorSet;
@@ -240,6 +274,31 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* Generate line light shared uniform buffer: its descriptor sets bind the LTC tables at binding 1. */
+		{
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Line, false, false);
+
+			m_lineLightUBO = sharedUBOManager.createSharedUniformBuffer(scene.name() + "LineLights", createLineLightDescriptorSet, uniformBlock.bytes(), 0, frameCount);
+
+			if ( m_lineLightUBO == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to create the line light shared uniform buffer !");
+
+				return false;
+			}
+
+			/* NOTE: Register existing lights. */
+			for ( const auto & light : m_lineLights )
+			{
+				if ( !light->createOnHardware(scene) )
+				{
+					TraceError{ClassId} << "Unable to create the line light '" << light->name() << "' !";
+
+					return false;
+				}
+			}
+		}
+
 		/* Push the ambient properties and the environment luminance to every render target. */
 		scene.refreshAmbientLightProperties();
 
@@ -317,6 +376,19 @@ namespace EmEn::Scenes
 			const auto pointer = m_spotLightUBO;
 
 			m_spotLightUBO.reset();
+
+			if ( !sharedUBOManager.destroySharedUniformBuffer(pointer) )
+			{
+				error++;
+			}
+		}
+
+		/* Release the line light SharedUniformBuffer. */
+		if ( m_lineLightUBO != nullptr )
+		{
+			const auto pointer = m_lineLightUBO;
+
+			m_lineLightUBO.reset();
 
 			if ( !sharedUBOManager.destroySharedUniformBuffer(pointer) )
 			{
@@ -454,6 +526,44 @@ namespace EmEn::Scenes
 	}
 
 	void
+	LightSet::add (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept
+	{
+		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
+		if ( m_initialized && !light->createOnHardware(scene) )
+		{
+			TraceError{ClassId} << "Unable to create the line light '" << light->name() << "' !";
+
+			return;
+		}
+
+		/* ⚠️ [LOCKING] Container mutation only — see add(DirectionalLight). */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+			m_lights.emplace(light);
+			m_lineLights.emplace(light);
+		}
+
+		this->notify(LineLightAdded, light);
+	}
+
+	void
+	LightSet::remove (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept
+	{
+		/* ⚠️ [LOCKING] Container mutation only — see remove(DirectionalLight). */
+		{
+			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+
+			m_lights.erase(light);
+			m_lineLights.erase(light);
+		}
+
+		this->notify(LineLightRemoved, light);
+
+		this->retireLight(light);
+	}
+
+	void
 	LightSet::retireLight (const std::shared_ptr< Component::AbstractLightEmitter > & light) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_lightsAccess};
@@ -502,6 +612,7 @@ namespace EmEn::Scenes
 		m_directionalLights.clear();
 		m_pointLights.clear();
 		m_spotLights.clear();
+		m_lineLights.clear();
 		/* Scene teardown: nothing renders any more, the retired lights follow the others. */
 		m_retiredLights.clear();
 		m_ambientLightColor = Black;
@@ -581,6 +692,14 @@ namespace EmEn::Scenes
 		}
 
 		for ( const auto & light : m_spotLights )
+		{
+			if ( !light->updateVideoMemory(readStateIndex, frameIndex) )
+			{
+				errors++;
+			}
+		}
+
+		for ( const auto & light : m_lineLights )
 		{
 			if ( !light->updateVideoMemory(readStateIndex, frameIndex) )
 			{
@@ -705,6 +824,45 @@ namespace EmEn::Scenes
 					entry.pad1 = 0.0F;
 
 					lightIndex++;
+				}
+
+				/* Line lights (type = 3): ONE entry per segment of the published polyline — pos = its start, dir = start →
+				 * end (not normalized), radius = the reach, innerCosAngle = the tube radius; the colour carries the
+				 * luminance (nits). No shadow flag: a line light casts no shadow yet. */
+				for ( const auto & light : m_lineLights )
+				{
+					if ( !light->isEnabled() )
+					{
+						continue;
+					}
+
+					const auto line = light->publishedLine(readStateIndex);
+
+					for ( uint32_t segment = 0; segment + 1 < line.pointCount && lightIndex < MaxRTLights; ++segment )
+					{
+						const auto & start = line.points[segment];
+						const auto direction = line.points[segment + 1] - start;
+
+						auto & entry = gpuData[lightIndex];
+						entry.colorR = line.color[Math::X];
+						entry.colorG = line.color[Math::Y];
+						entry.colorB = line.color[Math::Z];
+						entry.intensity = line.luminance;
+						entry.posX = start.x();
+						entry.posY = start.y();
+						entry.posZ = start.z();
+						entry.radius = line.reach;
+						entry.dirX = direction.x();
+						entry.dirY = direction.y();
+						entry.dirZ = direction.z();
+						entry.type = 3.0F;
+						entry.innerCosAngle = line.tubeRadius;
+						entry.outerCosAngle = 0.0F;
+						entry.pad0 = 0.0F;
+						entry.pad1 = 0.0F;
+
+						lightIndex++;
+					}
 				}
 
 				m_RTLightSSBO->unmapMemory();

@@ -2197,6 +2197,7 @@ namespace EmEn::Scenes
 		std::vector< std::shared_ptr< Component::DirectionalLight > > directionalLights;
 		std::vector< std::shared_ptr< Component::PointLight > > pointLights;
 		std::vector< std::shared_ptr< Component::SpotLight > > spotLights;
+		std::vector< std::shared_ptr< Component::LineLight > > lineLights;
 
 		{
 			const std::scoped_lock lock{m_lightSet.mutex()};
@@ -2204,6 +2205,7 @@ namespace EmEn::Scenes
 			directionalLights.assign(m_lightSet.directionalLights().begin(), m_lightSet.directionalLights().end());
 			pointLights.assign(m_lightSet.pointLights().begin(), m_lightSet.pointLights().end());
 			spotLights.assign(m_lightSet.spotLights().begin(), m_lightSet.spotLights().end());
+			lineLights.assign(m_lightSet.lineLights().begin(), m_lightSet.lineLights().end());
 		}
 
 		/* For all objects. */
@@ -2357,6 +2359,26 @@ namespace EmEn::Scenes
 				}
 
 				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+			}
+
+			/* Loop through all line lights: one pass, no shadow nor colour projection (first pass, owner 2026-09-30). */
+			for ( const auto & light : lineLights )
+			{
+				/* No descriptor set: the LTC tables could not be created (Renderer::LTCTables()) — nothing to bind. */
+				if ( !light->isEnabled() || light->descriptorSet(false) == nullptr )
+				{
+					continue;
+				}
+
+				const auto & instance = renderBatch.renderableInstance();
+
+				/* The reach, tested against the instance's bounding sphere (distance to the polyline). */
+				if ( instance->isLightDistanceCheckEnabled() && batchCoordinates != nullptr && !light->touch(instanceWorldSphere, readStateIndex) )
+				{
+					continue;
+				}
+
+				instance->render(readStateIndex, renderTarget, light.get(), RenderPassType::LineLightPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 		}
 
@@ -2512,6 +2534,7 @@ namespace EmEn::Scenes
 			renderPassTypes.emplace_back(RenderPassType::DirectionalLightPass);
 			renderPassTypes.emplace_back(RenderPassType::PointLightPass);
 			renderPassTypes.emplace_back(RenderPassType::SpotLightPass);
+			renderPassTypes.emplace_back(RenderPassType::LineLightPass);
 
 			/* Color projection pass types. */
 			renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassColorMap);

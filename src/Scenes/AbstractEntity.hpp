@@ -251,6 +251,8 @@ namespace EmEn::Scenes
 				PointLightDestroyed,		  ///< Component::PointLight removed.
 				SpotLightCreated,			 ///< Component::SpotLight added.
 				SpotLightDestroyed,		   ///< Component::SpotLight removed.
+				LineLightCreated,			 ///< Component::LineLight added.
+				LineLightDestroyed,		   ///< Component::LineLight removed.
 				SoundEmitterCreated,		  ///< Component::SoundEmitter added.
 				SoundEmitterDestroyed,		///< Component::SoundEmitter removed.
 				VisualCreated,				///< Component::Visual added.

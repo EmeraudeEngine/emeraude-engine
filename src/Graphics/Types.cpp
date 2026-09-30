@@ -114,6 +114,9 @@ namespace EmEn::Graphics
 			case RenderPassType::SpotLightPassFull :
 				return SpotLightPassFullString;
 
+			case RenderPassType::LineLightPass :
+				return LineLightPassString;
+
 			case RenderPassType::None :
 				return NoneString;
 		}
@@ -202,6 +205,11 @@ namespace EmEn::Graphics
 		if ( value == SpotLightPassFullString )
 		{
 			return RenderPassType::SpotLightPassFull;
+		}
+
+		if ( value == LineLightPassString )
+		{
+			return RenderPassType::LineLightPass;
 		}
 
 		if ( value == NoneString )
@@ -1363,6 +1371,9 @@ namespace EmEn::Graphics
 
 			case LightType::Spot :
 				return SpotLightString;
+
+			case LightType::Line :
+				return LineLightString;
 
 			default:
 				return nullptr;

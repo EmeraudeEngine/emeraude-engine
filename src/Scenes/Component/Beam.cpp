@@ -29,6 +29,8 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <atomic>
+#include <cmath>
+#include <numbers>
 
 /* Local inclusions. */
 #include "Graphics/Geometry/PulledVertexResource.hpp"
@@ -220,6 +222,90 @@ namespace EmEn::Scenes::Component
 
 		/* The width and the arc amplitude are the material's: its setters cannot tell the beam. */
 		this->updateBounds();
+
+		/* So is the look the driven light derives from. */
+		this->updateLight();
+	}
+
+	void
+	Beam::setLight (const std::shared_ptr< LineLight > & light, float scale) noexcept
+	{
+		m_light = light;
+		m_lightScale = std::isfinite(scale) ? std::max(0.0F, scale) : 1.0F;
+
+		/* Everything is sent again to the new light. */
+		m_lightCurveVersion = 0;
+		m_lightLuminance = -1.0F;
+		m_lightTubeRadius = -1.0F;
+
+		this->updateLight();
+	}
+
+	float
+	Beam::equivalentTubeLuminance () const noexcept
+	{
+		if ( m_material == nullptr )
+		{
+			return 0.0F;
+		}
+
+		/* The mean of the cross-section profile (1 − s²)^k over s ∈ [0, 1]: √π Γ(k + 1) / (2 Γ(k + 3/2)). */
+		const auto k = static_cast< double >(m_material->coreExponent());
+		const auto profileMean = std::sqrt(std::numbers::pi) * std::exp(std::lgamma(k + 1.0) - std::lgamma(k + 1.5)) / 2.0;
+
+		/* The luminance of the colour: the beam's radiance is colour × luminance (Material::BeamResource). */
+		const auto & color = m_material->color();
+		const auto colorLuminance = 0.2126F * color.red() + 0.7152F * color.green() + 0.0722F * color.blue();
+
+		return m_material->luminance() * colorLuminance * static_cast< float >(profileMean);
+	}
+
+	void
+	Beam::updateLight () noexcept
+	{
+		const auto light = m_light.lock();
+
+		if ( light == nullptr || m_material == nullptr )
+		{
+			return;
+		}
+
+		if ( light->isEnabled() != m_enabled )
+		{
+			light->enable(m_enabled);
+		}
+
+		if ( m_lightCurveVersion != m_version )
+		{
+			light->setPolyline(std::span< const Base::Math::Vector< 3, float > >{m_lightPolyline});
+
+			m_lightCurveVersion = m_version;
+		}
+
+		const auto luminance = this->equivalentTubeLuminance() * m_lightScale;
+
+		if ( luminance != m_lightLuminance )
+		{
+			light->setLuminance(luminance);
+
+			m_lightLuminance = luminance;
+		}
+
+		const auto tubeRadius = std::max(m_material->halfWidth(), 1.0e-4F);
+
+		if ( tubeRadius != m_lightTubeRadius )
+		{
+			light->setTubeRadius(tubeRadius);
+
+			m_lightTubeRadius = tubeRadius;
+		}
+
+		if ( m_material->color() != m_lightColor )
+		{
+			light->setColor(m_material->color());
+
+			m_lightColor = m_material->color();
+		}
 	}
 
 	void
@@ -253,6 +339,8 @@ namespace EmEn::Scenes::Component
 
 		m_stations.clear();
 		m_length = 0.0F;
+
+		m_lightPolyline = polyline;
 
 		if ( polyline.size() >= 2 )
 		{

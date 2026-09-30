@@ -28,7 +28,8 @@ two ends only): `beam.setPolyline(points)` (a laser through relays), `setBezierP
 `Base::Math::CurveShape`, shared with `Scenes::Component::Path`. `setStart()` / `setEnd()` move the curve's first / last
 point, `setEndTarget()` makes its last point follow an entity. `stationCount()`, `length()`, `curve()` read it back.
 
-A beam does NOT light the scene (owner decision): pair it with a light component when it must.
+A beam lights the scene through a LINE LIGHT it drives (owner decision 2026-09-30): `beam.setLight(lineLight, scale)`
+— the beam pushes its curve, half width, enabled state and equivalent tube luminance to the light. Graphics doc 36.
 
 **Live, from the console or an MCP client** (`src/Scenes/Component/BeamConsoleAdapter.cpp`): every setter above is a
 command of `Core.SceneManagerService.Beam` (MCP `SceneManager_Beam_*`), addressed by `entity, component` and answering
