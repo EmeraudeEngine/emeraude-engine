@@ -944,15 +944,15 @@ namespace EmEn::Resources
 			/**
 			 * @brief Checks if adding a dependency would create a circular dependency.
 			 *
-			 * This method performs a depth-first search through the dependency's existing
-			 * dependencies to detect if 'this' resource appears anywhere in the chain.
-			 * If found, adding the dependency would create a cycle that would cause a deadlock
-			 * during loading.
+			 * This method walks the dependency's existing dependencies to detect if 'this' resource appears anywhere in
+			 * the chain. If found, adding the dependency would create a cycle that would cause a deadlock during loading.
 			 *
 			 * @param dependency The dependency to check for cycles.
 			 * @return true if adding this dependency would create a cycle, false otherwise.
-			 * @note This method must be called while holding m_dependenciesAccess mutex.
-			 * @note The check is recursive and may be expensive for deep dependency trees.
+			 * @note Called by addDependency() under the dependency-GRAPH lock only (owner decision 2026-09-30): every edge
+			 * insertion is serialised, so the graph can only lose edges meanwhile — which never creates a cycle. Each
+			 * node's list is copied under THAT node's lock alone, never two node locks at once. Iterative, with a visited
+			 * set: O(V + E) and no recursion (the chain depth comes from data).
 			 * @see addDependency()
 			 */
 			[[nodiscard]]

@@ -26,6 +26,7 @@ those whose file is inside the module (the header filter also reports every incl
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
 | `src/Console` (+ `MCP/`), 12 TUs | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 24, all ON PURPOSE (below) — 21 misc-no-recursion, 1 avoid-c-arrays, 1 cppcoreguidelines-use-enum-class, 1 pro-type-reinterpret-cast. Before: 64 (clang-tidy 19, designated-initializers blind) / 66 (21). | Triad section 1, `docs/todo/triad-engine-pass.md` |
+| `src/Resources`, 6 TUs (+ `Container.hpp` templates) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 5, all ON PURPOSE (below) — 2 cppcoreguidelines-use-enum-class, 2 misc-no-recursion, 1 cppcoreguidelines-avoid-do-while. Before: 20. | Triad section 2 |
 
 ## Findings kept ON PURPOSE
 
@@ -46,3 +47,14 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   unscoped `NotificationCode` enums compared as `int` in `onNotification()`); changing one alone breaks the contract.
 - **pro-type-reinterpret-cast ×1** — `RemoteListener.cpp` `setsockopt(..., SO_SNDTIMEO, reinterpret_cast< const char
   * >(&timeout), ...)`: the Windows signature of the system call.
+
+### `src/Resources` (2026-09-30)
+
+- **cppcoreguidelines-use-enum-class ×2** — `ResourceTrait::NotificationCode`, `Container::NotificationCode`: the
+  Observer convention (see Console).
+- **misc-no-recursion ×2** — `ResourceTrait::dependencyLoaded()` → `checkDependencies()` → a parent's
+  `dependencyLoaded()`: the upward notification of a finished load. Its depth is the dependency chain, bounded by the
+  resource TYPES (scene → mesh → material → texture → image), not by data. (The data-driven cycle check is iterative
+  since 2026-09-30.)
+- **cppcoreguidelines-avoid-do-while ×1** — `Manager::unloadUnusedResources()`: "one pass, then again while a pass
+  frees something" (freeing a resource frees its dependencies on the next pass) — owner decision 2026-09-30.

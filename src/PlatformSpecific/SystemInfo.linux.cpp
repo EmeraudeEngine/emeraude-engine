@@ -203,7 +203,15 @@ namespace EmEn::PlatformSpecific
 	std::filesystem::path
 	SystemInfo::getRealApplicationDir () noexcept
 	{
-		const std::string realPath = std::filesystem::canonical("/proc/self/exe");
+		std::error_code errorCode;
+
+		const std::string realPath = std::filesystem::canonical("/proc/self/exe", errorCode).string();
+
+		/* NOTE: no /proc (a restricted container) — an empty path: the caller keeps its current directory. */
+		if ( errorCode )
+		{
+			return {};
+		}
 
 		const auto position = realPath.find_last_of('/');
 

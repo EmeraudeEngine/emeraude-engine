@@ -51,8 +51,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 
 | # | Section | Lines | Status |
 |---|---|---|---|
-| 1 | `src/Console` (+ `MCP/`) | 8 327 | 🟠 step 5 — verified, awaiting the owner's commit order |
-| 2 | `src/Resources` | 6 307 | ⬜ |
+| 1 | `src/Console` (+ `MCP/`) | 8 327 | ✅ pushed 2026-09-30 (engine `35f868fc`, base `995159e`, alpha `93eab54a`); VALIDATED macOS M2 (R2 proven: 1.0e999 / 1.0e-60 refused) + Windows NVIDIA (MSVC clean, console conformance 4439/0 — its command set) |
+| 2 | `src/Resources` | 6 307 | 🟠 step 5 — verified, awaiting the owner's commit order |
 | 3 | `src/Scenes/Loaders` | — | ⬜ |
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ⬜ |
 | 5 | `src/Input` | 5 357 | ⬜ |
@@ -130,4 +130,80 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
   Console = 24, all on purpose (from 64 / 66); emeraude-base 2161/2161 Release AND ASan/UBSan (3 live skipped); MCP
   conformance 1707/0, console conformance 4448/0, 0 VUID; runtime R1: 1e300 and 3.5e38 refused, 20000 accepted;
   `1.0e999` refused on the TCP console. R2 is macOS-only: peer check at validation.
-- [ ] (5) Ledger updated (done), report (done), commit + push on the owner's order, then peers (macOS: R2)
+- [x] (5) Pushed 2026-09-30: engine `35f868fc`, base `995159e`, alpha `93eab54a`; peers asked (macOS: R2)
+  - macOS peer 2026-09-30: PASS (build 0 warning with ASIO_NO_DEPRECATED on every PlatformSpecific / Net TU, base
+    2158 + 3 skipped, MCP 1707/0, console conformance 4427/0 — 21 fewer than Linux because the audio recorder /
+    external-input services are off on that Mac, so their commands are absent; 0 VUID).
+
+## Section 2 — `src/Resources` (started 2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline: **20 findings**, no crash: 6 modernize-use-scoped-lock, 3
+  performance-inefficient-string-concatenation, 3 misc-no-recursion, 2 cppcoreguidelines-use-enum-class
+  (`NotificationCode`: on purpose, the convention), 1 each: modernize-use-ranges, performance-unnecessary-value-param,
+  cppcoreguidelines-avoid-do-while, misc-const-correctness, performance-enum-size, readability-use-anyofallof.
+  `Container.hpp` (1 871 lines of templates) is only analysed where instantiated: reviewed by hand.
+- [x] (2) Review. The JSON boundary itself is sound (every key type-checked, errors logged, a bad index skipped).
+  Findings:
+  - **Ave Robustus — real defects (INTENT / architecture → owner):**
+    - S1 **path traversal**: `BaseInformation::parseData()` (LocalData) → `FileSystem::getFilepathFromDataDirectories()`
+      appends the JSON `data` to each data directory with `std::filesystem::path::append`: an ABSOLUTE `data`
+      REPLACES the whole path (`"/etc/passwd"`), and `"../../x"` leaves the data store. A resource definition can
+      point anywhere on disk.
+    - S2 **`ResourceTrait::wouldCreateCycle()`**: (a) reads each sub-dependency's `m_dependenciesToWaitFor` WITHOUT
+      that resource's lock (only `this` and the direct dependency are locked by `addDependency()`): a data race with
+      a loading thread's `dependencyLoaded()` erasing from it; (b) no visited set: exponential on shared (diamond)
+      dependencies; (c) recursive. `dependencyLoaded()` → `checkDependencies()` → parents' `dependencyLoaded()`
+      recursion: depth = the dependency chain, bounded by the resource types (scene → mesh → material → texture →
+      image).
+    - S3 **throwing `std::filesystem` calls, CASCADE-WIDE**: `directory_iterator` / `recursive_directory_iterator`
+      range-for (the constructor without `error_code` AND `operator++` throw — even the two sites passing an
+      `error_code` to the constructor), and 38 calls without `error_code` (`exists`, `relative`, `canonical`,
+      `create_directories`, `permissions`, `current_path`…): engine 17 + 4 iterations, base 14 + 2, projet-alpha 7 +
+      3. Under `-fno-exceptions` any filesystem error (permission, a directory removed, a broken link) = `std::terminate`.
+      Base already has non-throwing `IO::` wrappers for part of it.
+  - **Mechanical (step 3):** scoped_lock ×6 + const, `Action` enum → `uint8_t`, `std::ranges::sort`,
+    `Container::loadingTask()` request by `const &`, the 3 console concatenations → `String::concatenate`.
+  - **Policy (owner):** the `Manager::unloadUnusedResources()` do-while (a "repeat until a pass frees nothing" loop).
+  - **Ave Performus**: nothing to A/B here (loading is I/O bound; the pool is the base ThreadPool already).
+- [x] (3) Mechanical fixes applied 2026-09-30 (scoped_lock ×6 + const, `Action : uint8_t`, `std::ranges::sort`,
+  `loadingTask(const LoadingRequest &)` — the task lambdas already own their copy, the 6 console messages through
+  `String::concatenate`); builds clean.
+- [x] (3b) Owner rulings (2026-09-30):
+  - S1 **LEXICAL CONFINEMENT** in `FileSystem::getFilepathFromDataDirectories()`: an absolute `data`, a root name, or
+    a `lexically_normal()` form starting with `..` is refused (error, resource Failed). Symlinks inside a store are
+    accepted (whoever places them controls the disk).
+  - S2 **GLOBAL GRAPH LOCK**: a static dependency-graph mutex taken FIRST by `addDependency()`; iterative search
+    (explicit stack + visited set, O(V+E)) copying each node's list under that node's lock alone; then the pair lock
+    for the insertion. Lock order graph → node.
+  - S3 **ALL AT ONCE, cascade-wide**: base `IO::forEachDirectoryEntry(path, recursive, callback) → bool` (+ tests),
+    the 9 iterations onto it, the 38 calls onto `error_code` overloads / `IO::` wrappers, and an Ave Robustus rule
+    line "std::filesystem only through its error_code overloads".
+  - do-while **ON PURPOSE** (ledger).
+  APPLIED 2026-09-30:
+  - S1: `FileSystem::getFilepathFromDataDirectories()` confines the filename under `<data dir>/<path>` through the new
+    base `IO::confinedPath()` (10 019 real index entries checked: all inside their store). The SAME traversal found
+    in base `ZipReader::extract()` ("Zip Slip": entry names from the archive) — the ruling applied there too.
+  - S2: graph lock (function-local static mutex: `avoid-non-const-global-variables`, and no static-init order) +
+    iterative walk with visited set. Deadlock audit: no code holds a node lock while calling `addDependency()`.
+  - S3: base `IO::forEachDirectoryEntry()` (template, no std::function) + `IO::confinedPath()` + tests; migrated:
+    base (FileTimestamps, ZipReader, ZipWriter, `IO::directoryEntries()` itself threw on `++`), engine (Resources
+    Manager scans — `lexically_relative()` instead of `relative()`: the SAME 14 396 resources as the 39 earlier runs,
+    without two canonicalisations per file —, FileSystem, Core wipe scan + RushMaker script permissions, Renderer
+    pipeline cache ×5, USDLoader ×3, Scenes console, Desktop Commands ×4 ADL, SystemInfo.linux `canonical`),
+    projet-alpha (Paladin, AnimationDebug, AssetLoader, DoomLoader, GeometryGenerator, NormalMapDebug, the three
+    `main` `current_path`). The census missed ADL calls at first (`is_directory(p)` unqualified): 9 more found.
+  - Also found and fixed: `ZipWriter` path-kind checks used `&&` for "or" (a directory accepted as a file and the
+    reverse, then a throwing walk); Core's wipe scan added `file_size()`'s error value (uintmax −1) to its total.
+  - Hygiene: 40 source files had no final newline (36 base — library code included —, 4 engine): fixed.
+- [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0, clang-tidy 21 on
+  Resources 20 → 5 (all on purpose, ledger); base 2165/2165 Release AND ASan/UBSan (new: forEachDirectoryEntry,
+  confinedPath, Zip Slip, Zip path kinds); runtime `citadel`: 37 containers, 1 073 resources loaded, dynamic scan
+  14 396 (identical), 0 VUID, no confinement / walk error.
+- [ ] (5) Ledger (done), report, commit + push on the owner's order, then peers.
+
+### Leads noted for later sections (seen while passing)
+
+- Graphics: `CubemapResource.cpp` `CubemapFaceNames.at(faceIndex)` — a throwing `.at()`.
+- PlatformSpecific: `SystemInfo.linux.cpp` `line.at(position)` (memory parsing) — a throwing `.at()`.
+- A cascade-wide census of the other throwing std calls (`.at()`, `std::stoi`, `optional::value()` unchecked,
+  `std::thread` ctor) would follow the filesystem one.

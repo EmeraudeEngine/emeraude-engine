@@ -37,6 +37,7 @@
 #include "Component/Microphone.hpp"
 #include "Component/ConsoleAdapter.hpp"
 #include "Component/Visual.hpp"
+#include "IO/IO.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Material/StandardResource.hpp"
@@ -608,7 +609,7 @@ namespace EmEn::Scenes
 
 				const std::filesystem::path filepath{filePath};
 
-				if ( !std::filesystem::exists(filepath) )
+				if ( !EmEn::Base::IO::exists(filepath) )
 				{
 					return Console::CommandResult::error("File '" + filepath.string() + "' does not exist !");
 				}

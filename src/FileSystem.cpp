@@ -524,10 +524,22 @@ namespace EmEn
 	std::filesystem::path
 	FileSystem::getFilepathFromDataDirectories (const std::string & path, const std::string & filename) const noexcept
 	{
+		/* NOTE: the filename comes from DATA (a resource definition, a resource name): an absolute one would REPLACE the
+		 * data directory in path::append(), and "../" would walk out of the store. It must stay under <data dir>/<path>
+		 * (owner decision 2026-09-30, plan Ave Robustus). The check does not depend on the data directory. */
+		const auto confined = IO::confinedPath(std::filesystem::path{}, std::filesystem::path{filename});
+
+		if ( !confined ) [[unlikely]]
+		{
+			TraceError{ClassId} << "The data path '" << filename << "' leaves its store '" << path << "' (absolute, or escaping with \"..\") : refused !";
+
+			return {};
+		}
+
 		for ( auto filepath : m_dataDirectories )
 		{
 			filepath.append(path);
-			filepath.append(filename);
+			filepath /= *confined;
 
 			if ( IO::fileExists(filepath) )
 			{

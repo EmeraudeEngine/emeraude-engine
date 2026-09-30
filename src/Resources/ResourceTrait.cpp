@@ -31,6 +31,9 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <mutex>
+#include <unordered_set>
+#include <vector>
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
@@ -42,6 +45,24 @@
 namespace EmEn::Resources
 {
 	using namespace Base;
+
+	namespace
+	{
+		/**
+		 * @brief Returns the dependency-graph lock: it serialises every edge insertion with its cycle check
+		 * (addDependency()). Lock order: this one first, then node locks (m_dependenciesAccess).
+		 * @note A function-local static: constructed on first use, whatever the static initialisation order.
+		 * @return std::mutex &
+		 */
+		[[nodiscard]]
+		std::mutex &
+		dependencyGraphAccess () noexcept
+		{
+			static std::mutex graphAccess;
+
+			return graphAccess;
+		}
+	}
 
 	constexpr auto TracerTag{"ResourceChain"};
 
@@ -133,17 +154,23 @@ namespace EmEn::Resources
 		{
 			Tracer::error(TracerTag, "The dependency pointer is null !");
 
-			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+			const std::scoped_lock lock{m_dependenciesAccess};
 
 			m_status = Status::Failed;
 
 			return false;
 		}
 
+		/* NOTE: The graph lock FIRST (lock order: graph → node): the cycle check below and the insertion are atomic
+		 * against every other addDependency(). The check copies each node's list under that node's lock alone. */
+		const std::scoped_lock graphLock{dependencyGraphAccess()};
+
+		const auto createsCycle = this->wouldCreateCycle(dependency);
+
 		/* NOTE: Lock both this resource's and the dependency's mutex to safely modify
 		 * both dependency lists. std::scoped_lock handles deadlock avoidance by
 		 * acquiring locks in a consistent order. */
-		std::scoped_lock lock{m_dependenciesAccess, dependency->m_dependenciesAccess};
+		const std::scoped_lock lock{m_dependenciesAccess, dependency->m_dependenciesAccess};
 
 		/* First, we check the current resource status. */
 		switch ( m_status )
@@ -206,7 +233,7 @@ namespace EmEn::Resources
 		/* NOTE: Check for circular dependency.
 		 * We walk up the dependency's parent chain to see if 'this' resource appears.
 		 * If it does, adding this dependency would create a cycle and cause a deadlock. */
-		if ( this->wouldCreateCycle(dependency) ) [[unlikely]]
+		if ( createsCycle ) [[unlikely]]
 		{
 			TraceError{TracerTag} <<
 				"Circular dependency detected ! Adding '" << dependency->name() << "' (" << dependency->classLabel() << ") "
@@ -245,7 +272,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+			const std::scoped_lock lock{m_dependenciesAccess};
 
 			/* NOTE: Removes the loaded resource from dependencies. */
 			std::erase(m_dependenciesToWaitFor, dependency);
@@ -261,7 +288,7 @@ namespace EmEn::Resources
 		/* NOTE: We need to track what actions to take outside the lock to avoid
 		 * calling virtual methods (onDependenciesLoaded) and observer notifications
 		 * while holding the mutex, which could cause deadlocks. */
-		enum class Action
+		enum class Action : uint8_t
 		{
 			None,
 			CallOnDependenciesLoaded
@@ -270,7 +297,7 @@ namespace EmEn::Resources
 		auto pendingAction = Action::None;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+			const std::scoped_lock lock{m_dependenciesAccess};
 
 			/* NOTE: First, we check the current resource status. */
 			switch ( m_status )
@@ -332,7 +359,7 @@ namespace EmEn::Resources
 			std::vector< std::shared_ptr< ResourceTrait > > parentsToNotifyCopy;
 
 			{
-				const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+				const std::scoped_lock lock{m_dependenciesAccess};
 
 				if ( success )
 				{
@@ -489,26 +516,29 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::wouldCreateCycle (const std::shared_ptr< ResourceTrait > & dependency) const noexcept
 	{
-		/* NOTE: Direct self-reference check. */
-		if ( dependency.get() == this )
-		{
-			return true;
-		}
+		/* NOTE: Iterative walk with a visited set (a diamond of shared dependencies is visited once, not once per
+		 * path), shared_ptr copies so that a node released meanwhile stays alive while it is examined. */
+		std::vector< std::shared_ptr< ResourceTrait > > pending{dependency};
+		std::unordered_set< const ResourceTrait * > visited;
 
-		/* NOTE: Check if 'this' resource appears in the dependency's dependency chain.
-		 * We perform a depth-first search through all dependencies. */
-		for ( const auto & subDependency : dependency->m_dependenciesToWaitFor )
+		while ( !pending.empty() )
 		{
-			if ( subDependency.get() == this )
+			const auto node = std::move(pending.back());
+			pending.pop_back();
+
+			if ( node.get() == this )
 			{
 				return true;
 			}
 
-			/* Recursive check for deeper cycles. */
-			if ( this->wouldCreateCycle(subDependency) )
+			if ( !visited.insert(node.get()).second )
 			{
-				return true;
+				continue;
 			}
+
+			const std::scoped_lock nodeLock{node->m_dependenciesAccess};
+
+			pending.insert(pending.end(), node->m_dependenciesToWaitFor.cbegin(), node->m_dependenciesToWaitFor.cend());
 		}
 
 		return false;

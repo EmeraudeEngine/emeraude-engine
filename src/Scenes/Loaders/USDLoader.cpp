@@ -53,6 +53,7 @@
 #include "tydra/scene-access.hh"
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
@@ -742,7 +743,7 @@ namespace EmEn::Scenes::Loaders
 						std::error_code pathError;
 						const auto fullPath = std::filesystem::weakly_canonical(stageDirectory / rawPath, pathError);
 
-						if ( !pathError && std::filesystem::exists(fullPath) )
+						if ( !pathError && EmEn::Base::IO::exists(fullPath) )
 						{
 							descriptor.textureAssetPath = fullPath.string();
 						}
@@ -1358,7 +1359,7 @@ namespace EmEn::Scenes::Loaders
 			std::error_code pathError;
 			auto fullPath = std::filesystem::weakly_canonical(stageDirectory / assetIdentifier, pathError);
 
-			if ( pathError || !std::filesystem::exists(fullPath) )
+			if ( pathError || !EmEn::Base::IO::exists(fullPath) )
 			{
 				/* ⚠️⚠️ CASE. An asset authored on Windows or macOS records whatever spelling the
 				 * DCC felt like, on a filesystem that does not care. On Linux it does, and the
@@ -1927,7 +1928,7 @@ namespace EmEn::Scenes::Loaders
 		(void)output;
 		(void)m_resources;
 
-		if ( !std::filesystem::exists(filepath) )
+		if ( !EmEn::Base::IO::exists(filepath) )
 		{
 			TraceError{ClassId} << "File '" << filepath.string() << "' does not exist !";
 

@@ -2504,9 +2504,16 @@ namespace EmEn
 
 				script.close();
 
+				std::error_code permissionError;
+
 				std::filesystem::permissions(scriptPath,
 					std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec,
-					std::filesystem::perm_options::add);
+					std::filesystem::perm_options::add, permissionError);
+
+				if ( permissionError )
+				{
+					TraceWarning{ClassId} << "Unable to make " << scriptPath << " executable (" << permissionError.message() << "): run it with 'sh'.";
+				}
 
 				TraceSuccess{ClassId} << "RushMaker assemble script written to " << scriptPath;
 			}
@@ -2924,26 +2931,31 @@ namespace EmEn
 
 		/* Scan a directory: list content into trace and collect stats. */
 		const auto scanDirectory = [&trace] (const std::filesystem::path & directory) noexcept -> std::pair< size_t, uintmax_t > {
-			std::error_code errorCode;
 			size_t fileCount = 0;
 			uintmax_t totalSize = 0;
 
-			for ( const auto & entry : std::filesystem::recursive_directory_iterator(directory, errorCode) )
-			{
+			/* NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
+			static_cast< void >(IO::forEachDirectoryEntry(directory, true, [&trace, &fileCount, &totalSize] (const std::filesystem::directory_entry & entry) {
+				std::error_code errorCode;
+
 				if ( entry.is_regular_file(errorCode) )
 				{
+					/* NOTE: file_size() answers static_cast< uintmax_t >(-1) on error: it would wrap the total. */
 					const auto fileSize = entry.file_size(errorCode);
+					const auto countedSize = errorCode ? uintmax_t{0} : fileSize;
 
-					trace << "	" << entry.path().string() << " (" << fileSize << " bytes)" "\n";
+					trace << "	" << entry.path().string() << " (" << countedSize << " bytes)" "\n";
 
 					fileCount++;
-					totalSize += fileSize;
+					totalSize += countedSize;
 				}
 				else if ( entry.is_directory(errorCode) )
 				{
 					trace << "	" << entry.path().string() << "/" "\n";
 				}
-			}
+
+				return true;
+			}));
 
 			return {fileCount, totalSize};
 		};
@@ -3021,7 +3033,7 @@ namespace EmEn
 	{
 		const auto & settingsPath = m_primaryServices.settings().filepath();
 
-		if ( !std::filesystem::exists(settingsPath) )
+		if ( !IO::exists(settingsPath) )
 		{
 			TraceWarning trace{ClassId};
 			trace <<
@@ -3125,7 +3137,7 @@ namespace EmEn
 		const auto & settingsPath = settings.filepath();
 
 		/* Fresh install (no file yet): nothing to reset. */
-		if ( settingsPath.empty() || !std::filesystem::exists(settingsPath) )
+		if ( settingsPath.empty() || !IO::exists(settingsPath) )
 		{
 			return;
 		}

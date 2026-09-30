@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "String.hpp"
 
 namespace EmEn::Resources
 {
@@ -76,7 +77,7 @@ namespace EmEn::Resources
 					return Console::CommandResult::json(Base::FastJSON::stringify(names));
 				}
 
-				return Console::CommandResult::error("Container '" + containerName + "' not found !");
+				return Console::CommandResult::error(Base::String::concatenate("Container '", containerName, "' not found !"));
 			}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("loadResource", "Requests the asynchronous loading of a resource (downloads it first when its source is ExternalData). Poll it with resourceStatus().",
@@ -94,13 +95,13 @@ namespace EmEn::Resources
 
 					if ( !container->requestResource(resourceName) )
 					{
-						return Console::CommandResult::error("No resource '" + resourceName + "' in container '" + containerName + "' !");
+						return Console::CommandResult::error(Base::String::concatenate("No resource '", resourceName, "' in container '", containerName, "' !"));
 					}
 
-					return Console::CommandResult::success("Loading of '" + resourceName + "' requested. Poll with resourceStatus(" + containerName + ", " + resourceName + ").");
+					return Console::CommandResult::success(Base::String::concatenate("Loading of '", resourceName, "' requested. Poll with resourceStatus(", containerName, ", ", resourceName, ")."));
 				}
 
-				return Console::CommandResult::error("Container '" + containerName + "' not found !");
+				return Console::CommandResult::error(Base::String::concatenate("Container '", containerName, "' not found !"));
 			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("resourceStatus", "Returns the loading status of a resource: Unloaded, Enqueuing, ManualEnqueuing, Loading, Loaded or Failed.",
@@ -120,13 +121,13 @@ namespace EmEn::Resources
 
 					if ( !status )
 					{
-						return Console::CommandResult::error("No resource '" + resourceName + "' in container '" + containerName + "' !");
+						return Console::CommandResult::error(Base::String::concatenate("No resource '", resourceName, "' in container '", containerName, "' !"));
 					}
 
 					return Console::CommandResult::info(to_cstring(*status));
 				}
 
-				return Console::CommandResult::error("Container '" + containerName + "' not found !");
+				return Console::CommandResult::error(Base::String::concatenate("Container '", containerName, "' not found !"));
 			}, Console::CommandHint::ReadOnly);
 	}
 }

@@ -3247,12 +3247,12 @@ namespace EmEn::Graphics
 		{
 			/* NOTE: Clearing a cache that was never written is a no-op, not a failure: erasing
 			 * unconditionally made IO log an error for each absent file. */
-			if ( std::filesystem::exists(filepath) )
+			if ( IO::exists(filepath) )
 			{
 				IO::eraseFile(filepath);
 			}
 
-			if ( std::filesystem::exists(markerPath) )
+			if ( IO::exists(markerPath) )
 			{
 				IO::eraseFile(markerPath);
 			}
@@ -3265,11 +3265,11 @@ namespace EmEn::Graphics
 		/* ⚠️ A marker left behind means the PREVIOUS run died while the driver was parsing this
 		 * blob. One documented corruption originated inside vkGetPipelineCacheData itself, so the
 		 * content hash written at save time validated garbage — only this marker catches that. */
-		if ( std::filesystem::exists(markerPath) )
+		if ( IO::exists(markerPath) )
 		{
 			TraceWarning{ClassId} << "The previous run crashed while loading the pipeline cache ! Discarding it.";
 
-			if ( std::filesystem::exists(filepath) )
+			if ( IO::exists(filepath) )
 			{
 				IO::eraseFile(filepath);
 			}
@@ -3284,7 +3284,7 @@ namespace EmEn::Graphics
 		/* NOTE: No cache file yet is the NOMINAL path of a fresh install, not a failure. Since the
 		 * cache is enabled by default, reading the absent file unconditionally made every first
 		 * launch print an IO error. Check first, and start with an empty cache silently. */
-		if ( !std::filesystem::exists(filepath) )
+		if ( !IO::exists(filepath) )
 		{
 			m_device->createPipelineCache(nullptr, 0);
 

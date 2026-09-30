@@ -235,8 +235,10 @@ namespace EmEn
 
 			/**
 			 * @brief Returns a possible filepath from data directories.
-			 * @param path A reference to a string for the directory inside a data directory.
-			 * @param filename A reference to a string for the filename.
+			 * @note The filename is CONFINED under <data directory>/<path>: an absolute filename, or one escaping with "..",
+			 * is refused (an error, an empty path) — it comes from data (Base::IO::confinedPath()).
+			 * @param path A reference to a string for the directory inside a data directory (engine-provided).
+			 * @param filename A reference to a string for the filename (from data).
 			 * @return std::filesystem::path
 			 */
 			[[nodiscard]]

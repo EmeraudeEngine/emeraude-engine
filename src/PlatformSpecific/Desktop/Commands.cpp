@@ -27,6 +27,7 @@
 #include "Commands.hpp"
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "Network/URL.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
@@ -85,7 +86,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool
 	openFile (const std::filesystem::path & filepath) noexcept
 	{
-		if ( !is_regular_file(filepath) )
+		if ( !Base::IO::fileExists(filepath) )
 		{
 			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
 
@@ -98,7 +99,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool
 	openTextFile (Settings & settings, const std::filesystem::path & filepath) noexcept
 	{
-		if ( !is_regular_file(filepath) )
+		if ( !Base::IO::fileExists(filepath) )
 		{
 			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
 
@@ -113,7 +114,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool
 	openFolder (const std::filesystem::path & filepath) noexcept
 	{
-		if ( !is_directory(filepath) )
+		if ( !Base::IO::directoryExists(filepath) )
 		{
 			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
 
@@ -126,7 +127,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool
 	showInFolder (const std::filesystem::path & filepath) noexcept
 	{
-		if ( !is_regular_file(filepath) )
+		if ( !Base::IO::fileExists(filepath) )
 		{
 			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
 

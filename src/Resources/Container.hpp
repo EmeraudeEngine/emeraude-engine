@@ -1368,7 +1368,7 @@ namespace EmEn::Resources
 						names.emplace_back(name);
 					}
 
-					std::sort(names.begin(), names.end());
+					std::ranges::sort(names);
 				}
 
 				return names;
@@ -1795,7 +1795,7 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			void
-			loadingTask (LoadingRequest request) noexcept
+			loadingTask (const LoadingRequest & request) noexcept
 			{
 				/* Notify the beginning of a loading process. */
 				this->notify(LoadingProcessStarted);

@@ -228,7 +228,7 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_localStoresAccess};
+		const std::scoped_lock lock{m_localStoresAccess};
 
 		return this->parseStores(m_primaryServices.fileSystem(), stores, m_showInformation);
 	}
@@ -311,9 +311,10 @@ namespace EmEn::Resources
 		{
 			/* Get the parent directory name relative to data-stores/
 			 * This typically corresponds to a store name (e.g., "Backgrounds", "Materials"). */
-			const auto relativePath = std::filesystem::relative(filepath.parent_path(), dataStoreDirectory);
+			std::error_code relativeError;
+			const auto relativePath = std::filesystem::relative(filepath.parent_path(), dataStoreDirectory, relativeError);
 
-			if ( !relativePath.empty() )
+			if ( !relativeError && !relativePath.empty() )
 			{
 				/* Return the first component of the relative path as the store name. */
 				return relativePath.begin()->string();
@@ -357,9 +358,10 @@ namespace EmEn::Resources
 
 		/* If we can't determine the store from extension,
 		 * try using the parent directory name. */
-		const auto relativePath = std::filesystem::relative(filepath.parent_path(), dataStoreDirectory);
+		std::error_code relativeError;
+		const auto relativePath = std::filesystem::relative(filepath.parent_path(), dataStoreDirectory, relativeError);
 
-		if ( !relativePath.empty() )
+		if ( !relativeError && !relativePath.empty() )
 		{
 			return relativePath.begin()->string();
 		}
@@ -389,13 +391,15 @@ namespace EmEn::Resources
 				TraceInfo{ClassId} << "Scanning directory: " << dataStoreDirectory;
 			}
 
-			/* First, iterate over first-level directories which represent stores. */
-			for ( const auto & storeEntry : std::filesystem::directory_iterator(dataStoreDirectory) )
-			{
-				if ( !is_directory(storeEntry.path()) )
+			/* First, iterate over first-level directories which represent stores.
+			 * NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
+			const auto storesWalked = IO::forEachDirectoryEntry(dataStoreDirectory, false, [&] (const std::filesystem::directory_entry & storeEntry) {
+				std::error_code entryError;
+
+				if ( !storeEntry.is_directory(entryError) )
 				{
 					/* This entry is not a directory, skip it (e.g., ResourcesIndex.json files). */
-					continue;
+					return true;
 				}
 
 				const auto storeName = storeEntry.path().filename().string();
@@ -403,7 +407,7 @@ namespace EmEn::Resources
 				/* Skip hidden directories (starting with dot). */
 				if ( storeName.starts_with('.') )
 				{
-					continue;
+					return true;
 				}
 
 				if ( m_showInformation )
@@ -426,12 +430,13 @@ namespace EmEn::Resources
 				const auto & storeDirectory = storeEntry.path();
 
 				/* Now, recursively scan files within this store directory. */
-				for ( const auto & fileEntry : std::filesystem::recursive_directory_iterator(storeDirectory) )
-				{
-					if ( !is_regular_file(fileEntry.path()) )
+				const auto filesWalked = IO::forEachDirectoryEntry(storeDirectory, true, [&] (const std::filesystem::directory_entry & fileEntry) {
+					std::error_code fileError;
+
+					if ( !fileEntry.is_regular_file(fileError) )
 					{
 						/* This entry is not a file (could be a directory or symlink). */
-						continue;
+						return true;
 					}
 
 					const auto & filepath = fileEntry.path();
@@ -440,7 +445,7 @@ namespace EmEn::Resources
 					/* Skip hidden files (starting with dot). */
 					if ( filename.starts_with('.') )
 					{
-						continue;
+						return true;
 					}
 
 					/* Calculate relative path from the store directory (not data-stores).
@@ -448,19 +453,20 @@ namespace EmEn::Resources
 					 * Examples:
 					 *   - data-stores/Images/texture.png -> resourceName = "texture"
 					 *   - data-stores/Images/Murs/briques001.png -> resourceName = "Murs/briques001"
-					 */
-					const auto relativePathFromStore = std::filesystem::relative(filepath, storeDirectory);
+					 * NOTE: lexically_relative(), not std::filesystem::relative(): the walk yields storeDirectory/…
+					 * paths, so the result is the same without canonicalizing both paths (system calls) per file. */
+					const auto relativePathFromStore = filepath.lexically_relative(storeDirectory);
 					const auto resourceName = relativePathFromStore.parent_path() / relativePathFromStore.stem();
 					const auto resourceNameStr = resourceName.generic_string();
 
 					/* Calculate relative path from data-stores directory for the "Data" field. */
-					const auto relativePath = std::filesystem::relative(filepath, dataStoreDirectory);
+					const auto relativePath = filepath.lexically_relative(dataStoreDirectory);
 
 					/* Check if resource already exists (might have been loaded from JSON index). */
 					if ( store->contains(resourceNameStr) )
 					{
 						/* Resource already registered, skip it. */
-						continue;
+						return true;
 					}
 
 					/* Create a JSON-like structure for BaseInformation parsing. */
@@ -486,7 +492,21 @@ namespace EmEn::Resources
 					{
 						TraceWarning{ClassId} << "Failed to parse resource information for: " << filepath;
 					}
+
+					return true;
+				});
+
+				if ( !filesWalked )
+				{
+					TraceWarning{ClassId} << "The store directory " << storeDirectory << " could not be fully scanned (see the IO error above).";
 				}
+
+				return true;
+			});
+
+			if ( !storesWalked )
+			{
+				TraceWarning{ClassId} << "The data-stores directory " << dataStoreDirectory << " could not be fully scanned (see the IO error above).";
 			}
 		}
 
@@ -512,7 +532,7 @@ namespace EmEn::Resources
 
 		/* NOTE: Initialize the store service. */
 		{
-			const std::lock_guard< std::mutex > lock{m_localStoresAccess};
+			const std::scoped_lock lock{m_localStoresAccess};
 
 			if ( m_useDynamicScan )
 			{
@@ -715,12 +735,14 @@ namespace EmEn::Resources
 				continue;
 			}
 
-			for ( const auto & entry : std::filesystem::directory_iterator(dataStoreDirectory) )
-			{
-				if ( !is_regular_file(entry.path()) )
+			/* NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
+			const auto walked = IO::forEachDirectoryEntry(dataStoreDirectory, false, [&indexes, &indexMatchRule] (const std::filesystem::directory_entry & entry) {
+				std::error_code entryError;
+
+				if ( !entry.is_regular_file(entryError) )
 				{
 					/* This entry is not a file. */
-					continue;
+					return true;
 				}
 
 				const auto filepath = entry.path().string();
@@ -728,12 +750,19 @@ namespace EmEn::Resources
 				if ( !std::regex_search(filepath, indexMatchRule) )
 				{
 					/* No resource index file in this "data-stores/" directory. */
-					TraceWarning{ClassId} << "Directory '" << entry << "' do not contains any resource index file !";
+					TraceWarning{ClassId} << "Directory '" << entry.path() << "' do not contains any resource index file !";
 
-					continue;
+					return true;
 				}
 
 				indexes.emplace_back(filepath);
+
+				return true;
+			});
+
+			if ( !walked )
+			{
+				TraceWarning{ClassId} << "The data-stores directory " << dataStoreDirectory << " could not be fully scanned (see the IO error above).";
 			}
 		}
 
