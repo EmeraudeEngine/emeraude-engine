@@ -102,7 +102,7 @@ layout(location = 0) out vec4 vCoordinates;
 void main()
 {
 	vec4 coordinates;
-	const vec3 world = pathCorner(mat4(1.0), pc.span, gl_VertexIndex, false, pc.style, ubPathPoints.eye.xyz, ubPathPoints.view, ubPathPoints.projection, ubPathPoints.viewport.xy, coordinates);
+	const vec3 world = pathCorner(mat4(1.0), pc.span, gl_VertexIndex, false, pc.style, 0.0, ubPathPoints.eye.xyz, ubPathPoints.view, ubPathPoints.projection, ubPathPoints.viewport.xy, coordinates);
 
 	vCoordinates = coordinates;
 	gl_Position = ubPathPoints.projection * ubPathPoints.view * vec4(world, 1.0);

@@ -2393,8 +2393,9 @@ namespace EmEn::Saphir
 			"\t" "const mat4 pathProjection = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << ";" "\n"
 			"\t" "const vec2 pathViewport = " << ViewUB(Keys::UniformBlock::Component::ViewProperties, false) << ".xy;" "\n"
 			"\t" "const vec4 pathStyle = " << m_pathStyleExpression << ";" "\n"
+			"\t" "const float pathDepthOffset = " << m_pathDepthOffsetExpression << ";" "\n"
 			"\t" "vec4 pathCoordinates;" "\n"
-			"\t" "const vec3 pathPosition = pathCorner(pathModel, pathSpan, gl_VertexIndex, false, pathStyle, pathEye, pathView, pathProjection, pathViewport, pathCoordinates);" "\n"
+			"\t" "const vec3 pathPosition = pathCorner(pathModel, pathSpan, gl_VertexIndex, false, pathStyle, pathDepthOffset, pathEye, pathView, pathProjection, pathViewport, pathCoordinates);" "\n"
 			"\t" "const vec3 pathTangent = vec3(1.0, 0.0, 0.0);" "\n"
 			"\t" "const vec3 pathBinormal = vec3(0.0, 1.0, 0.0);" "\n"
 			"\t" "const vec3 pathNormal = vec3(0.0, 0.0, 1.0);" "\n"
@@ -2408,7 +2409,7 @@ namespace EmEn::Saphir
 
 			code <<
 				"\t" "vec4 previousPathCoordinates;" "\n"
-				"\t" "const vec3 previousPathPosition = pathCorner(" << previousModelMatrix << ", pathSpan, gl_VertexIndex, true, pathStyle, pathEye, pathView, pathProjection, pathViewport, previousPathCoordinates);" "\n";
+				"\t" "const vec3 previousPathPosition = pathCorner(" << previousModelMatrix << ", pathSpan, gl_VertexIndex, true, pathStyle, pathDepthOffset, pathEye, pathView, pathProjection, pathViewport, previousPathCoordinates);" "\n";
 		}
 
 		code << "\n";

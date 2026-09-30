@@ -77,6 +77,30 @@ it like any emitter — brilliant at night, modest in full sun. A colour exact O
 debug mode's (the exposure is not in the shaders; putting it there was rejected — the GPU auto-exposure would lag a
 CPU copy by a frame).
 
+### The depth offset (2026-09-30)
+
+Owner decisions: an offset TOWARD THE EYE, in metres, off by default — `PathResource::setDepthOffset(m)`, console
+`Path.setDepthOffset(entity, component, m)`, the third UBO vec4 (`PathPlacement.x`). `pathCorner()` moves each corner
+along its own ray toward the eye (its screen position unchanged, so a pixel width stays exact), by at most half the
+distance; the scene pass, the velocity and the selection depth share it (one `preparePathRibbon()`), the debug overlay
+passes 0 (it draws on top).
+
+⚠️ **A fixed offset cannot hold a path lying on the ground at every distance.** Measured (Linux, the `paths` zigzags
+5 cm above the ground, 3-pixel half width, camera 1.7 m high looking at the horizon, TAA off):
+
+| Offset | 14 m | 28 m | 50 m |
+|---|---|---|---|
+| 0 | 6.0 px | 5.0 | 4.0 |
+| 0.1 m | 6.0 | 5.0 | 4.0 |
+| 1 m | 6.0 | 6.0 | 5.0 |
+| 3 m | 6.0 | 6.0 | 6.0 |
+
+The ribbon's lower edge dips a half width BELOW the surface (camera-facing), and the ray grazing the ground descends
+only `height / distance` per metre: the depth to win is `half width / sin(grazing angle)` — about the square of the
+distance for a pixel width (a metre at 28 m, three at 50 m). An offset that large lets any object within it stop
+hiding the path. Open (owner decision): a ribbon LYING in the surface's plane, an offset derived from that geometry,
+or this offset for near and steep views only.
+
 ### The selection outline (2026-09-30)
 
 A highlighted path is outlined like any entity (graphics doc 34): the custom depth pass draws it with the depth-only

@@ -409,6 +409,29 @@ namespace EmEn::Graphics::Material
 				return m_properties[StyleOffset + 3];
 			}
 
+			/**
+			 * @brief Sets the DEPTH OFFSET: how far every corner of the ribbon moves toward the eye, along its own ray (its
+			 * place on screen, and a pixel width, unchanged), so that a path LYING ON A SURFACE is not cut by it where the
+			 * camera-facing ribbon dips below (owner decisions 2026-09-30: an offset toward the eye, in metres, off by default).
+			 * @note In WORLD units (metres), never more than half the way to the eye. What is closer to the path than the
+			 * offset stops hiding it: keep it small (a few centimetres). Applied alike by the scene pass, the velocity and
+			 * the selection outline's depth; the debug mode draws on top anyway.
+			 * @param offset The offset, 0 (none, the default) or more; a non-finite value is 0.
+			 * @return void
+			 */
+			void setDepthOffset (float offset) noexcept;
+
+			/**
+			 * @brief Returns the depth offset, in world units.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			depthOffset () const noexcept
+			{
+				return m_properties[PlacementOffset];
+			}
+
 		private:
 
 			/** @copydoc EmEn::Graphics::Material::Interface::create() */
@@ -450,10 +473,11 @@ namespace EmEn::Graphics::Material
 			 */
 			void markVideoMemoryDirty () noexcept;
 
-			/* UBO layout (std140, two vec4 — Keys PathRadiance, PathStyle). */
+			/* UBO layout (std140, three vec4 — Keys PathRadiance, PathStyle, PathPlacement). */
 			static constexpr auto RadianceOffset{0UL};
 			static constexpr auto StyleOffset{4UL};
-			static constexpr auto PropertiesSize{8UL};
+			static constexpr auto PlacementOffset{8UL};
+			static constexpr auto PropertiesSize{12UL};
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			Base::PixelFactory::Color< float > m_color{Base::PixelFactory::White};
@@ -461,7 +485,9 @@ namespace EmEn::Graphics::Material
 				/* Radiance (rgb), unused. */
 				0.0F, 0.0F, 0.0F, 0.0F,
 				/* Half width, in pixels, round, miter limit. */
-				DefaultHalfWidth, 0.0F, 0.0F, DefaultMiterLimit
+				DefaultHalfWidth, 0.0F, 0.0F, DefaultMiterLimit,
+				/* Depth offset toward the eye (world units), unused. */
+				0.0F, 0.0F, 0.0F, 0.0F
 			};
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;

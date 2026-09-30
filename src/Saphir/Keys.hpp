@@ -871,6 +871,8 @@ namespace EmEn::Saphir
 				constexpr auto PathRadiance{"pathRadiance"};
 				/** @brief Path: (half width — entity units or pixels —, 1 if in pixels, 1 if round joins and caps, miter limit). */
 				constexpr auto PathStyle{"pathStyle"};
+				/** @brief Path: (depth offset — world units every corner moves toward the eye, 0 = none —, unused ×3). */
+				constexpr auto PathPlacement{"pathPlacement"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};

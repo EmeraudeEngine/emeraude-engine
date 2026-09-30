@@ -105,8 +105,10 @@ namespace EmEn::Saphir::PathGLSL
 )GLSL"};
 
 	/**
-	 * @brief vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, vec3 eye, mat4 view,
-	 * mat4 projection, vec2 viewport, out vec4 coordinates).
+	 * @brief vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, float depthOffset,
+	 * vec3 eye, mat4 view, mat4 projection, vec2 viewport, out vec4 coordinates).
+	 * @note depthOffset: world units the corner moves toward the eye along its ray (Material::PathResource
+	 * setDepthOffset(), 0 = none).
 	 * @note Two constructions. A width in ENTITY UNITS: in world space, across = cross(segment, point → eye) (the beam's).
 	 * A width in PIXELS: in SCREEN space — the segment projected into pixels, the normal and the joins decided in 2D,
 	 * each offset lifted back to view space at its point's depth — so the line is exactly that many pixels wide
@@ -237,6 +239,13 @@ namespace EmEn::Saphir::PathGLSL
 			coordinates = vec4(0.0, 0.0, segmentLength, hw0);
 		}
 	}
+	/* The DEPTH OFFSET: the corner moved toward the eye along its own ray — its screen position (and a pixel width)
+	 * unchanged — so that a path lying on a surface is not cut by it. At most half the way to the eye. */
+	if ( depthOffset > 0.0 ) {
+		const vec3 toEye = eye - world;
+		const float eyeDistance = length(toEye);
+		if ( eyeDistance > 1.0e-6 ) { world += toEye * (min(depthOffset, eyeDistance * 0.5) / eyeDistance); }
+	}
 	return (inverse(model) * vec4(world, 1.0)).xyz;
 )GLSL"};
 
@@ -275,7 +284,7 @@ namespace EmEn::Saphir::PathGLSL
 			"vec4 pathMiter (vec3 incoming, vec3 outgoing, float limit)\n{" + MiterBody + "}\n\n" +
 			"vec2 pathScreen (mat4 projection, vec3 viewPoint, vec2 viewport)\n{" + ScreenBody + "}\n\n" +
 			"vec3 pathLift (mat4 projection, vec3 viewPoint, vec2 pixels, vec2 viewport)\n{" + LiftBody + "}\n\n" +
-			"vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, vec3 eye, mat4 view, mat4 projection, vec2 viewport, out vec4 coordinates)\n{" + CornerBody + "}\n\n";
+			"vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, float depthOffset, vec3 eye, mat4 view, mat4 projection, vec2 viewport, out vec4 coordinates)\n{" + CornerBody + "}\n\n";
 	}
 
 	/**
@@ -354,6 +363,7 @@ namespace EmEn::Saphir::PathGLSL
 		corner.addInParameter(GLSL::Integer, "vertexIndex");
 		corner.addInParameter(GLSL::Boolean, "previous");
 		corner.addInParameter(GLSL::FloatVector4, "style");
+		corner.addInParameter(GLSL::Float, "depthOffset");
 		corner.addInParameter(GLSL::FloatVector3, "eye");
 		corner.addInParameter(GLSL::Matrix4, "view");
 		corner.addInParameter(GLSL::Matrix4, "projection");

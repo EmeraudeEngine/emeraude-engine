@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 
 /* Local inclusions. */
@@ -275,6 +276,7 @@ namespace EmEn::Graphics::Material
 		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::PathMaterial, UniformBlock::Material};
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PathRadiance);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PathStyle);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PathPlacement);
 
 		return block;
 	}
@@ -282,7 +284,7 @@ namespace EmEn::Graphics::Material
 	bool
 	PathResource::prepareVertexStage (Generator::Abstract & /*generator*/, AbstractVertexStage & vertexShader) const noexcept
 	{
-		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle));
+		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle), MaterialUB(UniformBlock::Component::PathPlacement) + ".x");
 
 		return true;
 	}
@@ -339,7 +341,7 @@ namespace EmEn::Graphics::Material
 	{
 		/* The same ribbon as the scene pass (the generator switched the stage to the instance-transforms path and
 		 * declared the view block, Generator::ShadowCasting::isPulledVertexGeometry()). */
-		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle));
+		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle), MaterialUB(UniformBlock::Component::PathPlacement) + ".x");
 
 		if ( !vertexShader.declare(this->getUniformBlock(generator.shaderProgram()->setIndex(SetType::PerModelLayer), 0)) )
 		{
@@ -420,6 +422,14 @@ namespace EmEn::Graphics::Material
 	{
 		m_properties[StyleOffset + 2] = round ? 1.0F : 0.0F;
 		m_properties[StyleOffset + 3] = std::max(1.0F, miterLimit);
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	PathResource::setDepthOffset (float offset) noexcept
+	{
+		m_properties[PlacementOffset] = std::isfinite(offset) ? std::max(0.0F, offset) : 0.0F;
 
 		this->markVideoMemoryDirty();
 	}

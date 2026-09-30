@@ -89,6 +89,7 @@ namespace EmEn::Scenes::Component
 				state["widthInPixels"] = material->isWidthInPixels();
 				state["roundJoins"] = material->areJoinsRound();
 				state["miterLimit"] = static_cast< double >(material->miterLimit());
+				state["depthOffset"] = static_cast< double >(material->depthOffset());
 			}
 
 			return FastJSON::stringify(state);
@@ -272,6 +273,19 @@ namespace EmEn::Scenes::Component
 							return this->withMaterial(entityName, componentName, [round, miterLimit] (Graphics::Material::PathResource & material) {
 								material.setJoins(round, miterLimit);
 							}, "joins set.");
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setDepthOffset", "Sets how far a Path's ribbon moves toward the eye (its place on screen unchanged), so that a path lying on a surface is not cut by it: world units, 0 = none (the default).",
+						{entity, component, {"offset", "The offset in metres, 0 or more (a few centimetres: what is closer to the path than that stops hiding it)."}},
+						[this] (const std::string & entityName, const std::string & componentName, float offset) {
+							if ( !std::isfinite(offset) || offset < 0.0F )
+							{
+								return Console::CommandResult::error("The offset must be finite, 0 or more.");
+							}
+
+							return this->withMaterial(entityName, componentName, [offset] (Graphics::Material::PathResource & material) {
+								material.setDepthOffset(offset);
+							}, "depth offset set.");
 						}, Console::CommandHint::Idempotent);
 
 					this->bindCommand("setEnabled", "Shows or hides a Path.",
