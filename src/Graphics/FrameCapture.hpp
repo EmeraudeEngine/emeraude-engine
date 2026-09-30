@@ -177,6 +177,22 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether the armed capture still needs frames to be RENDERED: frames to copy, or the fence
+			 * waits of later frames that retire the copies already submitted (a copy completes framesInFlight() frames
+			 * after its own). Also true while a cancelled capture drains. One atomic load, no lock.
+			 * @note The on-demand rendering gate reads it (Core::renderingTask()): the waiter blocks the main thread,
+			 * which in a CEF application is the only source of redraw requests, so nothing else would wake the
+			 * rendering thread (AppSystem, 2026-09-30: every screenshot timed out).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			needsFrames () const noexcept
+			{
+				return m_state.load(std::memory_order_acquire) == State::Armed;
+			}
+
+			/**
 			 * @brief Returns whether a capture is armed or still being written.
 			 * @return bool
 			 */
@@ -286,7 +302,8 @@ namespace EmEn::Graphics
 			uint32_t m_width{0};
 			uint32_t m_height{0};
 			uint32_t m_nextFrame{0};
-			State m_state{State::Idle};
+			/* Written under m_access; atomic only so needsFrames() can read it lock-free from the rendering thread. */
+			std::atomic< State > m_state{State::Idle};
 			std::atomic_bool m_wantsFrames{false};
 			bool m_swapRedBlue{false};
 			bool m_temporal{false};

@@ -250,20 +250,29 @@ namespace EmEn
 			 * event, scene enable/disable, or an explicit requestRedraw()) instead of rendering every
 			 * iteration. An active scene bypasses the gate entirely (v1: an active scene is treated as
 			 * always-dirty and renders continuously). The wait uses a 60 FPS-period safety timeout so a
-			 * missed dirty signal self-heals within one frame rather than freezing the display. */
+			 * missed dirty signal self-heals within one frame rather than freezing the display.
+			 * ⚠️ The renderer's own debts (Renderer::owesFrames(): an armed frame capture, a video recording)
+			 * open the gate too, and nothing signals them: the safety timeout picks them up. A screenshot waits
+			 * on the MAIN thread, and in a CEF application that thread is the only source of redraw requests
+			 * (the WebView repaints), so a gate blind to the capture let every screenshot time out
+			 * (AppSystem, 2026-09-30). A capture also needs framesInFlight() frames past its copy to retire it. */
 			if ( m_renderingMode == RenderingMode::OnDemand && !m_sceneManager.hasActiveScene() )
 			{
 				std::unique_lock< std::mutex > lock{m_redrawMutex};
 
-				if ( m_pendingFrames.load(std::memory_order_relaxed) == 0 )
+				const auto mustRender = [this] {
+					return m_pendingFrames.load(std::memory_order_relaxed) > 0 || m_graphicsRenderer.owesFrames();
+				};
+
+				if ( !mustRender() )
 				{
-					m_redrawCondition.wait_for(lock, onDemandTimeout, [this] {
-						return m_pendingFrames.load(std::memory_order_relaxed) > 0 || !m_isRenderingLoopRunning;
+					m_redrawCondition.wait_for(lock, onDemandTimeout, [this, &mustRender] {
+						return mustRender() || !m_isRenderingLoopRunning;
 					});
 				}
 
 				/* NOTE: Woke on the safety timeout with nothing to draw (and still no scene): idle again. */
-				if ( m_pendingFrames.load(std::memory_order_relaxed) == 0 )
+				if ( !mustRender() )
 				{
 					continue;
 				}

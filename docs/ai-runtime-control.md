@@ -302,7 +302,11 @@ python3 tools/temporal-analysis.py <stem>          # or the .json path it printe
 - `screenshot()` and `temporalCapture([N = 5])` both copy the PRESENTED image inside its frame (UI
   included) and answer once the files are written. ⚠️ Read the path they ANSWER: the stem is unique,
   so a burst of captures moves it past the clock (two screenshots in one second used to collide). A
-  capture that times out is cancelled, and the next one arms normally. A temporal capture writes
+  capture that times out is cancelled, and the next one arms normally. ⚠️ In `RenderingMode::OnDemand`
+  with no active scene (AppSystem), an armed capture now keeps the rendering thread drawing until it is
+  retired (`Renderer::owesFrames()`, 2026-09-30); before that, every capture there timed out with "is the
+  window rendering?", because the waiting main thread was the only source of redraws. See
+  `docs/subsystems/source-tree/02-main-components.md` § Core - On-Demand Rendering. A temporal capture writes
   `<unix seconds>-<n>.png` for n = 0..N-1 and `<unix seconds>.json` (frame serial, timing, TAA
   jitter, camera, exposure per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
 - ⚠️ Capture **8** frames or more for a TAA question: the jitter cycle is 8 frames.

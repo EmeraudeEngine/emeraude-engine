@@ -1122,6 +1122,19 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether the renderer owes frames that no redraw request will ask for: an armed frame
+			 * capture (FrameCapture::needsFrames()) or a video recording. The on-demand gate keeps rendering while it is
+			 * true. Two atomic loads, no lock.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			owesFrames () const noexcept
+			{
+				return m_frameCapture.needsFrames() || m_recorder.isRecording();
+			}
+
+			/**
 			 * @brief Returns the deferred-destruction queue for Vulkan-backed objects.
 			 * @note This is the engine contract for destroying GPU-visible objects at
 			 * runtime: any object potentially referenced by an in-flight command buffer

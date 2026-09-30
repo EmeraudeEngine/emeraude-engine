@@ -196,6 +196,21 @@ for animated 3D real-time rendering.
 - **Explicit** — application/native code (or the remote console) may call `requestRedraw()` for changes
   not covered by the built-in triggers.
 
+**The renderer's own debts open the gate too (2026-09-30)** — `Renderer::owesFrames()`: an armed frame
+capture (`FrameCapture::needsFrames()`, true from `arm()` until the copies are retired, a cancelled capture
+draining included) or a video recording (`Recorder::isRecording()`). Nothing signals them: the 60 FPS
+safety re-check picks them up within one period. ⚠️ **Why it exists**: `screenshot()` / `temporalCapture()`
+wait on the **main** thread (console and MCP commands run there), and in a CEF application the main thread
+pumps CEF, i.e. it is the only source of redraw requests (the WebView repaints). A gate blind to the capture
+therefore rendered **nothing** while the capture waited — measured in AppSystem on Linux: 0 frames in the
+5 s wait at rest, 7 then none with a CSS animation running (901 frames in 5 s with the main thread free) —
+and every screenshot timed out on all three OSes. A capture also needs `framesInFlight()` frames past its
+copy, because a copy completes when its slot's fence is waited again. With the fix: one screenshot = 4
+frames (1 + 3 in flight), answered in 0.19 s, and the rendering thread goes back to 0 frames at rest.
+projet-alpha never showed it because an active 3D scene bypasses the gate. ⚠️ `getStatus()`'s FPS is not a
+frame counter: it read ~180 while the thread rendered nothing. Count frames with `getFrameDiagnostics()`
+(`renderedFrame`).
+
 **First frame / no scene**: `Renderer::renderFrameDirect` already degenerates to *clear color + overlay*
 when `scene == nullptr`, so the guaranteed initial frame (seeded by a `requestRedraw()` before the loop)
 is just the clear color plus whatever the overlay draws.
