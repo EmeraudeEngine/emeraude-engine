@@ -341,7 +341,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 |---|---|---|---|
 | 6a | Scene graph core: `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | ✅ pushed `23f04e76`; VALIDATED macOS M2 + Windows NVIDIA (1 MiB stack) — hostile refused, engine alive, watch + RecursiveSkeletons render, 0 VUID |
 | 6b | Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ✅ pushed base `33dc712`, engine `53116abe`, alpha `e8c7f692` (+ fixes base `f4319cc`, engine `7a3e540c`, alpha `805095b0`); VALIDATED macOS M2 + Windows NVIDIA |
-| 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | 🟠 verified on Linux, commit + push on the owner's order |
+| 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ✅ pushed base `9636ea0`, engine `e8dd6016`, alpha `e5b8ce2b`; peers pending |
 | 6d | `Component/` | 18 617 | ⬜ |
 | 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
 
@@ -516,7 +516,7 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
   log's error / warning classes identical to the 6b run but the two the console conformance provokes on purpose.
   The 3 `*** stack smashing detected ***` lines at exit are the pre-existing CEF helper item
   (`cef-memoryinfra-check-sigill`), present before the change.
-- [ ] (5) Commit + push on the owner's order (base, engine, projet-alpha); then the peers.
+- [x] (5) Pushed 2026-09-30: base `9636ea0`, engine `e8dd6016`, alpha `e5b8ce2b` (+ the owner's macOS MoltenVK validation record `c0856970`); peers to ask.
 - Leads noted for later sections: `BasicGroundResource` passes `DefaultGeometryFlags` as the grid's UV MULTIPLIER
   (`VertexGridResource::load(float, uint32_t, float)`) and its `load(path)` / `load(json)` call `setLoadSuccess()`
   without `beginLoading()` (section 7); `SoundfontResource` opens the JSON `file` path unconfined (section 10);
