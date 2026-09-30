@@ -311,6 +311,9 @@ namespace EmEn::Scenes
 		 * (it did, 2026-09-13) — but dispatching here would move the siblings in the MIDDLE of
 		 * their own iteration. Keep the coordinates; processLogics() dispatches them right after
 		 * the loop. The last request of a cycle wins, which is the final frame. */
+		const std::scoped_lock lock{m_componentsMutex};
+
+		/* NOTE: the flag is read under the lock — see linkComponent(). */
 		if ( m_dispatchingComponentLogics )
 		{
 			m_deferredMoveCoordinates = worldCoordinates;
@@ -320,7 +323,6 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: Dispatch the move to every component. */
-		const std::scoped_lock lock{m_componentsMutex};
 
 		for ( const auto & component : m_components )
 		{
@@ -334,15 +336,19 @@ namespace EmEn::Scenes
 		/* ⚠️ The component loop of processLogics() iterates m_components: growing it from inside
 		 * a component's processLogics() would invalidate that iteration. Refused with a diagnostic
 		 * rather than left to undefined behaviour (the recursive mutex would have let it through). */
-		if ( m_dispatchingComponentLogics ) [[unlikely]]
-		{
-			TraceError{TracerTag} << "Refusing to link the component '" << component->name() << "' to entity '" << this->name() << "' from a component's processLogics() !";
-
-			return false;
-		}
-
 		{
 			const std::scoped_lock lock{m_componentsMutex};
+
+			/* ⚠️ The flag is read UNDER the (recursive) lock (triad 2026-09-30): from the logic thread itself (a component's
+			 * processLogics()) the lock re-enters and the flag says "refuse"; from ANOTHER thread (a scene timer spawning an
+			 * actor) the lock waits for the component loop to end, and the flag is false again. Read before the lock, it was a
+			 * data race that refused a legitimate link (a lighten-marbles marble lost its light, seen on macOS). */
+			if ( m_dispatchingComponentLogics ) [[unlikely]]
+			{
+				TraceError{TracerTag} << "Refusing to link the component '" << component->name() << "' to entity '" << this->name() << "' from a component's processLogics() !";
+
+				return false;
+			}
 
 			if ( m_components.full() ) [[unlikely]]
 			{
@@ -499,17 +505,18 @@ namespace EmEn::Scenes
 	{
 		/* ⚠️ See linkComponent(): the component loop is iterating m_components. A component asking
 		 * for its own removal from processLogics() returns true from shouldBeRemoved() instead. */
-		if ( m_dispatchingComponentLogics ) [[unlikely]]
-		{
-			TraceError{TracerTag} << "Refusing to remove a component of entity '" << this->name() << "' from a component's processLogics() !";
-
-			return false;
-		}
-
 		std::shared_ptr< Component::Abstract > componentToUnlink;
 
 		{
 			const std::scoped_lock lock{m_componentsMutex};
+
+			/* NOTE: the flag is read under the lock — see linkComponent(). */
+			if ( m_dispatchingComponentLogics ) [[unlikely]]
+			{
+				TraceError{TracerTag} << "Refusing to remove a component of entity '" << this->name() << "' from a component's processLogics() !";
+
+				return false;
+			}
 
 			auto * const it = std::ranges::find_if(m_components, [&name] (const auto & component)
 												   { return component->name() == name; });
@@ -535,15 +542,17 @@ namespace EmEn::Scenes
 	{
 		/* ⚠️ See linkComponent(): the component loop is iterating m_components. A component asking
 		 * for its own removal from processLogics() returns true from shouldBeRemoved() instead. */
-		if ( m_dispatchingComponentLogics ) [[unlikely]]
-		{
-			TraceError{TracerTag} << "Refusing to remove a component of entity '" << this->name() << "' from a component's processLogics() !";
-
-			return;
-		}
-
 		{
 			const std::scoped_lock lock{m_componentsMutex};
+
+			/* NOTE: the flag is read under the lock — see linkComponent(). */
+			if ( m_dispatchingComponentLogics ) [[unlikely]]
+			{
+				TraceError{TracerTag} << "Refusing to remove a component of entity '" << this->name() << "' from a component's processLogics() !";
+
+				return;
+			}
+
 			for ( const auto & component : m_components )
 			{
 				this->unlinkComponent(component);

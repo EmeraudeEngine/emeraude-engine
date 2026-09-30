@@ -340,7 +340,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 6a | Scene graph core (✅ pushed `23f04e76`; VALIDATED macOS M2 + Windows NVIDIA (1 MiB stack) — hostile refused, engine alive, watch + RecursiveSkeletons render, 0 VUID): `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | 🟠 started |
-| 6b | (🟠 step 5 — verified, awaiting the commit order) Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ⬜ |
+| 6b | (✅ pushed base `33dc712`, engine `53116abe`, alpha `e8c7f692`; peers pending) Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ⬜ |
 | 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ⬜ |
 | 6d | `Component/` | 18 617 | ⬜ |
 | 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
@@ -398,6 +398,20 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 - [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0; base 2166/2166 Release
   AND ASan/UBSan; clang-tidy 98 → 32 (all on purpose, ledger); `beams` (camera + line light registered, console
   conformance 4448/0), `citadel` (sun shadows, torches), `lighten-marbles` (physics): 0 VUID, 0 payload-mismatch log.
-- [ ] (5) Docs (base error-handling § std::any, Ave Robustus rule + plan, ledger), report, commit + push on the owner's
-  order (base + engine + projet-alpha), then peers.
+- [x] (5) Pushed 2026-09-30: base `33dc712`, engine `53116abe`, alpha `e8c7f692`; peers asked.
+  - macOS peer: PASS (0 payload errors, scenes lit, the helmet dropped renders). It reported ONE pre-existing error on
+    lighten-marbles: "Refusing to link the component 'Light' to entity 'ACTOR_…40' from a component's processLogics()"
+    — a marble lost its light. Cause confirmed: `AbstractEntity::linkComponent()` / `removeComponent()` /
+    `clearComponents()` / `onContainerMove()` read `m_dispatchingComponentLogics` (a plain bool) BEFORE taking the
+    recursive `m_componentsMutex`: a data race, and a FALSE refusal when another thread (the scene timer spawning the
+    marble) links while the logic thread iterates that new entity. FIXED (pushed 2026-09-30, with the shutdown fix below):
+    the flag is read UNDER the lock — the logic thread re-enters and refuses (the legitimate case), another thread
+    waits for the loop to end. Verified: lighten-marbles (129 entities) and animation-debug, 0 refusal, 0 VUID.
+  - Windows peer: PASS on everything else, but lighten-marbles CRASHED AT SHUTDOWN 5/5 (heap corruption
+    `0xc0000374`). Reproduced on Linux 2/2 under `MALLOC_CHECK_=3 MALLOC_PERTURB_=165`; addr2line: the
+    `LightenMarbles` timer lambda. Cause: projet-alpha `Stage` erases the act BEFORE `deleteScene()`, the scene's
+    timer (capturing `&act`) keeps firing on the dead act. FIXED in projet-alpha (pushed 2026-09-30): `Act::~Act()` calls
+    `m_scene->destroyTimers()` first — 3/3 clean under the same poisoning, 0 VUID. Caution: projet-alpha
+    `docs/caution-points.md` § Scene Building; the join-under-lock trap it exposed: base
+    `docs/todo/event-trait-join-under-lock.md`.
 
