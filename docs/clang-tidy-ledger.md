@@ -30,6 +30,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Scenes/Loaders`, 4 TUs (+ `SceneDataConsumer.cpp`) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 172, all ON PURPOSE (below) — 141 pro-type-union-access, 18 pro-bounds-constant-array-index, 7 pro-type-reinterpret-cast, 3 avoid-const-or-ref-data-members, 1 Padding, 1 use-enum-class, 1 enum-size. Before: 221. | Triad section 3 |
 | `src/Net`, 10 Linux TUs (`*.windows.cpp`, `*.mac.mm` read by hand) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 39, all ON PURPOSE (below) — 20 reinterpret-cast, 7 make-member-function-const, 5 pro-type-vararg, 2 use-enum-class, 1 each array-to-pointer-decay, macro-usage, avoid-c-arrays, interfaces-global-init, constant-array-index. Before: 103. | Triad section 4 |
 | `src/Input`, 6 TUs | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 40, all ON PURPOSE (below) — 28 pro-bounds-constant-array-index, 8 use-enum-class, 4 misc-confusable-identifiers. Before: 47. | Triad section 5 |
+| `src/Scenes` 6a (scene graph core: Node, AbstractEntity, StaticEntity, controllers, OctreeSector, Scene.cpp / entities) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 13 misc-no-recursion, 6 missing-std-forward, 4 use-enum-class, 4 constant-array-index, 2 static-cast-downcast, 1 avoid-const-or-ref-data-members. Before: 48. | Triad sub-section 6a |
 
 ## Findings kept ON PURPOSE
 
@@ -96,4 +97,18 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **use-enum-class ×8** — `Key`, `ModKey`, `MouseButton`, `Joystick*`, `Gamepad*`: they carry the GLFW integer codes
   and are compared / combined as such (a scoped enum would need a cast at every GLFW call).
 - **misc-confusable-identifiers ×4** — `KeyI` / `Key1`, `KeyO` / `Key0` (and their `…String`): GLFW's own key names.
+
+### `src/Scenes` 6a — scene graph core (2026-09-30)
+
+- **misc-no-recursion ×13** — the node-tree walks (`Node::destroyTree` / `trimTree` / `destroyChildren` /
+  `onLocationDataUpdate`) and the octree (`OctreeSector` insert / erase / expand / depth…): the node depth is bounded by
+  `Node::MaxDepth` (256, owner decision 2026-09-30), the octree depth by its own maximum depth setting.
+- **missing-std-forward ×6** — callables invoked once per element (`forEachComponent`, `forEachModifiers`,
+  `OctreeSector` visitors): forwarding inside a loop would be the bug (use-after-move).
+- **use-enum-class ×4** — `NotificationCode` (the Observer convention).
+- **pro-bounds-constant-array-index ×4** — the render-state slot (`RenderStateSlotCount`, the frame sync's index):
+  checked in Debug on both the write and the read side (hot path, the two-level rule).
+- **pro-type-static-cast-downcast ×2** — `AbstractEntity.debug.cpp`: after a `CollisionModelType` switch (RTTI
+  avoided: engine item `rtti-removal`).
+- **avoid-const-or-ref-data-members ×1** — an entity's reference to its scene, by design.
 

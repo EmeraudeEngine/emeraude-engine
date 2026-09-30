@@ -176,6 +176,15 @@ namespace EmEn::Scenes
 			static constexpr auto Root{"root"};
 
 			/**
+			 * @brief The deepest a node may sit under the root (owner decision 2026-09-30, plan Ave Robustus).
+			 * @note Every walk of the graph and the notification climb (a child's notification is relayed hop by hop to
+			 * the scene) recurses once per level: an unbounded depth was a stack overflow — reproduced with a dropped
+			 * 200 000-level glTF. The deepest real asset measured is 30 levels (349 assets): 256 leaves 8× headroom.
+			 * createChild() refuses a node beyond it.
+			 */
+			static constexpr uint32_t MaxDepth{256};
+
+			/**
 			 * @brief Constructs the root node.
 			 *
 			 * Creates the special root node that serves as the world origin.
@@ -212,7 +221,8 @@ namespace EmEn::Scenes
 			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Base::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{parent->parentScene(), std::move(name), sceneTimeMS},
 				m_parent{parent},
-				m_logicStateCoordinates{coordinates}
+				m_logicStateCoordinates{coordinates},
+				m_depth{parent->m_depth + 1}
 			{
 
 			}
@@ -496,6 +506,18 @@ namespace EmEn::Scenes
 			const Base::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
 			{
+				/* NOTE: a per-instance, per-frame path — @pre readStateIndex < RenderStateSlotCount, checked in Debug only
+				 * like the write side (plan Ave Robustus, the two-level rule). */
+				if constexpr ( IsDebug )
+				{
+					if ( readStateIndex >= m_renderStateCoordinates.size() ) [[unlikely]]
+					{
+						Tracer::error(ClassId, "Index overflow !");
+
+						return m_renderStateCoordinates[0];
+					}
+				}
+
 				return m_renderStateCoordinates[readStateIndex];
 			}
 
@@ -564,6 +586,18 @@ namespace EmEn::Scenes
 			onImpulse () noexcept override
 			{
 				this->pauseSimulation(false);
+			}
+
+			/**
+			 * @brief Returns the level of this node under the root (the root is 0, its children 1, …).
+			 * @note Bounded by MaxDepth: createChild() refuses deeper.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			depth () const noexcept
+			{
+				return m_depth;
 			}
 
 			/**
@@ -936,5 +970,7 @@ namespace EmEn::Scenes
 			Base::Math::CartesianFrame< float > m_logicStateCoordinates;
 			std::array< Base::Math::CartesianFrame< float >, RenderStateSlotCount > m_renderStateCoordinates{};
 			uint64_t m_lifetime{0};
+			/** @brief The level under the root (the root is 0), fixed at construction: a node is never re-parented. */
+			uint32_t m_depth{0};
 	};
 }

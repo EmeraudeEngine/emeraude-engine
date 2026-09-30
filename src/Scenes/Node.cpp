@@ -755,10 +755,10 @@ namespace EmEn::Scenes
 		Vector< 3, float > scalingVector{1.0F, 1.0F, 1.0F};
 
 		/* Traverse in reverse (root to leaf). */
-		for ( auto it = frames.rbegin(); it != frames.rend(); ++it )
+		for ( auto & frame : std::ranges::reverse_view(frames) )
 		{
-			matrix *= (*it)->getModelMatrix();
-			scalingVector *= (*it)->scalingFactor();
+			matrix *= frame->getModelMatrix();
+			scalingVector *= frame->scalingFactor();
 		}
 
 		return CartesianFrame< float >{matrix, scalingVector};
@@ -817,6 +817,13 @@ namespace EmEn::Scenes
 		if ( m_children.contains(name) )
 		{
 			TraceError{ClassId} << "The node name '" << name << "' is already used at this level !";
+
+			return nullptr;
+		}
+
+		if ( m_depth >= MaxDepth ) [[unlikely]]
+		{
+			TraceError{ClassId} << "The node '" << name << "' would sit " << m_depth + 1 << " levels under the root, beyond the " << MaxDepth << " allowed : refused !";
 
 			return nullptr;
 		}

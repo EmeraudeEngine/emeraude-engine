@@ -55,8 +55,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 2 | `src/Resources` | 6 307 | ✅ pushed 2026-09-30 (base `4e029ab` + `fb9339a`, engine `d2207206` + `feac0ef4`, alpha `1a9e9554`); VALIDATED macOS M2 + Windows NVIDIA (tests incl. the Windows confinedPath block; scans unchanged, 9 891 there) |
 | 3 | `src/Scenes/Loaders` | 11 292 | ✅ pushed 2026-09-30 (engine `bf5f901c`); VALIDATED Windows NVIDIA + macOS M2 (glTF hostile set + samples + FBX demos, 0 VUID; the WAD step skipped on both: no IWAD — proven on Linux) |
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
-| 5 | `src/Input` | 5 465 | 🟠 step 5 — verified, awaiting the owner's commit order |
-| 6 | `src/Scenes` (the rest, by sub-group) | 70 278 | ⬜ |
+| 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
+| 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | 🟠 6a started |
 | 7 | `src/Graphics` (by sub-group) | 137 872 | ⬜ |
 | 8 | `src/Saphir` | 31 645 | ⬜ |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
@@ -333,5 +333,42 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
   on purpose, ledger); console conformance 4448/0, MCP 1707/0, `keyPress(298)` / `mouseClick(0)` injected,
   `keyPress(9999)` / `mouseClick(99)` refused, 0 VUID. The joystick / gamepad fixes: proven by code only (no device on
   Linux, macOS or Windows).
-- [ ] (5) Docs (input doc 01, AGENTS row, ledger), report, commit + push on the owner's order, then peers.
+- [x] (5) Pushed 2026-09-30: engine `fe74dac0`, alpha `2856df1e`; peers asked.
+
+## Section 6 — `src/Scenes` (started 2026-09-30), five sub-sections
+
+| Sub | Content | Lines | Status |
+|---|---|---|---|
+| 6a | Scene graph core (🟠 step 5 — verified, awaiting the commit order): `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | 🟠 started |
+| 6b | Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ⬜ |
+| 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ⬜ |
+| 6d | `Component/` | 18 617 | ⬜ |
+| 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
+
+Lead carried from section 3: `SceneDataConsumer::processNodeAsNode()` can build a DEEP `Node` chain from a file (a
+node with a transform is never flattened) — check `Node`'s destructor and every recursive traversal for depth.
+
+### 6a — scene graph core (started 2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline (8 TUs, findings of the 6a files only): **48**: 13 misc-no-recursion, 7
+  math-missing-parentheses, 4 use-enum-class, 4 constant-array-index, 3 qualified-auto, 3 bugprone-use-after-move (a
+  callable `std::forward`ed INSIDE a loop: `forEachComponent` ×2, `forEachModifiers`), 3 missing-std-forward, 3
+  implicit-bool-conversion, 2 static-cast-downcast, and singles.
+- [x] (2) REPRODUCED CRASH (the lead from section 3): a dropped glTF — a 200 000-level chain with a node animation, so
+  ModelViewer's NODE mode — overflows the stack in `Scene::onNotification()`: a notification climbs the `Node` tree
+  hop by hop (`Node::onUnhandledNotification()` → `notify()` → the parent…), and every graph walk recurses
+  (`destroyTree`, `trimTree`, `destroyChildren`, `onLocationDataUpdate`, ModelViewer's `mergeSubtree`). The deepest
+  real asset: 30 levels (349 measured; `RecursiveSkeletons`, `Dragon.glb` 22).
+- [x] (3b) Owner ruling (2026-09-30): **an ENGINE-WIDE DEPTH CAP** — `Node::MaxDepth = 256`, `Node::depth()`,
+  `createChild()` refuses beyond; SceneDataConsumer skips a refused subtree and fails the build (it also dereferenced
+  the null node of a DUPLICATE name, in node and flatten modes); ModelViewer drops the load.
+- [x] (3) Mechanical: the 3 forwards inside loops → lvalue calls; the render-state READ getters checked in Debug (like
+  the writes); `OctreeSector::collapse()` `= nullptr` (the pointee has its own `reset()`); `NodeCrawler` by `const &`;
+  fix-its (parentheses, qualified auto, implicit bool, loop convert, redundant member init) with a header filter
+  restricted to the 6a files; an unused `using`.
+- [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0; clang-tidy 48 → 31 (all
+  on purpose, ledger); the hostile 200 000-level animated glTF dropped in the model viewer → "would sit 257 levels
+  under the root… refused", "build failed", no crash (it overflowed the stack before); `RecursiveSkeletons` (30
+  levels) and `ChronographWatch` (node mode) load and render; `animation-debug` (15 entities), `citadel` (750): 0 VUID.
+- [ ] (5) Docs (scenes doc 11, ledger), report, commit + push on the owner's order, then peers.
 

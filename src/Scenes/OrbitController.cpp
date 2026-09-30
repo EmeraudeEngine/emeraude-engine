@@ -80,7 +80,7 @@ namespace EmEn::Scenes
 	void
 	OrbitController::setOrientation (float azimuth, float elevation) noexcept
 	{
-		constexpr auto ElevationLimit = std::numbers::pi_v< float > * 0.5F - PoleGap;
+		constexpr auto ElevationLimit = (std::numbers::pi_v< float > * 0.5F) - PoleGap;
 
 		m_azimuth = getClampedRadian(azimuth);
 		m_elevation = std::clamp(elevation, -ElevationLimit, ElevationLimit);
@@ -104,7 +104,7 @@ namespace EmEn::Scenes
 
 		/* NOTE: "Grab the object" convention. Dragging right turns the scene
 		 * with the cursor, dragging down raises the point of view. */
-		this->setOrientation(m_azimuth - deltaX * RotationStep, m_elevation + deltaY * RotationStep);
+		this->setOrientation(m_azimuth - (deltaX * RotationStep), m_elevation + (deltaY * RotationStep));
 
 		return true;
 	}
@@ -194,10 +194,9 @@ namespace EmEn::Scenes
 
 		/* NOTE: Y-up world. A positive elevation places the point of view above the target. */
 		const Vector< 3, float > position{
-			m_target[X] + planeRadius * std::sin(m_azimuth),
-			m_target[Y] + distance * std::sin(m_elevation),
-			m_target[Z] + planeRadius * std::cos(m_azimuth)
-		};
+			m_target[X] + (planeRadius * std::sin(m_azimuth)),
+			m_target[Y] + (distance * std::sin(m_elevation)),
+			m_target[Z] + (planeRadius * std::cos(m_azimuth))};
 
 		/* NOTE: Parent space equals world space for a direct child of the scene root. */
 		m_controlledNode->setPosition(position, TransformSpace::Parent);

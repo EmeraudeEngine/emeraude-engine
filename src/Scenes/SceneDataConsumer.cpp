@@ -80,6 +80,8 @@ namespace EmEn::Scenes
 
 		this->collectAnimatedNodeIndices(sceneData);
 
+		m_buildFailed = false;
+
 		const bool useStaticEntities = parentNode == nullptr;
 
 		if ( useStaticEntities )
@@ -127,6 +129,14 @@ namespace EmEn::Scenes
 					{
 						auto childNode = parentNode->createChild(nodeDesc.name);
 
+						/* NOTE: createChild() refuses a duplicate name or a node beyond Node::MaxDepth (it says why). */
+						if ( childNode == nullptr )
+						{
+							m_buildFailed = true;
+
+							continue;
+						}
+
 						childNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
 							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 					}
@@ -152,6 +162,13 @@ namespace EmEn::Scenes
 		}
 
 		this->buildInstanceSets(sceneData, scene, importFrame);
+
+		if ( m_buildFailed )
+		{
+			Tracer::error(ClassId, "Some nodes of the asset could not be created (see above: a duplicate name, or a hierarchy deeper than Node::MaxDepth): the build failed.");
+
+			return false;
+		}
 
 		return true;
 	}
@@ -535,6 +552,15 @@ namespace EmEn::Scenes
 			{
 				/* Additional mesh or structural node with transform: create a child. */
 				targetNode = engineParent->createChild(nodeDesc.name, frame);
+
+				/* NOTE: refused (a duplicate name, or deeper than Node::MaxDepth — a hostile file): the subtree is
+				 * skipped and the build reports a failure; it used to dereference the null node. */
+				if ( targetNode == nullptr )
+				{
+					m_buildFailed = true;
+
+					continue;
+				}
 
 				if ( hasMesh )
 				{

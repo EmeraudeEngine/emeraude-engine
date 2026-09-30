@@ -200,5 +200,7 @@ namespace EmEn::Scenes
 			size_t m_instanceTargetPerCell{1024};
 			bool m_flattenHierarchy{false};
 			bool m_createLights{false};
+			/** @brief Set when a node could not be created during the current build(). */
+			bool m_buildFailed{false};
 	};
 }

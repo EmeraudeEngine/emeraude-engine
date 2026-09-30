@@ -51,7 +51,7 @@ namespace EmEn::Scenes
 			 * @param baseNode From which node to execute the crawling.
 			 */
 			explicit
-			NodeCrawler (std::shared_ptr< node_t > baseNode) noexcept
+			NodeCrawler (const std::shared_ptr< node_t > & baseNode) noexcept
 			{
 				this->populateStack(baseNode);
 			}

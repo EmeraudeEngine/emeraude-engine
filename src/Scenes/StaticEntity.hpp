@@ -538,6 +538,18 @@ namespace EmEn::Scenes
 			const Base::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
 			{
+				/* NOTE: a per-instance, per-frame path — @pre readStateIndex < RenderStateSlotCount, checked in Debug only
+				 * like the write side (plan Ave Robustus, the two-level rule). */
+				if constexpr ( IsDebug )
+				{
+					if ( readStateIndex >= m_renderStateCoordinates.size() ) [[unlikely]]
+					{
+						Tracer::error(ClassId, "Index overflow !");
+
+						return m_renderStateCoordinates[0];
+					}
+				}
+
 				return m_renderStateCoordinates[readStateIndex];
 			}
 

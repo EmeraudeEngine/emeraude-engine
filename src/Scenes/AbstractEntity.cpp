@@ -488,9 +488,8 @@ namespace EmEn::Scenes
 	{
 		const std::scoped_lock lock{m_componentsMutex};
 
-		const auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
-			return component->name() == name;
-		});
+		auto * const it = std::ranges::find_if(m_components, [&name] (const auto & component)
+											   { return component->name() == name; });
 
 		return (it != m_components.end()) ? *it : nullptr;
 	}
@@ -512,9 +511,8 @@ namespace EmEn::Scenes
 		{
 			const std::scoped_lock lock{m_componentsMutex};
 
-			const auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
-				return component->name() == name;
-			});
+			auto * const it = std::ranges::find_if(m_components, [&name] (const auto & component)
+												   { return component->name() == name; });
 
 			if ( it == m_components.end() ) [[unlikely]]
 			{
@@ -597,7 +595,7 @@ namespace EmEn::Scenes
 			/* A component moving its entity from here must not re-enter the lock: see onContainerMove(). */
 			m_dispatchingComponentLogics = true;
 
-			auto componentIt = m_components.begin();
+			auto * componentIt = m_components.begin();
 
 			while ( componentIt != m_components.end() )
 			{

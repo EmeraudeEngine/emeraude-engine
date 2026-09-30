@@ -1467,7 +1467,7 @@ namespace EmEn::Scenes
 					/* X-axis: bit 2 (value 4). If set = negative X, if clear = positive X.
 					 * If we see a positive X slot, we can't be at negative X boundary (clear bit 1).
 					 * If we see a negative X slot, we can't be at positive X boundary (clear bit 0). */
-					if ( slot & 4 )
+					if ( (slot & 4) != 0U )
 					{
 						possibleX &= 0b10; /* Clear positive possibility. */
 					}
@@ -1477,7 +1477,7 @@ namespace EmEn::Scenes
 					}
 
 					/* Y-axis: bit 1 (value 2). */
-					if ( slot & 2 )
+					if ( (slot & 2) != 0U )
 					{
 						possibleY &= 0b10;
 					}
@@ -1487,7 +1487,7 @@ namespace EmEn::Scenes
 					}
 
 					/* Z-axis: bit 0 (value 1). */
-					if ( slot & 1 )
+					if ( (slot & 1) != 0U )
 					{
 						possibleZ &= 0b10;
 					}
@@ -1966,7 +1966,8 @@ namespace EmEn::Scenes
 			{
 				for ( auto & subSector : m_subSectors )
 				{
-					subSector.reset();
+					/* NOTE: releases the POINTER (the sector type has its own reset()). */
+					subSector = nullptr;
 				}
 
 				m_isExpanded = false;

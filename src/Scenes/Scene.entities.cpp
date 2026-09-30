@@ -40,7 +40,6 @@ namespace EmEn::Scenes
 {
 	using namespace Base;
 	using namespace Base::Math;
-	using Graphics::CelestialBody;
 
 	std::shared_ptr< Node >
 	Scene::findNode (const std::string & nodeName) const noexcept

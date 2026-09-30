@@ -1281,7 +1281,8 @@ namespace EmEn::Scenes
 				{
 					if ( const auto modifier = modifierWeak.lock() )
 					{
-						std::forward< function_t >(process)(*modifier);
+						/* NOTE: called once per modifier: never forwarded. */
+						process(*modifier);
 					}
 					else
 					{
@@ -3126,7 +3127,7 @@ namespace EmEn::Scenes
 			/** @brief The publication count, read at the latch. Render thread only. */
 			uint64_t m_framePublicationCount{0};
 			/** @brief When the frame latched its state. Render thread only. */
-			std::chrono::steady_clock::time_point m_frameLatchTime{};
+			std::chrono::steady_clock::time_point m_frameLatchTime;
 			/** @brief Guards the published statistics records (render thread writes, console reads). */
 			mutable std::mutex m_renderStatisticsAccess;
 			/** @brief Debug camera controller. @bug Should not be persistent. */

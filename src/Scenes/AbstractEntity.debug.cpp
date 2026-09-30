@@ -212,7 +212,7 @@ namespace EmEn::Scenes
 							const auto * capsuleModel = static_cast< const CapsuleCollisionModel * >(m_collisionModel.get());
 							const auto & capsule = capsuleModel->localCapsule();
 							const auto center = (capsule.startPoint() + capsule.endPoint()) * 0.5F;
-							const auto height = (capsule.endPoint() - capsule.startPoint()).length() + capsule.radius() * 2.0F;
+							const auto height = (capsule.endPoint() - capsule.startPoint()).length() + (capsule.radius() * 2.0F);
 							const auto diameter = capsule.radius() * 2.0F;
 
 							renderableInstance->setTransformationMatrix(
@@ -392,7 +392,7 @@ namespace EmEn::Scenes
 					const auto * capsuleModel = static_cast< const CapsuleCollisionModel * >(m_collisionModel.get());
 					const auto & capsule = capsuleModel->localCapsule();
 					const auto center = (capsule.startPoint() + capsule.endPoint()) * 0.5F;
-					const auto height = (capsule.endPoint() - capsule.startPoint()).length() + capsule.radius() * 2.0F;
+					const auto height = (capsule.endPoint() - capsule.startPoint()).length() + (capsule.radius() * 2.0F);
 					const auto diameter = capsule.radius() * 2.0F;
 
 					renderableInstance->setTransformationMatrix(

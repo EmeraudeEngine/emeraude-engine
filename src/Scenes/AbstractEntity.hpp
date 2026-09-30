@@ -557,7 +557,8 @@ namespace EmEn::Scenes
 
 				for ( const auto & component : m_components )
 				{
-					std::forward< function_t >(processComponent)(*component.get());
+					/* NOTE: called once per component: never forwarded (a forwarded rvalue callable would be used after move). */
+					processComponent(*component.get());
 				}
 			}
 
@@ -579,7 +580,8 @@ namespace EmEn::Scenes
 
 				for ( const auto & component : m_components )
 				{
-					std::forward< function_t >(processComponent)(*component.get());
+					/* NOTE: called once per component: never forwarded (a forwarded rvalue callable would be used after move). */
+					processComponent(*component.get());
 				}
 			}
 
