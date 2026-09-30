@@ -528,9 +528,11 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
     `CDLODTerrainResource` retire their GPU objects through `Renderer::deferredDestructor()`; projet-alpha
     `Stage::deleteActScene()` no longer deletes a scene the console already deleted. Linux: citadel delete/create
     0 VUID 2/2, terrain delete/create 0, no false error. Engine caution-points § "A surface geometry must RETIRE its
-    GPU objects". Items opened: `surface-geometries-updated-for-inactive-scenes` (owner decision: inactive scenes'
-    surfaces simulated every frame), `imposter-bake-records-destroyed-image-after-demo-switch` (pre-existing, 20×
-    `vkEndCommandBuffer-00059` after citadel → beams → terrain).
+    GPU objects". Then FIXED 2026-09-30 (both owner rulings): only the surfaces the previous frame drew are
+    updated (an inactive scene's sea / terrain cost nothing: 0 FFT update in 25 s on beams), and imposter resources
+    are named per scene with the atlas retired at the bake (the pre-existing 20× `vkEndCommandBuffer-00059` after
+    citadel → beams → terrain gone). Linux: citadel → beams → terrain → citadel → delete/create → shutdown, 0 VUID,
+    0 error. Engine caution-points § Scene Rendering (both entries).
   - Windows peer (RTX 3060 Laptop + AMD iGPU, MSVC /W4 /WX 0 warning): PASS on steps 1-4 (2170 = 2167 + 3 skipped,
     the 5 hostile definitions alive with the exact warnings, collision-debug 21 entities — ChildA at the 6 m offset
     from the screenshot geometry —, MCP 1707/0, console 4457/0). The same delete/create teardown defect (fixed above): NVIDIA 25

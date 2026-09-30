@@ -371,6 +371,60 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Records that a pass of the rendered frame `frameCursor` draws (or tries to draw) this geometry's
+			 * synthesized surface.
+			 * @note Render thread (RenderableInstance::Abstract::bindPerModelSet(), every pass). The renderer updates only
+			 * the surfaces drawn in the previous frame (Renderer::updateSurfaceGeometries()): the sea or the terrain of an
+			 * inactive scene costs nothing (owner decision 2026-09-30). A geometry whose surface is another's (a detail
+			 * surface on a terrain) forwards the mark to that one.
+			 * @param frameCursor The rendered-frame cursor (RenderableInstance::Abstract's skinning frame cursor).
+			 * @return void
+			 */
+			virtual
+			void
+			markSurfaceDrawn (uint64_t frameCursor) const noexcept
+			{
+				m_surfaceDrawnFrame.store(frameCursor, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns the last rendered frame that drew this geometry's surface (markSurfaceDrawn()), 0 if none.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			surfaceDrawnFrame () const noexcept
+			{
+				return m_surfaceDrawnFrame.load(std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Records that the renderer updated this geometry's surface for the rendered frame `frameCursor`.
+			 * @note Render thread (Renderer::updateSurfaceGeometries()). A draw that finds no surface set in a frame that
+			 * did NOT update it is the expected first-frame skip; in a frame that did, a contract violation.
+			 * @param frameCursor The rendered-frame cursor.
+			 * @return void
+			 */
+			void
+			markSurfaceUpdated (uint64_t frameCursor) noexcept
+			{
+				m_surfaceUpdatedFrame.store(frameCursor, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns the last rendered frame whose surface update ran (markSurfaceUpdated()), 0 if none.
+			 * @note A geometry whose surface is another's answers for that one.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			virtual
+			uint64_t
+			surfaceUpdatedFrame () const noexcept
+			{
+				return m_surfaceUpdatedFrame.load(std::memory_order_relaxed);
+			}
+
+			/**
 			 * @brief Returns a vertex buffer dedicated to ray tracing, when the rendering one cannot be traced.
 			 * @note A heightfield's rendering buffer is a flat patch the vertex stage displaces: it holds
 			 * no surface a BLAS could be built from. Such a geometry keeps a separate proxy — built on the
@@ -878,5 +932,11 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
+
+			/** @brief The last rendered frame that drew the synthesized surface. @see markSurfaceDrawn() */
+			mutable std::atomic< uint64_t > m_surfaceDrawnFrame{0};
+
+			/** @brief The last rendered frame that updated the synthesized surface. @see markSurfaceUpdated() */
+			std::atomic< uint64_t > m_surfaceUpdatedFrame{0};
 	};
 }

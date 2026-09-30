@@ -110,6 +110,13 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			const Vulkan::DescriptorSet * surfaceDescriptorSet () const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Geometry::Interface::markSurfaceDrawn() const */
+			void markSurfaceDrawn (uint64_t frameCursor) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Geometry::Interface::surfaceUpdatedFrame() const */
+			[[nodiscard]]
+			uint64_t surfaceUpdatedFrame () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Geometry::Interface::meshShadingSurfaceFor() */
 			[[nodiscard]]
 			std::optional< MeshShadingSurface > meshShadingSurfaceFor (const Base::Math::Vector< 3, float > & cameraPosition) const noexcept override;

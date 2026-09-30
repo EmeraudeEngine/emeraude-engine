@@ -160,11 +160,20 @@ namespace EmEn::Graphics::RenderableInstance
 		 * for the frame being recorded by Geometry::Interface::updateSurfaceVideoMemory(). */
 		if ( const auto * geometry = m_renderable->geometry(LODLevel); geometry != nullptr && geometry->heightfieldSurfaceEnabled() )
 		{
+			/* Marked even when the set is not ready yet: that is how a surface drawn for the first time gets its first
+			 * update (Renderer::updateSurfaceGeometries() only updates the surfaces drawn in the previous frame). */
+			geometry->markSurfaceDrawn(s_skinningFrameCursor);
+
 			const auto * surfaceDS = geometry->surfaceDescriptorSet();
 
 			if ( surfaceDS == nullptr )
 			{
-				this->traceMissingDescriptorSet("PerModel (heightfield surface)", renderTarget);
+				/* NOTE: A surface this frame did not update (drawn for the first time) skips this draw on purpose; one
+				 * that WAS updated and still has no set breaks the contract. */
+				if ( geometry->surfaceUpdatedFrame() == s_skinningFrameCursor )
+				{
+					this->traceMissingDescriptorSet("PerModel (heightfield surface)", renderTarget);
+				}
 
 				return false;
 			}

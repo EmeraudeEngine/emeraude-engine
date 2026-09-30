@@ -140,7 +140,12 @@ namespace EmEn::Scenes
 
 		auto & renderer = m_scene->AVConsoleManager().graphicsRenderer();
 
-		auto atlas = std::make_shared< ImposterAtlas >("Imposter/" + label);
+		/* NOTE: The atlas is baked in THIS scene, from this scene's tree: its resources are named per scene (owner
+		 * ruling 2026-09-30). A shared "Imposter/<label>" handed the second scene baking the same label the FIRST
+		 * scene's material and atlas, while its own atlas, owned by nobody, died in the bake's command buffer. */
+		const auto resourceName = "Imposter/" + m_scene->name() + "/" + label;
+
+		auto atlas = std::make_shared< ImposterAtlas >(resourceName);
 
 		if ( !atlas->create(renderer) )
 		{
@@ -232,7 +237,7 @@ namespace EmEn::Scenes
 		 * enableImposterBillboarding()), shaded by the imposter material. */
 		const Vector< 4, float > imposterBounds{centre[X], centre[Y], centre[Z], radius};
 
-		const auto material = m_resourceManager.container< Material::StandardResource >()->getOrCreateResourceSync("Imposter/" + label, [atlas, imposterBounds] (Material::StandardResource & imposterMaterial) {
+		const auto material = m_resourceManager.container< Material::StandardResource >()->getOrCreateResourceSync(resourceName, [atlas, imposterBounds] (Material::StandardResource & imposterMaterial) {
 			if ( !imposterMaterial.setImposterAtlas(atlas, imposterBounds) )
 			{
 				return false;
@@ -254,14 +259,14 @@ namespace EmEn::Scenes
 
 		const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
 
-		const auto quad = generator.quad(2.0F, 2.0F, "Imposter/" + label + "/Quad");
+		const auto quad = generator.quad(2.0F, 2.0F, resourceName + "/Quad");
 
 		if ( quad == nullptr )
 		{
 			return {};
 		}
 
-		auto renderable = m_resourceManager.container< Renderable::MeshResource >()->getOrCreateResourceSync("Imposter/" + label, [quad, material] (Renderable::MeshResource & meshResource) {
+		auto renderable = m_resourceManager.container< Renderable::MeshResource >()->getOrCreateResourceSync(resourceName, [quad, material] (Renderable::MeshResource & meshResource) {
 			return meshResource.load(quad, material);
 		});
 

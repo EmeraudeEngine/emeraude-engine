@@ -2784,7 +2784,30 @@ duplicate or invent one. Now `std::ranges::find`.
 > `~Scene` under `~Act`. ⚠️ A `waitIdle()` in `~Scene` does NOT help (tried): the next frame resubmits the surface
 > before its destruction. ⚠️ The Tracer and the validation callback interleave out of order in the log: bracketing a
 > destructor with log lines misplaces the VUIDs; use the debugger.
-> Still open: an inactive scene's surfaces are simulated every frame (item `surface-geometries-updated-for-inactive-scenes`).
+> **Only the surfaces the previous frame drew are updated (owner decision 2026-09-30).** A draw that asks for a
+> surface's descriptor set (`RenderableInstance::Abstract::bindPerModelSet()`, every pass) marks the geometry
+> (`Geometry::Interface::markSurfaceDrawn()`; a detail surface forwards to its terrain), and
+> `Renderer::updateSurfaceGeometries()` skips a surface not drawn in the previous frame: a loaded but inactive scene's
+> sea or terrain costs nothing (measured with a gdb counter on `OceanSurfaceResource::updateSurfaceVideoMemory`:
+> 1243 updates on citadel, 0 during 25 s on beams with citadel still loaded, back to ~25/s on return). A surface drawn
+> for the first time skips that one draw (both refuse to draw before their first update) and is updated from the next
+> frame; the "descriptor set contract violation" trace is emitted only when the surface WAS updated in that frame
+> (`markSurfaceUpdated()`). The ocean's time is absolute and its delta clamped to 0.25 s: resuming is continuous.
+
+### An imposter atlas is owned by its MATERIAL only: name its resources per scene, retire it at the bake — fixed 2026-09-30
+
+> [!CAUTION]
+> `Toolkit::bakeTreeImposter()` named the material, mesh and quad `"Imposter/<label>"` and fetched them with
+> `getOrCreateResourceSync()`: a second scene baking the same label (citadel then terrain both grow `Aspen0`) got the
+> FIRST scene's material — drawing the first scene's atlas — while its own new atlas was held by the bake job alone,
+> and `ImposterBake::recordPostRenderCompute()` popped that job INSIDE the recording: 20×
+> `VUID-vkEndCommandBuffer-commandBuffer-00059` ("bound VkImage … was destroyed") after citadel → beams → terrain. Now
+> the resources are `"Imposter/<scene>/<label>"` (owner ruling) and the bake target retires the atlas through the
+> renderer's deferred destructor when its job ends.
+> Method that found it — **who destroyed this Vulkan handle?**: a gdb Python breakpoint on `vkDestroyImage` recording
+> each call's backtrace by handle (`$rsi`), and one on `DebugMessenger::debugCallback` that parses the message
+> (`pMessage` = 6th pointer of the callback data, `((void **)$rdx)[5]`) and prints the stored backtrace of the handle it
+> names. The handle the application passes IS the one the layer prints.
 
 ### Fixed: the render lists walked EVERY entity and tested the volume last — 9 FPS for 32 ms of GPU (Sep 2026)
 

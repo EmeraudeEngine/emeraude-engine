@@ -21,7 +21,10 @@ The pieces, and the one-line reason for each:
   warm-up renders per job (the entity's published state catches up). ⚠️ `setClearColorOverride()` to TRANSPARENT is
   mandatory — without it every empty texel was a covered black one (measured: coverage 100 %). ⚠️ It says
   `isRefreshedWhenContentArrives() = false`: a streaming forest re-flagged every on-demand target every frame.
-- **`Scenes::Toolkit::bakeTreeImposter(label, tree, bounds)`** — a BAKE-ONLY entity (`RenderableInstance::
+- **`Scenes::Toolkit::bakeTreeImposter(label, tree, bounds)`** — its atlas, material, mesh and quad are named
+  `"Imposter/<scene>/<label>"` (per scene since 2026-09-30: a shared name handed the second scene the first one's
+  atlas; engine caution-points § "An imposter atlas is owned by its MATERIAL only"); the material is the atlas's only
+  long-term owner, and the bake target retires the atlas when its job ends. It builds a BAKE-ONLY entity (`RenderableInstance::
   setBakeOnly()`, shown only to the target whose bake subject it is — never the view, the probes, the shadows or the
   TLAS) holding 64 copies of the tree, each rotated so its view direction faces the camera (`imposterCellFrame()` of
   `hemiOctahedralCellDirection()`, emeraude-base `Math/OctahedralMapping.hpp`) and scaled to `ImposterRigRadius`

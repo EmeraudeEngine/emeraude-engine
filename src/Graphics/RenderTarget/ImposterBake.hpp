@@ -47,6 +47,7 @@ namespace EmEn
 {
 	namespace Vulkan
 	{
+		class DeferredDestructor;
 		class Framebuffer;
 		class Image;
 		class ImageView;
@@ -286,6 +287,8 @@ namespace EmEn::Graphics::RenderTarget
 			Base::Math::CartesianFrame< float > m_worldCoordinates;
 			std::deque< Job > m_jobs;
 			std::vector< std::weak_ptr< ImposterAtlas > > m_bakedAtlases;
+			/** @brief The renderer's (set by onCreate(), non-owning: the renderer outlives its targets). */
+			Vulkan::DeferredDestructor * m_deferredDestructor{nullptr};
 			mutable std::mutex m_jobsAccess;
 			std::atomic_bool m_hasJobs{false};
 			bool m_isCreated{false};

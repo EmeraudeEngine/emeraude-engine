@@ -3509,10 +3509,28 @@ namespace EmEn::Graphics
 
 		for ( const auto & geometry : alive )
 		{
-			if ( geometry->isCreated() && !geometry->updateSurfaceVideoMemory(lodViewPosition, m_currentFrameIndex) )
+			/* NOTE: Only the surfaces the previous frame drew (Geometry::Interface::markSurfaceDrawn()): a loaded but
+			 * inactive scene's sea or terrain is not simulated (owner decision 2026-09-30). m_skinningFrameCursor is
+			 * this frame's cursor (incremented at the frame begin); a surface drawn for the first time was marked by its
+			 * first draw attempt, which skipped (no surface set yet), and is updated from the next frame on. */
+			if ( geometry->surfaceDrawnFrame() + 1 < m_skinningFrameCursor )
+			{
+				continue;
+			}
+
+			if ( !geometry->isCreated() )
+			{
+				continue;
+			}
+
+			if ( !geometry->updateSurfaceVideoMemory(lodViewPosition, m_currentFrameIndex) )
 			{
 				TraceError{ClassId} << "Unable to update the synthesized surface of geometry '" << geometry->name() << "' !";
+
+				continue;
 			}
+
+			geometry->markSurfaceUpdated(m_skinningFrameCursor);
 		}
 	}
 

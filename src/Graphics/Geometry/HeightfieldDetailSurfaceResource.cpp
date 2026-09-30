@@ -100,6 +100,19 @@ namespace EmEn::Graphics::Geometry
 		return m_terrain->surfaceDescriptorSet();
 	}
 
+	void
+	HeightfieldDetailSurfaceResource::markSurfaceDrawn (uint64_t frameCursor) const noexcept
+	{
+		/* The surface drawn is the terrain's clipmap: the terrain is the one the renderer must keep updating. */
+		m_terrain->markSurfaceDrawn(frameCursor);
+	}
+
+	uint64_t
+	HeightfieldDetailSurfaceResource::surfaceUpdatedFrame () const noexcept
+	{
+		return m_terrain->surfaceUpdatedFrame();
+	}
+
 	std::optional< MeshShadingSurface >
 	HeightfieldDetailSurfaceResource::meshShadingSurfaceFor (const Vector< 3, float > & cameraPosition) const noexcept
 	{

@@ -33,6 +33,7 @@
 #include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
@@ -220,6 +221,14 @@ namespace EmEn::Graphics::RenderTarget
 
 		TraceInfo{ClassId} << "Imposter atlas '" << job.atlas->name() << "' baked.";
 
+		/* NOTE: The job may hold the atlas's LAST reference (its material is its only other owner): popping it would
+		 * destroy the atlas images this very command buffer is recording into. It is retired, released once the
+		 * frames in flight are done (triad 2026-09-30: 20 vkEndCommandBuffer-00059 after citadel → beams → terrain). */
+		if ( m_deferredDestructor != nullptr )
+		{
+			m_deferredDestructor->retireObject(std::shared_ptr< void >{job.atlas});
+		}
+
 		m_jobs.pop_front();
 
 		if ( m_jobs.empty() )
@@ -292,6 +301,8 @@ namespace EmEn::Graphics::RenderTarget
 	bool
 	ImposterBake::onCreate (Renderer & renderer) noexcept
 	{
+		m_deferredDestructor = &renderer.deferredDestructor();
+
 		if ( !this->createAttachment(renderer, DiscardedColorFormat, 0, "ColorImage", m_colorImage, m_colorImageView) ||
 			 !this->createAttachment(renderer, ImposterAtlas::NormalFormat, VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "NormalsImage", m_normalsImage, m_normalsImageView) ||
 			 !this->createAttachment(renderer, DiscardedColorFormat, 0, "MaterialPropertiesImage", m_materialPropertiesImage, m_materialPropertiesImageView) ||
