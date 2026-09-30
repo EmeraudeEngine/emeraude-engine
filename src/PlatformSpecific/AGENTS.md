@@ -30,3 +30,4 @@ Context for developing Emeraude Engine platform-specific code.
 | Common Pitfalls | [`docs/subsystems/platformspecific/15-common-pitfalls.md`](../../docs/subsystems/platformspecific/15-common-pitfalls.md) | 1 KB |
 | Attention Points | [`docs/subsystems/platformspecific/16-attention-points.md`](../../docs/subsystems/platformspecific/16-attention-points.md) | 1 KB |
 | Related Documentation | [`docs/subsystems/platformspecific/17-related-documentation.md`](../../docs/subsystems/platformspecific/17-related-documentation.md) | 1 KB |
+| macOS: the Vulkan loader is pinned to the bundle's driver (Sep 2026) | [`docs/subsystems/platformspecific/18-macos-vulkan-driver-pinned-to-the-bundle.md`](../../docs/subsystems/platformspecific/18-macos-vulkan-driver-pinned-to-the-bundle.md) | 4 KB |

@@ -40,4 +40,8 @@ const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
 
 macOS helpers are minimal - Objective-C provides native string handling. NSString conversion is done inline using `stringWithUTF8String:`.
 
+| Function | Purpose |
+|----------|---------|
+| `pinVulkanLoaderToBundledDriver()` | Sets `VK_DRIVER_FILES` to the bundle's `Contents/Resources/vulkan/icd.d/MoltenVK_icd.json` (unless already set, or absent), so the loader loads that driver only. Called by `PlatformManager` before `glfwInit()`. See [18-macos-vulkan-driver-pinned-to-the-bundle.md](18-macos-vulkan-driver-pinned-to-the-bundle.md) |
+
 ---

@@ -285,6 +285,9 @@ elseif ( APPLE )
 
 	# Link DiskArbitration framework for disk info (removable detection).
 	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework DiskArbitration")
+
+	# Link CoreFoundation framework for the bundle lookup (PlatformSpecific::pinVulkanLoaderToBundledDriver()).
+	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreFoundation")
 elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 

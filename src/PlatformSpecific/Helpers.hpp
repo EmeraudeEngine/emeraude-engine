@@ -298,4 +298,28 @@ namespace EmEn::PlatformSpecific
 	[[nodiscard]]
 	EMEN_API std::string buildKdialogFilters (const ExtensionFilters & filters) noexcept;
 #endif
+
+#if IS_MACOS
+	/**
+	 * @brief Restricts the Vulkan loader to the driver manifest shipped inside the application bundle.
+	 * @details The loader loads one driver per manifest it finds. A bundle ships MoltenVK with its own
+	 * manifest (Contents/Resources/vulkan/icd.d/MoltenVK_icd.json), and a machine with the LunarG SDK
+	 * installed exposes a second one (/usr/local/share/vulkan/icd.d) plus KosmicKrisp. The loader then
+	 * dlopens MoltenVK twice by two absolute paths, and the Objective-C runtime holds two copies of every
+	 * MoltenVK class (the "Class MVKBlockObserver is implemented in both" warning). Setting
+	 * VK_DRIVER_FILES to the bundle manifest makes the bundle driver the only one.
+	 * VK_LUNARG_direct_driver_loading cannot do this: it requires the Loader-Driver interface version 7,
+	 * and MoltenVK only advertises version 5 (checked 2026-09-30).
+	 * @note Must run before the first loader call (glfwInit()/glfwVulkanSupported() already scan the
+	 * drivers), and a macOS dylib holding Objective-C classes is never unloaded afterwards.
+	 * @note No-op when VK_DRIVER_FILES or VK_ICD_FILENAMES is already set (an explicit choice wins), or
+	 * when the executable carries no such manifest (not bundled, or a bundle without its own driver).
+	 * The variable is inherited by child processes, which is harmless for the CEF helpers: they create no
+	 * Vulkan instance.
+	 * @return std::string The manifest path VK_DRIVER_FILES now points at, or an empty string when
+	 * nothing was changed.
+	 */
+	[[nodiscard]]
+	std::string pinVulkanLoaderToBundledDriver () noexcept;
+#endif
 }

@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "PlatformSpecific/Helpers.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
@@ -72,6 +73,15 @@ namespace EmEn
 
 			glfwInitVulkanLoader(nullptr);
 		}
+
+#if IS_MACOS
+		/* NOTE: Before glfwInit(): the first loader call scans every driver manifest, and a MoltenVK loaded
+		 * from a second manifest (the LunarG SDK one) can never be unloaded. See pinVulkanLoaderToBundledDriver(). */
+		if ( const auto manifest = PlatformSpecific::pinVulkanLoaderToBundledDriver(); !manifest.empty() )
+		{
+			TraceInfo{ClassId} << "Vulkan loader restricted to the bundled driver manifest '" << manifest << "'.";
+		}
+#endif
 
 		if constexpr ( IsLinux )
 		{

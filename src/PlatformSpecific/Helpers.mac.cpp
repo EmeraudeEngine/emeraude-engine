@@ -26,7 +26,70 @@
 
 #include "Helpers.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <cstdlib>
+#include <filesystem>
+
+/* Third-party inclusions. */
+#include <CoreFoundation/CoreFoundation.h>
+#include <sys/syslimits.h>
+
+/* Local inclusions. */
+#include "IO/IO.hpp"
+
 namespace EmEn::PlatformSpecific
 {
+	std::string
+	pinVulkanLoaderToBundledDriver () noexcept
+	{
+		/* NOTE: An explicit driver choice (a developer pointing the loader at another manifest) always wins.
+		 * VK_ICD_FILENAMES is the deprecated spelling the loader still honors. */
+		if ( std::getenv("VK_DRIVER_FILES") != nullptr || std::getenv("VK_ICD_FILENAMES") != nullptr )
+		{
+			return {};
+		}
 
+		/* NOTE: Outside a bundle, CoreFoundation answers the executable's directory: the manifest is
+		 * then absent and nothing changes. */
+		const CFBundleRef mainBundle = CFBundleGetMainBundle();
+
+		if ( mainBundle == nullptr )
+		{
+			return {};
+		}
+
+		const CFURLRef resourcesURL = CFBundleCopyResourcesDirectoryURL(mainBundle);
+
+		if ( resourcesURL == nullptr )
+		{
+			return {};
+		}
+
+		std::array< char, PATH_MAX > resourcesPath{};
+
+		const auto converted = CFURLGetFileSystemRepresentation(resourcesURL, true, reinterpret_cast< UInt8 * >(resourcesPath.data()), static_cast< CFIndex >(resourcesPath.size()));
+
+		CFRelease(resourcesURL);
+
+		if ( converted == 0 )
+		{
+			return {};
+		}
+
+		const auto manifest = std::filesystem::path{resourcesPath.data()} / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+
+		if ( !Base::IO::fileExists(manifest) )
+		{
+			return {};
+		}
+
+		/* NOTE: The loader reads VK_DRIVER_FILES at each driver scan, so it only has to be set before the first one. */
+		if ( setenv("VK_DRIVER_FILES", manifest.c_str(), 0) != 0 )
+		{
+			return {};
+		}
+
+		return manifest.string();
+	}
 }
