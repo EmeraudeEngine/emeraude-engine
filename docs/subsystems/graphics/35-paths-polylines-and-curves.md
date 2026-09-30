@@ -95,11 +95,25 @@ passes 0 (it draws on top).
 | 1 m | 6.0 | 6.0 | 5.0 |
 | 3 m | 6.0 | 6.0 | 6.0 |
 
-The ribbon's lower edge dips a half width BELOW the surface (camera-facing), and the ray grazing the ground descends
+The macOS peer (M2, 2560x1440, 2026-09-30) needed 6 m at 50 m (3 m still lost a row): a pixel is larger in the world
+at a lower resolution, and the need grows with it. The ribbon's lower edge dips a half width BELOW the surface (camera-facing), and the ray grazing the ground descends
 only `height / distance` per metre: the depth to win is `half width / sin(grazing angle)` — about the square of the
 distance for a pixel width (a metre at 28 m, three at 50 m). An offset that large lets any object within it stop
-hiding the path. Open (owner decision): a ribbon LYING in the surface's plane, an offset derived from that geometry,
-or this offset for near and steep views only.
+hiding the path. Owner decision (2026-09-30): the answer for a path on a surface is the FLAT ribbon below; this offset
+stays for near and steep views.
+
+### The flat ribbon — a path lying on a surface (2026-09-30)
+
+`PathResource::setFlat(true, up = +Y)` (console `Path.setFlat(entity, component, state, x, y, z)`; `PathPlacement.yzw`,
+the up vector in the ENTITY's space, normalized; zero = facing the eye). `pathNormal()` returns `cross(segment, up)`
+instead of the eye-facing normal: the ribbon lies in the surface's plane like a road marking and TILTS WITH THE PATH'S
+OWN SLOPE (not with a slope across it); joins, bevels and round caps work unchanged in that plane. Seen edge-on it
+vanishes, like any marking. Widths in entity units only — a pixel width keeps facing the eye (its screen-space
+construction), and so does the debug overlay (visibility first). Lift the points a centimetre above the surface:
+two coplanar surfaces are a depth-test draw.
+Measured (Linux, the `RoundZigzag` 5 cm above the ground, 15 cm half width, camera 0.8 m high 14 m away, selection
+outline at hidden opacity 1 then 0): facing the eye 1495 → 779 outline pixels (half of it hidden by the ground);
+flat 1584 → 1584 (nothing hidden). Bench: `paths`'s `GroundTrail`.
 
 ### The selection outline (2026-09-30)
 

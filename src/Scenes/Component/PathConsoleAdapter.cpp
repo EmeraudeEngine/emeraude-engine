@@ -90,6 +90,16 @@ namespace EmEn::Scenes::Component
 				state["roundJoins"] = material->areJoinsRound();
 				state["miterLimit"] = static_cast< double >(material->miterLimit());
 				state["depthOffset"] = static_cast< double >(material->depthOffset());
+				state["flat"] = material->isFlat();
+				{
+					const auto up = material->flatUp();
+					Json::Value flatUp{Json::arrayValue};
+					flatUp.append(static_cast< double >(up[X]));
+					flatUp.append(static_cast< double >(up[Y]));
+					flatUp.append(static_cast< double >(up[Z]));
+
+					state["flatUp"] = flatUp;
+				}
 			}
 
 			return FastJSON::stringify(state);
@@ -286,6 +296,19 @@ namespace EmEn::Scenes::Component
 							return this->withMaterial(entityName, componentName, [offset] (Graphics::Material::PathResource & material) {
 								material.setDepthOffset(offset);
 							}, "depth offset set.");
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setFlat", "Makes a Path's ribbon lie flat in the surface an up vector is normal to (a trail on the ground) instead of facing the eye; widths in entity units only.",
+						{entity, component, {"state", "true to lie flat, false to face the eye."}, {"x", "The surface's up X, in the entity's space.", 0.0F}, {"y", "Up Y (UP is +Y).", 1.0F}, {"z", "Up Z.", 0.0F}},
+						[this] (const std::string & entityName, const std::string & componentName, bool state, float x, float y, float z) {
+							if ( state && (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || x * x + y * y + z * z < 1.0e-12F) )
+							{
+								return Console::CommandResult::error("The up vector must be finite and non-zero.");
+							}
+
+							return this->withMaterial(entityName, componentName, [state, x, y, z] (Graphics::Material::PathResource & material) {
+								material.setFlat(state, {x, y, z});
+							}, state ? "lying flat." : "facing the eye.");
 						}, Console::CommandHint::Idempotent);
 
 					this->bindCommand("setEnabled", "Shows or hides a Path.",

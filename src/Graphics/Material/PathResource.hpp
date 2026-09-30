@@ -39,6 +39,7 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "Math/Vector.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
 
@@ -422,6 +423,41 @@ namespace EmEn::Graphics::Material
 			void setDepthOffset (float offset) noexcept;
 
 			/**
+			 * @brief Makes the ribbon LIE FLAT in the surface an up vector is normal to — a trail on the ground, a road
+			 * marking — instead of facing the eye (owner decision 2026-09-30: the answer to a path lying on a surface).
+			 * @note Its width runs along cross(segment, up): the ribbon tilts with the path's own slope, not with a slope
+			 * across it. Seen edge-on it vanishes, like any marking. Widths in ENTITY UNITS only: a pixel width keeps facing
+			 * the eye, and so does the debug mode (visibility first). Lift the points a centimetre or two above the surface
+			 * (the depth test between two coplanar surfaces is a draw).
+			 * @param state Whether the ribbon lies flat.
+			 * @param up The surface's normal in the ENTITY's space (normalized here). Default +Y; a zero one leaves it facing.
+			 * @return void
+			 */
+			void setFlat (bool state, const Base::Math::Vector< 3, float > & up = Base::Math::Vector< 3, float >::positiveY()) noexcept;
+
+			/**
+			 * @brief Returns whether the ribbon lies flat (setFlat()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFlat () const noexcept
+			{
+				return m_properties[PlacementOffset + 1] != 0.0F || m_properties[PlacementOffset + 2] != 0.0F || m_properties[PlacementOffset + 3] != 0.0F;
+			}
+
+			/**
+			 * @brief Returns the up vector of a flat ribbon (entity space, unit), or zero when it faces the eye.
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float >
+			flatUp () const noexcept
+			{
+				return {m_properties[PlacementOffset + 1], m_properties[PlacementOffset + 2], m_properties[PlacementOffset + 3]};
+			}
+
+			/**
 			 * @brief Returns the depth offset, in world units.
 			 * @return float
 			 */
@@ -486,7 +522,7 @@ namespace EmEn::Graphics::Material
 				0.0F, 0.0F, 0.0F, 0.0F,
 				/* Half width, in pixels, round, miter limit. */
 				DefaultHalfWidth, 0.0F, 0.0F, DefaultMiterLimit,
-				/* Depth offset toward the eye (world units), unused. */
+				/* Depth offset toward the eye (world units), the flat ribbon's up vector (zero = facing the eye). */
 				0.0F, 0.0F, 0.0F, 0.0F
 			};
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;

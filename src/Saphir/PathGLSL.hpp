@@ -71,8 +71,15 @@ namespace EmEn::Saphir::PathGLSL
 	return ubPathPoints.pathPoints[(span.x + clamped) * 2u + (previous ? 1u : 0u)];
 )GLSL"};
 
-	/** @brief vec3 pathNormal (vec3 direction, vec3 point, vec3 eye): across the direction, facing the eye. */
+	/**
+	 * @brief vec3 pathNormal (vec3 direction, vec3 point, vec3 eye, vec3 up): across the direction — facing the eye, or
+	 * LYING in the surface a non-zero `up` is normal to (a flat ribbon, Material::PathResource::setFlat()).
+	 */
 	constexpr auto NormalBody{R"GLSL(
+	if ( dot(up, up) > 1.0e-12 ) {
+		const vec3 lying = cross(direction, up);
+		if ( dot(lying, lying) > 1.0e-12 ) { return normalize(lying); }
+	}
 	vec3 across = cross(direction, eye - point);
 	if ( dot(across, across) < 1.0e-20 ) { across = cross(direction, abs(direction.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)); }
 	return normalize(across);
@@ -105,10 +112,11 @@ namespace EmEn::Saphir::PathGLSL
 )GLSL"};
 
 	/**
-	 * @brief vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, float depthOffset,
+	 * @brief vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, vec4 placement,
 	 * vec3 eye, mat4 view, mat4 projection, vec2 viewport, out vec4 coordinates).
-	 * @note depthOffset: world units the corner moves toward the eye along its ray (Material::PathResource
-	 * setDepthOffset(), 0 = none).
+	 * @note placement (Keys PathPlacement): x, the world units the corner moves toward the eye along its ray
+	 * (Material::PathResource::setDepthOffset(), 0 = none); yzw, the UP vector of a FLAT ribbon in the entity's space
+	 * (setFlat(), zero = facing the eye) — widths in entity units only: a pixel width always faces the eye.
 	 * @note Two constructions. A width in ENTITY UNITS: in world space, across = cross(segment, point → eye) (the beam's).
 	 * A width in PIXELS: in SCREEN space — the segment projected into pixels, the normal and the joins decided in 2D,
 	 * each offset lifted back to view space at its point's depth — so the line is exactly that many pixels wide
@@ -205,18 +213,20 @@ namespace EmEn::Saphir::PathGLSL
 		const vec3 d = (w1 - w0) / segmentLength;
 		const float hw0 = style.x * length(model[1].xyz);
 		const float hw1 = hw0;
-		const vec3 n0 = pathNormal(d, w0, eye);
-		const vec3 n1 = pathNormal(d, w1, eye);
+		/* A flat ribbon lies in the plane its up vector is normal to (entity space, carried by the model). */
+		const vec3 up = mat3(model) * placement.yzw;
+		const vec3 n0 = pathNormal(d, w0, eye, up);
+		const vec3 n1 = pathNormal(d, w1, eye, up);
 		vec4 startMiter = vec4(n0, 0.0);
 		vec3 previousNormal = n0;
 		if ( !roundJoins && hasPrevious ) {
 			const vec3 incoming = w0 - wp;
-			if ( dot(incoming, incoming) > 1.0e-12 ) { previousNormal = pathNormal(normalize(incoming), w0, eye); startMiter = pathMiter(previousNormal, n0, style.w); }
+			if ( dot(incoming, incoming) > 1.0e-12 ) { previousNormal = pathNormal(normalize(incoming), w0, eye, up); startMiter = pathMiter(previousNormal, n0, style.w); }
 		}
 		vec4 endMiter = vec4(n1, 0.0);
 		if ( !roundJoins && hasNext ) {
 			const vec3 outgoing = w2 - w1;
-			if ( dot(outgoing, outgoing) > 1.0e-12 ) { endMiter = pathMiter(n1, pathNormal(normalize(outgoing), w1, eye), style.w); }
+			if ( dot(outgoing, outgoing) > 1.0e-12 ) { endMiter = pathMiter(n1, pathNormal(normalize(outgoing), w1, eye, up), style.w); }
 		}
 		if ( corner < 6 ) {
 			/* The quad: 0 start-, 1 start+, 2 end-, 3 end-, 4 start+, 5 end+. */
@@ -241,10 +251,10 @@ namespace EmEn::Saphir::PathGLSL
 	}
 	/* The DEPTH OFFSET: the corner moved toward the eye along its own ray — its screen position (and a pixel width)
 	 * unchanged — so that a path lying on a surface is not cut by it. At most half the way to the eye. */
-	if ( depthOffset > 0.0 ) {
+	if ( placement.x > 0.0 ) {
 		const vec3 toEye = eye - world;
 		const float eyeDistance = length(toEye);
-		if ( eyeDistance > 1.0e-6 ) { world += toEye * (min(depthOffset, eyeDistance * 0.5) / eyeDistance); }
+		if ( eyeDistance > 1.0e-6 ) { world += toEye * (min(placement.x, eyeDistance * 0.5) / eyeDistance); }
 	}
 	return (inverse(model) * vec4(world, 1.0)).xyz;
 )GLSL"};
@@ -280,11 +290,11 @@ namespace EmEn::Saphir::PathGLSL
 	{
 		return
 			std::string{"vec4 pathPoint (uvec4 span, int index, bool previous)\n{"} + PointBody + "}\n\n" +
-			"vec3 pathNormal (vec3 direction, vec3 point, vec3 eye)\n{" + NormalBody + "}\n\n" +
+			"vec3 pathNormal (vec3 direction, vec3 point, vec3 eye, vec3 up)\n{" + NormalBody + "}\n\n" +
 			"vec4 pathMiter (vec3 incoming, vec3 outgoing, float limit)\n{" + MiterBody + "}\n\n" +
 			"vec2 pathScreen (mat4 projection, vec3 viewPoint, vec2 viewport)\n{" + ScreenBody + "}\n\n" +
 			"vec3 pathLift (mat4 projection, vec3 viewPoint, vec2 pixels, vec2 viewport)\n{" + LiftBody + "}\n\n" +
-			"vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, float depthOffset, vec3 eye, mat4 view, mat4 projection, vec2 viewport, out vec4 coordinates)\n{" + CornerBody + "}\n\n";
+			"vec3 pathCorner (mat4 model, uvec4 span, int vertexIndex, bool previous, vec4 style, vec4 placement, vec3 eye, mat4 view, mat4 projection, vec2 viewport, out vec4 coordinates)\n{" + CornerBody + "}\n\n";
 	}
 
 	/**
@@ -336,6 +346,7 @@ namespace EmEn::Saphir::PathGLSL
 		normal.addInParameter(GLSL::FloatVector3, "direction");
 		normal.addInParameter(GLSL::FloatVector3, "point");
 		normal.addInParameter(GLSL::FloatVector3, "eye");
+		normal.addInParameter(GLSL::FloatVector3, "up");
 		Code{normal, Location::Output} << NormalBody;
 
 		Declaration::Function miter{"pathMiter", GLSL::FloatVector4};
@@ -363,7 +374,7 @@ namespace EmEn::Saphir::PathGLSL
 		corner.addInParameter(GLSL::Integer, "vertexIndex");
 		corner.addInParameter(GLSL::Boolean, "previous");
 		corner.addInParameter(GLSL::FloatVector4, "style");
-		corner.addInParameter(GLSL::Float, "depthOffset");
+		corner.addInParameter(GLSL::FloatVector4, "placement");
 		corner.addInParameter(GLSL::FloatVector3, "eye");
 		corner.addInParameter(GLSL::Matrix4, "view");
 		corner.addInParameter(GLSL::Matrix4, "projection");

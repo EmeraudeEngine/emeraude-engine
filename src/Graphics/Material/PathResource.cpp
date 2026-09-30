@@ -50,6 +50,7 @@
 namespace EmEn::Graphics::Material
 {
 	using namespace Base;
+	using namespace Base::Math;
 	using namespace Base::PixelFactory;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
@@ -284,7 +285,7 @@ namespace EmEn::Graphics::Material
 	bool
 	PathResource::prepareVertexStage (Generator::Abstract & /*generator*/, AbstractVertexStage & vertexShader) const noexcept
 	{
-		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle), MaterialUB(UniformBlock::Component::PathPlacement) + ".x");
+		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle), MaterialUB(UniformBlock::Component::PathPlacement));
 
 		return true;
 	}
@@ -341,7 +342,7 @@ namespace EmEn::Graphics::Material
 	{
 		/* The same ribbon as the scene pass (the generator switched the stage to the instance-transforms path and
 		 * declared the view block, Generator::ShadowCasting::isPulledVertexGeometry()). */
-		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle), MaterialUB(UniformBlock::Component::PathPlacement) + ".x");
+		vertexShader.enablePathRibbon(MaterialUB(UniformBlock::Component::PathStyle), MaterialUB(UniformBlock::Component::PathPlacement));
 
 		if ( !vertexShader.declare(this->getUniformBlock(generator.shaderProgram()->setIndex(SetType::PerModelLayer), 0)) )
 		{
@@ -422,6 +423,21 @@ namespace EmEn::Graphics::Material
 	{
 		m_properties[StyleOffset + 2] = round ? 1.0F : 0.0F;
 		m_properties[StyleOffset + 3] = std::max(1.0F, miterLimit);
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	PathResource::setFlat (bool state, const Vector< 3, float > & up) noexcept
+	{
+		const auto length = up.length();
+
+		/* A zero or non-finite up cannot orient anything: the ribbon faces the eye. */
+		const bool flat = state && std::isfinite(length) && length > 1.0e-6F;
+
+		m_properties[PlacementOffset + 1] = flat ? up[X] / length : 0.0F;
+		m_properties[PlacementOffset + 2] = flat ? up[Y] / length : 0.0F;
+		m_properties[PlacementOffset + 3] = flat ? up[Z] / length : 0.0F;
 
 		this->markVideoMemoryDirty();
 	}

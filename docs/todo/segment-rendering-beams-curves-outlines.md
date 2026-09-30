@@ -76,6 +76,7 @@ exact on screen is the debug mode's. What remains:
   shadow and is absent from reflection cubemaps (the directory needs the instance-transforms SSBO path).
 - ~~The debug overlay on the direct swap-chain frame path~~ DONE 2026-09-30, with the outline.
 - A point-count change pairs no previous points (velocity 0) but sets no reactive tag yet.
+- ~~A path on a surface~~ DONE 2026-09-30: the flat ribbon (`setFlat`) and a depth offset (graphics doc 35).
 - Dashes (the arc length is already in w), arrows, per-vertex colour; a Bézier path from the console.
 
 ### D. Beams — what the first pass left out

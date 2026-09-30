@@ -584,15 +584,15 @@ namespace EmEn::Saphir
 			 * Needs the instance-transforms SSBO path (the directory is indexed by the instance slot): a program without
 			 * it (instanced, MDI, cubemap, CSM) refuses the ribbon. Exclusive with every other vertex source.
 			 * @param styleExpression A GLSL vec4 expression: (half width, 1 if in pixels, 1 if round, miter limit).
-			 * @param depthOffsetExpression A GLSL float expression: the world units every corner moves toward the eye
-			 * (0 = none) — a path lying on a surface is not cut by it.
+			 * @param placementExpression A GLSL vec4 expression: (depth offset toward the eye in world units, the up vector
+			 * of a flat ribbon in the entity's space — zero = facing the eye).
 			 * @return void
 			 */
 			void
-			enablePathRibbon (std::string styleExpression, std::string depthOffsetExpression) noexcept
+			enablePathRibbon (std::string styleExpression, std::string placementExpression) noexcept
 			{
 				m_pathStyleExpression = std::move(styleExpression);
-				m_pathDepthOffsetExpression = std::move(depthOffsetExpression);
+				m_pathPlacementExpression = std::move(placementExpression);
 				m_pathRibbonEnabled = true;
 			}
 
@@ -1169,7 +1169,7 @@ namespace EmEn::Saphir
 			std::string m_beamShapeExpression;
 			std::string m_beamMotionExpression;
 			std::string m_pathStyleExpression;
-			std::string m_pathDepthOffsetExpression;
+			std::string m_pathPlacementExpression;
 			const char * m_positionOutput{"gl_Position"};
 			const char * m_instanceIndexExpression{"gl_InstanceIndex"};
 			bool m_instancingEnabled{false};
