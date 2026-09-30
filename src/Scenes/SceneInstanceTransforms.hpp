@@ -164,8 +164,8 @@ namespace EmEn::Scenes
 			 */
 			struct DebugPath
 			{
-				uint32_t firstPoint;
-				uint32_t pointCount;
+				uint32_t firstPoint{0};
+				uint32_t pointCount{0};
 				/** @brief The colour as displayed (sRGB) and the opacity. */
 				Base::Math::Vector< 4, float > color;
 				/** @brief (half width, 1 if in pixels, 1 if round, miter limit). */

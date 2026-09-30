@@ -223,7 +223,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Registers a texture in one binding bucket (deduplicated).
 			 */
-			uint32_t registerInBucket (std::vector< Entry > & entries, std::unordered_map< const Vulkan::TextureInterface *, uint32_t > & lookup, std::queue< uint32_t > & freeIndices, uint32_t & nextIndex, uint32_t maxIndex, const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept;
+			static uint32_t registerInBucket (std::vector< Entry > & entries, std::unordered_map< const Vulkan::TextureInterface *, uint32_t > & lookup, std::queue< uint32_t > & freeIndices, uint32_t & nextIndex, uint32_t maxIndex, const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept;
 
 			/**
 			 * @brief Unregisters a texture from one binding bucket.

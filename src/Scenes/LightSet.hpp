@@ -478,11 +478,12 @@ namespace EmEn::Scenes
 			forEachDirectionalLight (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< Component::DirectionalLight > & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_lightsAccess};
+				const std::scoped_lock lock{m_lightsAccess};
 
 				for ( const auto & light : m_directionalLights )
 				{
-					std::forward< function_t >(process)(light);
+					/* NOTE: called once per light: never forwarded. */
+					process(light);
 				}
 			}
 

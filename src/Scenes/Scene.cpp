@@ -31,6 +31,7 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "AnyValue.hpp"
 #include "Audio/HardwareOutput.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/Renderer.hpp"
@@ -762,7 +763,14 @@ namespace EmEn::Scenes
 		{
 			if ( notificationCode == AbstractEntity::EntityContentModified )
 			{
-				const auto staticEntity = std::any_cast< std::shared_ptr< StaticEntity > >(data);
+				const auto * const staticEntityPayload = Base::anyValue< std::shared_ptr< StaticEntity > >(data, ClassId);
+
+				if ( staticEntityPayload == nullptr )
+				{
+					return true;
+				}
+
+				const auto & staticEntity = *staticEntityPayload;
 
 				this->onEntityContentModified(staticEntity);
 			}
@@ -779,7 +787,14 @@ namespace EmEn::Scenes
 		{
 			if ( notificationCode == AbstractEntity::EntityContentModified )
 			{
-				const auto node = std::any_cast< std::shared_ptr< Node > >(data);
+				const auto * const nodePayload = Base::anyValue< std::shared_ptr< Node > >(data, ClassId);
+
+				if ( nodePayload == nullptr )
+				{
+					return true;
+				}
+
+				const auto & node = *nodePayload;
 
 				this->onEntityContentModified(node);
 			}

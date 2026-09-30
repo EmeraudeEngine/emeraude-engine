@@ -30,6 +30,7 @@
 #include "Physics/CollisionDetection.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <span>
 
@@ -39,50 +40,53 @@ namespace EmEn::Scenes
 	using namespace Base::Math;
 	using namespace Physics;
 
-	/**
-	 * @brief Applies complete collision response: velocity bounce + grounded state.
-	 * @param movable The movable trait to update.
-	 * @param surfaceNormal The dominant collision surface normal.
-	 * @param groundPenetration The ground penetration depth (0 if no direct ground collision).
-	 * @param dominantSource The source of the dominant collision (Ground, Boundary, or Entity).
-	 * @param groundedOnEntity Pointer to the entity we collided with (if source is Entity).
-	 */
-	static void
-	applyCollisionResponse (MovableTrait * movable, const Vector< 3, float > & surfaceNormal, float groundPenetration, GroundedSource dominantSource, const MovableTrait * groundedOnEntity) noexcept
+	namespace
 	{
-		auto velocity = movable->linearVelocity();
-		const float vn = Vector< 3, float >::dotProduct(velocity, surfaceNormal);
-
-		/* Apply velocity bounce if moving into surface.
-		 * vn > 0 means velocity is going INTO the surface (same direction as normal). */
-		if ( vn > 0.0F )
+		/**
+		 * @brief Applies complete collision response: velocity bounce + grounded state.
+		 * @param movable The movable trait to update.
+		 * @param surfaceNormal The dominant collision surface normal.
+		 * @param groundPenetration The ground penetration depth (0 if no direct ground collision).
+		 * @param dominantSource The source of the dominant collision (Ground, Boundary, or Entity).
+		 * @param groundedOnEntity Pointer to the entity we collided with (if source is Entity).
+		 */
+		void
+		applyCollisionResponse (MovableTrait * movable, const Vector< 3, float > & surfaceNormal, float groundPenetration, GroundedSource dominantSource, const MovableTrait * groundedOnEntity) noexcept
 		{
-			velocity -= surfaceNormal * vn * (1.0F + movable->getBodyPhysicalProperties().bounciness());
-			movable->setLinearVelocity(velocity);
-		}
+			auto velocity = movable->linearVelocity();
+			const float vn = Vector< 3, float >::dotProduct(velocity, surfaceNormal);
 
-		/* Apply grounded response if standing on a surface.
-		 * Surface is considered "ground" if:
-		 * - Direct ground collision (groundPenetration > 0), OR
-		 * - Normal points downward (Y < -0.7 in Y-up = surface faces up) */
-		constexpr auto GroundNormalThreshold{0.7F}; /* ~45 degrees */
-		const bool isOnSurface = (groundPenetration > 0.0F) || (surfaceNormal[Y] < -GroundNormalThreshold);
-
-		/* Only apply grounded response if not bouncing away (velocity Y near zero or negative). */
-		if ( isOnSurface && velocity[Y] <= 0.1F )
-		{
-			velocity[Y] = 0.0F;
-			movable->setLinearVelocity(velocity);
-
-			/* Set grounded with appropriate source.
-			 * Priority: Ground > Boundary > Entity (ground is always ground if detected). */
-			if ( groundPenetration > 0.0F )
+			/* Apply velocity bounce if moving into surface.
+			 * vn > 0 means velocity is going INTO the surface (same direction as normal). */
+			if ( vn > 0.0F )
 			{
-				movable->setGrounded(GroundedSource::Ground);
+				velocity -= surfaceNormal * vn * (1.0F + movable->getBodyPhysicalProperties().bounciness());
+				movable->setLinearVelocity(velocity);
 			}
-			else
+
+			/* Apply grounded response if standing on a surface.
+			 * Surface is considered "ground" if:
+			 * - Direct ground collision (groundPenetration > 0), OR
+			 * - Normal points downward (Y < -0.7 in Y-up = surface faces up) */
+			constexpr auto GroundNormalThreshold{0.7F}; /* ~45 degrees */
+			const bool isOnSurface = (groundPenetration > 0.0F) || (surfaceNormal[Y] < -GroundNormalThreshold);
+
+			/* Only apply grounded response if not bouncing away (velocity Y near zero or negative). */
+			if ( isOnSurface && velocity[Y] <= 0.1F )
 			{
-				movable->setGrounded(dominantSource, groundedOnEntity);
+				velocity[Y] = 0.0F;
+				movable->setLinearVelocity(velocity);
+
+				/* Set grounded with appropriate source.
+				 * Priority: Ground > Boundary > Entity (ground is always ground if detected). */
+				if ( groundPenetration > 0.0F )
+				{
+					movable->setGrounded(GroundedSource::Ground);
+				}
+				else
+				{
+					movable->setGrounded(dominantSource, groundedOnEntity);
+				}
 			}
 		}
 	}
@@ -537,10 +541,7 @@ namespace EmEn::Scenes
 					 * CLEARANCE above the ground and reports every airborne body as colliding. */
 					const auto penetration = groundLevel - corner[Y];
 
-					if ( penetration > deepestPenetration )
-					{
-						deepestPenetration = penetration;
-					}
+					deepestPenetration = std::max(penetration, deepestPenetration);
 				}
 
 				if ( deepestPenetration > 0.0F )
@@ -843,10 +844,7 @@ namespace EmEn::Scenes
 					 * CLEARANCE above the ground and reports every airborne body as colliding. */
 					const auto penetration = groundLevel - corner[Y];
 
-					if ( penetration > deepestPenetration )
-					{
-						deepestPenetration = penetration;
-					}
+					deepestPenetration = std::max(penetration, deepestPenetration);
 				}
 
 				if ( deepestPenetration > 0.0F )
@@ -1103,10 +1101,7 @@ namespace EmEn::Scenes
 					 * CLEARANCE above the ground and reports every airborne body as colliding. */
 					const auto penetration = groundLevel - corner[Y];
 
-					if ( penetration > deepestPenetration )
-					{
-						deepestPenetration = penetration;
-					}
+					deepestPenetration = std::max(penetration, deepestPenetration);
 				}
 
 				if ( deepestPenetration > 0.0F )
@@ -1123,7 +1118,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) const noexcept
+	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) noexcept
 	{
 		/* No collision model means no collision simulation. */
 		if ( !entity->hasCollisionModel() )

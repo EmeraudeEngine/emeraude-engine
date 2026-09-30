@@ -47,6 +47,32 @@ namespace EmEn::Scenes
 			virtual ~SeaLevelInterface () = default;
 
 			/**
+			 * @brief Copy constructor (deleted: a polymorphic interface, copying would slice).
+			 * @param copy A reference to the copied instance.
+			 */
+			SeaLevelInterface (const SeaLevelInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor (deleted: a polymorphic interface).
+			 * @param copy A reference to the copied instance.
+			 */
+			SeaLevelInterface (SeaLevelInterface && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment (deleted: a polymorphic interface).
+			 * @param copy A reference to the copied instance.
+			 * @return SeaLevelInterface &
+			 */
+			SeaLevelInterface & operator= (const SeaLevelInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment (deleted: a polymorphic interface).
+			 * @param copy A reference to the copied instance.
+			 * @return SeaLevelInterface &
+			 */
+			SeaLevelInterface & operator= (SeaLevelInterface && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the constant water level height.
 			 * @return float
 			 */

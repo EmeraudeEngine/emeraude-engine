@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "NodeCrawler.hpp"
+#include "AnyValue.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
@@ -454,7 +455,14 @@ namespace EmEn::Scenes
 				/* NOTE: A node is destroying one of its children. The data will be a smart pointer to the child node. */
 			case Node::SubNodeDeleting :
 			{
-				const auto node = std::any_cast< std::shared_ptr< Node > >(data);
+				const auto * const nodePayload = Base::anyValue< std::shared_ptr< Node > >(data, ClassId);
+
+				if ( nodePayload == nullptr )
+				{
+					return true;
+				}
+
+				const auto & node = *nodePayload;
 
 				/* NOTE: If a node controller was set up with this node, we stop it. */
 				if ( m_nodeController.node() == node )
@@ -501,22 +509,38 @@ namespace EmEn::Scenes
 		switch ( notificationCode )
 		{
 			case AbstractEntity::ModifierCreated :
-				m_modifiers.emplace(std::any_cast< std::shared_ptr< Component::AbstractModifier > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::AbstractModifier > >(data, ClassId) )
+				{
+					m_modifiers.emplace(*payload);
+				}
 				return true;
 
 			case AbstractEntity::ModifierDestroyed :
-				m_modifiers.erase(std::any_cast< std::shared_ptr< Component::AbstractModifier > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::AbstractModifier > >(data, ClassId) )
+				{
+					m_modifiers.erase(*payload);
+				}
 
 				return true;
 
 			case AbstractEntity::CameraCreated :
-				m_AVConsoleManager.addVideoDevice(std::any_cast< std::shared_ptr< Component::Camera > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::Camera > >(data, ClassId) )
+				{
+					m_AVConsoleManager.addVideoDevice(*payload);
+				}
 
 				return true;
 
 			case AbstractEntity::PrimaryCameraCreated :
 			{
-				auto camera = std::any_cast< std::shared_ptr< Component::Camera > >(data);
+				const auto * const cameraPayload = Base::anyValue< std::shared_ptr< Component::Camera > >(data, ClassId);
+
+				if ( cameraPayload == nullptr )
+				{
+					return true;
+				}
+
+				const auto & camera = *cameraPayload;
 				m_AVConsoleManager.addVideoDevice(camera, true);
 				this->setActiveCamera(camera);
 
@@ -525,7 +549,14 @@ namespace EmEn::Scenes
 
 			case AbstractEntity::CameraDestroyed :
 			{
-				auto camera = std::any_cast< std::shared_ptr< Component::Camera > >(data);
+				const auto * const cameraPayload = Base::anyValue< std::shared_ptr< Component::Camera > >(data, ClassId);
+
+				if ( cameraPayload == nullptr )
+				{
+					return true;
+				}
+
+				const auto & camera = *cameraPayload;
 
 				/* NOTE: The weak reference would self-heal anyway (activeCamera() resolves a
 				 * dead camera to nullptr); clearing eagerly just keeps the state tidy. */
@@ -540,67 +571,106 @@ namespace EmEn::Scenes
 			}
 
 			case AbstractEntity::MicrophoneCreated :
-				m_AVConsoleManager.addAudioDevice(std::any_cast< std::shared_ptr< Component::Microphone > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::Microphone > >(data, ClassId) )
+				{
+					m_AVConsoleManager.addAudioDevice(*payload);
+				}
 
 				return true;
 
 			case AbstractEntity::PrimaryMicrophoneCreated :
-				m_AVConsoleManager.addAudioDevice(std::any_cast< std::shared_ptr< Component::Microphone > >(data), true);
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::Microphone > >(data, ClassId) )
+				{
+					m_AVConsoleManager.addAudioDevice(*payload, true);
+				}
 
 				return true;
 
 			case AbstractEntity::MicrophoneDestroyed :
-				m_AVConsoleManager.removeAudioDevice(std::any_cast< std::shared_ptr< Component::Microphone > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::Microphone > >(data, ClassId) )
+				{
+					m_AVConsoleManager.removeAudioDevice(*payload);
+				}
 
 				return true;
 
 			case AbstractEntity::DirectionalLightCreated :
-				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::DirectionalLight > >(data, ClassId) )
+				{
+					m_lightSet.add(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::DirectionalLightDestroyed :
-				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::DirectionalLight > >(data, ClassId) )
+				{
+					m_lightSet.remove(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::PointLightCreated :
-				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::PointLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::PointLight > >(data, ClassId) )
+				{
+					m_lightSet.add(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::PointLightDestroyed :
-				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::PointLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::PointLight > >(data, ClassId) )
+				{
+					m_lightSet.remove(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::SpotLightCreated :
-				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::SpotLight > >(data, ClassId) )
+				{
+					m_lightSet.add(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::SpotLightDestroyed :
-				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::SpotLight > >(data, ClassId) )
+				{
+					m_lightSet.remove(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::LineLightCreated :
-				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::LineLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::LineLight > >(data, ClassId) )
+				{
+					m_lightSet.add(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::LineLightDestroyed :
-				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::LineLight > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::LineLight > >(data, ClassId) )
+				{
+					m_lightSet.remove(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::CloudVolumeCreated :
-				m_cloudSet.add(*this, std::any_cast< std::shared_ptr< Component::CloudVolume > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::CloudVolume > >(data, ClassId) )
+				{
+					m_cloudSet.add(*this, *payload);
+				}
 
 				return true;
 
 			case AbstractEntity::CloudVolumeDestroyed :
-				m_cloudSet.remove(std::any_cast< std::shared_ptr< Component::CloudVolume > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::CloudVolume > >(data, ClassId) )
+				{
+					m_cloudSet.remove(*payload);
+				}
 
 				return true;
 

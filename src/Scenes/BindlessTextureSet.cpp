@@ -49,7 +49,7 @@ namespace EmEn::Scenes
 			return it->second;
 		}
 
-		uint32_t globalIndex;
+		uint32_t globalIndex = 0;
 
 		if ( !freeIndices.empty() )
 		{
@@ -66,7 +66,7 @@ namespace EmEn::Scenes
 			globalIndex = nextIndex++;
 		}
 
-		entries.emplace_back(Entry{texture, globalIndex});
+		entries.emplace_back(Entry{.texture = texture, .globalIndex = globalIndex});
 		lookup.emplace(texturePtr, globalIndex);
 
 		return globalIndex;
@@ -101,7 +101,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t maxTextures3D, uint32_t firstDynamicSlot) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		m_maxTextures2D = maxTextures2D;
 		m_maxTexturesCube = maxTexturesCube;
@@ -119,7 +119,7 @@ namespace EmEn::Scenes
 	uint32_t
 	BindlessTextureSet::registerTexture2D (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		return this->registerInBucket(m_textures2D, m_lookup2D, m_free2D, m_next2D, m_maxTextures2D, texture);
 	}
@@ -127,7 +127,7 @@ namespace EmEn::Scenes
 	uint32_t
 	BindlessTextureSet::registerTextureCube (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		return this->registerInBucket(m_texturesCube, m_lookupCube, m_freeCube, m_nextCube, m_maxTexturesCube, texture);
 	}
@@ -135,7 +135,7 @@ namespace EmEn::Scenes
 	uint32_t
 	BindlessTextureSet::registerTextureCubeArray (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		return this->registerInBucket(m_texturesCubeArray, m_lookupCubeArray, m_freeCubeArray, m_nextCubeArray, m_maxTexturesCubeArray, texture);
 	}
@@ -143,7 +143,7 @@ namespace EmEn::Scenes
 	uint32_t
 	BindlessTextureSet::registerTexture3D (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		return this->registerInBucket(m_textures3D, m_lookup3D, m_free3D, m_next3D, m_maxTextures3D, texture);
 	}
@@ -151,7 +151,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::unregisterTexture2D (const Vulkan::TextureInterface * texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		BindlessTextureSet::unregisterFromBucket(m_textures2D, m_lookup2D, m_free2D, texture);
 	}
@@ -159,7 +159,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::unregisterTextureCube (const Vulkan::TextureInterface * texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		BindlessTextureSet::unregisterFromBucket(m_texturesCube, m_lookupCube, m_freeCube, texture);
 	}
@@ -167,7 +167,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::unregisterTextureCubeArray (const Vulkan::TextureInterface * texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		BindlessTextureSet::unregisterFromBucket(m_texturesCubeArray, m_lookupCubeArray, m_freeCubeArray, texture);
 	}
@@ -175,7 +175,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::unregisterTexture3D (const Vulkan::TextureInterface * texture) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		BindlessTextureSet::unregisterFromBucket(m_textures3D, m_lookup3D, m_free3D, texture);
 	}
@@ -183,7 +183,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::setEnvironmentCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		m_environmentCubemap = cubemap;
 	}
@@ -191,7 +191,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Vulkan::TextureInterface >
 	BindlessTextureSet::environmentCubemap () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		return m_environmentCubemap;
 	}
@@ -199,7 +199,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::setIrradianceCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		m_irradianceCubemap = cubemap;
 	}
@@ -207,7 +207,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::setPrefilteredCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		m_prefilteredCubemap = cubemap;
 	}
@@ -215,7 +215,7 @@ namespace EmEn::Scenes
 	BindlessTextureSet::Snapshot
 	BindlessTextureSet::snapshot () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		Snapshot snap;
 		snap.textures2D = m_textures2D;
@@ -232,7 +232,7 @@ namespace EmEn::Scenes
 	void
 	BindlessTextureSet::clear () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		m_textures2D.clear();
 		m_texturesCube.clear();

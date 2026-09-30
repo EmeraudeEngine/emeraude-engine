@@ -26,6 +26,8 @@
 
 #include "SphericalInfluenceArea.hpp"
 
+#include <algorithm>
+
 /* Local inclusions. */
 #include "AbstractEntity.hpp"
 #include "Tracer.hpp"
@@ -185,10 +187,7 @@ namespace EmEn::Scenes
 
 		m_outerRadius = outerRadius;
 
-		if ( m_innerRadius > m_outerRadius )
-		{
-			m_innerRadius = m_outerRadius;
-		}
+		m_innerRadius = std::min(m_innerRadius, m_outerRadius);
 	}
 
 	float
@@ -209,10 +208,7 @@ namespace EmEn::Scenes
 
 		m_innerRadius = innerRadius;
 
-		if ( m_innerRadius > m_outerRadius )
-		{
-			m_outerRadius = m_innerRadius;
-		}
+		m_outerRadius = std::max(m_innerRadius, m_outerRadius);
 	}
 
 	float

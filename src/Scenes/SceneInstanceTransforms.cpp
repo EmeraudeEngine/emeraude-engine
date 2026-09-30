@@ -105,7 +105,7 @@ namespace EmEn::Scenes
 	bool
 	SceneInstanceTransforms::initializePerFrameBuffers (Graphics::Renderer & renderer) noexcept
 	{
-		constexpr VkDeviceSize initialBytes = sizeof(Header) + InitialEntryCapacity * sizeof(Entry);
+		constexpr VkDeviceSize initialBytes = sizeof(Header) + (InitialEntryCapacity * sizeof(Entry));
 
 		const auto descriptorSetLayout = SceneInstanceTransforms::getDescriptorSetLayout(renderer.layoutManager());
 
@@ -198,10 +198,10 @@ namespace EmEn::Scenes
 		 * the directory would be an out-of-bounds read. */
 		if ( m_stagedPathDirectory.size() <= slot )
 		{
-			m_stagedPathDirectory.resize(slot + 1, PathSpan{0, 0, 0, 0});
+			m_stagedPathDirectory.resize(slot + 1, PathSpan{.firstPoint = 0, .pointCount = 0, .reserved0 = 0, .reserved1 = 0});
 		}
 
-		m_stagedPathDirectory[slot] = PathSpan{static_cast< uint32_t >(m_stagedPathPoints.size()), static_cast< uint32_t >(current.size()), 0, 0};
+		m_stagedPathDirectory[slot] = PathSpan{.firstPoint = static_cast< uint32_t >(m_stagedPathPoints.size()), .pointCount = static_cast< uint32_t >(current.size()), .reserved0 = 0, .reserved1 = 0};
 
 		const bool paired = previous.size() == current.size();
 
@@ -284,16 +284,16 @@ namespace EmEn::Scenes
 		auto & pathDirectoryBuffer = m_pathDirectoryBuffers[m_stagedFrameIndex];
 		auto & pathPointBuffer = m_pathPointBuffers[m_stagedFrameIndex];
 
-		const VkDeviceSize requiredBytes = sizeof(Header) + m_stagedEntries.size() * sizeof(Entry);
+		const VkDeviceSize requiredBytes = sizeof(Header) + (m_stagedEntries.size() * sizeof(Entry));
 
 		/* NOTE: Grow the current frame buffers when the staged ranges exceed their capacity, then repoint the frame's
 		 * descriptor set at the new ones. Legal here: the frame-in-flight fence guarantees no in-flight command buffer
 		 * references them. */
 		bool grown = false;
 
-		if ( !this->ensureCapacity(buffer, requiredBytes, sizeof(Header) + InitialEntryCapacity * sizeof(Entry), grown) ||
-			!this->ensureCapacity(pathDirectoryBuffer, m_stagedPathDirectory.size() * sizeof(PathSpan), InitialEntryCapacity * sizeof(PathSpan), grown) ||
-			!this->ensureCapacity(pathPointBuffer, m_stagedPathPoints.size() * sizeof(PathPoint), InitialPathPointCapacity * sizeof(PathPoint), grown) )
+		if ( !this->ensureCapacity(buffer, requiredBytes, sizeof(Header) + (InitialEntryCapacity * sizeof(Entry)), grown) ||
+			 !this->ensureCapacity(pathDirectoryBuffer, m_stagedPathDirectory.size() * sizeof(PathSpan), InitialEntryCapacity * sizeof(PathSpan), grown) ||
+			 !this->ensureCapacity(pathPointBuffer, m_stagedPathPoints.size() * sizeof(PathPoint), InitialPathPointCapacity * sizeof(PathPoint), grown) )
 		{
 			Tracer::error(ClassId, "Failed to grow the instance transforms SSBOs !");
 

@@ -179,11 +179,11 @@ namespace EmEn::Scenes
 		for ( uint32_t index = 0; index < census.drawn; ++index )
 		{
 			const auto & cloud = blocks[index];
-			const auto depth = matrix[2] * cloud.centerAndExtinction[0] + matrix[6] * cloud.centerAndExtinction[1] + matrix[10] * cloud.centerAndExtinction[2] + matrix[14];
+			const auto depth = (matrix[2] * cloud.centerAndExtinction[0]) + (matrix[6] * cloud.centerAndExtinction[1]) + (matrix[10] * cloud.centerAndExtinction[2]) + matrix[14];
 			const auto reach =
-				std::abs(matrix[2] * cloud.axisX[0] + matrix[6] * cloud.axisX[1] + matrix[10] * cloud.axisX[2]) * cloud.axisX[3] +
-				std::abs(matrix[2] * cloud.axisY[0] + matrix[6] * cloud.axisY[1] + matrix[10] * cloud.axisY[2]) * cloud.axisY[3] +
-				std::abs(matrix[2] * cloud.axisZ[0] + matrix[6] * cloud.axisZ[1] + matrix[10] * cloud.axisZ[2]) * cloud.axisZ[3];
+				(std::abs((matrix[2] * cloud.axisX[0]) + (matrix[6] * cloud.axisX[1]) + (matrix[10] * cloud.axisX[2])) * cloud.axisX[3]) +
+				(std::abs((matrix[2] * cloud.axisY[0]) + (matrix[6] * cloud.axisY[1]) + (matrix[10] * cloud.axisY[2])) * cloud.axisY[3]) +
+				(std::abs((matrix[2] * cloud.axisZ[0]) + (matrix[6] * cloud.axisZ[1]) + (matrix[10] * cloud.axisZ[2])) * cloud.axisZ[3]);
 
 			depthRange = std::max(depthRange, std::abs(depth) + reach);
 		}
@@ -202,7 +202,7 @@ namespace EmEn::Scenes
 		/* Outside the lock: the registration may observe the shape resource, which takes its own. */
 		cloud->createOnHardware(scene);
 
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		if ( std::ranges::find(m_clouds, cloud) != m_clouds.end() )
 		{
@@ -222,7 +222,7 @@ namespace EmEn::Scenes
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_access};
+			const std::scoped_lock lock{m_access};
 
 			std::erase(m_clouds, cloud);
 			m_count.store(m_clouds.size(), std::memory_order_release);
@@ -237,7 +237,7 @@ namespace EmEn::Scenes
 		std::vector< std::shared_ptr< Component::CloudVolume > > clouds;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_access};
+			const std::scoped_lock lock{m_access};
 
 			clouds.swap(m_clouds);
 			m_count.store(0, std::memory_order_release);

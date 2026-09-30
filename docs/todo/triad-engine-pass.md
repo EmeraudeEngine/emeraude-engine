@@ -339,8 +339,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 6a | Scene graph core (🟠 step 5 — verified, awaiting the commit order): `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | 🟠 started |
-| 6b | Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ⬜ |
+| 6a | Scene graph core (✅ pushed `23f04e76`; VALIDATED macOS M2 + Windows NVIDIA (1 MiB stack) — hostile refused, engine alive, watch + RecursiveSkeletons render, 0 VUID): `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | 🟠 started |
+| 6b | (🟠 step 5 — verified, awaiting the commit order) Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ⬜ |
 | 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ⬜ |
 | 6d | `Component/` | 18 617 | ⬜ |
 | 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
@@ -370,5 +370,34 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
   on purpose, ledger); the hostile 200 000-level animated glTF dropped in the model viewer → "would sit 257 levels
   under the root… refused", "build failed", no crash (it overflowed the stack before); `RecursiveSkeletons` (30
   levels) and `ChronographWatch` (node mode) load and render; `animation-debug` (15 entities), `citadel` (750): 0 VUID.
-- [ ] (5) Docs (scenes doc 11, ledger), report, commit + push on the owner's order, then peers.
+- [x] (5) Pushed 2026-09-30: engine `23f04e76`; peers asked.
+  - macOS peer (twice now, citadel and the watch): a `screenshot()` sent while an asset is still uploading answers
+    "did not complete in time … is the window rendering?" — a misleading wording (the window renders, the frame waits
+    for the upload). A candidate for 6e / the renderer's console: say "the scene is still loading".
+  - Both peers asked whether RecursiveSkeletons' "single white column" is right: it is NOT (the Khronos reference shows
+    several branching shapes); reproduced on Linux → engine item `gltf-recursive-skeletons-render-as-one-straight-column`
+    (not proven pre-existing; the triad's glTF changes do not touch skins).
+
+### 6b — scene rendering / lighting / physics (2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline (13 TUs, the 6b files only): **98**: 40 use-scoped-lock, 21 constant-array-index,
+  7 math-missing-parentheses, 5 use-std-min-max, 4 misc-unused-parameters, 3 designated-initializers, 3
+  avoid-const-or-ref, 2 each convert-to-static / special-member-functions / reinterpret / const-cast, singles.
+- [x] (2) Review: the 21 subscripts are all bounded by construction (slots, enums, clamped LOD, cloud census, the line
+  light's ≤ 9 points); no throwing call in 6b. Found while scanning: **40 value-form `std::any_cast< T >(data)`**
+  cascade-wide (engine 28 — Scene.entities ×19, Core ×4, Scene ×2, Scene.rendering ×2, Resources/Container ×1 —,
+  projet-alpha 12): a payload of the wrong type = `bad_any_cast` = an abort.
+- [x] (3b) Owner ruling (2026-09-30): **a base helper + explicit skip, all at once** — `Base::anyValue< T >(data,
+  context)` (`emeraude-base/src/AnyValue.hpp`, pointer form, logs; test in test_ObserverPattern), every site `if (
+  const auto * x = anyValue< … >(data, ClassId) ) { … }` (a handler returning bool answers `true`: ignored, still
+  listening). APPLIED: 0 value-form left.
+- [x] (3) Mechanical (fix-its restricted to the 6b files): scoped_lock ×40, parentheses, `std::min` / `std::max`,
+  designated initializers, `globalIndex` / `DebugPath` initialised, the forward inside `forEachDirectionalLight`'s
+  loop, `GroundLevelInterface` / `SeaLevelInterface` copy / move deleted (polymorphic interfaces), the unused `scene`
+  parameters named in a comment, `applyCollisionResponse` in an anonymous namespace, two helpers made static.
+- [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0; base 2166/2166 Release
+  AND ASan/UBSan; clang-tidy 98 → 32 (all on purpose, ledger); `beams` (camera + line light registered, console
+  conformance 4448/0), `citadel` (sun shadows, torches), `lighten-marbles` (physics): 0 VUID, 0 payload-mismatch log.
+- [ ] (5) Docs (base error-handling § std::any, Ave Robustus rule + plan, ledger), report, commit + push on the owner's
+  order (base + engine + projet-alpha), then peers.
 

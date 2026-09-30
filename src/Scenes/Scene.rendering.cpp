@@ -35,6 +35,7 @@
 #include <vector>
 
 /* Local inclusions. */
+#include "AnyValue.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/MDI/BatchBuilder.hpp"
@@ -882,7 +883,7 @@ namespace EmEn::Scenes
 		const auto publications = m_publicationCount.load(std::memory_order_seq_cst) - m_framePublicationCount;
 		const auto latchToEndMS = std::chrono::duration< double, std::milli >(std::chrono::steady_clock::now() - m_frameLatchTime).count();
 
-		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+		const std::scoped_lock lock{m_renderStatisticsAccess};
 
 		m_stateSyncStatistics.frames++;
 
@@ -900,7 +901,7 @@ namespace EmEn::Scenes
 	Scene::StateSyncStatistics
 	Scene::stateSyncStatistics (bool reset) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+		const std::scoped_lock lock{m_renderStatisticsAccess};
 
 		const auto statistics = m_stateSyncStatistics;
 
@@ -940,7 +941,7 @@ namespace EmEn::Scenes
 				Scene::accumulateRenderStatistics(m_renderLists[listIndex], viewStatistics);
 			}
 
-			const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+			const std::scoped_lock lock{m_renderStatisticsAccess};
 
 			m_viewRenderStatistics = viewStatistics;
 			m_shadowRenderStatistics = m_pendingShadowRenderStatistics;
@@ -1394,7 +1395,7 @@ namespace EmEn::Scenes
 	Scene::RenderListStatistics
 	Scene::viewRenderStatistics () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+		const std::scoped_lock lock{m_renderStatisticsAccess};
 
 		return m_viewRenderStatistics;
 	}
@@ -1402,7 +1403,7 @@ namespace EmEn::Scenes
 	Scene::RenderListStatistics
 	Scene::shadowRenderStatistics () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderStatisticsAccess};
+		const std::scoped_lock lock{m_renderStatisticsAccess};
 
 		return m_shadowRenderStatistics;
 	}
@@ -2662,7 +2663,14 @@ namespace EmEn::Scenes
 
 			case AVConsole::Manager::VideoDeviceRemoved :
 			{
-				const auto device = std::any_cast< const std::shared_ptr< AVConsole::AbstractVirtualDevice > >(data);
+				const auto * const devicePayload = Base::anyValue< const std::shared_ptr< AVConsole::AbstractVirtualDevice > >(data, ClassId);
+
+				if ( devicePayload == nullptr )
+				{
+					return;
+				}
+
+				const auto & device = *devicePayload;
 
 				if ( const auto renderTarget = std::dynamic_pointer_cast< RenderTarget::Abstract >(device) )
 				{
@@ -2689,7 +2697,10 @@ namespace EmEn::Scenes
 			case AVConsole::Manager::RenderToShadowMapAdded :
 			case AVConsole::Manager::RenderToTextureAdded :
 			case AVConsole::Manager::RenderToViewAdded :
-				this->initializeRenderTarget(std::any_cast< std::shared_ptr< RenderTarget::Abstract > >(data));
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< RenderTarget::Abstract > >(data, ClassId) )
+				{
+					this->initializeRenderTarget(*payload);
+				}
 				break;
 
 			default :

@@ -3006,7 +3006,7 @@ namespace EmEn::Scenes
 			 * @param maxPenetration Deepest penetration so far (in/out).
 			 * @param collidedEntity The movable trait of the deepest-penetration entity, when it has one (in/out).
 			 */
-			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
+			static void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]

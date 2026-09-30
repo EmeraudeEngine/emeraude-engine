@@ -214,7 +214,7 @@ namespace EmEn::Scenes
 			void
 			forEach (function_t && function) const noexcept requires (std::is_invocable_v< function_t, const Component::CloudVolume & >)
 			{
-				const std::lock_guard< std::mutex > lock{m_access};
+				const std::scoped_lock lock{m_access};
 
 				for ( const auto & cloud : m_clouds )
 				{

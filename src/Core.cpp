@@ -27,6 +27,7 @@
 #include "Core.hpp"
 
 /* Project configuration. */
+#include "AnyValue.hpp"
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
@@ -2701,7 +2702,14 @@ namespace EmEn
 			{
 				case Input::Manager::DroppedFiles :
 				{
-					const auto filepaths = std::any_cast< std::vector< std::filesystem::path > >(data);
+					const auto * const filepathsPayload = Base::anyValue< std::vector< std::filesystem::path > >(data, ClassId);
+
+					if ( filepathsPayload == nullptr )
+					{
+						return true;
+					}
+
+					const auto & filepaths = *filepathsPayload;
 
 					this->openFiles(filepaths);
 				}
@@ -2748,14 +2756,20 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Saphir::ShaderManager::ShaderCompilationSucceed :
-					TraceDebug{ClassId}  << "Shader '" << std::any_cast< std::string >(data) << "' compilation succeeded!";
+					if ( const auto * const payload = Base::anyValue< std::string >(data, ClassId) )
+					{
+						TraceDebug{ClassId}  << "Shader '" << *payload << "' compilation succeeded!";
+					}
 					break;
 
 				case Saphir::ShaderManager::ShaderCompilationFailed :
 				{
-					const auto [identifier, sourceCode] = std::any_cast< std::pair< std::string, std::string > >(data);
+					if ( const auto * const payload = Base::anyValue< std::pair< std::string, std::string > >(data, ClassId) )
+					{
+						const auto & [identifier, sourceCode] = *payload;
 
-					this->onCoreShaderCompilationFailed(identifier, sourceCode);
+						this->onCoreShaderCompilationFailed(identifier, sourceCode);
+					}
 				}
 					break;
 
@@ -2778,7 +2792,10 @@ namespace EmEn
 			{
 				case Audio::TrackMixer::MusicPlaying :
 				case Audio::TrackMixer::MusicSwitching :
-					this->notifyUser(std::any_cast< std::string >(data));
+					if ( const auto * const payload = Base::anyValue< std::string >(data, ClassId) )
+					{
+						this->notifyUser(*payload);
+					}
 					break;
 
 				case Audio::TrackMixer::MusicPaused :

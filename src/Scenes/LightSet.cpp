@@ -136,7 +136,7 @@ namespace EmEn::Scenes
 			size_t lightCount = 0;
 
 			{
-				const std::lock_guard< std::mutex > lock{m_lightsAccess};
+				const std::scoped_lock lock{m_lightsAccess};
 
 				lightCount = m_lights.size();
 			}
@@ -163,7 +163,7 @@ namespace EmEn::Scenes
 		 * Never acquire them the other way round. It is written down because it is NOT obvious from
 		 * either call site, and because the logic thread already takes m_renderToShadowMapAccess every
 		 * tick (Scene::publishStateForRendering → forEachRenderToShadowMap). */
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		const std::scoped_lock lock{m_lightsAccess};
 
 		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
@@ -415,7 +415,7 @@ namespace EmEn::Scenes
 		 * handler could take is held. Emitting under m_lightsAccess is inert only for as long as
 		 * nothing observes the light set — which is not a property anyone can rely on. */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.emplace(light);
 			m_directionalLights.emplace(light);
@@ -442,7 +442,7 @@ namespace EmEn::Scenes
 
 		/* ⚠️ [LOCKING] Container mutation only — see add(DirectionalLight). */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.emplace(light);
 			m_pointLights.emplace(light);
@@ -464,7 +464,7 @@ namespace EmEn::Scenes
 
 		/* ⚠️ [LOCKING] Container mutation only — see add(DirectionalLight). */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.emplace(light);
 			m_spotLights.emplace(light);
@@ -474,7 +474,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
+	LightSet::remove (Scene & /* scene: the add() overloads need it, the removal does not */, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
 		/* ⚠️ [LOCKING] The notification belongs outside the guard — see the add() overloads above.
 		 * ⚠️ [LIFETIME] No destroyFromHardware() here: the render thread iterates a SNAPSHOT of these
@@ -482,7 +482,7 @@ namespace EmEn::Scenes
 		 * reference this light. It is retired, and destroyed by destroyRetiredLights() on the render
 		 * thread once the in-flight fence proves nothing references it any more. */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.erase(light);
 			m_directionalLights.erase(light);
@@ -494,11 +494,11 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::remove (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept
+	LightSet::remove (Scene & /* scene: the add() overloads need it, the removal does not */, const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
 		/* ⚠️ [LOCKING] Container mutation only — see remove(DirectionalLight). */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.erase(light);
 			m_pointLights.erase(light);
@@ -510,11 +510,11 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept
+	LightSet::remove (Scene & /* scene: the add() overloads need it, the removal does not */, const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
 		/* ⚠️ [LOCKING] Container mutation only — see remove(DirectionalLight). */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.erase(light);
 			m_spotLights.erase(light);
@@ -538,7 +538,7 @@ namespace EmEn::Scenes
 
 		/* ⚠️ [LOCKING] Container mutation only — see add(DirectionalLight). */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.emplace(light);
 			m_lineLights.emplace(light);
@@ -548,11 +548,11 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::remove (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept
+	LightSet::remove (Scene & /* scene: the add() overloads need it, the removal does not */, const std::shared_ptr< Component::LineLight > & light) noexcept
 	{
 		/* ⚠️ [LOCKING] Container mutation only — see remove(DirectionalLight). */
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_lights.erase(light);
 			m_lineLights.erase(light);
@@ -566,7 +566,7 @@ namespace EmEn::Scenes
 	void
 	LightSet::retireLight (const std::shared_ptr< Component::AbstractLightEmitter > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		const std::scoped_lock lock{m_lightsAccess};
 
 		m_retiredLights.emplace_back(light, m_renderFrameCounter);
 	}
@@ -577,7 +577,7 @@ namespace EmEn::Scenes
 		std::vector< std::shared_ptr< Component::AbstractLightEmitter > > expiredLights;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_lightsAccess};
+			const std::scoped_lock lock{m_lightsAccess};
 
 			m_renderFrameCounter++;
 
@@ -606,7 +606,7 @@ namespace EmEn::Scenes
 	void
 	LightSet::removeAllLights () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		const std::scoped_lock lock{m_lightsAccess};
 
 		m_lights.clear();
 		m_directionalLights.clear();
@@ -671,7 +671,7 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightsAccess};
+		const std::scoped_lock lock{m_lightsAccess};
 
 		size_t errors = 0;
 
@@ -880,7 +880,7 @@ namespace EmEn::Scenes
 	std::ostream &
 	operator<< (std::ostream & out, const LightSet & obj)
 	{
-		const std::lock_guard< std::mutex > lock{obj.m_lightsAccess};
+		const std::scoped_lock lock{obj.m_lightsAccess};
 
 		out <<
 			"Ambient light color : " << obj.m_ambientLightColor << " (emitted " << obj.m_ambientEmissionChromaticity << ")" "\n"

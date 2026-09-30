@@ -56,6 +56,32 @@ namespace EmEn::Scenes
 			virtual ~GroundLevelInterface () = default;
 
 			/**
+			 * @brief Copy constructor (deleted: a polymorphic interface, copying would slice).
+			 * @param copy A reference to the copied instance.
+			 */
+			GroundLevelInterface (const GroundLevelInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor (deleted: a polymorphic interface).
+			 * @param copy A reference to the copied instance.
+			 */
+			GroundLevelInterface (GroundLevelInterface && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment (deleted: a polymorphic interface).
+			 * @param copy A reference to the copied instance.
+			 * @return GroundLevelInterface &
+			 */
+			GroundLevelInterface & operator= (const GroundLevelInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment (deleted: a polymorphic interface).
+			 * @param copy A reference to the copied instance.
+			 * @return GroundLevelInterface &
+			 */
+			GroundLevelInterface & operator= (GroundLevelInterface && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the ground level under the given position.
 			 * @param worldPosition An absolute position.
 			 * @return float

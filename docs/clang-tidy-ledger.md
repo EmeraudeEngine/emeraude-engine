@@ -31,6 +31,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Net`, 10 Linux TUs (`*.windows.cpp`, `*.mac.mm` read by hand) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 39, all ON PURPOSE (below) — 20 reinterpret-cast, 7 make-member-function-const, 5 pro-type-vararg, 2 use-enum-class, 1 each array-to-pointer-decay, macro-usage, avoid-c-arrays, interfaces-global-init, constant-array-index. Before: 103. | Triad section 4 |
 | `src/Input`, 6 TUs | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 40, all ON PURPOSE (below) — 28 pro-bounds-constant-array-index, 8 use-enum-class, 4 misc-confusable-identifiers. Before: 47. | Triad section 5 |
 | `src/Scenes` 6a (scene graph core: Node, AbstractEntity, StaticEntity, controllers, OctreeSector, Scene.cpp / entities) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 13 misc-no-recursion, 6 missing-std-forward, 4 use-enum-class, 4 constant-array-index, 2 static-cast-downcast, 1 avoid-const-or-ref-data-members. Before: 48. | Triad sub-section 6a |
+| `src/Scenes` 6b (Scene rendering / lighting / physics / debug, LightSet, SceneInstanceTransforms, SceneMetaData, RenderBatch, InstanceCluster, BindlessTextureSet, CloudSet, influence areas, interfaces) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 21 constant-array-index, 3 avoid-const-or-ref-data-members, 2 missing-std-forward, 2 reinterpret-cast, 2 const-cast, 1 use-enum-class, 1 static-cast-downcast. Before: 98. | Triad sub-section 6b |
 
 ## Findings kept ON PURPOSE
 
@@ -111,4 +112,16 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-type-static-cast-downcast ×2** — `AbstractEntity.debug.cpp`: after a `CollisionModelType` switch (RTTI
   avoided: engine item `rtti-removal`).
 - **avoid-const-or-ref-data-members ×1** — an entity's reference to its scene, by design.
+
+### `src/Scenes` 6b — scene rendering / lighting / physics (2026-09-30)
+
+- **pro-bounds-constant-array-index ×21** — engine-internal indices bounded by construction: the triple-buffer read /
+  write slots, the render-list enum, LOD levels (clamped to `MaxLODLevels - 1`), clouds (`gatherClouds()` fills at most
+  `MaxCloudVolumes`), a line light's points (`pointCount ≤ 9`, `setPolyline()`), light / cascade indices.
+- **avoid-const-or-ref-data-members ×3** — `RenderBatch`'s const members: an immutable value object by design.
+- **missing-std-forward ×2** — visitors invoked once per element (`CloudSet`, `LightSet`): never forwarded in a loop.
+- **pro-type-reinterpret-cast ×2** — `RenderBatch` packs its sort key.
+- **pro-type-const-cast ×2** — `SceneMetaData`: the RT skinned BLAS and a stale BLAS rebuilt lazily on objects the
+  render path holds `const` (a deliberate mutable-cache point on the frame path).
+- **use-enum-class, static-cast-downcast** — `NotificationCode`; a downcast after a type check (RTTI avoided).
 

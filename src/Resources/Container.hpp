@@ -47,6 +47,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
+#include "AnyValue.hpp"
 #include "NameableTrait.hpp"
 #include "ObservableTrait.hpp"
 
@@ -1421,7 +1422,14 @@ namespace EmEn::Resources
 					{
 						const std::scoped_lock scopeLock{m_resourcesAccess};
 
-						const auto downloadTicket = std::any_cast< int >(data);
+						const auto * const downloadTicketPayload = Base::anyValue< int >(data, this->resourceClassId());
+
+						if ( downloadTicketPayload == nullptr )
+						{
+							return true;
+						}
+
+						const auto & downloadTicket = *downloadTicketPayload;
 
 						const auto [rangeBegin, rangeEnd] = m_externalResources.equal_range(downloadTicket);
 
