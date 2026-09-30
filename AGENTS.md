@@ -45,6 +45,7 @@ foundation library [emeraude-base](dependencies/emeraude-base/AGENTS.md) (`EmEn:
 | Overlay (ImGui), Tool | [`src/Overlay/AGENTS.md`](src/Overlay/AGENTS.md), [`src/Tool/AGENTS.md`](src/Tool/AGENTS.md) |
 | OS-specific code | [`src/PlatformSpecific/AGENTS.md`](src/PlatformSpecific/AGENTS.md) |
 | Core lifecycle, tracer, source tree | [`src/AGENTS.md`](src/AGENTS.md) |
+| clang-tidy results and on-purpose findings (zero NEW finding per change) | [`docs/clang-tidy-ledger.md`](docs/clang-tidy-ledger.md) |
 | Foundation (math, image/audio/mesh factories, I/O, unit tests) | [`dependencies/emeraude-base/AGENTS.md`](dependencies/emeraude-base/AGENTS.md) |
 | Every other topic document (coordinate system, pipeline cache, exports, PCH…) | [`docs/agents/11-7-documentation-index.md`](docs/agents/11-7-documentation-index.md) |
 
