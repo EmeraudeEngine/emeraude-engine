@@ -35,6 +35,7 @@
 #include "tsf.h"
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
@@ -130,14 +131,16 @@ namespace EmEn::Audio
 		}
 
 		/* JSON format expects a "file" key with the path to the SF2 file. */
-		if ( !data.isMember("file") || !data["file"].isString() )
+		const auto fileKey = Base::FastJSON::getValue< std::string >(data, "file");
+
+		if ( !fileKey.has_value() )
 		{
 			TraceError{ClassId} << "Soundfont JSON data missing 'file' key for resource '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const std::filesystem::path filepath = data["file"].asString();
+		const std::filesystem::path filepath{*fileKey};
 
 		/* Read the entire file into memory. */
 		std::ifstream file(filepath, std::ios::binary | std::ios::ate);

@@ -32,6 +32,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Input`, 6 TUs | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 40, all ON PURPOSE (below) — 28 pro-bounds-constant-array-index, 8 use-enum-class, 4 misc-confusable-identifiers. Before: 47. | Triad section 5 |
 | `src/Scenes` 6a (scene graph core: Node, AbstractEntity, StaticEntity, controllers, OctreeSector, Scene.cpp / entities) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 13 misc-no-recursion, 6 missing-std-forward, 4 use-enum-class, 4 constant-array-index, 2 static-cast-downcast, 1 avoid-const-or-ref-data-members. Before: 48. | Triad sub-section 6a |
 | `src/Scenes` 6b (Scene rendering / lighting / physics / debug, LightSet, SceneInstanceTransforms, SceneMetaData, RenderBatch, InstanceCluster, BindlessTextureSet, CloudSet, influence areas, interfaces) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 21 constant-array-index, 3 avoid-const-or-ref-data-members, 2 missing-std-forward, 2 reinterpret-cast, 2 const-cast, 1 use-enum-class, 1 static-cast-downcast. Before: 98. | Triad sub-section 6b |
+| `src/Scenes` 6c (Manager + console, Toolkit, DefinitionResource) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 7, all ON PURPOSE (below) — 5 constant-array-index, 1 misc-no-recursion, 1 use-enum-class. Before: 20. `Scene.hpp`'s 3 use-after-move (seen only from these TUs) fixed. The cascade-wide checked-JSON migration's touched TUs: 0 new finding on the changed lines but the one below (`Material/Helpers.cpp`). | Triad sub-section 6c |
 
 ## Findings kept ON PURPOSE
 
@@ -124,4 +125,14 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-type-const-cast ×2** — `SceneMetaData`: the RT skinned BLAS and a stale BLAS rebuilt lazily on objects the
   render path holds `const` (a deliberate mutable-cache point on the frame path).
 - **use-enum-class, static-cast-downcast** — `NotificationCode`; a downcast after a type check (RTTI avoided).
+
+### `src/Scenes` 6c — scene manager, toolkit, scene definitions (2026-09-30)
+
+- **pro-bounds-constant-array-index ×5** — `Manager.console.cpp` `getRenderStatistics`: three `std::array` of the same
+  `Graphics::Geometry::MaxLODLevels` size walked by one loop index.
+- **misc-no-recursion ×1** — `DefinitionResource::readNodes()`: bounded by the parse's `stackLimit` (16) and by
+  `Node::MaxDepth`.
+- **use-enum-class ×1** — `NotificationCode` (the Observer convention).
+- **pro-bounds-constant-array-index ×1** — `Graphics/Material/Helpers.cpp` `parseColorComponent()`: `index <
+  min(4, size)` into a 4-slot array (it was a throwing `.at()` before the triad).
 

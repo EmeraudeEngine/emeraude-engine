@@ -199,6 +199,11 @@ The `setParentNode()` method is the key to building parent-child Node trees thro
 3. The next `generateEntity<Node>()` (or any generate*<Node>) creates the node as a child
 4. Chain calls to build deeper hierarchies
 
+> ⚠️ Fixed 2026-09-30 (triad 6c): until then the Parent policy created an EMPTY node of the same name under the parent,
+> then the node under that one — the cursor offset applied twice (`collision-debug`'s ChildA sat 12 m from its parent,
+> not the commented 6 m). A `Parent` / `Reusable` policy whose node is null (`setParentNode(nullptr)`, a failed build
+> passed on) now falls back to the scene root; it dereferenced null.
+
 ### Example: Articulated Arm
 
 ```cpp

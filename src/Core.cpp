@@ -1737,12 +1737,13 @@ namespace EmEn
 
 		const auto rootCheck = FastJSON::getRootFromFile(filepath, 16, true);
 
-		if ( !rootCheck || !rootCheck->isMember(Resources::Manager::StoresKey) )
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
+		if ( !rootCheck || !rootCheck->isObject() || !rootCheck->isMember(Resources::Manager::StoresKey) )
 		{
 			return false;
 		}
 
-		if ( !m_resourceManager.update(rootCheck.value()) )
+		if ( !m_resourceManager.update(*rootCheck) )
 		{
 			TraceError{ClassId} << "Unable to update the resource stores from the index '" << IO::toU8String(filepath) << "' !";
 
@@ -1766,9 +1767,15 @@ namespace EmEn
 			return false;
 		}
 
-		/* NOTE: Identify a scene definition by its structural top-level keys. */
+		/* NOTE: Identify a scene definition by its structural top-level keys (jsoncpp's member access aborts on
+		 * anything but an object). */
 		{
-			const auto & root = rootCheck.value();
+			const auto & root = *rootCheck;
+
+			if ( !root.isObject() )
+			{
+				return false;
+			}
 
 			if ( !root.isMember(DefinitionResource::NodesKey) && !root.isMember(DefinitionResource::StaticEntitiesKey) && !root.isMember(DefinitionResource::BoundaryKey) )
 			{

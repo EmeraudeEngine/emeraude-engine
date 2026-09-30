@@ -30,6 +30,7 @@
 #include "emeraude_platform.hpp"
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "Network/URL.hpp"
@@ -50,16 +51,16 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		const auto & resourceName = resourceDefinition[NameKey];
+		auto resourceName = FastJSON::asValue< std::string >(resourceDefinition[NameKey]);
 
-		if ( !resourceName.isString() ) [[unlikely]]
+		if ( !resourceName.has_value() ) [[unlikely]]
 		{
 			TraceError{ClassId} << "Key '" << NameKey << "' must be a string !";
 
 			return false;
 		}
 
-		m_name = resourceName.asString();
+		m_name = std::move(*resourceName);
 
 		return true;
 	}
@@ -76,16 +77,16 @@ namespace EmEn::Resources
 			return true;
 		}
 
-		const auto & source = resourceDefinition[SourceKey];
+		const auto source = FastJSON::asValue< std::string >(resourceDefinition[SourceKey]);
 
-		if ( !source.isString() ) [[unlikely]]
+		if ( !source.has_value() ) [[unlikely]]
 		{
 			TraceError{ClassId} << "Key '" << SourceKey << "' must be a string !";
 
 			return false;
 		}
 
-		const auto sourceString = source.asString();
+		const auto & sourceString = *source;
 
 		m_source = to_SourceType(sourceString);
 
@@ -123,17 +124,17 @@ namespace EmEn::Resources
 				return false;
 
 			case SourceType::LocalData :
-				if ( data.isString() )
+				if ( auto dataString = FastJSON::asValue< std::string >(data); dataString.has_value() )
 				{
 					std::string filename;
 
 					if constexpr ( IsWindows )
 					{
-						filename = String::replace('/', IO::Separator, data.asString());
+						filename = String::replace('/', IO::Separator, *dataString);
 					}
 					else
 					{
-						filename = data.asString();
+						filename = std::move(*dataString);
 					}
 
 					const auto filepath = fileSystem.getFilepathFromDataDirectories(DataStores, filename);
@@ -156,9 +157,9 @@ namespace EmEn::Resources
 				break;
 
 			case SourceType::ExternalData :
-				if ( data.isString() )
+				if ( const auto dataString = FastJSON::asValue< std::string >(data); dataString.has_value() )
 				{
-					const auto url = data.asString();
+					const auto & url = *dataString;
 
 					if ( Network::URL::isURL(url) )
 					{
@@ -196,6 +197,12 @@ namespace EmEn::Resources
 		return true;
 	}
 
+	std::optional< std::string >
+	BaseInformation::dataString () const noexcept
+	{
+		return FastJSON::asValue< std::string >(m_data);
+	}
+
 	void
 	BaseInformation::updateFromDownload (const std::filesystem::path & filepath) noexcept
 	{
@@ -206,6 +213,14 @@ namespace EmEn::Resources
 	bool
 	BaseInformation::parse (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept
 	{
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null): a store entry must be one. */
+		if ( !resourceDefinition.isObject() ) [[unlikely]]
+		{
+			TraceError{ClassId} << "A resource definition must be a JSON object !";
+
+			return false;
+		}
+
 		/* 1. Check resource name. */
 		if ( !this->parseName(resourceDefinition) )
 		{

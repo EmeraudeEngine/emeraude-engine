@@ -32,6 +32,7 @@
 
 /* Local inclusions. */
 #include "Constants.hpp"
+#include "FastJSON.hpp"
 #include "Math/Base.hpp"
 #include "Tracer.hpp"
 
@@ -278,6 +279,14 @@ namespace EmEn::Physics
 			{StickinessKey, &BodyPhysicalProperties::setStickiness, StickinessChanged}
 		}};
 
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
+		if ( !data.isObject() )
+		{
+			Tracer::error(ClassId, "The physical properties must be a JSON object !");
+
+			return false;
+		}
+
 		auto changes = false;
 
 		for ( const auto & property : properties )
@@ -289,17 +298,17 @@ namespace EmEn::Physics
 			}
 
 			/* Checking the value type and pop an error on bad one. */
-			if ( !data[property.jsonKey].isNumeric() )
+			const auto value = FastJSON::asValue< float >(data[property.jsonKey]);
+
+			if ( !value.has_value() )
 			{
-				TraceError{ClassId} << '\'' << property.jsonKey << "' key must be a floating number !";
+				TraceError{ClassId} << '\'' << property.jsonKey << "' key must be a finite floating number !";
 
 				continue;
 			}
 
 			/* Set the value, if changes prepares to declaring it as event. */
-			const auto value = data[property.jsonKey].asFloat();
-
-			if ( !(this->*property.method)(value, false) )
+			if ( !(this->*property.method)(*value, false) )
 			{
 				continue;
 			}

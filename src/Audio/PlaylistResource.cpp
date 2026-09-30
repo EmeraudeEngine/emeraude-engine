@@ -30,6 +30,7 @@
 #include <fstream>
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -105,14 +106,16 @@ namespace EmEn::Audio
 
 		for ( const auto & entry : data["tracks"] )
 		{
-			if ( !entry.isString() )
+			auto trackName = Base::FastJSON::asValue< std::string >(entry);
+
+			if ( !trackName.has_value() )
 			{
 				TraceWarning{ClassId} << "Playlist '" << this->name() << "' contains a non-string track entry. Skipped.";
 
 				continue;
 			}
 
-			m_trackNames.emplace_back(entry.asString());
+			m_trackNames.emplace_back(std::move(*trackName));
 		}
 
 		if ( m_trackNames.empty() )

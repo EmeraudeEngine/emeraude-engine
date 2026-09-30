@@ -163,39 +163,41 @@ namespace EmEn
 	std::optional< SettingValue >
 	Settings::jsonToSettingValue (const Json::Value & item) noexcept
 	{
+		/* NOTE: The narrowest type that holds the value, through the checked conversions (a non-finite double —
+		 * the parser accepts NaN and Infinity — reads as no value). */
 		if ( item.isBool() )
 		{
-			return item.asBool();
+			return FastJSON::asValue< bool >(item);
 		}
 
 		if ( item.isInt() )
 		{
-			return item.asInt();
+			return FastJSON::asValue< Json::Int >(item);
 		}
 
 		if ( item.isUInt() )
 		{
-			return item.asUInt();
+			return FastJSON::asValue< Json::UInt >(item);
 		}
 
 		if ( item.isInt64() )
 		{
-			return item.asInt64();
+			return FastJSON::asValue< Json::Int64 >(item);
 		}
 
 		if ( item.isUInt64() )
 		{
-			return item.asUInt64();
+			return FastJSON::asValue< Json::UInt64 >(item);
 		}
 
 		if ( item.isDouble() )
 		{
-			return item.asDouble();
+			return FastJSON::asValue< double >(item);
 		}
 
 		if ( item.isString() )
 		{
-			return item.asString();
+			return FastJSON::asValue< std::string >(item);
 		}
 
 		return std::nullopt;
@@ -291,7 +293,15 @@ namespace EmEn
 			return false;
 		}
 
-		return this->readLevel(root.value(), "");
+		/* NOTE: jsoncpp's getMemberNames() aborts on anything but an object (or null). */
+		if ( !root->isObject() )
+		{
+			TraceError{ClassId} << "The settings file " << filepath << " does not hold a JSON object !";
+
+			return false;
+		}
+
+		return this->readLevel(*root, "");
 	}
 
 	Json::Value

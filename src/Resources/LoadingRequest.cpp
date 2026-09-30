@@ -55,7 +55,8 @@ namespace EmEn::Resources
 
 			case SourceType::ExternalData :
 			{
-				const Network::URL resourceUrl{m_baseInformation.data().asString()};
+				/* NOTE: An empty string (data that is not one) is an invalid URL, refused below. */
+				const Network::URL resourceUrl{m_baseInformation.dataString().value_or(std::string{})};
 
 				if ( resourceUrl.isValid() )
 				{
@@ -96,7 +97,7 @@ namespace EmEn::Resources
 			return {};
 		}
 
-		return Network::URL{m_baseInformation.data().asString()};
+		return Network::URL{m_baseInformation.dataString().value_or(std::string{})};
 	}
 
 	void

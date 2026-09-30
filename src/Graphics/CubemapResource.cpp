@@ -36,6 +36,7 @@
 #include <cstring>
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "PixelFactory/FileIO.hpp"
@@ -271,19 +272,42 @@ namespace EmEn::Graphics
 		}
 		
 		/* Checks file format. */
-		if ( !data.isMember(FileFormatKey) || !data[FileFormatKey].isString() )
+		const auto fileFormatCheck = FastJSON::getValue< std::string >(data, FileFormatKey);
+
+		if ( !fileFormatCheck.has_value() )
 		{
 			TraceError{ClassId} << "There is no valid '" << FileFormatKey << "' key in cubemap definition !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto fileFormat = data[FileFormatKey].asString();
+		const auto & fileFormat = *fileFormatCheck;
+
+		/* The optional face size of an equirectangular source: absent or invalid = half the image height. */
+		const auto readFaceSize = [&data, this] (uint32_t imageHeight) -> uint32_t {
+			const auto defaultSize = imageHeight / 2;
+
+			if ( !data.isMember("Size") )
+			{
+				return defaultSize;
+			}
+
+			const auto size = FastJSON::getValue< uint32_t >(data, "Size");
+
+			if ( !size.has_value() || *size == 0 )
+			{
+				TraceWarning{ClassId} << "The key 'Size' of cubemap '" << this->name() << "' must be an integer greater than 0 ! Using " << defaultSize << ".";
+
+				return defaultSize;
+			}
+
+			return *size;
+		};
 
 		const auto & fileSystem = this->serviceProvider().primaryServices().fileSystem();
 
 		/* Checks if cubemap is packed onto one image. */
-		if ( data.isMember(PackedKey) && data[PackedKey].asBool() )
+		if ( FastJSON::getValue< bool >(data, PackedKey).value_or(false) )
 		{
 			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + PackedKey + '.' + fileFormat);
 
@@ -305,7 +329,7 @@ namespace EmEn::Graphics
 		}
 
 		/* Checks if cubemap is an equirectangular (panoramic 2:1) image. */
-		if ( data.isMember(EquirectangularKey) && data[EquirectangularKey].asBool() )
+		if ( FastJSON::getValue< bool >(data, EquirectangularKey).value_or(false) )
 		{
 			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + EquirectangularKey + '.' + fileFormat);
 
@@ -326,11 +350,7 @@ namespace EmEn::Graphics
 					return this->setLoadSuccess(false);
 				}
 
-				const uint32_t faceSize = data.isMember("Size")
-					? data["Size"].asUInt()
-					: equirectangular.height() / 2;
-
-				return this->loadEquirectangularHDR(equirectangular, faceSize);
+				return this->loadEquirectangularHDR(equirectangular, readFaceSize(equirectangular.height()));
 			}
 
 			Pixmap< uint8_t > equirectangular{};
@@ -342,11 +362,7 @@ namespace EmEn::Graphics
 				return this->setLoadSuccess(false);
 			}
 
-			const uint32_t faceSize = data.isMember("Size")
-				? data["Size"].asUInt()
-				: equirectangular.height() / 2;
-
-			return this->loadEquirectangular(equirectangular, faceSize);
+			return this->loadEquirectangular(equirectangular, readFaceSize(equirectangular.height()));
 		}
 
 		if ( fileFormat == "hdr" )

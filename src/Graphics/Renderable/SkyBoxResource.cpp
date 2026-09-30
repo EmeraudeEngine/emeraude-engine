@@ -108,14 +108,16 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !data.isMember(JKCubemap) || !data[JKCubemap].isString() )
+		const auto textureNameCheck = FastJSON::getValue< std::string >(data, JKCubemap);
+
+		if ( !textureNameCheck.has_value() )
 		{
 			TraceError{ClassId} << "The '" << JKCubemap << "' key is not present or not a string in '" << this->name() << "' Json file ! ";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto textureName = data[JKCubemap].asString();
+		const auto & textureName = *textureNameCheck;
 
 		/* Photometric part of the manifest: luminance (⚠️ TWO consumers — the material emission
 		 * below AND the IBL scale, see AbstractBackground::parsePhotometry()), average color,

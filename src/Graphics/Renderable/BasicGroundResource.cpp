@@ -115,28 +115,37 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		const auto & root = rootCheck.value();
+		const auto & root = *rootCheck;
+
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
+		if ( !root.isObject() )
+		{
+			TraceError{ClassId} << "The resource file " << filepath << " does not hold a JSON object !";
+
+			return this->setLoadSuccess(false);
+		}
 
 		/* Checks if additional stores before loading (optional) */
 		this->serviceProvider().update(root);
 
-		if ( !root.isMember(DefinitionResource::GroundKey) )
+		if ( !root.isMember(DefinitionResource::GroundKey) || !root[DefinitionResource::GroundKey].isObject() )
 		{
-			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present !";
+			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present or not an object !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		const auto & groundObject = root[DefinitionResource::GroundKey];
+		const auto type = FastJSON::getValue< std::string >(groundObject, FastJSON::TypeKey);
 
-		if ( !groundObject.isMember(FastJSON::TypeKey) && !groundObject[FastJSON::TypeKey].isString() )
+		if ( !type.has_value() )
 		{
 			TraceError{ClassId} << "The key '" << FastJSON::TypeKey << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( groundObject[FastJSON::TypeKey].asString() != ClassId || !groundObject.isMember(FastJSON::DataKey) )
+		if ( *type != ClassId || !groundObject.isMember(FastJSON::DataKey) )
 		{
 			TraceError{ClassId} << "This file doesn't contains a basic ground definition !";
 
@@ -151,24 +160,28 @@ namespace EmEn::Graphics::Renderable
 	{
 		/* 1. Creating a geometry. */
 		/* Checks size option. */
-		if ( !data.isMember(JKGridSize) || !data[JKGridSize].isNumeric() )
+		const auto gridSize = FastJSON::getValue< float >(data, JKGridSize);
+
+		if ( !gridSize.has_value() )
 		{
-			TraceError{ClassId} << "The key '" << JKGridSize << "' is not present or not numeric !";
+			TraceError{ClassId} << "The key '" << JKGridSize << "' is not present or not a finite number !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		/* Checks division option. */
-		if ( !data.isMember(JKGridDivision) || !data[JKGridDivision].isNumeric() )
+		const auto gridDivision = FastJSON::getValue< uint32_t >(data, JKGridDivision);
+
+		if ( !gridDivision.has_value() )
 		{
-			TraceError{ClassId} << "The key '" << JKGridDivision << "' is not present or not numeric !";
+			TraceError{ClassId} << "The key '" << JKGridDivision << "' is not present or not an unsigned integer !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "Geometry");
 
-		if ( !geometryResource->load(data[JKGridSize].asFloat(), data[JKGridDivision].asUInt(), DefaultGeometryFlags) )
+		if ( !geometryResource->load(*gridSize, *gridDivision, DefaultGeometryFlags) )
 		{
 			TraceError{ClassId} << "Unable to create grid geometry to generate the basic ground !";
 
@@ -180,34 +193,27 @@ namespace EmEn::Graphics::Renderable
 		{
 			const auto & subData = data[JKHeightMap];
 
-			if ( subData.isMember(JKImageName) && subData[JKImageName].isString() )
+			if ( const auto imageName = FastJSON::getValue< std::string >(subData, JKImageName); imageName.has_value() )
 			{
-				const auto imageName = subData[JKImageName].asString();
-
-				const auto imageResource = this->serviceProvider().container< ImageResource >()->getResource(imageName);
+				const auto imageResource = this->serviceProvider().container< ImageResource >()->getResource(*imageName);
 
 				if ( imageResource != nullptr )
 				{
 					/* Color inversion if requested. */
-					auto inverse = false;
-
-					if ( subData.isMember(JKInverse) )
-					{
-						inverse = subData[JKInverse].asBool();
-					}
+					const auto inverse = FastJSON::getValue< bool >(subData, JKInverse).value_or(false);
 
 					/* Checks for scaling. */
 					auto scale = 1.0F;
 
 					if ( subData.isMember(JKScale) )
 					{
-						if ( subData[JKScale].isNumeric() )
+						if ( const auto value = FastJSON::getValue< float >(subData, JKScale); value.has_value() )
 						{
-							scale = subData[JKScale].asFloat();
+							scale = *value;
 						}
 						else
 						{
-							TraceWarning{ClassId} << "The key '" << JKScale << "' is not numeric !";
+							TraceWarning{ClassId} << "The key '" << JKScale << "' is not a finite number !";
 						}
 					}
 
@@ -216,7 +222,7 @@ namespace EmEn::Graphics::Renderable
 				}
 				else
 				{
-					TraceWarning{ClassId} << "Image '" << imageName << "' is not available in data stores !";
+					TraceWarning{ClassId} << "Image '" << *imageName << "' is not available in data stores !";
 				}
 			}
 			else
@@ -226,14 +232,19 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 3. Check material properties. */
-		if ( !data.isMember(JKMaterialType) || !data[JKMaterialType].isString() )
+		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
+
+		if ( !materialType.has_value() )
 		{
 			TraceError{ClassId} << "The key '" << JKMaterialType << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !data.isMember(JKMaterialName) || !data[JKMaterialType].isString() )
+		/* NOTE: This check used to test the TYPE key a second time. */
+		const auto materialName = FastJSON::getValue< std::string >(data, JKMaterialName);
+
+		if ( !materialName.has_value() )
 		{
 			TraceError{ClassId} << "The key '" << JKMaterialName << "' is not present or not a string !";
 
@@ -243,30 +254,26 @@ namespace EmEn::Graphics::Renderable
 		/* Checks if the UV multiplier parameter. */
 		if ( data.isMember(JKUVMultiplier) )
 		{
-			if ( data[JKUVMultiplier].isNumeric() )
+			if ( const auto value = FastJSON::getValue< float >(data, JKUVMultiplier); value.has_value() )
 			{
-				geometryResource->localData().setUVMultiplier(data[JKUVMultiplier].asFloat());
+				geometryResource->localData().setUVMultiplier(*value);
 			}
 			else
 			{
-				TraceWarning{ClassId} << "The key '" << JKUVMultiplier << "' is not numeric !";
+				TraceWarning{ClassId} << "The key '" << JKUVMultiplier << "' is not a finite number !";
 			}
 		}
 
 		/* Gets the resource from the geometry store. */
 		std::shared_ptr< Material::Interface > materialResource;
 
-		const auto materialType = data[JKMaterialType].asString();
-
-		if ( materialType == Material::StandardResource::ClassId )
+		if ( *materialType == Material::StandardResource::ClassId )
 		{
-			const auto name = data[JKMaterialName].asString();
-
-			materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(name);
+			materialResource = this->serviceProvider().container< Material::StandardResource >()->getResource(*materialName);
 		}
 		else
 		{
-			TraceWarning{ClassId} << "Material resource type '" << materialType << "' for basic ground '" << this->name() << "' is not handled !";
+			TraceWarning{ClassId} << "Material resource type '" << *materialType << "' for basic ground '" << this->name() << "' is not handled !";
 		}
 
 		/* 3. Use the common func. */

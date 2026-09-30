@@ -2087,6 +2087,24 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 
 ## Resources / Loaders
 
+### A JSON file with the wrong SHAPE aborted the engine — fixed 2026-09-30 (triad 6c)
+
+> [!CAUTION]
+> **jsoncpp's library throws, and every read sits in a `noexcept`: the wrong type, the wrong range or the wrong root
+> is a SIGABRT, not an error.** Reproduced with `Core.openFiles()` (= a dropped file): a root array `[1, 2]`
+> (`isMember()` on an array), `"Position": ["a", "b", "c"]` (`asFloat()` on a string), `"GridDivision": -1`
+> (`asUInt()` out of range). Now: every read goes through `FastJSON::getValue()` / `FastJSON::asValue()` (nullopt on a
+> wrong type, an out-of-range integer, a non-finite float) and every root-parse site checks `isObject()` —
+> `ResourceTrait::load(path)` (every resource file), `DefinitionResource`, `Core` (store index, scene definition), the
+> grounds, `Resources::Manager` (indexes), `Net::Manager` (cache index), `Settings::readFile()`; a store entry that is
+> not an object is refused by `BaseInformation::parse()`. Rule and census method: emeraude-base `docs/error-handling.md`
+> § JSON.
+>
+> A scene definition's INVALID value (owner ruling 2026-09-30) warns and takes the key's default, as if absent:
+> `Boundary` (finite, > 0), `GridDivision` (1-1024, default 64), a Visual `Scale` (finite, > 0), the ambient `Color`
+> (3 or 4 finite, none negative → white) and `Intensity` (finite, ≥ 0 lx), `Position` / `LookAt` (three finite numbers,
+> else ignored), every other number finite. Before, `"Boundary": NaN` built a scene with a NaN octree, silently.
+
 ### Two files with the same NAME shared one resource namespace — fixed Sep 2026
 
 > [!CAUTION]

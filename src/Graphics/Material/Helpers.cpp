@@ -37,6 +37,7 @@
 #include "Saphir/Code.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Keys.hpp"
+#include "FastJSON.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material
@@ -51,7 +52,7 @@ namespace EmEn::Graphics::Material
 	std::optional< FillingType >
 	getFillingTypeFromJSON (const Json::Value & data) noexcept
 	{
-		if ( data.isMember(JKType) && data[JKType].isString() )
+		if ( const auto foundValue = FastJSON::getValue< std::string >(data, JKType); foundValue.has_value() )
 		{
 			constexpr std::array< const char *, 9 > fillingTypes{
 				ValueString,
@@ -65,13 +66,11 @@ namespace EmEn::Graphics::Material
 				NoneString
 			};
 
-			const auto foundValue = data[JKType].asString();
-
 			for ( const auto & value : fillingTypes )
 			{
-				if ( foundValue == value )
+				if ( *foundValue == value )
 				{
-					return to_FillingType(foundValue);
+					return to_FillingType(*foundValue);
 				}
 			}
 		}
@@ -82,7 +81,7 @@ namespace EmEn::Graphics::Material
 	std::optional< BlendingMode >
 	getBlendingModeFromJSON (const Json::Value & data) noexcept
 	{
-		if ( data.isMember(JKBlendingMode) && data[JKBlendingMode].isString() )
+		if ( const auto foundValue = FastJSON::getValue< std::string >(data, JKBlendingMode); foundValue.has_value() )
 		{
 			/* NOTE: ScreenBlendingString is still ACCEPTED, but it is a legacy authoring
 			 * value: to_BlendingMode() maps it to BlendingMode::Add. The screen operator is
@@ -99,13 +98,11 @@ namespace EmEn::Graphics::Material
 				NoneString
 			};
 
-			const auto foundValue = data[JKBlendingMode].asString();
-
 			for ( const auto & value : blendingModes )
 			{
-				if ( foundValue == value )
+				if ( *foundValue == value )
 				{
-					if ( foundValue == ScreenBlendingString )
+					if ( *foundValue == ScreenBlendingString )
 					{
 						TraceWarning{TracerTag} <<
 							"The '" << JKBlendingMode << "' value '" << ScreenBlendingString << "' is obsolete: that operator is "
@@ -113,7 +110,7 @@ namespace EmEn::Graphics::Material
 							"Loading it as '" << AddBlendingString << "'. Update the material manifest.";
 					}
 
-					return to_BlendingMode(foundValue);
+					return to_BlendingMode(*foundValue);
 				}
 			}
 		}
@@ -321,7 +318,8 @@ namespace EmEn::Graphics::Material
 	bool
 	parseComponentBase (const Json::Value & data, const char * componentName, FillingType & fillingType, Json::Value & componentData, bool optional) noexcept
 	{
-		if ( !data.isMember(componentName) )
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
+		if ( !data.isObject() || !data.isMember(componentName) )
 		{
 			fillingType = FillingType::None;
 
@@ -337,14 +335,16 @@ namespace EmEn::Graphics::Material
 
 		const auto & component = data[componentName];
 
-		if ( !component.isMember(JKType) || !component[JKType].isString() )
+		const auto type = FastJSON::getValue< std::string >(component, JKType);
+
+		if ( !type.has_value() )
 		{
 			TraceError{TracerTag} << "The key '" << JKType << "' from component '" << componentName << "' JSON structure is not present or not a string !";
 
 			return false;
 		}
 
-		fillingType = to_FillingType(component[JKType].asString());
+		fillingType = to_FillingType(*type);
 
 		if ( fillingType == FillingType::None )
 		{
@@ -417,16 +417,17 @@ namespace EmEn::Graphics::Material
 
 		for ( uint32_t index = 0; index < std::min(4U, data.size()); index++ )
 		{
-			const auto & colorComponent = data[index];
+			const auto colorComponent = FastJSON::asValue< float >(data[index]);
 
-			if ( !colorComponent.isNumeric() )
+			if ( !colorComponent.has_value() )
 			{
-				TraceError{TracerTag} << "Json array #" << index << " value is not numeric !";
+				TraceError{TracerTag} << "Json array #" << index << " value is not a finite number !";
 
 				break;
 			}
 
-			colorData.at(index) = colorComponent.asFloat();
+			/* NOTE: index < min(4, size) = within colorData. */
+			colorData[index] = *colorComponent;
 		}
 
 		return PixelFactory::Color{colorData};
@@ -435,20 +436,22 @@ namespace EmEn::Graphics::Material
 	float
 	parseValueComponent (const Json::Value & data) noexcept
 	{
-		if ( !data.isNumeric() )
+		const auto value = FastJSON::asValue< float >(data);
+
+		if ( !value.has_value() )
 		{
-			Tracer::error(TracerTag, "The Json value is not numeric !");
+			Tracer::error(TracerTag, "The Json value is not a finite number !");
 
 			return 0.0F;
 		}
 
-		return data.asFloat();
+		return *value;
 	}
 
 	bool
 	getComponentAsValue (const Json::Value & data, const char * componentType, float & value) noexcept
 	{
-		if ( !data.isMember(componentType) )
+		if ( !data.isObject() || !data.isMember(componentType) )
 		{
 			return false;
 		}
@@ -457,34 +460,37 @@ namespace EmEn::Graphics::Material
 
 		if  ( jsonNode.isObject() )
 		{
-			if ( !jsonNode.isMember(JKType) || !jsonNode[JKType].isString() )
+			const auto type = FastJSON::getValue< std::string >(jsonNode, JKType);
+
+			if ( !type.has_value() || to_FillingType(*type) != FillingType::Value )
 			{
 				return false;
 			}
 
-			if ( to_FillingType(jsonNode[JKType].asString()) != FillingType::Value )
+			/* NOTE: A 'Value' component's Data is a NUMBER (parseComponentBase()). This used to require an object
+			 * and then read it as a float, which aborted. */
+			const auto dataValue = FastJSON::getValue< float >(jsonNode, JKData);
+
+			if ( !dataValue.has_value() )
 			{
 				return false;
 			}
 
-			if ( !jsonNode.isMember(JKData) || !jsonNode[JKData].isObject() )
-			{
-				return false;
-			}
-
-			value = jsonNode[JKData].asFloat();
+			value = *dataValue;
 
 			return true;
 		}
 
-		if ( !jsonNode.isNumeric() )
+		const auto number = FastJSON::asValue< float >(jsonNode);
+
+		if ( !number.has_value() )
 		{
-			TraceError{"Interface"} << "The '" << componentType << "' key in Json structure is not numeric ! ";
+			TraceError{"Interface"} << "The '" << componentType << "' key in Json structure is not a finite number ! ";
 
 			return false;
 		}
 
-		value = jsonNode.asFloat();
+		value = *number;
 
 		return true;
 	}

@@ -29,7 +29,9 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
+#include <iomanip>
 #include <ranges>
 
 /* Local inclusions. */
@@ -60,6 +62,41 @@
 namespace EmEn::Scenes
 {
 	using namespace Base;
+
+	namespace
+	{
+		/**
+		 * @brief Writes a 3D vector as a JSON array: a non-finite component is written null (JSON has no NaN nor
+		 * infinity), the others with the float round-trip precision (9 significant digits).
+		 * @param output A reference to the stream.
+		 * @param vector A reference to the vector.
+		 * @return void
+		 */
+		void
+		writeJSONVector (std::stringstream & output, const Math::Vector< 3, float > & vector) noexcept
+		{
+			output << '[';
+
+			for ( size_t index = 0; index < 3; ++index )
+			{
+				if ( index > 0 )
+				{
+					output << ',';
+				}
+
+				if ( std::isfinite(vector[index]) )
+				{
+					output << std::setprecision(9) << vector[index];
+				}
+				else
+				{
+					output << "null";
+				}
+			}
+
+			output << ']';
+		}
+	}
 
 	void
 	Manager::onRegisterToConsole () noexcept
@@ -1040,8 +1077,10 @@ namespace EmEn::Scenes
 				std::stringstream info;
 				info << "{";
 				info << "\"name\":" << Json::valueToQuotedString(node->name().c_str(), node->name().size()) << ",";
-				info << "\"address\":\"" << node.get() << "\",";
-				info << "\"position\":[" << pos[0] << "," << pos[1] << "," << pos[2] << "],";
+				info << R"("address":")" << node.get() << "\",";
+				info << "\"position\":";
+				writeJSONVector(info, pos);
+				info << ",";
 				info << "\"childCount\":" << node->children().size();
 				info << "}";
 
@@ -1184,12 +1223,16 @@ namespace EmEn::Scenes
 				std::stringstream info;
 				info << "{";
 				info << "\"name\":" << Json::valueToQuotedString(node->name().c_str(), node->name().size()) << ",";
-				info << "\"worldPosition\":[" << worldPosition[0] << "," << worldPosition[1] << "," << worldPosition[2] << "],";
-				info << "\"localPosition\":[" << localPosition[0] << "," << localPosition[1] << "," << localPosition[2] << "],";
-				info << "\"linearVelocity\":[" << velocity[0] << "," << velocity[1] << "," << velocity[2] << "],";
+				info << "\"worldPosition\":";
+				writeJSONVector(info, worldPosition);
+				info << ",\"localPosition\":";
+				writeJSONVector(info, localPosition);
+				info << ",\"linearVelocity\":";
+				writeJSONVector(info, velocity);
+				info << ",";
 				info << "\"movable\":" << (node->isMovable() ? "true" : "false") << ",";
 				info << "\"grounded\":" << (node->isGrounded() ? "true" : "false") << ",";
-				info << "\"groundedSource\":\"" << groundedSource << "\"";
+				info << R"("groundedSource":")" << groundedSource << "\"";
 				info << "}";
 
 				return Console::CommandResult::json(info.str());

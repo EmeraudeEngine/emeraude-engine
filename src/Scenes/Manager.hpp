@@ -226,6 +226,8 @@ namespace EmEn::Scenes
 			bool
 			hasSceneNamed (const std::string & sceneName) const noexcept
 			{
+				const std::scoped_lock lock{m_sceneListAccess};
+
 				return m_scenes.contains(sceneName);
 			}
 
@@ -379,7 +381,7 @@ namespace EmEn::Scenes
 					return;
 				}
 
-				processActiveScene(m_activeScene);
+				std::forward< function_t >(processActiveScene)(m_activeScene);
 			}
 
 			/**
@@ -402,7 +404,7 @@ namespace EmEn::Scenes
 					return;
 				}
 
-				processActiveScene(m_activeScene);
+				std::forward< function_t >(processActiveScene)(m_activeScene);
 			}
 
 			/**

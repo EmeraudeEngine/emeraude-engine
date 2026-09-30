@@ -68,25 +68,36 @@ namespace EmEn::Scenes
 	bool
 	Manager::onTerminate () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+		size_t destroyedCount = 0;
 
-		/* First, disable the possible current active scene. */
-		this->disableActiveScene();
-
-		/* Then, remove all scene one by one. */
-		for ( auto sceneIt = m_scenes.cbegin(); sceneIt != m_scenes.cend(); )
 		{
-			if ( sceneIt->second.use_count() > 1 )
-			{
-				TraceError{ClassId} << "The scene '" << sceneIt->first << "' smart pointer still have " << sceneIt->second.use_count() << " uses ! Force a call to Scene::destroy().";
-			}
-			else
-			{
-				TraceSuccess{ClassId} << "Removing scene '" << sceneIt->first << "' ...";
-			}
+			const std::scoped_lock lock{m_sceneListAccess};
 
-			m_scenes.erase(sceneIt++);
+			/* First, disable the possible current active scene. */
+			this->disableActiveScene();
 
+			/* Then, remove all scene one by one. */
+			for ( auto sceneIt = m_scenes.cbegin(); sceneIt != m_scenes.cend(); )
+			{
+				if ( sceneIt->second.use_count() > 1 )
+				{
+					TraceError{ClassId} << "The scene '" << sceneIt->first << "' smart pointer still have " << sceneIt->second.use_count() << " uses ! Force a call to Scene::destroy().";
+				}
+				else
+				{
+					TraceSuccess{ClassId} << "Removing scene '" << sceneIt->first << "' ...";
+				}
+
+				m_scenes.erase(sceneIt++);
+
+				++destroyedCount;
+			}
+		}
+
+		/* NOTE: Emitted once the list lock is released (never emit under a lock a handler may take: getScene(),
+		 * getSceneNames()), one notification per destroyed scene as before. */
+		for ( size_t index = 0; index < destroyedCount; ++index )
+		{
 			this->notify(SceneDestroyed);
 		}
 
@@ -96,28 +107,36 @@ namespace EmEn::Scenes
 	std::shared_ptr< Scene >
 	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & groundLevel, const std::shared_ptr< SeaLevelInterface > & seaLevel) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+		std::shared_ptr< Scene > newScene;
 
-		if ( this->hasSceneNamed(sceneName) )
 		{
-			TraceError{ClassId} << "A scene named '" << sceneName << "' already exists ! Delete it first or enable it.";
+			const std::scoped_lock lock{m_sceneListAccess};
 
-			return nullptr;
+			/* NOTE: m_scenes directly: hasSceneNamed() takes the list lock, already held here. */
+			if ( m_scenes.contains(sceneName) )
+			{
+				TraceError{ClassId} << "A scene named '" << sceneName << "' already exists ! Delete it first or enable it.";
+
+				return nullptr;
+			}
+
+			newScene = std::make_shared< Scene >(
+				m_resourceManager.graphicsRenderer(),
+				m_resourceManager.audioManager(),
+				sceneName,
+				boundary,
+				background,
+				groundLevel,
+				seaLevel
+			);
+
+			m_scenes.emplace(sceneName, newScene);
 		}
 
-		auto newScene = std::make_shared< Scene >(
-			m_resourceManager.graphicsRenderer(),
-			m_resourceManager.audioManager(),
-			sceneName,
-			boundary,
-			background,
-			groundLevel,
-			seaLevel
-		);
-
+		/* NOTE: Emitted once the scene is listed and the list lock released (a handler may call getScene()). */
 		this->notify(SceneCreated, newScene);
 
-		return m_scenes.emplace(sceneName, newScene).first->second;
+		return newScene;
 	}
 
 	Manager::SceneLoading
@@ -202,7 +221,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const auto & root = rootCheck.value();
+		const auto & root = *rootCheck;
 
 		/* Create a temporary definition resource. */
 		auto definition = m_resourceManager.container< DefinitionResource >()->createResource("ConsoleSceneDefinition");
@@ -315,7 +334,7 @@ namespace EmEn::Scenes
 		/* NOTE: Taking the gate mutex before notifying closes the lost-wakeup window: a reader that
 		 * saw the count at one under that mutex is already waiting when the notification goes out. */
 		{
-			const std::lock_guard< std::mutex > lock{m_exclusiveAnnouncementAccess};
+			const std::scoped_lock lock{m_exclusiveAnnouncementAccess};
 		}
 
 		m_exclusiveAccessesWithdrawn.notify_all();
@@ -340,44 +359,47 @@ namespace EmEn::Scenes
 	bool
 	Manager::deleteScene (const std::string & sceneName) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
-
-		const auto sceneIt = m_scenes.find(sceneName);
-
-		if ( sceneIt == m_scenes.end() )
 		{
-			TraceError{ClassId} << "Scene '" << sceneName << "' doesn't exist and so can't be deleted !";
+			const std::scoped_lock lock{m_sceneListAccess};
 
-			return false;
+			const auto sceneIt = m_scenes.find(sceneName);
+
+			if ( sceneIt == m_scenes.end() )
+			{
+				TraceError{ClassId} << "Scene '" << sceneName << "' doesn't exist and so can't be deleted !";
+
+				return false;
+			}
+
+			/* NOTE: Disable the scene if this is the one being deleted. */
+			if ( sceneIt->second == m_activeScene )
+			{
+				/* NOTE: This will lock the shared mutex here.
+				 * As long as we don't have any other code that locks these
+				 * two mutexes in reverse order (m_activeSceneSharedAccess -> m_sceneListAccess),
+				 * we are safe from a deadlock. */
+				this->disableActiveScene();
+			}
+
+			/* NOTE: Destroy the scene with the render thread BLOCKED and the GPU drained.
+			 * A bare waitIdle is NOT enough — it does not prevent the render thread from submitting a
+			 * new frame between the drain and the destruction. Under the EXCLUSIVE active-scene lock the
+			 * render thread cannot enter withSharedActiveScene, so nothing references this scene's
+			 * resources (e.g. the post-process stack's intermediate render targets, sampled by the
+			 * renderer-global PostProcessor descriptor set) while ~Scene destroys them — otherwise the
+			 * GPU faults on freed memory (device lost). The stall is paid only here, on the deliberate
+			 * delete; the switch/disable path stays hitch-free. */
+			{
+				const ExclusiveAccessAnnouncement announcement{*this};
+				const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
+
+				sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
+
+				m_scenes.erase(sceneIt);
+			}
 		}
 
-		/* NOTE: Disable the scene if this is the one being deleted. */
-		if ( sceneIt->second == m_activeScene )
-		{
-			/* NOTE: This will lock the shared mutex here.
-			 * As long as we don't have any other code that locks these
-			 * two mutexes in reverse order (m_activeSceneSharedAccess -> m_sceneListAccess),
-			 * we are safe from a deadlock. */
-			this->disableActiveScene();
-		}
-
-		/* NOTE: Destroy the scene with the render thread BLOCKED and the GPU drained.
-		 * A bare waitIdle is NOT enough — it does not prevent the render thread from submitting a
-		 * new frame between the drain and the destruction. Under the EXCLUSIVE active-scene lock the
-		 * render thread cannot enter withSharedActiveScene, so nothing references this scene's
-		 * resources (e.g. the post-process stack's intermediate render targets, sampled by the
-		 * renderer-global PostProcessor descriptor set) while ~Scene destroys them — otherwise the
-		 * GPU faults on freed memory (device lost). The stall is paid only here, on the deliberate
-		 * delete; the switch/disable path stays hitch-free. */
-		{
-			const ExclusiveAccessAnnouncement announcement{*this};
-			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
-
-			sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
-
-			m_scenes.erase(sceneIt);
-		}
-
+		/* NOTE: Emitted once the list lock is released (a handler may call getScene()). */
 		this->notify(SceneDestroyed);
 
 		return true;
@@ -393,45 +415,48 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
-		 * Announced first: the render loop would otherwise take the shared access back before this
-		 * writer wakes (writer preference, see withSharedActiveScene()). */
-		const ExclusiveAccessAnnouncement announcement{*this};
-		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
-
-		if ( scene == nullptr )
 		{
-			Tracer::error(ClassId, "The scene pointer is null !");
+			/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
+			 * Announced first: the render loop would otherwise take the shared access back before this
+			 * writer wakes (writer preference, see withSharedActiveScene()). */
+			const ExclusiveAccessAnnouncement announcement{*this};
+			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
-			return false;
+			if ( scene == nullptr )
+			{
+				Tracer::error(ClassId, "The scene pointer is null !");
+
+				return false;
+			}
+
+			/* Checks whether the scene is usable and tries to complete it otherwise. */
+			if ( !scene->enable(m_inputManager, m_primaryServices.settings()) )
+			{
+				TraceError{ClassId} << "Unable to initialize the scene '" << scene->name() << "' !";
+
+				return false;
+			}
+
+			m_activeScene = scene;
+
+			/* The active scene's post-process chain becomes addressable as
+			 * `Core.SceneManagerService.PostProcess.*`, and stops being so when the scene is
+			 * disabled: the stack belongs to the scene, so the console node has to follow that
+			 * lifetime rather than outlive it.
+			 * ⚠️ A stack the RENDERER materializes later on its own — Scene::requirePostProcessStack(),
+			 * the path a scene that declared no stack takes when its camera asks for tone mapping —
+			 * is NOT registered here, and deliberately: that call runs on the render thread, and
+			 * mutating the console tree from there would race the main thread reading it. Such a
+			 * stack holds nothing but the camera's photographic effects, which the camera itself
+			 * owns and the console cannot select anyway. */
+			if ( m_activeScene->hasPostProcessStack() )
+			{
+				static_cast< void >(m_activeScene->postProcessStack()->registerToObject(*this));
+			}
 		}
 
-		/* Checks whether the scene is usable and tries to complete it otherwise. */
-		if ( !scene->enable(m_inputManager, m_primaryServices.settings()) )
-		{
-			TraceError{ClassId} << "Unable to initialize the scene '" << scene->name() << "' !";
-
-			return false;
-		}
-
-		m_activeScene = scene;
-
-		/* The active scene's post-process chain becomes addressable as
-		 * `Core.SceneManagerService.PostProcess.*`, and stops being so when the scene is
-		 * disabled: the stack belongs to the scene, so the console node has to follow that
-		 * lifetime rather than outlive it.
-		 * ⚠️ A stack the RENDERER materializes later on its own — Scene::requirePostProcessStack(),
-		 * the path a scene that declared no stack takes when its camera asks for tone mapping —
-		 * is NOT registered here, and deliberately: that call runs on the render thread, and
-		 * mutating the console tree from there would race the main thread reading it. Such a
-		 * stack holds nothing but the camera's photographic effects, which the camera itself
-		 * owns and the console cannot select anyway. */
-		if ( m_activeScene->hasPostProcessStack() )
-		{
-			static_cast< void >(m_activeScene->postProcessStack()->registerToObject(*this));
-		}
-
-		/* Send out a message that the scene has been activated. */
+		/* Send out a message that the scene has been activated, once the exclusive access is released: a handler
+		 * calling hasActiveScene() or withSharedActiveScene() would otherwise deadlock on this thread. */
 		this->notify(SceneEnabled, m_activeScene);
 
 		TraceSuccess{ClassId} << "Scene '" << m_activeScene->name() << "' loaded !";
@@ -453,31 +478,37 @@ namespace EmEn::Scenes
 			m_editorManager.deactivate();
 		}
 
-		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
-		 * Announced first: the render loop would otherwise take the shared access back before this
-		 * writer wakes (writer preference, see withSharedActiveScene()). */
-		const ExclusiveAccessAnnouncement announcement{*this};
-		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
+		std::shared_ptr< Scene > disabledScene;
 
-		/* NOTE: Drop this scene's textures from the global bindless descriptor table before it stops
-		 * being rendered. The manager only ever mirrors the ACTIVE scene; a scene that is no longer
-		 * active must leave no descriptor behind, otherwise destroying it later (deleteScene) would
-		 * destroy samplers/images still referenced by the descriptor set. */
-		m_activeScene->AVConsoleManager().graphicsRenderer().bindlessTextureManager().clearTextureSet(m_activeScene->bindlessTextureSet());
-
-		m_activeScene->disable(m_inputManager);
-
-		/* ⚠️ The console holds a RAW back-pointer to the child object. A scene going away with
-		 * its stack still registered leaves that pointer dangling, and the next `help` walks it. */
-		if ( m_activeScene->hasPostProcessStack() )
 		{
-			m_activeScene->postProcessStack()->unregisterFromParent();
+			/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
+			 * Announced first: the render loop would otherwise take the shared access back before this
+			 * writer wakes (writer preference, see withSharedActiveScene()). */
+			const ExclusiveAccessAnnouncement announcement{*this};
+			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
+
+			/* NOTE: Drop this scene's textures from the global bindless descriptor table before it stops
+			 * being rendered. The manager only ever mirrors the ACTIVE scene; a scene that is no longer
+			 * active must leave no descriptor behind, otherwise destroying it later (deleteScene) would
+			 * destroy samplers/images still referenced by the descriptor set. */
+			m_activeScene->AVConsoleManager().graphicsRenderer().bindlessTextureManager().clearTextureSet(m_activeScene->bindlessTextureSet());
+
+			m_activeScene->disable(m_inputManager);
+
+			/* ⚠️ The console holds a RAW back-pointer to the child object. A scene going away with
+			 * its stack still registered leaves that pointer dangling, and the next `help` walks it. */
+			if ( m_activeScene->hasPostProcessStack() )
+			{
+				m_activeScene->postProcessStack()->unregisterFromParent();
+			}
+
+			disabledScene = std::move(m_activeScene);
+			m_activeScene.reset();
 		}
 
-		/* Send out a message that the scene has been deactivated. */
-		this->notify(SceneDisabled, m_activeScene);
-
-		m_activeScene.reset();
+		/* Send out a message that the scene has been deactivated, once the exclusive access is released (see
+		 * enableScene()). The handlers see no active scene any more; the payload is the disabled one. */
+		this->notify(SceneDisabled, disabledScene);
 
 		return true;
 	}
@@ -485,7 +516,7 @@ namespace EmEn::Scenes
 	std::vector< std::string >
 	Manager::getSceneNames () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+		const std::scoped_lock lock{m_sceneListAccess};
 
 		if ( m_scenes.empty() )
 		{
@@ -504,7 +535,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Scene >
 	Manager::getScene (const std::string & sceneName) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+		const std::scoped_lock lock{m_sceneListAccess};
 
 		const auto sceneIt = m_scenes.find(sceneName);
 
@@ -519,7 +550,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< const Scene >
 	Manager::getScene (const std::string & sceneName) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+		const std::scoped_lock lock{m_sceneListAccess};
 
 		const auto sceneIt = m_scenes.find(sceneName);
 

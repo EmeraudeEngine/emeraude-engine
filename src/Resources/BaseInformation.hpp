@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <filesystem>
+#include <optional>
 #include <string>
 
 /* Third-party inclusions. */
@@ -168,6 +169,15 @@ namespace EmEn::Resources
 			{
 				return m_data;
 			}
+
+			/**
+			 * @brief Returns the resource data as a string: the file path of a LocalData resource, the URL of an
+			 * ExternalData one.
+			 * @note Checked (jsoncpp's asString() aborts on a non-string): empty when the data is not a string.
+			 * @return std::optional< std::string >
+			 */
+			[[nodiscard]]
+			std::optional< std::string > dataString () const noexcept;
 
 			/**
 			 * @brief Updates resource information after downloading an external resource.

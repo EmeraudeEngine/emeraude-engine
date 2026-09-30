@@ -850,12 +850,19 @@ namespace EmEn::Resources
 
 				const auto resourceIt = m_localStore->find(resourceName);
 
-				if ( resourceIt == m_localStore->cend() || resourceIt->second.sourceType() != SourceType::LocalData || !resourceIt->second.data().isString() )
+				if ( resourceIt == m_localStore->cend() || resourceIt->second.sourceType() != SourceType::LocalData )
 				{
 					return std::nullopt;
 				}
 
-				return std::filesystem::path{resourceIt->second.data().asString()};
+				const auto filepath = resourceIt->second.dataString();
+
+				if ( !filepath.has_value() )
+				{
+					return std::nullopt;
+				}
+
+				return std::filesystem::path{*filepath};
 			}
 
 			/**
@@ -1822,7 +1829,14 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(std::filesystem::path{infos.data().asString()});
+						if ( const auto filepath = infos.dataString(); filepath.has_value() )
+						{
+							success = request.resource()->load(std::filesystem::path{*filepath});
+						}
+						else
+						{
+							TraceError{resource_t::ClassId} << "The local resource '" << infos.name() << "' has no file path ! [CONTAINER]";
+						}
 						break;
 
 					/* This is direct data with a JsonCPP way of representing the data. */

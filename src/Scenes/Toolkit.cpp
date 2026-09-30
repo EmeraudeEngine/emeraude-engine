@@ -27,6 +27,7 @@
 #include "Toolkit.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <vector>
 
 /* Local inclusions. */
@@ -130,7 +131,7 @@ namespace EmEn::Scenes
 	Toolkit::TreeImposter
 	Toolkit::bakeTreeImposter (const std::string & label, const std::shared_ptr< Renderable::Abstract > & tree, const Space3D::Sphere< float > & bounds) noexcept
 	{
-		if ( m_scene == nullptr || tree == nullptr || bounds.radius() <= 0.0F )
+		if ( m_scene == nullptr || tree == nullptr || !std::isfinite(bounds.radius()) || bounds.radius() <= 0.0F )
 		{
 			TraceError{ClassId} << "Unable to bake the imposter of '" << label << "': no scene, no tree, or no bounds !";
 
@@ -271,7 +272,7 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		return {atlas, renderable};
+		return {.atlas = atlas, .renderable = renderable};
 	}
 
 	std::shared_ptr< Node >
@@ -292,26 +293,28 @@ namespace EmEn::Scenes
 		{
 			/* NOTE: A reusable scene node has been set. Returning it ... */
 			case GenPolicy::Reusable :
-				if ( m_previousNode == nullptr )
+				if ( m_previousNode != nullptr )
 				{
-					break;
+					return m_previousNode;
 				}
+				break;
 
-				return m_previousNode;
-
-			/* NOTE: A parent scene node has been set. Returning it ... */
+			/* NOTE: A parent scene node has been set: the new node goes directly under it. This used to create an
+			 * intermediate node of the same name under it first, then the node under that one — an empty node in
+			 * the graph and the cursor offset applied twice (triad 2026-09-30). */
 			case GenPolicy::Parent :
-				if ( m_previousNode == nullptr )
-				{
-					break;
-				}
-
-				parent = m_previousNode->createChild(name, m_cursorFrame, m_scene->lifetimeMS());
+				parent = m_previousNode;
 				break;
 
 			default:
-				parent = m_scene->root();
 				break;
+		}
+
+		/* NOTE: A policy without its node (setParentNode(nullptr), a failed build passed on) falls back to the root:
+		 * it used to dereference null. */
+		if ( parent == nullptr )
+		{
+			parent = m_scene->root();
 		}
 
 		auto childNode = parent->createChild(name, m_cursorFrame, m_scene->lifetimeMS());

@@ -190,6 +190,11 @@ for animated 3D real-time rendering.
   see [`Overlay/AGENTS.md`](../../../src/Overlay/AGENTS.md) § On-Demand Redraw Signal) → `requestRedraw()`.
 - **Scene enable/disable** — `SceneEnabled`/`SceneDisabled` → `requestRedraw()` (start drawing a new
   scene without latency; render the final bare clear-color frame when the last scene is disabled).
+  Since 2026-09-30 (triad 6c) `Scenes::Manager` emits `SceneCreated` / `SceneDestroyed` after releasing its scene-list
+  lock (`SceneCreated` once the scene is listed) and `SceneEnabled` / `SceneDisabled` after releasing the exclusive
+  active-scene access (a `SceneDisabled` handler already sees no active scene; the payload is the disabled one): a
+  handler may call `getScene()` or `hasActiveScene()`. ⚠️ The `SceneDisabled` of `deleteScene()` / `onTerminate()`
+  still fires under the list lock (they disable from inside it).
 - **Window** — framebuffer resize / content-scale change (wakes the sleeping render thread so it can
   recreate the swap-chain that `Renderer::onNotification` just marked degraded — otherwise, idle, it
   would never notice), surface recreated (`onWindowChanged`), and focus/visibility regained → `requestRedraw()`.

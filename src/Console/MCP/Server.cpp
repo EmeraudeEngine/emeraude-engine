@@ -740,7 +740,7 @@ namespace EmEn::Console::MCP
 						return;
 					}
 
-					if ( metaVersion.asString() != headerVersion )
+					if ( FastJSON::asValue< std::string >(metaVersion) != headerVersion )
 					{
 						this->respondError(400, id, HeaderMismatchCode, "The MCP-Protocol-Version header does not match _meta.");
 

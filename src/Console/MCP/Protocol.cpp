@@ -171,32 +171,34 @@ namespace EmEn::Console::MCP
 		bool
 		scalarArgument (const Json::Value & value, const std::string & name, Argument & argument, std::string & error) noexcept
 		{
-			if ( value.isBool() )
+			if ( const auto boolean = FastJSON::asValue< bool >(value); boolean.has_value() )
 			{
-				argument = Argument{value.asBool()};
+				argument = Argument{*boolean};
 
 				return true;
 			}
 
 			if ( value.isIntegral() )
 			{
-				if ( !value.isInt() )
+				const auto integer = FastJSON::asValue< int32_t >(value);
+
+				if ( !integer.has_value() )
 				{
 					error = "Argument '" + name + "' is outside the 32-bit integer range.";
 
 					return false;
 				}
 
-				argument = Argument{static_cast< int32_t >(value.asInt())};
+				argument = Argument{*integer};
 
 				return true;
 			}
 
 			if ( value.isDouble() )
 			{
-				const auto number = value.asDouble();
+				const auto number = FastJSON::asValue< double >(value);
 
-				if ( !std::isfinite(number) )
+				if ( !number.has_value() )
 				{
 					error = "Argument '" + name + "' is not a finite number.";
 
@@ -204,21 +206,21 @@ namespace EmEn::Console::MCP
 				}
 
 				/* NOTE: converting a double beyond the float range is undefined behaviour ([conv.double]). */
-				if ( std::abs(number) > static_cast< double >(std::numeric_limits< float >::max()) )
+				if ( std::abs(*number) > static_cast< double >(std::numeric_limits< float >::max()) )
 				{
 					error = "Argument '" + name + "' is outside the 32-bit floating point range.";
 
 					return false;
 				}
 
-				argument = Argument{static_cast< float >(number)};
+				argument = Argument{static_cast< float >(*number)};
 
 				return true;
 			}
 
-			if ( value.isString() )
+			if ( auto string = FastJSON::asValue< std::string >(value); string.has_value() )
 			{
-				argument = Argument{value.asString()};
+				argument = Argument{std::move(*string)};
 
 				return true;
 			}
@@ -773,7 +775,7 @@ namespace EmEn::Console::MCP
 	{
 		const auto & value = member(holder, key);
 
-		return value.isString() ? value.asString() : std::string{};
+		return FastJSON::asValue< std::string >(value).value_or(std::string{});
 	}
 
 	bool
@@ -781,7 +783,7 @@ namespace EmEn::Console::MCP
 	{
 		const auto & value = member(holder, key);
 
-		return value.isBool() ? value.asBool() : fallback;
+		return FastJSON::asValue< bool >(value).value_or(fallback);
 	}
 
 	std::string

@@ -20,9 +20,13 @@ parsing the text fails. `getFrameDiagnostics()` already writes `null` for a non-
 
 ## What remains
 
-1. Write those numbers through one helper that emits `null` for a non-finite value (or build them with
-   jsoncpp and a full-precision writer, `Console::MCP::serialize()`).
-2. Grep for other hand-streamed JSON answers (`R"(\"…\":)" <<`, `json << "`) and apply the same rule.
+- ✅ 2026-09-30 (triad 6c): `getNode()` / `getNodePhysics()` write their vectors through `writeJSONVector()`
+  (`Scenes/Manager.console.cpp`: `null` for a non-finite component, 9 significant digits — the float round trip),
+  the same rule as `getFrameDiagnostics()`' local `number` lambda.
+- The other hand-streamed answers (`CommandResult::json(<stream>.str())`), census 2026-09-30:
+  `Graphics/Renderer.console.cpp` ×3 (lines ~487, 558, 577), `Net/APIClient.console.cpp` ×4 (~211, 249, 327, 343),
+  `Window.console.cpp` ×1 (~68). Check each for a float; apply the rule.
+- Then consolidate: ONE console helper for "a float as a JSON number" instead of the two local copies.
 
 ## References
 

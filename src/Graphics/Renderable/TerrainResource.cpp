@@ -195,28 +195,37 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		const auto & root = rootCheck.value();
+		const auto & root = *rootCheck;
+
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
+		if ( !root.isObject() )
+		{
+			TraceError{ClassId} << "The resource file " << filepath << " does not hold a JSON object !";
+
+			return this->setLoadSuccess(false);
+		}
 
 		/* Checks if additional stores before loading (optional) */
 		this->serviceProvider().update(root);
 
-		if ( !root.isMember(DefinitionResource::GroundKey) )
+		if ( !root.isMember(DefinitionResource::GroundKey) || !root[DefinitionResource::GroundKey].isObject() )
 		{
-			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present !";
+			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present or not an object !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		const auto & groundObject = root[DefinitionResource::GroundKey];
+		const auto type = FastJSON::getValue< std::string >(groundObject, FastJSON::TypeKey);
 
-		if ( !groundObject.isMember(FastJSON::TypeKey) && !groundObject[FastJSON::TypeKey].isString() )
+		if ( !type.has_value() )
 		{
 			TraceError{ClassId} << "The key '" << FastJSON::TypeKey << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( groundObject[FastJSON::TypeKey].asString() != ClassId || !groundObject.isMember(FastJSON::DataKey) )
+		if ( *type != ClassId || !groundObject.isMember(FastJSON::DataKey) )
 		{
 			Tracer::error(ClassId, "This file doesn't contains a Terrain definition !");
 

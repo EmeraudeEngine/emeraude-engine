@@ -35,6 +35,7 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "FastJSON.hpp"
 #include "Resources/Container.hpp"
 #include "Tracer.hpp"
 
@@ -48,21 +49,23 @@ namespace EmEn::Graphics::Material::Component
 		: m_samplerName{samplerName},
 		m_variableName{std::move(variableName)}
 	{
-		if ( !data.isMember(JKResourceName) )
+		if ( !data.isObject() || !data.isMember(JKResourceName) )
 		{
 			TraceError{ClassId} << "There is no '" << JKResourceName << "' key in Json structure !";
 
 			return;
 		}
 
-		if ( !data[JKResourceName].isString() )
+		const auto resourceName = FastJSON::getValue< std::string >(data, JKResourceName);
+
+		if ( !resourceName.has_value() )
 		{
 			TraceError{ClassId} << "The key '" << JKResourceName << "' key in Json structure must be a string !";
 
 			return;
 		}
 
-		const auto textureResourceName = data[JKResourceName].asString();
+		const auto & textureResourceName = *resourceName;
 
 		/* Check the texture type. */
 		switch ( fillingType )
@@ -114,22 +117,22 @@ namespace EmEn::Graphics::Material::Component
 
 		/* Normal map Y flip: converts between OpenGL (Y+ up) and DirectX (Y+ down) conventions.
 		 * Enabled per-component in the material JSON via "FlipNormalMapY": true. */
-		if ( data.isMember("FlipNormalMapY") && data["FlipNormalMapY"].isBool() )
+		if ( const auto flip = FastJSON::getValue< bool >(data, "FlipNormalMapY"); flip.has_value() )
 		{
-			m_textureResource->enableFlipNormalMapY(data["FlipNormalMapY"].asBool());
+			m_textureResource->enableFlipNormalMapY(*flip);
 		}
 
 		/* Check the optional UVW channel. */
 		if ( data.isMember(JKChannel) )
 		{
-			if ( const auto & jsonNode = data[JKChannel]; jsonNode.isNumeric() )
+			if ( const auto channel = FastJSON::asValue< uint32_t >(data[JKChannel]); channel.has_value() )
 			{
-				m_UVWChannel = jsonNode.asUInt();
+				m_UVWChannel = *channel;
 			}
 			else
 			{
 				TraceWarning{ClassId} <<
-					"The '" << JKChannel << "' key in Json structure is not numeric ! "
+					"The '" << JKChannel << "' key in Json structure is not an unsigned integer ! "
 					"Leaving UVW channel to 0 ...";
 			}
 		}
@@ -137,9 +140,9 @@ namespace EmEn::Graphics::Material::Component
 		/* Check the optional source color channel (scalar components reading a packed texture). */
 		if ( data.isMember(JKSourceChannel) )
 		{
-			if ( const auto & jsonNode = data[JKSourceChannel]; jsonNode.isNumeric() && jsonNode.asUInt() <= 3 )
+			if ( const auto channel = FastJSON::asValue< uint32_t >(data[JKSourceChannel]); channel.has_value() && *channel <= 3 )
 			{
-				m_sourceChannel = static_cast< Base::PixelFactory::Channel >(jsonNode.asUInt());
+				m_sourceChannel = static_cast< Base::PixelFactory::Channel >(*channel);
 			}
 			else
 			{
@@ -156,14 +159,16 @@ namespace EmEn::Graphics::Material::Component
 			{
 				for ( auto index = 0; index < 3; index++ )
 				{
-					if ( !jsonNode[index].isNumeric() )
+					const auto value = FastJSON::asValue< float >(jsonNode[index]);
+
+					if ( !value.has_value() )
 					{
-						TraceError{ClassId} << "Json array #" << index << " value is not numeric !";
+						TraceError{ClassId} << "Json array #" << index << " value is not a finite number !";
 
 						break;
 					}
 
-					m_UVWScale[index] = jsonNode[index].asFloat();
+					m_UVWScale[index] = *value;
 				}
 			}
 			else
@@ -179,14 +184,16 @@ namespace EmEn::Graphics::Material::Component
 			{
 				for ( auto index = 0; index < 3; index++ )
 				{
-					if ( !jsonNode[index].isNumeric() )
+					const auto value = FastJSON::asValue< float >(jsonNode[index]);
+
+					if ( !value.has_value() )
 					{
-						TraceError{ClassId} << "Json array #" << index << " value is not numeric !";
+						TraceError{ClassId} << "Json array #" << index << " value is not a finite number !";
 
 						break;
 					}
 
-					m_UVWOffset[index] = jsonNode[index].asFloat();
+					m_UVWOffset[index] = *value;
 				}
 			}
 			else
@@ -197,9 +204,9 @@ namespace EmEn::Graphics::Material::Component
 
 		if ( data.isMember(JKEnableAlpha) )
 		{
-			if ( const auto & jsonNode = data[JKEnableAlpha]; jsonNode.isBool() )
+			if ( const auto enabled = FastJSON::asValue< bool >(data[JKEnableAlpha]); enabled.has_value() )
 			{
-				m_alphaEnabled = jsonNode.asBool();
+				m_alphaEnabled = *enabled;
 			}
 			else
 			{

@@ -491,10 +491,23 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		/* Checks if additional stores before loading (optional) */
-		this->serviceProvider().update(root.value());
+		/* NOTE: A resource file holds a JSON object; jsoncpp's member access, in every load (const Json::Value &),
+		 * aborts on anything else. */
+		if ( !root->isObject() )
+		{
+			TraceError{TracerTag} << "The resource file " << filepath << " does not hold a JSON object !";
 
-		return this->load(root.value());
+			m_status = Status::Failed;
+
+			this->notify(LoadFailed, this->name());
+
+			return false;
+		}
+
+		/* Checks if additional stores before loading (optional) */
+		this->serviceProvider().update(*root);
+
+		return this->load(*root);
 	}
 
 	std::string

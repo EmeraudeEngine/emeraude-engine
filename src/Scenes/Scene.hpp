@@ -1245,7 +1245,7 @@ namespace EmEn::Scenes
 
 				for ( const auto & entity : m_staticEntities | std::views::values )
 				{
-					std::forward< function_t >(process)(*entity);
+					process(*entity);
 				}
 			}
 
@@ -1722,7 +1722,7 @@ namespace EmEn::Scenes
 				 * start as soon as its imposter bake target joined this list (2026-09-23). */
 				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToShadowMapAccess, m_renderToShadowMaps, "shadow map") )
 				{
-					std::forward< function_t >(process)(renderTarget);
+					process(renderTarget);
 				}
 			}
 
@@ -1805,7 +1805,7 @@ namespace EmEn::Scenes
 				 * start as soon as its imposter bake target joined this list (2026-09-23). */
 				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToTextureAccess, m_renderToTextures, "texture") )
 				{
-					std::forward< function_t >(process)(renderTarget);
+					process(renderTarget);
 				}
 			}
 
@@ -1856,7 +1856,7 @@ namespace EmEn::Scenes
 				 * start as soon as its imposter bake target joined this list (2026-09-23). */
 				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToViewAccess, m_renderToViews, "view") )
 				{
-					std::forward< function_t >(process)(renderTarget);
+					process(renderTarget);
 				}
 			}
 

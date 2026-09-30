@@ -208,14 +208,20 @@ namespace EmEn::Net
 
 		const auto rootCheck = FastJSON::getRootFromFile(indexFilepath);
 
-		if ( !rootCheck || !rootCheck->isMember(FilesKey) || !(*rootCheck)[FilesKey].isArray() )
+		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
+		if ( !rootCheck || !rootCheck->isObject() || !rootCheck->isMember(FilesKey) || !(*rootCheck)[FilesKey].isArray() )
 		{
 			return false;
 		}
 
 		for ( const auto & file : (*rootCheck)[FilesKey] )
 		{
-			if ( !file.isMember(URLKey) || !file.isMember(FilenameKey) || !file.isMember(BytesKey) || !file[URLKey].isString() || !file[FilenameKey].isString() || !file[BytesKey].isIntegral() )
+			/* NOTE: The checked reads refuse a non-object entry, a wrong type and a negative size alike. */
+			auto url = FastJSON::getValue< std::string >(file, URLKey);
+			auto filename = FastJSON::getValue< std::string >(file, FilenameKey);
+			const auto bytes = FastJSON::getValue< uint64_t >(file, BytesKey);
+
+			if ( !url.has_value() || !filename.has_value() || !bytes.has_value() )
 			{
 				TraceWarning{ClassId} << "Malformed entry in the download cache index, skipped.";
 
@@ -223,9 +229,9 @@ namespace EmEn::Net
 			}
 
 			CacheEntry entry;
-			entry.filename = file[FilenameKey].asString();
-			entry.bytes = file[BytesKey].asLargestUInt();
-			entry.lastUse = file.isMember(LastUseKey) && file[LastUseKey].isIntegral() ? file[LastUseKey].asLargestUInt() : 0;
+			entry.filename = std::move(*filename);
+			entry.bytes = *bytes;
+			entry.lastUse = FastJSON::getValue< uint64_t >(file, LastUseKey).value_or(0);
 
 			m_useCounter = std::max(m_useCounter, entry.lastUse);
 
@@ -249,7 +255,7 @@ namespace EmEn::Net
 				continue;
 			}
 
-			m_cache.emplace(file[URLKey].asString(), std::move(entry));
+			m_cache.emplace(std::move(*url), std::move(entry));
 		}
 
 		return true;

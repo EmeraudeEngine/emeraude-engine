@@ -56,7 +56,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 3 | `src/Scenes/Loaders` | 11 292 | ✅ pushed 2026-09-30 (engine `bf5f901c`); VALIDATED Windows NVIDIA + macOS M2 (glTF hostile set + samples + FBX demos, 0 VUID; the WAD step skipped on both: no IWAD — proven on Linux) |
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
-| 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | 🟠 6a started |
+| 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | 🟠 6a + 6b ✅, 6c started |
 | 7 | `src/Graphics` (by sub-group) | 137 872 | ⬜ |
 | 8 | `src/Saphir` | 31 645 | ⬜ |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
@@ -339,9 +339,9 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 6a | Scene graph core (✅ pushed `23f04e76`; VALIDATED macOS M2 + Windows NVIDIA (1 MiB stack) — hostile refused, engine alive, watch + RecursiveSkeletons render, 0 VUID): `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | 🟠 started |
-| 6b | (✅ pushed base `33dc712`, engine `53116abe`, alpha `e8c7f692`; peers pending) Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ⬜ |
-| 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ⬜ |
+| 6a | Scene graph core: `Node`, `NodeCrawler`, `AbstractEntity` (+ debug), `StaticEntity`, `NodeController`, `OrbitController`, `LocatableInterface`, `OctreeSector` (+ crawler), `Scene.cpp`, `Scene.entities.cpp`, `Scene.hpp` | ~11 000 | ✅ pushed `23f04e76`; VALIDATED macOS M2 + Windows NVIDIA (1 MiB stack) — hostile refused, engine alive, watch + RecursiveSkeletons render, 0 VUID |
+| 6b | Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ✅ pushed base `33dc712`, engine `53116abe`, alpha `e8c7f692` (+ fixes base `f4319cc`, engine `7a3e540c`, alpha `805095b0`); VALIDATED macOS M2 + Windows NVIDIA |
+| 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | 🟠 verified on Linux, commit + push on the owner's order |
 | 6d | `Component/` | 18 617 | ⬜ |
 | 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
 
@@ -418,4 +418,107 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
     MSVC /W4 /WX 0 warning): lighten-marbles 5/5 exit 0 (was 5/5 `0xc0000374`), 0 crash event, 0 VUID, 0 refusal —
     the spawner was live at shutdown (128 nodes / 127 point lights at 25 s). macOS (M2): 3/3 clean, 0 "Refusing to
     link", every marble lit. animation-debug and beams clean on both.
+
+### 6c — scene manager, toolkit, scene definitions (started 2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline (4 TUs: `Manager.cpp`, `Manager.console.cpp`, `Toolkit.cpp`,
+  `DefinitionResource.cpp`; the 6c files only): **16**: 7 use-scoped-lock, 5 constant-array-index
+  (`getRenderStatistics`: three `std::array` of the SAME `Geometry::MaxLODLevels` size walked by one index — bounded),
+  2 missing-std-forward (`withShared/ExclusiveActiveScene`), 2 raw-string-literal, and singles: use-enum-class
+  (`NotificationCode`, the convention), isolate-declaration, misc-no-recursion (`readNodes`: bounded by the parse's
+  `stackLimit` 16 and by `Node::MaxDepth`), designated-initializers. The 71 other findings of these TUs are in headers
+  of 6a / 6b / 6d / 6e / Loaders (their own passes). ⚠️ 3 `bugprone-use-after-move` in `Scene.hpp` (1248, 1808, 1859:
+  a `std::forward` inside a loop) only show when instantiated from these TUs: 6a missed them → fix with 6c.
+- [x] (2) Review. REPRODUCED at runtime (`Core.openFiles()` = a dropped file, the documented remote path), each a
+  **SIGABRT** — jsoncpp's LIBRARY is built with exceptions: `Json::LogicError` escapes a `noexcept` (the headers'
+  `JSON_USE_EXCEPTION 0` only changes inline code; with it the library would `abort()` anyway):
+  - D1 a non-object root (`[1, 2]`): `Core::openSceneDefinition()` calls `root.isMember()` on an array ("requires
+    objectValue or nullValue"); `DefinitionResource` does the same everywhere on `m_root`.
+  - D2 a non-numeric array element (`"Position": ["a", "b", "c"]`): the raw `asFloat()` of `readNodes()` /
+    `readStaticEntities()` / the ambient colour ("Value is not convertible to float"). Base `FastJSON::getValue<
+    Vector / Matrix / Color >` has the SAME defect (`createFromJsonImpl` never checks an element's type).
+  - D3 an out-of-range integer (`"GridDivision": -1`): base `FastJSON::getValue< uint32_t >` checks `isNumeric()` then
+    `asUInt()` ("LargestInt out of UInt range"); the same for `asInt()` of `1e20`. **Base-wide**: every integral
+    `getValue` of the cascade. Census of the raw conversions: engine 13 integral (+ ~126 float/double, of which the
+    unchecked ones abort on a non-number), base 4, projet-alpha 0 integral.
+  - D4 non-finite floats are ACCEPTED silently: the parser runs with `allowSpecialFloats = true` (NaN, Infinity,
+    and `1e999` → inf). `"Boundary": NaN` built scene `H4` with a NaN boundary, no log (`Scene::rebuildRenderingOctree()`
+    tests `<= 0`, which NaN passes). No range checks either: `GridDivision` unbounded (`(n+1)²` vertices), `Scale`
+    <= 0 / NaN, ambient colour / illuminance negative.
+  - T1 `Toolkit::generateNode()` under `setParentNode()` creates TWO nodes: `parent = m_previousNode->createChild(name)`
+    then `parent->createChild(name)` — an empty node, then the real one under it, the cursor offset applied TWICE.
+    `collision-debug` `listEntities()`: `HierarchyParent6/HierarchyChildA7` (no component) →
+    `HierarchyChildA7/HierarchyChildA7` (the cube), the same for ChildB (also `node-relation`).
+  - T2 same function: a `Reusable` / `Parent` policy with a null node (`setParentNode(nullptr)`, a failed build
+    passed on) `break`s with `parent` still null → `parent->createChild()` dereferences null; and a refused
+    `createChild()` in the Parent case (depth cap, duplicate name) the same.
+  - M1 `Manager` emits UNDER `m_sceneListAccess`: `SceneCreated` (newScene, before the emplace), `SceneDestroyed`
+    (deleteScene, onTerminate): Core's handler runs `Resources::Manager::unloadUnusedResources()` under the list lock,
+    and a handler calling `getScene()` / `getSceneNames()` would deadlock (non-recursive mutex).
+  - M2 `hasSceneNamed()` (public: ImageViewer, ModelViewer, the console, projet-alpha `AbstractDemo`) read `m_scenes`
+    WITHOUT the lock → fixed in (3).
+  - L1 every scene-definition load logs "resource '…' is destroyed while still enqueueing dependencies (Manual mode)":
+    `DefinitionResource::load(json)` never completes the resource's load state.
+  - Not a defect: the console commands read `m_activeScene` unlocked — they run on the main thread (the only writer).
+  - Leads for later sections: `BasicGroundResource.cpp:171` / `TerrainResource` raw `asUInt()` after `isNumeric()`
+    (D3 pattern, section 7); `Core.cpp` tools mode `arguments().get(…).value()` (section 15).
+- [x] (3) Mechanical (2026-09-30): scoped_lock ×7; `std::forward` of the once-called callable in
+  `withShared/ExclusiveActiveScene`; `*rootCheck` instead of the throwing `.value()` ×2; `hasSceneNamed()` takes the list
+  lock (and `newScene()`, which holds it, reads `m_scenes.contains()` directly); the ambient declaration isolated;
+  `TreeImposter` designated initializer; `bakeTreeImposter()` also refuses a NaN / infinite radius (its existing
+  refusal, `<= 0` let NaN through); two raw strings; `Scene.hpp` the 3 flagged forwards inside a loop + a 4th, same
+  shape, in `forEachRenderToShadowMap()` → lvalue calls. Builds clean.
+- [x] (3b) Owner rulings (2026-09-30), all as recommended:
+  - D1-D3 **ALL AT ONCE, cascade-wide**: base FastJSON fixed (an out-of-range integer, a non-numeric element, a
+    non-number → `std::nullopt`) + tests; a non-object root refused (`DefinitionResource`, `Core::openSceneDefinition`);
+    EVERY raw jsoncpp conversion of the cascade (`asInt/UInt/Int64/UInt64/Float/Double/String/Bool/CString`: ~210
+    sites, ~40 files — engine ~190, base ~14, alpha 2) moved onto the checked FastJSON helpers.
+  - D4 **getValue REFUSES a non-finite float** (and a double out of float range): `std::nullopt` + debug log = absent,
+    the caller's default applies; the parser's `allowSpecialFloats` stays (1e999 → inf regardless of it).
+  - Scene-definition values: **warning + the key's default** (as if absent); `GridDivision` capped at 1024 (≈ 1 M
+    vertices), beyond → warning + 64.
+  - T1 (child directly under the set parent: the demos' children move to their commented offset), T2 (null node →
+    the root; a refused `createChild()` → nullptr + error), M1 (emit after the list lock, `SceneCreated` after the
+    emplace), L1 (the definition marks its load complete): APPLY.
+  APPLIED 2026-09-30:
+  - Base `FastJSON::asValue< T >(node)` (the checked counterpart of jsoncpp's `as*()`), the keyed `getValue` on top of
+    it, Vector / Matrix / Color elements checked; tests failing first (`LargestInt out of UInt range`, NaN accepted,
+    `Value is not convertible to float`) then passing. Rule: base `docs/error-handling.md` § JSON, projet-alpha
+    `.claude/rules/ave-robustus.md`, `docs/plans/ave-robustus.md`.
+  - EXACT census (a `[[deprecated]]` overlay of `json/value.h`, recipe in base `docs/error-handling.md`; the grep
+    counted base `Variant::asFloat()` too): **89 sites / 19 files → 6, all inside `asValue()`**. Migrated:
+    DefinitionResource, BasicGroundResource, TerrainResource, CubemapResource, SkyBoxResource, Material Texture +
+    Helpers, Settings, MCP Protocol + Server, BaseInformation (+ `dataString()`), Container, LoadingRequest,
+    Net::Manager, BodyPhysicalProperties, Playlist, Soundfont, projet-alpha Forest.
+  - Non-object roots refused at EVERY root-parse site that expects an object (the ruling extended from the scene path
+    to the same defect elsewhere): `ResourceTrait::load(path)` (every resource file), DefinitionResource, Core (store
+    index + scene definition), both grounds, `Resources::Manager` indexes, `Net::Manager` cache index,
+    `Settings::readFile()` (`getMemberNames()` on an array); a non-object store entry refused by
+    `BaseInformation::parse()`.
+  - Defects found while migrating, fixed on the lines touched: `getComponentAsValue()` required the `Data` of a
+    `Value` component to be an OBJECT and then read it as a float (an abort; the documented form is a number);
+    `BasicGroundResource` tested `!isMember && !isString` (`||` meant) and checked the material NAME key's presence
+    against the TYPE key; `parseColorComponent()`'s throwing `.at()`.
+  - Scene definitions: warning + default (`readNumber()` / `readVector()`), GridDivision cap 1024; the definition
+    completes its load state (L1: the "destroyed while still enqueueing" warning is gone).
+  - T1 + T2 (Toolkit), M1 (Manager): `SceneCreated` / `SceneDestroyed` after the list lock; ALSO `SceneEnabled` /
+    `SceneDisabled` after the exclusive active-scene access (same DEFER rule: a handler calling `hasActiveScene()`
+    would deadlock). Residual: the `SceneDisabled` of `deleteScene()` / `onTerminate()` still fires under the list
+    lock (they disable from inside it) — documented in `subsystems/source-tree/02-main-components.md`.
+  - Item `console-json-non-finite-numbers`: `getNode()` / `getNodePhysics()` done (`writeJSONVector()`: null for a
+    non-finite component, 9 digits); the other hand-streamed answers listed in the item (Renderer, APIClient, Window).
+- [x] (4) Verified 2026-09-30 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 128 TUs 0;
+  `-Wfloat-conversion` + CEF-flags clang on the 23 touched TUs 0; clang-tidy 6c 20 → 7 (on purpose, ledger), 0 new
+  finding on the changed lines of every touched TU but one bounded subscript (ledger); base **2170/2170** Release AND
+  ASan/UBSan. Runtime (`Core.openFiles()`): the 3 hostile definitions that aborted now load with a warning, NaN
+  boundary → warning + 1000, an all-invalid definition → 7 warnings, scene built; `collision-debug`: 21 entities (was
+  23), ChildA directly under the parent; `citadel`: MCP conformance 1707/0, console conformance 4466/0, 0 VUID, the
+  log's error / warning classes identical to the 6b run but the two the console conformance provokes on purpose.
+  The 3 `*** stack smashing detected ***` lines at exit are the pre-existing CEF helper item
+  (`cef-memoryinfra-check-sigill`), present before the change.
+- [ ] (5) Commit + push on the owner's order (base, engine, projet-alpha); then the peers.
+- Leads noted for later sections: `BasicGroundResource` passes `DefaultGeometryFlags` as the grid's UV MULTIPLIER
+  (`VertexGridResource::load(float, uint32_t, float)`) and its `load(path)` / `load(json)` call `setLoadSuccess()`
+  without `beginLoading()` (section 7); `SoundfontResource` opens the JSON `file` path unconfined (section 10);
+  Core tools mode `arguments().get(…).value()` (section 15).
 

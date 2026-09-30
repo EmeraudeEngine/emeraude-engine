@@ -271,10 +271,10 @@ namespace EmEn::Resources
 				continue;
 			}
 
-			const auto & root = rootCheck.value();
+			const auto & root = *rootCheck;
 
-			/* 3. Register every stores */
-			if ( !root.isMember(StoresKey) )
+			/* 3. Register every stores (jsoncpp's member access aborts on anything but an object). */
+			if ( !root.isObject() || !root.isMember(StoresKey) )
 			{
 				TraceError{ClassId} << "'" << StoresKey << "' key doesn't exist !";
 
