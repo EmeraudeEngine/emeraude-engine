@@ -59,6 +59,15 @@ namespace EmEn::Saphir::BeamGLSL
 	/** @brief The octave count the fBm loop is unrolled against (the UBO value is clamped to it). */
 	constexpr auto MaxOctaves{8};
 
+	/**
+	 * @brief The gain of the arc's saturation (beamOffset()): the ENERGY-normalized fBm (its spread is the same for 1 to
+	 * 8 octaves, σ ≈ 0.28) times this, through tanh, has a mean magnitude of 0.50 and never reaches 1 — the statistics of
+	 * a uniform draw in [-1, 1], which is what the AMPLITUDE of Unreal's Cascade beam noise means (UParticleModuleBeamNoise
+	 * NoiseRange: each noise point displaced within ± the range). Measured offline on 40 000 samples per octave count,
+	 * 2026-09-30: mean |offset| 0.495-0.506, 99th percentile 0.988-0.990.
+	 */
+	constexpr auto ArcGain{3.4F};
+
 	/** @brief Vertices per segment: the quad between two stations (a triangle list). */
 	constexpr uint32_t VerticesPerSegment{6};
 
@@ -109,7 +118,8 @@ namespace EmEn::Saphir::BeamGLSL
 			"const float fade = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);" << Line::End <<
 			"return mix(g0 * f, g1 * (f - 1.0), fade) * 2.0;";
 
-		/* fBm, amplitude halved per octave (a 1/f spectrum: the jagged look of a discharge), normalized. */
+		/* fBm, amplitude halved per octave (a 1/f spectrum: the jagged look of a discharge), normalized by its ENERGY (the
+		 * root of the summed squared amplitudes): the same spread whatever the octave count. */
 		Declaration::Function fbm{"beamFbm", GLSL::Float};
 		fbm.addInParameter(GLSL::Float, "x");
 		fbm.addInParameter(GLSL::UnsignedInteger, "seed");
@@ -122,14 +132,15 @@ namespace EmEn::Saphir::BeamGLSL
 			"for ( int octave = 0; octave < " << MaxOctaves << "; ++octave ) {" << Line::End <<
 			"	if ( octave >= octaves ) { break; }" << Line::End <<
 			"	sum += amplitude * beamNoise(frequency, seed + uint(octave) * 0x632BE5ABu);" << Line::End <<
-			"	norm += amplitude;" << Line::End <<
+			"	norm += amplitude * amplitude;" << Line::End <<
 			"	amplitude *= 0.5;" << Line::End <<
 			"	frequency *= 2.0;" << Line::End <<
 			"}" << Line::End <<
-			"return norm > 0.0 ? sum / norm : 0.0;";
+			"return norm > 0.0 ? sum / sqrt(norm) : 0.0;";
 
-		/* The arc: its offset across the beam, in unit-segment space (y, z). A re-strike rate > 0 draws a new arc
-		 * every 1 / rate seconds (the seed changes); the drift scrolls the noise along the beam in between. */
+		/* The arc: its offset along the station's normal and binormal, in entity units. The AMPLITUDE is the largest offset
+		 * (Cascade's NoiseRange): the saturated fBm stays within ±1, its mean magnitude is 1/2 (ArcGain). A re-strike rate
+		 * > 0 draws a new arc every 1 / rate seconds (the seed changes); the drift scrolls the noise along the beam. */
 		Declaration::Function offset{"beamOffset", GLSL::FloatVector2};
 		offset.addInParameter(GLSL::Float, "t");
 		offset.addInParameter(GLSL::Float, "time");
@@ -142,7 +153,7 @@ namespace EmEn::Saphir::BeamGLSL
 			"const int octaves = clamp(int(shape.w), 1, " << MaxOctaves << ");" << Line::End <<
 			"const float x = t * shape.z + time * motion.z;" << Line::End <<
 			"const float envelope = sin(3.14159265 * clamp(t, 0.0, 1.0));" << Line::End <<
-			"return shape.y * envelope * vec2(beamFbm(x, seed, octaves), beamFbm(x, seed ^ 0x5BD1E995u, octaves));";
+			"return shape.y * envelope * tanh(" << ArcGain << " * vec2(beamFbm(x, seed, octaves), beamFbm(x, seed ^ 0x5BD1E995u, octaves)));";
 
 		/* A station of the beam's centre line, displaced by the arc along its frame, in world space. A station index out
 		 * of range is clamped (the neighbours of the end stations). */

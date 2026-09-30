@@ -405,7 +405,8 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Sets the arc: how far and how finely the beam wanders across its line. An amplitude of 0 is a
 			 * straight laser.
-			 * @param amplitude The largest offset across the beam, in the entity's units. Clamped to 0 or above.
+			 * @param amplitude The largest offset across the beam, in the entity's units — Cascade's NoiseRange: the arc never
+			 * exceeds it and its mean offset is half of it (Saphir::BeamGLSL::ArcGain). Clamped to 0 or above.
 			 * @param frequency The number of noise cycles along the whole beam (its coarsest bends). Clamped to 0 or above.
 			 * @param octaves The number of noise octaves (the detail of the discharge), 1 to Saphir::BeamGLSL::MaxOctaves (8).
 			 * @return void

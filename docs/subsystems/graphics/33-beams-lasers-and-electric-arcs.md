@@ -49,12 +49,22 @@ beam and its target under ONE exclusive access to the scene (never a second lock
 ### The arc
 
 Two independent fBm of 1D gradient noise (Perlin 2002 quintic fade, Wellons' lowbias32 hash), amplitude halved
-per octave, under a `sin(πt)` envelope that pins both ends — t the normalized ARC LENGTH, so a curved arc is pinned at
+per octave, normalized by their ENERGY (√Σa²: the same spread for 1 to 8 octaves), through `tanh(ArcGain × fbm)`, under
+a `sin(πt)` envelope that pins both ends — t the normalized ARC LENGTH, so a curved arc is pinned at
 the two ends of the whole curve, not at its control points (owner decision 2026-09-30). The two offsets run along the
 station's normal and binormal: a ROTATION MINIMIZING frame (double reflection, Wang, Jüttler, Zheng, Liu, ACM TOG
 2008), which does not twist around the curve; its first normal is cross(tangent, +Y) (+X near vertical), so a
-straight beam keeps exactly the axes it had before curves (measured: the same noise amplitude on a straight and on a
-curved beam, 30-47 px at 0.8 m amplitude and 5.5 m). Deterministic per (seed, time): a re-strike rate `r`
+straight beam keeps exactly the axes it had before curves.
+
+**The amplitude means what Cascade's does** (owner decision 2026-09-30; Unreal's `UParticleModuleBeamNoise`
+`NoiseRange`: each noise point displaced within ± the range): the arc NEVER exceeds it and its mean offset is HALF of
+it — the statistics of a uniform draw, smooth. `BeamGLSL::ArcGain` = 3.4, chosen offline (40 000 samples per octave
+count: mean |offset| 0.495-0.506 of the amplitude, 99th percentile 0.988-0.990). Before, the fBm was normalized by the
+SUM of its octave amplitudes: σ 0.165 at 6 octaves, 99 % of the offsets under 0.43 of the amplitude — a 0.35 m arc
+wandered 2-3 px at 42 px/m and read as a smooth line (Windows peer, 2026-09-30). Measured after (Linux, straight 4 m
+arc seen from 5.5 m, 147 px/m, 6 octaves, re-strike 0): 104 px of the 118 px an amplitude of 0.8 m allows (31 before),
+46 px at 0.35 m (≈ 13 before). ⚠️ Half of the wander runs along the axis that points at the eye for a beam across the
+view (the frame is the beam's, as in Cascade): a curve seen edge-on shows it all, one seen face-on only the other axis. Deterministic per (seed, time): a re-strike rate `r`
 changes the seed every `1/r` s; the drift scrolls the noise between re-strikes. The clock is the scene time pair
 of the instance-transforms header (`windTimes.xy`: this frame, the previous one — the wind and the beams share it).
 
