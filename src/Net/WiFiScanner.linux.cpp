@@ -35,67 +35,73 @@
 
 namespace EmEn::Net::WiFiScanner
 {
-	/**
-	 * @brief Executes a shell command and returns its stdout.
-	 * @param command The command to execute.
-	 * @return std::string The captured output.
-	 */
-	static std::string
-	executeCommand (const char * command) noexcept
+	namespace
 	{
-		std::string result;
-
-		auto * pipe = popen(command, "r");
-
-		if ( pipe == nullptr )
+		/**
+		 * @brief Executes a shell command and returns its stdout.
+		 * @param command The command to execute.
+		 * @return std::string The captured output.
+		 */
+		std::string
+		executeCommand (const char * command) noexcept
 		{
-			return result;
-		}
+			std::string result;
 
-		std::array< char, 256 > buffer{};
+			auto * pipe = popen(command, "r");
 
-		while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
-		{
-			result += buffer.data();
-		}
-
-		pclose(pipe);
-
-		return result;
-	}
-
-	/**
-	 * @brief Converts WiFi frequency (MHz) to channel number.
-	 * @param frequency The frequency in MHz.
-	 * @return int32_t The channel number.
-	 */
-	static int32_t
-	frequencyToChannel (uint32_t frequency) noexcept
-	{
-		/* 2.4 GHz band. */
-		if ( frequency >= 2412 && frequency <= 2484 )
-		{
-			if ( frequency == 2484 )
+			if ( pipe == nullptr )
 			{
-				return 14;
+				return result;
 			}
 
-			return static_cast< int32_t >(((frequency - 2412) / 5) + 1);
-		}
+			std::array< char, 256 > buffer{};
 
-		/* 5 GHz band. */
-		if ( frequency >= 5170 && frequency <= 5825 )
+			while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
+			{
+				result += buffer.data();
+			}
+
+			pclose(pipe);
+
+			return result;
+		}
+	}
+
+	namespace
+	{
+		/**
+		 * @brief Converts WiFi frequency (MHz) to channel number.
+		 * @param frequency The frequency in MHz.
+		 * @return int32_t The channel number.
+		 */
+		int32_t
+		frequencyToChannel (uint32_t frequency) noexcept
 		{
-			return static_cast< int32_t >((frequency - 5000) / 5);
-		}
+			/* 2.4 GHz band. */
+			if ( frequency >= 2412 && frequency <= 2484 )
+			{
+				if ( frequency == 2484 )
+				{
+					return 14;
+				}
 
-		/* 6 GHz band. */
-		if ( frequency >= 5955 && frequency <= 7115 )
-		{
-			return static_cast< int32_t >((frequency - 5950) / 5);
-		}
+				return static_cast< int32_t >(((frequency - 2412) / 5) + 1);
+			}
 
-		return 0;
+			/* 5 GHz band. */
+			if ( frequency >= 5170 && frequency <= 5825 )
+			{
+				return static_cast< int32_t >((frequency - 5000) / 5);
+			}
+
+			/* 6 GHz band. */
+			if ( frequency >= 5955 && frequency <= 7115 )
+			{
+				return static_cast< int32_t >((frequency - 5950) / 5);
+			}
+
+			return 0;
+		}
 	}
 
 	/**
@@ -105,96 +111,102 @@ namespace EmEn::Net::WiFiScanner
 	 * @param line The nmcli output line.
 	 * @return Network The parsed network.
 	 */
-	/**
-	 * @brief Parses a decimal number out of untrusted text, without ever throwing.
-	 * @tparam number_t The wanted integral type.
-	 * @param text The text to read.
-	 * @return std::optional< number_t > Empty when the text is not a plain number.
-	 */
-	template< typename number_t >
-	static std::optional< number_t >
-	parseNumber (const std::string & text) noexcept
+	namespace
 	{
-		number_t value{0};
-
-		const auto * begin = text.data();
-		const auto * end = text.data() + text.size();
-
-		if ( std::from_chars(begin, end, value).ec != std::errc{} )
+		/**
+		 * @brief Parses a decimal number out of untrusted text, without ever throwing.
+		 * @tparam number_t The wanted integral type.
+		 * @param text The text to read.
+		 * @return std::optional< number_t > Empty when the text is not a plain number.
+		 */
+		template< typename number_t >
+		std::optional< number_t >
+		parseNumber (const std::string & text) noexcept
 		{
-			return std::nullopt;
-		}
+			number_t value{0};
 
-		return value;
+			const auto * begin = text.data();
+			const auto * end = text.data() + text.size();
+
+			if ( std::from_chars(begin, end, value).ec != std::errc{} )
+			{
+				return std::nullopt;
+			}
+
+			return value;
+		}
 	}
 
-	static Network
-	parseLine (const std::string & line) noexcept
+	namespace
 	{
-		Network network;
-
-		/* ⚠️ nmcli's terse output escapes BOTH ':' and '\\' with a backslash. Scanning for "\\:"
-		 * alone mis-reads an SSID that ends with a backslash ("Free\\" becomes "Free\\:", whose
-		 * trailing "\\:" was eaten as an escape): every field then shifted left and a text field
-		 * reached std::stoi. The unescaping is done in one left-to-right pass instead, which is the
-		 * only way to honour "\\\\" before "\\:". */
-		std::vector< std::string > fields;
-		std::string field;
-
-		for ( size_t index = 0; index < line.size(); ++index )
+		Network
+		parseLine (const std::string & line) noexcept
 		{
-			const auto character = line[index];
+			Network network;
 
-			if ( character == '\\' && index + 1 < line.size() )
+			/* ⚠️ nmcli's terse output escapes BOTH ':' and '\\' with a backslash. Scanning for "\\:"
+			 * alone mis-reads an SSID that ends with a backslash ("Free\\" becomes "Free\\:", whose
+			 * trailing "\\:" was eaten as an escape): every field then shifted left and a text field
+			 * reached std::stoi. The unescaping is done in one left-to-right pass instead, which is the
+			 * only way to honour "\\\\" before "\\:". */
+			std::vector< std::string > fields;
+			std::string field;
+
+			for ( size_t index = 0; index < line.size(); ++index )
 			{
-				/* The escaped character is taken verbatim, whatever it is. */
-				field += line[index + 1];
-				++index;
+				const auto character = line[index];
 
-				continue;
+				if ( character == '\\' && index + 1 < line.size() )
+				{
+					/* The escaped character is taken verbatim, whatever it is. */
+					field += line[index + 1];
+					++index;
+
+					continue;
+				}
+
+				if ( character == ':' )
+				{
+					fields.emplace_back(field);
+					field.clear();
+
+					continue;
+				}
+
+				field += character;
 			}
 
-			if ( character == ':' )
-			{
-				fields.emplace_back(field);
-				field.clear();
+			fields.emplace_back(field);
 
-				continue;
+			/* Parse fields: SSID, BSSID, SIGNAL, FREQ, SECURITY, MODE */
+			if ( fields.size() >= 6 )
+			{
+				network.ssid = fields[0];
+				network.bssid = fields[1];
+				/* ⚠️ std::stoi / std::stoul throw on text, and this function is noexcept in a
+				 * -fno-exceptions build: a neighbour's SSID was enough to terminate the process.
+				 * from_chars reports it as a value, and a malformed line is simply dropped. */
+				network.quality = parseNumber< int32_t >(fields[2]).value_or(0);
+				network.signalLevel = (network.quality / 2) - 100; /* Approximate dBm. */
+
+				/* Parse frequency: "2412 MHz" → 2412 */
+				const auto & freqStr = fields[3];
+				const auto spacePos = freqStr.find(' ');
+				network.frequency = parseNumber< uint32_t >(spacePos != std::string::npos ? freqStr.substr(0, spacePos) : freqStr).value_or(0);
+				network.channel = frequencyToChannel(network.frequency);
+
+				network.security = fields[4];
+				network.mode = fields[5];
+
+				/* Remove trailing newline from last field. */
+				if ( !network.mode.empty() && network.mode.back() == '\n' )
+				{
+					network.mode.pop_back();
+				}
 			}
 
-			field += character;
+			return network;
 		}
-
-		fields.emplace_back(field);
-
-		/* Parse fields: SSID, BSSID, SIGNAL, FREQ, SECURITY, MODE */
-		if ( fields.size() >= 6 )
-		{
-			network.ssid = fields[0];
-			network.bssid = fields[1];
-			/* ⚠️ std::stoi / std::stoul throw on text, and this function is noexcept in a
-			 * -fno-exceptions build: a neighbour's SSID was enough to terminate the process.
-			 * from_chars reports it as a value, and a malformed line is simply dropped. */
-			network.quality = parseNumber< int32_t >(fields[2]).value_or(0);
-			network.signalLevel = (network.quality / 2) - 100; /* Approximate dBm. */
-
-			/* Parse frequency: "2412 MHz" → 2412 */
-			const auto freqStr = fields[3];
-			const auto spacePos = freqStr.find(' ');
-			network.frequency = parseNumber< uint32_t >(spacePos != std::string::npos ? freqStr.substr(0, spacePos) : freqStr).value_or(0);
-			network.channel = frequencyToChannel(network.frequency);
-
-			network.security = fields[4];
-			network.mode = fields[5];
-
-			/* Remove trailing newline from last field. */
-			if ( !network.mode.empty() && network.mode.back() == '\n' )
-			{
-				network.mode.pop_back();
-			}
-		}
-
-		return network;
 	}
 
 	std::vector< Network >
@@ -253,7 +265,7 @@ namespace EmEn::Net::WiFiScanner
 			}
 
 			/* Check for "yes:" prefix (ACTIVE field). */
-			if ( line.substr(0, 4) != "yes:" )
+			if ( !line.starts_with("yes:") )
 			{
 				continue;
 			}

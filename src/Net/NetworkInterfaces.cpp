@@ -58,11 +58,11 @@
 
 	/* The hardware address travels in a family of its own: AF_PACKET on Linux, AF_LINK on
 	 * the BSD family (macOS included). */
-	#if defined(__linux__)
-		#include <netpacket/packet.h>
-	#else
-		#include <net/if_dl.h>
-	#endif
+#ifdef __linux__
+#include <netpacket/packet.h>
+#else
+#include <net/if_dl.h>
+#endif
 #endif
 
 namespace EmEn::Net::NetworkInterfaces
@@ -385,21 +385,21 @@ namespace EmEn::Net::NetworkInterfaces
 				continue;
 			}
 
-	#if defined(__linux__)
+#ifdef __linux__
 			if ( entry->ifa_addr->sa_family == AF_PACKET )
 			{
 				const auto * link = reinterpret_cast< const struct sockaddr_ll * >(entry->ifa_addr);
 
 				macByName[entry->ifa_name] = formatMAC(link->sll_addr, link->sll_halen);
 			}
-	#else
+#else
 			if ( entry->ifa_addr->sa_family == AF_LINK )
 			{
 				const auto * link = reinterpret_cast< const struct sockaddr_dl * >(entry->ifa_addr);
 
 				macByName[entry->ifa_name] = formatMAC(reinterpret_cast< const uint8_t * >(LLADDR(link)), link->sdl_alen);
 			}
-	#endif
+#endif
 		}
 
 		/* Second pass: one entry per IPv4/IPv6 address. */
@@ -466,7 +466,7 @@ namespace EmEn::Net::NetworkInterfaces
 				return true;
 			}
 
-#if defined(__linux__)
+#ifdef __linux__
 			if ( item.loopback )
 			{
 				return false;

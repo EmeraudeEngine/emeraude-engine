@@ -53,8 +53,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 |---|---|---|---|
 | 1 | `src/Console` (+ `MCP/`) | 8 327 | ✅ pushed 2026-09-30 (engine `35f868fc`, base `995159e`, alpha `93eab54a`); VALIDATED macOS M2 (R2 proven: 1.0e999 / 1.0e-60 refused) + Windows NVIDIA (MSVC clean, console conformance 4439/0 — its command set) |
 | 2 | `src/Resources` | 6 307 | ✅ pushed 2026-09-30 (base `4e029ab` + `fb9339a`, engine `d2207206` + `feac0ef4`, alpha `1a9e9554`); VALIDATED macOS M2 + Windows NVIDIA (tests incl. the Windows confinedPath block; scans unchanged, 9 891 there) |
-| 3 | `src/Scenes/Loaders` | 11 292 | 🟠 step 5 — verified, awaiting the owner's commit order |
-| 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ⬜ |
+| 3 | `src/Scenes/Loaders` | 11 292 | ✅ pushed 2026-09-30 (engine `bf5f901c`); VALIDATED Windows NVIDIA + macOS M2 (glTF hostile set + samples + FBX demos, 0 VUID; the WAD step skipped on both: no IWAD — proven on Linux) |
+| 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | 🟠 step 5 — verified, awaiting the owner's commit order |
 | 5 | `src/Input` | 5 357 | ⬜ |
 | 6 | `src/Scenes` (the rest, by sub-group) | 70 278 | ⬜ |
 | 7 | `src/Graphics` (by sub-group) | 137 872 | ⬜ |
@@ -265,4 +265,42 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
   chain loads, 20 + 24 real glTF samples load, 3 corrupted WADs refused with the right reason, doom1.wad loads
   (E1M1, 53 textures), a USDA tree (26 prims, depth 3, 4 meshes) and the FBX demos load; VUIDs seen belong to the
   two opened lifetime / binding items only.
-- [ ] (5) Ledger (done), report, commit + push on the owner's order, then peers.
+- [x] (5) Pushed 2026-09-30: engine `bf5f901c`; peers asked.
+
+## Section 4 — `src/Net` (started 2026-09-30)
+
+- The 2026-08-27 network audit (memory `project_network_audit_2026_08_27`) was ALREADY FIXED the same day, lots 1-6
+  (base `8f1eaa3` / `23e31f3`, engine `9ca76041` / `32524962` / `64cb8545` / `ad142ee9`, app_system `c69838e5`). What
+  it left is base-side (totalTimeout not a hard budget, URI layer breaking signed URLs, no URI fuzzer, OCSP / CRL,
+  TLS floor) and app_system (detached threads) — outside this engine pass.
+- [x] (1) clang-tidy 21.1.6 baseline (the 10 Linux TUs; `*.windows.cpp` read by hand): **103 findings**: 30
+  use-scoped-lock, 20 reinterpret-cast, 16 use-anonymous-namespace, 7 designated-initializers, 7
+  make-member-function-const, 5 concise-preprocessor-directives, 5 pro-type-vararg, 3 const-correctness, 2
+  use-enum-class, 1 each array-to-pointer-decay, macro-usage, avoid-c-arrays, use-ranges, interfaces-global-init (a
+  false positive: `max_listen_connections` is `SOMAXCONN`, constant), constant-array-index, unnecessary-copy,
+  starts-ends-with.
+- [x] (2) Review — real defects, all under EARLIER rulings (no new owner question):
+  - N1 (S3, "all at once"): four throwing directory walks the first census missed — a range-for over a NAMED
+    `directory_iterator` or a braced one: `Net/Manager.cpp` ×2 (`.part` sweep, `clearCache`), `SerialPort.linux.cpp`
+    (`/sys/class/tty`), `Graphics/TextureCache.cpp` (`clearCache`).
+  - N2 (S1, "paths from data confined"): the download-cache index (`index.json`, on disk) names each file; `m_cacheDirectory
+    / filename` with a tampered `"../../x"` would make an EVICTION `remove()` an arbitrary file.
+  - N3 (rule "no throwing std call"): `SerialPort.windows.cpp` `std::stoul` on the USB VID / PID (terminate on a
+    non-hex value; the Linux one was fixed by lot 4). And the WLAN SSID lengths used unbounded against their 32-byte
+    array (`WiFiScanner.windows.cpp`).
+- [x] (3) Applied 2026-09-30: N1 (4 walks: `IO::forEachDirectoryEntry()`, SerialPort an explicit `increment()`),
+  N2 (cache index names confined), N3 (Windows `from_chars` + bounded `strnlen`, SSID clamp). Mechanical: scoped_lock
+  ×30, designated initializers, concise preprocessor, `starts_with`, ranges, 16 helpers into anonymous namespaces.
+  REVERTED fix-its: `make-member-function-const` on the I/O methods (logical mutation; and the fix-it changed
+  `SerialPort.hpp` / `.linux.cpp` but not `.windows.cpp` → the Windows build would have broken). Fix-its run with
+  `--header-filter='.*/src/Net/.*'`: nothing outside the section touched (the section 3 lesson).
+- [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0; clang-tidy 103 → 39
+  (all on purpose, ledger); runtime: a tampered cache index (a relative and an absolute escape, a 1-byte budget
+  forcing an eviction) → both dropped, the victim file intact, the `.part` swept, `clearCache()` fine; a real
+  download → cached → index reloaded after a restart → cleared; 0 VUID. The owner's cache was restored to its
+  original state (empty). UDP / serial / WiFi changes: compile-checked only (no device); `*.windows.cpp` compiled by
+  the Windows peer only.
+  Found: the CEF helper processes start the download manager on the SAME cache → engine item
+  `net-cache-managed-by-cef-helper-processes`.
+- [ ] (5) Ledger (done), report, commit + push on the owner's order, then peers (Windows: the two `.windows.cpp`).
+

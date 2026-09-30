@@ -1145,7 +1145,7 @@ namespace EmEn::Scenes::Loaders
 		 * data stores (11): none refused (owner decision 2026-09-30, plan Ave Robustus). */
 		if ( const auto validation = fastgltf::validate(asset); validation != fastgltf::Error::None )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath << "' is invalid, refused : " << fastgltf::getErrorMessage(validation);
+			TraceError{ClassId} << "The glTF '" << filepath.string() << "' is invalid, refused : " << fastgltf::getErrorMessage(validation);
 
 			return false;
 		}
@@ -1153,7 +1153,7 @@ namespace EmEn::Scenes::Loaders
 		/* NOTE: validate() does not check the node hierarchy; the node walks rely on a strict forest. */
 		if ( std::string hierarchyError; !isStrictNodeForest(asset, hierarchyError) )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath << "' has an invalid node hierarchy, refused : " << hierarchyError << '.';
+			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has an invalid node hierarchy, refused : " << hierarchyError << '.';
 
 			return false;
 		}

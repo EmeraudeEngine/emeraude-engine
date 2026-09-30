@@ -30,3 +30,21 @@
   `UDPClient.cpp` / `NetworkInterfaces.cpp` (they depend on nothing but `emeraude_export.hpp`),
   doing a real round-trip, a real DNS-SD exchange, a real enumeration. Reuse that technique
   rather than trusting the build.
+
+### Triad section 4 (2026-09-30)
+
+- **Directory walks never throw**: the `.part` sweep and `clearCache()` (and `SerialPort::listPorts()` on
+  `/sys/class/tty`, the unplug case lot 4 aimed at) walk through `Base::IO::forEachDirectoryEntry()` / an explicit
+  `increment(error_code)` — a range-for's `operator++` throws even when the iterator was built with an `error_code`.
+- **The cache index is data on disk**: an entry whose file name leaves the cache directory (`"../../x"`, absolute) is
+  DROPPED at load (`Base::IO::confinedPath()`) — an eviction would otherwise `remove()` a file anywhere. Measured: a
+  tampered index with a relative and an absolute name, a 1-byte budget forcing an eviction at startup → both entries
+  dropped, the victim file intact, the legitimate entry evicted, the `.part` swept.
+- **Windows serial ids**: `std::from_chars` (hex) for the USB VID / PID, never `std::stoul` (it throws); the
+  registry string is read with a bounded `strnlen`. WLAN SSID lengths are clamped to their 32-byte array.
+- ⚠️ The CEF helper processes start this manager too, on the SAME cache: engine item
+  `net-cache-managed-by-cef-helper-processes`.
+- I/O methods (`UDPClient::bind` / `set*`, `SerialPort::read` / `write`) stay NON-const on purpose: they mutate the
+  socket / port (clang-tidy `make-member-function-const` proposes otherwise; its fix-it also desynchronised the
+  Windows definitions it cannot see).
+

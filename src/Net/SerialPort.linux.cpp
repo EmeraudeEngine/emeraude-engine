@@ -106,62 +106,68 @@ namespace EmEn::Net
 	 * Port Enumeration
 	 * ======================================================================= */
 
-	/**
-	 * @brief Reads the content of a sysfs attribute file.
-	 * @param path The sysfs attribute path.
-	 * @return std::string The attribute value (trimmed), or empty.
-	 */
-	static std::string
-	readSysfsAttribute (const std::filesystem::path & path) noexcept
+	namespace
 	{
-		std::ifstream file(path);
-
-		if ( !file.is_open() )
+		/**
+		 * @brief Reads the content of a sysfs attribute file.
+		 * @param path The sysfs attribute path.
+		 * @return std::string The attribute value (trimmed), or empty.
+		 */
+		std::string
+		readSysfsAttribute (const std::filesystem::path & path) noexcept
 		{
-			return "";
+			std::ifstream file(path);
+
+			if ( !file.is_open() )
+			{
+				return "";
+			}
+
+			std::string value;
+			std::getline(file, value);
+
+			/* Trim trailing whitespace/newline. */
+			while ( !value.empty() && (value.back() == '\n' || value.back() == '\r' || value.back() == ' ') )
+			{
+				value.pop_back();
+			}
+
+			return value;
 		}
-
-		std::string value;
-		std::getline(file, value);
-
-		/* Trim trailing whitespace/newline. */
-		while ( !value.empty() && (value.back() == '\n' || value.back() == '\r' || value.back() == ' ') )
-		{
-			value.pop_back();
-		}
-
-		return value;
 	}
 
-	/**
-	 * @brief Reads a hexadecimal sysfs attribute as a uint16_t.
-	 * @param path The sysfs attribute path.
-	 * @return uint16_t The parsed value, or 0.
-	 */
-	static uint16_t
-	readSysfsHex (const std::filesystem::path & path) noexcept
+	namespace
 	{
-		const auto str = readSysfsAttribute(path);
-
-		if ( str.empty() )
+		/**
+		 * @brief Reads a hexadecimal sysfs attribute as a uint16_t.
+		 * @param path The sysfs attribute path.
+		 * @return uint16_t The parsed value, or 0.
+		 */
+		uint16_t
+		readSysfsHex (const std::filesystem::path & path) noexcept
 		{
-			return 0;
+			const auto str = readSysfsAttribute(path);
+
+			if ( str.empty() )
+			{
+				return 0;
+			}
+
+			/* ⚠️ std::stoul throws on a non-hex or oversized value, and this function is noexcept
+			 * inside a -fno-exceptions build: a driver exposing a malformed idVendor would have
+			 * terminated the process. from_chars reports it as a value. */
+			uint32_t value = 0;
+
+			const auto * begin = str.data();
+			const auto * end = str.data() + str.size();
+
+			if ( std::from_chars(begin, end, value, 16).ec != std::errc{} || value > 0xFFFFU )
+			{
+				return 0;
+			}
+
+			return static_cast< uint16_t >(value);
 		}
-
-		/* ⚠️ std::stoul throws on a non-hex or oversized value, and this function is noexcept
-		 * inside a -fno-exceptions build: a driver exposing a malformed idVendor would have
-		 * terminated the process. from_chars reports it as a value. */
-		uint32_t value = 0;
-
-		const auto * begin = str.data();
-		const auto * end = str.data() + str.size();
-
-		if ( std::from_chars(begin, end, value, 16).ec != std::errc{} || value > 0xFFFFU )
-		{
-			return 0;
-		}
-
-		return static_cast< uint16_t >(value);
 	}
 
 	std::vector< SerialPortInfo >
@@ -182,15 +188,14 @@ namespace EmEn::Net
 			return ports;
 		}
 
-		std::filesystem::directory_iterator iterator{sysClassTty, error};
+		/* NOTE: an explicit increment(error_code): a range-for's operator++ THROWS, and a USB adapter unplugged during
+		 * the walk is exactly its error case (terminate under -fno-exceptions; triad 2026-09-30). */
+		std::error_code walkError;
+		const std::filesystem::directory_iterator end;
 
-		if ( error )
+		for ( auto iterator = std::filesystem::directory_iterator{sysClassTty, walkError}; !walkError && iterator != end; iterator.increment(walkError) )
 		{
-			return ports;
-		}
-
-		for ( const auto & entry : iterator )
-		{
+			const auto & entry = *iterator;
 			const auto devicePath = entry.path() / "device";
 
 			/* Only include entries that have a device symlink (filters out virtual ttys). */
@@ -257,9 +262,8 @@ namespace EmEn::Net
 		}
 
 		/* Sort by path for consistent ordering. */
-		std::sort(ports.begin(), ports.end(), [] (const auto & a, const auto & b) {
-			return a.path < b.path;
-		});
+		std::ranges::sort(ports, [] (const auto & a, const auto & b)
+						  { return a.path < b.path; });
 
 		return ports;
 	}
@@ -273,80 +277,86 @@ namespace EmEn::Net
 	 * @param baudRate The baud rate value.
 	 * @return speed_t The termios constant, or B9600 as fallback.
 	 */
-	/**
-	 * @brief Converts a numeric baud rate to a POSIX termios speed constant.
-	 * @note ⚠️ Returns nothing for a rate POSIX has no constant for — 250000, the default of
-	 * Marlin-based 3D printers, is one of them. Falling back to B9600 and reporting success made
-	 * the port open at the wrong speed with every reply unreadable and no diagnostic; such a rate
-	 * goes through the BOTHER path below instead.
-	 * @param baudRate The baud rate value.
-	 * @return std::optional< speed_t >
-	 */
-	static std::optional< speed_t >
-	toBaudConstant (uint32_t baudRate) noexcept
+	namespace
 	{
-		switch ( baudRate )
+		/**
+		 * @brief Converts a numeric baud rate to a POSIX termios speed constant.
+		 * @note ⚠️ Returns nothing for a rate POSIX has no constant for — 250000, the default of
+		 * Marlin-based 3D printers, is one of them. Falling back to B9600 and reporting success made
+		 * the port open at the wrong speed with every reply unreadable and no diagnostic; such a rate
+		 * goes through the BOTHER path below instead.
+		 * @param baudRate The baud rate value.
+		 * @return std::optional< speed_t >
+		 */
+		std::optional< speed_t >
+		toBaudConstant (uint32_t baudRate) noexcept
 		{
-			case 50 : return B50;
-			case 75 : return B75;
-			case 110 : return B110;
-			case 134 : return B134;
-			case 150 : return B150;
-			case 200 : return B200;
-			case 300 : return B300;
-			case 600 : return B600;
-			case 1200 : return B1200;
-			case 1800 : return B1800;
-			case 2400 : return B2400;
-			case 4800 : return B4800;
-			case 9600 : return B9600;
-			case 19200 : return B19200;
-			case 38400 : return B38400;
-			case 57600 : return B57600;
-			case 115200 : return B115200;
-			case 230400 : return B230400;
-			case 460800 : return B460800;
-			case 500000 : return B500000;
-			case 576000 : return B576000;
-			case 921600 : return B921600;
-			case 1000000 : return B1000000;
-			case 1152000 : return B1152000;
-			case 1500000 : return B1500000;
-			case 2000000 : return B2000000;
-			case 2500000 : return B2500000;
-			case 3000000 : return B3000000;
-			case 3500000 : return B3500000;
-			case 4000000 : return B4000000;
+			switch ( baudRate )
+			{
+				case 50 : return B50;
+				case 75 : return B75;
+				case 110 : return B110;
+				case 134 : return B134;
+				case 150 : return B150;
+				case 200 : return B200;
+				case 300 : return B300;
+				case 600 : return B600;
+				case 1200 : return B1200;
+				case 1800 : return B1800;
+				case 2400 : return B2400;
+				case 4800 : return B4800;
+				case 9600 : return B9600;
+				case 19200 : return B19200;
+				case 38400 : return B38400;
+				case 57600 : return B57600;
+				case 115200 : return B115200;
+				case 230400 : return B230400;
+				case 460800 : return B460800;
+				case 500000 : return B500000;
+				case 576000 : return B576000;
+				case 921600 : return B921600;
+				case 1000000 : return B1000000;
+				case 1152000 : return B1152000;
+				case 1500000 : return B1500000;
+				case 2000000 : return B2000000;
+				case 2500000 : return B2500000;
+				case 3000000 : return B3000000;
+				case 3500000 : return B3500000;
+				case 4000000 : return B4000000;
 
-			default :
-				return std::nullopt;
+				default :
+					return std::nullopt;
+			}
 		}
 	}
 
-	/**
-	 * @brief Applies an arbitrary baud rate the termios constants cannot express (Linux only).
-	 * @note TCSETS2 + BOTHER take the rate as a number in c_ispeed / c_ospeed. This is how
-	 * 250000 (Marlin), 76800 and the odd rates of some USB adapters are reached.
-	 * @param fd The open descriptor.
-	 * @param baudRate The wanted rate.
-	 * @return bool
-	 */
-	static bool
-	applyCustomBaudRate (int fd, uint32_t baudRate) noexcept
+	namespace
 	{
-		KernelTermios2 tty2{};
-
-		if ( ::ioctl(fd, KernelTCGETS2, &tty2) != 0 )
+		/**
+		 * @brief Applies an arbitrary baud rate the termios constants cannot express (Linux only).
+		 * @note TCSETS2 + BOTHER take the rate as a number in c_ispeed / c_ospeed. This is how
+		 * 250000 (Marlin), 76800 and the odd rates of some USB adapters are reached.
+		 * @param fd The open descriptor.
+		 * @param baudRate The wanted rate.
+		 * @return bool
+		 */
+		bool
+		applyCustomBaudRate (int fd, uint32_t baudRate) noexcept
 		{
-			return false;
+			KernelTermios2 tty2{};
+
+			if ( ::ioctl(fd, KernelTCGETS2, &tty2) != 0 )
+			{
+				return false;
+			}
+
+			tty2.c_cflag &= ~CBAUD;
+			tty2.c_cflag |= BOTHER;
+			tty2.c_ispeed = baudRate;
+			tty2.c_ospeed = baudRate;
+
+			return ::ioctl(fd, KernelTCSETS2, &tty2) == 0;
 		}
-
-		tty2.c_cflag &= ~CBAUD;
-		tty2.c_cflag |= BOTHER;
-		tty2.c_ispeed = baudRate;
-		tty2.c_ospeed = baudRate;
-
-		return ::ioctl(fd, KernelTCSETS2, &tty2) == 0;
 	}
 
 	/* =========================================================================

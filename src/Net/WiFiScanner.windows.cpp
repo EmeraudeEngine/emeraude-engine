@@ -231,9 +231,10 @@ namespace EmEn::Net::WiFiScanner
 			Network net;
 
 			/* SSID. */
-			if ( bssEntry.dot11Ssid.uSSIDLength > 0 )
+			/* NOTE: the length the API reports is clamped to the SSID array (DOT11_SSID_MAX_LENGTH, 32 bytes). */
+			if ( const auto ssidLength = std::min< size_t >(bssEntry.dot11Ssid.uSSIDLength, sizeof(bssEntry.dot11Ssid.ucSSID)); ssidLength > 0 )
 			{
-				net.ssid.assign(reinterpret_cast< const char * >(bssEntry.dot11Ssid.ucSSID), bssEntry.dot11Ssid.uSSIDLength);
+				net.ssid.assign(reinterpret_cast< const char * >(bssEntry.dot11Ssid.ucSSID), ssidLength);
 			}
 
 			/* BSSID. */
@@ -341,9 +342,10 @@ namespace EmEn::Net::WiFiScanner
 			const auto & assoc = connAttr->wlanAssociationAttributes;
 
 			/* SSID. */
-			if ( assoc.dot11Ssid.uSSIDLength > 0 )
+			/* NOTE: the length the API reports is clamped to the SSID array (DOT11_SSID_MAX_LENGTH, 32 bytes). */
+			if ( const auto ssidLength = std::min< size_t >(assoc.dot11Ssid.uSSIDLength, sizeof(assoc.dot11Ssid.ucSSID)); ssidLength > 0 )
 			{
-				net.ssid.assign(reinterpret_cast< const char * >(assoc.dot11Ssid.ucSSID), assoc.dot11Ssid.uSSIDLength);
+				net.ssid.assign(reinterpret_cast< const char * >(assoc.dot11Ssid.ucSSID), ssidLength);
 			}
 
 			/* BSSID. */

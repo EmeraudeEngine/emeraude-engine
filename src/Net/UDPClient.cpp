@@ -73,14 +73,17 @@ namespace EmEn::Net
 {
 	/* ---- Platform helpers ---- */
 
-	static void
-	platformCloseSocket (SocketType sock) noexcept
+	namespace
 	{
+		void
+		platformCloseSocket (SocketType sock) noexcept
+		{
 #ifdef _WIN32
-		closesocket(sock);
+			closesocket(sock);
 #else
-		close(sock);
+			close(sock);
 #endif
+		}
 	}
 
 #ifdef _WIN32
@@ -133,10 +136,13 @@ namespace EmEn::Net
 	/* ---- Socket helpers (kept private to this TU) ---- */
 
 	/* Only WinSock types the option value as a char pointer, hence the single wrapper. */
-	static bool
-	setSocketOption (SocketType sock, int level, int optionName, const void * value, size_t size) noexcept
+	namespace
 	{
-		return setsockopt(sock, level, optionName, reinterpret_cast< const char * >(value), static_cast< socklen_t >(size)) == 0;
+		bool
+		setSocketOption (SocketType sock, int level, int optionName, const void * value, size_t size) noexcept
+		{
+			return setsockopt(sock, level, optionName, reinterpret_cast< const char * >(value), static_cast< socklen_t >(size)) == 0;
+		}
 	}
 
 	/* ⚠️ The value type of IP_MULTICAST_TTL and IP_MULTICAST_LOOP is NOT the same on the three
@@ -154,7 +160,7 @@ namespace EmEn::Net
 	 * does Linux. Do NOT take that as licence to send one type everywhere — the leniency is an
 	 * implementation detail of the current kernels, not a contract, and it is absent from the
 	 * documentation of every one of them. Each platform gets what its own manual specifies. */
-#if defined(_WIN32)
+#ifdef _WIN32
 	using MulticastOptionValue = DWORD;
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
 	using MulticastOptionValue = unsigned char;
@@ -162,24 +168,30 @@ namespace EmEn::Net
 	using MulticastOptionValue = int;
 #endif
 
-	static std::string
-	toDottedDecimal (const struct in_addr & address) noexcept
+	namespace
 	{
-		std::array< char, INET_ADDRSTRLEN > buffer{};
-
-		if ( inet_ntop(AF_INET, &address, buffer.data(), buffer.size()) == nullptr )
+		std::string
+		toDottedDecimal (const struct in_addr & address) noexcept
 		{
-			return {};
-		}
+			std::array< char, INET_ADDRSTRLEN > buffer{};
 
-		return buffer.data();
+			if ( inet_ntop(AF_INET, &address, buffer.data(), buffer.size()) == nullptr )
+			{
+				return {};
+			}
+
+			return buffer.data();
+		}
 	}
 
-	static bool
-	isMulticastAddress (const struct in_addr & address) noexcept
+	namespace
 	{
-		/* Class D, 224.0.0.0/4. */
-		return ( ntohl(address.s_addr) & 0xF0000000U ) == 0xE0000000U;
+		bool
+		isMulticastAddress (const struct in_addr & address) noexcept
+		{
+			/* Class D, 224.0.0.0/4. */
+			return ( ntohl(address.s_addr) & 0xF0000000U ) == 0xE0000000U;
+		}
 	}
 
 	/* Length of one select() slice. Bounds how long close() waits for a parked receive() to
@@ -194,58 +206,61 @@ namespace EmEn::Net
 	 * on an unconnected datagram socket (ENOTCONN / WSAENOTCONN — Linux is the one stack
 	 * lenient enough to do it anyway), so close() signals through 'closing' and the reader has
 	 * to come up for air to see it. See the m_closing comment in the header. */
-	static bool
-	waitReadable (SocketType sock, uint32_t timeoutMs, const std::atomic_bool * closing) noexcept
+	namespace
 	{
-		/* ⚠️ The remaining time is recomputed from a DEADLINE, never by subtracting the nominal
-		 * slice. A select() slice returns after *at least* its timeout, never exactly it, so
-		 * counting slices accumulates the scheduling error: measured +13.8% on a 3 s wait, and the
-		 * shorter the slice the worse the ratio. The caller's timeout is a contract — the JS side
-		 * builds watchdogs and scan budgets on it — so it stays honest to within one slice. */
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeoutMs};
-
-		while ( true )
+		bool
+		waitReadable (SocketType sock, uint32_t timeoutMs, const std::atomic_bool * closing) noexcept
 		{
-			if ( closing != nullptr && closing->load(std::memory_order_acquire) )
+			/* ⚠️ The remaining time is recomputed from a DEADLINE, never by subtracting the nominal
+			 * slice. A select() slice returns after *at least* its timeout, never exactly it, so
+			 * counting slices accumulates the scheduling error: measured +13.8% on a 3 s wait, and the
+			 * shorter the slice the worse the ratio. The caller's timeout is a contract — the JS side
+			 * builds watchdogs and scan budgets on it — so it stays honest to within one slice. */
+			const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeoutMs};
+
+			while ( true )
 			{
-				return false;
-			}
+				if ( closing != nullptr && closing->load(std::memory_order_acquire) )
+				{
+					return false;
+				}
 
-			const auto now = std::chrono::steady_clock::now();
-			const auto remainingMs = now >= deadline
-				? int64_t{0}
-				: std::chrono::duration_cast< std::chrono::milliseconds >(deadline - now).count();
+				const auto now = std::chrono::steady_clock::now();
+				const auto remainingMs = now >= deadline
+					? int64_t{0}
+					: std::chrono::duration_cast< std::chrono::milliseconds >(deadline - now).count();
 
-			const auto sliceMs = static_cast< uint32_t >(std::min< int64_t >(remainingMs, PollSliceMs));
+				const auto sliceMs = static_cast< uint32_t >(std::min< int64_t >(remainingMs, PollSliceMs));
 
-			fd_set readFds;
-			FD_ZERO(&readFds);
-			FD_SET(sock, &readFds);
+				fd_set readFds;
+				FD_ZERO(&readFds);
+				FD_SET(sock, &readFds);
 
-			struct timeval tv{};
-			tv.tv_sec = static_cast< long >(sliceMs / 1000);
-			tv.tv_usec = static_cast< long >((sliceMs % 1000) * 1000);
+				struct timeval tv{};
+				tv.tv_sec = static_cast< long >(sliceMs / 1000);
+				tv.tv_usec = static_cast< long >((sliceMs % 1000) * 1000);
 
-			const auto ready = select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv);
+				const auto ready = select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv);
 
-			if ( ready > 0 )
-			{
-				return true;
-			}
+				if ( ready > 0 )
+				{
+					return true;
+				}
 
-			/* An error will not sort itself out by waiting: report it as the single-shot
-			 * version did, rather than spinning until the timeout runs out.
-			 * ⚠️ EINTR lands here and truncates the wait — pre-existing behaviour, unchanged by
-			 * the slicing, and deliberately left alone rather than widened in this pass. */
-			if ( ready < 0 )
-			{
-				return false;
-			}
+				/* An error will not sort itself out by waiting: report it as the single-shot
+				 * version did, rather than spinning until the timeout runs out.
+				 * ⚠️ EINTR lands here and truncates the wait — pre-existing behaviour, unchanged by
+				 * the slicing, and deliberately left alone rather than widened in this pass. */
+				if ( ready < 0 )
+				{
+					return false;
+				}
 
-			/* Covers timeoutMs == 0 too: the poll above was the single non-blocking look. */
-			if ( remainingMs == 0 )
-			{
-				return false;
+				/* Covers timeoutMs == 0 too: the poll above was the single non-blocking look. */
+				if ( remainingMs == 0 )
+				{
+					return false;
+				}
 			}
 		}
 	}
@@ -258,85 +273,94 @@ namespace EmEn::Net
 
 	/* The search target is interpolated into a request line: anything that could start a new
 	 * header (CR, LF, NUL, or any control character) makes the datagram attacker-shaped. */
-	static bool
-	isValidSearchTarget (const std::string & searchTarget) noexcept
+	namespace
 	{
-		if ( searchTarget.empty() || searchTarget.size() > 256 )
+		bool
+		isValidSearchTarget (const std::string & searchTarget) noexcept
 		{
-			return false;
-		}
+			if ( searchTarget.empty() || searchTarget.size() > 256 )
+			{
+				return false;
+			}
 
-		return std::ranges::none_of(searchTarget, [] (char character) {
-			return static_cast< unsigned char >(character) < 0x20 || static_cast< unsigned char >(character) == 0x7F;
-		});
+			return std::ranges::none_of(searchTarget, [] (char character) {
+				return static_cast< unsigned char >(character) < 0x20 || static_cast< unsigned char >(character) == 0x7F;
+			});
+		}
 	}
 
-	static std::string
-	buildMSearchPacket (const std::string & searchTarget, int mx) noexcept
+	namespace
 	{
-		std::ostringstream packet;
-		packet
-			<< "M-SEARCH * HTTP/1.1\r\n"
-			<< "HOST: " << SSDPMulticastAddress << ":" << SSDPMulticastPort << "\r\n"
-			<< "MAN: \"ssdp:discover\"\r\n"
-			<< "MX: " << mx << "\r\n"
-			<< "ST: " << searchTarget << "\r\n"
-			<< "\r\n";
+		std::string
+		buildMSearchPacket (const std::string & searchTarget, int mx) noexcept
+		{
+			std::ostringstream packet;
+			packet
+				<< "M-SEARCH * HTTP/1.1\r\n"
+				<< "HOST: " << SSDPMulticastAddress << ":" << SSDPMulticastPort << "\r\n"
+				<< "MAN: \"ssdp:discover\"\r\n"
+				<< "MX: " << mx << "\r\n"
+				<< "ST: " << searchTarget << "\r\n"
+				<< "\r\n";
 
-		return packet.str();
+			return packet.str();
+		}
 	}
 
-	static std::map< std::string, std::string >
-	parseSSDPHeaders (const std::string & response) noexcept
+	namespace
 	{
-		std::map< std::string, std::string > headers;
-		std::istringstream stream(response);
-		std::string line;
-
-		/* Skip the status line (e.g., "HTTP/1.1 200 OK"). */
-		if ( std::getline(stream, line) )
+		std::map< std::string, std::string >
+		parseSSDPHeaders (const std::string & response) noexcept
 		{
-			if ( const auto firstSpace = line.find(' '); firstSpace != std::string::npos )
+			std::map< std::string, std::string > headers;
+			std::istringstream stream(response);
+			std::string line;
+
+			/* Skip the status line (e.g., "HTTP/1.1 200 OK"). */
+			if ( std::getline(stream, line) )
 			{
-				const auto secondSpace = line.find(' ', firstSpace + 1);
-
-				headers["_STATUS"] = line.substr(firstSpace + 1, secondSpace != std::string::npos ? secondSpace - firstSpace - 1 : std::string::npos);
-			}
-		}
-
-		/* Parse headers. */
-		while ( std::getline(stream, line) )
-		{
-			/* Remove trailing \r if present. */
-			if ( !line.empty() && line.back() == '\r' )
-			{
-				line.pop_back();
-			}
-
-			if ( line.empty() )
-			{
-				break;
-			}
-
-			if ( const auto colonPos = line.find(':'); colonPos != std::string::npos )
-			{
-				auto key = line.substr(0, colonPos);
-				auto value = line.substr(colonPos + 1);
-
-				/* Trim leading whitespace from value. */
-				if ( const auto valueStart = value.find_first_not_of(' '); valueStart != std::string::npos )
+				if ( const auto firstSpace = line.find(' '); firstSpace != std::string::npos )
 				{
-					value = value.substr(valueStart);
+					const auto secondSpace = line.find(' ', firstSpace + 1);
+
+					headers["_STATUS"] = line.substr(firstSpace + 1, secondSpace != std::string::npos ? secondSpace - firstSpace - 1 : std::string::npos);
+				}
+			}
+
+			/* Parse headers. */
+			while ( std::getline(stream, line) )
+			{
+				/* Remove trailing \r if present. */
+				if ( !line.empty() && line.back() == '\r' )
+				{
+					line.pop_back();
 				}
 
-				/* Convert key to uppercase for case-insensitive matching. */
-				std::ranges::transform(key, key.begin(), ::toupper);
+				if ( line.empty() )
+				{
+					break;
+				}
 
-				headers[key] = value;
+				if ( const auto colonPos = line.find(':'); colonPos != std::string::npos )
+				{
+					auto key = line.substr(0, colonPos);
+					auto value = line.substr(colonPos + 1);
+
+					/* Trim leading whitespace from value. */
+					if ( const auto valueStart = value.find_first_not_of(' '); valueStart != std::string::npos )
+					{
+						value = value.substr(valueStart);
+					}
+
+					/* Convert key to uppercase for case-insensitive matching. */
+					std::ranges::transform(key, key.begin(), ::toupper);
+
+					headers[key] = value;
+				}
 			}
-		}
 
-		return headers;
+			return headers;
+		}
 	}
 
 	/* ---- UDPClient lifecycle ---- */

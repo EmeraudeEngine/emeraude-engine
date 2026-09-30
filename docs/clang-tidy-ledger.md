@@ -28,6 +28,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Console` (+ `MCP/`), 12 TUs | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 24, all ON PURPOSE (below) — 21 misc-no-recursion, 1 avoid-c-arrays, 1 cppcoreguidelines-use-enum-class, 1 pro-type-reinterpret-cast. Before: 64 (clang-tidy 19, designated-initializers blind) / 66 (21). | Triad section 1, `docs/todo/triad-engine-pass.md` |
 | `src/Resources`, 6 TUs (+ `Container.hpp` templates) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 5, all ON PURPOSE (below) — 2 cppcoreguidelines-use-enum-class, 2 misc-no-recursion, 1 cppcoreguidelines-avoid-do-while. Before: 20. | Triad section 2 |
 | `src/Scenes/Loaders`, 4 TUs (+ `SceneDataConsumer.cpp`) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 172, all ON PURPOSE (below) — 141 pro-type-union-access, 18 pro-bounds-constant-array-index, 7 pro-type-reinterpret-cast, 3 avoid-const-or-ref-data-members, 1 Padding, 1 use-enum-class, 1 enum-size. Before: 221. | Triad section 3 |
+| `src/Net`, 10 Linux TUs (`*.windows.cpp`, `*.mac.mm` read by hand) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 39, all ON PURPOSE (below) — 20 reinterpret-cast, 7 make-member-function-const, 5 pro-type-vararg, 2 use-enum-class, 1 each array-to-pointer-decay, macro-usage, avoid-c-arrays, interfaces-global-init, constant-array-index. Before: 103. | Triad section 4 |
 
 ## Findings kept ON PURPOSE
 
@@ -72,4 +73,18 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   short-lived, non-copyable object by design.
 - **clang-analyzer-optin.performance.Padding ×1** — a lambda CLOSURE's layout (GLTFLoader).
 - **use-enum-class + enum-size** — `LoaderCapabilityBits`: a bit-flag set combined with `|`, `uint32_t` on purpose.
+
+### `src/Net` (2026-09-30)
+
+- **pro-type-reinterpret-cast ×20** — the BSD socket API (`sockaddr_in` ↔ `sockaddr`, option buffers).
+- **make-member-function-const ×7** — `UDPClient::bind` / `setBroadcast` / `setMulticast*`, `SerialPort::read` /
+  `write`: they mutate the socket / port (logical mutation). Their fix-it also broke the Windows definitions.
+- **pro-type-vararg ×5** — `ioctl()` / `fcntl()`, the POSIX system calls.
+- **use-enum-class ×2** — `NotificationCode` (the Observer convention).
+- **macro-usage, avoid-c-arrays** — `SerialPort.linux.cpp`'s private mirror of the kernel `termios2` (`BOTHER`, the
+  `c_cc` array): it must match the kernel ABI byte for byte.
+- **array-to-pointer-decay ×1** — a `char[]` buffer handed to a C API (`NetworkInterfaces.cpp`).
+- **interfaces-global-init ×1** — `TCPServer::DefaultBacklog{asio::socket_base::max_listen_connections}`: that is
+  `SOMAXCONN`, a constant expression (a false positive).
+- **pro-bounds-constant-array-index ×1** — `UDPClient.cpp` NUL after `recvfrom(…, size - 1, …)`: bounded.
 

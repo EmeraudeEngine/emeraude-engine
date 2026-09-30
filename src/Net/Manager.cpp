@@ -135,7 +135,7 @@ namespace EmEn::Net
 		this->sweepPartialFiles();
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			this->enforceCacheBudget();
 		}
@@ -154,14 +154,14 @@ namespace EmEn::Net
 		 * terminate inside that window: a download() landing here would hand a worker a client
 		 * that is about to be destroyed. From now on every request is refused. */
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			m_shuttingDown = true;
 		}
 
 		/* Workers still running hold `this`: the thread pool is drained by PrimaryServices
 		 * before the services terminate, so nothing is in flight here. */
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		if ( m_indexDirty && !this->writeCacheIndex(this->serializeCacheIndex()) )
 		{
@@ -228,6 +228,17 @@ namespace EmEn::Net
 			entry.lastUse = file.isMember(LastUseKey) && file[LastUseKey].isIntegral() ? file[LastUseKey].asLargestUInt() : 0;
 
 			m_useCounter = std::max(m_useCounter, entry.lastUse);
+
+			/* NOTE: the index is a file on disk: a tampered name ("../../x", an absolute path) would make an EVICTION
+			 * remove a file anywhere. Confined to the cache directory, or dropped (triad 2026-09-30, plan Ave Robustus). */
+			if ( !IO::confinedPath(m_cacheDirectory, std::filesystem::path{entry.filename}) )
+			{
+				TraceWarning{ClassId} << "Cached file name '" << entry.filename << "' leaves the cache directory, entry dropped.";
+
+				m_indexDirty = true;
+
+				continue;
+			}
 
 			if ( !IO::fileExists(m_cacheDirectory / entry.filename) )
 			{
@@ -301,33 +312,24 @@ namespace EmEn::Net
 	void
 	Manager::sweepPartialFiles () const noexcept
 	{
-		std::error_code error;
-
-		std::filesystem::directory_iterator iterator{m_cacheDirectory, error};
-
-		if ( error )
-		{
-			return;
-		}
-
 		size_t removed = 0;
 
-		for ( const auto & entry : iterator )
-		{
+		/* NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
+		static_cast< void >(IO::forEachDirectoryEntry(m_cacheDirectory, false, [&removed] (const std::filesystem::directory_entry & entry) {
 			if ( entry.path().extension() != PartialSuffix )
 			{
-				continue;
+				return true;
 			}
 
-			std::filesystem::remove(entry.path(), error);
+			std::error_code error;
 
-			if ( !error )
+			if ( std::filesystem::remove(entry.path(), error) && !error )
 			{
 				removed++;
 			}
 
-			error.clear();
-		}
+			return true;
+		}));
 
 		if ( removed > 0 )
 		{
@@ -408,7 +410,7 @@ namespace EmEn::Net
 	std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > >
 	Manager::cachedFiles () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > > files;
 		files.reserve(m_cache.size());
@@ -424,28 +426,21 @@ namespace EmEn::Net
 	bool
 	Manager::clearCache () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		bool success = true;
 
 		/* ⚠️ The directory is walked, not the index: a .part file left by a crash, or a file whose
 		 * index entry was lost, is invisible to the map and would never be reclaimed — while the
 		 * header promises "every cached file". The index itself is kept. */
-		std::error_code error;
-
-		std::filesystem::directory_iterator iterator{m_cacheDirectory, error};
-
-		if ( error )
-		{
-			return false;
-		}
-
-		for ( const auto & entry : iterator )
-		{
+		/* NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
+		const auto walked = IO::forEachDirectoryEntry(m_cacheDirectory, false, [&success] (const std::filesystem::directory_entry & entry) {
 			if ( entry.path().filename() == CacheIndexFilename )
 			{
-				continue;
+				return true;
 			}
+
+			std::error_code error;
 
 			std::filesystem::remove(entry.path(), error);
 
@@ -453,9 +448,15 @@ namespace EmEn::Net
 			{
 				TraceError{ClassId} << "Unable to remove the cached file '" << IO::toU8String(entry.path()) << "': " << error.message();
 
-				error.clear();
 				success = false;
 			}
+
+			return true;
+		});
+
+		if ( !walked )
+		{
+			return false;
 		}
 
 		m_cache.clear();
@@ -479,7 +480,7 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			if ( m_shuttingDown )
 			{
@@ -503,7 +504,7 @@ namespace EmEn::Net
 		bool firstInFlight = false;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			/* Same URL already tracked: O(1) now — the linear scan re-serialised every tracked
 			 * URL on every request. */
@@ -572,9 +573,9 @@ namespace EmEn::Net
 
 		if ( completeNow )
 		{
-			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+			const std::scoped_lock lock{m_eventsAccess};
 
-			m_events.emplace_back(Event{ticket, FileDownloaded});
+			m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 
 			return ticket;
 		}
@@ -588,9 +589,9 @@ namespace EmEn::Net
 		 * emitted DownloadingStarted/Finished for transfers that never happened. */
 		if ( firstInFlight )
 		{
-			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+			const std::scoped_lock lock{m_eventsAccess};
 
-			m_events.emplace_back(Event{ticket, DownloadingStarted});
+			m_events.emplace_back(Event{.ticket = ticket, .code = DownloadingStarted});
 		}
 
 		auto threadPool = m_threadPool;
@@ -600,15 +601,15 @@ namespace EmEn::Net
 			TraceError{ClassId} << "No thread pool available, '" << url << "' fails.";
 
 			{
-				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+				const std::scoped_lock lock{m_itemsAccess};
 
 				m_items[static_cast< size_t >(ticket) - 1].setError(Network::DownloadOutcome::LocalIO, 0);
 				--m_inFlight;
 			}
 
-			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+			const std::scoped_lock lock{m_eventsAccess};
 
-			m_events.emplace_back(Event{ticket, FileDownloaded});
+			m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 
 			return ticket;
 		}
@@ -621,15 +622,15 @@ namespace EmEn::Net
 			TraceError{ClassId} << "The thread pool refused the task, '" << url << "' fails.";
 
 			{
-				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+				const std::scoped_lock lock{m_itemsAccess};
 
 				m_items[static_cast< size_t >(ticket) - 1].setError(Network::DownloadOutcome::LocalIO, 0);
 				--m_inFlight;
 			}
 
-			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+			const std::scoped_lock lock{m_eventsAccess};
 
-			m_events.emplace_back(Event{ticket, FileDownloaded});
+			m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 		}
 
 		return ticket;
@@ -642,7 +643,7 @@ namespace EmEn::Net
 		std::filesystem::path filepath;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			const auto & item = m_items[static_cast< size_t >(ticket) - 1];
 			url = item.url();
@@ -650,23 +651,23 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			if ( m_shuttingDown || m_impl->client == nullptr )
 			{
 				m_items[static_cast< size_t >(ticket) - 1].setError();
 				--m_inFlight;
 
-				const std::lock_guard< std::mutex > eventsLock{m_eventsAccess};
+				const std::scoped_lock eventsLock{m_eventsAccess};
 
-				m_events.emplace_back(Event{ticket, FileDownloaded});
+				m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 
 				return;
 			}
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			/* Pending until a worker actually picks it up — the state exists to be observable. */
 			m_items[static_cast< size_t >(ticket) - 1].setTransferring();
@@ -684,8 +685,9 @@ namespace EmEn::Net
 		/* The hook runs on this worker: it only records the counters under the items mutex and
 		 * raises the pending flag; dispatchCompleted() turns that into ONE Progress notification
 		 * per ticket per main-loop cycle, whatever the read granularity. */
-		const auto progressHook = [this, ticket] (uint64_t received, std::optional< uint64_t > total) {
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const auto progressHook = [this, ticket] (uint64_t received, std::optional< uint64_t > total)
+		{
+			const std::scoped_lock lock{m_itemsAccess};
 
 			m_items[static_cast< size_t >(ticket) - 1].setProgress(received, total.value_or(0));
 		};
@@ -720,7 +722,7 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			auto & item = m_items[static_cast< size_t >(ticket) - 1];
 
@@ -728,7 +730,7 @@ namespace EmEn::Net
 			{
 				item.setDone(bytes);
 
-				m_cache[to_string(url)] = CacheEntry{filepath.filename().string(), bytes, ++m_useCounter};
+				m_cache[to_string(url)] = CacheEntry{.filename = filepath.filename().string(), .bytes = bytes, .lastUse = ++m_useCounter};
 				m_indexDirty = true;
 
 				this->enforceCacheBudget();
@@ -743,9 +745,9 @@ namespace EmEn::Net
 			--m_inFlight;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_eventsAccess};
+		const std::scoped_lock lock{m_eventsAccess};
 
-		m_events.emplace_back(Event{ticket, FileDownloaded});
+		m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 	}
 
 	void
@@ -754,7 +756,7 @@ namespace EmEn::Net
 		std::vector< Event > events;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_eventsAccess};
+			const std::scoped_lock lock{m_eventsAccess};
 
 			events.swap(m_events);
 		}
@@ -765,7 +767,7 @@ namespace EmEn::Net
 			bool anyPending = false;
 
 			{
-				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+				const std::scoped_lock lock{m_itemsAccess};
 
 				anyPending = m_inFlight > 0 && std::ranges::any_of(m_items, [] (const DownloadItem & item) {
 					return item.hasPendingProgress();
@@ -789,7 +791,7 @@ namespace EmEn::Net
 		std::vector< int > progressed;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_itemsAccess};
+			const std::scoped_lock lock{m_itemsAccess};
 
 			/* ⚠️ The 1 -> 0 edge, not the value: a cache hit carries events without ever having
 			 * been in flight, and used to emit DownloadingFinished on every one of them. */
@@ -824,7 +826,7 @@ namespace EmEn::Net
 		{
 			if ( this->writeCacheIndex(indexContent) )
 			{
-				const std::lock_guard< std::mutex > lock{m_itemsAccess};
+				const std::scoped_lock lock{m_itemsAccess};
 
 				m_indexDirty = false;
 			}
@@ -843,7 +845,7 @@ namespace EmEn::Net
 	std::pair< uint64_t, uint64_t >
 	Manager::downloadProgress (int ticket) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -860,7 +862,7 @@ namespace EmEn::Net
 	DownloadStatus
 	Manager::downloadStatus (int ticket) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -873,7 +875,7 @@ namespace EmEn::Net
 	std::filesystem::path
 	Manager::downloadedFilepath (int ticket) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -903,7 +905,7 @@ namespace EmEn::Net
 	std::pair< Base::Network::DownloadOutcome, uint16_t >
 	Manager::downloadFailure (int ticket) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -916,7 +918,7 @@ namespace EmEn::Net
 	size_t
 	Manager::fileCount () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		return m_items.size();
 	}
@@ -924,7 +926,7 @@ namespace EmEn::Net
 	size_t
 	Manager::fileRemainingCount () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_itemsAccess};
+		const std::scoped_lock lock{m_itemsAccess};
 
 		return m_inFlight;
 	}

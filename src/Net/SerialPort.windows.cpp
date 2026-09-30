@@ -28,6 +28,8 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <charconv>
+#include <cstring>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -145,17 +147,36 @@ namespace EmEn::Net
 			if ( SetupDiGetDeviceRegistryPropertyA(devInfo, &devInfoData, SPDRP_HARDWAREID,
 				nullptr, reinterpret_cast< PBYTE >(hardwareId), hardwareIdSize, nullptr) )
 			{
-				const std::string hwId(hardwareId);
+				/* NOTE: bounded — a registry value that fills the buffer carries no terminating NUL. */
+				const std::string hwId(hardwareId, strnlen(hardwareId, sizeof(hardwareId)));
 
-				/* Parse VID and PID from strings like "USB\VID_2341&PID_0043". */
-				if ( auto vidPos = hwId.find("VID_"); vidPos != std::string::npos )
+				/* Parse VID and PID from strings like "USB\VID_2341&PID_0043".
+				 * NOTE: std::from_chars, never std::stoul — it throws on a non-hex id, and throwing is std::terminate
+				 * under -fno-exceptions (triad 2026-09-30; the Linux twin was fixed by the 2026-08-27 lot 4). */
+				const auto parseHex4 = [&hwId] (size_t position) -> uint16_t {
+					uint16_t value = 0;
+
+					if ( position + 4 <= hwId.size() )
+					{
+						const auto * first = hwId.data() + position;
+
+						if ( const auto [end, error] = std::from_chars(first, first + 4, value, 16); error != std::errc{} || end != first + 4 )
+						{
+							return 0;
+						}
+					}
+
+					return value;
+				};
+
+				if ( const auto vidPos = hwId.find("VID_"); vidPos != std::string::npos )
 				{
-					info.vendorId = static_cast< uint16_t >(std::stoul(hwId.substr(vidPos + 4, 4), nullptr, 16));
+					info.vendorId = parseHex4(vidPos + 4);
 				}
 
-				if ( auto pidPos = hwId.find("PID_"); pidPos != std::string::npos )
+				if ( const auto pidPos = hwId.find("PID_"); pidPos != std::string::npos )
 				{
-					info.productId = static_cast< uint16_t >(std::stoul(hwId.substr(pidPos + 4, 4), nullptr, 16));
+					info.productId = parseHex4(pidPos + 4);
 				}
 			}
 

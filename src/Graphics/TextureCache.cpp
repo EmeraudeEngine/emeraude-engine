@@ -38,6 +38,7 @@
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "IO/IO.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -106,13 +107,13 @@ namespace EmEn::Graphics
 
 		size_t erasedCount = 0;
 
-		std::error_code error;
+		/* NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
+		static_cast< void >(Base::IO::forEachDirectoryEntry(m_cacheDirectory, false, [&erasedCount] (const std::filesystem::directory_entry & entry) {
+			std::error_code error;
 
-		for ( const auto & entry : std::filesystem::directory_iterator{m_cacheDirectory, error} )
-		{
 			if ( !entry.is_regular_file(error) || entry.path().extension() != CacheFileExtension )
 			{
-				continue;
+				return true;
 			}
 
 			if ( std::filesystem::remove(entry.path(), error) )
@@ -123,7 +124,9 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Unable to erase the texture cache entry '" << entry.path() << "' !";
 			}
-		}
+
+			return true;
+		}));
 
 		TraceSuccess{ClassId} << "Texture cache cleared (" << erasedCount << " entrie(s) erased).";
 	}

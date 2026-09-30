@@ -790,13 +790,13 @@ namespace EmEn::Net
 
 		const int delay = static_cast< int >(initialDelaySeconds);
 
-	#if defined(__linux__)
+#ifdef __linux__
 		static_cast< void >(::setsockopt(handle, IPPROTO_TCP, TCP_KEEPIDLE, &delay, sizeof(delay)));
-	#elif defined(__APPLE__)
+#elif defined(__APPLE__)
 		static_cast< void >(::setsockopt(handle, IPPROTO_TCP, TCP_KEEPALIVE, &delay, sizeof(delay)));
-	#else
+#else
 		static_cast< void >(delay);
-	#endif
+#endif
 
 		return true;
 #endif
