@@ -1266,6 +1266,7 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 | | *(JSON input)* | Send `{...}` to create scene from JSON |
 | **RendererService** | `screenshot()` | Capture framebuffer to PNG |
 | | `getStatus()` | FPS, frame time, resolution |
+| | `setPostProcessorEnabled(1\|0)` | The post-processing master switch (`PostProcessor::enable()`): 0 sends every frame down the DIRECT swap-chain path (no scene target, no exposure: a photometric frame clips to white) — a diagnostic of that path; the effects' A/B is `PostProcess.bypassSceneEffects` |
 | | `setOverflowCensus(1\|0)` | Arm / disarm the overflow census (NaN / Inf / fp16-ceiling counts) |
 | | `resetOverflowCensus()` | Open a new census statistics window |
 | | `testOverflowCensus()` | Census positive control: `PASS` / `FAIL` with both tuples |

@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -228,7 +229,8 @@ namespace EmEn::Graphics
 			void
 			enable (bool state) noexcept
 			{
-				m_enabled = state;
+				/* Any thread (a console command): the render thread reads it at its next frame. */
+				m_enabled.store(state, std::memory_order_release);
 			}
 
 			/**
@@ -244,7 +246,7 @@ namespace EmEn::Graphics
 			bool
 			isEnabled () const noexcept
 			{
-				return m_enabled && this->usable();
+				return m_enabled.load(std::memory_order_acquire) && this->usable();
 			}
 
 			/* Cached requirements — stored from configure(). */
@@ -498,7 +500,7 @@ namespace EmEn::Graphics
 			 * them must not additionally have to remember to flip a switch (that omission is
 			 * exactly what made enableHDR() a silent no-op on every scene without an
 			 * application-provided stack). */
-			bool m_enabled{true};
+			std::atomic< bool > m_enabled{true};
 			/* Cached requirements from configure(). */
 			bool m_cachedRequiresHDR{false};
 			bool m_cachedRequiresDepth{false};

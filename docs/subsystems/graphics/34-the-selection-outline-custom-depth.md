@@ -86,7 +86,14 @@ pixel it covers. RTX 3070 Ti, 2880x1620, `geometry-generator`:
 
 ### ⚠️ Limits (first pass)
 
-- Internal-target frames only (`Renderer::renderFrameWithInternal()`): the direct swap-chain path has no scene target.
+- ~~Internal-target frames only~~ Both frame paths since 2026-09-30. On the DIRECT swap-chain path
+  (`Renderer::renderFrameDirect()`: post-processing forbidden, or a scene with nothing to post-process) the custom depth
+  is recorded between the two swap-chain passes at the swap-chain's size, and the composite draws in the swap-chain's
+  post-process pass (single-sample colour + depth: the pipeline follows the render pass it is recorded in). The scene
+  depth for "hidden" comes from the RENDERER's grab pass — armed on that path whenever something is outlined (a colour
+  + depth blit that frame), since the swap-chain depth is an attachment of the very pass the composite draws in.
+  Verified (Linux, 2026-09-30, `Core.RendererService.setPostProcessorEnabled(0)`): the same outline pixel count on both
+  paths (7364 on `paths`), the hidden part removed alike at hidden opacity 0 (38 → 25 on both), 0 VUID.
 - The scissor of a set is the UNION of the entities' projected boxes (`Scene::highlightedWorldBoundingBoxes()`, one box
   per live entity published per slot): two entities at opposite corners scissor nearly the whole screen. Measured:
   both `geometry-generator` halves, 2 px, 0.119 ms.

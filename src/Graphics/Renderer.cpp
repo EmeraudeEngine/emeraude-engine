@@ -2032,13 +2032,28 @@ namespace EmEn::Graphics
 
 		commandBuffer->endRenderPass();
 
+		/* The selection outline's source: the highlighted entities' depth alone, through the main camera ("custom
+		 * depth"), outside any render pass — as on the internal-target path, at the swap-chain's size. */
+		bool selectionOutlined = false;
+
+		if ( sceneHasContent )
+		{
+			const auto & extent = m_swapChain->extent();
+
+			selectionOutlined = m_selectionOutline.recordDepth(*commandBuffer, *scenePtr, extent.width, extent.height, m_swapChain->viewMatrices());
+		}
+
 		/* Grab pass: capture the resolved scene into a sample-able texture (same frame).
 		 * NEED-DRIVEN: armed whenever the frame contains TranslucentGB objects (grab-pass
 		 * transmission/refraction materials) — `enableGrabPass(true)` remains a manual
 		 * force-on. ⚠️ The flag alone used to gate this blit and NOTHING ever set it: the
 		 * machinery was pre-allocated but dead, and every grab-pass material sampled an
 		 * unfilled slot (measured on CarConcept: uniform sky-blue glass, no interior). */
-		if ( ( m_grabPassEnabled || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated() )
+		/* The outline needs the SCENE's depth too (full where visible, dimmed where hidden): the only sampleable copy of
+		 * it on this path is this grab (the swap-chain depth is an attachment of the pass the outline draws in). */
+		const bool grabbed = ( m_grabPassEnabled || selectionOutlined || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated();
+
+		if ( grabbed )
 		{
 			const auto * srcDepth = m_grabPass->hasDepth() ? m_swapChain->currentDepthStencilImage().get() : nullptr;
 
@@ -2113,6 +2128,23 @@ namespace EmEn::Graphics
 				/* TODO: What we need to really do here, when it occurs? */
 				Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
 			}
+		}
+
+		/* The selection outline over the final image, then the paths in debug mode on top of it — the internal-target
+		 * path's order. Their pipelines follow the render pass they are recorded in (this one is the swap-chain's
+		 * post-process pass). */
+		if ( selectionOutlined )
+		{
+			const auto & extent = m_swapChain->extent();
+
+			m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->postProcessFramebuffer(), extent.width, extent.height, grabbed ? m_grabPass.get() : nullptr, m_swapChain->viewMatrices(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
+		}
+
+		if ( scenePtr != nullptr && !scenePtr->instanceTransforms().debugPaths().empty() )
+		{
+			const auto & extent = m_swapChain->extent();
+
+			m_pathDebugOverlay.record(*commandBuffer, *m_swapChain->postProcessFramebuffer(), extent.width, extent.height, scenePtr->instanceTransforms(), m_swapChain->viewMatrices(), scenePtr->frameReadStateIndex(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
 		}
 
 		/* Render the scene debug helpers (compass) over the scene. */

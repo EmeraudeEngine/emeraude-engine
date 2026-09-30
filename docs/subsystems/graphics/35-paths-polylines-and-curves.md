@@ -143,4 +143,5 @@ shadow-casting program, which builds the SAME ribbon.
 - **A material change does not reach the path**: call `markLookChanged()` (the console adapter does) — the bounds
   follow the width, and the debug look is the material's style.
 - **Debug mode, round and translucent**: the two capsules overlap at every join, the joint reads darker (accepted).
-- The debug overlay needs the internal scene target (`renderFrameWithInternal()`), like the outline.
+- The debug overlay runs on both frame paths (since 2026-09-30): on the direct swap-chain path it draws in the
+  swap-chain's post-process pass, after the outline (graphics doc 34 § Limits).

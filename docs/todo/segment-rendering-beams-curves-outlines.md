@@ -51,7 +51,7 @@ Validated on `geometry-generator` (3070 Ti): 2 px line all around, full where vi
 0 validation message. What remains:
 - ~~Measure the composite's cost; scissor it~~ DONE 2026-09-29: graphics doc 34 § Cost and the scissor.
 - ~~Several entities at once~~ DONE 2026-09-29 (a set, one style; editor Shift+click): graphics doc 34, scenes doc 25.
-- The direct swap-chain frame path (no scene target there).
+- ~~The direct swap-chain frame path~~ DONE 2026-09-30 (graphics doc 34 § Limits; `setPostProcessorEnabled(0)` to test it).
 - B.1, the geometric silhouette (`VertexFactory::Silhouette` + primitive A), for debug / wireframe tools — later.
 
 ### C. Paths and curves — `Component::Path` — first pass DONE 2026-09-29 (graphics doc 35)
@@ -74,7 +74,7 @@ The colour (owner decision 2026-09-29): a linear hue × a luminance in nits (250
 exact on screen is the debug mode's. What remains:
 - ~~A path cannot be OUTLINED~~ DONE 2026-09-30 (graphics doc 35 § The selection outline). A path still casts no
   shadow and is absent from reflection cubemaps (the directory needs the instance-transforms SSBO path).
-- The debug overlay on the direct swap-chain frame path (no scene target there).
+- ~~The debug overlay on the direct swap-chain frame path~~ DONE 2026-09-30, with the outline.
 - A point-count change pairs no previous points (velocity 0) but sets no reactive tag yet.
 - Dashes (the arc length is already in w), arrows, per-vertex colour; a Bézier path from the console.
 

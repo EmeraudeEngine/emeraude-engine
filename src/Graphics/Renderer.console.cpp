@@ -306,6 +306,19 @@ namespace EmEn::Graphics
 				return Console::CommandResult::success("Overflow census disarmed from the next rendered frame (its last counts and its window are kept).");
 			}, Console::CommandHint::Idempotent);
 
+		this->bindCommand("setPostProcessorEnabled", "Allows or forbids post-processing (the master switch, PostProcessor::enable()). Forbidden, every frame takes the DIRECT swap-chain path: no scene target, no exposure nor tone mapping (a photometric frame clips to white) — a diagnostic of that path, not an A/B of the effects (use PostProcess.bypassSceneEffects for that).",
+			{
+				{"enabled", "1 (true) allows post-processing (the default), 0 (false) forbids it."}
+			},
+			[this] (bool enabled) {
+				/* Read by the render thread at its next frame. */
+				m_postProcessor.enable(enabled);
+
+				return Console::CommandResult::success(enabled ?
+					"Post-processing allowed from the next frame (taken when the active scene has effects to run)." :
+					"Post-processing forbidden from the next frame: every frame takes the direct swap-chain path.");
+			}, Console::CommandHint::Idempotent);
+
 		this->bindCommand("resetOverflowCensus", "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.", [this] () {
 			auto * census = m_postProcessor.overflowCensus();
 
