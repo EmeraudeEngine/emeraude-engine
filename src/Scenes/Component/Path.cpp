@@ -34,7 +34,6 @@
 #include "Graphics/Geometry/PulledVertexResource.hpp"
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
-#include "Math/CurveTessellation.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/PathGLSL.hpp"
 #include "Scenes/AbstractEntity.hpp"
@@ -110,9 +109,7 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setPolyline (std::span< const Vector< 3, float > > points, bool closed) noexcept
 	{
-		m_kind = Kind::Polyline;
-		m_sourcePoints.assign(points.begin(), points.end());
-		m_closed = closed;
+		m_curve.setPolyline(points, closed);
 
 		this->rebuild();
 	}
@@ -120,16 +117,7 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setBezierPath (const BSpline< 3, float > & path) noexcept
 	{
-		m_kind = Kind::BezierPath;
-		m_bezierPath = path;
-		m_sourcePoints.clear();
-
-		for ( const auto & point : path.points() )
-		{
-			m_sourcePoints.emplace_back(point.position());
-		}
-
-		m_closed = false;
+		m_curve.setBezierPath(path);
 
 		this->rebuild();
 	}
@@ -137,9 +125,7 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setUniformBSpline (std::span< const Vector< 3, float > > controlPoints, bool closed) noexcept
 	{
-		m_kind = Kind::UniformBSpline;
-		m_sourcePoints.assign(controlPoints.begin(), controlPoints.end());
-		m_closed = closed;
+		m_curve.setUniformBSpline(controlPoints, closed);
 
 		this->rebuild();
 	}
@@ -147,10 +133,7 @@ namespace EmEn::Scenes::Component
 	void
 	Path::setCatmullRom (std::span< const Vector< 3, float > > points, bool closed, float alpha) noexcept
 	{
-		m_kind = Kind::CatmullRom;
-		m_sourcePoints.assign(points.begin(), points.end());
-		m_closed = closed;
-		m_alpha = std::clamp(alpha, 0.0F, 1.0F);
+		m_curve.setCatmullRom(points, closed, alpha);
 
 		this->rebuild();
 	}
@@ -198,52 +181,10 @@ namespace EmEn::Scenes::Component
 		++m_version;
 	}
 
-	const char *
-	Path::kindName (Kind kind) noexcept
-	{
-		switch ( kind )
-		{
-			case Kind::Polyline :
-				return "Polyline";
-
-			case Kind::BezierPath :
-				return "BezierPath";
-
-			case Kind::UniformBSpline :
-				return "UniformBSpline";
-
-			case Kind::CatmullRom :
-				return "CatmullRom";
-		}
-
-		return "Unknown";
-	}
-
 	void
 	Path::rebuild () noexcept
 	{
-		const std::span< const Vector< 3, float > > source{m_sourcePoints};
-
-		std::vector< Vector< 3, float > > points;
-
-		switch ( m_kind )
-		{
-			case Kind::Polyline :
-				points = CurveTessellation::polyline(source, m_closed);
-				break;
-
-			case Kind::BezierPath :
-				points = CurveTessellation::bezierPath(m_bezierPath, m_tolerance);
-				break;
-
-			case Kind::UniformBSpline :
-				points = CurveTessellation::uniformBSpline(source, m_tolerance, m_closed);
-				break;
-
-			case Kind::CatmullRom :
-				points = CurveTessellation::catmullRom(source, m_tolerance, m_alpha, m_closed);
-				break;
-		}
+		const auto points = m_curve.tessellate(m_tolerance);
 
 		/* The arc length rides in w (round caps' distances, future dashes). */
 		m_polyline.clear();

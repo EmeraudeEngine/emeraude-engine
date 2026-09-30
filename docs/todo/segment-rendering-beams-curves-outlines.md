@@ -39,9 +39,10 @@ mask and `docs/subsystems/scenes/13-instance-transforms.md` (per-slot local tran
 
 ### A. The general polyline primitive (for B and C)
 
-- A polyline / segment list expanded to camera-facing ribbons in the vertex stage (owner decision: vertex
-  stage, vertex pulling), mitred or round joins and caps, width in world units OR in pixels, depth tested or
-  always-on-top / occluded-dashed. The beam's pixel clamp and profile (`BeamGLSL`) are reusable as they are.
+- ~~A polyline expanded to camera-facing ribbons by vertex pulling~~ DONE 2026-09-29 (the Path, graphics doc 35).
+- ~~The beams on it~~ DONE 2026-09-30: a Beam follows any curve of the Path's kinds (`Math::CurveShape`), on vertex
+  pulling, the arc pinned at the two ends only along a rotation minimizing frame (graphics doc 33; bench `beams`:
+  `RelayLaser`, `CoilArc`). Left: an occluded-dashed look; the geometric silhouette (B.1) still to be built on it.
 
 ### B. Selection silhouette — first pass DONE (2026-09-29)
 
@@ -111,6 +112,9 @@ exact on screen is the debug mode's. What remains:
   handled); a final effect AFTER the tone mapping draws the N-pixel edge and compares that depth with the scene's —
   full where visible, dimmed where hidden. Rejected: a stencil bit in the scene pass (no hidden parts), a
   render-to-texture of the subject (a second fully shaded render + a camera rig).
+- 2026-09-30: curved beams = the Path's curve kinds (not a single Bézier, not a chain of straight arcs); the Beam
+  moves to vertex pulling (a straight beam is a 2-point curve, one ribbon code); the arc is pinned at the two ENDS of
+  the whole curve only (not at each control point). No depth bias for paths lying on a surface, for now.
 - 2026-09-29: order = bugs, then finish (beam console adapter, outline cost + scissor, multi-selection), then new
   (polyline + curves). **A beam does NOT light the scene — not now** (still emissive only). **Multi-selection = a
   SET of highlighted entities, one style** (add / remove / clear, console; Shift+click in the editor). **Paths and

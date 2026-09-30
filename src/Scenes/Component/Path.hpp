@@ -47,6 +47,7 @@
 #include "Graphics/RenderableInstance/PathPoints.hpp"
 #include "Graphics/RenderableInstance/Unique.hpp"
 #include "Math/BSpline.hpp"
+#include "Math/CurveShape.hpp"
 #include "Math/Vector.hpp"
 
 /* Forward declarations. */
@@ -92,14 +93,8 @@ namespace EmEn::Scenes::Component
 			/** @brief The chord tolerance of the curve tessellation, in the entity's units (1 cm for metres). */
 			static constexpr float DefaultTolerance{0.01F};
 
-			/** @brief The kind of curve the points describe. */
-			enum class Kind : uint8_t
-			{
-				Polyline,
-				BezierPath,
-				UniformBSpline,
-				CatmullRom
-			};
+			/** @brief The kind of curve the points describe (Math::CurveShape, shared with the Beam). */
+			using Kind = Base::Math::CurveKind;
 
 			/**
 			 * @brief Constructs a path component.
@@ -269,7 +264,7 @@ namespace EmEn::Scenes::Component
 			Kind
 			kind () const noexcept
 			{
-				return m_kind;
+				return m_curve.kind();
 			}
 
 			/**
@@ -280,7 +275,7 @@ namespace EmEn::Scenes::Component
 			bool
 			isClosed () const noexcept
 			{
-				return m_closed;
+				return m_curve.isClosed();
 			}
 
 			/**
@@ -291,7 +286,7 @@ namespace EmEn::Scenes::Component
 			const std::vector< Base::Math::Vector< 3, float > > &
 			sourcePoints () const noexcept
 			{
-				return m_sourcePoints;
+				return m_curve.points();
 			}
 
 			/**
@@ -387,7 +382,12 @@ namespace EmEn::Scenes::Component
 
 			/** @brief Converts a kind into its name. */
 			[[nodiscard]]
-			static const char * kindName (Kind kind) noexcept;
+			static
+			const char *
+			kindName (Kind kind) noexcept
+			{
+				return Base::Math::to_cstring(kind);
+			}
 
 		private:
 
@@ -421,8 +421,7 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Graphics::Geometry::PulledVertexResource > m_geometry;
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 			std::shared_ptr< Graphics::RenderableInstance::PathPoints > m_pathPoints;
-			Base::Math::BSpline< 3, float > m_bezierPath;
-			std::vector< Base::Math::Vector< 3, float > > m_sourcePoints;
+			Base::Math::CurveShape< float > m_curve;
 			std::vector< Base::Math::Vector< 4, float > > m_polyline;
 			/** @brief What each render state slot last received (m_version when current): a slot is published on change only. */
 			std::array< uint64_t, RenderStateSlotCount > m_publishedVersions{};
@@ -431,9 +430,6 @@ namespace EmEn::Scenes::Component
 			Base::PixelFactory::Color< float > m_debugColor{1.0F, 0.85F, 0.1F, 1.0F};
 			uint64_t m_version{1};
 			float m_tolerance{DefaultTolerance};
-			float m_alpha{0.5F};
-			Kind m_kind{Kind::Polyline};
-			bool m_closed{false};
 			bool m_enabled{true};
 			bool m_debugMode{false};
 	};

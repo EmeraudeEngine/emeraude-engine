@@ -1761,6 +1761,14 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* ⚠️ A pulled-vertex instance (a path, a beam) is built from its entry in the instance-transforms SSBO, which a
+		 * cubemap target does not read: it is ABSENT from it. Skipped here, before any program generation — refused by
+		 * the vertex stage, the instance was marked broken and removed from the scene. */
+		if ( renderTarget->isCubemap() && renderableInstance->isPulledVertexInstance() )
+		{
+			return true; // Continue
+		}
+
 		/* Check whether the renderable instance is ready for shadow casting. */
 		if ( renderableInstance->isReadyToRender(renderTarget) )
 		{
@@ -2470,6 +2478,12 @@ namespace EmEn::Scenes
 			TraceDebug{ClassId} << "A new render target is available " << to_cstring(renderTarget->renderType()) << " ! Updating renderable instances from the scene ...";
 
 			this->forEachRenderableInstance([this, renderTarget] (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) {
+				/* A pulled-vertex instance is absent from a cubemap (see checkRenderableInstanceForRendering()). */
+				if ( renderTarget->isCubemap() && renderableInstance->isPulledVertexInstance() )
+				{
+					return true;
+				}
+
 				if ( !this->getRenderableInstanceReadyForRendering(renderableInstance, renderTarget) )
 				{
 					TraceError{ClassId} << "The initialization of renderable instance '" << renderableInstance->renderable()->name() << "' from render target '" << renderTarget->id() << "' has failed !";

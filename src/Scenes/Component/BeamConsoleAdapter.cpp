@@ -28,7 +28,9 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <span>
 #include <string>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "json/json.h"
@@ -65,7 +67,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		/**
-		 * @brief Returns the full state of a beam as JSON: endpoints, target, look.
+		 * @brief Returns the full state of a beam as JSON: its curve, endpoints, target, look.
 		 * @param beam The beam.
 		 * @return std::string
 		 */
@@ -79,6 +81,12 @@ namespace EmEn::Scenes::Component
 			state["type"] = Beam::ClassId;
 			state["enabled"] = beam.isEnabled();
 			state["segmentCount"] = beam.segmentCount();
+			state["stationCount"] = beam.stationCount();
+			state["kind"] = Base::Math::to_cstring(beam.curve().kind());
+			state["closed"] = beam.curve().isClosed();
+			state["sourcePointCount"] = static_cast< Json::UInt64 >(beam.curve().points().size());
+			state["tolerance"] = static_cast< double >(beam.tolerance());
+			state["length"] = static_cast< double >(beam.length());
 			state["start"] = toJSON(beam.start());
 			state["end"] = toJSON(beam.end());
 
@@ -184,7 +192,7 @@ namespace EmEn::Scenes::Component
 					const Console::Parameter entity{entityParameter("the beam")};
 					const Console::Parameter component{componentParameter(Beam::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a Beam as JSON: its endpoints (entity space, metres), the entity its end follows, and its look (colour, luminance in nits, half width, arc).",
+					this->bindCommand("getState", "Returns the state of a Beam as JSON: its curve (kind, closed, stations, length), its endpoints (entity space, metres), the entity its end follows, and its look (colour, luminance in nits, half width, arc).",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
 							return this->act(entityName, componentName, [] (Beam & beam) {
@@ -192,7 +200,63 @@ namespace EmEn::Scenes::Component
 							});
 						}, Console::CommandHint::ReadOnly);
 
-					this->bindCommand("setStart", "Sets the start of a Beam, in its entity's space.",
+					this->bindCommand("setPoints", "Makes a Beam follow a curve through points in its entity's space: \"x y z; x y z; ...\" — its first and last points are its start and end. Kinds: Polyline (a laser through relays), UniformBSpline (smooth, not through them), CatmullRom (through every point).",
+						{
+							entity,
+							component,
+							{"kind", "Polyline, UniformBSpline or CatmullRom (a Bezier path is set from code: Math::BSpline)."},
+							{"points", "The points, \"x y z; x y z; ...\" (metres, UP is +Y), 2 at least."},
+							{"closed", "true to close the curve on itself.", false}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, const std::string & kind, const std::string & text, bool closed) {
+							const auto points = parsePointList(text);
+
+							if ( !points.has_value() || points->size() < 2 )
+							{
+								return Console::CommandResult::error("Malformed points: \"x y z; x y z; ...\", finite numbers, 2 points at least.");
+							}
+
+							if ( kind != "Polyline" && kind != "UniformBSpline" && kind != "CatmullRom" )
+							{
+								return Console::CommandResult::error("Unknown kind '" + kind + "' (Polyline, UniformBSpline or CatmullRom).");
+							}
+
+							return this->act(entityName, componentName, [&kind, &points, closed] (Beam & beam) {
+								const std::span< const Vector< 3, float > > source{points.value()};
+
+								if ( kind == "Polyline" )
+								{
+									beam.setPolyline(source, closed);
+								}
+								else if ( kind == "UniformBSpline" )
+								{
+									beam.setUniformBSpline(source, closed);
+								}
+								else
+								{
+									beam.setCatmullRom(source, closed);
+								}
+
+								return changed(beam, "Beam '" + beam.name() + "' curve set.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setTolerance", "Sets the chord tolerance of a Beam's curve tessellation: the largest distance between the curve and the drawn stations' polyline, in entity units.",
+						{entity, component, {"tolerance", "The tolerance, > 0 (0.01 = 1 cm)."}},
+						[this] (const std::string & entityName, const std::string & componentName, float tolerance) {
+							if ( !std::isfinite(tolerance) || tolerance <= 0.0F )
+							{
+								return Console::CommandResult::error("The tolerance must be a finite number above 0.");
+							}
+
+							return this->act(entityName, componentName, [tolerance] (Beam & beam) {
+								beam.setTolerance(tolerance);
+
+								return changed(beam, "Beam '" + beam.name() + "' tolerance set.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setStart", "Sets the start of a Beam — the first point of its curve —, in its entity's space.",
 						{entity, component, {"x", "X, in metres."}, {"y", "Y, in metres (UP is +Y)."}, {"z", "Z, in metres."}},
 						[this] (const std::string & entityName, const std::string & componentName, float x, float y, float z) {
 							if ( !finite(x, y, z) )
@@ -207,7 +271,7 @@ namespace EmEn::Scenes::Component
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("setEnd", "Sets the end of a Beam, in its entity's space. Forgets the entity it followed.",
+					this->bindCommand("setEnd", "Sets the end of a Beam — the last point of its curve —, in its entity's space. Forgets the entity it followed.",
 						{entity, component, {"x", "X, in metres."}, {"y", "Y, in metres (UP is +Y)."}, {"z", "Z, in metres."}},
 						[this] (const std::string & entityName, const std::string & componentName, float x, float y, float z) {
 							if ( !finite(x, y, z) )
@@ -325,7 +389,7 @@ namespace EmEn::Scenes::Component
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("setArc", "Sets how far and how finely a Beam wanders across its line: an amplitude of 0 is a straight laser. Refused on a beam of 1 segment (getState's segmentCount), which cannot wander.",
+					this->bindCommand("setArc", "Sets how far and how finely a Beam wanders across its curve (pinned at both ends): an amplitude of 0 is a laser. Refused on a beam of 2 stations (getState's stationCount: a straight beam of 1 segment), which cannot wander.",
 						{entity, component, {"amplitude", "The largest offset across the beam, in entity units, 0 or more."}, {"frequency", "Noise cycles along the whole beam, 0 or more."}, {"octaves", "Noise octaves (the detail), 1-8."}},
 						[this] (const std::string & entityName, const std::string & componentName, float amplitude, float frequency, int32_t octaves) {
 							if ( !std::isfinite(amplitude) || !std::isfinite(frequency) || amplitude < 0.0F || frequency < 0.0F || octaves < 1 )
@@ -334,10 +398,10 @@ namespace EmEn::Scenes::Component
 							}
 
 							return this->withMaterial(entityName, componentName, [amplitude, frequency, octaves] (Beam & beam, Graphics::Material::BeamResource & material) {
-								/* One segment has no interior vertex to displace: the arc would be accepted and never drawn. */
-								if ( amplitude > 0.0F && beam.segmentCount() < 2 )
+								/* Two stations have no interior one to displace: the arc would be accepted and never drawn. */
+								if ( amplitude > 0.0F && beam.stationCount() < 3 )
 								{
-									return Console::CommandResult::error("Beam '" + beam.name() + "' has 1 segment: it cannot wander. Build it with more segments (Beam::DefaultSegmentCount is " + std::to_string(Beam::DefaultSegmentCount) + ").");
+									return Console::CommandResult::error("Beam '" + beam.name() + "' has " + std::to_string(beam.stationCount()) + " stations: it cannot wander. Build it with more segments (Beam::DefaultSegmentCount is " + std::to_string(Beam::DefaultSegmentCount) + ") or give it a curve.");
 								}
 
 								material.setArc(amplitude, frequency, static_cast< uint32_t >(octaves));

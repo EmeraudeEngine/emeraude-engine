@@ -30,40 +30,58 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Graphics/Material/BeamResource.hpp"
+#include "Graphics/RenderableInstance/PathPoints.hpp"
 #include "Graphics/RenderableInstance/Unique.hpp"
-#include "Math/Matrix.hpp"
+#include "Math/BSpline.hpp"
+#include "Math/CurveShape.hpp"
 #include "Math/Vector.hpp"
 
 /* Forward declarations. */
-namespace EmEn::Resources
+namespace EmEn
 {
-	class Manager;
+	namespace Resources
+	{
+		class Manager;
+	}
+
+	namespace Graphics::Geometry
+	{
+		class PulledVertexResource;
+	}
 }
 
 namespace EmEn::Scenes::Component
 {
 	/**
-	 * @brief A BEAM between two points: a laser, an electric arc — Half-Life's env_beam / env_laser, made
-	 * photometric. An arc amplitude of 0 draws a straight laser; above it the beam wanders and re-strikes.
-	 * @note The beam is a camera-facing ribbon the vertex stage builds (Graphics::Material::BeamResource,
-	 * AbstractVertexStage::enableBeamRibbon()). Its two endpoints travel as the LOCAL TRANSFORMATION of its
-	 * renderable instance — the unit segment [0, 1] on x placed from start to end — published per logic tick
-	 * (publishStateForRendering(), RenderableInstance::Abstract::publishTransformationMatrix()). That is what keeps a
-	 * moving beam race-free and gives it a real previous model matrix, hence a real velocity.
-	 * @note The endpoints are in the ENTITY's space. The end can follow another entity instead (setEndTarget()): its
-	 * world position is brought into this entity's space every tick.
-	 * @note An emissive overlay: unlit, additive, no depth write, no shadow, out of the ray tracing. It does not light
-	 * the scene (owner decision, 2026-09-28): pair it with a light component when it must.
+	 * @brief A BEAM along a curve: a laser, an electric arc — Half-Life's env_beam / env_laser, made photometric. An arc
+	 * amplitude of 0 draws a laser; above it the beam wanders and re-strikes.
+	 * @note Its centre line is a curve of the Path's kinds (Math::CurveShape, owner decision 2026-09-30): a straight
+	 * start → end by default, a polyline through relays, a Bézier path, a B-spline, a Catmull-Rom. setStart() / setEnd()
+	 * move its first / last point; the end can follow another entity (setEndTarget()).
+	 * @note Drawn by VERTEX PULLING, like a path (Graphics::Geometry::PulledVertexResource, Saphir BeamGLSL): the curve is
+	 * tessellated (chord tolerance), every segment split so that the whole beam has at least segmentCount() pieces
+	 * (CurveTessellation::subdivided(): an arc needs regular stations, a laser only the corners), and each STATION carries
+	 * its position, its normalized arc length and a normal that does not twist around the curve (a rotation minimizing
+	 * frame): the arc's two axes. The stations are published per render state slot (RenderableInstance::PathPoints) and
+	 * staged into the scene's path SSBO — two vec4 per station, (position, t) then (normal, 0).
+	 * @note The arc is pinned at both ENDS only (owner decision 2026-09-30): sin(π t) over the whole length.
+	 * @note An emissive overlay: unlit, additive, no depth write, no shadow, out of the ray tracing, absent from the
+	 * reflection cubemaps. It does not light the scene (owner decision, 2026-09-28): pair it with a light component.
+	 * @note Setters: from the logic thread or under the scene's exclusive access (a console command).
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 */
 	class EMEN_LEAN_API Beam final : public Abstract
@@ -76,15 +94,20 @@ namespace EmEn::Scenes::Component
 			/** @brief The default number of segments along the beam (the resolution of the arc). */
 			static constexpr uint32_t DefaultSegmentCount{64};
 
+			/** @brief The chord tolerance of the curve tessellation, in the entity's units (1 cm for metres). */
+			static constexpr float DefaultTolerance{0.01F};
+
+			/** @brief The kind of curve the beam follows (Math::CurveShape, shared with the Path). */
+			using Kind = Base::Math::CurveKind;
+
 			/**
-			 * @brief Constructs a beam component.
-			 * @note Creates the beam's own material (one per beam: its look is per beam) and its renderable, on the
-			 * shared strip geometry of this segment count.
+			 * @brief Constructs a beam component: a straight beam from (0, 0, 0) to (0, 0, 1).
+			 * @note Creates the beam's own material, geometry and renderable (one per beam: its look is per beam).
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param resources A reference to the resource manager.
-			 * @param segmentCount The number of segments along the beam (at least 1). A straight laser needs 1 — and
-			 * then CANNOT wander: its arc amplitude is ignored; an arc wants enough to show its finest octave. Default 64.
+			 * @param segmentCount The number of segments over the whole beam, at least (1 at least). A straight laser needs
+			 * 1 — and then CANNOT wander: it has no interior station; an arc wants enough to show its finest octave. Default 64.
 			 */
 			Beam (const std::string & componentName, const AbstractEntity & parentEntity, Resources::Manager & resources, uint32_t segmentCount = DefaultSegmentCount) noexcept;
 
@@ -183,54 +206,45 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets the start of the beam, in the entity's space.
+			 * @brief Sets the start of the beam — the first point of its curve —, in the entity's space.
 			 * @param position A reference to a vector.
 			 * @return void
 			 */
-			void
-			setStart (const Base::Math::Vector< 3, float > & position) noexcept
-			{
-				m_start = position;
-			}
+			void setStart (const Base::Math::Vector< 3, float > & position) noexcept;
 
 			/**
-			 * @brief Returns the start of the beam, in the entity's space.
-			 * @return const Base::Math::Vector< 3, float > &
+			 * @brief Returns the start of the beam (the first point of its curve), in the entity's space.
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			const Base::Math::Vector< 3, float > &
+			Base::Math::Vector< 3, float >
 			start () const noexcept
 			{
-				return m_start;
+				return m_curve.points().empty() ? Base::Math::Vector< 3, float >{} : m_curve.points().front();
 			}
 
 			/**
-			 * @brief Sets the end of the beam, in the entity's space. Forgets an end target.
+			 * @brief Sets the end of the beam — the last point of its curve —, in the entity's space. Forgets an end target.
 			 * @param position A reference to a vector.
 			 * @return void
 			 */
-			void
-			setEnd (const Base::Math::Vector< 3, float > & position) noexcept
-			{
-				m_end = position;
-				m_endTarget.reset();
-			}
+			void setEnd (const Base::Math::Vector< 3, float > & position) noexcept;
 
 			/**
-			 * @brief Returns the end of the beam, in the entity's space (the target's position when one is followed).
-			 * @return const Base::Math::Vector< 3, float > &
+			 * @brief Returns the end of the beam (the last point of its curve; the target's position when one is followed).
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			const Base::Math::Vector< 3, float > &
+			Base::Math::Vector< 3, float >
 			end () const noexcept
 			{
-				return m_end;
+				return m_curve.points().empty() ? Base::Math::Vector< 3, float >{} : m_curve.points().back();
 			}
 
 			/**
-			 * @brief Makes the end of the beam follow another entity, every logic tick.
-			 * @param target A reference to the followed entity (held weakly: the beam falls back on its last end when
-			 * the target is gone).
+			 * @brief Makes the end of the beam (the last point of its curve) follow another entity, every logic tick.
+			 * @param target A reference to the followed entity (held weakly: the beam keeps its last end when the target is
+			 * gone).
 			 * @param offset An offset from the target's origin, in the TARGET's space. Default none.
 			 * @return void
 			 */
@@ -259,8 +273,92 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the number of segments along the beam, fixed at construction.
-			 * @note A beam of ONE segment has no interior vertex: it cannot wander, whatever its arc amplitude.
+			 * @brief Makes the beam follow a POLYLINE (a laser through relays), in the entity's space.
+			 * @param points The points (2 at least to draw anything).
+			 * @param closed Whether the last point joins the first.
+			 * @return void
+			 */
+			void setPolyline (std::span< const Base::Math::Vector< 3, float > > points, bool closed = false) noexcept;
+
+			/**
+			 * @brief Makes the beam follow a piecewise BÉZIER path, in the entity's space.
+			 * @param path The anchors, their handles (offsets from the anchor) and a curve type per span.
+			 * @return void
+			 */
+			void setBezierPath (const Base::Math::BSpline< 3, float > & path) noexcept;
+
+			/**
+			 * @brief Makes the beam follow a uniform cubic B-SPLINE (smooth, not through its points), in the entity's space.
+			 * @param controlPoints The control points.
+			 * @param closed Whether the curve closes on itself.
+			 * @return void
+			 */
+			void setUniformBSpline (std::span< const Base::Math::Vector< 3, float > > controlPoints, bool closed = false) noexcept;
+
+			/**
+			 * @brief Makes the beam follow a CATMULL-ROM spline (through every point), in the entity's space.
+			 * @param points The points.
+			 * @param closed Whether the curve closes on itself.
+			 * @param alpha 0 uniform, 0.5 centripetal (the default: no cusp, no loop), 1 chordal.
+			 * @return void
+			 */
+			void setCatmullRom (std::span< const Base::Math::Vector< 3, float > > points, bool closed = false, float alpha = 0.5F) noexcept;
+
+			/**
+			 * @brief Sets the chord tolerance of the curve tessellation, and re-tessellates.
+			 * @param tolerance The largest distance between the curve and its polyline, in the entity's units (> 0).
+			 * @return void
+			 */
+			void setTolerance (float tolerance) noexcept;
+
+			/**
+			 * @brief Returns the chord tolerance.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			tolerance () const noexcept
+			{
+				return m_tolerance;
+			}
+
+			/**
+			 * @brief Returns the curve the beam follows (its kind, its points).
+			 * @return const Base::Math::CurveShape< float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::CurveShape< float > &
+			curve () const noexcept
+			{
+				return m_curve;
+			}
+
+			/**
+			 * @brief Returns the number of stations drawn along the beam (segments + 1; 0 when there is nothing to draw).
+			 * @note An arc wanders at the INTERIOR stations only: 2 stations (a straight single segment) cannot wander.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			stationCount () const noexcept
+			{
+				return static_cast< uint32_t >(m_stations.size() / RecordsPerStation);
+			}
+
+			/**
+			 * @brief Returns the length of the beam (its tessellated curve), in the entity's units.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			length () const noexcept
+			{
+				return m_length;
+			}
+
+			/**
+			 * @brief Returns the minimum number of segments over the whole beam, fixed at construction.
+			 * @note A straight beam of ONE segment has no interior station: it cannot wander, whatever its arc amplitude.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -275,11 +373,7 @@ namespace EmEn::Scenes::Component
 			 * @param state The state.
 			 * @return void
 			 */
-			void
-			setEnabled (bool state) noexcept
-			{
-				m_enabled = state;
-			}
+			void setEnabled (bool state) noexcept;
 
 			/**
 			 * @brief Returns whether the beam is shown.
@@ -291,6 +385,9 @@ namespace EmEn::Scenes::Component
 			{
 				return m_enabled;
 			}
+
+			/** @brief The vec4 records per station in the path SSBO: (position, t), then (normal, 0). */
+			static constexpr size_t RecordsPerStation{2};
 
 		private:
 
@@ -308,30 +405,38 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Builds the unit segment placement from the endpoints: x = end − start, y and z two unit
-			 * directions across the beam, origin = start. A disabled or zero-length beam collapses (zero x column: the
-			 * vertex stage draws nothing).
-			 * @return Base::Math::Matrix< 4, float >
+			 * @brief Tessellates and subdivides the curve into the stations (position and t, normal), sizes the geometry,
+			 * and marks them for publication.
+			 * @return void
 			 */
-			[[nodiscard]]
-			Base::Math::Matrix< 4, float > computeSegmentMatrix () const noexcept;
+			void rebuild () noexcept;
 
 			/**
-			 * @brief Refreshes the render bounds from the endpoints, the width and the arc amplitude, and notifies the
-			 * entity when they changed.
+			 * @brief Refreshes the render bounds from the stations, the width and the arc amplitude, and notifies the entity
+			 * when they changed.
 			 * @return void
 			 */
 			void updateBounds () noexcept;
 
 			std::shared_ptr< Graphics::Material::BeamResource > m_material;
+			std::shared_ptr< Graphics::Geometry::PulledVertexResource > m_geometry;
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
+			std::shared_ptr< Graphics::RenderableInstance::PathPoints > m_pathPoints;
 			std::weak_ptr< const AbstractEntity > m_endTarget;
-			Base::Math::Matrix< 4, float > m_segmentMatrix;
+			Base::Math::CurveShape< float > m_curve;
+			/** @brief RecordsPerStation vec4 per station, in the entity's space. */
+			std::vector< Base::Math::Vector< 4, float > > m_stations;
+			/** @brief What each render state slot last received (m_version when current): a slot is published on change only. */
+			std::array< uint64_t, RenderStateSlotCount > m_publishedVersions{};
 			Base::Math::Space3D::AACuboid< float > m_boundingBox;
 			Base::Math::Space3D::Sphere< float > m_boundingSphere;
-			Base::Math::Vector< 3, float > m_start;
-			Base::Math::Vector< 3, float > m_end{0.0F, 0.0F, 1.0F};
+			/** @brief The stations' extent, before the width and arc margin (updateBounds()). */
+			Base::Math::Vector< 3, float > m_stationsMinimum;
+			Base::Math::Vector< 3, float > m_stationsMaximum;
 			Base::Math::Vector< 3, float > m_endTargetOffset;
+			uint64_t m_version{1};
+			float m_tolerance{DefaultTolerance};
+			float m_length{0.0F};
 			uint32_t m_segmentCount;
 			bool m_enabled{true};
 	};

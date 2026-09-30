@@ -97,6 +97,9 @@ shadow-casting program, which builds the SAME ribbon.
 - Verified (Linux, `paths`, 2026-09-30): the six paths outlined, the 2-pixel mast and the pixel zigzags included, round
   caps round, the turning loop followed; nothing drawn with every path behind the camera; a hidden and a debug-drawn
   path not outlined; `geometry-generator`'s figurine unchanged; 0 VUID. The dumped depth program has no vertex input.
+- A 1-2 px "step" in the rim at the pixel mast's elbow (macOS peer, 2026-09-30) is the RIBBON's own staircase: the arm,
+  2 px thick and slightly sloped in perspective, rises one pixel row a few pixels past the corner, and the rim follows
+  the ribbon's pixels exactly (pixel dump, TAA off and on). A join defect would show in the ribbon, not in the rim.
 
 ### ⚠️ Traps and limits
 
@@ -128,7 +131,13 @@ shadow-casting program, which builds the SAME ribbon.
   ordinary mesh — a position attribute with no vertex buffer, garbage (a spurious outline, 0 VUID). A path casts no
   shadow (`disableShadowCasting()`); the selection outline now builds its ribbon (§ The selection outline below).
 - **Instance-transforms SSBO path only**: `preparePathRibbon()` refuses instancing, MDI, cubemap and CSM (the
-  directory is indexed by the instance slot, `gl_InstanceIndex`). A path is absent from reflection cubemaps.
+  directory is indexed by the instance slot, `gl_InstanceIndex`). A path is absent from reflection cubemaps: ⚠️ the
+  scene SKIPS a pulled-vertex instance for a cubemap target (`Scene::checkRenderableInstanceForRendering()`, since
+  2026-09-30) — refused by the vertex stage, the instance was marked broken and REMOVED from the scene as soon as a
+  reflection probe existed (reproduced with the beams, which share the route: graphics doc 33 § Traps).
+- **Shared with the beams** (2026-09-30): the curve kinds and their tessellation are `Base::Math::CurveShape`
+  (`Path::Kind` = `Math::CurveKind`), the SSBO, the directory, `RenderableInstance::PathPoints` and
+  `PulledVertexResource` carry a beam's stations too (graphics doc 33).
 - **The vertex capacity only grows** (the render thread reads it while the logic publishes more points); the
   vertices past the frame's count collapse. A path that shrank keeps drawing collapsed vertices.
 - **A material change does not reach the path**: call `markLookChanged()` (the console adapter does) — the bounds

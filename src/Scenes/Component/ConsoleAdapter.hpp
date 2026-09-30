@@ -30,6 +30,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,6 +39,7 @@
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Math/Vector.hpp"
 #include "Scenes/Component/Abstract.hpp"
 
 namespace EmEn::Scenes
@@ -118,6 +120,14 @@ namespace EmEn::Scenes::Component
 	 */
 	[[nodiscard]]
 	Console::Parameter componentParameter (const std::string & componentType) noexcept;
+
+	/**
+	 * @brief Parses a list of points, "x y z; x y z; ..." (commas accepted between coordinates) — the curves of a Path, a Beam.
+	 * @param text The text.
+	 * @return std::optional< std::vector< Base::Math::Vector< 3, float > > > Nothing on a malformed or non-finite value.
+	 */
+	[[nodiscard]]
+	std::optional< std::vector< Base::Math::Vector< 3, float > > > parsePointList (const std::string & text) noexcept;
 
 	/**
 	 * @brief The answer of a setter: the confirmation, then the component's NEW state as a JSON output.

@@ -545,15 +545,15 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Turns the geometry into a BEAM RIBBON (a laser, an electric arc): each vertex is a
-			 * (t, side, 0) point of a shared strip, t ∈ [0, 1] along the beam and side = ±1 across it, and the stage
-			 * places it on the beam's centre line — displaced by the arc noise — then across it, facing the eye.
-			 * @note The model matrix maps the unit segment onto the beam (Saphir `BeamGLSL.hpp`); the previous
-			 * position re-evaluates the ribbon with the PREVIOUS model matrix and the previous scene time, so a moving
-			 * or re-striking beam reports its real velocity. The clock is the scene time pair of the instance-transforms
-			 * header (`windTimes.xy`); without that block the arc is frozen at t = 0.
+			 * @brief Turns the stage into a BEAM RIBBON (a laser, an electric arc), built by VERTEX PULLING: each vertex
+			 * reads the beam's stations from the path SSBO (no vertex attribute), is placed on the curve — displaced by the
+			 * arc noise along the station's frame — then across it, facing the eye (Saphir `BeamGLSL.hpp`).
+			 * @note The previous position rebuilds the ribbon from the PREVIOUS stations, the previous model matrix and the
+			 * previous scene time, so a moving or re-striking beam reports its real velocity. The clock is the scene time
+			 * pair of the instance-transforms header (`windTimes.xy`).
 			 * @note Must be switched on BEFORE the velocity synthesis (Material::Interface::prepareVertexStage()).
-			 * Exclusive with skinning, the vegetation wind, a heightfield surface and the imposter billboard.
+			 * Exclusive with skinning, the vegetation wind, a heightfield surface, the imposter billboard and the path
+			 * ribbon; the instance-transforms SSBO path only (never instanced, MDI, cubemap nor CSM).
 			 * @param shapeExpression A GLSL vec4 expression: (half width, arc amplitude, arc frequency, octaves).
 			 * @param motionExpression A GLSL vec4 expression: (seed, re-strike rate in Hz, drift, unused).
 			 * @return void

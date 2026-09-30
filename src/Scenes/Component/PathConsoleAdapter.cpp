@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -109,51 +108,6 @@ namespace EmEn::Scenes::Component
 		}
 
 		/**
-		 * @brief Parses "x y z; x y z; ..." (commas accepted between coordinates) into points.
-		 * @param text The text.
-		 * @return std::optional< std::vector< Vector< 3, float > > > Nothing on a malformed or non-finite value.
-		 */
-		[[nodiscard]]
-		std::optional< std::vector< Vector< 3, float > > >
-		parsePoints (const std::string & text) noexcept
-		{
-			std::vector< Vector< 3, float > > points;
-			std::stringstream pointsStream{text};
-			std::string item;
-
-			while ( std::getline(pointsStream, item, ';') )
-			{
-				for ( auto & character : item )
-				{
-					if ( character == ',' )
-					{
-						character = ' ';
-					}
-				}
-
-				std::stringstream coordinates{item};
-				float x = 0.0F;
-				float y = 0.0F;
-				float z = 0.0F;
-
-				if ( !(coordinates >> x >> y >> z) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) )
-				{
-					/* An empty trailing item ("...;") is not an error. */
-					if ( item.find_first_not_of(" \t") == std::string::npos )
-					{
-						continue;
-					}
-
-					return std::nullopt;
-				}
-
-				points.emplace_back(x, y, z);
-			}
-
-			return points;
-		}
-
-		/**
 		 * @brief The console adapter of the Path component: its curve, its look, its modes.
 		 */
 		class PathConsoleAdapter final : public ConsoleAdapter< Path >
@@ -221,7 +175,7 @@ namespace EmEn::Scenes::Component
 							{"closed", "true to close the curve on itself.", false}
 						},
 						[this] (const std::string & entityName, const std::string & componentName, const std::string & kind, const std::string & text, bool closed) {
-							const auto points = parsePoints(text);
+							const auto points = parsePointList(text);
 
 							if ( !points.has_value() )
 							{

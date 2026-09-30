@@ -1,7 +1,8 @@
 ## Beams — lasers and electric arcs (Sep 2026)
 
-Half-Life's `env_beam` / `env_laser`, made photometric: a ribbon between two points, straight (a laser) or
-wandering and re-striking (an electric arc). Owner decisions and the open work: engine
+Half-Life's `env_beam` / `env_laser`, made photometric: a ribbon along a curve — straight between two points by
+default, or any curve of the Path's kinds (2026-09-30) —, steady (a laser) or wandering and re-striking (an electric
+arc). Owner decisions and the open work: engine
 `docs/todo/segment-rendering-beams-curves-outlines.md`. Bench: projet-alpha demo `beams`.
 
 ### Using it
@@ -18,8 +19,14 @@ entity->componentBuilder< Scenes::Component::Beam >("Arc")
 		material->setArc(0.35F, 3.0F, 6);         // amplitude, noise cycles along the beam, octaves (0 = laser)
 		material->setArcMotion(7, 12.0F, 0.4F);   // seed, re-strikes per second (0 = never), drift
 	})
-	.build(resources, 96U);                       // segments along the beam: 1 for a laser
+	.build(resources, 96U);                       // segments over the whole beam, at least: 1 for a laser
 ```
+
+A CURVED beam (owner decisions 2026-09-30: the Path's curve kinds, the beam on vertex pulling, the arc pinned at the
+two ends only): `beam.setPolyline(points)` (a laser through relays), `setBezierPath(Math::BSpline)`,
+`setUniformBSpline(points)`, `setCatmullRom(points)`, `setTolerance(t)` — the kinds and the tessellation are
+`Base::Math::CurveShape`, shared with `Scenes::Component::Path`. `setStart()` / `setEnd()` move the curve's first / last
+point, `setEndTarget()` makes its last point follow an entity. `stationCount()`, `length()`, `curve()` read it back.
 
 A beam does NOT light the scene (owner decision): pair it with a light component when it must.
 
@@ -33,16 +40,21 @@ beam and its target under ONE exclusive access to the scene (never a second lock
 
 | Piece | Job |
 |---|---|
-| `Scenes::Component::Beam` | Owns its material and its `RenderableInstance::Unique`; turns the endpoints into the **segment matrix** (x = end − start, y/z two unit axes across, origin = start) every logic tick and publishes it per render-state slot. Render bounds = the segment ± (half width + arc amplitude); no collision extent. |
-| `RenderableInstance::Abstract::publishTransformationMatrix()` | The local transformation, **one copy per render-state slot** (triple buffer). The endpoints thus travel through the frame-buffered instance-transforms SSBO, which gives the beam a real previous model matrix. `setTransformationMatrix()` still writes all slots (build-time constants). |
-| `Geometry::ResourceGenerator::beamStrip(N)` | A shared strip of `N + 1` stations × 2 vertices at `(t, ±1, 0)`, position only. Never uploaded again. |
+| `Scenes::Component::Beam` | Owns its material, its `Geometry::PulledVertexResource` and its `RenderableInstance::Unique`. Its curve (`Math::CurveShape`) is tessellated (chord tolerance, 1 cm), every segment split so that the whole beam has at least `segmentCount` pieces (`CurveTessellation::subdivided()`: the corners kept exactly), and each STATION gets its position, its normalized arc length t and a rotation minimizing normal (`CurveTessellation::rotationMinimizingNormals()`, the arc's axes). Rebuilt on change only (a followed end: when the target moved); published per render-state slot on change only. Render bounds = the stations ± (half width + arc amplitude); no collision extent. |
+| `RenderableInstance::PathPoints` + `SceneInstanceTransforms` bindings 1-2 | The Path's machinery (graphics doc 35): the stations are published per render-state slot, staged into the frame-buffered path SSBO beside the instance's entry with the previous frame's (the render-side history). TWO vec4 records per station — `(position, t)` then `(normal, 0)` — in the entity's space. The model matrix is the entity's own. |
+| `Geometry::PulledVertexResource` | No vertex buffer: 6 vertices per segment (a quad, triangle list), the capacity grows only; a vertex past the last segment collapses. |
 | `Material::BeamResource` | A second concrete `Material::Interface` (owner decision: structurally different, NOT a mode of Standard). UBO = the LOOK only (radiance = linear colour × nits, shape, motion). Unlit, `BlendingMode::Add`, `writesGeometryBuffer() = false`, writes the reactive mask. |
-| `AbstractVertexStage::enableBeamRibbon()` + Saphir `BeamGLSL.hpp` | The vertex stage places each strip vertex on the beam's centre line displaced by the arc, then across the local tangent facing the eye, in WORLD space, and brings it back through `inverse(model)`. |
+| `AbstractVertexStage::enableBeamRibbon()` + Saphir `BeamGLSL.hpp` | The vertex stage pulls its station (`beamStation()`: the point displaced by the arc along the normal and `cross(tangent, normal)`), faces the eye across the local tangent (the neighbour stations), in WORLD space, and brings it back through `inverse(model)`. The instance-transforms path only (never instanced, MDI, cubemap nor CSM), like the path ribbon. |
 
 ### The arc
 
 Two independent fBm of 1D gradient noise (Perlin 2002 quintic fade, Wellons' lowbias32 hash), amplitude halved
-per octave, under a `sin(πt)` envelope that pins both ends. Deterministic per (seed, time): a re-strike rate `r`
+per octave, under a `sin(πt)` envelope that pins both ends — t the normalized ARC LENGTH, so a curved arc is pinned at
+the two ends of the whole curve, not at its control points (owner decision 2026-09-30). The two offsets run along the
+station's normal and binormal: a ROTATION MINIMIZING frame (double reflection, Wang, Jüttler, Zheng, Liu, ACM TOG
+2008), which does not twist around the curve; its first normal is cross(tangent, +Y) (+X near vertical), so a
+straight beam keeps exactly the axes it had before curves (measured: the same noise amplitude on a straight and on a
+curved beam, 30-47 px at 0.8 m amplitude and 5.5 m). Deterministic per (seed, time): a re-strike rate `r`
 changes the seed every `1/r` s; the drift scrolls the noise between re-strikes. The clock is the scene time pair
 of the instance-transforms header (`windTimes.xy`: this frame, the previous one — the wind and the beams share it).
 
@@ -93,16 +105,21 @@ message.
 
 ### ⚠️ Traps
 
-- **A beam of ONE segment cannot wander.** The segment count is fixed at construction (`build(resources, n)`,
-  `Beam::segmentCount()`); with 1 there is no interior vertex to displace, so an arc amplitude is ignored. The
-  console `Beam.setArc` refuses it (`getState` shows `segmentCount`); the C++ `material()->setArc()` does not
-  know the beam and stays silent. Found by the macOS and Windows peers on 2026-09-29: the Linux capture of a
+- **A beam of TWO stations cannot wander.** The minimum segment count is fixed at construction (`build(resources,
+  n)`, `Beam::segmentCount()`); a straight beam of 1 segment has 2 stations and no interior one to displace, so an arc
+  amplitude is ignored. A curve adds a station per corner (a relay laser of 1 segment has one per relay: an arc there
+  moves the corners only). The console `Beam.setArc` refuses a beam of fewer than 3 stations (`getState` shows
+  `stationCount`); the C++ `material()->setArc()` does not know the beam and stays silent. Found by the macOS and Windows peers on 2026-09-29: the Linux capture of a
   "wandering" 1-segment laser was a straight line, validated too fast.
 
 - One program set per beam: the renderable name enters the program cache key and every beam owns its material
   (tens of beams: fine; hundreds: batch them in a `Multiple` — the rejected alternative).
 - The material UBO lives in ONE frame region: only the look goes there. Endpoints never — they would race the
   frame in flight (`docs/subsystems/graphics/25-16-…` Rule 1).
-- A zero-length or disabled beam collapses its x column; `BeamGLSL::beamCorner()` returns the origin for it
-  (`inverse()` of a singular matrix is NaN).
-- The arc is frozen (time 0) in cubemap and CSM passes: no instance-transforms clock there.
+- A disabled or zero-length beam publishes NO station: its directory entry is empty, `isDrawnInScene()` keeps it out
+  of the render lists, and `beamCorner()` collapses without reading anything.
+- ⚠️ **A beam is ABSENT from reflection cubemaps** (since 2026-09-30; before, it was drawn there with a frozen arc):
+  the stations are read through the instance-transforms SSBO, which a cubemap pass does not use. A pulled-vertex
+  instance is SKIPPED for a cubemap target (`Scene::checkRenderableInstanceForRendering()`); without that skip the
+  vertex stage refused the program, the instance was marked broken, and EVERY beam and path of the scene was
+  removed as soon as a reflection probe existed (reproduced on `beams` with a temporary probe, 2026-09-30).

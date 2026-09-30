@@ -127,19 +127,6 @@ namespace EmEn::Graphics::Geometry
 			std::shared_ptr< IndexedVertexResource > quad (float width, float height, std::string resourceName = {}) const noexcept;
 
 			/**
-			 * @brief Generates the strip a BEAM RIBBON is built from: segmentCount + 1 stations along the beam, two
-			 * vertices each, at positions (t, side, 0) with t ∈ [0, 1] and side = ±1.
-			 * @note Not a surface: the vertex stage places every vertex (AbstractVertexStage::enableBeamRibbon(),
-			 * Material::BeamResource), so the positions are coordinates, and the generation parameters (transform,
-			 * attributes) are ignored — position only. Shared by every beam of the same segment count.
-			 * @param segmentCount The number of segments along the beam (the arc's resolution), at least 1.
-			 * @param resourceName A string. Default auto generated name.
-			 * @return std::shared_ptr< IndexedVertexResource >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > beamStrip (uint32_t segmentCount, std::string resourceName = {}) const noexcept;
-
-			/**
 			 * @brief Generates a square geometry.
 			 * @param size The size of the square.
 			 * @param resourceName A string. Default auto generated name.

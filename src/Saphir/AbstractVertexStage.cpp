@@ -804,11 +804,11 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::declarePositionAttribute () noexcept
 	{
-		/* ⚠️ A pulled-vertex source (the path ribbon) has NO position attribute: its position is built from the path SSBO
-		 * (preparePathRibbon()). Declared anyway, the attribute went into the vertex format and the pipeline declared
+		/* ⚠️ A pulled-vertex source (the path and beam ribbons) has NO position attribute: its position is built from the
+		 * path SSBO (preparePathRibbon(), prepareBeamRibbon()). Declared anyway, the attribute went into the vertex format and the pipeline declared
 		 * binding 0 — reading whatever buffer the previous draw had bound, and VUID-vkCmdDraw-None-04007 whenever none
 		 * was (the macOS peer, 2026-09-29: until the ground's first draw of the frame). */
-		if ( m_pathRibbonEnabled )
+		if ( m_pathRibbonEnabled || m_beamRibbonEnabled )
 		{
 			return true;
 		}
@@ -976,8 +976,8 @@ namespace EmEn::Saphir
 
 		std::stringstream code{};
 
-		/* A path ribbon has no position attribute: its rest position is the pulled one. */
-		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << (m_pathRibbonEnabled ? "pathPosition" : Attribute::Position) << ";" "\n";
+		/* A path or beam ribbon has no position attribute: its rest position is the pulled one. */
+		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << (m_pathRibbonEnabled ? "pathPosition" : (m_beamRibbonEnabled ? "beamPosition" : Attribute::Position)) << ";" "\n";
 
 		outputInstructions.append(code.str());
 
@@ -1756,7 +1756,7 @@ namespace EmEn::Saphir
 	const char *
 	AbstractVertexStage::vertexFrameExpression (VertexAttributeType vectorType) const noexcept
 	{
-		/* A beam is an unlit emissive ribbon: its frame is the unit segment's own axes, declared by prepareBeamRibbon(). */
+		/* A beam is an unlit emissive ribbon: its frame is declared by prepareBeamRibbon(). */
 		/* A path is an unlit ribbon facing the eye, like the beam: its frame is declared by preparePathRibbon(). */
 		if ( m_pathRibbonEnabled )
 		{
@@ -2239,30 +2239,31 @@ namespace EmEn::Saphir
 			return true;
 		}
 
-		if ( m_skinningEnabled || m_vegetationWindEnabled || m_heightfieldSurfaceEnabled || m_imposterBillboardEnabled )
+		if ( m_skinningEnabled || m_vegetationWindEnabled || m_heightfieldSurfaceEnabled || m_imposterBillboardEnabled || m_pathRibbonEnabled )
 		{
-			Tracer::error(ClassId, "A beam ribbon cannot be skinned, blown by the wind, a heightfield or an imposter !");
+			Tracer::error(ClassId, "A beam ribbon cannot be skinned, blown by the wind, a heightfield, an imposter or a path !");
 
 			return false;
 		}
 
-		/* The endpoints ARE the model matrix of the instance: one beam, one matrix, one draw. */
-		if ( this->isInstancingEnabled() || this->isMDIEnabled() )
+		/* The directory is indexed by the instance slot: the instance-transforms SSBO path only (like the path ribbon). */
+		if ( this->isInstancingEnabled() || this->isMDIEnabled() || !this->isInstanceTransformsEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
 		{
-			Tracer::error(ClassId, "A beam ribbon is drawn through a unique instance, never instanced nor through MDI !");
+			Tracer::error(ClassId, "A beam ribbon is drawn through a unique instance on the instance-transforms SSBO path only (never instanced, MDI, cubemap nor CSM) !");
 
 			return false;
 		}
 
-		if ( !this->declare(InputAttribute{VertexAttributeType::Position}) )
-		{
-			return false;
-		}
-
-		/* Registers the model matrix's own preparation (instance-transforms SSBO) BEFORE this one. */
+		/* Registers the model matrix's own preparation (instance-transforms SSBO) BEFORE this one. No vertex attribute:
+		 * every vertex is pulled from the beam's stations by gl_VertexIndex. */
 		std::string modelMatrix;
 
 		if ( !this->resolveWorldModelMatrix(modelMatrix) )
+		{
+			return false;
+		}
+
+		if ( !generator.declarePathBlocks(*this) )
 		{
 			return false;
 		}
@@ -2282,51 +2283,40 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* The scene clock rides in the instance-transforms header (x this frame, y the previous one), which exists on
-		 * the non-instanced SSBO path only; elsewhere (cubemap, CSM) the arc is frozen at t = 0. */
-		const auto hasClock = this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled();
-		const std::string time{hasClock ? "ubInstanceTransforms.windTimes.x" : "0.0"};
-		const std::string previousTime{hasClock ? "ubInstanceTransforms.windTimes.y" : "0.0"};
-
-		/* One pixel at a distance of 1 (perspective) or anywhere (orthographic): 2 / (viewport height · P[1][1]). A
-		 * cascade view has no projection in its block, and no beam casts a shadow: no clamp there. */
-		std::string pixel{"vec2(0.0)"};
-
-		if ( !this->isCSMModeEnabled() )
-		{
-			const auto projection = ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false);
-
-			pixel = "vec2(2.0 / max(" + ViewUB(Keys::UniformBlock::Component::ViewProperties, false) + ".y * abs(" + projection + "[1][1]), 1.0e-6), " + projection + "[2][3] != 0.0 ? 1.0 : 0.0)";
-		}
-
-		const std::string position{Attribute::Position};
+		/* One pixel at a distance of 1 (perspective) or anywhere (orthographic): 2 / (viewport height · P[1][1]). */
+		const auto projection = ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false);
+		const std::string pixel{"vec2(2.0 / max(" + ViewUB(Keys::UniformBlock::Component::ViewProperties, false) + ".y * abs(" + projection + "[1][1]), 1.0e-6), " + projection + "[2][3] != 0.0 ? 1.0 : 0.0)"};
+		const std::string span{"ubPathDirectory.pathSpans[" + std::string{m_instanceIndexExpression} + "]"};
 
 		std::stringstream code;
 
+		/* The scene clock rides in the instance-transforms header (x this frame, y the previous one), beside the wind's. */
 		code <<
-			"\t" "/* Beam ribbon, built in world space and brought back to the unit segment space (Saphir BeamGLSL). */" "\n"
+			"\t" "/* Beam ribbon, pulled from the beam's stations, built in world space and brought back to the entity's space (Saphir BeamGLSL). */" "\n"
 			"\t" "const mat4 beamModel = " << modelMatrix << ";" "\n"
+			"\t" "const uvec4 beamSpan = " << span << ";" "\n"
 			"\t" "const vec3 beamEye = " << ViewUB(Keys::UniformBlock::Component::PositionWorldSpace, false) << ".xyz;" "\n"
 			"\t" "const vec2 beamPixel = " << pixel << ";" "\n"
 			"\t" "const vec4 beamShapeParameters = " << m_beamShapeExpression << ";" "\n"
 			"\t" "const vec4 beamMotionParameters = " << m_beamMotionExpression << ";" "\n"
-			"\t" "const vec4 beamCurrentCorner = beamCorner(beamModel, " << position << ".xy, " << time << ", beamShapeParameters, beamMotionParameters, beamEye, beamPixel);" "\n"
+			"\t" "vec2 beamCoordinates;" "\n"
+			"\t" "const vec4 beamCurrentCorner = beamCorner(beamModel, beamSpan, gl_VertexIndex, ubInstanceTransforms.windTimes.x, beamShapeParameters, beamMotionParameters, beamEye, beamPixel, false, beamCoordinates);" "\n"
 			"\t" "const vec3 beamPosition = beamCurrentCorner.xyz;" "\n"
 			"\t" "const vec3 beamTangent = vec3(1.0, 0.0, 0.0);" "\n"
 			"\t" "const vec3 beamBinormal = vec3(0.0, 1.0, 0.0);" "\n"
 			"\t" "const vec3 beamNormal = vec3(0.0, 0.0, 1.0);" "\n"
-			"\t" << ShaderVariable::BeamCoordinates << " = " << position << ".xy;" "\n"
+			"\t" << ShaderVariable::BeamCoordinates << " = beamCoordinates;" "\n"
 			"\t" << ShaderVariable::BeamCoverage << " = beamCurrentCorner.w;" "\n";
 
-		/* The velocity pass: the same ribbon with the previous model matrix (the instance-transforms entry, odd slot —
-		 * the one synthesizeVelocityClipPositions() multiplies it by) and the previous scene time. */
+		/* The velocity pass: the same ribbon from the PREVIOUS stations (the render-side history), the previous model
+		 * matrix (the instance-transforms entry, odd slot) and the previous scene time. It faces the CURRENT eye. */
 		if ( m_previousBeamRequired )
 		{
-			const auto previousModelMatrix = this->isInstanceTransformsEnabled() ?
-				"ubInstanceTransforms.instanceMatrices[" + std::string{m_instanceIndexExpression} + " * 2 + 1]" :
-				modelMatrix;
+			const auto previousModelMatrix = "ubInstanceTransforms.instanceMatrices[" + std::string{m_instanceIndexExpression} + " * 2 + 1]";
 
-			code << "\t" "const vec3 previousBeamPosition = beamCorner(" << previousModelMatrix << ", " << position << ".xy, " << previousTime << ", beamShapeParameters, beamMotionParameters, beamEye, beamPixel).xyz;" "\n";
+			code <<
+				"\t" "vec2 previousBeamCoordinates;" "\n"
+				"\t" "const vec3 previousBeamPosition = beamCorner(" << previousModelMatrix << ", beamSpan, gl_VertexIndex, ubInstanceTransforms.windTimes.y, beamShapeParameters, beamMotionParameters, beamEye, beamPixel, true, previousBeamCoordinates).xyz;" "\n";
 		}
 
 		code << "\n";

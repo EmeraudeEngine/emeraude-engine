@@ -27,7 +27,9 @@
 #include "ConsoleAdapter.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <ranges>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
@@ -49,6 +51,45 @@ namespace EmEn::Scenes::Component
 	componentParameter (const std::string & componentType) noexcept
 	{
 		return {"component", "The " + componentType + " component's name on that entity (SceneManager listEntityComponents(entity) lists them)."};
+	}
+
+	std::optional< std::vector< Base::Math::Vector< 3, float > > >
+	parsePointList (const std::string & text) noexcept
+	{
+		std::vector< Base::Math::Vector< 3, float > > points;
+		std::stringstream pointsStream{text};
+		std::string item;
+
+		while ( std::getline(pointsStream, item, ';') )
+		{
+			for ( auto & character : item )
+			{
+				if ( character == ',' )
+				{
+					character = ' ';
+				}
+			}
+
+			std::stringstream coordinates{item};
+			float x = 0.0F;
+			float y = 0.0F;
+			float z = 0.0F;
+
+			if ( !(coordinates >> x >> y >> z) || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) )
+			{
+				/* An empty trailing item ("...;") is not an error. */
+				if ( item.find_first_not_of(" \t") == std::string::npos )
+				{
+					continue;
+				}
+
+				return std::nullopt;
+			}
+
+			points.emplace_back(x, y, z);
+		}
+
+		return points;
 	}
 
 	Console::CommandResult

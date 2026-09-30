@@ -29,14 +29,14 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <atomic>
-#include <cmath>
 
 /* Local inclusions. */
-#include "Constants.hpp"
-#include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/Geometry/PulledVertexResource.hpp"
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Math/CurveTessellation.hpp"
 #include "Resources/Manager.hpp"
+#include "Saphir/BeamGLSL.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Tracer.hpp"
 
@@ -48,7 +48,7 @@ namespace EmEn::Scenes::Component
 
 	namespace
 	{
-		/** @brief Numbers every beam: each one owns its material, so each one needs its own resource names. */
+		/** @brief Numbers every beam: each one owns its material and its geometry, so each one needs its own names. */
 		std::atomic< uint32_t > s_beamCount{0};
 	}
 
@@ -69,22 +69,24 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		const Geometry::ResourceGenerator generator{resources, Geometry::None};
+		/* No vertex buffer: the ribbon is pulled from the stations (Saphir BeamGLSL). Its capacity grows with them. */
+		m_geometry = resources.container< Geometry::PulledVertexResource >()->getOrCreateResourceSync(resourceName, [] (Geometry::PulledVertexResource & geometry) {
+			return geometry.load(Topology::TriangleList, 0);
+		});
 
-		const auto strip = generator.beamStrip(m_segmentCount);
-
-		if ( strip == nullptr )
+		if ( m_geometry == nullptr )
 		{
-			TraceError{ClassId} << "Unable to create the strip geometry of the beam '" << componentName << "' !";
+			TraceError{ClassId} << "Unable to create the geometry of the beam '" << componentName << "' !";
 
 			return;
 		}
 
-		/* The ribbon faces the eye from either side of its strip: no culling. */
+		/* The ribbon faces the eye from either side: no culling. */
+		const auto geometry = m_geometry;
 		const auto material = m_material;
 
-		const auto renderable = resources.container< Renderable::MeshResource >()->getOrCreateResourceSync(resourceName, [strip, material] (Renderable::MeshResource & meshResource) {
-			return meshResource.load(strip, material, RasterizationOptions{PolygonMode::Fill, CullingMode::None});
+		const auto renderable = resources.container< Renderable::MeshResource >()->getOrCreateResourceSync(resourceName, [geometry, material] (Renderable::MeshResource & meshResource) {
+			return meshResource.load(geometry, material, RasterizationOptions{PolygonMode::Fill, CullingMode::None});
 		});
 
 		if ( renderable == nullptr )
@@ -94,7 +96,11 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
+		m_pathPoints = std::make_shared< RenderableInstance::PathPoints >();
+
 		m_renderableInstance = std::make_shared< RenderableInstance::Unique >(renderable, RenderableInstance::lightingFlags(RenderableInstance::Lighting::Unlit));
+		/* Before any scene links it: the render thread reads it without a lock. */
+		m_renderableInstance->setPathPoints(m_pathPoints);
 
 		/* An emissive overlay: it adds light, occludes nothing, casts and receives nothing, and stays out of the TLAS
 		 * (Material::BeamResource). */
@@ -103,15 +109,28 @@ namespace EmEn::Scenes::Component
 		m_renderableInstance->disableShadowReceiving();
 		m_renderableInstance->disableRayTracing();
 
-		/* Every slot starts at the initial placement: nothing renders this instance before it is linked. */
-		m_segmentMatrix = this->computeSegmentMatrix();
+		const std::array< Vector< 3, float >, 2 > straight{Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{0.0F, 0.0F, 1.0F}};
 
-		for ( uint32_t slot = 0; slot < RenderStateSlotCount; ++slot )
-		{
-			m_renderableInstance->publishTransformationMatrix(slot, m_segmentMatrix);
-		}
+		m_curve.setPolyline(std::span< const Vector< 3, float > >{straight});
 
-		this->updateBounds();
+		this->rebuild();
+	}
+
+	void
+	Beam::setStart (const Vector< 3, float > & position) noexcept
+	{
+		m_curve.setFirstPoint(position);
+
+		this->rebuild();
+	}
+
+	void
+	Beam::setEnd (const Vector< 3, float > & position) noexcept
+	{
+		m_endTarget.reset();
+		m_curve.setLastPoint(position);
+
+		this->rebuild();
 	}
 
 	void
@@ -122,6 +141,60 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	Beam::setPolyline (std::span< const Vector< 3, float > > points, bool closed) noexcept
+	{
+		m_curve.setPolyline(points, closed);
+
+		this->rebuild();
+	}
+
+	void
+	Beam::setBezierPath (const BSpline< 3, float > & path) noexcept
+	{
+		m_curve.setBezierPath(path);
+
+		this->rebuild();
+	}
+
+	void
+	Beam::setUniformBSpline (std::span< const Vector< 3, float > > controlPoints, bool closed) noexcept
+	{
+		m_curve.setUniformBSpline(controlPoints, closed);
+
+		this->rebuild();
+	}
+
+	void
+	Beam::setCatmullRom (std::span< const Vector< 3, float > > points, bool closed, float alpha) noexcept
+	{
+		m_curve.setCatmullRom(points, closed, alpha);
+
+		this->rebuild();
+	}
+
+	void
+	Beam::setTolerance (float tolerance) noexcept
+	{
+		m_tolerance = std::max(tolerance, 1.0e-5F);
+
+		this->rebuild();
+	}
+
+	void
+	Beam::setEnabled (bool state) noexcept
+	{
+		if ( m_enabled == state )
+		{
+			return;
+		}
+
+		m_enabled = state;
+
+		/* A hidden beam publishes no station: nothing is drawn. */
+		++m_version;
+	}
+
+	void
 	Beam::processLogics (const Scene & /*scene*/) noexcept
 	{
 		if ( m_renderableInstance == nullptr )
@@ -129,77 +202,123 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		/* The followed end: the target's point in the world, brought into this entity's space. */
+		/* The followed end: the target's point in the world, brought into this entity's space — re-tessellated only when
+		 * it moved. */
 		if ( const auto target = m_endTarget.lock() )
 		{
 			const auto targetPoint = target->getWorldCoordinates().getModelMatrix() * Vector< 4, float >{m_endTargetOffset[X], m_endTargetOffset[Y], m_endTargetOffset[Z], 1.0F};
 			const auto localPoint = this->getWorldCoordinates().getModelMatrix().inverse() * targetPoint;
+			const Vector< 3, float > end{localPoint[X], localPoint[Y], localPoint[Z]};
 
-			m_end = {localPoint[X], localPoint[Y], localPoint[Z]};
+			if ( !m_curve.points().empty() && m_curve.points().back() != end )
+			{
+				m_curve.setLastPoint(end);
+
+				this->rebuild();
+			}
 		}
 
-		m_segmentMatrix = this->computeSegmentMatrix();
-
+		/* The width and the arc amplitude are the material's: its setters cannot tell the beam. */
 		this->updateBounds();
 	}
 
 	void
 	Beam::publishStateForRendering (uint32_t writeStateIndex) noexcept
 	{
-		if ( m_renderableInstance == nullptr )
+		if ( m_pathPoints == nullptr )
 		{
 			return;
 		}
 
-		m_renderableInstance->publishTransformationMatrix(writeStateIndex, m_segmentMatrix);
-	}
+		const auto slot = writeStateIndex % RenderStateSlotCount;
 
-	Matrix< 4, float >
-	Beam::computeSegmentMatrix () const noexcept
-	{
-		const auto direction = m_end - m_start;
-		const auto length = direction.length();
-
-		const Vector< 4, float > origin{m_start[X], m_start[Y], m_start[Z], 1.0F};
-
-		/* Collapsed: a zero x column, which the vertex stage draws as nothing (BeamGLSL beamCorner()). */
-		if ( !m_enabled || length < 1.0e-6F )
+		/* Only a slot that has not received this version yet: a still beam costs nothing per tick (its arc moves on the
+		 * GPU, with the scene clock). */
+		if ( m_publishedVersions[slot] == m_version )
 		{
-			return {Vector< 4, float >{}, Vector< 4, float >{0.0F, 1.0F, 0.0F, 0.0F}, Vector< 4, float >{0.0F, 0.0F, 1.0F, 0.0F}, origin};
+			return;
 		}
 
-		/* Two unit directions across the beam, the arc's axes. */
-		const auto forward = direction / length;
-		const auto reference = std::abs(forward[Y]) < 0.99F ? Vector< 3, float >::positiveY() : Vector< 3, float >::positiveX();
-		const auto across = Vector< 3, float >::crossProduct(forward, reference).normalized();
-		const auto over = Vector< 3, float >::crossProduct(forward, across);
+		static const std::vector< Vector< 4, float > > Nothing{};
 
-		return {
-			Vector< 4, float >{direction[X], direction[Y], direction[Z], 0.0F},
-			Vector< 4, float >{across[X], across[Y], across[Z], 0.0F},
-			Vector< 4, float >{over[X], over[Y], over[Z], 0.0F},
-			origin
-		};
+		/* A beam has no debug overlay. */
+		m_pathPoints->publish(slot, m_enabled ? m_stations : Nothing, RenderableInstance::PathPoints::DebugLook{});
+		m_publishedVersions[slot] = m_version;
+	}
+
+	void
+	Beam::rebuild () noexcept
+	{
+		const auto polyline = m_curve.tessellate(m_tolerance);
+
+		m_stations.clear();
+		m_length = 0.0F;
+
+		if ( polyline.size() >= 2 )
+		{
+			/* Every corner kept, at least m_segmentCount pieces over the whole beam: regular stations for the arc. */
+			const auto points = CurveTessellation::subdivided(std::span< const Vector< 3, float > >{polyline}, m_segmentCount);
+			const auto normals = CurveTessellation::rotationMinimizingNormals(std::span< const Vector< 3, float > >{points});
+
+			std::vector< float > arcLengths(points.size(), 0.0F);
+
+			for ( size_t index = 1; index < points.size(); ++index )
+			{
+				arcLengths[index] = arcLengths[index - 1] + (points[index] - points[index - 1]).length();
+			}
+
+			m_length = arcLengths.back();
+
+			if ( m_length > 0.0F )
+			{
+				m_stations.reserve(points.size() * RecordsPerStation);
+
+				for ( size_t index = 0; index < points.size(); ++index )
+				{
+					/* t is the NORMALIZED arc length: the arc's envelope sin(π t) pins both ends, its noise runs along it. */
+					m_stations.emplace_back(points[index][X], points[index][Y], points[index][Z], arcLengths[index] / m_length);
+					m_stations.emplace_back(normals[index][X], normals[index][Y], normals[index][Z], 0.0F);
+				}
+
+				m_stationsMinimum = points.front();
+				m_stationsMaximum = points.front();
+
+				for ( const auto & point : points )
+				{
+					for ( const auto axis : {X, Y, Z} )
+					{
+						m_stationsMinimum[axis] = std::min(m_stationsMinimum[axis], point[axis]);
+						m_stationsMaximum[axis] = std::max(m_stationsMaximum[axis], point[axis]);
+					}
+				}
+
+				/* The draw must cover the stations before they are published (the capacity only grows). */
+				if ( m_geometry != nullptr )
+				{
+					m_geometry->setVertexCapacity(static_cast< uint32_t >(points.size() - 1) * Saphir::BeamGLSL::VerticesPerSegment);
+				}
+			}
+		}
+
+		++m_version;
+
+		this->updateBounds();
 	}
 
 	void
 	Beam::updateBounds () noexcept
 	{
-		/* The ribbon never leaves the segment by more than its half width plus the arc amplitude. The one-pixel clamp
-		 * of a far beam widens it by a pixel, which the culling of a line segment does not need. */
-		const auto margin = m_material != nullptr ? m_material->halfWidth() + m_material->arcAmplitude() : 0.0F;
+		if ( m_stations.empty() )
+		{
+			return;
+		}
 
-		const Vector< 3, float > minimum{
-			std::min(m_start[X], m_end[X]) - margin,
-			std::min(m_start[Y], m_end[Y]) - margin,
-			std::min(m_start[Z], m_end[Z]) - margin
-		};
-
-		const Vector< 3, float > maximum{
-			std::max(m_start[X], m_end[X]) + margin,
-			std::max(m_start[Y], m_end[Y]) + margin,
-			std::max(m_start[Z], m_end[Z]) + margin
-		};
+		/* The ribbon never leaves its centre line by more than its half width plus the arc amplitude. The one-pixel clamp
+		 * of a far beam widens it by a pixel, which the culling does not need. A millimetre keeps a flat beam's box valid. */
+		const auto margin = std::max(m_material != nullptr ? m_material->halfWidth() + m_material->arcAmplitude() : 0.0F, 0.001F);
+		const Vector< 3, float > padding{margin, margin, margin};
+		const auto minimum = m_stationsMinimum - padding;
+		const auto maximum = m_stationsMaximum + padding;
 
 		if ( m_boundingBox.isValid() && m_boundingBox.minimum() == minimum && m_boundingBox.maximum() == maximum )
 		{
@@ -207,7 +326,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_boundingBox.set(maximum, minimum);
-		m_boundingSphere = Space3D::Sphere< float >{(m_end - m_start).length() * 0.5F + margin, (m_start + m_end) * 0.5F};
+		m_boundingSphere = Space3D::Sphere< float >{(maximum - minimum).length() * 0.5F, (minimum + maximum) * 0.5F};
 
 		/* The entity refreshes its extents (culling, octree). */
 		this->notify(ComponentBoundariesModified);

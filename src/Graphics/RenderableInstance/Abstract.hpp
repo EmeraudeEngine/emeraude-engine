@@ -1110,6 +1110,19 @@ namespace EmEn::Graphics::RenderableInstance
 			bool isDrawnInScene (uint32_t readStateIndex) const noexcept;
 
 			/**
+			 * @brief Returns whether the instance's vertices are PULLED from its points (a path, a beam: setPathPoints()).
+			 * @note Such an instance is built from its entry in the instance-transforms SSBO: a target that does not read it
+			 * (a cubemap) cannot draw it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPulledVertexInstance () const noexcept
+			{
+				return m_pathPoints != nullptr;
+			}
+
+			/**
 			 * @brief Returns the instance transforms SSBO slot staged for the current render pass.
 			 * @note Only meaningful on the non-instanced path, between two Scene::prepareRender() calls.
 			 * @return uint32_t

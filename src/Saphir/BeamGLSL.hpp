@@ -31,18 +31,23 @@
 #include "Saphir/Code.hpp"
 #include "Saphir/Declaration/Function.hpp"
 #include "Saphir/Keys.hpp"
+#include "Saphir/PathGLSL.hpp"
 
 /**
  * @brief The GLSL side of a beam ribbon (a laser, an electric arc): the arc displacement and the camera-facing
  * ribbon corner (AbstractVertexStage::enableBeamRibbon(), Material::BeamResource).
- * @note The beam lives in a UNIT SEGMENT space: the model matrix maps x ∈ [0, 1] from the start to the end of the
- * beam, and its y and z columns are two unit directions across it (Scenes::Component::Beam publishes that matrix per
- * logic tick, RenderableInstance::Abstract::publishTransformationMatrix()). The ribbon is built in WORLD space, where
- * the eye and the pixel size live, and brought back to that space through the inverse model matrix, so the standard
- * matrices and the velocity downstream apply unchanged — the imposter billboard's scheme.
- * @note The arc is two independent fBm of 1D gradient noise along the beam (one per axis across it), under a
- * sin(πt) envelope that pins both ends. Deterministic per (seed, time): the previous position is the same code at
- * the previous time with the previous model matrix, which is what gives a moving or re-striking arc a real velocity.
+ * @note The beam follows a curve (Scenes::Component::Beam) drawn by VERTEX PULLING: no vertex buffer, every vertex reads
+ * the beam's STATIONS from the scene's path SSBO (the instance-transforms set, bindings 1-2, through the directory entry
+ * of its instance slot) — two records per station, (position, t) then (normal, 0), in the entity's space; t is the
+ * normalized arc length. SIX vertices per segment, a triangle list (the quad between two stations); a vertex past the
+ * last segment collapses onto the origin.
+ * @note The ribbon is built in WORLD space, where the eye and the pixel size live, and brought back to the entity's
+ * space through the inverse model matrix, so the standard matrices and the velocity downstream apply unchanged — the
+ * imposter billboard's scheme. Its across direction faces the eye, around the local tangent (the neighbour stations).
+ * @note The arc is two independent fBm of 1D gradient noise along the beam, one along each axis of the station's
+ * rotation minimizing frame (normal, cross(tangent, normal)), under a sin(πt) envelope that pins both ENDS
+ * (owner decision 2026-09-30). Deterministic per (seed, time): the previous position is the same code at the previous
+ * time with the previous stations and model matrix, which is what gives a moving or re-striking arc a real velocity.
  * @note Hash: "lowbias32", Chris Wellons, "Prospecting for Hash Functions" (2018, public domain),
  * https://nullprogram.com/blog/2018/07/31/ . Gradient noise and its quintic fade: Ken Perlin, "Improving Noise",
  * SIGGRAPH 2002. Sub-pixel width: Emil Persson, "Phone-wire AA", GPU Pro 5 (2014) — the drawn width is clamped to one
@@ -54,15 +59,21 @@ namespace EmEn::Saphir::BeamGLSL
 	/** @brief The octave count the fBm loop is unrolled against (the UBO value is clamped to it). */
 	constexpr auto MaxOctaves{8};
 
+	/** @brief Vertices per segment: the quad between two stations (a triangle list). */
+	constexpr uint32_t VerticesPerSegment{6};
+
 	/**
 	 * @brief Declares the beam functions in a vertex stage: beamHash(uint), beamNoise(float, uint),
 	 * beamFbm(float, uint, int), beamOffset(float t, float time, vec4 shape, vec4 motion),
-	 * beamCentre(mat4 model, float t, float time, vec4 shape, vec4 motion) and
-	 * beamCorner(mat4 model, vec2 coordinates, float time, vec4 shape, vec4 motion, vec3 eye, vec2 pixel).
-	 * @note beamCorner() returns (object-space position, coverage). `pixel` is (world size of one pixel at a distance
-	 * of 1 — or at any distance under an orthographic projection —, 1 for a perspective projection else 0); a zero
-	 * pixel size disables the clamp. `shape` and `motion` are the Material::BeamResource UBO vectors (Keys
-	 * BeamShape, BeamMotion).
+	 * beamStation(mat4 model, uvec4 span, int station, float time, vec4 shape, vec4 motion, bool previous) and
+	 * beamCorner(mat4 model, uvec4 span, int vertexIndex, float time, vec4 shape, vec4 motion, vec3 eye, vec2 pixel,
+	 * bool previous, out vec2 coordinates) — and pathPoint() (PathGLSL), their reader of the path SSBO.
+	 * @note beamCorner() returns (object-space position, coverage) and writes (t, side in [-1, 1]) to `coordinates`.
+	 * `pixel` is (world size of one pixel at a distance of 1 — or at any distance under an orthographic projection —, 1
+	 * for a perspective projection else 0); a zero pixel size disables the clamp. `shape` and `motion` are the
+	 * Material::BeamResource UBO vectors (Keys BeamShape, BeamMotion); `previous` reads the stations of the previous
+	 * frame (the velocity pass).
+	 * @note Requires the path blocks (Generator::Abstract::declarePathBlocks()).
 	 * @param shader A reference to the shader.
 	 * @return bool
 	 */
@@ -133,44 +144,70 @@ namespace EmEn::Saphir::BeamGLSL
 			"const float envelope = sin(3.14159265 * clamp(t, 0.0, 1.0));" << Line::End <<
 			"return shape.y * envelope * vec2(beamFbm(x, seed, octaves), beamFbm(x, seed ^ 0x5BD1E995u, octaves));";
 
-		/* A point of the beam's centre line, in world space. */
-		Declaration::Function centre{"beamCentre", GLSL::FloatVector3};
-		centre.addInParameter(GLSL::Matrix4, "model");
-		centre.addInParameter(GLSL::Float, "t");
-		centre.addInParameter(GLSL::Float, "time");
-		centre.addInParameter(GLSL::FloatVector4, "shape");
-		centre.addInParameter(GLSL::FloatVector4, "motion");
-		Code{centre, Location::Output} <<
-			"const vec2 across = beamOffset(t, time, shape, motion);" << Line::End <<
-			"return (model * vec4(t, across.x, across.y, 1.0)).xyz;";
+		/* A station of the beam's centre line, displaced by the arc along its frame, in world space. A station index out
+		 * of range is clamped (the neighbours of the end stations). */
+		Declaration::Function station{"beamStation", GLSL::FloatVector3};
+		station.addInParameter(GLSL::Matrix4, "model");
+		station.addInParameter(GLSL::UIntVector4, "span");
+		station.addInParameter(GLSL::Integer, "station");
+		station.addInParameter(GLSL::Float, "time");
+		station.addInParameter(GLSL::FloatVector4, "shape");
+		station.addInParameter(GLSL::FloatVector4, "motion");
+		station.addInParameter(GLSL::Boolean, "previous");
+		Code{station, Location::Output} <<
+			"const int count = int(span.y) / 2;" << Line::End <<
+			"const int index = clamp(station, 0, count - 1);" << Line::End <<
+			"const vec4 point = pathPoint(span, index * 2, previous);" << Line::End <<
+			"const vec3 normal = pathPoint(span, index * 2 + 1, previous).xyz;" << Line::End <<
+			"const vec3 tangent = pathPoint(span, min(index + 1, count - 1) * 2, previous).xyz - pathPoint(span, max(index - 1, 0) * 2, previous).xyz;" << Line::End <<
+			"const vec3 binormal = cross(tangent, normal);" << Line::End <<
+			"const float binormalLength = length(binormal);" << Line::End <<
+			"const vec2 across = beamOffset(point.w, time, shape, motion);" << Line::End <<
+			"return (model * vec4(point.xyz + normal * across.x + (binormalLength > 1.0e-12 ? binormal / binormalLength : vec3(0.0)) * across.y, 1.0)).xyz;";
 
-		/* A corner of the ribbon: the centre moved across the local tangent, facing the eye, by the half width —
-		 * clamped to one pixel, the coverage returned in w. */
+		/* A corner of the ribbon: the station moved across the local tangent, facing the eye, by the half width — clamped
+		 * to one pixel, the coverage returned in w. */
 		Declaration::Function corner{"beamCorner", GLSL::FloatVector4};
 		corner.addInParameter(GLSL::Matrix4, "model");
-		corner.addInParameter(GLSL::FloatVector2, "coordinates");
+		corner.addInParameter(GLSL::UIntVector4, "span");
+		corner.addInParameter(GLSL::Integer, "vertexIndex");
 		corner.addInParameter(GLSL::Float, "time");
 		corner.addInParameter(GLSL::FloatVector4, "shape");
 		corner.addInParameter(GLSL::FloatVector4, "motion");
 		corner.addInParameter(GLSL::FloatVector3, "eye");
 		corner.addInParameter(GLSL::FloatVector2, "pixel");
+		corner.addInParameter(GLSL::Boolean, "previous");
+		corner.addOutParameter(GLSL::FloatVector2, "coordinates");
 		Code{corner, Location::Output} <<
-			"/* A beam of zero length has no inverse model matrix: collapse it. */" << Line::End <<
-			"if ( dot(model[0].xyz, model[0].xyz) < 1.0e-12 ) { return vec4(0.0); }" << Line::End <<
-			"const float t = coordinates.x;" << Line::End <<
-			"const vec3 point = beamCentre(model, t, time, shape, motion);" << Line::End <<
-			"const vec3 tangent = beamCentre(model, t + 0.00390625, time, shape, motion) - beamCentre(model, t - 0.00390625, time, shape, motion);" << Line::End <<
+			"coordinates = vec2(0.0);" << Line::End <<
+			"const int count = int(span.y) / 2;" << Line::End <<
+			"const int segment = vertexIndex / " << VerticesPerSegment << ";" << Line::End <<
+			"const int corner = vertexIndex - segment * " << VerticesPerSegment << ";" << Line::End <<
+			"/* Past the last segment (the capacity exceeds the stations), or no station at all (a hidden beam): collapsed" << Line::End <<
+			" * onto the origin without reading anything — pathPoint() clamps to [0, count - 1], undefined for count 0. */" << Line::End <<
+			"if ( count < 2 || segment >= count - 1 ) { return vec4(0.0); }" << Line::End <<
+			"/* Two triangles: (start, -1) (end, -1) (end, +1), (start, -1) (end, +1) (start, +1). */" << Line::End <<
+			"const int index = segment + ((corner == 1 || corner == 2 || corner == 4) ? 1 : 0);" << Line::End <<
+			"const float side = (corner == 2 || corner == 4 || corner == 5) ? 1.0 : -1.0;" << Line::End <<
+			"const vec3 point = beamStation(model, span, index, time, shape, motion, previous);" << Line::End <<
+			"const vec3 tangent = beamStation(model, span, index + 1, time, shape, motion, previous) - beamStation(model, span, index - 1, time, shape, motion, previous);" << Line::End <<
 			"const vec3 toEye = eye - point;" << Line::End <<
 			"vec3 across = cross(tangent, toEye);" << Line::End <<
-			"/* Looking straight down the beam: any direction across it will do. */" << Line::End <<
-			"if ( dot(across, across) < 1.0e-20 ) { across = model[1].xyz; }" << Line::End <<
+			"/* Looking straight down the beam: the station's normal will do. */" << Line::End <<
+			"if ( dot(across, across) < 1.0e-20 ) { across = (model * vec4(pathPoint(span, index * 2 + 1, previous).xyz, 0.0)).xyz; }" << Line::End <<
 			"across = normalize(across);" << Line::End <<
 			"const float halfWidth = shape.x * length(model[1].xyz);" << Line::End <<
 			"const float pixelSize = pixel.x * (pixel.y > 0.0 ? length(toEye) : 1.0);" << Line::End <<
 			"const float drawnHalfWidth = max(halfWidth, pixelSize);" << Line::End <<
-			"const vec3 world = point + across * (coordinates.y * drawnHalfWidth);" << Line::End <<
+			"const vec3 world = point + across * (side * drawnHalfWidth);" << Line::End <<
+			"coordinates = vec2(pathPoint(span, index * 2, previous).w, side);" << Line::End <<
 			"return vec4((inverse(model) * vec4(world, 1.0)).xyz, drawnHalfWidth > 0.0 ? halfWidth / drawnHalfWidth : 0.0);";
 
-		return shader.declare(hash) && shader.declare(noise) && shader.declare(fbm) && shader.declare(offset) && shader.declare(centre) && shader.declare(corner);
+		if ( !PathGLSL::declarePointFunction(shader) )
+		{
+			return false;
+		}
+
+		return shader.declare(hash) && shader.declare(noise) && shader.declare(fbm) && shader.declare(offset) && shader.declare(station) && shader.declare(corner);
 	}
 }

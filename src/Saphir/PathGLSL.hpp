@@ -279,6 +279,29 @@ namespace EmEn::Saphir::PathGLSL
 	}
 
 	/**
+	 * @brief Declares pathPoint() alone in a Saphir shader: the point reader of the path SSBO, shared with the beam ribbon
+	 * (Saphir BeamGLSL, whose stations are records of the same SSBO).
+	 * @note Requires the path blocks (Generator::Abstract::declarePathBlocks()).
+	 * @param shader A reference to the shader.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	inline
+	bool
+	declarePointFunction (AbstractShader & shader) noexcept
+	{
+		using namespace Keys;
+
+		Declaration::Function point{"pathPoint", GLSL::FloatVector4};
+		point.addInParameter(GLSL::UIntVector4, "span");
+		point.addInParameter(GLSL::Integer, "index");
+		point.addInParameter(GLSL::Boolean, "previous");
+		Code{point, Location::Output} << PointBody;
+
+		return shader.declare(point);
+	}
+
+	/**
 	 * @brief Declares the path GLSL functions in a Saphir shader.
 	 * @note pathCorner(...) returns the object-space position; `style` is the Material::PathResource style vector (Keys
 	 * PathStyle); `view`, `projection` (unjittered as the scene pass uses it: the jitter is a push constant on
@@ -295,11 +318,10 @@ namespace EmEn::Saphir::PathGLSL
 	{
 		using namespace Keys;
 
-		Declaration::Function point{"pathPoint", GLSL::FloatVector4};
-		point.addInParameter(GLSL::UIntVector4, "span");
-		point.addInParameter(GLSL::Integer, "index");
-		point.addInParameter(GLSL::Boolean, "previous");
-		Code{point, Location::Output} << PointBody;
+		if ( !declarePointFunction(shader) )
+		{
+			return false;
+		}
 
 		Declaration::Function normal{"pathNormal", GLSL::FloatVector3};
 		normal.addInParameter(GLSL::FloatVector3, "direction");
@@ -339,6 +361,6 @@ namespace EmEn::Saphir::PathGLSL
 		corner.addOutParameter(GLSL::FloatVector4, "coordinates");
 		Code{corner, Location::Output} << CornerBody;
 
-		return shader.declare(point) && shader.declare(normal) && shader.declare(miter) && shader.declare(screen) && shader.declare(lift) && shader.declare(corner);
+		return shader.declare(normal) && shader.declare(miter) && shader.declare(screen) && shader.declare(lift) && shader.declare(corner);
 	}
 }

@@ -65,11 +65,10 @@ namespace EmEn::Graphics::Material
 	 * light: a LUMINANCE in nits (Graphics/Photometry.hpp, the emissive contract) added over the scene.
 	 * @note An emissive overlay, not a surface: additive blending, no G-buffer write (writesGeometryBuffer()), no depth
 	 * write, no shadow, out of the TLAS (Scenes::Component::Beam sets the instance up so).
-	 * @note Its UBO holds the LOOK only — colour, luminance, width, arc — which changes rarely. The endpoints are the
-	 * model matrix of the instance (the unit segment placed per logic tick through the frame-buffered
-	 * instance-transforms SSBO), never this UBO: a material UBO lives in ONE frame region.
-	 * @note Drawn by one renderable per beam (the component owns it); the strip geometry is shared per segment count
-	 * (Geometry::ResourceGenerator::beamStrip()).
+	 * @note Its UBO holds the LOOK only — colour, luminance, width, arc — which changes rarely. The curve is the beam's
+	 * STATIONS, published per render state slot and staged into the frame-buffered path SSBO (Scenes::Component::Beam),
+	 * never this UBO: a material UBO lives in ONE frame region.
+	 * @note Drawn by one renderable per beam on its own pulled-vertex geometry (the component owns both).
 	 */
 	class EMEN_LEAN_API BeamResource final : public Interface
 	{
