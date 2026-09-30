@@ -41,10 +41,10 @@ every development machine and any user who installed the SDK.
   would have no driver left (`VK_ERROR_INCOMPATIBLE_DRIVER`). Revisit if MoltenVK raises its version.
 - **`VK_LOADER_DRIVERS_SELECT` cannot replace it either**: it matches manifest *file names*, and both
   MoltenVK manifests are called `MoltenVK_icd.json`.
-- The variable is inherited by child processes. That is harmless for app_system's CEF helpers: they link
+- The variable is inherited by child processes. That is harmless for a consumer's CEF helpers: they link
   the engine but create no Vulkan instance.
 - Keep the bundle manifest's `api_version` in step with the MoltenVK that ships (the consumer owns the
-  manifest; app_system: `resources/mac/vulkan/icd.d/MoltenVK_icd.json`, 1.4.0).
+  manifest).
 
 **Verify.** Launch with `VK_LOADER_DEBUG=driver`: `VK_DRIVER_FILES` replaces the default search, so the only
 "Found ICD manifest file" line is the bundle's (`…/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json`). No

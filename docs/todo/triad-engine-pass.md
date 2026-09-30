@@ -414,4 +414,8 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
     `m_scene->destroyTimers()` first — 3/3 clean under the same poisoning, 0 VUID. Caution: projet-alpha
     `docs/caution-points.md` § Scene Building; the join-under-lock trap it exposed: base
     `docs/todo/event-trait-join-under-lock.md`.
+  - Re-run 2026-09-30 (base `f4319cc`, engine `7a3e540c`, alpha `805095b0`): VALIDATED. Windows (RTX 3060 Laptop,
+    MSVC /W4 /WX 0 warning): lighten-marbles 5/5 exit 0 (was 5/5 `0xc0000374`), 0 crash event, 0 VUID, 0 refusal —
+    the spawner was live at shutdown (128 nodes / 127 point lights at 25 s). macOS (M2): 3/3 clean, 0 "Refusing to
+    link", every marble lit. animation-debug and beams clean on both.
 
