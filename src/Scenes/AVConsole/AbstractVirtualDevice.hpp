@@ -32,8 +32,8 @@
 /* STL inclusions. */
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
-#include <unordered_set>
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
@@ -239,27 +239,6 @@ namespace EmEn::Scenes::AVConsole
 			ConnexionResult connect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
 
 			/**
-			 * @brief Interconnects a virtual device between all existing outputs.
-			 * @note this[Output] -> target[Input]
-			 * @param engineContext A reference to the audio video managers.
-			 * @param intermediateDevice A reference to a virtual device smart pointer.
-			 * @param fireEvents Set to fire or not events on connexion.
-			 * @return ConnexionResult
-			 */
-			ConnexionResult interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept;
-
-			/**
-			 * @brief Interconnects a virtual device between a specific output.
-			 * @note this[Output] -> target[Input]
-			 * @param engineContext A reference to the audio video managers.
-			 * @param intermediateDevice A reference to a virtual device smart pointer.
-			 * @param outputDeviceName A reference to a string to filter an output. If this device does not exist, the method will perform no connexion.
-			 * @param fireEvents Set to fire or not events on connexion.
-			 * @return ConnexionResult
-			 */
-			ConnexionResult interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept;
-
-			/**
 			 * @brief Disconnects the output of this virtual device from the input of a virtual device.
 			 * @param engineContext A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
@@ -452,8 +431,11 @@ namespace EmEn::Scenes::AVConsole
 			const std::string m_id;
 			const DeviceType m_type;
 			const ConnexionType m_allowedConnexionType;
-			std::unordered_set< std::weak_ptr< AbstractVirtualDevice >, WeakPtrOwnerHash, WeakPtrOwnerEqual > m_inputDevicesConnected;
-			std::unordered_set< std::weak_ptr< AbstractVirtualDevice >, WeakPtrOwnerHash, WeakPtrOwnerEqual > m_outputDevicesConnected;
+			/* NOTE: Ordered by OWNER (std::owner_less<>): nothing is hashed, so an expired device is still a valid key. The
+			 * former unordered_set hashed through a shared_ptr built from the weak_ptr, which throws (an abort here) on an
+			 * expired one — on a rehash with MSVC, which does not cache hashes (triad 2026-10-01). */
+			std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> > m_inputDevicesConnected;
+			std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> > m_outputDevicesConnected;
 			mutable std::mutex m_IOAccess;
 	};
 }

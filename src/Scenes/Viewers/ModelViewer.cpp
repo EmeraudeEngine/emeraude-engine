@@ -77,10 +77,10 @@ namespace EmEn::Scenes::Viewers
 		 * or enabling a component is not.
 		 */
 		void
-		forEachSceneComponent (const Scene & scene, const std::function< void (Component::Abstract &) > & visit) noexcept
+		forEachSceneComponent (Scene & scene, const std::function< void (Component::Abstract &) > & visit) noexcept
 		{
-			scene.forEachStaticEntities([&visit] (const StaticEntity & entity) {
-				const_cast< StaticEntity & >(entity).forEachComponent([&visit] (Component::Abstract & component) {
+			scene.forEachStaticEntities([&visit] (StaticEntity & entity) {
+				entity.forEachComponent([&visit] (Component::Abstract & component) {
 					visit(component);
 
 					return true;
@@ -140,7 +140,7 @@ namespace EmEn::Scenes::Viewers
 			return nullptr;
 		}
 
-		const auto scene = m_sceneManager.newScene(SceneName, SceneBoundary);
+		auto scene = m_sceneManager.newScene(SceneName, SceneBoundary);
 
 		if ( scene == nullptr )
 		{

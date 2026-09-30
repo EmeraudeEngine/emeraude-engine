@@ -29,15 +29,11 @@
 /* STL inclusions. */
 #include <ranges>
 #include <sstream>
-
-/* Local inclusions. */
-#include "Tracer.hpp"
+#include <vector>
 
 namespace EmEn::Scenes::AVConsole
 {
 	using namespace Base;
-
-	constexpr auto TracerTag{"VirtualDevice"};
 
 	ConnexionResult
 	AbstractVirtualDevice::connect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
@@ -65,116 +61,6 @@ namespace EmEn::Scenes::AVConsole
 			targetDevice->onInputDeviceConnected(engineContext, *this);
 
 			this->onOutputDeviceConnected(engineContext, *targetDevice);
-		}
-
-		return ConnexionResult::Success;
-	}
-
-	ConnexionResult
-	AbstractVirtualDevice::interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept
-	{
-		/* 1. Check if connexion is allowed (intermediate must be Both). */
-		if ( intermediateDevice->allowedConnexionType() != ConnexionType::Both )
-		{
-			TraceError{TracerTag} << "The virtual device '" << intermediateDevice->id() << "' must allow input/output to perform an interconnection !";
-
-			return ConnexionResult::NotAllowed;
-		}
-
-		/* 2. Check if there is output! */
-		if ( m_outputDevicesConnected.empty() )
-		{
-			TraceError{TracerTag} << "The virtual device '" << this->id() << "' has no existing output connexion !";
-
-			return ConnexionResult::Failure;
-		}
-
-		for ( const auto & outputDeviceWeak : m_outputDevicesConnected )
-		{
-			const auto outputDevice = outputDeviceWeak.lock();
-
-			if ( outputDevice == nullptr )
-			{
-				continue;
-			}
-
-			/* 3. Disconnect direct link between devices. */
-			if ( const auto result = this->disconnect(engineContext, outputDevice, fireEvents); result != ConnexionResult::Success )
-			{
-				continue;
-			}
-
-			/* 4. Connect the intermediate device between the disconnected devices. */
-			if ( const auto result = this->connect(engineContext, intermediateDevice, true); result != ConnexionResult::Success )
-			{
-				return result;
-			}
-
-			if ( const auto result = intermediateDevice->connect(engineContext, outputDevice, true); result != ConnexionResult::Success )
-			{
-				return result;
-			}
-
-			// TODO: Here, we need to handle failure. What if one of the connections fails?
-			// TODO: Leave the system in a "broken" state or try to roll back?
-			// TODO: For now, we just return false.
-		}
-
-		return ConnexionResult::Success;
-	}
-
-	ConnexionResult
-	AbstractVirtualDevice::interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept
-	{
-		/* 1. Check the existence of the device inside outputs. */
-		if ( m_outputDevicesConnected.empty() )
-		{
-			TraceError{TracerTag} << "The virtual device '" << this->id() << "' has no existing output connexion !";
-
-			return ConnexionResult::Failure;
-		}
-
-		const auto outputDeviceIt = std::ranges::find_if(m_outputDevicesConnected, [&outputDeviceName] (const auto & deviceWeak) {
-			const auto device = deviceWeak.lock();
-
-			if ( device == nullptr)
-			{
-				return false;
-			}
-
-			return outputDeviceName.empty() || outputDeviceName == device->id();
-		});
-
-		if ( outputDeviceIt == m_outputDevicesConnected.cend() )
-		{
-			TraceError{TracerTag} << "There is no output virtual device named '" << outputDeviceName << "' !";
-
-			return ConnexionResult::Failure;
-		}
-
-		/* 2. Check if connexion is allowed. */
-		if ( intermediateDevice->allowedConnexionType() != ConnexionType::Both )
-		{
-			TraceError{TracerTag} << "The virtual device '" << intermediateDevice->id() << "' must allow input/output to perform an interconnection !";
-
-			return ConnexionResult::NotAllowed;
-		}
-
-		/* 3. Disconnect the direct link between the devices. */
-		if ( const auto result = this->disconnect(engineContext, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
-		{
-			return result;
-		}
-
-		/* 4. Connect the intermediate device between the disconnected devices. */
-		if ( const auto result = this->connect(engineContext, intermediateDevice, fireEvents); result != ConnexionResult::Success )
-		{
-			return result;
-		}
-
-		if ( const auto result = intermediateDevice->connect(engineContext, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
-		{
-			return result;
 		}
 
 		return ConnexionResult::Success;
@@ -209,53 +95,79 @@ namespace EmEn::Scenes::AVConsole
 	void
 	AbstractVirtualDevice::disconnectFromAll (EngineContext & engineContext, bool fireEvents) noexcept
 	{
-		/* NOTE: We lock IO access on this device. */
-		const std::lock_guard< std::mutex > lockHere{m_IOAccess};
+		/* NOTE: The same discipline as connect() / disconnect(): both sides of a link are edited under ONE
+		 * std::scoped_lock of the two mutexes (no lock-order deadlock between two devices), and the events are
+		 * fired once the locks are released (a handler may query this device). weak_from_this(): valid even when no
+		 * shared_ptr owns this device any more (the teardown path; shared_from_this() crashed there). */
+		const auto thisDevice = this->weak_from_this();
 
-		/* [OFFSCREEN-CLEANUP] Crash here! Attempt to call "shared_from_this" from an invalid pointer. "this" is empty. */
-		const auto thisDevice = this->shared_from_this();
+		std::vector< std::shared_ptr< AbstractVirtualDevice > > inputDevices;
+		std::vector< std::shared_ptr< AbstractVirtualDevice > > outputDevices;
 
-		for ( const auto & deviceWeakPointer : m_inputDevicesConnected )
 		{
-			if ( const auto inputDeviceConnected = deviceWeakPointer.lock() )
+			const std::scoped_lock lock{m_IOAccess};
+
+			inputDevices.reserve(m_inputDevicesConnected.size());
+			outputDevices.reserve(m_outputDevicesConnected.size());
+
+			for ( const auto & deviceWeakPointer : m_inputDevicesConnected )
 			{
-				/* NOTE: We lock IO access on the other device. */
-				const std::lock_guard< std::mutex > lockThere{inputDeviceConnected->m_IOAccess};
-
-				inputDeviceConnected->m_outputDevicesConnected.erase(thisDevice);
-
-				if ( fireEvents )
+				if ( auto device = deviceWeakPointer.lock() )
 				{
-					inputDeviceConnected->onOutputDeviceDisconnected(engineContext, *this);
+					inputDevices.emplace_back(std::move(device));
+				}
+			}
+
+			for ( const auto & deviceWeakPointer : m_outputDevicesConnected )
+			{
+				if ( auto device = deviceWeakPointer.lock() )
+				{
+					outputDevices.emplace_back(std::move(device));
 				}
 			}
 		}
+
+		for ( const auto & inputDevice : inputDevices )
+		{
+			{
+				const std::scoped_lock lock{m_IOAccess, inputDevice->m_IOAccess};
+
+				inputDevice->m_outputDevicesConnected.erase(thisDevice);
+				m_inputDevicesConnected.erase(inputDevice);
+			}
+
+			if ( fireEvents )
+			{
+				inputDevice->onOutputDeviceDisconnected(engineContext, *this);
+			}
+		}
+
+		for ( const auto & outputDevice : outputDevices )
+		{
+			{
+				const std::scoped_lock lock{m_IOAccess, outputDevice->m_IOAccess};
+
+				outputDevice->m_inputDevicesConnected.erase(thisDevice);
+				m_outputDevicesConnected.erase(outputDevice);
+			}
+
+			if ( fireEvents )
+			{
+				outputDevice->onInputDeviceDisconnected(engineContext, *this);
+			}
+		}
+
+		/* The expired leftovers (devices already gone). */
+		const std::scoped_lock lock{m_IOAccess};
 
 		m_inputDevicesConnected.clear();
-
-		for ( const auto & deviceWeakPointer : m_outputDevicesConnected )
-		{
-			if ( const auto outputDeviceConnected = deviceWeakPointer.lock() )
-			{
-				/* NOTE: We lock IO access on the other device. */
-				const std::lock_guard< std::mutex > lockThere{outputDeviceConnected->m_IOAccess};
-
-				outputDeviceConnected->m_inputDevicesConnected.erase(thisDevice);
-
-				if ( fireEvents )
-				{
-					outputDeviceConnected->onInputDeviceDisconnected(engineContext, *this);
-				}
-			}
-		}
-
 		m_outputDevicesConnected.clear();
 	}
 
 	std::string
 	AbstractVirtualDevice::getConnexionState () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_IOAccess};
+		const std::scoped_lock lock{m_IOAccess};
 
 		std::stringstream string;
 

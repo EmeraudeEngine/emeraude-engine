@@ -154,7 +154,7 @@ namespace EmEn::Scenes::AVConsole
 	bool
 	Manager::removeVideoDevice (const std::shared_ptr< AbstractVirtualDevice > & device) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+		const std::scoped_lock lock{m_deviceAccess};
 
 		if ( device->deviceType() != DeviceType::Video )
 		{
@@ -182,7 +182,7 @@ namespace EmEn::Scenes::AVConsole
 	bool
 	Manager::removeAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+		const std::scoped_lock lock{m_deviceAccess};
 
 		if ( device->deviceType() != DeviceType::Audio )
 		{
@@ -248,7 +248,7 @@ namespace EmEn::Scenes::AVConsole
 		std::shared_ptr< AbstractVirtualDevice > targetDevice;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+			const std::scoped_lock lock{m_deviceAccess};
 
 			sourceDevice = this->getVideoDeviceNoLock(sourceDeviceId);
 
@@ -307,7 +307,7 @@ namespace EmEn::Scenes::AVConsole
 		std::shared_ptr< AbstractVirtualDevice > targetDevice;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+			const std::scoped_lock lock{m_deviceAccess};
 
 			sourceDevice = this->getAudioDeviceNoLock(sourceDeviceId);
 
@@ -366,7 +366,7 @@ namespace EmEn::Scenes::AVConsole
 		std::string targetId;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+			const std::scoped_lock lock{m_deviceAccess};
 
 			if ( !this->autoSelectPrimaryInputVideoDevice() )
 			{
@@ -399,7 +399,7 @@ namespace EmEn::Scenes::AVConsole
 		std::string targetDeviceId;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+			const std::scoped_lock lock{m_deviceAccess};
 
 			if ( m_primaryOutputVideoDeviceId.empty() )
 			{
@@ -455,7 +455,7 @@ namespace EmEn::Scenes::AVConsole
 		std::string targetId;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+			const std::scoped_lock lock{m_deviceAccess};
 
 			if ( !this->autoSelectPrimaryInputAudioDevice() )
 			{
@@ -483,7 +483,7 @@ namespace EmEn::Scenes::AVConsole
 	std::string
 	Manager::getConnexionStates () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+		const std::scoped_lock lock{m_deviceAccess};
 
 		std::stringstream string;
 
@@ -507,7 +507,7 @@ namespace EmEn::Scenes::AVConsole
 	std::string
 	Manager::getDeviceList (DeviceType deviceType) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+		const std::scoped_lock lock{m_deviceAccess};
 
 		std::stringstream string;
 
@@ -615,7 +615,7 @@ namespace EmEn::Scenes::AVConsole
 	void
 	Manager::clear () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+		const std::scoped_lock lock{m_deviceAccess};
 
 		/* NOTE: Clearing the primary device names. */
 		m_primaryOutputAudioDeviceId.clear();

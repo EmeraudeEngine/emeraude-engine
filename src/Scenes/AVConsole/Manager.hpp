@@ -178,7 +178,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			isVideoDeviceExists (const std::string & deviceId) const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return m_virtualVideoDevices.contains(deviceId);
 			}
@@ -192,7 +192,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			isAudioDeviceExists (const std::string & deviceId) const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return m_virtualAudioDevices.contains(deviceId);
 			}
@@ -205,7 +205,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			hasPrimaryVideoOutput () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return !m_primaryOutputVideoDeviceId.empty();
 			}
@@ -218,7 +218,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			hasPrimaryAudioOutput () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return !m_primaryOutputAudioDeviceId.empty();
 			}
@@ -232,7 +232,7 @@ namespace EmEn::Scenes::AVConsole
 			std::shared_ptr< AbstractVirtualDevice >
 			getVideoDevice (const std::string & deviceId) const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return this->getVideoDeviceNoLock(deviceId);
 			}
@@ -246,7 +246,7 @@ namespace EmEn::Scenes::AVConsole
 			std::shared_ptr< AbstractVirtualDevice >
 			getAudioDevice (const std::string & deviceId) const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return this->getAudioDeviceNoLock(deviceId);
 			}
@@ -259,7 +259,7 @@ namespace EmEn::Scenes::AVConsole
 			std::vector< std::shared_ptr< AbstractVirtualDevice > >
 			getVideoDeviceSources () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return this->getVideoDeviceSourcesNoLock();
 			}
@@ -272,7 +272,7 @@ namespace EmEn::Scenes::AVConsole
 			std::vector< std::shared_ptr< AbstractVirtualDevice > >
 			getAudioDeviceSources () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return this->getAudioDeviceSourcesNoLock();
 			}
@@ -285,7 +285,7 @@ namespace EmEn::Scenes::AVConsole
 			std::shared_ptr< AbstractVirtualDevice >
 			getPrimaryVideoDevice () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				if ( m_primaryOutputVideoDeviceId.empty() )
 				{
@@ -303,7 +303,7 @@ namespace EmEn::Scenes::AVConsole
 			std::shared_ptr< AbstractVirtualDevice >
 			getPrimaryAudioDevice () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				if ( m_primaryOutputAudioDeviceId.empty() )
 				{
@@ -322,7 +322,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			addVideoDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice = false) noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return this->addVideoDeviceNoLock(device, primaryDevice);
 			}
@@ -336,7 +336,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			addAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice = false) noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+				const std::scoped_lock lock{m_deviceAccess};
 
 				return this->addAudioDeviceNoLock(device, primaryDevice);
 			}

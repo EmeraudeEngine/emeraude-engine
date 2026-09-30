@@ -1250,6 +1250,26 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Iterates all static entities with thread-safe callback, for a caller that changes them.
+			 * @note Holds the static entity mutex during iteration. Before this overload, three callers
+			 * (the editor, ModelViewer, projet-alpha's asset loader) const_cast'ed the entities of the const one.
+			 * @tparam function_t Callable with signature: void(StaticEntity&)
+			 * @param process Callback receiving each entity by reference.
+			 */
+			template< typename function_t >
+			void
+			forEachStaticEntities (function_t && process) noexcept
+				requires (std::is_invocable_v< function_t, StaticEntity & >)
+			{
+				const std::scoped_lock lock{m_staticEntitiesAccess};
+
+				for ( const auto & entity : m_staticEntities | std::views::values )
+				{
+					process(*entity);
+				}
+			}
+
+			/**
 			 * @brief Returns detailed static entity statistics as a formatted string.
 			 *
 			 * Includes entity count and optionally the full entity list.

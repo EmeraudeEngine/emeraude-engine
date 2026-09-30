@@ -34,6 +34,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Scenes` 6b (Scene rendering / lighting / physics / debug, LightSet, SceneInstanceTransforms, SceneMetaData, RenderBatch, InstanceCluster, BindlessTextureSet, CloudSet, influence areas, interfaces) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 21 constant-array-index, 3 avoid-const-or-ref-data-members, 2 missing-std-forward, 2 reinterpret-cast, 2 const-cast, 1 use-enum-class, 1 static-cast-downcast. Before: 98. | Triad sub-section 6b |
 | `src/Scenes` 6c (Manager + console, Toolkit, DefinitionResource) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 7, all ON PURPOSE (below) — 5 constant-array-index, 1 misc-no-recursion, 1 use-enum-class. Before: 20. `Scene.hpp`'s 3 use-after-move (seen only from these TUs) fixed. The cascade-wide checked-JSON migration's touched TUs: 0 new finding on the changed lines but the one below (`Material/Helpers.cpp`). | Triad sub-section 6c |
 | `src/Scenes` 6d (`Component/`) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 40, all ON PURPOSE (below) — 22 constant-array-index, 9 use-enum-class, 3 non-private members, 2 non-const globals, 1 each mt-unsafe, missing-std-forward, const-ref member, static-cast downcast. Before: 75. | Triad sub-section 6d |
+| `src/Scenes` 6e (`Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 38, all ON PURPOSE (below) — 11 constant-array-index, 9 pro-type-vararg, 6 non-private members, 5 switch-missing-default-case, 5 avoid-const-or-ref-data-members, 1 reinterpret-cast, 1 use-enum-class. Before: 78. | Triad sub-section 6e |
 
 ## Findings kept ON PURPOSE
 
@@ -151,4 +152,17 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **missing-std-forward ×1** — `forEachSuffix()` calls its callable in a loop.
 - **avoid-const-or-ref-data-members ×1** — the console adapter's reference to the scene manager, by design.
 - **pro-type-static-cast-downcast ×1** — `DirectionalLight`: after a type check (RTTI avoided).
+
+### `src/Scenes` 6e — editor, AV console, viewers, effects toolkit, debug (2026-10-01)
+
+- **pro-bounds-constant-array-index ×11** — the compass's six axes, the gizmos' three axes (enum-bounded loops).
+- **pro-type-vararg ×9** — ImGui's printf-style API (`Text`, `BulletText`, `SetTooltip`) with CONSTANT formats.
+- **non-private-member-variables ×6** — the gizmo base's program / geometry / frame / scale / highlight state, written by
+  the three derived gizmos.
+- **switch-missing-default-case ×5** — false positives: the switches cover every enumerator of `GizmoMode` /
+  `TransformSpace` (`enum class`); a `default` would silence `-Wswitch` for a new enumerator.
+- **avoid-const-or-ref-data-members ×5** — the viewers' references to the resource / scene managers and settings, by
+  design (service references).
+- **pro-type-reinterpret-cast ×1** — `AbstractVirtualDevice.hpp`: the device-type tag reinterpretation.
+- **use-enum-class ×1** — `NotificationCode` (the Observer convention).
 

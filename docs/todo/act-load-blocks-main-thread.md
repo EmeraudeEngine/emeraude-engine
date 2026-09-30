@@ -25,3 +25,12 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
   or pump the window events between the loader's steps — the second is simpler but runs input callbacks in the
   middle of a load (re-entrancy to check).
 - Owner decision needed between the two.
+
+## Evidence 2026-10-01 (Windows peer, RTX 3060 Laptop)
+
+`Core.shutdown()` sent to `terrain` 40 s after launch, while its act was still being built on the main thread (no
+imposter baked yet): "[UIManagerService] No default page found !", "[UIManagerService] Timeout waiting for 1
+web-view(s) to complete CEF teardown — abandoning.", then "[WebView] Web-view 'ApplicationMenuCEF' destroyed while its
+CEF browser is still alive — forcing CloseBrowser(true)". The same shutdown at 100 s (load finished): clean. Also:
+`Stage.loadDemo(terrain)` kept the console blocked > 60 s on that machine.
+

@@ -641,8 +641,8 @@ namespace EmEn::Scenes::Editor
 			}
 		};
 
-		m_scene->forEachStaticEntities([&testEntity] (const StaticEntity & entity) {
-			testEntity(const_cast< StaticEntity & >(entity));
+		m_scene->forEachStaticEntities([&testEntity] (StaticEntity & entity) {
+			testEntity(entity);
 		});
 
 		if ( const auto & rootNode = m_scene->root(); rootNode != nullptr )
@@ -1117,7 +1117,7 @@ namespace EmEn::Scenes::Editor
 		}
 
 		/* NOTE: Transformation state: only the gizmo reacts; a click away from it changes nothing (owner decision). */
-		Gizmo::Abstract * activeGizmo = nullptr;
+		const Gizmo::Abstract * activeGizmo = nullptr;
 
 		switch ( m_gizmoMode )
 		{
@@ -1270,10 +1270,6 @@ namespace EmEn::Scenes::Editor
 							break;
 
 						case TransformSpace::World :
-							m_transformSpace = TransformSpace::Local;
-							m_notifier.push("Transform space: Local");
-							break;
-
 						case TransformSpace::Parent :
 							m_transformSpace = TransformSpace::Local;
 							m_notifier.push("Transform space: Local");

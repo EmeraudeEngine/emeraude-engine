@@ -81,46 +81,12 @@ namespace EmEn::Scenes::AVConsole
 		Light
 	};
 
-	/** @brief The connexion, interconnection et disconnection result enumeration. */
+	/** @brief The connexion and disconnection result enumeration. */
 	enum class ConnexionResult : uint8_t
 	{
 		Success,
 		Failure,
 		DifferentDeviceType,
 		NotAllowed
-	};
-
-	/**
-	 * @brief Transparent hasher that hashes the raw pointer address.
-	 * @todo Check why we have to now about the type here, template seems useless.
-	 */
-	struct WeakPtrOwnerHash final
-	{
-		using is_transparent = void;
-
-		template< typename T >
-		std::size_t
-		operator() (const T & ptr) const
-		{
-			const auto shared = std::shared_ptr< AbstractVirtualDevice >(ptr);
-
-			return std::hash< AbstractVirtualDevice * >{}(shared.get());
-		}
-	};
-
-	/**
-	 * @brief Transparent equality predicate.
-	 * @todo Check if U and T are different type at the moment of comparison.
-	 */
-	struct WeakPtrOwnerEqual final
-	{
-		using is_transparent = void;
-
-		template< typename T, typename U >
-		bool
-		operator() (const T & a, const U & b) const
-		{
-			return !a.owner_before(b) && !b.owner_before(a);
-		}
 	};
 }

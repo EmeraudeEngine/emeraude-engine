@@ -343,7 +343,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 6b | Scene rendering / lighting / physics: `Scene.rendering/lighting/physics/debug.cpp`, `LightSet`, `SceneInstanceTransforms`, `SceneMetaData`, `RenderBatch`, `InstanceCluster`, `BindlessTextureSet`, `CloudSet`, `ParticipatingMedium`, influence areas, shadow options, ground / sea interfaces | ~9 000 | ✅ pushed base `33dc712`, engine `53116abe`, alpha `e8c7f692` (+ fixes base `f4319cc`, engine `7a3e540c`, alpha `805095b0`); VALIDATED macOS M2 + Windows NVIDIA |
 | 6c | `Manager` (+ console), `Toolkit`, `DefinitionResource` (JSON scene definitions: a trust boundary) | ~5 000 | ✅ pushed base `9636ea0`, engine `e8dd6016`, alpha `e5b8ce2b`; VALIDATED macOS M2 + Windows NVIDIA/AMD |
 | 6d | `Component/` | 18 617 | 🟠 started 2026-09-30 |
-| 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | ⬜ |
+| 6e | `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` | ~8 500 | 🟠 started 2026-10-01 |
 
 Lead carried from section 3: `SceneDataConsumer::processNodeAsNode()` can build a DEEP `Node` chain from a file (a
 node with a transform is never flattened) — check `Node`'s destructor and every recursive traversal for depth.
@@ -582,5 +582,50 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
   `setChaos(inf)` in projet-alpha's particles demo logged both refusals, then was reverted. Demos particles, beams
   (MCP 1707/0, console 4448/0), terrain, lighten-marbles, animation-debug: 0 VUID, 0 error, 0 refusal on the legitimate
   paths.
+- [x] (5) Pushed 2026-09-30: engine `e32b26f2`; peers asked.
+  - macOS M2: PASS (AppleClang 0 warning; particles, beams — MCP 1707/0, console 4427/0, its command set —,
+    lighten-marbles, terrain, animation-debug: 0 VUID, 0 UNASSIGNED, 0 error, 0 refusal, exit 0).
+  - Windows RTX 3060 Laptop + AMD iGPU: PASS (MSVC /W4 /WX 0 warning; the 5 demos 0 VUID, 0 refusal in 11 runs; MCP
+    1707/0, console 4439/0). One observation, unrelated to 6d: `terrain` shut down at 40 s, WHILE its act was still
+    loading, logged "[UIManagerService] No default page found !" and a CEF teardown timeout of the menu web-view (0 at
+    100 s) — noted in item `act-load-blocks-main-thread`.
+
+### 6e — `Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/` (started 2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (14 TUs, the 6e files only): **78**: 26 use-scoped-lock, 11 constant-array-index,
+  9 pro-type-vararg (ImGui's printf-style API, constant formats), 6 non-private members (the gizmo base), 5
+  switch-missing-default-case, 5 use-anonymous-namespace, 5 avoid-const-or-ref-data-members, 3 parentheses, 2
+  const-cast, 2 no-automatic-move, singles.
+- [x] (2) Review. Findings:
+  - A1 **`AbstractVirtualDevice::interconnect()`** (both overloads) has NO caller in the engine or projet-alpha, and
+    the first one is undefined behaviour: it range-fors over `m_outputDevicesConnected` while the `disconnect()` /
+    `connect()` it calls erase from and insert into that set (plus a TODO: no rollback on a half-done insertion).
+  - A2 **`WeakPtrOwnerHash` constructs a `std::shared_ptr` from the weak_ptr it hashes**: that constructor throws
+    `std::bad_weak_ptr` on an EXPIRED device = an abort. PROVEN with a standalone copy of the hasher: libstdc++ caches
+    the hash of a non-`noexcept` hasher, so Linux survives a rehash by accident; on a non-cached path (the same hasher
+    `noexcept`, and MSVC's `unordered_set`, which does not cache) inserting into a set holding an expired peer →
+    SIGABRT. A peer that dies while still connected is all it takes.
+  - A3 `AbstractVirtualDevice::disconnectFromAll()` departs from the class's own pattern (`connect()` /
+    `disconnect()` lock BOTH mutexes in one `std::scoped_lock` and fire their events after unlocking): it holds its
+    mutex, then locks each peer's (a lock-order deadlock between two devices), fires the peers' events under both
+    locks, and calls `shared_from_this()` (its comment records a past crash there).
+  - V1 `ImageViewer`: an image that reads but has a zero dimension divided by zero → refused (fixed in (3)).
+  - On purpose (ledger): the ImGui varargs; the `GizmoMode` switches cover every enumerator (a `default` would silence
+    `-Wswitch`); the gizmo base's protected state; the subscripts (compass axes, gizmo axes).
+- [x] (3) Mechanical (2026-10-01): scoped_lock ×23, parentheses ×3, `CameraPresets` helpers in an anonymous
+  namespace, the two viewer scenes returned by move, a const pointee, the World / Parent transform-space branches
+  merged, the ImageViewer empty-image refusal; a NON-CONST `Scene::forEachStaticEntities()` overload removes the three
+  `const_cast`s that worked around it (the editor, ModelViewer, projet-alpha's asset loader). Builds clean.
+- [x] (3b) Owner rulings (2026-10-01), all as recommended, APPLIED: A1 both `interconnect()` overloads REMOVED (dead API,
+  latent UB; its now-unused `TracerTag` too — AppleClang `-Wunused-const-variable`); A2 the device sets are
+  `std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> >` and the throwing `WeakPtrOwnerHash` /
+  `WeakPtrOwnerEqual` are gone; A3 `disconnectFromAll()` snapshots its peers, edits both sides of each link under ONE
+  `std::scoped_lock` of the two mutexes, fires the SAME peer events after unlocking, and uses `weak_from_this()`.
+  Engine caution-points § Build / Compiler (the weak_ptr hashing trap).
+- [x] (4) Verified 2026-10-01 (Linux): cascade builds (0 warning), clangcheck 115 TUs 0, `-Wfloat-conversion` 0;
+  clang-tidy 78 → 38 (on purpose, ledger). One launch: citadel → console `deleteScene(citadel)` → an image dropped
+  (`+ImageViewer`) → a glTF dropped (`+ModelViewer`) → `Stage.loadDemo(beams)` (MCP 1707/0, console 4448/0) →
+  lighten-marbles → shutdown: 0 VUID, 0 error. The animated Fox dropped, `cycleAnimation()` ×2 (the ModelViewer path
+  that lost its const_cast): 0 VUID.
 - [ ] (5) Commit + push on the owner's order; then the peers.
 

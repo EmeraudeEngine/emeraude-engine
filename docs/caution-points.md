@@ -4754,6 +4754,18 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### A `weak_ptr` must never be hashed through a `shared_ptr` built from it — fixed 2026-10-01 (triad 6e)
+
+> [!CAUTION]
+> AVConsole's device sets were `std::unordered_set< std::weak_ptr< … > >` with a hasher that did
+> `std::shared_ptr< T >(weakPtr).get()`: that constructor THROWS `std::bad_weak_ptr` on an expired pointer — an abort
+> under `-fno-exceptions`. Proven standalone: libstdc++ caches the hash of a hasher that is not `noexcept`, so Linux
+> survived a rehash by accident; with the same hasher `noexcept` (no cache) — and on MSVC, whose `unordered_set` never
+> caches — inserting into a set holding an expired peer aborts. A set of `weak_ptr` is a
+> `std::set< std::weak_ptr< T >, std::owner_less<> >` (owner-ordered, nothing hashed, an expired key stays valid; C++26
+> brings `std::owner_hash`). The same pass found `disconnectFromAll()` nesting two device mutexes (use ONE
+> `std::scoped_lock` of both, as `connect()` / `disconnect()` do) and firing events under them.
+
 ### ⚠️⚠️ Windows: an INCREMENTAL build after a layout change of an exported class corrupted the heap (Sep 2026)
 
 **Symptom (Windows peer):** after pulling `8bb26496` + `3fd571a8`, which added members to the

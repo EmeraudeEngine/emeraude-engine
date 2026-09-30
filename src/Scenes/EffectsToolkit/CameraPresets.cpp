@@ -58,106 +58,104 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	constexpr auto CamcorderFormat{6.4F};         /* 1/2" consumer camcorder. */
 	constexpr auto Super8Format{5.79F};           /* Super 8 film gate, 5.79 x 4.01 mm. */
 
-	/**
-	 * @brief [Internal] Mounts a FORMAT on a camera without moving the shot.
-	 * @note Reads the framing BEFORE the format changes, then mounts the equivalent focal length
-	 * on the new gate. Setting the format alone would reframe by the crop factor, and stealing the
-	 * framing is not a style's business — the scene author placed that camera. The optical
-	 * character still changes, which is the whole point of declaring a format.
-	 * @param camera A reference to the camera.
-	 * @param sensorWidth The format width, in millimeters.
-	 * @return void
-	 */
-	static
-	void
-	mountFormat (Component::Camera & camera, float sensorWidth) noexcept
+	namespace
 	{
-		const auto framing = camera.fieldOfView();
-
-		camera.setSensorWidth(sensorWidth);
-		camera.setFocalLength(camera.sensorHeight() / (2.0F * std::tan(Base::Math::Radian(framing) * 0.5F)));
-	}
-
-	/**
-	 * @brief [Internal] Rejects the cameras a photographic style must never touch.
-	 * @note A technical camera (a cubemap face) has no format, no lens and no grading: its field
-	 * of view is a geometric constraint and every optical knob here would break it.
-	 * @param camera A reference to the camera.
-	 * @return bool True when the camera can be styled.
-	 */
-	static
-	bool
-	isStyleable (const Component::Camera & camera) noexcept
-	{
-		if ( camera.isTechnicalCamera() )
+		/**
+		 * @brief [Internal] Mounts a FORMAT on a camera without moving the shot.
+		 * @note Reads the framing BEFORE the format changes, then mounts the equivalent focal length
+		 * on the new gate. Setting the format alone would reframe by the crop factor, and stealing the
+		 * framing is not a style's business — the scene author placed that camera. The optical
+		 * character still changes, which is the whole point of declaring a format.
+		 * @param camera A reference to the camera.
+		 * @param sensorWidth The format width, in millimeters.
+		 * @return void
+		 */
+		void
+		mountFormat (Component::Camera & camera, float sensorWidth) noexcept
 		{
-			TraceWarning{"CameraPresets"} << "Camera '" << camera.name() << "' is a technical "
-				"camera (its field of view is a geometric constraint): a photographic style would "
-				"break it. Ignoring.";
+			const auto framing = camera.fieldOfView();
 
-			return false;
+			camera.setSensorWidth(sensorWidth);
+			camera.setFocalLength(camera.sensorHeight() / (2.0F * std::tan(Base::Math::Radian(framing) * 0.5F)));
 		}
 
-		return true;
-	}
-
-	/**
-	 * @brief [Internal] Applies a full optics/exposure block, then replaces the lens stack.
-	 * @param camera A reference to the camera.
-	 * @param aperture The f-stop.
-	 * @param sensorWidth The FORMAT width in millimeters (the framing is preserved).
-	 * @param exposureCompensation The exposure bias in EV.
-	 * @param depthOfField Materializes the depth of field.
-	 * @param HDR Materializes the HDR tone mapping.
-	 * @param lensEffects The lens effect stack (replaces the current one).
-	 * @return void
-	 */
-	static
-	void
-	configureCamera (Component::Camera & camera, float aperture, float sensorWidth, float exposureCompensation, bool depthOfField, bool HDR, const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & lensEffects = {}) noexcept
-	{
-		if ( !isStyleable(camera) )
+		/**
+		 * @brief [Internal] Rejects the cameras a photographic style must never touch.
+		 * @note A technical camera (a cubemap face) has no format, no lens and no grading: its field
+		 * of view is a geometric constraint and every optical knob here would break it.
+		 * @param camera A reference to the camera.
+		 * @return bool True when the camera can be styled.
+		 */
+		bool
+		isStyleable (const Component::Camera & camera) noexcept
 		{
-			return;
+			if ( camera.isTechnicalCamera() )
+			{
+				TraceWarning{"CameraPresets"} << "Camera '" << camera.name() << "' is a technical "
+					"camera (its field of view is a geometric constraint): a photographic style would "
+					"break it. Ignoring.";
+
+				return false;
+			}
+
+			return true;
 		}
 
-		camera.clearLensEffects();
-
-		camera.setAperture(aperture);
-		mountFormat(camera, sensorWidth);
-		camera.setAutoFocus(true);
-		camera.setAutoExposure(true);
-		camera.setExposureCompensation(exposureCompensation);
-		camera.enableDepthOfField(depthOfField);
-		camera.enableHDR(HDR);
-
-		for ( const auto & effect : lensEffects )
+		/**
+		 * @brief [Internal] Applies a full optics/exposure block, then replaces the lens stack.
+		 * @param camera A reference to the camera.
+		 * @param aperture The f-stop.
+		 * @param sensorWidth The FORMAT width in millimeters (the framing is preserved).
+		 * @param exposureCompensation The exposure bias in EV.
+		 * @param depthOfField Materializes the depth of field.
+		 * @param HDR Materializes the HDR tone mapping.
+		 * @param lensEffects The lens effect stack (replaces the current one).
+		 * @return void
+		 */
+		void
+		configureCamera (Component::Camera & camera, float aperture, float sensorWidth, float exposureCompensation, bool depthOfField, bool HDR, const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & lensEffects = {}) noexcept
 		{
-			camera.addLensEffect(effect);
+			if ( !isStyleable(camera) )
+			{
+				return;
+			}
+
+			camera.clearLensEffects();
+
+			camera.setAperture(aperture);
+			mountFormat(camera, sensorWidth);
+			camera.setAutoFocus(true);
+			camera.setAutoExposure(true);
+			camera.setExposureCompensation(exposureCompensation);
+			camera.enableDepthOfField(depthOfField);
+			camera.enableHDR(HDR);
+
+			for ( const auto & effect : lensEffects )
+			{
+				camera.addLensEffect(effect);
+			}
 		}
-	}
 
-	/**
-	 * @brief [Internal] Storage slot for the user style behind CameraPreset::Custom.
-	 * @note Function-local statics: no global construction order issue. Written once at
-	 * setup (logic thread), read on style application — same-thread usage expected.
-	 */
-	static
-	CameraStyle &
-	customStyleSlot () noexcept
-	{
-		static CameraStyle style;
+		/**
+		 * @brief [Internal] Storage slot for the user style behind CameraPreset::Custom.
+		 * @note Function-local statics: no global construction order issue. Written once at
+		 * setup (logic thread), read on style application — same-thread usage expected.
+		 */
+		CameraStyle &
+		customStyleSlot () noexcept
+		{
+			static CameraStyle style;
 
-		return style;
-	}
+			return style;
+		}
 
-	static
-	bool &
-	customStyleDefined () noexcept
-	{
-		static bool defined{false};
+		bool &
+		customStyleDefined () noexcept
+		{
+			static bool defined{false};
 
-		return defined;
+			return defined;
+		}
 	}
 
 	void

@@ -251,7 +251,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			pipelineLayout->handle(),
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			0,
-			MatrixBytes + sizeof(float) * 2,
+			MatrixBytes + (sizeof(float) * 2),
 			buffer.data()
 		);
 

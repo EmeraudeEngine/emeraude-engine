@@ -69,6 +69,14 @@ namespace EmEn::Scenes::Viewers
 			return nullptr;
 		}
 
+		/* NOTE: A dropped file is a trust boundary: an empty image has no aspect ratio (a division by zero below). */
+		if ( pixmap.width() == 0 || pixmap.height() == 0 )
+		{
+			TraceError{ClassId} << "The image file '" << IO::toU8String(filepath) << "' is empty !";
+
+			return nullptr;
+		}
+
 		const auto ratio = static_cast< float >(pixmap.width()) / static_cast< float >(pixmap.height());
 		const auto quadWidth = QuadHeight * ratio;
 
@@ -78,7 +86,7 @@ namespace EmEn::Scenes::Viewers
 			return nullptr;
 		}
 
-		const auto scene = m_sceneManager.newScene(SceneName, SceneBoundary);
+		auto scene = m_sceneManager.newScene(SceneName, SceneBoundary);
 
 		if ( scene == nullptr )
 		{
