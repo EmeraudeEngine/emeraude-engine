@@ -38,6 +38,7 @@
 #include <optional>
 #include <ranges>
 #include <unordered_map>
+#include <utility>
 
 /* Local inclusions. */
 #include "VertexFactory/Shape.hpp"
@@ -50,6 +51,7 @@
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Resources/Manager.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
 
 namespace
@@ -327,30 +329,28 @@ namespace
 	 * lasts 8/35 s = 228.571 ms (4.375 frame changes per second). Rounded to the nearest
 	 * millisecond below, which is all MovieResource's uint32 durations can express.
 	 */
-	constexpr std::array< AnimationRange, 22 > AnimationRanges{{
-		{"NUKAGE1", "NUKAGE3", false},
-		{"FWATER1", "FWATER4", false},
-		{"SWATER1", "SWATER4", false},
-		{"LAVA1", "LAVA4", false},
-		{"BLOOD1", "BLOOD3", false},
-		{"RROCK05", "RROCK08", false},
-		{"SLIME01", "SLIME04", false},
-		{"SLIME05", "SLIME08", false},
-		{"SLIME09", "SLIME12", false},
-		{"BLODGR1", "BLODGR4", true},
-		{"SLADRIP1", "SLADRIP3", true},
-		{"BLODRIP1", "BLODRIP4", true},
-		{"FIREWALA", "FIREWALL", true},
-		{"GSTFONT1", "GSTFONT3", true},
-		{"FIRELAV3", "FIRELAVA", true},
-		{"FIREMAG1", "FIREMAG3", true},
-		{"FIREBLU1", "FIREBLU2", true},
-		{"ROCKRED1", "ROCKRED3", true},
-		{"BFALL1", "BFALL4", true},
-		{"SFALL1", "SFALL4", true},
-		{"WFALL1", "WFALL4", true},
-		{"DBRAIN1", "DBRAIN4", true}
-	}};
+	constexpr std::array< AnimationRange, 22 > AnimationRanges{{{.startName = "NUKAGE1", .endName = "NUKAGE3", .isTexture = false},
+																{.startName = "FWATER1", .endName = "FWATER4", .isTexture = false},
+																{.startName = "SWATER1", .endName = "SWATER4", .isTexture = false},
+																{.startName = "LAVA1", .endName = "LAVA4", .isTexture = false},
+																{.startName = "BLOOD1", .endName = "BLOOD3", .isTexture = false},
+																{.startName = "RROCK05", .endName = "RROCK08", .isTexture = false},
+																{.startName = "SLIME01", .endName = "SLIME04", .isTexture = false},
+																{.startName = "SLIME05", .endName = "SLIME08", .isTexture = false},
+																{.startName = "SLIME09", .endName = "SLIME12", .isTexture = false},
+																{.startName = "BLODGR1", .endName = "BLODGR4", .isTexture = true},
+																{.startName = "SLADRIP1", .endName = "SLADRIP3", .isTexture = true},
+																{.startName = "BLODRIP1", .endName = "BLODRIP4", .isTexture = true},
+																{.startName = "FIREWALA", .endName = "FIREWALL", .isTexture = true},
+																{.startName = "GSTFONT1", .endName = "GSTFONT3", .isTexture = true},
+																{.startName = "FIRELAV3", .endName = "FIRELAVA", .isTexture = true},
+																{.startName = "FIREMAG1", .endName = "FIREMAG3", .isTexture = true},
+																{.startName = "FIREBLU1", .endName = "FIREBLU2", .isTexture = true},
+																{.startName = "ROCKRED1", .endName = "ROCKRED3", .isTexture = true},
+																{.startName = "BFALL1", .endName = "BFALL4", .isTexture = true},
+																{.startName = "SFALL1", .endName = "SFALL4", .isTexture = true},
+																{.startName = "WFALL1", .endName = "WFALL4", .isTexture = true},
+																{.startName = "DBRAIN1", .endName = "DBRAIN4", .isTexture = true}}};
 
 	/** @brief Vanilla frame duration: 8 tics at 35 tics per second. */
 	constexpr uint32_t AnimationFrameDurationMS{228};
@@ -387,7 +387,7 @@ namespace
 		{
 			const int canvasX = originX + column;
 
-			if ( canvasX < 0 || canvasX >= canvasWidth )
+			if ( canvasX < 0 || std::cmp_greater_equal(canvasX, canvasWidth) )
 			{
 				continue;
 			}
@@ -425,7 +425,7 @@ namespace
 				{
 					const int canvasY = originY + topDelta + row;
 
-					if ( canvasY >= 0 && canvasY < canvasHeight )
+					if ( canvasY >= 0 && std::cmp_less(canvasY, canvasHeight) )
 					{
 						const auto canvasIndex = (static_cast< size_t >(canvasY) * canvasWidth) + static_cast< size_t >(canvasX);
 						indexes[canvasIndex] = patch[pixelsOffset + row];
@@ -505,6 +505,15 @@ namespace EmEn::Scenes::Loaders
 				.offset = readUInt32(entry),
 				.size = readUInt32(entry + 4)
 			});
+
+			/* NOTE: every lump read below trusts [offset, offset + size) — a lump outside the file is a
+			 * STRUCTURAL corruption: the WAD is refused (owner decision 2026-09-30, plan Ave Robustus). */
+			if ( static_cast< uint64_t >(lumps.back().offset) + lumps.back().size > wad.size() )
+			{
+				TraceError{TracerTag} << "Corrupted WAD " << filepath << " : lump '" << lumps.back().name << "' lies outside the file !";
+
+				return false;
+			}
 		}
 
 		const auto findLump = [&lumps] (const std::string & name, size_t from = 0, size_t upTo = 0) -> const Lump * {
@@ -676,7 +685,9 @@ namespace EmEn::Scenes::Loaders
 		if ( const auto * pnames = findLump("PNAMES"); pnames != nullptr && pnames->size >= 4 )
 		{
 			const auto count = readUInt32(lumpData(*pnames));
-			patchNames.reserve(count);
+
+			/* NOTE: the count comes from the file: reserve no more than the lump can hold (8 bytes a name). */
+			patchNames.reserve(std::min< size_t >(count, (pnames->size - 4) / 8));
 
 			for ( uint32_t index = 0; index < count && 4 + ((index + 1) * 8) <= pnames->size; ++index )
 			{
@@ -702,15 +713,27 @@ namespace EmEn::Scenes::Loaders
 			const auto * base = lumpData(*textureLump);
 			const auto textureCount = readInt32(base);
 
+			/* NOTE: the offset table, each entry and its patch list must lie inside the lump — a STRUCTURAL
+			 * corruption refuses the WAD (owner decision 2026-09-30, plan Ave Robustus). */
+			if ( textureCount < 0 || 4 + (static_cast< uint64_t >(textureCount) * 4) > textureLump->size )
+			{
+				TraceError{TracerTag} << "Corrupted WAD " << filepath << " : the " << textureLumpName << " table (" << textureCount << " entries) is larger than its lump !";
+
+				return false;
+			}
+
 			for ( int32_t index = 0; index < textureCount; ++index )
 			{
-				const auto entryOffset = static_cast< size_t >(readInt32(base + 4 + (static_cast< size_t >(index) * 4)));
+				const auto entryOffsetValue = readInt32(base + 4 + (static_cast< size_t >(index) * 4));
 
-				if ( entryOffset + 22 > textureLump->size )
+				if ( entryOffsetValue < 0 || static_cast< uint64_t >(entryOffsetValue) + 22 > textureLump->size )
 				{
-					continue;
+					TraceError{TracerTag} << "Corrupted WAD " << filepath << " : " << textureLumpName << " entry #" << index << " lies outside its lump !";
+
+					return false;
 				}
 
+				const auto entryOffset = static_cast< size_t >(entryOffsetValue);
 				const auto * entry = base + entryOffset;
 
 				TextureDefinition definition;
@@ -718,6 +741,14 @@ namespace EmEn::Scenes::Loaders
 				definition.height = readUInt16(entry + 14);
 
 				const auto patchCount = readUInt16(entry + 20);
+
+				if ( entryOffset + 22 + (static_cast< size_t >(patchCount) * 10) > textureLump->size )
+				{
+					TraceError{TracerTag} << "Corrupted WAD " << filepath << " : the patch list of " << textureLumpName << " entry #" << index << " runs past its lump !";
+
+					return false;
+				}
+
 				definition.patches.reserve(patchCount);
 
 				for ( uint16_t patchIdx = 0; patchIdx < patchCount; ++patchIdx )
@@ -843,7 +874,7 @@ namespace EmEn::Scenes::Loaders
 		const auto createTexture = [&] (const std::string & name, uint16_t width, uint16_t height, const std::vector< uint8_t > & indexes, const std::vector< uint8_t > & coverage) -> std::shared_ptr< TextureResource::Texture2D > {
 			auto rgba = composeRGBA(width, height, indexes, coverage);
 
-			const auto imageName = "WAD:" + wadStem + "/Image/" + name;
+			const auto imageName = Base::String::concatenate("WAD:", wadStem, "/Image/", name);
 
 			/* NOTE: the resource lambdas may run asynchronously on the resource manager's
 			 * loading threads — every buffer MUST be captured by value (moved), never by
@@ -864,7 +895,7 @@ namespace EmEn::Scenes::Loaders
 				return nullptr;
 			}
 
-			const auto textureName = "WAD:" + wadStem + "/Texture/" + name;
+			const auto textureName = Base::String::concatenate("WAD:", wadStem, "/Texture/", name);
 
 			/* NOT sRGB on purpose: unlit materials on the direct swap-chain path keep the
 			 * whole chain in perceptual space, exactly like the original renderer (palette
@@ -1015,7 +1046,7 @@ namespace EmEn::Scenes::Loaders
 
 				/* ⚠️ Captured BY VALUE (moved): these lambdas run on the resource manager's loading
 				 * threads, so a reference to a local here is a dangling read. */
-				auto movie = m_resources.container< MovieResource >()->getOrCreateResource("WAD:" + wadStem + "/Movie/" + resourceSuffix, [movieFrames = std::move(frames)] (MovieResource & movieResource) mutable {
+				auto movie = m_resources.container< MovieResource >()->getOrCreateResource(Base::String::concatenate("WAD:", wadStem, "/Movie/", resourceSuffix), [movieFrames = std::move(frames)] (MovieResource & movieResource) mutable {
 					return movieResource.load(std::move(movieFrames));
 				});
 
@@ -1025,7 +1056,7 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				/* NOT sRGB, same reasoning as the static path: the whole chain stays perceptual. */
-				auto animated = m_resources.container< TextureResource::AnimatedTexture2D >()->getOrCreateResource("WAD:" + wadStem + "/AnimTexture/" + resourceSuffix, [movie] (TextureResource::AnimatedTexture2D & texture) {
+				auto animated = m_resources.container< TextureResource::AnimatedTexture2D >()->getOrCreateResource(Base::String::concatenate("WAD:", wadStem, "/AnimTexture/", resourceSuffix), [movie] (TextureResource::AnimatedTexture2D & texture) {
 					texture.enableSRGB(false);
 
 					return texture.load(movie);
@@ -1415,8 +1446,11 @@ namespace EmEn::Scenes::Loaders
 			}
 			else
 			{
-				/* Iterative descent, carrying the clipped polygon. Bit 15 of a child = leaf. */
+				/* Iterative descent, carrying the clipped polygon. Bit 15 of a child = leaf.
+				 * NOTE: a BSP is a TREE: a node reached twice is a cycle from the file (an endless descent piling
+				 * polygons) — a STRUCTURAL corruption, the WAD is refused (owner decision 2026-09-30). */
 				std::vector< std::pair< uint16_t, Polygon2D > > stack;
+				std::vector< uint8_t > nodeVisited(nodes.size(), 0);
 				stack.emplace_back(static_cast< uint16_t >(nodes.size() - 1), levelBox);
 
 				while ( !stack.empty() )
@@ -1435,6 +1469,15 @@ namespace EmEn::Scenes::Loaders
 					{
 						continue;
 					}
+
+					if ( nodeVisited[nodeIndex] != 0 )
+					{
+						TraceError{TracerTag} << "Corrupted WAD " << filepath << " : the BSP node #" << nodeIndex << " is reached twice (a cycle) !";
+
+						return false;
+					}
+
+					nodeVisited[nodeIndex] = 1;
 
 					const auto & node = nodes[nodeIndex];
 
@@ -1564,7 +1607,7 @@ namespace EmEn::Scenes::Loaders
 
 				for ( size_t subIdx = 0; subIdx < subSectors.size(); ++subIdx )
 				{
-					if ( subSectorSectors[subIdx] < 0 )
+					if ( subSectorSectors[subIdx] < 0 || static_cast< size_t >(subSectorSectors[subIdx]) >= sectors.size() )
 					{
 						continue;
 					}
@@ -1740,7 +1783,7 @@ namespace EmEn::Scenes::Loaders
 		shape->declareNormalsAvailable();
 
 		/* ---- Engine resources: geometry, materials, mesh. ---- */
-		const auto resourcePrefix = "WAD:" + wadStem + "/" + m_loadedMapName;
+		const auto resourcePrefix = Base::String::concatenate("WAD:", wadStem, "/", m_loadedMapName);
 
 		constexpr auto geometryFlags = Geometry::EnableNormal | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnableVertexColor;
 

@@ -52,8 +52,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | # | Section | Lines | Status |
 |---|---|---|---|
 | 1 | `src/Console` (+ `MCP/`) | 8 327 | ✅ pushed 2026-09-30 (engine `35f868fc`, base `995159e`, alpha `93eab54a`); VALIDATED macOS M2 (R2 proven: 1.0e999 / 1.0e-60 refused) + Windows NVIDIA (MSVC clean, console conformance 4439/0 — its command set) |
-| 2 | `src/Resources` | 6 307 | 🟠 step 5 — verified, awaiting the owner's commit order |
-| 3 | `src/Scenes/Loaders` | — | ⬜ |
+| 2 | `src/Resources` | 6 307 | ✅ pushed 2026-09-30 (base `4e029ab` + `fb9339a`, engine `d2207206` + `feac0ef4`, alpha `1a9e9554`); VALIDATED macOS M2 + Windows NVIDIA (tests incl. the Windows confinedPath block; scans unchanged, 9 891 there) |
+| 3 | `src/Scenes/Loaders` | 11 292 | 🟠 step 5 — verified, awaiting the owner's commit order |
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ⬜ |
 | 5 | `src/Input` | 5 357 | ⬜ |
 | 6 | `src/Scenes` (the rest, by sub-group) | 70 278 | ⬜ |
@@ -199,7 +199,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
   Resources 20 → 5 (all on purpose, ledger); base 2165/2165 Release AND ASan/UBSan (new: forEachDirectoryEntry,
   confinedPath, Zip Slip, Zip path kinds); runtime `citadel`: 37 containers, 1 073 resources loaded, dynamic scan
   14 396 (identical), 0 VUID, no confinement / walk error.
-- [ ] (5) Ledger (done), report, commit + push on the owner's order, then peers.
+- [x] (5) Pushed 2026-09-30: base `4e029ab` (newlines) + `fb9339a`, engine `d2207206` (newlines) + `feac0ef4`, alpha `1a9e9554`; peers asked.
 
 ### Leads noted for later sections (seen while passing)
 
@@ -207,3 +207,62 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 - PlatformSpecific: `SystemInfo.linux.cpp` `line.at(position)` (memory parsing) — a throwing `.at()`.
 - A cascade-wide census of the other throwing std calls (`.at()`, `std::stoi`, `optional::value()` unchecked,
   `std::thread` ctor) would follow the filesystem one.
+  - Peers 2026-09-30: macOS PASS (1 076 loaded: +3 audio, timing), Windows PASS (1 072). The Windows peer found an
+    UNRELATED engine defect on `citadel`: a mesh-shader cubemap-shadow pipeline with 6 views > the device's
+    `maxMeshMultiviewViewCount` (4) → engine item `mesh-shader-multiview-view-count-limit`.
+
+## Section 3 — `src/Scenes/Loaders` (started 2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline: **221 findings**: 139 cppcoreguidelines-pro-type-union-access (ALL in
+  FBXLoader: the ufbx API is unions — `ufbx_vec3::x`…), 22 modernize-use-designated-initializers, 18
+  pro-bounds-constant-array-index, 9 math-missing-parentheses, 7 reinterpret-cast, 7 misc-no-recursion, 3 each
+  avoid-const-or-ref-data-members / use-internal-linkage / inefficient-string-concatenation / integer-sign-comparison,
+  1 each use-after-move, nondeterministic-pointer-iteration-order, Padding, nested-conditional, use-enum-class,
+  enum-size, make-member-function-const.
+- [x] (2) Review — findings:
+  - **Real bug, fixed at once (no intent)**: `GLTFLoader.cpp` a multi-material mesh MOVED `materialList` into the
+    MultiLayerMeshResource lambda, then filled its SceneData descriptor from the moved-from list → the DEFAULT
+    material (MultiLayerMeshResource::load(sceneData) then built ONE layer instead of N). Proof by code +
+    `bugprone-use-after-move`; no shipped asset takes that path (0 single-node multi-material mesh in the stores).
+  - G1 glTF indices never validated (fastgltf's parse does not check them; `fastgltf::validate()` is never called):
+    27 raw `asset.X[i]` sites.
+  - G2 recursive walks over hierarchies FROM THE FILE: glTF nodes (a `children` cycle = infinite recursion, a deep
+    chain = stack overflow; fastgltf::validate() does not check cycles), 5 USD prim walks.
+  - W1-W6 WADLoader: lump offset / size never checked against the file; `patchNames.reserve(count)` from the file;
+    TEXTURE1/2 table and patch list read past their lump; a BSP children cycle = an endless loop piling polygons;
+    `sectors[subSectorSectors[i]]` checked on `< 0` only. (Checked sound: blitPatch, linedef / sidedef / seg / sector
+    references elsewhere, the directory itself.)
+  - FBX array subscripts: bounded (false positives). The 139 union accesses: the ufbx API (on purpose, ledger).
+- [x] (3b) Owner rulings (2026-09-30):
+  - G1 **`fastgltf::validate()` + refusal**, after checking with the conformance bench that no asset loading today
+    is rejected (if some are: the list goes to the owner first).
+  - G2 **iterative + visited set**: a node reached twice (cycle / shared child) → the glTF is refused; USD walks
+    iterative (a prim tree cannot cycle).
+  - W1-W6 **structure refused, references skipped**: a lump outside the file, a table larger than its lump, a BSP
+    cycle → "Corrupted WAD"; an out-of-range cross-reference → the element skipped; reserve() bounded by the lump.
+  - Fuzzing **engine todo item** (a libFuzzer harness per loader later); now: hand-crafted hostile files through
+    the console → a clean refusal, no crash.
+  APPLIED 2026-09-30:
+  - G1: `fastgltf::validate()` after the parse → refusal. Checked BEFORE with a standalone harness (same fastgltf,
+    same options): 314 parseable glTF-Sample-Assets + 11 store assets, 0 rejected.
+  - G2: glTF `isStrictNodeForest()` right after validate (at most one parent, every node reachable from a parentless
+    one: no cycle) — 349 real assets, 0 rejected; `buildNodeDescriptors()` iterative; the 6 USD walks iterative
+    (children pushed through `std::views::reverse`: the former order). ALSO `SceneDataConsumer` (Scenes, the next
+    stage of the same hierarchy): the hostile 200 000-node chain OVERFLOWED THE STACK in `processNodeAsStatic()` →
+    both consumer walks iterative, + a visited set (every loader feeds it).
+  - W1-W6 applied (lump outside the file, TEXTURE1/2 table / entry / patch list, BSP node reached twice → "Corrupted
+    WAD"; `reserve()` bounded; the sector upper bound).
+  - Found while passing: FBX nodes wired by iterating an `unordered_map` keyed by pointer → a different root / child
+    order (and duplicate-name winner) on every run: now the file order.
+  - clang-tidy fix-its (designated initializers, parentheses, `std::cmp_*`, `getOptions() const`): the run also
+    rewrote 7 emeraude-base headers and `Graphics/SharedUniformBuffer.hpp` (headers included by the TUs) — REVERTED
+    (outside the section). ⚠️ Run fix-its with a header filter restricted to the section.
+  - Engine items opened: `engine-fuzz-harness-for-loaders` (ruling), `texture-destroyed-while-upload-in-flight` (a
+    load refused after its textures were uploaded → VUID destroy-in-use / use-after-destroy; also at shutdown after
+    heavy loads), `rt-light-ssbo-unbound-with-disabled-light-set` (doom-loader: binding 3 never written, pre-existing).
+- [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0; clang-tidy 21 on the
+  section 221 → 172 (all on purpose, ledger); runtime: hostile glTF (index out of range, cycle) refused, the 200 000
+  chain loads, 20 + 24 real glTF samples load, 3 corrupted WADs refused with the right reason, doom1.wad loads
+  (E1M1, 53 textures), a USDA tree (26 prims, depth 3, 4 meshes) and the FBX demos load; VUIDs seen belong to the
+  two opened lifetime / binding items only.
+- [ ] (5) Ledger (done), report, commit + push on the owner's order, then peers.

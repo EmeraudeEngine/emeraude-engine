@@ -26,6 +26,9 @@
 
 #include "SceneDataConsumer.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
 #include "Math/Vector.hpp"
 #include "Graphics/Photometry.hpp"
@@ -371,154 +374,194 @@ namespace EmEn::Scenes
 	}
 
 	void
-	SceneDataConsumer::processNodeAsStatic (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, Scene & scene, const CartesianFrame< float > & parentWorldFrame) noexcept
+	SceneDataConsumer::processNodeAsStatic (const Scenes::Loaders::SceneData & sceneData, size_t rootNodeIndex, Scene & scene, const CartesianFrame< float > & rootParentWorldFrame) noexcept
 	{
-		if ( nodeIndex >= sceneData.nodes.size() )
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the former recursion's order): the
+		 * hierarchy comes from a FILE — a 200 000-node chain overflowed the stack here (triad 2026-09-30). A node
+		 * reached twice (a cycle, a shared child) is skipped: SceneData comes from every loader. */
+		std::vector< std::pair< size_t, CartesianFrame< float > > > pending{{rootNodeIndex, rootParentWorldFrame}};
+		std::vector< uint8_t > visited(sceneData.nodes.size(), 0);
+
+		while ( !pending.empty() )
 		{
-			return;
-		}
+			const auto [nodeIndex, parentWorldFrame] = std::move(pending.back());
+			pending.pop_back();
 
-		const auto & nodeDesc = sceneData.nodes[nodeIndex];
-
-		/* Compute this node's world frame by accumulating transforms.
-		 * NOTE: Extract scale from the combined matrix column lengths before
-		 * CartesianFrame normalizes the direction vectors (which would lose scale). */
-		const auto worldMatrix = parentWorldFrame.getModelMatrix() * nodeDesc.localFrame.getModelMatrix();
-		const Vector< 3, float > worldScale{
-			Vector< 3, float >{worldMatrix[M4x4Col0Row0], worldMatrix[M4x4Col0Row1], worldMatrix[M4x4Col0Row2]}.length(),
-			Vector< 3, float >{worldMatrix[M4x4Col1Row0], worldMatrix[M4x4Col1Row1], worldMatrix[M4x4Col1Row2]}.length(),
-			Vector< 3, float >{worldMatrix[M4x4Col2Row0], worldMatrix[M4x4Col2Row1], worldMatrix[M4x4Col2Row2]}.length()
-		};
-		const CartesianFrame< float > worldFrame{worldMatrix, worldScale};
-
-		/* Create a StaticEntity when this node carries anything the scene must own. A light-only
-		 * node has no mesh but still needs an entity to hold its emitter. */
-		const bool hasMesh =
-			nodeDesc.meshIndex.has_value() &&
-			nodeDesc.meshIndex.value() < sceneData.meshes.size() &&
-			sceneData.meshes[nodeDesc.meshIndex.value()].renderable != nullptr;
-		const bool hasLight = m_createLights && nodeDesc.lightIndex.has_value();
-
-		if ( hasMesh || hasLight )
-		{
-			/* ⚠️ A node name is NOT unique in glTF or FBX, and the scene's entity registry is keyed
-			 * by name: a collision used to cost the whole node, silently. Only the DUPLICATES are
-			 * renamed — the first holder of a name keeps it verbatim, so every entity that already
-			 * resolved by name still does. Same remedy as `buildResourceKey()`, one level up. */
-			auto entityName = nodeDesc.name;
-
-			if ( scene.findStaticEntity(entityName) != nullptr )
+			if ( nodeIndex >= sceneData.nodes.size() )
 			{
-				entityName += '-' + std::to_string(nodeIndex);
+				continue;
 			}
 
-			auto staticEntity = scene.createStaticEntity(entityName, worldFrame);
-
-			if ( staticEntity != nullptr )
+			if ( visited[nodeIndex] != 0 )
 			{
-				if ( hasMesh )
-				{
-					const auto meshIndex = nodeDesc.meshIndex.value();
+				TraceWarning{ClassId} << "The scene node #" << nodeIndex << " is reached twice (a cycle or a shared child): skipped.";
 
-					staticEntity->componentBuilder< Component::Visual >(entityName + "/Visual")
-						.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
+				continue;
+			}
+
+			visited[nodeIndex] = 1;
+
+			const auto & nodeDesc = sceneData.nodes[nodeIndex];
+
+			/* Compute this node's world frame by accumulating transforms.
+			 * NOTE: Extract scale from the combined matrix column lengths before
+			 * CartesianFrame normalizes the direction vectors (which would lose scale). */
+			const auto worldMatrix = parentWorldFrame.getModelMatrix() * nodeDesc.localFrame.getModelMatrix();
+			const Vector< 3, float > worldScale{
+				Vector< 3, float >{worldMatrix[M4x4Col0Row0], worldMatrix[M4x4Col0Row1], worldMatrix[M4x4Col0Row2]}.length(),
+				Vector< 3, float >{worldMatrix[M4x4Col1Row0], worldMatrix[M4x4Col1Row1], worldMatrix[M4x4Col1Row2]}.length(),
+				Vector< 3, float >{worldMatrix[M4x4Col2Row0], worldMatrix[M4x4Col2Row1], worldMatrix[M4x4Col2Row2]}.length()
+			};
+			const CartesianFrame< float > worldFrame{worldMatrix, worldScale};
+
+			/* Create a StaticEntity when this node carries anything the scene must own. A light-only
+			 * node has no mesh but still needs an entity to hold its emitter. */
+			const bool hasMesh =
+				nodeDesc.meshIndex.has_value() &&
+				nodeDesc.meshIndex.value() < sceneData.meshes.size() &&
+				sceneData.meshes[nodeDesc.meshIndex.value()].renderable != nullptr;
+			const bool hasLight = m_createLights && nodeDesc.lightIndex.has_value();
+
+			if ( hasMesh || hasLight )
+			{
+				/* ⚠️ A node name is NOT unique in glTF or FBX, and the scene's entity registry is keyed
+				 * by name: a collision used to cost the whole node, silently. Only the DUPLICATES are
+				 * renamed — the first holder of a name keeps it verbatim, so every entity that already
+				 * resolved by name still does. Same remedy as `buildResourceKey()`, one level up. */
+				auto entityName = nodeDesc.name;
+
+				if ( scene.findStaticEntity(entityName) != nullptr )
+				{
+					entityName += '-' + std::to_string(nodeIndex);
 				}
 
-				this->attachLight(sceneData, nodeDesc, *staticEntity);
-			}
-		}
+				auto staticEntity = scene.createStaticEntity(entityName, worldFrame);
 
-		/* Recurse into children with accumulated world transform. */
-		for ( const auto childIndex : nodeDesc.childIndices )
-		{
-			this->processNodeAsStatic(sceneData, childIndex, scene, worldFrame);
+				if ( staticEntity != nullptr )
+				{
+					if ( hasMesh )
+					{
+						const auto meshIndex = nodeDesc.meshIndex.value();
+
+						staticEntity->componentBuilder< Component::Visual >(entityName + "/Visual")
+							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
+					}
+
+					this->attachLight(sceneData, nodeDesc, *staticEntity);
+				}
+			}
+
+			/* Children with the accumulated world transform. */
+			for ( const auto & child : std::views::reverse(nodeDesc.childIndices) )
+			{
+				pending.emplace_back(child, worldFrame);
+			}
 		}
 	}
 
 	void
-	SceneDataConsumer::processNodeAsNode (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept
+	SceneDataConsumer::processNodeAsNode (const Scenes::Loaders::SceneData & sceneData, size_t rootNodeIndex, const std::shared_ptr< Node > & rootEngineParent) noexcept
 	{
-		if ( nodeIndex >= sceneData.nodes.size() )
+		/* NOTE: an ITERATIVE walk, as processNodeAsStatic() (triad 2026-09-30). */
+		std::vector< std::pair< size_t, std::shared_ptr< Node > > > pending{{rootNodeIndex, rootEngineParent}};
+		std::vector< uint8_t > visited(sceneData.nodes.size(), 0);
+
+		while ( !pending.empty() )
 		{
-			return;
-		}
+			const auto [nodeIndex, engineParent] = std::move(pending.back());
+			pending.pop_back();
 
-		const auto & nodeDesc = sceneData.nodes[nodeIndex];
-
-		/* Skip skeleton joint nodes — their transforms are driven by
-		 * the SkeletalAnimator, not by the scene node hierarchy.
-		 * However, if the joint also carries a mesh, we must process it. */
-		if ( sceneData.skinJointNodeIndices.contains(nodeIndex) && !nodeDesc.meshIndex.has_value() )
-		{
-			return;
-		}
-
-		const auto & frame = nodeDesc.localFrame;
-		const bool hasTransform = (frame.getModelMatrix() != CartesianFrame< float >{}.getModelMatrix());
-		const bool hasMesh = nodeDesc.meshIndex.has_value();
-		/* A light-only node must survive flattening: dropping it would drop the emitter with it. */
-		const bool hasLight = m_createLights && nodeDesc.lightIndex.has_value();
-		/* ⚠️ Same reasoning for an ANIMATED node, and it is the easier one to miss: a pivot that a
-		 * clip rotates typically carries no mesh and an identity rest transform — precisely what
-		 * the flattening rule discards. Flattened, the clip would drive the PARENT and swing the
-		 * whole asset instead of the part. */
-		const bool isAnimated = m_animatedNodeIndices.contains(nodeIndex);
-
-		/* Flatten the hierarchy when possible:
-		 * - Identity transform + no mesh → skip this node, pass parent through.
-		 * - Has mesh or has transform → need a node in the scene.
-		 *   If the parent has no Visual yet, attach directly to it.
-		 *   Otherwise, create a child node. */
-		std::shared_ptr< Node > targetNode;
-
-		if ( !hasMesh && !hasLight && !hasTransform && !isAnimated )
-		{
-			/* Identity, no mesh, no light: flatten — skip this node entirely. */
-			targetNode = engineParent;
-		}
-		else if ( hasMesh && !hasLight && !hasTransform && !isAnimated && !engineParent->hasComponent() )
-		{
-			/* First mesh with identity transform: attach directly to the parent node. */
-			const auto meshIndex = nodeDesc.meshIndex.value();
-
-			if ( meshIndex < sceneData.meshes.size() && sceneData.meshes[meshIndex].renderable != nullptr )
+			if ( nodeIndex >= sceneData.nodes.size() )
 			{
-				engineParent->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
-					.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
+				continue;
 			}
 
-			targetNode = engineParent;
-		}
-		else
-		{
-			/* Additional mesh or structural node with transform: create a child. */
-			targetNode = engineParent->createChild(nodeDesc.name, frame);
-
-			if ( hasMesh )
+			if ( visited[nodeIndex] != 0 )
 			{
+				TraceWarning{ClassId} << "The scene node #" << nodeIndex << " is reached twice (a cycle or a shared child): skipped.";
+
+				continue;
+			}
+
+			visited[nodeIndex] = 1;
+
+			const auto & nodeDesc = sceneData.nodes[nodeIndex];
+
+			/* Skip skeleton joint nodes — their transforms are driven by
+			 * the SkeletalAnimator, not by the scene node hierarchy.
+			 * However, if the joint also carries a mesh, we must process it. */
+			if ( sceneData.skinJointNodeIndices.contains(nodeIndex) && !nodeDesc.meshIndex.has_value() )
+			{
+				continue;
+			}
+
+			const auto & frame = nodeDesc.localFrame;
+			const bool hasTransform = (frame.getModelMatrix() != CartesianFrame< float >{}.getModelMatrix());
+			const bool hasMesh = nodeDesc.meshIndex.has_value();
+			/* A light-only node must survive flattening: dropping it would drop the emitter with it. */
+			const bool hasLight = m_createLights && nodeDesc.lightIndex.has_value();
+			/* ⚠️ Same reasoning for an ANIMATED node, and it is the easier one to miss: a pivot that a
+			 * clip rotates typically carries no mesh and an identity rest transform — precisely what
+			 * the flattening rule discards. Flattened, the clip would drive the PARENT and swing the
+			 * whole asset instead of the part. */
+			const bool isAnimated = m_animatedNodeIndices.contains(nodeIndex);
+
+			/* Flatten the hierarchy when possible:
+			 * - Identity transform + no mesh → skip this node, pass parent through.
+			 * - Has mesh or has transform → need a node in the scene.
+			 *   If the parent has no Visual yet, attach directly to it.
+			 *   Otherwise, create a child node. */
+			std::shared_ptr< Node > targetNode;
+
+			if ( !hasMesh && !hasLight && !hasTransform && !isAnimated )
+			{
+				/* Identity, no mesh, no light: flatten — skip this node entirely. */
+				targetNode = engineParent;
+			}
+			else if ( hasMesh && !hasLight && !hasTransform && !isAnimated && !engineParent->hasComponent() )
+			{
+				/* First mesh with identity transform: attach directly to the parent node. */
 				const auto meshIndex = nodeDesc.meshIndex.value();
 
 				if ( meshIndex < sceneData.meshes.size() && sceneData.meshes[meshIndex].renderable != nullptr )
 				{
-					targetNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
+					engineParent->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
 						.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 				}
+
+				targetNode = engineParent;
 			}
-		}
+			else
+			{
+				/* Additional mesh or structural node with transform: create a child. */
+				targetNode = engineParent->createChild(nodeDesc.name, frame);
 
-		/* Safe in every branch above: whenever targetNode was flattened onto the parent, the
-		 * node was known to carry no light. */
-		this->attachLight(sceneData, nodeDesc, *targetNode);
+				if ( hasMesh )
+				{
+					const auto meshIndex = nodeDesc.meshIndex.value();
 
-		if ( isAnimated )
-		{
-			m_animatedNodes[nodeIndex] = targetNode;
-		}
+					if ( meshIndex < sceneData.meshes.size() && sceneData.meshes[meshIndex].renderable != nullptr )
+					{
+						targetNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
+							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
+					}
+				}
+			}
 
-		/* Recurse into children. */
-		for ( const auto childIndex : nodeDesc.childIndices )
-		{
-			this->processNodeAsNode(sceneData, childIndex, targetNode);
+			/* Safe in every branch above: whenever targetNode was flattened onto the parent, the
+			 * node was known to carry no light. */
+			this->attachLight(sceneData, nodeDesc, *targetNode);
+
+			if ( isAnimated )
+			{
+				m_animatedNodes[nodeIndex] = targetNode;
+			}
+
+			/* Children. */
+			for ( const auto & child : std::views::reverse(nodeDesc.childIndices) )
+			{
+				pending.emplace_back(child, targetNode);
+			}
 		}
 	}
 

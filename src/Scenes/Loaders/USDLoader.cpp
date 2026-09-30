@@ -33,6 +33,7 @@
 #include <numbers>
 #include <system_error>
 #include <memory>
+#include <ranges>
 #include <utility>
 #include <vector>
 #include <array>
@@ -63,6 +64,7 @@
 #include "PixelFactory/Pixmap.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Resources/Manager.hpp"
+#include "String.hpp"
 #include "SceneData.hpp"
 #include "Tracer.hpp"
 #include "VertexFactory/Shape.hpp"
@@ -292,7 +294,7 @@ namespace EmEn::Scenes::Loaders
 						continue;
 					}
 
-					const auto candidate = USDZArchive::normalize(base + '/' + wanted);
+					const auto candidate = USDZArchive::normalize(Base::String::concatenate(base, "/", wanted));
 
 					if ( m_asset.asset_map.contains(candidate) )
 					{
@@ -379,7 +381,8 @@ namespace EmEn::Scenes::Loaders
 
 			/** @brief Whether an archive entry name designates a USD layer. */
 			[[nodiscard]]
-			static bool
+			static
+			bool
 			isUSDName (const std::string & name) noexcept
 			{
 				const auto dot = name.find_last_of('.');
@@ -562,68 +565,92 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectInventory (const tinyusdz::Prim & prim, size_t depth, Inventory & inventory) noexcept
+	USDLoader::collectInventory (const tinyusdz::Prim & root, size_t rootDepth, Inventory & inventory) noexcept
 	{
-		inventory.primCount++;
-		inventory.maxDepth = std::max(inventory.maxDepth, depth);
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
+		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
+		std::vector< std::pair< const tinyusdz::Prim *, size_t > > pending{{&root, rootDepth}};
 
-		/* `prim_type_name()` carries the authored schema name ("Mesh", "Xform", …). It is empty
-		 * for a typeless prim (a pure "over" or a bare def), which is itself worth counting. */
-		auto typeName = prim.prim_type_name();
+		while ( !pending.empty() )
+		{
+			const auto [primPointer, depth] = pending.back();
+			pending.pop_back();
 
-		if ( typeName.empty() )
-		{
-			typeName = prim.type_name();
-		}
+			const auto & prim = *primPointer;
 
-		if ( typeName.empty() )
-		{
-			typeName = "<typeless>";
-		}
+			inventory.primCount++;
+			inventory.maxDepth = std::max(inventory.maxDepth, depth);
 
-		inventory.primTypeCounts[typeName]++;
+			/* `prim_type_name()` carries the authored schema name ("Mesh", "Xform", …). It is empty
+			 * for a typeless prim (a pure "over" or a bare def), which is itself worth counting. */
+			auto typeName = prim.prim_type_name();
 
-		if ( typeName == "PointInstancer" )
-		{
-			inventory.pointInstancerCount++;
-		}
-		else if ( typeName == "Mesh" )
-		{
-			inventory.meshCount++;
-		}
-		else if ( typeName == "Material" )
-		{
-			inventory.materialCount++;
-		}
+			if ( typeName.empty() )
+			{
+				typeName = prim.type_name();
+			}
 
-		for ( const auto & child : prim.children() )
-		{
-			USDLoader::collectInventory(child, depth + 1, inventory);
+			if ( typeName.empty() )
+			{
+				typeName = "<typeless>";
+			}
+
+			inventory.primTypeCounts[typeName]++;
+
+			if ( typeName == "PointInstancer" )
+			{
+				inventory.pointInstancerCount++;
+			}
+			else if ( typeName == "Mesh" )
+			{
+				inventory.meshCount++;
+			}
+			else if ( typeName == "Material" )
+			{
+				inventory.materialCount++;
+			}
+
+			for ( const auto & child : std::views::reverse(prim.children()) )
+			{
+				pending.emplace_back(&child, depth + 1);
+			}
 		}
 	}
 
 	void
-	USDLoader::reportPrimTree (const tinyusdz::Prim & prim, size_t depth, size_t & remaining) noexcept
+	USDLoader::reportPrimTree (const tinyusdz::Prim & root, size_t rootDepth, size_t & remaining) noexcept
 	{
-		if ( remaining == 0 )
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
+		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
+		std::vector< std::pair< const tinyusdz::Prim *, size_t > > pending{{&root, rootDepth}};
+
+		while ( !pending.empty() )
 		{
-			return;
-		}
+			const auto [primPointer, depth] = pending.back();
+			pending.pop_back();
 
-		remaining--;
+			const auto & prim = *primPointer;
 
-		auto typeName = prim.prim_type_name();
+			if ( remaining == 0 )
+			{
+				return;
+			}
 
-		if ( typeName.empty() )
-		{
-			typeName = prim.type_name();
-		}
+			remaining--;
 
-		TraceInfo{ClassId} << std::string(depth * 2, ' ') << "/" << prim.element_name() << "  [" << ( typeName.empty() ? "<typeless>" : typeName ) << "]";
+			auto typeName = prim.prim_type_name();
 
-		for ( const auto & child : prim.children() )
-		{
-			USDLoader::reportPrimTree(child, depth + 1, remaining);
+			if ( typeName.empty() )
+			{
+				typeName = prim.type_name();
+			}
+
+			TraceInfo{ClassId} << std::string(depth * 2, ' ') << "/" << prim.element_name() << "  [" << ( typeName.empty() ? "<typeless>" : typeName ) << "]";
+
+			for ( const auto & child : std::views::reverse(prim.children()) )
+			{
+				pending.emplace_back(&child, depth + 1);
+			}
 		}
 	}
 
@@ -692,224 +719,247 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectEnvironmentLights (const tinyusdz::Prim & prim, const std::filesystem::path & stageDirectory, SceneData & output) noexcept
+	USDLoader::collectEnvironmentLights (const tinyusdz::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept
 	{
-		/* ⚠️ Tydra's RenderLight carries colour, intensity and exposure but NOT the dome's image
-		 * path, so the DomeLight prim is read directly. Without this the asset's own sky — the
-		 * 8K HDR that produces every reference render Intel ships — is silently dropped, and the
-		 * scene ends up lit by whatever generic sky the demo installed instead. */
-		if ( const auto * domeLight = prim.as< tinyusdz::DomeLight >(); domeLight != nullptr )
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
+		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
+		std::vector< const tinyusdz::Prim * > pending{&root};
+
+		while ( !pending.empty() )
 		{
-			LightDescriptor descriptor;
-			descriptor.name = prim.element_name();
-			descriptor.type = LightType::Environment;
+			const auto & prim = *pending.back();
+			pending.pop_back();
 
-			float intensity = 1.0F;
-			float exposure = 0.0F;
-
-			if ( const auto value = domeLight->intensity.get_value(); value.has_value() )
+			/* ⚠️ Tydra's RenderLight carries colour, intensity and exposure but NOT the dome's image
+			 * path, so the DomeLight prim is read directly. Without this the asset's own sky — the
+			 * 8K HDR that produces every reference render Intel ships — is silently dropped, and the
+			 * scene ends up lit by whatever generic sky the demo installed instead. */
+			if ( const auto * domeLight = prim.as< tinyusdz::DomeLight >(); domeLight != nullptr )
 			{
-				float scalar = 1.0F;
+				LightDescriptor descriptor;
+				descriptor.name = prim.element_name();
+				descriptor.type = LightType::Environment;
 
-				if ( value.get_scalar(&scalar) )
+				float intensity = 1.0F;
+				float exposure = 0.0F;
+
+				if ( const auto value = domeLight->intensity.get_value(); value.has_value() )
 				{
-					intensity = scalar;
-				}
-			}
+					float scalar = 1.0F;
 
-			if ( const auto value = domeLight->exposure.get_value(); value.has_value() )
-			{
-				float scalar = 0.0F;
-
-				if ( value.get_scalar(&scalar) )
-				{
-					exposure = scalar;
-				}
-			}
-
-			/* USD folds exposure into the intensity as a power of two, exactly like a stop. */
-			descriptor.intensity = intensity * std::pow(2.0F, exposure);
-
-			if ( const auto value = domeLight->file.get_value(); value.has_value() )
-			{
-				tinyusdz::value::AssetPath assetPath;
-
-				if ( value.value().get_scalar(&assetPath) )
-				{
-					const auto & rawPath = assetPath.GetAssetPath();
-
-					if ( !rawPath.empty() )
+					if ( value.get_scalar(&scalar) )
 					{
-						std::error_code pathError;
-						const auto fullPath = std::filesystem::weakly_canonical(stageDirectory / rawPath, pathError);
+						intensity = scalar;
+					}
+				}
 
-						if ( !pathError && EmEn::Base::IO::exists(fullPath) )
+				if ( const auto value = domeLight->exposure.get_value(); value.has_value() )
+				{
+					float scalar = 0.0F;
+
+					if ( value.get_scalar(&scalar) )
+					{
+						exposure = scalar;
+					}
+				}
+
+				/* USD folds exposure into the intensity as a power of two, exactly like a stop. */
+				descriptor.intensity = intensity * std::pow(2.0F, exposure);
+
+				if ( const auto value = domeLight->file.get_value(); value.has_value() )
+				{
+					tinyusdz::value::AssetPath assetPath;
+
+					if ( value.value().get_scalar(&assetPath) )
+					{
+						const auto & rawPath = assetPath.GetAssetPath();
+
+						if ( !rawPath.empty() )
 						{
-							descriptor.textureAssetPath = fullPath.string();
-						}
-						else
-						{
-							TraceWarning{ClassId} << "Dome light image '" << rawPath << "' not found next to the stage.";
+							std::error_code pathError;
+							const auto fullPath = std::filesystem::weakly_canonical(stageDirectory / rawPath, pathError);
+
+							if ( !pathError && EmEn::Base::IO::exists(fullPath) )
+							{
+								descriptor.textureAssetPath = fullPath.string();
+							}
+							else
+							{
+								TraceWarning{ClassId} << "Dome light image '" << rawPath << "' not found next to the stage.";
+							}
 						}
 					}
 				}
+
+				TraceInfo{ClassId} <<
+					"Environment light '" << descriptor.name << "': intensity " << descriptor.intensity <<
+					", image '" << ( descriptor.textureAssetPath.empty() ? "<none>" : descriptor.textureAssetPath ) << "'.";
+
+				output.lights.emplace_back(std::move(descriptor));
 			}
 
-			TraceInfo{ClassId} <<
-				"Environment light '" << descriptor.name << "': intensity " << descriptor.intensity <<
-				", image '" << ( descriptor.textureAssetPath.empty() ? "<none>" : descriptor.textureAssetPath ) << "'.";
-
-			output.lights.emplace_back(std::move(descriptor));
-		}
-
-		for ( const auto & child : prim.children() )
-		{
-			USDLoader::collectEnvironmentLights(child, stageDirectory, output);
+			for ( const auto & child : std::views::reverse(prim.children()) )
+			{
+				pending.push_back(&child);
+			}
 		}
 	}
 
 	void
-	USDLoader::collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept
+	USDLoader::collectInstancers (const tinyusdz::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept
 	{
-		using namespace Base::Math;
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
+		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
+		std::vector< std::pair< const tinyusdz::Prim *, std::string > > pending{{&root, rootPath}};
 
-		if ( const auto * pointInstancer = prim.as< tinyusdz::GeomPointInstancer >(); pointInstancer != nullptr )
+		while ( !pending.empty() )
 		{
-			Instancer instancer;
-			instancer.path = primPath;
+			const auto entry = std::move(pending.back());
+			pending.pop_back();
 
-			/* ⚠️ AXIS BAKE, INSTANCE EDITION. The vertices of a prototype went through
-			 *
-			 *     C : engine = (usd.x, usd.z, -usd.y)
-			 *
-			 * in buildMeshes(). An instance carries a TRANSFORM, not a point, so it cannot be fed
-			 * through C directly: a transform changes basis by CONJUGATION, C·T·C⁻¹. Applied to an
-			 * already-baked prototype vertex, that reproduces the source placement exactly:
-			 *
-			 *     C·(T·p) = (C·T·C⁻¹)·(C·p)
-			 *
-			 * C is the rotation of +90° about X (it sends y to z and z to -y, determinant +1), so
-			 * the conjugation has a closed form on each part of the transform, and no matrix is
-			 * needed:
-			 *   - a translation is simply carried through C;
-			 *   - a rotation quaternion is conjugated by C's own quaternion;
-			 *   - a scale, being sign-blind, has its Y and Z factors SWAPPED.
-			 *
-			 * Skipping the conjugation and merely permuting the position is the trap: the forest
-			 * lands in the right places, and every plant is rotated wrong — which reads as a bad
-			 * asset rather than a bad conversion. */
-			/* ⚠️ The axis flip is COMPOSED INTO the bake — one place, so an instance can never end
-			 * up mirrored differently from the prototype it draws. */
-			const auto bakePosition = [metersPerUnit] (const auto & position) {
-				return Vector< 3, float >{static_cast< float >(position[0]) * metersPerUnit, static_cast< float >(position[2]) * metersPerUnit, -static_cast< float >(position[1]) * metersPerUnit};
-			};
+			const auto & prim = *entry.first;
+			const auto & primPath = entry.second;
 
-			/* The quaternion of C, a +90° rotation about X: (sin(45°), 0, 0, cos(45°)). */
-			const Quaternion< float > axisChange{std::numbers::sqrt2_v< float > / 2.0F, 0.0F, 0.0F, std::numbers::sqrt2_v< float > / 2.0F};
-			const auto axisChangeInverse = axisChange.conjugated();
+			using namespace Base::Math;
 
-			std::vector< tinyusdz::value::point3f > positions;
-			std::vector< tinyusdz::value::quath > orientations;
-			std::vector< tinyusdz::value::float3 > scales;
-
-			if ( const auto value = pointInstancer->positions.get_value(); value.has_value() )
+			if ( const auto * pointInstancer = prim.as< tinyusdz::GeomPointInstancer >(); pointInstancer != nullptr )
 			{
-				if ( !value.value().get_scalar(&positions) )
+				Instancer instancer;
+				instancer.path = primPath;
+
+				/* ⚠️ AXIS BAKE, INSTANCE EDITION. The vertices of a prototype went through
+				 *
+				 *     C : engine = (usd.x, usd.z, -usd.y)
+				 *
+				 * in buildMeshes(). An instance carries a TRANSFORM, not a point, so it cannot be fed
+				 * through C directly: a transform changes basis by CONJUGATION, C·T·C⁻¹. Applied to an
+				 * already-baked prototype vertex, that reproduces the source placement exactly:
+				 *
+				 *     C·(T·p) = (C·T·C⁻¹)·(C·p)
+				 *
+				 * C is the rotation of +90° about X (it sends y to z and z to -y, determinant +1), so
+				 * the conjugation has a closed form on each part of the transform, and no matrix is
+				 * needed:
+				 *   - a translation is simply carried through C;
+				 *   - a rotation quaternion is conjugated by C's own quaternion;
+				 *   - a scale, being sign-blind, has its Y and Z factors SWAPPED.
+				 *
+				 * Skipping the conjugation and merely permuting the position is the trap: the forest
+				 * lands in the right places, and every plant is rotated wrong — which reads as a bad
+				 * asset rather than a bad conversion. */
+				/* ⚠️ The axis flip is COMPOSED INTO the bake — one place, so an instance can never end
+				 * up mirrored differently from the prototype it draws. */
+				const auto bakePosition = [metersPerUnit] (const auto & position) {
+					return Vector< 3, float >{static_cast< float >(position[0]) * metersPerUnit, static_cast< float >(position[2]) * metersPerUnit, -static_cast< float >(position[1]) * metersPerUnit};
+				};
+
+				/* The quaternion of C, a +90° rotation about X: (sin(45°), 0, 0, cos(45°)). */
+				const Quaternion< float > axisChange{std::numbers::sqrt2_v< float > / 2.0F, 0.0F, 0.0F, std::numbers::sqrt2_v< float > / 2.0F};
+				const auto axisChangeInverse = axisChange.conjugated();
+
+				std::vector< tinyusdz::value::point3f > positions;
+				std::vector< tinyusdz::value::quath > orientations;
+				std::vector< tinyusdz::value::float3 > scales;
+
+				if ( const auto value = pointInstancer->positions.get_value(); value.has_value() )
 				{
-					TraceWarning{ClassId} << "Instancer '" << primPath << "' has time-sampled positions, which are not read.";
-				}
-			}
-
-			if ( const auto value = pointInstancer->protoIndices.get_value(); value.has_value() )
-			{
-				std::vector< int32_t > indices;
-
-				if ( value.value().get_scalar(&indices) )
-				{
-					instancer.prototypeIndices = std::move(indices);
-				}
-			}
-
-			if ( const auto value = pointInstancer->orientations.get_value(); value.has_value() )
-			{
-				(void)value.value().get_scalar(&orientations);
-			}
-
-			if ( const auto value = pointInstancer->scales.get_value(); value.has_value() )
-			{
-				(void)value.value().get_scalar(&scales);
-			}
-
-			/* The prototypes relationship is the ONLY thing tying an instance to what it draws:
-			 * `protoIndices[i]` indexes INTO this target list, not into anything global. */
-			if ( pointInstancer->prototypes.has_value() )
-			{
-				const auto & relation = pointInstancer->prototypes.value();
-
-				if ( relation.is_path() )
-				{
-					instancer.prototypePaths.emplace_back(relation.targetPath.full_path_name());
-				}
-				else if ( relation.is_pathvector() )
-				{
-					for ( const auto & target : relation.targetPathVector )
+					if ( !value.value().get_scalar(&positions) )
 					{
-						instancer.prototypePaths.emplace_back(target.full_path_name());
+						TraceWarning{ClassId} << "Instancer '" << primPath << "' has time-sampled positions, which are not read.";
 					}
 				}
-			}
 
-			instancer.instances.reserve(positions.size());
-
-			for ( size_t index = 0; index < positions.size(); ++index )
-			{
-				auto rotation = Quaternion< float >{};
-
-				if ( index < orientations.size() )
+				if ( const auto value = pointInstancer->protoIndices.get_value(); value.has_value() )
 				{
-					/* USD stores an orientation as a HALF-precision quaternion, real part first.
-					 * The engine's constructor takes (x, y, z, w). */
-					const auto & source = orientations[index];
+					std::vector< int32_t > indices;
 
-					const Quaternion< float > sourceRotation{
-						tinyusdz::value::half_to_float(source.imag[0]),
-						tinyusdz::value::half_to_float(source.imag[1]),
-						tinyusdz::value::half_to_float(source.imag[2]),
-						tinyusdz::value::half_to_float(source.real)
-					};
-
-					rotation = axisChange * sourceRotation * axisChangeInverse;
-					rotation.normalize();
+					if ( value.value().get_scalar(&indices) )
+					{
+						instancer.prototypeIndices = std::move(indices);
+					}
 				}
 
-				auto scale = Vector< 3, float >{1.0F, 1.0F, 1.0F};
-
-				if ( index < scales.size() )
+				if ( const auto value = pointInstancer->orientations.get_value(); value.has_value() )
 				{
-					scale[0] = scales[index][0];
-					scale[1] = scales[index][2];
-					scale[2] = scales[index][1];
+					(void)value.value().get_scalar(&orientations);
 				}
 
-				/* ⚠️ The instance rotation is conjugated by the flip AFTER the USD axis change, and
-				 * the scale is left alone (M·diag(s)·M = diag(s)). Mirroring the position without
-				 * the rotation puts every plant in the right spot facing the wrong way. */
-				instancer.instances.emplace_back(CartesianFrame< float >::fromQuaternion(bakePosition(positions[index]), rotation, scale));
+				if ( const auto value = pointInstancer->scales.get_value(); value.has_value() )
+				{
+					(void)value.value().get_scalar(&scales);
+				}
+
+				/* The prototypes relationship is the ONLY thing tying an instance to what it draws:
+				 * `protoIndices[i]` indexes INTO this target list, not into anything global. */
+				if ( pointInstancer->prototypes.has_value() )
+				{
+					const auto & relation = pointInstancer->prototypes.value();
+
+					if ( relation.is_path() )
+					{
+						instancer.prototypePaths.emplace_back(relation.targetPath.full_path_name());
+					}
+					else if ( relation.is_pathvector() )
+					{
+						for ( const auto & target : relation.targetPathVector )
+						{
+							instancer.prototypePaths.emplace_back(target.full_path_name());
+						}
+					}
+				}
+
+				instancer.instances.reserve(positions.size());
+
+				for ( size_t index = 0; index < positions.size(); ++index )
+				{
+					auto rotation = Quaternion< float >{};
+
+					if ( index < orientations.size() )
+					{
+						/* USD stores an orientation as a HALF-precision quaternion, real part first.
+						 * The engine's constructor takes (x, y, z, w). */
+						const auto & source = orientations[index];
+
+						const Quaternion< float > sourceRotation{
+							tinyusdz::value::half_to_float(source.imag[0]),
+							tinyusdz::value::half_to_float(source.imag[1]),
+							tinyusdz::value::half_to_float(source.imag[2]),
+							tinyusdz::value::half_to_float(source.real)
+						};
+
+						rotation = axisChange * sourceRotation * axisChangeInverse;
+						rotation.normalize();
+					}
+
+					auto scale = Vector< 3, float >{1.0F, 1.0F, 1.0F};
+
+					if ( index < scales.size() )
+					{
+						scale[0] = scales[index][0];
+						scale[1] = scales[index][2];
+						scale[2] = scales[index][1];
+					}
+
+					/* ⚠️ The instance rotation is conjugated by the flip AFTER the USD axis change, and
+					 * the scale is left alone (M·diag(s)·M = diag(s)). Mirroring the position without
+					 * the rotation puts every plant in the right spot facing the wrong way. */
+					instancer.instances.emplace_back(CartesianFrame< float >::fromQuaternion(bakePosition(positions[index]), rotation, scale));
+				}
+
+				if ( !instancer.instances.empty() )
+				{
+					instancers.emplace_back(std::move(instancer));
+				}
+				else
+				{
+					TraceWarning{ClassId} << "Instancer '" << primPath << "' declares no usable position.";
+				}
 			}
 
-			if ( !instancer.instances.empty() )
+			for ( const auto & child : std::views::reverse(prim.children()) )
 			{
-				instancers.emplace_back(std::move(instancer));
+				pending.emplace_back(&child, primPath + "/" + child.element_name());
 			}
-			else
-			{
-				TraceWarning{ClassId} << "Instancer '" << primPath << "' declares no usable position.";
-			}
-		}
-
-		for ( const auto & child : prim.children() )
-		{
-			USDLoader::collectInstancers(child, primPath + "/" + child.element_name(), metersPerUnit, instancers);
 		}
 	}
 
@@ -959,7 +1009,7 @@ namespace EmEn::Scenes::Loaders
 
 					for ( size_t index = 0; index < instancer.instances.size(); ++index )
 					{
-						if ( index < instancer.prototypeIndices.size() && static_cast< size_t >(instancer.prototypeIndices[index]) == prototypeIndex )
+						if ( index < instancer.prototypeIndices.size() && std::cmp_equal(instancer.prototypeIndices[index], prototypeIndex) )
 						{
 							selected.push_back(instancer.instances[index]);
 						}
@@ -1024,38 +1074,48 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectLightPlacements (const tinyusdz::tydra::XformNode & node, std::map< std::string, LightPlacement > & placements) noexcept
+	USDLoader::collectLightPlacements (const tinyusdz::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept
 	{
-		/* Every node is recorded, not just the lights: the map is keyed by absolute prim path and the
-		 * caller looks up whatever Tydra reports, so filtering by prim type here would only be a
-		 * second place to keep in sync with UsdLux. A whole stage is a few thousand entries. */
-		const auto & world = node.get_world_matrix();
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
+		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
+		std::vector< const tinyusdz::tydra::XformNode * > pending{&root};
 
-		/* ⚠️ USD is a ROW-VECTOR convention: the translation sits in the LAST ROW (m[3][0..2]) and the
-		 * local basis vectors are the ROWS, not the columns. Reading it column-major transposes the
-		 * rotation — which does not fail, it just aims every light somewhere plausible and wrong. */
-		LightPlacement placement;
-
-		placement.position = {
-			static_cast< float >(world.m[3][0]),
-			static_cast< float >(world.m[3][1]),
-			static_cast< float >(world.m[3][2])
-		};
-
-		/* ⚠️ A UsdLux light emits along its own LOCAL -Z. That is the specification for DiskLight,
-		 * RectLight, DistantLight and the shaping cone alike — not -Y, and not the stage's up axis
-		 * (this stage is Z-up, which makes the two easy to confuse). */
-		placement.direction = {
-			-static_cast< float >(world.m[2][0]),
-			-static_cast< float >(world.m[2][1]),
-			-static_cast< float >(world.m[2][2])
-		};
-
-		placements.emplace(node.absolute_path.full_path_name(), placement);
-
-		for ( const auto & child : node.children )
+		while ( !pending.empty() )
 		{
-			USDLoader::collectLightPlacements(child, placements);
+			const auto & node = *pending.back();
+			pending.pop_back();
+
+			/* Every node is recorded, not just the lights: the map is keyed by absolute prim path and the
+			 * caller looks up whatever Tydra reports, so filtering by prim type here would only be a
+			 * second place to keep in sync with UsdLux. A whole stage is a few thousand entries. */
+			const auto & world = node.get_world_matrix();
+
+			/* ⚠️ USD is a ROW-VECTOR convention: the translation sits in the LAST ROW (m[3][0..2]) and the
+			 * local basis vectors are the ROWS, not the columns. Reading it column-major transposes the
+			 * rotation — which does not fail, it just aims every light somewhere plausible and wrong. */
+			LightPlacement placement;
+
+			placement.position = {
+				static_cast< float >(world.m[3][0]),
+				static_cast< float >(world.m[3][1]),
+				static_cast< float >(world.m[3][2])
+			};
+
+			/* ⚠️ A UsdLux light emits along its own LOCAL -Z. That is the specification for DiskLight,
+			 * RectLight, DistantLight and the shaping cone alike — not -Y, and not the stage's up axis
+			 * (this stage is Z-up, which makes the two easy to confuse). */
+			placement.direction = {
+				-static_cast< float >(world.m[2][0]),
+				-static_cast< float >(world.m[2][1]),
+				-static_cast< float >(world.m[2][2])
+			};
+
+			placements.emplace(node.absolute_path.full_path_name(), placement);
+
+			for ( const auto & child : std::views::reverse(node.children) )
+			{
+				pending.push_back(&child);
+			}
 		}
 	}
 
@@ -1629,12 +1689,25 @@ namespace EmEn::Scenes::Loaders
 
 		std::map< std::string, tinyusdz::value::matrix4d > prototypeRootMatrices;
 
-		const auto collectNodes = [&drawList, &skippedClassCount, &prototypeRootMatrices, &prototypePaths] (auto & self, const tinyusdz::tydra::Node & node) -> void {
+		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
+		 * the depth of the node tree comes from the FILE (triad 2026-09-30). */
+		std::vector< const tinyusdz::tydra::Node * > pending;
+
+		for ( const auto & rootNode : std::views::reverse(renderScene.nodes) )
+		{
+			pending.push_back(&rootNode);
+		}
+
+		while ( !pending.empty() )
+		{
+			const auto & node = *pending.back();
+			pending.pop_back();
+
 			if ( node.abs_path.starts_with("/_class_") )
 			{
 				skippedClassCount++;
 
-				return;
+				continue;
 			}
 
 			if ( std::ranges::find(prototypePaths, node.abs_path) != prototypePaths.end() )
@@ -1647,15 +1720,10 @@ namespace EmEn::Scenes::Loaders
 				drawList.emplace_back(static_cast< size_t >(node.id), node.global_matrix, node.abs_path);
 			}
 
-			for ( const auto & child : node.children )
+			for ( const auto & child : std::views::reverse(node.children) )
 			{
-				self(self, child);
+				pending.push_back(&child);
 			}
-		};
-
-		for ( const auto & node : renderScene.nodes )
-		{
-			collectNodes(collectNodes, node);
 		}
 
 		const auto isPrototype = [&prototypePaths] (const std::string & path) {
@@ -1729,10 +1797,9 @@ namespace EmEn::Scenes::Loaders
 				const auto z = static_cast< double >(p[2]);
 
 				return std::array< double, 3 >{
-					x * worldMatrix.m[0][0] + y * worldMatrix.m[1][0] + z * worldMatrix.m[2][0] + worldMatrix.m[3][0],
-					x * worldMatrix.m[0][1] + y * worldMatrix.m[1][1] + z * worldMatrix.m[2][1] + worldMatrix.m[3][1],
-					x * worldMatrix.m[0][2] + y * worldMatrix.m[1][2] + z * worldMatrix.m[2][2] + worldMatrix.m[3][2]
-				};
+					(x * worldMatrix.m[0][0]) + (y * worldMatrix.m[1][0]) + (z * worldMatrix.m[2][0]) + worldMatrix.m[3][0],
+					(x * worldMatrix.m[0][1]) + (y * worldMatrix.m[1][1]) + (z * worldMatrix.m[2][1]) + worldMatrix.m[3][1],
+					(x * worldMatrix.m[0][2]) + (y * worldMatrix.m[1][2]) + (z * worldMatrix.m[2][2]) + worldMatrix.m[3][2]};
 			};
 
 			/* A direction ignores the translation. The 3x3 block is used as-is rather than its
@@ -1745,10 +1812,9 @@ namespace EmEn::Scenes::Loaders
 				const auto z = static_cast< double >(d[2]);
 
 				return std::array< double, 3 >{
-					x * worldMatrix.m[0][0] + y * worldMatrix.m[1][0] + z * worldMatrix.m[2][0],
-					x * worldMatrix.m[0][1] + y * worldMatrix.m[1][1] + z * worldMatrix.m[2][1],
-					x * worldMatrix.m[0][2] + y * worldMatrix.m[1][2] + z * worldMatrix.m[2][2]
-				};
+					(x * worldMatrix.m[0][0]) + (y * worldMatrix.m[1][0]) + (z * worldMatrix.m[2][0]),
+					(x * worldMatrix.m[0][1]) + (y * worldMatrix.m[1][1]) + (z * worldMatrix.m[2][1]),
+					(x * worldMatrix.m[0][2]) + (y * worldMatrix.m[1][2]) + (z * worldMatrix.m[2][2])};
 			};
 
 			const auto & indices = renderMesh.faceVertexIndices();
@@ -1793,7 +1859,7 @@ namespace EmEn::Scenes::Loaders
 
 					if ( texCoords != nullptr )
 					{
-						vertices[index].setTextureCoordinates(Vector< 2, float >{texCoords[index * 2], texCoords[index * 2 + 1]});
+						vertices[index].setTextureCoordinates(Vector< 2, float >{texCoords[index * 2], texCoords[(index * 2) + 1]});
 					}
 				}
 
@@ -1803,8 +1869,8 @@ namespace EmEn::Scenes::Loaders
 				for ( size_t triangle = 0; triangle < triangleCount; ++triangle )
 				{
 					const auto a = indices[triangle * 3];
-					const auto b = indices[triangle * 3 + 1];
-					const auto c = indices[triangle * 3 + 2];
+					const auto b = indices[(triangle * 3) + 1];
+					const auto c = indices[(triangle * 3) + 2];
 
 					/* The winding is kept as authored: the (a, c, b) swap that used to sit here
 					 * compensated the engine's ORIENTATION-REVERSING projection — NOT the axis

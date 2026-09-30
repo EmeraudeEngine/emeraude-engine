@@ -676,42 +676,143 @@ namespace EmEn::Scenes::Loaders
 		static constexpr int8_t ComponentCount{static_cast< int8_t >(component_count)};
 	};
 
-	/**
-	 * @brief Reads one vertex attribute of a primitive, whichever way it is stored.
-	 *
-	 * Routes to the Draco decoder when the primitive compresses this attribute, and to the plain
-	 * accessor otherwise. A primitive is allowed to be MIXED — KHR_draco_mesh_compression only
-	 * covers the primitive's own attributes and its indices, so anything else it declares (morph
-	 * targets, most notably) stays an ordinary accessor and takes the second branch.
-	 *
-	 * ⚠️⚠️ THE GUARD IS THE POINT OF THIS FUNCTION. An accessor with no bufferView makes
-	 * fastgltf::iterateAccessor() emit `count` ZERO-INITIALISED elements without any error, as
-	 * glTF § 5.1.1 mandates ("MUST be initialized with zeros; extensions MAY override"). Since
-	 * every accessor of a Draco primitive is bufferView-less, a read site that forgot to route
-	 * through here would produce a mesh collapsed onto the origin, silently, with no log line
-	 * and no failure. So a bufferView-less accessor that Draco did not claim is a hard error.
-	 *
-	 * @tparam ElementType The fastgltf vector type the functor expects.
-	 * @tparam Functor The per-element callback type.
-	 * @param asset A reference to the parsed glTF asset.
-	 * @param primitive A reference to the primitive being read.
-	 * @param attributeName The glTF attribute name, e.g. "POSITION".
-	 * @param accessor A reference to the accessor declared for that attribute.
-	 * @param dracoCache A reference to the Draco cache.
-	 * @param adapter A reference to the meshopt-backed buffer adapter.
-	 * @param functor The callback invoked once per element, in vertex order.
-	 * @return bool
-	 */
-	template< typename ElementType, typename Functor >
-	[[nodiscard]]
-	bool
-	readDracoAwareAttribute (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, std::string_view attributeName, const fastgltf::Accessor & accessor, DracoPrimitiveCache & dracoCache, const MeshoptBufferAdapter & adapter, Functor && functor) noexcept
+	namespace
 	{
-		if ( primitive.dracoCompression != nullptr )
+		/**
+		 * @brief Reads one vertex attribute of a primitive, whichever way it is stored.
+		 *
+		 * Routes to the Draco decoder when the primitive compresses this attribute, and to the plain
+		 * accessor otherwise. A primitive is allowed to be MIXED — KHR_draco_mesh_compression only
+		 * covers the primitive's own attributes and its indices, so anything else it declares (morph
+		 * targets, most notably) stays an ordinary accessor and takes the second branch.
+		 *
+		 * ⚠️⚠️ THE GUARD IS THE POINT OF THIS FUNCTION. An accessor with no bufferView makes
+		 * fastgltf::iterateAccessor() emit `count` ZERO-INITIALISED elements without any error, as
+		 * glTF § 5.1.1 mandates ("MUST be initialized with zeros; extensions MAY override"). Since
+		 * every accessor of a Draco primitive is bufferView-less, a read site that forgot to route
+		 * through here would produce a mesh collapsed onto the origin, silently, with no log line
+		 * and no failure. So a bufferView-less accessor that Draco did not claim is a hard error.
+		 *
+		 * @tparam ElementType The fastgltf vector type the functor expects.
+		 * @tparam Functor The per-element callback type.
+		 * @param asset A reference to the parsed glTF asset.
+		 * @param primitive A reference to the primitive being read.
+		 * @param attributeName The glTF attribute name, e.g. "POSITION".
+		 * @param accessor A reference to the accessor declared for that attribute.
+		 * @param dracoCache A reference to the Draco cache.
+		 * @param adapter A reference to the meshopt-backed buffer adapter.
+		 * @param functor The callback invoked once per element, in vertex order.
+		 * @return bool
+		 */
+		template< typename ElementType, typename Functor >
+		[[nodiscard]]
+		bool
+		readDracoAwareAttribute (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, std::string_view attributeName, const fastgltf::Accessor & accessor, DracoPrimitiveCache & dracoCache, const MeshoptBufferAdapter & adapter, Functor && functor) noexcept
 		{
-			const auto * const dracoAttribute = dracoCache.attribute(asset, primitive, attributeName);
+			if ( primitive.dracoCompression != nullptr )
+			{
+				const auto * const dracoAttribute = dracoCache.attribute(asset, primitive, attributeName);
 
-			if ( dracoAttribute != nullptr )
+				if ( dracoAttribute != nullptr )
+				{
+					const auto * const dracoMesh = dracoCache.mesh(asset, primitive);
+
+					if ( dracoMesh == nullptr )
+					{
+						return false;
+					}
+
+					/* ⚠️ The decoded point count and the accessor count MUST agree: the rest of
+					 * loadMeshes() pre-allocated its vertex array from the ACCESSOR, so a shorter
+					 * decode would leave uninitialised vertices and a longer one would write past
+					 * the primitive's slice. */
+					if ( static_cast< size_t >(dracoMesh->num_points()) != accessor.count )
+					{
+						TraceError{GLTFLoader::ClassId} <<
+							"Draco attribute '" << attributeName << "' decodes " << dracoMesh->num_points() <<
+							" points where the accessor declares " << accessor.count << " !";
+
+						return false;
+					}
+
+					/* ⚠️ The glTF accessor is the authority on normalisation, not the bitstream.
+					 * Draco carries its own `normalized` flag and ConvertValue() honours it, so a
+					 * disagreement between the two would silently scale an attribute by 255 (or by
+					 * 1/255). No asset of the Khronos corpus exercises this — every Draco-compressed
+					 * attribute there is plain float or plain uint16 — so say so rather than guess. */
+					if ( dracoAttribute->normalized() != accessor.normalized )
+					{
+						TraceWarning{GLTFLoader::ClassId} <<
+							"Draco attribute '" << attributeName << "' declares normalized=" << dracoAttribute->normalized() <<
+							" where the glTF accessor declares " << accessor.normalized << " — reading with the bitstream's own convention.";
+					}
+
+					using Component = typename AttributeElement< ElementType >::Component;
+
+					constexpr auto componentCount = AttributeElement< ElementType >::ComponentCount;
+
+					std::array< Component, static_cast< size_t >(componentCount) > components{};
+
+					for ( uint32_t pointIndex = 0; pointIndex < dracoMesh->num_points(); ++pointIndex )
+					{
+						/* ⚠️ `mapped_index()` is not decoration: a Draco attribute is stored as a
+						 * value table plus a point -> value mapping, so reading the table in point
+						 * order would scramble every attribute that has fewer values than points
+						 * (a hard edge splits UVs but not positions, and the two tables differ). */
+						if ( !dracoAttribute->ConvertValue< Component >(dracoAttribute->mapped_index(draco::PointIndex{pointIndex}), componentCount, components.data()) )
+						{
+							TraceError{GLTFLoader::ClassId} << "Draco attribute '" << attributeName << "' could not be converted at point " << pointIndex << " !";
+
+							return false;
+						}
+
+						functor(ElementType::fromPointer(components.data()));
+					}
+
+					return true;
+				}
+			}
+
+			if ( !accessor.bufferViewIndex.has_value() )
+			{
+				TraceError{GLTFLoader::ClassId} <<
+					"Attribute '" << attributeName << "' has no buffer view and no Draco source — "
+					"reading it would silently yield zeros. Refusing the mesh.";
+
+				return false;
+			}
+
+			fastgltf::iterateAccessor< ElementType >(asset, accessor, std::forward< Functor >(functor), adapter);
+
+			return true;
+		}
+	}
+
+	namespace
+	{
+		/**
+		 * @brief Reads the triangle indices of a primitive, whichever way they are stored.
+		 *
+		 * ⚠️ Unlike an attribute, the indices of a Draco primitive are ALWAYS carried by the
+		 * bitstream — the extension has no notion of compressing the attributes while leaving the
+		 * indices behind. So a Draco primitive whose mesh fails to decode is a hard failure here,
+		 * with no accessor to fall back on.
+		 *
+		 * @tparam Functor The per-index callback type.
+		 * @param asset A reference to the parsed glTF asset.
+		 * @param primitive A reference to the primitive being read.
+		 * @param accessor A reference to the index accessor.
+		 * @param dracoCache A reference to the Draco cache.
+		 * @param adapter A reference to the meshopt-backed buffer adapter.
+		 * @param functor The callback invoked once per index, three per triangle.
+		 * @return bool
+		 */
+		template< typename Functor >
+		[[nodiscard]]
+		bool
+		readDracoAwareIndices (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, const fastgltf::Accessor & accessor, DracoPrimitiveCache & dracoCache, const MeshoptBufferAdapter & adapter, Functor && functor) noexcept
+		{
+			if ( primitive.dracoCompression != nullptr )
 			{
 				const auto * const dracoMesh = dracoCache.mesh(asset, primitive);
 
@@ -720,207 +821,115 @@ namespace EmEn::Scenes::Loaders
 					return false;
 				}
 
-				/* ⚠️ The decoded point count and the accessor count MUST agree: the rest of
-				 * loadMeshes() pre-allocated its vertex array from the ACCESSOR, so a shorter
-				 * decode would leave uninitialised vertices and a longer one would write past
-				 * the primitive's slice. */
-				if ( static_cast< size_t >(dracoMesh->num_points()) != accessor.count )
+				if ( static_cast< size_t >(dracoMesh->num_faces()) * 3 != accessor.count )
 				{
 					TraceError{GLTFLoader::ClassId} <<
-						"Draco attribute '" << attributeName << "' decodes " << dracoMesh->num_points() <<
-						" points where the accessor declares " << accessor.count << " !";
+						"The Draco bitstream decodes " << dracoMesh->num_faces() << " faces where the index accessor declares " <<
+						accessor.count << " indices !";
 
 					return false;
 				}
 
-				/* ⚠️ The glTF accessor is the authority on normalisation, not the bitstream.
-				 * Draco carries its own `normalized` flag and ConvertValue() honours it, so a
-				 * disagreement between the two would silently scale an attribute by 255 (or by
-				 * 1/255). No asset of the Khronos corpus exercises this — every Draco-compressed
-				 * attribute there is plain float or plain uint16 — so say so rather than guess. */
-				if ( dracoAttribute->normalized() != accessor.normalized )
+				for ( uint32_t faceIndex = 0; faceIndex < dracoMesh->num_faces(); ++faceIndex )
 				{
-					TraceWarning{GLTFLoader::ClassId} <<
-						"Draco attribute '" << attributeName << "' declares normalized=" << dracoAttribute->normalized() <<
-						" where the glTF accessor declares " << accessor.normalized << " — reading with the bitstream's own convention.";
-				}
+					const auto & face = dracoMesh->face(draco::FaceIndex{faceIndex});
 
-				using Component = typename AttributeElement< ElementType >::Component;
-
-				constexpr auto componentCount = AttributeElement< ElementType >::ComponentCount;
-
-				std::array< Component, static_cast< size_t >(componentCount) > components{};
-
-				for ( uint32_t pointIndex = 0; pointIndex < dracoMesh->num_points(); ++pointIndex )
-				{
-					/* ⚠️ `mapped_index()` is not decoration: a Draco attribute is stored as a
-					 * value table plus a point -> value mapping, so reading the table in point
-					 * order would scramble every attribute that has fewer values than points
-					 * (a hard edge splits UVs but not positions, and the two tables differ). */
-					if ( !dracoAttribute->ConvertValue< Component >(dracoAttribute->mapped_index(draco::PointIndex{pointIndex}), componentCount, components.data()) )
-					{
-						TraceError{GLTFLoader::ClassId} << "Draco attribute '" << attributeName << "' could not be converted at point " << pointIndex << " !";
-
-						return false;
-					}
-
-					functor(ElementType::fromPointer(components.data()));
+					functor(face[0].value());
+					functor(face[1].value());
+					functor(face[2].value());
 				}
 
 				return true;
 			}
-		}
 
-		if ( !accessor.bufferViewIndex.has_value() )
-		{
-			TraceError{GLTFLoader::ClassId} <<
-				"Attribute '" << attributeName << "' has no buffer view and no Draco source — "
-				"reading it would silently yield zeros. Refusing the mesh.";
-
-			return false;
-		}
-
-		fastgltf::iterateAccessor< ElementType >(asset, accessor, std::forward< Functor >(functor), adapter);
-
-		return true;
-	}
-
-	/**
-	 * @brief Reads the triangle indices of a primitive, whichever way they are stored.
-	 *
-	 * ⚠️ Unlike an attribute, the indices of a Draco primitive are ALWAYS carried by the
-	 * bitstream — the extension has no notion of compressing the attributes while leaving the
-	 * indices behind. So a Draco primitive whose mesh fails to decode is a hard failure here,
-	 * with no accessor to fall back on.
-	 *
-	 * @tparam Functor The per-index callback type.
-	 * @param asset A reference to the parsed glTF asset.
-	 * @param primitive A reference to the primitive being read.
-	 * @param accessor A reference to the index accessor.
-	 * @param dracoCache A reference to the Draco cache.
-	 * @param adapter A reference to the meshopt-backed buffer adapter.
-	 * @param functor The callback invoked once per index, three per triangle.
-	 * @return bool
-	 */
-	template< typename Functor >
-	[[nodiscard]]
-	bool
-	readDracoAwareIndices (const fastgltf::Asset & asset, const fastgltf::Primitive & primitive, const fastgltf::Accessor & accessor, DracoPrimitiveCache & dracoCache, const MeshoptBufferAdapter & adapter, Functor && functor) noexcept
-	{
-		if ( primitive.dracoCompression != nullptr )
-		{
-			const auto * const dracoMesh = dracoCache.mesh(asset, primitive);
-
-			if ( dracoMesh == nullptr )
+			if ( !accessor.bufferViewIndex.has_value() )
 			{
-				return false;
-			}
-
-			if ( static_cast< size_t >(dracoMesh->num_faces()) * 3 != accessor.count )
-			{
-				TraceError{GLTFLoader::ClassId} <<
-					"The Draco bitstream decodes " << dracoMesh->num_faces() << " faces where the index accessor declares " <<
-					accessor.count << " indices !";
+				Tracer::error(GLTFLoader::ClassId, "The index accessor has no buffer view and no Draco source — reading it would silently yield zeros. Refusing the mesh.");
 
 				return false;
 			}
 
-			for ( uint32_t faceIndex = 0; faceIndex < dracoMesh->num_faces(); ++faceIndex )
-			{
-				const auto & face = dracoMesh->face(draco::FaceIndex{faceIndex});
-
-				functor(face[0].value());
-				functor(face[1].value());
-				functor(face[2].value());
-			}
+			fastgltf::iterateAccessor< uint32_t >(asset, accessor, std::forward< Functor >(functor), adapter);
 
 			return true;
 		}
-
-		if ( !accessor.bufferViewIndex.has_value() )
-		{
-			Tracer::error(GLTFLoader::ClassId, "The index accessor has no buffer view and no Draco source — reading it would silently yield zeros. Refusing the mesh.");
-
-			return false;
-		}
-
-		fastgltf::iterateAccessor< uint32_t >(asset, accessor, std::forward< Functor >(functor), adapter);
-
-		return true;
 	}
 
-	/**
-	 * @brief Names the extensions an asset requires that this loader does not declare.
-	 *
-	 * Called only when a parse failed with Error::MissingExtensions. fastgltf refuses such a file
-	 * whole, so its extensionsRequired array is never handed back — the list has to be recovered by
-	 * re-parsing with every extension fastgltf knows, which is what this does. It costs a second
-	 * parse of a file that was going to be rejected anyway, once, on an error path.
-	 *
-	 * @param filepath A reference to the asset path, for the .glb/.gltf discrimination and the log.
-	 * @param data A reference to the already-loaded file bytes.
-	 * @param parentPath A reference to the directory external resources resolve against.
-	 * @param declared The extension mask this loader passes to its own Parser.
-	 */
-	void
-	reportMissingExtensions (const std::filesystem::path & filepath, fastgltf::GltfDataBuffer & data, const std::filesystem::path & parentPath, fastgltf::Extensions declared) noexcept
+	namespace
 	{
-		/* Everything fastgltf itself knows about. A parse with this mask can still fail on
-		 * MissingExtensions, but only for an extension fastgltf has never heard of. */
-		auto everything = fastgltf::Extensions::None;
-
-		for ( const auto & [name, value] : fastgltf::extensionStrings )
+		/**
+		 * @brief Names the extensions an asset requires that this loader does not declare.
+		 *
+		 * Called only when a parse failed with Error::MissingExtensions. fastgltf refuses such a file
+		 * whole, so its extensionsRequired array is never handed back — the list has to be recovered by
+		 * re-parsing with every extension fastgltf knows, which is what this does. It costs a second
+		 * parse of a file that was going to be rejected anyway, once, on an error path.
+		 *
+		 * @param filepath A reference to the asset path, for the .glb/.gltf discrimination and the log.
+		 * @param data A reference to the already-loaded file bytes.
+		 * @param parentPath A reference to the directory external resources resolve against.
+		 * @param declared The extension mask this loader passes to its own Parser.
+		 */
+		void
+		reportMissingExtensions (const std::filesystem::path & filepath, fastgltf::GltfDataBuffer & data, const std::filesystem::path & parentPath, fastgltf::Extensions declared) noexcept
 		{
-			everything |= value;
-		}
+			/* Everything fastgltf itself knows about. A parse with this mask can still fail on
+			 * MissingExtensions, but only for an extension fastgltf has never heard of. */
+			auto everything = fastgltf::Extensions::None;
 
-		fastgltf::Parser permissive{everything};
-
-		/* No options: nothing is consumed from this asset, only its extension list is read. */
-		auto retry = filepath.extension() == ".glb" ?
-			permissive.loadGltfBinary(data, parentPath, fastgltf::Options::None) :
-			permissive.loadGltf(data, parentPath, fastgltf::Options::None);
-
-		if ( retry.error() != fastgltf::Error::None )
-		{
-			Tracer::error(GLTFLoader::ClassId, "The asset requires an extension that fastgltf itself does not know, so it cannot be named. Check its 'extensionsRequired' array by hand.");
-
-			return;
-		}
-
-		const auto declaredNames = fastgltf::stringifyExtensionBits(declared);
-
-		std::string missing;
-
-		for ( const auto & required : retry.get().extensionsRequired )
-		{
-			const auto isDeclared = std::ranges::any_of(declaredNames, [&required] (const auto & name) {
-				return name == required;
-			});
-
-			if ( isDeclared )
+			for ( const auto & [name, value] : fastgltf::extensionStrings )
 			{
-				continue;
+				everything |= value;
 			}
 
-			if ( !missing.empty() )
+			fastgltf::Parser permissive{everything};
+
+			/* No options: nothing is consumed from this asset, only its extension list is read. */
+			auto retry = filepath.extension() == ".glb" ?
+				permissive.loadGltfBinary(data, parentPath, fastgltf::Options::None) :
+				permissive.loadGltf(data, parentPath, fastgltf::Options::None);
+
+			if ( retry.error() != fastgltf::Error::None )
 			{
-				missing += ", ";
+				Tracer::error(GLTFLoader::ClassId, "The asset requires an extension that fastgltf itself does not know, so it cannot be named. Check its 'extensionsRequired' array by hand.");
+
+				return;
 			}
 
-			missing.append(required.data(), required.size());
+			const auto declaredNames = fastgltf::stringifyExtensionBits(declared);
+
+			std::string missing;
+
+			for ( const auto & required : retry.get().extensionsRequired )
+			{
+				const auto isDeclared = std::ranges::any_of(declaredNames, [&required] (const auto & name) {
+					return name == required;
+				});
+
+				if ( isDeclared )
+				{
+					continue;
+				}
+
+				if ( !missing.empty() )
+				{
+					missing += ", ";
+				}
+
+				missing.append(required.data(), required.size());
+			}
+
+			if ( missing.empty() )
+			{
+				/* Should not happen: the first parse refused the file for a missing extension, so the
+				 * diff cannot be empty. Say so rather than print a misleading empty list. */
+				Tracer::error(GLTFLoader::ClassId, "The parse was refused for a missing extension, but every required extension is declared. The extension mask and the refusal disagree.");
+
+				return;
+			}
+
+			TraceError{GLTFLoader::ClassId} << "Required extension(s) this loader does not support : " << missing << '.';
 		}
-
-		if ( missing.empty() )
-		{
-			/* Should not happen: the first parse refused the file for a missing extension, so the
-			 * diff cannot be empty. Say so rather than print a misleading empty list. */
-			Tracer::error(GLTFLoader::ClassId, "The parse was refused for a missing extension, but every required extension is declared. The extension mask and the refusal disagree.");
-
-			return;
-		}
-
-		TraceError{GLTFLoader::ClassId} << "Required extension(s) this loader does not support : " << missing << '.';
 	}
 
 	GLTFLoader::GLTFLoader (Resources::Manager & resources) noexcept
@@ -930,6 +939,87 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	GLTFLoader::~GLTFLoader () = default;
+
+	namespace
+	{
+		/**
+		 * @brief Checks that the node hierarchy is a strict FOREST, as glTF § 3.5 requires: every node has at most one
+		 * parent, every child index is in range, and no cycle. fastgltf::validate() does not check it, and a recursive or
+		 * unguarded walk over a cycle never ends (triad 2026-09-30).
+		 * @note Iterative, O(nodes + children): with at most one parent each, a node in a cycle is unreachable from the
+		 * parentless nodes, so "every node reachable from a parentless node" is the no-cycle proof.
+		 * @param asset A reference to the parsed asset.
+		 * @param error A reference to the reason, filled on failure.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isStrictNodeForest (const fastgltf::Asset & asset, std::string & error) noexcept
+		{
+			const auto nodeCount = asset.nodes.size();
+
+			std::vector< uint8_t > parentCount(nodeCount, 0);
+
+			for ( size_t nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex )
+			{
+				for ( const auto childIndex : asset.nodes[nodeIndex].children )
+				{
+					if ( childIndex >= nodeCount )
+					{
+						error = "node #" + std::to_string(nodeIndex) + " has an out-of-range child #" + std::to_string(childIndex);
+
+						return false;
+					}
+
+					if ( parentCount[childIndex] != 0 )
+					{
+						error = "node #" + std::to_string(childIndex) + " has more than one parent (or is its own ancestor)";
+
+						return false;
+					}
+
+					parentCount[childIndex] = 1;
+				}
+			}
+
+			std::vector< uint8_t > reached(nodeCount, 0);
+			std::vector< size_t > pending;
+			pending.reserve(nodeCount);
+
+			for ( size_t nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex )
+			{
+				if ( parentCount[nodeIndex] == 0 )
+				{
+					pending.push_back(nodeIndex);
+				}
+			}
+
+			size_t reachedCount = 0;
+
+			while ( !pending.empty() )
+			{
+				const auto nodeIndex = pending.back();
+				pending.pop_back();
+
+				reached[nodeIndex] = 1;
+				++reachedCount;
+
+				for ( const auto childIndex : asset.nodes[nodeIndex].children )
+				{
+					pending.push_back(childIndex);
+				}
+			}
+
+			if ( reachedCount != nodeCount )
+			{
+				error = std::to_string(nodeCount - reachedCount) + " node(s) form a cycle";
+
+				return false;
+			}
+
+			return true;
+		}
+	}
 
 	bool
 	GLTFLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
@@ -1048,6 +1138,25 @@ namespace EmEn::Scenes::Loaders
 		}
 
 		const auto & asset = result.get();
+
+		/* NOTE: fastgltf's parse does NOT range-check the indices an asset holds (material, accessor, buffer view,
+		 * image, node, skin…): only validate() does. A hostile file — a dropped one — would otherwise index out of
+		 * bounds at every asset.X[i] below. Checked on the whole glTF-Sample-Assets corpus (314 assets) and the
+		 * data stores (11): none refused (owner decision 2026-09-30, plan Ave Robustus). */
+		if ( const auto validation = fastgltf::validate(asset); validation != fastgltf::Error::None )
+		{
+			TraceError{ClassId} << "The glTF '" << filepath << "' is invalid, refused : " << fastgltf::getErrorMessage(validation);
+
+			return false;
+		}
+
+		/* NOTE: validate() does not check the node hierarchy; the node walks rely on a strict forest. */
+		if ( std::string hierarchyError; !isStrictNodeForest(asset, hierarchyError) )
+		{
+			TraceError{ClassId} << "The glTF '" << filepath << "' has an invalid node hierarchy, refused : " << hierarchyError << '.';
+
+			return false;
+		}
 
 		/* EXT_meshopt_compression working set. Every accessor read below goes through it, and it
 		 * is released at the end of this function. */
@@ -2841,7 +2950,9 @@ namespace EmEn::Scenes::Loaders
 			else
 			{
 				mesh = m_resources.container< Renderable::MultiLayerMeshResource >()
-					->getOrCreateResource(meshName, [geometry, materialList = std::move(materialList), rasterizationList = std::move(rasterizationList)] (auto & meshResource) {
+					/* NOTE: materialList is COPIED (shared pointers): the scene-data descriptor below needs it too. Moved
+					 * here, it left every multi-material mesh with the DEFAULT material in its descriptor (triad 2026-09-30). */
+					->getOrCreateResource(meshName, [geometry, materialList, rasterizationList = std::move(rasterizationList)] (auto & meshResource) {
 						return meshResource.load(geometry, materialList, rasterizationList);
 					});
 			}
@@ -3337,11 +3448,28 @@ namespace EmEn::Scenes::Loaders
 		/* Pre-allocate nodes vector (one per glTF node). */
 		output.nodes.resize(asset.nodes.size());
 
-		/* Recursive lambda to build node descriptors. */
-		const auto buildNode = [&] (auto & self, size_t nodeIndex) -> void {
+		/* NOTE: an ITERATIVE walk (explicit stack): the depth comes from the file, a recursion overflows the stack on a
+		 * long chain. The hierarchy is a strict forest (isStrictNodeForest(), checked at load): no node twice. */
+		std::vector< size_t > pending;
+		pending.reserve(asset.nodes.size());
+
+		/* Build from scene root nodes. */
+		output.rootNodeIndices.reserve(glTFScene.nodeIndices.size());
+
+		for ( const auto nodeIndex : glTFScene.nodeIndices )
+		{
+			output.rootNodeIndices.push_back(nodeIndex);
+			pending.push_back(nodeIndex);
+		}
+
+		while ( !pending.empty() )
+		{
+			const auto nodeIndex = pending.back();
+			pending.pop_back();
+
 			if ( nodeIndex >= asset.nodes.size() )
 			{
-				return;
+				continue;
 			}
 
 			const auto & glTFNode = asset.nodes[nodeIndex];
@@ -3349,7 +3477,7 @@ namespace EmEn::Scenes::Loaders
 			/* Skip excluded nodes and their entire subtree. */
 			if ( !glTFNode.name.empty() && m_options.excludedNodeNames.contains(std::string{glTFNode.name}) )
 			{
-				return;
+				continue;
 			}
 
 			auto & descriptor = output.nodes[nodeIndex];
@@ -3379,19 +3507,8 @@ namespace EmEn::Scenes::Loaders
 			for ( const auto childIndex : glTFNode.children )
 			{
 				descriptor.childIndices.push_back(childIndex);
-
-				self(self, childIndex);
+				pending.push_back(childIndex);
 			}
-		};
-
-		/* Build from scene root nodes. */
-		output.rootNodeIndices.reserve(glTFScene.nodeIndices.size());
-
-		for ( const auto nodeIndex : glTFScene.nodeIndices )
-		{
-			output.rootNodeIndices.push_back(nodeIndex);
-
-			buildNode(buildNode, nodeIndex);
 		}
 	}
 
@@ -3451,9 +3568,27 @@ namespace EmEn::Scenes::Loaders
 					break;
 			}
 
+			const auto * const typeName = [&descriptor] () -> const char * {
+				switch ( descriptor.type )
+				{
+					case LightType::Directional :
+						return "directional ";
+
+					case LightType::Point :
+						return "point ";
+
+					case LightType::Spot :
+						return "spot ";
+
+					case LightType::Environment :
+						return "environment ";
+				}
+
+				return "unknown ";
+			}();
+
 			TraceDebug{ClassId} <<
-				"Light '" << descriptor.name << "': " <<
-				( descriptor.type == LightType::Directional ? "directional " : ( descriptor.type == LightType::Point ? "point " : "spot " ) ) <<
+				"Light '" << descriptor.name << "': " << typeName <<
 				descriptor.intensity << ( descriptor.type == LightType::Directional ? " lux" : " cd" ) <<
 				", range " << descriptor.range <<
 				", cone " << descriptor.innerConeAngle << "/" << descriptor.outerConeAngle << " deg.";

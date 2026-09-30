@@ -142,9 +142,9 @@ namespace EmEn::Scenes
 
 		private:
 
-			void processNodeAsStatic (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, Scene & scene, const Base::Math::CartesianFrame< float > & parentWorldFrame) noexcept;
+			void processNodeAsStatic (const Scenes::Loaders::SceneData & sceneData, size_t rootNodeIndex, Scene & scene, const Base::Math::CartesianFrame< float > & rootParentWorldFrame) noexcept;
 
-			void processNodeAsNode (const Scenes::Loaders::SceneData & sceneData, size_t nodeIndex, const std::shared_ptr< Node > & engineParent) noexcept;
+			void processNodeAsNode (const Scenes::Loaders::SceneData & sceneData, size_t rootNodeIndex, const std::shared_ptr< Node > & rootEngineParent) noexcept;
 
 			/**
 			 * @brief Attaches the light referenced by a node descriptor to an engine entity.

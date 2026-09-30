@@ -27,6 +27,7 @@ those whose file is inside the module (the header filter also reports every incl
 |---|---|---|---|
 | `src/Console` (+ `MCP/`), 12 TUs | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 24, all ON PURPOSE (below) — 21 misc-no-recursion, 1 avoid-c-arrays, 1 cppcoreguidelines-use-enum-class, 1 pro-type-reinterpret-cast. Before: 64 (clang-tidy 19, designated-initializers blind) / 66 (21). | Triad section 1, `docs/todo/triad-engine-pass.md` |
 | `src/Resources`, 6 TUs (+ `Container.hpp` templates) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 5, all ON PURPOSE (below) — 2 cppcoreguidelines-use-enum-class, 2 misc-no-recursion, 1 cppcoreguidelines-avoid-do-while. Before: 20. | Triad section 2 |
+| `src/Scenes/Loaders`, 4 TUs (+ `SceneDataConsumer.cpp`) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 172, all ON PURPOSE (below) — 141 pro-type-union-access, 18 pro-bounds-constant-array-index, 7 pro-type-reinterpret-cast, 3 avoid-const-or-ref-data-members, 1 Padding, 1 use-enum-class, 1 enum-size. Before: 221. | Triad section 3 |
 
 ## Findings kept ON PURPOSE
 
@@ -58,3 +59,17 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   since 2026-09-30.)
 - **cppcoreguidelines-avoid-do-while ×1** — `Manager::unloadUnusedResources()`: "one pass, then again while a pass
   frees something" (freeing a resource frees its dependencies on the next pass) — owner decision 2026-09-30.
+
+### `src/Scenes/Loaders` (2026-09-30)
+
+- **pro-type-union-access ×141** — FBXLoader only: the ufbx API is unions (`ufbx_vec3::x`, …).
+- **pro-bounds-constant-array-index ×18** — each one checked bounded: FBX (`texIdx` checked, `k < 3`, `wi < take ≤ 4`,
+  ufbx indices consistent by construction), glTF (texture index checked, literal loops), USD (literal 4×4 loops), WAD
+  (counts derived from the lump size; cross-references checked).
+- **pro-type-reinterpret-cast ×7** — binary buffers (a WAD name, the file read, meshopt / Draco input — its offset is
+  bounded upstream —, the USDZ asset map, Tydra's raw normal / UV buffers — sized by the vertex count check).
+- **avoid-const-or-ref-data-members ×3** — each loader holds the `Resources::Manager &` it was built with: a
+  short-lived, non-copyable object by design.
+- **clang-analyzer-optin.performance.Padding ×1** — a lambda CLOSURE's layout (GLTFLoader).
+- **use-enum-class + enum-size** — `LoaderCapabilityBits`: a bit-flag set combined with `|`, `uint32_t` on purpose.
+

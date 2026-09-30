@@ -152,7 +152,7 @@ namespace EmEn::Scenes::Loaders
 			 */
 			[[nodiscard]]
 			const LoaderOptions &
-			getOptions () noexcept
+			getOptions () const noexcept
 			{
 				return m_options;
 			}

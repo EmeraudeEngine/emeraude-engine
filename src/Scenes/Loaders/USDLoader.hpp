@@ -237,12 +237,12 @@ namespace EmEn::Scenes::Loaders
 			 * @note Positions, orientations and scales are converted into the engine's own space
 			 * HERE, by the same bake the vertices go through, so a set of instances and the mesh
 			 * it instances always agree.
-			 * @param prim A reference to the prim to visit.
-			 * @param primPath The absolute path of that prim.
+			 * @param root A reference to the root prim of the walk.
+			 * @param rootPath The absolute path of the root prim.
 			 * @param metersPerUnit The stage's linear unit.
 			 * @param instancers The list being filled.
 			 */
-			static void collectInstancers (const tinyusdz::Prim & prim, const std::string & primPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
+			static void collectInstancers (const tinyusdz::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
 
 			/**
 			 * @brief Turns the collected instancers into instance sets referencing built meshes.
@@ -305,29 +305,29 @@ namespace EmEn::Scenes::Loaders
 			 * vectors as ROWS. Reading it column-major transposes the rotation, which does not fail: it
 			 * aims every light somewhere plausible and wrong.
 			 *
-			 * @param node A reference to the xform node to walk.
+			 * @param root A reference to the root xform node of the walk.
 			 * @param placements A reference to the map to populate, keyed by absolute prim path.
 			 * @return void
 			 */
-			static void collectLightPlacements (const tinyusdz::tydra::XformNode & node, std::map< std::string, LightPlacement > & placements) noexcept;
+			static void collectLightPlacements (const tinyusdz::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept;
 
 			/**
 			 * @brief Walks a prim subtree and collects environment (dome) lights.
 			 * @note Tydra's RenderLight does not carry the dome's image path, so the prim is read
 			 * directly. Dropping it silently loses the asset's own sky.
-			 * @param prim A reference to the prim to visit.
+			 * @param root A reference to the root prim of the walk.
 			 * @param stageDirectory The directory the stage was read from.
 			 * @param output A reference to the scene data to populate.
 			 */
-			static void collectEnvironmentLights (const tinyusdz::Prim & prim, const std::filesystem::path & stageDirectory, SceneData & output) noexcept;
+			static void collectEnvironmentLights (const tinyusdz::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept;
 
 			/**
 			 * @brief Walks a prim subtree and accumulates the inventory.
-			 * @param prim A reference to the prim to visit.
-			 * @param depth The current depth in the hierarchy.
+			 * @param root A reference to the root prim of the walk.
+			 * @param rootDepth The depth of the root in the hierarchy.
 			 * @param inventory A reference to the inventory being filled.
 			 */
-			static void collectInventory (const tinyusdz::Prim & prim, size_t depth, Inventory & inventory) noexcept;
+			static void collectInventory (const tinyusdz::Prim & root, size_t rootDepth, Inventory & inventory) noexcept;
 
 			/**
 			 * @brief Reports what the composed stage actually contains.
@@ -345,11 +345,11 @@ namespace EmEn::Scenes::Loaders
 			 * @note A type histogram says WHAT a stage contains; it cannot say where, nor under
 			 * what. When a prim is expected and missing, the tree is the only thing that tells
 			 * "it was dropped" from "it is there under another type".
-			 * @param prim A reference to the prim to visit.
-			 * @param depth The current depth.
+			 * @param root A reference to the root prim of the walk.
+			 * @param rootDepth The depth of the root.
 			 * @param remaining Lines left in the budget, decremented as they are printed.
 			 */
-			static void reportPrimTree (const tinyusdz::Prim & prim, size_t depth, size_t & remaining) noexcept;
+			static void reportPrimTree (const tinyusdz::Prim & root, size_t rootDepth, size_t & remaining) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

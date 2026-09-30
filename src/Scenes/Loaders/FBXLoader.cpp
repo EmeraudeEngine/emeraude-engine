@@ -1856,11 +1856,30 @@ namespace EmEn::Scenes::Loaders
 			output.nodes.push_back(std::move(descriptor));
 		}
 
-		/* Second pass: wire children and collect roots (children of the ufbx root). */
+		/* Second pass: wire children and collect roots (children of the ufbx root).
+		 * NOTE: in the FILE order (scene.nodes), never by iterating nodeIndexMap: an unordered_map keyed by pointer
+		 * yields a different order on every run — the order of the roots and children, and therefore which duplicate
+		 * name the scene keeps verbatim (SceneDataConsumer renames the later ones), changed from run to run. */
 		output.rootNodeIndices.clear();
 
-		for ( const auto & [nodePtr, descriptorIdx] : nodeIndexMap )
+		for ( size_t index = 0; index < scene.nodes.count; ++index )
 		{
+			const ufbx_node * nodePtr = scene.nodes.data[index];
+
+			if ( nodePtr == nullptr )
+			{
+				continue;
+			}
+
+			const auto nodeIt = nodeIndexMap.find(nodePtr);
+
+			if ( nodeIt == nodeIndexMap.end() )
+			{
+				/* The ufbx root or an excluded node: no descriptor. */
+				continue;
+			}
+
+			const auto descriptorIdx = nodeIt->second;
 			const ufbx_node * parent = nodePtr->parent;
 
 			if ( parent == nullptr || parent->is_root )
