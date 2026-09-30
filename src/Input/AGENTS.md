@@ -226,6 +226,10 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
 
 ## Critical Points
 
+- **Controller queries are a trust boundary** — range-checked always, neutral answer out of range; the joystick /
+  gamepad axis inversion and the gamepad `isButtonReleased()` bug fixed 2026-09-30:
+  [`docs/subsystems/input/01-controller-queries-are-a-trust-boundary.md`](../../docs/subsystems/input/01-controller-queries-are-a-trust-boundary.md).
+
 - **Unregistration**: Unregister listeners before destruction
 - **No built-in mapping**: Application responsible for action mapping
 - **Dual approach**: Choose events (reactive) or polling (direct) based on need

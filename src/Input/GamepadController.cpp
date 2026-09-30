@@ -60,7 +60,7 @@ namespace EmEn::Input
 			return "No gamepad connected !" "\n";
 		}
 
-		const auto & [buttons, axes] = s_devicesState.at(m_deviceID);
+		const auto & [buttons, axes] = s_devicesState[static_cast< size_t >(m_deviceID)];
 
 		std::stringstream output;
 		output << "Gamepad #" << m_deviceID << " mapping." "\n";

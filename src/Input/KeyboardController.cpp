@@ -44,12 +44,14 @@ namespace EmEn::Input
 	bool
 	KeyboardController::isKeyPressed (int32_t key) const noexcept
 	{
-		if ( m_disabled || key == KeyUnknown )
+		/* NOTE: public API — any int reaches it: out of range (KeyUnknown included) is "not pressed", never an
+		 * out-of-bounds read (triad 2026-09-30). */
+		if ( m_disabled || key < 0 || static_cast< size_t >(key) >= s_deviceState.size() )
 		{
 			return false;
 		}
 
-		return s_deviceState[static_cast< size_t >(key)];
+		return s_deviceState[static_cast< size_t >(key)] != 0;
 	}
 
 	bool
@@ -61,27 +63,28 @@ namespace EmEn::Input
 		}
 
 		return std::ranges::any_of(s_deviceState, [] (auto state) {
-			return state;
+			return state != 0;
 		});
 	}
 
 	bool
 	KeyboardController::isKeyReleased (int32_t key) const noexcept
 	{
-		if ( m_disabled || key == KeyUnknown )
+		if ( m_disabled || key < 0 || static_cast< size_t >(key) >= s_deviceState.size() )
 		{
 			return true;
 		}
 
-		return !s_deviceState[static_cast< size_t >(key)];
+		return s_deviceState[static_cast< size_t >(key)] == 0;
 	}
 
 	void
 	KeyboardController::changeKeyState (int32_t key, bool pressed) noexcept
 	{
-		if ( key != KeyUnknown )
+		/* NOTE: KeyUnknown (-1) and any other out-of-range code are ignored — an out-of-bounds WRITE otherwise. */
+		if ( key >= 0 && static_cast< size_t >(key) < s_deviceState.size() )
 		{
-			s_deviceState[static_cast< size_t >(key)] = pressed;
+			s_deviceState[static_cast< size_t >(key)] = pressed ? 1 : 0;
 		}
 	}
 
@@ -94,7 +97,7 @@ namespace EmEn::Input
 
 		for ( int32_t key = GLFW_KEY_SPACE; key < GLFW_KEY_LAST + 1; key++ )
 		{
-			if ( s_deviceState.at(static_cast< size_t >(key)) )
+			if ( s_deviceState[static_cast< size_t >(key)] != 0 )
 			{
 				output << "Key #" << key << " : Pressed" "\n";
 			}

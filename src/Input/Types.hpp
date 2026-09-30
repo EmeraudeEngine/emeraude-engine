@@ -290,11 +290,11 @@ namespace EmEn::Input
 
 	/**
 	 * @brief Returns a C-String version of the enum value.
-	 * @param type The enum value.
+	 * @param key The key.
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	EMEN_API const char * to_cstring (Key type) noexcept;
+	EMEN_API const char * to_cstring (Key key) noexcept;
 
 	/**
 	 * @brief Returns string version of the enum value.

@@ -54,8 +54,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 1 | `src/Console` (+ `MCP/`) | 8 327 | ✅ pushed 2026-09-30 (engine `35f868fc`, base `995159e`, alpha `93eab54a`); VALIDATED macOS M2 (R2 proven: 1.0e999 / 1.0e-60 refused) + Windows NVIDIA (MSVC clean, console conformance 4439/0 — its command set) |
 | 2 | `src/Resources` | 6 307 | ✅ pushed 2026-09-30 (base `4e029ab` + `fb9339a`, engine `d2207206` + `feac0ef4`, alpha `1a9e9554`); VALIDATED macOS M2 + Windows NVIDIA (tests incl. the Windows confinedPath block; scans unchanged, 9 891 there) |
 | 3 | `src/Scenes/Loaders` | 11 292 | ✅ pushed 2026-09-30 (engine `bf5f901c`); VALIDATED Windows NVIDIA + macOS M2 (glTF hostile set + samples + FBX demos, 0 VUID; the WAD step skipped on both: no IWAD — proven on Linux) |
-| 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | 🟠 step 5 — verified, awaiting the owner's commit order |
-| 5 | `src/Input` | 5 357 | ⬜ |
+| 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
+| 5 | `src/Input` | 5 465 | 🟠 step 5 — verified, awaiting the owner's commit order |
 | 6 | `src/Scenes` (the rest, by sub-group) | 70 278 | ⬜ |
 | 7 | `src/Graphics` (by sub-group) | 137 872 | ⬜ |
 | 8 | `src/Saphir` | 31 645 | ⬜ |
@@ -302,5 +302,36 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
   the Windows peer only.
   Found: the CEF helper processes start the download manager on the SAME cache → engine item
   `net-cache-managed-by-cef-helper-processes`.
-- [ ] (5) Ledger (done), report, commit + push on the owner's order, then peers (Windows: the two `.windows.cpp`).
+- [x] (5) Pushed 2026-09-30: engine `e40abf15`; peers asked.
+  - macOS peer: PASS. Noticed a LEGACY `downloads_db.json` at the cache ROOT (the pre-2026-08-27 manager's index,
+    `"FileDataBase": []`), never read nor cleaned by the current manager — a leftover, harmless; owner to decide
+    (a one-time cleanup, or leave it).
+
+## Section 5 — `src/Input` (started 2026-09-30)
+
+- [x] (1) clang-tidy 21.1.6 baseline (6 TUs): **47 findings**: 25 pro-bounds-constant-array-index, 8 use-enum-class, 7
+  implicit-bool-conversion, 4 misc-confusable-identifiers (`KeyI` / `Key1`, `KeyO` / `Key0`: GLFW's names), 1 each
+  unintended-char-ostream-output, narrowing-conversions, inconsistent-declaration-parameter-name.
+- [x] (2) Review. The console / MCP injection validates its input (keys 32-348, buttons 0-7, modifiers 0-63). Real
+  defects, all intent-obvious (public engine API = checked always, the two-level ruling):
+  - J1 `JoystickController::axeValue()` reads the axis only when the device is NOT usable: a connected joystick always
+    answers 0 (joystick movement never worked); with no device, `s_devicesState.at(-1)` throws → std::terminate —
+    `Player::getJoystickMoveInput()` calls it every frame when joystick control is enabled.
+  - G1 `GamepadController::axeValue()`: the same inversion, and `s_devicesState[-1]` (out of bounds) with no device.
+  - G2 `GamepadController::isButtonReleased()` returned `== GLFW_PRESS`, exactly like `isButtonPressed()`.
+  - J2 / J3 joystick buttons / hats: bound checked in DEBUG only, with `>` instead of `>=`; nothing in Release.
+  - K1 keyboard / pointer state arrays indexed by a key / button checked only against `KeyUnknown` (-1): any other
+    out-of-range value from a caller is an out-of-bounds read / write.
+  - C1 `isConnected()` (joystick AND gamepad) accepts `m_deviceID == DeviceCount` (16), one past the array.
+  - projet-alpha `Player::getJoystickMoveInput()`: `else if ( value > 0.0F )` three times where `< 0.0F` is meant —
+    the negative directions (Left, Upward, Forward) were dead branches.
+  - Throwing `.at()` (gamepad / joystick / keyboard `getRawState()`, joystick reads): → bounded `operator[]`.
+- [x] (3) Applied 2026-09-30: J1, G1, G2, J2 / J3 (checked always, `>=`), K1 (keyboard / pointer bounds on every
+  query and on `changeKeyState()`), C1 (`< DeviceCount`), the `.at()` → bounded `[]`, the hat printed as an int, the
+  `to_cstring(Key)` parameter name; projet-alpha `Player` negative directions (`< 0.0F`).
+- [x] (4) Verified 2026-09-30: cascade builds (0 warning), clangcheck 0, `-Wfloat-conversion` 0; clang-tidy 47 → 40 (all
+  on purpose, ledger); console conformance 4448/0, MCP 1707/0, `keyPress(298)` / `mouseClick(0)` injected,
+  `keyPress(9999)` / `mouseClick(99)` refused, 0 VUID. The joystick / gamepad fixes: proven by code only (no device on
+  Linux, macOS or Windows).
+- [ ] (5) Docs (input doc 01, AGENTS row, ledger), report, commit + push on the owner's order, then peers.
 

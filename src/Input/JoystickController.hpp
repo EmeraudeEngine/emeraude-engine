@@ -92,7 +92,7 @@ namespace EmEn::Input
 			bool
 			isConnected () const noexcept override
 			{
-				return m_deviceID > -1 && m_deviceID <= DeviceCount;
+				return m_deviceID > -1 && m_deviceID < DeviceCount;
 			}
 
 			/** @copydoc EmEn::Input::ControllerInterface::getRawState() */

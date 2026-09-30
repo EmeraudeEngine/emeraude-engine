@@ -88,7 +88,7 @@ namespace EmEn::Input
 			bool
 			isConnected () const noexcept override
 			{
-				return m_deviceID > -1 && m_deviceID <= DeviceCount;
+				return m_deviceID > -1 && m_deviceID < DeviceCount;
 			}
 
 			/** @copydoc EmEn::Input::ControllerInterface::getRawState() */
@@ -187,12 +187,13 @@ namespace EmEn::Input
 			bool
 			isButtonPressed (GamepadButton button) const noexcept
 			{
-				if ( !this->usable() )
+				/* NOTE: public API — an out-of-range button is "not pressed" (triad 2026-09-30). */
+				if ( !this->usable() || static_cast< size_t >(button) >= std::size(s_devicesState[0].buttons) )
 				{
 					return false;
 				}
 
-				return s_devicesState[m_deviceID].buttons[button] == GLFW_PRESS;
+				return s_devicesState[static_cast< size_t >(m_deviceID)].buttons[button] == GLFW_PRESS;
 			}
 
 			/**
@@ -204,12 +205,13 @@ namespace EmEn::Input
 			bool
 			isButtonReleased (GamepadButton button) const noexcept
 			{
-				if ( !this->usable() )
+				if ( !this->usable() || static_cast< size_t >(button) >= std::size(s_devicesState[0].buttons) )
 				{
 					return true;
 				}
 
-				return s_devicesState[m_deviceID].buttons[button] == GLFW_PRESS;
+				/* NOTE: it answered `== GLFW_PRESS`, exactly like isButtonPressed() (triad 2026-09-30). */
+				return s_devicesState[static_cast< size_t >(m_deviceID)].buttons[button] != GLFW_PRESS;
 			}
 
 			/**
@@ -221,9 +223,11 @@ namespace EmEn::Input
 			float
 			axeValue (GamepadAxis axe) const noexcept
 			{
-				if ( !this->usable() )
+				/* NOTE: it read the axis only when the device was NOT usable — a connected gamepad always answered 0, and
+				 * with no device it indexed [-1] (triad 2026-09-30). */
+				if ( this->usable() && static_cast< size_t >(axe) < std::size(s_devicesState[0].axes) )
 				{
-					const auto value = s_devicesState[m_deviceID].axes[axe];
+					const auto value = s_devicesState[static_cast< size_t >(m_deviceID)].axes[axe];
 
 					if ( value > m_threshold || value < -m_threshold )
 					{

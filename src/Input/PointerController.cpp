@@ -44,12 +44,13 @@ namespace EmEn::Input
 	bool
 	PointerController::isButtonPressed (MouseButton button) const noexcept
 	{
-		if ( m_disabled )
+		/* NOTE: public API — an out-of-range button is "not pressed", never an out-of-bounds read. */
+		if ( m_disabled || static_cast< size_t >(button) >= s_deviceState.size() )
 		{
 			return false;
 		}
 
-		return s_deviceState[static_cast< size_t >(button)];
+		return s_deviceState[static_cast< size_t >(button)] != 0;
 	}
 
 	bool
@@ -61,19 +62,19 @@ namespace EmEn::Input
 		}
 
 		return std::ranges::any_of(s_deviceState, [] (auto state) {
-			return state;
+			return state != 0;
 		});
 	}
 
 	bool
 	PointerController::isButtonReleased (MouseButton button) const noexcept
 	{
-		if ( m_disabled )
+		if ( m_disabled || static_cast< size_t >(button) >= s_deviceState.size() )
 		{
 			return true;
 		}
 
-		return !s_deviceState[static_cast< size_t >(button)];
+		return s_deviceState[static_cast< size_t >(button)] == 0;
 	}
 
 	std::string
@@ -85,7 +86,7 @@ namespace EmEn::Input
 
 		for ( int32_t button = GLFW_MOUSE_BUTTON_1; button < GLFW_MOUSE_BUTTON_LAST + 1; button++ )
 		{
-			if ( s_deviceState.at(static_cast< size_t >(button)) )
+			if ( s_deviceState[static_cast< size_t >(button)] != 0 )
 			{
 				output << "Button #" << button << " : Pressed" "\n";
 			}
@@ -106,7 +107,7 @@ namespace EmEn::Input
 #else
 		for ( int32_t button = GLFW_MOUSE_BUTTON_1; button < GLFW_MOUSE_BUTTON_LAST + 1; button++ )
 		{
-			s_deviceState.at(static_cast< size_t >(button)) = glfwGetMouseButton(window.handle(), button) == GLFW_PRESS;
+			s_deviceState[static_cast< size_t >(button)] = glfwGetMouseButton(window.handle(), button) == GLFW_PRESS ? 1 : 0;
 		}
 #endif
 

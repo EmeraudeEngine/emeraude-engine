@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
-#include <iostream>
 #include <sstream>
 
 /* Third-party inclusions. */
@@ -82,9 +81,11 @@ namespace EmEn::Input
 	float
 	JoystickController::axeValue (JoystickAxis axeIndex) const noexcept
 	{
-		if ( !this->usable() )
+		/* NOTE: it read the axis only when the device was NOT usable — a connected joystick always answered 0, and with
+		 * no device `.at(-1)` threw, i.e. std::terminate (triad 2026-09-30). */
+		if ( this->usable() && static_cast< size_t >(axeIndex) < JoystickMaxAxis )
 		{
-			auto value = s_devicesState.at(m_deviceID).axes[axeIndex];
+			const auto value = s_devicesState[static_cast< size_t >(m_deviceID)].axes[axeIndex];
 
 			if ( value > m_threshold || value < -m_threshold )
 			{
@@ -103,17 +104,13 @@ namespace EmEn::Input
 			return false;
 		}
 
-		if constexpr ( IsDebug )
+		/* NOTE: public API — checked in Release too, and `>=` (it was `>`, in Debug only; triad 2026-09-30). */
+		if ( buttonNum < 0 || buttonNum >= JoystickMaxButtons )
 		{
-			if ( static_cast< size_t >(buttonNum) > JoystickMaxButtons )
-			{
-				std::cerr << "Buttons limit is " << JoystickMaxButtons << " !" "\n";
-
-				return false;
-			}
+			return false;
 		}
 
-		return s_devicesState.at(m_deviceID).buttons[buttonNum];
+		return s_devicesState[static_cast< size_t >(m_deviceID)].buttons[static_cast< size_t >(buttonNum)];
 	}
 
 	bool
@@ -124,17 +121,13 @@ namespace EmEn::Input
 			return true;
 		}
 
-		if constexpr ( IsDebug )
+		/* NOTE: public API — checked in Release too, and `>=` (it was `>`, in Debug only; triad 2026-09-30). */
+		if ( buttonNum < 0 || buttonNum >= JoystickMaxButtons )
 		{
-			if ( static_cast< size_t >(buttonNum) > JoystickMaxButtons )
-			{
-				std::cerr << "Buttons limit is " << JoystickMaxButtons << " !" "\n";
-
-				return true;
-			}
+			return true;
 		}
 
-		return !s_devicesState.at(m_deviceID).buttons[buttonNum];
+		return !s_devicesState[static_cast< size_t >(m_deviceID)].buttons[static_cast< size_t >(buttonNum)];
 	}
 
 	JoystickHatDirection
@@ -145,17 +138,13 @@ namespace EmEn::Input
 			return Center;
 		}
 
-		if constexpr ( IsDebug )
+		/* NOTE: public API — checked in Release too, and `>=` (it was `>`, in Debug only; triad 2026-09-30). */
+		if ( hatNum < 0 || hatNum >= JoystickMaxHats )
 		{
-			if ( static_cast< size_t >(hatNum) > JoystickMaxHats )
-			{
-				std::cerr << "Hats limit is " << JoystickMaxHats << " !" "\n";
-
-				return Center;
-			}
+			return Center;
 		}
 
-		return s_devicesState.at(m_deviceID).hats[hatNum];
+		return s_devicesState[static_cast< size_t >(m_deviceID)].hats[static_cast< size_t >(hatNum)];
 	}
 
 	std::string
@@ -190,7 +179,7 @@ namespace EmEn::Input
 
 		for ( int32_t hat = 0; hat < JoystickMaxHats; hat++ )
 		{
-			output << "Hat #" << hat << " : " << hats[hat] << '\n';
+			output << "Hat #" << hat << " : " << static_cast< int >(hats[hat]) << '\n';
 		}
 
 		return output.str();
