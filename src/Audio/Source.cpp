@@ -713,12 +713,7 @@ namespace EmEn::Audio
 			alSourcePlay(this->identifier());
 		}
 
-		if ( alGetErrors("Source::play()", static_cast< const char * >(__FILE__), __LINE__) )
-		{
-			return false;
-		}
-
-		return true;
+		return !alGetErrors("Source::play()", static_cast< const char * >(__FILE__), __LINE__);
 	}
 
 	void

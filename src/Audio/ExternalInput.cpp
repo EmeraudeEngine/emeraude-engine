@@ -158,7 +158,7 @@ namespace EmEn::Audio
 		}
 
 		/* Checks configuration file */
-		const auto bufferSize = settings.getOrSetDefault< int32_t >(AudioCaptureBufferSizeKey, DefaultAudioCaptureBufferSize);
+		const auto bufferSize = settings.getOrSetDefaultInRange< int32_t >(AudioCaptureBufferSizeKey, DefaultAudioCaptureBufferSize, MinAudioCaptureBufferSize, MaxAudioCaptureBufferSize);
 		m_frequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(AudioCaptureFrequencyKey, DefaultAudioCaptureFrequency));
 
 		if ( m_frequency == WaveFactory::Frequency::Invalid )
@@ -396,8 +396,8 @@ namespace EmEn::Audio
 		const uint32_t riffSize = dataSize + 36;
 		const uint16_t audioFormat = 1; /* PCM */
 		const uint16_t numChannels = 1; /* Mono */
-		const uint32_t sampleRate = static_cast< uint32_t >(m_frequency);
-		const uint32_t byteRate = sampleRate * numChannels * sizeof(int16_t);
+		const auto sampleRate = static_cast< uint32_t >(m_frequency);
+		const uint32_t byteRate = sampleRate * numChannels * static_cast< uint32_t >(sizeof(int16_t)); /* The WAV header field is 32-bit. */
 		const uint16_t blockAlign = numChannels * sizeof(int16_t);
 		const uint16_t bitsPerSample = 16;
 

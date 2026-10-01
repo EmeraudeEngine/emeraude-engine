@@ -194,10 +194,10 @@ namespace EmEn::Audio
 
 		const std::array attributeList{
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
-			ALC_REFRESH, settings.getOrSetDefault< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate),
-			ALC_SYNC, settings.getOrSetDefault< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState),
-			ALC_MONO_SOURCES, settings.getOrSetDefault< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount),
-			ALC_STEREO_SOURCES, settings.getOrSetDefault< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount),
+			ALC_REFRESH, settings.getOrSetDefaultInRange< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate, MinOpenALRefreshRate, MaxOpenALRefreshRate),
+			ALC_SYNC, settings.getOrSetDefaultInRange< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState, MinOpenALSyncState, MaxOpenALSyncState),
+			ALC_MONO_SOURCES, settings.getOrSetDefaultInRange< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount, MinOpenALMaxMonoSourceCount, MaxOpenALMaxMonoSourceCount),
+			ALC_STEREO_SOURCES, settings.getOrSetDefaultInRange< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount, MinOpenALMaxStereoSourceCount, MaxOpenALMaxStereoSourceCount),
 			ALC_OUTPUT_MODE_SOFT, static_cast< int >(outputModeValue),
 			0
 		};
@@ -263,7 +263,7 @@ namespace EmEn::Audio
 
 		/* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
 		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]);
-		m_musicChunkSize = settings.getOrSetDefault< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
+		m_musicChunkSize = settings.getOrSetDefaultInRange< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize, MinAudioMusicChunkSize, MaxAudioMusicChunkSize);
 
 		/* NOTE: The recorder uses a loopback device with a thread-local context.
 		 * It MUST be initialized before any alGen/alListener calls so that
@@ -579,7 +579,7 @@ namespace EmEn::Audio
 			{
 				const auto beepDuration = sampleRate / 12;  /* ~83ms per beep */
 				const auto gapDuration = sampleRate / 20;   /* 50ms gap */
-				const auto totalDuration = beepDuration * 2 + gapDuration;
+				const auto totalDuration = (beepDuration * 2) + gapDuration;
 
 				auto & localData = warningSound->localData();
 
@@ -752,7 +752,7 @@ namespace EmEn::Audio
 	size_t
 	Manager::getAvailableSourceCount () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sourcePoolMutex};
+		const std::scoped_lock lock{m_sourcePoolMutex};
 
 		return m_availableSources.size();
 	}
@@ -760,7 +760,7 @@ namespace EmEn::Audio
 	SourceRequest
 	Manager::requestSource () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sourcePoolMutex};
+		const std::scoped_lock lock{m_sourcePoolMutex};
 
 		if ( m_availableSources.empty() )
 		{
@@ -781,7 +781,7 @@ namespace EmEn::Audio
 	{
 		if ( source != nullptr )
 		{
-			const std::lock_guard< std::mutex > lock{m_sourcePoolMutex};
+			const std::scoped_lock lock{m_sourcePoolMutex};
 
 			m_availableSources.push_back(source);
 		}
@@ -982,7 +982,7 @@ namespace EmEn::Audio
 
 		/* ALC extensions */
 		bool extensionFound = false;
-		const auto rawExtensions = alcGetString(nullptr, ALC_EXTENSIONS);
+		const auto * const rawExtensions = alcGetString(nullptr, ALC_EXTENSIONS);
 
 		if ( rawExtensions != nullptr )
 		{

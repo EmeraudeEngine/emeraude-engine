@@ -85,6 +85,32 @@ namespace EmEn::Audio
 			~SoundfontResource () override;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SoundfontResource (const SoundfontResource & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SoundfontResource (SoundfontResource && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SoundfontResource &
+			 */
+			SoundfontResource & operator= (const SoundfontResource & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SoundfontResource &
+			 */
+			SoundfontResource & operator= (SoundfontResource && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
 			 * @return size_t
 			 */
@@ -175,6 +201,17 @@ namespace EmEn::Audio
 			std::string presetName (int presetIndex) const noexcept;
 
 		private:
+
+			/** @brief The store a JSON soundfont definition resolves its `file` in. */
+			static constexpr auto SoundBanksStore{"data-stores/SoundBanks"};
+
+			/**
+			 * @brief Reads and parses a SF2 file into this resource.
+			 * @param filepath The resolved file path.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool readSoundfont (const std::filesystem::path & filepath) noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]

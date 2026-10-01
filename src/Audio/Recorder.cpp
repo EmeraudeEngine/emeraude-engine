@@ -63,8 +63,8 @@ namespace EmEn::Audio
 		}
 
 		const auto & outputDeviceName = m_audioManager.selectedOutputDeviceName();
-		const auto monoSources = settings.getOrSetDefault< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount);
-		const auto stereoSources = settings.getOrSetDefault< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount);
+		const auto monoSources = settings.getOrSetDefaultInRange< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount, MinOpenALMaxMonoSourceCount, MaxOpenALMaxMonoSourceCount);
+		const auto stereoSources = settings.getOrSetDefaultInRange< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount, MinOpenALMaxStereoSourceCount, MaxOpenALMaxStereoSourceCount);
 
 		/* Check for required extensions. */
 		if ( !OpenAL::installExtensionLoopback() || !OpenAL::installExtensionThreadLocalContext() )
@@ -119,7 +119,7 @@ namespace EmEn::Audio
 		/* Create the game context on the loopback device. */
 		const std::array loopbackAttrs{
 			ALC_FORMAT_CHANNELS_SOFT, static_cast< int >(channelFormat),
-			ALC_FORMAT_TYPE_SOFT, static_cast< int >(ALC_SHORT_SOFT),
+			ALC_FORMAT_TYPE_SOFT, ALC_SHORT_SOFT,
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
 			ALC_MONO_SOURCES, monoSources,
 			ALC_STEREO_SOURCES, stereoSources,
@@ -449,8 +449,8 @@ namespace EmEn::Audio
 		const uint32_t riffSize = dataSize + 36;
 		const uint16_t audioFormat = 1; /* PCM */
 		const uint16_t numChannels = m_channelCount;
-		const uint32_t sampleRate = static_cast< uint32_t >(m_playbackFrequency);
-		const uint32_t byteRate = sampleRate * numChannels * sizeof(int16_t);
+		const auto sampleRate = static_cast< uint32_t >(m_playbackFrequency);
+		const uint32_t byteRate = sampleRate * numChannels * static_cast< uint32_t >(sizeof(int16_t)); /* The WAV header field is 32-bit. */
 		const uint16_t blockAlign = numChannels * sizeof(int16_t);
 		const uint16_t bitsPerSample = 16;
 

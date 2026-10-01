@@ -48,6 +48,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Vulkan` 9a (instance, device, presentation) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 11 array-to-pointer decay, 10 reinterpret-cast, 5 convert-to-static, 4 constant-array-index, 1 each misplaced-const, dead store. Before: 59. | Triad sub-section 9a |
 | `src/Vulkan` 9b (memory and resources) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 48, all ON PURPOSE (below) — 24 reinterpret-cast, 10 qualified-auto, 5 const-correctness, 4 constant-array-index, 3 branch-clone, 2 array-to-pointer decay. Before: 116. | Triad sub-section 9b |
 | `src/Vulkan` 9c (commands, pipelines, descriptors, sync) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 21, all ON PURPOSE (below) — 15 reinterpret-cast, 2 constant-array-index, 2 vararg, 1 each convert-to-static, use-enum-class. Before: 45. | Triad sub-section 9c |
+| `src/Audio` 10a (the audio core) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 87, all ON PURPOSE (below) — 47 designated-initializers, 24 reinterpret-cast, 13 convert-to-static, 2 use-enum-class, 1 non-const global. Before: 121. | Triad sub-section 10a |
 
 ## Findings kept ON PURPOSE
 
@@ -337,4 +338,13 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-type-vararg ×2** — `std::snprintf` into the profiler's fixed label (bounded, truncating by design).
 - **convert-member-functions-to-static ×1** — `ComputePipeline::getHash()`: the pipeline cache's instance API.
 - **use-enum-class ×1** — `DescriptorSetLayout::Flag` (a bit set, the flag convention).
+
+### `src/Audio` 10a — the audio core (2026-10-01)
+
+- **modernize-use-designated-initializers ×47** — `MusicResource`'s 48-note jingle table: an aligned `{start, duration,
+  frequency}` table reads better positional than with three member names per note.
+- **pro-type-reinterpret-cast ×24** — OpenAL / WAV byte buffers, `alGetProcAddress` entry points.
+- **convert-member-functions-to-static ×13** — the OpenAL wrappers' query API (an instance API over the device).
+- **use-enum-class ×2** — `NotificationCode` of `Manager` and `TrackMixer` (the observable convention).
+- **avoid-non-const-global-variables ×1** — `s_tsfMutex` (anonymous namespace): the lock serialising TinySoundFont.
 

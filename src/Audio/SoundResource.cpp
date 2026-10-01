@@ -59,7 +59,7 @@ namespace EmEn::Audio
 		 * Two short beeps with a pitch sweep, easily recognizable as a placeholder. */
 		const auto beepDuration = sampleRate / 10;  /* 100ms per beep */
 		const auto silenceDuration = sampleRate / 20;  /* 50ms silence between beeps */
-		const auto totalDuration = beepDuration * 2 + silenceDuration;
+		const auto totalDuration = (beepDuration * 2) + silenceDuration;
 
 		WaveFactory::Synthesizer synth{m_localData, totalDuration, frequencyPlayback};
 

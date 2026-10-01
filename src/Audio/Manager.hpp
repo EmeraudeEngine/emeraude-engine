@@ -113,6 +113,32 @@ namespace EmEn::Audio
 			~Manager () override = default;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Manager (const Manager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Manager (Manager && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Manager &
+			 */
+			Manager & operator= (const Manager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Manager &
+			 */
+			Manager & operator= (Manager && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
 			 * @return size_t
 			 */

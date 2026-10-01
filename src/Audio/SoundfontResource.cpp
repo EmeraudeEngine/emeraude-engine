@@ -27,7 +27,9 @@
 #include "SoundfontResource.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <fstream>
+#include <limits>
 
 /* Third-party inclusions. */
 /* TinySoundFont implementation (must be defined in exactly one .cpp file). */
@@ -36,6 +38,8 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "FileSystem.hpp"
+#include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
@@ -67,59 +71,19 @@ namespace EmEn::Audio
 	bool
 	SoundfontResource::load (const std::filesystem::path & filepath) noexcept
 	{
+		/* NOTE: A JSON definition goes through ResourceTrait::load(), which parses it and calls load(json) — as
+		 * MeshResource does for a non-glTF file; without this, a .json in the store was read as an SF2 and failed. */
+		if ( filepath.extension() == ".json" )
+		{
+			return ResourceTrait::load(filepath);
+		}
+
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		/* Read the entire file into memory.
-		 * TSF needs the data to remain valid for the lifetime of the tsf handle. */
-		std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-
-		if ( !file.is_open() )
-		{
-			TraceError{ClassId} << "Unable to open soundfont file '" << filepath << "' !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		const auto fileSize = file.tellg();
-
-		if ( fileSize <= 0 )
-		{
-			TraceError{ClassId} << "Soundfont file '" << filepath << "' is empty or unreadable !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		file.seekg(0, std::ios::beg);
-
-		m_fileData.resize(static_cast< size_t >(fileSize));
-
-		if ( !file.read(m_fileData.data(), fileSize) )
-		{
-			TraceError{ClassId} << "Failed to read soundfont file '" << filepath << "' !";
-
-			m_fileData.clear();
-
-			return this->setLoadSuccess(false);
-		}
-
-		/* Load the soundfont from memory. */
-		m_tsf = tsf_load_memory(m_fileData.data(), static_cast< int >(m_fileData.size()));
-
-		if ( m_tsf == nullptr )
-		{
-			TraceError{ClassId} << "Failed to parse soundfont file '" << filepath << "' ! Invalid SF2 format.";
-
-			m_fileData.clear();
-
-			return this->setLoadSuccess(false);
-		}
-
-		TraceDebug{ClassId} << "Loaded soundfont '" << this->name() << "' with " << this->presetCount() << " presets (" << (m_fileData.size() / 1024) << " KB).";
-
-		return this->setLoadSuccess(true);
+		return this->setLoadSuccess(this->readSoundfont(filepath));
 	}
 
 	bool
@@ -140,16 +104,33 @@ namespace EmEn::Audio
 			return this->setLoadSuccess(false);
 		}
 
-		const std::filesystem::path filepath{*fileKey};
+		/* NOTE: Owner ruling (2026-10-01): the file is a DATA path, resolved like every other one — inside the SoundBanks
+		 * store of the data directories, confined (an absolute or escaping path is refused, traced by FileSystem). It
+		 * used to be opened raw, relative to the process's working directory. */
+		const auto filepath = this->serviceProvider().primaryServices().fileSystem().getFilepathFromDataDirectories(SoundBanksStore, *fileKey);
 
-		/* Read the entire file into memory. */
+		if ( filepath.empty() )
+		{
+			TraceError{ClassId} << "The soundfont file '" << *fileKey << "' of resource '" << this->name() << "' is not in the '" << SoundBanksStore << "' store of any data directory !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(this->readSoundfont(filepath));
+	}
+
+	bool
+	SoundfontResource::readSoundfont (const std::filesystem::path & filepath) noexcept
+	{
+		/* Read the entire file into memory.
+		 * TSF needs the data to remain valid for the lifetime of the tsf handle. */
 		std::ifstream file(filepath, std::ios::binary | std::ios::ate);
 
 		if ( !file.is_open() )
 		{
 			TraceError{ClassId} << "Unable to open soundfont file '" << filepath << "' !";
 
-			return this->setLoadSuccess(false);
+			return false;
 		}
 
 		const auto fileSize = file.tellg();
@@ -158,7 +139,15 @@ namespace EmEn::Audio
 		{
 			TraceError{ClassId} << "Soundfont file '" << filepath << "' is empty or unreadable !";
 
-			return this->setLoadSuccess(false);
+			return false;
+		}
+
+		/* NOTE: TinySoundFont takes the size as an int: a larger file cannot be handed to it. */
+		if ( static_cast< uint64_t >(fileSize) > static_cast< uint64_t >(std::numeric_limits< int >::max()) )
+		{
+			TraceError{ClassId} << "Soundfont file '" << filepath << "' is " << static_cast< uint64_t >(fileSize) << " bytes, larger than the parser accepts (" << std::numeric_limits< int >::max() << ") !";
+
+			return false;
 		}
 
 		file.seekg(0, std::ios::beg);
@@ -171,7 +160,7 @@ namespace EmEn::Audio
 
 			m_fileData.clear();
 
-			return this->setLoadSuccess(false);
+			return false;
 		}
 
 		/* Load the soundfont from memory. */
@@ -183,12 +172,12 @@ namespace EmEn::Audio
 
 			m_fileData.clear();
 
-			return this->setLoadSuccess(false);
+			return false;
 		}
 
 		TraceDebug{ClassId} << "Loaded soundfont '" << this->name() << "' with " << this->presetCount() << " presets (" << (m_fileData.size() / 1024) << " KB).";
 
-		return this->setLoadSuccess(true);
+		return true;
 	}
 
 	int

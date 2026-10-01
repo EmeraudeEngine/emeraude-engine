@@ -79,7 +79,7 @@ namespace EmEn::Audio
 
 		auto * trackMixer = static_cast< TrackMixer * >(userParam);
 
-		const std::lock_guard< std::mutex > lock{trackMixer->m_stateAccess};
+		const std::scoped_lock lock{trackMixer->m_stateAccess};
 
 		const PlayingTrack currentTrack = trackMixer->m_playingTrack;
 		const ALuint currentSourceId = currentTrack == PlayingTrack::TrackA
@@ -159,7 +159,7 @@ namespace EmEn::Audio
 	void
 	TrackMixer::setVolume (float volume) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_stateAccess};
+		const std::scoped_lock lock{m_stateAccess};
 
 		m_gain = Math::clampToUnit(volume);
 
@@ -190,7 +190,7 @@ namespace EmEn::Audio
 		 * stop the non-current track and set the current one to full volume. */
 		if ( !state && this->usable() )
 		{
-			const std::lock_guard< std::mutex > lock{m_stateAccess};
+			const std::scoped_lock lock{m_stateAccess};
 
 			/* Stop any ongoing fade. */
 			m_isFading = false;
@@ -233,7 +233,7 @@ namespace EmEn::Audio
 		/* NOTE: Also update the currently playing source if any. */
 		if ( this->usable() )
 		{
-			const std::lock_guard< std::mutex > lock{m_stateAccess};
+			const std::scoped_lock lock{m_stateAccess};
 
 			const bool looping = (mode == PlayMode::Loop);
 
@@ -312,7 +312,7 @@ namespace EmEn::Audio
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_stateAccess};
+			const std::scoped_lock lock{m_stateAccess};
 
 			m_userState = UserState::Playing;
 
@@ -351,11 +351,11 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Check which track was playing. */
-		PlayingTrack trackToPlayNow;
+		PlayingTrack trackToPlayNow = PlayingTrack::None;
 		bool wasPlaying = true;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_stateAccess};
+			const std::scoped_lock lock{m_stateAccess};
 
 			switch ( m_playingTrack )
 			{
@@ -571,7 +571,7 @@ namespace EmEn::Audio
 			return 0.0F;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_stateAccess};
+		const std::scoped_lock lock{m_stateAccess};
 
 		switch ( m_playingTrack )
 		{
@@ -734,7 +734,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_stateAccess};
+		const std::scoped_lock lock{m_stateAccess};
 
 		switch ( m_playingTrack )
 		{
@@ -790,7 +790,7 @@ namespace EmEn::Audio
 	{
 		if ( this->usable() )
 		{
-			const std::lock_guard< std::mutex > lock{m_stateAccess};
+			const std::scoped_lock lock{m_stateAccess};
 
 			switch ( m_playingTrack )
 			{
@@ -814,7 +814,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_stateAccess};
+		const std::scoped_lock lock{m_stateAccess};
 
 		switch ( m_playingTrack )
 		{
@@ -849,7 +849,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_stateAccess};
+		const std::scoped_lock lock{m_stateAccess};
 
 		switch ( m_playingTrack )
 		{
@@ -884,7 +884,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_stateAccess};
+		const std::scoped_lock lock{m_stateAccess};
 
 		m_userState = UserState::Stopped;
 

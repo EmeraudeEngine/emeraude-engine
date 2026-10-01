@@ -546,7 +546,7 @@ namespace EmEn::Audio
 
 			for ( const auto & track : m_playlist )
 			{
-				const auto marker = (index == m_musicIndex) ? " > " : "   ";
+				const auto * const marker = (index == m_musicIndex) ? " > " : "   ";
 
 				list << marker << (index + 1) << ". " << track->name() << "\n";
 

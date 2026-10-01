@@ -180,6 +180,8 @@ namespace EmEn
 		/* Music streaming buffer size in samples. */
 		constexpr auto AudioMusicChunkSizeKey{"Core/Audio/MusicChunkSize"};
 		constexpr auto DefaultAudioMusicChunkSize{8192};
+		constexpr auto MinAudioMusicChunkSize{1024}; /* Inclusive: outside the range the default applies, with a warning. */
+		constexpr auto MaxAudioMusicChunkSize{1048576};
 		/* Path to a SoundFont (.sf2) used for MIDI music. Empty = none. */
 		constexpr auto AudioMusicSoundfontKey{"Core/Audio/MusicSoundfont"};
 		constexpr auto DefaultAudioMusicSoundfont{""};
@@ -200,15 +202,23 @@ namespace EmEn
 			/* OpenAL context refresh rate in Hz. */
 			constexpr auto OpenALRefreshRateKey{"Core/Audio/OpenAL/RefreshRate"};
 			constexpr auto DefaultOpenALRefreshRate{46};
+			constexpr auto MinOpenALRefreshRate{1}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxOpenALRefreshRate{1000};
 			/* OpenAL synchronous context flag (0 = asynchronous). */
 			constexpr auto OpenALSyncStateKey{"Core/Audio/OpenAL/SyncState"};
 			constexpr auto DefaultOpenALSyncState{0};
+			constexpr auto MinOpenALSyncState{0}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxOpenALSyncState{1};
 			/* Maximum number of simultaneous mono sources. */
 			constexpr auto OpenALMaxMonoSourceCountKey{"Core/Audio/OpenAL/MaxMonoSourceCount"};
 			constexpr auto DefaultOpenALMaxMonoSourceCount{32};
+			constexpr auto MinOpenALMaxMonoSourceCount{1}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxOpenALMaxMonoSourceCount{256};
 			/* Maximum number of simultaneous stereo sources. */
 			constexpr auto OpenALMaxStereoSourceCountKey{"Core/Audio/OpenAL/MaxStereoSourceCount"};
 			constexpr auto DefaultOpenALMaxStereoSourceCount{2};
+			constexpr auto MinOpenALMaxStereoSourceCount{1}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxOpenALMaxStereoSourceCount{64};
 
 			/* Audio Capture (Audio::ExternalInput) */
 			/* Enable audio input capture (microphone / line-in). */
@@ -225,6 +235,8 @@ namespace EmEn
 			/* Capture buffer size in samples. */
 			constexpr auto AudioCaptureBufferSizeKey{"Core/Audio/Capture/BufferSize"};
 			constexpr auto DefaultAudioCaptureBufferSize{64};
+			constexpr auto MinAudioCaptureBufferSize{1}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxAudioCaptureBufferSize{1024};
 
 		/* Video */
 		/* Persist window/video geometry and state on exit. */

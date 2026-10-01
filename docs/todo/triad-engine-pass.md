@@ -60,7 +60,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed and VALIDATED on the three OS (2026-10-01) |
 | 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed (9b, 9c peers pending) |
-| 10 | `src/Audio` | 18 919 | ⬜ |
+| 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | 🟠 10a started |
 | 11 | `src/Physics` | 9 197 | ⬜ |
 | 12 | `src/Animations` | 3 488 | ⬜ |
 | 13 | `src/Overlay` | 7 303 | ⬜ |
@@ -1072,8 +1072,8 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 9a | Instance, device, presentation: `Instance`, `DebugMessenger`, `PhysicalDevice`, `Device`, `DeviceQueueConfiguration`, `DeviceRequirements`, `Queue`, `Surface`, `SwapChain`, `Utility` (trust boundary: the settings — GPU choice, layers, present modes — and what the driver reports) | ~9 500 | ✅ pushed engine `fa06d2fd`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ✅ pushed (the engine 9b commit); peers pending |
-| 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ✅ pushed (the engine 9c commit); peers pending |
+| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ✅ pushed engine `03962da6`; macOS M2 + Windows VALIDATED except the dump step (alpha crash, fixed, re-test pending) |
+| 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ✅ pushed engine `1cbb475d`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 
 ### 9a — instance, device, presentation (2026-10-01)
 
@@ -1148,7 +1148,14 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   dumps the sRGB `SecurityCubemap`; `dumpRenderTarget(OffscreenRenderingCubemap)` (format 97) is refused, 0 VUID (the old
   default: the VUID above). terrain, water-world, animation-debug, citadel (RT acceleration structures; MCP 1707/0,
   console 4466/0), a hardware H.265 rush (121 frames): 0 VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9b commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `03962da6`, base `94fc69d`; peers asked.
+  - macOS M2 and Windows (NVIDIA + AMD): builds 0 warning; terrain, water-world, animation-debug, citadel (MCP 1707/0,
+    console 4445/0 macOS, 4455/1 and 4456/1 Windows — the known RST checks) 0 VUID, 0 `VUID-…-pRegions-00183`; the
+    Windows NVIDIA H.265 rush 121 pictures. Step 1 (the dumps) could NOT run on either: `offscreen-rendering` crashed at
+    startup by itself (SIGSEGV 6/6 macOS, 0xc0000005 5/5 Windows) — a PRE-EXISTING projet-alpha use-after-scope: the "CCTV"
+    material's async factory captured the block-local `dynamicTexture2D` BY REFERENCE (Linux survived by luck). Fixed in
+    projet-alpha `ad00545f` (by value; `Marble::getMesh()`'s `&color` too, same pattern), Linux 3/3 runs: the sRGB dump, the format-97
+    refusal, 0 VUID. The dumps are re-asked from the peers with that fix.
 
 ### 9c — commands, pipelines, descriptors, sync (2026-10-01)
 
@@ -1165,5 +1172,49 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   `-Wfloat-conversion` 0; clang-tidy 45 → 21 (on purpose, ledger). `getGPUTimings()` with the profiler ON prints its
   table (labels at their 47-character capacity, unchanged); terrain, sponza, citadel (MCP 1707/0, console 4466/0): 0
   VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9c commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `1cbb475d`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): the GPU profiler works on MoltenVK ("3 query pools of 128 timestamps, period
+    1 ns/tick, 64 valid bits") and prints its full table (labels cut at 47 characters, as designed); terrain, sponza,
+    citadel (MCP 1707/0, console 4445/0): 0 VUID, 0 UNASSIGNED.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): the profiler table on both
+    (39 lines); terrain, sponza, citadel (MCP 1707/0, console 4455/1 NVIDIA the known RST, 4457/0 AMD); NVIDIA only the
+    known 12325. Noted (PRE-EXISTING, unchanged by 9c — the label was already 48 bytes): labels are cut at 47 characters
+    and the statistics accumulate BY LABEL, so two scopes whose names differ only past character 47 would merge (none do
+    today: 0 duplicates on both GPUs).
+
+## Section 10 — `src/Audio` (started 2026-10-01), two sub-sections (owner, 2026-10-01)
+
+| Sub | Content | Lines | Status |
+|---|---|---|---|
+| 10a | The audio core: the resources read from disk (`SoundResource`, `MusicResource`, `PlaylistResource`, `SoundfontResource` — the unconfined `file` path lead of section 2), `Buffer`, `Manager` (+ console), `TrackMixer` (+ console), `Source`, `Listener`, `Ambience*`, `Recorder`, `ExternalInput`, `HardwareOutput`, `Utility` | ~12 000 | ✅ pushed (the engine 10a commit); peers pending |
+| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ⬜ |
+
+### 10a — the audio core (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (18 TUs + headers): **121**: 47 designated initializers (a note table), 24
+  reinterpret-cast, 16 scoped-lock, 13 convert-to-static, and singles (incl. two missing braces, two widening sizes).
+- [x] (2) Review (trust boundaries: the resource files, the playlist / ambience JSON, the audio settings, the TrackMixer
+  console). Sound: the console bounds its volume (0-100), seek (the duration) and indices; the ambience channel count
+  is bounded by the source pool, its radius by `setRadius()`. Findings:
+  - A1 (the section-2 lead) `SoundfontResource::load(json)` opened its `file` key RAW (working-directory relative,
+    absolute and `..` accepted) — and the JSON form was unreachable anyway: the container calls `load(path)` on the
+    `.json`, which read it as an SF2 (owner question). A file over 2 GiB overflowed TinySoundFont's `int` size.
+  - A2 audio settings unbounded: the capture buffer size times 1024 in `int32` (signed overflow, a negative size to
+    OpenAL), a music chunk size of 0 (`chunkCount(0)`), the OpenAL attributes (owner question).
+- [x] (3) Mechanical: fix-its with `--format-style=none` (scoped_lock, designated initializers — NOT the 48-note jingle
+  table, kept positional for readability —, parentheses, `auto`, the two missing braces, a redundant cast, a boolean),
+  the WAV byte rate in `uint32_t` explicitly, two `const auto * const`, `s_tsfMutex` in an anonymous namespace, a `const`
+  reader builder, a switch local initialized, copy / move deleted on `Audio::Manager` and `SoundfontResource`.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - A1 `file` resolved through `FileSystem::getFilepathFromDataDirectories("data-stores/SoundBanks", file)` (confined);
+    `load(path)` hands a `.json` to `ResourceTrait::load()` (as `MeshResource` does), the read shared by both forms
+    (`readSoundfont()`), a file past `INT_MAX` bytes refused.
+  - A2 through `getOrSetDefaultInRange()`: Capture BufferSize 1-1024 KiB, Music ChunkSize 1024-1048576, OpenAL
+    MaxMonoSources 1-256, MaxStereoSources 1-64, RefreshRate 1-1000, SyncState 0-1.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 117 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 121 → 87 (on purpose, ledger). A scratch `--add-data-directory` with
+  `SoundBanks/TestSF.json` `{"file": "FluidR3.sf2"}` → `Loaded` (the owner's store file); `"../SoundBanks/FluidR3.sf2"` and
+  `"/etc/hostname"` → refused by FileSystem; the six audio keys out of range → their warnings and the defaults; a MIDI
+  track plays (the `.sf2` path); citadel MCP 1707/0, console 4466/0, 0 VUID.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 10a commit); peers asked.
 

@@ -53,7 +53,10 @@ namespace EmEn::Audio
 
 	/* NOTE: TSF (TinySoundFont) is not thread-safe for concurrent rendering operations.
 	 * This mutex protects SF2-based MIDI loading when multiple MusicResources load in parallel. */
-	static std::mutex s_tsfMutex;
+	namespace
+	{
+		std::mutex s_tsfMutex;
+	}
 
 	bool
 	MusicResource::onDependenciesLoaded () noexcept
@@ -104,7 +107,7 @@ namespace EmEn::Audio
 
 		/* Lock the mutex to ensure thread-safe access to the TSF handle.
 		 * TSF maintains internal state that cannot be safely accessed concurrently. */
-		const std::lock_guard< std::mutex > tsfLock{s_tsfMutex};
+		const std::scoped_lock tsfLock{s_tsfMutex};
 
 		WaveFactory::ReadOptions midiOptions;
 		midiOptions.synthesisFrequency = m_frequency;
@@ -327,7 +330,7 @@ namespace EmEn::Audio
 		for ( size_t sampleIndex = 0; sampleIndex < totalSamples; ++sampleIndex )
 		{
 			stereoData[sampleIndex * 2] = monoData[sampleIndex];
-			stereoData[sampleIndex * 2 + 1] = monoData[sampleIndex];
+			stereoData[(sampleIndex * 2) + 1] = monoData[sampleIndex];
 		}
 
 		return this->setLoadSuccess(true);

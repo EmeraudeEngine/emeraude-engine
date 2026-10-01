@@ -67,7 +67,7 @@ namespace EmEn::Audio
 		}
 
 		Json::Value root;
-		Json::CharReaderBuilder readerBuilder;
+		const Json::CharReaderBuilder readerBuilder;
 		std::string errors;
 
 		if ( !Json::parseFromStream(readerBuilder, file, &root, &errors) )
