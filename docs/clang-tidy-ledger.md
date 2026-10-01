@@ -36,6 +36,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Scenes` 6d (`Component/`) | 2026-09-30 | clang-tidy 21.1.6 after the triad pass: 40, all ON PURPOSE (below) — 22 constant-array-index, 9 use-enum-class, 3 non-private members, 2 non-const globals, 1 each mt-unsafe, missing-std-forward, const-ref member, static-cast downcast. Before: 75. | Triad sub-section 6d |
 | `src/Scenes` 6e (`Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 38, all ON PURPOSE (below) — 11 constant-array-index, 9 pro-type-vararg, 6 non-private members, 5 switch-missing-default-case, 5 avoid-const-or-ref-data-members, 1 reinterpret-cast, 1 use-enum-class. Before: 78. | Triad sub-section 6e |
 | `src/Graphics` 7a (resources read from disk: images, textures, KTX2, cubemaps, IBL, movies, font, cloud shape) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 72, all ON PURPOSE (below) — 53 constant-array-index, 17 reinterpret-cast, 2 convert-member-functions-to-static. Before: 171. The touched resource-chain TUs: 3 misc-no-recursion (the failure propagation). | Triad sub-section 7a |
+| `src/Graphics` 7b (`Material/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 23 constant-array-index, 7 static-cast-downcast, 1 use-enum-class. Before: 56. | Triad sub-section 7b |
 
 ## Findings kept ON PURPOSE
 
@@ -179,4 +180,12 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **misc-no-recursion ×3** (`ResourceTrait`) — a failure propagating up the dependency chain
   (`releaseLinksAfterFailure()` → `dependencyFailed()` → …): bounded by the chain's depth (image → texture → material
   → mesh → …).
+
+### `src/Graphics` 7b — `Material/` (2026-10-01)
+
+- **pro-bounds-constant-array-index ×23** — `StandardResource`'s UVW transform / rotation tables (`slot <
+  MaxUVWSlots`, the slot allocated by the component) and `Helpers::parseColorComponent()` (`index < min(4, size)`).
+- **pro-type-static-cast-downcast ×7** — a material component cast to `Component::Texture` right after a
+  `type() == Type::Texture` check or right after its own `emplace()` of a `Texture` (RTTI avoided).
+- **use-enum-class ×1** — `MaterialFlagBits` (a bit set, the flag convention).
 

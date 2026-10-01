@@ -1477,15 +1477,15 @@ namespace EmEn::Graphics::Material
 		 * transform is bit-exact whatever it indexes. */
 		for ( size_t slot = 0; slot < UVWTransformSlots; slot++ )
 		{
-			m_materialProperties[UVWTransformTableOffset + slot * 4] = 1.0F;
-			m_materialProperties[UVWTransformTableOffset + slot * 4 + 1] = 1.0F;
-			m_materialProperties[UVWTransformTableOffset + slot * 4 + 2] = 0.0F;
-			m_materialProperties[UVWTransformTableOffset + slot * 4 + 3] = 0.0F;
+			m_materialProperties[UVWTransformTableOffset + (slot * 4)] = 1.0F;
+			m_materialProperties[UVWTransformTableOffset + (slot * 4) + 1] = 1.0F;
+			m_materialProperties[UVWTransformTableOffset + (slot * 4) + 2] = 0.0F;
+			m_materialProperties[UVWTransformTableOffset + (slot * 4) + 3] = 0.0F;
 
-			m_materialProperties[UVWRotationTableOffset + slot * 4] = 1.0F;
-			m_materialProperties[UVWRotationTableOffset + slot * 4 + 1] = 0.0F;
-			m_materialProperties[UVWRotationTableOffset + slot * 4 + 2] = 0.0F;
-			m_materialProperties[UVWRotationTableOffset + slot * 4 + 3] = 0.0F;
+			m_materialProperties[UVWRotationTableOffset + (slot * 4)] = 1.0F;
+			m_materialProperties[UVWRotationTableOffset + (slot * 4) + 1] = 0.0F;
+			m_materialProperties[UVWRotationTableOffset + (slot * 4) + 2] = 0.0F;
+			m_materialProperties[UVWRotationTableOffset + (slot * 4) + 3] = 0.0F;
 		}
 
 		for ( size_t index = 0; index < UVWIndexVectors * 4; index++ )
@@ -1532,12 +1532,12 @@ namespace EmEn::Graphics::Material
 
 			for ( size_t candidate = 1; candidate < used; candidate++ )
 			{
-				if ( m_materialProperties[UVWTransformTableOffset + candidate * 4] == scaleX
-				  && m_materialProperties[UVWTransformTableOffset + candidate * 4 + 1] == scaleY
-				  && m_materialProperties[UVWTransformTableOffset + candidate * 4 + 2] == offsetX
-				  && m_materialProperties[UVWTransformTableOffset + candidate * 4 + 3] == offsetY
-				  && m_materialProperties[UVWRotationTableOffset + candidate * 4] == cosine
-				  && m_materialProperties[UVWRotationTableOffset + candidate * 4 + 1] == sine )
+				if ( m_materialProperties[UVWTransformTableOffset + (candidate * 4)] == scaleX
+				  && m_materialProperties[UVWTransformTableOffset + (candidate * 4) + 1] == scaleY
+				  && m_materialProperties[UVWTransformTableOffset + (candidate * 4) + 2] == offsetX
+				  && m_materialProperties[UVWTransformTableOffset + (candidate * 4) + 3] == offsetY
+				  && m_materialProperties[UVWRotationTableOffset + (candidate * 4)] == cosine
+				  && m_materialProperties[UVWRotationTableOffset + (candidate * 4) + 1] == sine )
 				{
 					slot = candidate;
 
@@ -1558,13 +1558,13 @@ namespace EmEn::Graphics::Material
 
 				slot = used++;
 
-				m_materialProperties[UVWTransformTableOffset + slot * 4] = scaleX;
-				m_materialProperties[UVWTransformTableOffset + slot * 4 + 1] = scaleY;
-				m_materialProperties[UVWTransformTableOffset + slot * 4 + 2] = offsetX;
-				m_materialProperties[UVWTransformTableOffset + slot * 4 + 3] = offsetY;
+				m_materialProperties[UVWTransformTableOffset + (slot * 4)] = scaleX;
+				m_materialProperties[UVWTransformTableOffset + (slot * 4) + 1] = scaleY;
+				m_materialProperties[UVWTransformTableOffset + (slot * 4) + 2] = offsetX;
+				m_materialProperties[UVWTransformTableOffset + (slot * 4) + 3] = offsetY;
 
-				m_materialProperties[UVWRotationTableOffset + slot * 4] = cosine;
-				m_materialProperties[UVWRotationTableOffset + slot * 4 + 1] = sine;
+				m_materialProperties[UVWRotationTableOffset + (slot * 4)] = cosine;
+				m_materialProperties[UVWRotationTableOffset + (slot * 4) + 1] = sine;
 			}
 
 			m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] = static_cast< float >(slot);
@@ -1705,7 +1705,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::createDescriptorSet (Renderer & renderer, const UniformBufferObject & uniformBufferObject) noexcept
+	StandardResource::createDescriptorSet (Renderer & renderer, const UniformBufferObject & /*uniformBufferObject*/) noexcept
 	{
 		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
 		m_descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
@@ -2066,14 +2066,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept
 	{
-		static constexpr std::pair< ComponentType, RTTextureRole > mappings[] = {
+		static constexpr std::array< std::pair< ComponentType, RTTextureRole >, 6 > mappings{{
 			{ComponentType::Albedo, RTTextureRole::Albedo},
 			{ComponentType::Normal, RTTextureRole::Normal},
 			{ComponentType::Roughness, RTTextureRole::Roughness},
 			{ComponentType::Metalness, RTTextureRole::Metalness},
 			{ComponentType::AutoIllumination, RTTextureRole::Emission},
 			{ComponentType::Opacity, RTTextureRole::Opacity}
-		};
+		}};
 
 		for ( const auto & [compType, role] : mappings )
 		{
@@ -2756,8 +2756,6 @@ namespace EmEn::Graphics::Material
 
 		/* Transmission component */
 		{
-			const auto componentIt = m_components.find(ComponentType::Transmission);
-
 			if ( this->declaresTransmission() )
 			{
 				lightGenerator.declareSurfaceTransmission(
@@ -2811,7 +2809,7 @@ namespace EmEn::Graphics::Material
 	{
 		/* For PBR, the fragment color is the albedo (base color).
 		 * The actual shading is computed by the BRDF in the light generator. */
-		const auto base = this->albedoExpression();
+		auto base = this->albedoExpression();
 
 		/* Blending modes of the opacity contract (rules 1 and 3): the alpha channel carries
 		 * the opacity. Cutout mode (rule 2) keeps the base alpha — surviving texels are opaque. */

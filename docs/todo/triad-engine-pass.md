@@ -640,8 +640,8 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 7a | Resources read from disk: images and textures (`ImageResource`, `CompressedImageResource`, `KTX2Decoder`, `TextureCompressor`, `VolumetricImageResource`, `TextureResource/`, `TextureCache`), cubemaps and IBL (`CubemapResource`, `IBLTexture`), video (`MovieResource`, `CubemapMovieResource`, `VideoFrameConverter`, `ExternalInput`), `FontResource`, `CloudShapeResource` | ~13 700 | 🟠 started |
-| 7b | `Material/` (JSON material definitions) | ~14 000 | ⬜ |
+| 7a | (✅ pushed base `10e23f3`, engine `4e4bda64`; peers pending) Resources read from disk: images and textures (`ImageResource`, `CompressedImageResource`, `KTX2Decoder`, `TextureCompressor`, `VolumetricImageResource`, `TextureResource/`, `TextureCache`), cubemaps and IBL (`CubemapResource`, `IBLTexture`), video (`MovieResource`, `CubemapMovieResource`, `VideoFrameConverter`, `ExternalInput`), `FontResource`, `CloudShapeResource` | ~13 700 | 🟠 started |
+| 7b | `Material/` (JSON material definitions) | ~14 000 | ✅ pushed 2026-10-01; peers pending |
 | 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ⬜ |
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ⬜ |
 | 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ⬜ |
@@ -709,5 +709,29 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2)
   VUIDs, VMA asserts); a corrupted texture cache → 17 entries ignored, recompressed. Regression: citadel (MCP 1707/0,
   console 4466/0, log classes = the 6b run), terrain, beams, lighten-marbles, the INTACT helmet / lamp / Fox: 0 VUID,
   0 VMA, 0 error, 0 "goes on without", 0 "fails: its dependency".
-- [ ] (5) Commit + push on the owner's order; then the peers.
+- [x] (5) Pushed 2026-10-01: base `10e23f3`, engine `4e4bda64`; peers asked (the broken helmet / lamp, a corrupted
+  texture cache in a dedicated `--cache-directory`, regression demos).
+  - Windows peer: 4e4bda64 did NOT compile on MSVC — two `const auto *const pairIt = std::ranges::find_if(…)` on a
+    `std::array` in `KTX2Decoder.cpp` (clang-tidy's qualified-auto fix-it; MSVC's array iterator is a class). Fixed and
+    pushed as engine `734b4422` (owner's order). Caution-points § Build / Compiler.
+
+### 7b — `Material/` (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (8 TUs): **56**: 23 constant-array-index, 20 parentheses, 7 static-cast-downcast,
+  and singles: an unused forward declaration, use-enum-class, an unused parameter, a C array, a dead store, a
+  no-automatic-move.
+- [x] (2) Review. The trust boundary (the JSON definitions of `StandardResource`, `BeamResource`, `PathResource`)
+  reads every key through `FastJSON::getValue` (the 6c migration: a wrong type or a non-finite value is absent, the
+  default applies), and the setters it feeds clamp their ranges (`setIOR` 1-3, roughness / metalness / opacity /
+  factors 0-1, distances and strengths ≥ 0); the `set…Component(float)` creators delegate to those setters; a normal /
+  height scale may be any finite value (glTF allows a negative one). The material helpers were hardened in 6c. No
+  defect at the boundary; no owner question.
+- [x] (3) Mechanical (2026-10-01): parentheses (fix-its, `--format-style=none`), the dead `Transmission` lookup
+  removed, the albedo expression returned by move, the unused descriptor-set parameter named in a comment, the RT
+  texture mapping table a `std::array`, the unused `Resources::Manager` forward declaration of `Component/Texture.hpp`
+  removed.
+- [x] (4) Verified 2026-10-01 (Linux): builds clean, clangcheck 107 TUs 0, `-Wfloat-conversion` 0; clang-tidy 56 → 31
+  (on purpose, ledger). One launch: citadel (its material library), then the helmet, the KTX2 lamp and the Fox dropped
+  after deleting it, then beams (beam / path materials): 0 VUID, 0 error, 0 VMA.
+- [x] (5) Pushed 2026-10-01 (see the 7b commit); peers asked with the 7a validation.
 

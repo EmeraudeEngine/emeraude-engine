@@ -47,11 +47,6 @@
 #include "PixelFactory/Types.hpp"
 #include "Saphir/Keys.hpp"
 
-namespace EmEn::Resources
-{
-	class Manager;
-}
-
 namespace EmEn::Graphics::Material::Component
 {
 	/**

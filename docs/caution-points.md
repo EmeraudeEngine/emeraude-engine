@@ -4766,6 +4766,15 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### clang-tidy's `readability-qualified-auto` fix-it breaks MSVC on a `std::array` iterator (2026-10-01)
+
+> [!CAUTION]
+> The fix-it turns `const auto it = std::ranges::find_if(anArray, …)` into `const auto *const it`: a raw pointer
+> with libstdc++ / libc++, a CLASS (`_Array_const_iterator`) with MSVC, where the deduction fails (C3535, C2440, C2679).
+> It broke the Windows build of engine `4e4bda64` (fixed `734b4422`). Never apply that fix-it to an iterator; review
+> every `auto *` it writes. With `--fix`, also pass `--format-style=none` (otherwise clang-tidy reformats the lines it
+> touches) and check `init-variables` (it initializes floats to `NAN` and adds `<math.h>`).
+
 ### A `weak_ptr` must never be hashed through a `shared_ptr` built from it — fixed 2026-10-01 (triad 6e)
 
 > [!CAUTION]
