@@ -292,19 +292,35 @@ namespace EmEn::PlatformSpecific
 	std::filesystem::path
 	SystemInfo::getRealApplicationDir () noexcept
 	{
-		std::string realPath(1024, '\0');
+		/* NOTE: The wide API in a growing buffer. GetModuleFileNameA turned every character outside the ANSI code page
+		 * into '?' (an install path with such a character: the data not found), and a path past the 1024-byte buffer
+		 * was truncated unchecked. 32768 is the longest Windows path. */
+		std::wstring realPath(MAX_PATH, L'\0');
 
-		GetModuleFileNameA(
-			nullptr,
-			realPath.data(),
-			static_cast< DWORD >(realPath.size())
-		);
+		while ( true )
+		{
+			const auto length = GetModuleFileNameW(nullptr, realPath.data(), static_cast< DWORD >(realPath.size()));
 
-		const auto position = realPath.find_last_of('\\');
+			if ( length == 0 )
+			{
+				return {};
+			}
 
-		return
-			position == std::string::npos ?
-			realPath :
-			realPath.substr(0, position);
+			if ( length < realPath.size() )
+			{
+				realPath.resize(length);
+
+				break;
+			}
+
+			if ( realPath.size() >= 32768 )
+			{
+				return {};
+			}
+
+			realPath.resize(realPath.size() * 2);
+		}
+
+		return std::filesystem::path{realPath}.parent_path();
 	}
 }

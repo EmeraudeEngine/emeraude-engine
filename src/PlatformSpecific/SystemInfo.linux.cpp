@@ -195,7 +195,7 @@ namespace EmEn::PlatformSpecific
 			return 0;
 		}
 
-		const auto bytes = std::strtol(&line.at(position), nullptr, 10);
+		const auto bytes = std::strtol(line.c_str() + position, nullptr, 10);
 
 		return static_cast< size_t >(bytes * sysconf( _SC_PAGESIZE));
 	}

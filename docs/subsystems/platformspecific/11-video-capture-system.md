@@ -44,3 +44,17 @@ Cross-platform webcam/video capture via `VideoCaptureDevice`.
 | Linux | None (V4L2 uses kernel headers) |
 
 ---
+
+## Frame checks (triad 14, 2026-10-01)
+
+- `convertYUYVtoRGBA()` returns `bool`: it refuses an odd width (YUYV packs pixel pairs; an odd pixel count wrote past
+  the output), a row stride below the packed row, and source data shorter than the frame. It honours the stride
+  (V4L2 `bytesperline`), so a padded row no longer skews the image.
+- Linux refuses a device whose negotiated format is not YUYV (an MJPEG-only webcam answered `S_FMT` with another format,
+  decoded as garbage). A short frame makes `captureFrame()` fail with a warning instead of returning stale data.
+- Windows: the RGB32 path checks the buffer length (an over-read before), the frame size is read again on
+  `MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED`, and `MFGetAttributeSize()`'s result is checked.
+- macOS: the frame callback checks the lock, the base address, the BGRA non-planar format and the row length; `close()`
+  detaches the delegate and drains the capture queue before freeing it.
+- The platform objects live in `std::unique_ptr< PlatformContext > m_platformContext` (it was an owning `void *`).
+- Measured on Linux (`/dev/video0`): YUYV 640×480 captured through projet-alpha's KeyP, 0 VUID.

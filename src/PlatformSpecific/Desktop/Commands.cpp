@@ -26,6 +26,11 @@
 
 #include "Commands.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cctype>
+#include <string_view>
+
 /* Local inclusions. */
 #include "IO/IO.hpp"
 #include "Network/URL.hpp"
@@ -80,6 +85,22 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
+		/* NOTE: Web links only (owner ruling 2026-10-01): the string goes to the system as is (ShellExecuteW, open,
+		 * xdg-open), which launches any registered protocol handler — file://host/share/x.exe, the Windows ms-*
+		 * handlers. The raw string is tested, since it is the raw string that is handed over. */
+		const auto hasScheme = [&url] (std::string_view scheme) {
+			return url.size() > scheme.size() && std::equal(scheme.begin(), scheme.end(), url.begin(), [] (char expected, char actual) {
+				return expected == static_cast< char >(std::tolower(static_cast< unsigned char >(actual)));
+			});
+		};
+
+		if ( !hasScheme("http://") && !hasScheme("https://") )
+		{
+			TraceWarning{TracerTag} << "The URL '" << url << "' is refused: only http:// and https:// links are opened !";
+
+			return false;
+		}
+
 		return runDefaultDesktopApplication(url);
 	}
 
@@ -88,12 +109,12 @@ namespace EmEn::PlatformSpecific::Desktop
 	{
 		if ( !Base::IO::fileExists(filepath) )
 		{
-			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
+			TraceWarning{TracerTag} << "The file '" << Base::IO::toU8String(filepath) << "' does not exist !";
 
 			return false;
 		}
 
-		return runDefaultDesktopApplication(filepath.string());
+		return runDefaultDesktopApplication(Base::IO::toU8String(filepath));
 	}
 
 	bool
@@ -101,14 +122,14 @@ namespace EmEn::PlatformSpecific::Desktop
 	{
 		if ( !Base::IO::fileExists(filepath) )
 		{
-			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
+			TraceWarning{TracerTag} << "The file '" << Base::IO::toU8String(filepath) << "' does not exist !";
 
 			return false;
 		}
 
 		const auto textEditor = settings.getOrSetDefault< std::string >(TextEditorKey, DefaultTextEditor);
 
-		return runDesktopApplication(textEditor, filepath.string());
+		return runDesktopApplication(textEditor, Base::IO::toU8String(filepath));
 	}
 
 	bool
@@ -116,12 +137,12 @@ namespace EmEn::PlatformSpecific::Desktop
 	{
 		if ( !Base::IO::directoryExists(filepath) )
 		{
-			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
+			TraceWarning{TracerTag} << "The file '" << Base::IO::toU8String(filepath) << "' does not exist !";
 
 			return false;
 		}
 
-		return runDefaultDesktopApplication(filepath.string());
+		return runDefaultDesktopApplication(Base::IO::toU8String(filepath));
 	}
 
 	bool
@@ -129,11 +150,11 @@ namespace EmEn::PlatformSpecific::Desktop
 	{
 		if ( !Base::IO::fileExists(filepath) )
 		{
-			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
+			TraceWarning{TracerTag} << "The file '" << Base::IO::toU8String(filepath) << "' does not exist !";
 
 			return false;
 		}
 
-		return runDefaultDesktopApplication(filepath.parent_path().string());
+		return runDefaultDesktopApplication(Base::IO::toU8String(filepath.parent_path()));
 	}
 }

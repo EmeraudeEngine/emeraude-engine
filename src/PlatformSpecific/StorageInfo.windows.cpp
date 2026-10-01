@@ -26,6 +26,9 @@
 
 #include "StorageInfo.hpp"
 
+/* STL inclusions. */
+#include <array>
+
 /* Third-party inclusions. */
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -42,10 +45,13 @@ namespace EmEn::PlatformSpecific::StorageInfo
 	{
 		std::vector< DriveInfo > drives;
 
-		wchar_t driveStrings[512];
-		const auto length = GetLogicalDriveStringsW(511, driveStrings);
+		std::array< wchar_t, 512 > driveStringsBuffer{};
+		auto * driveStrings = driveStringsBuffer.data();
+		const auto length = GetLogicalDriveStringsW(static_cast< DWORD >(driveStringsBuffer.size() - 1), driveStrings);
 
-		if ( length == 0 )
+		/* NOTE: A result past the buffer is the size it needs, and the buffer was not written (it was walked
+		 * uninitialized). 26 drive letters always fit. */
+		if ( length == 0 || length >= driveStringsBuffer.size() )
 		{
 			return drives;
 		}

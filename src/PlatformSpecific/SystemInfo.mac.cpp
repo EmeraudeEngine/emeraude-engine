@@ -27,6 +27,7 @@
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdio> // FIXME: Remove this
 #include <iostream>
 #include <sstream>
@@ -88,22 +89,37 @@ namespace EmEn::PlatformSpecific
 		{
 			io_registry_entry_t ioRegistryRoot = IORegistryEntryFromPath(kIOMainPortDefault, "IOService:/");
 
-			auto UUIDString = (CFStringRef) IORegistryEntryCreateCFProperty(ioRegistryRoot, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0);
+			/* NOTE: The property can be missing (NULL: CFStringGetCStringPtr() and CFRelease() crashed on it), and
+			 * CFStringGetCStringPtr() may legitimately return NULL: CFStringGetCString() copies instead. */
+			const auto UUIDProperty = IORegistryEntryCreateCFProperty(ioRegistryRoot, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0);
 
-			const char * buffer = CFStringGetCStringPtr(UUIDString, kCFStringEncodingMacRoman);
-
-			if ( buffer != nullptr )
+			if ( UUIDProperty != nullptr && CFGetTypeID(UUIDProperty) == CFStringGetTypeID() )
 			{
-				m_OSInformation.machineUUID.assign(buffer);
+				std::array< char, 128 > buffer{};
+
+				if ( CFStringGetCString(static_cast< CFStringRef >(UUIDProperty), buffer.data(), static_cast< CFIndex >(buffer.size()), kCFStringEncodingUTF8) )
+				{
+					m_OSInformation.machineUUID.assign(buffer.data());
+				}
+				else
+				{
+					std::cerr << "Unable to get the machine UUID !" "\n";
+				}
 			}
 			else
 			{
 				std::cerr << "Unable to get the machine UUID !" "\n";
 			}
 
-			CFRelease(UUIDString);
+			if ( UUIDProperty != nullptr )
+			{
+				CFRelease(UUIDProperty);
+			}
 
-			IOObjectRelease(ioRegistryRoot);
+			if ( ioRegistryRoot != MACH_PORT_NULL )
+			{
+				IOObjectRelease(ioRegistryRoot);
+			}
 		}
 
 		return true;

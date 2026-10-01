@@ -26,6 +26,14 @@
 
 #include "CustomMessage.hpp"
 
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
+/* Local inclusions for the string conversions. */
+#include "PlatformSpecific/StringConversion.mac.hpp"
+
 /* Third-party inclusions. */
 #import <AppKit/AppKit.h>
 
@@ -87,16 +95,16 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * The first button added is the default (highlighted). */
 			for ( const auto & label : m_buttons )
 			{
-				NSString * buttonTitle = [NSString stringWithUTF8String:label.c_str()];
+				NSString * buttonTitle = toNSString(label);
 				[alert addButtonWithTitle:buttonTitle];
 			}
 
 			/* Set message text. */
-			NSString * messageString = [NSString stringWithUTF8String:m_message.c_str()];
+			NSString * messageString = toNSString(m_message);
 			[alert setMessageText:messageString];
 
 			/* Set title as informative text. */
-			NSString * titleString = [NSString stringWithUTF8String:this->title().c_str()];
+			NSString * titleString = toNSString(this->title());
 			[alert setInformativeText:titleString];
 
 			[alert.window setLevel:CGShieldingWindowLevel()];

@@ -28,6 +28,11 @@
 
 #include "Window.hpp"
 
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_COCOA
 #include "GLFW/glfw3native.h"

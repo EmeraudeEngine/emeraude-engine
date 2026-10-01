@@ -82,6 +82,10 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) )
 			{
+				/* NOTE: The documentation asks for CoTaskMemFree() whether the call succeeds or not
+				 * (CoTaskMemFree(nullptr) is a no-op). */
+				CoTaskMemFree(path);
+
 				TraceError{ClassId} << "Unable to get the home directory!";
 
 				return false;
@@ -89,7 +93,6 @@ namespace EmEn::PlatformSpecific
 
 			m_homePath.assign(path);
 
-			/* NOTE: No memory leak as a SHGetKnownFolderPath() failure guarantees there is no allocation. */
 			CoTaskMemFree(path);
 		}
 

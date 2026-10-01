@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <optional>
 
 /* Third-party inclusions. */
@@ -115,120 +116,107 @@ namespace EmEn::PlatformSpecific
 		return valueBuf;
 	}
 
+	namespace
+	{
+		/**
+		 * @brief Converts a UTF-16 string to a multibyte code page.
+		 * @note The query and the conversion use the SAME explicit length (the former conversion passed -1, which counts
+		 * a terminator the query did not, so the call failed with ERROR_INSUFFICIENT_BUFFER), an input past INT_MAX is
+		 * refused, and the result is cut to what was really written. An empty result on any failure.
+		 * @param codePage The target code page (CP_ACP, CP_UTF8).
+		 * @param input The wide string.
+		 * @return std::string
+		 */
+		std::string
+		wideToMultiByte (UINT codePage, const std::wstring & input) noexcept
+		{
+			if ( input.empty() || input.length() > static_cast< size_t >(std::numeric_limits< int >::max()) )
+			{
+				return {};
+			}
+
+			const auto length = static_cast< int >(input.length());
+			const int count = WideCharToMultiByte(codePage, 0, input.data(), length, nullptr, 0, nullptr, nullptr);
+
+			if ( count <= 0 )
+			{
+				return {};
+			}
+
+			std::string output(static_cast< size_t >(count), '\0');
+
+			const int written = WideCharToMultiByte(codePage, 0, input.data(), length, output.data(), count, nullptr, nullptr);
+
+			if ( written <= 0 )
+			{
+				return {};
+			}
+
+			output.resize(static_cast< size_t >(written));
+
+			return output;
+		}
+
+		/**
+		 * @brief Converts a multibyte code page string to UTF-16.
+		 * @note Same checks as wideToMultiByte().
+		 * @param codePage The source code page (CP_ACP, CP_UTF8).
+		 * @param input The multibyte string.
+		 * @return std::wstring
+		 */
+		std::wstring
+		multiByteToWide (UINT codePage, const std::string & input) noexcept
+		{
+			if ( input.empty() || input.length() > static_cast< size_t >(std::numeric_limits< int >::max()) )
+			{
+				return {};
+			}
+
+			const auto length = static_cast< int >(input.length());
+			const int count = MultiByteToWideChar(codePage, 0, input.data(), length, nullptr, 0);
+
+			if ( count <= 0 )
+			{
+				return {};
+			}
+
+			std::wstring output(static_cast< size_t >(count), L'\0');
+
+			const int written = MultiByteToWideChar(codePage, 0, input.data(), length, output.data(), count);
+
+			if ( written <= 0 )
+			{
+				return {};
+			}
+
+			output.resize(static_cast< size_t >(written));
+
+			return output;
+		}
+	}
+
 	std::string
 	convertWideToANSI (const std::wstring & input)
 	{
-		const int count = WideCharToMultiByte(
-			CP_ACP,
-			0,
-			input.data(),
-			static_cast< int >(input.length()),
-			nullptr,
-			0,
-			nullptr,
-			nullptr
-		);
-
-		std::string output{};
-		output.resize(count);
-
-		WideCharToMultiByte(
-			CP_ACP,
-			0,
-			input.data(),
-			-1,
-			output.data(),
-			count,
-			nullptr,
-			nullptr
-		);
-
-		return output;
+		return wideToMultiByte(CP_ACP, input);
 	}
 
 	std::wstring
 	convertANSIToWide (const std::string & input)
 	{
-		const int count = MultiByteToWideChar(
-			CP_ACP,
-			0,
-			input.data(),
-			static_cast< int >(input.length()),
-			nullptr,
-			0
-		);
-
-		std::wstring output{};
-		output.resize(count);
-
-		MultiByteToWideChar(
-			CP_ACP,
-			0,
-			input.data(),
-			static_cast< int >(input.length()),
-			output.data(),
-			count
-		);
-
-		return output;
+		return multiByteToWide(CP_ACP, input);
 	}
 
 	std::string
 	convertWideToUTF8 (const std::wstring & input)
 	{
-		const int count = WideCharToMultiByte(
-			CP_UTF8,
-			0,
-			input.data(),
-			static_cast< int >(input.length()),
-			nullptr,
-			0,
-			nullptr,
-			nullptr
-		);
-
-		std::string output{};
-		output.resize(count);
-
-		WideCharToMultiByte(
-			CP_UTF8,
-			0,
-			input.data(),
-			-1,
-			output.data(),
-			count,
-			nullptr,
-			nullptr
-		);
-
-		return output;
+		return wideToMultiByte(CP_UTF8, input);
 	}
 
 	std::wstring
 	convertUTF8ToWide (const std::string & input)
 	{
-		const int count = MultiByteToWideChar(
-			CP_UTF8,
-			0,
-			input.data(),
-			static_cast< int >(input.length()),
-			nullptr,
-			0
-		);
-
-		std::wstring output{};
-		output.resize(count);
-
-		MultiByteToWideChar(
-			CP_UTF8,
-			0,
-			input.data(),
-			static_cast< int >(input.length()),
-			output.data(),
-			count
-		);
-
-		return output;
+		return multiByteToWide(CP_UTF8, input);
 	}
 
 	bool

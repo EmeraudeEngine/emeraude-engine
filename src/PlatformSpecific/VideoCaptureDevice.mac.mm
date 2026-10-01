@@ -28,6 +28,14 @@
 
 /* Local inclusions. */
 #include "VideoCaptureDevice.hpp"
+
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
+/* Local inclusions. */
+#include "PlatformSpecific/StringConversion.mac.hpp"
 #include "Tracer.hpp"
 
 /* STL inclusions. */
@@ -101,12 +109,26 @@ namespace EmEn::PlatformSpecific
 		return;
 	}
 
-	CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+	/* NOTE: The output is configured for BGRA, but the buffer is checked before it is read (a lock failure, a NULL
+	 * base address, another or a planar format, or rows shorter than width * 4 bytes are dropped). */
+	if ( CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess )
+	{
+		return;
+	}
 
 	const auto width = static_cast< uint32_t >(CVPixelBufferGetWidth(pixelBuffer));
 	const auto height = static_cast< uint32_t >(CVPixelBufferGetHeight(pixelBuffer));
 	const auto bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer);
 	const auto * baseAddress = static_cast< const uint8_t * >(CVPixelBufferGetBaseAddress(pixelBuffer));
+
+	if ( baseAddress == nullptr || width == 0 || height == 0 ||
+		 CVPixelBufferGetPixelFormatType(pixelBuffer) != kCVPixelFormatType_32BGRA || CVPixelBufferIsPlanar(pixelBuffer) ||
+		 bytesPerRow < static_cast< size_t >(width) * 4 )
+	{
+		CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+
+		return;
+	}
 
 	const size_t dataSize = static_cast< size_t >(width) * height * 4;
 
@@ -118,12 +140,12 @@ namespace EmEn::PlatformSpecific
 		_frameHeight = height;
 
 		/* Copy row by row to handle stride/padding differences. */
-		for ( uint32_t row = 0; row < height; ++row )
+		for ( size_t row = 0; row < height; ++row )
 		{
 			const auto * srcRow = baseAddress + (row * bytesPerRow);
 			auto * dstRow = _latestBGRA.data() + (row * width * 4);
 
-			std::memcpy(dstRow, srcRow, width * 4);
+			std::memcpy(dstRow, srcRow, static_cast< size_t >(width) * 4);
 		}
 
 		_hasNewFrame = true;
@@ -184,8 +206,8 @@ namespace EmEn::PlatformSpecific
 
 namespace EmEn::PlatformSpecific
 {
-	/* Platform-specific context stored via m_platformHandle. */
-	struct MacCaptureContext
+	/* The platform-specific context (VideoCaptureDevice::m_platformContext). */
+	struct VideoCaptureDevice::PlatformContext
 	{
 		AVCaptureSession * session{nil};
 		AVCaptureDeviceInput * input{nil};
@@ -226,8 +248,8 @@ namespace EmEn::PlatformSpecific
 			for ( AVCaptureDevice * device in captureDevices )
 			{
 				VideoCaptureDeviceInfo info;
-				info.devicePath = std::string([[device uniqueID] UTF8String]);
-				info.deviceName = std::string([[device localizedName] UTF8String]);
+				info.devicePath = toStdString([device uniqueID]);
+				info.deviceName = toStdString([device localizedName]);
 				info.index = index++;
 
 				devices.emplace_back(std::move(info));
@@ -258,8 +280,39 @@ namespace EmEn::PlatformSpecific
 
 		@autoreleasepool
 		{
+			/* NOTE: macOS (TCC) gives the camera only with the user's consent (owner ruling 2026-10-01): a denied or
+			 * restricted access is refused; an undetermined one asks the user, and this attempt fails (the next one
+			 * succeeds once granted). The application's Info.plist must carry NSCameraUsageDescription. */
+			switch ( [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo] )
+			{
+				case AVAuthorizationStatusAuthorized :
+					break;
+
+				case AVAuthorizationStatusNotDetermined :
+					[AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^ (BOOL granted) { static_cast< void >(granted); }];
+
+					TraceWarning{TracerTag} << "Camera access requested: grant it, then open the device again.";
+
+					return false;
+
+				case AVAuthorizationStatusDenied :
+				case AVAuthorizationStatusRestricted :
+				default :
+					TraceError{TracerTag} << "Camera access is denied (System Settings > Privacy & Security > Camera) !";
+
+					return false;
+			}
+
 			/* Find the device by uniqueID. */
 			NSString * deviceID = [NSString stringWithUTF8String:devicePath.c_str()];
+
+			if ( deviceID == nil )
+			{
+				TraceError{TracerTag} << "The video device ID is not valid UTF-8 !";
+
+				return false;
+			}
+
 			AVCaptureDevice * device = [AVCaptureDevice deviceWithUniqueID:deviceID];
 
 			if ( device == nil )
@@ -270,11 +323,11 @@ namespace EmEn::PlatformSpecific
 			}
 
 			/* Create the capture context. */
-			auto * context = new (std::nothrow) MacCaptureContext{};
+			std::unique_ptr< PlatformContext > context{new (std::nothrow) PlatformContext{}};
 
 			if ( context == nullptr )
 			{
-				TraceError{TracerTag} << "Failed to allocate MacCaptureContext.";
+				TraceError{TracerTag} << "Failed to allocate the capture context.";
 
 				return false;
 			}
@@ -286,9 +339,8 @@ namespace EmEn::PlatformSpecific
 			if ( context->input == nil )
 			{
 				TraceError{TracerTag} << "Failed to create capture input for '" << devicePath << "': "
-					<< [[error localizedDescription] UTF8String];
+					<< toStdString([error localizedDescription]);
 
-				delete context;
 
 				return false;
 			}
@@ -331,7 +383,6 @@ namespace EmEn::PlatformSpecific
 			{
 				TraceError{TracerTag} << "Cannot add capture input to session for '" << devicePath << "'.";
 
-				delete context;
 
 				return false;
 			}
@@ -359,7 +410,6 @@ namespace EmEn::PlatformSpecific
 			{
 				TraceError{TracerTag} << "Cannot add capture output to session for '" << devicePath << "'.";
 
-				delete context;
 
 				return false;
 			}
@@ -373,13 +423,12 @@ namespace EmEn::PlatformSpecific
 			{
 				TraceError{TracerTag} << "Capture session failed to start for '" << devicePath << "'.";
 
-				delete context;
 
 				return false;
 			}
 
 			/* Store context and update state. */
-			m_platformHandle = context;
+			m_platformContext = std::move(context);
 			m_width = requestedWidth;
 			m_height = requestedHeight;
 			m_isOpen = true;
@@ -387,7 +436,7 @@ namespace EmEn::PlatformSpecific
 			/* Wait for the first frame to arrive from the camera before returning.
 			 * AVFoundation's startRunning is asynchronous, so without this the first
 			 * call to captureFrame() would fail with no data available. */
-			if ( ![context->delegate waitForFirstFrame:3000] )
+			if ( ![m_platformContext->delegate waitForFirstFrame:3000] )
 			{
 				TraceWarning{TracerTag} << "Timed out waiting for first frame from '" << devicePath << "'. "
 					<< "The device is open but capture may not be ready yet.";
@@ -410,7 +459,7 @@ namespace EmEn::PlatformSpecific
 
 		@autoreleasepool
 		{
-			auto * context = static_cast< MacCaptureContext * >(m_platformHandle);
+			auto * context = m_platformContext.get();
 
 			if ( context != nullptr )
 			{
@@ -419,14 +468,23 @@ namespace EmEn::PlatformSpecific
 					[context->session stopRunning];
 				}
 
-				/* NOTE: The session holds strong references to inputs/outputs.
-				 * Stopping and releasing the session is sufficient. */
+				/* NOTE: Detach the delegate and drain its queue BEFORE freeing it: a frame callback still running on
+				 * the capture queue touched the freed delegate. ARC releases the session, input, output, delegate
+				 * and queue with the context. */
+				if ( context->output != nil )
+				{
+					[context->output setSampleBufferDelegate:nil queue:nil];
+				}
 
-				delete context;
+				if ( context->captureQueue != nullptr )
+				{
+					dispatch_sync(context->captureQueue, ^ {});
+				}
+
 			}
 		}
 
-		m_platformHandle = nullptr;
+		m_platformContext.reset();
 		m_isOpen = false;
 		m_width = 0;
 		m_height = 0;
@@ -443,12 +501,12 @@ namespace EmEn::PlatformSpecific
 	bool
 	VideoCaptureDevice::captureFrame (std::vector< uint8_t > & rgbaOutput) noexcept
 	{
-		if ( !m_isOpen || m_platformHandle == nullptr )
+		if ( !m_isOpen || m_platformContext == nullptr )
 		{
 			return false;
 		}
 
-		auto * context = static_cast< MacCaptureContext * >(m_platformHandle);
+		auto * context = m_platformContext.get();
 
 		uint32_t actualWidth = 0;
 		uint32_t actualHeight = 0;

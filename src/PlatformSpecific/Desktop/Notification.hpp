@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace EmEn
 {
@@ -69,9 +70,9 @@ namespace EmEn::PlatformSpecific::Desktop
 			 * @param message A string for the notification message [std::move].
 			 * @param icon The notification icon type. Default none (no icon).
 			 */
-			Notification (Window * window, const std::string & title, std::string message, std::optional< NotificationIcon > icon = std::nullopt) noexcept
+			Notification (Window * window, std::string title, std::string message, std::optional< NotificationIcon > icon = std::nullopt) noexcept
 				: m_window{window},
-				m_title{title},
+				m_title{std::move(title)},
 				m_message{std::move(message)},
 				m_icon{icon}
 			{

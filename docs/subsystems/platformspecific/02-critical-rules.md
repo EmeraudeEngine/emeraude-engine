@@ -45,3 +45,24 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 ```
 
 ---
+
+## Triad 14 rules (2026-10-01)
+
+- **Every engine `.mm` is compiled with ARC** (`-fobjc-arc`, set on each `.mm` by `cmake/PrepareEngineSourceFiles.cmake`).
+  Each file refuses to build without it (`#if !__has_feature(objc_arc) #error`). Without ARC, the ARC-style code (no
+  `release` anywhere) leaked every alert, notification and capture session.
+- **NSString ↔ std::string through `PlatformSpecific/StringConversion.mac.hpp`**: `toNSString()` (never nil — nil
+  inserted in a collection or given to `-fileURLWithPath:` raises an Objective-C exception, an abort) and
+  `toStdString()` (never a NULL `UTF8String` into `std::string`).
+- **No shell for a user string on macOS**: `runDefaultDesktopApplication()` runs `open` through an argv (`reproc`), as
+  on Linux; it used `system("open \"" + argument + "\"")`. The Linux dialogs and notifications still build a shell
+  command line: every user string goes through `escapeShellArg()` (one implementation, in `Helpers.linux.cpp`).
+- **Windows strings**: a path for the shell goes through `Base::IO::toU8String()` (on MSVC, `path::string()` converts to
+  the ANSI code page and throws outside it, an abort); the UTF-16 ↔ multibyte converters use the same explicit length
+  for the size query and the conversion, refuse an input past INT_MAX and keep only what was written; one quoted
+  argument for `ShellExecuteW` goes through `quoteArgument()` (backslashes before a quote doubled).
+- **Camera permission (macOS)**: `VideoCaptureDevice::open()` checks `authorizationStatusForMediaType:` — denied or
+  restricted is refused, undetermined asks the user and fails this attempt. The application's Info.plist must carry
+  `NSCameraUsageDescription` (projet-alpha's does since 2026-10-01, with `NSMicrophoneUsageDescription`).
+- **`openURL()` opens web links only** (`http://`, `https://`, owner ruling): the raw string goes to the system, which
+  would launch any registered protocol handler (`file://host/share/x.exe`, the Windows `ms-*` handlers).

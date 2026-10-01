@@ -53,6 +53,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Physics` 11 | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 27, all ON PURPOSE (below) — 16 static-cast-downcast, 7 convert-member-functions-to-static, 2 constant-array-index, 1 use-enum-class, 1 special-member-functions. Before: 90. | Triad section 11 |
 | `src/Animations` 12 (+ `Scenes/Loaders/GLTFLoader.cpp` changes) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 0. Before: 5. `GLTFLoader.cpp`: 0 new finding on the changed lines (its 10 are the section 3 ones). The fix-its touched three base headers through the includes: reverted. | Triad section 12 |
 | `src/Overlay` 13 | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 4, all ON PURPOSE (below) — 3 constant-array-index, 1 use-enum-class. Before: 22. | Triad section 13 |
+| `src/PlatformSpecific` 14 (Linux TUs) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 44, all ON PURPOSE (below) — 10 array-to-pointer decay, 10 union access, 10 vararg, 7 mt-unsafe, 4 non-private members, 1 branch-clone, 1 const-correctness, 1 reinterpret-cast. Before: 54. The Windows / macOS sources are not compiled here. | Triad section 14 |
 
 ## Findings kept ON PURPOSE
 
@@ -381,4 +382,15 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-bounds-constant-array-index ×3** — `Manager::m_programs[index]`: the index is built from two bits (premultiplied
   alpha, BGRA source), always below `ProgramCount` (4).
 - **use-enum-class ×1** — `Manager::NotificationCode` (the Observer convention).
+
+### `src/PlatformSpecific` 14 (2026-10-01)
+
+- **pro-type-union-access ×10, pro-bounds-array-to-pointer-decay ×10, pro-type-vararg ×10** — the V4L2 API
+  (`v4l2_format::fmt.pix`, `v4l2_buffer::m.offset`, `ioctl()`), `FD_SET`, `fgets` into a `std::array`.
+- **concurrency-mt-unsafe ×7** — `system()`, `getenv()`, `strerror()` on the calling thread of a dialog / notification /
+  capture (no concurrent caller).
+- **non-private-member-variables ×4** — `Desktop::Notification`'s protected members, shared with its platform bodies.
+- **branch-clone ×1** — `Message.linux.cpp`: the `MessageType` cases listed explicitly before their shared default.
+- **const-correctness ×1** — `UserInfo.linux.cpp`: `getpwuid_r()` takes a `passwd **`.
+- **pro-type-reinterpret-cast ×1** — `VideoCaptureDevice.linux.cpp`: the `v4l2_capability::card` byte array as text.
 

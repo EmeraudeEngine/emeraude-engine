@@ -37,44 +37,7 @@ namespace EmEn::PlatformSpecific::Desktop
 {
 	namespace
 	{
-		bool
-		checkProgram (const std::string & program) noexcept
-		{
-			const std::string command = "which " + program + " > /dev/null 2>&1";
-
-			return system(command.c_str()) == 0;
-		}
-
-		bool
-		hasZenity () noexcept
-		{
-			static const bool result = checkProgram("zenity");
-
-			return result;
-		}
-
-		bool
-		hasKdialog () noexcept
-		{
-			static const bool result = checkProgram("kdialog");
-
-			return result;
-		}
-
-		bool
-		isKdeDesktop () noexcept
-		{
-			const char * desktop = std::getenv("XDG_CURRENT_DESKTOP");
-
-			if ( desktop != nullptr )
-			{
-				const std::string desktopStr{desktop};
-
-				return desktopStr.find("KDE") != std::string::npos;
-			}
-
-			return false;
-		}
+		/* NOTE: The program detection and the shell escaping are PlatformSpecific/Helpers' (they were duplicated here). */
 
 		const char *
 		toIconName (NotificationIcon icon) noexcept
@@ -94,31 +57,6 @@ namespace EmEn::PlatformSpecific::Desktop
 				default:
 					return "dialog-information";
 			}
-		}
-
-		std::string
-		escapeShellArg (const std::string & arg) noexcept
-		{
-			std::string escaped;
-			escaped.reserve(arg.size() + 2);
-			escaped += '\'';
-
-			for ( const char c : arg )
-			{
-				if ( c == '\'' )
-				{
-					/* End quote, add escaped quote, restart quote. */
-					escaped += "'\\''";
-				}
-				else
-				{
-					escaped += c;
-				}
-			}
-
-			escaped += '\'';
-
-			return escaped;
 		}
 	}
 

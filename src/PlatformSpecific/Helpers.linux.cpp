@@ -27,6 +27,7 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -119,11 +120,11 @@ namespace EmEn::PlatformSpecific
 			return output;
 		}
 
-		char buffer[4096];
+		std::array< char, 4096 > buffer{};
 
-		while ( fgets(buffer, sizeof(buffer), pipe) != nullptr )
+		while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
 		{
-			output += buffer;
+			output += buffer.data();
 		}
 
 		const int status = pclose(pipe);

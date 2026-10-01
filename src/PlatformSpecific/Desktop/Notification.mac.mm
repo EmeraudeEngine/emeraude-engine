@@ -26,6 +26,14 @@
 
 #include "Notification.hpp"
 
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
+/* Local inclusions for the string conversions. */
+#include "PlatformSpecific/StringConversion.mac.hpp"
+
 /* macOS inclusions. */
 #import <Foundation/Foundation.h>
 
@@ -46,10 +54,18 @@ namespace EmEn::PlatformSpecific::Desktop
 			 * UNUserNotificationCenter.
 			 */
 			NSUserNotificationCenter * center = [NSUserNotificationCenter defaultUserNotificationCenter];
+
+			/* NOTE: There is no notification center outside an application bundle: nothing was delivered while true
+			 * was returned. */
+			if ( center == nil )
+			{
+				return false;
+			}
+
 			NSUserNotification * notification = [[NSUserNotification alloc] init];
 
-			notification.title = [NSString stringWithUTF8String:m_title.c_str()];
-			notification.informativeText = [NSString stringWithUTF8String:m_message.c_str()];
+			notification.title = toNSString(m_title);
+			notification.informativeText = toNSString(m_message);
 			notification.soundName = NSUserNotificationDefaultSoundName;
 
 			/* Deliver the notification. */

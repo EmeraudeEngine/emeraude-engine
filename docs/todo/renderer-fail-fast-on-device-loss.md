@@ -21,6 +21,21 @@ iGPU the process survived the loss and kept failing every submit.
 ⚠️ Not every 60 s timeout is a loss: by the spec, `vkWaitForFences` on a lost device returns in finite time, and the
 NVIDIA-Windows `VK_TIMEOUT` of the same day meant a frame still executing (or paging), not a killed GPU.
 
+
+**A second path, measured 2026-10-01** (macOS M2, engine `734de41d`, triad 13 peer validation): `Core.WindowService.resize(17000,
+1200)` gives a 34000×1870 framebuffer. The overlay refuses its surfaces past 16384 px (triad 13), and the scene target
+is clamped to 16384×1870 RGBA16F. But the post-process targets at that size exhaust the GPU memory:
+`VK_ERROR_OUT_OF_DEVICE_MEMORY` (MoltenVK "Insufficient Memory"), then `VK_ERROR_DEVICE_LOST` on a fence wait. The
+next resize cascades on the lost device:
+- every post-process target fails;
+- 9 × `VUID-vkResetFences-pFences-01123` (resetting a fence still pending on the lost device);
+- then a **SIGSEGV** in `vkQueueSubmit` on the render thread, from
+  `Overlay::Manager::updateVideoMemory → UIScreen::processSurfaceUpdates → Surface::uploadActiveBuffer →
+  Image::writeData → ImageTransferOperation::transferToGPU → Queue::submit`.
+
+The overlay upload, like the rest, keeps submitting after the device is lost. The unbounded `Window.resize` console
+command is the trigger: triad section 15 (`Window.cpp`).
+
 ## What remains
 
 - On `VK_ERROR_DEVICE_LOST` from any submit or wait: mark the renderer lost, report once with the dump, stop

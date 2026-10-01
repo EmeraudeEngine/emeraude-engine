@@ -43,49 +43,62 @@ namespace EmEn::PlatformSpecific
 		return m_height;
 	}
 
-	void
-	VideoCaptureDevice::convertYUYVtoRGBA (const uint8_t * yuyvData, size_t yuyvSize, std::vector< uint8_t > & rgbaOutput, uint32_t width, uint32_t height) noexcept
+	bool
+	VideoCaptureDevice::convertYUYVtoRGBA (const uint8_t * yuyvData, size_t yuyvSize, std::vector< uint8_t > & rgbaOutput, uint32_t width, uint32_t height, size_t rowStride) noexcept
 	{
-		const size_t pixelCount = static_cast< size_t >(width) * height;
-
-		rgbaOutput.resize(pixelCount * 4);
-
-		/* YUYV packs 2 pixels in 4 bytes: Y0 U Y1 V */
-		const size_t expectedYUYVSize = pixelCount * 2;
-
-		if ( yuyvSize < expectedYUYVSize )
+		/* YUYV packs 2 pixels in 4 bytes: Y0 U Y1 V. An odd width is not a YUYV frame. */
+		if ( yuyvData == nullptr || width == 0 || height == 0 || (width % 2) != 0 )
 		{
-			return;
+			return false;
 		}
 
-		for ( size_t i = 0; i < pixelCount; i += 2 )
+		const size_t packedRowBytes = static_cast< size_t >(width) * 2;
+		const size_t stride = rowStride == 0 ? packedRowBytes : rowStride;
+
+		/* NOTE: The source must hold every row (the last one without its padding). */
+		if ( stride < packedRowBytes || yuyvSize < (stride * (height - 1)) + packedRowBytes )
 		{
-			const size_t yuyvIndex = i * 2;
-
-			const auto y0 = static_cast< int >(yuyvData[yuyvIndex + 0]);
-			const auto u  = static_cast< int >(yuyvData[yuyvIndex + 1]);
-			const auto y1 = static_cast< int >(yuyvData[yuyvIndex + 2]);
-			const auto v  = static_cast< int >(yuyvData[yuyvIndex + 3]);
-
-			/* BT.601 conversion */
-			const int c0 = y0 - 16;
-			const int c1 = y1 - 16;
-			const int d = u - 128;
-			const int e = v - 128;
-
-			/* Pixel 0 */
-			const size_t rgbaIndex0 = i * 4;
-			rgbaOutput[rgbaIndex0 + 0] = static_cast< uint8_t >(std::clamp((298 * c0 + 409 * e + 128) >> 8, 0, 255));
-			rgbaOutput[rgbaIndex0 + 1] = static_cast< uint8_t >(std::clamp((298 * c0 - 100 * d - 208 * e + 128) >> 8, 0, 255));
-			rgbaOutput[rgbaIndex0 + 2] = static_cast< uint8_t >(std::clamp((298 * c0 + 516 * d + 128) >> 8, 0, 255));
-			rgbaOutput[rgbaIndex0 + 3] = 255;
-
-			/* Pixel 1 */
-			const size_t rgbaIndex1 = (i + 1) * 4;
-			rgbaOutput[rgbaIndex1 + 0] = static_cast< uint8_t >(std::clamp((298 * c1 + 409 * e + 128) >> 8, 0, 255));
-			rgbaOutput[rgbaIndex1 + 1] = static_cast< uint8_t >(std::clamp((298 * c1 - 100 * d - 208 * e + 128) >> 8, 0, 255));
-			rgbaOutput[rgbaIndex1 + 2] = static_cast< uint8_t >(std::clamp((298 * c1 + 516 * d + 128) >> 8, 0, 255));
-			rgbaOutput[rgbaIndex1 + 3] = 255;
+			return false;
 		}
+
+		rgbaOutput.resize(static_cast< size_t >(width) * height * 4);
+
+		for ( size_t row = 0; row < height; ++row )
+		{
+			const uint8_t * source = yuyvData + (row * stride);
+			uint8_t * destination = rgbaOutput.data() + (row * width * 4);
+
+			for ( size_t column = 0; column < width; column += 2 )
+			{
+				const size_t yuyvIndex = column * 2;
+
+				const auto y0 = static_cast< int >(source[yuyvIndex + 0]);
+				const auto u  = static_cast< int >(source[yuyvIndex + 1]);
+				const auto y1 = static_cast< int >(source[yuyvIndex + 2]);
+				const auto v  = static_cast< int >(source[yuyvIndex + 3]);
+
+				/* BT.601 conversion */
+				const int c0 = y0 - 16;
+				const int c1 = y1 - 16;
+				const int d = u - 128;
+				const int e = v - 128;
+
+				/* Pixel 0 */
+				const size_t rgbaIndex0 = column * 4;
+				destination[rgbaIndex0 + 0] = static_cast< uint8_t >(std::clamp((298 * c0 + 409 * e + 128) >> 8, 0, 255));
+				destination[rgbaIndex0 + 1] = static_cast< uint8_t >(std::clamp((298 * c0 - 100 * d - 208 * e + 128) >> 8, 0, 255));
+				destination[rgbaIndex0 + 2] = static_cast< uint8_t >(std::clamp((298 * c0 + 516 * d + 128) >> 8, 0, 255));
+				destination[rgbaIndex0 + 3] = 255;
+
+				/* Pixel 1 */
+				const size_t rgbaIndex1 = (column + 1) * 4;
+				destination[rgbaIndex1 + 0] = static_cast< uint8_t >(std::clamp((298 * c1 + 409 * e + 128) >> 8, 0, 255));
+				destination[rgbaIndex1 + 1] = static_cast< uint8_t >(std::clamp((298 * c1 - 100 * d - 208 * e + 128) >> 8, 0, 255));
+				destination[rgbaIndex1 + 2] = static_cast< uint8_t >(std::clamp((298 * c1 + 516 * d + 128) >> 8, 0, 255));
+				destination[rgbaIndex1 + 3] = 255;
+			}
+		}
+
+		return true;
 	}
 }

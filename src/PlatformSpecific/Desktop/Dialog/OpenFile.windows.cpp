@@ -432,17 +432,21 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			hr = items->GetCount(&filepathCount);
 			if ( FAILED(hr) )
 			{
+				items->Release();
+
 				Tracer::error(ClassId, "Unable to get the number of file selected !");
 
 				return false;
 			}
 
-			for ( int filepathIndex = 0; filepathIndex < static_cast< int >(filepathCount); ++filepathIndex )
+			for ( DWORD filepathIndex = 0; filepathIndex < filepathCount; ++filepathIndex )
 			{
 				IShellItem * item = nullptr;
 
-				items->GetItemAt(filepathIndex, &item);
-				if ( SUCCEEDED(hr) )
+				/* NOTE: The result of GetItemAt() itself (the former test read the GetCount() one: a null item was
+				 * dereferenced on a failure). */
+				hr = items->GetItemAt(filepathIndex, &item);
+				if ( SUCCEEDED(hr) && item != nullptr )
 				{
 					PWSTR path;
 

@@ -26,6 +26,14 @@
 
 #include "OpenFile.hpp"
 
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
+/* Local inclusions for the string conversions. */
+#include "PlatformSpecific/StringConversion.mac.hpp"
+
 /* STL inclusions. */
 #include <filesystem>
 
@@ -43,7 +51,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	{
         @autoreleasepool
         {
-            NSString * title = [NSString stringWithUTF8String:this->title().c_str()];
+            NSString * title = toNSString(this->title());
 
             NSOpenPanel * panel = [NSOpenPanel openPanel];
 
@@ -52,7 +60,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
             /* Set default directory. */
             if ( !m_defaultDirectory.empty() )
             {
-                NSString * dirPath = [NSString stringWithUTF8String:m_defaultDirectory.string().c_str()];
+                NSString * dirPath = toNSString(m_defaultDirectory.string());
                 NSURL * dirURL = [NSURL fileURLWithPath:dirPath isDirectory:YES];
                 [panel setDirectoryURL:dirURL];
             }
@@ -78,11 +86,11 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                 NSMutableArray * filter_names = [NSMutableArray array];
                 NSMutableOrderedSet * file_type_set = [NSMutableOrderedSet orderedSetWithCapacity:m_extensionFilters.size()];
 
-                for ( auto & filter : m_extensionFilters )
+                for ( const auto & filter : m_extensionFilters )
                 {
-                    [filter_names addObject:@(filter.first.c_str())];
+                    [filter_names addObject:toNSString(filter.first)];
 
-                    for ( std::string & ext : filter.second )
+                    for ( std::string ext : filter.second )
                     {
                         auto pos = ext.rfind('.');
 
@@ -91,7 +99,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                             ext.erase(0, pos + 1);
                         }
 
-                        [file_type_set addObject:@(ext.c_str())];
+                        [file_type_set addObject:toNSString(ext)];
                     }
                 }
                 [file_types_list addObject:[file_type_set array]];
@@ -138,7 +146,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                 {
                     NSString * filepath = [url path];
 
-                    m_filepaths.emplace_back([filepath UTF8String]);
+                    m_filepaths.emplace_back(toStdString(filepath));
                 }
             }
             else

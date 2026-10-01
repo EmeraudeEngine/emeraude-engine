@@ -26,6 +26,11 @@
 
 #include "Commands.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cmath>
+#include <string>
+
 /* Third-party inclusions. */
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -45,6 +50,51 @@
 namespace EmEn::PlatformSpecific::Desktop
 {
 	constexpr auto TracerTag{"Commands"};
+
+	namespace
+	{
+		/**
+		 * @brief Quotes one argument for the Windows command-line parser (CommandLineToArgvW / the MSVC runtime).
+		 * @note A plain L'"' + argument + L'"' broke on a trailing backslash ("C:\\dir\\" escaped the closing quote) and
+		 * on an embedded quote: the backslashes before a quote are doubled, an embedded quote is escaped. Algorithm from
+		 * D. Colascione, "Everyone quotes command line arguments the wrong way" (Microsoft, 2011).
+		 * @param argument The argument.
+		 * @return std::wstring
+		 */
+		std::wstring
+		quoteArgument (const std::wstring & argument) noexcept
+		{
+			std::wstring quoted{L'"'};
+			size_t backslashes = 0;
+
+			for ( const auto character : argument )
+			{
+				if ( character == L'\\' )
+				{
+					++backslashes;
+
+					continue;
+				}
+
+				if ( character == L'"' )
+				{
+					quoted.append((backslashes * 2) + 1, L'\\');
+				}
+				else
+				{
+					quoted.append(backslashes, L'\\');
+				}
+
+				quoted += character;
+				backslashes = 0;
+			}
+
+			quoted.append(backslashes * 2, L'\\');
+			quoted += L'"';
+
+			return quoted;
+		}
+	}
 
 	/* NOTE: These commands intentionally bypass reproc and any shell (cmd.exe/start).
 	 * reproc's Windows argv-join drops empty arguments ("" is never quoted — see
@@ -66,7 +116,7 @@ namespace EmEn::PlatformSpecific::Desktop
 		}
 
 		const auto wideExecutable = convertUTF8ToWide(executable);
-		const auto wideArgument = argument.empty() ? std::wstring{} : L'"' + convertUTF8ToWide(argument) + L'"';
+		const auto wideArgument = argument.empty() ? std::wstring{} : quoteArgument(convertUTF8ToWide(argument));
 
 		const auto result = reinterpret_cast< INT_PTR >(ShellExecuteW(nullptr, L"open", wideExecutable.c_str(), wideArgument.empty() ? nullptr : wideArgument.c_str(), nullptr, SW_SHOWNORMAL));
 
@@ -119,6 +169,21 @@ namespace EmEn::PlatformSpecific::Desktop
 		/* Initialize COM if not already done. */
 		HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+		/* NOTE: S_OK and S_FALSE both take a reference that CoUninitialize() must give back (it was never called);
+		 * RPC_E_CHANGED_MODE takes none. Released on every return below. */
+		struct ComScope final
+		{
+			bool initialized{false};
+
+			~ComScope ()
+			{
+				if ( initialized )
+				{
+					CoUninitialize();
+				}
+			}
+		} comScope{SUCCEEDED(hr)};
+
 		if ( FAILED(hr) && hr != RPC_E_CHANGED_MODE )
 		{
 			Tracer::error(TracerTag, "Failed to initialize COM for taskbar progress.");
@@ -156,8 +221,8 @@ namespace EmEn::PlatformSpecific::Desktop
 
 		HWND hwnd = window.getWin32Window();
 
-		/* Handle progress disable (negative value). */
-		if ( progress < 0.0F )
+		/* Handle progress disable (negative value; a NaN too, which was cast to ULONGLONG below: UB). */
+		if ( std::isnan(progress) || progress < 0.0F )
 		{
 			taskbar->SetProgressState(hwnd, TBPF_NOPROGRESS);
 			taskbar->Release();
@@ -197,7 +262,7 @@ namespace EmEn::PlatformSpecific::Desktop
 		/* Set the progress value (0-100 range). */
 		if ( mode != ProgressMode::None && mode != ProgressMode::Indeterminate )
 		{
-			const auto progressValue = static_cast< ULONGLONG >(progress * 100.0F);
+			const auto progressValue = static_cast< ULONGLONG >(std::min(progress, 1.0F) * 100.0F);
 			taskbar->SetProgressValue(hwnd, progressValue, 100);
 		}
 

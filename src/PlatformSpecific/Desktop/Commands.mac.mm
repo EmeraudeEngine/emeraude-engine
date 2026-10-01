@@ -26,9 +26,14 @@
 
 #include "Commands.hpp"
 
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
 /* STL inclusions. */
-#include <cstdlib>
-#include <sstream>
+#include <array>
+#include <vector>
 
 /* Third-party inclusions. */
 #import <AppKit/AppKit.h>
@@ -84,31 +89,39 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		std::stringstream commandStream;
-		commandStream << "open \"" << argument << "\"";
+		/* NOTE: An argv, no shell (as on Linux): the former system("open \"" + argument + "\"") ran whatever a quote,
+		 * a $(…) or a backtick in the argument (a path, a URL) carried, and its result was ignored. */
+		const std::array< const char *, 3 > args{"open", argument.data(), nullptr};
+		const auto [exitCode, errorCode] = reproc::run(args.data());
 
-		system(commandStream.str().c_str());
+		if ( exitCode != 0 )
+		{
+			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+
+			return false;
+		}
 
 		return true;
 	}
 
 	void
-	flashTaskbarIcon (const Window & window, bool state) noexcept
+	flashTaskbarIcon (const Window & /*window*/, bool state) noexcept
 	{
-		if ( !state )
-		{
-			return;
-		}
+		/* NOTE: The request identifier, so that `false` cancels it (it returned early and never did). Main thread only,
+		 * as every AppKit call. */
+		static NSInteger s_attentionRequest = 0;
 
 		@autoreleasepool
 		{
 			if ( state )
 			{
-				[NSApp requestUserAttention:NSCriticalRequest];
+				s_attentionRequest = [NSApp requestUserAttention:NSCriticalRequest];
 			}
-			else
+			else if ( s_attentionRequest != 0 )
 			{
-				[NSApp requestUserAttention:NSInformationalRequest];
+				[NSApp cancelUserAttentionRequest:s_attentionRequest];
+
+				s_attentionRequest = 0;
 			}
 		}
 	}

@@ -5145,6 +5145,23 @@ misleading.
 
 ## Platform-Specific
 
+### ⚠️⚠️ The engine's `.mm` files were compiled WITHOUT ARC — written for it, they leaked everything (fixed 2026-10-01, triad 14)
+
+> [!CAUTION]
+> No `-fobjc-arc` reached the engine's Objective-C++ sources (only projet-alpha's CEF targets had it), while the code
+> never calls `release`: every `NSAlert`, `NSUserNotification`, and the camera's session / output / delegate / queue
+> leaked on each use. `cmake/PrepareEngineSourceFiles.cmake` now sets `-fobjc-arc` on every `.mm`, and each `.mm`
+> refuses to compile without it (`__has_feature(objc_arc)`). A NEW `.mm` must carry the same guard.
+
+### On MSVC, `std::filesystem::path::string()` is ANSI, and it throws outside the code page (2026-10-01, triad 14)
+
+> [!CAUTION]
+> `path::string()` converts the UTF-16 path to the ANSI code page: a character outside it throws `std::system_error`
+> (an abort with exceptions off), and an accented character inside it becomes ANSI bytes that a UTF-8 → UTF-16
+> conversion then turns into U+FFFD. Use `Base::IO::toU8String()` for a path that leaves the process (the shell, a
+> log line), and the wide API (`GetModuleFileNameW`, `ShellExecuteW`) on the Windows side.
+
+
 ### Fixed: GNOME dropped the Wayland connection during a long load — a silent close, a 60 s stall, a crash at exit (Sep 2026)
 
 > **Symptom (owner, 2026-09-25, `terrain` with its 16 km forest):** "the engine fell over" — the window froze

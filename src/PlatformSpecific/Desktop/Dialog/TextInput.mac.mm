@@ -26,6 +26,14 @@
 
 #include "TextInput.hpp"
 
+/* NOTE: Written for ARC (no retain / release anywhere): the build passes -fobjc-arc to every engine .mm (triad 14). */
+#if !__has_feature(objc_arc)
+#error "This file must be compiled with ARC (-fobjc-arc)."
+#endif
+
+/* Local inclusions for the string conversions. */
+#include "PlatformSpecific/StringConversion.mac.hpp"
+
 /* Third-party inclusions. */
 #import <AppKit/AppKit.h>
 
@@ -39,17 +47,18 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	{
 		@autoreleasepool
 		{
-			[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+			/* NOTE: No activation policy change (owner ruling 2026-10-01): an Accessory policy set here on every
+			 * prompt was never restored, and the application lost its Dock icon, menu bar and Cmd-Tab entry. */
 
 			NSAlert * alert = [[NSAlert alloc] init];
 			[alert setAlertStyle:NSAlertStyleInformational];
 			[alert addButtonWithTitle:@"OK"];
 			[alert addButtonWithTitle:@"Cancel"];
 
-			NSString * messageString = [NSString stringWithUTF8String:m_message.c_str()];
+			NSString * messageString = toNSString(m_message);
 			[alert setMessageText:messageString];
 
-			NSString * defaultString = [NSString stringWithUTF8String:m_defaultText.c_str()];
+			NSString * defaultString = toNSString(m_defaultText);
 
 			switch ( m_inputMode )
 			{
@@ -65,7 +74,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 					if ( button == NSAlertFirstButtonReturn )
 					{
-						m_text = [[input stringValue] UTF8String];
+						m_text = toStdString([input stringValue]);
 					}
 					else
 					{
@@ -99,7 +108,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 					if ( button == NSAlertFirstButtonReturn )
 					{
-						m_text = [[textView string] UTF8String];
+						m_text = toStdString([textView string]);
 					}
 					else
 					{
@@ -121,7 +130,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 					if ( button == NSAlertFirstButtonReturn )
 					{
-						m_text = [[input stringValue] UTF8String];
+						m_text = toStdString([input stringValue]);
 					}
 					else
 					{

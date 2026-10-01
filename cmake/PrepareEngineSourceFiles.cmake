@@ -238,3 +238,13 @@ else ()
         )
     endif ()
 endif ()
+
+# NOTE: The engine's Objective-C++ sources are written for ARC (no retain / release anywhere): compiled without it, every
+# alert, notification and capture session leaked (triad 14, 2026-10-01). Each .mm refuses to build without it.
+if ( APPLE )
+    foreach ( EMERAUDE_SOURCE_FILE IN LISTS EMERAUDE_SOURCE_FILES )
+        if ( EMERAUDE_SOURCE_FILE MATCHES "\\.mm$" )
+            set_source_files_properties(${EMERAUDE_SOURCE_FILE} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+        endif ()
+    endforeach ()
+endif ()

@@ -147,9 +147,22 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		/* Store the actual negotiated resolution. */
+		/* NOTE: The driver adjusts the format to what the device supports: a device without YUYV (an MJPEG-only
+		 * webcam) answers with another pixel format, which the YUYV conversion would turn into garbage. */
+		if ( fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_YUYV )
+		{
+			TraceError{TracerTag} << "The device '" << devicePath << "' does not provide YUYV frames (only YUYV is supported) !";
+
+			::close(m_fd);
+			m_fd = -1;
+
+			return false;
+		}
+
+		/* Store the actual negotiated resolution and row stride. */
 		m_width = fmt.fmt.pix.width;
 		m_height = fmt.fmt.pix.height;
+		m_rowStride = fmt.fmt.pix.bytesperline;
 
 		TraceInfo{TracerTag} << "Video format set to " << m_width << "x" << m_height << " YUYV on '" << devicePath << "'.";
 
@@ -264,6 +277,7 @@ namespace EmEn::PlatformSpecific
 		m_isOpen = false;
 		m_width = 0;
 		m_height = 0;
+		m_rowStride = 0;
 
 		TraceInfo{TracerTag} << "Video capture device closed.";
 	}
@@ -287,7 +301,7 @@ namespace EmEn::PlatformSpecific
 		FD_ZERO(&fds);
 		FD_SET(m_fd, &fds);
 
-		struct timeval tv;
+		struct timeval tv{};
 		tv.tv_sec = 5;
 		tv.tv_usec = 0;
 
@@ -312,8 +326,13 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		/* Convert YUYV to RGBA. */
-		convertYUYVtoRGBA(static_cast< const uint8_t * >(m_buffer), buf.bytesused, rgbaOutput, m_width, m_height);
+		/* Convert YUYV to RGBA. NOTE: A frame shorter than the negotiated format is reported, not returned stale. */
+		const bool converted = convertYUYVtoRGBA(static_cast< const uint8_t * >(m_buffer), buf.bytesused, rgbaOutput, m_width, m_height, m_rowStride);
+
+		if ( !converted )
+		{
+			TraceWarning{TracerTag} << "Incomplete frame (" << buf.bytesused << " bytes for " << m_width << "x" << m_height << ") dropped.";
+		}
 
 		/* Re-enqueue the buffer for the next frame. */
 		if ( ::ioctl(m_fd, VIDIOC_QBUF, &buf) < 0 )
@@ -323,6 +342,6 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		return true;
+		return converted;
 	}
 }

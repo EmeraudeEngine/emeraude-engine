@@ -35,19 +35,22 @@
 
 namespace EmEn::PlatformSpecific
 {
-	void
-	resizeBuffer (std::string & buffer) noexcept
+	namespace
 	{
-		auto bufferSize = sysconf(_SC_GETPW_R_SIZE_MAX);
-
-		/* Value was indeterminate */
-		if ( bufferSize < 0 )
+		void
+		resizeBuffer (std::string & buffer) noexcept
 		{
-			/* Should be more than enough */
-			bufferSize = 16384;
-		}
+			auto bufferSize = sysconf(_SC_GETPW_R_SIZE_MAX);
 
-		buffer.resize(bufferSize, '\0');
+			/* Value was indeterminate */
+			if ( bufferSize < 0 )
+			{
+				/* Should be more than enough */
+				bufferSize = 16384;
+			}
+
+			buffer.resize(bufferSize, '\0');
+		}
 	}
 
 	bool
@@ -64,9 +67,10 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		m_username = userData.pw_gecos;
-		m_accountName = userData.pw_name;
-		m_homePath = userData.pw_dir;
+		/* NOTE: A field the system leaves NULL is an empty string (a NULL `const char *` into std::string is UB). */
+		m_username = userData.pw_gecos != nullptr ? userData.pw_gecos : "";
+		m_accountName = userData.pw_name != nullptr ? userData.pw_name : "";
+		m_homePath = userData.pw_dir != nullptr ? userData.pw_dir : "";
 
 		if ( m_username.empty() )
 		{

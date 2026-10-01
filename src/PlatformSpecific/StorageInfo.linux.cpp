@@ -27,6 +27,7 @@
 #include "StorageInfo.hpp"
 
 /* STL inclusions. */
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -37,43 +38,79 @@
 
 namespace EmEn::PlatformSpecific::StorageInfo
 {
-	/**
-	 * @brief Checks if a block device is removable via sysfs.
-	 * @param devicePath The device path (e.g., "/dev/sdb1").
-	 * @return bool True if removable.
-	 */
-	static
-	bool
-	isDeviceRemovable (const std::string & devicePath) noexcept
+	namespace
 	{
-		/* Extract the base block device name: "/dev/sdb1" → "sdb", "/dev/nvme0n1p2" → "nvme0n1". */
-		auto devName = std::filesystem::path(devicePath).filename().string();
-
-		/* Strip partition suffix: "sdb1" → "sdb", "nvme0n1p2" → "nvme0n1". */
-		while ( !devName.empty() && std::isdigit(devName.back()) )
+		/**
+		 * @brief Checks if a block device is removable via sysfs.
+		 * @param devicePath The device path (e.g., "/dev/sdb1").
+		 * @return bool True if removable.
+		 */
+		bool
+		isDeviceRemovable (const std::string & devicePath) noexcept
 		{
-			devName.pop_back();
+			/* Extract the base block device name: "/dev/sdb1" → "sdb", "/dev/nvme0n1p2" → "nvme0n1". */
+			auto devName = std::filesystem::path(devicePath).filename().string();
+
+			/* Strip partition suffix: "sdb1" → "sdb", "nvme0n1p2" → "nvme0n1". */
+			while ( !devName.empty() && std::isdigit(static_cast< unsigned char >(devName.back())) != 0 )
+			{
+				devName.pop_back();
+			}
+
+			/* For nvme, also strip the trailing 'p' (partition separator). */
+			if ( !devName.empty() && devName.back() == 'p' && devName.find("nvme") != std::string::npos )
+			{
+				devName.pop_back();
+			}
+
+			const auto removablePath = std::filesystem::path("/sys/block") / devName / "removable";
+
+			std::ifstream file(removablePath);
+
+			if ( !file.is_open() )
+			{
+				return false;
+			}
+
+			int value = 0;
+			file >> value;
+
+			return value == 1;
 		}
 
-		/* For nvme, also strip the trailing 'p' (partition separator). */
-		if ( !devName.empty() && devName.back() == 'p' && devName.find("nvme") != std::string::npos )
+		/**
+		 * @brief Decodes the octal escapes of a /proc/mounts field (a space is "\040", a tab "\011", a newline "\012", a
+		 * backslash "\134"): a mount point with a space was passed escaped to statvfs() and skipped.
+		 * @param field The escaped field.
+		 * @return std::string
+		 */
+		std::string
+		decodeMountField (const std::string & field) noexcept
 		{
-			devName.pop_back();
+			std::string decoded;
+			decoded.reserve(field.size());
+
+			for ( size_t index = 0; index < field.size(); ++index )
+			{
+				const auto isOctal = [&field] (size_t position) {
+					return position < field.size() && field[position] >= '0' && field[position] <= '7';
+				};
+
+				if ( field[index] == '\\' && isOctal(index + 1) && isOctal(index + 2) && isOctal(index + 3) )
+				{
+					const auto value = ((field[index + 1] - '0') * 64) + ((field[index + 2] - '0') * 8) + (field[index + 3] - '0');
+
+					decoded += static_cast< char >(value);
+					index += 3;
+				}
+				else
+				{
+					decoded += field[index];
+				}
+			}
+
+			return decoded;
 		}
-
-		const auto removablePath = std::filesystem::path("/sys/block") / devName / "removable";
-
-		std::ifstream file(removablePath);
-
-		if ( !file.is_open() )
-		{
-			return false;
-		}
-
-		int value = 0;
-		file >> value;
-
-		return value == 1;
 	}
 
 	std::vector< DriveInfo >
@@ -99,14 +136,16 @@ namespace EmEn::PlatformSpecific::StorageInfo
 
 			lineStream >> device >> mountPoint >> fsType;
 
+			mountPoint = decodeMountField(mountPoint);
+
 			/* Skip virtual/pseudo filesystems (only keep real block devices). */
-			if ( device.find("/dev/") != 0 )
+			if ( !device.starts_with("/dev/") )
 			{
 				continue;
 			}
 
 			/* Skip device mapper entries for snap/loop (common on Ubuntu). */
-			if ( device.find("/dev/loop") == 0 )
+			if ( device.starts_with("/dev/loop") )
 			{
 				continue;
 			}

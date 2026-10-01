@@ -63,9 +63,9 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | ✅ 10a-10b pushed and VALIDATED on the three OS (2026-10-01) |
 | 11 | `src/Physics` | 9 197 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
 | 12 | `src/Animations` (+ the glTF skins and extents it led to) | 3 488 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
-| 13 | `src/Overlay` | 7 303 | ✅ pushed (peers pending) |
-| 14 | `src/PlatformSpecific` | 8 996 | ⬜ |
-| 15 | `src/Tool`, `src/Help`, root files | 1 292 + 40 files | ⬜ |
+| 13 | `src/Overlay` | 7 303 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
+| 14 | `src/PlatformSpecific` (+ the ARC flag of every engine `.mm`) | 8 996 | ✅ pushed (peers pending: Windows and macOS changes uncompiled on Linux) |
+| 15 | `src/Tool`, `src/Help`, root files (leads: the `Window.resize` console command has no upper bound and reports the requested size, 13 peers) | 1 292 + 40 files | ⬜ |
 
 ## Section 1 — `src/Console` (started 2026-09-30)
 
@@ -1425,5 +1425,66 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   (`Stage.openMenu()`) through 4 window resizes (1200×700, 1700×1000, 900×600, 1600×900): the menu re-laid out at
   each size, 4 transition buffers committed, 0 VUID, 0 error; a 17 000×1200 request (the compositor settled at
   7 668 px: the refusal not reached at runtime); citadel MCP 1707/0, console 4466/0.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 13 commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `734de41d`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning, Retina scale 2): the 4 resizes re-lay the menu out (exactly 4 commits, 2400×1400
+    to 3400×1870), citadel MCP 1707/0, console 4445/0, 0 VUID. The O2 refusal PROVEN at runtime: `resize(17000, 1200)`
+    → a 34000×1870 framebuffer, "The surface 'ApplicationMenuCEF' would be 34000x1870 px, past the device limit of
+    16384 px per side: the size is refused" (and 'Notifier'). The post-process targets at that size then exhaust the
+    M2's memory → device lost → a SIGSEGV in an overlay upload submitted on the lost device (pre-existing device-loss
+    handling: recorded in `renderer-fail-fast-on-device-loss`; the unbounded `Window.resize` command is for section
+    15).
+  - Windows PASS on NVIDIA RTX 3060 Laptop and AMD (MSVC /W4 /WX 0 warning: `roundedToInteger<>` and the
+    `std::scoped_lock` on `Vulkan::Device` clean): one commit per resize, the menu re-laid out every time; Windows
+    clamps `resize(17000, 1200)` to the desktop (1924×1061), no crash; the three ImGUI screens created at startup, the
+    physical-camera panel toggled (Shift+F2); MCP 1707/0, console 4457/0 (AMD 4455/1, the known RST flake); AMD 0
+    VUID, NVIDIA only the known `renderPass-12325`. Note for section 15: `Window.resize` answers with the REQUESTED
+    size, not the size applied.
+
+## Section 14 — `src/PlatformSpecific` (started 2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (the 17 Linux TUs + headers; the Windows / macOS sources are not compilable here):
+  **54** (12 array-to-pointer decay, 10 vararg, 9 mt-unsafe, 8 union access, 4 non-private members, singles).
+- [x] (2) Review: Linux and the common code by hand; the Windows and macOS sources by an agent, every finding re-read.
+  Sound: the Linux shell command lines (every user string through `escapeShellArg()`), `reproc` argv for
+  `runDesktopApplication()`, the Windows file-dialog STA thread, the registry reads, the bounded dialog buffers.
+  Findings:
+  - Q1 VideoCapture: the YUYV conversion wrote past the output for an odd pixel count and ignored the row stride; Linux
+    never checked that the driver kept YUYV; a short frame returned stale data as a success; Windows RGB32 read
+    `w × h × 4` bytes unchecked, ignored a format change while streaming and `MFGetAttributeSize()`'s result; macOS
+    trusted the pixel buffer (lock, base address, format, row length) and freed the delegate while its queue could
+    still call it; the platform objects were an owning `void *`.
+  - Q2 macOS: the engine `.mm` files were compiled WITHOUT ARC while written for it (every alert, notification and
+    capture session leaked); `TextInput` set the Accessory activation policy on every prompt and never restored it; no
+    camera permission check and no `NSCameraUsageDescription`; `open "…"` through `system()` (shell injection);
+    nil / NULL string conversions (an abort on invalid UTF-8); a NULL CF property crashed `SystemInfo` at boot;
+    `flashTaskbarIcon(false)` never cancelled; the notification reported success without a notification center.
+  - Q3 Windows: `path::string()` (ANSI, throws outside the code page) for every shell path and log line; the UTF-16 →
+    multibyte converters queried one length and converted another (ERROR_INSUFFICIENT_BUFFER); `GetModuleFileNameA`
+    (`?` outside the code page, 1024-byte truncation unchecked) for the application directory; `OpenFile` /
+    `SaveFile` COM leaks and a dereference of a failed `GetItemAt()`; an `IFileSaveDialog` in an `IFileOpenDialog *`;
+    `CoInitializeEx` never balanced; a NaN progress cast to `ULONGLONG`; a trailing backslash escaping the closing
+    quote; `CoTaskMemFree` missing on a failure; `GetLogicalDriveStringsW` overflow not checked.
+  - Q4 Linux: `/proc/mounts` octal escapes not decoded (a mount point with a space skipped); `isdigit` on a signed
+    `char`; NULL `passwd` fields into `std::string`; a throwing `.at()`; the program detection and shell escaping
+    duplicated in `Notification.linux.cpp`.
+  - Q5 `std::thread`'s constructor throws (an abort): `Helpers.linux.cpp` and `Notification.windows.cpp` here, about ten
+    sites cascade-wide (owner question).
+  - Q6 `openURL()` hands any scheme that passes `URL::isURL()` to the system (`ShellExecuteW`, `open`, `xdg-open`): any
+    registered protocol handler (`file://host/share/x.exe`, `ms-*`). No caller today (owner question).
+- [x] (3) Mechanical: Q1, Q3, Q4, Q2 except the rulings; clang-tidy fix-its TU by TU (starts_with, `timeval{}`,
+  pass-by-value, anonymous namespaces, `std::array`), no header outside the section touched.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED: Q5 → base item `non-throwing-thread-start` (a base RAII
+  thread with a non-throwing start, then a cascade pass); ARC enabled on every engine `.mm` with a compile-time guard
+  in each; the TextInput activation-policy line removed; `NSCameraUsageDescription` in projet-alpha's Info.plist and the
+  macOS authorization check in `VideoCaptureDevice::open()`; Q6 `openURL()` opens `http://` and `https://` only (the
+  raw string tested, case-insensitive; `file://`, `ms-*`, `javascript:` refused with an error);
+  `NSMicrophoneUsageDescription` added to the Info.plist too (the audio capture).
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 114 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 54 → 44 (on purpose, ledger). Harnesses under ASan / UBSan on the real function
+  text: the old YUYV conversion over-reads on a 3×3 frame, the new one refuses it, is byte-identical on a packed 4×2
+  frame, honours an 8-byte stride and refuses a short frame; the `/proc/mounts` decoder (`\040`, `\011`, `\134`, an
+  incomplete escape kept); the `openURL()` scheme test (8 cases). Runtime (owner-approved camera test): `/dev/video0` negotiated YUYV 640×480, two real
+  captures through KeyP (49 091 distinct colours), 0 VUID; citadel MCP 1707/0, console 4466/0. The Windows and macOS
+  changes are UNCOMPILED here: the peers build and test them.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 14 commit), base `d005f1c`, alpha `c043790a`; peers asked (each OS has a camera).
 

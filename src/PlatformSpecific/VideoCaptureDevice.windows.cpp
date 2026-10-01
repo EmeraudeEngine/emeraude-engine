@@ -47,8 +47,8 @@ namespace EmEn::PlatformSpecific
 {
 	constexpr auto TracerTag{"VideoCaptureDevice"};
 
-	/* Platform-specific context stored via m_platformHandle. */
-	struct MFCaptureContext
+	/* The platform-specific context (VideoCaptureDevice::m_platformContext). */
+	struct VideoCaptureDevice::PlatformContext
 	{
 		IMFSourceReader * sourceReader{nullptr};
 		IMFMediaSource * mediaSource{nullptr};
@@ -250,18 +250,17 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		auto * context = new (std::nothrow) MFCaptureContext{};
+		std::unique_ptr< PlatformContext > context{new (std::nothrow) PlatformContext{}};
 
 		if ( context == nullptr )
 		{
-			TraceError{TracerTag} << "Failed to allocate MFCaptureContext.";
+			TraceError{TracerTag} << "Failed to allocate the capture context.";
 
 			return false;
 		}
 
 		if ( !initializeCOMAndMF(context->comInitialized, context->mfStarted) )
 		{
-			delete context;
 
 			return false;
 		}
@@ -275,7 +274,6 @@ namespace EmEn::PlatformSpecific
 			TraceError{TracerTag} << "MFCreateAttributes failed (HRESULT: " << hr << ").";
 
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -286,7 +284,6 @@ namespace EmEn::PlatformSpecific
 		{
 			attributes->Release();
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -303,7 +300,6 @@ namespace EmEn::PlatformSpecific
 			TraceError{TracerTag} << "MFEnumDeviceSources failed (HRESULT: " << hr << ").";
 
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -344,7 +340,6 @@ namespace EmEn::PlatformSpecific
 			TraceError{TracerTag} << "Failed to find video device matching '" << devicePath << "' on Windows.";
 
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -358,7 +353,6 @@ namespace EmEn::PlatformSpecific
 			TraceError{TracerTag} << "Failed to activate media source (HRESULT: " << hr << ").";
 
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -381,7 +375,6 @@ namespace EmEn::PlatformSpecific
 			context->mediaSource->Shutdown();
 			context->mediaSource->Release();
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -428,7 +421,6 @@ namespace EmEn::PlatformSpecific
 			context->mediaSource->Shutdown();
 			context->mediaSource->Release();
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-			delete context;
 
 			return false;
 		}
@@ -438,15 +430,22 @@ namespace EmEn::PlatformSpecific
 		hr = context->sourceReader->GetCurrentMediaType(
 			static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &currentType);
 
-		if ( SUCCEEDED(hr) )
+		if ( SUCCEEDED(hr) && currentType != nullptr )
 		{
 			UINT32 actualWidth = 0;
 			UINT32 actualHeight = 0;
 
-			MFGetAttributeSize(currentType, MF_MT_FRAME_SIZE, &actualWidth, &actualHeight);
-
-			m_width = actualWidth;
-			m_height = actualHeight;
+			/* NOTE: The size is taken only when the attribute is really there (its result was ignored). */
+			if ( SUCCEEDED(MFGetAttributeSize(currentType, MF_MT_FRAME_SIZE, &actualWidth, &actualHeight)) )
+			{
+				m_width = actualWidth;
+				m_height = actualHeight;
+			}
+			else
+			{
+				m_width = requestedWidth;
+				m_height = requestedHeight;
+			}
 
 			currentType->Release();
 		}
@@ -456,11 +455,11 @@ namespace EmEn::PlatformSpecific
 			m_height = requestedHeight;
 		}
 
-		m_platformHandle = context;
+		m_platformContext = std::move(context);
 		m_isOpen = true;
 
 		TraceInfo{TracerTag} << "Video capture device '" << devicePath << "' opened successfully on Windows ("
-			<< m_width << "x" << m_height << ", " << (context->isRGB32 ? "RGB32" : "YUY2") << ").";
+			<< m_width << "x" << m_height << ", " << (m_platformContext->isRGB32 ? "RGB32" : "YUY2") << ").";
 
 		return true;
 	}
@@ -473,7 +472,7 @@ namespace EmEn::PlatformSpecific
 			return;
 		}
 
-		auto * context = static_cast< MFCaptureContext * >(m_platformHandle);
+		auto * context = m_platformContext.get();
 
 		if ( context != nullptr )
 		{
@@ -490,10 +489,9 @@ namespace EmEn::PlatformSpecific
 
 			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
 
-			delete context;
 		}
 
-		m_platformHandle = nullptr;
+		m_platformContext.reset();
 		m_isOpen = false;
 		m_width = 0;
 		m_height = 0;
@@ -510,12 +508,12 @@ namespace EmEn::PlatformSpecific
 	bool
 	VideoCaptureDevice::captureFrame (std::vector< uint8_t > & rgbaOutput) noexcept
 	{
-		if ( !m_isOpen || m_platformHandle == nullptr )
+		if ( !m_isOpen || m_platformContext == nullptr )
 		{
 			return false;
 		}
 
-		auto * context = static_cast< MFCaptureContext * >(m_platformHandle);
+		auto * context = m_platformContext.get();
 
 		/* Media Foundation may return S_OK with a null sample for the first few
 		 * reads (stream tick / warmup). Retry a limited number of times. */
@@ -553,6 +551,27 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
+		/* NOTE: A device can switch its format while streaming (a capture card, a virtual camera): the frame size is
+		 * read again, or the next frames were read with the old one (an over-read on the RGB32 path). */
+		if ( (streamFlags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) != 0 )
+		{
+			IMFMediaType * changedType = nullptr;
+
+			if ( SUCCEEDED(context->sourceReader->GetCurrentMediaType(static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &changedType)) && changedType != nullptr )
+			{
+				UINT32 changedWidth = 0;
+				UINT32 changedHeight = 0;
+
+				if ( SUCCEEDED(MFGetAttributeSize(changedType, MF_MT_FRAME_SIZE, &changedWidth, &changedHeight)) )
+				{
+					m_width = changedWidth;
+					m_height = changedHeight;
+				}
+
+				changedType->Release();
+			}
+		}
+
 		IMFMediaBuffer * buffer = nullptr;
 		HRESULT hr = sample->GetBufferByIndex(0, &buffer);
 
@@ -586,12 +605,33 @@ namespace EmEn::PlatformSpecific
 			/* RGB32 is BGRA in memory. Convert to RGBA. */
 			const size_t pixelCount = static_cast< size_t >(m_width) * m_height;
 
+			/* NOTE: The conversion reads pixelCount * 4 bytes: a shorter buffer was read past its end. */
+			if ( pixelCount == 0 || currentLength < pixelCount * 4 )
+			{
+				buffer->Unlock();
+				buffer->Release();
+				sample->Release();
+
+				TraceWarning{TracerTag} << "Incomplete RGB32 frame (" << currentLength << " bytes for " << m_width << "x" << m_height << ") dropped.";
+
+				return false;
+			}
+
 			convertBGRAtoRGBA(rawData, pixelCount, rgbaOutput);
 		}
 		else
 		{
-			/* YUY2 format. Use the shared YUYV->RGBA converter. */
-			convertYUYVtoRGBA(rawData, currentLength, rgbaOutput, m_width, m_height);
+			/* YUY2 format. Use the shared YUYV->RGBA converter, which refuses a frame shorter than the format. */
+			if ( !convertYUYVtoRGBA(rawData, currentLength, rgbaOutput, m_width, m_height) )
+			{
+				buffer->Unlock();
+				buffer->Release();
+				sample->Release();
+
+				TraceWarning{TracerTag} << "Incomplete YUY2 frame (" << currentLength << " bytes for " << m_width << "x" << m_height << ") dropped.";
+
+				return false;
+			}
 		}
 
 		buffer->Unlock();

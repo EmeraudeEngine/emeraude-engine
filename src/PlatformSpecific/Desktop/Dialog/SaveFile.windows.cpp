@@ -219,7 +219,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		Tracer::debug(ClassId, "[COM] Using modern save file dialog (IFileSaveDialog).");
 
-		IFileOpenDialog * dialogHandle = nullptr;
+		/* NOTE: An IFileSaveDialog (it was stored in an IFileOpenDialog pointer, which only worked because every method
+		 * used sits in an IFileDialog slot). */
+		IFileSaveDialog * dialogHandle = nullptr;
 
 		HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_IFileSaveDialog, reinterpret_cast< void * * >(&dialogHandle));
 		if ( FAILED(hr) )
@@ -230,7 +232,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		}
 
 		/* NOTE: Create an automatic dialog release. */
-		std::unique_ptr< IFileOpenDialog, void (*)(IFileOpenDialog *) > autoRelease(dialogHandle, [] (IFileOpenDialog * p) {
+		std::unique_ptr< IFileSaveDialog, void (*)(IFileSaveDialog *) > autoRelease(dialogHandle, [] (IFileSaveDialog * p) {
 			p->Release();
 		});
 
@@ -370,6 +372,8 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 				hr = item->GetDisplayName(SIGDN_FILESYSPATH, &filepath);
 				if ( FAILED(hr) )
 				{
+					item->Release();
+
 					Tracer::error(ClassId, "Unable to get the filepath from the item selected !");
 
 					return false;
