@@ -39,5 +39,5 @@ destruction must stay legal after a device loss, and the exit should be the clea
 
 ## References
 
-- Engine `docs/todo/triad-engine-pass.md` § 15 (6), Windows (B).
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 15 (6), Windows (B).
 - Vulkan spec, "Lost Device": which commands stay valid after `VK_ERROR_DEVICE_LOST`.

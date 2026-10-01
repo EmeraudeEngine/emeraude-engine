@@ -34,4 +34,4 @@ both the webcam (`Graphics::ExternalInput`) and the microphone (`Audio::External
 
 - `src/SettingKeys.hpp` (`VideoCaptureEnableKey`, `AudioCaptureEnableKey`), `src/Graphics/ExternalInput.cpp`,
   `src/Audio/ExternalInput.cpp`.
-- `docs/todo/triad-engine-pass.md` § 14 (6).
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 14 (6).

@@ -32,4 +32,4 @@ only for this). That is an API change, not a mechanical triad fix, so 7e left it
 ## References
 
 - `src/Graphics/RenderTarget/Abstract.hpp`: the constructor.
-- `docs/todo/triad-engine-pass.md` § 7e.
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 7e.

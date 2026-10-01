@@ -31,4 +31,4 @@ delivered the requested 640×480.
 
 - `src/PlatformSpecific/VideoCaptureDevice.mac.mm` `open()` (the preset block, then `addInput:`).
 - Apple, `AVCaptureSession.sessionPreset` and `canSetSessionPreset:`.
-- `docs/todo/triad-engine-pass.md` § 14 (6).
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 14 (6).

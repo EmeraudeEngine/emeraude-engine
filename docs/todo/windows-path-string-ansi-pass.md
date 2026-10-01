@@ -49,4 +49,4 @@ sites and the other startup-critical ones:
 ## References
 
 - Engine `docs/caution-points.md` § "On MSVC, std::filesystem::path::string() is ANSI".
-- `docs/todo/triad-engine-pass.md` § 14 (the peer measurement) and § 15.
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 14 (the peer measurement) and § 15.

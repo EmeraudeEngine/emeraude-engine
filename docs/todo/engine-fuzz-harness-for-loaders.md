@@ -30,4 +30,4 @@ malformed input during the 2026 Ave robustus plan, then clean multi-million-run 
 ## References
 
 - emeraude-base `src/Fuzzing/README.md`, `docs/plans/ave-robustus.md` § A.3.
-- Engine `docs/todo/triad-engine-pass.md` § Section 3.
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § Section 3.

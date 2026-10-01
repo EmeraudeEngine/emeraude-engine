@@ -42,4 +42,4 @@ the next. A tipping cube is chaotic, so any tiny difference grows. The owner wan
 - `projet-alpha/src/Builtin/CollisionDebug.cpp` (the dynamic rotation test), `Core.SceneManagerService.getNodePhysics()`.
 - Related physics items: `physics-solver-restitution-and-position-correction`, `physics-nan-linear-velocities`,
   `rotational-physics`.
-- `docs/todo/triad-engine-pass.md` § 11 (the peer readings).
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 11 (the peer readings).

@@ -57,4 +57,4 @@ dedicated solver pass, validated by runtime measurements, over a fix inside the 
   `solvePositionConstraints()`.
 - E. Catto, "Iterative Dynamics with Temporal Coherence" (GDC 2005) and Box2D `b2ContactSolver` (restitution from the
   pre-solve velocity, restitution threshold, accumulated impulses).
-- `docs/todo/triad-engine-pass.md` § 11.
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 11.

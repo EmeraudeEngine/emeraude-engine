@@ -41,4 +41,4 @@ next render pass, or right after its clear, would explain a uniform colour. That
 
 - `src/Scenes/Manager.console.cpp`: the `dumpRenderTarget` command (waitIdle, then `downloadImage`).
 - `src/Graphics/Renderer.cpp`: the render-to-texture submission, `setRenderFinished()` / `markRendered()`.
-- `docs/todo/triad-engine-pass.md` § 9b (the peer re-test).
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 9b (the peer re-test).

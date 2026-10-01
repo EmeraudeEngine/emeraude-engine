@@ -49,6 +49,9 @@ unnamed item keeps the bare `glTF:{stem}/{Category}/{index}`). Textures add `-sr
 - **Proof.** Fox and RiggedFigure carry one node each, yet their matrices are unchanged (old and new both equal the
   spec, 0.0): their mesh hangs under that same node, and the root transform cancels it. CesiumMan and SimpleSkin carry
   nothing.
+- **Validated** on the three OS (2026-10-01, engine `0317b73c`): Linux RTX 3070 Ti, macOS M2, Windows NVIDIA + AMD.
+  BrainStem stands upright while animating (plain, Draco, Meshopt-EXT), the other skinned samples are unchanged, and
+  the citadel dragon perches upright with its patched asset; 0 VUID.
 
 #### CUBICSPLINE — the output accessor has a STRIDE OF THREE (fixed Aug 2026)
 

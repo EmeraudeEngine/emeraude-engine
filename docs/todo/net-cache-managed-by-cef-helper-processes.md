@@ -34,4 +34,4 @@ deletes the main process's `.part` file mid-transfer, may evict what the main pr
 ## References
 
 - `src/Net/Manager.cpp` (`onInitialize`, `sweepPartialFiles`, `enforceCacheBudget`), `src/PrimaryServices.cpp`.
-- Engine `docs/todo/triad-engine-pass.md` § Section 4.
+- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § Section 4.
