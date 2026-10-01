@@ -199,7 +199,7 @@ namespace EmEn::Vulkan
 				"\t" "Descriptor type: " << setLayoutBinding.descriptorType << "\n"
 				"\t" "Descriptor count: " << setLayoutBinding.descriptorCount << "\n"
 				"\t" "Stage flags: " << setLayoutBinding.stageFlags << "\n"
-				"\t" "Immutable Samplers: " << setLayoutBinding.pImmutableSamplers << "\n\n";
+				"\t" "Immutable Samplers: " << static_cast< const void * >(setLayoutBinding.pImmutableSamplers) << "\n\n";
 		}
 
 		return out;

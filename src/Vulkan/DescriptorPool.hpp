@@ -200,7 +200,7 @@ namespace EmEn::Vulkan
 			size_t
 			pageCount () const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+				const std::scoped_lock lock{m_descriptorPoolAccess};
 
 				return m_handle != VK_NULL_HANDLE ? 1 + m_extraPages.size() : 0;
 			}

@@ -623,16 +623,16 @@ namespace EmEn::Vulkan
 		imageCopy.srcSubresource.mipLevel = 0;
 		imageCopy.srcSubresource.baseArrayLayer = 0;
 		imageCopy.srcSubresource.layerCount = 1;
-		imageCopy.srcOffset = {0, 0, 0};
+		imageCopy.srcOffset = {.x = 0, .y = 0, .z = 0};
 		imageCopy.dstSubresource.aspectMask = aspectMask;
 		imageCopy.dstSubresource.mipLevel = 0;
 		imageCopy.dstSubresource.baseArrayLayer = 0;
 		imageCopy.dstSubresource.layerCount = 1;
-		imageCopy.dstOffset = {0, 0, 0};
+		imageCopy.dstOffset = {.x = 0, .y = 0, .z = 0};
 		imageCopy.extent = {
-			std::min(src.width(), dst.width()),
-			std::min(src.height(), dst.height()),
-			1
+			.width = std::min(src.width(), dst.width()),
+			.height = std::min(src.height(), dst.height()),
+			.depth = 1
 		};
 
 		vkCmdCopyImage(

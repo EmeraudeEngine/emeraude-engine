@@ -95,7 +95,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* [VULKAN-CPU-SYNC] vkAllocateCommandBuffers() */
-		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
+		const std::scoped_lock lock{m_commandPoolAccess};
 
 		VkCommandBufferAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -130,7 +130,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* [VULKAN-CPU-SYNC] vkFreeCommandBuffers() */
-		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
+		const std::scoped_lock lock{m_commandPoolAccess};
 
 		if constexpr ( IsDebug )
 		{
@@ -159,7 +159,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* [VULKAN-CPU-SYNC] vkResetCommandPool() */
-		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
+		const std::scoped_lock lock{m_commandPoolAccess};
 
 		if ( const auto result = vkResetCommandPool(this->device()->handle(), m_handle, releaseMemory ? VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT : 0); result != VK_SUCCESS )
 		{

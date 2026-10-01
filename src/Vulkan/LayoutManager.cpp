@@ -66,7 +66,7 @@ namespace EmEn::Vulkan
 	std::shared_ptr< DescriptorSetLayout >
 	LayoutManager::getDescriptorSetLayout (const std::string & UUID) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		const auto descriptorSetLayoutIt = m_descriptorSetLayouts.find(UUID);
 
@@ -87,7 +87,7 @@ namespace EmEn::Vulkan
 	bool
 	LayoutManager::createDescriptorSetLayout (const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		/* NOTE: If the layout already exists (concurrent creation race), just succeed silently. */
 		if ( m_descriptorSetLayouts.contains(descriptorSetLayout->UUID()) )
@@ -109,7 +109,7 @@ namespace EmEn::Vulkan
 	std::shared_ptr< PipelineLayout >
 	LayoutManager::getPipelineLayout (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags createFlags) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		const std::scoped_lock lock{m_access};
 
 		/* FIXME: Find a better way to create an UUID. */
 		std::stringstream pipelineLayoutUUIDStream;

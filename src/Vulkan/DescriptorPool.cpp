@@ -82,7 +82,7 @@ namespace EmEn::Vulkan
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+			const std::scoped_lock lock{m_descriptorPoolAccess};
 
 			for ( auto * page : m_extraPages )
 			{
@@ -141,7 +141,7 @@ namespace EmEn::Vulkan
 	DescriptorPool::allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkAllocateDescriptorSets() */
-		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+		const std::scoped_lock lock{m_descriptorPoolAccess};
 
 		auto * descriptorSetLayoutHandle = descriptorSetLayout.handle();
 		VkDescriptorSet descriptorSetHandle = VK_NULL_HANDLE;
@@ -187,7 +187,7 @@ namespace EmEn::Vulkan
 	DescriptorPool::freeDescriptorSet (VkDescriptorSet descriptorSetHandle) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkFreeDescriptorSets() */
-		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+		const std::scoped_lock lock{m_descriptorPoolAccess};
 
 		auto * page = m_handle;
 
@@ -213,7 +213,7 @@ namespace EmEn::Vulkan
 	DescriptorPool::reset () const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkResetDescriptorPool() */
-		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+		const std::scoped_lock lock{m_descriptorPoolAccess};
 
 		if ( const auto result = vkResetDescriptorPool(this->device()->handle(), m_handle, 0); result != VK_SUCCESS )
 		{

@@ -28,6 +28,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
@@ -285,7 +286,7 @@ namespace EmEn::Vulkan
 			 */
 			struct ScopeRecord
 			{
-				char label[LabelCapacity]{};
+				std::array< char, LabelCapacity > label{};
 				uint32_t beginQuery{0};
 				uint32_t endQuery{0};
 				uint32_t depth{0};

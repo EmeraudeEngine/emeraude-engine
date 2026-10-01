@@ -183,7 +183,7 @@ namespace EmEn::Vulkan
 
 		/* The caller just waited this slot's in-flight fence: every query of the previous
 		 * submission is available, the read cannot stall (no WAIT flag on purpose). */
-		std::array< uint64_t, MaxScopesPerFrame * 2 > results{};
+		std::array< uint64_t, static_cast< size_t >(MaxScopesPerFrame) * 2 > results{};
 
 		const auto result = vkGetQueryPoolResults(
 			this->device()->handle(),
@@ -206,7 +206,7 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_accumulatedAccess};
+		const std::scoped_lock lock{m_accumulatedAccess};
 
 		for ( const auto & record : frame.records )
 		{
@@ -218,7 +218,7 @@ namespace EmEn::Vulkan
 			const auto ticks = (end - begin) & m_timestampMask;
 			const auto milliseconds = static_cast< float >(static_cast< double >(ticks) * m_timestampPeriodNS * 1e-6);
 
-			this->accumulate(record.label, record.depth, milliseconds);
+			this->accumulate(record.label.data(), record.depth, milliseconds);
 		}
 	}
 
@@ -317,11 +317,11 @@ namespace EmEn::Vulkan
 
 		if ( subLabel != nullptr )
 		{
-			std::snprintf(record.label, LabelCapacity, "%s/%s", label, subLabel);
+			std::snprintf(record.label.data(), record.label.size(), "%s/%s", label, subLabel);
 		}
 		else
 		{
-			std::snprintf(record.label, LabelCapacity, "%s", label);
+			std::snprintf(record.label.data(), record.label.size(), "%s", label);
 		}
 
 		record.beginQuery = frame.queryCount++;
@@ -360,7 +360,7 @@ namespace EmEn::Vulkan
 	{
 		std::vector< Timing > timings;
 
-		const std::lock_guard< std::mutex > lock{m_accumulatedAccess};
+		const std::scoped_lock lock{m_accumulatedAccess};
 
 		timings.reserve(m_accumulated.size());
 
@@ -382,7 +382,7 @@ namespace EmEn::Vulkan
 	void
 	GPUProfiler::resetStatistics () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_accumulatedAccess};
+		const std::scoped_lock lock{m_accumulatedAccess};
 
 		m_accumulated.clear();
 	}

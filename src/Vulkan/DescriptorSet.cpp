@@ -28,7 +28,6 @@
 
 /* Local inclusions. */
 #include "DescriptorPool.hpp"
-#include "DescriptorSet.hpp"
 #include "DescriptorSetLayout.hpp"
 #include "Device.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"

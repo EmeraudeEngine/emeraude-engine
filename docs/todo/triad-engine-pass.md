@@ -59,7 +59,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed and VALIDATED on the three OS (2026-10-01) |
-| 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | 🟠 9a started |
+| 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed (9b, 9c peers pending) |
 | 10 | `src/Audio` | 18 919 | ⬜ |
 | 11 | `src/Physics` | 9 197 | ⬜ |
 | 12 | `src/Animations` | 3 488 | ⬜ |
@@ -1073,7 +1073,7 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 |---|---|---|---|
 | 9a | Instance, device, presentation: `Instance`, `DebugMessenger`, `PhysicalDevice`, `Device`, `DeviceQueueConfiguration`, `DeviceRequirements`, `Queue`, `Surface`, `SwapChain`, `Utility` (trust boundary: the settings — GPU choice, layers, present modes — and what the driver reports) | ~9 500 | ✅ pushed engine `fa06d2fd`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ✅ pushed (the engine 9b commit); peers pending |
-| 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ⬜ |
+| 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ✅ pushed (the engine 9c commit); peers pending |
 
 ### 9a — instance, device, presentation (2026-10-01)
 
@@ -1149,4 +1149,21 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   default: the VUID above). terrain, water-world, animation-debug, citadel (RT acceleration structures; MCP 1707/0,
   console 4466/0), a hardware H.265 rush (121 frames): 0 VUID, 0 leak.
 - [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9b commit); peers asked.
+
+### 9c — commands, pipelines, descriptors, sync (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (18 TUs + headers): **45**: 15 reinterpret-cast, 14 scoped-lock, 3 designated
+  initializers, 3 array-to-pointer decay, and singles (a duplicate include, a pointer-to-pointer streamed, an
+  implicit-widening constant, a C array, two `snprintf`).
+- [x] (2) Review. Internal (the renderer and Saphir drive these wrappers); sound: the GPU profiler drops the scopes past
+  `MaxScopesPerFrame` with a warning and keeps its open / close bookkeeping balanced; the descriptor pool grows (the
+  2026-09-22 fix). No defect, no owner question.
+- [x] (3) Mechanical: fix-its with `--format-style=none` (scoped_lock, designated initializers — spacing normalized —,
+  the duplicate include), the profiler label a `std::array< char, LabelCapacity >`, a `size_t` constant product, the
+  immutable-sampler pointer streamed as `const void *`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 113 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 45 → 21 (on purpose, ledger). `getGPUTimings()` with the profiler ON prints its
+  table (labels at their 47-character capacity, unchanged); terrain, sponza, citadel (MCP 1707/0, console 4466/0): 0
+  VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9c commit); peers asked.
 
