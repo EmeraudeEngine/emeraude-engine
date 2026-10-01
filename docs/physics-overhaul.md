@@ -180,6 +180,16 @@ firstCycle + count)`. Console / MCP (`Core.SceneManagerService`):
   IDENTICAL to run 1 over cycles 60-71 and splits at cycle 72 (the top box E first, then B, A) — long after the loads,
   which fits the pair-ORDER half of the hypothesis (a different octree insertion order changing the Gauss-Seidel order
   once several contacts interact), not the property half.
+- **Windows, RTX 3060 and AMD iGPU (peer, 5 + 5 recorded launches)**: the twin `BenchTipCube` bit-identical 5/5 on BOTH
+  GPUs, with the same final state on NVIDIA and AMD (31.955, 4.405); 12 other stations bit-identical. The stack and
+  `DynTopCube` already differ at cycle 60, in a few DISCRETE states (StackA's height at cycle 60 takes 0.1870 or
+  0.2019; `DynTopCube` repeats on AMD in 4 of 5 runs, at the Linux 6.855): the first fork lies in cycles 0-59, where the
+  loads complete. Two NVIDIA runs share `DynTopCube`'s state at cycle 60 yet end apart: a second fork later.
+- **Reading across the three OS**: one contact pair repeats exactly everywhere; several interacting pairs fork in
+  discrete states — the signature of an ORDER (of insertion, hence of solving), not of floating-point noise. P2's sort
+  of the manifolds by stable ids is the targeted fix; then the bench must read 0 differing samples on every station on
+  the three OS. Dating the first fork would need a recording armed before the scene starts: NOT designed — owner
+  (2026-10-01) agreed it is not needed before P2; design it only if P2 does not reach 0 differing samples.
 
 ### Baseline — Linux, RTX 3070 Ti, engine `5c2b2c40` + the bench, 5 launches × 30 s of physics
 

@@ -42,6 +42,11 @@ its entity-level properties and non-overridden shape are re-derived when the geo
 depends on the machine (`docs/caution-points.md` § the body properties set on an entity are overwritten). Test: the
 twin station `BenchTipCube`.
 
+**2026-10-01, every cycle recorded on the three OS** (`docs/physics-overhaul.md` § 6, "The per-cycle recorder"): the
+single-pair twin is bit-identical 5/5 on Linux, the M2, the RTX 3060 and the AMD iGPU; the stack and `DynTopCube` fork
+in DISCRETE states (Windows: before cycle 60; the M2: once at cycle 72) — an order effect. Acceptance after P2: 0
+differing samples on every station, 5 runs, three OS.
+
 ## What remains
 
 > Expected to close with `physics-unified-contact-pipeline` (deterministic contact order, phase P2 of
