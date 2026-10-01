@@ -26,6 +26,13 @@
 
 #include "Window.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+#include <utility>
+
+/* Local inclusions. */
+#include "FastJSON.hpp"
+
 namespace EmEn
 {
 	void
@@ -42,30 +49,39 @@ namespace EmEn
 					return Console::CommandResult::error("Minimum size is 320x240.");
 				}
 
+				/* NOTE: Refused past the device and monitor limits (owner ruling 2026-10-01): the framebuffer of a too large
+				 * window exhausted the GPU memory and lost the device. */
+				if ( const auto maximum = this->maximumWindowSize(); std::cmp_greater(width, maximum[0]) || std::cmp_greater(height, maximum[1]) )
+				{
+					return Console::CommandResult::error("The size " + std::to_string(width) + "x" + std::to_string(height) + " is past the limits: at most " + std::to_string(maximum[0]) + "x" + std::to_string(maximum[1]) + ".");
+				}
+
 				if ( !this->resize(width, height) )
 				{
 					return Console::CommandResult::error("Failed to resize window !");
 				}
 
-				return Console::CommandResult::success("Window resized to " + std::to_string(width) + "x" + std::to_string(height) + ".");
+				/* NOTE: The REQUESTED size: the window system applies it asynchronously and may clamp it (to the desktop on
+				 * Windows). getState() reads the size applied. */
+				return Console::CommandResult::success("Window resize to " + std::to_string(width) + "x" + std::to_string(height) + " requested (getState() gives the size applied).");
 			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("getState", "Returns the window state as JSON (size, position, framebuffer, scale).", [this] () {
 			const auto & state = this->state();
 
-			std::stringstream json;
-			json << "{";
-			json << "\"windowWidth\":" << state.windowWidth << ",";
-			json << "\"windowHeight\":" << state.windowHeight << ",";
-			json << "\"windowXPosition\":" << state.windowXPosition << ",";
-			json << "\"windowYPosition\":" << state.windowYPosition << ",";
-			json << "\"framebufferWidth\":" << state.framebufferWidth << ",";
-			json << "\"framebufferHeight\":" << state.framebufferHeight << ",";
-			json << "\"contentXScale\":" << state.contentXScale << ",";
-			json << "\"contentYScale\":" << state.contentYScale;
-			json << "}";
+			/* NOTE: A JSON document, not a stream: a stream wrote a non-finite scale as "nan" and followed the global
+			 * locale (a decimal comma), both invalid JSON. */
+			Json::Value json{Json::objectValue};
+			json["windowWidth"] = state.windowWidth;
+			json["windowHeight"] = state.windowHeight;
+			json["windowXPosition"] = state.windowXPosition;
+			json["windowYPosition"] = state.windowYPosition;
+			json["framebufferWidth"] = state.framebufferWidth;
+			json["framebufferHeight"] = state.framebufferHeight;
+			json["contentXScale"] = std::isfinite(state.contentXScale) ? state.contentXScale : 0.0F;
+			json["contentYScale"] = std::isfinite(state.contentYScale) ? state.contentYScale : 0.0F;
 
-			return Console::CommandResult::json(json.str());
+			return Console::CommandResult::json(Base::FastJSON::stringify(json));
 		}, Console::CommandHint::ReadOnly);
 	}
 }

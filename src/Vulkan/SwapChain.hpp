@@ -412,11 +412,10 @@ namespace EmEn::Vulkan
 			 * @note This is a workaround for Windows where vkCreateSwapchainKHR() can deadlock
 			 * during interactive window resize. By destroying the surface completely, we avoid
 			 * the problematic swap-chain transition on the same surface.
-			 * @param useNativeCode Use the native code to build the surface.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool fullRecreate (bool useNativeCode) noexcept;
+			bool fullRecreate () noexcept;
 
 			/**
 			 * @brief Acquires the next image index available in the swap-chain.

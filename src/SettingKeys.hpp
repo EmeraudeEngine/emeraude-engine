@@ -333,8 +333,6 @@ namespace EmEn
 				constexpr auto GLFWUsePlatformKey{"Core/Video/Window/GLFW/UsePlatform"};
 				constexpr auto DefaultGLFWUsePlatform{"Auto"};
 				/* Create the Vulkan surface via native OS code instead of GLFW. */
-				constexpr auto GLFWEnableNativeCodeForVkSurfaceKey{"Core/Video/Window/GLFW/EnableNativeCodeForVkSurface"};
-				constexpr auto DefaultEnableNativeCodeForVkSurface{false};
 				/* Use libdecor for client-side window decorations on Wayland. */
 				constexpr auto GLFWWaylandEnableLibDecorKey{"Core/Video/Window/GLFW/Wayland/EnableLibDecor"};
 				constexpr auto DefaultGLFWWaylandEnableLibDecor{true};

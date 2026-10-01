@@ -193,8 +193,8 @@ namespace EmEn::Tool
 		std::vector< float > vertices;
 		std::vector< uint32_t > indices;
 
-		NormalType normals;
-		TextureCoordinatesType textureCoordinates;
+		NormalType normals{};
+		TextureCoordinatesType textureCoordinates{};
 
 		if ( m_enableTangentSpace )
 		{

@@ -30,7 +30,6 @@
 #include "emeraude_platform.hpp"
 
 /* Local inclusions. */
-#include "String.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
 #endif
@@ -65,17 +64,11 @@ namespace EmEn
 				continue;
 			}
 
-			/* NOTE: Checking the form --xxx=yyy */
-			if ( value.find_first_of('=') != std::string::npos )
+			/* NOTE: Checking the form --xxx=yyy. Split at the FIRST '=' only: the value may hold one (a path, a
+			 * "key=value" option), and exploding on every '=' kept only the first chunk of it. */
+			if ( const auto equalPosition = value.find('='); equalPosition != std::string::npos )
 			{
-				if ( const auto chunks = String::explode(value, '=', false); chunks.size() >= 2 )
-				{
-					m_arguments.emplace(chunks[0], chunks[1]);
-				}
-				else if ( chunks.size() == 1 )
-				{
-					m_arguments.emplace(chunks[0], "");
-				}
+				m_arguments.emplace(value.substr(0, equalPosition), value.substr(equalPosition + 1));
 
 				continue;
 			}
@@ -143,18 +136,18 @@ namespace EmEn
 	bool
 	Arguments::isSwitchPresent (std::string_view argument) const noexcept
 	{
-		return m_switches.contains(argument.data());
+		return m_switches.contains(argument);
 	}
 
 	bool
 	Arguments::isSwitchPresent (std::string_view argument, std::string_view alternateArgument) const noexcept
 	{
-		if ( m_switches.contains(argument.data()) )
+		if ( m_switches.contains(argument) )
 		{
 			return true;
 		}
 
-		return m_switches.contains(alternateArgument.data());
+		return m_switches.contains(alternateArgument);
 	}
 
 	std::optional< std::string >

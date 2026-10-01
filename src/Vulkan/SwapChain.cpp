@@ -86,7 +86,8 @@ namespace EmEn::Vulkan
 		 * render pass and framebuffer code reads (format, extent, image count, usage). */
 		if ( m_headless )
 		{
-			const auto framebufferSize = window.getFramebufferSize();
+			/* NOTE: The size published by the main thread (the render thread never queries GLFW). */
+			const auto framebufferSize = window.publishedFramebufferSize();
 
 			m_createInfo = {};
 			m_createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -265,7 +266,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::fullRecreate (bool useNativeCode) noexcept
+	SwapChain::fullRecreate () noexcept
 	{
 		/* NOTE: The full recreation exists for the SURFACE; a headless swap-chain has none. */
 		if ( m_headless )
@@ -290,7 +291,7 @@ namespace EmEn::Vulkan
 		auto & window = m_renderer.window();
 
 		/* Destroy and recreate the Vulkan surface using native Win32 API. */
-		if ( !window.recreateSurface(useNativeCode) )
+		if ( !window.recreateSurface() )
 		{
 			Tracer::error(ClassId, "Unable to recreate the Vulkan surface !");
 
@@ -451,7 +452,8 @@ namespace EmEn::Vulkan
 	VkExtent2D
 	SwapChain::chooseSwapExtent (const VkSurfaceCapabilitiesKHR & capabilities) const noexcept
 	{
-		const auto framebufferSize = m_renderer.window().getFramebufferSize();
+		/* NOTE: The size published by the main thread (the render thread never queries GLFW). */
+		const auto framebufferSize = m_renderer.window().publishedFramebufferSize();
 
 		/*TraceDebug{ClassId} <<
 			"Vulkan minimum extent detected : " << capabilities.minImageExtent.width << 'X' << capabilities.minImageExtent.height << "\n"

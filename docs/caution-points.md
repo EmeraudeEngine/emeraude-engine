@@ -5170,6 +5170,57 @@ misleading.
 > (an abort with exceptions off), and an accented character inside it becomes ANSI bytes that a UTF-8 → UTF-16
 > conversion then turns into U+FFFD. Use `Base::IO::toU8String()` for a path that leaves the process (the shell, a
 > log line), and the wide API (`GetModuleFileNameW`, `ShellExecuteW`) on the Windows side.
+>
+> Measured by the Windows peer (2026-10-01) from a Release copied under a folder named `Jérôme`: the CEF menu did not
+> load (U+FFFD in its `file://` URL) and `FileSystem.getJson()` sent CP-1252 bytes the console client refused. Both
+> fixed in triad 15; about 120 sites remain, item `docs/todo/windows-path-string-ansi-pass.md`.
+>
+> Since triad 15, `IO::u8path()` / `toU8String()` / `toGenericU8String()` convert on Windows through the base's strict
+> `String::utf8ToUTF16()` / `utf16ToUTF8()` (RFC 3629, U+FFFD for each invalid subpart or lone surrogate). The former
+> `char8_t` route threw `std::system_error` (an abort) on invalid UTF-8, for example the CESU bytes jsoncpp produces
+> from a lone `\udc00` in a JSON path, or on a filename with a lone surrogate (NTFS allows one).
+
+### ⚠️ On Wayland, `glfwSetWindowSize()` calls back the FRAMEBUFFER size only (2026-10-01, triad 15)
+
+> [!CAUTION]
+> GLFW 3.5 `wl_window.c` `resizeWindow()` emits `_glfwInputFramebufferSize()`, never the window-size callback: after a
+> programmatic resize (the console `Window.resize`), `Window::state().windowWidth / windowHeight` kept the OLD size, which
+> `getState()` reported and the exit save would have stored (measured: framebuffer 2400×1350, window still 1920×1080
+> at a 1.5 scale). `framebufferSizeCallback()` now refreshes the window size with `glfwGetWindowSize()`. A new window
+> callback must not assume GLFW fires both on every platform.
+
+### ⚠️ The render thread reads the framebuffer size from `Window::publishedFramebufferSize()` ONLY (2026-10-01, triad 15)
+
+> [!CAUTION]
+> GLFW documents `glfwGetFramebufferSize()` as main-thread only (on Cocoa it is an AppKit view query), and windowless the
+> render thread read `m_state` while the console `resize` wrote it (a torn width / height pair). The main thread now
+> publishes the size through `Window::setFramebufferState()` (every framebuffer write: the callback, `resize()` windowless,
+> `create()`, the fullscreen switches) into one atomic 64-bit pair; the swap-chain and `Renderer` read only that.
+> A size of 0 (a minimised window on Windows) makes the render thread SKIP the frame: it used to wait in
+> `waitValidWindowSize()` with no exit while holding the scene lock, which hung a quit and could deadlock a pausable
+> application. `waitValidWindowSize()` is gone.
+>
+> The Vulkan surface comes from `glfwCreateWindowSurface()` only (`Window::createSurface()`). The native-code paths are
+> removed, and with them the setting `Core/Video/Window/GLFW/EnableNativeCodeForVkSurface`: the XCB path passed a null
+> connection (VUID-VkXcbSurfaceCreateInfoKHR-connection-01310), and the macOS one returned false without a trace. The key
+> stays orphaned in an existing `settings.json` (projet-alpha never resets its settings), and nothing reads it.
+
+### Fixed: every settings file kept the version and the date of its FIRST write (2026-10-01, triad 15)
+
+> Reading a settings file puts its header keys (`WrittenByEngineVersion`, `WrittenByApplicationVersion`, `WrittenAtDate`)
+> into the root store like any value, and `Settings::writeFile()` wrote the header FIRST, then the body over it: a file
+> written by engine 0.9.42 on 2026-07-26 still said so after every save by 0.9.82. The header is now written after the
+> body. The store keeps the values READ, on purpose: `Core::resetSettingsIfOutdated()` compares them with the build at
+> startup. The date uses `localtime_r()` / `localtime_s()`, checked (`localtime()` returned nullptr on failure, which was
+> dereferenced, and shares a static buffer between threads).
+
+### `Window.resize` is bounded by the device and the monitor (2026-10-01, triad 15)
+
+> A 17000 pt request became a 34000 px framebuffer on macOS, which the swap-chain clamped to 16384, and the render targets
+> exhausted the GPU memory (device lost). `Window::maximumWindowSize()` = the device `maxImageDimension2D` divided by the
+> content scale, and, when windowed, the largest monitor work area: the console refuses anything larger and names the
+> maximum. The reply gives the REQUESTED size (GLFW applies it asynchronously, the OS may clamp it): `getState()` reads the
+> size applied.
 
 
 ### Fixed: GNOME dropped the Wayland connection during a long load — a silent close, a 60 s stall, a crash at exit (Sep 2026)
@@ -5247,8 +5298,9 @@ Most C libraries the engine feeds paths to expect UTF-8 — ImGui says so in its
 UTF-8 filenames"*, then `MultiByteToWideChar(CP_UTF8, …)`). With `.string()`, any user whose profile
 path leaves ASCII (`C:\Users\Sébastien\…`) silently gets a mangled filename and a lost `.ini`.
 
-**Use `EmEn::Base::IO::toU8String(path)`** (`emeraude-base`, `IO/IO.hpp`) — `u8string()` on Windows,
-`string()` on POSIX where native bytes are already UTF-8. Its mirror is `IO::u8path(std::string)`
+**Use `EmEn::Base::IO::toU8String(path)`** (`emeraude-base`, `IO/IO.hpp`) — on Windows a strict UTF-16 → UTF-8
+conversion of the native string (`String::utf16ToUTF8()`, non-throwing since triad 15), `string()` on POSIX where
+native bytes are already UTF-8. Its mirror is `IO::u8path(std::string)`
 for the reverse direction. `toGenericU8String()` does the same with forward slashes.
 
 **Trap 2 — never `.string().c_str()` when the callee STORES the pointer.** `path::string()` returns a

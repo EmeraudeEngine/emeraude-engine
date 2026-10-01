@@ -1744,11 +1744,10 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Recreates the base of the rendering system.
 			 * @param withSurface Set this parameter to true to recreate the swap-chain and the surface.
-			 * @param useNativeCode Use the native code to build surface instead the GLFW. Default false.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreateRenderingSubSystem (bool withSurface, bool useNativeCode = false) noexcept;
+			bool recreateRenderingSubSystem (bool withSurface) noexcept;
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourcesManager;

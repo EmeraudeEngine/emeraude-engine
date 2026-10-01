@@ -34,11 +34,14 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <ranges>
 #include <sstream>
 #include <string_view>
+#include <system_error>
 #include <thread>
 
 /* Third-party inclusions. */
@@ -374,8 +377,6 @@ namespace EmEn
 
 		this->onCoreSurfaceRefreshed();
 
-		m_windowChanged = false;
-
 		if ( m_graphicsRenderer.recorder().isRecording() )
 		{
 			TraceInfo{ClassId} << "Stopping recording due to framebuffer resize.";
@@ -499,7 +500,7 @@ namespace EmEn
 			if ( m_graphicsRenderer.usable() )
 			{
 				/* NOTE: Must be done on the main thread. */
-				if ( m_windowChanged )
+				if ( m_windowChanged.exchange(false) )
 				{
 					this->onWindowChanged();
 				}
@@ -915,9 +916,16 @@ namespace EmEn
 		}
 
 		/* Checks if we need to execute the engine in tool mode. */
-		if ( m_primaryServices.arguments().isSwitchPresent(ToolsArg, ToolsLongArg) )
+		/* NOTE: The tool name is a VALUE ("-t vulkanInfo", "--tools-mode=vulkanInfo"), which Arguments files as an
+		 * argument, never as a switch: the former switch test never entered the mode with a name, and entered it
+		 * without one, where the value() below aborted. */
+		if ( m_primaryServices.arguments().get(ToolsArg, ToolsLongArg).has_value() )
 		{
 			m_startupMode = StartupMode::ToolsMode;
+		}
+		else if ( m_primaryServices.arguments().isSwitchPresent(ToolsArg, ToolsLongArg) )
+		{
+			TraceError{ClassId} << "The tools mode needs a tool name (" << ToolsArg << " <name> or " << ToolsLongArg << "=<name>) !";
 		}
 
 		Tracer::success(ClassId, "*** Core level created ***");
@@ -1660,15 +1668,37 @@ namespace EmEn
 		return errors > 0 ? EXIT_FAILURE : m_userExitCode;
 	}
 
-	void
+	size_t
 	Core::openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept
 	{
+		size_t unopenedCount = 0;
+
 		std::vector< std::filesystem::path > remainingFilepaths;
 		remainingFilepaths.reserve(filepaths.size());
 
 		/* NOTE: Here Core always has the first view on files to consume engine-level content. */
 		for ( const auto & filepath : filepaths )
 		{
+			/* NOTE: A JSON (a store index, a scene definition) is read whole: refused above 64 MiB (owner ruling
+			 * 2026-10-01), a multi-GB one aborted on the allocation. */
+			if ( IO::getFileExtension(filepath, true) == "json" )
+			{
+				constexpr std::uintmax_t MaxOpenedJSONBytes{64ULL * 1024 * 1024};
+
+				std::error_code errorCode;
+
+				if ( const auto fileSize = std::filesystem::file_size(filepath, errorCode); errorCode || fileSize > MaxOpenedJSONBytes )
+				{
+					TraceError{ClassId} << "The JSON file '" << IO::toU8String(filepath) << "' is unreadable or larger than 64 MiB, refused !";
+
+					this->notifyUser(BlobTrait{} << "The file '" << IO::toU8String(filepath.filename()) << "' is too large to open.");
+
+					++unopenedCount;
+
+					continue;
+				}
+			}
+
 			if ( this->openResourceIndex(filepath) )
 			{
 				continue;
@@ -1680,7 +1710,7 @@ namespace EmEn
 		/* NOTE: If all files are used by Core, we stop the operation. */
 		if ( remainingFilepaths.empty() )
 		{
-			return;
+			return unopenedCount;
 		}
 
 		/* NOTE: The application overrides the Core default behaviors by
@@ -1724,7 +1754,11 @@ namespace EmEn
 			TraceWarning{ClassId} << "No default behavior to open the file '" << IO::toU8String(filepath) << "' !";
 
 			this->notifyUser(BlobTrait{} << "Unable to open the file '" << IO::toU8String(filepath.filename()) << "'.");
+
+			++unopenedCount;
 		}
+
+		return unopenedCount;
 	}
 
 	bool
@@ -2733,7 +2767,8 @@ namespace EmEn
 
 					const auto & filepaths = *filepathsPayload;
 
-					this->openFiles(filepaths);
+					/* NOTE: Every unopened file already raised its own notification. */
+					static_cast< void >(this->openFiles(filepaths));
 				}
 					break;
 
@@ -2904,7 +2939,7 @@ namespace EmEn
 	{
 		Tracer::info(ClassId, "Executing in tools mode ...");
 
-		const auto tools = m_primaryServices.arguments().get(ToolsArg, ToolsLongArg).value();
+		const auto tools = m_primaryServices.arguments().get(ToolsArg, ToolsLongArg).value_or(std::string{});
 
 		if ( tools == VulkanInformationToolName )
 		{

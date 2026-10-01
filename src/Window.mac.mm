@@ -46,55 +46,6 @@ namespace EmEn
 {
 	using namespace Vulkan;
 
-	bool
-	Window::createSurface (bool useNativeCode) noexcept
-	{
-		VkResult result = VK_SUCCESS;
-
-		VkSurfaceKHR surfaceHandle{VK_NULL_HANDLE};
-
-		if ( useNativeCode )
-		{
-			// FIXME: Don't know what to write for now ...
-			return false;
-		}
-		else
-		{
-			result = glfwCreateWindowSurface(m_instance.handle(), m_handle.get(), nullptr, &surfaceHandle);
-		}
-
-		if ( result != VK_SUCCESS )
-		{
-			TraceFatal{ClassId} << "Unable to create the Vulkan surface : " << vkResultToCString(result) << " !";
-
-			return false;
-		}
-
-		m_surface = std::make_unique< Surface >(m_instance, surfaceHandle);
-		m_surface->setIdentifier(ClassId, "OSVideoFramebuffer", "Surface");
-
-		return true;
-	}
-
-	void
-	Window::destroySurface () noexcept
-	{
-		if ( m_surface != nullptr )
-		{
-			Tracer::debug(ClassId, "Destroying Vulkan surface...");
-
-			m_surface.reset();
-		}
-	}
-
-	bool
-	Window::recreateSurface (bool useNativeCode) noexcept
-	{
-		this->destroySurface();
-
-		return this->createSurface(useNativeCode);
-	}
-
 	void
 	Window::disableTitleBar () noexcept
 	{

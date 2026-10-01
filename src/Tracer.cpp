@@ -45,6 +45,7 @@
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "IO/IO.hpp"
 #include "FileSystem.hpp"
 #include "String.hpp"
 #include "Logging/Logging.hpp"
@@ -105,7 +106,7 @@ namespace EmEn
 	{
 		{
 			/* NOTE: Lock between the writing logs task in a file and the push/pop method. */
-			const std::lock_guard< std::mutex > lock{m_entriesAccess};
+			const std::scoped_lock lock{m_entriesAccess};
 
 			m_entries.emplace(severity, tag, std::move(message), location, std::this_thread::get_id());
 		}
@@ -145,7 +146,7 @@ namespace EmEn
 	void
 	TracerLogger::clear () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_entriesAccess};
+		const std::scoped_lock lock{m_entriesAccess};
 
 		std::queue< TracerEntry > emptyQueue;
 
@@ -273,7 +274,7 @@ namespace EmEn
 		}
 	}
 
-	Tracer::Tracer (PrivateToken) noexcept
+	Tracer::Tracer (PrivateToken /*token*/) noexcept
 	{
 #if IS_WINDOWS
 		/* NOTE: Before the very first trace goes out. */
@@ -282,7 +283,7 @@ namespace EmEn
 
 		if constexpr ( IsDebug )
 		{
-			std::cout << "Tracer constructed!" << std::endl;
+			std::cout << "Tracer constructed!" "\n";
 		}
 	}
 
@@ -296,7 +297,7 @@ namespace EmEn
 
 		if constexpr ( IsDebug )
 		{
-			std::cout << "Tracer instance destroyed!" << std::endl;
+			std::cout << "Tracer instance destroyed!" "\n";
 		}
 
 #if IS_WINDOWS
@@ -415,7 +416,9 @@ namespace EmEn
 
 			if ( argument.has_value() )
 			{
-				this->enableLogger(std::filesystem::path{argument.value()});
+				/* NOTE: IO::u8path(): the argument is UTF-8, and a path built from a std::string goes through the
+				 * ANSI code page on Windows. */
+				this->enableLogger(IO::u8path(argument.value()));
 			}
 			else
 			{
@@ -496,7 +499,7 @@ namespace EmEn
 		}
 
 		{
-			const std::lock_guard< std::mutex > sinkLock{m_consoleAccess};
+			const std::scoped_lock sinkLock{m_consoleAccess};
 			for (const auto& sink : m_sinks)
 			{
 				sink(severity, tag, message);
@@ -519,7 +522,7 @@ namespace EmEn
 			trace << "[" << location.file_name() << ':' << location.line() << ':' << location.column() << " `" << location.function_name() << "`]";
 		}
 
-		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+		const std::scoped_lock lock{m_consoleAccess};
 
 		switch ( severity )
 		{
@@ -552,7 +555,7 @@ namespace EmEn
 		}
 
 		{
-			const std::lock_guard< std::mutex > sinkLock{m_consoleAccess};
+			const std::scoped_lock sinkLock{m_consoleAccess};
 			for (const auto& sink : m_sinks)
 			{
 				sink(Severity::Info, tag, message.empty() ? std::string(functionName) + "() called !" : std::string(functionName) + "() : " + std::string(message));
@@ -582,7 +585,7 @@ namespace EmEn
 			this->injectProcessInfo(trace);
 		}
 
-		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+		const std::scoped_lock lock{m_consoleAccess};
 
 		std::cout << trace.str() << "\n";
 	}
@@ -653,7 +656,7 @@ namespace EmEn
 	void
 	Tracer::addSink(Sink sink) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+		const std::scoped_lock lock{m_consoleAccess};
 		m_sinks.emplace_back(std::move(sink));
 	}
 

@@ -350,6 +350,7 @@ namespace EmEn
 			 * log entries to the specified file. If a logger is already active, this
 			 * method returns immediately.
 			 *
+			 * @pre No other thread traces yet (startup): m_logger is read unlocked by trace() on every thread.
 			 * @param filepath The path to the log file to create/open.
 			 * @return true if logging was successfully enabled, false on failure.
 			 * @version 0.8.38
@@ -374,6 +375,7 @@ namespace EmEn
 			 * Stops the TracerLogger worker thread and destroys the logger instance,
 			 * ensuring all pending entries are written before shutdown.
 			 *
+			 * @pre No other thread traces any more (shutdown): m_logger is read unlocked by trace() on every thread.
 			 * @version 0.8.38
 			 */
 			void disableLogger () noexcept;
@@ -569,7 +571,7 @@ namespace EmEn
 			 *
 			 * @version 0.8.38
 			 */
-			explicit Tracer (PrivateToken) noexcept;
+			explicit Tracer (PrivateToken token) noexcept;
 
 		private:
 
@@ -793,11 +795,11 @@ namespace EmEn
 	{
 		public:
 
-			explicit TraceDebug (const char *, const std::source_location & = {}) noexcept {}
+			explicit TraceDebug (const char * /*tag*/, const std::source_location & /*location*/ = {}) noexcept {}
 
-			TraceDebug (const char *, const char *, const std::source_location & = {}) noexcept {}
+			TraceDebug (const char * /*tag*/, const char * /*message*/, const std::source_location & /*location*/ = {}) noexcept {}
 
-			TraceDebug (const char *, std::string_view, const std::source_location & = {}) noexcept {}
+			TraceDebug (const char * /*tag*/, std::string_view /*message*/, const std::source_location & /*location*/ = {}) noexcept {}
 
 			TraceDebug (const TraceDebug &) noexcept = delete;
 
@@ -811,7 +813,7 @@ namespace EmEn
 
 			template< typename data_t >
 			TraceDebug &
-			operator<< (const data_t &) noexcept
+			operator<< (const data_t & /*data*/) noexcept
 			{
 				return *this;
 			}

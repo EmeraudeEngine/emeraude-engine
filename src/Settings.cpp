@@ -27,6 +27,7 @@
 #include "Settings.hpp"
 
 /* Project configuration. */
+#include "emeraude_platform.hpp"
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
@@ -370,21 +371,7 @@ namespace EmEn
 
 		Json::Value root;
 
-		/* 1. JSON File header. */
-		root[EngineVersionKey] = VersionString;
-		root[ApplicationVersionKey] = m_applicationVersion;
-
-		{
-			const auto timestamp = time(nullptr);
-			const auto * now = localtime(&timestamp);
-
-			std::stringstream text;
-			text << now->tm_year + 1900 << '-' << now->tm_mon + 1 << '-' << now->tm_mday;
-
-			root[DateKey] = text.str();
-		}
-
-		/* 2. JSON File body. */
+		/* 1. JSON File body. */
 		for ( const auto & [key, store] : m_stores )
 		{
 			/* NOTE: Skip empty stores. An emptied store (e.g. left behind after
@@ -413,6 +400,33 @@ namespace EmEn
 				{
 					data[name].append(settingValueToJson(value));
 				}
+			}
+		}
+
+		/* 2. JSON File header. NOTE: After the body: reading a file puts its header keys into the root store, and the body
+		 * wrote them back over the fresh header, so every file kept the version and date of its FIRST write. The store keeps
+		 * the values read (resetSettingsIfOutdated() compares them at startup). */
+		root[EngineVersionKey] = VersionString;
+		root[ApplicationVersionKey] = m_applicationVersion;
+
+		{
+			/* NOTE: The reentrant form, checked: localtime() shares a static buffer between threads and returns
+			 * nullptr on failure, which was dereferenced. */
+			const auto timestamp = std::time(nullptr);
+			std::tm now{};
+
+#if IS_WINDOWS
+			const bool converted = localtime_s(&now, &timestamp) == 0;
+#else
+			const bool converted = localtime_r(&timestamp, &now) != nullptr;
+#endif
+
+			if ( converted )
+			{
+				std::stringstream text;
+				text << now.tm_year + 1900 << '-' << now.tm_mon + 1 << '-' << now.tm_mday;
+
+				root[DateKey] = text.str();
 			}
 		}
 

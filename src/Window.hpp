@@ -34,9 +34,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <array>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -608,10 +610,20 @@ namespace EmEn
 			float aspectRatio () const noexcept;
 
 			/**
-			 * @brief Waits for a valid window size.
-			 * @return void
+			 * @brief Returns the framebuffer size last published by the main thread, in pixels.
+			 * @note The render thread's way to read the size (owner ruling 2026-10-01): GLFW queries are main-thread
+			 * only (an AppKit query on Cocoa), and a windowless resize wrote m_state while the render thread read it (a
+			 * torn pair). The pair is one atomic 64-bit value.
+			 * @return std::array< uint32_t, 2 >
 			 */
-			void waitValidWindowSize () const noexcept;
+			[[nodiscard]]
+			std::array< uint32_t, 2 >
+			publishedFramebufferSize () const noexcept
+			{
+				const auto packed = m_publishedFramebufferSize.load(std::memory_order_acquire);
+
+				return {static_cast< uint32_t >(packed >> 32), static_cast< uint32_t >(packed & 0xFFFFFFFFU)};
+			}
 
 			/**
 			 * @brief Drains the pending OS window events once, delivering callbacks.
@@ -654,7 +666,7 @@ namespace EmEn
 			{
 				if ( m_handle == nullptr )
 				{
-					function();
+					std::forward< function_t >(function)();
 
 					return;
 				}
@@ -690,7 +702,7 @@ namespace EmEn
 				glfwPollEvents();
 
 				/* Execute the user function. */
-				function();
+				std::forward< function_t >(function)();
 
 				/* Restore all window callbacks. */
 				glfwSetWindowPosCallback(window, prevWindowPos);
@@ -767,6 +779,16 @@ namespace EmEn
 			std::array< uint32_t, 2 > getDesktopSize (GLFWmonitor * monitor = nullptr) const noexcept;
 
 			/**
+			 * @brief Returns the largest window size a resize may ask, in screen coordinates.
+			 * @note The device's maxImageDimension2D divided by the content scale (the framebuffer is size × scale), and,
+			 * for a window, the largest monitor work area (owner ruling 2026-10-01: a 17000 pt request became a
+			 * 34000 px framebuffer on macOS, exhausted the GPU memory and lost the device).
+			 * @return std::array< uint32_t, 2 >
+			 */
+			[[nodiscard]]
+			std::array< uint32_t, 2 > maximumWindowSize () const noexcept;
+
+			/**
 			 * @brief Returns the cached list of connected monitors.
 			 * @note The list is populated on initialization and updated on hot-plug events.
 			 * @return const Base::StaticVector< MonitorDevice, 16 > &
@@ -783,13 +805,28 @@ namespace EmEn
 			 * @note This is useful on Windows where vkCreateSwapchainKHR can deadlock.
 			 * By destroying the surface completely and recreating it, we avoid the
 			 * problematic swap-chain transition.
-			 * @param useNativeCode Use vulkan native code instead of glfw.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreateSurface (bool useNativeCode) noexcept;
+			bool recreateSurface () noexcept;
 
 		private:
+
+			/**
+			 * @brief Sets the framebuffer size of the state and publishes it for the render thread.
+			 * @note Main thread only (the GLFW callbacks, create(), resize(), initializeState()).
+			 * @param width The width in pixels.
+			 * @param height The height in pixels.
+			 * @return void
+			 */
+			void
+			setFramebufferState (uint32_t width, uint32_t height) noexcept
+			{
+				m_state.framebufferWidth = width;
+				m_state.framebufferHeight = height;
+
+				m_publishedFramebufferSize.store((static_cast< uint64_t >(width) << 32) | height, std::memory_order_release);
+			}
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
@@ -852,12 +889,14 @@ namespace EmEn
 			bool create (int width, int height, int monitorNumber, bool fullscreenMode) noexcept;
 
 			/**
-			 * @brief Creates the vulkan surface.
-			 * @param useNativeCode Use vulkan native code instead of glfw.
+			 * @brief Creates the vulkan surface, through glfwCreateWindowSurface() on every platform.
+			 * @note The native-code paths and their setting (Core/Video/Window/GLFW/EnableNativeCodeForVkSurface) were
+			 * removed (owner ruling 2026-10-01): off by default and broken (an XCB surface with a null connection,
+			 * nothing for Wayland, an empty macOS branch).
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createSurface (bool useNativeCode) noexcept;
+			bool createSurface () noexcept;
 
 			/**
 			 * @brief Destroys the current Vulkan surface.
@@ -1010,9 +1049,15 @@ namespace EmEn
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
 #endif
+			/* The framebuffer size for the render thread (publishedFramebufferSize()): width in the high 32 bits. */
+			std::atomic< uint64_t > m_publishedFramebufferSize{0};
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_isUserResizing{false};
+#if IS_WINDOWS
+			/* Whether initializeNativeWindow() initialised COM, so that releaseNativeWindow() uninitialises it only then. */
+			bool m_COMInitialized{false};
+#endif
 			Base::StaticVector< MonitorDevice, 16 > m_monitorDevices;
 
 			/** @brief Static instance pointer for the GLFW monitor callback (no user pointer available on monitor callbacks). */

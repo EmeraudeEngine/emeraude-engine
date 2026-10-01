@@ -115,6 +115,14 @@ namespace EmEn
 					return Console::CommandResult::error("openFiles(): give at least one file path.");
 				}
 
+				/* NOTE: Bounded (owner ruling 2026-10-01): every file loads synchronously on the main thread. */
+				constexpr size_t MaxFileCount{64};
+
+				if ( paths.size() > MaxFileCount )
+				{
+					return Console::CommandResult::error("openFiles(): at most " + std::to_string(MaxFileCount) + " files per call.");
+				}
+
 				Console::Outputs outputs;
 				std::vector< std::filesystem::path > filepaths;
 				filepaths.reserve(paths.size());
@@ -122,6 +130,15 @@ namespace EmEn
 				for ( const auto & path : paths )
 				{
 					auto filepath = IO::u8path(path);
+
+					/* NOTE: Absolute paths only, as the help says (owner ruling 2026-10-01): a relative one resolved against
+					 * the working directory of the process. */
+					if ( !filepath.is_absolute() )
+					{
+						outputs.emplace_back(Severity::Warning, "The path '" + path + "' is not absolute! Skipping ...");
+
+						continue;
+					}
 
 					if ( !IO::fileExists(filepath) )
 					{
@@ -142,9 +159,17 @@ namespace EmEn
 
 				const auto fileCount = filepaths.size();
 
-				this->openFiles(filepaths);
+				/* NOTE: The reply said "submitted" with a success even when no file could be opened. */
+				const auto unopenedCount = this->openFiles(filepaths);
 
-				outputs.emplace_back(Severity::Success, std::to_string(fileCount) + " file(s) submitted to the opening pipeline.");
+				if ( unopenedCount == fileCount )
+				{
+					outputs.emplace_back(Severity::Error, "None of the " + std::to_string(fileCount) + " file(s) could be opened (refused, or no behavior for them).");
+
+					return Console::CommandResult::fromOutputs(std::move(outputs), false);
+				}
+
+				outputs.emplace_back(Severity::Success, std::to_string(fileCount - unopenedCount) + " of " + std::to_string(fileCount) + " file(s) taken by the opening pipeline.");
 
 				return Console::CommandResult::fromOutputs(std::move(outputs), true);
 			});

@@ -77,6 +77,19 @@ namespace EmEn
 		 * @return EngineContext &
 		 */
 		EngineContext & operator= (const EngineContext & ) = delete;
+
+		/**
+		 * @brief Non-movable (contains references)
+		 */
+		EngineContext (EngineContext && ) = delete;
+
+		/**
+		 * @brief Non-movable (contains references)
+		 * @return EngineContext &
+		 */
+		EngineContext & operator= (EngineContext && ) = delete;
+
+		~EngineContext () = default;
 	};
 
 	/**

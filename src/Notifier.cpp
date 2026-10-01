@@ -144,7 +144,7 @@ namespace EmEn
 	Notifier::renderNotifications () noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
-		const std::lock_guard< std::mutex > lock{m_surface->activeBufferMutex()};
+		const std::scoped_lock lock{m_surface->activeBufferMutex()};
 
 		/* NOTE: Skip rendering if the surface is being resized (pixmap dimensions may be invalid). */
 		if ( !m_surface->isVideoMemorySizeValid() )
@@ -165,19 +165,23 @@ namespace EmEn
 
 		if ( pixmap.fill(m_clearColor) )
 		{
-			if ( !m_notifications.empty() )
+			/* NOTE: The list is tested under its lock too (push() runs on other threads). */
+			std::stringstream buffer;
+			bool hasNotifications = false;
+
 			{
-				std::stringstream buffer;
+				const std::scoped_lock lockNotifications{m_notificationAccess};
 
+				for ( const auto & [message, delay] : std::ranges::reverse_view(m_notifications) )
 				{
-					const std::lock_guard< std::mutex > lockNotifications{m_notificationAccess};
+					buffer << message << '\n';
 
-					for ( const auto & [message, delay] : std::ranges::reverse_view(m_notifications))
-					{
-						buffer << message << '\n';
-					}
+					hasNotifications = true;
 				}
+			}
 
+			if ( hasNotifications )
+			{
 				m_processor.write(buffer.str());
 			}
 
@@ -189,7 +193,7 @@ namespace EmEn
 	Notifier::clearDisplay (const Color< float > & bgColor) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
-		const std::lock_guard< std::mutex > lock{m_surface->activeBufferMutex()};
+		const std::scoped_lock lock{m_surface->activeBufferMutex()};
 
 		if ( m_surface->activePixmap().fill(bgColor) )
 		{
@@ -202,7 +206,7 @@ namespace EmEn
 	{
 		/* NOTE: Removes all notifications. */
 		{
-			const std::lock_guard< std::mutex > lock{m_notificationAccess};
+			const std::scoped_lock lock{m_notificationAccess};
 
 			m_notifications.clear();
 		}

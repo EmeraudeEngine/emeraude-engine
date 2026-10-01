@@ -33,9 +33,6 @@
 #include <vulkan/vulkan_wayland.h>
 #include <dlfcn.h>
 #include <poll.h>
-/* NOTE: xcb.h must precede vulkan_xcb.h — vulkan_xcb.h uses xcb_* types. */
-#include <xcb/xcb.h>
-#include <vulkan/vulkan_xcb.h>
 /* NOTE: Under linux, including X.h defines the MACRO "Success"
  * and enter in conflicts with Severity enum. */
 #undef Success
@@ -81,63 +78,6 @@ namespace
 namespace EmEn
 {
 	using namespace Vulkan;
-
-	bool
-	Window::createSurface (bool useNativeCode) noexcept
-	{
-		VkResult result = VK_SUCCESS;
-
-		VkSurfaceKHR surfaceHandle{VK_NULL_HANDLE};
-
-		if ( useNativeCode )
-		{
-			VkXcbSurfaceCreateInfoKHR createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-			createInfo.pNext = nullptr;
-			createInfo.flags = 0; // VkXcbSurfaceCreateFlagsKHR
-			createInfo.connection = nullptr; // xcb_connection_t *
-			createInfo.window = glfwGetX11Window(m_handle.get()); // xcb_window_t
-
-			result = vkCreateXcbSurfaceKHR(m_instance.handle(), &createInfo, nullptr, &surfaceHandle);
-		}
-		else
-		{
-			result = glfwCreateWindowSurface(m_instance.handle(), m_handle.get(), nullptr, &surfaceHandle);
-		}
-
-		if ( result != VK_SUCCESS )
-		{
-			TraceFatal{ClassId} << "Unable to create the Vulkan surface : " << Vulkan::vkResultToCString(result) << " !";
-
-			return false;
-		}
-
-		m_surface = std::make_unique< Surface >(m_instance, surfaceHandle);
-		m_surface->setIdentifier(ClassId, "OSVideoFramebuffer", "Surface");
-
-		return true;
-	}
-
-	void
-	Window::destroySurface () noexcept
-	{
-		if ( m_surface != nullptr )
-		{
-			Tracer::debug(ClassId, "Destroying Vulkan surface...");
-
-			m_surface.reset();
-		}
-	}
-
-	bool
-	Window::recreateSurface (bool useNativeCode) noexcept
-	{
-		Tracer::debug(ClassId, "Recreating Vulkan surface...");
-
-		this->destroySurface();
-
-		return this->createSurface(useNativeCode);
-	}
 
 	void
 	Window::disableTitleBar () noexcept

@@ -54,6 +54,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Animations` 12 (+ `Scenes/Loaders/GLTFLoader.cpp` changes) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 0. Before: 5. `GLTFLoader.cpp`: 0 new finding on the changed lines (its 10 are the section 3 ones). The fix-its touched three base headers through the includes: reverted. | Triad section 12 |
 | `src/Overlay` 13 | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 4, all ON PURPOSE (below) — 3 constant-array-index, 1 use-enum-class. Before: 22. | Triad section 13 |
 | `src/PlatformSpecific` 14 (Linux TUs) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 44, all ON PURPOSE (below) — 10 array-to-pointer decay, 10 union access, 10 vararg, 7 mt-unsafe, 4 non-private members, 1 branch-clone, 1 const-correctness, 1 reinterpret-cast. Before: 54. The Windows / macOS sources are not compiled here. | Triad section 14 |
+| `src/Tool`, `src/Help`, root files 15 | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 38, all ON PURPOSE (below) — 10 vararg, 6 reinterpret-cast, 5 convert-to-static, 4 const members, 3 constant-array-index, 2 enum-class, 2 crtp-constructor, 2 non-private members, 1 mt-unsafe, 1 no-recursion, 1 branch-clone, 1 non-const global. Before: 69. | Triad section 15 |
 
 ## Findings kept ON PURPOSE
 
@@ -393,4 +394,24 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **branch-clone ×1** — `Message.linux.cpp`: the `MessageType` cases listed explicitly before their shared default.
 - **const-correctness ×1** — `UserInfo.linux.cpp`: `getpwuid_r()` takes a `passwd **`.
 - **pro-type-reinterpret-cast ×1** — `VideoCaptureDevice.linux.cpp`: the `v4l2_capability::card` byte array as text.
+
+### `src/Tool`, `src/Help`, root files 15 (2026-10-01)
+
+- **pro-type-vararg ×10** — `Core.cpp`: `ImGui::Text()` / `TextDisabled()`, ImGui's printf-style API.
+- **pro-type-reinterpret-cast ×6** — `Window.linux.cpp`: `dlsym()` results cast to the libwayland-client function types.
+- **convert-member-functions-to-static ×5** — `Window::initializeNativeWindow()` / `releaseNativeWindow()` /
+  `drainDisplayConnection()` / `pumpEvents()` and `CursorAtlas::resetCursor()`: one declaration, a body per platform,
+  and the Windows / macOS bodies use the instance.
+- **avoid-const-or-ref-data-members ×4** — `Identification`: the application identity is immutable by design.
+- **pro-bounds-constant-array-index ×3** — `CursorAtlas::setCursor()`: the index is checked against
+  `StandardCursorCount` just above.
+- **use-enum-class ×2** — `Core::NotificationCode`, `Window::NotificationCode` (the Observer convention).
+- **crtp-constructor-accessibility ×2, non-private-member-variables ×2** — `Tracer.hpp` `T_TraceHelperBase`: its public
+  constructors and protected `m_tag` / `m_location` are what the `TraceInfo` / `TraceError`… helpers build on.
+- **concurrency-mt-unsafe ×1** — `Core.cpp`: `system()` in a Debug-only path, on the main thread.
+- **misc-no-recursion ×1** — `Settings::readLevel()`: the depth is bounded by the JSON parser (stack limit 16).
+- **bugprone-branch-clone ×1** — `Settings::settingValueToJson()`: `if constexpr` branches of different types, each
+  `return v;`.
+- **avoid-non-const-global-variables ×1** — `Window.linux.cpp` `s_waylandReader`: the libwayland functions resolved once
+  for the process, used on the main thread only.
 

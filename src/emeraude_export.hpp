@@ -53,7 +53,7 @@
 	#define EMEN_LEAN_API
 #endif
 
-#if defined(EMERAUDE_USE_FULL_EXPORTS)
+#ifdef EMERAUDE_USE_FULL_EXPORTS
 	#define EMEN_API EMEN_API_IMPL
 #else
 	#define EMEN_API

@@ -113,7 +113,7 @@ namespace EmEn
 			/* GLFW_X11_XCB_VULKAN_SURFACE specifies whether to prefer the VK_KHR_xcb_surface extension for creating
 			 * Vulkan surface, or whether to use the VK_KHR_xlib_surface extension. Possible values are GLFW_TRUE and GLFW_FALSE.
 			 * This is ignored on other platforms. */
-			glfwInitHint(GLFW_X11_XCB_VULKAN_SURFACE, useX11XCB);
+			glfwInitHint(GLFW_X11_XCB_VULKAN_SURFACE, useX11XCB ? GLFW_TRUE : GLFW_FALSE);
 		}
 
 		if ( glfwInit() == GLFW_FALSE )

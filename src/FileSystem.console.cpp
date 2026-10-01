@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 
 namespace EmEn
 {
@@ -44,17 +45,19 @@ namespace EmEn
 		this->bindCommand("getJson", "Returns all filesystem paths as JSON.", [this] () {
 			Json::Value root{Json::objectValue};
 			root["binaryName"] = m_binaryName;
-			root["binaryDirectory"] = m_binaryDirectory.string();
-			root["userDirectory"] = m_userDirectory.string();
-			root["userDataDirectory"] = m_userDataDirectory.string();
-			root["configDirectory"] = m_configDirectory.string();
-			root["cacheDirectory"] = m_cacheDirectory.string();
+			/* NOTE: UTF-8 (IO::toU8String), not path::string(): on Windows that is the ANSI code page, and a non-ASCII
+			 * directory produced invalid UTF-8 in the JSON (a client refused the line). */
+			root["binaryDirectory"] = Base::IO::toU8String(m_binaryDirectory);
+			root["userDirectory"] = Base::IO::toU8String(m_userDirectory);
+			root["userDataDirectory"] = Base::IO::toU8String(m_userDataDirectory);
+			root["configDirectory"] = Base::IO::toU8String(m_configDirectory);
+			root["cacheDirectory"] = Base::IO::toU8String(m_cacheDirectory);
 
 			Json::Value dataDirectories{Json::arrayValue};
 
 			for ( const auto & dataDirectory : m_dataDirectories )
 			{
-				dataDirectories.append(dataDirectory.string());
+				dataDirectories.append(Base::IO::toU8String(dataDirectory));
 			}
 
 			root["dataDirectories"] = std::move(dataDirectories);
@@ -74,27 +77,27 @@ namespace EmEn
 
 				if ( name == "binaryDirectory" )
 				{
-					return Console::CommandResult::info(m_binaryDirectory.string());
+					return Console::CommandResult::info(Base::IO::toU8String(m_binaryDirectory));
 				}
 
 				if ( name == "userDirectory" )
 				{
-					return Console::CommandResult::info(m_userDirectory.string());
+					return Console::CommandResult::info(Base::IO::toU8String(m_userDirectory));
 				}
 
 				if ( name == "userDataDirectory" )
 				{
-					return Console::CommandResult::info(m_userDataDirectory.string());
+					return Console::CommandResult::info(Base::IO::toU8String(m_userDataDirectory));
 				}
 
 				if ( name == "configDirectory" )
 				{
-					return Console::CommandResult::info(m_configDirectory.string());
+					return Console::CommandResult::info(Base::IO::toU8String(m_configDirectory));
 				}
 
 				if ( name == "cacheDirectory" )
 				{
-					return Console::CommandResult::info(m_cacheDirectory.string());
+					return Console::CommandResult::info(Base::IO::toU8String(m_cacheDirectory));
 				}
 
 				return Console::CommandResult::error("Unknown path name '" + name + "'.");

@@ -217,6 +217,18 @@ namespace EmEn
 			 *
 			 * @version 0.8.39
 			 */
+			/** @brief Deleted copy constructor (owns a worker thread and a file). */
+			TracerLogger (const TracerLogger & copy) noexcept = delete;
+
+			/** @brief Deleted move constructor (the worker thread holds `this`). */
+			TracerLogger (TracerLogger && copy) noexcept = delete;
+
+			/** @brief Deleted copy assignment. @return TracerLogger & */
+			TracerLogger & operator= (const TracerLogger & copy) noexcept = delete;
+
+			/** @brief Deleted move assignment. @return TracerLogger & */
+			TracerLogger & operator= (TracerLogger && copy) noexcept = delete;
+
 			~TracerLogger ();
 
 			/**

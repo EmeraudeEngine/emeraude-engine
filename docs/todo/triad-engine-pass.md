@@ -64,8 +64,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 11 | `src/Physics` | 9 197 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
 | 12 | `src/Animations` (+ the glTF skins and extents it led to) | 3 488 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
 | 13 | `src/Overlay` | 7 303 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
-| 14 | `src/PlatformSpecific` (+ the ARC flag of every engine `.mm`) | 8 996 | ✅ pushed (peers pending: Windows and macOS changes uncompiled on Linux) |
-| 15 | `src/Tool`, `src/Help`, root files (leads: the `Window.resize` console command has no upper bound and reports the requested size, 13 peers) | 1 292 + 40 files | ⬜ |
+| 14 | `src/PlatformSpecific` (+ the ARC flag of every engine `.mm`) | 8 996 | ✅ pushed and VALIDATED on the three OS (2026-10-01; build fix `e83b7e58`) |
+| 15 | `src/Tool`, `src/Help`, root files (leads: the `Window.resize` console command has no upper bound and reports the requested size, 13 peers) | 1 292 + 40 files | 🟡 verified on Linux, NOT committed (2026-10-01) |
 
 ## Section 1 — `src/Console` (started 2026-09-30)
 
@@ -1486,5 +1486,98 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   incomplete escape kept); the `openURL()` scheme test (8 cases). Runtime (owner-approved camera test): `/dev/video0` negotiated YUYV 640×480, two real
   captures through KeyP (49 091 distinct colours), 0 VUID; citadel MCP 1707/0, console 4466/0. The Windows and macOS
   changes are UNCOMPILED here: the peers build and test them.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 14 commit), base `d005f1c`, alpha `c043790a`; peers asked (each OS has a camera).
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `6ff4d476`, base `d005f1c`, alpha `c043790a`; peers asked (each OS has a camera).
+- [x] (5b) The first peer builds failed: the inline `VideoCaptureDevice () noexcept = default;` instantiated the deleter of
+  `std::unique_ptr< PlatformContext >` on an incomplete type (macOS 138 TUs, MSVC 139 TUs; Linux compiled it). Fixed by
+  engine `e83b7e58` (the constructor defined `= default` in each platform source), pushed on the owner's order; caution
+  point "a `std::unique_ptr` to a forward-declared type".
+- [x] (6) VALIDATED 2026-10-01 at engine `e83b7e58`:
+  - **macOS M2** (AppleClang, 222 TUs, 0 warning; the 13 ARC `.mm` silent; MoltenVK): PASS, 0 VUID / UNASSIGNED / [Error]
+    on every launch. Camera: opened, real frames (the first one dark: auto-exposure warm-up), closed at shutdown. Window
+    under ARC: `resize(1400, 800)` → framebuffer 2800×1600 at scale 2. MCP 1707/0, console 4445/0. NOT exercised: the
+    first-run permission request (TCC attributes a shell launch to the terminal, which already had camera access) and
+    the dialogs (no injected key reaches them).
+  - **Windows** NVIDIA RTX 3060 Laptop + AMD Radeon (MSVC /W4 /WX, 222 TUs, 0 warning; every rewritten `.windows.cpp`
+    clean): PASS. Webcam YUY2 640×480 (the YUYV path), opened once, closed at shutdown; NVIDIA only the known
+    `VUID-VkGraphicsPipelineCreateInfo-renderPass-12325`, AMD 0; MCP 1707/0, console 4457/0 on both.
+    `GetModuleFileNameW` finds the binary from a non-ASCII directory (`Jérôme`), BUT two `path::string()` there: the
+    CEF menu did not load (U+FFFD in its URL, projet-alpha `UI/Manager.cpp`) and `FileSystem.getJson()` sent CP-1252
+    bytes (engine `FileSystem.console.cpp`). Both fixed in section 15; the rest is item `windows-path-string-ansi-pass`.
+    NOT exercised: `openURL()`, the taskbar progress (no UI path).
+  - Side notes from macOS, opened as items on the owner's order (2026-10-01): `macos-video-capture-ignores-requested-size`
+    (the log says 640×480, the frames are 1920×1080) and `video-capture-enable-key-typo` (the video key is
+    `Core/Audio/Capture/Enable`).
 
+## Section 15 — `src/Tool`, `src/Help`, root files (started 2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline on the 24 TUs (the root sources, `Tool/`, `Help/`; filtered to the section's files):
+  **69**.
+- [x] (2) Review: the root files by an agent (F1-F19, every one re-read against the code), the rest by hand. Sound: the
+  console commands run on the main thread (the `resize` GLFW calls are legal), the console `int32` conversion, every
+  GLFW callback null-checks its user pointer, `openFiles`' existence check (`IO::fileExists`: regular files only), the
+  settings backup and directory walks (`error_code`, `forEachDirectoryEntry`), the loop flags (atomic).
+  Findings:
+  - F1 `Window.resize` (console / MCP) had no upper bound and answered with the request: a 17000 pt request became a
+    34000 px framebuffer on macOS, the render targets exhausted the GPU memory (device lost); windowless, an image past
+    `maxImageDimension2D` (owner question).
+  - F2 each F11 round trip doubled the window on a scaled display (the framebuffer size, in pixels, saved into the
+    window size key, read back in points). F3 `waitValidWindowSize()` tested `||` and had no exit: a minimised window on
+    Windows (0×0) spun the render thread while holding the scene lock, a quit hung in `join()`, a pausable application
+    deadlocked (owner question). F4 a quit while minimised saved 0×0 / -32000, and the next launch failed for good.
+  - F5 the tools mode was unreachable with `--tools-mode X` (filed as an argument, tested as a switch), and a bare `-t`
+    aborted on `.value()`. F6 `Core::m_windowChanged` a plain `bool` written by the render thread, a refresh between
+    the read and the reset was lost. F7 the render thread called `glfwGetFramebufferSize()` (main-thread only; an AppKit
+    query on Cocoa), windowless it read `m_state` while `resize` wrote it (owner question).
+  - F8 `getCenteredPosition()` underflowed in `uint32` (window larger than the desktop → about 2.1e9). F9 `openFiles`:
+    (a) "submitted … success" even when nothing opened; (b) relative paths accepted against its help; (c) unbounded
+    count, all synchronous on the main thread; (d) a multi-GB JSON read whole (an allocation abort); (e) on Windows
+    `IO::u8path()` / `toU8String()` threw on invalid UTF-8 or a lone surrogate (owner questions).
+  - F10 `CoUninitialize()` without a successful `CoInitializeEx()` (windowless, or `RPC_E_CHANGED_MODE`: it could tear
+    down CEF's apartment). F11 the native Vulkan surface paths: XCB with a null connection
+    (VUID-VkXcbSurfaceCreateInfoKHR-connection-01310), macOS returning false silently (owner question).
+  - F12 a null `glfwGetVideoMode()` dereferenced. F13 the gamma setting unvalidated (GLFW asserts finite > 0). F14 the
+    fullscreen "closest mode" search started from 1920×1080 and only took larger modes. F15 the GLFW getters read a stale
+    error of the thread and returned their defaults. F16 `getFramebufferSize(true)` divided by an unchecked scale (UB
+    cast of an infinity) through `.at()`. F17 `setMainLoopFrequency(0)` busy-spun the main loop. F18 the `std::thread`
+    construction (the base item `non-throwing-thread-start`), and two `std::thread` members never used. F19
+    `Window.getState` built JSON with a stream ("nan", a locale decimal comma).
+  - Mine: `Arguments` split `--x=y` on EVERY '=' (a value holding one was cut) and looked switches up through
+    `string_view::data()` (not NUL-terminated); `Notifier` tested its list outside its lock; `Tracer --enable-log` built
+    its path from a `std::string` (ANSI on Windows); `Settings` dereferenced `localtime()` unchecked (nullptr on failure,
+    a static buffer shared between threads), and every settings file kept the version and date of its FIRST write (the
+    header keys, read back into the root store, were written back over the fresh header). Found at runtime: on Wayland
+    `glfwSetWindowSize()` calls back only the framebuffer size, so `Window::state()` kept the old window size.
+  - From the 14 peers (Windows, non-ASCII directory): the menu URL and `FileSystem.getJson()` through `path::string()`.
+- [x] (3) Mechanical: F2, F4, F5, F6, F8, F9a, F10, F12-F17, F18 (the unused members), F19, "mine", the two peer sites;
+  clang-tidy by hand (scoped_lock, named parameters, `\n` for `std::endl`, the rule of five on `TracerLogger` and
+  `EngineContext`, `std::forward`, `#ifdef`). `openFiles()` now returns the number of files no stage opened; the console
+  answers an error when none opened, else "N of M file(s) taken".
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - F1 → refuse past the limits: `Window::maximumWindowSize()` = the device `maxImageDimension2D` / the content scale,
+    and windowed the largest monitor work area; the reply names the maximum, and a success says "requested (getState()
+    gives the size applied)".
+  - F3 → skip frames: `waitValidWindowSize()` removed; the render thread skips the frame while the published size is 0.
+  - F7 → publish an atomic size: `Window::setFramebufferState()` (every framebuffer write, main thread) and
+    `publishedFramebufferSize()` (an atomic 64-bit pair, read by `SwapChain` and `Renderer`).
+  - F9b-d → absolute paths only, at most 64 files per call, a JSON above 64 MiB refused (`Core::openFiles()`, so a drop
+    too); no root allow-list.
+  - F11 → the native surface code and the setting `GLFWEnableNativeCodeForVkSurface` removed:
+    `Window::createSurface()` = `glfwCreateWindowSurface()` on every platform.
+  - `path::string()` cascade-wide (124 sites in 30 files) → engine item `windows-path-string-ansi-pass`; the
+    startup-critical sites fixed here.
+  - F9e → fixed in base: `String::utf8ToUTF16()` / `utf16ToUTF8()` (strict RFC 3629, U+FFFD for each maximal invalid
+    subpart and each lone surrogate, `noexcept`), used by `IO::u8path()` / `toU8String()` / `toGenericU8String()` on
+    Windows; unit tests `String.utf8ToUTF16` / `String.utf16ToUTF8`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti, Wayland, scale 1.5): cascade builds (0 warning); clangcheck 121 TUs 0;
+  `-Wfloat-conversion` 0; clang-tidy 69 → 38 (on purpose, ledger), 0 new in the base `String.cpp`; base unit tests 2188/2188 in Release and under
+  ASan / UBSan. Runtime, validation ON, 0 VUID in every run: citadel MCP 1707/0, console 4466/0;
+  `resize(20000, 1200)` and `resize(1200, 30000)` refused ("at most 3840x2160"); `resize(1600, 900)` and
+  `(1280, 720)` → `getState()` window 1600×900 / 1280×720, framebuffer 2400×1350 / 1920×1080 (before the Wayland fix
+  the window stayed 1920×1080); `openFiles` refuses a relative path, 65 paths, a 65 MiB JSON (the console answers "None of
+  the 1 file(s) could be opened"), and a refused JSON + `Box.gltf` answers "1 of 2"; `-t` alone traces "needs a tool
+  name" and starts normally; `Settings.save()` now writes the date and the versions of the build (2026-10-1, 0.9.82,
+  0.6.61; before: 2026-7-26, 0.9.42), the body byte-identical. The Windows (COM, the minimised window, a non-ASCII
+  install path) and macOS (the resize limits, the GLFW surface) changes await the peers.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 15 commit, with the items
+  `macos-video-capture-ignores-requested-size` and `video-capture-enable-key-typo`), base and alpha (the 15 commits);
+  peers asked.

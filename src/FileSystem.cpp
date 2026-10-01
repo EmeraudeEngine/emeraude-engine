@@ -127,7 +127,8 @@ namespace EmEn
 	bool
 	FileSystem::checkBinaryName () noexcept
 	{
-		m_binaryName = m_arguments.binaryFilepath().filename().string();
+		/* NOTE: UTF-8, not path::string(): on MSVC that is the ANSI code page, which throws (an abort) outside it. */
+		m_binaryName = IO::toU8String(m_arguments.binaryFilepath().filename());
 
 		return !m_binaryName.empty();
 	}

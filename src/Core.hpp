@@ -412,9 +412,12 @@ namespace EmEn
 			 *     consumed raises an on-screen notification.
 			 * @note This runs synchronously on the main thread.
 			 * @param filepaths A reference to a vector of filesystem paths representing the dropped files.
+			 * @return size_t The number of files no stage opened (refused, or no behavior for them); each one raised a
+			 * notification. A file a stage took but failed to load is reported by that stage, not counted here.
 			 * @see onCoreOpenFiles()
 			 */
-			void openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
+			[[nodiscard]]
+			size_t openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
 
 			/**
 			 * @brief Walks the animation clips of the asset shown by the model viewer.
@@ -1110,6 +1113,12 @@ namespace EmEn
 			void
 			setMainLoopFrequency (uint32_t frequency) noexcept
 			{
+				/* NOTE: 0 gave an infinite timeout, which glfwWaitEventsTimeout() rejects: the loop busy-spun. */
+				if ( frequency == 0 )
+				{
+					return;
+				}
+
 				m_mainLoopFrequency = frequency;
 				m_mainLoopEventTimeoutSeconds = 1.0 / static_cast< double >(frequency);
 			}
@@ -1771,8 +1780,6 @@ namespace EmEn
 			std::vector< ServiceInterface * > m_userServiceEnabled;	   ///< User-registered service pointers.
 			/* Runtime state. */
 			CursorAtlas m_cursorAtlas;						  ///< Custom cursor cache.
-			std::thread m_logicsThread;						 ///< Logic processing thread.
-			std::thread m_renderingThread;					  ///< Rendering thread.
 			uint64_t m_lifetime{0};							 ///< Total runtime in microseconds.
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
@@ -1820,7 +1827,9 @@ namespace EmEn
 			bool m_preventDefaultKeyBehaviors{false}; ///< Disable Core's default key handling.
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
-			bool m_windowChanged{false};
+			/* NOTE: Atomic: set by the render thread (WindowContentRefreshed), consumed by the main thread with
+			 * exchange(false) — a plain bool raced, and a refresh landing between the read and the reset was lost. */
+			std::atomic< bool > m_windowChanged{false};
 			bool m_userApplicationReadyToQuit{false};
 			/** @} */ // End of Member Variables group
 	};

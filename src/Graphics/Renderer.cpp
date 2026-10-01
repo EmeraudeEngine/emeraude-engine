@@ -1646,7 +1646,7 @@ namespace EmEn::Graphics
 		if ( !m_acquiredImageIndex.has_value() )
 		{
 			/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
-			if ( this->isSwapChainDegraded() && !this->recreateRenderingSubSystem(false, false) )
+			if ( this->isSwapChainDegraded() && !this->recreateRenderingSubSystem(false) )
 			{
 				Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
 			}
@@ -2795,8 +2795,16 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::recreateRenderingSubSystem (bool withSurface, bool useNativeCode) noexcept
+	Renderer::recreateRenderingSubSystem (bool withSurface) noexcept
 	{
+		/* NOTE: A minimised window has a 0-px framebuffer and no swap-chain can be made: the frame is skipped, the
+		 * swap-chain stays degraded and this is retried on the next frame (owner ruling 2026-10-01). The former
+		 * wait for a valid size had no exit and held the scene lock: a quit while minimised hung in join(). */
+		if ( const auto framebufferSize = m_window.publishedFramebufferSize(); framebufferSize[0] == 0 || framebufferSize[1] == 0 )
+		{
+			return true;
+		}
+
 		/* NOTE: Wait the device to finish all his work before destroying/recreating the swap-chain. */
 		this->device()->waitIdle("Renderer::recreateSystem()");
 
@@ -2805,9 +2813,6 @@ namespace EmEn::Graphics
 
 		/* The frame slots may come back with another count: the video copies they carried are complete now. */
 		m_recorder.onDeviceIdle();
-
-		/* NOTE: Lock operation to wait a valid size from the OS. */
-		m_window.waitValidWindowSize();
 
 		/* NOTE: Query the surface properties again. */
 		if ( !m_window.surface()->update(this->device()->physicalDevice()) )
@@ -2820,7 +2825,7 @@ namespace EmEn::Graphics
 		/* NOTE: Recreate the swap-chain. */
 		if ( withSurface )
 		{
-			if ( !m_swapChain->fullRecreate(useNativeCode) )
+			if ( !m_swapChain->fullRecreate() )
 			{
 				return false;
 			}

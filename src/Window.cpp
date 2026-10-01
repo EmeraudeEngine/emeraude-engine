@@ -30,14 +30,20 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 
 /* Local inclusions. */
 #include "Arguments.hpp"
 #include "PlatformManager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/Utility.hpp"
 
 namespace EmEn
 {
@@ -248,6 +254,11 @@ namespace EmEn
 			}
 			else
 			{
+				/* NOTE: Back to the defaults, as the resize failure above does: a stored size the window cannot have
+				 * (saved by an older build) would fail every launch. */
+				settings.set< int32_t >(WindowWidthKey, DefaultWindowWidth);
+				settings.set< int32_t >(WindowHeightKey, DefaultWindowHeight);
+
 				Tracer::fatal(ClassId, "Unable to get a valid window !");
 
 				return false;
@@ -293,9 +304,7 @@ namespace EmEn
 			this->setGamma(gamma, preferredMonitor);
 		}
 
-		const auto useNativeCode = settings.getOrSetDefault< bool >(GLFWEnableNativeCodeForVkSurfaceKey, DefaultEnableNativeCodeForVkSurface);
-
-		if ( !this->createSurface(useNativeCode) )
+		if ( !this->createSurface() )
 		{
 			Tracer::fatal(ClassId, "Unable to get a valid surface !");
 
@@ -342,7 +351,13 @@ namespace EmEn
 				Tracer::info(ClassId, "Saving the window properties ...");
 			}
 
-			if ( this->isFullscreenMode() )
+			/* NOTE: Never a minimised window's state (0 × 0, the position about -32000 on Windows): the next launch
+			 * failed to create it, for good. */
+			if ( this->isIconified() || m_state.windowWidth == 0 || m_state.windowHeight == 0 )
+			{
+				Tracer::warning(ClassId, "The window is minimised or empty: its properties are not saved.");
+			}
+			else if ( this->isFullscreenMode() )
 			{
 				m_primaryServices.settings().set(VideoFullscreenWidthKey, m_state.framebufferWidth);
 				m_primaryServices.settings().set(VideoFullscreenHeightKey, m_state.framebufferHeight);
@@ -393,8 +408,7 @@ namespace EmEn
 			/* NOTE: Save the state. */
 			m_state.windowWidth = static_cast< uint32_t >(width);
 			m_state.windowHeight = static_cast< uint32_t >(height);
-			m_state.framebufferWidth = static_cast< uint32_t >(width);
-			m_state.framebufferHeight = static_cast< uint32_t >(height);
+			this->setFramebufferState(static_cast< uint32_t >(width), static_cast< uint32_t >(height));
 
 			/* NOTE: This follow the GLFW framework events order. */
 			this->notify(OSNotifiesFramebufferResized);
@@ -407,13 +421,13 @@ namespace EmEn
 
 		if ( this->isFullscreenMode() )
 		{
-			/* Gets the closest acceptable width/height. */
+			/* Gets the closest acceptable width/height. NOTE: The largest mode within the request, else the smallest
+			 * mode of the monitor: the former search started from 1920 × 1080 and only took modes above it, so any
+			 * request below 1080p got 1920 × 1080, larger than asked and maybe not a mode at all. */
 			auto perfectFitFound = false;
 
-			std::array< int32_t, 2 > closest{
-				DefaultVideoFullscreenWidth,
-				DefaultVideoFullscreenHeight
-			};
+			std::array< int32_t, 2 > closest{0, 0};
+			std::array< int32_t, 2 > smallest{0, 0};
 
 			auto * monitor = glfwGetWindowMonitor(m_handle.get());
 
@@ -426,12 +440,22 @@ namespace EmEn
 					break;
 				}
 
-				/* Checks for the below sizes. */
-				if ( mode.width < width && mode.width > closest[0] && mode.height < height && mode.height > closest[1] )
+				const auto area = static_cast< int64_t >(mode.width) * mode.height;
+
+				if ( mode.width <= width && mode.height <= height && area > static_cast< int64_t >(closest[0]) * closest[1] )
 				{
-					closest[0] = mode.width;
-					closest[1] = mode.height;
+					closest = {mode.width, mode.height};
 				}
+
+				if ( smallest[0] == 0 || area < static_cast< int64_t >(smallest[0]) * smallest[1] )
+				{
+					smallest = {mode.width, mode.height};
+				}
+			}
+
+			if ( closest[0] == 0 )
+			{
+				closest = smallest[0] != 0 ? smallest : std::array< int32_t, 2 >{DefaultVideoFullscreenWidth, DefaultVideoFullscreenHeight};
 			}
 
 			if ( !perfectFitFound )
@@ -504,11 +528,104 @@ namespace EmEn
 			"Desktop dimension (Width: " << desktopSize[0] << ", Height: " << desktopSize[1] << ")" "\n"
 			"Window dimension (Width: " << windowSize[0] << ", Height: " << windowSize[1] << ")" "\n";
 
-		/* Get the window position center on the selected monitor. */
-		return {
-			static_cast< int32_t >(desktopPosition[0] + ((desktopSize[0] - windowSize[0]) / 2)),
-			static_cast< int32_t >(desktopPosition[1] + ((desktopSize[1] - windowSize[1]) / 2))
+		/* Get the window position center on the selected monitor. NOTE: In int64, clamped to the desktop origin: the
+		 * unsigned difference underflowed (about 2.1e9, off-screen) for a window larger than the desktop, or a
+		 * desktop size of 0 on failure. */
+		const auto centered = [] (int32_t origin, uint32_t desktop, uint32_t window) {
+			const auto offset = (static_cast< int64_t >(desktop) - static_cast< int64_t >(window)) / 2;
+
+			return static_cast< int32_t >(static_cast< int64_t >(origin) + std::max< int64_t >(offset, 0));
 		};
+
+		return {
+			centered(desktopPosition[0], desktopSize[0], windowSize[0]),
+			centered(desktopPosition[1], desktopSize[1], windowSize[1])
+		};
+	}
+
+	bool
+	Window::createSurface () noexcept
+	{
+		VkSurfaceKHR surfaceHandle{VK_NULL_HANDLE};
+
+		if ( const auto result = glfwCreateWindowSurface(m_instance.handle(), m_handle.get(), nullptr, &surfaceHandle); result != VK_SUCCESS )
+		{
+			TraceFatal{ClassId} << "Unable to create the Vulkan surface : " << Vulkan::vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		m_surface = std::make_unique< Vulkan::Surface >(m_instance, surfaceHandle);
+		m_surface->setIdentifier(ClassId, "OSVideoFramebuffer", "Surface");
+
+		return true;
+	}
+
+	void
+	Window::destroySurface () noexcept
+	{
+		if ( m_surface != nullptr )
+		{
+			Tracer::debug(ClassId, "Destroying Vulkan surface...");
+
+			m_surface.reset();
+		}
+	}
+
+	bool
+	Window::recreateSurface () noexcept
+	{
+		Tracer::debug(ClassId, "Recreating Vulkan surface...");
+
+		this->destroySurface();
+
+		return this->createSurface();
+	}
+
+	std::array< uint32_t, 2 >
+	Window::maximumWindowSize () const noexcept
+	{
+		std::array< uint32_t, 2 > maximum{std::numeric_limits< uint32_t >::max(), std::numeric_limits< uint32_t >::max()};
+
+		/* NOTE: The framebuffer (size × content scale) must fit the device's 2D images. */
+		if ( const auto & device = m_instance.graphicsDevice(); device != nullptr )
+		{
+			const auto maxImageDimension = device->physicalDevice()->propertiesVK10().limits.maxImageDimension2D;
+			const auto scaleX = std::isfinite(m_state.contentXScale) && m_state.contentXScale > 0.0F ? m_state.contentXScale : 1.0F;
+			const auto scaleY = std::isfinite(m_state.contentYScale) && m_state.contentYScale > 0.0F ? m_state.contentYScale : 1.0F;
+
+			maximum[0] = static_cast< uint32_t >(std::floor(static_cast< float >(maxImageDimension) / scaleX));
+			maximum[1] = static_cast< uint32_t >(std::floor(static_cast< float >(maxImageDimension) / scaleY));
+		}
+
+		/* NOTE: A window must fit a monitor's work area (the largest one: the window can be moved to it). */
+		if ( !m_windowLess && !this->isFullscreenMode() )
+		{
+			int monitorCount = 0;
+			auto * const * monitors = glfwGetMonitors(&monitorCount);
+			std::array< uint32_t, 2 > largestWorkArea{0, 0};
+
+			for ( int index = 0; monitors != nullptr && index < monitorCount; ++index )
+			{
+				int workX = 0;
+				int workY = 0;
+				int workWidth = 0;
+				int workHeight = 0;
+
+				glfwGetMonitorWorkarea(monitors[index], &workX, &workY, &workWidth, &workHeight);
+
+				largestWorkArea[0] = std::max(largestWorkArea[0], static_cast< uint32_t >(std::max(workWidth, 0)));
+				largestWorkArea[1] = std::max(largestWorkArea[1], static_cast< uint32_t >(std::max(workHeight, 0)));
+			}
+
+			if ( largestWorkArea[0] > 0 && largestWorkArea[1] > 0 )
+			{
+				maximum[0] = std::min(maximum[0], largestWorkArea[0]);
+				maximum[1] = std::min(maximum[1], largestWorkArea[1]);
+			}
+		}
+
+		return maximum;
 	}
 
 	bool
@@ -676,6 +793,14 @@ namespace EmEn
 			return;
 		}
 
+		/* NOTE: GLFW asserts a finite, positive gamma (a Debug abort on 0 or NaN from the settings). */
+		if ( !std::isfinite(value) || value <= 0.0F )
+		{
+			TraceWarning{ClassId} << "The gamma " << value << " is not a finite positive value, ignored !";
+
+			return;
+		}
+
 		if ( auto * monitor = Window::getMonitor(desiredMonitor); monitor != nullptr )
 		{
 			glfwSetGamma(monitor, value);
@@ -695,9 +820,10 @@ namespace EmEn
 
 		auto & settings = m_primaryServices.settings();
 
-		/* Save the current window size. */
+		/* Save the current window size. NOTE: In screen coordinates (getSize()), as the key is read back: the
+		 * framebuffer size is in PIXELS, and on a 2× display every fullscreen round trip doubled the window. */
 		{
-			const auto currentSize = this->getFramebufferSize();
+			const auto currentSize = this->getSize();
 
 			settings.set< uint32_t >(WindowWidthKey, currentSize[0]);
 			settings.set< uint32_t >(WindowHeightKey, currentSize[1]);
@@ -784,6 +910,10 @@ namespace EmEn
 		int xPosition = -1;
 		int yPosition = -1;
 
+		/* NOTE: Clear a stale error first: the switch below reads the LAST error of the thread, and a leftover one
+		 * from an unrelated call made this getter return its defaults. */
+		static_cast< void >(glfwGetError(nullptr));
+
 		glfwGetWindowPos(m_handle.get(), &xPosition, &yPosition);
 
 		/* NOTE: We use the glfw handler to display errors. */
@@ -812,6 +942,10 @@ namespace EmEn
 
 		int widthPts = -1;
 		int heightPts = -1;
+
+		/* NOTE: Clear a stale error first: the switch below reads the LAST error of the thread, and a leftover one
+		 * from an unrelated call made this getter return its defaults. */
+		static_cast< void >(glfwGetError(nullptr));
 
 		glfwGetWindowSize(m_handle.get(), &widthPts, &heightPts);
 
@@ -850,6 +984,10 @@ namespace EmEn
 		int topPts = -1;
 		int rightPts = -1;
 		int bottomPts = -1;
+
+		/* NOTE: Clear a stale error first: the switch below reads the LAST error of the thread, and a leftover one
+		 * from an unrelated call made this getter return its defaults. */
+		static_cast< void >(glfwGetError(nullptr));
 
 		glfwGetWindowFrameSize(m_handle.get(), &leftPts, &topPts, &rightPts, &bottomPts);
 
@@ -896,6 +1034,10 @@ namespace EmEn
 
 		int xPosition = -1;
 		int yPosition = -1;
+
+		/* NOTE: Clear a stale error first: the switch below reads the LAST error of the thread, and a leftover one
+		 * from an unrelated call made this getter return its defaults. */
+		static_cast< void >(glfwGetError(nullptr));
 
 		glfwGetMonitorPos(monitor, &xPosition, &yPosition);
 
@@ -1027,6 +1169,10 @@ namespace EmEn
 		int widthPx = -1;
 		int heightPx = -1;
 
+		/* NOTE: Clear a stale error first: the switch below reads the LAST error of the thread, and a leftover one
+		 * from an unrelated call made this getter return its defaults. */
+		static_cast< void >(glfwGetError(nullptr));
+
 		glfwGetFramebufferSize(m_handle.get(), &widthPx, &heightPx);
 
 		/* NOTE: We use the glfw handler to display errors. */
@@ -1044,9 +1190,17 @@ namespace EmEn
 		if ( applyScale )
 		{
 			const auto scale = this->getContentScale();
-			const auto scaledWidth = std::floor(static_cast< float >(widthPx) / scale.at(0));
-			/* NOTE: Per-axis scale — the height uses the Y scale (was scale.at(0)). */
-			const auto scaledHeight = std::floor(static_cast< float >(heightPx) / scale.at(1));
+
+			/* NOTE: A zero, negative or non-finite scale gives the unscaled size (a division by it was cast to an
+			 * integer: UB on an infinity). */
+			if ( !std::isfinite(scale[0]) || !std::isfinite(scale[1]) || scale[0] <= 0.0F || scale[1] <= 0.0F )
+			{
+				return {static_cast< uint32_t >(std::max(widthPx, 0)), static_cast< uint32_t >(std::max(heightPx, 0))};
+			}
+
+			const auto scaledWidth = std::floor(static_cast< float >(widthPx) / scale[0]);
+			/* NOTE: Per-axis scale — the height uses the Y scale. */
+			const auto scaledHeight = std::floor(static_cast< float >(heightPx) / scale[1]);
 
 			return {
 				static_cast< uint32_t >(scaledWidth),
@@ -1069,6 +1223,10 @@ namespace EmEn
 		}
 
 		std::array< float, 2 > scale{0.0F, 0.0F};
+
+		/* NOTE: Clear a stale error first: the switch below reads the LAST error of the thread, and a leftover one
+		 * from an unrelated call made this getter return its defaults. */
+		static_cast< void >(glfwGetError(nullptr));
 
 		glfwGetWindowContentScale(m_handle.get(), scale.data(), scale.data()+1);
 
@@ -1098,24 +1256,6 @@ namespace EmEn
 		}
 
 		return static_cast< float >(m_state.framebufferWidth) / static_cast< float >(m_state.framebufferHeight);
-	}
-
-	void
-	Window::waitValidWindowSize () const noexcept
-	{
-		bool validSizeFound = false;
-
-		while ( !validSizeFound )
-		{
-			const auto size = this->getFramebufferSize();
-
-			if ( size[0] > 0 || size[1] > 0 )
-			{
-				validSizeFound = true;
-			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		}
 	}
 
 	std::string
@@ -1229,7 +1369,15 @@ namespace EmEn
 			 * we use the current mode of the monitor */
 			if ( width == Automatic || height == Automatic )
 			{
-				const auto * currentMode = glfwGetVideoMode(monitor);
+				const auto * currentMode = monitor != nullptr ? glfwGetVideoMode(monitor) : nullptr;
+
+				/* NOTE: No monitor (or no mode) to take the size from: refused, it was dereferenced. */
+				if ( currentMode == nullptr )
+				{
+					Tracer::error(ClassId, "No video mode to take the automatic fullscreen size from !");
+
+					return false;
+				}
 
 				width = currentMode->width;
 				height = currentMode->height;
@@ -1257,8 +1405,7 @@ namespace EmEn
 			return false;
 		}
 
-		m_state.framebufferWidth = width;
-		m_state.framebufferHeight = height;
+		this->setFramebufferState(static_cast< uint32_t >(width), static_cast< uint32_t >(height));
 
 		/* Register all callbacks related to the window object. */
 		glfwSetWindowUserPointer(m_handle.get(), this);
@@ -1304,8 +1451,7 @@ namespace EmEn
 			m_state.contentYScale = 1.0F;
 
 			/* The framebuffer of the window expressed in pixels. */
-			m_state.framebufferWidth = DefaultWindowWidth;
-			m_state.framebufferHeight = DefaultWindowHeight;
+			this->setFramebufferState(DefaultWindowWidth, DefaultWindowHeight);
 		}
 		else
 		{
@@ -1338,8 +1484,7 @@ namespace EmEn
 			/* The framebuffer of the window expressed in pixels. */
 			const auto framebufferSize = this->getFramebufferSize(); // Gives incorrect data at startup.
 
-			m_state.framebufferWidth = framebufferSize[0];
-			m_state.framebufferHeight = framebufferSize[1];
+			this->setFramebufferState(framebufferSize[0], framebufferSize[1]);
 		}
 	}
 
@@ -1475,8 +1620,20 @@ namespace EmEn
 		}
 
 		/* NOTE: Save the state. */
-		_this->m_state.framebufferWidth = static_cast< uint32_t >(width);
-		_this->m_state.framebufferHeight = static_cast< uint32_t >(height);
+		_this->setFramebufferState(static_cast< uint32_t >(width), static_cast< uint32_t >(height));
+
+		/* NOTE: Refresh the window size too: on Wayland, glfwSetWindowSize() calls back only the framebuffer size
+		 * (GLFW 3.5 wl_window.c resizeWindow()), so the window size stayed the old one and was saved as such. */
+		int widthPts = 0;
+		int heightPts = 0;
+
+		glfwGetWindowSize(window, &widthPts, &heightPts);
+
+		if ( widthPts > 0 && heightPts > 0 )
+		{
+			_this->m_state.windowWidth = static_cast< uint32_t >(widthPts);
+			_this->m_state.windowHeight = static_cast< uint32_t >(heightPts);
+		}
 
 		_this->notify(OSNotifiesFramebufferResized);
 	}

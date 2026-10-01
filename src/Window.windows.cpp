@@ -34,7 +34,6 @@
 #include "GLFW/glfw3native.h"
 #include <dwmapi.h>
 #include <shobjidl.h>
-#include <vulkan/vulkan_win32.h>
 
 /* Local inclusions. */
 #include "PrimaryServices.hpp"
@@ -85,62 +84,6 @@ namespace EmEn
 
 			return appsUseLightTheme == 0;
 		}
-	}
-
-	bool
-	Window::createSurface (bool useNativeCode) noexcept
-	{
-		VkResult result = VK_SUCCESS;
-
-		VkSurfaceKHR surfaceHandle{VK_NULL_HANDLE};
-
-		if ( useNativeCode )
-		{
-			VkWin32SurfaceCreateInfoKHR createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-			createInfo.pNext = nullptr;
-			createInfo.hwnd = glfwGetWin32Window(m_handle.get());
-			createInfo.hinstance = GetModuleHandle(nullptr);
-
-			result = vkCreateWin32SurfaceKHR(m_instance.handle(), &createInfo, nullptr, &surfaceHandle);
-		}
-		else
-		{
-			result = glfwCreateWindowSurface(m_instance.handle(), m_handle.get(), nullptr, &surfaceHandle);
-		}
-
-		if ( result != VK_SUCCESS )
-		{
-			TraceFatal{ClassId} << "Unable to create the Vulkan surface : " << vkResultToCString(result) << " !";
-
-			return false;
-		}
-
-		m_surface = std::make_unique< Surface >(m_instance, surfaceHandle);
-		m_surface->setIdentifier(ClassId, "OSVideoFramebuffer", "Surface");
-
-		return true;
-	}
-
-	void
-	Window::destroySurface () noexcept
-	{
-		if ( m_surface != nullptr )
-		{
-			Tracer::debug(ClassId, "Destroying Vulkan surface...");
-
-			m_surface.reset();
-		}
-	}
-
-	bool
-	Window::recreateSurface (bool useNativeCode) noexcept
-	{
-		Tracer::debug(ClassId, "Recreating Vulkan surface...");
-
-		this->destroySurface();
-
-		return this->createSurface(useNativeCode);
 	}
 
 	void
@@ -219,13 +162,23 @@ namespace EmEn
 			return false;
 		}
 
+		/* NOTE: S_OK and S_FALSE both take a reference that releaseNativeWindow() gives back. */
+		m_COMInitialized = true;
+
 		return true;
 	}
 
 	void
 	Window::releaseNativeWindow () noexcept
 	{
-		CoUninitialize();
+		/* NOTE: Only when initializeNativeWindow() took the reference: an unbalanced CoUninitialize() (a failed
+		 * init, or a windowless run that never called it) could tear down another component's apartment (CEF's). */
+		if ( m_COMInitialized )
+		{
+			CoUninitialize();
+
+			m_COMInitialized = false;
+		}
 	}
 
 	void

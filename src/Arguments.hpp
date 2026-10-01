@@ -278,7 +278,9 @@ namespace EmEn
 
 			std::filesystem::path m_binaryFilepath;
 			std::vector< std::string > m_rawArguments;
-			std::set< std::string > m_switches;
+			/* NOTE: A transparent comparator: a lookup by std::string_view needs no NUL-terminated copy (the former
+			 * contains(argument.data()) read a view past its end). */
+			std::set< std::string, std::less<> > m_switches;
 			std::map< std::string, std::string, std::less<> > m_arguments;
 			const bool m_childProcess{false};
 	};
