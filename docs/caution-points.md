@@ -2676,6 +2676,16 @@ answers the question is the one without `head`.
 
 ## Animation
 
+### ⚠️ A skinned glTF joint's world matrix includes its NON-JOINT ancestors (fixed 2026-10-01)
+
+> [!CAUTION]
+> The glTF rule: `J_global · IBM`, with every ancestor of the joint, and the skinned mesh node's own transform ignored.
+> The engine's skeleton composed only the joint chain: BrainStem (node 0 +90°, node 2 −90°, above the root joint) fell
+> flat as soon as its clip played. `GLTFLoader::skeletonLayout()` now carries the non-joint nodes between the joints and
+> the common ancestor with the mesh, and `Skin::rootTransform()` takes the mesh node's path back out. Detail: `docs/subsystems/scenes-loaders/03-implemented-loaders/01-gltfloader.md`
+> § Skins. Before blaming the engine for a mis-oriented clip, evaluate the file through the spec independently (the
+> citadel dragon was an ASSET defect: projet-alpha `tools/fix-dragon-root-rotation.py`).
+
 ### Fixed: `play()` keys on the CLIP name, the loaders hand out RESOURCE names — a silent, total no-op (Aug 2026)
 
 **Symptom.** The `asset-loader` demo's KeyPad2 cycled its animation index, printed the clip name it

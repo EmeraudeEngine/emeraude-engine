@@ -1388,8 +1388,8 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   - macOS M2 PASS (AppleClang 0 warning, base 2186 = 2183 + 3 skipped): the 13 crafted glTFs exactly as on Linux;
     CesiumMan, Fox, BrainStem, RiggedFigure, SimpleSkin load and animate with 0 [SkeletalAnimator] line;
     animation-debug, citadel MCP 1707/0, console 4445/0; 0 VUID, 0 UNASSIGNED. Found (PRE-EXISTING, A/B on Linux with
-    the pre-12 loader and animator: the same): the animated BrainStem lies on its side — item
-    `gltf-skinned-non-joint-ancestors-misoriented`.
+    the pre-12 loader and animator: the same): the animated BrainStem lies on its side — fixed
+    2026-10-01 (the non-joint ancestors carried into the skeleton; `01-gltfloader.md` § Skins).
   - Windows PASS on NVIDIA RTX 3060 Laptop and AMD (MSVC /W4 /WX 0 warning: `quickRandom< int8_t >` accepted without
     the former Windows special case; base 2186 = 2183 + 3 skipped): the 13 crafted glTFs as on Linux (NVIDIA and AMD
     logs identical), the five skinned samples load and cycle, animation-debug, citadel MCP 1707/0, console 4457/0;
@@ -1629,4 +1629,16 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
     code (`getUTF8CommandLineArguments()`) is UNCOMPILED here.
 - [x] (8) Pushed 2026-10-01 (owner's order): engine (the Windows-findings commit). The Windows peer was asked to re-check
   `--enable-log` (and `--cache-directory`) under `Jérôme`, and AMD beams launches for the VUID-03715.
-- [ ] (9) The Windows re-check.
+- [x] (9) Windows re-check at engine `a8925986` (2026-10-01, NVIDIA + AMD; MSVC /W4 /WX, 314 TUs, 0 warning; the new
+  `getUTF8CommandLineArguments()` compiles clean):
+  - (B) FIXED: AMD beams 8/8 launches with an empty cache, 0 VUID-03715, 0 DEVICE_LOST, 0 guard line, 0 VUID.
+    citadel: MCP 1707/0, console 4457/0 on both GPUs; NVIDIA only the known 12325, AMD 0.
+  - (A) FIXED for `--enable-log` (the log created under `Jérôme`) and `--cache-directory` (used). STILL BROKEN for
+    `--settings-filepath`: `Settings.cpp` assigned the UTF-8 `std::string` to the path (ANSI conversion), so the file
+    was "not found" and the engine ran on its defaults.
+  - An ASCII path showed no regression.
+- [x] (10) Fixed 2026-10-01 (Linux-verified; Windows re-check pending): `Settings.cpp` builds the `--settings-filepath`
+  path through `IO::u8path()`. The five `FileSystem::*Directory (const std::string & append)` overloads append through
+  `IO::u8path()` (`path.append(std::string)` is the same ANSI conversion, which `--settings-filename` reached), and so
+  do the organization / application names of the user directories. A settings copy under `Jérôme` is read and saved
+  back on Linux, 0 VUID; citadel MCP 1707/0, console 4466/0.

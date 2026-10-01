@@ -307,7 +307,10 @@ namespace EmEn::Animations
 
 			if ( parentIndex == NoParent )
 			{
-				m_worldMatrices[i] = localMatrix;
+				/* NOTE: The skin's root transform (the identity unless the loader set one) brings the joints into the
+				 * space of the node that holds the mesh: glTF skins with the joints' WORLD matrices and ignores the
+				 * mesh node's transform, which the scene graph applies here (GLTFLoader::loadSkins()). */
+				m_worldMatrices[i] = m_skin.rootTransform() * localMatrix;
 			}
 			else
 			{

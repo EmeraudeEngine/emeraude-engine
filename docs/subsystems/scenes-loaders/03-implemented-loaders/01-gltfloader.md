@@ -21,6 +21,35 @@ Phases 4-5 skipped when `skipSkinning = true`.
 unnamed item keeps the bare `glTF:{stem}/{Category}/{index}`). Textures add `-srgb` / `-data`.
 ⚠️ The trailing index is **load-bearing**, not decoration — see *The resource key* above.
 
+#### Skins: a joint's world matrix includes its NON-JOINT ancestors (fixed 2026-10-01)
+
+> [!CAUTION]
+> glTF skins a vertex with `Σ w · (J_global · IBM) · v`. `J_global` includes EVERY ancestor of the joint, joints or
+> not, and the transform of the node that holds the skinned mesh is ignored. The engine places the mesh at that node
+> (the scene graph). Until 2026-10-01 the skeleton composed only the joint chain, from a root with `NoParent`, so a
+> transformed non-joint ancestor was lost. BrainStem has node 0 (+90° about X) → node 21 → node 2 (−90° about X, a
+> channel targets it) → the root joint, and its mesh node is a child of node 0. It stood upright at rest (no skinning
+> applies) and fell flat as soon as its clip played. Measured against the spec: off by 1.0 at rest and by 3.3 mid-clip;
+> 0.0 since.
+
+`skeletonLayout()` (owner ruling: "ancestors as joints"):
+
+- **The common ancestor.** It is the lowest node above the first mesh node using the skin that every joint reaches
+  walking up (`NoParent` when the scene root is above them all).
+- **Carried nodes.** The non-joint nodes between the joints and that ancestor (exclusive) become skeleton joints that
+  skin no vertex. Their inverse bind matrix is the identity.
+- **Order.** The joints and carried nodes are sorted parents first by depth. A skin with nothing to carry (every corpus
+  asset but BrainStem, Fox and RiggedFigure) keeps exactly the order of `parentFirstJointOrder()`.
+- **Channels.** `loadAnimations()` maps a carried node's channels to the skeletal clip. It also keeps them in the node
+  clip, for any plain content under the same node: the skinned mesh is never under a carried node.
+- **The root transform.** `Skin::setRootTransform()` holds `(mesh node world)⁻¹ · (common ancestor world)`, at rest,
+  per mesh. `SkeletalAnimator::computeWorldMatrices()` premultiplies it into every root joint, which brings the
+  skeleton into the mesh node's space. An animated node between the mesh node and the common ancestor is not followed
+  (a warning names it). A mesh used by nodes with different transforms keeps the first node's (a warning).
+- **Proof.** Fox and RiggedFigure carry one node each, yet their matrices are unchanged (old and new both equal the
+  spec, 0.0): their mesh hangs under that same node, and the root transform cancels it. CesiumMan and SimpleSkin carry
+  nothing.
+
 #### CUBICSPLINE — the output accessor has a STRIDE OF THREE (fixed Aug 2026)
 
 > [!CAUTION]
@@ -247,8 +276,8 @@ message says only that *something* is missing;
 **transmission is the last one reading only its
 scalar factor, never its texture** (clearcoat's three maps and sheen's two are read since
 2026-09-14, see below); animation channels targeting a node that is
-not a joint of `skins[0]` are dropped, so rigid-node animation (doors, platforms, props) is
-impossible; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
+not a joint of `skins[0]` go to a separate node clip (`Component::NodeAnimation`, since triad 12), and
+a skin other than `skins[0]` gets no joint channel; `instanceSets` is never populated (`EXT_mesh_gpu_instancing` not enabled).
 
 **`KHR_materials_sheen`'s TWO MAPS are read since 2026-09-14.** Sixth occurrence of "GPU ready,
 loader mute" — the `Sheen` ComponentType already sampled a **vec4** and the generator already read

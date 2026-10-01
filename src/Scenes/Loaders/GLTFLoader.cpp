@@ -1164,6 +1164,289 @@ namespace EmEn::Scenes::Loaders
 		}
 
 		/**
+		 * @brief The node layout of the skeleton built for a glTF skin.
+		 * @note glTF skins a vertex with the WORLD matrix of each joint, which includes every ancestor of the joint,
+		 * joints or not, and it ignores the transform of the node that holds the mesh. The engine places the mesh at
+		 * that node (the scene graph), so the skeleton must carry the non-joint nodes between the joints and the lowest
+		 * common ancestor of the mesh node and the joints; the scene graph applies that ancestor and everything above,
+		 * and Skin::rootTransform() takes the mesh node's own path back out (BrainStem, 2026-10-01).
+		 */
+		struct SkeletonLayout
+		{
+			/** @brief The glTF node of each skeleton joint, parents first: the skin's joints and the non-joint nodes on
+			 * their paths up to the common ancestor (exclusive). */
+			std::vector< size_t > nodes;
+			/** @brief The skeleton index of each skin-local (glTF) joint. */
+			std::vector< int32_t > jointOrder;
+			/** @brief The skeleton index of every node of the layout. */
+			std::unordered_map< size_t, int32_t > nodeToSkeletonIndex;
+			/** @brief The lowest common ancestor of the skin's mesh node and every joint (NoParent: none, the scene
+			 * root is above them all). */
+			int32_t commonAncestor{Base::Animation::NoParent};
+			/** @brief The count of non-joint nodes the layout carries. */
+			size_t carriedNodeCount{0};
+		};
+
+		/**
+		 * @brief Returns the first node that holds a mesh skinned by this skin.
+		 * @param asset A reference to the parsed asset.
+		 * @param skinIndex The skin index.
+		 * @return int32_t The node index, NoParent when no node uses the skin.
+		 */
+		[[nodiscard]]
+		int32_t
+		skinnedMeshNode (const fastgltf::Asset & asset, size_t skinIndex) noexcept
+		{
+			for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
+			{
+				const auto & node = asset.nodes[nodeIdx];
+
+				if ( node.skinIndex.has_value() && node.skinIndex.value() == skinIndex && node.meshIndex.has_value() )
+				{
+					return static_cast< int32_t >(nodeIdx);
+				}
+			}
+
+			return Base::Animation::NoParent;
+		}
+
+		/**
+		 * @brief Returns the layout of the skeleton of a glTF skin (see SkeletonLayout).
+		 * @note A skin whose joints hang directly under the common ancestor (every corpus asset but BrainStem,
+		 * 2026-10-01) keeps exactly the order of parentFirstJointOrder(). Every walk up the hierarchy is memoized, so
+		 * a deep hostile hierarchy stays linear.
+		 * @pre The node hierarchy is a strict forest and every joint node is in range (hasConsistentExtents()).
+		 * @param asset A reference to the parsed asset.
+		 * @param skinIndex The skin index.
+		 * @param nodeParents A reference to the parent node table (nodeParentTable()).
+		 * @return SkeletonLayout
+		 */
+		[[nodiscard]]
+		SkeletonLayout
+		skeletonLayout (const fastgltf::Asset & asset, size_t skinIndex, const std::vector< int32_t > & nodeParents) noexcept
+		{
+			using Base::Animation::NoParent;
+
+			const auto & skin = asset.skins[skinIndex];
+			const auto jointCount = skin.joints.size();
+
+			SkeletonLayout layout;
+			layout.jointOrder = parentFirstJointOrder(skin, nodeParents);
+
+			const std::unordered_set< size_t > joints{skin.joints.begin(), skin.joints.end()};
+
+			/* 1. The common ancestor: the highest node of the mesh node's chain that the joints reach walking up. */
+			const auto meshNode = skinnedMeshNode(asset, skinIndex);
+			std::vector< int32_t > meshChain;
+			std::unordered_map< size_t, int32_t > meshChainRank;
+
+			for ( auto node = meshNode; node != NoParent; node = nodeParents[static_cast< size_t >(node)] )
+			{
+				meshChainRank[static_cast< size_t >(node)] = static_cast< int32_t >(meshChain.size());
+				meshChain.push_back(node);
+			}
+
+			/* NOTE: The rank of the first mesh-chain node strictly above a node, -1 for none; memoized. */
+			std::unordered_map< size_t, int32_t > reach;
+			std::vector< size_t > path;
+
+			const auto reachFrom = [&] (int32_t start) {
+				int32_t result = -1;
+
+				path.clear();
+
+				for ( auto node = start; node != NoParent; node = nodeParents[static_cast< size_t >(node)] )
+				{
+					if ( const auto rank = meshChainRank.find(static_cast< size_t >(node)); rank != meshChainRank.end() )
+					{
+						result = rank->second;
+
+						break;
+					}
+
+					if ( const auto known = reach.find(static_cast< size_t >(node)); known != reach.end() )
+					{
+						result = known->second;
+
+						break;
+					}
+
+					path.push_back(static_cast< size_t >(node));
+				}
+
+				for ( const auto node : path )
+				{
+					reach[node] = result;
+				}
+
+				return result;
+			};
+
+			bool shared = meshNode != NoParent;
+			int32_t commonRank = -1;
+
+			for ( size_t joint = 0; joint < jointCount && shared; ++joint )
+			{
+				const auto rank = reachFrom(nodeParents[skin.joints[joint]]);
+
+				if ( rank < 0 )
+				{
+					shared = false;
+				}
+				else
+				{
+					commonRank = std::max(commonRank, rank);
+				}
+			}
+
+			layout.commonAncestor = shared && commonRank >= 0 ? meshChain[static_cast< size_t >(commonRank)] : NoParent;
+
+			/* 2. The non-joint nodes between each joint and the common ancestor. */
+			std::vector< size_t > carried;
+			std::unordered_set< size_t > carriedSet;
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				for ( auto node = nodeParents[skin.joints[joint]]; node != NoParent && node != layout.commonAncestor; node = nodeParents[static_cast< size_t >(node)] )
+				{
+					const auto index = static_cast< size_t >(node);
+
+					/* NOTE: A joint walks its own way up, and a carried node already carries its own path. */
+					if ( joints.contains(index) || !carriedSet.insert(index).second )
+					{
+						break;
+					}
+
+					carried.push_back(index);
+				}
+			}
+
+			layout.carriedNodeCount = carried.size();
+
+			std::vector< size_t > jointNodesInOrder(jointCount);
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				jointNodesInOrder[static_cast< size_t >(layout.jointOrder[joint])] = skin.joints[joint];
+			}
+
+			if ( carried.empty() )
+			{
+				layout.nodes = std::move(jointNodesInOrder);
+			}
+			else
+			{
+				/* 3. Parents first: sorted by depth below the common ancestor (stable), the carried nodes ahead. */
+				std::vector< size_t > members = carried;
+				members.insert(members.end(), jointNodesInOrder.begin(), jointNodesInOrder.end());
+
+				std::unordered_map< size_t, size_t > depth;
+
+				for ( const auto member : members )
+				{
+					path.clear();
+
+					auto node = static_cast< int32_t >(member);
+					size_t known = 0;
+
+					while ( true )
+					{
+						if ( const auto it = depth.find(static_cast< size_t >(node)); it != depth.end() )
+						{
+							known = it->second + 1;
+
+							break;
+						}
+
+						path.push_back(static_cast< size_t >(node));
+
+						const auto parent = nodeParents[static_cast< size_t >(node)];
+
+						if ( parent == NoParent || (!joints.contains(static_cast< size_t >(parent)) && !carriedSet.contains(static_cast< size_t >(parent))) )
+						{
+							known = 0;
+
+							break;
+						}
+
+						node = parent;
+					}
+
+					while ( !path.empty() )
+					{
+						depth[path.back()] = known++;
+						path.pop_back();
+					}
+				}
+
+				std::ranges::stable_sort(members, [&depth] (size_t lhs, size_t rhs) {
+					return depth[lhs] < depth[rhs];
+				});
+
+				layout.nodes = std::move(members);
+			}
+
+			for ( size_t index = 0; index < layout.nodes.size(); ++index )
+			{
+				layout.nodeToSkeletonIndex[layout.nodes[index]] = static_cast< int32_t >(index);
+			}
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				layout.jointOrder[joint] = layout.nodeToSkeletonIndex[skin.joints[joint]];
+			}
+
+			return layout;
+		}
+
+		/**
+		 * @brief Returns the local matrix of a node (its TRS; fastgltf decomposes a node matrix on load), the
+		 * translation scaled as the joints' are.
+		 * @param node A reference to the glTF node.
+		 * @param uniformScale The loader's uniform scale.
+		 * @return Matrix< 4, float >
+		 */
+		[[nodiscard]]
+		Matrix< 4, float >
+		nodeLocalMatrix (const fastgltf::Node & node, float uniformScale) noexcept
+		{
+			const auto * trs = std::get_if< fastgltf::TRS >(&node.transform);
+
+			if ( trs == nullptr )
+			{
+				return {};
+			}
+
+			return composeTRS(
+				Vector< 3, float >{trs->translation.x() * uniformScale, trs->translation.y() * uniformScale, trs->translation.z() * uniformScale},
+				Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()},
+				Vector< 3, float >{trs->scale.x(), trs->scale.y(), trs->scale.z()}
+			);
+		}
+
+		/**
+		 * @brief Returns the world matrix of a node at rest (NoParent: the identity).
+		 * @param asset A reference to the parsed asset.
+		 * @param nodeIndex The node index, or NoParent.
+		 * @param nodeParents A reference to the parent node table (nodeParentTable()).
+		 * @param uniformScale The loader's uniform scale.
+		 * @return Matrix< 4, float >
+		 */
+		[[nodiscard]]
+		Matrix< 4, float >
+		nodeWorldMatrix (const fastgltf::Asset & asset, int32_t nodeIndex, const std::vector< int32_t > & nodeParents, float uniformScale) noexcept
+		{
+			Matrix< 4, float > world{};
+
+			for ( auto node = nodeIndex; node != Base::Animation::NoParent; node = nodeParents[static_cast< size_t >(node)] )
+			{
+				world = nodeLocalMatrix(asset.nodes[static_cast< size_t >(node)], uniformScale) * world;
+			}
+
+			return world;
+		}
+
+		/**
 		 * @brief Checks the indices fastgltf::validate() ITSELF reads without a range check (fastgltf 0.9.0): the
 		 * sparse indices / values buffer views of an accessor, the sampler of an animation channel, the input and
 		 * output accessors of an animation sampler. The parser does not check them either, so validate() read out of
@@ -1630,7 +1913,15 @@ namespace EmEn::Scenes::Loaders
 
 				if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(m_meshes[meshIdx].get()) )
 				{
-					skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
+					/* NOTE: Each mesh gets its copy of the skin, with the root transform of its own node. */
+					auto skin = m_skins[skinIdx];
+
+					if ( const auto rootTransform = m_meshSkinRootTransform.find(meshIdx); rootTransform != m_meshSkinRootTransform.end() )
+					{
+						skin.setRootTransform(rootTransform->second);
+					}
+
+					skeletalData->setSkeletalData(m_skeletons[skinIdx], std::move(skin), m_animationClips);
 				}
 			}
 		}
@@ -3445,6 +3736,20 @@ namespace EmEn::Scenes::Loaders
 		/* Build a node-index → parent-node-index lookup from the node tree. */
 		const auto nodeParents = nodeParentTable(asset);
 
+		/* The nodes an animation targets (see the root transform below). */
+		std::unordered_set< size_t > animatedNodes;
+
+		for ( const auto & animation : asset.animations )
+		{
+			for ( const auto & channel : animation.channels )
+			{
+				if ( channel.nodeIndex.has_value() )
+				{
+					animatedNodes.insert(channel.nodeIndex.value());
+				}
+			}
+		}
+
 		for ( size_t skinIndex = 0; skinIndex < asset.skins.size(); ++skinIndex )
 		{
 			const auto & glTFSkin = asset.skins[skinIndex];
@@ -3453,15 +3758,6 @@ namespace EmEn::Scenes::Loaders
 			if ( jointCount == 0 )
 			{
 				continue;
-			}
-
-			/* Build a fast lookup: GLTF node index → skin-local joint index. */
-			std::unordered_map< size_t, int32_t > nodeToJointIndex;
-			nodeToJointIndex.reserve(jointCount);
-
-			for ( size_t j = 0; j < jointCount; ++j )
-			{
-				nodeToJointIndex[glTFSkin.joints[j]] = static_cast< int32_t >(j);
 			}
 
 			/* Read inverse bind matrices from the accessor (if provided). */
@@ -3517,36 +3813,46 @@ namespace EmEn::Scenes::Loaders
 				}
 			}
 
-			/* Build Joint array, parents first (glTF allows any order: see parentFirstJointOrder()). For each skin
-			 * joint, find its parent within the skin. The Skin maps the glTF joint index (vertex JOINTS_0) to it. */
-			const auto skeletonIndex = parentFirstJointOrder(glTFSkin, nodeParents);
+			/* Build Joint array, parents first (glTF allows any order: see skeletonLayout()). The skeleton holds the
+			 * skin's joints and the non-joint nodes between them and the common ancestor of the mesh; the Skin maps the
+			 * glTF joint index (vertex JOINTS_0) to its skeleton index. */
+			const auto layout = skeletonLayout(asset, skinIndex, nodeParents);
+			const auto & skeletonIndex = layout.jointOrder;
 
-			std::vector< Joint< float > > engineJoints(jointCount);
+			std::unordered_map< size_t, size_t > nodeToSkinJoint;
+			nodeToSkinJoint.reserve(jointCount);
 
 			for ( size_t j = 0; j < jointCount; ++j )
 			{
-				const auto glTFNodeIndex = glTFSkin.joints[j];
+				nodeToSkinJoint[glTFSkin.joints[j]] = j;
+			}
+
+			std::vector< Joint< float > > engineJoints(layout.nodes.size());
+
+			for ( size_t index = 0; index < layout.nodes.size(); ++index )
+			{
+				const auto glTFNodeIndex = layout.nodes[index];
 				const auto & glTFNode = asset.nodes[glTFNodeIndex];
-				auto & joint = engineJoints[static_cast< size_t >(skeletonIndex[j])];
+				auto & joint = engineJoints[index];
 
 				joint.name = std::string{glTFNode.name};
-				joint.inverseBindMatrix = inverseBindMatrices[j];
 
-				/* Find parent joint: walk up the node tree until we find a node that is in this skin. */
-				joint.parentIndex = NoParent;
-				auto parentNodeIdx = nodeParents[glTFNodeIndex];
-
-				while ( parentNodeIdx != NoParent )
+				/* NOTE: A carried (non-joint) node skins no vertex: its inverse bind matrix stays the identity. */
+				if ( const auto skinJoint = nodeToSkinJoint.find(glTFNodeIndex); skinJoint != nodeToSkinJoint.end() )
 				{
-					const auto it = nodeToJointIndex.find(static_cast< size_t >(parentNodeIdx));
+					joint.inverseBindMatrix = inverseBindMatrices[skinJoint->second];
+				}
 
-					if ( it != nodeToJointIndex.end() )
+				/* The parent is the glTF parent when the layout holds it; the common ancestor and above are the scene
+				 * graph's. */
+				joint.parentIndex = NoParent;
+
+				if ( const auto parentNode = nodeParents[glTFNodeIndex]; parentNode != NoParent )
+				{
+					if ( const auto it = layout.nodeToSkeletonIndex.find(static_cast< size_t >(parentNode)); it != layout.nodeToSkeletonIndex.end() )
 					{
-						joint.parentIndex = skeletonIndex[static_cast< size_t >(it->second)];
-						break;
+						joint.parentIndex = it->second;
 					}
-
-					parentNodeIdx = nodeParents[static_cast< size_t >(parentNodeIdx)];
 				}
 
 				/* Extract local TRS from the node. GLTF stores parent-relative transforms. */
@@ -3560,6 +3866,11 @@ namespace EmEn::Scenes::Loaders
 					/* NOTE: A scale is invariant under the flip — M·diag(s)·M = diag(s). */
 					joint.scale = {trs->scale.x(), trs->scale.y(), trs->scale.z()};
 				}
+			}
+
+			if ( layout.carriedNodeCount > 0 )
+			{
+				TraceInfo{ClassId} << "Skin #" << skinIndex << ": " << layout.carriedNodeCount << " non-joint node(s) between the joints and the mesh's common ancestor carried into the skeleton.";
 			}
 
 			Skeleton< float > skeleton{std::move(engineJoints)};
@@ -3581,12 +3892,51 @@ namespace EmEn::Scenes::Loaders
 			m_skeletons.push_back(std::move(skeletonResource));
 			m_skins.push_back(std::move(skin));
 
-			/* Record which meshes reference this skin for later association with renderables. */
-			for ( const auto & node : asset.nodes )
+			/* Record which meshes reference this skin for later association with renderables, each with the root
+			 * transform that brings the skeleton into its node's space: (mesh node world)⁻¹ · (common ancestor world),
+			 * at rest. */
+			const auto commonAncestorWorld = nodeWorldMatrix(asset, layout.commonAncestor, nodeParents, m_options.uniformScale);
+
+			for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
 			{
-				if ( node.skinIndex.has_value() && node.skinIndex.value() == skinIndex && node.meshIndex.has_value() )
+				const auto & node = asset.nodes[nodeIdx];
+
+				if ( !node.skinIndex.has_value() || node.skinIndex.value() != skinIndex || !node.meshIndex.has_value() )
 				{
-					m_meshToSkinIndex[node.meshIndex.value()] = skinIndex;
+					continue;
+				}
+
+				const auto meshIndex = node.meshIndex.value();
+
+				m_meshToSkinIndex[meshIndex] = skinIndex;
+
+				const auto meshWorldInverse = nodeWorldMatrix(asset, static_cast< int32_t >(nodeIdx), nodeParents, m_options.uniformScale).tryInverse();
+
+				if ( !meshWorldInverse )
+				{
+					TraceWarning{ClassId} << "The skinned mesh node #" << nodeIdx << " has a singular world transform: its skeleton keeps no root transform.";
+
+					continue;
+				}
+
+				const auto rootTransform = meshWorldInverse.value() * commonAncestorWorld;
+
+				/* NOTE: A mesh is one renderable, whatever the node using it: the first node's transform is kept. */
+				if ( const auto [it, inserted] = m_meshSkinRootTransform.try_emplace(meshIndex, rootTransform); !inserted && it->second != rootTransform )
+				{
+					TraceWarning{ClassId} << "The skinned mesh #" << meshIndex << " is used by nodes with different transforms: the first one's is kept.";
+				}
+
+				/* NOTE: The root transform is taken at rest: an animated node between the mesh and the common ancestor is
+				 * not followed. */
+				for ( auto pathNode = static_cast< int32_t >(nodeIdx); pathNode != NoParent && pathNode != layout.commonAncestor; pathNode = nodeParents[static_cast< size_t >(pathNode)] )
+				{
+					if ( animatedNodes.contains(static_cast< size_t >(pathNode)) )
+					{
+						TraceWarning{ClassId} << "The node #" << pathNode << " above the skinned mesh node #" << nodeIdx << " is animated: the skinned mesh does not follow that animation.";
+
+						break;
+					}
 				}
 			}
 		}
@@ -3607,17 +3957,26 @@ namespace EmEn::Scenes::Loaders
 		 * first animated frame — the classic symptom of a half-applied conversion. */
 
 		/* For mapping node indices to joint indices, we need the skin context: the SKELETON index, parents first,
-		 * exactly as loadSkins() orders the joints. */
+		 * exactly as loadSkins() lays the skeleton out (skeletonLayout(): the joints and the non-joint nodes it
+		 * carries). */
 		std::unordered_map< size_t, int32_t > nodeToJointIndex;
+		std::unordered_set< size_t > carriedNodes;
 
 		if ( !asset.skins.empty() )
 		{
 			const auto & skin = asset.skins[0];
-			const auto skeletonIndex = parentFirstJointOrder(skin, nodeParentTable(asset));
+			auto layout = skeletonLayout(asset, 0, nodeParentTable(asset));
 
-			for ( size_t j = 0; j < skin.joints.size(); ++j )
+			nodeToJointIndex = std::move(layout.nodeToSkeletonIndex);
+
+			const std::unordered_set< size_t > joints{skin.joints.begin(), skin.joints.end()};
+
+			for ( const auto & [node, index] : nodeToJointIndex )
 			{
-				nodeToJointIndex[skin.joints[j]] = skeletonIndex[j];
+				if ( !joints.contains(node) )
+				{
+					carriedNodes.insert(node);
+				}
 			}
 		}
 
@@ -3803,6 +4162,16 @@ namespace EmEn::Scenes::Loaders
 
 				if ( isJointChannel )
 				{
+					/* NOTE: A node the skeleton carries (a non-joint ancestor of the joints) can still parent plain
+					 * content in the scene graph: its channel drives both, as a node channel targeting the node itself. */
+					if ( carriedNodes.contains(nodeIdx) )
+					{
+						auto nodeChannel = channel;
+						nodeChannel.targetIndex = static_cast< int32_t >(nodeIdx);
+
+						nodeChannels.push_back(std::move(nodeChannel));
+					}
+
 					channels.push_back(std::move(channel));
 				}
 				else

@@ -172,21 +172,21 @@ namespace EmEn
 		{
 			directoryPath.append(".local");
 			directoryPath.append("share");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
+			directoryPath /= IO::u8path(m_organizationName);
+			directoryPath /= IO::u8path(m_applicationName);
 		}
 		else if constexpr ( IsMacOS )
 		{
 			directoryPath.append("Library");
 			directoryPath.append("Application Support");
-			directoryPath.append(m_applicationReverseId);
+			directoryPath /= IO::u8path(m_applicationReverseId);
 		}
 		else if constexpr ( IsWindows )
 		{
 			directoryPath.append("AppData");
 			directoryPath.append("Roaming");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
+			directoryPath /= IO::u8path(m_organizationName);
+			directoryPath /= IO::u8path(m_applicationName);
 		}
 
 		return registerDirectory(directoryPath, true, true, m_userDataDirectory);
@@ -231,21 +231,21 @@ namespace EmEn
 			if constexpr  ( IsLinux )
 			{
 				directoryPath.append(".config");
-				directoryPath.append(m_organizationName);
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_organizationName);
+				directoryPath /= IO::u8path(m_applicationName);
 			}
 			else if constexpr ( IsMacOS )
 			{
 				directoryPath.append("Library");
 				directoryPath.append("Preferences");
-				directoryPath.append(m_applicationReverseId);
+				directoryPath /= IO::u8path(m_applicationReverseId);
 			}
 			else if constexpr ( IsWindows )
 			{
 				directoryPath.append("AppData");
 				directoryPath.append("Local");
-				directoryPath.append(m_organizationName);
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_organizationName);
+				directoryPath /= IO::u8path(m_applicationName);
 			}
 
 			paths.emplace_back(directoryPath);
@@ -298,21 +298,21 @@ namespace EmEn
 			if constexpr  ( IsLinux )
 			{
 				directoryPath.append(".cache");
-				directoryPath.append(m_organizationName);
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_organizationName);
+				directoryPath /= IO::u8path(m_applicationName);
 			}
 			else if constexpr ( IsMacOS )
 			{
 				directoryPath.append("Library");
 				directoryPath.append("Caches");
-				directoryPath.append(m_applicationReverseId);
+				directoryPath /= IO::u8path(m_applicationReverseId);
 			}
 			else if constexpr ( IsWindows )
 			{
 				directoryPath.append("AppData");
 				directoryPath.append("Local");
-				directoryPath.append(m_organizationName);
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_organizationName);
+				directoryPath /= IO::u8path(m_applicationName);
 			}
 
 			paths.emplace_back(directoryPath);
@@ -386,14 +386,14 @@ namespace EmEn
 		{
 			{
 				std::filesystem::path directoryPath{"/usr/share/games"};
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_applicationName);
 
 				paths.emplace_back(directoryPath);
 			}
 
 			{
 				std::filesystem::path directoryPath{"/usr/local/share/games"};
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_applicationName);
 
 				paths.emplace_back(directoryPath);
 			}
@@ -408,21 +408,21 @@ namespace EmEn
 			{
 				directoryPath.append(".local");
 				directoryPath.append("share");
-				directoryPath.append(m_organizationName);
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_organizationName);
+				directoryPath /= IO::u8path(m_applicationName);
 			}
 			else if constexpr ( IsMacOS )
 			{
 				directoryPath.append("Library");
 				directoryPath.append("Application Support");
-				directoryPath.append(m_applicationReverseId);
+				directoryPath /= IO::u8path(m_applicationReverseId);
 			}
 			else if constexpr ( IsWindows )
 			{
 				directoryPath.append("AppData");
 				directoryPath.append("Local");
-				directoryPath.append(m_organizationName);
-				directoryPath.append(m_applicationName);
+				directoryPath /= IO::u8path(m_organizationName);
+				directoryPath /= IO::u8path(m_applicationName);
 			}
 
 			paths.emplace_back(directoryPath);

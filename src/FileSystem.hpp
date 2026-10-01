@@ -42,6 +42,7 @@
 /* Local inclusions for usages. */
 #include "Identification.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
+#include "IO/IO.hpp"
 
 namespace EmEn
 {
@@ -113,7 +114,8 @@ namespace EmEn
 			binaryDirectory (const std::string & append) const noexcept
 			{
 				auto path = m_binaryDirectory;
-				path.append(append);
+				/* NOTE: The text is UTF-8: a path appended from a std::string goes through the ANSI code page on Windows. */
+				path /= Base::IO::u8path(append);
 
 				return path;
 			}
@@ -139,7 +141,8 @@ namespace EmEn
 			userDirectory (const std::string & append) const noexcept
 			{
 				auto path = m_userDirectory;
-				path.append(append);
+				/* NOTE: The text is UTF-8: a path appended from a std::string goes through the ANSI code page on Windows. */
+				path /= Base::IO::u8path(append);
 
 				return path;
 			}
@@ -165,7 +168,8 @@ namespace EmEn
 			userDataDirectory (const std::string & append) const noexcept
 			{
 				auto path = m_userDataDirectory;
-				path.append(append);
+				/* NOTE: The text is UTF-8: a path appended from a std::string goes through the ANSI code page on Windows. */
+				path /= Base::IO::u8path(append);
 
 				return path;
 			}
@@ -191,7 +195,8 @@ namespace EmEn
 			configDirectory (const std::string & append) const noexcept
 			{
 				auto path = m_configDirectory;
-				path.append(append);
+				/* NOTE: The text is UTF-8: a path appended from a std::string goes through the ANSI code page on Windows. */
+				path /= Base::IO::u8path(append);
 
 				return path;
 			}
@@ -217,7 +222,8 @@ namespace EmEn
 			cacheDirectory (const std::string & append) const noexcept
 			{
 				auto path = m_cacheDirectory;
-				path.append(append);
+				/* NOTE: The text is UTF-8: a path appended from a std::string goes through the ANSI code page on Windows. */
+				path /= Base::IO::u8path(append);
 
 				return path;
 			}

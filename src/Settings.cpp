@@ -56,7 +56,9 @@ namespace EmEn
 
 		if ( const auto filepath = m_arguments.get("--settings-filepath") )
 		{
-			m_filepath = filepath.value();
+			/* NOTE: IO::u8path(): the argument is UTF-8, and a path assigned from a std::string goes through the ANSI
+			 * code page on Windows (a non-ASCII settings path was "not found", Windows peer 2026-10-01). */
+			m_filepath = IO::u8path(filepath.value());
 		}
 		else if ( const auto filename = m_arguments.get("--settings-filename") )
 		{
