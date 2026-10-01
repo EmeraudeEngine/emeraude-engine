@@ -26,6 +26,9 @@
 
 #include "RingModulator.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -71,7 +74,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_RING_MODULATOR_MIN_FREQUENCY || value > AL_RING_MODULATOR_MAX_FREQUENCY )
+		if ( std::isnan(value) || value < AL_RING_MODULATOR_MIN_FREQUENCY || value > AL_RING_MODULATOR_MAX_FREQUENCY )
 		{
 			TraceWarning{ClassId} << "Frequency must be between " << AL_RING_MODULATOR_MIN_FREQUENCY << " and " << AL_RING_MODULATOR_MAX_FREQUENCY << '.';
 
@@ -89,7 +92,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_RING_MODULATOR_MIN_HIGHPASS_CUTOFF || value > AL_RING_MODULATOR_MAX_HIGHPASS_CUTOFF )
+		if ( std::isnan(value) || value < AL_RING_MODULATOR_MIN_HIGHPASS_CUTOFF || value > AL_RING_MODULATOR_MAX_HIGHPASS_CUTOFF )
 		{
 			TraceWarning{ClassId} << "HighPass CutOff must be between " << AL_RING_MODULATOR_MIN_HIGHPASS_CUTOFF << " and " << AL_RING_MODULATOR_MAX_HIGHPASS_CUTOFF << '.';
 

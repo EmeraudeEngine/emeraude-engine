@@ -49,6 +49,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Vulkan` 9b (memory and resources) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 48, all ON PURPOSE (below) — 24 reinterpret-cast, 10 qualified-auto, 5 const-correctness, 4 constant-array-index, 3 branch-clone, 2 array-to-pointer decay. Before: 116. | Triad sub-section 9b |
 | `src/Vulkan` 9c (commands, pipelines, descriptors, sync) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 21, all ON PURPOSE (below) — 15 reinterpret-cast, 2 constant-array-index, 2 vararg, 1 each convert-to-static, use-enum-class. Before: 45. | Triad sub-section 9c |
 | `src/Audio` 10a (the audio core) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 87, all ON PURPOSE (below) — 47 designated-initializers, 24 reinterpret-cast, 13 convert-to-static, 2 use-enum-class, 1 non-const global. Before: 121. | Triad sub-section 10a |
+| `src/Audio` 10b (`Effects/`, `Filters/`, `EffectSlot`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 1, ON PURPOSE (below) — 1 convert-member-functions-to-static. Before: 1. | Triad sub-section 10b |
 
 ## Findings kept ON PURPOSE
 
@@ -348,3 +349,10 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **use-enum-class ×2** — `NotificationCode` of `Manager` and `TrackMixer` (the observable convention).
 - **avoid-non-const-global-variables ×1** — `s_tsfMutex` (anonymous namespace): the lock serialising TinySoundFont.
 
+### `src/Audio` 10b — `Effects/`, `Filters/`, `EffectSlot` (2026-10-01)
+
+- **convert-member-functions-to-static ×1** — `EffectSlot::disable()`: it acts on the source it is given, but it is
+  the slot's API, the pair of `enable()`.
+- Not a finding but a trap: a range check written `!(value >= MIN && value <= MAX)` (which refuses NaN) draws
+  `readability-simplify-boolean-expr`, and its fix-it rewrites it into `value < MIN || value > MAX`, which lets NaN
+  through. Write `std::isnan(value) || value < MIN || value > MAX` instead.

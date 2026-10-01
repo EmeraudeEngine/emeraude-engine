@@ -26,6 +26,9 @@
 
 #include "AutoWah.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -72,7 +75,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_AUTOWAH_MIN_ATTACK_TIME || value > AL_AUTOWAH_MAX_ATTACK_TIME )
+		if ( std::isnan(value) || value < AL_AUTOWAH_MIN_ATTACK_TIME || value > AL_AUTOWAH_MAX_ATTACK_TIME )
 		{
 			TraceWarning{ClassId} << "Attack time must be between " << AL_AUTOWAH_MIN_ATTACK_TIME << " and " << AL_AUTOWAH_MAX_ATTACK_TIME << '.';
 
@@ -90,7 +93,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_AUTOWAH_MIN_RELEASE_TIME || value > AL_AUTOWAH_MAX_RELEASE_TIME )
+		if ( std::isnan(value) || value < AL_AUTOWAH_MIN_RELEASE_TIME || value > AL_AUTOWAH_MAX_RELEASE_TIME )
 		{
 			TraceWarning{ClassId} << "Release time must be between " << AL_AUTOWAH_MIN_RELEASE_TIME << " and " << AL_AUTOWAH_MAX_RELEASE_TIME << '.';
 
@@ -108,7 +111,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_AUTOWAH_MIN_RESONANCE || value > AL_AUTOWAH_MAX_RESONANCE )
+		if ( std::isnan(value) || value < AL_AUTOWAH_MIN_RESONANCE || value > AL_AUTOWAH_MAX_RESONANCE )
 		{
 			TraceWarning{ClassId} << "Resonance must be between " << AL_AUTOWAH_MIN_RESONANCE << " and " << AL_AUTOWAH_MAX_RESONANCE << '.';
 
@@ -126,7 +129,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_AUTOWAH_MIN_PEAK_GAIN || value > AL_AUTOWAH_MAX_PEAK_GAIN )
+		if ( std::isnan(value) || value < AL_AUTOWAH_MIN_PEAK_GAIN || value > AL_AUTOWAH_MAX_PEAK_GAIN )
 		{
 			TraceWarning{ClassId} << "Peak gain must be between " << AL_AUTOWAH_MIN_PEAK_GAIN << " and " << AL_AUTOWAH_MAX_PEAK_GAIN << '.';
 

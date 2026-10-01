@@ -26,6 +26,9 @@
 
 #include "Reverb.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -81,7 +84,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_DENSITY || value > AL_REVERB_MAX_DENSITY )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_DENSITY || value > AL_REVERB_MAX_DENSITY )
 		{
 			TraceWarning{ClassId} << "Density must be between " << AL_REVERB_MIN_DENSITY << " and " << AL_REVERB_MAX_DENSITY << '.';
 
@@ -99,7 +102,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_DIFFUSION || value > AL_REVERB_MAX_DIFFUSION )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_DIFFUSION || value > AL_REVERB_MAX_DIFFUSION )
 		{
 			TraceWarning{ClassId} << "Diffusion must be between " << AL_REVERB_MIN_DIFFUSION << " and " << AL_REVERB_MAX_DIFFUSION << '.';
 
@@ -117,7 +120,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_GAIN || value > AL_REVERB_MAX_GAIN )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_GAIN || value > AL_REVERB_MAX_GAIN )
 		{
 			TraceWarning{ClassId} << "Gain must be between " << AL_REVERB_MIN_GAIN << " and " << AL_REVERB_MAX_GAIN << '.';
 
@@ -135,7 +138,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_GAINHF || value > AL_REVERB_MAX_GAINHF )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_GAINHF || value > AL_REVERB_MAX_GAINHF )
 		{
 			TraceWarning{ClassId} << "Gain HF must be between " << AL_REVERB_MIN_GAINHF << " and " << AL_REVERB_MAX_GAINHF << '.';
 
@@ -153,7 +156,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_DECAY_TIME || value > AL_REVERB_MAX_DECAY_TIME )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_DECAY_TIME || value > AL_REVERB_MAX_DECAY_TIME )
 		{
 			TraceWarning{ClassId} << "Decay time must be between " << AL_REVERB_MIN_DECAY_TIME << " and " << AL_REVERB_MAX_DECAY_TIME << '.';
 
@@ -171,7 +174,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_DECAY_HFRATIO || value > AL_REVERB_MAX_DECAY_HFRATIO )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_DECAY_HFRATIO || value > AL_REVERB_MAX_DECAY_HFRATIO )
 		{
 			TraceWarning{ClassId} << "Decay HF ratio must be between " << AL_REVERB_MIN_DECAY_HFRATIO << " and " << AL_REVERB_MAX_DECAY_HFRATIO << '.';
 
@@ -189,7 +192,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_REFLECTIONS_GAIN || value > AL_REVERB_MAX_REFLECTIONS_GAIN )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_REFLECTIONS_GAIN || value > AL_REVERB_MAX_REFLECTIONS_GAIN )
 		{
 			TraceWarning{ClassId} << "Reflections gain must be between " << AL_REVERB_MIN_REFLECTIONS_GAIN << " and " << AL_REVERB_MAX_REFLECTIONS_GAIN << '.';
 
@@ -207,7 +210,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_REFLECTIONS_DELAY || value > AL_REVERB_MAX_REFLECTIONS_DELAY )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_REFLECTIONS_DELAY || value > AL_REVERB_MAX_REFLECTIONS_DELAY )
 		{
 			TraceWarning{ClassId} << "Reflections gain must be between " << AL_REVERB_MIN_REFLECTIONS_DELAY << " and " << AL_REVERB_MAX_REFLECTIONS_DELAY << '.';
 
@@ -225,7 +228,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_LATE_REVERB_GAIN || value > AL_REVERB_MAX_LATE_REVERB_GAIN )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_LATE_REVERB_GAIN || value > AL_REVERB_MAX_LATE_REVERB_GAIN )
 		{
 			TraceWarning{ClassId} << "Late reverb gain must be between " << AL_REVERB_MIN_LATE_REVERB_GAIN << " and " << AL_REVERB_MAX_LATE_REVERB_GAIN << '.';
 
@@ -243,7 +246,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_LATE_REVERB_DELAY || value > AL_REVERB_MAX_LATE_REVERB_DELAY )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_LATE_REVERB_DELAY || value > AL_REVERB_MAX_LATE_REVERB_DELAY )
 		{
 			TraceWarning{ClassId} << "Late reverb delay must be between " << AL_REVERB_MIN_LATE_REVERB_DELAY << " and " << AL_REVERB_MAX_LATE_REVERB_DELAY << '.';
 
@@ -261,7 +264,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_AIR_ABSORPTION_GAINHF || value > AL_REVERB_MAX_AIR_ABSORPTION_GAINHF )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_AIR_ABSORPTION_GAINHF || value > AL_REVERB_MAX_AIR_ABSORPTION_GAINHF )
 		{
 			TraceWarning{ClassId} << "Air absorption gain HF must be between " << AL_REVERB_MIN_AIR_ABSORPTION_GAINHF << " and " << AL_REVERB_MAX_AIR_ABSORPTION_GAINHF << '.';
 
@@ -279,7 +282,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_REVERB_MIN_ROOM_ROLLOFF_FACTOR || value > AL_REVERB_MAX_ROOM_ROLLOFF_FACTOR )
+		if ( std::isnan(value) || value < AL_REVERB_MIN_ROOM_ROLLOFF_FACTOR || value > AL_REVERB_MAX_ROOM_ROLLOFF_FACTOR )
 		{
 			TraceWarning{ClassId} << "Room roll-off factor must be between " << AL_REVERB_MIN_ROOM_ROLLOFF_FACTOR << " and " << AL_REVERB_MAX_ROOM_ROLLOFF_FACTOR << '.';
 

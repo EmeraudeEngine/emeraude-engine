@@ -4793,6 +4793,14 @@ dereference what a resource accessor returns without checking it.**
 > every `auto *` it writes. With `--fix`, also pass `--format-style=none` (otherwise clang-tidy reformats the lines it
 > touches) and check `init-variables` (it initializes floats to `NAN` and adds `<math.h>`).
 
+### A float range check written `v < MIN || v > MAX` lets NaN through (2026-10-01, triad 10b)
+
+> [!CAUTION]
+> Every comparison with NaN is false, so `value < MIN || value > MAX` accepts a NaN, which then reaches the API (75
+> EFX setters handed it to OpenAL, which answered `AL_INVALID_VALUE`). Write
+> `std::isnan(value) || value < MIN || value > MAX`. Do not write `!(value >= MIN && value <= MAX)` instead: it is
+> correct, but clang-tidy's `readability-simplify-boolean-expr` flags it and its fix-it restores the NaN hole.
+
 ### A `weak_ptr` must never be hashed through a `shared_ptr` built from it — fixed 2026-10-01 (triad 6e)
 
 > [!CAUTION]

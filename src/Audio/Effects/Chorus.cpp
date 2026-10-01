@@ -26,6 +26,9 @@
 
 #include "Chorus.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -116,7 +119,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_CHORUS_MIN_RATE || value > AL_CHORUS_MAX_RATE )
+		if ( std::isnan(value) || value < AL_CHORUS_MIN_RATE || value > AL_CHORUS_MAX_RATE )
 		{
 			TraceWarning{ClassId} << "Rate must be between " << AL_CHORUS_MIN_RATE << " and " << AL_CHORUS_MAX_RATE << '.';
 
@@ -134,7 +137,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_CHORUS_MIN_DEPTH || value > AL_CHORUS_MAX_DEPTH )
+		if ( std::isnan(value) || value < AL_CHORUS_MIN_DEPTH || value > AL_CHORUS_MAX_DEPTH )
 		{
 			TraceWarning{ClassId} << "Depth must be between " << AL_CHORUS_MIN_DEPTH << " and " << AL_CHORUS_MAX_DEPTH << '.';
 
@@ -152,7 +155,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_CHORUS_MIN_FEEDBACK || value > AL_CHORUS_MAX_FEEDBACK )
+		if ( std::isnan(value) || value < AL_CHORUS_MIN_FEEDBACK || value > AL_CHORUS_MAX_FEEDBACK )
 		{
 			TraceWarning{ClassId} << "Feedback must be between " << AL_CHORUS_MIN_FEEDBACK << " and " << AL_CHORUS_MAX_FEEDBACK << '.';
 
@@ -170,7 +173,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_CHORUS_MIN_DELAY || value > AL_CHORUS_MAX_DELAY )
+		if ( std::isnan(value) || value < AL_CHORUS_MIN_DELAY || value > AL_CHORUS_MAX_DELAY )
 		{
 			TraceWarning{ClassId} << "Delay must be between " << AL_CHORUS_MIN_DELAY << " and " << AL_CHORUS_MAX_DELAY << '.';
 

@@ -26,6 +26,9 @@
 
 #include "Equalizer.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -78,7 +81,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_LOW_GAIN || value > AL_EQUALIZER_MAX_LOW_GAIN )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_LOW_GAIN || value > AL_EQUALIZER_MAX_LOW_GAIN )
 		{
 			TraceWarning{ClassId} << "Low gain must be between " << AL_EQUALIZER_MIN_LOW_GAIN << " and " << AL_EQUALIZER_MAX_LOW_GAIN << '.';
 
@@ -96,7 +99,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_LOW_CUTOFF || value > AL_EQUALIZER_MAX_LOW_CUTOFF )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_LOW_CUTOFF || value > AL_EQUALIZER_MAX_LOW_CUTOFF )
 		{
 			TraceWarning{ClassId} << "Low cut-off must be between " << AL_EQUALIZER_MIN_LOW_CUTOFF << " and " << AL_EQUALIZER_MAX_LOW_CUTOFF << '.';
 
@@ -113,7 +116,7 @@ namespace EmEn::Audio::Effects
 		{
 			return;
 		}
-		if ( value < AL_EQUALIZER_MIN_MID1_GAIN || value > AL_EQUALIZER_MAX_MID1_GAIN )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_MID1_GAIN || value > AL_EQUALIZER_MAX_MID1_GAIN )
 		{
 			TraceWarning{ClassId} << "Mid1 gain must be between " << AL_EQUALIZER_MIN_MID1_GAIN << " and " << AL_EQUALIZER_MAX_MID1_GAIN << '.';
 
@@ -131,7 +134,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_MID1_CENTER || value > AL_EQUALIZER_MAX_MID1_CENTER )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_MID1_CENTER || value > AL_EQUALIZER_MAX_MID1_CENTER )
 		{
 			TraceWarning{ClassId} << "Mid1 center must be between " << AL_EQUALIZER_MIN_MID1_CENTER << " and " << AL_EQUALIZER_MAX_MID1_CENTER << '.';
 
@@ -149,7 +152,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_MID1_WIDTH || value > AL_EQUALIZER_MAX_MID1_WIDTH )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_MID1_WIDTH || value > AL_EQUALIZER_MAX_MID1_WIDTH )
 		{
 			TraceWarning{ClassId} << "Mid1 width must be between " << AL_EQUALIZER_MIN_MID1_WIDTH << " and " << AL_EQUALIZER_MAX_MID1_WIDTH << '.';
 
@@ -167,7 +170,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_MID2_GAIN || value > AL_EQUALIZER_MAX_MID2_GAIN )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_MID2_GAIN || value > AL_EQUALIZER_MAX_MID2_GAIN )
 		{
 			TraceWarning{ClassId} << "Mid2 gain must be between " << AL_EQUALIZER_MIN_MID2_GAIN << " and " << AL_EQUALIZER_MAX_MID2_GAIN << '.';
 
@@ -184,7 +187,7 @@ namespace EmEn::Audio::Effects
 		{
 			return;
 		}
-		if ( value < AL_EQUALIZER_MIN_MID2_CENTER || value > AL_EQUALIZER_MAX_MID2_CENTER )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_MID2_CENTER || value > AL_EQUALIZER_MAX_MID2_CENTER )
 		{
 			TraceWarning{ClassId} << "Mid2 center must be between " << AL_EQUALIZER_MIN_MID2_CENTER << " and " << AL_EQUALIZER_MAX_MID2_CENTER << '.';
 
@@ -202,7 +205,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_MID2_WIDTH || value > AL_EQUALIZER_MAX_MID2_WIDTH )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_MID2_WIDTH || value > AL_EQUALIZER_MAX_MID2_WIDTH )
 		{
 			TraceWarning{ClassId} << "Mid2 width must be between " << AL_EQUALIZER_MIN_MID2_WIDTH << " and " << AL_EQUALIZER_MAX_MID2_WIDTH << '.';
 
@@ -220,7 +223,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_HIGH_GAIN || value > AL_EQUALIZER_MAX_HIGH_GAIN )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_HIGH_GAIN || value > AL_EQUALIZER_MAX_HIGH_GAIN )
 		{
 			TraceWarning{ClassId} << "High gain must be between " << AL_EQUALIZER_MIN_HIGH_GAIN << " and " << AL_EQUALIZER_MAX_HIGH_GAIN << '.';
 
@@ -238,7 +241,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EQUALIZER_MIN_HIGH_CUTOFF || value > AL_EQUALIZER_MAX_HIGH_CUTOFF )
+		if ( std::isnan(value) || value < AL_EQUALIZER_MIN_HIGH_CUTOFF || value > AL_EQUALIZER_MAX_HIGH_CUTOFF )
 		{
 			TraceWarning{ClassId} << "High cut-off must be between " << AL_EQUALIZER_MIN_HIGH_CUTOFF << " and " << AL_EQUALIZER_MAX_HIGH_CUTOFF << '.';
 

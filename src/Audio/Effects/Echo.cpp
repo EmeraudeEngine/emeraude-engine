@@ -26,6 +26,9 @@
 
 #include "Echo.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -72,7 +75,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_ECHO_MIN_DELAY || value > AL_ECHO_MAX_DELAY )
+		if ( std::isnan(value) || value < AL_ECHO_MIN_DELAY || value > AL_ECHO_MAX_DELAY )
 		{
 			TraceWarning{ClassId} << "Delay must be between " << AL_ECHO_MIN_DELAY << " and " << AL_ECHO_MAX_DELAY << '.';
 
@@ -90,7 +93,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_ECHO_MIN_LRDELAY || value > AL_ECHO_MAX_LRDELAY )
+		if ( std::isnan(value) || value < AL_ECHO_MIN_LRDELAY || value > AL_ECHO_MAX_LRDELAY )
 		{
 			TraceWarning{ClassId} << "LR Delay must be between " << AL_ECHO_MIN_LRDELAY << " and " << AL_ECHO_MAX_LRDELAY << '.';
 
@@ -108,7 +111,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_ECHO_MIN_DAMPING || value > AL_ECHO_MAX_DAMPING )
+		if ( std::isnan(value) || value < AL_ECHO_MIN_DAMPING || value > AL_ECHO_MAX_DAMPING )
 		{
 			TraceWarning{ClassId} << "Damping must be between " << AL_ECHO_MIN_DAMPING << " and " << AL_ECHO_MAX_DAMPING << '.';
 
@@ -126,7 +129,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 		
-		if ( value < AL_ECHO_MIN_FEEDBACK || value > AL_ECHO_MAX_FEEDBACK )
+		if ( std::isnan(value) || value < AL_ECHO_MIN_FEEDBACK || value > AL_ECHO_MAX_FEEDBACK )
 		{
 			TraceWarning{ClassId} << "Feedback must be between " << AL_ECHO_MIN_FEEDBACK << " and " << AL_ECHO_MAX_FEEDBACK << '.';
 
@@ -144,7 +147,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_ECHO_MIN_SPREAD || value > AL_ECHO_MAX_SPREAD )
+		if ( std::isnan(value) || value < AL_ECHO_MIN_SPREAD || value > AL_ECHO_MAX_SPREAD )
 		{
 			TraceWarning{ClassId} << "Spread must be between " << AL_ECHO_MIN_SPREAD << " and " << AL_ECHO_MAX_SPREAD << '.';
 

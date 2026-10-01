@@ -60,7 +60,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed and VALIDATED on the three OS (2026-10-01) |
 | 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed (9b, 9c peers pending) |
-| 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | 🟠 10a started |
+| 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | ✅ 10a-10b pushed (peers pending) |
 | 11 | `src/Physics` | 9 197 | ⬜ |
 | 12 | `src/Animations` | 3 488 | ⬜ |
 | 13 | `src/Overlay` | 7 303 | ⬜ |
@@ -1156,6 +1156,9 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
     material's async factory captured the block-local `dynamicTexture2D` BY REFERENCE (Linux survived by luck). Fixed in
     projet-alpha `ad00545f` (by value; `Marble::getMesh()`'s `&color` too, same pattern), Linux 3/3 runs: the sRGB dump, the format-97
     refusal, 0 VUID. The dumps are re-asked from the peers with that fix.
+  - Re-test with alpha `ad00545f`: macOS M2 PASS — `offscreen-rendering` 3/3 clean launches; the sRGB cubemap face
+    dumped (a valid 1024×1024 PNG), `OffscreenRenderingCubemap` refused ("format 97, which cannot be downloaded"), 0
+    `VUID-…-pRegions-00183`, 0 VUID; `lighten-marbles` 0 VUID, 0 error. Windows pending.
 
 ### 9c — commands, pipelines, descriptors, sync (2026-10-01)
 
@@ -1187,7 +1190,7 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 10a | The audio core: the resources read from disk (`SoundResource`, `MusicResource`, `PlaylistResource`, `SoundfontResource` — the unconfined `file` path lead of section 2), `Buffer`, `Manager` (+ console), `TrackMixer` (+ console), `Source`, `Listener`, `Ambience*`, `Recorder`, `ExternalInput`, `HardwareOutput`, `Utility` | ~12 000 | ✅ pushed (the engine 10a commit); peers pending |
-| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ⬜ |
+| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ✅ pushed (the engine 10b commit); peers pending |
 
 ### 10a — the audio core (2026-10-01)
 
@@ -1216,5 +1219,34 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   `SoundBanks/TestSF.json` `{"file": "FluidR3.sf2"}` → `Loaded` (the owner's store file); `"../SoundBanks/FluidR3.sf2"` and
   `"/etc/hostname"` → refused by FileSystem; the six audio keys out of range → their warnings and the defaults; a MIDI
   track plays (the `.sf2` path); citadel MCP 1707/0, console 4466/0, 0 VUID.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 10a commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `1320d529`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): `TestSF` (`FluidR3.sf2`) `Loaded`; `../SoundBanks/FluidR3.sf2` and `/etc/hosts`
+    refused by FileSystem ("leaves its store … refused") then by `SoundfontResource`; the five audio keys out of range →
+    their warnings and the defaults; a track plays (`nowPlaying()` advances); citadel MCP 1707/0, console 4445/0; 0 VUID,
+    0 UNASSIGNED everywhere. The shutdown pair "`GlobalReleaseFlush` AL_INVALID_OPERATION" + "unread problem with AL" is
+    PRE-EXISTING (in ~20 logs from 6b to 9c, with or without music). Windows pending.
+
+### 10b — `Effects/`, `Filters/`, `EffectSlot` (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (15 TUs + headers): **1** — `EffectSlot::disable()` convert-to-static.
+- [x] (2) Review (trust boundary: the EFX parameters from the console and the JSON definitions; every setter checks its
+  range against the `AL_…_MIN_…` / `AL_…_MAX_…` constants before the `alEffect*` call). Findings:
+  - E1 a NaN passed every float range check (`value < MIN || value > MAX` is false for NaN) and reached OpenAL, which
+    refuses it with `AL_INVALID_VALUE` (0xa003) — no UB, but no warning naming the parameter and an AL error left in the
+    queue. 75 float setters.
+  - E2 `EAXReverb::setReflectionsPan()` / `setLatePan()` and their getters used `alEffectf` / `alGetEffectf` on
+    `AL_EAXREVERB_REFLECTIONS_PAN` / `AL_EAXREVERB_LATE_REVERB_PAN`, which are 3-float VECTORS: OpenAL Soft answers
+    `AL_INVALID_ENUM` (0xa002), so both pans never worked (owner question).
+- [x] (3) Mechanical: E1 — the 75 float checks become `std::isnan(value) || value < MIN || value > MAX` (the 6 integer
+  ones are unchanged). A first `!(value >= MIN && value <= MAX)` form is rejected: it drew 81
+  `readability-simplify-boolean-expr`, whose fix-it reopens the NaN hole.
+- [x] (3b) Owner ruling (2026-10-01), as recommended, APPLIED: E2 — the pans become `Base::Math::Vector< 3, float >`,
+  set through `alEffectfv` (a non-finite component or a length over 1 refused with a warning, per the EFX guide) and
+  read through `alGetEffectfv`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 120 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 1 → 1 (on purpose, ledger). A scratch harness on the bundled OpenAL Soft (no demo
+  uses `EAXReverb`): the old `alEffectf(pan)` → 0xa002, the new `alEffectfv(pan)` → 0, read back `0.5 0 -0.25`; a NaN
+  density → 0xa003 (what the new check stops first). citadel: a track plays (`nowPlaying()` 5 s), MCP 1707/0, console
+  4466/0, 0 VUID, 0 UNASSIGNED.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 10b commit); peers asked.
 

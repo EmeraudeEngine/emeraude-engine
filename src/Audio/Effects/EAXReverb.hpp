@@ -31,6 +31,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "Math/Vector.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -114,10 +115,11 @@ namespace EmEn::Audio::Effects
 			void setReflectionsDelay (float value) noexcept;
 
 			/**
-			 * @brief Sets the reflections pan.
-			 * @param value A free value.
+			 * @brief Sets the reflections pan: a direction in the listener's space, its length the focus.
+			 * @note A 3-component EFX vector (alEffectfv); a non-finite one or one longer than 1 is refused.
+			 * @param value A vector of length 0 (no panning) to 1.
 			 */
-			void setReflectionsPan (float value) noexcept;
+			void setReflectionsPan (const Base::Math::Vector< 3, float > & value) noexcept;
 
 			/**
 			 * @brief Sets the late gain.
@@ -132,10 +134,11 @@ namespace EmEn::Audio::Effects
 			void setLateDelay (float value) noexcept;
 
 			/**
-			 * @brief Sets the late pan.
-			 * @param value A free value.
+			 * @brief Sets the late reverb pan: a direction in the listener's space, its length the focus.
+			 * @note A 3-component EFX vector (alEffectfv); a non-finite one or one longer than 1 is refused.
+			 * @param value A vector of length 0 (no panning) to 1.
 			 */
-			void setLatePan (float value) noexcept;
+			void setLatePan (const Base::Math::Vector< 3, float > & value) noexcept;
 
 			/**
 			 * @brief Sets the echo time.
@@ -262,11 +265,11 @@ namespace EmEn::Audio::Effects
 			float reflectionsDelay () const noexcept;
 
 			/**
-			 * @brief Returns the reflections pan value.
-			 * @return float
+			 * @brief Returns the reflections pan vector.
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			float reflectionsPan () const noexcept;
+			Base::Math::Vector< 3, float > reflectionsPan () const noexcept;
 
 			/**
 			 * @brief Returns the late gain value.
@@ -283,11 +286,11 @@ namespace EmEn::Audio::Effects
 			float lateDelay () const noexcept;
 
 			/**
-			 * @brief Returns the late pan value.
-			 * @return float
+			 * @brief Returns the late reverb pan vector.
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			float latePan () const noexcept;
+			Base::Math::Vector< 3, float > latePan () const noexcept;
 
 			/**
 			 * @brief Returns the echo time value.

@@ -26,6 +26,9 @@
 
 #include "FrequencyShifter.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -71,7 +74,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_FREQUENCY_SHIFTER_MIN_FREQUENCY || value > AL_FREQUENCY_SHIFTER_MAX_FREQUENCY )
+		if ( std::isnan(value) || value < AL_FREQUENCY_SHIFTER_MIN_FREQUENCY || value > AL_FREQUENCY_SHIFTER_MAX_FREQUENCY )
 		{
 			TraceWarning{ClassId} << "Frequency must be between " << AL_FREQUENCY_SHIFTER_MIN_FREQUENCY << " and " << AL_FREQUENCY_SHIFTER_MAX_FREQUENCY << '.';
 

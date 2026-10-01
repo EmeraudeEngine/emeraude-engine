@@ -26,6 +26,9 @@
 
 #include "Distortion.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -73,7 +76,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_DISTORTION_MIN_EDGE || value > AL_DISTORTION_MAX_EDGE )
+		if ( std::isnan(value) || value < AL_DISTORTION_MIN_EDGE || value > AL_DISTORTION_MAX_EDGE )
 		{
 			TraceWarning{ClassId} << "ShapeEdge must be between " << AL_DISTORTION_MIN_EDGE << " and " << AL_DISTORTION_MAX_EDGE << '.';
 
@@ -91,7 +94,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_DISTORTION_MIN_GAIN || value > AL_DISTORTION_MAX_GAIN )
+		if ( std::isnan(value) || value < AL_DISTORTION_MIN_GAIN || value > AL_DISTORTION_MAX_GAIN )
 		{
 			TraceWarning{ClassId} << "Gain must be between " << AL_DISTORTION_MIN_GAIN << " and " << AL_DISTORTION_MAX_GAIN << '.';
 
@@ -109,7 +112,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_DISTORTION_MIN_LOWPASS_CUTOFF || value > AL_DISTORTION_MAX_LOWPASS_CUTOFF )
+		if ( std::isnan(value) || value < AL_DISTORTION_MIN_LOWPASS_CUTOFF || value > AL_DISTORTION_MAX_LOWPASS_CUTOFF )
 		{
 			TraceWarning{ClassId} << "Low-pass cut-off must be between " << AL_DISTORTION_MIN_LOWPASS_CUTOFF << " and " << AL_DISTORTION_MAX_LOWPASS_CUTOFF << '.';
 
@@ -127,7 +130,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_DISTORTION_MIN_EQCENTER || value > AL_DISTORTION_MAX_EQCENTER )
+		if ( std::isnan(value) || value < AL_DISTORTION_MIN_EQCENTER || value > AL_DISTORTION_MAX_EQCENTER )
 		{
 			TraceWarning{ClassId} << "EQ center must be between " << AL_DISTORTION_MIN_EQCENTER << " and " << AL_DISTORTION_MAX_EQCENTER << '.';
 
@@ -145,7 +148,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_DISTORTION_MIN_EQBANDWIDTH || value > AL_DISTORTION_MAX_EQBANDWIDTH )
+		if ( std::isnan(value) || value < AL_DISTORTION_MIN_EQBANDWIDTH || value > AL_DISTORTION_MAX_EQBANDWIDTH )
 		{
 			TraceWarning{ClassId} << "EQ bandwidth must be between " << AL_DISTORTION_MIN_EQBANDWIDTH << " and " << AL_DISTORTION_MAX_EQBANDWIDTH << '.';
 

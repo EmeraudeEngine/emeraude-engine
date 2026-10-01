@@ -26,6 +26,9 @@
 
 #include "VocalMorpher.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -159,7 +162,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_VOCAL_MORPHER_MIN_RATE || value > AL_VOCAL_MORPHER_MAX_RATE )
+		if ( std::isnan(value) || value < AL_VOCAL_MORPHER_MIN_RATE || value > AL_VOCAL_MORPHER_MAX_RATE )
 		{
 			TraceWarning{ClassId} << "Rate must be between " << AL_VOCAL_MORPHER_MIN_RATE << " and " << AL_VOCAL_MORPHER_MAX_RATE << '.';
 

@@ -26,6 +26,9 @@
 
 #include "HighPass.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -70,7 +73,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		if ( value < AL_HIGHPASS_MIN_GAIN || value > AL_HIGHPASS_MAX_GAIN )
+		if ( std::isnan(value) || value < AL_HIGHPASS_MIN_GAIN || value > AL_HIGHPASS_MAX_GAIN )
 		{
 			TraceWarning{ClassId} << "Gain must be between " << AL_HIGHPASS_MIN_GAIN << " and " << AL_HIGHPASS_MAX_GAIN << '.';
 
@@ -88,7 +91,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		if ( value < AL_HIGHPASS_MIN_GAINLF || value > AL_HIGHPASS_MAX_GAINLF )
+		if ( std::isnan(value) || value < AL_HIGHPASS_MIN_GAINLF || value > AL_HIGHPASS_MAX_GAINLF )
 		{
 			TraceWarning{ClassId} << "Gain must be between " << AL_HIGHPASS_MIN_GAINLF << " and " << AL_HIGHPASS_MAX_GAINLF << '.';
 

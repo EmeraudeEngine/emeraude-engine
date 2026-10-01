@@ -26,6 +26,10 @@
 
 #include "EAXReverb.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <cmath>
+
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
@@ -91,7 +95,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_DENSITY || value > AL_EAXREVERB_MAX_DENSITY )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_DENSITY || value > AL_EAXREVERB_MAX_DENSITY )
 		{
 			TraceWarning{ClassId} << "Density must be between " << AL_EAXREVERB_MIN_DENSITY << " and " << AL_EAXREVERB_MAX_DENSITY << '.';
 
@@ -109,7 +113,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_DIFFUSION || value > AL_EAXREVERB_MAX_DIFFUSION )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_DIFFUSION || value > AL_EAXREVERB_MAX_DIFFUSION )
 		{
 			TraceWarning{ClassId} << "Diffusion must be between " << AL_EAXREVERB_MIN_DIFFUSION << " and " << AL_EAXREVERB_MAX_DIFFUSION << '.';
 
@@ -127,7 +131,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_GAIN || value > AL_EAXREVERB_MAX_GAIN )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_GAIN || value > AL_EAXREVERB_MAX_GAIN )
 		{
 			TraceWarning{ClassId} << "Gain must be between " << AL_EAXREVERB_MIN_GAIN << " and " << AL_EAXREVERB_MAX_GAIN << '.';
 
@@ -145,7 +149,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_GAINHF || value > AL_EAXREVERB_MAX_GAINHF )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_GAINHF || value > AL_EAXREVERB_MAX_GAINHF )
 		{
 			TraceWarning{ClassId} << "Gain HF must be between " << AL_EAXREVERB_MIN_GAINHF << " and " << AL_EAXREVERB_MAX_GAINHF << '.';
 
@@ -163,7 +167,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_GAINLF || value > AL_EAXREVERB_MAX_GAINLF )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_GAINLF || value > AL_EAXREVERB_MAX_GAINLF )
 		{
 			TraceWarning{ClassId} << "Gain LF must be between " << AL_EAXREVERB_MIN_GAINLF << " and " << AL_EAXREVERB_MAX_GAINLF << '.';
 
@@ -181,7 +185,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_DECAY_TIME || value > AL_EAXREVERB_MAX_DECAY_TIME )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_DECAY_TIME || value > AL_EAXREVERB_MAX_DECAY_TIME )
 		{
 			TraceWarning{ClassId} << "Decay time must be between " << AL_EAXREVERB_MIN_DECAY_TIME << " and " << AL_EAXREVERB_MAX_DECAY_TIME << '.';
 
@@ -199,7 +203,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_DECAY_HFRATIO || value > AL_EAXREVERB_MAX_DECAY_HFRATIO )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_DECAY_HFRATIO || value > AL_EAXREVERB_MAX_DECAY_HFRATIO )
 		{
 			TraceWarning{ClassId} << "Decay HF ratio must be between " << AL_EAXREVERB_MIN_DECAY_HFRATIO << " and " << AL_EAXREVERB_MAX_DECAY_HFRATIO << '.';
 
@@ -217,7 +221,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_DECAY_LFRATIO || value > AL_EAXREVERB_MAX_DECAY_LFRATIO )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_DECAY_LFRATIO || value > AL_EAXREVERB_MAX_DECAY_LFRATIO )
 		{
 			TraceWarning{ClassId} << "Decay LF ratio must be between " << AL_EAXREVERB_MIN_DECAY_LFRATIO << " and " << AL_EAXREVERB_MAX_DECAY_LFRATIO << '.';
 
@@ -235,7 +239,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_REFLECTIONS_GAIN || value > AL_EAXREVERB_MAX_REFLECTIONS_GAIN )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_REFLECTIONS_GAIN || value > AL_EAXREVERB_MAX_REFLECTIONS_GAIN )
 		{
 			TraceWarning{ClassId} << "Reflections gain must be between " << AL_EAXREVERB_MIN_REFLECTIONS_GAIN << " and " << AL_EAXREVERB_MAX_REFLECTIONS_GAIN << '.';
 
@@ -253,7 +257,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_REFLECTIONS_DELAY || value > AL_EAXREVERB_MAX_REFLECTIONS_DELAY )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_REFLECTIONS_DELAY || value > AL_EAXREVERB_MAX_REFLECTIONS_DELAY )
 		{
 			TraceWarning{ClassId} << "Reflections delay must be between " << AL_EAXREVERB_MIN_REFLECTIONS_DELAY << " and " << AL_EAXREVERB_MAX_REFLECTIONS_DELAY << '.';
 
@@ -264,14 +268,25 @@ namespace EmEn::Audio::Effects
 	}
 
 	void
-	EAXReverb::setReflectionsPan (float value) noexcept
+	EAXReverb::setReflectionsPan (const Math::Vector< 3, float > & value) noexcept
 	{
 		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		OpenAL::alEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, value);
+		/* NOTE: Owner ruling (2026-10-01): a 3-component EFX vector, so alEffectfv — a single float through
+		 * alEffectf was rejected by OpenAL (AL_INVALID_ENUM): the setter never worked. Its length must stay within 1. */
+		if ( !std::isfinite(value[0]) || !std::isfinite(value[1]) || !std::isfinite(value[2]) || !(value.length() <= 1.0F) )
+		{
+			TraceWarning{ClassId} << "The pan must be a finite vector of length 1 at most.";
+
+			return;
+		}
+
+		const std::array< ALfloat, 3 > components{value[0], value[1], value[2]};
+
+		OpenAL::alEffectfv(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, components.data());
 	}
 
 	void
@@ -282,7 +297,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_LATE_REVERB_GAIN || value > AL_EAXREVERB_MAX_LATE_REVERB_GAIN )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_LATE_REVERB_GAIN || value > AL_EAXREVERB_MAX_LATE_REVERB_GAIN )
 		{
 			TraceWarning{ClassId} << "Late reverb gain must be between " << AL_EAXREVERB_MIN_LATE_REVERB_GAIN << " and " << AL_EAXREVERB_MAX_LATE_REVERB_GAIN << '.';
 
@@ -300,7 +315,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_LATE_REVERB_DELAY || value > AL_EAXREVERB_MAX_LATE_REVERB_DELAY )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_LATE_REVERB_DELAY || value > AL_EAXREVERB_MAX_LATE_REVERB_DELAY )
 		{
 			TraceWarning{ClassId} << "Late reverb delay must be between " << AL_EAXREVERB_MIN_LATE_REVERB_DELAY << " and " << AL_EAXREVERB_MAX_LATE_REVERB_DELAY << '.';
 
@@ -311,14 +326,25 @@ namespace EmEn::Audio::Effects
 	}
 
 	void
-	EAXReverb::setLatePan (float value) noexcept
+	EAXReverb::setLatePan (const Math::Vector< 3, float > & value) noexcept
 	{
 		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		OpenAL::alEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, value);
+		/* NOTE: Owner ruling (2026-10-01): a 3-component EFX vector, so alEffectfv — a single float through
+		 * alEffectf was rejected by OpenAL (AL_INVALID_ENUM): the setter never worked. Its length must stay within 1. */
+		if ( !std::isfinite(value[0]) || !std::isfinite(value[1]) || !std::isfinite(value[2]) || !(value.length() <= 1.0F) )
+		{
+			TraceWarning{ClassId} << "The pan must be a finite vector of length 1 at most.";
+
+			return;
+		}
+
+		const std::array< ALfloat, 3 > components{value[0], value[1], value[2]};
+
+		OpenAL::alEffectfv(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, components.data());
 	}
 
 	void
@@ -329,7 +355,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_ECHO_TIME || value > AL_EAXREVERB_MAX_ECHO_TIME )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_ECHO_TIME || value > AL_EAXREVERB_MAX_ECHO_TIME )
 		{
 			TraceWarning{ClassId} << "Echo time must be between " << AL_EAXREVERB_MIN_ECHO_TIME << " and " << AL_EAXREVERB_MAX_ECHO_TIME << '.';
 
@@ -347,7 +373,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_ECHO_DEPTH || value > AL_EAXREVERB_MAX_ECHO_DEPTH )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_ECHO_DEPTH || value > AL_EAXREVERB_MAX_ECHO_DEPTH )
 		{
 			TraceWarning{ClassId} << "Echo depth must be between " << AL_EAXREVERB_MIN_ECHO_DEPTH << " and " << AL_EAXREVERB_MAX_ECHO_DEPTH << '.';
 
@@ -365,7 +391,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_MODULATION_TIME || value > AL_EAXREVERB_MAX_MODULATION_TIME )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_MODULATION_TIME || value > AL_EAXREVERB_MAX_MODULATION_TIME )
 		{
 			TraceWarning{ClassId} << "Modulation time must be between " << AL_EAXREVERB_MIN_MODULATION_TIME << " and " << AL_EAXREVERB_MAX_MODULATION_TIME << '.';
 
@@ -383,7 +409,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_MODULATION_DEPTH || value > AL_EAXREVERB_MAX_MODULATION_DEPTH )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_MODULATION_DEPTH || value > AL_EAXREVERB_MAX_MODULATION_DEPTH )
 		{
 			TraceWarning{ClassId} << "Modulation depth must be between " << AL_EAXREVERB_MIN_MODULATION_DEPTH << " and " << AL_EAXREVERB_MAX_MODULATION_DEPTH << '.';
 
@@ -400,7 +426,7 @@ namespace EmEn::Audio::Effects
 		{
 			return;
 		}
-		if ( value < AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF || value > AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF || value > AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF )
 		{
 			TraceWarning{ClassId} << "Air absorption gain HF must be between " << AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF << " and " << AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF << '.';
 
@@ -418,7 +444,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_HFREFERENCE || value > AL_EAXREVERB_MAX_HFREFERENCE )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_HFREFERENCE || value > AL_EAXREVERB_MAX_HFREFERENCE )
 		{
 			TraceWarning{ClassId} << "HF reference must be between " << AL_EAXREVERB_MIN_HFREFERENCE << " and " << AL_EAXREVERB_MAX_HFREFERENCE << '.';
 
@@ -436,7 +462,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_LFREFERENCE || value > AL_EAXREVERB_MAX_LFREFERENCE )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_LFREFERENCE || value > AL_EAXREVERB_MAX_LFREFERENCE )
 		{
 			TraceWarning{ClassId} << "LF reference must be between " << AL_EAXREVERB_MIN_LFREFERENCE << " and " << AL_EAXREVERB_MAX_LFREFERENCE << '.';
 
@@ -454,7 +480,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( value < AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR || value > AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR )
+		if ( std::isnan(value) || value < AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR || value > AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR )
 		{
 			TraceWarning{ClassId} << "Room Roll-off factor must be between " << AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR << " and " << AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR << '.';
 
@@ -606,17 +632,17 @@ namespace EmEn::Audio::Effects
 		return value;
 	}
 
-	float
+	Math::Vector< 3, float >
 	EAXReverb::reflectionsPan () const noexcept
 	{
-		ALfloat value = 0.0F;
+		std::array< ALfloat, 3 > components{};
 
 		if ( OpenAL::isEFXAvailable() )
 		{
-			OpenAL::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, &value);
+			OpenAL::alGetEffectfv(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, components.data());
 		}
 
-		return value;
+		return {components[0], components[1], components[2]};
 	}
 
 	float
@@ -645,17 +671,17 @@ namespace EmEn::Audio::Effects
 		return value;
 	}
 
-	float
+	Math::Vector< 3, float >
 	EAXReverb::latePan () const noexcept
 	{
-		ALfloat value = 0.0F;
+		std::array< ALfloat, 3 > components{};
 
 		if ( OpenAL::isEFXAvailable() )
 		{
-			OpenAL::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, &value);
+			OpenAL::alGetEffectfv(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, components.data());
 		}
 
-		return value;
+		return {components[0], components[1], components[2]};
 	}
 
 	float
