@@ -37,4 +37,5 @@ velocity 0).
 is moved sideways downhill by `depth · sin(slope)`, while gravity is skipped and the downward velocity zeroed
 (grounded on terrain). That is a steady surface-constrained creep, matching the measured `|v|` of 0.2-1.8. Expected
 to go away with `physics-unified-contact-pipeline` (phase P2 of `docs/physics-overhaul.md`), which makes the ground
-an ordinary contact with friction. Measure it on a `collision-debug` slope station first.
+an ordinary contact with friction. P2 is CLOSED (2026-10-02): on `collision-debug`'s 30° slope the ball and the box
+come to rest (§ 1b); the generated-terrain case of this item is still to re-measure.

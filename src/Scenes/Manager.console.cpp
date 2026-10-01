@@ -632,6 +632,42 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success("Ground set with material '" + matName + "'.");
 			});
 
+		this->bindCommand("getGroundLevel", "Returns the ground height of the active scene at a world X/Z as JSON (the bilinear height field, getLevelAt()), and the ground normal there.",
+			{
+				{"x", "The world X coordinate."},
+				{"z", "The world Z coordinate."}
+			},
+			[this] (float positionX, float positionZ) {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				const auto groundLevel = m_activeScene->groundLevel();
+
+				if ( groundLevel == nullptr )
+				{
+					return Console::CommandResult::error("The active scene has no ground !");
+				}
+
+				if ( !std::isfinite(positionX) || !std::isfinite(positionZ) )
+				{
+					return Console::CommandResult::error("The coordinates must be finite !");
+				}
+
+				const Math::Vector< 3, float > position{positionX, 0.0F, positionZ};
+				const auto level = groundLevel->getLevelAt(position);
+
+				std::stringstream info;
+				info << R"({"position":)";
+				writeJSONVector(info, Math::Vector< 3, float >{positionX, level, positionZ});
+				info << R"(,"normal":)";
+				writeJSONVector(info, groundLevel->getNormalAt(position));
+				info << '}';
+
+				return Console::CommandResult::json(info.str());
+			});
+
 		this->bindCommand("loadGLTF", "Loads a glTF file into the active scene, synchronously (AI/bench harness, small assets only).",
 			{
 				{"filePath", "Path of the .gltf/.glb file."},

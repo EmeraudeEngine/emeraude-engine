@@ -169,7 +169,8 @@ namespace EmEn::Scenes
 				void
 				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t featureId) noexcept override
 				{
-					if ( NarrowPhase::generate(m_model, m_frame, triangle, SoftStepSolver::SpeculativeMargin, m_contact) )
+					/* One-sided and solid below (NarrowPhase::generateGround()). */
+					if ( NarrowPhase::generateGround(m_model, m_frame, triangle, SoftStepSolver::SpeculativeMargin, m_claimedLowPoints, m_contact) )
 					{
 						/* A = the body, B = the static world; the sub key tells the triangles apart. */
 						appendManifold(m_contact, m_bodyIndex, 0, m_creationNumber, GroundKey, static_cast< uint64_t >(featureId) + 1, m_friction, m_restitution, m_manifolds);
@@ -184,6 +185,7 @@ namespace EmEn::Scenes
 				Space3D::ContactManifold< float > m_contact;
 				uint64_t m_creationNumber;
 				uint32_t m_bodyIndex;
+				uint32_t m_claimedLowPoints{0};
 				float m_friction;
 				float m_restitution;
 		};
@@ -206,9 +208,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::resolveCollisions (std::vector< std::shared_ptr< AbstractEntity > > & movedEntities) const noexcept
+	Scene::resolveCollisions (std::vector< std::shared_ptr< AbstractEntity > > & movedEntities, std::vector< PhysicsImpact > & impacts) const noexcept
 	{
 		movedEntities.clear();
+		impacts.clear();
 
 		if ( m_physicsOctree == nullptr )
 		{
@@ -512,15 +515,16 @@ namespace EmEn::Scenes
 			auto & bodyA = bodies[manifold.bodyA];
 			auto & bodyB = bodies[manifold.bodyB];
 
-			/* The impact as the former pipeline reported it: mass × approach speed / step (NodeCollision). */
+			/* The impact as the former pipeline reported it: mass × approach speed / step (NodeCollision). COLLECTED,
+			 * not emitted: this step holds the physics octree lock and a handler may create or remove entities. */
 			if ( bodyA.movable != nullptr && bodyA.dynamic && impact )
 			{
-				bodyA.movable->onCollision(approach * bodyA.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds);
+				impacts.push_back({bodyEntities[manifold.bodyA], approach * bodyA.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
 			}
 
 			if ( bodyB.movable != nullptr && bodyB.dynamic && impact )
 			{
-				bodyB.movable->onCollision(approach * bodyB.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds);
+				impacts.push_back({bodyEntities[manifold.bodyB], approach * bodyB.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
 			}
 
 			/* A stands on B when the normal (A → B) points down; B on A when it points up. */

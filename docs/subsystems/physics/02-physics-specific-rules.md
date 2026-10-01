@@ -27,14 +27,21 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
    `Physics::NarrowPhase::generate()` → a base `Space3D::ContactManifold` (normal A → B). A sleeping body touched by an
    active one wakes.
 3. **Ground**: `GroundLevelInterface::visitTriangles()` under every active body — its RENDERED triangles, one manifold
-   per triangle (keys: creation number, `GroundKey`, triangle feature id + 1).
+   per triangle (keys: creation number, `GroundKey`, triangle feature id + 1), through
+   `NarrowPhase::generateGround()`: the ground is ONE-SIDED and SOLID BELOW (2026-10-02). A body whose centre is over
+   a triangle's plane gets the generators' contact, dropped if its normal would push the body down; a body whose
+   centre is UNDER the plane (it crossed the surface in one step) gets its low points pushed back up along the face
+   normal, each low point given to one triangle only.
 4. **Solve**: manifolds sorted by key, `Physics::SoftStepSolver::step()` (4 sub-steps: gravity, warm start, soft solve,
    integrate, relax; restitution 4 passes; impulses cached by feature id). Materials: friction = √(μA μB),
    restitution = max(eA, eB); the ground's default material is μ 1, e 0.
 5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
-   the events (`onCollision()` for an approach above 0.05 m/s) and the grounded state from the manifolds (a contact
+   the impacts (an approach above 0.05 m/s) are COLLECTED and the grounded state set from the manifolds (a contact
    within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.
-6. The moved entities are relocated in the octrees by `Scene::processLogics()` after the lock is released.
+6. After the lock is released, `Scene::processLogics()` relocates the moved entities in the octrees, then EMITS the
+   impacts (`MovableTrait::onCollision()` → `NodeCollision`) in manifold order. ⚠️ Never emit them inside the step: it
+   holds `m_physicsOctreeAccess` (a plain `std::mutex`), and a handler that creates or removes an entity would take it
+   again (fixed 2026-10-02; no handler did yet — they all defer).
 
 A collidable body's gravity and motion happen in the step; `MovableTrait::updateSimulation(env, integratedByScene)`
 only applies the drag to it (a body without a collision model still integrates itself).

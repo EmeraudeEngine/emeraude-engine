@@ -26,6 +26,10 @@
 
 #include "NarrowPhase.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cstdint>
+
 /* Local inclusions. */
 #include "Math/Space3D/Contacts/BoxBox.hpp"
 #include "Math/Space3D/Contacts/BoxTriangle.hpp"
@@ -35,6 +39,7 @@
 #include "Math/Space3D/Contacts/SphereBox.hpp"
 #include "Math/Space3D/Contacts/SphereTriangle.hpp"
 #include "Math/Space3D/OrientedBox.hpp"
+#include "StaticVector.hpp"
 #include "BoxCollisionModel.hpp"
 #include "CapsuleCollisionModel.hpp"
 #include "CollisionModelInterface.hpp"
@@ -173,6 +178,135 @@ namespace EmEn::Physics
 
 			return false;
 		}
+
+		/** @brief Dispatches a world shape and a triangle to the base contact generators. */
+		[[nodiscard]]
+		bool
+		contactsOfTriangle (const WorldShape & shape, const Triangle< float > & triangle, ContactManifold< float > & manifold) noexcept
+		{
+			switch ( shape.kind )
+			{
+				case WorldShape::Kind::Sphere :
+					return computeContactManifold(shape.sphere, triangle, manifold);
+
+				case WorldShape::Kind::Box :
+					return computeContactManifold(shape.box, triangle, manifold);
+
+				case WorldShape::Kind::Capsule :
+					return computeContactManifold(shape.capsule, triangle, manifold);
+			}
+
+			manifold.clear();
+
+			return false;
+		}
+
+		/** @brief A feature id bit for the half-space contacts of a ground triangle (never produced by the generators). */
+		constexpr uint32_t GroundHalfSpaceFeature{0x80000000U};
+
+		/** @brief The centre of a world shape. */
+		[[nodiscard]]
+		Vector< 3, float >
+		centerOf (const WorldShape & shape) noexcept
+		{
+			switch ( shape.kind )
+			{
+				case WorldShape::Kind::Sphere :
+					return shape.sphere.position();
+
+				case WorldShape::Kind::Box :
+					return shape.box.center();
+
+				case WorldShape::Kind::Capsule :
+					return (shape.capsule.startPoint() + shape.capsule.endPoint()) * 0.5F;
+			}
+
+			return {};
+		}
+
+		/** @brief A low point of a shape over a ground plane: its position, height over the plane and stable index. */
+		struct LowPoint final
+		{
+			Vector< 3, float > position;
+			float height{0.0F};
+			uint32_t index{0};
+		};
+
+		/**
+		 * @brief The points of a world shape lower than a reach over a plane, the four lowest at most: the bottom of a
+		 * sphere, the bottom of each capsule end, the box corners. Their index is stable (the box corner index, the
+		 * capsule end), so a solver can carry their impulse from one step to the next.
+		 */
+		void
+		lowPoints (const WorldShape & shape, const Vector< 3, float > & upward, const Vector< 3, float > & planePoint, float reach, Base::StaticVector< LowPoint, 4 > & points) noexcept
+		{
+			points.clear();
+
+			/* Eight box corners at most. */
+			Base::StaticVector< LowPoint, 8 > candidates;
+
+			const auto add = [&] (const Vector< 3, float > & position, uint32_t index) {
+				const auto height = Vector< 3, float >::dotProduct(position - planePoint, upward);
+
+				if ( height < reach && !candidates.full() )
+				{
+					candidates.push_back(LowPoint{.position = position, .height = height, .index = index});
+				}
+			};
+
+			switch ( shape.kind )
+			{
+				case WorldShape::Kind::Sphere :
+					add(shape.sphere.position() - (upward * shape.sphere.radius()), 0);
+					break;
+
+				case WorldShape::Kind::Capsule :
+				{
+					const auto rim = upward * shape.capsule.radius();
+
+					add(shape.capsule.startPoint() - rim, 0);
+					add(shape.capsule.endPoint() - rim, 1);
+				}
+					break;
+
+				case WorldShape::Kind::Box :
+					for ( uint32_t index = 0; index < 8; ++index )
+					{
+						add(shape.box.corner(index), index);
+					}
+					break;
+			}
+
+			/* The four lowest, ties broken by the index: deterministic. */
+			std::ranges::sort(candidates, [] (const LowPoint & lhs, const LowPoint & rhs) {
+				return lhs.height != rhs.height ? lhs.height < rhs.height : lhs.index < rhs.index;
+			});
+
+			for ( const auto & candidate : candidates )
+			{
+				if ( points.full() )
+				{
+					break;
+				}
+
+				points.push_back(candidate);
+			}
+		}
+
+		/** @brief Whether a point projects inside a triangle along its unit normal (edges included). */
+		[[nodiscard]]
+		bool
+		projectsInside (const Vector< 3, float > & point, const Triangle< float > & triangle, const Vector< 3, float > & normal) noexcept
+		{
+			const auto onInnerSide = [&point, &normal] (const Vector< 3, float > & from, const Vector< 3, float > & to) {
+				return Vector< 3, float >::dotProduct(Vector< 3, float >::crossProduct(to - from, point - from), normal) >= 0.0F;
+			};
+
+			return
+				onInnerSide(triangle.pointA(), triangle.pointB()) &&
+				onInnerSide(triangle.pointB(), triangle.pointC()) &&
+				onInnerSide(triangle.pointC(), triangle.pointA());
+		}
 	}
 
 	bool
@@ -193,20 +327,77 @@ namespace EmEn::Physics
 			return false;
 		}
 
-		switch ( shape.kind )
-		{
-			case WorldShape::Kind::Sphere :
-				return computeContactManifold(shape.sphere, triangle, manifold);
+		return contactsOfTriangle(shape, triangle, manifold);
+	}
 
-			case WorldShape::Kind::Box :
-				return computeContactManifold(shape.box, triangle, manifold);
-
-			case WorldShape::Kind::Capsule :
-				return computeContactManifold(shape.capsule, triangle, manifold);
-		}
-
+	bool
+	NarrowPhase::generateGround (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Triangle< float > & triangle, float margin, uint32_t & claimedLowPoints, ContactManifold< float > & manifold) noexcept
+	{
 		manifold.clear();
 
-		return false;
+		Vector< 3, float > upward;
+
+		if ( !TriangleDetail::unitNormal(triangle, upward) )
+		{
+			return false;
+		}
+
+		/* A height-field triangle faces +Y whatever its winding. */
+		if ( upward[Y] < 0.0F )
+		{
+			upward = -upward;
+		}
+
+		const auto shape = toWorldShape(modelA, frameA, margin);
+
+		if ( !shape.valid )
+		{
+			return false;
+		}
+
+		const auto centreHeight = Vector< 3, float >::dotProduct(centerOf(shape) - triangle.pointA(), upward);
+
+		/* 1. The centre is OVER the plane (every body that did not cross the surface): the contact generators, one-sided —
+		 * the ground may only push a body up (the normal A → B points down). */
+		if ( centreHeight >= 0.0F )
+		{
+			if ( !contactsOfTriangle(shape, triangle, manifold) )
+			{
+				return false;
+			}
+
+			if ( Vector< 3, float >::dotProduct(manifold.normal(), upward) > 0.0F )
+			{
+				manifold.clear();
+
+				return false;
+			}
+
+			return true;
+		}
+
+		/* 2. The centre is UNDER the plane (the body crossed the surface within one step): the ground is solid below, the
+		 * low points of A that project inside this triangle go back up along the face normal. */
+		Base::StaticVector< LowPoint, 4 > low;
+		lowPoints(shape, upward, triangle.pointA(), 0.0F, low);
+
+		manifold.setNormal(-upward);
+
+		for ( const auto & point : low )
+		{
+			const auto bit = 1U << point.index;
+
+			if ( (claimedLowPoints & bit) != 0U || !projectsInside(point.position, triangle, upward) )
+			{
+				continue;
+			}
+
+			claimedLowPoints |= bit;
+
+			/* The (inflated) point is under the plane by -height: halfway to it, as the generators place a point. */
+			static_cast< void >(manifold.addPoint(ContactPoint< float >{point.position - (upward * (point.height * 0.5F)), -point.height, GroundHalfSpaceFeature | point.index}));
+		}
+
+		return !manifold.empty();
 	}
 }

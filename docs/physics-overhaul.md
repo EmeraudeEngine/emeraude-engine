@@ -35,7 +35,10 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    Baumgarte bias and the position pass. (f) Materials combine as Box2D: friction = geometric mean, restitution = max.
    (g) The walkers may regress on the branch between P2 and P4 — no compatibility workaround. (h) `DynTopCube` moves
    its properties to the component in P2. (i) The old `Collisions/` MTV overlap tests are RETIRED once the collision
-   models use the contacts; only their boolean defects are fixed.
+   models use the contacts; only their boolean defects are fixed. ⚠️ REVISED by the owner on 2026-10-02: the
+   emeraude-base MTV overloads are KEPT ("they may serve in other cases"); their known defects stay open in base
+   `collision-pair-test-defects`. Only the engine's model-level wrappers (`isCollidingWith()`, removed in P3.a) and the
+   dead `MovableTrait` API stay removed (owner, same day).
 8. **P3 design (owner, 2026-10-02, the recommendations)**: (a) `AABBCollisionModel` becomes ORIENTED — its local box
    follows the entity's rotation (`OrientedBox::fromCuboid(localBox, frame)`), the octree keeps the world AABB — and
    is renamed `BoxCollisionModel` / `CollisionModelType::Box`; no second box model. (b) The centre of mass is the
@@ -130,6 +133,39 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   The two tipping cubes no longer rest at the same place relative to their base (x +2.822 / −0.025 vs +2.866 / −0.010
   in z): tumbling over an edge amplifies the rounding of their different world coordinates — chaos, not a defect (each
   is bit-identical run to run).
+- **P3 accepted on macOS M2** (peer, 2026-10-02; base `3fcc3db`, engine `cc3cdaa8`, alpha `1bf2e020`): 0 warning,
+  base 2272 / 0 failed / 3 skipped, 0 differing samples on all 17 stations in 5 runs, 7 demos clean. Every station
+  equals the Linux values EXCEPT the two cubes that tumble before resting: `DynTopCube` x 2.809 (Linux 2.822),
+  `BenchTipCube` (32.811, −59.947) vs (32.866, −60.010) — each deterministic on its platform. Likely the FMA
+  contraction of clang on arm64 (`-ffp-contract=on` by default) amplified by the tumble; not verified, and not a goal
+  (decision 3: same machine, same binary).
+- **P3 accepted on Windows** (peer, 2026-10-02; same commits): MSVC 0 warning (no C4459 / C4305), base 2272 / 0 / 3
+  skipped; 0 differing samples on all 17 stations, 5 runs on the RTX 3060 AND the AMD iGPU, NVIDIA run 1 = AMD run 1;
+  every value = Linux (the tipping cubes too: x86 both). 7 demos: clean exits, 0 NaN. Seen once in 3 launches of
+  lighten-marbles, NOT physics: 4 × "[RenderableInstance] Descriptor set contract violation: the sealed pipeline layout
+  declares the 'PerLight' set, but the renderable instance cannot provide it" on the terrain right after its creation
+  (a load-time race, rendering side; reported to the owner).
+- **Defect found by the owner (2026-10-02): balls tunnel through the GROUND** (balls-of-steel, a P2 regression).
+  Measured with the new console `getGroundLevel(x, z)`: 82 of 400 sampled balls have their centre under the terrain
+  after 25 s (down to the lower boundary, 167 m below), speeds up to 66 m/s. Cause: the ground contact exists only
+  within the fixed 2 cm speculative margin; a ball moving more than its radius per step (> 30 m/s for r 0.5 m) gets
+  its centre under the triangle, the sphere ↔ triangle normal then points DOWN and pushes it through. Before P2 the
+  ground was a height test (anything under it went up). Fix options to the owner (one-sided solid ground,
+  velocity-scaled speculative margin, both); the owner took both.
+  **Fixed (2026-10-02)** by the one-sided, solid-below ground (`NarrowPhase::generateGround()`,
+  `subsystems/physics/02-physics-specific-rules.md` step 3). Bench stations `BenchFastBall` / `BenchFastBox`
+  (released 95 m up, 43 m/s at the ground) went to the lower boundary (y −99.5) before, and rest at y 0.500 after:
+  they sink once (centre ≈ −0.02 for one step), then come back up. balls-of-steel: 0 ball under the terrain at 5, 12
+  and 25 s (82 of 400 before). The 14 stations that never cross the surface are bit-identical to P3; `BenchBoxFlat`,
+  `DynTopCube` and `BenchTipCube` change from their first ground contact (the one-sided filter dropped manifolds that
+  pushed them DOWN) and stay within 1 cm of P3 for the flat box, on a face for the tipping cubes.
+  ⚠️ The velocity-scaled speculative margin (B) was tried and NOT kept: with this solver it MAGNIFIES the
+  sequential-impulse impact artefact — the whole stop happens in one sub-step, the first corner's impulse tilts the box,
+  the other corners (under the centre of mass) get a tangential velocity, friction answers, and the box leaves
+  sideways and in yaw: `BenchBoxFlat` slid 0.21 m, `BenchFastBox` 3.5 m, the e = 1 ball lost 1 % (e 0.9906). Face
+  contacts from the low points, merged per plane, did not cure it either (a flat box over a grid also had its
+  corners ON the cells' diagonals, claimed by two triangles — kept: one triangle per low point). The margin is P5's
+  (`physics-continuous-collision`), with the solver's impact behaviour.
 
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
@@ -218,7 +254,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 |---|---|---|
 | P0 bench | projet-alpha | `physics-collision-debug-bench` |
 | P1 foundation | emeraude-base | `contact-manifold-generation`, `shape-casts-with-hit-normal`, `collision-pair-test-defects`, `rigid-body-math-helpers` |
-| P2 solver | engine | `physics-unified-contact-pipeline` (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
+| P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` (supersedes `physics-step-up-pass`), projet-alpha `actors-kinematic-character-migration` |
 | P5 later | engine | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` |
@@ -275,6 +311,7 @@ firstCycle + count)`. Console / MCP (`Core.SceneManagerService`):
 | `getPhysicsRecordingStatus()` | `{"state": Idle / Waiting / Recording / Complete, firstCycle, cycleCount, recordedCycles, nodes}` |
 | `stopPhysicsRecording()` | stops; what is recorded stays savable |
 | `savePhysicsRecording()` | writes `captures/physics-recording-<unix s>.json` (the `getNodePhysics()` keys per sample, by node) and releases it |
+| `getGroundLevel(x, z)` | `{"position": [x, level, z], "normal": [...]}`: the ground height there (`getLevelAt()`, the bilinear height field — not exactly the triangles' surface), to count bodies under the ground |
 
 - The logic thread never allocates (start() reserves nodes × cycles) and never writes the file (save() does, on the
   console thread, outside the lock). An idle recorder costs one atomic load per cycle (`m_armed`).

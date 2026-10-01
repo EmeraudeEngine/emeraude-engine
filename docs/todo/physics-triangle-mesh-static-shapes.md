@@ -5,7 +5,7 @@ status: blocked
 priority: unranked
 scope: Physics (collision models), Scenes (StaticEntity)
 opened: 2026-10-01
-blocked-by: [contact-manifold-generation, physics-unified-contact-pipeline]
+blocked-by: [contact-manifold-generation]
 tags: [physics, collisions, physics-overhaul]
 ---
 

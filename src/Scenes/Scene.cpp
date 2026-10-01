@@ -449,12 +449,21 @@ namespace EmEn::Scenes
 		/* NOTE: The physics step: it integrates the collidable dynamic bodies and resolves the contacts. */
 		if ( enablePhysicalSimulation )
 		{
-			this->resolveCollisions(m_physicsMovedEntities);
+			this->resolveCollisions(m_physicsMovedEntities, m_physicsImpacts);
 
 			/* Relocated in the octrees once the step released the physics octree lock. */
 			for ( const auto & entity : m_physicsMovedEntities )
 			{
 				this->checkEntityLocationInOctrees(entity);
+			}
+
+			/* The impacts, emitted outside the lock too (NodeCollision): a handler may create or remove entities. */
+			for ( const auto & [entity, impactForce] : m_physicsImpacts )
+			{
+				if ( auto * movable = entity->getMovableTrait(); movable != nullptr )
+				{
+					movable->onCollision(impactForce);
+				}
 			}
 		}
 

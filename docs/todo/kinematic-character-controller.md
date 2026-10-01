@@ -5,7 +5,7 @@ status: blocked
 priority: unranked
 scope: Physics, Scenes (Node), a new character trait or component
 opened: 2026-10-01
-blocked-by: [shape-casts-with-hit-normal, physics-unified-contact-pipeline]
+blocked-by: [shape-casts-with-hit-normal]
 tags: [physics, character-controller, physics-overhaul]
 ---
 

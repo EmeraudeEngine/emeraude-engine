@@ -2809,6 +2809,14 @@ namespace EmEn::Scenes
 
 		private:
 
+			/** @brief One impact of a physics step, emitted after it (outside the physics octree lock). */
+			struct PhysicsImpact final
+			{
+				std::shared_ptr< AbstractEntity > entity;
+				/** The impact force: mass × approach speed / step (the former NodeCollision value). */
+				float impactForce{0.0F};
+			};
+
 			/**
 			 * @brief Check if a renderable instance is ready for shadow casting.
 			 * @param renderTarget A reference to the render target smart-pointer.
@@ -2945,8 +2953,10 @@ namespace EmEn::Scenes
 			 *
 			 * @param movedEntities The entities the step moved (cleared first), for the caller to relocate in the
 			 * octrees once the physics octree lock is released.
+			 * @param impacts The impacts of the step (cleared first), in manifold order, for the caller to emit
+			 * (`MovableTrait::onCollision()`) once the lock is released: a handler may create or remove entities.
 			 */
-			void resolveCollisions (std::vector< std::shared_ptr< AbstractEntity > > & movedEntities) const noexcept;
+			void resolveCollisions (std::vector< std::shared_ptr< AbstractEntity > > & movedEntities, std::vector< PhysicsImpact > & impacts) const noexcept;
 
 			/**
 			 * @brief Hard clips an entity inside the world boundaries (safety).
@@ -3177,6 +3187,8 @@ namespace EmEn::Scenes
 			mutable std::unordered_map< uint64_t, Base::Math::Vector< 3, float > > m_kinematicLastPositions;
 			/** @brief The entities the last physics step moved (relocated in the octrees after it). */
 			std::vector< std::shared_ptr< AbstractEntity > > m_physicsMovedEntities;
+			/** @brief The impacts of the last physics step (emitted after it, outside the physics octree lock). */
+			std::vector< PhysicsImpact > m_physicsImpacts;
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */
 			PhysicsRecorder m_physicsRecorder;
 			/** @brief The next entity creation number (AbstractEntity::creationNumber()). Mutable: an entity is constructed

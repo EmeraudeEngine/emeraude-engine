@@ -1,11 +1,10 @@
 ---
 id: physics-simulation-islands
 title: Simulation islands — bodies in contact sleep and wake together
-status: blocked
+status: open
 priority: unranked
 scope: Physics, Scenes/Scene.physics.cpp
 opened: 2026-10-01
-blocked-by: [physics-unified-contact-pipeline]
 tags: [physics, performance, physics-overhaul]
 ---
 

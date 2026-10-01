@@ -29,6 +29,9 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "Math/Space3D/Contacts/ContactManifold.hpp"
@@ -76,5 +79,25 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			static bool generate (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float margin, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+
+			/**
+			 * @brief Generates the contacts of a collision model (A) and a GROUND triangle (B): one-sided, and solid below.
+			 * @note A height-field ground is the top of a solid, not a thin shell (owner, 2026-10-02; the approach of Jolt's
+			 * height fields and Box2D v3's one-sided chains). (1) A's centre OVER the triangle's plane: the contact
+			 * generators, a manifold whose normal would push A down dropped. (2) A's centre UNDER the plane (it crossed the
+			 * surface within one step — a ball at 43 m/s moves 0.72 m per step): the low points of A (the bottom of a
+			 * sphere, of each capsule end, the four lowest box corners) that project inside the triangle are pushed back up
+			 * along the face normal by their depth. Before, case (2) got a normal pointing DOWN and the body went through.
+			 * @param modelA A reference to model A.
+			 * @param frameA A reference to A's world frame.
+			 * @param triangle A reference to the world ground triangle (its up side is the side of +Y).
+			 * @param margin The speculative margin added to A (m), >= 0.
+			 * @param claimedLowPoints A writable bit set of A's low points already given to a triangle (bit = the point's
+			 * stable index), zero for each body: a point on an edge shared by two triangles belongs to the first only.
+			 * @param manifold A reference to the manifold written (cleared first).
+			 * @return bool True when the inflated shape touches the triangle, or is under it.
+			 */
+			[[nodiscard]]
+			static bool generateGround (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float margin, uint32_t & claimedLowPoints, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
 	};
 }

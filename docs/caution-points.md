@@ -4856,6 +4856,20 @@ dereference what a resource accessor returns without checking it.**
 > - Whether the entity-level setter should keep existing is a decision for the physics overhaul
 >   (`docs/physics-overhaul.md`).
 
+### Physics: a triangle ground is a SURFACE — a body that crosses it in one step is pushed THROUGH it (fixed 2026-10-02)
+
+> [!CAUTION]
+> A sphere ↔ triangle (or box / capsule ↔ triangle) contact takes its normal from the side the shape's centre is on.
+> At 60 Hz a body moving more than its half size per step (> 30 m/s for a 0.5 m ball) can end a step with its centre
+> UNDER a ground triangle: the normal then points down and the solver pushes it on through. Measured in balls-of-steel
+> (balls dropped from the scene's top, up to 66 m/s): 82 of 400 sampled balls under the terrain after 25 s, down to the
+> lower boundary 167 m below, where they bounced back and hit the ground from underneath.
+> - Fix: `Physics::NarrowPhase::generateGround()` — the ground is one-sided and solid below (a contact that pushes a
+>   body down is dropped; a centre under the plane gets its low points pushed back up along the face normal).
+> - Probe: `Core.SceneManagerService.getGroundLevel(x, z)` against `getNodePhysics()` positions; bench stations
+>   `BenchFastBall` / `BenchFastBox` (`collision-debug`, 95 m drops).
+> - A wall or a thin solid still tunnels at those speeds: continuous collision is P5 (`physics-continuous-collision`).
+
 ### A float range check written `v < MIN || v > MAX` lets NaN through (2026-10-01, triad 10b)
 
 > [!CAUTION]
