@@ -109,6 +109,15 @@ namespace EmEn::PlatformSpecific
 	convertUTF8ToWide (const std::string & input);
 
 	/**
+	 * @brief Returns the process command line as UTF-8 arguments (GetCommandLineW() + CommandLineToArgvW()).
+	 * @note The argv a narrow main() receives is in the ANSI code page: a character outside it is lost, and one inside
+	 * it (é = 0xE9) is not UTF-8, while the engine reads every argument as UTF-8.
+	 * @return std::optional< std::vector< std::string > > nullopt when the command line cannot be read or split.
+	 */
+	[[nodiscard]]
+	EMEN_API std::optional< std::vector< std::string > > getUTF8CommandLineArguments () noexcept;
+
+	/**
 	 * @brief Displays a console.
 	 * @warning Used only for Windows OS since the logs are displayed in their own process.
 	 * @param title A reference to a string.

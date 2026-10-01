@@ -546,6 +546,11 @@ Arguments > Settings > Default values
 > survived argv and died one layer down, here. Linux and macOS convert without loss, so the whole
 > path is a no-op there: **this cannot be caught by running it on POSIX**, only by reading, and a
 > green Linux run of the same flag proves only that nothing regressed.
+>
+> ⚠️ The "entry point already fixed" did not hold: projet-alpha's Windows `main (int, char **)` (since 0.6.51) hands the
+> engine an ANSI argv. Since triad 15 (2026-10-01), `Arguments (int, char **, bool)` takes the arguments from the wide
+> command line on Windows (`PlatformSpecific::getUTF8CommandLineArguments()`), so the values are UTF-8 whatever the
+> entry point.
 
 ### ServiceInterface - Common Service Interface
 **Files**: `ServiceInterface.hpp` (4KB)

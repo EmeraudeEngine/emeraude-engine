@@ -5180,6 +5180,26 @@ misleading.
 > `char8_t` route threw `std::system_error` (an abort) on invalid UTF-8, for example the CESU bytes jsoncpp produces
 > from a lone `\udc00` in a JSON path, or on a filename with a lone surrogate (NTFS allows one).
 
+### ⚠️ A narrow `main()` gets an ANSI argv on Windows — `Arguments` reads the wide command line (2026-10-01, triad 15)
+
+> [!CAUTION]
+> projet-alpha's Windows entry point has been `main (int, char **)` since 0.6.51; before, it passed `__wargv`. The CRT
+> gives that argv in the ANSI code page (é = `0xE9`), while the engine reads every argument as UTF-8: each path argument
+> goes through `IO::u8path()`. A non-ASCII `--enable-log` / `--cache-directory` / `--settings-filepath` therefore
+> failed: before triad 15 the `char8_t` conversion threw (an abort); since then the strict converter refuses it.
+> `Arguments (int, char **, bool)` now replaces the argv on Windows with
+> `PlatformSpecific::getUTF8CommandLineArguments()` (`GetCommandLineW()` + `CommandLineToArgvW()`), when that splits
+> into as many arguments. An application can keep a narrow `main()`.
+
+### ⚠️ A buffer's device address is only as aligned as its memory requirements — ask for more (2026-10-01, triad 15)
+
+> [!CAUTION]
+> `vmaCreateBuffer()` applies the `vkGetBufferMemoryRequirements()` alignment, which may be 4 (AMD, a host-visible
+> buffer). A consumer of the device address can require more: the TLAS instance data must be 16-byte aligned
+> (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715). Its misaligned address lost the device on AMD, intermittently,
+> and never on NVIDIA. Use `Buffer::setMinimumAlignment()` before `createOnHardware()`, as `prepareTLAS()` now does. The
+> scratch buffers instead over-allocate and round their address up to 256, which is also legal.
+
 ### ⚠️ On Wayland, `glfwSetWindowSize()` calls back the FRAMEBUFFER size only (2026-10-01, triad 15)
 
 > [!CAUTION]

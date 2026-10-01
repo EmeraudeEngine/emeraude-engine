@@ -515,6 +515,12 @@ namespace EmEn::Vulkan
 
 		auto instanceBuffer = std::make_unique< Buffer >(m_device, 0, instanceBufferSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, true);
 
+		/* NOTE: The instance data address must be 16-byte aligned (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715):
+		 * the memory requirements alone gave a 4-byte aligned address on AMD, and the build lost the device. */
+		constexpr VkDeviceSize InstanceDataAlignment{16};
+
+		instanceBuffer->setMinimumAlignment(InstanceDataAlignment);
+
 		if ( !instanceBuffer->createOnHardware() )
 		{
 			Tracer::error(ClassId, "Unable to create TLAS instance buffer !");
@@ -533,6 +539,13 @@ namespace EmEn::Vulkan
 		instanceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 		instanceAddressInfo.buffer = instanceBuffer->handle();
 		const auto instanceAddress = m_fpGetBufferDeviceAddress(deviceHandle, &instanceAddressInfo);
+
+		if ( instanceAddress % InstanceDataAlignment != 0 )
+		{
+			TraceError{ClassId} << "The TLAS instance buffer address 0x" << std::hex << instanceAddress << std::dec << " is not " << InstanceDataAlignment << "-byte aligned, the build is refused !";
+
+			return nullptr;
+		}
 
 		/* 3. Build the request object. Keep structs alive for deferred recording. */
 		auto request = std::make_unique< TLASBuildRequest >();

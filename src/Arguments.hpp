@@ -39,6 +39,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -84,6 +85,16 @@ namespace EmEn
 						m_rawArguments.emplace_back(argv[argIndex]);
 					}
 				}
+
+#if IS_WINDOWS
+				/* NOTE: A narrow main() gets the argv in the ANSI code page, and every argument is read as UTF-8 (a path
+				 * through IO::u8path()): a non-ASCII path was refused. The same arguments are taken from the wide command
+				 * line instead, when it splits into as many (a synthetic argv, given by a caller, is kept). */
+				if ( auto arguments = PlatformSpecific::getUTF8CommandLineArguments(); arguments && arguments->size() == m_rawArguments.size() )
+				{
+					m_rawArguments = std::move(*arguments);
+				}
+#endif
 			}
 
 #if IS_WINDOWS

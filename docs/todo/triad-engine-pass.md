@@ -1595,4 +1595,38 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
       as expected; the running demo was undisturbed.
     - `-t` alone traced "needs a tool name" and started normally.
     - citadel: MCP 1707/0, console 4445/0, 0 [Error].
-  - **Windows** — pending.
+  - **Windows** NVIDIA RTX 3060 Laptop + AMD Radeon, 2026-10-01 — PASS except two findings (below):
+    - Build: MSVC /W4 /WX, 604 TUs, 0 warning; base tests 2188 = 2185 + 3 skipped.
+    - Non-ASCII directory (`Jérôme`): the CEF menu loads (URL `J%C3%A9r%C3%B4me`), and `getJson()` is valid UTF-8
+      (`c3 a9`, `c3 b4`).
+    - Minimised window: 10 s minimised, the console answers in ≤ 10 ms; restored, rendering resumes. Quitting while
+      minimised exits 0 (no hang in `join()`). The relaunch opens at the saved 1280×720, not iconic.
+    - `resize(20000, 1200)` refused ("at most 1920x1032"); `getState()` is valid JSON.
+    - `openFiles` and `-t` alone as expected.
+    - citadel: MCP 1707/0; console 4457/0 on NVIDIA, 4456/1 on AMD (the known flood RST). NVIDIA only the known 12325.
+    - ⚠️ (A) `--enable-log=<…/Jérôme/…>` is refused, while an ASCII path works. Cause: projet-alpha's Windows entry
+      point has been `main (int, char **)` + `Application{argc, argv}` since `21ade4e5` (0.6.51; before:
+      `Application(__argc, __wargv)`). The argv is in the ANSI code page, and every argument read through
+      `IO::u8path()` (the four directory arguments since 2026-08-28, `--enable-log` since 15) cannot decode it.
+      Before 15 the `char8_t` route threw (an abort); now the strict converter refuses the path (U+FFFD).
+    - ⚠️ (B) AMD, intermittent (1 of 4 beams launches): 5× `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715`
+      (the TLAS instance data address `0x30a75aed4` is not 16-byte aligned), then DEVICE_LOST, fence VUIDs, and a
+      `0xc0000409` fail-fast in `Emeraude.dll` at shutdown. Cause: `prepareTLAS()` creates the instance buffer with
+      `vmaCreateBuffer()`, which applies only the buffer's memory-requirement alignment (4 is legal); the scratch
+      buffers already over-allocate and round their address up to 256.
+- [x] (7) Owner rulings on the Windows findings (2026-10-01), as recommended, APPLIED:
+  - (A) → fixed in the engine `Arguments`: on Windows, `Arguments (int, char **, bool)` takes the arguments from the wide
+    command line, through `PlatformSpecific::getUTF8CommandLineArguments()` (`GetCommandLineW()` +
+    `CommandLineToArgvW()`, converted to UTF-8). It does this only when the wide line splits into as many arguments, so
+    a synthetic argv is kept. Every application gets UTF-8 arguments again, whatever its entry point.
+  - (B) → `Buffer::setMinimumAlignment()` (through `vmaCreateBufferWithAlignment()`, a power of two checked). The TLAS
+    instance buffer asks for 16, and `prepareTLAS()` refuses a build whose instance address is not 16-byte aligned (a
+    trace, no device loss).
+  - (B, the shutdown after the loss) → item `device-lost-shutdown-fail-fast`. `rt-device-lost-game-logic` names the
+    alignment as a candidate cause.
+  - Verified on Linux (RTX 3070 Ti): the cascade builds, 0 warning; clangcheck 0; 0 new clang-tidy finding in the touched
+    TUs. citadel on the RayTracing lane (RTGI / RTR / RTAO resident): 0 VUID, no refused TLAS, MCP 1707/0. The Windows
+    code (`getUTF8CommandLineArguments()`) is UNCOMPILED here.
+- [x] (8) Pushed 2026-10-01 (owner's order): engine (the Windows-findings commit). The Windows peer was asked to re-check
+  `--enable-log` (and `--cache-directory`) under `Jérôme`, and AMD beams launches for the VUID-03715.
+- [ ] (9) The Windows re-check.

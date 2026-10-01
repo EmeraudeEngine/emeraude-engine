@@ -32,6 +32,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <optional>
 
 /* Third-party inclusions. */
@@ -43,6 +44,7 @@
 #endif
 #include <Windows.h>
 #include <objbase.h>
+#include <shellapi.h>
 #include <process.h>
 #include <psapi.h>
 #include <tlhelp32.h>
@@ -217,6 +219,30 @@ namespace EmEn::PlatformSpecific
 	convertUTF8ToWide (const std::string & input)
 	{
 		return multiByteToWide(CP_UTF8, input);
+	}
+
+	std::optional< std::vector< std::string > >
+	getUTF8CommandLineArguments () noexcept
+	{
+		int count = 0;
+
+		/* NOTE: CommandLineToArgvW() allocates one block, freed with LocalFree(). */
+		const std::unique_ptr< LPWSTR, decltype(&LocalFree) > wideArguments{CommandLineToArgvW(GetCommandLineW(), &count), &LocalFree};
+
+		if ( wideArguments == nullptr || count <= 0 )
+		{
+			return std::nullopt;
+		}
+
+		std::vector< std::string > arguments;
+		arguments.reserve(static_cast< size_t >(count));
+
+		for ( int index = 0; index < count; ++index )
+		{
+			arguments.emplace_back(convertWideToUTF8(wideArguments.get()[index]));
+		}
+
+		return arguments;
 	}
 
 	bool

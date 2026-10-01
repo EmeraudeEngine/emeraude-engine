@@ -48,6 +48,7 @@ namespace EmEn::Vulkan
 		m_createInfo{other.m_createInfo},
 		m_deviceMemory{std::move(other.m_deviceMemory)},
 		m_memoryAllocation{other.m_memoryAllocation},
+		m_minimumAlignment{other.m_minimumAlignment},
 		m_hostVisible{other.m_hostVisible},
 		m_hostReadable{other.m_hostReadable},
 		m_dedicatedMemory{other.m_dedicatedMemory}
@@ -74,6 +75,7 @@ namespace EmEn::Vulkan
 			m_createInfo = other.m_createInfo;
 			m_deviceMemory = std::move(other.m_deviceMemory);
 			m_memoryAllocation = other.m_memoryAllocation;
+			m_minimumAlignment = other.m_minimumAlignment;
 			m_hostVisible = other.m_hostVisible;
 			m_hostReadable = other.m_hostReadable;
 			m_dedicatedMemory = other.m_dedicatedMemory;
@@ -249,8 +251,16 @@ namespace EmEn::Vulkan
 		//allocInfo.pUserData = nullptr;
 		//allocInfo.priority = 0.5F;
 
+		/* NOTE: A power of two is required by VMA; anything else is refused rather than silently ignored. */
+		if ( m_minimumAlignment != 0 && (m_minimumAlignment & (m_minimumAlignment - 1)) != 0 )
+		{
+			TraceError{ClassId} << "The minimum alignment " << m_minimumAlignment << " is not a power of two !";
+
+			return false;
+		}
+
 		/* Bind the buffer to the device memory */
-		if ( const auto result = vmaCreateBuffer(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, &m_handle, &m_memoryAllocation, nullptr); result != VK_SUCCESS )
+		if ( const auto result = vmaCreateBufferWithAlignment(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, m_minimumAlignment, &m_handle, &m_memoryAllocation, nullptr); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a buffer with VMA : " << vkResultToCString(result) << " !";
 

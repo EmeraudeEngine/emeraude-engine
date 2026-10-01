@@ -204,6 +204,33 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Requests a minimum alignment of the buffer's memory, so of its device address.
+			 * @note Must be called before createOnHardware(). vkGetBufferMemoryRequirements() may answer a smaller one (4
+			 * on AMD for a host-visible buffer), while a consumer of the device address can need more: the instance data
+			 * of an acceleration structure build must be 16-byte aligned (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715).
+			 * With VMA this goes through vmaCreateBufferWithAlignment(); the non-VMA path binds the buffer at the start
+			 * of its own allocation.
+			 * @param alignment A power of two, or 0 for the memory requirements alone.
+			 * @return void
+			 */
+			void
+			setMinimumAlignment (VkDeviceSize alignment) noexcept
+			{
+				m_minimumAlignment = alignment;
+			}
+
+			/**
+			 * @brief Returns the minimum alignment requested for the buffer's memory (0 = none).
+			 * @return VkDeviceSize
+			 */
+			[[nodiscard]]
+			VkDeviceSize
+			minimumAlignment () const noexcept
+			{
+				return m_minimumAlignment;
+			}
+
+			/**
 			 * @brief Returns the buffer vulkan handle.
 			 * @return VkBuffer
 			 */
@@ -415,6 +442,7 @@ namespace EmEn::Vulkan
 			VkBufferCreateInfo m_createInfo{};
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
+			VkDeviceSize m_minimumAlignment{0};
 			mutable std::mutex m_hostMemoryAccess;
 			bool m_hostVisible{false};
 			bool m_hostReadable{false};

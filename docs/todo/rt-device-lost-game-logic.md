@@ -24,6 +24,12 @@ builds racing uploads across the round-robined transfer queues.
 `DeferredDestructor`, the one-shot queue-family ownership fix `ebae3d4c`, the shared-UBO registry
 race `e8d63525`).
 
+**A candidate cause, fixed 2026-10-01 (triad 15):** the TLAS instance buffer had no 16-byte alignment guarantee
+(`vmaCreateBuffer()` applies only the memory-requirement alignment). On AMD the Windows peer measured a 4-byte-aligned
+instance address (`VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715`), and the device was lost with the same
+`READ_INVALID` signature. Not proven to be THIS loss: the 2026-07-26 runs were on NVIDIA. The shutdown after a loss is
+item `device-lost-shutdown-fail-fast`.
+
 ⚠️ **0/8 is NOT proof of a fix.** At the original 25 % rate, eight clean runs happen by chance
 about 10 % of the time. Left open deliberately.
 
