@@ -47,21 +47,25 @@ single-pair twin is bit-identical 5/5 on Linux, the M2, the RTX 3060 and the AMD
 in DISCRETE states (Windows: before cycle 60; the M2: once at cycle 72) — an order effect. Acceptance after P2: 0
 differing samples on every station, 5 runs, three OS.
 
+**2026-10-01, after P2** (engine `dd823ab5`, `docs/physics-overhaul.md` § 1b): Linux 5/5 bit-identical on all 17
+stations; the M2 0 differing samples on 16 of 17, the stack included (the persistent order fixed the order effect).
+The 17th, `DynTopCube`, was a TIME SHIFT, not a solver difference: its shape was not overridden, so it joined the
+simulation only when its geometry finished loading (cycle 40 / 50 / 52). Fixed in the demo (decision (h): component
+properties, overridden shapes), Linux 3/3 identical; waiting for the peers' 5 runs and the Windows P2 report.
+
 ## What remains
 
 > Expected to close with `physics-unified-contact-pipeline` (deterministic contact order, phase P2 of
 > `docs/physics-overhaul.md`).
 
 
-- [ ] Find the source of the run-to-run difference. The candidates, none measured yet:
-  - the order of the contact pairs, which comes from the octree traversal and may follow addresses or an unordered
-    container; a Gauss-Seidel solver gives a different result for a different order;
-  - a step tied to wall-clock time (a variable dt or a variable number of substeps);
-  - an unseeded random number.
+- Source FOUND and fixed by P2: the order of the contact pairs (octree traversal) fed a Gauss-Seidel solver; P2 sorts
+  bodies by creation number and pairs / manifolds by key. A body whose shape waits for an async load starts late: a
+  scene that needs reproducibility overrides its shapes.
 - Target DECIDED by the owner on 2026-10-01 (`docs/physics-overhaul.md` § 1.3): the same
   machine, the same binary, the same inputs. No `-ffast-math` for now, but the owner may enable it one day, so
   correctness must not depend on bit-exact floats. Cross-platform bit-exactness is not a goal.
-- [ ] Re-measure: the same resting position on 5 launches.
+- [ ] Re-measure on the peers: 0 differing samples on every station, 5 recorded runs, macOS + Windows (NVIDIA, AMD).
 
 ## References
 

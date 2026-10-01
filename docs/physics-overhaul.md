@@ -75,6 +75,13 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   the logic thread could still tick the scene — the scene is now disabled first (0 of 8 since).
   Demos checked (no NaN, no error, clean exit): balls-of-steel, physics-debug, lighten-marbles, game-logic, collision,
   citadel, animation-debug. The walkers' feel is not checked (keyboard; may regress until P4, owner).
+- **P2 on macOS M2 (peer, 5 recorded launches)**: clean build (clang, 0 warning), base 2272 / 0 failed; **0 differing
+  samples on 16 of 17 stations** — the stack is now bit-identical on the M2 (it diverged in P0 / P1). The 17th,
+  `DynTopCube`, was the same trajectory SHIFTED IN TIME (released at cycle 40 / 50 / 52 depending on the launch): its
+  shape was not overridden, so it stayed out of the physics octree until its geometry loaded, and its properties were
+  on the entity. Decision (h) applied (component properties, overridden shapes): on Linux it now falls from cycle 0,
+  3 launches identical, and rests exactly like its twin (3.211, 1.137, −4.997 vs 33.212, 1.137, −59.997, both 81.5°).
+  Every other station matches the Linux values; balls-of-steel: 3 clean shutdowns of 3.
 
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
