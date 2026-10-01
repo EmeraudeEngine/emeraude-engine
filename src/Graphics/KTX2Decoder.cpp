@@ -75,7 +75,7 @@ namespace EmEn::Graphics
 		VkFormat
 		toLinearFormat (VkFormat format) noexcept
 		{
-			const auto *const pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
+			const auto pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
 				return pair.nonLinear == format;
 			});
 
@@ -161,7 +161,7 @@ namespace EmEn::Graphics
 	VkFormat
 	KTX2Decoder::sRGBFormat (VkFormat format) noexcept
 	{
-		const auto *const pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
+		const auto pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
 			return pair.linear == format;
 		});
 
