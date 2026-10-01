@@ -171,17 +171,17 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				if ( !m_transferCommandBuffer->reset() )
+				if ( !(*m_transferCommandBuffer).reset() )
 				{
 					return false;
 				}
 
-				if ( m_graphicsCommandBuffer != nullptr && !m_graphicsCommandBuffer->reset() )
+				if ( m_graphicsCommandBuffer != nullptr && !(*m_graphicsCommandBuffer).reset() )
 				{
 					return false;
 				}
 
-				return m_operationFence->reset();
+				return (*m_operationFence).reset();
 			}
 
 			/**

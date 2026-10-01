@@ -31,7 +31,10 @@ device's queue families nor the transfer manager. It reproduces with `ForceGPU` 
 
 - [ ] Find where the physics transfer manager picks family 0: probably a graphics-family index used on a compute-only
   device. Use the compute device's own transfer (or compute) family.
-- [ ] Release the compute device cleanly when the physics service fails (the 4 remaining uses).
+- [ ] Release the compute device cleanly when the physics service fails (the 4 remaining uses). The Windows peer
+  (2026-10-01, NVIDIA and AMD, the same failure) traced the tail: the command pool whose creation the validation layer
+  refused keeps its handle and outlives the device (`VUID-vkDestroyDevice-device-05137` "1 leaked objects: VkCommandPool",
+  then "No device to destroy this command pool").
 - [ ] Re-run with `EnableAcceleration = true`: 0 VUID, "physics acceleration" up, a clean shutdown.
 
 ## References

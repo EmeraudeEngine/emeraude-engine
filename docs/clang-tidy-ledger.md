@@ -46,6 +46,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Saphir` 8b (`LightGenerator`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 10, all ON PURPOSE (below) — 9 convert-member-functions-to-static, 1 branch-clone. Before: 15. | Triad sub-section 8b |
 | `src/Saphir` 8c (`Declaration/`, `Generator/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 10, all ON PURPOSE (below) — 7 reinterpret-cast, 2 branch-clone, 1 use-enum-class. Before: 23. | Triad sub-section 8c |
 | `src/Vulkan` 9a (instance, device, presentation) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 11 array-to-pointer decay, 10 reinterpret-cast, 5 convert-to-static, 4 constant-array-index, 1 each misplaced-const, dead store. Before: 59. | Triad sub-section 9a |
+| `src/Vulkan` 9b (memory and resources) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 48, all ON PURPOSE (below) — 24 reinterpret-cast, 10 qualified-auto, 5 const-correctness, 4 constant-array-index, 3 branch-clone, 2 array-to-pointer decay. Before: 116. | Triad sub-section 9b |
 
 ## Findings kept ON PURPOSE
 
@@ -316,4 +317,15 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **misc-misplaced-const ×1** — `const VkSemaphore semaphore`: the handle is meant const, not its pointee.
 - **clang-analyzer-deadcode.DeadStores ×1** — `SwapChain`'s present-mode `selectionReason` default: every branch
   overwrites it, the default is the fallback's wording.
+
+### `src/Vulkan` 9b — memory and resources (2026-10-01)
+
+- **pro-type-reinterpret-cast ×24** — Vulkan handles as `uint64_t` object names, mapped memory, device addresses.
+- **readability-qualified-auto ×10** — Vulkan / VMA handles (`VkDevice`, `VmaAllocator`): `const auto` stays.
+- **misc-const-correctness ×5** — mapped pointers handed back to the caller as WRITABLE memory, transfer operations
+  reserved for writing.
+- **pro-bounds-constant-array-index ×4** — mip / region loops bounded by their counts.
+- **bugprone-branch-clone ×3** — `TransferManager`'s queue-family and format branches: distinct cases with the same
+  values (documented per case).
+- **pro-bounds-array-to-pointer-decay ×2** — `VideoEncoderH265`'s `memset` of the Std reference lists (C structures).
 

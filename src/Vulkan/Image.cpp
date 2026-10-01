@@ -334,6 +334,38 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: An empty image, or one past the device's limits, has no valid creation (VkImageCreateInfo valid usage):
+		 * refused here with its size rather than left to an undefined driver call. */
+		{
+			const auto & extent = m_createInfo.extent;
+			const auto & limits = this->device()->physicalDevice()->propertiesVK10().limits;
+
+			uint32_t maxDimension = limits.maxImageDimension2D;
+
+			if ( m_createInfo.imageType == VK_IMAGE_TYPE_1D )
+			{
+				maxDimension = limits.maxImageDimension1D;
+			}
+			else if ( m_createInfo.imageType == VK_IMAGE_TYPE_3D )
+			{
+				maxDimension = limits.maxImageDimension3D;
+			}
+			else if ( (m_createInfo.flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0 )
+			{
+				maxDimension = limits.maxImageDimensionCube;
+			}
+
+			const bool empty = extent.width == 0 || extent.height == 0 || extent.depth == 0 || m_createInfo.mipLevels == 0 || m_createInfo.arrayLayers == 0;
+			const bool tooLarge = extent.width > maxDimension || extent.height > maxDimension || (m_createInfo.imageType == VK_IMAGE_TYPE_3D && extent.depth > maxDimension) || m_createInfo.arrayLayers > limits.maxImageArrayLayers;
+
+			if ( empty || tooLarge )
+			{
+				TraceError{ClassId} << "Unable to create the image '" << this->identifier() << "': " << extent.width << "x" << extent.height << "x" << extent.depth << ", " << m_createInfo.mipLevels << " level(s), " << m_createInfo.arrayLayers << " layer(s) is " << ( empty ? "empty" : "past the device's limits" ) << " (largest side " << maxDimension << ", " << limits.maxImageArrayLayers << " layers) !";
+
+				return false;
+			}
+		}
+
 		const auto result =
 			this->device()->useMemoryAllocator() ?
 			this->createWithVMA() :
@@ -491,7 +523,7 @@ namespace EmEn::Vulkan
 			 * means VRAM (Resizable BAR), otherwise system RAM sampled across PCIe. */
 			VkMemoryPropertyFlags chosenFlags = 0;
 			vmaGetAllocationMemoryProperties(this->device()->memoryAllocatorHandle(), m_memoryAllocation, &chosenFlags);
-			TraceInfo{ClassId} << "Host-visible image '" << this->identifier() << "' placed by VMA in " << ((chosenFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ? "DEVICE_LOCAL (VRAM)" : "host (system RAM)") << " memory.";
+			TraceInfo{ClassId} << "Host-visible image '" << this->identifier() << "' placed by VMA in " << (((chosenFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0U) ? "DEVICE_LOCAL (VRAM)" : "host (system RAM)") << " memory.";
 		}
 
 		return true;
@@ -727,8 +759,8 @@ namespace EmEn::Vulkan
 			region.imageSubresource.mipLevel = level;
 			region.imageSubresource.baseArrayLayer = 0;
 			region.imageSubresource.layerCount = 1;
-			region.imageOffset = {0, 0, 0};
-			region.imageExtent = {mips[level].width, mips[level].height, 1};
+			region.imageOffset = {.x = 0, .y = 0, .z = 0};
+			region.imageExtent = {.width = mips[level].width, .height = mips[level].height, .depth = 1};
 
 			regions.emplace_back(region);
 

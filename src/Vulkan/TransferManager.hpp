@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -83,6 +84,32 @@ namespace EmEn::Vulkan
 			~TransferManager () override = default;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			TransferManager (const TransferManager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			TransferManager (TransferManager && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return TransferManager &
+			 */
+			TransferManager & operator= (const TransferManager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return TransferManager &
+			 */
+			TransferManager & operator= (TransferManager && copy) noexcept = delete;
+
+			/**
 			 * @brief Sets the device used by the transfer manager.
 			 * @return void
 			 */
@@ -116,7 +143,7 @@ namespace EmEn::Vulkan
 			uploadBuffer (Buffer & targetBuffer, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+				const std::scoped_lock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -127,7 +154,7 @@ namespace EmEn::Vulkan
 
 				//TraceDebug{ClassId} << "Initialize a buffer transfer operation for " << requiredBytes << " bytes (Buffer:" << targetBuffer.identifier() << ") ...";
 
-				const auto transferOperation = this->getAndReserveBufferTransferOperation(requiredBytes);
+				auto * const transferOperation = this->getAndReserveBufferTransferOperation(requiredBytes);
 
 				if ( transferOperation == nullptr )
 				{
@@ -141,7 +168,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				if ( !writeData(*stagingBuffer) )
+				if ( !std::forward< function_t >(writeData)(*stagingBuffer) )
 				{
 					TraceError{ClassId} << "Unable to write " << requiredBytes << " bytes of data in the staging buffer (Buffer) !";
 
@@ -164,7 +191,7 @@ namespace EmEn::Vulkan
 			uploadImage (Image & targetImage, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+				const std::scoped_lock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -175,7 +202,7 @@ namespace EmEn::Vulkan
 
 				//TraceDebug{ClassId} << "Initialize an image transfer operation for " << requiredBytes << " bytes (Image:" << targetImage.identifier() << ") ...";
 
-				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+				auto * const transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
 
 				if ( transferOperation == nullptr )
 				{
@@ -189,7 +216,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				if ( !writeData(*stagingBuffer) )
+				if ( !std::forward< function_t >(writeData)(*stagingBuffer) )
 				{
 					TraceError{ClassId} << "Unable to write " << requiredBytes << " bytes of data in the staging buffer (Image) !";
 
@@ -213,7 +240,7 @@ namespace EmEn::Vulkan
 			uploadCompressedImage (Image & targetImage, size_t requiredBytes, function_t && writeData, const std::vector< VkBufferImageCopy > & mipRegions) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+				const std::scoped_lock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -222,7 +249,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+				auto * const transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
 
 				if ( transferOperation == nullptr )
 				{
@@ -236,7 +263,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				if ( !writeData(*stagingBuffer) )
+				if ( !std::forward< function_t >(writeData)(*stagingBuffer) )
 				{
 					TraceError{ClassId} << "Unable to write " << requiredBytes << " bytes of compressed data in the staging buffer !";
 
@@ -265,7 +292,7 @@ namespace EmEn::Vulkan
 			uploadImageRegion (Image & targetImage, size_t requiredBytes, function_t && writeData, const VkBufferImageCopy & region) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+				const std::scoped_lock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -274,7 +301,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+				auto * const transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
 
 				if ( transferOperation == nullptr )
 				{
@@ -288,7 +315,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				if ( !writeData(*stagingBuffer) )
+				if ( !std::forward< function_t >(writeData)(*stagingBuffer) )
 				{
 					TraceError{ClassId} << "Unable to write " << requiredBytes << " bytes of data in the staging buffer (Image region) !";
 

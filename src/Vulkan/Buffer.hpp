@@ -34,7 +34,7 @@
 #include <memory>
 
 /* Third-party forward declarations (see Device.hpp note). */
-typedef struct VmaAllocation_T * VmaAllocation;
+using VmaAllocation = struct VmaAllocation_T *;
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"

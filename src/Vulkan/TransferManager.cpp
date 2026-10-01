@@ -92,7 +92,7 @@ namespace EmEn::Vulkan
 		{
 			Tracer::error(ClassId, "Unable to create the image layout transition fence !");
 
-			m_imageLayoutTransitionFence.reset();
+			m_imageLayoutTransitionFence = nullptr;
 
 			return false;
 		}
@@ -105,8 +105,8 @@ namespace EmEn::Vulkan
 	{
 		m_device->waitIdle("TransferManager::onTerminate()");
 
-		m_imageLayoutTransitionFence.reset();
-		m_imageLayoutTransitionCommandBuffer.reset();
+		m_imageLayoutTransitionFence = nullptr;
+		m_imageLayoutTransitionCommandBuffer = nullptr;
 
 		m_bufferTransferOperations.clear();
 		m_imageTransferOperations.clear();
@@ -122,9 +122,9 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::transitionImageLayout (Image & image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+		const std::scoped_lock lock{m_transferOperationsAccess};
 
-		if ( !m_imageLayoutTransitionFence->reset() )
+		if ( !(*m_imageLayoutTransitionFence).reset() )
 		{
 			TraceError{ClassId} << "Unable to reset the image layout transition fence for the image '" << image.identifier() << "' !";
 
@@ -238,7 +238,7 @@ namespace EmEn::Vulkan
 	TransferManager::downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< uint8_t > & pixmap) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
-		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+		const std::scoped_lock lock{m_transferOperationsAccess};
 
 		if ( !this->usable() )
 		{
@@ -269,19 +269,23 @@ namespace EmEn::Vulkan
 		}
 
 		/* Calculate bytes per pixel based on format. */
-		uint32_t bytesPerPixel;
-		ChannelMode channelMode;
+		uint32_t bytesPerPixel = 0;
+		ChannelMode channelMode = ChannelMode::RGBA;
 
 		switch ( format )
 		{
 			case VK_FORMAT_R8G8B8A8_UNORM:
 			case VK_FORMAT_B8G8R8A8_UNORM:
+			case VK_FORMAT_R8G8B8A8_SRGB:
+			case VK_FORMAT_B8G8R8A8_SRGB:
 				bytesPerPixel = 4;
 				channelMode = ChannelMode::RGBA;
 				break;
 
 			case VK_FORMAT_R8G8B8_UNORM:
 			case VK_FORMAT_B8G8R8_UNORM:
+			case VK_FORMAT_R8G8B8_SRGB:
+			case VK_FORMAT_B8G8R8_SRGB:
 				bytesPerPixel = 3;
 				channelMode = ChannelMode::RGB;
 				break;
@@ -303,16 +307,17 @@ namespace EmEn::Vulkan
 				break;
 
 			default:
-				/* Default to RGBA8. */
-				bytesPerPixel = 4;
-				channelMode = ChannelMode::RGBA;
-				break;
+				/* NOTE: Owner ruling (2026-10-01): an unknown format is REFUSED. Sizing it as RGBA8 gave a 16-bit
+				 * colour target (8 bytes per pixel) a staging buffer half too small: the GPU copy wrote past it. */
+				TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(format) << ", which cannot be downloaded (8-bit RGB(A) / BGR(A), UNORM or sRGB, and the depth / stencil formats only) !";
+
+				return false;
 		}
 
-		const size_t requiredBytes = extent.width * extent.height * bytesPerPixel;
+		const size_t requiredBytes = static_cast< size_t >(extent.width) * extent.height * bytesPerPixel;
 
 		/* Get staging buffer from transfer operation. */
-		const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+		auto * const transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
 
 		if ( transferOperation == nullptr )
 		{
@@ -381,7 +386,7 @@ namespace EmEn::Vulkan
 		region.imageSubresource.mipLevel = 0;
 		region.imageSubresource.baseArrayLayer = 0;
 		region.imageSubresource.layerCount = 1;
-		region.imageOffset = {0, 0, 0};
+		region.imageOffset = {.x = 0, .y = 0, .z = 0};
 		region.imageExtent = extent;
 
 		vkCmdCopyImageToBuffer(
@@ -643,9 +648,9 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::clearDepthImage (Image & image, float depthValue, uint32_t stencilValue) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+		const std::scoped_lock lock{m_transferOperationsAccess};
 
-		if ( !m_imageLayoutTransitionFence->reset() )
+		if ( !(*m_imageLayoutTransitionFence).reset() )
 		{
 			TraceError{ClassId} << "Unable to reset the fence for clearing the depth image '" << image.identifier() << "' !";
 
@@ -708,9 +713,9 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::clearColorImage (Image & image, VkClearColorValue clearColor) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+		const std::scoped_lock lock{m_transferOperationsAccess};
 
-		if ( !m_imageLayoutTransitionFence->reset() )
+		if ( !(*m_imageLayoutTransitionFence).reset() )
 		{
 			TraceError{ClassId} << "Unable to reset the fence for clearing the color image '" << image.identifier() << "' !";
 

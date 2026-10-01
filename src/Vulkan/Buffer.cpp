@@ -101,6 +101,14 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: Vulkan has no buffer of size 0 (VUID-VkBufferCreateInfo-size-00912). */
+		if ( m_createInfo.size == 0 )
+		{
+			TraceError{ClassId} << "Unable to create the buffer '" << this->identifier() << "': its size is 0 !";
+
+			return false;
+		}
+
 		const auto result =
 			this->device()->useMemoryAllocator() ?
 			this->createWithVMA() :
@@ -340,7 +348,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* [VULKAN-CPU-SYNC] CHECK */
-		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
+		const std::scoped_lock lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
 		{
@@ -398,7 +406,7 @@ namespace EmEn::Vulkan
 		}
 
 		// [VULKAN-CPU-SYNC] CHECK
-		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
+		const std::scoped_lock lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
 		{

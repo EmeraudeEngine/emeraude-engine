@@ -47,8 +47,8 @@ namespace EmEn::Vulkan
 
 	AccelerationStructureBuilder::~AccelerationStructureBuilder () noexcept
 	{
-		m_commandBuffer.reset();
-		m_fence.reset();
+		m_commandBuffer = nullptr;
+		m_fence = nullptr;
 		m_commandPool.reset();
 	}
 
@@ -136,7 +136,7 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_buildAccess};
+		const std::scoped_lock lock{m_buildAccess};
 
 		/* Device already lost: refuse silently (the loss is reported once, loudly, at detection).
 		 * Logging per call here floods the console and hides the first, real fault. */
@@ -476,7 +476,7 @@ namespace EmEn::Vulkan
 	std::unique_ptr< TLASBuildRequest >
 	AccelerationStructureBuilder::prepareTLAS (const std::vector< TLASInstanceInput > & instances) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_buildAccess};
+		const std::scoped_lock lock{m_buildAccess};
 
 		/* Device already lost: refuse silently (reported once at detection). */
 		if ( m_deviceLost )
@@ -640,7 +640,7 @@ namespace EmEn::Vulkan
 	AccelerationStructureBuilder::submitOneShot (function_t && recordCommands) noexcept
 	{
 		/* 1. Reset and begin command buffer. */
-		if ( !m_commandBuffer->reset() )
+		if ( !(*m_commandBuffer).reset() )
 		{
 			return false;
 		}
@@ -653,7 +653,7 @@ namespace EmEn::Vulkan
 		/* 2. Record commands. Bracket them with GPU checkpoints so a DEVICE_LOST during an
 		 * acceleration-structure build is pinpointed to this region (VK_NV_device_diagnostic_checkpoints). */
 		m_device->setCheckpoint(m_commandBuffer->handle(), "AS-build:begin");
-		recordCommands(m_commandBuffer->handle());
+		std::forward< function_t >(recordCommands)(m_commandBuffer->handle());
 		m_device->setCheckpoint(m_commandBuffer->handle(), "AS-build:end");
 
 		/* 3. End recording. */
@@ -672,7 +672,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( !m_fence->reset() )
+		if ( !(*m_fence).reset() )
 		{
 			return false;
 		}

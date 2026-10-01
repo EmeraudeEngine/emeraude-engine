@@ -44,10 +44,13 @@ namespace EmEn::Vulkan
 	 * parametric for the Main 10 / P010 HDR10 extension. */
 	constexpr auto PictureFormat{VK_FORMAT_G8_B8R8_2PLANE_420_UNORM};
 
-	static uint32_t
-	alignUp (uint32_t value, uint32_t alignment) noexcept
+	namespace
 	{
-		return (value + alignment - 1) / alignment * alignment;
+		uint32_t
+		alignUp (uint32_t value, uint32_t alignment) noexcept
+		{
+			return (value + alignment - 1) / alignment * alignment;
+		}
 	}
 
 	VideoEncoderH265::VideoEncoderH265 (const std::shared_ptr< Device > & device) noexcept
@@ -488,7 +491,7 @@ namespace EmEn::Vulkan
 			viewInfo.image = image.handle();
 			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			viewInfo.format = PictureFormat;
-			viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+			viewInfo.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
 
 			return vkCreateImageView(m_device->handle(), &viewInfo, nullptr, &view) == VK_SUCCESS;
 		};
@@ -507,7 +510,7 @@ namespace EmEn::Vulkan
 			viewInfo.image = m_dpbPictures[0]->handle();
 			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			viewInfo.format = PictureFormat;
-			viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, slot, 1};
+			viewInfo.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = slot, .layerCount = 1};
 
 			if ( vkCreateImageView(m_device->handle(), &viewInfo, nullptr, &m_dpbViews[slot]) != VK_SUCCESS )
 			{
@@ -527,7 +530,7 @@ namespace EmEn::Vulkan
 
 			VkBufferCreateInfo bufferInfo{};
 			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = lumaBytes + lumaBytes / 2;
+			bufferInfo.size = lumaBytes + (lumaBytes / 2);
 			bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			bufferInfo.sharingMode = sameFamily ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
 			bufferInfo.queueFamilyIndexCount = sameFamily ? 0 : static_cast< uint32_t >(families.size());
@@ -550,7 +553,7 @@ namespace EmEn::Vulkan
 		 * (measured Aug 2026: 2880x1620 landed on x.5 alignment units and produced
 		 * green/magenta smears + CABAC errors, while 1280x720 was aligned by luck). */
 		{
-			const VkDeviceSize rawSize = static_cast< VkDeviceSize >(m_settings.width) * m_settings.height * 3 / 2 + (1U << 20U);
+			const VkDeviceSize rawSize = (static_cast< VkDeviceSize >(m_settings.width) * m_settings.height * 3 / 2) + (1U << 20U);
 			const VkDeviceSize bufferSize = (rawSize + 4095U) / 4096U * 4096U;
 
 			VkBufferCreateInfo bufferInfo{};
@@ -635,13 +638,13 @@ namespace EmEn::Vulkan
 
 				VkBufferImageCopy bufferRegion{};
 				bufferRegion.bufferOffset = 0;
-				bufferRegion.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-				bufferRegion.imageExtent = {m_settings.width, m_settings.height, 1};
+				bufferRegion.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+				bufferRegion.imageExtent = {.width = m_settings.width, .height = m_settings.height, .depth = 1};
 
 				vkCmdCopyImageToBuffer(commandBuffer->handle(), lumaPlane.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_planeBounceBuffer->handle(), 1, &bufferRegion);
 
 				bufferRegion.bufferOffset = lumaBytes;
-				bufferRegion.imageExtent = {m_settings.width / 2, m_settings.height / 2, 1};
+				bufferRegion.imageExtent = {.width = m_settings.width / 2, .height = m_settings.height / 2, .depth = 1};
 
 				vkCmdCopyImageToBuffer(commandBuffer->handle(), chromaPlane.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_planeBounceBuffer->handle(), 1, &bufferRegion);
 			}
@@ -687,7 +690,7 @@ namespace EmEn::Vulkan
 			toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			toTransfer.image = m_sourcePicture->handle();
-			toTransfer.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+			toTransfer.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
 
 			vkCmdPipelineBarrier(commandBuffer->handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
 
@@ -695,14 +698,14 @@ namespace EmEn::Vulkan
 
 			VkBufferImageCopy bufferRegion{};
 			bufferRegion.bufferOffset = 0;
-			bufferRegion.imageSubresource = {VK_IMAGE_ASPECT_PLANE_0_BIT, 0, 0, 1};
-			bufferRegion.imageExtent = {m_settings.width, m_settings.height, 1};
+			bufferRegion.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+			bufferRegion.imageExtent = {.width = m_settings.width, .height = m_settings.height, .depth = 1};
 
 			vkCmdCopyBufferToImage(commandBuffer->handle(), m_planeBounceBuffer->handle(), m_sourcePicture->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferRegion);
 
 			bufferRegion.bufferOffset = lumaBytes;
 			bufferRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-			bufferRegion.imageExtent = {m_settings.width / 2, m_settings.height / 2, 1};
+			bufferRegion.imageExtent = {.width = m_settings.width / 2, .height = m_settings.height / 2, .depth = 1};
 
 			vkCmdCopyBufferToImage(commandBuffer->handle(), m_planeBounceBuffer->handle(), m_sourcePicture->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferRegion);
 		}
@@ -725,7 +728,7 @@ namespace EmEn::Vulkan
 				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 				barrier.image = m_sourcePicture->handle();
-				barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+				barrier.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
 
 				barriers.emplace_back(barrier);
 			}
@@ -746,7 +749,7 @@ namespace EmEn::Vulkan
 				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 				barrier.image = m_dpbPictures[0]->handle();
-				barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, DpbSlotCount};
+				barrier.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = DpbSlotCount};
 
 				barriers.emplace_back(barrier);
 			}

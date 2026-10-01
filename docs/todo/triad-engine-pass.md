@@ -58,7 +58,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
-| 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed (peers pending) |
+| 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed and VALIDATED on the three OS (2026-10-01) |
 | 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | 🟠 9a started |
 | 10 | `src/Audio` | 18 919 | ⬜ |
 | 11 | `src/Physics` | 9 197 | ⬜ |
@@ -990,8 +990,8 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed engine `1f1004d4`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ✅ pushed engine `040d100f`; macOS M2 VALIDATED, Windows pending |
-| 8c | `Declaration/`, `Generator/` | ~13 000 | ✅ pushed engine `0709e6e3`; macOS M2 VALIDATED, Windows pending |
+| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ✅ pushed engine `040d100f`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 8c | `Declaration/`, `Generator/` | ~13 000 | ✅ pushed engine `0709e6e3`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 
 ### 8a — shader core (2026-10-01)
 
@@ -1034,6 +1034,14 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   - macOS M2 PASS (AppleClang 0 warning): empty `--cache-directory` per launch — light-and-shadow-debug 188, beams 39,
     sponza 221, citadel 472 binaries compiled through the new generator, 0 compilation failure, 0 VUID, 0 UNASSIGNED;
     citadel MCP 1707/0, console 4445/0.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU, 8b and 8c validated TOGETHER at `0709e6e3` (MSVC
+    /W4 /WX 0 warning), binary cache ON per empty directory: light-and-shadow-debug 188, beams 39, sponza 220, terrain
+    284 / 252, water-world 178 / 131, animation-debug 129, citadel 474 / 472 binaries; 0 compilation or PerModel
+    failure; citadel MCP 1707/0, console 4457/0 / 4455/1 (the known RST check); NVIDIA only the known 12325.
+  - Windows noticed: (a) file IO fails past MAX_PATH (a 142-character scratch cache directory pushed 118 binary paths
+    to 273-282 characters; handled, traced) → emeraude-base item `windows-long-paths`; (b) on the RTX 3060 the terrain
+    imposter bake is often unfinished at 100 s (0 to 20 atlases depending on the run; AMD always 20), pre-existing,
+    nothing fails.
   - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): beams, citadel (MCP 1707/0;
     console 4455/1 NVIDIA, the known RST check; 4457/0 AMD), terrain, sponza: 0 compilation failure; on AMD with the
     binary cache ON per empty directory: 39 / 472 / 252 / 220 binaries; NVIDIA only the known 12325. (The shader caches do
@@ -1063,8 +1071,8 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 9a | Instance, device, presentation: `Instance`, `DebugMessenger`, `PhysicalDevice`, `Device`, `DeviceQueueConfiguration`, `DeviceRequirements`, `Queue`, `Surface`, `SwapChain`, `Utility` (trust boundary: the settings — GPU choice, layers, present modes — and what the driver reports) | ~9 500 | ✅ pushed (the engine 9a commit); peers pending |
-| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ⬜ |
+| 9a | Instance, device, presentation: `Instance`, `DebugMessenger`, `PhysicalDevice`, `Device`, `DeviceQueueConfiguration`, `DeviceRequirements`, `Queue`, `Surface`, `SwapChain`, `Utility` (trust boundary: the settings — GPU choice, layers, present modes — and what the driver reports) | ~9 500 | ✅ pushed engine `fa06d2fd`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ✅ pushed (the engine 9b commit); peers pending |
 | 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ⬜ |
 
 ### 9a — instance, device, presentation (2026-10-01)
@@ -1098,5 +1106,47 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   creates a command pool on family 0, absent from the compute device: `VUID-vkCreateCommandPool-queueFamilyIndex-01937`,
   the physics service fails, the compute device leaks — engine item `physics-acceleration-transfer-pool-on-missing-family`.
   Normal settings: beams, terrain, citadel (MCP 1707/0, console 4466/0): 0 VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9a commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `fa06d2fd`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): one queue family (#0, 1 queue); the forced / unknown compute GPU lines as
+    expected; beams, terrain, citadel (MCP 1707/0, console 4445/0) 0 VUID, 0 UNASSIGNED.
+  - macOS found (PRE-EXISTING): with physics acceleration ON the compute LOGICAL device fails on MoltenVK — created
+    without `VK_KHR_portability_subset` (`VUID-VkDeviceCreateInfo-pProperties-04451`): `getComputeDevice()` passes no
+    extension, the portability handling exists only for the graphics device → engine item
+    `compute-device-missing-portability-subset`.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): queue families NVIDIA
+    #0 ×16 / #1 ×2 / #4 ×1, AMD #0 ×8 / #2 ×1 / #3 ×1, none capped; forced AMD → graphics AND compute "(FORCED)",
+    "NoSuchGPU" → the warning and the score; the known physics-acceleration failure reproduces on both (family 0 asked by
+    the transfer pool, the compute device created with 1 + 2 / 2 + 1), with its leak tail; beams, terrain, citadel (MCP
+    1707/0 on both, console 4456/1 NVIDIA the known RST, 4457/0 AMD); NVIDIA only the known 12325. NVIDIA terrain shut
+    down during a pending imposter bake again logged "No default page found !" + a CEF web-view teardown timeout
+    (third time, pre-existing).
+
+### 9b — memory and resources (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (16 TUs + headers): **116**: 24 reinterpret-cast, 21 smart-pointer resets, 15
+  qualified-auto, 14 designated initializers, 12 scoped-lock, 5 each of missing `std::forward` and const locals, and
+  singles (incl. two implicit-widening sizes).
+- [x] (2) Review. Findings:
+  - M1 `TransferManager::downloadImage()` sized its staging buffer from a format switch whose DEFAULT was "RGBA8, 4
+    bytes": a 16-bit colour target (`R16G16B16A16_SFLOAT`, 8 bytes, reachable through the console's `dumpRenderTarget`)
+    got a buffer half too small — measured with the old default: `VUID-vkCmdCopyImageToBuffer-pRegions-00183`, "8388608
+    bytes … exceeds the VkBuffer total size of 6291456 bytes", and a corrupt PNG answered "dumped" (owner question).
+  - M2 `Buffer` / `Image::createOnHardware()` validated nothing: a size 0, an empty extent or one past the device's
+    limits went straight to the driver (VUIDs, undefined in Release) — an evident refusal (no valid creation exists).
+  - M3 two 32-bit size products (`downloadImage()`'s bytes, `VertexBufferObject`'s), the five callables taken by `&&`
+    and invoked without `std::forward`.
+- [x] (3) Mechanical: fix-its with `--format-style=none` (scoped_lock, designated initializers — spacing normalized —,
+  parentheses, smart-pointer resets, explicit bool tests, `using`), M2 (an error naming the size / extent / limits, then
+  `false`), M3 (`size_t` products, `std::forward< function_t >` at the single call), raw `transferOperation` pointers
+  qualified (NOT the `VkDevice` handles), the switch locals initialized, `alignUp()` in an anonymous namespace,
+  `TransferManager` copy / move deleted.
+- [x] (3b) Owner ruling (2026-10-01), as recommended, APPLIED: M1 an unknown format is REFUSED (an error naming it);
+  the known list gained the 8-bit sRGB variants (`R8G8B8A8_SRGB`… — the old default happened to size them right, the
+  first refusal test caught their absence).
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 114 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 116 → 48 (on purpose, ledger). offscreen-rendering: `dumpRenderTarget(Cubemap)`
+  dumps the sRGB `SecurityCubemap`; `dumpRenderTarget(OffscreenRenderingCubemap)` (format 97) is refused, 0 VUID (the old
+  default: the VUID above). terrain, water-world, animation-debug, citadel (RT acceleration structures; MCP 1707/0,
+  console 4466/0), a hardware H.265 rush (121 frames): 0 VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9b commit); peers asked.
 

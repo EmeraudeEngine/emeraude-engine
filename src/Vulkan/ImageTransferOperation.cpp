@@ -96,9 +96,9 @@ namespace EmEn::Vulkan
 	{
 		m_semaphore.reset();
 		m_stagingBuffer.reset();
-		m_transferCommandBuffer.reset();
-		m_graphicsCommandBuffer.reset();
-		m_operationFence.reset();
+		m_transferCommandBuffer = nullptr;
+		m_graphicsCommandBuffer = nullptr;
+		m_operationFence = nullptr;
 	}
 
 	bool
