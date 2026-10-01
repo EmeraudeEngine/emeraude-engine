@@ -1581,3 +1581,18 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 - [x] (5) Pushed 2026-10-01 (owner's order): engine (the 15 commit, with the items
   `macos-video-capture-ignores-requested-size` and `video-capture-enable-key-typo`), base and alpha (the 15 commits);
   peers asked.
+- [ ] (6) Peers, at engine `62e10c7e`, base `a1a8fc7`, alpha `249a0550`:
+  - **macOS M2 — VALIDATED 2026-10-01** (AppleClang, 576/576 + tests 42/42, 0 warning; base tests 2188 = 2185 + 3
+    skipped live HTTPS; MoltenVK; 0 VUID / UNASSIGNED, exit 0 on every launch). The GLFW-only surface renders.
+    - `resize(17000, 1200)` was refused: "at most 1920x967". That is the monitor work area in points, below
+      `maxImageDimension2D` / 2 = 8192, and the device was not lost.
+    - `resize(1400, 800)` / `(1280, 720)` gave getState() window 1400×800 / 1280×720 and framebuffer 2800×1600 /
+      2560×1440.
+    - F2 is proven. Two Shift+F11 (the fullscreen toggle on macOS; plain F11 is projet-alpha's web-view refresh) went
+      to 1920×1080 at 3840×2160, then back to 1280×720 in points, not doubled. `save()` stored 1280×720 with the header
+      0.9.82 / 2026-10-1 / 0.6.61 (before: 0.9.52 / 2026-8-3).
+    - `openFiles`: a relative path, a 65 MiB JSON ("None of the 1"), and a glTF + that JSON ("1 of 2") all behaved
+      as expected; the running demo was undisturbed.
+    - `-t` alone traced "needs a tool name" and started normally.
+    - citadel: MCP 1707/0, console 4445/0, 0 [Error].
+  - **Windows** — pending.
