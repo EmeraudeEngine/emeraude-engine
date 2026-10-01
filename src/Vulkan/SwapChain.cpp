@@ -93,7 +93,7 @@ namespace EmEn::Vulkan
 			m_createInfo.minImageCount = m_tripleBufferingEnabled ? 3 : 2;
 			m_createInfo.imageFormat = m_sRGBEnabled ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
 			m_createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-			m_createInfo.imageExtent = {std::max(framebufferSize[0], 1U), std::max(framebufferSize[1], 1U)};
+			m_createInfo.imageExtent = {.width = std::max(framebufferSize[0], 1U), .height = std::max(framebufferSize[1], 1U)};
 			m_createInfo.imageArrayLayers = 1;
 			m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -131,7 +131,7 @@ namespace EmEn::Vulkan
 		m_createInfo.clipped = VK_TRUE;
 		m_createInfo.oldSwapchain = oldSwapChain;
 
-		VkResult result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
+		const VkResult result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
 
 		/* NOTE: Destroy the previous swap chain if exists. */
 		if ( m_createInfo.oldSwapchain != VK_NULL_HANDLE )
@@ -1607,7 +1607,7 @@ namespace EmEn::Vulkan
 
 		/* Select optimal present mode based on user preferences. */
 		VkPresentModeKHR selectedMode = VK_PRESENT_MODE_FIFO_KHR;
-		auto selectionReason = "default fallback (always available)";
+		const char * selectionReason = "default fallback (always available)";
 
 		if ( m_VSyncEnabled )
 		{

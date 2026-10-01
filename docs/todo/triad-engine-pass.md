@@ -59,7 +59,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed (peers pending) |
-| 9 | `src/Vulkan` | 32 843 | ⬜ |
+| 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | 🟠 9a started |
 | 10 | `src/Audio` | 18 919 | ⬜ |
 | 11 | `src/Physics` | 9 197 | ⬜ |
 | 12 | `src/Animations` | 3 488 | ⬜ |
@@ -989,9 +989,9 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed engine `1f1004d4`; macOS M2 VALIDATED, Windows pending |
+| 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed engine `1f1004d4`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ✅ pushed engine `040d100f`; macOS M2 VALIDATED, Windows pending |
-| 8c | `Declaration/`, `Generator/` | ~13 000 | ✅ pushed (the engine 8c commit); peers pending |
+| 8c | `Declaration/`, `Generator/` | ~13 000 | ✅ pushed engine `0709e6e3`; macOS M2 VALIDATED, Windows pending |
 
 ### 8a — shader core (2026-10-01)
 
@@ -1034,6 +1034,10 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   - macOS M2 PASS (AppleClang 0 warning): empty `--cache-directory` per launch — light-and-shadow-debug 188, beams 39,
     sponza 221, citadel 472 binaries compiled through the new generator, 0 compilation failure, 0 VUID, 0 UNASSIGNED;
     citadel MCP 1707/0, console 4445/0.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): beams, citadel (MCP 1707/0;
+    console 4455/1 NVIDIA, the known RST check; 4457/0 AMD), terrain, sponza: 0 compilation failure; on AMD with the
+    binary cache ON per empty directory: 39 / 472 / 252 / 220 binaries; NVIDIA only the known 12325. (The shader caches do
+    not live under `--cache-directory`: only CEF, downloads, the pipeline and texture caches do.)
 
 ### 8c — `Declaration/`, `Generator/` (2026-10-01)
 
@@ -1050,5 +1054,49 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   `-Wfloat-conversion` 0; clang-tidy 23 → 10 (on purpose, ledger). terrain (heightfield PerModel set), water-world
   (ocean), animation-debug (skinning), citadel (shadow casting; MCP 1707/0, console 4466/0): 0 shader compilation or
   layout failure, 0 VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8c commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `0709e6e3`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): empty cache per launch — terrain 252, water-world 131, animation-debug 129,
+    citadel 472 binaries, 0 compilation or PerModel-layout failure, 0 VUID, 0 UNASSIGNED; citadel MCP 1707/0, console
+    4445/0.
+
+## Section 9 — `src/Vulkan` (started 2026-10-01), three sub-sections (owner, 2026-10-01)
+
+| Sub | Content | Lines | Status |
+|---|---|---|---|
+| 9a | Instance, device, presentation: `Instance`, `DebugMessenger`, `PhysicalDevice`, `Device`, `DeviceQueueConfiguration`, `DeviceRequirements`, `Queue`, `Surface`, `SwapChain`, `Utility` (trust boundary: the settings — GPU choice, layers, present modes — and what the driver reports) | ~9 500 | ✅ pushed (the engine 9a commit); peers pending |
+| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ⬜ |
+| 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ⬜ |
+
+### 9a — instance, device, presentation (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (10 TUs + headers): **59**: 12 array-to-pointer decay, 8 reinterpret-cast, 5 each
+  of convert-to-static and scoped-lock, 4 constant-array-index, 3 each of implicit bool and const locals, and singles.
+- [x] (2) Review (trust boundaries: the settings — validation layers, `ForceGPU`, auto-select mode, MSAA samples,
+  present-mode switches — and what the driver reports). Sound: the requested layers are matched against the available
+  ones, the MSAA count is clamped by `Device::checkMultisampleCount()`, the swap-chain extent is clamped to the surface
+  capabilities, the frames exist before the render passes read them. Findings:
+  - D1 every queue the driver reports for a used family was created and registered into a `StaticVector< Queue *, 16 >`
+    (and its priorities into a `StaticVector< float, 16 >`): a family reporting 17+ queues would `abort()` at startup
+    (NVIDIA's graphics family reports exactly 16) (owner question). The same for the family list
+    (`StaticVector< VkQueueFamilyProperties2, 8 >`, filled with the driver's count).
+  - D2 `Instance::getComputeDevice()` (the physics compute device) read `ForceGPU` and ignored it (owner question).
+- [x] (3) Mechanical: fix-its with `--format-style=none` (scoped_lock, designated initializers, `std::max`, explicit bool
+  tests, `VK_NULL_HANDLE` init, static calls not through `this`, `using`), two `std::ranges::any_of`, the debug-messenger
+  function pointers through `reinterpret_cast`, `UUIDToString()` on a `std::span< const uint8_t, VK_UUID_SIZE >`, three
+  `const` locals, an explicit `const char *`, a `StaticVector` pointer iterator qualified, `SwapChain` copy / move deleted.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - D1 `DeviceQueueConfiguration::MaxQueuesPerFamily` (16): `addQueueFamilyToCreateInfo()` creates min(reported, 16)
+    queues per family (an info line when it caps), the `StaticVector`s sized by that constant. Applied the same way to
+    the family list: `PhysicalDevice::MaxQueueFamilies` (8), the first 8 read with a warning beyond (none reports more
+    than six today).
+  - D2 the compute device takes the forced GPU when it is compute-capable, else warns and selects by score.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 113 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 59 → 32 (on purpose, ledger). Queue families unchanged (graphics #0 ×16, transfer #1
+  ×2, compute #2 ×8, video encode #4 ×1: no cap reached). Physics acceleration ON + `ForceGPU = "NVIDIA GeForce RTX 3070
+  Ti"` → "Compute capable physical device '…' selected (FORCED)"; `ForceGPU = "NoSuchGPU"` → the warning and the score
+  selection. That run exposed a PRE-EXISTING defect of the (off by default) physics acceleration — its transfer manager
+  creates a command pool on family 0, absent from the compute device: `VUID-vkCreateCommandPool-queueFamilyIndex-01937`,
+  the physics service fails, the compute device leaks — engine item `physics-acceleration-transfer-pool-on-missing-family`.
+  Normal settings: beams, terrain, citadel (MCP 1707/0, console 4466/0): 0 VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 9a commit); peers asked.
 

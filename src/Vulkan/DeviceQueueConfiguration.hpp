@@ -48,6 +48,13 @@ namespace EmEn::Vulkan
 			static constexpr auto ClassId{"VulkanDeviceQueueConfiguration"};
 
 			/**
+			 * @brief The most queues the engine creates and holds per queue family.
+			 * @note Owner ruling (2026-10-01): a family reporting more (none does today: NVIDIA's graphics family reports
+			 * exactly 16) gets this many; the rest stay unused.
+			 */
+			static constexpr size_t MaxQueuesPerFamily{16};
+
+			/**
 			 * @brief Constructs a default queue configuration for a device.
 			 */
 			DeviceQueueConfiguration () noexcept = default;
@@ -84,10 +91,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns queue priority structure.
-			 * @return const Base::StaticVector< Queue *, 16 > &
+			 * @return const Base::StaticVector< Queue *, MaxQueuesPerFamily > &
 			 */
 			[[nodiscard]]
-			const Base::StaticVector< Queue *, 16 > & queues (QueuePriority priority) const noexcept;
+			const Base::StaticVector< Queue *, MaxQueuesPerFamily > & queues (QueuePriority priority) const noexcept;
 
 			/**
 			 * @brief Returns a queue by priority.
@@ -113,6 +120,6 @@ namespace EmEn::Vulkan
 		private:
 
 			uint32_t m_queueFamilyIndex{0};
-			mutable std::array< std::pair< std::atomic< uint32_t >, Base::StaticVector< Queue *, 16 > >, 3 > m_queueByPriorities;
+			mutable std::array< std::pair< std::atomic< uint32_t >, Base::StaticVector< Queue *, MaxQueuesPerFamily > >, 3 > m_queueByPriorities;
 	};
 }

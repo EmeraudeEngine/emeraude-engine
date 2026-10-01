@@ -42,7 +42,7 @@ namespace EmEn::Vulkan
 		: m_instance{instance},
 		m_createInfo{DebugMessenger::getCreateInfo()}
 	{
-		auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(m_instance.handle(), "vkCreateDebugUtilsMessengerEXT");
+		auto vkCreateDebugUtilsMessengerEXT = reinterpret_cast< PFN_vkCreateDebugUtilsMessengerEXT >(vkGetInstanceProcAddr(m_instance.handle(), "vkCreateDebugUtilsMessengerEXT"));
 
 		if ( vkCreateDebugUtilsMessengerEXT == nullptr )
 		{
@@ -74,7 +74,7 @@ namespace EmEn::Vulkan
 		/* NOTE: An instance must exist to clean a debug messenger properly ! */
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			auto vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(m_instance.handle(), "vkDestroyDebugUtilsMessengerEXT");
+			auto vkDestroyDebugUtilsMessengerEXT = reinterpret_cast< PFN_vkDestroyDebugUtilsMessengerEXT >(vkGetInstanceProcAddr(m_instance.handle(), "vkDestroyDebugUtilsMessengerEXT"));
 
 			if ( vkDestroyDebugUtilsMessengerEXT != nullptr )
 			{

@@ -88,6 +88,32 @@ namespace EmEn::Vulkan
 				this->destroyFromHardware();
 			}
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SwapChain (const SwapChain & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SwapChain (SwapChain && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SwapChain &
+			 */
+			SwapChain & operator= (const SwapChain & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SwapChain &
+			 */
+			SwapChain & operator= (SwapChain && copy) noexcept = delete;
+
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() noexcept */
 			bool
 			createOnHardware () noexcept override

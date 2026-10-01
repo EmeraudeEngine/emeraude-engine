@@ -159,6 +159,13 @@ namespace EmEn::Vulkan
 		{
 			vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &count, nullptr);
 
+			if ( count > MaxQueueFamilies )
+			{
+				TraceWarning{ClassId} << "The physical device reports " << count << " queue families: only the first " << MaxQueueFamilies << " are used.";
+
+				count = static_cast< uint32_t >(MaxQueueFamilies);
+			}
+
 			if ( count > 0 )
 			{
 				m_queueFamilyProperties.resize(count, {
@@ -326,7 +333,7 @@ namespace EmEn::Vulkan
 			return {};
 		}
 
-		for ( auto it = m_queueFamilyProperties.cbegin(); it != m_queueFamilyProperties.cend(); ++it )
+		for ( const auto * it = m_queueFamilyProperties.cbegin(); it != m_queueFamilyProperties.cend(); ++it )
 		{
 			const auto index = static_cast< uint32_t >(std::distance(m_queueFamilyProperties.cbegin(), it));
 
@@ -379,10 +386,7 @@ namespace EmEn::Vulkan
 
 			const auto heapSize = memory.memoryHeaps[memory.memoryTypes[typeIndex].heapIndex].size;
 
-			if ( heapSize > largestDeviceLocal )
-			{
-				largestDeviceLocal = heapSize;
-			}
+			largestDeviceLocal = std::max(heapSize, largestDeviceLocal);
 
 			if ( (flags & mappable) == mappable && heapSize > largestMappableDeviceLocal )
 			{
@@ -820,7 +824,7 @@ namespace EmEn::Vulkan
 
 		for ( const auto sample : samples )
 		{
-			if ( supportedSampleCount & sample )
+			if ( (supportedSampleCount & sample) != 0U )
 			{
 				return sample;
 			}
@@ -830,7 +834,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::string
-	PhysicalDevice::UUIDToString (const uint8_t uuid[]) noexcept
+	PhysicalDevice::UUIDToString (std::span< const uint8_t, VK_UUID_SIZE > uuid) noexcept
 	{
 		std::stringstream output;
 

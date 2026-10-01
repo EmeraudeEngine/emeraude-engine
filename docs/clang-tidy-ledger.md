@@ -45,6 +45,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Saphir` 8a (shader core: `ShaderManager`, `Program`, the shader stages, `AbstractVertexStage`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 7, all ON PURPOSE (below). Before: 40. | Triad sub-section 8a |
 | `src/Saphir` 8b (`LightGenerator`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 10, all ON PURPOSE (below) — 9 convert-member-functions-to-static, 1 branch-clone. Before: 15. | Triad sub-section 8b |
 | `src/Saphir` 8c (`Declaration/`, `Generator/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 10, all ON PURPOSE (below) — 7 reinterpret-cast, 2 branch-clone, 1 use-enum-class. Before: 23. | Triad sub-section 8c |
+| `src/Vulkan` 9a (instance, device, presentation) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 32, all ON PURPOSE (below) — 11 array-to-pointer decay, 10 reinterpret-cast, 5 convert-to-static, 4 constant-array-index, 1 each misplaced-const, dead store. Before: 59. | Triad sub-section 9a |
 
 ## Findings kept ON PURPOSE
 
@@ -303,4 +304,16 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **bugprone-branch-clone ×2** — `Declaration/Types.cpp`'s size table: distinct GLSL types of the same size, one case
   each so the table stays readable per type.
 - **use-enum-class ×1** — `GeneratorFlagBits` (a bit set, the flag convention).
+
+### `src/Vulkan` 9a — instance, device, presentation (2026-10-01)
+
+- **pro-bounds-array-to-pointer-decay ×11** — the Vulkan C structures' fixed arrays (`deviceName`, `memoryTypes`,
+  `extensionName`…) handed to the C API and to streams.
+- **pro-type-reinterpret-cast ×10** — `vkGetInstanceProcAddr` / `vkGetDeviceProcAddr` function pointers, `pNext` chains.
+- **convert-member-functions-to-static ×5** — `PhysicalDevice` query wrappers kept on the instance (their unused
+  parameters mirror the Vulkan calls they will wrap) and the `Instance` compatibility checks.
+- **pro-bounds-constant-array-index ×4** — memory-type and queue-priority loops bounded by the driver's counts.
+- **misc-misplaced-const ×1** — `const VkSemaphore semaphore`: the handle is meant const, not its pointee.
+- **clang-analyzer-deadcode.DeadStores ×1** — `SwapChain`'s present-mode `selectionReason` default: every branch
+  overwrites it, the default is the fallback's wording.
 

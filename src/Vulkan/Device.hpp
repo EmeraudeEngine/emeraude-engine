@@ -39,7 +39,7 @@
 /* Third-party forward declarations (the VMA implementation header is only
  * needed by the few .cpp files that call vma* functions — VmaAllocator is
  * an opaque handle, identical to VMA's own VK_DEFINE_HANDLE definition). */
-typedef struct VmaAllocator_T * VmaAllocator;
+using VmaAllocator = struct VmaAllocator_T *;
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
@@ -737,7 +737,7 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			static
-			uint32_t addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const Base::StaticVector<VkQueueFamilyProperties2, 8>& queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			uint32_t addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares queues for a graphics and compute device.
@@ -748,7 +748,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares queues for a graphics device.
@@ -759,7 +759,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares queues for a compute device.
@@ -769,7 +769,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchComputeQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchComputeQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Prepares transfer-only queues for the device (optional).
@@ -779,7 +779,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool searchTransferOnlyQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchTransferOnlyQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Searches a queue family with video-encode capability (Vulkan Video).
@@ -789,7 +789,7 @@ namespace EmEn::Vulkan
 			 * @param queuePriorities A writable reference to the queue priorities.
 			 * @return bool True when a VIDEO_ENCODE queue family was configured.
 			 */
-			bool searchVideoEncodeQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorities) noexcept;
+			bool searchVideoEncodeQueueConfiguration (const Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, Base::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Creates the device with the defined and verified queues.
@@ -808,7 +808,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool installQueues (const std::map< uint32_t, Base::StaticVector< float, 16 > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept;
+			bool installQueues (const std::map< uint32_t, Base::StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept;
 
 			const Instance & m_instance;
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;

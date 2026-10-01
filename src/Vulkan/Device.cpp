@@ -104,7 +104,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::installQueues (const std::map< uint32_t, StaticVector< float, 16 > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept
+	Device::installQueues (const std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorityValues, const DeviceQueueConfiguration & configuration) noexcept
 	{
 		const auto queueFamilyIndex = configuration.queueFamilyIndex();
 
@@ -119,7 +119,7 @@ namespace EmEn::Vulkan
 
 		for ( uint32_t queueIndex = 0; queueIndex < queueCount; queueIndex++ )
 		{
-			VkQueue queueHandle;
+			VkQueue queueHandle = VK_NULL_HANDLE;
 
 			vkGetDeviceQueue(m_deviceHandle, queueFamilyIndex, queueIndex, &queueHandle);
 
@@ -201,7 +201,7 @@ namespace EmEn::Vulkan
 
 		m_basicSupport = queueFamilyProperties.size() <= 1;
 
-		std::map< uint32_t, StaticVector< float, 16 > > queuePriorityValues;
+		std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > queuePriorityValues;
 		StaticVector< VkDeviceQueueCreateInfo, 8 > queueCreateInfos;
 
 		/* NOTE: Split the strategy search for queue family. */
@@ -438,7 +438,7 @@ namespace EmEn::Vulkan
 	}
 
 	uint32_t
-	Device::addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	Device::addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept
 	{
 		/* NOTE: Avoid adding the same family twice. */
 		for ( const auto & createInfo : queueCreateInfos )
@@ -449,7 +449,14 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		const uint32_t queueCount = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueCount;
+		/* NOTE: Owner ruling (2026-10-01): never more queues than a DeviceQueueConfiguration holds. */
+		const uint32_t reportedQueueCount = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueCount;
+		const auto queueCount = std::min(reportedQueueCount, static_cast< uint32_t >(DeviceQueueConfiguration::MaxQueuesPerFamily));
+
+		if ( queueCount < reportedQueueCount )
+		{
+			TraceInfo{ClassId} << "Queue family #" << queueFamilyIndex << " reports " << reportedQueueCount << " queues: " << queueCount << " are created.";
+		}
 
 		auto & priorities = queuePriorities[queueFamilyIndex];
 		priorities.resize(queueCount, 1.0F); /* NOTE: Default priority. */
@@ -468,7 +475,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	Device::searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept
 	{
 		/* 1. Discovering the best candidates. */
 		std::optional< uint32_t > bestGraphicsIndex;
@@ -572,7 +579,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	Device::searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept
 	{
 		std::optional< uint32_t > bestGraphicsIndex;
 
@@ -624,7 +631,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::searchComputeQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	Device::searchComputeQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept
 	{
 		std::optional< uint32_t > bestComputeIndex;
 
@@ -671,7 +678,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::searchTransferOnlyQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	Device::searchTransferOnlyQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept
 	{
 		std::optional< uint32_t > transferIndex;
 
@@ -686,7 +693,7 @@ namespace EmEn::Vulkan
 			}
 
 			/* ... and only the transfer-only capabilities. */
-			if ( properties.queueFlags & ~(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT) )
+			if ( (properties.queueFlags & ~(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT)) != 0U )
 			{
 				continue;
 			}
@@ -711,7 +718,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::searchVideoEncodeQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	Device::searchVideoEncodeQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, DeviceQueueConfiguration::MaxQueuesPerFamily > > & queuePriorities) noexcept
 	{
 		std::optional< uint32_t > videoEncodeIndex;
 
@@ -719,7 +726,7 @@ namespace EmEn::Vulkan
 		{
 			const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
 
-			if ( properties.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR )
+			if ( (properties.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) != 0U )
 			{
 				videoEncodeIndex = index;
 

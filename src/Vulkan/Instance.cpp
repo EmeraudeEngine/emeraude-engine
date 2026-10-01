@@ -310,15 +310,9 @@ namespace EmEn::Vulkan
 			" MX"  /* Space prefix to avoid matching other patterns like "RTX" */
 		};
 
-		for ( const auto & pattern : mobilePatterns )
-		{
-			if ( gpuName.find(pattern) != std::string::npos )
-			{
-				return true;
-			}
-		}
-
-		return false;
+		return std::ranges::any_of(mobilePatterns, [&gpuName] (const std::string & pattern) {
+			return gpuName.find(pattern) != std::string::npos;
+		});
 	}
 
 	HybridGPUConfig
@@ -1232,7 +1226,7 @@ namespace EmEn::Vulkan
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 
-		std::vector< const char * > requiredExtensions;
+		const std::vector< const char * > requiredExtensions;
 
 		std::map< size_t, std::shared_ptr< PhysicalDevice > > scoredDevices;
 
@@ -1245,12 +1239,12 @@ namespace EmEn::Vulkan
 				continue;
 			}
 
-			if ( !this->checkDevicesFeaturesForCompute(physicalDevice, score) )
+			if ( !Instance::checkDevicesFeaturesForCompute(physicalDevice, score) )
 			{
 				continue;
 			}
 
-			if ( !this->checkDeviceForRequiredExtensions(physicalDevice, requiredExtensions, score) )
+			if ( !Instance::checkDeviceForRequiredExtensions(physicalDevice, requiredExtensions, score) )
 			{
 				continue;
 			}
@@ -1281,15 +1275,44 @@ namespace EmEn::Vulkan
 			return {};
 		}
 
-		const auto & selectedPhysicalDevice = scoredDevices.rbegin()->second;
+		/* NOTE: Owner ruling (2026-10-01): the forced GPU drives the compute device too, as it drives the graphics one,
+		 * so a forced-GPU test runs physics on the same device; a forced GPU that cannot compute falls back to the score. */
+		std::shared_ptr< PhysicalDevice > selectedPhysicalDevice;
 
-		TraceSuccess{ClassId} << "Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected (" << autoSelectModeString << " mode)";
+		if ( !forceGPUName.empty() )
+		{
+			for ( const auto & physicalDevice : scoredDevices | std::views::values )
+			{
+				if ( physicalDevice->deviceName() == forceGPUName )
+				{
+					selectedPhysicalDevice = physicalDevice;
+
+					break;
+				}
+			}
+
+			if ( selectedPhysicalDevice == nullptr )
+			{
+				TraceWarning{ClassId} << "The forced physical device '" << forceGPUName << "' is not a compatible compute device ! Selecting by score.";
+			}
+		}
+
+		if ( selectedPhysicalDevice != nullptr )
+		{
+			TraceSuccess{ClassId} << "Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected (FORCED)";
+		}
+		else
+		{
+			selectedPhysicalDevice = scoredDevices.rbegin()->second;
+
+			TraceSuccess{ClassId} << "Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected (" << autoSelectModeString << " mode)";
+		}
 
 		/* NOTE: Logical device creation for computing. */
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, m_showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
-		DeviceRequirements requirements{false, nullptr, true};
+		const DeviceRequirements requirements{false, nullptr, true};
 
 		if ( !logicalDevice->create(requirements, requiredExtensions, useVMA) )
 		{
@@ -1386,19 +1409,11 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, VkQueueFlagBits type, size_t & score) const noexcept
+	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, VkQueueFlagBits type, size_t & /*score*/) const noexcept
 	{
-		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
-		{
-			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & type) == 0 )
-			{
-				continue;
-			}
-
-			return true;
-		}
-
-		return false;
+		return std::ranges::any_of(physicalDevice->queueFamilyPropertiesVK11(), [type] (const auto & queueFamilyProperty) {
+			return (queueFamilyProperty.queueFamilyProperties.queueFlags & type) != 0;
+		});
 	}
 
 	bool

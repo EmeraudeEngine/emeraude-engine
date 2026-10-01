@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,13 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanPhysicalDevice"};
+
+			/**
+			 * @brief The most queue families the engine reads from a device.
+			 * @note Owner ruling (2026-10-01, with the per-family queue cap): a device reporting more (none does today, six at
+			 * most) has its first ones used, with a warning.
+			 */
+			static constexpr size_t MaxQueueFamilies{8};
 
 			/**
 			 * @brief Constructs a physical device.
@@ -471,10 +479,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns prefetched physical device queue family properties from Vulkan 1.1.
-			 * @return const Base::StaticVector< VkQueueFamilyProperties2, 8 > &
+			 * @return const Base::StaticVector< VkQueueFamilyProperties2, MaxQueueFamilies > &
 			 */
 			[[nodiscard]]
-			const Base::StaticVector< VkQueueFamilyProperties2, 8 > &
+			const Base::StaticVector< VkQueueFamilyProperties2, MaxQueueFamilies > &
 			queueFamilyPropertiesVK11 () const noexcept
 			{
 				return m_queueFamilyProperties;
@@ -748,7 +756,7 @@ namespace EmEn::Vulkan
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			static std::string UUIDToString (const uint8_t uuid[]) noexcept;
+			static std::string UUIDToString (std::span< const uint8_t, VK_UUID_SIZE > uuid) noexcept;
 
 		private:
 
@@ -770,7 +778,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};
 			VkPhysicalDeviceVulkan13Properties m_propertiesVK13{};
 			VkPhysicalDeviceMemoryProperties2 m_memoryProperties{};
-			Base::StaticVector< VkQueueFamilyProperties2, 8 > m_queueFamilyProperties;
+			Base::StaticVector< VkQueueFamilyProperties2, MaxQueueFamilies > m_queueFamilyProperties;
 			std::vector< VkPhysicalDeviceToolProperties > m_toolProperties;
 			std::vector< VkDisplayPropertiesKHR > m_displayProperties;
 			std::vector< VkDisplayPlanePropertiesKHR > m_displayPlaneProperties;

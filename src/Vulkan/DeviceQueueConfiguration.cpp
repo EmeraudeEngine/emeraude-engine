@@ -87,7 +87,7 @@ namespace EmEn::Vulkan
 		}
 	}
 
-	const Base::StaticVector< Queue *, 16 > &
+	const Base::StaticVector< Queue *, DeviceQueueConfiguration::MaxQueuesPerFamily > &
 	DeviceQueueConfiguration::queues (QueuePriority priority) const noexcept
 	{
 		switch ( priority )
