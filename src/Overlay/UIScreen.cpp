@@ -52,7 +52,15 @@ namespace EmEn::Overlay
 	{
 		auto errors = 0;
 
-		for ( const auto & surface : m_surfaces )
+		/* NOTE: A copy taken under the mutex: the main thread reorders / destroys surfaces meanwhile, and a surface
+		 * update notifies observers that may call back into this screen (the mutex is not recursive). */
+		{
+			const std::scoped_lock lock{m_surfacesMutex};
+
+			m_surfaceSnapshot.assign(m_surfaces.begin(), m_surfaces.end());
+		}
+
+		for ( const auto & surface : m_surfaceSnapshot )
 		{
 			/* NOTE: When forceInvalidate is true (window resize), all surfaces must
 			 * recalculate their pixel dimensions based on new FramebufferProperties. */
@@ -72,6 +80,8 @@ namespace EmEn::Overlay
 				break;
 			}
 		}
+
+		m_surfaceSnapshot.clear();
 
 		return errors == 0;
 	}
@@ -861,6 +871,9 @@ namespace EmEn::Overlay
 	std::ostream &
 	operator<< (std::ostream & out, const UIScreen & obj)
 	{
+		/* NOTE: The surface list is mutated under this mutex (stack order, creation, destruction). */
+		const std::scoped_lock lock{obj.m_surfacesMutex};
+
 		const auto exclusiveSurface = obj.m_inputExclusiveSurface.lock();
 		const auto pointerMoveTapSurface = obj.m_pointerMoveTapSurface.lock();
 

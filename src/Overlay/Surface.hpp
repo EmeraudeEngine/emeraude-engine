@@ -1393,6 +1393,18 @@ namespace EmEn::Overlay
 			bool updatePhysicalRepresentation (Graphics::Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Returns whether a pixel size fits the device's 2D image limit; traces an error otherwise.
+			 * @note A size past it fails the image creation, and a huge one aborted on the pixmap allocation
+			 * (-fno-exceptions): it is refused before both (owner ruling 2026-10-01).
+			 * @param renderer A reference to the graphics renderer.
+			 * @param width The width in pixels.
+			 * @param height The height in pixels.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool fitsDeviceLimits (Graphics::Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
+
+			/**
 			 * @brief Recreates the transition buffer at the size requested by the content provider.
 			 * @details Dedicated path for the content-provider-driven resize (see
 			 * requestTransitionBufferResize()). Unlike updatePhysicalRepresentation(), it does NOT
@@ -1497,7 +1509,7 @@ namespace EmEn::Overlay
 			float m_alphaThreshold{0.1F};
 			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
 			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
-			std::function< void () > m_redrawRequester{}; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
+			std::function< void () > m_redrawRequester; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
 			bool m_transitionResizeRequested{false};
 			bool m_acceleratedSourceEnabled{false};
 			bool m_videoMemorySizeValid{false};

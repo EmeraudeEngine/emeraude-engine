@@ -251,9 +251,9 @@ namespace EmEn::Overlay
 
 		/* NOTE: Accelerated-mode resources (popup cache + one-shot copy resources). */
 		m_acceleratedPopupImage.reset();
-		m_acceleratedCommandBuffer.reset();
+		m_acceleratedCommandBuffer = nullptr;
 		m_acceleratedCommandPool.reset();
-		m_acceleratedFence.reset();
+		m_acceleratedFence = nullptr;
 
 		/* NOTE: The sampler comes from the renderer's shared sampler cache (Renderer::getSampler,
 		 * id "OverlaySurface") and is shared by every overlay surface. Only release our reference —
@@ -761,7 +761,7 @@ namespace EmEn::Overlay
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_requestedTransitionSizeMutex};
+		const std::scoped_lock lock{m_requestedTransitionSizeMutex};
 
 		m_requestedTransitionWidth = width;
 		m_requestedTransitionHeight = height;
@@ -775,7 +775,7 @@ namespace EmEn::Overlay
 		uint32_t requestedHeight = 0;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_requestedTransitionSizeMutex};
+			const std::scoped_lock lock{m_requestedTransitionSizeMutex};
 
 			if ( !m_transitionResizeRequested )
 			{
@@ -790,6 +790,12 @@ namespace EmEn::Overlay
 		/* NOTE: The content provider's painted size is authoritative. If the transition buffer
 		 * already matches it, there is nothing to do — the next incoming frame will commit. */
 		if ( m_transitionBuffer.matchesSize(requestedWidth, requestedHeight) )
+		{
+			return true;
+		}
+
+		/* NOTE: Refused BEFORE any pixmap allocation (owner ruling 2026-10-01): the transition buffer stays. */
+		if ( !this->fitsDeviceLimits(renderer, requestedWidth, requestedHeight) )
 		{
 			return true;
 		}
@@ -837,6 +843,21 @@ namespace EmEn::Overlay
 	}
 
 	bool
+	Surface::fitsDeviceLimits (Renderer & renderer, uint32_t width, uint32_t height) const noexcept
+	{
+		const auto maxDimension = renderer.device()->physicalDevice()->propertiesVK10().limits.maxImageDimension2D;
+
+		if ( width <= maxDimension && height <= maxDimension )
+		{
+			return true;
+		}
+
+		TraceError{ClassId} << "The surface '" << this->name() << "' would be " << width << "x" << height << " px, past the device limit of " << maxDimension << " px per side: the size is refused, the current buffer stays !";
+
+		return false;
+	}
+
+	bool
 	Surface::updatePhysicalRepresentation (Renderer & renderer) noexcept
 	{
 		const auto & framebuffer = this->framebufferProperties();
@@ -852,6 +873,13 @@ namespace EmEn::Overlay
 		 * current buffer and defer recreation. The next resize event (window back to a valid
 		 * size) re-invalidates the surface and recreates it correctly. */
 		if ( textureWidth == 0 || textureHeight == 0 )
+		{
+			return true;
+		}
+
+		/* NOTE: Refused BEFORE any pixmap allocation (owner ruling 2026-10-01): the current buffer stays, as for the
+		 * 0-px state above, and the next valid size recreates it. */
+		if ( !this->fitsDeviceLimits(renderer, textureWidth, textureHeight) )
 		{
 			return true;
 		}
@@ -995,7 +1023,7 @@ namespace EmEn::Overlay
 		{
 			TraceError{ClassId} << "Unable to create the accelerated-copy command buffer for the surface '" << this->name() << "' !";
 
-			m_acceleratedCommandBuffer.reset();
+			m_acceleratedCommandBuffer = nullptr;
 			m_acceleratedCommandPool.reset();
 
 			return false;
@@ -1008,8 +1036,8 @@ namespace EmEn::Overlay
 		{
 			TraceError{ClassId} << "Unable to create the accelerated-copy fence for the surface '" << this->name() << "' !";
 
-			m_acceleratedFence.reset();
-			m_acceleratedCommandBuffer.reset();
+			m_acceleratedFence = nullptr;
+			m_acceleratedCommandBuffer = nullptr;
 			m_acceleratedCommandPool.reset();
 
 			return false;
@@ -1270,11 +1298,11 @@ namespace EmEn::Overlay
 		}
 
 		VkImageCopy region{};
-		region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-		region.srcOffset = {0, 0, 0};
-		region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-		region.dstOffset = {static_cast< int32_t >(popupX), static_cast< int32_t >(popupY), 0};
-		region.extent = {copyWidth, copyHeight, 1};
+		region.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+		region.srcOffset = {.x = 0, .y = 0, .z = 0};
+		region.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+		region.dstOffset = {.x = static_cast< int32_t >(popupX), .y = static_cast< int32_t >(popupY), .z = 0};
+		region.extent = {.width = copyWidth, .height = copyHeight, .depth = 1};
 
 		m_acceleratedCommandBuffer->copyImage(*m_acceleratedPopupImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, targetImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
 	}

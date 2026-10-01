@@ -61,9 +61,9 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed and VALIDATED on the three OS (2026-10-01) |
 | 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed and VALIDATED on the three OS (2026-10-01) |
 | 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | ✅ 10a-10b pushed and VALIDATED on the three OS (2026-10-01) |
-| 11 | `src/Physics` | 9 197 | ✅ pushed (peers pending) |
-| 12 | `src/Animations` (+ the glTF skins and extents it led to) | 3 488 | ✅ pushed (peers pending) |
-| 13 | `src/Overlay` | 7 303 | ⬜ |
+| 11 | `src/Physics` | 9 197 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
+| 12 | `src/Animations` (+ the glTF skins and extents it led to) | 3 488 | ✅ pushed and VALIDATED on the three OS (2026-10-01) |
+| 13 | `src/Overlay` | 7 303 | ✅ pushed (peers pending) |
 | 14 | `src/PlatformSpecific` | 8 996 | ⬜ |
 | 15 | `src/Tool`, `src/Help`, root files | 1 292 + 40 files | ⬜ |
 
@@ -1384,4 +1384,46 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   overflows the shared material buffer (7 232 slots), a known limit. 13 hand-crafted glTFs: the valid ones load (an
   out-of-order skin, more IBMs than joints), the 10 hostile ones refused with their reason, 0 VUID. animation-debug
   (the skinned Paladins animate), citadel MCP 1707/0, console 4466/0, 0 VUID.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 12 commit), base `96cf9bc`; peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `29159fdf`, base `96cf9bc`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning, base 2186 = 2183 + 3 skipped): the 13 crafted glTFs exactly as on Linux;
+    CesiumMan, Fox, BrainStem, RiggedFigure, SimpleSkin load and animate with 0 [SkeletalAnimator] line;
+    animation-debug, citadel MCP 1707/0, console 4445/0; 0 VUID, 0 UNASSIGNED. Found (PRE-EXISTING, A/B on Linux with
+    the pre-12 loader and animator: the same): the animated BrainStem lies on its side — item
+    `gltf-skinned-non-joint-ancestors-misoriented`.
+  - Windows PASS on NVIDIA RTX 3060 Laptop and AMD (MSVC /W4 /WX 0 warning: `quickRandom< int8_t >` accepted without
+    the former Windows special case; base 2186 = 2183 + 3 skipped): the 13 crafted glTFs as on Linux (NVIDIA and AMD
+    logs identical), the five skinned samples load and cycle, animation-debug, citadel MCP 1707/0, console 4457/0;
+    AMD 0 VUID, NVIDIA only the known `renderPass-12325`. BrainStem as on macOS (it alone logs "1 node animation
+    clip(s) attached, driving 1 node(s)"): the item above.
+
+## Section 13 — `src/Overlay` (started 2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (8 TUs + headers): **22** (6 ambiguous smart-pointer `reset()`, 5 designated
+  initializers, 3 scoped-lock, 3 redundant member init, 3 constant-array-index, singles).
+- [x] (2) Review (the trust boundaries: the window system's sizes and scales, the content provider's painted size and
+  dirty region — CEF, through `requestTransitionBufferResize()` and the transition buffer —, the render / main thread
+  split). Sound: the upload path (the partial band only when provable, the full upload otherwise), the accelerated
+  popup composite (clamped to the target), the 0-px transient. Findings:
+  - O1 the render-thread passes (`updateVideoMemory()`, `onWindowResized()`, `dumpUploadStatistics()`,
+    `UIScreen::processSurfaceUpdates()`) iterated `m_screens` / `m_surfaces` without the mutex that the main thread's
+    `createScreen()` / `destroyScreen()` / stack operations take; `createImGUIScreen()` wrote `m_ImGUIScreens` unlocked
+    while `render()` reads it locked; `surfaces()` handed out an unlocked reference; `UIScreen::operator<<` read the
+    stack unlocked (owner question).
+  - O2 a surface size has no upper bound: past `maxImageDimension2D` the image creation is refused (9b), but the pixmap
+    is allocated first and a huge one aborts (owner question).
+  - O3 `FramebufferProperties`: a NaN or infinite screen scale passed the `<= 0` test (NaN resolutions), and the pixel
+    sizes converted `round(float)` to `uint32_t` / `int32_t` unchecked (UB on a NaN or negative geometry).
+- [x] (3) Mechanical: O3 (a non-finite scale is 1; `roundedToInteger()` saturates, NaN = 0); the `operator<<` lock; the
+  fix-its (`= nullptr` ×6, designated initializers with the spacing normalized, `std::scoped_lock` ×3 + the ImGUI
+  device lock, the redundant initializers, the parameter name), run TU by TU: no header outside the section touched.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - O1 snapshots: `Manager::snapshotScreens()` into a reused `m_screenSnapshot`, `UIScreen::m_surfaceSnapshot`, both
+    copied under their mutex and processed without it; `createImGUIScreen()` locks; `surfaces()` returns a copy.
+  - O2 refused before any allocation (`Surface::fitsDeviceLimits()`): error, the current buffer stays.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 110 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 22 → 4 (on purpose, ledger). citadel with the CEF menu open
+  (`Stage.openMenu()`) through 4 window resizes (1200×700, 1700×1000, 900×600, 1600×900): the menu re-laid out at
+  each size, 4 transition buffers committed, 0 VUID, 0 error; a 17 000×1200 request (the compositor settled at
+  7 668 px: the refusal not reached at runtime); citadel MCP 1707/0, console 4466/0.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 13 commit); peers asked.
+

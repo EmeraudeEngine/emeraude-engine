@@ -397,14 +397,18 @@ namespace EmEn::Overlay
 			std::vector< std::string > stackOrder () const noexcept;
 
 			/**
-			 * @brief Returns the screen surfaces in stack order (bottom to top).
+			 * @brief Returns a copy of the screen surfaces in stack order (bottom to top).
 			 * @details Index 0 = bottom (drawn first), index N-1 = top (drawn last).
-			 * @return const std::vector< std::shared_ptr< Surface > > &
+			 * @note A COPY taken under the surface mutex: the stack is mutated from the main thread (creation,
+			 * destruction, bring / send) while the render thread reads it. A reference handed out unlocked raced.
+			 * @return std::vector< std::shared_ptr< Surface > >
 			 */
 			[[nodiscard]]
-			const std::vector< std::shared_ptr< Surface > > &
+			std::vector< std::shared_ptr< Surface > >
 			surfaces () const noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				return m_surfaces;
 			}
 
@@ -606,7 +610,7 @@ namespace EmEn::Overlay
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
 			std::vector< std::shared_ptr< Surface > > m_surfaces;
-			std::function< void () > m_redrawRequester{}; ///< Propagated from the Overlay::Manager to request a redraw on any visual mutation (on-demand rendering). @see setRedrawRequester()
+			std::function< void () > m_redrawRequester; ///< Propagated from the Overlay::Manager to request a redraw on any visual mutation (on-demand rendering). @see setRedrawRequester()
 			std::weak_ptr< Surface > m_inputExclusiveSurface;
 			/* NOTE: Implicit pointer capture (grab). The surface that consumes a button
 			 * press receives every subsequent move/release/wheel until all of its buttons
@@ -631,6 +635,9 @@ namespace EmEn::Overlay
 			 * drag on an overlay view while a 3D view below keeps receiving the moves). */
 			std::weak_ptr< Surface > m_pointerMoveTapSurface;
 			mutable std::mutex m_surfacesMutex;
+			/* The surfaces being processed by processSurfaceUpdates() (render thread), copied under m_surfacesMutex and
+			 * reused: no allocation per frame, no lock held while a surface notifies its observers. */
+			std::vector< std::shared_ptr< Surface > > m_surfaceSnapshot;
 			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
 			bool m_isListeningPointer{false};

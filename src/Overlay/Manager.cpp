@@ -291,6 +291,9 @@ namespace EmEn::Overlay
 	std::shared_ptr< ImGUIScreen >
 	Manager::createImGUIScreen (const std::string & name, const std::function< void () > & drawFunction) noexcept
 	{
+		/* NOTE: render() reads m_ImGUIScreens under this mutex on the render thread. */
+		const std::scoped_lock lock{m_screensAccess};
+
 		if ( m_ImGUIScreens.contains(name) )
 		{
 			TraceError{ClassId} << "An ImGUI screen named '" << name << "' already exists !";
@@ -522,14 +525,16 @@ namespace EmEn::Overlay
 		/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
 		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
 
-		if ( !this->isEnabled() || m_screens.empty() )
+		if ( !this->isEnabled() )
 		{
 			return;
 		}
 
+		this->snapshotScreens();
+
 		/* NOTE: Only process VISIBLE screens for performance.
 		 * Hidden screens will be processed when they become visible again. */
-		for ( const auto & screen : m_screens | std::views::values )
+		for ( const auto & screen : m_screenSnapshot )
 		{
 			if ( screen->empty() || !screen->isVisible() )
 			{
@@ -543,6 +548,22 @@ namespace EmEn::Overlay
 		}
 
 		this->dumpUploadStatistics();
+
+		/* NOTE: Released now, so a screen destroyed meanwhile does not outlive this pass. */
+		m_screenSnapshot.clear();
+	}
+
+	void
+	Manager::snapshotScreens () noexcept
+	{
+		const std::scoped_lock lock{m_screensAccess};
+
+		m_screenSnapshot.clear();
+
+		for ( const auto & screen : m_screens | std::views::values )
+		{
+			m_screenSnapshot.push_back(screen);
+		}
 	}
 
 	void
@@ -565,7 +586,7 @@ namespace EmEn::Overlay
 
 		const auto elapsedSeconds = static_cast< double >(elapsed.count()) / 1000.0;
 
-		for ( const auto & screen : m_screens | std::views::values )
+		for ( const auto & screen : m_screenSnapshot )
 		{
 			for ( const auto & surface : screen->surfaces() )
 			{
@@ -626,7 +647,9 @@ namespace EmEn::Overlay
 		 * NOTE: Surfaces are NOT automatically committed. The active buffer continues to render
 		 * with the old content/size until the application explicitly calls commitTransitionBuffer().
 		 * This allows asynchronous renderers (e.g., CEF) to prepare new content before committing. */
-		for ( const auto & screen : m_screens | std::views::values )
+		this->snapshotScreens();
+
+		for ( const auto & screen : m_screenSnapshot )
 		{
 			if ( screen->empty() )
 			{
@@ -640,6 +663,8 @@ namespace EmEn::Overlay
 
 			TraceDebug{ClassId} << "The screen '" << screen->name() << "' resized.";
 		}
+
+		m_screenSnapshot.clear();
 
 		/* Step 3: Notify observers of the resize completion. */
 		const auto & windowState = m_resourceManager.graphicsRenderer().window().state();
@@ -796,7 +821,7 @@ namespace EmEn::Overlay
 				{
 					if ( texture->Status != ImTextureStatus_OK )
 					{
-						const std::lock_guard< Vulkan::Device > deviceLock{*m_ImGUIDescriptorPool->device()};
+						const std::scoped_lock deviceLock{*m_ImGUIDescriptorPool->device()};
 
 						ImGui_ImplVulkan_UpdateTexture(texture);
 					}
@@ -1012,7 +1037,7 @@ namespace EmEn::Overlay
 		ImGui::DestroyContext();
 
 		m_ImGUIDescriptorPool->destroyFromHardware();
-		m_ImGUIDescriptorPool.reset();
+		m_ImGUIDescriptorPool = nullptr;
 	}
 
 #endif

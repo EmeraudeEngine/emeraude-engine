@@ -27,6 +27,7 @@
 #include "FramebufferProperties.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <ostream>
 #include <sstream>
 
@@ -35,12 +36,14 @@ namespace EmEn::Overlay
 	void
 	FramebufferProperties::updateScaledResolution () noexcept
 	{
-		if ( m_screenScaleX <= 0.0F )
+		/* NOTE: A NaN or infinite scale (from the window system) passed the former `<= 0` test and made every
+		 * resolution NaN (or 0). */
+		if ( !std::isfinite(m_screenScaleX) || m_screenScaleX <= 0.0F )
 		{
 			m_screenScaleX = 1.0F;
 		}
 
-		if ( m_screenScaleY <= 0.0F )
+		if ( !std::isfinite(m_screenScaleY) || m_screenScaleY <= 0.0F )
 		{
 			m_screenScaleY = 1.0F;
 		}

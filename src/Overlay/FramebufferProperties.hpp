@@ -32,7 +32,9 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
+#include <type_traits>
 
 namespace EmEn::Overlay
 {
@@ -251,7 +253,7 @@ namespace EmEn::Overlay
 			getRoundedResolutionX () const noexcept
 				requires(std::is_integral_v< integer_t >)
 			{
-				return static_cast< integer_t >(std::round(m_resolutionX));
+				return FramebufferProperties::roundedToInteger< integer_t >(m_resolutionX);
 			}
 
 			/**
@@ -265,7 +267,7 @@ namespace EmEn::Overlay
 			getRoundedResolutionY () const noexcept
 				requires(std::is_integral_v< integer_t >)
 			{
-				return static_cast< integer_t >(std::round(m_resolutionY));
+				return FramebufferProperties::roundedToInteger< integer_t >(m_resolutionY);
 			}
 
 			/**
@@ -280,7 +282,7 @@ namespace EmEn::Overlay
 			getRoundedResolutionX (float width) const noexcept
 				requires(std::is_integral_v< integer_t >)
 			{
-				return static_cast< integer_t >(std::round(m_resolutionX * width));
+				return FramebufferProperties::roundedToInteger< integer_t >(m_resolutionX * width);
 			}
 
 			/**
@@ -295,7 +297,7 @@ namespace EmEn::Overlay
 			getRoundedResolutionY (float height) const noexcept
 				requires(std::is_integral_v< integer_t >)
 			{
-				return static_cast< integer_t >(std::round(m_resolutionY * height));
+				return FramebufferProperties::roundedToInteger< integer_t >(m_resolutionY * height);
 			}
 
 			/**
@@ -308,7 +310,7 @@ namespace EmEn::Overlay
 			getSurfaceWidth (float surfaceWidth) const noexcept
 			{
 				/* NOTE: Do not remove the double round! */
-				return static_cast< uint32_t >(std::round(std::round(m_resolutionX * surfaceWidth) * m_screenScaleX));
+				return FramebufferProperties::roundedToInteger< uint32_t >(std::round(m_resolutionX * surfaceWidth) * m_screenScaleX);
 			}
 
 			/**
@@ -321,7 +323,7 @@ namespace EmEn::Overlay
 			getSurfaceHeight (float surfaceHeight) const noexcept
 			{
 				/* NOTE: Do not remove the double round! */
-				return static_cast< uint32_t >(std::round(std::round(m_resolutionY * surfaceHeight) * m_screenScaleY));
+				return FramebufferProperties::roundedToInteger< uint32_t >(std::round(m_resolutionY * surfaceHeight) * m_screenScaleY);
 			}
 
 			/**
@@ -331,6 +333,41 @@ namespace EmEn::Overlay
 			void reset () noexcept;
 
 		private:
+
+			/**
+			 * @brief Returns a float rounded to an integer, saturated to the integer range.
+			 * @note A float outside the integer range (NaN included) converted to an integer is undefined behaviour: a
+			 * NaN or negative surface geometry reached the unsigned pixel sizes. NaN gives 0.
+			 * @tparam integer_t The integer type.
+			 * @param value The value.
+			 * @return integer_t
+			 */
+			template< typename integer_t >
+			[[nodiscard]]
+			static
+			integer_t
+			roundedToInteger (float value) noexcept
+				requires (std::is_integral_v< integer_t >)
+			{
+				const auto rounded = std::round(value);
+
+				if ( std::isnan(rounded) )
+				{
+					return 0;
+				}
+
+				if ( rounded <= static_cast< float >(std::numeric_limits< integer_t >::lowest()) )
+				{
+					return std::numeric_limits< integer_t >::lowest();
+				}
+
+				if ( rounded >= static_cast< float >(std::numeric_limits< integer_t >::max()) )
+				{
+					return std::numeric_limits< integer_t >::max();
+				}
+
+				return static_cast< integer_t >(rounded);
+			}
 
 			/**
 			 * @brief Updates the scaled resolution with factors.

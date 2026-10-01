@@ -464,6 +464,16 @@ namespace EmEn::Overlay
 			 */
 			void updateFramebufferProperties () noexcept;
 
+			/**
+			 * @brief Copies the screen pointers into m_screenSnapshot under m_screensAccess.
+			 * @note The render-thread passes (updateVideoMemory(), onWindowResized(), dumpUploadStatistics()) iterate this
+			 * copy: iterating m_screens itself raced with createScreen() / destroyScreen() on the main thread (a rehash or
+			 * an erase during the iteration), and holding m_screensAccess during the updates would deadlock an observer
+			 * that touches the screen list. The caller holds m_physicalRepresentationUpdateMutex.
+			 * @return void
+			 */
+			void snapshotScreens () noexcept;
+
 			/** @brief Number of shader programs (2 alpha modes × 2 pixel formats = 4). */
 			static constexpr size_t ProgramCount = 4;
 
@@ -474,7 +484,7 @@ namespace EmEn::Overlay
 			 * @return std::shared_ptr< Saphir::Program >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Saphir::Program > generateShaderProgram (bool premultipliedAlpha, bool bgraSource) const noexcept;
+			std::shared_ptr< Saphir::Program > generateShaderProgram (bool premultipliedAlpha, bool isBGRASurface) const noexcept;
 
 #ifdef IMGUI_ENABLED
 
@@ -499,6 +509,8 @@ namespace EmEn::Overlay
 			std::shared_ptr< Graphics::Geometry::IndexedVertexResource > m_surfaceGeometry;
 			std::array< std::shared_ptr< Saphir::Program >, ProgramCount > m_programs;
 			std::unordered_map< std::string, std::shared_ptr< UIScreen > > m_screens;
+			/* The screens being processed by a render-thread pass (snapshotScreens()), reused: no allocation per frame. */
+			std::vector< std::shared_ptr< UIScreen > > m_screenSnapshot;
 			std::shared_ptr< UIScreen > m_inputExclusiveScreen;
 #ifdef IMGUI_ENABLED
 			/* NOTE: These own the UTF-8 bytes that ImGuiIO::IniFilename / ::LogFilename point
@@ -527,7 +539,7 @@ namespace EmEn::Overlay
 			/* NOTE: Diagnostic only, render thread. @see Surface::UploadStatistics and the setting
 			 * Core/Video/Overlay/EnableUploadStatistics (read once at initialization). */
 			bool m_uploadStatisticsEnabled{false};
-			std::chrono::steady_clock::time_point m_lastUploadStatisticsDump{};
+			std::chrono::steady_clock::time_point m_lastUploadStatisticsDump;
 
 			/**
 			 * @brief Dumps and clears the per-surface GPU upload statistics, at most once per second.

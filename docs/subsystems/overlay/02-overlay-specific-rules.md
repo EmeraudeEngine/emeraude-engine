@@ -527,3 +527,23 @@ repaints again, and whether the gap between `bandBytes` and `regionBytes` justif
 > wheel event over an ImGUI window, so the scene and the editor behind it never see it. A RELEASE is never consumed:
 > a drag started in the scene must end even over a window. An INJECTED event (`InputManagerService.mouseClick`,
 > `keyPress`) reaches the engine callbacks only: it never presses an ImGUI widget.
+
+## Threading and limits (triad 13, 2026-10-01)
+
+- **The render-thread passes iterate SNAPSHOTS.** `Manager::updateVideoMemory()`, `onWindowResized()` and
+  `dumpUploadStatistics()` iterate `m_screenSnapshot` (`snapshotScreens()` copies the screen pointers under
+  `m_screensAccess`), and `UIScreen::processSurfaceUpdates()` iterates `m_surfaceSnapshot` (copied under
+  `m_surfacesMutex`). Iterating `m_screens` / `m_surfaces` directly raced with `createScreen()` / `destroyScreen()`
+  and the surface stack operations on the main thread (a rehash or an erase during the iteration). The locks are NOT
+  held during the updates: a surface notifies observers (`OverlayResized`…) that may call back into the screen, and
+  both mutexes are non-recursive. Both snapshot vectors are reused (no allocation per frame) and cleared after the
+  pass, so a screen or a surface destroyed meanwhile does not outlive it. `createImGUIScreen()` takes `m_screensAccess`
+  (`render()` reads `m_ImGUIScreens` under it). `UIScreen::surfaces()` returns a COPY taken under the lock.
+- **A surface pixel size past the device's `maxImageDimension2D` is refused** (`Surface::fitsDeviceLimits()`), before
+  any pixmap allocation, both in `updatePhysicalRepresentation()` and in `recreateTransitionBufferToRequestedSize()`:
+  an error naming the surface and the size, the current buffer stays, and the next valid size recreates it (owner
+  ruling). A huge size used to abort on the pixmap allocation (`-fno-exceptions`).
+- **`FramebufferProperties` never converts an out-of-range float**: a NaN or infinite screen scale is 1 (as `<= 0`
+  already was), and the pixel / point sizes go through `roundedToInteger()` (saturated, NaN = 0, which takes the
+  existing 0-px transient path).
+
