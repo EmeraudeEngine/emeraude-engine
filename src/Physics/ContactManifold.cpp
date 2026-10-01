@@ -43,8 +43,8 @@ namespace EmEn::Physics
 	{
 		out <<
 			"Contact manifold :" "\n"
-			"Body A : " << ( obj.m_bodyA ? "Present" : "None" ) << "\n"
-			"Body B : " << ( obj.m_bodyB ? "Present" : "None" ) << "\n";
+			"Body A : " << ( (obj.m_bodyA != nullptr) ? "Present" : "None" ) << "\n"
+			"Body B : " << ( (obj.m_bodyB != nullptr) ? "Present" : "None" ) << "\n";
 
 		if ( obj.hasContacts() )
 		{

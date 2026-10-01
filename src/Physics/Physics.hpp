@@ -1967,6 +1967,37 @@ namespace EmEn::Physics
 	}
 
 	/**
+	 * @brief Returns the factor that applies the quadratic drag to a velocity over one step.
+	 * @note The drag deceleration is dv/dt = -k |v| v with k = Cd rho A / (2 m). Integrated EXACTLY over the step (the
+	 * direction does not change), |v'| = |v| / (1 + k |v| dt). The explicit step (dv = k v^2 dt) went past a stop for a
+	 * light and fast body (k |v| dt > 1): the velocity reversed, then diverged to infinity and NaN. Both agree at low
+	 * speed (to the first order in k |v| dt).
+	 * @tparam precision_t A floating point type. Default float.
+	 * @param dragCoefficient The drag coefficient (Cd), positive.
+	 * @param density The fluid density (rho) in kg/m^3, positive.
+	 * @param speed The current speed |v| in m/s, positive.
+	 * @param surface The cross-section surface (A) in m^2, positive.
+	 * @param inverseMass The inverse of the body mass (1 / m), positive.
+	 * @param deltaTime The step duration in seconds, positive.
+	 * @return precision_t A factor in (0, 1] to multiply the velocity with (1 when a term is zero, negative or NaN).
+	 */
+	template< typename precision_t = float >
+	precision_t
+	getDragVelocityFactor (precision_t dragCoefficient, precision_t density, precision_t speed, precision_t surface, precision_t inverseMass, precision_t deltaTime) noexcept requires (std::is_floating_point_v< precision_t >)
+	{
+		/* k |v| dt, from the drag force at a unit speed (Cd rho A / 2) without dividing by the speed. */
+		const auto kSpeedStep = getDragMagnitude(dragCoefficient, density, static_cast< precision_t >(1), surface) * inverseMass * speed * deltaTime;
+
+		/* No drag on a zero, negative (a negative scene density) or NaN term: 1 + k |v| dt could reach 0. */
+		if ( !(kSpeedStep > static_cast< precision_t >(0)) )
+		{
+			return static_cast< precision_t >(1);
+		}
+
+		return static_cast< precision_t >(1) / (static_cast< precision_t >(1) + kSpeedStep);
+	}
+
+	/**
 	 * @brief Modulates a scalar according to a factor. If the factor is 0, the return value will be 1.
 	 * @tparam precision_t
 	 * @param value A normalized value to modulate.

@@ -26,6 +26,9 @@
 
 #include "MovableTrait.hpp"
 
+/* STL inclusions. */
+#include <limits>
+
 /* Local inclusions. */
 
 namespace EmEn::Physics
@@ -131,19 +134,18 @@ namespace EmEn::Physics
 			m_linearSpeed = m_linearVelocity.length();
 		}
 
-		/* Apply the drag force if there is linear speed. */
-		if ( m_linearSpeed > 0.0F )
+		/* Apply the drag if there is linear speed (a massless body ignores forces, as addForce() does). */
+		if ( m_linearSpeed > 0.0F && !objectProperties.isMassNull() )
 		{
-			const auto dragMagnitude = Physics::getDragMagnitude(
+			m_linearVelocity *= Physics::getDragVelocityFactor(
 				objectProperties.dragCoefficient(),
 				envProperties.atmosphericDensity(),
 				m_linearSpeed,
-				objectProperties.surface()
+				objectProperties.surface(),
+				objectProperties.inverseMass(),
+				WorldPhysicsUpdateCycleDurationS< float >
 			);
-
-			const auto force = m_linearVelocity.normalized().scale(-dragMagnitude);
-
-			this->addForce(force);
+			m_linearSpeed = m_linearVelocity.length();
 		}
 
 		bool isMoveOccurs = false;
@@ -182,13 +184,19 @@ namespace EmEn::Physics
 			m_angularVelocity *= 1.0F - angularDrag;
 			m_angularSpeed = m_angularVelocity.length();
 
-			/* Dispatch the final rotation to the entity according to the new angular velocity. */
-			this->rotateFromPhysics(
-				m_angularSpeed * WorldPhysicsUpdateCycleDurationS< float >,
-				m_angularVelocity / m_angularSpeed
-			);
+			/* NOTE: A drag of 1 ("immediate stop") zeroes the speed, and any drag makes it underflow after enough
+			 * frames. Vector / s is NaN once |s| <= the float epsilon: the NaN axis turned the orientation into NaN
+			 * for good (rotation(0, NaN) is NaN). 1 / speed stays finite above FLT_MIN. */
+			if ( m_angularSpeed > std::numeric_limits< float >::min() )
+			{
+				/* Dispatch the final rotation to the entity according to the new angular velocity. */
+				this->rotateFromPhysics(
+					m_angularSpeed * WorldPhysicsUpdateCycleDurationS< float >,
+					m_angularVelocity * (1.0F / m_angularSpeed)
+				);
 
-			isMoveOccurs = true;
+				isMoveOccurs = true;
+			}
 		}
 
 		return isMoveOccurs;

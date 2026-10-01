@@ -67,12 +67,9 @@ namespace EmEn::Physics
 	void
 	ContactPoint::setEffectiveMass (float mass) noexcept
 	{
-		m_effectiveMass = mass;
-
-		if ( m_effectiveMass > 0.0F )
-		{
-			m_effectiveMass = 1.0F / m_effectiveMass;
-		}
+		/* NOTE: A K <= 0 (a non positive-definite inertia tensor) or a non-finite one was stored as is, so the
+		 * impulse pulled the bodies together: no impulse instead. */
+		m_effectiveMass = mass > 0.0F && std::isfinite(mass) ? 1.0F / mass : 0.0F;
 	}
 
 	void
@@ -99,23 +96,15 @@ namespace EmEn::Physics
 	void
 	ContactPoint::setEffectiveMassTangent1 (float mass) noexcept
 	{
-		m_effectiveMassTangent1 = mass;
-
-		if ( m_effectiveMassTangent1 > 0.0F )
-		{
-			m_effectiveMassTangent1 = 1.0F / m_effectiveMassTangent1;
-		}
+		/* The setEffectiveMass() rule. */
+		m_effectiveMassTangent1 = mass > 0.0F && std::isfinite(mass) ? 1.0F / mass : 0.0F;
 	}
 
 	void
 	ContactPoint::setEffectiveMassTangent2 (float mass) noexcept
 	{
-		m_effectiveMassTangent2 = mass;
-
-		if ( m_effectiveMassTangent2 > 0.0F )
-		{
-			m_effectiveMassTangent2 = 1.0F / m_effectiveMassTangent2;
-		}
+		/* The setEffectiveMass() rule. */
+		m_effectiveMassTangent2 = mass > 0.0F && std::isfinite(mass) ? 1.0F / mass : 0.0F;
 	}
 
 	std::ostream &

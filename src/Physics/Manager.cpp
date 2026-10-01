@@ -139,7 +139,7 @@ namespace EmEn::Physics
 		m_computePipelines.clear();
 		m_pipelineLayouts.clear();
 
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 
 		this->clearCommandBuffers();
 

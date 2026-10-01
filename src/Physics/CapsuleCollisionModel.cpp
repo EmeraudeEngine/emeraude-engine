@@ -26,6 +26,9 @@
 
 #include "CapsuleCollisionModel.hpp"
 
+/* STL inclusions. */
+#include <limits>
+
 /* Local inclusions. */
 #include "AABBCollisionModel.hpp"
 #include "Math/Space3D/Capsule.hpp"
@@ -63,7 +66,7 @@ namespace EmEn::Physics
 	}
 
 	CollisionDetectionResults
-	CapsuleCollisionModel::collideWithPoint (const CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const CartesianFrame< float > & otherWorldFrame) const noexcept
+	CapsuleCollisionModel::collideWithPoint (const CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & /*other*/, const CartesianFrame< float > & otherWorldFrame) const noexcept
 	{
 		CollisionDetectionResults results;
 
@@ -118,9 +121,11 @@ namespace EmEn::Physics
 			results.m_MTV = mtv;
 			results.m_depth = mtv.length();
 
-			if ( results.m_depth > 0.0F )
+			/* NOTE: Vector / s is NaN once |s| <= the float epsilon: a 1-ulp overlap made a NaN normal that reached the
+			 * velocities and the positions. 1 / depth stays finite above FLT_MIN. */
+			if ( results.m_depth > std::numeric_limits< float >::min() )
 			{
-				results.m_impactNormal = mtv / results.m_depth;
+				results.m_impactNormal = mtv * (1.0F / results.m_depth);
 			}
 
 			/* Contact point: closest point on capsule axis to sphere, then offset by capsule radius. */
@@ -148,13 +153,16 @@ namespace EmEn::Physics
 			results.m_MTV = mtv;
 			results.m_depth = mtv.length();
 
-			if ( results.m_depth > 0.0F )
+			/* NOTE: Vector / s is NaN once |s| <= the float epsilon: a 1-ulp overlap made a NaN normal that reached the
+			 * velocities and the positions. 1 / depth stays finite above FLT_MIN. */
+			if ( results.m_depth > std::numeric_limits< float >::min() )
 			{
-				results.m_impactNormal = mtv / results.m_depth;
+				results.m_impactNormal = mtv * (1.0F / results.m_depth);
 			}
 
 			/* Contact point: closest points between capsule axis and AABB. */
-			Point< float > closestOnAxis, closestOnCuboid;
+			Point< float > closestOnAxis;
+			Point< float > closestOnCuboid;
 			closestPointsCapsuleCuboid(worldCapsule, worldAABB, closestOnAxis, closestOnCuboid);
 			results.m_contact = closestOnAxis - (results.m_impactNormal * m_localCapsule.radius());
 		}
@@ -178,13 +186,16 @@ namespace EmEn::Physics
 			results.m_MTV = mtv;
 			results.m_depth = mtv.length();
 
-			if ( results.m_depth > 0.0F )
+			/* NOTE: Vector / s is NaN once |s| <= the float epsilon: a 1-ulp overlap made a NaN normal that reached the
+			 * velocities and the positions. 1 / depth stays finite above FLT_MIN. */
+			if ( results.m_depth > std::numeric_limits< float >::min() )
 			{
-				results.m_impactNormal = mtv / results.m_depth;
+				results.m_impactNormal = mtv * (1.0F / results.m_depth);
 			}
 
 			/* Contact point: closest points between the two capsule axes. */
-			Point< float > closestOnA, closestOnB;
+			Point< float > closestOnA;
+			Point< float > closestOnB;
 			closestPointsBetweenSegments(worldCapsuleA.axis(), worldCapsuleB.axis(), closestOnA, closestOnB);
 			results.m_contact = closestOnA - (results.m_impactNormal * m_localCapsule.radius());
 		}

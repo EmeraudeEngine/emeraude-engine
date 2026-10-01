@@ -59,9 +59,9 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed and VALIDATED on the three OS (2026-10-01) |
-| 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed (9b, 9c peers pending) |
-| 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | ✅ 10a-10b pushed (peers pending) |
-| 11 | `src/Physics` | 9 197 | ⬜ |
+| 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed and VALIDATED on the three OS (2026-10-01) |
+| 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | ✅ 10a-10b pushed and VALIDATED on the three OS (2026-10-01) |
+| 11 | `src/Physics` | 9 197 | ✅ pushed (peers pending) |
 | 12 | `src/Animations` | 3 488 | ⬜ |
 | 13 | `src/Overlay` | 7 303 | ⬜ |
 | 14 | `src/PlatformSpecific` | 8 996 | ⬜ |
@@ -1072,7 +1072,7 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 9a | Instance, device, presentation: `Instance`, `DebugMessenger`, `PhysicalDevice`, `Device`, `DeviceQueueConfiguration`, `DeviceRequirements`, `Queue`, `Surface`, `SwapChain`, `Utility` (trust boundary: the settings — GPU choice, layers, present modes — and what the driver reports) | ~9 500 | ✅ pushed engine `fa06d2fd`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ✅ pushed engine `03962da6`; macOS M2 + Windows VALIDATED except the dump step (alpha crash, fixed, re-test pending) |
+| 9b | Memory and resources: `Buffer`, `DeviceMemory`, `MemoryRegion`, `Image`, `ImageView`, `Sampler`, `TextureInterface`, the transfer operations and `TransferManager`, the buffer objects, `AccelerationStructure` (+ builder), `VideoEncoderH265` | ~10 000 | ✅ pushed engine `03962da6`; VALIDATED macOS M2 + Windows NVIDIA + AMD (the dump step with alpha `ad00545f`) |
 | 9c | Commands, pipelines, descriptors, sync: `CommandBuffer` / `CommandPool`, `ComputePipeline` / `GraphicsPipeline`, `PipelineLayout`, `RenderPass` / `RenderSubPass`, `Framebuffer`, the `Descriptor*` classes, `LayoutManager`, `ShaderModule`, `GPUProfiler`, `Sync/` | ~10 000 | ✅ pushed engine `1cbb475d`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 
 ### 9a — instance, device, presentation (2026-10-01)
@@ -1193,8 +1193,8 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 10a | The audio core: the resources read from disk (`SoundResource`, `MusicResource`, `PlaylistResource`, `SoundfontResource` — the unconfined `file` path lead of section 2), `Buffer`, `Manager` (+ console), `TrackMixer` (+ console), `Source`, `Listener`, `Ambience*`, `Recorder`, `ExternalInput`, `HardwareOutput`, `Utility` | ~12 000 | ✅ pushed (the engine 10a commit); peers pending |
-| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ✅ pushed (`2544c410`); macOS validated, Windows pending |
+| 10a | The audio core: the resources read from disk (`SoundResource`, `MusicResource`, `PlaylistResource`, `SoundfontResource` — the unconfined `file` path lead of section 2), `Buffer`, `Manager` (+ console), `TrackMixer` (+ console), `Source`, `Listener`, `Ambience*`, `Recorder`, `ExternalInput`, `HardwareOutput`, `Utility` | ~12 000 | ✅ pushed engine `1320d529`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ✅ pushed engine `2544c410`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 
 ### 10a — the audio core (2026-10-01)
 
@@ -1257,5 +1257,67 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   4466/0, 0 VUID, 0 UNASSIGNED.
 - [x] (5) Pushed 2026-10-01 (owner's order): engine `2544c410`; peers asked.
   - macOS M2 PASS (AppleClang 0 warning): citadel, a track plays (5.07 s advance in 5 s), MCP 1707/0, console 4445/0,
-    0 VUID, 0 UNASSIGNED, 0 error. Windows pending.
+    0 VUID, 0 UNASSIGNED, 0 error.
+  - Windows PASS on NVIDIA RTX 3060 Laptop and AMD (MSVC /W4 /WX 0 warning): citadel, a track plays (5.02 s / 5.04 s
+    advance in 5 s), MCP 1707/0 on both; console 4455/1 and 4454/2 (the known RST flakes,
+    `console-last-refusal-lost-on-windows`); AMD 0 VUID, NVIDIA only the known `renderPass-12325`. The 9b dumps again:
+    6/6 real, 0/6 blue this time.
 
+## Section 11 — `src/Physics` (started 2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (14 TUs + headers): **90**: 33 implicit-bool-conversion, 17 branch-clone (the
+  `Particle` transform switches), 16 static-cast-downcast, 7 convert-to-static, 5 designated initializers, 3 unused
+  parameters, 3 isolate-declaration, 2 constant-array-index, singles.
+- [x] (2) Review: the trust boundaries (the properties' setters, their JSON, the environment from a scene definition)
+  by hand; the collision models, `CollisionDetection`, `ContactManifold` / `ContactPoint`, `ConstraintSolver`, `Physics.hpp` and
+  the base collision maths by an agent, every finding re-checked against the code. Findings:
+  - P1 `MovableTrait::updateSimulation()` divided the angular velocity by an angular speed that drag can drive to 0:
+    exactly with an angular drag of 1.0, and by underflow after ~500 free-spinning frames at the default 0.1. The NaN
+    axis turned the orientation into NaN for good (`rotation(0, NaN)` is NaN).
+  - P2 `Vector / s` is NaN for `|s| <= epsilon` (base): every `normal = mtv / depth` (9 sites in the three models) made
+    a NaN normal for a 1-ulp overlap, which reached the velocities, then the positions.
+  - P3 the explicit quadratic drag (`MovableTrait`, `Particle`) went past a stop when `k |v| dt > 1`, reversed, then
+    diverged (a 1 g, 100 cm² particle at 40 m/s: `-nan` in 8 frames) (owner question).
+  - P4 the property setters accepted NaN (and +inf for mass / surface / drag); a `Weight` animation can pass one
+    (owner question). `merge()` made `1/0 = +inf` for two massless bodies. The JSON notifications carried an
+    `optional< float >`, not the `float` the other overload sends. The JSON never read `AngularDragCoefficient`
+    (owner question).
+  - P5 base `Matrix::inverse()` tested `|det| <= epsilon` (absolute) and returned the matrix itself: the inverse inertia
+    of a 1 kg, 10 cm sphere was 0.004 instead of 250 (owner question). `determinant()` skipped the terms
+    below epsilon too.
+  - P6 the `deltaTime` guard of `ConstraintSolver::solve()` was commented out (a 0 step made the Baumgarte bias +inf);
+    `ContactPoint` stored a K <= 0 or NaN as its own inverse.
+  - P7 the solver re-applies restitution at each velocity iteration (the bounce is lost; `onCollision` up to 8× per
+    contact) and the position correction 3× with a stale depth (owner question).
+  - Minor, recorded only (owner: no item): `Physics.hpp` atmosphere functions mix metres and km above 84.85 m (no
+    caller); with coincident centres, sphere-sphere / capsule-capsule / capsule-sphere push the first body of the pair
+    down, an arbitrary choice; the sphere and capsule shape merges ignore or misplace `centerOffset`.
+  - Sound (checked): contact capacity (`addContact()` guards `MaxContactPoints`), the normal convention end to end, the
+    divisions of the base collision maths, degenerate shapes (`isValid()`), mass 0 / static pairs, friction bounds,
+    fixed iteration counts, member initialization.
+- [x] (3) Mechanical: P1 (re-test the speed after damping, `> FLT_MIN`, `* (1 / speed)`), P2 (`depth > FLT_MIN`,
+  `mtv * (1 / depth)`), P6 (the guard restored, `!(deltaTime > 0)`; K -> 0 when not finite and positive), `merge()`
+  (the `setMass()` rule), the notification payload; fix-its: the `Particle` switches merged, designated initializers,
+  `std::max`, `= nullptr`, implicit bool conversions, isolated declarations (also 7 in base headers: a header fix-it is
+  applied once per TU, see the ledger), `/*other*/`. Base: `SamePrimitive.hpp` `denom` un-nested (~90 levels; 21 more
+  lines in 7 base files: base item `runaway-nested-parentheses`).
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - P3 the exact step `|v'| = |v| / (1 + k |v| dt)` (`Physics::getDragVelocityFactor()`, 1 for a zero / negative /
+    NaN term), in `MovableTrait` and `Particle`.
+  - P4 the setters refuse non-finite values (`std::isnan(v) || v < 0 || v > 1` for the unit ones, the tidy-safe form),
+    `setInertiaTensor()` a non-finite entry; the JSON reads `AngularDragCoefficient`; `Inertia` stays code-only
+    (documented).
+  - P5 base: a relative singularity test (`|det| <= epsilon × ∏ max |column entry|`, upper 3x3 for an affine 4x4),
+    `tryInverse()` (`std::optional`), `inverse()` unchanged in contract, `determinant()` skips exact zeros only;
+    `MovableTrait` takes a zero inverse inertia on a singular tensor.
+  - P7 → engine item `physics-solver-restitution-and-position-correction` (a measured solver pass).
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); base unit tests 2184/2184 (Release and
+  ASan/UBSan), 4 new `MathMatrix` tests; the old header printed `det(diag(1e-8, 1, 1)) = 0` and `inverse()[0] = 0.004`,
+  the new one `1e-8` and `250`; clangcheck 116 TUs 0, `-Wfloat-conversion` 0; clang-tidy 90 → 27 (on purpose, ledger).
+  Harnesses on the real code: the drag (explicit `-nan` at frame 8, exact 40 → 1.21 m/s; an 80 kg body equal to
+  1e-6); `BodyPhysicalProperties` linked against `libEmeraude` (the JSON angular drag 0.75 read; NaN / inf refused by
+  the seven setters and the tensor, the value kept). Runtime: collision, collision-debug (rotating cubes), lighten-marbles,
+  particles, physics-debug — 0 VUID, 0 error, 0 property warning, the scenes intact; sponza pixel A/B for the
+  `Matrix` change inside the noise (mean |Δ| 0.71 / 1.04 against 0.77 run-to-run, >8 levels 0.44-0.47 % against
+  0.45 %); citadel MCP 1707/0, console 4466/0, 0 VUID.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 11 commit), base `9d62d80`; peers asked.

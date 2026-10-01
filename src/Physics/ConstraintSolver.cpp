@@ -42,10 +42,12 @@ namespace EmEn::Physics
 	void
 	ConstraintSolver::solve (std::vector< ContactManifold > & manifolds, float deltaTime) noexcept
 	{
-		/*if ( manifolds.empty() || deltaTime <= 0.0F )
+		/* NOTE: The Baumgarte bias divides by deltaTime: 0 made it +inf (an inf velocity, then a NaN position), a
+		 * negative one pulled the bodies together. A NaN fails the test too. */
+		if ( manifolds.empty() || !(deltaTime > 0.0F) )
 		{
 			return;
-		}*/
+		}
 
 		/* Prepare all manifolds (compute relative positions, effective mass, etc.). */
 		for ( auto & manifold : manifolds )
@@ -86,26 +88,26 @@ namespace EmEn::Physics
 			const MovableTrait * bodyB = contact.bodyB();
 
 			/* Skip if both bodies are nullptr or immovable. */
-			if ( (!bodyA || !bodyA->isMovable()) && (!bodyB || !bodyB->isMovable()) )
+			if ( ((bodyA == nullptr) || !bodyA->isMovable()) && ((bodyB == nullptr) || !bodyB->isMovable()) )
 			{
 				continue;
 			}
 
 			/* Compute effective mass for this contact. */
-			const float massInvA = bodyA && bodyA->isMovable() ? bodyA->getBodyPhysicalProperties().inverseMass() : 0.0F;
-			const float massInvB = bodyB && bodyB->isMovable() ? bodyB->getBodyPhysicalProperties().inverseMass() : 0.0F;
+			const float massInvA = (bodyA != nullptr) && bodyA->isMovable() ? bodyA->getBodyPhysicalProperties().inverseMass() : 0.0F;
+			const float massInvB = (bodyB != nullptr) && bodyB->isMovable() ? bodyB->getBodyPhysicalProperties().inverseMass() : 0.0F;
 
 			/* Angular contribution to effective mass. */
 			float angularContribution = 0.0F;
 
-			if ( bodyA && bodyA->isMovable() && bodyA->isRotationPhysicsEnabled() )
+			if ( (bodyA != nullptr) && bodyA->isMovable() && bodyA->isRotationPhysicsEnabled() )
 			{
 				auto rA_cross_n = Base::Math::Vector< 3, float >::crossProduct(contact.rA(), contact.normal());
 				auto temp = bodyA->inverseWorldInertia() * rA_cross_n;
 				angularContribution += Base::Math::Vector< 3, float >::dotProduct(rA_cross_n, temp);
 			}
 
-			if ( bodyB && bodyB->isMovable() && bodyB->isRotationPhysicsEnabled() )
+			if ( (bodyB != nullptr) && bodyB->isMovable() && bodyB->isRotationPhysicsEnabled() )
 			{
 				auto rB_cross_n = Base::Math::Vector< 3, float >::crossProduct(contact.rB(), contact.normal());
 				auto temp = bodyB->inverseWorldInertia() * rB_cross_n;
@@ -118,7 +120,7 @@ namespace EmEn::Physics
 			float angularContributionT1 = 0.0F;
 			float angularContributionT2 = 0.0F;
 
-			if ( bodyA && bodyA->isMovable() && bodyA->isRotationPhysicsEnabled() )
+			if ( (bodyA != nullptr) && bodyA->isMovable() && bodyA->isRotationPhysicsEnabled() )
 			{
 				auto rA_cross_t1 = Base::Math::Vector< 3, float >::crossProduct(contact.rA(), contact.tangent1());
 				auto tempT1 = bodyA->inverseWorldInertia() * rA_cross_t1;
@@ -129,7 +131,7 @@ namespace EmEn::Physics
 				angularContributionT2 += Base::Math::Vector< 3, float >::dotProduct(rA_cross_t2, tempT2);
 			}
 
-			if ( bodyB && bodyB->isMovable() && bodyB->isRotationPhysicsEnabled() )
+			if ( (bodyB != nullptr) && bodyB->isMovable() && bodyB->isRotationPhysicsEnabled() )
 			{
 				auto rB_cross_t1 = Base::Math::Vector< 3, float >::crossProduct(contact.rB(), contact.tangent1());
 				auto tempT1 = bodyB->inverseWorldInertia() * rB_cross_t1;
@@ -159,7 +161,7 @@ namespace EmEn::Physics
 			MovableTrait * bodyB = contact.bodyB();
 
 			/* Skip if both bodies are immovable. */
-			if ( (!bodyA || !bodyA->isMovable()) && (!bodyB || !bodyB->isMovable()) )
+			if ( ((bodyA == nullptr) || !bodyA->isMovable()) && ((bodyB == nullptr) || !bodyB->isMovable()) )
 			{
 				continue;
 			}
@@ -168,7 +170,7 @@ namespace EmEn::Physics
 			Base::Math::Vector< 3, float > velocityA;
 			Base::Math::Vector< 3, float > velocityB;
 
-			if ( bodyA && bodyA->isMovable() )
+			if ( (bodyA != nullptr) && bodyA->isMovable() )
 			{
 				velocityA = bodyA->linearVelocity();
 
@@ -178,7 +180,7 @@ namespace EmEn::Physics
 				}
 			}
 
-			if ( bodyB && bodyB->isMovable() )
+			if ( (bodyB != nullptr) && bodyB->isMovable() )
 			{
 				velocityB = bodyB->linearVelocity();
 
@@ -194,15 +196,15 @@ namespace EmEn::Physics
 			/* Compute restitution (average bounciness of both bodies). */
 			float restitution = 0.0F;
 
-			if ( bodyA && bodyB )
+			if ( (bodyA != nullptr) && (bodyB != nullptr) )
 			{
 				restitution = (bodyA->getBodyPhysicalProperties().bounciness() + bodyB->getBodyPhysicalProperties().bounciness()) * 0.5F;
 			}
-			else if ( bodyA )
+			else if ( bodyA != nullptr )
 			{
 				restitution = bodyA->getBodyPhysicalProperties().bounciness();
 			}
-			else if ( bodyB )
+			else if ( bodyB != nullptr )
 			{
 				restitution = bodyB->getBodyPhysicalProperties().bounciness();
 			}
@@ -233,13 +235,13 @@ namespace EmEn::Physics
 			 * to match a stale comment. */
 			constexpr auto GroundNormalThreshold{0.7F};
 
-			if ( bodyA && bodyA->isMovable() )
+			if ( (bodyA != nullptr) && bodyA->isMovable() )
 			{
 				bodyA->applyLinearImpulse(-linearImpulse);
 
 				/* Body A is grounded if normal points downward (A is on top).
 				 * Only ground against static surfaces, not other dynamic bodies. */
-				if ( normal[Base::Math::Y] < -GroundNormalThreshold && (!bodyB || !bodyB->isMovable()) )
+				if ( normal[Base::Math::Y] < -GroundNormalThreshold && ((bodyB == nullptr) || !bodyB->isMovable()) )
 				{
 					/* Ground on Entity since this is Node-to-Node collision resolution. */
 					bodyA->setGrounded(GroundedSource::Entity, bodyB);
@@ -253,13 +255,13 @@ namespace EmEn::Physics
 				}
 			}
 
-			if ( bodyB && bodyB->isMovable() )
+			if ( (bodyB != nullptr) && bodyB->isMovable() )
 			{
 				bodyB->applyLinearImpulse(linearImpulse);
 
 				/* Body B is grounded if normal points upward (B is on top).
 				 * Only ground against static surfaces, not other dynamic bodies. */
-				if ( normal[Base::Math::Y] > GroundNormalThreshold && (!bodyA || !bodyA->isMovable()) )
+				if ( normal[Base::Math::Y] > GroundNormalThreshold && ((bodyA == nullptr) || !bodyA->isMovable()) )
 				{
 					/* Ground on Entity since this is Node-to-Node collision resolution. */
 					bodyB->setGrounded(GroundedSource::Entity, bodyA);
@@ -280,12 +282,12 @@ namespace EmEn::Physics
 
 			if ( impactForce > 0.0F )
 			{
-				if ( bodyA && bodyA->isMovable() )
+				if ( (bodyA != nullptr) && bodyA->isMovable() )
 				{
 					bodyA->onCollision(impactForce);
 				}
 
-				if ( bodyB && bodyB->isMovable() )
+				if ( (bodyB != nullptr) && bodyB->isMovable() )
 				{
 					bodyB->onCollision(impactForce);
 				}
@@ -298,15 +300,15 @@ namespace EmEn::Physics
 			/* Compute friction coefficient (average stickiness of both bodies). */
 			float friction = 0.0F;
 
-			if ( bodyA && bodyB )
+			if ( (bodyA != nullptr) && (bodyB != nullptr) )
 			{
 				friction = (bodyA->getBodyPhysicalProperties().stickiness() + bodyB->getBodyPhysicalProperties().stickiness()) * 0.5F;
 			}
-			else if ( bodyA )
+			else if ( bodyA != nullptr )
 			{
 				friction = bodyA->getBodyPhysicalProperties().stickiness();
 			}
-			else if ( bodyB )
+			else if ( bodyB != nullptr )
 			{
 				friction = bodyB->getBodyPhysicalProperties().stickiness();
 			}
@@ -324,7 +326,7 @@ namespace EmEn::Physics
 			velocityA.reset();
 			velocityB.reset();
 
-			if ( bodyA && bodyA->isMovable() )
+			if ( (bodyA != nullptr) && bodyA->isMovable() )
 			{
 				velocityA = bodyA->linearVelocity();
 
@@ -334,7 +336,7 @@ namespace EmEn::Physics
 				}
 			}
 
-			if ( bodyB && bodyB->isMovable() )
+			if ( (bodyB != nullptr) && bodyB->isMovable() )
 			{
 				velocityB = bodyB->linearVelocity();
 
@@ -355,7 +357,7 @@ namespace EmEn::Physics
 
 				const auto frictionImpulse1 = contact.tangent1() * lambdaT1;
 
-				if ( bodyA && bodyA->isMovable() )
+				if ( (bodyA != nullptr) && bodyA->isMovable() )
 				{
 					bodyA->applyLinearImpulse(-frictionImpulse1);
 
@@ -365,7 +367,7 @@ namespace EmEn::Physics
 					}
 				}
 
-				if ( bodyB && bodyB->isMovable() )
+				if ( (bodyB != nullptr) && bodyB->isMovable() )
 				{
 					bodyB->applyLinearImpulse(frictionImpulse1);
 
@@ -385,7 +387,7 @@ namespace EmEn::Physics
 
 				const auto frictionImpulse2 = contact.tangent2() * lambdaT2;
 
-				if ( bodyA && bodyA->isMovable() )
+				if ( (bodyA != nullptr) && bodyA->isMovable() )
 				{
 					bodyA->applyLinearImpulse(-frictionImpulse2);
 
@@ -395,7 +397,7 @@ namespace EmEn::Physics
 					}
 				}
 
-				if ( bodyB && bodyB->isMovable() )
+				if ( (bodyB != nullptr) && bodyB->isMovable() )
 				{
 					bodyB->applyLinearImpulse(frictionImpulse2);
 
@@ -420,7 +422,7 @@ namespace EmEn::Physics
 			MovableTrait * bodyB = contact.bodyB();
 
 			/* Skip if both bodies are immovable. */
-			if ( (!bodyA || !bodyA->isMovable()) && (!bodyB || !bodyB->isMovable()) )
+			if ( ((bodyA == nullptr) || !bodyA->isMovable()) && ((bodyB == nullptr) || !bodyB->isMovable()) )
 			{
 				continue;
 			}
@@ -439,7 +441,7 @@ namespace EmEn::Physics
 			/* Apply position correction. */
 			auto correctionVector = contact.normal() * correction;
 
-			if ( bodyA && bodyA->isMovable() )
+			if ( (bodyA != nullptr) && bodyA->isMovable() )
 			{
 				const float massInvA = bodyA->getBodyPhysicalProperties().inverseMass();
 				const auto deltaA = -correctionVector * massInvA;
@@ -447,7 +449,7 @@ namespace EmEn::Physics
 				bodyA->moveFromPhysics(deltaA);
 			}
 
-			if ( bodyB && bodyB->isMovable() )
+			if ( (bodyB != nullptr) && bodyB->isMovable() )
 			{
 				const float massInvB = bodyB->getBodyPhysicalProperties().inverseMass();
 				const auto deltaB = correctionVector * massInvB;

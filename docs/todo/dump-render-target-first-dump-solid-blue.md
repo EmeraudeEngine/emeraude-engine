@@ -21,6 +21,8 @@ dump (the night city) is ~730-790 KB.
   real (5/5).
 - 0 VUID. The `hasBeenRendered()` guard passed: the target had been submitted at least once.
 - Not seen on Linux or macOS. Neither of them repeated the first dump on purpose.
+- A second Windows series (engine `2544c410`, each launch on an EMPTY `--cache-directory`, so a slower start): 0/6
+  blue first dumps (NVIDIA 3, AMD 3). It is intermittent, so a fix needs a reproduction rate first.
 
 The command runs on the console thread. It calls `device()->waitIdle()` and then `downloadImage()`, but nothing stops
 the render thread from submitting the next frame between the two. A copy that reads the target in the middle of its

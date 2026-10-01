@@ -27,7 +27,10 @@
 #include "BodyPhysicalProperties.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstddef>
 #include <limits>
 
 /* Local inclusions. */
@@ -44,9 +47,9 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setMass (float value, bool fireEvents) noexcept
 	{
-		if ( value < 0.0F )
+		if ( !std::isfinite(value) || value < 0.0F )
 		{
-			Tracer::warning(ClassId, "Mass can't be negative !");
+			Tracer::warning(ClassId, "Mass must be finite and non-negative !");
 
 			return false;
 		}
@@ -73,9 +76,9 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setSurface (float value, bool fireEvents) noexcept
 	{
-		if ( value < 0.0F )
+		if ( !std::isfinite(value) || value < 0.0F )
 		{
-			Tracer::warning(ClassId, "Surface can't be negative !");
+			Tracer::warning(ClassId, "Surface must be finite and non-negative !");
 
 			return false;
 		}
@@ -99,9 +102,9 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setDragCoefficient (float value, bool fireEvents) noexcept
 	{
-		if ( value < 0.0F )
+		if ( !std::isfinite(value) || value < 0.0F )
 		{
-			Tracer::warning(ClassId, "Drag coefficient can't be negative.");
+			Tracer::warning(ClassId, "Drag coefficient must be finite and non-negative.");
 
 			return false;
 		}
@@ -125,7 +128,7 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setAngularDragCoefficient (float value, bool fireEvents) noexcept
 	{
-		if ( value < 0.0F || value > 1.0F )
+		if ( std::isnan(value) || value < 0.0F || value > 1.0F )
 		{
 			Tracer::warning(ClassId, "Angular drag must be a scalar value [0.0 -> 1.0].");
 
@@ -151,7 +154,7 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setBounciness (float value, bool fireEvents) noexcept
 	{
-		if ( value < 0.0F || value > 1.0F )
+		if ( std::isnan(value) || value < 0.0F || value > 1.0F )
 		{
 			Tracer::warning(ClassId, "Bounciness must be a scalar value [0.0 -> 1.0].");
 
@@ -177,7 +180,7 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setStickiness (float value, bool fireEvents) noexcept
 	{
-		if ( value < 0.0F || value > 1.0F )
+		if ( std::isnan(value) || value < 0.0F || value > 1.0F )
 		{
 			Tracer::warning(ClassId, "Stickiness must be a scalar value [0.0 -> 1.0].");
 
@@ -271,12 +274,13 @@ namespace EmEn::Physics
 			int notificationCode = std::numeric_limits< int >::max();
 		};
 
-		constexpr std::array< property_t, 5 > properties{{
-			{MassKey, &BodyPhysicalProperties::setMass, MassChanged},
-			{SurfaceKey, &BodyPhysicalProperties::setSurface, SurfaceChanged},
-			{DragCoefficientKey, &BodyPhysicalProperties::setDragCoefficient, DragCoefficientChanged},
-			{BouncinessKey, &BodyPhysicalProperties::setBounciness, BouncinessChanged},
-			{StickinessKey, &BodyPhysicalProperties::setStickiness, StickinessChanged}
+		constexpr std::array< property_t, 6 > properties{{
+			{.jsonKey = MassKey, .method = &BodyPhysicalProperties::setMass, .notificationCode = MassChanged},
+			{.jsonKey = SurfaceKey, .method = &BodyPhysicalProperties::setSurface, .notificationCode = SurfaceChanged},
+			{.jsonKey = DragCoefficientKey, .method = &BodyPhysicalProperties::setDragCoefficient, .notificationCode = DragCoefficientChanged},
+			{.jsonKey = AngularDragCoefficientKey, .method = &BodyPhysicalProperties::setAngularDragCoefficient, .notificationCode = AngularDragCoefficientChanged},
+			{.jsonKey = BouncinessKey, .method = &BodyPhysicalProperties::setBounciness, .notificationCode = BouncinessChanged},
+			{.jsonKey = StickinessKey, .method = &BodyPhysicalProperties::setStickiness, .notificationCode = StickinessChanged}
 		}};
 
 		/* NOTE: jsoncpp's member access aborts on anything but an object (or null). */
@@ -313,7 +317,8 @@ namespace EmEn::Physics
 				continue;
 			}
 
-			this->notify(property.notificationCode, value);
+			/* The float itself, as the other setProperties() overload sends it (not the optional). */
+			this->notify(property.notificationCode, *value);
 
 			changes = true;
 		}
@@ -330,11 +335,9 @@ namespace EmEn::Physics
 	BodyPhysicalProperties::merge (const BodyPhysicalProperties & other) noexcept
 	{
 		m_mass += other.m_mass;
-		m_inverseMass = 1.0F / m_mass;
-		if ( other.m_surface > m_surface )
-		{
-			m_surface = other.m_surface;
-		}
+		/* The setMass() rule: a null mass has a null inverse (two massless bodies made 1/0 = +inf). */
+		m_inverseMass = m_mass > 0.0F ? 1.0F / m_mass : 0.0F;
+		m_surface = std::max(other.m_surface, m_surface);
 		m_dragCoefficient = (m_dragCoefficient + other.m_dragCoefficient) * Half< float >;
 		m_angularDragCoefficient = (m_angularDragCoefficient + other.m_angularDragCoefficient) * Half< float >;
 		m_bounciness = (m_bounciness + other.m_bounciness) * Half< float >;
@@ -346,6 +349,17 @@ namespace EmEn::Physics
 	bool
 	BodyPhysicalProperties::setInertiaTensor (const Base::Math::Matrix< 3, float > & inertiaTensor, bool fireEvents) noexcept
 	{
+		/* Every value must be finite. */
+		for ( size_t index = 0; index < 9; ++index )
+		{
+			if ( !std::isfinite(inertiaTensor[index]) )
+			{
+				Tracer::warning(ClassId, "Inertia tensor values must be finite !");
+
+				return false;
+			}
+		}
+
 		/* Check if all diagonal values are non-negative (physical constraint). */
 		if ( inertiaTensor[M3x3Col0Row0] < 0.0F || inertiaTensor[M3x3Col1Row1] < 0.0F || inertiaTensor[M3x3Col2Row2] < 0.0F )
 		{

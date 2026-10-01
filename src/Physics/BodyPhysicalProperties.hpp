@@ -170,7 +170,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets the mass of the body.
-			 * @param value The mass in kilograms.
+			 * @param value The mass in kilograms, finite and non-negative (else refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -213,7 +213,7 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the surface of the body in square meters.
 			 * @note This should be an approximation of average surface.
-			 * @param value The surface in square meters.
+			 * @param value The surface in square meters, finite and non-negative (else refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -233,7 +233,7 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the drag coefficient of the body.
 			 * @note Use constants from EmEn::Physics::DragCoefficient namespace.
-			 * @param value The coefficient.
+			 * @param value The coefficient, finite and non-negative (else refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -253,7 +253,7 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the angular drag coefficient of the body.
 			 * @note This is a damping factor applied to angular velocity. Higher values = more damping.
-			 * @param value The coefficient (0.0 = no drag, 1.0 = full stop).
+			 * @param value The coefficient (0.0 = no drag, 1.0 = full stop; NaN or out of range: refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -272,7 +272,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets the bounciness of the body when hitting something.
-			 * @param value A scalar clamped from 0.0 to 1.0.
+			 * @param value A scalar from 0.0 to 1.0 (NaN or out of range: refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -291,7 +291,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets the stickiness of the body when hitting something.
-			 * @param value A scalar clamped from 0.0 to 1.0.
+			 * @param value A scalar from 0.0 to 1.0 (NaN or out of range: refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -311,7 +311,8 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the moment of inertia tensor for the body.
 			 * @note For a solid cuboid: Ixx = m*(h²+d²)/12, Iyy = m*(w²+d²)/12, Izz = m*(w²+h²)/12
-			 * @param inertiaTensor A 3x3 inertia tensor matrix (diagonal for symmetric bodies).
+			 * @param inertiaTensor A 3x3 inertia tensor matrix (diagonal for symmetric bodies), finite, with a
+			 * non-negative diagonal (else refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
 			 * @return bool
 			 */
@@ -343,7 +344,10 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets physical properties at once from JSON data.
-			 * @param data A reference to a JSON value.
+			 * @note Reads the keys Mass, Surface, DragCoefficient, AngularDragCoefficient, Bounciness and Stickiness
+			 * (finite numbers, each checked by its setter; an absent key keeps its value). The inertia tensor is set from
+			 * code only (setInertiaTensor()): InertiaKey is not read.
+			 * @param data A reference to a JSON value (an object).
 			 * @return bool
 			 */
 			bool setProperties (const Json::Value & data) noexcept;

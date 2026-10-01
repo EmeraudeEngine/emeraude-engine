@@ -4784,6 +4784,15 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### A clang-tidy `--fix` over several TUs applies a header fix-it once PER TU (2026-10-01, triad 11)
+
+> [!CAUTION]
+> Each TU that includes a header re-applies that header's fix-its. An idempotent fix (`isolate-declaration`) is
+> harmless; a non-idempotent one is not. A base line `a * e - b * b` was found wrapped in ~90 parenthesis levels, which
+> looks like a parentheses fix-it applied once per TU (21 more such lines: base item `runaway-nested-parentheses`).
+> Run header fixes from ONE TU, and check `git status` for headers OUTSIDE the target module after any `--fix` run (the
+> triad 11 run also edited four emeraude-base headers).
+
 ### clang-tidy's `readability-qualified-auto` fix-it breaks MSVC on a `std::array` iterator (2026-10-01)
 
 > [!CAUTION]
@@ -4792,6 +4801,21 @@ dereference what a resource accessor returns without checking it.**
 > It broke the Windows build of engine `4e4bda64` (fixed `734b4422`). Never apply that fix-it to an iterator; review
 > every `auto *` it writes. With `--fix`, also pass `--format-style=none` (otherwise clang-tidy reformats the lines it
 > touches) and check `init-variables` (it initializes floats to `NAN` and adds `<math.h>`).
+
+### Physics: the drag is integrated EXACTLY, and nothing divides by a speed or a depth that can be tiny (2026-10-01, triad 11)
+
+> [!CAUTION]
+> - The explicit quadratic drag (`dv = k v² dt`) went past a stop when `k |v| dt > 1` (a light, wide, fast body: a 1 g,
+>   100 cm² particle at 40 m/s), reversed the velocity and reached `-nan` in 8 frames. `MovableTrait` and `Particle`
+>   now use `Physics::getDragVelocityFactor()`: `|v'| = |v| / (1 + k |v| dt)`, the exact solution over the step, equal
+>   to the explicit one at low speed (an 80 kg body at 5 m/s: 1e-6 apart).
+> - Base `Vector / s` is NaN once `|s| <= epsilon` (not inf): an angular speed decayed by the drag (or a 1-ulp contact
+>   depth) made a NaN rotation axis or contact normal, then a NaN orientation or position FOR GOOD. Test
+>   `s > std::numeric_limits< float >::min()` and multiply by `1 / s`.
+> - The inverse world inertia comes from base `Matrix::tryInverse()`: the former absolute singularity test left a small
+>   body's tensor un-inverted (0.004 instead of 250).
+> - The solver still re-applies restitution per iteration and over-corrects penetration: item
+>   `physics-solver-restitution-and-position-correction`.
 
 ### A float range check written `v < MIN || v > MAX` lets NaN through (2026-10-01, triad 10b)
 

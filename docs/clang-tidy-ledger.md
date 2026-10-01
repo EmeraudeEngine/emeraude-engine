@@ -50,6 +50,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Vulkan` 9c (commands, pipelines, descriptors, sync) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 21, all ON PURPOSE (below) — 15 reinterpret-cast, 2 constant-array-index, 2 vararg, 1 each convert-to-static, use-enum-class. Before: 45. | Triad sub-section 9c |
 | `src/Audio` 10a (the audio core) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 87, all ON PURPOSE (below) — 47 designated-initializers, 24 reinterpret-cast, 13 convert-to-static, 2 use-enum-class, 1 non-const global. Before: 121. | Triad sub-section 10a |
 | `src/Audio` 10b (`Effects/`, `Filters/`, `EffectSlot`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 1, ON PURPOSE (below) — 1 convert-member-functions-to-static. Before: 1. | Triad sub-section 10b |
+| `src/Physics` 11 | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 27, all ON PURPOSE (below) — 16 static-cast-downcast, 7 convert-member-functions-to-static, 2 constant-array-index, 1 use-enum-class, 1 special-member-functions. Before: 90. | Triad section 11 |
 
 ## Findings kept ON PURPOSE
 
@@ -356,3 +357,19 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - Not a finding but a trap: a range check written `!(value >= MIN && value <= MAX)` (which refuses NaN) draws
   `readability-simplify-boolean-expr`, and its fix-it rewrites it into `value < MIN || value > MAX`, which lets NaN
   through. Write `std::isnan(value) || value < MIN || value > MAX` instead.
+
+### `src/Physics` 11 (2026-10-01)
+
+- **pro-type-static-cast-downcast ×16** — the collision models' double dispatch: each `isCollidingWith()` switches on
+  `other.modelType()` and casts to that exact type (a tag-checked downcast, no RTTI on this hot path).
+- **convert-member-functions-to-static ×7** — the three `ConstraintSolver` phases (`prepareContacts`,
+  `solveVelocityConstraints`, `solvePositionConstraints`: the solver pass of item
+  `physics-solver-restitution-and-position-correction` gives them per-contact state) and the four
+  `PointCollisionModel::collideWith*()` (a point has no shape: the same dispatch API as the other models).
+- **pro-bounds-constant-array-index ×2** — `ContactPoint` tangent impulses: `tangentIndex` is always the literal 0 or 1.
+- **use-enum-class ×1** — `BodyPhysicalProperties::NotificationCode` (the Observer convention).
+- **special-member-functions ×1** — `CollisionModelInterface`: owned by `std::unique_ptr`, never copied through the
+  interface (as `Geometry::Interface`).
+- Trap met in this pass: a `--fix` run over several TUs applies a HEADER fix-it once per TU that includes it. Here it
+  was harmless (`isolate-declaration` in base headers, idempotent), but a non-idempotent one (parentheses) nests
+  again at every TU: run header fixes from one TU, and review every header in the diff.

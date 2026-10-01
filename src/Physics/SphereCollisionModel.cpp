@@ -26,6 +26,9 @@
 
 #include "SphereCollisionModel.hpp"
 
+/* STL inclusions. */
+#include <limits>
+
 /* Local inclusions. */
 #include "AABBCollisionModel.hpp"
 #include "CapsuleCollisionModel.hpp"
@@ -62,7 +65,7 @@ namespace EmEn::Physics
 	}
 
 	CollisionDetectionResults
-	SphereCollisionModel::collideWithPoint (const CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const CartesianFrame< float > & otherWorldFrame) const noexcept
+	SphereCollisionModel::collideWithPoint (const CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & /*other*/, const CartesianFrame< float > & otherWorldFrame) const noexcept
 	{
 		CollisionDetectionResults results;
 
@@ -116,9 +119,11 @@ namespace EmEn::Physics
 			results.m_MTV = mtv;
 			results.m_depth = mtv.length();
 
-			if ( results.m_depth > 0.0F )
+			/* NOTE: Vector / s is NaN once |s| <= the float epsilon: a 1-ulp overlap made a NaN normal that reached the
+			 * velocities and the positions. 1 / depth stays finite above FLT_MIN. */
+			if ( results.m_depth > std::numeric_limits< float >::min() )
 			{
-				results.m_impactNormal = mtv / results.m_depth;
+				results.m_impactNormal = mtv * (1.0F / results.m_depth);
 			}
 
 			/* Contact point is at the surface of the first sphere in the direction of the MTV. */
@@ -144,9 +149,11 @@ namespace EmEn::Physics
 			results.m_MTV = mtv;
 			results.m_depth = mtv.length();
 
-			if ( results.m_depth > 0.0F )
+			/* NOTE: Vector / s is NaN once |s| <= the float epsilon: a 1-ulp overlap made a NaN normal that reached the
+			 * velocities and the positions. 1 / depth stays finite above FLT_MIN. */
+			if ( results.m_depth > std::numeric_limits< float >::min() )
 			{
-				results.m_impactNormal = mtv / results.m_depth;
+				results.m_impactNormal = mtv * (1.0F / results.m_depth);
 			}
 
 			/* Contact point is at the surface of the sphere in the direction of the MTV. */
@@ -173,9 +180,11 @@ namespace EmEn::Physics
 			results.m_MTV = mtv;
 			results.m_depth = mtv.length();
 
-			if ( results.m_depth > 0.0F )
+			/* NOTE: Vector / s is NaN once |s| <= the float epsilon: a 1-ulp overlap made a NaN normal that reached the
+			 * velocities and the positions. 1 / depth stays finite above FLT_MIN. */
+			if ( results.m_depth > std::numeric_limits< float >::min() )
 			{
-				results.m_impactNormal = mtv / results.m_depth;
+				results.m_impactNormal = mtv * (1.0F / results.m_depth);
 			}
 
 			/* Contact point is at the surface of the sphere in the direction of the MTV. */

@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cstdint>
 
 /* Local inclusions for usages. */
@@ -279,8 +280,9 @@ namespace EmEn::Physics
 				rotationTransposed.transpose();
 				auto worldInertia = rotationMatrix * localInertia * rotationTransposed;
 
-				// Compute and cache the inverse
-				m_inverseWorldInertia = worldInertia.inverse();
+				/* Compute and cache the inverse. A truly singular tensor gives no angular response (a zero inverse):
+				 * inverse() would have returned the tensor itself. */
+				m_inverseWorldInertia = worldInertia.tryInverse().value_or(Base::Math::Matrix< 3, float >{std::array< float, 9 >{}});
 			}
 
 			/**

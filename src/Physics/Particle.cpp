@@ -67,13 +67,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setPosition(position);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setPosition(position);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setPosition(position);
 				break;
@@ -86,13 +80,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setXPosition(position);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setXPosition(position);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setXPosition(position);
 				break;
@@ -105,13 +93,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setYPosition(position);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setYPosition(position);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setYPosition(position);
 				break;
@@ -124,13 +106,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setZPosition(position);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setZPosition(position);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setZPosition(position);
 				break;
@@ -147,9 +123,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.translate(distance, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.translate(distance, false);
 				break;
@@ -166,9 +139,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.translateX(distance, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.translateX(distance, false);
 				break;
@@ -185,9 +155,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.translateY(distance, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.translateY(distance, false);
 				break;
@@ -204,9 +171,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.translateZ(distance, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.translateZ(distance, false);
 				break;
@@ -223,9 +187,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.rotate(radian, axis, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.rotate(radian, axis, false);
 				break;
@@ -242,9 +203,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.pitch(radian, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.pitch(radian, false);
 				break;
@@ -261,9 +219,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.yaw(radian, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.yaw(radian, false);
 				break;
@@ -280,9 +235,6 @@ namespace EmEn::Physics
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.roll(radian, false);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.roll(radian, false);
 				break;
@@ -301,13 +253,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingFactor(factor);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setScalingFactor(factor);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setScalingFactor(factor);
 				break;
@@ -320,13 +266,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingFactor(factor);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setScalingFactor(factor);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setScalingFactor(factor);
 				break;
@@ -339,13 +279,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingXFactor(factor);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setScalingXFactor(factor);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setScalingXFactor(factor);
 				break;
@@ -358,13 +292,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingYFactor(factor);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setScalingYFactor(factor);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setScalingYFactor(factor);
 				break;
@@ -377,13 +305,7 @@ namespace EmEn::Physics
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingZFactor(factor);
-				break;
-
 			case TransformSpace::Parent :
-				m_cartesianFrame.setScalingZFactor(factor);
-				break;
-
 			case TransformSpace::World :
 				m_cartesianFrame.setScalingZFactor(factor);
 				break;
@@ -432,16 +354,14 @@ namespace EmEn::Physics
 			return false;
 		}
 
-		const auto dragMagnitude = Physics::getDragMagnitude(
+		m_linearVelocity *= Physics::getDragVelocityFactor(
 			particleProperties.dragCoefficient(),
 			envProperties.atmosphericDensity(),
 			linearSpeed,
-			particleProperties.surface()
+			particleProperties.surface(),
+			particleProperties.inverseMass(),
+			WorldPhysicsUpdateCycleDurationS< float >
 		);
-
-		const auto force = m_linearVelocity.normalized().scale(-dragMagnitude);
-
-		m_linearVelocity += force * particleProperties.inverseMass() * WorldPhysicsUpdateCycleDurationS< float >;
 
 		return true;
 	}
