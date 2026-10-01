@@ -130,6 +130,32 @@ namespace EmEn::Saphir
 			~ShaderManager () override;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ShaderManager (const ShaderManager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ShaderManager (ShaderManager && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ShaderManager &
+			 */
+			ShaderManager & operator= (const ShaderManager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ShaderManager &
+			 */
+			ShaderManager & operator= (ShaderManager && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
 			 * @return size_t
 			 */

@@ -91,6 +91,8 @@ namespace EmEn::Saphir
 
 	ShaderManager::~ShaderManager () = default;
 
+	namespace
+	{
 	/**
 	 * @brief Converts a Saphir shader type to its GLSLang counterpart.
 	 * @note File-local: its EShLanguage return type used to drag the glslang public
@@ -99,7 +101,6 @@ namespace EmEn::Saphir
 	 * @return EShLanguage
 	 */
 	[[nodiscard]]
-	static
 	EShLanguage
 	toGLSLangShaderType (ShaderType shaderType) noexcept
 	{
@@ -134,6 +135,7 @@ namespace EmEn::Saphir
 
 				return EShLangCount;
 		}
+	}
 	}
 
 	bool

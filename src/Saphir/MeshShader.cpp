@@ -163,7 +163,7 @@ namespace EmEn::Saphir
 
 		for ( const auto & stageOutput : this->stageOutputs() )
 		{
-			const auto arrayName = this->storeName(std::string{stageOutput.name()} + "MS");
+			const auto * const arrayName = this->storeName(std::string{stageOutput.name()} + "MS");
 
 			arrayOutputs.emplace_back(stageOutput.location(), stageOutput.type(), arrayName, stageOutput.interpolation(), -1);
 
@@ -185,8 +185,8 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto instanceName = outputBlock.instanceName();
-			const auto arrayInstance = this->storeName(instanceName + "MS");
+			const auto & instanceName = outputBlock.instanceName();
+			const auto * const arrayInstance = this->storeName(instanceName + "MS");
 
 			OutputBlock arrayBlock{outputBlock.name(), outputBlock.location(), arrayInstance, std::numeric_limits< uint32_t >::max()};
 			Structure local{this->storeName(std::string{outputBlock.name()} + "Local")};

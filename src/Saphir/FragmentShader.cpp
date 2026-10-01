@@ -56,15 +56,15 @@ namespace
 	 * to the pixel's vectors: world vectors = model matrix · v (not normalized), view vectors =
 	 * normalize(normal matrix · v), and TangentToWorldMatrix = normal matrix · mat3(T, B, N). */
 	constexpr std::array< HeightfieldFrameOverride, 9 > HeightfieldFrameOverrides{{
-		{EmEn::Saphir::Keys::ShaderVariable::NormalWorldSpace, "hfvNormalWorldSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "hfPixelToWorld * hfPixelNormal"},
-		{EmEn::Saphir::Keys::ShaderVariable::TangentWorldSpace, "hfvTangentWorldSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "hfPixelToWorld * hfPixelTangent"},
-		{EmEn::Saphir::Keys::ShaderVariable::BinormalWorldSpace, "hfvBinormalWorldSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "hfPixelToWorld * hfPixelBinormal"},
-		{EmEn::Saphir::Keys::ShaderVariable::NormalViewSpace, "hfvNormalViewSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "normalize(hfPixelToView * hfPixelNormal)"},
-		{EmEn::Saphir::Keys::ShaderVariable::TangentViewSpace, "hfvTangentViewSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "normalize(hfPixelToView * hfPixelTangent)"},
-		{EmEn::Saphir::Keys::ShaderVariable::BinormalViewSpace, "hfvBinormalViewSpace", EmEn::Saphir::Keys::GLSL::FloatVector3, "normalize(hfPixelToView * hfPixelBinormal)"},
-		{EmEn::Saphir::Keys::ShaderVariable::WorldTBNMatrix, "hfvWorldTBNMatrix", EmEn::Saphir::Keys::GLSL::Matrix3, "mat3(normalize(hfPixelToWorld * hfPixelTangent), normalize(hfPixelToWorld * hfPixelBinormal), normalize(hfPixelToWorld * hfPixelNormal))"},
-		{EmEn::Saphir::Keys::ShaderVariable::ViewTBNMatrix, "hfvViewTBNMatrix", EmEn::Saphir::Keys::GLSL::Matrix3, "transpose(mat3(normalize(hfPixelToView * hfPixelTangent), normalize(hfPixelToView * hfPixelBinormal), normalize(hfPixelToView * hfPixelNormal)))"},
-		{EmEn::Saphir::Keys::ShaderVariable::TangentToWorldMatrix, "hfvTangentToWorldMatrix", EmEn::Saphir::Keys::GLSL::Matrix3, "hfPixelToView * mat3(hfPixelTangent, hfPixelBinormal, hfPixelNormal)"}
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::NormalWorldSpace, .received = "hfvNormalWorldSpace", .type = EmEn::Saphir::Keys::GLSL::FloatVector3, .definition = "hfPixelToWorld * hfPixelNormal"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::TangentWorldSpace, .received = "hfvTangentWorldSpace", .type = EmEn::Saphir::Keys::GLSL::FloatVector3, .definition = "hfPixelToWorld * hfPixelTangent"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::BinormalWorldSpace, .received = "hfvBinormalWorldSpace", .type = EmEn::Saphir::Keys::GLSL::FloatVector3, .definition = "hfPixelToWorld * hfPixelBinormal"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::NormalViewSpace, .received = "hfvNormalViewSpace", .type = EmEn::Saphir::Keys::GLSL::FloatVector3, .definition = "normalize(hfPixelToView * hfPixelNormal)"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::TangentViewSpace, .received = "hfvTangentViewSpace", .type = EmEn::Saphir::Keys::GLSL::FloatVector3, .definition = "normalize(hfPixelToView * hfPixelTangent)"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::BinormalViewSpace, .received = "hfvBinormalViewSpace", .type = EmEn::Saphir::Keys::GLSL::FloatVector3, .definition = "normalize(hfPixelToView * hfPixelBinormal)"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::WorldTBNMatrix, .received = "hfvWorldTBNMatrix", .type = EmEn::Saphir::Keys::GLSL::Matrix3, .definition = "mat3(normalize(hfPixelToWorld * hfPixelTangent), normalize(hfPixelToWorld * hfPixelBinormal), normalize(hfPixelToWorld * hfPixelNormal))"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::ViewTBNMatrix, .received = "hfvViewTBNMatrix", .type = EmEn::Saphir::Keys::GLSL::Matrix3, .definition = "transpose(mat3(normalize(hfPixelToView * hfPixelTangent), normalize(hfPixelToView * hfPixelBinormal), normalize(hfPixelToView * hfPixelNormal)))"},
+		{.canonical = EmEn::Saphir::Keys::ShaderVariable::TangentToWorldMatrix, .received = "hfvTangentToWorldMatrix", .type = EmEn::Saphir::Keys::GLSL::Matrix3, .definition = "hfPixelToView * mat3(hfPixelTangent, hfPixelBinormal, hfPixelNormal)"}
 	}};
 }
 

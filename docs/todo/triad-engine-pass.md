@@ -57,8 +57,8 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
-| 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | 🟠 7a started |
-| 8 | `src/Saphir` | 31 645 | ⬜ |
+| 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed (7g peers pending) |
+| 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | 🟠 8a started |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
 | 10 | `src/Audio` | 18 919 | ⬜ |
 | 11 | `src/Physics` | 9 197 | ⬜ |
@@ -646,7 +646,7 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ✅ pushed (the engine 7d commit); peers pending |
 | 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ✅ pushed engine `11e574d8`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ✅ pushed engine `cfcb91b7`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ✅ pushed (the engine 7g commit); peers pending |
+| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ✅ pushed engine `712bf0e7`; macOS M2 VALIDATED, Windows pending |
 
 Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2, done); 7c (done) `BasicGroundResource` passes
 `DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d (done) the
@@ -972,5 +972,38 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   shared / probe warnings, ScreenSpace lane → the ten SS / shared ones, light-and-shadow-debug → "VolumetricLight/
   SampleCount = 100000 … Using 64" (the demo's value); 0 VUID. Regression: geometry-generator XRay (option 2: 1000
   slices, 8.8 ms each, 0 VUID), water-world (ocean waves), terrain (clouds), citadel MCP 1707/0, console 4466/0, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 7g commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `712bf0e7`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning; ScreenSpace lane only): citadel the 10 SS / shared warnings,
+    light-and-shadow-debug the same 10 + "VolumetricLight/SampleCount … Using 64"; geometry-generator XRay 1000 slices
+    (56.7 ms each), water-world, terrain, citadel MCP 1707/0, console 4445/0; 0 VUID, 0 UNASSIGNED everywhere.
+  - macOS noticed (PRE-EXISTING, projet-alpha): the XRay demo traces "1000 slices saved" while its write block is
+    commented out → alpha item `geometry-generator-xray-claims-a-save`.
+
+## Section 8 — `src/Saphir` (started 2026-10-01), three sub-sections (owner, 2026-10-01)
+
+| Sub | Content | Lines | Status |
+|---|---|---|---|
+| 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed (the engine 8a commit); peers pending |
+| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ⬜ |
+| 8c | `Declaration/`, `Generator/` | ~13 000 | ⬜ |
+
+### 8a — shader core (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (15 TUs, the 8a files and their headers): **40**: 21 qualified-auto, 9 designated
+  initializers, and singles (any_of, a nested conditional, a dead store, an unnecessary copy, an anonymous-namespace
+  function, special members, recursion, an unscoped enum).
+- [x] (2) Review. The trust boundary is the on-disk SPIR-V cache (`ShaderManager::checkBinaryFromCache()`): every
+  header field (magic, format version, source hash, stage, size, toolchain hash, data hash), a size multiple of 4 and
+  the SPIR-V magic word are checked before a byte reaches `vkCreateShaderModule`; a rejected file is erased. The rest
+  generates GLSL from engine data. No defect, no owner question.
+- [x] (3) Mechanical: designated initializers (the heightfield frame-override table, spacing normalized),
+  `const auto * const` for the `const char *` expressions (NOT the `std::array` iterators of `FragmentShader`: MSVC's
+  are classes, the 7a lesson), `preparationAlreadyDone()` through `std::ranges::any_of` (the commented-out version and
+  its "check if right" TODO were right, removed), the rest-position conditional unnested, a reference instead of a
+  copy, `toGLSLangShaderType()` in an anonymous namespace, `ShaderManager` copy / move deleted.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 110 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 40 → 7 (on purpose, ledger). The generated GLSL is unchanged by construction (the
+  two text-generating edits produce the same strings); beams (path / beam ribbons), citadel (mesh shaders; MCP 1707/0,
+  console 4466/0), terrain (heightfield fragment overrides), sponza: 0 shader compilation failure, 0 VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8a commit); peers asked.
 

@@ -42,6 +42,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Graphics` 7e (`RenderTarget/`, `RenderableInstance/`, scene / intermediate / selection targets, view matrices, shared UBOs, bindless table, vertex formats, skinning, path overlay) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 109, all ON PURPOSE (below) — 80 constant-array-index, 16 reinterpret-cast, 7 qualified-auto, 2 use-enum-class, 2 non-private members, 1 each convert-to-static, unused parameter. Before: 205. | Triad sub-section 7e |
 | `src/Graphics` 7f (post-process: `PostProcessor`, `PostProcessStack`, the passes, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared / Resolve / Camera / Style) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 145, all ON PURPOSE (below) — 129 constant-array-index, 9 return-const-ref-from-parameter, 4 inefficient string concatenation, 2 macro-usage, 1 use-enum-class. Before: 192. | Triad sub-section 7f |
 | `src/Graphics` 7g (lighting and atmosphere: `Effects/` Lighting, Atmosphere, `Compute/`, the probe volume, LTC, dummies, cloud shadow map, ocean waves, imposter atlas) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 69, all ON PURPOSE (below) — 47 constant-array-index, 10 return-const-ref-from-parameter, 7 qualified-auto, 2 static-cast-downcast, 2 integer-division, 1 cert-msc51. Before: 184. | Triad sub-section 7g |
+| `src/Saphir` 8a (shader core: `ShaderManager`, `Program`, the shader stages, `AbstractVertexStage`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 7, all ON PURPOSE (below). Before: 40. | Triad sub-section 8a |
 
 ## Findings kept ON PURPOSE
 
@@ -273,4 +274,16 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **bugprone-integer-division ×2** — `IrradianceProbeVolume`: `counts / 2` centres the grid on a whole cell.
 - **cert-msc51-cpp ×1** — `IrradianceProbeVolume::m_random` seeded with a constant: the probe ray rotations must be
   reproducible run to run (A/B measurements).
+
+### `src/Saphir` 8a — shader core (2026-10-01)
+
+- **readability-qualified-auto ×2** — `FragmentShader`'s `std::ranges::find_if` over a `std::array`: an iterator, a
+  class on MSVC (`auto *` broke the Windows build in 7a).
+- **clang-analyzer-deadcode.DeadStores ×1** — `MeshShader`'s `topology = "triangles"` before a switch over every
+  enumerator: the value an out-of-range enum gets.
+- **misc-no-recursion ×1** — `AbstractVertexStage::requestSynthesizeInstruction()`: a synthesized variable may need
+  another, bounded by the variable set.
+- **pro-bounds-constant-array-index ×1**, **pro-bounds-array-to-pointer-decay ×1** — a bounded output loop; the
+  `Code` stream's `operator<<` taking string literals.
+- **use-enum-class ×1** — `ShaderManager::NotificationCode` (the observable notification convention).
 

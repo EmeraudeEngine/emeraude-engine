@@ -243,20 +243,9 @@ namespace EmEn::Saphir
 	bool
 	AbstractVertexStage::preparationAlreadyDone (const char * preparation) const noexcept
 	{
-		/*return std::ranges::any_of(m_uniquePreparations, [preparation] (const auto & pair) {
-			return std::strcmp(pair.first, preparation) == 0;
-		});*/
-
-		/* TODO: Check if the code above is right ! */
-		for ( const auto & variableType : std::ranges::views::keys(m_uniquePreparations) )
-		{
-			if ( std::strcmp(variableType, preparation) == 0 )
-			{
-				return true;
-			}
-		}
-
-		return false;
+		return std::ranges::any_of(std::ranges::views::keys(m_uniquePreparations), [preparation] (const char * variableType) {
+			return std::strcmp(variableType, preparation) == 0;
+		});
 	}
 
 	bool
@@ -437,8 +426,8 @@ namespace EmEn::Saphir
 		/* Double skinning: the previous clip position uses the PREVIOUS pose (the skinning
 		 * SSBO interleaves {current, previous} bone matrices) — limb motion produces real
 		 * velocity, not just the transform delta. */
-		const auto posExpr = this->vertexPositionExpression();
-		const auto prevPosExpr = this->previousVertexPositionExpression();
+		const auto * const posExpr = this->vertexPositionExpression();
+		const auto * const prevPosExpr = this->previousVertexPositionExpression();
 
 		if ( m_skinningEnabled )
 		{
@@ -858,7 +847,7 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto posExpr = this->vertexPositionExpression();
+			const auto * const posExpr = this->vertexPositionExpression();
 
 			code << ShaderVariable::MDIModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
@@ -869,7 +858,7 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto posExpr = this->vertexPositionExpression();
+			const auto * const posExpr = this->vertexPositionExpression();
 
 			code << Attribute::ModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
@@ -880,13 +869,13 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			const auto posExpr = this->vertexPositionExpression();
+			const auto * const posExpr = this->vertexPositionExpression();
 
 			code << ShaderVariable::InstanceModelMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
 		else
 		{
-			const auto posExpr = this->vertexPositionExpression();
+			const auto * const posExpr = this->vertexPositionExpression();
 
 			code << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << posExpr << ", 1.0);" "\n";
 		}
@@ -977,7 +966,18 @@ namespace EmEn::Saphir
 		std::stringstream code{};
 
 		/* A path or beam ribbon has no position attribute: its rest position is the pulled one. */
-		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << (m_pathRibbonEnabled ? "pathPosition" : (m_beamRibbonEnabled ? "beamPosition" : Attribute::Position)) << ";" "\n";
+		const char * restPosition = Attribute::Position;
+
+		if ( m_pathRibbonEnabled )
+		{
+			restPosition = "pathPosition";
+		}
+		else if ( m_beamRibbonEnabled )
+		{
+			restPosition = "beamPosition";
+		}
+
+		code << '\t' << ShaderVariable::RestPositionModelSpace << " = " << restPosition << ";" "\n";
 
 		outputInstructions.append(code.str());
 
@@ -1010,7 +1010,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		const auto posExpr = this->vertexPositionExpression();
+		const auto * const posExpr = this->vertexPositionExpression();
 
 		code << ShaderVariable::PositionViewSpace << " = " << ShaderVariable::ModelViewMatrix << " * vec4(" << posExpr << ", 1.0);" "\n";
 
@@ -1053,7 +1053,7 @@ namespace EmEn::Saphir
 			MVPMatrix = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
 		}
 
-		const auto posExpr = this->vertexPositionExpression();
+		const auto * const posExpr = this->vertexPositionExpression();
 
 		outputInstructions += "\t" + std::string{m_positionOutput} + " = ";
 		outputInstructions += MVPMatrix;
@@ -1413,9 +1413,9 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		const auto tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
-		const auto binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
-		const auto norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
+		const auto * const tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
+		const auto * const binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
+		const auto * const norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
 
 		topInstructions.append((std::stringstream{} <<
 			"	const vec3 worldT = normalize((" << modelMatrix << " * vec4(" << tanExpr << ", 0.0)).xyz);" "\n"
@@ -1468,9 +1468,9 @@ namespace EmEn::Saphir
 		}
 
 		{
-			const auto tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
-			const auto binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
-			const auto norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
+			const auto * const tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
+			const auto * const binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
+			const auto * const norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
 
 			topInstructions.append((std::stringstream{} <<
 				"	const vec3 viewT = normalize(" << ShaderVariable::NormalMatrix << " * " << tanExpr << ");" "\n"
@@ -1521,9 +1521,9 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		const auto tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
-		const auto binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
-		const auto norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
+		const auto * const tanExpr = this->vertexFrameExpression(VertexAttributeType::Tangent);
+		const auto * const binExpr = this->vertexFrameExpression(VertexAttributeType::Binormal);
+		const auto * const norExpr = this->vertexFrameExpression(VertexAttributeType::Normal);
 
 		const auto matrixCode = (std::stringstream{} <<
 			'\t' << ShaderVariable::TangentToWorldMatrix << " = " << ShaderVariable::NormalMatrix << " * mat3(" << tanExpr << ", " << binExpr << ", " << norExpr << ");" "\n"
