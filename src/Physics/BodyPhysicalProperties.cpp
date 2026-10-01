@@ -204,7 +204,7 @@ namespace EmEn::Physics
 	}
 
 	bool
-	BodyPhysicalProperties::setProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness, float stickiness, const Matrix< 3, float > & inertiaTensor) noexcept
+	BodyPhysicalProperties::setProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness, float stickiness, const std::optional< Matrix< 3, float > > & inertiaTensor) noexcept
 	{
 		auto changes = false;
 
@@ -250,9 +250,9 @@ namespace EmEn::Physics
 			changes = true;
 		}
 
-		if ( this->setInertiaTensor(inertiaTensor, false) )
+		if ( inertiaTensor.has_value() ? this->setInertiaTensor(inertiaTensor.value(), false) : this->resetInertiaTensor(false) )
 		{
-			this->notify(InertiaTensorChanged, m_inertiaTensor);
+			this->notify(InertiaTensorChanged);
 
 			changes = true;
 		}
@@ -342,8 +342,11 @@ namespace EmEn::Physics
 		m_angularDragCoefficient = (m_angularDragCoefficient + other.m_angularDragCoefficient) * Half< float >;
 		m_bounciness = (m_bounciness + other.m_bounciness) * Half< float >;
 		m_stickiness = (m_stickiness + other.m_stickiness) * Half< float >;
-		/* FIXME: Not sure about this !! */
-		m_inertiaTensor = (m_inertiaTensor + other.m_inertiaTensor) * Half< float >;
+		/* Explicit tensors add up (exact about a common centre of mass); a derived one stays derived. */
+		if ( other.m_inertiaTensor.has_value() )
+		{
+			m_inertiaTensor = m_inertiaTensor.has_value() ? m_inertiaTensor.value() + other.m_inertiaTensor.value() : other.m_inertiaTensor.value();
+		}
 	}
 
 	bool
@@ -369,7 +372,7 @@ namespace EmEn::Physics
 		}
 
 		/* Check if the tensor changed. */
-		if ( m_inertiaTensor == inertiaTensor )
+		if ( m_inertiaTensor.has_value() && m_inertiaTensor.value() == inertiaTensor )
 		{
 			return false;
 		}
@@ -385,17 +388,43 @@ namespace EmEn::Physics
 		return true;
 	}
 
+	bool
+	BodyPhysicalProperties::resetInertiaTensor (bool fireEvents) noexcept
+	{
+		if ( !m_inertiaTensor.has_value() )
+		{
+			return false;
+		}
+
+		m_inertiaTensor.reset();
+
+		if ( fireEvents )
+		{
+			this->notify(InertiaTensorChanged);
+			this->notify(PropertiesChanged);
+		}
+
+		return true;
+	}
+
 	std::ostream &
 	operator<< (std::ostream & out, const BodyPhysicalProperties & obj)
 	{
-		return out << "Body physical properties :" "\n"
+		out << "Body physical properties :" "\n"
 			"Mass : " << obj.m_mass << " Kg (Inverse: " << obj.m_inverseMass << ")" << "\n"
 			"Surface : " << obj.m_surface << " m²" << "\n"
 			"Drag coefficient : " << obj.m_dragCoefficient << "\n"
 			"Angular drag coefficient : " << obj.m_angularDragCoefficient << "\n"
 			"Bounciness : " << obj.m_bounciness << "\n"
 			"Stickiness : " << obj.m_stickiness << "\n"
-			"Inertia tensor : " << obj.m_inertiaTensor << '\n';
+			"Inertia tensor : ";
+
+		if ( obj.m_inertiaTensor.has_value() )
+		{
+			return out << obj.m_inertiaTensor.value() << '\n';
+		}
+
+		return out << "derived from the collision shape" "\n";
 	}
 
 	std::string

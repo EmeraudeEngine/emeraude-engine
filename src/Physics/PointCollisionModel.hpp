@@ -31,17 +31,10 @@
 
 /* STL inclusions. */
 #include <limits>
+#include <optional>
 
 /* Local inclusions for inheritances. */
 #include "CollisionModelInterface.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Physics
-{
-	class SphereCollisionModel;
-	class AABBCollisionModel;
-	class CapsuleCollisionModel;
-}
 
 namespace EmEn::Physics
 {
@@ -72,10 +65,6 @@ namespace EmEn::Physics
 			{
 				return CollisionModelType::Point;
 			}
-
-			/** @copydoc CollisionModelInterface::isCollidingWith() */
-			[[nodiscard]]
-			CollisionDetectionResults isCollidingWith (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept override;
 
 			/** @copydoc CollisionModelInterface::getAABB() */
 			[[nodiscard]]
@@ -126,46 +115,22 @@ namespace EmEn::Physics
 				return worldFrame.position();
 			}
 
-			/**
-			 * @brief Collision test: Point vs Point.
-			 * @note Always returns false (two points cannot collide).
-			 * @param thisWorldFrame World frame of this point.
-			 * @param other The other point model.
-			 * @param otherWorldFrame World frame of the other point.
-			 * @return CollisionDetectionResults
-			 */
+			/** @copydoc CollisionModelInterface::centerOfMassOffset() */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithPoint (const Base::Math::CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			Base::Math::Vector< 3, float >
+			centerOfMassOffset (const Base::Math::Vector< 3, float > & /*scaling*/) const noexcept override
+			{
+				return {};
+			}
 
-			/**
-			 * @brief Collision test: Point vs Sphere.
-			 * @param thisWorldFrame World frame of this point.
-			 * @param other The sphere model.
-			 * @param otherWorldFrame World frame of the sphere.
-			 * @return CollisionDetectionResults
-			 */
+			/** @copydoc CollisionModelInterface::solidInertia() */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithSphere (const Base::Math::CartesianFrame< float > & thisWorldFrame, const SphereCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
-
-			/**
-			 * @brief Collision test: Point vs AABB.
-			 * @param thisWorldFrame World frame of this point.
-			 * @param other The AABB model.
-			 * @param otherWorldFrame World frame of the AABB.
-			 * @return CollisionDetectionResults
-			 */
-			[[nodiscard]]
-			CollisionDetectionResults collideWithAABB (const Base::Math::CartesianFrame< float > & thisWorldFrame, const AABBCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
-
-			/**
-			 * @brief Collision test: Point vs Capsule.
-			 * @param thisWorldFrame World frame of this point.
-			 * @param other The capsule model.
-			 * @param otherWorldFrame World frame of the capsule.
-			 * @return CollisionDetectionResults
-			 */
-			[[nodiscard]]
-			CollisionDetectionResults collideWithCapsule (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CapsuleCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			std::optional< Base::Math::Matrix< 3, float > >
+			solidInertia (float /*mass*/, const Base::Math::Vector< 3, float > & /*scaling*/) const noexcept override
+			{
+				/* A point has no extent: it does not rotate. */
+				return std::nullopt;
+			}
 
 			/** @copydoc CollisionModelInterface::overrideShapeParameters() */
 			void

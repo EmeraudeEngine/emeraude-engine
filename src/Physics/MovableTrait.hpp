@@ -245,81 +245,6 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief [PHYSICS-NEW-SYSTEM] Applies an angular impulse directly to the angular velocity.
-			 * @note Angular impulse L = I * Δω. Used by constraint solver for rotational response.
-			 * @param angularImpulse The angular impulse vector.
-			 * @return void
-			 */
-			void
-			applyAngularImpulse (const Base::Math::Vector< 3, float > & angularImpulse) noexcept
-			{
-				if ( !m_isMovable || !m_rotationEnabled )
-				{
-					return;
-				}
-
-				m_angularVelocity += m_inverseWorldInertia * angularImpulse;
-				m_angularSpeed = m_angularVelocity.length();
-
-				this->onImpulse();
-			}
-
-			/**
-			 * @brief [PHYSICS-NEW-SYSTEM] Updates the inverse world inertia tensor from the current orientation.
-			 * @note Call this after rotation changes. I_world = R * I_local * R^T.
-			 * @param rotationMatrix The current orientation as a 3x3 rotation matrix.
-			 * @return void
-			 */
-			void
-			updateInverseWorldInertia (const Base::Math::Matrix< 3, float > & rotationMatrix) noexcept
-			{
-				const auto & localInertia = this->getBodyPhysicalProperties().inertiaTensor();
-
-				// Transform inertia tensor to world space: I_world = R * I_local * R^T
-				auto rotationTransposed = rotationMatrix;
-				rotationTransposed.transpose();
-				auto worldInertia = rotationMatrix * localInertia * rotationTransposed;
-
-				/* Compute and cache the inverse. A truly singular tensor gives no angular response (a zero inverse):
-				 * inverse() would have returned the tensor itself. */
-				m_inverseWorldInertia = worldInertia.tryInverse().value_or(Base::Math::Matrix< 3, float >{std::array< float, 9 >{}});
-			}
-
-			/**
-			 * @brief [PHYSICS-NEW-SYSTEM] Returns the inverse world inertia tensor.
-			 * @note This is the cached transformed and inverted inertia tensor.
-			 * @return const Base::Math::Matrix< 3, float > &
-			 */
-			[[nodiscard]]
-			const Base::Math::Matrix< 3, float > &
-			inverseWorldInertia () const noexcept
-			{
-				return m_inverseWorldInertia;
-			}
-
-			/**
-			 * @brief Sets the center of mass.
-			 * @param centerOfMass A reference to a vector.
-			 * @return void
-			 */
-			void
-			setCenterOfMass (const Base::Math::Vector< 3, float > & centerOfMass) noexcept
-			{
-				m_centerOfMass = centerOfMass;
-			}
-
-			/**
-			 * @brief Returns the center of mass from the scene node position.
-			 * @return const Base::Math::Vector< 3, float > &
-			 */
-			[[nodiscard]]
-			const Base::Math::Vector< 3, float > &
-			centerOfMass () const noexcept
-			{
-				return m_centerOfMass;
-			}
-
-			/**
 			 * @brief Adds a physical force to the object acceleration.
 			 * @note Using this formula: F = m * a
 			 * @param force A reference to a vector representing the force. The magnitude (length) will represent the acceleration in m/s².
@@ -451,8 +376,8 @@ namespace EmEn::Physics
 			virtual Base::Math::Vector< 3, float > getWorldVelocity () const noexcept = 0;
 
 			/**
-			 * @brief Returns the world center of mass of the entity.
-			 * @note If not override, velocity is null.
+			 * @brief Returns the world center of mass of the entity: the centroid of its collision shape (physics
+			 * overhaul P3, decision 8b), its origin without one.
 			 * @return Base::Math::Vector< float >
 			 */
 			[[nodiscard]]
@@ -615,8 +540,6 @@ namespace EmEn::Physics
 
 			Base::Math::Vector< 3, float > m_linearVelocity;
 			Base::Math::Vector< 3, float > m_angularVelocity; // Omega
-			Base::Math::Vector< 3, float > m_centerOfMass;
-			Base::Math::Matrix< 3, float > m_inverseWorldInertia; // Cached I^-1 in world space
 			const MovableTrait * m_groundedOn{nullptr}; ///< Entity we're grounded on (if source is Entity).
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};
@@ -625,7 +548,8 @@ namespace EmEn::Physics
 			uint8_t m_groundedFrames{0}; ///< Grace period countdown.
 			uint8_t m_stableFrames{0}; ///< Consecutive frames with negligible velocity.
 			bool m_isMovable{true};
-			bool m_rotationEnabled{false};
+			/* On by default for every dynamic body (P3, decision 8d); a character turns it off. */
+			bool m_rotationEnabled{true};
 			bool m_freeFlyModeEnabled{false};
 	};
 }

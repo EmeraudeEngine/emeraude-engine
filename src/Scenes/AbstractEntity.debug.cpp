@@ -106,7 +106,7 @@ namespace EmEn::Scenes
 							meshResource = AbstractEntity::getBoundingSphereVisualDebug(resourceManager);
 							break;
 
-						case CollisionModelType::AABB :
+						case CollisionModelType::Box :
 						case CollisionModelType::Capsule : /* TODO: Implement capsule visual debug mesh. */
 							meshResource = AbstractEntity::getBoundingBoxVisualDebug(resourceManager);
 							break;
@@ -189,19 +189,16 @@ namespace EmEn::Scenes
 							renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
 							break;
 
-						case CollisionModelType::AABB :
+						case CollisionModelType::Box :
 						{
-							const auto worldFrame = this->getWorldCoordinates();
-							const auto worldAABB = m_collisionModel->getAABB(worldFrame);
+							/* The box turns with the entity (P3): drawn in local space, like the collider. */
+							const auto localBox = m_collisionModel->getAABB();
 
-							if ( worldAABB.isValid() )
+							if ( localBox.isValid() )
 							{
-								const auto inverseEntity = worldFrame.getInvertedModelMatrix();
-
 								renderableInstance->setTransformationMatrix(
-									inverseEntity *
-									Matrix< 4, float >::translation(worldAABB.centroid()) *
-									Matrix< 4, float >::scaling(worldAABB.width(), worldAABB.height(), worldAABB.depth())
+									Matrix< 4, float >::translation(localBox.centroid()) *
+									Matrix< 4, float >::scaling(localBox.width(), localBox.height(), localBox.depth())
 								);
 							}
 						}
@@ -369,19 +366,16 @@ namespace EmEn::Scenes
 					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
 					break;
 
-				case CollisionModelType::AABB :
+				case CollisionModelType::Box :
 				{
-					const auto worldFrame = this->getWorldCoordinates();
-					const auto worldAABB = m_collisionModel->getAABB(worldFrame);
+					/* The box turns with the entity (P3): drawn in local space, like the collider. */
+					const auto localBox = m_collisionModel->getAABB();
 
-					if ( worldAABB.isValid() )
+					if ( localBox.isValid() )
 					{
-						const auto inverseEntity = worldFrame.getInvertedModelMatrix();
-
 						renderableInstance->setTransformationMatrix(
-							inverseEntity *
-							Matrix< 4, float >::translation(worldAABB.centroid()) *
-							Matrix< 4, float >::scaling(worldAABB.width(), worldAABB.height(), worldAABB.depth())
+							Matrix< 4, float >::translation(localBox.centroid()) *
+							Matrix< 4, float >::scaling(localBox.width(), localBox.height(), localBox.depth())
 						);
 					}
 				}

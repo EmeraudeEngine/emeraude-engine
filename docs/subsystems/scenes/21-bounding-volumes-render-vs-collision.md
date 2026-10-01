@@ -49,7 +49,7 @@ Current state:
 ### Open: compound collision shapes
 
 A collision extent is currently **one** box or sphere per component, and `AbstractEntity` builds
-a single `AABBCollisionModel` from it. Real objects need several: a tree is a narrow trunk at
+a single `BoxCollisionModel` from it. Real objects need several: a tree is a narrow trunk at
 ground level and a wide canopy above it — one AABB around both makes you collide with foliage at
 ankle height. Moving the collision extent to a **list** of primitives is a separate project: it
 touches the collision model, the broad phase and the narrow phase, all of which assume one shape

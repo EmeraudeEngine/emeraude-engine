@@ -36,6 +36,15 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    (g) The walkers may regress on the branch between P2 and P4 — no compatibility workaround. (h) `DynTopCube` moves
    its properties to the component in P2. (i) The old `Collisions/` MTV overlap tests are RETIRED once the collision
    models use the contacts; only their boolean defects are fixed.
+8. **P3 design (owner, 2026-10-02, the recommendations)**: (a) `AABBCollisionModel` becomes ORIENTED — its local box
+   follows the entity's rotation (`OrientedBox::fromCuboid(localBox, frame)`), the octree keeps the world AABB — and
+   is renamed `BoxCollisionModel` / `CollisionModelType::Box`; no second box model. (b) The centre of mass is the
+   shape's CENTROID (Box2D v3 `localCenter`): the solver integrates the centre of mass and the write-back moves the
+   origin to `COM − R · offset`. (c) The inertia tensor is DERIVED from the shape and the mass (`RigidBody::solid*Inertia`)
+   unless the author set one explicitly (`BodyPhysicalProperties` remembers it); a point model does not rotate; the
+   JSON stays code-only (`InertiaKey` is not read). (d) Rotation is ON by default for every dynamic body; actors and
+   the player keep it off (their final state: the P4 controller never takes its rotation from the physics).
+   (e) The angular drag keeps today's feel at the reference rate, integrated exactly: `ω *= (1 − c)^(dt · rate)`.
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -82,6 +91,45 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   on the entity. Decision (h) applied (component properties, overridden shapes): on Linux it now falls from cycle 0,
   3 launches identical, and rests exactly like its twin (3.211, 1.137, −4.997 vs 33.212, 1.137, −59.997, both 81.5°).
   Every other station matches the Linux values; balls-of-steel: 3 clean shutdowns of 3.
+- **P2 acceptance MET on macOS M2** (peer, 2026-10-02; base `0238d8a`, engine `b8bbeb29`, alpha `b49e2cde`): 0 warning;
+  5 recorded runs, run 1 compared with runs 2-5: 1800 common cycles, **0 differing samples, max gap 0.0 on all 17
+  stations**, no non-finite value. `DynTopCube` at cycle 60 y 4.2303, vy −0.587; at rest (3.211, 1.137, −4.997), 81.5°
+  — the Linux values to the printed digits.
+- **P2 acceptance MET on Windows** (peer, 2026-10-02; same commits): MSVC 0 warning (no C4459), base 2272 / 0 failed /
+  3 skipped (live HTTPS); recorded bench on the RTX 3060 Laptop AND the AMD iGPU: **0 differing samples on all 17
+  stations, 5 runs each**, and NVIDIA run 1 = AMD run 1 over all 1800 cycles (before the `DynTopCube` fix it was the
+  only station to differ, from cycle 62, on both GPUs). Values = Linux: stack tops 0.501 / 1.500 / 2.503 / 3.508 /
+  4.515, tail amplitude of the top box (0.0033, 0.0078, 0.0056) m; box flat 5.24°, edge 44.45°; e 0.4915 / 0.9978;
+  spinner axes constant; platform carries the box 9.999 → 14.019; `DynTopCube` 81.54°. balls-of-steel 5 / 5 clean
+  shutdowns.
+- **Run-to-run determinism: CLOSED (2026-10-02, three OS)** — item `physics-run-to-run-determinism` deleted. The
+  P0 / P1 divergences came from the ORDER of the contact pairs (octree traversal) fed to a sequential solver; P2 sorts
+  the bodies by creation number and the pairs / manifolds by key. Two lessons that stay: compare runs CYCLE BY CYCLE
+  (§ 6, a final state hides a time shift and invents differences), and a body whose collision shape waits for an
+  asynchronous geometry load joins the simulation late — a scene that must reproduce overrides its shapes and sets
+  the properties on the component (`DynTopCube`, decision 6h).
+
+- **P3 (rotation, 2026-10-02)**: P3.a — `AABBCollisionModel` → `BoxCollisionModel` / `CollisionModelType::Box`, the
+  narrow phase collides `toWorldBox()` (oriented), the models' MTV tests and their four `.cpp` removed, the debug overlay
+  draws the local box. P3.b — centre of mass = shape centroid, inertia derived from the shape unless explicit
+  (`std::optional` tensor), rotation on by default (off for projet-alpha's `AbstractLiving`), exact angular drag
+  (`docs/subsystems/physics/16-rigid-body-rotation.md`). Bench, Linux, 3 recorded launches, **0 differing samples on
+  all 17 stations**:
+
+  | Station | P2 | P3 |
+  |---|---|---|
+  | box dropped flat | tilts 5.24° | flat (0.00°), y 0.500 |
+  | box on an edge | stays at 44.4° | falls onto a face (0.00°), y 0.500 |
+  | 5-box stack | top 4.515, tail (3.3, 7.8, 5.6) mm | top 4.494, tail 0.47 mm in X only, 0° (≈ 1.5 mm soft penetration per contact) |
+  | `DynTopCube` / twin | rest at 81.5° (envelope) | rest on a face (90.00°, y 1.000) |
+  | slope (30° slab) | an axis-aligned step | the ball rolls down, then rolls without slipping on the ground (\|v\| = \|ω\| r within 2 %); the box tumbles down onto a face; both rest |
+  | balls e 0.5 / 1.0 | 0.4915 / 0.9978 | unchanged |
+  | spinner | world-axis ✔ | unchanged (2 rad/s, upward Y constant) |
+  | platform | carries 10 → 14 | carries 10.000 → 14.018 |
+
+  The two tipping cubes no longer rest at the same place relative to their base (x +2.822 / −0.025 vs +2.866 / −0.010
+  in z): tumbling over an edge amplifies the rounding of their different world coordinates — chaos, not a defect (each
+  is bit-identical run to run).
 
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
@@ -170,8 +218,8 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 |---|---|---|
 | P0 bench | projet-alpha | `physics-collision-debug-bench` |
 | P1 foundation | emeraude-base | `contact-manifold-generation`, `shape-casts-with-hit-normal`, `collision-pair-test-defects`, `rigid-body-math-helpers` |
-| P2 solver | engine | `physics-unified-contact-pipeline` (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; expected to close `physics-run-to-run-determinism`, `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
-| P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` |
+| P2 solver | engine | `physics-unified-contact-pipeline` (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
+| P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` (supersedes `physics-step-up-pass`), projet-alpha `actors-kinematic-character-migration` |
 | P5 later | engine | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` |
 

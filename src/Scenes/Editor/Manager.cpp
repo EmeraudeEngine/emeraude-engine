@@ -51,7 +51,7 @@
 #include "Math/Space3D/Intersections/SegmentSphere.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "Notifier.hpp"
-#include "Physics/AABBCollisionModel.hpp"
+#include "Physics/BoxCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 #include "Physics/SphereCollisionModel.hpp"
 #include "Resources/Manager.hpp"
@@ -609,7 +609,7 @@ namespace EmEn::Scenes::Editor
 				}
 					break;
 
-				case CollisionModelType::AABB :
+				case CollisionModelType::Box :
 				case CollisionModelType::Capsule :
 				{
 					const auto worldAABB = model->getAABB(worldFrame);

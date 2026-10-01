@@ -2011,6 +2011,34 @@ namespace EmEn::Physics
 		return value + ((static_cast< precision_t >(1) - value) * factor);
 	}
 
+	/**
+	 * @brief Returns the factor that applies the angular drag to an angular velocity over a step.
+	 * @note The coefficient c keeps its historical meaning, "the fraction of ω lost per logic cycle"
+	 * (WorldPhysicsUpdateCycleDurationS), and is integrated EXACTLY for any step: ω(t) = ω₀ (1 − c)^(t / cycle), so the
+	 * feel does not depend on the tick rate (physics overhaul P3, decision 8e). Over one cycle it is 1 − c.
+	 * @tparam precision_t A floating point type. Default float.
+	 * @param angularDragCoefficient The coefficient c, in [0, 1] (0 = perpetual rotation, 1 = immediate stop).
+	 * @param deltaTime The step duration in seconds, positive.
+	 * @return precision_t A factor in [0, 1] to multiply the angular velocity with (1 for a NaN or non-positive term).
+	 */
+	template< typename precision_t = float >
+	[[nodiscard]]
+	precision_t
+	getAngularDragFactor (precision_t angularDragCoefficient, precision_t deltaTime) noexcept requires (std::is_floating_point_v< precision_t >)
+	{
+		if ( !(angularDragCoefficient > static_cast< precision_t >(0)) || !(deltaTime > static_cast< precision_t >(0)) )
+		{
+			return static_cast< precision_t >(1);
+		}
+
+		if ( !(angularDragCoefficient < static_cast< precision_t >(1)) )
+		{
+			return static_cast< precision_t >(0);
+		}
+
+		return std::pow(static_cast< precision_t >(1) - angularDragCoefficient, deltaTime / WorldPhysicsUpdateCycleDurationS< precision_t >);
+	}
+
 	namespace Inertia
 	{
 		/**

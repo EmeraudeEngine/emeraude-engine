@@ -35,6 +35,7 @@
 /* Local inclusions. */
 #include "Math/RigidBody.hpp"
 #include "Math/Space3D/Contacts/ContactManifold.hpp"
+#include "Physics/BodyInertia.hpp"
 #include "Physics/NarrowPhase.hpp"
 
 namespace EmEn::Scenes
@@ -264,8 +265,12 @@ namespace EmEn::Scenes
 			}
 
 			auto * movable = entity->getMovableTrait();
+			const auto rotation = frame.getRotationMatrix3();
+			const auto * model = entity->collisionModel();
 			SoftStepSolver::Body body;
-			body.position = frame.position();
+			/* P3: the body turns about the centroid of its shape (decision 8b). */
+			body.centerOffset = model != nullptr ? rotation * model->centerOfMassOffset(frame.scalingFactor()) : Vector< 3, float >{};
+			body.position = frame.position() + body.centerOffset;
 			body.orientation = frame.toQuaternion();
 
 			if ( movable->isMovable() )
@@ -276,7 +281,8 @@ namespace EmEn::Scenes
 				body.linearVelocity = movable->linearVelocity();
 				body.angularVelocity = movable->isRotationPhysicsEnabled() ? movable->angularVelocity() : Vector< 3, float >{};
 				body.inverseMass = properties.inverseMass();
-				body.inverseInertia = movable->isRotationPhysicsEnabled() ? movable->inverseWorldInertia() : Matrix< 3, float >{std::array< float, 9 >{}};
+				/* P3: the explicit tensor, else the shape's as a uniform solid (decision 8c); zero = no rotation. */
+				body.inverseInertia = movable->isRotationPhysicsEnabled() ? worldInverseInertia(localInverseInertia(properties, model, frame.scalingFactor()), rotation) : Matrix< 3, float >{std::array< float, 9 >{}};
 				body.gravity = !movable->isFreeFlyModeEnabled() && !properties.isMassNull();
 				/* A sleeping body is solid but still; contact with an awake one wakes it (below). */
 				body.dynamic = !entity->isSimulationPaused();
@@ -452,9 +458,13 @@ namespace EmEn::Scenes
 
 			bool moved = false;
 
-			if ( body.deltaPosition.lengthSquared() > 0.0F )
+			/* The solver moved the centre of mass; the node turns about its origin (rotateFromPhysics() below), so
+			 * the origin also takes the swing of the offset: Δorigin = Δcom + c − ΔR · c. */
+			const auto originDelta = body.deltaPosition + body.centerOffset - (body.deltaRotation * body.centerOffset);
+
+			if ( originDelta.lengthSquared() > 0.0F )
 			{
-				body.movable->moveFromPhysics(body.deltaPosition);
+				body.movable->moveFromPhysics(originDelta);
 				moved = true;
 			}
 
@@ -678,7 +688,7 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionModelType::AABB :
+			case CollisionModelType::Box :
 			{
 				const auto aabb = model->getAABB(worldCoords);
 
@@ -810,7 +820,7 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionModelType::AABB :
+			case CollisionModelType::Box :
 			{
 				const auto aabb = model->getAABB(worldCoords);
 

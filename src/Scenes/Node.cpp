@@ -859,13 +859,6 @@ namespace EmEn::Scenes
 			this->onContainerMove(this->getWorldCoordinates());
 		}
 
-		/* Update the inverse world inertia tensor when rotation changes.
-		 * This is needed for correct angular physics response. */
-		if ( this->isMovable() && this->isRotationPhysicsEnabled() )
-		{
-			this->updateInverseWorldInertia(m_logicStateCoordinates.getRotationMatrix3());
-		}
-
 		/* Dispatch the movement to every sub node. */
 		for ( const auto & subNode : m_children | std::views::values )
 		{
@@ -1135,12 +1128,15 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		if ( this->parent()->isRoot() )
+		const auto worldFrame = this->parent()->isRoot() ? m_logicStateCoordinates : this->getWorldCoordinates();
+
+		if ( !this->hasCollisionModel() )
 		{
-			return m_logicStateCoordinates.position() + this->centerOfMass();
+			return worldFrame.position();
 		}
 
-		return this->getWorldCoordinates().position() + this->centerOfMass();
+		/* The centroid of the collision shape (P3, decision 8b): the point the physics turns the body about. */
+		return worldFrame.position() + (worldFrame.getRotationMatrix3() * this->collisionModel()->centerOfMassOffset(worldFrame.scalingFactor()));
 	}
 
 	bool

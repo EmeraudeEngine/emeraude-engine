@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
+#include <optional>
 #include <string>
 
 /* Third-party inclusions. */
@@ -106,10 +107,11 @@ namespace EmEn::Physics
 			 * @param angularDragCoefficient The angular drag coefficient.
 			 * @param bounciness A scalar of the bounciness of the object when hitting something. Default 50%.
 			 * @param stickiness A scalar of the stickiness of the object when hitting something. Default 50%.
-			 * @param inertiaTensor A reference to a matrix 3x3. Default matrix identity.
+			 * @param inertiaTensor An explicit inertia tensor, or nothing (`{}`, the default) to derive it from the
+			 * collision shape and the mass (physics overhaul P3, decision 8c).
 			 */
 			explicit
-			BodyPhysicalProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness, const Base::Math::Matrix< 3, float > & inertiaTensor = Base::Math::Matrix< 3, float >::identity()) noexcept
+			BodyPhysicalProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness, const std::optional< Base::Math::Matrix< 3, float > > & inertiaTensor = std::nullopt) noexcept
 				: m_mass{mass},
 				m_inverseMass{mass > 0.0F ? 1.0F / mass : 0.0F},
 				m_surface{surface},
@@ -309,8 +311,9 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Sets the moment of inertia tensor for the body.
-			 * @note For a solid cuboid: Ixx = m*(h²+d²)/12, Iyy = m*(w²+d²)/12, Izz = m*(w²+h²)/12
+			 * @brief Sets an EXPLICIT moment of inertia tensor (about the centre of mass, in the body's axes).
+			 * @note Without one, the physics derives it from the collision shape and the mass
+			 * (`Physics::localInverseInertia()`); set one only for a body whose mass is not spread like its shape.
 			 * @param inertiaTensor A 3x3 inertia tensor matrix (diagonal for symmetric bodies), finite, with a
 			 * non-negative diagonal (else refused with a warning).
 			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
@@ -319,11 +322,18 @@ namespace EmEn::Physics
 			bool setInertiaTensor (const Base::Math::Matrix< 3, float > & inertiaTensor, bool fireEvents = true) noexcept;
 
 			/**
-			 * @brief Returns the moment of inertia tensor.
-			 * @return const Base::Math::Matrix< 3, float > &
+			 * @brief Removes the explicit inertia tensor: the physics derives it from the collision shape again.
+			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
+			 * @return bool Whether there was an explicit tensor.
+			 */
+			bool resetInertiaTensor (bool fireEvents = true) noexcept;
+
+			/**
+			 * @brief Returns the explicit moment of inertia tensor, or nothing when it is derived from the shape.
+			 * @return const std::optional< Base::Math::Matrix< 3, float > > &
 			 */
 			[[nodiscard]]
-			const Base::Math::Matrix< 3, float > &
+			const std::optional< Base::Math::Matrix< 3, float > > &
 			inertiaTensor () const noexcept
 			{
 				return m_inertiaTensor;
@@ -337,10 +347,10 @@ namespace EmEn::Physics
 			 * @param angularDragCoefficient The angular drag coefficient.
 			 * @param bounciness A scalar of the bounciness of the body when hitting something.
 			 * @param stickiness A scalar of the stickiness of the body when hitting something.
-			 * @param inertiaTensor A reference to a matrix 3x3.
+			 * @param inertiaTensor An explicit inertia tensor, or nothing (`{}`) to derive it from the collision shape.
 			 * @return bool
 			 */
-			bool setProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness, float stickiness, const Base::Math::Matrix< 3, float > & inertiaTensor) noexcept;
+			bool setProperties (float mass, float surface, float dragCoefficient, float angularDragCoefficient, float bounciness, float stickiness, const std::optional< Base::Math::Matrix< 3, float > > & inertiaTensor) noexcept;
 
 			/**
 			 * @brief Sets physical properties at once from JSON data.
@@ -365,6 +375,8 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Merges physical properties. Mass will be summed, the bigger surface will be kept and the drag coefficient, bounciness and stickiness will be averaged.
+			 * @note Two explicit inertia tensors are summed (exact for a common centre of mass); one explicit tensor
+			 * is kept; none stays derived.
 			 * @warning  This is an approximation method.
 			 * @note This method do not trigger any notification.
 			 * @param other A reference to PhysicalProperties.
@@ -402,7 +414,8 @@ namespace EmEn::Physics
 			float m_angularDragCoefficient{DefaultAngularDragCoefficient};
 			float m_bounciness{DefaultBounciness};
 			float m_stickiness{DefaultStickiness};
-			Base::Math::Matrix< 3, float > m_inertiaTensor;
+			/** Nothing = derived from the collision shape and the mass (P3). */
+			std::optional< Base::Math::Matrix< 3, float > > m_inertiaTensor;
 	};
 
 	/**

@@ -219,19 +219,10 @@ collision testing (critical for scenes with many settled objects, e.g., ball pit
 
 ### Collision Normal Convention
 
-`isCollidingWith(frameA, modelB, frameB)` returns:
-- `m_MTV`: direction to push **A out of B** (separation vector for A)
-- `m_impactNormal`: normalized MTV (points from B toward A)
-
-The `ConstraintSolver` uses the convention `relativeVelocity = velocityB - velocityA` and
-expects normals pointing **from A toward B**. Therefore, all collision detection functions
-**negate** the normal before passing it to `ContactManifold::addContact()`.
-
-```
-isCollidingWith() normal:  B ──→ A  (push A away)
-Solver convention normal:  A ──→ B  (from first body toward second)
-Fix: manifold.addContact(contact, -impactNormal, depth)
-```
+⚠️ HISTORY: the models' `isCollidingWith()` (an MTV pushing A out of B) and the `ConstraintSolver` that negated it
+were removed by the physics overhaul (P2, 2026-10-01; P3.a, 2026-10-02). The contacts now come from
+`Physics::NarrowPhase` as base contact manifolds whose normal points FROM A TO B, the convention of
+`Physics::SoftStepSolver` — no negation anywhere (`subsystems/physics/05-critical-collision-normal-convention.md`).
 
 See: `Physics/AGENTS.md` → "Critical: Collision Normal Convention" for bug pattern details.
 

@@ -31,20 +31,15 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
+#include <optional>
 
 /* Local inclusions for inheritances. */
 #include "CollisionModelInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Math/RigidBody.hpp"
 #include "Math/Space3D/Capsule.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Physics
-{
-	class PointCollisionModel;
-	class SphereCollisionModel;
-	class AABBCollisionModel;
-}
 
 namespace EmEn::Physics
 {
@@ -129,10 +124,6 @@ namespace EmEn::Physics
 			{
 				return CollisionModelType::Capsule;
 			}
-
-			/** @copydoc CollisionModelInterface::isCollidingWith() */
-			[[nodiscard]]
-			CollisionDetectionResults isCollidingWith (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept override;
 
 			/** @copydoc CollisionModelInterface::getAABB() */
 			[[nodiscard]]
@@ -237,45 +228,56 @@ namespace EmEn::Physics
 				};
 			}
 
-			/**
-			 * @brief Collision test: Capsule vs Point.
-			 * @param thisWorldFrame World frame of this capsule.
-			 * @param other The point model.
-			 * @param otherWorldFrame World frame of the point.
-			 * @return CollisionDetectionResults
-			 */
+			/** @copydoc CollisionModelInterface::centerOfMassOffset() */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithPoint (const Base::Math::CartesianFrame< float > & thisWorldFrame, const PointCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			Base::Math::Vector< 3, float >
+			centerOfMassOffset (const Base::Math::Vector< 3, float > & /*scaling*/) const noexcept override
+			{
+				/* The capsule ignores the frame's scaling (toWorldCapsule()). */
+				return (m_localCapsule.startPoint() + m_localCapsule.endPoint()) * 0.5F;
+			}
 
-			/**
-			 * @brief Collision test: Capsule vs Sphere.
-			 * @param thisWorldFrame World frame of this capsule.
-			 * @param other The sphere model.
-			 * @param otherWorldFrame World frame of the sphere.
-			 * @return CollisionDetectionResults
-			 */
+			/** @copydoc CollisionModelInterface::solidInertia() */
 			[[nodiscard]]
-			CollisionDetectionResults collideWithSphere (const Base::Math::CartesianFrame< float > & thisWorldFrame, const SphereCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+			std::optional< Base::Math::Matrix< 3, float > >
+			solidInertia (float mass, const Base::Math::Vector< 3, float > & /*scaling*/) const noexcept override
+			{
+				if ( !(mass > 0.0F) || !m_localCapsule.isValid() )
+				{
+					return std::nullopt;
+				}
 
-			/**
-			 * @brief Collision test: Capsule vs AABB.
-			 * @param thisWorldFrame World frame of this capsule.
-			 * @param other The AABB model.
-			 * @param otherWorldFrame World frame of the AABB.
-			 * @return CollisionDetectionResults
-			 */
-			[[nodiscard]]
-			CollisionDetectionResults collideWithAABB (const Base::Math::CartesianFrame< float > & thisWorldFrame, const AABBCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+				const auto axis = m_localCapsule.endPoint() - m_localCapsule.startPoint();
+				const auto axisLength = axis.length();
+				const auto alongY = Base::Math::RigidBody::solidCapsuleInertia(mass, m_localCapsule.radius(), axisLength);
 
-			/**
-			 * @brief Collision test: Capsule vs Capsule.
-			 * @param thisWorldFrame World frame of this capsule.
-			 * @param other The other capsule model.
-			 * @param otherWorldFrame World frame of the other capsule.
-			 * @return CollisionDetectionResults
-			 */
-			[[nodiscard]]
-			CollisionDetectionResults collideWithCapsule (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CapsuleCollisionModel & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept;
+				if ( !alongY.has_value() || !(axisLength > 0.0F) )
+				{
+					/* No axis: a sphere, the same tensor in every orientation. */
+					return alongY;
+				}
+
+				/* An axisymmetric body about the unit axis a: I = I⊥ Id + (I∥ − I⊥) a aᵀ. */
+				const auto direction = axis * (1.0F / axisLength);
+				const auto perpendicular = alongY.value()[Base::Math::M3x3Col0Row0];
+				const auto difference = alongY.value()[Base::Math::M3x3Col1Row1] - perpendicular;
+
+				const auto xx = (difference * direction[0] * direction[0]) + perpendicular;
+				const auto yy = (difference * direction[1] * direction[1]) + perpendicular;
+				const auto zz = (difference * direction[2] * direction[2]) + perpendicular;
+				const auto xy = difference * direction[0] * direction[1];
+				const auto xz = difference * direction[0] * direction[2];
+				const auto yz = difference * direction[1] * direction[2];
+
+				/* Symmetric: the column-major storage reads the same as the row-major. */
+				const std::array< float, 9 > values{
+					xx, xy, xz,
+					xy, yy, yz,
+					xz, yz, zz
+				};
+
+				return Base::Math::Matrix< 3, float >{values};
+			}
 
 			/** @copydoc CollisionModelInterface::overrideShapeParameters() */
 			void

@@ -29,8 +29,13 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <optional>
+
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "Math/Vector.hpp"
@@ -45,20 +50,8 @@ namespace EmEn::Physics
 	{
 		Point,
 		Sphere,
-		AABB,
+		Box,
 		Capsule
-	};
-
-	/**
-	 * @brief Results of a collision detection test.
-	 */
-	struct EMEN_API CollisionDetectionResults
-	{
-		Base::Math::Vector< 3, float > m_MTV;		  /**< Minimum Translation Vector to separate shapes. */
-		Base::Math::Vector< 3, float > m_contact;	  /**< Absolute contact point in world space. */
-		Base::Math::Vector< 3, float > m_impactNormal; /**< Normal of the impact surface. */
-		float m_depth{0.0F};							 /**< Penetration depth. */
-		bool m_collisionDetected{false};				 /**< Whether a collision was detected. */
 	};
 
 	/**
@@ -89,16 +82,6 @@ namespace EmEn::Physics
 			virtual CollisionModelType modelType () const noexcept = 0;
 
 			/**
-			 * @brief Tests collision with another collision model.
-			 * @param thisWorldFrame World-space frame of this model.
-			 * @param other The other collision model to test against.
-			 * @param otherWorldFrame World-space frame of the other model.
-			 * @return CollisionDetectionResults containing collision information.
-			 */
-			[[nodiscard]]
-			virtual CollisionDetectionResults isCollidingWith (const Base::Math::CartesianFrame< float > & thisWorldFrame, const CollisionModelInterface & other, const Base::Math::CartesianFrame< float > & otherWorldFrame) const noexcept = 0;
-
-			/**
 			 * @brief Returns the axis-aligned bounding box in local space.
 			 * @return AACuboid representing the local-space AABB.
 			 */
@@ -118,7 +101,7 @@ namespace EmEn::Physics
 			 * @note This is the radius of the smallest sphere that can contain the shape.
 			 *	   - Point: 0
 			 *	   - Sphere: radius
-			 *	   - AABB: max(halfWidth, halfHeight, halfDepth)
+			 *	   - Box: max(halfWidth, halfHeight, halfDepth)
 			 *	   - Capsule: half-height + radius
 			 * @return float The maximum bounding radius.
 			 */
@@ -126,11 +109,33 @@ namespace EmEn::Physics
 			virtual float getRadius () const noexcept = 0;
 
 			/**
+			 * @brief Returns the centre of mass of the shape, from the entity's origin, in the entity's axes.
+			 * @note The physics turns a body about this point (Box2D v3 `localCenter`; physics overhaul P3, decision
+			 * 8b). It follows the same scaling as the narrow phase: a box scales with its frame, a sphere and a
+			 * capsule do not.
+			 * @param scaling A reference to the scaling factor of the entity's world frame.
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			virtual Base::Math::Vector< 3, float > centerOfMassOffset (const Base::Math::Vector< 3, float > & scaling) const noexcept = 0;
+
+			/**
+			 * @brief Returns the inertia tensor of the shape as a uniform solid, about its centre of mass, in the
+			 * entity's axes.
+			 * @param mass The mass (kg), finite and > 0.
+			 * @param scaling A reference to the scaling factor of the entity's world frame.
+			 * @return std::optional< Base::Math::Matrix< 3, float > > Nothing for a shape that does not rotate (a
+			 * point) or an unusable one (no geometry yet, an invalid mass).
+			 */
+			[[nodiscard]]
+			virtual std::optional< Base::Math::Matrix< 3, float > > solidInertia (float mass, const Base::Math::Vector< 3, float > & scaling) const noexcept = 0;
+
+			/**
 			 * @brief Sets the bounding shape parameters.
 			 * @note The interpretation of dimensions depends on the collision model type:
 			 *	   - Point: dimensions ignored
 			 *	   - Sphere: radius = max(dimensions) * 0.5
-			 *	   - AABB: halfExtents = dimensions * 0.5
+			 *	   - Box: halfExtents = dimensions * 0.5
 			 *	   - Capsule: radius = max(width, depth) * 0.5, height = dimensions.y
 			 * @param dimensions The dimensions (width, height, depth) of the bounding shape.
 			 * @param centerOffset The offset of the shape center from the entity's origin.
@@ -151,7 +156,7 @@ namespace EmEn::Physics
 			 * @note The interpretation of dimensions depends on the collision model type:
 			 *	   - Point: dimensions ignored
 			 *	   - Sphere: radius = max(current radius, max(dimensions) * 0.5)
-			 *	   - AABB: merge with the given dimensions/offset
+			 *	   - Box: merge with the given dimensions/offset
 			 *	   - Capsule: expand radius and height if necessary
 			 * @param dimensions The dimensions (width, height, depth) to merge.
 			 * @param centerOffset The offset of the shape center from the entity's origin.

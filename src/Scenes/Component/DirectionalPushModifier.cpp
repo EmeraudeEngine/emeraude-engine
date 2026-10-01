@@ -104,7 +104,7 @@ namespace EmEn::Scenes::Component
 						break;
 					}
 
-					case CollisionModelType::AABB :
+					case CollisionModelType::Box :
 					case CollisionModelType::Capsule :
 					{
 						const auto worldAABB = model->getAABB(worldCoordinates);

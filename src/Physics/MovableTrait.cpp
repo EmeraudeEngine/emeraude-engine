@@ -117,12 +117,11 @@ namespace EmEn::Physics
 			m_linearSpeed = m_linearVelocity.length();
 		}
 
-		/* Apply the drag on rotation if there is angular speed and rotation is enabled.
-		 * A simple damping coefficient: velocity *= 1 - drag per cycle (0 = perpetual rotation, 1 = immediate stop).
-		 * NOTE: tick-rate dependent; its exact integration is item `rotational-physics`. */
+		/* Apply the drag on rotation if there is angular speed and rotation is enabled: the fraction of ω lost per
+		 * logic cycle, integrated exactly (Physics::getAngularDragFactor()). */
 		if ( m_rotationEnabled && m_angularSpeed > 0.0F )
 		{
-			m_angularVelocity *= 1.0F - objectProperties.angularDragCoefficient();
+			m_angularVelocity *= Physics::getAngularDragFactor(objectProperties.angularDragCoefficient(), WorldPhysicsUpdateCycleDurationS< float >);
 			m_angularSpeed = m_angularVelocity.length();
 		}
 

@@ -366,11 +366,13 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 ### `src/Physics` 11 (2026-10-01)
 
 - **pro-type-static-cast-downcast ×16** — the collision models' double dispatch: each `isCollidingWith()` switches on
-  `other.modelType()` and casts to that exact type (a tag-checked downcast, no RTTI on this hot path).
+  `other.modelType()` and casts to that exact type (a tag-checked downcast, no RTTI on this hot path). REMOVED with the
+  models' MTV tests in P3.a (2026-10-02); the same tag-checked downcast lives on in `NarrowPhase.cpp` (its own row).
 - **convert-member-functions-to-static ×7** — the three `ConstraintSolver` phases (`prepareContacts`,
   `solveVelocityConstraints`, `solvePositionConstraints` — that solver was REMOVED by the physics overhaul P2 on
   2026-10-01, these three findings with it) and the four
-  `PointCollisionModel::collideWith*()` (a point has no shape: the same dispatch API as the other models).
+  `PointCollisionModel::collideWith*()` (a point has no shape: the same dispatch API as the other models; removed in
+  P3.a, 2026-10-02).
 - **pro-bounds-constant-array-index ×2** — `ContactPoint` tangent impulses: `tangentIndex` is always the literal 0 or 1.
 - **use-enum-class ×1** — `BodyPhysicalProperties::NotificationCode` (the Observer convention).
 - **special-member-functions ×1** — `CollisionModelInterface`: owned by `std::unique_ptr`, never copied through the

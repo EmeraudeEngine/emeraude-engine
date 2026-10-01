@@ -96,8 +96,11 @@ namespace EmEn::Physics
 			{
 				/** The trait to write back to; nullptr for the static world and the kinematic bodies. */
 				MovableTrait * movable{nullptr};
-				/** The world position (the node's origin, the centre of mass for P2). */
+				/** The world position of the CENTRE OF MASS (the point the body turns about). */
 				Base::Math::Vector< 3, float > position;
+				/** The world offset of the centre of mass from the node's origin (the solver ignores it; the scene's
+				 * write-back moves the origin by deltaPosition + centerOffset − deltaRotation · centerOffset). */
+				Base::Math::Vector< 3, float > centerOffset;
 				Base::Math::Quaternion< float > orientation;
 				Base::Math::Vector< 3, float > linearVelocity;
 				Base::Math::Vector< 3, float > angularVelocity;

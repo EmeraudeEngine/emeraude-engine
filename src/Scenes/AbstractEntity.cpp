@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <optional>
 
 /* Local inclusions. */
 #include "Component/Camera.hpp"
@@ -45,7 +46,7 @@
 #include "Component/LineLight.hpp"
 #include "Component/Visual.hpp"
 #include "Component/Weight.hpp"
-#include "Physics/AABBCollisionModel.hpp"
+#include "Physics/BoxCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 #include "Tracer.hpp"
 
@@ -125,7 +126,7 @@ namespace EmEn::Scenes
 		auto angularDragCoefficient = 0.0F;
 		auto bounciness = 0.0F;
 		auto stickiness = 0.0F;
-		auto inertiaTensor = Matrix< 3, float >::identity();
+		std::optional< Matrix< 3, float > > inertiaTensor;
 
 		auto masslessShapeCount = 0;
 		auto masslessBounciness = 0.0F;
@@ -174,8 +175,9 @@ namespace EmEn::Scenes
 					angularDragCoefficient += physicalProperties.angularDragCoefficient();
 					bounciness += physicalProperties.bounciness();
 					stickiness += physicalProperties.stickiness();
-					/* FIXME: How to combine this ! */
-					inertiaTensor = physicalProperties.inertiaTensor();
+					/* An explicit tensor is kept for a single physical component; several components leave it to the
+					 * physics, derived from the entity's collision shape and its total mass (P3, decision 8c). */
+					inertiaTensor = physicalEntityCount == 0 ? physicalProperties.inertiaTensor() : std::nullopt;
 
 					physicalEntityCount++;
 				}
@@ -204,7 +206,7 @@ namespace EmEn::Scenes
 				/* NOTE: If no collision model we create a default AABB. */
 				if ( m_collisionModel == nullptr )
 				{
-					m_collisionModel = std::make_unique< AABBCollisionModel >(component->localBoundingBox());
+					m_collisionModel = std::make_unique< BoxCollisionModel >(component->localBoundingBox());
 				}
 				else if ( !m_collisionModel->areShapeParametersOverridden() )
 				{
@@ -218,7 +220,7 @@ namespace EmEn::Scenes
 							m_collisionModel->mergeShapeParameters(component->localBoundingSphere());
 							break;
 
-						case CollisionModelType::AABB :
+						case CollisionModelType::Box :
 						case CollisionModelType::Capsule :
 							m_collisionModel->mergeShapeParameters(component->localBoundingBox());
 							break;
@@ -238,7 +240,7 @@ namespace EmEn::Scenes
 				angularDragCoefficient / div,
 				clampToUnit(bounciness / div),
 				clampToUnit(stickiness / div),
-				inertiaTensor // FIXME: Incorrect !
+				inertiaTensor
 			);
 		}
 		else
@@ -296,7 +298,7 @@ namespace EmEn::Scenes
 					m_collisionModel->mergeShapeParameters(component->localBoundingSphere());
 					break;
 
-				case CollisionModelType::AABB :
+				case CollisionModelType::Box :
 				case CollisionModelType::Capsule :
 					m_collisionModel->mergeShapeParameters(component->localBoundingBox());
 					break;

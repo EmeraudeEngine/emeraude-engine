@@ -35,7 +35,7 @@
 #include "Math/Space3D/Contacts/SphereBox.hpp"
 #include "Math/Space3D/Contacts/SphereTriangle.hpp"
 #include "Math/Space3D/OrientedBox.hpp"
-#include "AABBCollisionModel.hpp"
+#include "BoxCollisionModel.hpp"
 #include "CapsuleCollisionModel.hpp"
 #include "CollisionModelInterface.hpp"
 #include "SphereCollisionModel.hpp"
@@ -61,6 +61,8 @@ namespace EmEn::Physics
 			OrientedBox< float > box;
 			Capsule< float > capsule;
 			Kind kind{Kind::Sphere};
+			/* False for a box not usable yet (a model whose geometry has not loaded: an empty local box). */
+			bool valid{true};
 		};
 
 		/**
@@ -88,14 +90,25 @@ namespace EmEn::Physics
 				}
 					break;
 
-				case CollisionModelType::AABB :
+				case CollisionModelType::Box :
 				{
-					/* P2: the world envelope, axis-aligned (oriented boxes are P3). */
-					const auto aabb = static_cast< const AABBCollisionModel & >(model).toWorldAABB(frame);
-					const Vector< 3, float > half{(aabb.width() * 0.5F) + margin, (aabb.height() * 0.5F) + margin, (aabb.depth() * 0.5F) + margin};
+					/* P3: the box turns with its entity (before 2026-10-02, the world envelope of its 8 corners). */
+					const auto & boxModel = static_cast< const BoxCollisionModel & >(model);
 
 					shape.kind = WorldShape::Kind::Box;
-					shape.box = OrientedBox< float >{aabb.centroid(), {Vector< 3, float >{1.0F, 0.0F, 0.0F}, Vector< 3, float >{0.0F, 1.0F, 0.0F}, Vector< 3, float >{0.0F, 0.0F, 1.0F}}, half};
+
+					if ( !boxModel.localBox().isValid() )
+					{
+						shape.valid = false;
+
+						break;
+					}
+
+					const auto box = boxModel.toWorldBox(frame);
+					const auto & half = box.halfExtents();
+
+					shape.box = OrientedBox< float >{box.center(), box.axes(), Vector< 3, float >{half[X] + margin, half[Y] + margin, half[Z] + margin}};
+					shape.valid = shape.box.isValid();
 				}
 					break;
 
@@ -118,6 +131,13 @@ namespace EmEn::Physics
 		contactsOf (const WorldShape & shapeA, const WorldShape & shapeB, ContactManifold< float > & manifold) noexcept
 		{
 			using Kind = WorldShape::Kind;
+
+			if ( !shapeA.valid || !shapeB.valid )
+			{
+				manifold.clear();
+
+				return false;
+			}
 
 			switch ( shapeA.kind )
 			{
@@ -165,6 +185,13 @@ namespace EmEn::Physics
 	NarrowPhase::generate (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Triangle< float > & triangle, float margin, ContactManifold< float > & manifold) noexcept
 	{
 		const auto shape = toWorldShape(modelA, frameA, margin);
+
+		if ( !shape.valid )
+		{
+			manifold.clear();
+
+			return false;
+		}
 
 		switch ( shape.kind )
 		{
