@@ -33,6 +33,8 @@
 #include <memory>
 
 /* Local inclusions for usages. */
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Triangle.hpp"
 #include "Math/Vector.hpp"
 
 /* Forward declarations. */
@@ -43,6 +45,40 @@ namespace EmEn::Graphics::Renderable
 
 namespace EmEn::Scenes
 {
+	/**
+	 * @brief Receives the ground triangles of a region (GroundLevelInterface::visitTriangles()).
+	 */
+	class EMEN_API GroundTriangleVisitor
+	{
+		public:
+
+			/**
+			 * @brief Destructs the visitor.
+			 */
+			virtual ~GroundTriangleVisitor () = default;
+
+			/**
+			 * @brief Receives one triangle.
+			 * @param triangle A reference to the triangle in world space, its winding normal pointing UP.
+			 * @param featureId An identifier of the triangle, stable while the ground does not change (its cell and half),
+			 * for the contact manifolds' feature ids.
+			 * @return void
+			 */
+			virtual void onTriangle (const Base::Math::Space3D::Triangle< float > & triangle, uint32_t featureId) noexcept = 0;
+
+		protected:
+
+			/**
+			 * @brief Constructs a visitor.
+			 */
+			GroundTriangleVisitor () noexcept = default;
+
+			GroundTriangleVisitor (const GroundTriangleVisitor & copy) noexcept = default;
+			GroundTriangleVisitor (GroundTriangleVisitor && copy) noexcept = default;
+			GroundTriangleVisitor & operator= (const GroundTriangleVisitor & copy) noexcept = default;
+			GroundTriangleVisitor & operator= (GroundTriangleVisitor && copy) noexcept = default;
+	};
+
 	/**
 	 * @brief Interface to define a physical and visible floor in a scene.
 	 */
@@ -88,6 +124,19 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual float getLevelAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Visits the ground triangles under a world region — the RENDERED surface, what the physics collides
+			 * with (physics overhaul P2, docs/physics-overhaul.md § 1.6).
+			 * @note Only the region's X and Z extents select the cells; nothing is visited outside the ground.
+			 * @note ⚠️ Not the surface getLevelAt() answers: that one interpolates a cell bilinearly, the triangles split it
+			 * along its rendered diagonal.
+			 * @param worldRegion A reference to the region (a body's world AABB).
+			 * @param visitor A reference to the visitor, called once per triangle.
+			 * @return size_t The number of triangles visited.
+			 */
+			[[nodiscard]]
+			virtual size_t visitTriangles (const Base::Math::Space3D::AACuboid< float > & worldRegion, GroundTriangleVisitor & visitor) const noexcept = 0;
 
 			/**
 			 * @brief Returns a position where Y is completed by the level at X,Z position.

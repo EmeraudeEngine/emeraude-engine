@@ -24,8 +24,37 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    FROM A TO B (Box2D, Bullet, Jolt, and the engine solver); `isColliding()` keeps its MTV ("push A out of B").
    (d) Order: box ↔ box, sphere ↔ box, capsule ↔ box, sphere / capsule ↔ triangle, the sphere / capsule pairs; then
    the casts, the defects, the inertia helpers — each with its unit tests (Release + ASan/UBSan).
-6. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
+6. **P2 design (owner, 2026-10-01, the recommendations)**:
+   (a) ONE pipeline: ground, static entities and movables all become manifolds for one solver; the world boundaries
+   keep their hard clip, after the solver. (b) In P2 the collision models map to the base primitives as they are:
+   AABB → an axis-aligned `OrientedBox` (turning it with the entity is P3), sphere → `Sphere`, capsule → `Capsule`,
+   point → a zero-radius sphere. (c) The ground answers its real TRIANGLES under a box (a new `GroundLevelInterface`
+   query), contacts against them are exact, and the P4 walker reuses the same casts. (d) A stable CREATION NUMBER
+   (uint64) per entity, given by the scene, sorts the pairs and keys the persistent manifolds. (e) The solver is Box2D
+   v3's soft step: sub-steps, warm starting, restitution once from the pre-solve speed, soft contacts replacing the
+   Baumgarte bias and the position pass. (f) Materials combine as Box2D: friction = geometric mean, restitution = max.
+   (g) The walkers may regress on the branch between P2 and P4 — no compatibility workaround. (h) `DynTopCube` moves
+   its properties to the component in P2. (i) The old `Collisions/` MTV overlap tests are RETIRED once the collision
+   models use the contacts; only their boolean defects are fixed.
+7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
+
+## 1b. P2 progress
+
+- **P2.a (infrastructure, 2026-10-01)**: `AbstractEntity::creationNumber()` — 0 for the root, then 1, 2, … in creation
+  order, drawn from `Scene::allocateEntityNumber()` in the constructor (deterministic: entities are built in a fixed
+  order; the octree insertion order is not). `GroundLevelInterface::visitTriangles(region, visitor)` with a
+  `GroundTriangleVisitor` (no allocation): `BasicGroundResource` and `TerrainResource` (full-resolution grid, not the
+  CDLOD levels) answer their rendered triangles through `Scenes/GroundTriangles.hpp` and the base
+  `Grid::forEachTriangleInRegion()`; feature id = (cellZ × cells + cellX) × 2 + half.
+
+- **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
+  physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
+  integrating itself in `MovableTrait::updateSimulation()`; `addForce()` and the drag are unchanged for the actors.
+  (2) The solver integrates the orientation in WORLD space (`RigidBody::integrateOrientation()`): the
+  `rotateFromPhysics()` local-axis defect is fixed in P2, not P3 (P3 keeps the oriented boxes and the shape-derived
+  inertia). (3) An animated non-movable node is a KINEMATIC body: infinite mass, a velocity derived from its motion
+  between two cycles, so what rests on it is carried.
 
 ## 2. Analysis of the physics as it stood on 2026-10-01
 

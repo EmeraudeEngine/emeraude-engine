@@ -1088,6 +1088,18 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Hands out the next entity creation number (0 first, for the root node).
+			 * @note Called by AbstractEntity's constructor only.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			allocateEntityNumber () const noexcept
+			{
+				return m_entityCreationCounter.fetch_add(1, std::memory_order_relaxed);
+			}
+
+			/**
 			 * @brief Returns the per-cycle physics recorder of this scene (a measurement tool).
 			 * @note Thread-safe: start / stop / status / write from the console thread, sampled by the logic thread.
 			 * @return PhysicsRecorder &
@@ -3234,6 +3246,9 @@ namespace EmEn::Scenes
 			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */
 			PhysicsRecorder m_physicsRecorder;
+			/** @brief The next entity creation number (AbstractEntity::creationNumber()). Mutable: an entity is constructed
+			 * from a const Scene reference; atomic: entities may be created from several threads. */
+			mutable std::atomic< uint64_t > m_entityCreationCounter{0};
 			/** @brief Scene-local random float generator. */
 			Base::Randomizer< float > m_floatRandomizer;
 			/** @brief Scene-local random integer generator. */

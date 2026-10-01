@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Component/Camera.hpp"
+#include "Scene.hpp"
 #include "Component/CloudVolume.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
@@ -105,6 +106,12 @@ namespace EmEn::Scenes
 		}
 
 		return identifiedObservable;
+	}
+
+	uint64_t
+	AbstractEntity::allocateCreationNumber (const Scene & scene) noexcept
+	{
+		return scene.allocateEntityNumber();
 	}
 
 	void

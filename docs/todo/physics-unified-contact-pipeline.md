@@ -18,6 +18,13 @@ the impulse solver; ground, boundary and static-entity contacts are a summed pos
 (`Scene::resolveCollisions()` phase 1, `applyCollisionResponse()`), with no torque and a per-tick friction multiplier.
 The solver itself loses the bounce, over-corrects the penetration, never warm-starts, and follows the octree order.
 
+## Owner decisions (2026-10-01)
+
+`docs/physics-overhaul.md` § 1.6: one pipeline; the models mapped to the base primitives (AABB axis-aligned in P2);
+the ground's real triangles through a new `GroundLevelInterface` query; a creation number per entity for sorting and
+manifold keys; Box2D v3 soft step; friction geometric mean, restitution max; walkers may regress until P4;
+`DynTopCube` moved to component properties; the old MTV overlap tests retired afterwards.
+
 ## What remains
 
 - [ ] Every solid contact becomes a manifold for the solver: ground (a static with inverse mass 0, normal and depth from
@@ -30,12 +37,11 @@ The solver itself loses the bounce, over-corrects the penetration, never warm-st
 - [ ] Stepping: soft step with sub-steps and relaxation (Box2D v3) at the fixed 60 Hz tick; choose the sub-step count
   on the P0 measurements.
 - [ ] Coulomb friction in the solver for every contact, including the ground; remove `v.xz *= 1 − stickiness` from
-  `MovableTrait::updateSimulation()`. Decide the combination rule of two materials with the owner (average today;
-  geometric mean and max are the usual alternatives).
+  `MovableTrait::updateSimulation()`. Combination (owner): friction = geometric mean, restitution = max.
 - [ ] Gravity always applied to a dynamic body (no switch-off while grounded, no zeroed downward velocity): resting
   becomes the solver's job. The grounded state of a dynamic body is read from its manifolds (a contact whose normal is
-  within the floor cone), without a 15-tick grace period. ⚠️ The Player and the walkers still rely on the grace period
-  until `kinematic-character-controller` replaces them: keep their behaviour or migrate them in the same step.
+  within the floor cone), without a 15-tick grace period. The walkers may regress on the branch until P4 (owner): no
+  compatibility path.
 - [ ] Deterministic order: manifolds and contacts sorted by stable ids before solving (target: same machine, same
   binary, same inputs — owner decision 2026-10-01). Closes `physics-run-to-run-determinism` when 5 launches agree.
 - [ ] Re-measure every P0 station; record the numbers in `docs/physics-overhaul.md` / the physics topic docs.

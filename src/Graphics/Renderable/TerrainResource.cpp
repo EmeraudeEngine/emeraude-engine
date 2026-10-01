@@ -26,6 +26,9 @@
 
 #include "TerrainResource.hpp"
 
+/* Local inclusions. */
+#include "Scenes/GroundTriangles.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
@@ -80,6 +83,18 @@ namespace EmEn::Graphics::Renderable
 
 		/* Checks if all is loaded */
 		return this->addDependency(m_material);
+	}
+
+	size_t
+	TerrainResource::visitTriangles (const Base::Math::Space3D::AACuboid< float > & worldRegion, Scenes::GroundTriangleVisitor & visitor) const noexcept
+	{
+		/* The physics collides with the FULL-resolution grid: the CDLOD levels only change what is drawn far away. */
+		if ( m_localData == nullptr )
+		{
+			return 0;
+		}
+
+		return Scenes::visitGridTriangles(*m_localData, worldRegion, visitor);
 	}
 
 	bool

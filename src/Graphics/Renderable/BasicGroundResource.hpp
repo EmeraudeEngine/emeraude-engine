@@ -220,6 +220,10 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			Base::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override;
 
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::visitTriangles() const */
+			[[nodiscard]]
+			size_t visitTriangles (const Base::Math::Space3D::AACuboid< float > & worldRegion, Scenes::GroundTriangleVisitor & visitor) const noexcept override;
+
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::getNormalAt() const */
 			[[nodiscard]]
 			Base::Math::Vector< 3, float > getNormalAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override;

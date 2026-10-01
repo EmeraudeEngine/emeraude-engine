@@ -231,6 +231,10 @@ namespace EmEn::Graphics::Renderable
 				return {positionX, m_localData->getHeightAt(positionX, positionZ) + deltaY, positionZ};
 			}
 
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::visitTriangles() const */
+			[[nodiscard]]
+			size_t visitTriangles (const Base::Math::Space3D::AACuboid< float > & worldRegion, Scenes::GroundTriangleVisitor & visitor) const noexcept override;
+
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::getNormalAt() const */
 			[[nodiscard]]
 			Base::Math::Vector< 3, float >

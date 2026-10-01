@@ -751,6 +751,20 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the entity's creation number in its scene: 0 for the root node, then 1, 2, … in creation order.
+			 * @note Stable for the entity's lifetime and independent of WHEN its resources finish loading: the physics
+			 * sorts its contact pairs and keys its persistent manifolds with it (an order taken from the octree, or from
+			 * addresses, changes between launches — docs/physics-overhaul.md § 6).
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			creationNumber () const noexcept
+			{
+				return m_creationNumber;
+			}
+
+			/**
 			 * @brief Returns whether the entity is renderable.
 			 *
 			 * An entity is renderable if it has at least one component with rendering capability
@@ -1009,10 +1023,19 @@ namespace EmEn::Scenes
 			AbstractEntity (const Scene & scene, std::string entityName, uint32_t sceneTimepointMS) noexcept
 				: NameableTrait{std::move(entityName)},
 				m_scene{scene},
-				m_birthTime{sceneTimepointMS}
+				m_birthTime{sceneTimepointMS},
+				m_creationNumber{allocateCreationNumber(scene)}
 			{
 
 			}
+
+			/**
+			 * @brief Draws the next creation number from the scene's counter (defined where Scene is complete).
+			 * @param scene A reference to the scene.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			static uint64_t allocateCreationNumber (const Scene & scene) noexcept;
 
 			/**
 			 * @brief Sets the renderable state flag.
@@ -1333,6 +1356,7 @@ namespace EmEn::Scenes
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
+			const uint64_t m_creationNumber{0};			 ///< Creation order in the scene (creationNumber()).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
 			mutable uint64_t m_renderingGatherStamp{0};	 ///< The last rendering gather that collected the entity (markCollectedByRenderingGather()).
 			Base::Math::CartesianFrame< float > m_deferredMoveCoordinates; ///< World coordinates of a move requested from a component's processLogics(), dispatched after the component loop.

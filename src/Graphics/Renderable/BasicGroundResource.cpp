@@ -27,6 +27,9 @@
 #include "BasicGroundResource.hpp"
 
 /* Local inclusions. */
+#include "Scenes/GroundTriangles.hpp"
+
+/* Local inclusions. */
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/ImageResource.hpp"
@@ -63,6 +66,17 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		return {positionX, m_geometry->localData().getHeightAt(positionX, positionZ) + deltaY, positionZ};
+	}
+
+	size_t
+	BasicGroundResource::visitTriangles (const Space3D::AACuboid< float > & worldRegion, Scenes::GroundTriangleVisitor & visitor) const noexcept
+	{
+		if ( m_geometry == nullptr )
+		{
+			return 0;
+		}
+
+		return Scenes::visitGridTriangles(m_geometry->localData(), worldRegion, visitor);
 	}
 
 	Vector< 3, float >
