@@ -192,7 +192,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "Unable to parse the resource file " << filepath << " !" "\n";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		const auto & root = *rootCheck;
@@ -202,7 +204,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The resource file " << filepath << " does not hold a JSON object !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* Checks if additional stores before loading (optional) */
@@ -212,7 +216,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present or not an object !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		const auto & groundObject = root[DefinitionResource::GroundKey];
@@ -222,14 +228,18 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << FastJSON::TypeKey << "' is not present or not a string !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		if ( *type != ClassId || !groundObject.isMember(FastJSON::DataKey) )
 		{
 			Tracer::error(ClassId, "This file doesn't contains a Terrain definition !");
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		return this->load(groundObject[FastJSON::DataKey]);
@@ -251,6 +261,13 @@ namespace EmEn::Graphics::Renderable
 		m_parameters.detailDistance = FastJSON::getValue< float >(data, JKGridDetailDistance).value_or(m_parameters.detailDistance);
 		m_parameters.patchQuads = FastJSON::getValue< uint32_t >(data, JKGridPatchQuads).value_or(m_parameters.patchQuads);
 		m_parameters.clipTexels = FastJSON::getValue< uint32_t >(data, JKGridClipTexels).value_or(m_parameters.clipTexels);
+
+		if ( gridDivision > MaxGridDivision || m_parameters.clipTexels > MaxClipTexels )
+		{
+			TraceError{ClassId} << "Terrain '" << this->name() << "': a division of " << gridDivision << " (at most " << MaxGridDivision << ") or a clip level of " << m_parameters.clipTexels << " texels (at most " << MaxClipTexels << ") is refused !";
+
+			return this->setLoadSuccess(false);
+		}
 
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, JKMaterialType);
@@ -339,7 +356,7 @@ namespace EmEn::Graphics::Renderable
 
 					/* Checks the mode for leveling the vertices. */
 					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
-					const auto mode = magic_enum::enum_cast< PointTransformationMode >(modeString).value();
+					const auto mode = magic_enum::enum_cast< PointTransformationMode >(modeString).value_or(PointTransformationMode::Replace);
 
 					/* Applies the height map on the geometry. */
 					m_localData->applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
@@ -366,7 +383,7 @@ namespace EmEn::Graphics::Renderable
 
 					/* Checks the mode for leveling the vertices. */
 					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
-					const auto perlinMode = magic_enum::enum_cast< EmEn::Base::VertexFactory::PointTransformationMode >(modeString).value();
+					const auto perlinMode = magic_enum::enum_cast< EmEn::Base::VertexFactory::PointTransformationMode >(modeString).value_or(EmEn::Base::VertexFactory::PointTransformationMode::Replace);
 
 					m_localData->applyPerlinNoise(perlinSize, perlinScale, perlinMode);
 				}

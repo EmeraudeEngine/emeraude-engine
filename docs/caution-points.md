@@ -2117,6 +2117,24 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 > (3 or 4 finite, none negative → white) and `Intensity` (finite, ≥ 0 lx), `Position` / `LookAt` (three finite numbers,
 > else ignored), every other number finite. Before, `"Boundary": NaN` built a scene with a NaN octree, silently.
 
+### A ground / terrain / grid JSON had no size bound (triad 7c, 2026-10-01)
+
+> [!CAUTION]
+> **A division read from a file is a memory request: cap it where it is read.** `GridDivision` of a vertex grid, a
+> basic ground or a terrain, and a terrain's `GridClipTexels`, had no upper bound (an out-of-memory abort), and past
+> 65534 the base `Grid` wrapped its point count (emeraude-base caution-points § VertexFactory). Now refused with the cap
+> named: `VertexGridResource::MaxGridDivision` 4096 (vertex grids AND basic grounds: 16.8 M vertices),
+> `TerrainResource::MaxGridDivision` 16384 (1 GiB of heights), `TerrainResource::MaxClipTexels` 4096 (default 2048); a
+> scene definition's ground keeps 1024 (above). Also fixed then: `BasicGroundResource::load(json)` passed
+> `DefaultGeometryFlags` (15) as the grid's UV MULTIPLIER and built its grid WITHOUT those flags — now the flags go to
+> the constructor and the UV multiplier is 1.0 unless the `UVMultiplier` key sets it.
+>
+> To test a `Grounds/` JSON (none ships in the data stores): a scratch `--add-data-directory=<dir>` holding
+> `data-stores/Grounds/<name>.json` = `{"Ground": {"Type": "BasicGroundResource" | "TerrainResource", "Data": {...,
+> "MaterialType": "MaterialStandardResource", "MaterialName": "Grounds/Concrete001"}}}`, then
+> `Core.ResourcesManagerService.loadResource(TerrainResource, <name>)` and `resourceStatus(...)`. ⚠️ The material type
+> is the class id `MaterialStandardResource`, not `StandardResource`.
+
 ### Two files with the same NAME shared one resource namespace — fixed Sep 2026
 
 > [!CAUTION]

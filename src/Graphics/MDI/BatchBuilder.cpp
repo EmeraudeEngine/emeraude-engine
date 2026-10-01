@@ -322,7 +322,7 @@ namespace EmEn::Graphics::MDI
 						const auto bdaHi = static_cast< uint32_t >((bdaAddress >> 32) & 0xFFFFFFFFUL);
 
 						std::array< float, 21 > buffer{};
-						std::memcpy(&buffer[0], &bdaLo, sizeof(uint32_t));
+						std::memcpy(buffer.data(), &bdaLo, sizeof(uint32_t));
 						std::memcpy(&buffer[1], &bdaHi, sizeof(uint32_t));
 						/* buffer[2], buffer[3] : 8 bytes of std430 padding before the mat4. */
 						std::memcpy(&buffer[4], viewProjectionMatrix.data(), 64);

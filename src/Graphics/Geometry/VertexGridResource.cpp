@@ -55,7 +55,7 @@ namespace EmEn::Graphics::Geometry
 		const auto rowCount = m_localData.squaredQuadCount(); /* 4 */
 
 		/* 25 * element count per vertex */
-		vertexAttributes.reserve(m_localData.pointCount() * vertexElementCount);
+		vertexAttributes.reserve(static_cast< size_t >(m_localData.pointCount()) * vertexElementCount);
 
 		/* This holds the number of indices requested to draw a
 		 * full row of quads, including the primitive restart. */
@@ -347,9 +347,20 @@ namespace EmEn::Graphics::Geometry
 	bool
 	VertexGridResource::load (const Json::Value & data) noexcept
 	{
+		const auto gridDivision = FastJSON::getValue< uint32_t >(data, JKDivision).value_or(DefaultGridDivision);
+
+		if ( gridDivision > MaxGridDivision )
+		{
+			TraceError{ClassId} << "Vertex grid '" << this->name() << "': a division of " << gridDivision << " exceeds " << MaxGridDivision << " !";
+
+			static_cast< void >(this->failLoading());
+
+			return false;
+		}
+
 		return this->load(
 			FastJSON::getValue< float >(data, JKSize).value_or(DefaultGridSize),
-			FastJSON::getValue< uint32_t >(data, JKDivision).value_or(DefaultGridDivision),
+			gridDivision,
 			FastJSON::getValue< float >(data, JKUVMultiplier).value_or(DefaultUVMultiplier)
 		);
 	}

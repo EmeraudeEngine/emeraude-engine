@@ -86,7 +86,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "Unable to create default grid geometry to generate the default basic ground !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* 2. Retrieving the default material. */
@@ -96,7 +98,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "Unable to get default material to generate the default basic ground !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* 3. Use the common func. */
@@ -112,7 +116,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "Unable to parse the resource file " << filepath << " !" "\n";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		const auto & root = *rootCheck;
@@ -122,7 +128,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The resource file " << filepath << " does not hold a JSON object !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* Checks if additional stores before loading (optional) */
@@ -132,7 +140,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present or not an object !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		const auto & groundObject = root[DefinitionResource::GroundKey];
@@ -142,14 +152,18 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << FastJSON::TypeKey << "' is not present or not a string !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		if ( *type != ClassId || !groundObject.isMember(FastJSON::DataKey) )
 		{
 			TraceError{ClassId} << "This file doesn't contains a basic ground definition !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		return this->load(groundObject[FastJSON::DataKey]);
@@ -166,7 +180,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << JKGridSize << "' is not present or not a finite number !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* Checks division option. */
@@ -176,16 +192,29 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << JKGridDivision << "' is not present or not an unsigned integer !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "Geometry");
+		if ( *gridDivision > Geometry::VertexGridResource::MaxGridDivision )
+		{
+			TraceError{ClassId} << "Basic ground '" << this->name() << "': a division of " << *gridDivision << " exceeds " << Geometry::VertexGridResource::MaxGridDivision << " !";
 
-		if ( !geometryResource->load(*gridSize, *gridDivision, DefaultGeometryFlags) )
+			static_cast< void >(this->failLoading());
+
+			return false;
+		}
+
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->serviceProvider(), this->name() + "Geometry", DefaultGeometryFlags);
+
+		if ( !geometryResource->load(*gridSize, *gridDivision) )
 		{
 			TraceError{ClassId} << "Unable to create grid geometry to generate the basic ground !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* 2. Check for geometry options. */
@@ -238,7 +267,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << JKMaterialType << "' is not present or not a string !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* NOTE: This check used to test the TYPE key a second time. */
@@ -248,7 +279,9 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceError{ClassId} << "The key '" << JKMaterialName << "' is not present or not a string !";
 
-			return this->setLoadSuccess(false);
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		/* Checks if the UV multiplier parameter. */

@@ -27,6 +27,7 @@
 #include "CDLODTerrainResource.hpp"
 
 /* STL inclusions. */
+#include <numbers>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -465,11 +466,11 @@ namespace EmEn::Graphics::Geometry
 			{
 				for ( uint32_t nodeX = 0; nodeX < nodesPerAxis; ++nodeX )
 				{
-					auto range = children[(static_cast< size_t >(nodeZ * 2) * childrenPerAxis) + (nodeX * 2)];
+					auto range = children[(static_cast< size_t >(nodeZ) * 2 * childrenPerAxis) + (static_cast< size_t >(nodeX) * 2)];
 
 					for ( uint32_t child = 1; child < 4; ++child )
 					{
-						const auto & childRange = children[(static_cast< size_t >((nodeZ * 2) + (child / 2)) * childrenPerAxis) + (nodeX * 2) + (child % 2)];
+						const auto & childRange = children[(((static_cast< size_t >(nodeZ) * 2) + (child / 2)) * childrenPerAxis) + (static_cast< size_t >(nodeX) * 2) + (child % 2)];
 
 						range[0] = std::min(range[0], childRange[0]);
 						range[1] = std::max(range[1], childRange[1]);
@@ -491,7 +492,7 @@ namespace EmEn::Graphics::Geometry
 		/* A node of level k reads clip level k: its farthest vertex (range + node diagonal) must stay
 		 * inside that level's valid extent even when the level lags the camera by a strip. Divided by
 		 * 2^k, the condition no longer depends on k. */
-		const auto coverageLimit = (halfTexels - slackTexels - (patchQuads * std::sqrt(2.0F))) * m_cellSize;
+		const auto coverageLimit = (halfTexels - slackTexels - (patchQuads * std::numbers::sqrt2_v< float >)) * m_cellSize;
 
 		if ( m_parameters.detailDistance > coverageLimit )
 		{
@@ -502,7 +503,7 @@ namespace EmEn::Graphics::Geometry
 
 		/* Strugar's rule of thumb: a level's ring must be wide enough for the nodes of that level, or two
 		 * levels meet across one node and the morph cannot hide it. */
-		if ( m_parameters.detailDistance < 2.0F * std::sqrt(2.0F) * patchQuads * m_cellSize )
+		if ( m_parameters.detailDistance < 2.0F * std::numbers::sqrt2_v< float > * patchQuads * m_cellSize )
 		{
 			TraceWarning{ClassId} << "Terrain '" << this->name() << "': a detail distance of " << m_parameters.detailDistance << " m is short for patches of " << (patchQuads * m_cellSize) << " m — levels may meet two by two.";
 		}
@@ -697,7 +698,7 @@ namespace EmEn::Graphics::Geometry
 		 * morphing neighbour would crack by the height difference between the levels. A single-level terrain never
 		 * morphs (its start is infinite). */
 		const auto quarterSize = static_cast< float >(quarterCells) * m_cellSize;
-		const auto farthestCorner = std::sqrt(2.0F) * 1.5F * quarterSize;
+		const auto farthestCorner = std::numbers::sqrt2_v< float > * 1.5F * quarterSize;
 
 		if ( m_morphTable[0][0] < farthestCorner || m_lodRanges[0] < farthestCorner )
 		{
@@ -1167,9 +1168,9 @@ namespace EmEn::Graphics::Geometry
 					copy.bufferOffset = stagingData.size() * sizeof(uint16_t);
 					copy.bufferRowLength = 0;
 					copy.bufferImageHeight = 0;
-					copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, level, 1};
-					copy.imageOffset = {static_cast< int32_t >(segmentX.texel), static_cast< int32_t >(segmentZ.texel), 0};
-					copy.imageExtent = {static_cast< uint32_t >(segmentX.length), static_cast< uint32_t >(segmentZ.length), 1};
+					copy.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = level, .layerCount = 1};
+					copy.imageOffset = {.x = static_cast< int32_t >(segmentX.texel), .y = static_cast< int32_t >(segmentZ.texel), .z = 0};
+					copy.imageExtent = {.width = static_cast< uint32_t >(segmentX.length), .height = static_cast< uint32_t >(segmentZ.length), .depth = 1};
 
 					for ( int64_t z = 0; z < segmentZ.length; ++z )
 					{
@@ -1665,7 +1666,7 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			{
-				const std::lock_guard< std::mutex > lock{self->m_pendingAccess};
+				const std::scoped_lock lock{self->m_pendingAccess};
 
 				self->m_pendingProxy = std::move(proxy);
 				self->m_hasPendingProxy = true;
@@ -1689,7 +1690,7 @@ namespace EmEn::Graphics::Geometry
 		PendingRayTracingProxy proxy;
 
 		{
-			const std::lock_guard< std::mutex > lock{m_pendingAccess};
+			const std::scoped_lock lock{m_pendingAccess};
 
 			if ( !m_hasPendingProxy )
 			{
@@ -1722,7 +1723,7 @@ namespace EmEn::Graphics::Geometry
 	CDLODTerrainResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
 		{
-			const std::lock_guard< std::mutex > lock{m_pendingAccess};
+			const std::scoped_lock lock{m_pendingAccess};
 
 			m_pendingProxy = {};
 			m_hasPendingProxy = false;

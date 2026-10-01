@@ -27,6 +27,7 @@
 #include "ResourceGenerator.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <algorithm>
 
 /* Local inclusions. */
@@ -143,7 +144,7 @@ namespace EmEn::Graphics::Geometry
 	std::shared_ptr< IndexedVertexResource >
 	ResourceGenerator::hollowedCube (float size, float borderSize, VertexFactory::CapUVMapping uvMapping, std::string resourceName) const noexcept
 	{
-		static constexpr const char * uvMappingNames[] = {"none", "planar", "perSegment"};
+		static constexpr std::array< const char *, 3 > uvMappingNames{"none", "planar", "perSegment"};
 
 		if ( resourceName.empty() )
 		{
@@ -208,7 +209,7 @@ namespace EmEn::Graphics::Geometry
 	std::shared_ptr< IndexedVertexResource >
 	ResourceGenerator::cylinder (float baseRadius, float topRadius, float length, uint32_t slices, uint32_t stacks, VertexFactory::CapUVMapping capMapping, std::string resourceName) const noexcept
 	{
-		static constexpr const char * capMappingNames[] = {"none", "planar", "perSegment"};
+		static constexpr std::array< const char *, 3 > capMappingNames{"none", "planar", "perSegment"};
 
 		if ( resourceName.empty() )
 		{
@@ -231,7 +232,7 @@ namespace EmEn::Graphics::Geometry
 	std::shared_ptr< IndexedVertexResource >
 	ResourceGenerator::disk (float outerRadius, float innerRadius, uint32_t slices, uint32_t stacks, VertexFactory::CapUVMapping uvMapping, std::string resourceName) const noexcept
 	{
-		static constexpr const char * uvMappingNames[] = {"none", "planar", "perSegment"};
+		static constexpr std::array< const char *, 3 > uvMappingNames{"none", "planar", "perSegment"};
 
 		if ( resourceName.empty() )
 		{
@@ -443,7 +444,7 @@ namespace EmEn::Graphics::Geometry
 	std::shared_ptr< IndexedVertexResource >
 	ResourceGenerator::tube (float outerRadius, float innerRadius, float length, uint32_t slices, uint32_t stacks, VertexFactory::CapUVMapping capMapping, std::string resourceName) const noexcept
 	{
-		static constexpr const char * capMappingNames[] = {"none", "planar", "perSegment"};
+		static constexpr std::array< const char *, 3 > capMappingNames{"none", "planar", "perSegment"};
 
 		if ( resourceName.empty() )
 		{

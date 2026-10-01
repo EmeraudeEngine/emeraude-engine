@@ -275,7 +275,7 @@ namespace EmEn::Graphics::Geometry
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
-			std::chrono::steady_clock::time_point m_startTime{};
+			std::chrono::steady_clock::time_point m_startTime;
 			VkDeviceSize m_uniformSectionSize{0};
 			uint32_t m_patchIndexCount{0};
 			uint32_t m_currentFrameIndex{0};

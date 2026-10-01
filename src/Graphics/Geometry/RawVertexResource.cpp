@@ -27,6 +27,7 @@
 #include "RawVertexResource.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -233,7 +234,7 @@ namespace EmEn::Graphics::Geometry
 
 		for ( uint32_t i = 0; i < vertexCount; ++i )
 		{
-			auto * dst = interleaved.data() + static_cast< size_t >(i) * vertexElementCount;
+			auto * dst = interleaved.data() + (static_cast< size_t >(i) * vertexElementCount);
 			const auto i3 = static_cast< size_t >(i) * 3;
 
 			/* Position (always present). */
@@ -350,12 +351,9 @@ namespace EmEn::Graphics::Geometry
 			const auto dx = positions[offset] - centroid[X];
 			const auto dy = positions[offset + 1] - centroid[Y];
 			const auto dz = positions[offset + 2] - centroid[Z];
-			const auto distSq = dx * dx + dy * dy + dz * dz;
+			const auto distSq = (dx * dx) + (dy * dy) + (dz * dz);
 
-			if ( distSq > maxDistSq )
-			{
-				maxDistSq = distSq;
-			}
+			maxDistSq = std::max(distSq, maxDistSq);
 		}
 
 		boundingSphere = Sphere< float >(std::sqrt(maxDistSq), centroid);

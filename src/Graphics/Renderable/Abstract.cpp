@@ -26,6 +26,9 @@
 
 #include "Abstract.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Base;
@@ -57,7 +60,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	Abstract::cacheProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key, const std::shared_ptr< Saphir::Program > & program) const noexcept
 	{
-		const std::lock_guard lock{m_programCacheMutex};
+		const std::scoped_lock lock{m_programCacheMutex};
 
 		m_programCache[renderTarget][key] = program;
 	}
@@ -65,7 +68,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	Abstract::clearProgramCache (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		const std::lock_guard lock{m_programCacheMutex};
+		const std::scoped_lock lock{m_programCacheMutex};
 
 		m_programCache.erase(renderTarget);
 	}
@@ -73,7 +76,7 @@ namespace EmEn::Graphics::Renderable
 	void
 	Abstract::clearAllProgramCaches () const noexcept
 	{
-		const std::lock_guard lock{m_programCacheMutex};
+		const std::scoped_lock lock{m_programCacheMutex};
 
 		m_programCache.clear();
 	}
@@ -108,15 +111,9 @@ namespace EmEn::Graphics::Renderable
 		/* NOTE: Check if any cached program has a matching render pass handle.
 		 * This is necessary because after a window resize, the render pass is recreated
 		 * with a new handle, making previously cached programs invalid. */
-		for ( const auto & [key, program] : renderTargetIt->second )
-		{
-			if ( key.renderPassHandle == renderPassHandle )
-			{
-				return true;
-			}
-		}
-
-		return false;
+		return std::ranges::any_of(renderTargetIt->second, [renderPassHandle] (const auto & entry) {
+			return entry.first.renderPassHandle == renderPassHandle;
+		});
 	}
 
 	size_t

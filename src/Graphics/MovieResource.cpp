@@ -606,7 +606,10 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Unable to load the movie '" << this->name() << "': no frame provided !";
 
-			return this->setLoadSuccess(false);
+			/* NOTE: failLoading(): setLoadSuccess() before beginLoading() only logged, the resource stayed Unloaded. */
+			static_cast< void >(this->failLoading());
+
+			return false;
 		}
 
 		if ( !this->beginLoading() )

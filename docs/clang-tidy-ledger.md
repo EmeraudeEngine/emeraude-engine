@@ -37,6 +37,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Scenes` 6e (`Editor/`, `AVConsole/`, `Viewers/`, `EffectsToolkit/`, `Debug/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 38, all ON PURPOSE (below) — 11 constant-array-index, 9 pro-type-vararg, 6 non-private members, 5 switch-missing-default-case, 5 avoid-const-or-ref-data-members, 1 reinterpret-cast, 1 use-enum-class. Before: 78. | Triad sub-section 6e |
 | `src/Graphics` 7a (resources read from disk: images, textures, KTX2, cubemaps, IBL, movies, font, cloud shape) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 72, all ON PURPOSE (below) — 53 constant-array-index, 17 reinterpret-cast, 2 convert-member-functions-to-static. Before: 171. The touched resource-chain TUs: 3 misc-no-recursion (the failure propagation). | Triad sub-section 7a |
 | `src/Graphics` 7b (`Material/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 23 constant-array-index, 7 static-cast-downcast, 1 use-enum-class. Before: 56. | Triad sub-section 7b |
+| `src/Graphics` 7c (`Geometry/`, `Renderable/`, `MDI/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 51, all ON PURPOSE (below) — 30 constant-array-index, 4 integer-division, 4 non-private members, 3 use-enum-class, 3 qualified-auto, 2 misc-no-recursion, 2 static-cast-downcast, 1 each special-member-functions, const-ref member, implicit-widening. Before: 95. | Triad sub-section 7c |
 
 ## Findings kept ON PURPOSE
 
@@ -188,4 +189,27 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-type-static-cast-downcast ×7** — a material component cast to `Component::Texture` right after a
   `type() == Type::Texture` check or right after its own `emplace()` of a `Texture` (RTTI avoided).
 - **use-enum-class ×1** — `MaterialFlagBits` (a bit set, the flag convention).
+
+### `src/Graphics` 7c — `Geometry/`, `Renderable/`, `MDI/` (2026-10-01)
+
+- **pro-bounds-constant-array-index ×30** — the CDLOD clip levels and levels of detail (`level < m_clipLevelCount ≤
+  MaxClipLevels`, `lod < m_levelOfDetailCount ≤ MaxLevelsOfDetail`), the ocean's FFT cascades (bounded loops over
+  `std::array`s) and `ResourceGenerator`'s mapping-name tables (an enum's value).
+- **bugprone-integer-division ×4** — exact by construction: `clipTexels / 2U` (a power of two, ≥ 256, checked),
+  `patchQuads / 2U` (even, checked), the ocean quad-tree's `quarter / 2U` (the row of a quarter, an integer on purpose).
+- **non-private-member-variables ×4** — `Geometry::Interface`'s RT members (`m_accelerationStructure`,
+  `m_rtIndexBufferObject`, `m_BLASGeometryFirstIndices`, `m_accelerationStructureStale`), shared with every geometry
+  class by design (protected, not public).
+- **use-enum-class ×3** — `GeometryFlagBits`, `SubGeometryFlagBits`, `RenderableFlagBits` (bit sets, the flag
+  convention).
+- **readability-qualified-auto ×3** — `auto *const` suggested on Vulkan handles (`VkCommandBuffer`,
+  `VkDescriptorSet`, `VkPipeline`): dispatchable handles are pointers on some platforms only — `const auto` stays
+  (caution-points § qualified-auto).
+- **misc-no-recursion ×2** — the CDLOD and ocean `selectNode()` quad-tree walks: bounded by the level-of-detail count.
+- **pro-type-static-cast-downcast ×2** — `MeshResource` / `MultiLayerMeshResource` cast the manager they were built
+  with (RTTI avoided).
+- **special-member-functions ×1** — `Geometry::Interface` (a resource: never copied, held by `shared_ptr`).
+- **avoid-const-or-ref-data-members ×1** — `ResourceGenerator::m_resources` (a non-owning service reference for the
+  generator's lifetime).
+- **implicit-widening-of-multiplication-result ×1** — a `static_assert` on `sizeof(Uniforms)` (compile-time constants).
 

@@ -71,6 +71,10 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto DefaultGridSize{5000.0F}; /* NOTE: 5 kilometer. */
 			static constexpr auto DefaultGridDivision{5000U}; /* NOTE: Cell wil be 1 meter. */
 			static constexpr auto DefaultUVMultiplier{5000.0F};
+			/** @brief The largest division a JSON description may ask for: 16385² heights, 1 GiB. */
+			static constexpr auto MaxGridDivision{16384U};
+			/** @brief The largest clip level a JSON description may ask for (default 2048). */
+			static constexpr auto MaxClipTexels{4096U};
 
 			/**
 			 * @brief Constructs a terrain resource.
@@ -208,7 +212,7 @@ namespace EmEn::Graphics::Renderable
 			memoryOccupied () const noexcept override
 			{
 				/* The whole grid's heights on the CPU, plus the geometry's pyramid, node ranges and patch. */
-				return m_localData->pointCount() * sizeof(float) + (m_geometry != nullptr ? m_geometry->memoryOccupied() : 0);
+				return (m_localData->pointCount() * sizeof(float)) + (m_geometry != nullptr ? m_geometry->memoryOccupied() : 0);
 			}
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(const Base::Math::Vector< 3, float > &) const */

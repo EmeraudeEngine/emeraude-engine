@@ -138,7 +138,7 @@ namespace EmEn::Graphics::Geometry
 			bool
 			isCreated () const noexcept override
 			{
-				return !static_cast< bool >(m_vertexBufferObject == nullptr || !m_vertexBufferObject->isCreated());
+				return m_vertexBufferObject != nullptr && m_vertexBufferObject->isCreated();
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::topology() */

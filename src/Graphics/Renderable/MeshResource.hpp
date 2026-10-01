@@ -245,7 +245,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
 
-			Base::StaticVector< std::shared_ptr< Geometry::Interface >, Geometry::MaxLODLevels > m_geometry{};
+			Base::StaticVector< std::shared_ptr< Geometry::Interface >, Geometry::MaxLODLevels > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
 			RasterizationOptions m_rasterizationOptions;
 			mutable std::mutex m_geometryMutex;

@@ -71,6 +71,8 @@ namespace EmEn::Graphics::Geometry
 			static constexpr auto DefaultGridSize{1000.0F}; /* NOTE: 1 kilometer. */
 			static constexpr auto DefaultGridDivision{500U}; /* NOTE: Cell wil be 2 meters. */
 			static constexpr auto DefaultUVMultiplier{500.0F};
+			/** @brief The largest division a JSON description may ask for: 4096² cells, 16.8 M vertices. */
+			static constexpr auto MaxGridDivision{4096U};
 
 			/**
 			 * @brief Construct a vertex grid geometry resource.
@@ -113,7 +115,8 @@ namespace EmEn::Graphics::Geometry
 			 */
 			~VertexGridResource () override
 			{
-				this->destroyFromHardware(true);
+				/* NOTE: Qualified: a virtual call from a destructor dispatches to this class anyway; say so. */
+				VertexGridResource::destroyFromHardware(true);
 			}
 
 			/**

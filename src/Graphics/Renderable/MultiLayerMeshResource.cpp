@@ -81,7 +81,7 @@ namespace EmEn::Graphics::Renderable
 	const Geometry::Interface *
 	MultiLayerMeshResource::geometry (uint32_t LODLevel) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_geometryMutex};
+		const std::scoped_lock lock{m_geometryMutex};
 
 		if ( m_geometry.empty() )
 		{
@@ -96,7 +96,7 @@ namespace EmEn::Graphics::Renderable
 	uint32_t
 	MultiLayerMeshResource::levelOfDetailCount () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_geometryMutex};
+		const std::scoped_lock lock{m_geometryMutex};
 
 		return static_cast< uint32_t >(m_geometry.size());
 	}
@@ -185,8 +185,17 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		const auto nodeIdx = sceneData.singleMeshNodeIndex();
-		const auto meshIdx = sceneData.nodes[nodeIdx].meshIndex.value();
-		const auto & meshDesc = sceneData.meshes[meshIdx];
+		const auto meshIndex = sceneData.nodes[nodeIdx].meshIndex;
+
+		/* NOTE: isSingleMesh() implies it; checked anyway rather than the throwing optional::value(). */
+		if ( !meshIndex.has_value() || *meshIndex >= sceneData.meshes.size() )
+		{
+			TraceError{ClassId} << "Asset '" << filepath << "' has no usable mesh on its mesh node !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		const auto & meshDesc = sceneData.meshes[*meshIndex];
 
 		/* Attach geometry. */
 		if ( !this->setGeometry(meshDesc.geometry) )
@@ -592,7 +601,7 @@ namespace EmEn::Graphics::Renderable
 		 * sub-geometry count that early answers 1 for a two-group shape and rejects a valid
 		 * chain. Here every dependency is guaranteed loaded. */
 		{
-			const std::lock_guard< std::mutex > lock{m_geometryMutex};
+			const std::scoped_lock lock{m_geometryMutex};
 
 			for ( size_t level = 1; level < m_geometry.size(); ++level )
 			{
@@ -736,7 +745,7 @@ namespace EmEn::Graphics::Renderable
 
 		/* Thread-safe swap into the geometry array. */
 		{
-			const std::lock_guard< std::mutex > lock{m_geometryMutex};
+			const std::scoped_lock lock{m_geometryMutex};
 
 			/* Ensure sequential filling: LOD levels must be added in order. */
 			if ( m_geometry.size() == LODLevel )

@@ -640,15 +640,15 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 7a | (✅ pushed base `10e23f3`, engine `4e4bda64`; peers pending) Resources read from disk: images and textures (`ImageResource`, `CompressedImageResource`, `KTX2Decoder`, `TextureCompressor`, `VolumetricImageResource`, `TextureResource/`, `TextureCache`), cubemaps and IBL (`CubemapResource`, `IBLTexture`), video (`MovieResource`, `CubemapMovieResource`, `VideoFrameConverter`, `ExternalInput`), `FontResource`, `CloudShapeResource` | ~13 700 | 🟠 started |
-| 7b | `Material/` (JSON material definitions) | ~14 000 | ✅ pushed 2026-10-01; peers pending |
-| 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ⬜ |
+| 7a | Resources read from disk: images and textures (`ImageResource`, `CompressedImageResource`, `KTX2Decoder`, `TextureCompressor`, `VolumetricImageResource`, `TextureResource/`, `TextureCache`), cubemaps and IBL (`CubemapResource`, `IBLTexture`), video (`MovieResource`, `CubemapMovieResource`, `VideoFrameConverter`, `ExternalInput`), `FontResource`, `CloudShapeResource` | ~13 700 | ✅ pushed base `10e23f3`, engine `4e4bda64` + MSVC hotfix `734b4422`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 7b | `Material/` (JSON material definitions) | ~14 000 | ✅ pushed engine `1ee4a6c6`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ✅ pushed base `dce53a7` + the engine 7c commit; peers pending |
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ⬜ |
 | 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ⬜ |
 | 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ⬜ |
 | 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ⬜ |
 
-Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2); 7c `BasicGroundResource` passes
+Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2, done); 7c (done) `BasicGroundResource` passes
 `DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d the
 `screenshot()` "did not complete in time" wording while an asset is still uploading (6a). Outside section 7: base
 `Animation/AnimationChannel.hpp:277` `-Wfloat-conversion` (6d), `SoundfontResource` unconfined `file` path (section 10).
@@ -714,6 +714,15 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2)
   - Windows peer: 4e4bda64 did NOT compile on MSVC — two `const auto *const pairIt = std::ranges::find_if(…)` on a
     `std::array` in `KTX2Decoder.cpp` (clang-tidy's qualified-auto fix-it; MSVC's array iterator is a class). Fixed and
     pushed as engine `734b4422` (owner's order). Caution-points § Build / Compiler.
+  - VALIDATED 2026-10-01 at engine `1ee4a6c6` (= `734b4422` + 7b), base `10e23f3`, alpha `47128cce`, every launch on a
+    scratch `--cache-directory`. macOS M2 (AppleClang 0 warning; base 2170 = 2167 + 3 skipped) and Windows (MSVC /W4 /WX
+    0 warning; NVIDIA RTX 3060 Laptop AND the forced AMD iGPU, same results): the broken helmet and lamp RENDER with
+    the default texture and one "goes on without its failed dependency" warning each, shutdown 0 VUID / 0 VMA / 0
+    "still have N uses"; every corrupted `.bc7cache` entry the run looks up is "ignored" (22 on both) and the helmet
+    renders with its real albedo; citadel MCP 1707/0, terrain, lighten-marbles, beams, intact helmet + Fox: 0 VUID (on
+    Windows NVIDIA only the known 12325 of citadel), 0 error, exit 0.
+  - Windows noticed: `console-conformance` fails ONE flood / over-long-line check in 3 of 6 runs (the refusal line is
+    lost, the client reads a reset). Not 7a: engine item `docs/todo/console-last-refusal-lost-on-windows.md`.
 
 ### 7b — `Material/` (2026-10-01)
 
@@ -733,5 +742,43 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2)
 - [x] (4) Verified 2026-10-01 (Linux): builds clean, clangcheck 107 TUs 0, `-Wfloat-conversion` 0; clang-tidy 56 → 31
   (on purpose, ledger). One launch: citadel (its material library), then the helmet, the KTX2 lamp and the Fox dropped
   after deleting it, then beams (beam / path materials): 0 VUID, 0 error, 0 VMA.
-- [x] (5) Pushed 2026-10-01 (see the 7b commit); peers asked with the 7a validation.
+- [x] (5) Pushed 2026-10-01 as engine `1ee4a6c6`; VALIDATED with 7a (macOS M2, Windows NVIDIA + AMD, above).
+
+### 7c — `Geometry/`, `Renderable/`, `MDI/` (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (the 7c TUs): **95**: 30 constant-array-index, 13 use-scoped-lock, 5
+  parentheses, 4 each of implicit-widening, integer-division, unchecked-optional-access, C arrays and protected
+  members, 3 each of designated-initializers, std-numbers, use-enum-class and qualified-auto, a virtual call from a
+  destructor (`VertexGridResource`), and singles.
+- [x] (2) Review (trust boundary: the ground / terrain / grid JSON of the `Grounds` store, the glTF meshes). Findings:
+  - G1 no grid size had an upper bound, and base `Grid::pointCount()` = (division + 1)² is computed in the index type:
+    a division above 65534 wrapped the point count (65535 → 0), and `UINT32_MAX` + 1 wrapped to 0 (owner question).
+  - G2 `BasicGroundResource::load(json)` passed `DefaultGeometryFlags` (15) as the grid's UV MULTIPLIER and built its
+    `VertexGridResource` without those flags (the 7c lead; owner question).
+  - G3 `setLoadSuccess(false)` before `beginLoading()` (`BasicGroundResource` × 3, `TerrainResource::load(path)`, the
+    head of `MovieResource::load(frames)`): a refused load stayed `Unloaded` — `failLoading()` now.
+  - G4 `meshIndex.value()` (`MeshResource`, `MultiLayerMeshResource`) and `enum_cast(...).value()`
+    (`TerrainResource`, the height-map modes): throwing `std::optional::value()` on data.
+- [x] (3) Mechanical (2026-10-01): fix-its with `--format-style=none` (scoped_lock, parentheses, `std::numbers`,
+  `std::min` / `std::max`, redundant casts and member initializers, `.data()`, designated initializers; the spacing
+  normalized), `std::array` for the C arrays of `ResourceGenerator`, the 64-bit index products of `CDLODTerrainResource`
+  and `VertexGridResource`, the destructor's call qualified (`VertexGridResource::destroyFromHardware(true)`),
+  `std::ranges::any_of` in `Renderable::Abstract`, G3, G4 (a mesh node without a usable mesh is refused with an error;
+  an unknown height-map mode is `Replace`), the two `isCreated()` De Morgan forms simplified.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - G1 base `Grid::initializeByCellSize()` / `initializeByGridSize()` refuse a count above the new
+    `Grid::MaxCellCount` (65534 for `uint32_t`, 254 for `uint16_t`) and a non-finite size (base unit tests
+    `ACellCountWhosePointCountOverflowsTheIndexTypeIsRefused`, `ANonFiniteSizeIsRefused`: failing before, passing
+    after). The engine JSON loaders refuse above named caps: `VertexGridResource::MaxGridDivision` 4096 (vertex grids
+    and basic grounds), `TerrainResource::MaxGridDivision` 16384 and `TerrainResource::MaxClipTexels` 4096 (default
+    2048). A scene definition's ground keeps its stricter 1024 (6c).
+  - G2 the flags go to the constructor, as in the three other ground paths, and the UV multiplier is the default 1.0
+    (the existing optional `UVMultiplier` key still sets it). No ground JSON exists in the data stores today.
+- [x] (4) Verified 2026-10-01 (Linux): cascade builds (0 warning); base 2172 = 2169 + 3 skipped, Release AND
+  ASan/UBSan; clangcheck 118 TUs 0, `-Wfloat-conversion` 0; clang-tidy 95 → 51 (on purpose, ledger). A scratch
+  `--add-data-directory` with `Grounds/` JSON loaded through `loadResource()`: a 64-division basic ground and a
+  512-division terrain → `Loaded`; a 5000-division ground, a 20000-division terrain and an 8192-texel clip → `Failed`
+  with the cap named; a single-mesh `Box.glb` in `Meshes/` → `Loaded` as both `SimpleMeshResource` and `MeshResource`.
+  terrain and citadel: 0 VUID, 0 error, 0 leak, exit 0.
+- [x] (5) Pushed 2026-10-01 (owner's order): base `dce53a7`, engine (the 7c commit); peers asked.
 
