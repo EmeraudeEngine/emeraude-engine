@@ -5,7 +5,7 @@
 -   **Philosophy:** [`docs/architecture-philosophy.md`](../architecture-philosophy.md) (Deep dive).
 -   **Tracer:** [`docs/tracer-system.md`](../tracer-system.md) (Logging rules).
 -   **Conventions:** [`docs/cpp-conventions.md`](../cpp-conventions.md) (Includes AI-friendly guidelines).
--   **Physics:** [`docs/physics-system.md`](../physics-system.md).
+-   **Physics:** [`docs/physics-system.md`](../physics-system.md); the overhaul under way (2026-10-01): [`docs/physics-overhaul.md`](../physics-overhaul.md).
 -   **Resources:** [`docs/resource-management.md`](../resource-management.md).
 -   **Coordinates:** [`docs/coordinate-system.md`](../coordinate-system.md) (Y-UP convention — absolute law).
 -   **Graphics Hub:** [`docs/graphics-system.md`](../graphics-system.md) (High-level rendering architecture).

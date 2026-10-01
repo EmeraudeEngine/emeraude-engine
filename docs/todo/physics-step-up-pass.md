@@ -1,10 +1,11 @@
 ---
 id: physics-step-up-pass
 title: Physics — a pass on the step-up (stairs climb, with problems)
-status: open
+status: blocked
 priority: unranked
 scope: Physics
 opened: 2026-09-28
+blocked-by: [kinematic-character-controller]
 tags: [physics, player]
 ---
 
@@ -31,3 +32,10 @@ The owner scheduled a dedicated physics pass in another session.
 
 - [ ] Characterize the problems on `citadel`'s two flights (keyboard, window launch).
 - [ ] Decide the fixes with the owner (smoothing the lift, headroom, the summing, …).
+
+## Superseded (2026-10-01)
+
+The owner chose a kinematic character controller (`kinematic-character-controller`, phase P4 of
+`docs/physics-overhaul.md`): its step-up is a sweep (up, forward, down) with a headroom test, replacing the teleport
+in `Scene::accumulateStaticEntityCorrections()`. Delete this item when the controller climbs citadel's stairs, after
+the characterization above is recorded in the controller's acceptance test.

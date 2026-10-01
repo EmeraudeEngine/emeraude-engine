@@ -28,3 +28,4 @@ Context for developing the Emeraude Engine physics system.
 | Available Collision Primitives | [`docs/subsystems/physics/13-available-collision-primitives.md`](../../docs/subsystems/physics/13-available-collision-primitives.md) | 1 KB |
 | Particle Physics & Modifiers | [`docs/subsystems/physics/14-particle-physics-modifiers.md`](../../docs/subsystems/physics/14-particle-physics-modifiers.md) | 1 KB |
 | Detailed Documentation | [`docs/subsystems/physics/15-detailed-documentation.md`](../../docs/subsystems/physics/15-detailed-documentation.md) | 1 KB |
+| ⚠️ Physics overhaul (2026-10-01): analysis, owner decisions, phases P0-P5 and their items | [`docs/physics-overhaul.md`](../../docs/physics-overhaul.md) | 9 KB |

@@ -2,6 +2,7 @@
 
 For complete physics system architecture:
 - [`../../docs/physics-system.md`](../../physics-system.md) - Detailed 4-entity architecture
+- [`../../docs/physics-overhaul.md`](../../physics-overhaul.md) - The overhaul under way (2026-10-01): analysis, owner decisions, phases
 
 Related systems:
 - [`../../docs/coordinate-system.md`](../../coordinate-system.md) - Y-UP convention (CRITICAL)

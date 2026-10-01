@@ -29,3 +29,12 @@ velocity 0).
 
 - [ ] Decide whether a permanent roll is CORRECT on that terrain (slope everywhere, no flat cell)
   or whether friction is too low. That question is open and must be answered before any fix.
+
+## Hypothesis (2026-10-01, read from the code, not measured)
+
+`Scene::accumulateGroundCorrection()` pushes the body along the slope normal by the VERTICAL depth
+(`positionCorrection -= normal * penetration`). On a slope the normal has a horizontal part, so every tick the body
+is moved sideways downhill by `depth · sin(slope)`, while gravity is skipped and the downward velocity zeroed
+(grounded on terrain). That is a steady surface-constrained creep, matching the measured `|v|` of 0.2-1.8. Expected
+to go away with `physics-unified-contact-pipeline` (phase P2 of `docs/physics-overhaul.md`), which makes the ground
+an ordinary contact with friction. Measure it on a `collision-debug` slope station first.

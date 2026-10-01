@@ -1186,7 +1186,7 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success("'" + shapeName + "' textured with '" + imageName + "' added as '" + entityName + "'.");
 			});
 
-		this->bindCommand("getNodePhysics", "Returns the physics state of a root-level node of the active scene as JSON: world/local position, linear velocity, movable, grounded and WHICH surface it rests on (Ground/Boundary/Entity).",
+		this->bindCommand("getNodePhysics", "Returns the physics state of a root-level node of the active scene as JSON: world/local position, world orientation (upward and backward vectors), linear and angular velocity, movable, simulation paused (asleep), grounded and WHICH surface it rests on (Ground/Boundary/Entity), and the scene's physics cycle the state belongs to.",
 			{
 				{"name", "The node name."}
 			},
@@ -1206,7 +1206,8 @@ namespace EmEn::Scenes
 				/* ⚠️ WORLD position, not local: a node parented under another reports a local position
 				 * that says nothing about where it rests in the world, which is what a physics
 				 * measurement is about. */
-				const auto worldPosition = node->getWorldCoordinates().position();
+				const auto worldCoordinates = node->getWorldCoordinates();
+				const auto worldPosition = worldCoordinates.position();
 				const auto & localPosition = node->localCoordinates().position();
 				const auto & velocity = node->linearVelocity();
 
@@ -1227,12 +1228,22 @@ namespace EmEn::Scenes
 				writeJSONVector(info, worldPosition);
 				info << ",\"localPosition\":";
 				writeJSONVector(info, localPosition);
+				info << ",\"worldUpward\":";
+				writeJSONVector(info, worldCoordinates.upwardVector());
+				info << ",\"worldBackward\":";
+				writeJSONVector(info, worldCoordinates.backwardVector());
 				info << ",\"linearVelocity\":";
 				writeJSONVector(info, velocity);
+				info << ",\"angularVelocity\":";
+				writeJSONVector(info, node->angularVelocity());
 				info << ",";
 				info << "\"movable\":" << (node->isMovable() ? "true" : "false") << ",";
+				info << "\"simulationPaused\":" << (node->isSimulationPaused() ? "true" : "false") << ",";
 				info << "\"grounded\":" << (node->isGrounded() ? "true" : "false") << ",";
-				info << R"("groundedSource":")" << groundedSource << "\"";
+				info << R"("groundedSource":")" << groundedSource << "\",";
+				/* The physics cycle this state belongs to: a client polling at its own rate samples by cycle,
+				 * never by wall-clock time (the physics ticks at a fixed WorldPhysicsUpdateFrequency). */
+				info << "\"sceneCycle\":" << m_activeScene->cycle();
 				info << "}";
 
 				return Console::CommandResult::json(info.str());

@@ -1,10 +1,11 @@
 ---
 id: physics-solver-restitution-and-position-correction
 title: The constraint solver loses the bounce and over-corrects penetration
-status: open
+status: blocked
 priority: unranked
 scope: Physics/ConstraintSolver, Physics/ContactPoint
 opened: 2026-10-01
+blocked-by: [physics-collision-debug-bench]
 tags: [physics, solver, restitution, stability]
 ---
 
@@ -32,7 +33,16 @@ dedicated solver pass, validated by runtime measurements, over a fix inside the 
     jitters.
   - On top of that, the Baumgarte velocity bias (`prepareContacts()`) corrects the same penetration a second time.
 
+**2026-10-01, the P0 bench** (`docs/physics-overhaul.md` § 6): the restitution against the GROUND is right (e_eff 0.494
+for 0.5, 0.998 for 1.0 — that path does not go through this solver). The 5-box stack, which does, never settles: boxes
+B…E keep a downward velocity of 0.2-1.6 m/s while resting and move 0.16-0.33 m over the last 5 s of a 30 s run.
+
 ## What remains
+
+> Since 2026-10-01 this is done INSIDE `physics-unified-contact-pipeline` (phase P2 of the physics overhaul,
+> `docs/physics-overhaul.md`), measured on the `collision-debug` stations of projet-alpha's
+> `physics-collision-debug-bench`.
+
 
 - [ ] Measure first: the bounce height of a ball dropped with `e` = 0.5 and 1.0, and the resting jitter of a stack of
   boxes (position amplitude over 5 s). Use `collision-debug`, `physics-debug`, `lighten-marbles`.

@@ -27,14 +27,24 @@ do not, so this is not an x86 / arm64 floating-point divergence. Something in th
 the next. A tipping cube is chaotic, so any tiny difference grows. The owner wants the physics reviewed as a whole
 ("il faudra revoir la physique").
 
+**2026-10-01, the P0 bench** (`docs/physics-overhaul.md` § 6, Linux, 5 launches): `DynTopCube` rests at x 6.855 on all
+5, but the 5-box stack (`BenchStack*`, movable ↔ movable contacts through the solver) ends at positions up to 8 cm apart
+and with different velocities from one launch to the next. The divergence exists on Linux too; it is not only Windows.
+
 ## What remains
+
+> Expected to close with `physics-unified-contact-pipeline` (deterministic contact order, phase P2 of
+> `docs/physics-overhaul.md`).
+
 
 - [ ] Find the source of the run-to-run difference. The candidates, none measured yet:
   - the order of the contact pairs, which comes from the octree traversal and may follow addresses or an unordered
     container; a Gauss-Seidel solver gives a different result for a different order;
   - a step tied to wall-clock time (a variable dt or a variable number of substeps);
   - an unseeded random number.
-- [ ] Decide the target with the owner: reproducible on one machine (same binary, same inputs), or across platforms.
+- Target DECIDED by the owner on 2026-10-01 (`docs/physics-overhaul.md` § 1.3): the same
+  machine, the same binary, the same inputs. No `-ffast-math` for now, but the owner may enable it one day, so
+  correctness must not depend on bit-exact floats. Cross-platform bit-exactness is not a goal.
 - [ ] Re-measure: the same resting position on 5 launches.
 
 ## References

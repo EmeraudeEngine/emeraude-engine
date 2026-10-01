@@ -4837,6 +4837,24 @@ dereference what a resource accessor returns without checking it.**
 > - The solver still re-applies restitution per iteration and over-corrects penetration: item
 >   `physics-solver-restitution-and-position-correction`.
 
+### Physics: the body properties set on an ENTITY are overwritten by its components — set them on the component (2026-10-01)
+
+> [!CAUTION]
+> `AbstractEntity::updateEntityProperties()` re-derives the entity's `BodyPhysicalProperties` from its components (the
+> sum of the masses, the average of the other values, the LAST component's inertia tensor) on every component update —
+> a component linked, removed, or its geometry finishing an ASYNCHRONOUS load. A
+> `entity->bodyPhysicalProperties().setProperties(…)` is therefore silently replaced; `AbstractEntity.hpp` warns it,
+> nothing enforces it. The toolkit's generators give the visual component its own properties: mass = volume × density,
+> bounciness and stickiness 0.5, and the IDENTITY inertia tensor whatever the mass and the size (`{}` is a default
+> `Matrix< 3 >`, which is the identity; `Toolkit::generateCuboidInstance()`, `generateSphereInstance()`).
+> - Measured on the `collision-debug` bench: a ball declared e = 1.0 on its entity bounced exactly like one declared
+>   e = 0.5 (rebound / impact 0.48, the default), whatever the order of `setProperties()` and `enableVisualDebug()`.
+>   Declared on the component (`built.component()->bodyPhysicalProperties()`): e_eff 0.998 and 0.494.
+> - ⚠️ An identity tensor on a 10 kg, 1 m cube (whose real moment is 1.67 kg·m²) makes it spin 1.67× too easily.
+> - Existing code that sets them on the entity (`collision-debug`'s `DynTopCube`) does not simulate what it declares.
+> - Whether the entity-level setter should keep existing is a decision for the physics overhaul
+>   (`docs/physics-overhaul.md`).
+
 ### A float range check written `v < MIN || v > MAX` lets NaN through (2026-10-01, triad 10b)
 
 > [!CAUTION]
