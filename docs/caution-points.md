@@ -4793,6 +4793,16 @@ dereference what a resource accessor returns without checking it.**
 > Run header fixes from ONE TU, and check `git status` for headers OUTSIDE the target module after any `--fix` run (the
 > triad 11 run also edited four emeraude-base headers).
 
+### A `std::unique_ptr` to a forward-declared type needs EVERY special member out of line — the constructor too (2026-10-01, triad 14)
+
+> [!CAUTION]
+> `VideoCaptureDevice` got a `std::unique_ptr< PlatformContext >` (the type defined in each platform source) with its
+> destructor out of line but `VideoCaptureDevice () noexcept = default;` still in the header. Clang and MSVC instantiate
+> the deleter for an inline constructor (the member cleanup), even `noexcept` under `-fno-exceptions`: every includer
+> failed on the incomplete type (138 TUs on macOS, 139 on MSVC: C2027 / C2338 "can't delete an incomplete type").
+> GCC does not, and Linux had no such member: the Linux build passed. Declare the constructor in the header and default
+> it in the source, where the type is complete (engine `6ff4d476` broke, fixed by the next commit).
+
 ### clang-tidy's `readability-qualified-auto` fix-it breaks MSVC on a `std::array` iterator (2026-10-01)
 
 > [!CAUTION]

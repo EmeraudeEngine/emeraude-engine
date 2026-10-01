@@ -59,7 +59,7 @@ namespace EmEn::PlatformSpecific
 			/**
 			 * @brief Constructs a video capture device (closed state).
 			 */
-			VideoCaptureDevice () noexcept = default;
+			VideoCaptureDevice () noexcept;
 
 			/**
 			 * @brief Destructs the video capture device, closing if open.

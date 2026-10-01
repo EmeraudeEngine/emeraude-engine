@@ -44,6 +44,8 @@ namespace EmEn::PlatformSpecific
 {
 	constexpr auto TracerTag{"VideoCaptureDevice"};
 
+	VideoCaptureDevice::VideoCaptureDevice () noexcept = default;
+
 	VideoCaptureDevice::~VideoCaptureDevice () noexcept
 	{
 		this->close();

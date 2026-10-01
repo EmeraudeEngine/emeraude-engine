@@ -131,6 +131,10 @@ namespace EmEn::PlatformSpecific
 		}
 	}
 
+	/* NOTE: Defined here, where PlatformContext is complete: an inline constructor instantiates the unique_ptr's
+	 * deleter in every includer, where the type is incomplete (the macOS / Windows build broke on it). */
+	VideoCaptureDevice::VideoCaptureDevice () noexcept = default;
+
 	VideoCaptureDevice::~VideoCaptureDevice () noexcept
 	{
 		this->close();
