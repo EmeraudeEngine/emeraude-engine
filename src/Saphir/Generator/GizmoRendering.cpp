@@ -43,13 +43,14 @@ namespace EmEn::Saphir::Generator
 	/** @brief Gizmo push constant component names. */
 	static constexpr auto HighlightFactor{"highlightFactor"};
 
+	namespace
+	{
 	/**
 	 * @brief Declares the gizmo push constant block in a shader.
 	 * Layout: mat4 MVP (64B) + float frameIndex (4B) + float highlightFactor (4B) = 72 bytes.
 	 * @param shader The shader to declare the block in.
 	 * @return bool
 	 */
-	static
 	bool
 	declareGizmoPushConstantBlock (AbstractShader & shader) noexcept
 	{
@@ -59,6 +60,7 @@ namespace EmEn::Saphir::Generator
 		pushConstantBlock.addMember(Declaration::VariableType::Float, HighlightFactor);
 
 		return shader.declare(pushConstantBlock);
+	}
 	}
 
 	void

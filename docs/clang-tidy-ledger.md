@@ -44,6 +44,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Graphics` 7g (lighting and atmosphere: `Effects/` Lighting, Atmosphere, `Compute/`, the probe volume, LTC, dummies, cloud shadow map, ocean waves, imposter atlas) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 69, all ON PURPOSE (below) — 47 constant-array-index, 10 return-const-ref-from-parameter, 7 qualified-auto, 2 static-cast-downcast, 2 integer-division, 1 cert-msc51. Before: 184. | Triad sub-section 7g |
 | `src/Saphir` 8a (shader core: `ShaderManager`, `Program`, the shader stages, `AbstractVertexStage`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 7, all ON PURPOSE (below). Before: 40. | Triad sub-section 8a |
 | `src/Saphir` 8b (`LightGenerator`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 10, all ON PURPOSE (below) — 9 convert-member-functions-to-static, 1 branch-clone. Before: 15. | Triad sub-section 8b |
+| `src/Saphir` 8c (`Declaration/`, `Generator/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 10, all ON PURPOSE (below) — 7 reinterpret-cast, 2 branch-clone, 1 use-enum-class. Before: 23. | Triad sub-section 8c |
 
 ## Findings kept ON PURPOSE
 
@@ -294,4 +295,12 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   (today constant names, an instance API so a generator may vary them).
 - **bugprone-branch-clone ×1** — the reflectivity priority chain: the "artistic reflection" branch and the fallback
   both publish `0.0`, kept apart because they say different things (documented in place).
+
+### `src/Saphir` 8c — `Declaration/`, `Generator/` (2026-10-01)
+
+- **pro-type-reinterpret-cast ×7** — a render pass / effect handle mixed into a program cache hash as an integer
+  (64-bit targets only, where a non-dispatchable Vulkan handle is a pointer).
+- **bugprone-branch-clone ×2** — `Declaration/Types.cpp`'s size table: distinct GLSL types of the same size, one case
+  each so the table stays readable per type.
+- **use-enum-class ×1** — `GeneratorFlagBits` (a bit set, the flag convention).
 

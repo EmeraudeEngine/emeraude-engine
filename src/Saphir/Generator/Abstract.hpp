@@ -57,6 +57,7 @@ namespace EmEn
 	{
 		class DescriptorSetLayout;
 		class Framebuffer;
+		class LayoutManager;
 	}
 
 	class Settings;
@@ -438,6 +439,15 @@ namespace EmEn::Saphir::Generator
 
 				return geometry != nullptr && geometry->heightfieldSurfaceEnabled() && geometry->oceanSurfaceEnabled();
 			}
+
+			/**
+			 * @brief Returns the PerModel descriptor set layout of this program's geometry: the ocean's, the heightfield
+			 * surface's, or else the skinning SSBO's.
+			 * @param layoutManager A reference to the layout manager.
+			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout > nullptr when its creation failed.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::DescriptorSetLayout > perModelDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) const noexcept;
 
 			/**
 			 * @brief Returns whether this program draws a MESH-SHADING surface through task + mesh stages

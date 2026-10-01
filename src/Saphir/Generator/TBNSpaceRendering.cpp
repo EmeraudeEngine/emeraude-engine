@@ -285,7 +285,7 @@ namespace EmEn::Saphir::Generator
 	bool
 	TBNSpaceRendering::onGraphicsPipelineConfiguration (const Program & /*program*/, GraphicsPipeline & graphicsPipeline) noexcept
 	{
-		const auto renderableInstance = this->getRenderableInstance();
+		const auto * const renderableInstance = this->getRenderableInstance();
 
 		if ( renderableInstance == nullptr )
 		{

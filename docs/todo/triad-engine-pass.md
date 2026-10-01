@@ -58,7 +58,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
 | 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
-| 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | 🟠 8a started |
+| 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | ✅ 8a-8c pushed (peers pending) |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
 | 10 | `src/Audio` | 18 919 | ⬜ |
 | 11 | `src/Physics` | 9 197 | ⬜ |
@@ -989,9 +989,9 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
-| 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed (the engine 8a commit); peers pending |
-| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ✅ pushed (the engine 8b commit); peers pending |
-| 8c | `Declaration/`, `Generator/` | ~13 000 | ⬜ |
+| 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed engine `1f1004d4`; macOS M2 VALIDATED, Windows pending |
+| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ✅ pushed engine `040d100f`; macOS M2 VALIDATED, Windows pending |
+| 8c | `Declaration/`, `Generator/` | ~13 000 | ✅ pushed (the engine 8c commit); peers pending |
 
 ### 8a — shader core (2026-10-01)
 
@@ -1011,7 +1011,10 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   `-Wfloat-conversion` 0; clang-tidy 40 → 7 (on purpose, ledger). The generated GLSL is unchanged by construction (the
   two text-generating edits produce the same strings); beams (path / beam ribbons), citadel (mesh shaders; MCP 1707/0,
   console 4466/0), terrain (heightfield fragment overrides), sponza: 0 shader compilation failure, 0 VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8a commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `1f1004d4`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning, the mesh path compiled on arm64): each launch on an EMPTY `--cache-directory`
+    so every shader went through the new code — beams 39, terrain 252, sponza 221, citadel 472 binaries compiled, 0
+    compilation failure, 0 VUID, 0 UNASSIGNED; citadel MCP 1707/0, console 4445/0.
 
 ### 8b — `LightGenerator` (2026-10-01)
 
@@ -1027,5 +1030,25 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 - [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 109 TUs 0,
   `-Wfloat-conversion` 0; clang-tidy 15 → 10 (on purpose, ledger). light-and-shadow-debug (point, spot, directional
   shadows), beams (line lights), sponza (PBR), citadel: 0 shader compilation failure, 0 VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8b commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `040d100f`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): empty `--cache-directory` per launch — light-and-shadow-debug 188, beams 39,
+    sponza 221, citadel 472 binaries compiled through the new generator, 0 compilation failure, 0 VUID, 0 UNASSIGNED;
+    citadel MCP 1707/0, console 4445/0.
+
+### 8c — `Declaration/`, `Generator/` (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (31 TUs + headers): **23**: 7 reinterpret-cast, 4 qualified-auto, 4 parentheses,
+  2 branch clones, 2 nested conditionals, and singles (a non-const global, an anonymous-namespace function, an unscoped
+  enum).
+- [x] (2) Review. The GLSL declarations and the program generators work from engine data; no trust boundary, no
+  defect. One duplication: the PerModel descriptor-set-layout choice (ocean, else heightfield surface, else skinning)
+  written as the same nested conditional in `SceneRendering` and `ShadowCasting`.
+- [x] (3) Mechanical: one `Generator::Abstract::perModelDescriptorSetLayout()` for both generators, the shader-block
+  tracer tag a `constexpr` in an anonymous namespace, `declareGizmoPushConstantBlock()` in an anonymous namespace,
+  `const auto * const` on four raw pointers, parentheses.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 112 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 23 → 10 (on purpose, ledger). terrain (heightfield PerModel set), water-world
+  (ocean), animation-debug (skinning), citadel (shadow casting; MCP 1707/0, console 4466/0): 0 shader compilation or
+  layout failure, 0 VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8c commit); peers asked.
 

@@ -224,11 +224,7 @@ namespace EmEn::Saphir::Generator
 		/* Add the skinning SSBO descriptor set layout for skeletal meshes, or the heightfield surface's. */
 		if ( setIndexes.isSetEnabled(SetType::PerModel) )
 		{
-			auto descriptorSetLayout = this->isOceanSurfaceEnabled() ?
-				getOceanSurfaceDescriptorSetLayout(renderer.layoutManager()) :
-				(this->isHeightfieldSurfaceEnabled() ?
-					getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
-					getSkinningDescriptorSetLayout(renderer.layoutManager()));
+			auto descriptorSetLayout = this->perModelDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{
@@ -485,8 +481,8 @@ namespace EmEn::Saphir::Generator
 		const bool isCSM = renderTarget->isCascadedShadowMap();
 
 		/* The same meshlet ceilings as the scene pass (SceneRendering::generateMeshShadingStages()). */
-		constexpr uint32_t MaxVertices = MeshShadingSurface::MeshletVertices * MeshShadingSurface::MeshletVertices + 4 * MeshShadingSurface::MeshletVertices;
-		constexpr uint32_t MaxPrimitives = 2 * MeshShadingSurface::MeshletQuads * MeshShadingSurface::MeshletQuads + 4 * 4 * MeshShadingSurface::MeshletQuads;
+		constexpr uint32_t MaxVertices = (MeshShadingSurface::MeshletVertices * MeshShadingSurface::MeshletVertices) + (4 * MeshShadingSurface::MeshletVertices);
+		constexpr uint32_t MaxPrimitives = (2 * MeshShadingSurface::MeshletQuads * MeshShadingSurface::MeshletQuads) + (4 * 4 * MeshShadingSurface::MeshletQuads);
 		constexpr std::array< uint32_t, 3 > Workgroup{MeshShadingSurface::WorkgroupSize, 1, 1};
 
 		auto * meshShader = program.initMeshShader(this->name() + "MeshShader", MeshOutputTopology::Triangles, MaxVertices, MaxPrimitives, Workgroup);

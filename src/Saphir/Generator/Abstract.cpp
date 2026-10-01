@@ -35,7 +35,10 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "HeightfieldSurfaceHelper.hpp"
+#include "OceanSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
+#include "SkinningLayoutHelper.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
@@ -436,6 +439,22 @@ namespace EmEn::Saphir::Generator
 		renderer.cacheProgram(programCacheKey, m_shaderProgram);
 
 		return true;
+	}
+
+	std::shared_ptr< Vulkan::DescriptorSetLayout >
+	Abstract::perModelDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) const noexcept
+	{
+		if ( this->isOceanSurfaceEnabled() )
+		{
+			return getOceanSurfaceDescriptorSetLayout(layoutManager);
+		}
+
+		if ( this->isHeightfieldSurfaceEnabled() )
+		{
+			return getHeightfieldSurfaceDescriptorSetLayout(layoutManager);
+		}
+
+		return getSkinningDescriptorSetLayout(layoutManager);
 	}
 
 	uint32_t

@@ -34,7 +34,10 @@ namespace EmEn::Saphir::Declaration
 {
 	using namespace Base;
 
-	const char * ShaderBlockTracerTag = "ShaderBlock";
+	namespace
+	{
+		constexpr auto ShaderBlockTracerTag{"ShaderBlock"};
+	}
 
 	bool
 	AbstractShaderBlock::isValid () const noexcept
@@ -79,7 +82,7 @@ namespace EmEn::Saphir::Declaration
 	bool
 	AbstractShaderBlock::addMember (const Structure & structure, Key interpolation) noexcept
 	{
-		const auto name = structure.instanceName().c_str();
+		const auto * const name = structure.instanceName().c_str();
 
 		if ( Utility::contains(m_members, name) )
 		{
@@ -129,7 +132,7 @@ namespace EmEn::Saphir::Declaration
 	bool
 	AbstractShaderBlock::addArrayMember (const Structure & structure, uint32_t arraySize, Key interpolation) noexcept
 	{
-		const auto name = structure.instanceName().c_str();
+		const auto * const name = structure.instanceName().c_str();
 
 		if ( Utility::contains(m_members, name) )
 		{

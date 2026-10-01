@@ -326,11 +326,7 @@ namespace EmEn::Saphir::Generator
 		/* Prepare the descriptor set layout for skeletal animation bone matrices, or for a heightfield surface. */
 		if ( setIndexes.isSetEnabled(SetType::PerModel) )
 		{
-			auto descriptorSetLayout = this->isOceanSurfaceEnabled() ?
-				getOceanSurfaceDescriptorSetLayout(renderer.layoutManager()) :
-				(this->isHeightfieldSurfaceEnabled() ?
-					getHeightfieldSurfaceDescriptorSetLayout(renderer.layoutManager()) :
-					getSkinningDescriptorSetLayout(renderer.layoutManager()));
+			auto descriptorSetLayout = this->perModelDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{
@@ -418,8 +414,8 @@ namespace EmEn::Saphir::Generator
 		/* The meshlet ceilings: 8 × 8 quads (81 vertices, 128 triangles) plus the skirts of up to four tile edges
 		 * (4 × 9 vertices, 4 × 32 triangles in both windings) — 117 / 256, inside the 256 / 256 every
 		 * VK_EXT_mesh_shader device guarantees. */
-		constexpr uint32_t MaxVertices = MeshShadingSurface::MeshletVertices * MeshShadingSurface::MeshletVertices + 4 * MeshShadingSurface::MeshletVertices;
-		constexpr uint32_t MaxPrimitives = 2 * MeshShadingSurface::MeshletQuads * MeshShadingSurface::MeshletQuads + 4 * 4 * MeshShadingSurface::MeshletQuads;
+		constexpr uint32_t MaxVertices = (MeshShadingSurface::MeshletVertices * MeshShadingSurface::MeshletVertices) + (4 * MeshShadingSurface::MeshletVertices);
+		constexpr uint32_t MaxPrimitives = (2 * MeshShadingSurface::MeshletQuads * MeshShadingSurface::MeshletQuads) + (4 * 4 * MeshShadingSurface::MeshletQuads);
 		constexpr std::array< uint32_t, 3 > Workgroup{MeshShadingSurface::WorkgroupSize, 1, 1};
 
 		auto * meshShader = program.initMeshShader(this->name() + "MeshShader", MeshOutputTopology::Triangles, MaxVertices, MaxPrimitives, Workgroup);
@@ -917,7 +913,7 @@ namespace EmEn::Saphir::Generator
 						}
 						else
 						{
-							const auto lane = this->debugMaterialPropertiesLane() == 1 ? "r" : "g";
+							const auto * const lane = this->debugMaterialPropertiesLane() == 1 ? "r" : "g";
 
 							Code{*fragmentShader, Location::Output} <<
 								m_lightGenerator.fragmentColor() << " = vec4(vec3(" << ShaderVariable::OutputMaterialProperties << "." << lane << "), " << m_lightGenerator.fragmentColor() << ".a);";
