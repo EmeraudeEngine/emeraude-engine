@@ -43,7 +43,6 @@
 #include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"AtmosphericFogEffect"};
-/* NOLINTEND(cert-err58-cpp) */
 
 /* Compile-time size check. */
 static_assert(sizeof(EmEn::Graphics::Effects::Atmosphere::AtmosphericFog::FogPushConstants) == 116, "FogPushConstants must be exactly 116 bytes !");
@@ -54,7 +53,7 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
-	static constexpr auto FogFragmentShader = R"GLSL(
+	constexpr auto FogFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -259,12 +258,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* ---- Create descriptor sets ---- */
 		m_fogPerFrame = this->createPerFrameDescriptorSets(tripleInputLayout, ClassId, "AFDescSet");
 
-		if ( m_fogPerFrame.empty() )
-		{
-			return false;
-		}
-
-		return true;
+		return !m_fogPerFrame.empty();
 	}
 
 	void

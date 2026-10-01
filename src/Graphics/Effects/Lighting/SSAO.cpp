@@ -40,7 +40,7 @@ namespace
 {
 	using namespace EmEn;
 
-	static constexpr auto SSAOComputeFragmentShader = R"GLSL(
+	constexpr auto SSAOComputeFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -188,7 +188,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.radius = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionSSRadiusKey, DefaultGraphicsPPAmbientOcclusionSSRadius);
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionIntensityKey, DefaultGraphicsPPAmbientOcclusionIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionSSBiasKey, DefaultGraphicsPPAmbientOcclusionSSBias);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionSSSampleCountKey, DefaultGraphicsPPAmbientOcclusionSSSampleCount);
+		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPAmbientOcclusionSSSampleCountKey, DefaultGraphicsPPAmbientOcclusionSSSampleCount, MinGraphicsPPAmbientOcclusionSSSampleCount, MaxGraphicsPPAmbientOcclusionSSSampleCount);
 
 		const auto halfW = (width > 1) ? width / 2 : 1U;
 		const auto halfH = (height > 1) ? height / 2 : 1U;
@@ -268,12 +268,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* AO computation: reads depth + normals (updated per-frame). */
 		m_aoPerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "AO_DescSet");
 
-		if ( m_aoPerFrame.empty() )
-		{
-			return false;
-		}
-
-		return true;
+		return !m_aoPerFrame.empty();
 	}
 
 	void
@@ -338,13 +333,13 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	SSAO::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	SSAO::denoiseContribution (const FrameContext & /*context*/) noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "ssao";
 		contribution.source = &m_aoTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.targetH = &m_blurHTarget;
+		contribution.targetV = &m_blurVTarget;
 
 		/* Same 5-tap gaussian as the retired SSAO_Blur_FS pass (no guides). */
 		contribution.code =
@@ -365,7 +360,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		CombineContribution contribution;
 		contribution.prefix = "ssao";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_blurVTarget});
 		contribution.needsMaterialProperties = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 

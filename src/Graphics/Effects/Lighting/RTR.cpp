@@ -1045,8 +1045,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * below is expressed in TRACE texels and scales with the trace height, so the cone LOD
 		 * exactly cancels the resolution gain. Use the GlossyCone knobs for that. */
 		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPReflectionsRTPixelDoublingKey, DefaultGraphicsPPReflectionsRTPixelDoubling);
-		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
+		const auto halfW = traceSize(width, pixelDoubling);
+		const auto halfH = traceSize(height, pixelDoubling);
 
 		/* Glossy cone controls (bench knobs — see SettingKeys.hpp for the full rationale). */
 		m_coneEnabled = settings.getOrSetDefault< bool >(GraphicsPPReflectionsRTGlossyConeEnabledKey, DefaultGraphicsPPReflectionsRTGlossyConeEnabled);
@@ -1060,7 +1060,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.temporalDepthTolerance = std::max(0.001F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalDepthToleranceKey, DefaultGraphicsPPReflectionsRTTemporalDepthTolerance));
 		m_parameters.temporalNormalThreshold = std::clamp(settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalNormalThresholdKey, DefaultGraphicsPPReflectionsRTTemporalNormalThreshold), -1.0F, 1.0F);
 		m_parameters.temporalVarianceGamma = std::max(0.0F, settings.getOrSetDefault< float >(GraphicsPPReflectionsRTTemporalVarianceGammaKey, DefaultGraphicsPPReflectionsRTTemporalVarianceGamma));
-		m_parameters.temporalMaxAccumulation = std::max(1U, settings.getOrSetDefault< uint32_t >(GraphicsPPReflectionsRTTemporalMaxAccumulationKey, DefaultGraphicsPPReflectionsRTTemporalMaxAccumulation));
+		m_parameters.temporalMaxAccumulation = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPReflectionsRTTemporalMaxAccumulationKey, DefaultGraphicsPPReflectionsRTTemporalMaxAccumulation, MinGraphicsPPReflectionsRTTemporalMaxAccumulation, MaxGraphicsPPReflectionsRTTemporalMaxAccumulation);
 
 		/* Trace target (half-res by default, RGBA16F: reflected color RGB + confidence A). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "RTR_Trace") )
@@ -1655,7 +1655,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_pyramidBaseSources.fill(nullptr);
 
 		m_pyramidSets.clear();
-		m_pyramidDescriptorPool.reset();
+		m_pyramidDescriptorPool = nullptr;
 		m_pyramidDownsamplePipeline.reset();
 		m_pyramidPipelineLayout.reset();
 		m_pyramidDSLayout.reset();
@@ -1969,15 +1969,15 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	RTR::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	RTR::denoiseContribution (const FrameContext & /*context*/) noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "rtr";
 		/* SVGF order: the spatial bilateral runs on the TEMPORALLY integrated trace (the raw trace
 		 * when the chain is off). */
 		contribution.source = m_temporalOutput != nullptr ? m_temporalOutput : static_cast< const TextureInterface * >(&m_traceTarget);
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.targetH = &m_blurHTarget;
+		contribution.targetV = &m_blurVTarget;
 		contribution.needsDepth = true;
 		contribution.needsNormals = true;
 		contribution.dynamics = Base::Math::Vector< 4, float >{m_parameters.depthSigma, m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F};
@@ -2042,9 +2042,9 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		CombineContribution contribution;
 		contribution.prefix = "rtr";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
-		contribution.samplers.emplace_back(CombineSamplerInput{"Pyramid", &m_pyramidTexture});
-		contribution.samplers.emplace_back(CombineSamplerInput{"Cone", &m_coneTexture});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Pyramid", .texture = &m_pyramidTexture});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Cone", .texture = &m_coneTexture});
 		contribution.needsDepth = true;
 		contribution.needsNormals = true;
 		contribution.needsMaterialProperties = true;

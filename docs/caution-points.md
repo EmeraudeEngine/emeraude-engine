@@ -6797,6 +6797,15 @@ dimming the reflection of every material under 0.6 roughness in both lanes (ston
 > [1, 256], `MaxRadius` [1, 128] and `AutoFocusSpeed` (0, 100]. A new numeric key that drives a loop, an allocation or
 > a cast takes the same call. Measured 2026-10-01: all twelve out of range in one settings copy → twelve warnings
 > (sponza, terrain), the scenes render, 0 VUID.
+> Triad 7g added the lighting counts and sizes (the float looks stay unbounded: a wrong one looks wrong, it cannot
+> hang): RTAO `SampleCount` [1, 64] and `BlurRadius` [0, 16]; IndirectDiffuse (SSGI and RTGI) `SampleCount` [1, 64],
+> `Denoiser/Iterations` [0, 8], `Denoiser/MaxAccumulation` [1, 1024]; RTR `Temporal/MaxAccumulation` [1, 1024]; SSAO
+> `SampleCount` [1, 128]; ContactShadows `ScreenSpace/StepCount` [1, 128], `MaxBlurRadius` [0, 64]; SSGI
+> `ScreenSpace/StepCount` [1, 128], `SkyVisibilitySliceCount` [1, 16], `SkyVisibilityStepCount` [1, 64]; SSR `BlurRadius`
+> [0, 16]; IrradianceProbes `ProbeCountX` / `Z` [1, 64], `ProbeCountY` [1, 32], `RaysPerProbe` [1, 1024]. An OVERRIDE
+> key (read with `get()`, the demo's value as the fallback: `VolumetricLight/SampleCount` [1, 256]) goes through the
+> sibling `Settings::getInRange()`, which keeps the demo's value. Measured: the eighteen keys out of range on citadel
+> (both lanes) and light-and-shadow-debug → one warning per site, 0 VUID.
 
 ### The application SAVES its settings on exit — restore a debug key AFTER the process is gone (Sep 2026)
 

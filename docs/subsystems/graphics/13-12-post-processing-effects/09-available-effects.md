@@ -53,4 +53,6 @@ its range a value warns and takes the default (`Settings::getOrSetDefaultInRange
 defaults in `SettingKeys.hpp`): `TemporalAA/Alpha` (0, 1], `TemporalAA/VarianceGamma` (0, 10],
 `MotionBlur/SampleCount` [1, 128], `MotionBlur/SoftDepthExtent` (0, 10], `Clouds/StepCount` [1, 512],
 `Clouds/LightStepCount` [1, 64], `DepthOfField/SampleCount` [1, 256], `DepthOfField/MaxRadius` [1, 128] px,
-`DepthOfField/AutoFocusSpeed` (0, 100]. `VolumetricLight`'s override keys above are not bounded yet (triad 7g).
+`DepthOfField/AutoFocusSpeed` (0, 100]. Triad 7g bounded the lighting effects' counts and sizes the same way (the list:
+engine caution-points § "A number read from the settings file is a trust boundary"), and `VolumetricLight/SampleCount`
+[1, 256] through `Settings::getInRange()`, which keeps the demo's value (its keys are overrides).

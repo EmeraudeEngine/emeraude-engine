@@ -27,6 +27,7 @@
 #include "XRayAnalyzer.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <chrono>
 #include <cstring>
 
@@ -194,10 +195,10 @@ void main()
 
 	struct PushConstants
 	{
-		float rayOriginBase[4];
-		float rayDirRight[4];
-		float rayDirUp[4];
-		float rayDirForward[4];
+		std::array< float, 4 > rayOriginBase;
+		std::array< float, 4 > rayDirRight;
+		std::array< float, 4 > rayDirUp;
+		std::array< float, 4 > rayDirForward;
 		uint32_t resolution;
 		uint32_t gridResolution;
 		float sliceDepthZ;
@@ -252,8 +253,8 @@ void main()
 		std::unique_ptr< Vulkan::CommandBuffer > commandBuffer;
 
 		/* Computed bounds in view space. */
-		float boundsMin[3]{0, 0, 0};
-		float boundsMax[3]{0, 0, 0};
+		std::array< float, 3 > boundsMin{0.0F, 0.0F, 0.0F};
+		std::array< float, 3 > boundsMax{0.0F, 0.0F, 0.0F};
 		float squareMinX{0};
 		float squareMinY{0};
 		float squareSize{0};
@@ -322,9 +323,9 @@ void main()
 		/* Transform all triangles and compute bounds. */
 		struct GPUTriangle
 		{
-			float v0[4]; /* xyz + padding */
-			float v1[4];
-			float v2[4];
+			std::array< float, 4 > v0; /* xyz + padding */
+			std::array< float, 4 > v1;
+			std::array< float, 4 > v2;
 		};
 
 		std::vector< GPUTriangle > gpuTriangles;
@@ -337,15 +338,16 @@ void main()
 			const auto & tris = entry.shape->triangles();
 			const auto & verts = entry.shape->vertices();
 
-			for ( size_t t = 0; t < tris.size(); ++t )
+			for ( const auto & tri : tris )
 			{
 				GPUTriangle gt{};
+				const std::array< std::array< float, 4 > *, 3 > corners{&gt.v0, &gt.v1, &gt.v2};
 
 				for ( int i = 0; i < 3; ++i )
 				{
-					const auto worldPos = Impl::transformPoint(verts[tris[t].vertexIndex(i)].position(), entry.frame);
+					const auto worldPos = Impl::transformPoint(verts[tri.vertexIndex(i)].position(), entry.frame);
 
-					float * dst = (i == 0) ? gt.v0 : (i == 1) ? gt.v1 : gt.v2;
+					auto & dst = *corners[static_cast< size_t >(i)];
 					dst[0] = worldPos[X];
 					dst[1] = worldPos[Y];
 					dst[2] = worldPos[Z];
@@ -383,8 +385,8 @@ void main()
 		const auto sliceHeight = d.boundsMax[1] - d.boundsMin[1];
 		const auto maxExtent = std::max(sliceWidth, sliceHeight);
 
-		d.squareMinX = d.boundsMin[0] - (maxExtent - sliceWidth) * 0.5F;
-		d.squareMinY = d.boundsMin[1] - (maxExtent - sliceHeight) * 0.5F;
+		d.squareMinX = d.boundsMin[0] - ((maxExtent - sliceWidth) * 0.5F);
+		d.squareMinY = d.boundsMin[1] - ((maxExtent - sliceHeight) * 0.5F);
 		d.squareSize = maxExtent;
 		d.sliceDepthRange = d.boundsMax[2] - d.boundsMin[2];
 
@@ -514,11 +516,12 @@ void main()
 				uint32_t count;
 			};
 
-			std::vector< std::vector< uint32_t > > cellTriangles(GPUGridRes * GPUGridRes);
+			std::vector< std::vector< uint32_t > > cellTriangles(static_cast< size_t >(GPUGridRes) * GPUGridRes);
 
 			for ( uint32_t t = 0; t < d.triangleCount; ++t )
 			{
 				const auto & gt = gpuTriangles[t];
+				const std::array< const std::array< float, 4 > *, 3 > corners{&gt.v0, &gt.v1, &gt.v2};
 
 				/* Project triangle to view space XY. */
 				float minVX = std::numeric_limits< float >::max();
@@ -528,7 +531,7 @@ void main()
 
 				for ( int i = 0; i < 3; ++i )
 				{
-					const float * v = (i == 0) ? gt.v0 : (i == 1) ? gt.v1 : gt.v2;
+					const auto & v = *corners[static_cast< size_t >(i)];
 					const Vector< 3, float > worldPos{v[0], v[1], v[2]};
 					const auto relative = worldPos - d.viewpoint.position();
 					const auto vx = Vector< 3, float >::dotProduct(relative, d.right);
@@ -550,13 +553,13 @@ void main()
 				{
 					for ( uint32_t cx = cellMinX; cx <= cellMaxX; ++cx )
 					{
-						cellTriangles[cy * GPUGridRes + cx].push_back(t);
+						cellTriangles[(cy * GPUGridRes) + cx].push_back(t);
 					}
 				}
 			}
 
 			/* Flatten into offset/count + index array. */
-			std::vector< GridCell > gridCells(GPUGridRes * GPUGridRes);
+			std::vector< GridCell > gridCells(static_cast< size_t >(GPUGridRes) * GPUGridRes);
 			std::vector< uint32_t > gridIndices;
 
 			for ( uint32_t c = 0; c < GPUGridRes * GPUGridRes; ++c )
@@ -649,7 +652,7 @@ void main()
 		}
 
 		/* Step 6: Descriptor pool and set. */
-		std::vector< VkDescriptorPoolSize > poolSizes = {
+		const std::vector< VkDescriptorPoolSize > poolSizes = {
 			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4}
 		};
 
@@ -694,7 +697,7 @@ void main()
 		gridIndexBufferInfo.offset = 0;
 		gridIndexBufferInfo.range = VK_WHOLE_SIZE;
 
-		VkWriteDescriptorSet writes[4]{};
+		std::array< VkWriteDescriptorSet, 4 > writes{};
 
 		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		writes[0].dstSet = d.descriptorSet->handle();
@@ -724,7 +727,7 @@ void main()
 		writes[3].descriptorCount = 1;
 		writes[3].pBufferInfo = &gridIndexBufferInfo;
 
-		vkUpdateDescriptorSets(d.device->handle(), 4, writes, 0, nullptr);
+		vkUpdateDescriptorSets(d.device->handle(), static_cast< uint32_t >(writes.size()), writes.data(), 0, nullptr);
 
 		/* Step 7: Command pool and buffer. */
 		const auto queueFamilyIndex = d.device->hasComputeQueues() ? d.device->getComputeFamilyIndex() : d.device->getGraphicsFamilyIndex();
@@ -762,7 +765,7 @@ void main()
 		const auto pixelStepY = d.squareSize / static_cast< float >(res);
 
 		const auto baseOrigin = d.viewpoint.position() + d.right * d.squareMinX + d.up * d.squareMinY;
-		const auto depthZ = d.boundsMin[2] + depth * d.sliceDepthRange;
+		const auto depthZ = d.boundsMin[2] + (depth * d.sliceDepthRange);
 
 		PushConstants pc{};
 		pc.rayOriginBase[0] = baseOrigin[X];
@@ -830,7 +833,7 @@ void main()
 		auto gpuMs = std::chrono::duration_cast< std::chrono::milliseconds >(gpuEnd - gpuStart).count();
 
 		/* Reset command buffer for reuse. */
-		static_cast< void >(d.commandBuffer->reset());
+		static_cast< void >((*d.commandBuffer).reset());
 
 		/* Readback. */
 
@@ -877,7 +880,7 @@ void main()
 		std::vector< uint32_t > packedData(packedWordCount);
 
 		/* Empty pixmap for benchmark mode (unpackPixels == false). */
-		Pixmap< uint8_t > dummyOutput;
+		const Pixmap< uint8_t > dummyOutput;
 		Pixmap< uint8_t > unpackedOutput;
 
 		/* Precompute constants outside the loop. */
@@ -892,7 +895,7 @@ void main()
 		for ( uint32_t i = 0; i < sliceCount; ++i )
 		{
 			const auto depth = static_cast< float >(i) / static_cast< float >(sliceCount - 1);
-			const auto depthZ = d.boundsMin[2] + depth * d.sliceDepthRange;
+			const auto depthZ = d.boundsMin[2] + (depth * d.sliceDepthRange);
 
 			PushConstants pc{};
 			pc.rayOriginBase[0] = baseOrigin[X]; pc.rayOriginBase[1] = baseOrigin[Y]; pc.rayOriginBase[2] = baseOrigin[Z];
@@ -961,7 +964,7 @@ void main()
 
 			static_cast< void >(queue->submit(*d.commandBuffer));
 			static_cast< void >(queue->waitIdle());
-			static_cast< void >(d.commandBuffer->reset());
+			static_cast< void >((*d.commandBuffer).reset());
 
 			/* Readback: bulk memcpy packed bits from staging. */
 			auto * mapped = d.stagingBuffer->mapMemory();
@@ -984,7 +987,7 @@ void main()
 					const auto word = packedData[idx >> 5];
 					const auto bit = idx & 31;
 
-					if ( (word >> bit) & 1 )
+					if ( ((word >> bit) & 1U) != 0U )
 					{
 						pixels[idx] = 255;
 					}

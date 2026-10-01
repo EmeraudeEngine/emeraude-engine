@@ -683,6 +683,37 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the stored value at @p key like @ref get(), refusing a value outside its range.
+			 * @note The sibling of @ref getOrSetDefaultInRange() for an OVERRIDE key (one never registered in the file):
+			 * absent, out of range, a NaN or an infinity, @p fallback is returned — the warning only for a stored value.
+			 * @tparam variable_t An arithmetic type, not bool.
+			 * @param key Slash-delimited path.
+			 * @param fallback Value returned when the key is absent or out of range.
+			 * @param minimum The lowest accepted value.
+			 * @param maximum The highest accepted value.
+			 * @param minimumExclusive True when @p minimum itself is refused. Default false.
+			 * @return variable_t
+			 */
+			template< SettingType variable_t >
+			requires (std::is_arithmetic_v< variable_t > && !std::is_same_v< variable_t, bool >)
+			[[nodiscard]]
+			variable_t
+			getInRange (const std::string & key, const variable_t & fallback, const variable_t & minimum, const variable_t & maximum, bool minimumExclusive = false) const noexcept
+			{
+				const auto value = this->get< variable_t >(key, fallback);
+
+				/* NOTE: every comparison with a NaN is false, and an infinity fails one bound. */
+				if ( (minimumExclusive ? value > minimum : value >= minimum) && value <= maximum )
+				{
+					return value;
+				}
+
+				TraceWarning{ClassId} << "'" << key << "' = " << Settings::printable(value) << " is outside " << ( minimumExclusive ? "(" : "[" ) << Settings::printable(minimum) << ", " << Settings::printable(maximum) << "] ! Using " << Settings::printable(fallback) << ".";
+
+				return fallback;
+			}
+
+			/**
 			 * @brief Returns the stored value at @p key like @ref getOrSetDefault(), refusing a value outside its range.
 			 * @note Ave Robustus (owner ruling 2026-10-01): a value outside [@p minimum, @p maximum] — or
 			 * (@p minimum, @p maximum] with @p minimumExclusive —, a NaN or an infinity, is traced as one warning naming the

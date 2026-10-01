@@ -30,6 +30,7 @@
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstring>
 
 /* Local inclusions. */
@@ -244,14 +245,11 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxDistanceKey, DefaultGraphicsPPContactShadowsMaxDistance);
 		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsNormalBiasKey, DefaultGraphicsPPContactShadowsNormalBias);
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsIntensityKey, DefaultGraphicsPPContactShadowsIntensity);
-		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsMaxBlurRadius);
+		m_parameters.maxBlurRadius = settings.getOrSetDefaultInRange< float >(GraphicsPPContactShadowsMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsMaxBlurRadius, MinGraphicsPPContactShadowsMaxBlurRadius, MaxGraphicsPPContactShadowsMaxBlurRadius);
 		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsPPContactShadowsSSThicknessKey, DefaultGraphicsPPContactShadowsSSThickness);
-		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsPPContactShadowsSSStepCountKey, DefaultGraphicsPPContactShadowsSSStepCount);
+		m_parameters.stepCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPContactShadowsSSStepCountKey, DefaultGraphicsPPContactShadowsSSStepCount, MinGraphicsPPContactShadowsSSStepCount, MaxGraphicsPPContactShadowsSSStepCount);
 
-		if ( m_parameters.stepCount < 1 )
-		{
-			m_parameters.stepCount = 1;
-		}
+		m_parameters.stepCount = std::max(m_parameters.stepCount, 1U);
 
 		/* ⚠️ FULL resolution — see the class note. The ray-traced sibling halves it to amortise
 		 * ray traversal; a depth march does not pay that, and halving would blur away the fine
@@ -414,9 +412,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * storage: columns are elements {0,1,2}, {4,5,6}, {8,9,10}. */
 		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
 		const auto * view = viewMat.data();
-		const auto viewLightX = view[0] * lightDirection.x() + view[4] * lightDirection.y() + view[8] * lightDirection.z();
-		const auto viewLightY = view[1] * lightDirection.x() + view[5] * lightDirection.y() + view[9] * lightDirection.z();
-		const auto viewLightZ = view[2] * lightDirection.x() + view[6] * lightDirection.y() + view[10] * lightDirection.z();
+		const auto viewLightX = (view[0] * lightDirection.x()) + (view[4] * lightDirection.y()) + (view[8] * lightDirection.z());
+		const auto viewLightY = (view[1] * lightDirection.x()) + (view[5] * lightDirection.y()) + (view[9] * lightDirection.z());
+		const auto viewLightZ = (view[2] * lightDirection.x()) + (view[6] * lightDirection.y()) + (view[10] * lightDirection.z());
 
 		marchData.lightParameters = {viewLightX, viewLightY, viewLightZ, m_parameters.maxDistance};
 		marchData.marchParameters = {m_parameters.normalBias, m_parameters.thickness, static_cast< float >(m_parameters.stepCount), 0.0F};
@@ -440,13 +438,13 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	SSContactShadows::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	SSContactShadows::denoiseContribution (const FrameContext & /*context*/) noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "sscs";
 		contribution.source = &m_shadowTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.targetH = &m_blurHTarget;
+		contribution.targetV = &m_blurVTarget;
 		contribution.dynamics = {m_parameters.maxBlurRadius, 0.0F, 0.0F, 0.0F};
 
 		/* The SAME PCSS-lite kernel as the ray-traced sibling: a 9-tap gaussian whose radius
@@ -480,7 +478,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		CombineContribution contribution;
 		contribution.prefix = "sscs";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_blurVTarget});
 		contribution.needsMaterialProperties = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 

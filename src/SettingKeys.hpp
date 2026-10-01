@@ -495,10 +495,16 @@ namespace EmEn
 			/* Probes per axis of the camera-centred volume (Y is up). 16 x 8 x 16 = 2048 probes. */
 			constexpr auto GraphicsRayTracingIrradianceProbesCountXKey{"Core/Graphics/RayTracing/IrradianceProbes/ProbeCountX"};
 			constexpr auto DefaultGraphicsRayTracingIrradianceProbesCountX{16U};
+			constexpr auto MinGraphicsRayTracingIrradianceProbesCountX{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsRayTracingIrradianceProbesCountX{64U};
 			constexpr auto GraphicsRayTracingIrradianceProbesCountYKey{"Core/Graphics/RayTracing/IrradianceProbes/ProbeCountY"};
 			constexpr auto DefaultGraphicsRayTracingIrradianceProbesCountY{8U};
+			constexpr auto MinGraphicsRayTracingIrradianceProbesCountY{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsRayTracingIrradianceProbesCountY{32U};
 			constexpr auto GraphicsRayTracingIrradianceProbesCountZKey{"Core/Graphics/RayTracing/IrradianceProbes/ProbeCountZ"};
 			constexpr auto DefaultGraphicsRayTracingIrradianceProbesCountZ{16U};
+			constexpr auto MinGraphicsRayTracingIrradianceProbesCountZ{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsRayTracingIrradianceProbesCountZ{64U};
 			/* Distance between two probes, in metres: the volume spans (count - 1) x spacing per axis
 			 * around the camera (24 x 12 x 24 m by default). */
 			constexpr auto GraphicsRayTracingIrradianceProbesSpacingKey{"Core/Graphics/RayTracing/IrradianceProbes/ProbeSpacing"};
@@ -515,6 +521,8 @@ namespace EmEn
 			 * 2048 probes x 128 rays = 0.26 M rays per frame, against ~9 M for RTGI at half resolution. */
 			constexpr auto GraphicsRayTracingIrradianceProbesRaysPerProbeKey{"Core/Graphics/RayTracing/IrradianceProbes/RaysPerProbe"};
 			constexpr auto DefaultGraphicsRayTracingIrradianceProbesRaysPerProbe{128U};
+			constexpr auto MinGraphicsRayTracingIrradianceProbesRaysPerProbe{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsRayTracingIrradianceProbesRaysPerProbe{1024U};
 			/* Temporal hysteresis of the atlases: the weight of the PREVIOUS frame. 0.97 converges in
 			 * about 100 frames and hides the per-frame ray rotation; lower reacts faster and shimmers. */
 			constexpr auto GraphicsRayTracingIrradianceProbesHysteresisKey{"Core/Graphics/RayTracing/IrradianceProbes/Hysteresis"};
@@ -595,11 +603,15 @@ namespace EmEn
 			/* 1/N accumulation cap: the steady-state weight of the current frame is 1/N. */
 			constexpr auto GraphicsPPReflectionsRTTemporalMaxAccumulationKey{"Core/Graphics/PostProcessing/Reflections/RayTracing/Temporal/MaxAccumulation"};
 			constexpr auto DefaultGraphicsPPReflectionsRTTemporalMaxAccumulation{32U};
+			constexpr auto MinGraphicsPPReflectionsRTTemporalMaxAccumulation{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPReflectionsRTTemporalMaxAccumulation{1024U};
 
 			/* Ray Tracing > Ambient Occlusion */
 			/* Samples per pixel for ray-traced ambient occlusion. */
 			constexpr auto GraphicsPPAmbientOcclusionRTSampleCountKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/SampleCount"};
 			constexpr auto DefaultGraphicsPPAmbientOcclusionRTSampleCount{8U};
+			constexpr auto MinGraphicsPPAmbientOcclusionRTSampleCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPAmbientOcclusionRTSampleCount{64U};
 			/* Compute ambient occlusion at half resolution (pixel doubling) to save performance. */
 			constexpr auto GraphicsPPAmbientOcclusionRTPixelDoublingKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/PixelDoubling"};
 			constexpr auto DefaultGraphicsPPAmbientOcclusionRTPixelDoubling{true};
@@ -612,6 +624,8 @@ namespace EmEn
 			/* Bilateral denoising blur radius for AO, in pixels. */
 			constexpr auto GraphicsPPAmbientOcclusionRTBlurRadiusKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/BlurRadius"};
 			constexpr auto DefaultGraphicsPPAmbientOcclusionRTBlurRadius{4U};
+			constexpr auto MinGraphicsPPAmbientOcclusionRTBlurRadius{0U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPAmbientOcclusionRTBlurRadius{16U};
 			/* Normal edge-stopping sigma for the AO bilateral blur. */
 			constexpr auto GraphicsPPAmbientOcclusionRTNormalSigmaKey{"Core/Graphics/PostProcessing/AmbientOcclusion/RayTracing/NormalSigma"};
 			constexpr auto DefaultGraphicsPPAmbientOcclusionRTNormalSigma{0.5F};
@@ -740,6 +754,8 @@ namespace EmEn
 			 * visually equivalent to 16 after the bilateral blur and ~16 ms/frame cheaper. */
 			constexpr auto GraphicsPPIndirectDiffuseSampleCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/SampleCount"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseSampleCount{8U};
+			constexpr auto MinGraphicsPPIndirectDiffuseSampleCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseSampleCount{64U};
 			/* Maximum bounce range, in world units (a traced ray's length, a march's total distance).
 			 * Both lanes fade a bounce over the LAST FIFTH of this range only. It was 5 m in the
 			 * screen-space lane until Sep 2026, against 8 here. */
@@ -807,6 +823,8 @@ namespace EmEn
 			 * shared bilateral blur H/V (the BlurRadius key is inert since then). */
 			constexpr auto GraphicsPPIndirectDiffuseDenoiserIterationsKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/Iterations"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserIterations{4U};
+			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserIterations{0U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserIterations{8U};
 			/* Luminance edge-stopping sigma, normalised by the LOCAL standard deviation
 			 * (SVGF auto-dosage: noisy → smooth hard, converged → preserve detail).
 			 * Larger = closer to a plain depth/normal bilateral (guidance off). */
@@ -824,6 +842,8 @@ namespace EmEn
 			 * smoother but slower to react to lighting changes. */
 			constexpr auto GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/MaxAccumulation"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation{64U};
+			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserMaxAccumulation{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserMaxAccumulation{1024U};
 			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age
@@ -876,6 +896,8 @@ namespace EmEn
 			/* Upper bound of the distance-scaled penumbra blur, in pixels. */
 			constexpr auto GraphicsPPContactShadowsMaxBlurRadiusKey{"Core/Graphics/PostProcessing/ContactShadows/MaxBlurRadius"};
 			constexpr auto DefaultGraphicsPPContactShadowsMaxBlurRadius{10.0F};
+			constexpr auto MinGraphicsPPContactShadowsMaxBlurRadius{0.0F}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPContactShadowsMaxBlurRadius{64.0F};
 			/* ⚠️ THE knob of the screen-space lane. The depth buffer is a heightfield with no
 			 * thickness, so an occluder is only recognised when the ray passes BEHIND a sample by
 			 * less than this, in metres. Too thin and light leaks through thin geometry; too thick
@@ -887,6 +909,8 @@ namespace EmEn
 			 * raising the distance without raising this thins the sampling. */
 			constexpr auto GraphicsPPContactShadowsSSStepCountKey{"Core/Graphics/PostProcessing/ContactShadows/ScreenSpace/StepCount"};
 			constexpr auto DefaultGraphicsPPContactShadowsSSStepCount{16U};
+			constexpr auto MinGraphicsPPContactShadowsSSStepCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPContactShadowsSSStepCount{128U};
 
 			constexpr auto GraphicsPPDepthOfFieldEnabledKey{"Core/Graphics/PostProcessing/DepthOfField/Enabled"};
 			constexpr auto DefaultGraphicsPPDepthOfFieldEnabled{true};
@@ -950,6 +974,8 @@ namespace EmEn
 			constexpr auto DefaultGraphicsPPVolumetricLightExposure{0.25F};
 			constexpr auto GraphicsPPVolumetricLightSampleCountKey{"Core/Graphics/PostProcessing/VolumetricLight/SampleCount"};
 			constexpr auto DefaultGraphicsPPVolumetricLightSampleCount{64U};
+			constexpr auto MinGraphicsPPVolumetricLightSampleCount{1U}; /* Inclusive: outside the range the effect keeps its current value (an override key), with a warning. */
+			constexpr auto MaxGraphicsPPVolumetricLightSampleCount{256U};
 			/* EMA weight of the occlusion mask: 1 = no accumulation, 0.2 ~= 8 frames. */
 			constexpr auto GraphicsPPVolumetricLightTemporalAlphaKey{"Core/Graphics/PostProcessing/VolumetricLight/TemporalAlpha"};
 			constexpr auto DefaultGraphicsPPVolumetricLightTemporalAlpha{0.2F};
@@ -1024,6 +1050,8 @@ namespace EmEn
 			/* Samples per pixel for screen-space ambient occlusion. */
 			constexpr auto GraphicsPPAmbientOcclusionSSSampleCountKey{"Core/Graphics/PostProcessing/AmbientOcclusion/ScreenSpace/SampleCount"};
 			constexpr auto DefaultGraphicsPPAmbientOcclusionSSSampleCount{32U};
+			constexpr auto MinGraphicsPPAmbientOcclusionSSSampleCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPAmbientOcclusionSSSampleCount{128U};
 
 			/* Screen Space > Global Illumination — the screen-space lane's OWN knobs: the two that
 			 * describe its depth-buffer march and have no traced equivalent. Range, intensity,
@@ -1037,6 +1065,8 @@ namespace EmEn
 			 * shared range without raising this thins the sampling. */
 			constexpr auto GraphicsPPIndirectDiffuseSSStepCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/StepCount"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseSSStepCount{16U};
+			constexpr auto MinGraphicsPPIndirectDiffuseSSStepCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseSSStepCount{128U};
 
 			/* Screen Space > Global Illumination > SKY VISIBILITY (GTAO horizon search, Sep 2026).
 			 * ⚠️ THE reason the two lanes disagreed in an enclosed space: RTGI's rays measure the
@@ -1065,10 +1095,14 @@ namespace EmEn
 			 * search walks BOTH of its sides. XeGTAO calls 3 "high quality". */
 			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilitySliceCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilitySliceCount"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount{3U};
+			constexpr auto MinGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount{16U};
 			/* Depth samples per slice SIDE. The step distribution is quadratic, so the near field
 			 * keeps its detail while the last steps reach the radius. */
 			constexpr auto GraphicsPPIndirectDiffuseSSSkyVisibilityStepCountKey{"Core/Graphics/PostProcessing/IndirectDiffuse/ScreenSpace/SkyVisibilityStepCount"};
 			constexpr auto DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount{6U};
+			constexpr auto MinGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount{64U};
 			/* Fraction of the radius over which a far occluder fades out, in [0;1].
 			 * ⚠️ Low ON PURPOSE, and NOT XeGTAO's 0.615: that value keeps an ARTISTIC ambient
 			 * occlusion local, while a roof must occlude the sky at full strength however far it
@@ -1087,6 +1121,8 @@ namespace EmEn
 			 * (a polished surface keeps a mirror-sharp reflection). */
 			constexpr auto GraphicsPPReflectionsSSBlurRadiusKey{"Core/Graphics/PostProcessing/Reflections/ScreenSpace/BlurRadius"};
 			constexpr auto DefaultGraphicsPPReflectionsSSBlurRadius{2U};
+			constexpr auto MinGraphicsPPReflectionsSSBlurRadius{0U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPReflectionsSSBlurRadius{16U};
 			/* Depth edge-stopping sigma for the reflection bilateral blur. */
 			constexpr auto GraphicsPPReflectionsSSDepthSigmaKey{"Core/Graphics/PostProcessing/Reflections/ScreenSpace/DepthSigma"};
 			constexpr auto DefaultGraphicsPPReflectionsSSDepthSigma{0.5F};

@@ -41,6 +41,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Graphics` 7d (`Renderer` + console, `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 91, all ON PURPOSE (below) — 28 SIMD intrinsics, 26 reinterpret-cast, 21 constant-array-index, 5 convert-to-static, 4 owning-memory, 3 union access, 2 qualified-auto, 1 each use-after-move (false positive), use-enum-class. Before: 226. | Triad sub-section 7d |
 | `src/Graphics` 7e (`RenderTarget/`, `RenderableInstance/`, scene / intermediate / selection targets, view matrices, shared UBOs, bindless table, vertex formats, skinning, path overlay) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 109, all ON PURPOSE (below) — 80 constant-array-index, 16 reinterpret-cast, 7 qualified-auto, 2 use-enum-class, 2 non-private members, 1 each convert-to-static, unused parameter. Before: 205. | Triad sub-section 7e |
 | `src/Graphics` 7f (post-process: `PostProcessor`, `PostProcessStack`, the passes, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared / Resolve / Camera / Style) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 145, all ON PURPOSE (below) — 129 constant-array-index, 9 return-const-ref-from-parameter, 4 inefficient string concatenation, 2 macro-usage, 1 use-enum-class. Before: 192. | Triad sub-section 7f |
+| `src/Graphics` 7g (lighting and atmosphere: `Effects/` Lighting, Atmosphere, `Compute/`, the probe volume, LTC, dummies, cloud shadow map, ocean waves, imposter atlas) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 69, all ON PURPOSE (below) — 47 constant-array-index, 10 return-const-ref-from-parameter, 7 qualified-auto, 2 static-cast-downcast, 2 integer-division, 1 cert-msc51. Before: 184. | Triad sub-section 7g |
 
 ## Findings kept ON PURPOSE
 
@@ -260,4 +261,16 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **cppcoreguidelines-macro-usage ×2** — `EMEN_CLOUD_VOLUME_GLSL`, `GIDENOISER_REPROJECTION_GLSL`: GLSL text spliced
   by adjacent-literal concatenation at compile time, which a `constexpr` pointer cannot do.
 - **use-enum-class ×1** — `OverflowCensus::CounterIndex` (indices into the counter array, now on `uint8_t`).
+
+### `src/Graphics` 7g — lighting and atmosphere (2026-10-01)
+
+- **pro-bounds-constant-array-index ×47** — per-frame sets and ping-pong pairs, the probe grid axes (`axis < 3`), the
+  cascade matrices, the XRay corners.
+- **bugprone-return-const-ref-from-parameter ×10** — the chain's pass-through contract (see 7f).
+- **readability-qualified-auto ×7** — Vulkan handles (`ProbeConvolver`, `OceanWaves`), as in 7c / 7e.
+- **pro-type-static-cast-downcast ×2** — `VolumetricClouds` / `VolumetricScattering`: the shadow map cast right after
+  its type check (RTTI avoided).
+- **bugprone-integer-division ×2** — `IrradianceProbeVolume`: `counts / 2` centres the grid on a whole cell.
+- **cert-msc51-cpp ×1** — `IrradianceProbeVolume::m_random` seeded with a constant: the probe ray rotations must be
+  reproducible run to run (A/B measurements).
 

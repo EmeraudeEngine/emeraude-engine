@@ -771,11 +771,11 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * (owner decision): screen-space effects run full-res — they are the cheap tier of
 		 * the reflection ladder, definition is their selling point. */
 		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPReflectionsSSPixelDoublingKey, DefaultGraphicsPPReflectionsSSPixelDoubling);
-		const auto halfW = pixelDoubling ? (width > 1 ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? (height > 1 ? height / 2 : 1U) : height;
+		const auto halfW = traceSize(width, pixelDoubling);
+		const auto halfH = traceSize(height, pixelDoubling);
 
 		/* Bilateral blur quality knobs. */
-		m_blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsPPReflectionsSSBlurRadiusKey, DefaultGraphicsPPReflectionsSSBlurRadius);
+		m_blurRadius = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPReflectionsSSBlurRadiusKey, DefaultGraphicsPPReflectionsSSBlurRadius, MinGraphicsPPReflectionsSSBlurRadius, MaxGraphicsPPReflectionsSSBlurRadius);
 		m_depthSigma = settings.getOrSetDefault< float >(GraphicsPPReflectionsSSDepthSigmaKey, DefaultGraphicsPPReflectionsSSDepthSigma);
 		m_normalSigma = settings.getOrSetDefault< float >(GraphicsPPReflectionsSSNormalSigmaKey, DefaultGraphicsPPReflectionsSSNormalSigma);
 		m_debugNonFinite = settings.getOrSetDefault< bool >(GraphicsPPDebugNonFiniteKey, DefaultGraphicsPPDebugNonFinite);
@@ -1404,7 +1404,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_colorPyramidFullView.reset();
 		m_colorPyramidMipViews.clear();
 		m_colorPyramidImage.reset();
-		m_hiZDescriptorPool.reset();
+		m_hiZDescriptorPool = nullptr;
 		m_hiZCopyPipeline.reset();
 		m_hiZReducePipeline.reset();
 		m_hiZPipelineLayout.reset();
@@ -1701,13 +1701,13 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	SSR::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	SSR::denoiseContribution (const FrameContext & /*context*/) noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "ssr";
 		contribution.source = &m_resolveTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.targetH = &m_blurHTarget;
+		contribution.targetV = &m_blurVTarget;
 		contribution.needsDepth = true;
 		contribution.needsNormals = true;
 		contribution.dynamics = Base::Math::Vector< 4, float >{m_depthSigma, m_normalSigma, static_cast< float >(m_blurRadius), 0.0F};
@@ -1758,7 +1758,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		CombineContribution contribution;
 		contribution.prefix = "ssr";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_blurVTarget});
 		contribution.needsMaterialProperties = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 

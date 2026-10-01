@@ -733,20 +733,20 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
 		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseRTPixelDoublingKey, DefaultGraphicsPPIndirectDiffuseRTPixelDoubling);
-		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+		const auto halfW = traceSize(width, pixelDoubling);
+		const auto halfH = traceSize(height, pixelDoubling);
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
 		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseMaxDistance);
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseIntensityKey, DefaultGraphicsPPIndirectDiffuseIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseRTBiasKey, DefaultGraphicsPPIndirectDiffuseRTBias);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSampleCountKey, DefaultGraphicsPPIndirectDiffuseSampleCount);
+		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseSampleCountKey, DefaultGraphicsPPIndirectDiffuseSampleCount, MinGraphicsPPIndirectDiffuseSampleCount, MaxGraphicsPPIndirectDiffuseSampleCount);
 		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseDepthSigma);
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseNormalSigma);
 		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserLuminanceSigma);
-		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations);
-		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
+		m_parameters.atrousIterations = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations, MinGraphicsPPIndirectDiffuseDenoiserIterations, MaxGraphicsPPIndirectDiffuseDenoiserIterations);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MinGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MaxGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
 		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseTemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseTemporalDepthTolerance);
@@ -1062,7 +1062,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		CombineContribution contribution;
 		contribution.prefix = "rtgi";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", m_combineSource});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = m_combineSource});
 		contribution.needsMaterialProperties = true;
 		contribution.needsAlbedo = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});

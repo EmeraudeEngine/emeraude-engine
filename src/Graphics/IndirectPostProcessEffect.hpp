@@ -840,13 +840,14 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns this frame's denoise contribution.
 			 * @note Only meaningful when usesSharedDenoise() is true, after recordPreDenoisePasses().
+			 * @note Non-const: the contribution hands the denoise pass this effect's H / V targets to write.
 			 * @param context The per-frame chain context.
 			 * @return DenoiseContribution
 			 */
 			[[nodiscard]]
 			virtual
 			DenoiseContribution
-			denoiseContribution (const FrameContext & /*context*/) const noexcept
+			denoiseContribution (const FrameContext & /*context*/) noexcept
 			{
 				return {};
 			}
@@ -865,6 +866,25 @@ namespace EmEn::Graphics
 			}
 
 		protected:
+
+			/**
+			 * @brief Returns one side of a trace target: the full size, or half of it (at least 1) under pixel doubling.
+			 * @param fullSize The full-resolution size, in pixels.
+			 * @param pixelDoubling Whether the effect traces at half resolution.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			static
+			uint32_t
+			traceSize (uint32_t fullSize, bool pixelDoubling) noexcept
+			{
+				if ( !pixelDoubling )
+				{
+					return fullSize;
+				}
+
+				return fullSize > 1 ? fullSize / 2 : 1U;
+			}
 
 			/**
 			 * @brief Constructs an indirect post-process effect.

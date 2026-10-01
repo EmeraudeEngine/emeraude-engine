@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -93,12 +94,12 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			struct EMEN_API TracePushConstants
 			{
-				float invRelativeViewProj[16];
-				float invViewCol0[3];
+				std::array< float, 16 > invRelativeViewProj;
+				std::array< float, 3 > invViewCol0;
 				float viewPosX;
-				float invViewCol1[3];
+				std::array< float, 3 > invViewCol1;
 				float viewPosY;
-				float invViewCol2[3];
+				std::array< float, 3 > invViewCol2;
 				float viewPosZ;
 				float maxDistance;
 				float intensity;
@@ -202,7 +203,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
 			[[nodiscard]]
-			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
+			DenoiseContribution denoiseContribution (const FrameContext & context) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]

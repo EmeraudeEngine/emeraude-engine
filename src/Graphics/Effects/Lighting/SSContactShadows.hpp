@@ -185,7 +185,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::denoiseContribution() */
 			[[nodiscard]]
-			DenoiseContribution denoiseContribution (const FrameContext & context) const noexcept override;
+			DenoiseContribution denoiseContribution (const FrameContext & context) noexcept override;
 
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::combineContribution() */
 			[[nodiscard]]

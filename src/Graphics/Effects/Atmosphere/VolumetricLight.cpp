@@ -45,7 +45,6 @@
 #include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"VolumetricLightEffect"};
-/* NOLINTEND(cert-err58-cpp) */
 
 namespace
 {
@@ -53,7 +52,7 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
-	static constexpr auto OcclusionFragmentShader = R"GLSL(
+	constexpr auto OcclusionFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -124,7 +123,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto RadialBlurFragmentShader = R"GLSL(
+	constexpr auto RadialBlurFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -230,7 +229,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		m_parameters.density = settings.get< float >(GraphicsPPVolumetricLightDensityKey, m_parameters.density);
 		m_parameters.decay = settings.get< float >(GraphicsPPVolumetricLightDecayKey, m_parameters.decay);
 		m_parameters.exposure = settings.get< float >(GraphicsPPVolumetricLightExposureKey, m_parameters.exposure);
-		m_parameters.numSamples = settings.get< uint32_t >(GraphicsPPVolumetricLightSampleCountKey, m_parameters.numSamples);
+		m_parameters.numSamples = settings.getInRange< uint32_t >(GraphicsPPVolumetricLightSampleCountKey, m_parameters.numSamples, MinGraphicsPPVolumetricLightSampleCount, MaxGraphicsPPVolumetricLightSampleCount);
 		m_parameters.temporalAlpha = settings.get< float >(GraphicsPPVolumetricLightTemporalAlphaKey, m_parameters.temporalAlpha);
 
 		constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -345,12 +344,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		m_occlusionPerFrame = this->createPerFrameDescriptorSets(occlusionInputLayout, ClassId, "VL_Occlusion_DescSet");
 		m_radialPerFrame = this->createPerFrameDescriptorSets(singleInputLayout, ClassId, "VL_Radial_DescSet");
 
-		if ( m_occlusionPerFrame.empty() || m_radialPerFrame.empty() )
-		{
-			return false;
-		}
-
-		return true;
+		return !(m_occlusionPerFrame.empty() || m_radialPerFrame.empty());
 	}
 
 	void
@@ -406,9 +400,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto lightIntensity = m_lightIntensityOverride.value_or(mainLight->intensity());
 
 		/* Project a far point along the light source direction. */
-		const auto farPointX = camPos[0] + lightSource.x() * 10000.0F;
-		const auto farPointY = camPos[1] + lightSource.y() * 10000.0F;
-		const auto farPointZ = camPos[2] + lightSource.z() * 10000.0F;
+		const auto farPointX = camPos[0] + (lightSource.x() * 10000.0F);
+		const auto farPointY = camPos[1] + (lightSource.y() * 10000.0F);
+		const auto farPointZ = camPos[2] + (lightSource.z() * 10000.0F);
 
 		/* Transform to view space (Matrix<4> * Vector<4>). */
 		const Math::Vector< 4, float > worldPos{farPointX, farPointY, farPointZ, 1.0F};
@@ -421,15 +415,15 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		if ( clipPos[3] > 0.001F )
 		{
-			screenX = (clipPos[0] / clipPos[3]) * 0.5F + 0.5F;
-			screenY = (clipPos[1] / clipPos[3]) * 0.5F + 0.5F;
+			screenX = ((clipPos[0] / clipPos[3]) * 0.5F) + 0.5F;
+			screenY = ((clipPos[1] / clipPos[3]) * 0.5F) + 0.5F;
 		}
 
 		/* Fade based on distance from screen center. */
 		const auto dx = screenX - 0.5F;
 		const auto dy = screenY - 0.5F;
-		const auto distFromCenter = std::sqrt(dx * dx + dy * dy);
-		lightOnScreen *= std::max(0.0F, std::min(1.0F, 1.0F - distFromCenter * 0.5F));
+		const auto distFromCenter = std::sqrt((dx * dx) + (dy * dy));
+		lightOnScreen *= std::max(0.0F, std::min(1.0F, 1.0F - (distFromCenter * 0.5F)));
 
 		/* 2. Update per-frame descriptors: depth + previous mask (ping-pong) for the
 		 * occlusion pass, this frame's mask for the radial pass. */
@@ -511,7 +505,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 	{
 		CombineContribution contribution;
 		contribution.prefix = "vlight";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_radialTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_radialTarget});
 
 		/* Same math as the retired VL_Composite_FS pass: pure additive blend of the
 		 * radially blurred light shafts (the lightOnScreen fade is already baked into

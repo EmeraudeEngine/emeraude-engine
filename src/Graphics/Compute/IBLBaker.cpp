@@ -949,7 +949,7 @@ void main ()
 		const auto durationUS = std::chrono::duration_cast< std::chrono::microseconds >(std::chrono::steady_clock::now() - start).count();
 #endif
 
-		static_cast< void >(m_commandBuffer->reset());
+		static_cast< void >((*m_commandBuffer).reset());
 
 		irradiance.image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		prefiltered.image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

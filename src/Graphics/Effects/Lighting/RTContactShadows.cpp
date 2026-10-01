@@ -45,7 +45,6 @@
 #include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"RTContactShadowsEffect"};
-/* NOLINTEND(cert-err58-cpp) */
 
 namespace
 {
@@ -234,14 +233,14 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxDistanceKey, DefaultGraphicsPPContactShadowsMaxDistance);
 		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsPPContactShadowsNormalBiasKey, DefaultGraphicsPPContactShadowsNormalBias);
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPContactShadowsIntensityKey, DefaultGraphicsPPContactShadowsIntensity);
-		m_parameters.maxBlurRadius = settings.getOrSetDefault< float >(GraphicsPPContactShadowsMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsMaxBlurRadius);
+		m_parameters.maxBlurRadius = settings.getOrSetDefaultInRange< float >(GraphicsPPContactShadowsMaxBlurRadiusKey, DefaultGraphicsPPContactShadowsMaxBlurRadius, MinGraphicsPPContactShadowsMaxBlurRadius, MaxGraphicsPPContactShadowsMaxBlurRadius);
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality.
 		 * SAME key and rule as RTAO — the shared denoise pass blurs the whole group in
 		 * one multi-target pass, so every member's blur targets must share one extent. */
 		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPAmbientOcclusionRTPixelDoublingKey, DefaultGraphicsPPAmbientOcclusionRTPixelDoubling);
-		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+		const auto halfW = traceSize(width, pixelDoubling);
+		const auto halfH = traceSize(height, pixelDoubling);
 
 		/* Create shadow mask target (half-res, RT gives clean results — the combine
 		 * upsamples bilinearly back to full resolution). */
@@ -498,13 +497,13 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	RTContactShadows::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	RTContactShadows::denoiseContribution (const FrameContext & /*context*/) noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "cshdw";
 		contribution.source = &m_shadowTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.targetH = &m_blurHTarget;
+		contribution.targetV = &m_blurVTarget;
 		contribution.dynamics = {m_parameters.maxBlurRadius, 0.0F, 0.0F, 0.0F};
 
 		/* Same PCSS-lite kernel as the retired CS_Blur_FS pass: 9-tap gaussian whose
@@ -538,7 +537,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		CombineContribution contribution;
 		contribution.prefix = "cshdw";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_blurVTarget});
 		contribution.needsMaterialProperties = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 

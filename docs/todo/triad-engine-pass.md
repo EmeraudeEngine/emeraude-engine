@@ -645,8 +645,8 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 | 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ✅ pushed base `dce53a7`, engine `b1541d1c`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ✅ pushed (the engine 7d commit); peers pending |
 | 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ✅ pushed engine `11e574d8`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ✅ pushed (the engine 7f commit); peers pending |
-| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ⬜ |
+| 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ✅ pushed engine `cfcb91b7`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ✅ pushed (the engine 7g commit); peers pending |
 
 Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2, done); 7c (done) `BasicGroundResource` passes
 `DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d (done) the
@@ -930,5 +930,47 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   counters), `getStatus` complete, the frame against the pre-fix-it run: mean |diff| 0.05 level, 738 of 4.67 M pixels
   over 24 (TAA noise); MCP 1707/0. citadel ScreenSpace ↔ RayTracing lane switches (the GI denoiser of SSGI / RTGI /
   RTR), console 4466/0, 0 VUID, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 7f commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `cfcb91b7`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): sponza 12 warning lines (10 keys, ViewDistance ×3, the RushMaker pair now
+    tagged `SettingsService`), terrain the 2 Clouds lines plus TAA ×2 and RushMaker ×2 (both enabled in that copy too);
+    both render, no hang; `testOverflowCensus()` PASS, `getStatus` complete (ScreenSpace only); citadel RayTracing
+    refused as expected on MoltenVK, MCP 1707/0, console 4445/0; 0 VUID, 0 UNASSIGNED everywhere.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): the same 12 + 6 warning
+    lines on both GPUs (the ViewDistance one now prints no "m": the generic Settings wording), renders, no hang; the
+    census self-test PASS on both; the AMD iGPU HAS the ray-traced lane (RTGI / RTR / RTAO resident); citadel lane
+    switches on both, MCP 1707/0; console 4454/2 (NVIDIA) and 4455/1 (AMD): only the known flaky RST checks (item
+    `console-last-refusal-lost-on-windows`); NVIDIA only the known 12325.
+
+### 7g — lighting and atmosphere (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (23 TUs, the 7g files and their headers): **184**: 45 constant-array-index, 23
+  parentheses, 17 C arrays, 17 designated initializers, 12 nested conditionals, 12 const_cast, 10
+  return-const-ref-from-parameter, 7 each of smart-pointer resets and qualified-auto, 6 static in anonymous namespaces,
+  5 redundant boolean literals, 4 implicit-widening, 3 unmatched `NOLINTEND`, and singles.
+- [x] (2) Review (trust boundary: the ~70 numeric settings the lighting effects read). Findings:
+  - L1 the counts and sizes (samples, steps, iterations, accumulations, blur radii, the probe grid and its rays) were
+    unbounded: a huge one hangs the GPU or allocates without limit (owner question).
+  - L2 `denoiseContribution() const` handed the denoise pass MUTABLE pointers to the effect's own targets: 12
+    `const_cast` (the six effects).
+  - L3 the pixel-doubling extent `pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width` copied ten times (RTAO,
+    RTContactShadows, RTGI, RTR, SSR).
+  - Checked, sound: the ten return-const-ref are the chain's pass-through contract (7f); the probe volume's constant
+    seed is its reproducible rotation sequence; its two integer divisions centre the grid on whole cells.
+- [x] (3) Mechanical: fix-its with `--format-style=none` (parentheses, designated initializers — spacing
+  normalized —, smart-pointer resets, boolean returns, a range-for, `std::max`, an explicit bool test, `static` dropped
+  in anonymous namespaces); the three orphan `NOLINTEND` removed; L2 the hook made non-const (the caller holds non-const
+  effects) and the const_casts removed; L3 one `IndirectPostProcessEffect::traceSize()`; the push-constant / UBO / GPU
+  C arrays → `std::array` (same layout, the size `static_assert`s hold), the XRay corner ternaries → a corner table, the
+  descriptor writes a `std::array`; 64-bit grid / cascade offsets; `sqrt1` / `sqrt2` renamed (confusable with
+  `sqrtl`); `std::numbers::sqrt3_v`; two `const` locals; copy / move deleted on `IrradianceProbeVolume`.
+- [x] (3b) Owner ruling (2026-10-01), as recommended, APPLIED: L1 the eighteen keys (22 read sites) bounded through
+  `getOrSetDefaultInRange()` with `Min…` / `Max…` constants; `VolumetricLight/SampleCount` through the new
+  `Settings::getInRange()` sibling (an override key: the demo's value is kept). Docs: caution-points § Settings trust
+  boundary, `09-available-effects.md`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 122 TUs 0, `-Wfloat-conversion` 0;
+  clang-tidy 184 → 69 (on purpose, ledger). The eighteen keys out of range: citadel RayTracing lane → the eleven RT /
+  shared / probe warnings, ScreenSpace lane → the ten SS / shared ones, light-and-shadow-debug → "VolumetricLight/
+  SampleCount = 100000 … Using 64" (the demo's value); 0 VUID. Regression: geometry-generator XRay (option 2: 1000
+  slices, 8.8 ms each, 0 VUID), water-world (ocean waves), terrain (clouds), citadel MCP 1707/0, console 4466/0, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 7g commit); peers asked.
 

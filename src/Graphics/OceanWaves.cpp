@@ -662,7 +662,7 @@ void main ()
 	OceanWaves::destroy () noexcept
 	{
 		m_descriptorSet.reset();
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 		m_resolvePipeline.reset();
 		m_fftPipeline.reset();
 		m_evolvePipeline.reset();
@@ -747,8 +747,8 @@ void main ()
 
 		{
 			VkBufferImageCopy region{};
-			region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, CascadeCount};
-			region.imageExtent = {Resolution, Resolution, 1};
+			region.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = CascadeCount};
+			region.imageExtent = {.width = Resolution, .height = Resolution, .depth = 1};
 
 			vkCmdCopyBufferToImage(handle, staging->handle(), m_spectrumImage->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -850,8 +850,8 @@ void main ()
 			vkCmdPipelineBarrier(handle, sourceStages, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &before, 0, nullptr, 0, nullptr);
 
 			VkImageCopy region{};
-			region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, CascadeCount};
-			region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, CascadeCount};
+			region.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = CascadeCount};
+			region.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = CascadeCount};
 			region.extent = CascadeExtent;
 
 			vkCmdCopyImage(handle, m_displacementImage->handle(), VK_IMAGE_LAYOUT_GENERAL, m_previousDisplacementImage->handle(), VK_IMAGE_LAYOUT_GENERAL, 1, &region);
@@ -943,8 +943,8 @@ void main ()
 		}
 
 		VkBufferImageCopy region{};
-		region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, CascadeCount};
-		region.imageExtent = {Resolution, Resolution, 1};
+		region.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = CascadeCount};
+		region.imageExtent = {.width = Resolution, .height = Resolution, .depth = 1};
 
 		vkCmdCopyImageToBuffer(commandBuffer->handle(), m_displacementImage->handle(), VK_IMAGE_LAYOUT_GENERAL, staging->handle(), 1, &region);
 

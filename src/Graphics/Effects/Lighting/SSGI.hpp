@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -153,11 +154,11 @@ namespace EmEn::Graphics::Effects::Lighting
 			struct EMEN_API HorizonPushConstants
 			{
 				/* xyz = inverse view rotation column 0, w = search radius in world units. */
-				float invViewCol0[4];
+				std::array< float, 4 > invViewCol0;
 				/* xyz = inverse view rotation column 1, w = falloff range, as a fraction of the radius. */
-				float invViewCol1[4];
+				std::array< float, 4 > invViewCol1;
 				/* xyz = inverse view rotation column 2, w = animated-noise frame index (< 0 = frozen). */
-				float invViewCol2[4];
+				std::array< float, 4 > invViewCol2;
 				float nearPlane;
 				float farPlane;
 				float tanHalfFovY;

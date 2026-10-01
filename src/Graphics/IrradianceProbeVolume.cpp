@@ -37,6 +37,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <numbers>
 #include <string>
 
 /* Local inclusions. */
@@ -588,12 +589,12 @@ namespace EmEn::Graphics
 		auto & settings = renderer.primaryServices().settings();
 
 		m_parameters.enabled = settings.getOrSetDefault< bool >(GraphicsRayTracingIrradianceProbesEnabledKey, DefaultGraphicsRayTracingIrradianceProbesEnabled);
-		m_parameters.probeCountX = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingIrradianceProbesCountXKey, DefaultGraphicsRayTracingIrradianceProbesCountX);
-		m_parameters.probeCountY = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingIrradianceProbesCountYKey, DefaultGraphicsRayTracingIrradianceProbesCountY);
-		m_parameters.probeCountZ = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingIrradianceProbesCountZKey, DefaultGraphicsRayTracingIrradianceProbesCountZ);
+		m_parameters.probeCountX = settings.getOrSetDefaultInRange< uint32_t >(GraphicsRayTracingIrradianceProbesCountXKey, DefaultGraphicsRayTracingIrradianceProbesCountX, MinGraphicsRayTracingIrradianceProbesCountX, MaxGraphicsRayTracingIrradianceProbesCountX);
+		m_parameters.probeCountY = settings.getOrSetDefaultInRange< uint32_t >(GraphicsRayTracingIrradianceProbesCountYKey, DefaultGraphicsRayTracingIrradianceProbesCountY, MinGraphicsRayTracingIrradianceProbesCountY, MaxGraphicsRayTracingIrradianceProbesCountY);
+		m_parameters.probeCountZ = settings.getOrSetDefaultInRange< uint32_t >(GraphicsRayTracingIrradianceProbesCountZKey, DefaultGraphicsRayTracingIrradianceProbesCountZ, MinGraphicsRayTracingIrradianceProbesCountZ, MaxGraphicsRayTracingIrradianceProbesCountZ);
 		m_parameters.probeSpacing = settings.getOrSetDefault< float >(GraphicsRayTracingIrradianceProbesSpacingKey, DefaultGraphicsRayTracingIrradianceProbesSpacing);
 		m_parameters.cameraHeightFraction = std::clamp(settings.getOrSetDefault< float >(GraphicsRayTracingIrradianceProbesCameraHeightFractionKey, DefaultGraphicsRayTracingIrradianceProbesCameraHeightFraction), 0.0F, 1.0F);
-		m_parameters.raysPerProbe = settings.getOrSetDefault< uint32_t >(GraphicsRayTracingIrradianceProbesRaysPerProbeKey, DefaultGraphicsRayTracingIrradianceProbesRaysPerProbe);
+		m_parameters.raysPerProbe = settings.getOrSetDefaultInRange< uint32_t >(GraphicsRayTracingIrradianceProbesRaysPerProbeKey, DefaultGraphicsRayTracingIrradianceProbesRaysPerProbe, MinGraphicsRayTracingIrradianceProbesRaysPerProbe, MaxGraphicsRayTracingIrradianceProbesRaysPerProbe);
 		m_parameters.hysteresis = settings.getOrSetDefault< float >(GraphicsRayTracingIrradianceProbesHysteresisKey, DefaultGraphicsRayTracingIrradianceProbesHysteresis);
 		m_parameters.bounceFeedback = std::clamp(settings.getOrSetDefault< float >(GraphicsRayTracingIrradianceProbesBounceFeedbackKey, DefaultGraphicsRayTracingIrradianceProbesBounceFeedback), 0.0F, 1.0F);
 		m_parameters.normalBias = settings.getOrSetDefault< float >(GraphicsRayTracingIrradianceProbesNormalBiasKey, DefaultGraphicsRayTracingIrradianceProbesNormalBias);
@@ -669,7 +670,7 @@ namespace EmEn::Graphics
 		m_tracePipelineLayout.reset();
 		m_descriptorSets.clear();
 		m_descriptorSetLayout.reset();
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 		m_parameterBuffers.clear();
 		m_rayBuffer.reset();
 		m_sampler.reset();
@@ -1041,12 +1042,12 @@ namespace EmEn::Graphics
 		const float u2 = unit(m_random);
 		const float u3 = unit(m_random);
 		constexpr float TwoPi = 6.283185307179586F;
-		const float sqrt1 = std::sqrt(1.0F - u1);
-		const float sqrt2 = std::sqrt(u1);
-		const float qx = sqrt1 * std::sin(TwoPi * u2);
-		const float qy = sqrt1 * std::cos(TwoPi * u2);
-		const float qz = sqrt2 * std::sin(TwoPi * u3);
-		const float qw = sqrt2 * std::cos(TwoPi * u3);
+		const float sqrtOneMinusU1 = std::sqrt(1.0F - u1);
+		const float sqrtU1 = std::sqrt(u1);
+		const float qx = sqrtOneMinusU1 * std::sin(TwoPi * u2);
+		const float qy = sqrtOneMinusU1 * std::cos(TwoPi * u2);
+		const float qz = sqrtU1 * std::sin(TwoPi * u3);
+		const float qw = sqrtU1 * std::cos(TwoPi * u3);
 
 		/* Centred on the camera cell horizontally; vertically the camera sits at CameraHeightFraction
 		 * of the height (a camera stands near the floor of a room whose ceiling is far above it). */
@@ -1054,9 +1055,9 @@ namespace EmEn::Graphics
 
 		ParametersUBO block{};
 		block.originSpacing = {
-			static_cast< float >(cell[0] - counts[0] / 2) * m_parameters.probeSpacing,
+			static_cast< float >(cell[0] - (counts[0] / 2)) * m_parameters.probeSpacing,
 			static_cast< float >(cell[1] - cellsBelowCamera) * m_parameters.probeSpacing,
-			static_cast< float >(cell[2] - counts[2] / 2) * m_parameters.probeSpacing,
+			static_cast< float >(cell[2] - (counts[2] / 2)) * m_parameters.probeSpacing,
 			m_parameters.probeSpacing
 		};
 		block.probeCounts = {counts[0], counts[1], counts[2], static_cast< int32_t >(m_parameters.raysPerProbe)};
@@ -1066,14 +1067,14 @@ namespace EmEn::Graphics
 			m_parameters.normalBias,
 			m_parameters.viewBias,
 			m_parameters.hysteresis,
-			m_parameters.probeSpacing * MaxRayDistanceCellDiagonals * 1.7320508F
+			m_parameters.probeSpacing * MaxRayDistanceCellDiagonals * std::numbers::sqrt3_v< float >
 		};
 		block.skyAmbient = {inputs.skyLuminance, m_parameters.enabled ? 1.0F : 0.0F, static_cast< float >(inputs.lightCount), m_parameters.bounceFeedback};
 		block.ambientColor = {inputs.ambient[Base::Math::X], inputs.ambient[Base::Math::Y], inputs.ambient[Base::Math::Z], m_parameters.indirectIntensity};
 		/* Rotation matrix of the quaternion, stored as COLUMNS (GLSL mat3 constructor order). */
-		block.rotation0 = {1.0F - 2.0F * (qy * qy + qz * qz), 2.0F * (qx * qy + qz * qw), 2.0F * (qx * qz - qy * qw), 0.0F};
-		block.rotation1 = {2.0F * (qx * qy - qz * qw), 1.0F - 2.0F * (qx * qx + qz * qz), 2.0F * (qy * qz + qx * qw), 0.0F};
-		block.rotation2 = {2.0F * (qx * qz + qy * qw), 2.0F * (qy * qz - qx * qw), 1.0F - 2.0F * (qx * qx + qy * qy), 0.0F};
+		block.rotation0 = {1.0F - (2.0F * (qy * qy + qz * qz)), 2.0F * (qx * qy + qz * qw), 2.0F * (qx * qz - qy * qw), 0.0F};
+		block.rotation1 = {2.0F * (qx * qy - qz * qw), 1.0F - (2.0F * (qx * qx + qz * qz)), 2.0F * (qy * qz + qx * qw), 0.0F};
+		block.rotation2 = {2.0F * (qx * qz + qy * qw), 2.0F * (qy * qz - qx * qw), 1.0F - (2.0F * (qx * qx + qy * qy)), 0.0F};
 
 		if ( frameIndex < m_parameterBuffers.size() )
 		{

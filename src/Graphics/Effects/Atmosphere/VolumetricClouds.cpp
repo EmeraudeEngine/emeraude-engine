@@ -725,7 +725,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 						Octaves
 					);
 
-					voxels[(static_cast< size_t >(z) * Size + y) * Size + x] = static_cast< uint8_t >(std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F));
+					voxels[((static_cast< size_t >(z) * Size + y) * Size) + x] = static_cast< uint8_t >(std::lround(std::clamp(value, 0.0F, 1.0F) * 255.0F));
 				}
 			}
 		}
@@ -1003,7 +1003,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				{
 					const auto & matrix = cascadedView.cascadeViewProjectionMatrix(cascade);
 
-					std::memcpy(&cascadeBlock.matrices[cascade * 16], matrix.data(), 16 * sizeof(float));
+					std::memcpy(&cascadeBlock.matrices[static_cast< size_t >(cascade) * 16], matrix.data(), 16 * sizeof(float));
 
 					cascadeBlock.splitDistances[cascade] = cascadedView.splitDistance(cascade);
 				}

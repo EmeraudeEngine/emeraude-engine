@@ -55,7 +55,7 @@ namespace
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
 	 */
-	static constexpr auto RTAOTraceFragmentShader = R"GLSL(
+	constexpr auto RTAOTraceFragmentShader = R"GLSL(
 #version 460
 #extension GL_EXT_ray_query : require
 #extension GL_EXT_buffer_reference2 : require
@@ -275,17 +275,17 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionRTSampleCountKey, DefaultGraphicsPPAmbientOcclusionRTSampleCount);
+		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPAmbientOcclusionRTSampleCountKey, DefaultGraphicsPPAmbientOcclusionRTSampleCount, MinGraphicsPPAmbientOcclusionRTSampleCount, MaxGraphicsPPAmbientOcclusionRTSampleCount);
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionIntensityKey, DefaultGraphicsPPAmbientOcclusionIntensity);
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTBiasKey, DefaultGraphicsPPAmbientOcclusionRTBias);
 		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTMaxDistanceKey, DefaultGraphicsPPAmbientOcclusionRTMaxDistance);
-		m_parameters.blurRadius = settings.getOrSetDefault< uint32_t >(GraphicsPPAmbientOcclusionRTBlurRadiusKey, DefaultGraphicsPPAmbientOcclusionRTBlurRadius);
+		m_parameters.blurRadius = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPAmbientOcclusionRTBlurRadiusKey, DefaultGraphicsPPAmbientOcclusionRTBlurRadius, MinGraphicsPPAmbientOcclusionRTBlurRadius, MaxGraphicsPPAmbientOcclusionRTBlurRadius);
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionRTNormalSigmaKey, DefaultGraphicsPPAmbientOcclusionRTNormalSigma);
 
 		/* Pixel doubling: half-res for performance (default), full-res for quality. */
 		const auto pixelDoubling = settings.getOrSetDefault< bool >(GraphicsPPAmbientOcclusionRTPixelDoublingKey, DefaultGraphicsPPAmbientOcclusionRTPixelDoubling);
-		const auto halfW = pixelDoubling ? ((width > 1) ? width / 2 : 1U) : width;
-		const auto halfH = pixelDoubling ? ((height > 1) ? height / 2 : 1U) : height;
+		const auto halfW = traceSize(width, pixelDoubling);
+		const auto halfH = traceSize(height, pixelDoubling);
 
 		/* Trace target (half-res, RG16F: AO + depth for bilateral blur). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16_SFLOAT, "RTAO_Trace") )
@@ -401,12 +401,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* Trace: set 1 reads depth + normals (updated per-frame). */
 		m_tracePerFrame = this->createPerFrameDescriptorSets(traceInputLayout, ClassId, "Trace_DescSet");
 
-		if ( m_tracePerFrame.empty() )
-		{
-			return false;
-		}
-
-		return true;
+		return !m_tracePerFrame.empty();
 	}
 
 	void
@@ -556,13 +551,13 @@ namespace EmEn::Graphics::Effects::Lighting
 	}
 
 	IndirectPostProcessEffect::DenoiseContribution
-	RTAO::denoiseContribution (const FrameContext & /*context*/) const noexcept
+	RTAO::denoiseContribution (const FrameContext & /*context*/) noexcept
 	{
 		DenoiseContribution contribution;
 		contribution.prefix = "rtao";
 		contribution.source = &m_traceTarget;
-		contribution.targetH = const_cast< IntermediateRenderTarget * >(&m_blurHTarget);
-		contribution.targetV = const_cast< IntermediateRenderTarget * >(&m_blurVTarget);
+		contribution.targetH = &m_blurHTarget;
+		contribution.targetV = &m_blurVTarget;
 		contribution.needsNormals = true;
 		contribution.dynamics = {m_parameters.normalSigma, static_cast< float >(m_parameters.blurRadius), 0.0F, 0.0F};
 
@@ -607,7 +602,7 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		CombineContribution contribution;
 		contribution.prefix = "rtao";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_blurVTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_blurVTarget});
 		contribution.needsMaterialProperties = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});
 

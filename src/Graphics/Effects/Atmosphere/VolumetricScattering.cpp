@@ -61,7 +61,7 @@ namespace
 	/* Bindings: 0 scene colour, 1 depth, 2 material properties, 3 cascaded shadow map,
 	 * 4 the cascade block. The last two are declared by EMEN_CSM_SAMPLING_GLSL, which owns the
 	 * whole sampling convention — never restate it here. */
-	static constexpr auto ScatteringFragmentShader = R"GLSL(
+	constexpr auto ScatteringFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -338,12 +338,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		m_cascadeUBOs = this->createPerFrameUniformBuffers(sizeof(CSMCascadeBlock), ClassId, "VS_Cascade_Frame_UBO");
 
-		if ( m_cascadeUBOs.empty() )
-		{
-			return false;
-		}
-
-		return true;
+		return !m_cascadeUBOs.empty();
 	}
 
 	void
@@ -453,7 +448,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			{
 				const auto & matrix = cascadedView.cascadeViewProjectionMatrix(cascade);
 
-				std::memcpy(&cascadeBlock.matrices[cascade * 16], matrix.data(), 16 * sizeof(float));
+				std::memcpy(&cascadeBlock.matrices[static_cast< size_t >(cascade) * 16], matrix.data(), 16 * sizeof(float));
 
 				cascadeBlock.splitDistances[cascade] = cascadedView.splitDistance(cascade);
 			}

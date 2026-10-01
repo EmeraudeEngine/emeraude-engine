@@ -646,22 +646,22 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.maxDistance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseMaxDistanceKey, DefaultGraphicsPPIndirectDiffuseMaxDistance);
 		m_parameters.intensity = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseIntensityKey, DefaultGraphicsPPIndirectDiffuseIntensity);
 		m_parameters.thickness = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSThicknessKey, DefaultGraphicsPPIndirectDiffuseSSThickness);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSampleCountKey, DefaultGraphicsPPIndirectDiffuseSampleCount);
-		m_parameters.stepCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSStepCountKey, DefaultGraphicsPPIndirectDiffuseSSStepCount);
+		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseSampleCountKey, DefaultGraphicsPPIndirectDiffuseSampleCount, MinGraphicsPPIndirectDiffuseSampleCount, MaxGraphicsPPIndirectDiffuseSampleCount);
+		m_parameters.stepCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseSSStepCountKey, DefaultGraphicsPPIndirectDiffuseSSStepCount, MinGraphicsPPIndirectDiffuseSSStepCount, MaxGraphicsPPIndirectDiffuseSSStepCount);
 		m_parameters.skyVisibilityEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseSSSkyVisibilityEnabledKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityEnabled);
 		m_parameters.skyVisibilityRadius = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSSkyVisibilityRadiusKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityRadius);
 		m_parameters.skyVisibilityFalloffRange = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseSSSkyVisibilityFalloffRangeKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityFalloffRange);
-		m_parameters.skyVisibilitySliceCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSSkyVisibilitySliceCountKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount);
-		m_parameters.skyVisibilityStepCount = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseSSSkyVisibilityStepCountKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount);
+		m_parameters.skyVisibilitySliceCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseSSSkyVisibilitySliceCountKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount, MinGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount, MaxGraphicsPPIndirectDiffuseSSSkyVisibilitySliceCount);
+		m_parameters.skyVisibilityStepCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseSSSkyVisibilityStepCountKey, DefaultGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount, MinGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount, MaxGraphicsPPIndirectDiffuseSSSkyVisibilityStepCount);
 		m_parameters.depthSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDepthSigmaKey, DefaultGraphicsPPIndirectDiffuseDepthSigma);
 		m_parameters.normalSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseNormalSigmaKey, DefaultGraphicsPPIndirectDiffuseNormalSigma);
 		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserLuminanceSigma);
-		m_parameters.atrousIterations = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations);
+		m_parameters.atrousIterations = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations, MinGraphicsPPIndirectDiffuseDenoiserIterations, MaxGraphicsPPIndirectDiffuseDenoiserIterations);
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseTemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseTemporalDepthTolerance);
 		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseTemporalNormalThreshold);
 		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseTemporalVarianceGamma);
-		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
+		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MinGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MaxGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
 		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseDenoiserDebugView);
 		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
 		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseTemporalEnabled);
@@ -1014,7 +1014,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		CombineContribution contribution;
 		contribution.prefix = "ssgi";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", m_combineSource});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = m_combineSource});
 		contribution.needsMaterialProperties = true;
 		contribution.needsAlbedo = true;
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{m_parameters.intensity, 0.0F, 0.0F, 0.0F});

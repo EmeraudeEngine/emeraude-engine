@@ -181,6 +181,32 @@ namespace EmEn::Graphics
 			~IrradianceProbeVolume () noexcept;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			IrradianceProbeVolume (const IrradianceProbeVolume & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			IrradianceProbeVolume (IrradianceProbeVolume && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return IrradianceProbeVolume &
+			 */
+			IrradianceProbeVolume & operator= (const IrradianceProbeVolume & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return IrradianceProbeVolume &
+			 */
+			IrradianceProbeVolume & operator= (IrradianceProbeVolume && copy) noexcept = delete;
+
+			/**
 			 * @brief Reads the settings and creates every GPU resource and pipeline.
 			 * @param renderer A reference to the graphics renderer (device, layouts, shader manager, RT set layout).
 			 * @return bool

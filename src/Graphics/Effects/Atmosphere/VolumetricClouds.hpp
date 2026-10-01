@@ -160,7 +160,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				std::array< CloudBlock, MaxClouds > clouds{};
 			};
 
-			static_assert(sizeof(FrameBlock) == 64 + 5 * 16 + MaxClouds * 112, "FrameBlock must match the GLSL std140 block !");
+			static_assert(sizeof(FrameBlock) == 64 + (5 * 16) + (MaxClouds * 112), "FrameBlock must match the GLSL std140 block !");
 
 			/** @brief Why the clouds of a frame were drawn or not — the census the pass traces. */
 			struct EMEN_API Census

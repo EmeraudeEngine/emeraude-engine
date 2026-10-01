@@ -94,7 +94,7 @@ namespace EmEn::Graphics
 				std::array< CloudBlock, MaxCloudVolumes > clouds{};
 			};
 
-			static_assert(sizeof(ShadowBlock) == 64 + 2 * 16 + MaxCloudVolumes * 112, "ShadowBlock must match the GLSL std140 block !");
+			static_assert(sizeof(ShadowBlock) == 64 + (2 * 16) + (MaxCloudVolumes * 112), "ShadowBlock must match the GLSL std140 block !");
 
 			/**
 			 * @brief Constructs a cloud shadow map.
