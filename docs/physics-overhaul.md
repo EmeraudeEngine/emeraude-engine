@@ -151,6 +151,28 @@ client reads ~7 samples per second per station (15 stations), enough for a bounc
   (`docs/caution-points.md` § Physics). `DynTopCube` still sets them on the entity: its declared bounciness,
   stickiness and inertia are therefore NOT the ones simulated (kept as is for comparison with the earlier readings).
 
+### The per-cycle recorder (2026-10-01)
+
+`Scenes::PhysicsRecorder` (`src/Scenes/PhysicsRecorder.hpp`), owned by each `Scene`, sampled by `Scene::processLogics()`
+right after `resolveCollisions()`: the end-of-cycle state of chosen root nodes on EVERY cycle of `[firstCycle,
+firstCycle + count)`. Console / MCP (`Core.SceneManagerService`):
+
+| Command | Does |
+|---|---|
+| `recordNodePhysics("A,B,C", firstCycle, cycleCount)` | arms a recording (1-64 nodes, 1-36000 cycles); the names are ONE quoted argument (the console splits unquoted commas) |
+| `getPhysicsRecordingStatus()` | `{"state": Idle / Waiting / Recording / Complete, firstCycle, cycleCount, recordedCycles, nodes}` |
+| `stopPhysicsRecording()` | stops; what is recorded stays savable |
+| `savePhysicsRecording()` | writes `captures/physics-recording-<unix s>.json` (the `getNodePhysics()` keys per sample, by node) and releases it |
+
+- The logic thread never allocates (start() reserves nodes × cycles) and never writes the file (save() does, on the
+  console thread, outside the lock). An idle recorder costs one atomic load per cycle (`m_armed`).
+- A name absent when the recording begins is recorded with `"found": false`.
+- `tools/physics-bench.py` uses it by default (`--first-cycle 60`, i.e. from 1 s); `--poll` keeps the P0 method.
+- **First measurement (Linux, RTX 3070 Ti, 5 launches × 1800 cycles × 17 stations)**: the 5 runs are BIT-IDENTICAL on
+  every cycle of every station (0 differing samples, `DynTopCube`, the stack and the twin included). The isolated
+  differences seen by polling were the one-cycle labelling offset — proven. Linux reproduces exactly; the divergence
+  on Windows and macOS is now measurable to the cycle (next: the peers' recorded runs).
+
 ### Baseline — Linux, RTX 3070 Ti, engine `5c2b2c40` + the bench, 5 launches × 30 s of physics
 
 | Station | Measured (5 runs) | Verdict |

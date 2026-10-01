@@ -76,6 +76,7 @@
 #include "OrbitController.hpp"
 #include "OctreeSector.hpp"
 #include "ParticipatingMedium.hpp"
+#include "PhysicsRecorder.hpp"
 #include "Physics/ConstraintSolver.hpp"
 #include "RenderBatch.hpp"
 #include "SceneInstanceTransforms.hpp"
@@ -1084,6 +1085,18 @@ namespace EmEn::Scenes
 			root () const noexcept
 			{
 				return m_rootNode;
+			}
+
+			/**
+			 * @brief Returns the per-cycle physics recorder of this scene (a measurement tool).
+			 * @note Thread-safe: start / stop / status / write from the console thread, sampled by the logic thread.
+			 * @return PhysicsRecorder &
+			 */
+			[[nodiscard]]
+			PhysicsRecorder &
+			physicsRecorder () noexcept
+			{
+				return m_physicsRecorder;
 			}
 
 			/**
@@ -3219,6 +3232,8 @@ namespace EmEn::Scenes
 			ParticipatingMedium m_participatingMedium{ParticipatingMedium::Vacuum()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */
 			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
+			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */
+			PhysicsRecorder m_physicsRecorder;
 			/** @brief Scene-local random float generator. */
 			Base::Randomizer< float > m_floatRandomizer;
 			/** @brief Scene-local random integer generator. */

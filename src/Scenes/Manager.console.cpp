@@ -1249,6 +1249,97 @@ namespace EmEn::Scenes
 				return Console::CommandResult::json(info.str());
 			}, Console::CommandHint::ReadOnly);
 
+		this->bindCommand("recordNodePhysics", "Records the physics state of root-level nodes of the active scene on EVERY logic cycle of a range, on the logic thread (after the collisions): the same cycles for every run, no sampling gap. Then getPhysicsRecordingStatus() until Complete, and savePhysicsRecording().",
+			{
+				{"nodeNames", "The root node names, comma-separated, as ONE quoted argument (\"A,B,C\"), 1 to 64."},
+				{"firstCycle", "The first scene cycle to record (a cycle already past starts at once)."},
+				{"cycleCount", "The number of cycles to record (1 to 36000, 10 min at 60 Hz)."}
+			},
+			[this] (const std::string & nodeNames, int32_t firstCycle, int32_t cycleCount) {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				if ( firstCycle < 0 || cycleCount <= 0 )
+				{
+					return Console::CommandResult::error("firstCycle must be >= 0 and cycleCount > 0 !");
+				}
+
+				std::vector< std::string > names;
+
+				for ( auto name : String::explode(nodeNames, ',', false) )
+				{
+					name = String::trim(name);
+
+					if ( !name.empty() )
+					{
+						names.emplace_back(std::move(name));
+					}
+				}
+
+				std::string error;
+
+				if ( !m_activeScene->physicsRecorder().start(std::move(names), static_cast< size_t >(firstCycle), static_cast< size_t >(cycleCount), error) )
+				{
+					return Console::CommandResult::error(error);
+				}
+
+				return Console::CommandResult::json(m_activeScene->physicsRecorder().status());
+			});
+
+		this->bindCommand("getPhysicsRecordingStatus", "Returns the state of the active scene's physics recording as JSON: state (Idle, Waiting, Recording, Complete), firstCycle, cycleCount, recordedCycles, nodes.",
+			[this] () {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				return Console::CommandResult::json(m_activeScene->physicsRecorder().status());
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("stopPhysicsRecording", "Stops the active scene's physics recording; the cycles recorded so far can still be saved.",
+			[this] () {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				m_activeScene->physicsRecorder().stop();
+
+				return Console::CommandResult::json(m_activeScene->physicsRecorder().status());
+			});
+
+		this->bindCommand("savePhysicsRecording", "Writes the completed physics recording of the active scene to a JSON file in the captures directory, releases it, and answers the file path.",
+			[this] () {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				const auto captureDirectory = m_activeScene->AVConsoleManager().graphicsRenderer().primaryServices().fileSystem().userDataDirectory("captures");
+				const auto seconds = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+
+				auto filepath = captureDirectory / ("physics-recording-" + std::to_string(seconds) + ".json");
+
+				/* A unique name: two saves in one second must not overwrite each other. */
+				std::error_code existsError;
+
+				for ( int suffix = 1; std::filesystem::exists(filepath, existsError) && suffix < 1000; ++suffix )
+				{
+					filepath = captureDirectory / ("physics-recording-" + std::to_string(seconds) + "-" + std::to_string(suffix) + ".json");
+				}
+
+				std::string error;
+
+				if ( !m_activeScene->physicsRecorder().write(filepath, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
+
+				return Console::CommandResult::info(filepath.string());
+			});
+
 		this->bindCommand("setNodePosition", "Moves a root-level node of the active scene to world coordinates.",
 			{
 				{"nodeName", "The node name."},

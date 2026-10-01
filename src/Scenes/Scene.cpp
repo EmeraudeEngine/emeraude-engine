@@ -452,6 +452,9 @@ namespace EmEn::Scenes
 			this->resolveCollisions();
 		}
 
+		/* The end-of-cycle physics state, recorded only while a recording is armed (a measurement tool). */
+		m_physicsRecorder.sample(*this);
+
 		if ( m_groundLevel != nullptr )
 		{
 			const auto worldCoordinates = m_AVConsoleManager.getPrimaryVideoDevice()->getWorldCoordinates();
