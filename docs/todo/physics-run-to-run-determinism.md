@@ -31,7 +31,12 @@ the next. A tipping cube is chaotic, so any tiny difference grows. The owner wan
 (`tools/physics-bench.py --compare`), the 5 Linux runs are identical on every station. Bodies that never rest end at
 different final states only because their last sample falls on a different cycle — do not compare final states.
 
-**2026-10-01, the peers' bench** (`docs/physics-overhaul.md` § 6): `DynTopCube` repeats on Linux and on the Windows AMD
+**2026-10-01, compared by cycle on the three OS** (`docs/physics-overhaul.md` § 6, "The peers compared by cycle"): the
+stack diverges on Windows (both GPUs) and macOS, `DynTopCube` on the RTX 3060 and the M2, the single-pair twin nowhere.
+Working hypothesis: the completion order of the asynchronous geometry loads, which drives both the re-derived
+properties and the physics octree insertion order (hence the solver's pair order).
+
+**2026-10-01, the peers' bench (final states)** (`docs/physics-overhaul.md` § 6): `DynTopCube` repeats on Linux and on the Windows AMD
 iGPU (X 6.855, 5/5 each), not on the RTX 3060 (a few discrete outcomes, two runs bit-identical) nor the M2. Hypothesis:
 its entity-level properties and non-overridden shape are re-derived when the geometry load completes, at a cycle that
 depends on the machine (`docs/caution-points.md` § the body properties set on an entity are overwritten). Test: the

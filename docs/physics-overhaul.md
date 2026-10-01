@@ -203,4 +203,25 @@ proves nothing. `DynTopCube` on the RTX 3060 / M2 lands metres apart and RESTS (
 feeding energy into a body tipping on its axis-aligned envelope. `DynTopCube` falls off and rests at X 6.855: the
 difference is the re-derived properties (§ Bench traps). Whether the twin repeats on the RTX 3060 / M2 is the test.
 
+### The peers compared by cycle (2026-10-01, after the twin and `--compare`)
+
+⚠️ Method limit (Windows peer): the client samples each station about every 9 cycles with a phase that differs per
+launch, so two runs share few cycles (often 0-45 of ~200 samples); a "no divergence" on few common cycles proves
+little. A per-cycle recorder on the logic thread would remove both this limit and the one-cycle labelling offset.
+
+| Machine | `DynTopCube` | Stack (`BenchStack*`) | Twin (`BenchTipCube`) |
+|---|---|---|---|
+| Linux, RTX 3070 Ti | identical | identical (39-82 common cycles per pair) | identical |
+| Windows, AMD iGPU (P0 runs) | identical (134 common cycles) | DIVERGES from cycle ~117-132 | (not in the P0 runs) |
+| Windows, RTX 3060 | DIVERGES on 3/4 pairs (from cycle 408-1769, 4-12 m apart) | DIVERGES on every pair (from cycle 68-1783) | no divergence in the few common cycles (7-44); final angle 63-76°, but the twin never rests, so final states cannot decide: NOT proven bit-repeatable |
+| macOS, M2 | DIVERGES on 4/4 (from cycle 239-932) | DIVERGES on 3/4, once from the first contact (cycle ~10) | isolated samples only, the same final position 5/5 |
+
+**Working hypothesis (not proven)**: the ORDER in which asynchronous events complete — the geometry loads — changes
+(1) `DynTopCube`'s re-derived body properties (§ Bench traps) and (2) the order the entities enter the physics octree,
+hence the order of the contact pairs the Gauss-Seidel solver visits. The twin is a single pair: the order cannot
+matter to it, and it is the most stable one — much closer than `DynTopCube`, not proven bit-repeatable on the RTX 3060
+(only the per-cycle recorder can settle it). The stack is many pairs: it diverges wherever the load order varies. Linux
+(the fastest machine) would complete the loads in the same order every time. P2's sort of the manifolds by stable ids
+(`physics-unified-contact-pipeline`) addresses (2); declaring the body properties on the component addresses (1).
+
 Raw runs: kept outside the repository (one JSON per run, ~1.6 MB); re-run with the command in the script's header.
