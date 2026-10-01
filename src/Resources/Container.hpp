@@ -1244,9 +1244,20 @@ namespace EmEn::Resources
 					return this->getDefaultResourceUnlocked();
 				}
 
+				/* NOTE: A resource the function refused or left unfinished is put in the Failed state (links released,
+				 * owner ruling 2026-10-01), not left half-created in the container. */
+				const auto failUnfinished = [&newResource] () noexcept {
+					if ( const auto status = newResource->status(); status == Status::Unloaded || status == Status::Enqueuing || status == Status::ManualEnqueuing )
+					{
+						static_cast< void >(newResource->failLoading());
+					}
+				};
+
 				if ( !createFunction(*newResource) )
 				{
 					TraceError{resource_t::ClassId} << "The manual loading function for resource '" << resourceName << "' has returned an error !";
+
+					failUnfinished();
 
 					return this->getDefaultResourceUnlocked();
 				}
@@ -1259,6 +1270,8 @@ namespace EmEn::Resources
 						TraceError{resource_t::ClassId} <<
 							"The manual resource '" << resourceName << "' is still in creation mode!"
 							"A manual loading should ends with a call to ResourceTrait::setManualLoadSuccess() or ResourceTrait::load().";
+
+						failUnfinished();
 
 						return this->getDefaultResourceUnlocked();
 
@@ -1342,6 +1355,14 @@ namespace EmEn::Resources
 					else
 					{
 						TraceError{resource_t::ClassId} << "The manual loading function has return an error !";
+					}
+
+					/* NOTE: A resource the function left unfinished, or refused before loading, is put in the Failed state:
+					 * its parents (it was handed out before this task ran) are told and its links released (owner ruling
+					 * 2026-10-01). It used to stay Unloaded forever, its parents waiting, the whole chain leaking. */
+					if ( const auto status = newResource->status(); status == Status::Unloaded || status == Status::Enqueuing || status == Status::ManualEnqueuing )
+					{
+						static_cast< void >(newResource->failLoading());
 					}
 				}) )
 				{

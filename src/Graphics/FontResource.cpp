@@ -48,7 +48,7 @@ namespace EmEn::Graphics
 
 		constexpr auto BitmapSize{256};
 
-		const std::bitset< BitmapSize * BitmapSize > bitmap{DefaultFont};
+		const std::bitset< static_cast< size_t >(BitmapSize) * BitmapSize > bitmap{DefaultFont};
 
 		Pixmap< uint8_t > charsMap{BitmapSize, BitmapSize, ChannelMode::Grayscale};
 

@@ -75,6 +75,32 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AnimatedTexture2D (const AnimatedTexture2D & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AnimatedTexture2D (AnimatedTexture2D && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AnimatedTexture2D &
+			 */
+			AnimatedTexture2D & operator= (const AnimatedTexture2D & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AnimatedTexture2D &
+			 */
+			AnimatedTexture2D & operator= (AnimatedTexture2D && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the animated texture 2D resource.
 			 */
 			~AnimatedTexture2D () override
@@ -251,6 +277,10 @@ namespace EmEn::Graphics::TextureResource
 			bool load (const std::shared_ptr< MovieResource > & movieResource) noexcept;
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
+			[[nodiscard]]
+			bool onDependencyFailed (const ResourceTrait & dependency) noexcept override;
 
 			std::shared_ptr< MovieResource > m_localData;
 			std::shared_ptr< Vulkan::Image > m_image;

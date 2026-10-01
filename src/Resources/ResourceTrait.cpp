@@ -154,111 +154,146 @@ namespace EmEn::Resources
 		{
 			Tracer::error(TracerTag, "The dependency pointer is null !");
 
-			const std::scoped_lock lock{m_dependenciesAccess};
+			{
+				const std::scoped_lock lock{m_dependenciesAccess};
 
-			m_status = Status::Failed;
+				m_status = Status::Failed;
+			}
+
+			/* NOTE: The dependencies already added and the parents are released (no link may cycle once failed). */
+			this->releaseLinksAfterFailure();
 
 			return false;
 		}
 
-		/* NOTE: The graph lock FIRST (lock order: graph → node): the cycle check below and the insertion are atomic
-		 * against every other addDependency(). The check copies each node's list under that node's lock alone. */
-		const std::scoped_lock graphLock{dependencyGraphAccess()};
+		/* NOTE: A refusal that FAILS this resource releases its links once the locks below are released
+		 * (releaseLinksAfterFailure() takes this resource's lock and calls the parents). */
+		bool failed = false;
+		bool dependencyAlreadyFailed = false;
 
-		const auto createsCycle = this->wouldCreateCycle(dependency);
+		const auto added = [&] () noexcept -> bool {
+			/* NOTE: The graph lock FIRST (lock order: graph → node): the cycle check below and the insertion are atomic
+			 * against every other addDependency(). The check copies each node's list under that node's lock alone. */
+			const std::scoped_lock graphLock{dependencyGraphAccess()};
 
-		/* NOTE: Lock both this resource's and the dependency's mutex to safely modify
-		 * both dependency lists. std::scoped_lock handles deadlock avoidance by
-		 * acquiring locks in a consistent order. */
-		const std::scoped_lock lock{m_dependenciesAccess, dependency->m_dependenciesAccess};
+			const auto createsCycle = this->wouldCreateCycle(dependency);
 
-		/* First, we check the current resource status. */
-		switch ( m_status )
-		{
-			case Status::Unloaded :
-				TraceError{TracerTag} <<
-					"The resource '" << this->name() << "' (" << this->classLabel() << ") is not in loading stage ! "
-					"You should call ResourceTrait::beginLoading() first.";
+			/* NOTE: Lock both this resource's and the dependency's mutex to safely modify
+			 * both dependency lists. std::scoped_lock handles deadlock avoidance by
+			 * acquiring locks in a consistent order. */
+			const std::scoped_lock lock{m_dependenciesAccess, dependency->m_dependenciesAccess};
+
+			/* First, we check the current resource status. */
+			switch ( m_status )
+			{
+				case Status::Unloaded :
+					TraceError{TracerTag} <<
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") is not in loading stage ! "
+						"You should call ResourceTrait::beginLoading() first.";
+
+					return false;
+
+				case Status::Enqueuing :
+				case Status::ManualEnqueuing :
+					/* The status is in the right condition to add dependency. */
+					break;
+
+				case Status::Loading :
+					TraceError{TracerTag} <<
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") is loading !"
+						"No more dependency can be added !";
+					break;
+
+				case Status::Loaded :
+					TraceWarning{TracerTag} <<
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") is loaded !"
+						"No more dependency can be added !";
+					break;
+
+				case Status::Failed :
+				default:
+					TraceError{TracerTag} <<
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") is failed !"
+						"This resource should be removed.";
+
+					return false;
+			}
+
+			/* NOTE: A dependency that ALREADY failed (an asynchronous creation that ended before this call) would be
+			 * waited for forever: it is handled as a failure notification, once the locks are released. */
+			if ( dependency->m_status == Status::Failed )
+			{
+				dependencyAlreadyFailed = true;
 
 				return false;
+			}
 
-			case Status::Enqueuing :
-			case Status::ManualEnqueuing :
-				/* The status is in the right condition to add dependency. */
-				break;
+			/* NOTE: If the dependency is already loaded, we skip it... */
+			if ( dependency->isLoaded() )
+			{
+				if ( s_showInformation )
+				{
+					TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already loaded.";
+				}
 
-			case Status::Loading :
+				return true;
+			}
+
+			/* NOTE: If the dependency is already present, we also skip it... */
+			if ( std::ranges::find(std::as_const(m_dependenciesToWaitFor), dependency) != m_dependenciesToWaitFor.cend() )
+			{
+				if ( s_showInformation )
+				{
+					TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already in the queue.";
+				}
+
+				return true;
+			}
+
+			/* NOTE: Check for circular dependency.
+			 * We walk up the dependency's parent chain to see if 'this' resource appears.
+			 * If it does, adding this dependency would create a cycle and cause a deadlock. */
+			if ( createsCycle ) [[unlikely]]
+			{
 				TraceError{TracerTag} <<
-					"The resource '" << this->name() << "' (" << this->classLabel() << ") is loading !"
-					"No more dependency can be added !";
-				break;
+					"Circular dependency detected ! Adding '" << dependency->name() << "' (" << dependency->classLabel() << ") "
+					"as a dependency of '" << this->name() << "' (" << this->classLabel() << ") would create a cycle !";
 
-			case Status::Loaded :
-				TraceWarning{TracerTag} <<
-					"The resource '" << this->name() << "' (" << this->classLabel() << ") is loaded !"
-					"No more dependency can be added !";
-				break;
+				m_status = Status::Failed;
 
-			case Status::Failed :
-			default:
-				TraceError{TracerTag} <<
-					"The resource '" << this->name() << "' (" << this->classLabel() << ") is failed !"
-					"This resource should be removed.";
+				failed = true;
 
 				return false;
-		}
+			}
 
-		/* NOTE: If the dependency is already loaded, we skip it... */
-		if ( dependency->isLoaded() )
-		{
+			/* NOTE: Adds the dependency to wait for being loaded ... */
+			m_dependenciesToWaitFor.push_back(dependency);
+
+			/* ... then set this resource as the parent of the dependency (double-link). */
+			dependency->m_parentsToNotify.push_back(this->shared_from_this());
+
 			if ( s_showInformation )
 			{
-				TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already loaded.";
+				TraceInfo{TracerTag} <<
+					"Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
+					"added to resource '" << this->name() << "' (" << this->classLabel() << "). "
+					"Dependency count : " << m_dependenciesToWaitFor.size() << ".";
 			}
 
 			return true;
-		}
+		}();
 
-		/* NOTE: If the dependency is already present, we also skip it... */
-		if ( std::ranges::find(std::as_const(m_dependenciesToWaitFor), dependency) != m_dependenciesToWaitFor.cend() )
+		if ( failed )
 		{
-			if ( s_showInformation )
-			{
-				TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already in the queue.";
-			}
-
-			return true;
+			this->releaseLinksAfterFailure();
 		}
 
-		/* NOTE: Check for circular dependency.
-		 * We walk up the dependency's parent chain to see if 'this' resource appears.
-		 * If it does, adding this dependency would create a cycle and cause a deadlock. */
-		if ( createsCycle ) [[unlikely]]
+		if ( dependencyAlreadyFailed )
 		{
-			TraceError{TracerTag} <<
-				"Circular dependency detected ! Adding '" << dependency->name() << "' (" << dependency->classLabel() << ") "
-				"as a dependency of '" << this->name() << "' (" << this->classLabel() << ") would create a cycle !";
-
-			m_status = Status::Failed;
-
-			return false;
+			return this->goOnAfterDependencyFailure(*dependency);
 		}
 
-		/* NOTE: Adds the dependency to wait for being loaded ... */
-		m_dependenciesToWaitFor.push_back(dependency);
-
-		/* ... then set this resource as the parent of the dependency (double-link). */
-		dependency->m_parentsToNotify.push_back(this->shared_from_this());
-
-		if ( s_showInformation )
-		{
-			TraceInfo{TracerTag} <<
-				"Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
-				"added to resource '" << this->name() << "' (" << this->classLabel() << "). "
-				"Dependency count : " << m_dependenciesToWaitFor.size() << ".";
-		}
-
-		return true;
+		return added;
 	}
 
 	void
@@ -271,6 +306,12 @@ namespace EmEn::Resources
 				"is loaded from resource '" << this->name() << "' (" << this->classLabel() << ") !";
 		}
 
+		/* NOTE: A resource that failed meanwhile (another dependency failed) has released its links: nothing to do. */
+		if ( m_status == Status::Failed )
+		{
+			return;
+		}
+
 		{
 			const std::scoped_lock lock{m_dependenciesAccess};
 
@@ -280,6 +321,78 @@ namespace EmEn::Resources
 
 		/* Launch an overall check for dependency loading. */
 		this->checkDependencies();
+	}
+
+	void
+	ResourceTrait::dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency) noexcept
+	{
+		/* NOTE: Already failed (another dependency first): its links are released already. */
+		if ( m_status == Status::Failed )
+		{
+			return;
+		}
+
+		{
+			const std::scoped_lock lock{m_dependenciesAccess};
+
+			std::erase(m_dependenciesToWaitFor, dependency);
+		}
+
+		if ( this->goOnAfterDependencyFailure(*dependency) )
+		{
+			this->checkDependencies();
+		}
+	}
+
+	bool
+	ResourceTrait::goOnAfterDependencyFailure (const ResourceTrait & dependency) noexcept
+	{
+		if ( this->onDependencyFailed(dependency) )
+		{
+			TraceWarning{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") goes on without its failed dependency '" << dependency.name() << "' (" << dependency.classLabel() << ").";
+
+			return true;
+		}
+
+		TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") fails: its dependency '" << dependency.name() << "' (" << dependency.classLabel() << ") failed.";
+
+		m_status = Status::Failed;
+
+		this->notify(LoadFailed, this->name());
+
+		this->releaseLinksAfterFailure();
+
+		return false;
+	}
+
+	void
+	ResourceTrait::releaseLinksAfterFailure () noexcept
+	{
+		std::vector< std::shared_ptr< ResourceTrait > > parents;
+
+		{
+			const std::scoped_lock lock{m_dependenciesAccess};
+
+			parents = std::move(m_parentsToNotify);
+			m_parentsToNotify.clear();
+
+			/* NOTE: The children still loading keep a pointer to this resource until they end (their parent lists):
+			 * this one no longer holds them, so nothing cycles. */
+			m_dependenciesToWaitFor.clear();
+		}
+
+		if ( parents.empty() )
+		{
+			return;
+		}
+
+		/* NOTE: A resource with parents is owned by a shared_ptr (addDependency() took shared_from_this()). */
+		const auto self = this->shared_from_this();
+
+		for ( const auto & parent : parents )
+		{
+			parent->dependencyFailed(self);
+		}
 	}
 
 	void
@@ -401,6 +514,8 @@ namespace EmEn::Resources
 			else
 			{
 				this->notify(LoadFailed, this->name());
+
+				this->releaseLinksAfterFailure();
 			}
 		}
 	}
@@ -455,6 +570,8 @@ namespace EmEn::Resources
 			this->notify(LoadFailed, this->name());
 
 			TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this << ") failed to load ...";
+
+			this->releaseLinksAfterFailure();
 		}
 
 		return status;
@@ -488,6 +605,8 @@ namespace EmEn::Resources
 
 			this->notify(LoadFailed, this->name());
 
+			this->releaseLinksAfterFailure();
+
 			return false;
 		}
 
@@ -500,6 +619,8 @@ namespace EmEn::Resources
 			m_status = Status::Failed;
 
 			this->notify(LoadFailed, this->name());
+
+			this->releaseLinksAfterFailure();
 
 			return false;
 		}

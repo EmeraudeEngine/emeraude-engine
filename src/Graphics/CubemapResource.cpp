@@ -78,15 +78,15 @@ namespace EmEn::Graphics
 
 			for ( size_t channel = 0; channel < 3; ++channel )
 			{
-				const auto topLeft = data[(loY * width + loX) * colorCount + channel];
-				const auto topRight = data[(loY * width + hiX) * colorCount + channel];
-				const auto bottomLeft = data[(hiY * width + loX) * colorCount + channel];
-				const auto bottomRight = data[(hiY * width + hiX) * colorCount + channel];
+				const auto topLeft = data[((loY * width + loX) * colorCount) + channel];
+				const auto topRight = data[((loY * width + hiX) * colorCount) + channel];
+				const auto bottomLeft = data[((hiY * width + loX) * colorCount) + channel];
+				const auto bottomRight = data[((hiY * width + hiX) * colorCount) + channel];
 
-				const auto top = topLeft + (topRight - topLeft) * fracX;
-				const auto bottom = bottomLeft + (bottomRight - bottomLeft) * fracX;
+				const auto top = topLeft + ((topRight - topLeft) * fracX);
+				const auto bottom = bottomLeft + ((bottomRight - bottomLeft) * fracX);
 
-				radiance[channel] = top + (bottom - top) * fracY;
+				radiance[channel] = top + ((bottom - top) * fracY);
 			}
 		}
 
@@ -142,14 +142,14 @@ namespace EmEn::Graphics
 
 			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{
-				if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
+				if ( !m_faces[faceIndex].initialize(size, size, ChannelMode::RGBA) )
 				{
 					TraceError{ClassId} << "Unable to load the default pixmap for face #" << faceIndex << " !";
 
 					return this->setLoadSuccess(false);
 				}
 
-				if ( !m_faces.at(faceIndex).fill(colors.at(faceIndex)) )
+				if ( !m_faces[faceIndex].fill(colors[faceIndex]) )
 				{
 					TraceError{ClassId} << "Unable to fill the default pixmap for face #" << faceIndex << " !";
 
@@ -182,7 +182,7 @@ namespace EmEn::Graphics
 
 			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{
-				if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
+				if ( !m_faces[faceIndex].initialize(size, size, ChannelMode::RGBA) )
 				{
 					TraceError{ClassId} << "Unable to load the default pixmap for face #" << faceIndex << " !";
 
@@ -193,14 +193,16 @@ namespace EmEn::Graphics
 				 * This produces a seamless spherical gradient across all cube faces. */
 				for ( size_t row = 0; row < size; row++ )
 				{
-					const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+					const auto t = (2.0F * (static_cast< float >(row) + 0.5F) * invSize) - 1.0F;
 
 					for ( size_t col = 0; col < size; col++ )
 					{
-						const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+						const auto s = (2.0F * (static_cast< float >(col) + 0.5F) * invSize) - 1.0F;
 
 						/* Compute the 3D direction vector for this texel based on face. */
-						float dx, dy, dz;
+						float dx = 0.0F;
+						float dy = 0.0F;
+						float dz = 0.0F;
 
 						switch ( faceIndex )
 						{
@@ -216,11 +218,11 @@ namespace EmEn::Graphics
 						 * Y = +1 (zenith) → position 0.0 (dark blue)
 						 * Y =  0 (horizon) → position 0.5 (pink)
 						 * Y = -1 (nadir) → position 1.0 (light orange) */
-						const auto normalizedY = dy / std::sqrt(dx * dx + dy * dy + dz * dz);
+						const auto normalizedY = dy / std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 						const auto gradientPosition = 0.5F * (1.0F - normalizedY);
 
-						m_faces.at(faceIndex).setPixel(
-							row * size + col,
+						m_faces[faceIndex].setPixel(
+							(row * size) + col,
 							sunsetGradient.colorAt(gradientPosition)
 						);
 					}
@@ -375,23 +377,23 @@ namespace EmEn::Graphics
 		/* Unpacked mode: load individual face files. */
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames.at(faceIndex) + '.' + fileFormat);
+			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames[faceIndex] + '.' + fileFormat);
 
 			if ( filepath.empty() )
 			{
 				return this->setLoadSuccess(false);
 			}
 
-			if ( !FileIO::read(filepath, m_faces.at(faceIndex)) )
+			if ( !FileIO::read(filepath, m_faces[faceIndex]) )
 			{
-				TraceError{ClassId} << "Unable to load plane '" << CubemapFaceNames.at(faceIndex) << "' from file '" << filepath << "' !";
+				TraceError{ClassId} << "Unable to load plane '" << CubemapFaceNames[faceIndex] << "' from file '" << filepath << "' !";
 
 				return this->setLoadSuccess(false);
 			}
 
-			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces.at(faceIndex)) )
+			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces[faceIndex]) )
 			{
-				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames.at(faceIndex) << "' to create a cubemap !";
+				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames[faceIndex] << "' to create a cubemap !";
 
 				return this->setLoadSuccess(false);
 			}
@@ -424,7 +426,7 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			if ( !m_faces.at(faceIndex).initialize(faceSize, faceSize, ChannelMode::RGBA) )
+			if ( !m_faces[faceIndex].initialize(faceSize, faceSize, ChannelMode::RGBA) )
 			{
 				TraceError{ClassId} << "Unable to initialize the pixmap for face #" << faceIndex << " !";
 
@@ -433,14 +435,16 @@ namespace EmEn::Graphics
 
 			for ( uint32_t row = 0; row < faceSize; row++ )
 			{
-				const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+				const auto t = (2.0F * (static_cast< float >(row) + 0.5F) * invSize) - 1.0F;
 
 				for ( uint32_t col = 0; col < faceSize; col++ )
 				{
-					const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+					const auto s = (2.0F * (static_cast< float >(col) + 0.5F) * invSize) - 1.0F;
 
 					/* Compute the 3D direction vector for this texel based on face. */
-					float dx, dy, dz;
+					float dx = 0.0F;
+					float dy = 0.0F;
+					float dz = 0.0F;
 
 					switch ( faceIndex )
 					{
@@ -453,7 +457,7 @@ namespace EmEn::Graphics
 					}
 
 					/* Normalize direction vector. */
-					const auto length = std::sqrt(dx * dx + dy * dy + dz * dz);
+					const auto length = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 					const auto nx = dx / length;
 					const auto ny = dy / length;
 					const auto nz = dz / length;
@@ -461,19 +465,19 @@ namespace EmEn::Graphics
 					/* Convert to equirectangular UV coordinates. */
 					const auto theta = std::atan2(nz, nx);
 					const auto phi = std::asin(ny);
-					const auto u = theta / twoPi + 0.5F;
-					const auto v = 0.5F - phi / pi;
+					const auto u = (theta / twoPi) + 0.5F;
+					const auto v = 0.5F - (phi / pi);
 
 					/* Sample the equirectangular source with bilinear interpolation. */
 					const auto color = equirectangular.linearSample(u, v);
 
-					m_faces.at(faceIndex).setPixel(col, row, color);
+					m_faces[faceIndex].setPixel(col, row, color);
 				}
 			}
 
-			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces.at(faceIndex)) )
+			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces[faceIndex]) )
 			{
-				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames.at(faceIndex) << "' to create a cubemap !";
+				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames[faceIndex] << "' to create a cubemap !";
 
 				return this->setLoadSuccess(false);
 			}
@@ -512,7 +516,7 @@ namespace EmEn::Graphics
 		 * The Background "Luminance" key (nits) then scales an HDR sky exactly like an LDR one,
 		 * and the average color stays representative. Rec.709 luma on linear radiances. */
 		double hemisphereIlluminance = 0.0;
-		double sphereWeightedLuma[3] = {0.0, 0.0, 0.0};
+		std::array< double, 3 > sphereWeightedLuma{0.0, 0.0, 0.0};
 		double sphereSolidAngle = 0.0;
 
 		for ( uint32_t row = 0; row < height; ++row )
@@ -521,15 +525,15 @@ namespace EmEn::Graphics
 			const auto texelSolidAngle = (twoPi / static_cast< float >(width)) * (pi / static_cast< float >(height)) * std::cos(elevation);
 			const auto groundCosine = std::sin(elevation);
 
-			const auto * rowData = sourceData + static_cast< size_t >(row) * width * colorCount;
+			const auto * rowData = sourceData + (static_cast< size_t >(row) * width * colorCount);
 
-			double rowSum[3] = {0.0, 0.0, 0.0};
+			std::array< double, 3 > rowSum{0.0, 0.0, 0.0};
 
 			for ( uint32_t col = 0; col < width; ++col )
 			{
-				rowSum[0] += rowData[col * colorCount + 0];
-				rowSum[1] += rowData[col * colorCount + 1];
-				rowSum[2] += rowData[col * colorCount + 2];
+				rowSum[0] += rowData[(col * colorCount) + 0];
+				rowSum[1] += rowData[(col * colorCount) + 1];
+				rowSum[2] += rowData[(col * colorCount) + 2];
 			}
 
 			for ( size_t channel = 0; channel < 3; ++channel )
@@ -542,7 +546,7 @@ namespace EmEn::Graphics
 			/* Only the sky half lights the ground. */
 			if ( groundCosine > 0.0F )
 			{
-				const auto rowLuma = 0.2126 * rowSum[0] + 0.7152 * rowSum[1] + 0.0722 * rowSum[2];
+				const auto rowLuma = (0.2126 * rowSum[0]) + (0.7152 * rowSum[1]) + (0.0722 * rowSum[2]);
 
 				hemisphereIlluminance += rowLuma * texelSolidAngle * groundCosine;
 			}
@@ -571,19 +575,21 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			auto & face = m_facesHDR.at(faceIndex);
+			auto & face = m_facesHDR[faceIndex];
 			face.resize(static_cast< size_t >(faceSize) * faceSize * 4);
 
 			for ( uint32_t row = 0; row < faceSize; row++ )
 			{
-				const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+				const auto t = (2.0F * (static_cast< float >(row) + 0.5F) * invSize) - 1.0F;
 
 				for ( uint32_t col = 0; col < faceSize; col++ )
 				{
-					const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+					const auto s = (2.0F * (static_cast< float >(col) + 0.5F) * invSize) - 1.0F;
 
 					/* Compute the 3D direction vector for this texel based on face. */
-					float dx, dy, dz;
+					float dx = 0.0F;
+					float dy = 0.0F;
+					float dz = 0.0F;
 
 					switch ( faceIndex )
 					{
@@ -595,20 +601,20 @@ namespace EmEn::Graphics
 						default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
 					}
 
-					const auto length = std::sqrt(dx * dx + dy * dy + dz * dz);
+					const auto length = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 					const auto nx = dx / length;
 					const auto ny = dy / length;
 					const auto nz = dz / length;
 
 					const auto theta = std::atan2(nz, nx);
 					const auto phi = std::asin(ny);
-					const auto u = theta / twoPi + 0.5F;
-					const auto v = 0.5F - phi / pi;
+					const auto u = (theta / twoPi) + 0.5F;
+					const auto v = 0.5F - (phi / pi);
 
 					std::array< float, 3 > radiance{};
 					sampleEquirectangularHDR(equirectangular, u, v, radiance);
 
-					auto * texel = face.data() + (static_cast< size_t >(row) * faceSize + col) * 4;
+					auto * texel = face.data() + ((static_cast< size_t >(row) * faceSize + col) * 4);
 					texel[0] = floatToHalf(radiance[0] * calibration);
 					texel[1] = floatToHalf(radiance[1] * calibration);
 					texel[2] = floatToHalf(radiance[2] * calibration);
@@ -629,7 +635,7 @@ namespace EmEn::Graphics
 			if ( debugFace.initialize(faceSize, faceSize, ChannelMode::RGB) )
 			{
 				auto * out = debugFace.data().data();
-				const auto & face = m_facesHDR.at(faceIndex);
+				const auto & face = m_facesHDR[faceIndex];
 
 				const auto halfToFloat = [] (uint16_t half) {
 					const auto exponent = static_cast< int32_t >((half >> 10) & 0x1FU);
@@ -694,11 +700,11 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			m_faces.at(faceIndex) = Processor< uint8_t >::crop(pixmap, rectangles.at(faceIndex));
+			m_faces[faceIndex] = Processor< uint8_t >::crop(pixmap, rectangles[faceIndex]);
 
-			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces.at(faceIndex)) )
+			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces[faceIndex]) )
 			{
-				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames.at(faceIndex) << "' to create a cubemap !";
+				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames[faceIndex] << "' to create a cubemap !";
 
 				return this->setLoadSuccess(false);
 			}
@@ -717,11 +723,11 @@ namespace EmEn::Graphics
 		
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			m_faces.at(faceIndex) = pixmaps.at(faceIndex);
+			m_faces[faceIndex] = pixmaps[faceIndex];
 
-			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces.at(faceIndex)) )
+			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces[faceIndex]) )
 			{
-				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames.at(faceIndex) << "' to create a cubemap !";
+				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames[faceIndex] << "' to create a cubemap !";
 
 				return this->setLoadSuccess(false);
 			}
@@ -740,14 +746,14 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
+			if ( !m_faces[faceIndex].initialize(size, size, ChannelMode::RGBA) )
 			{
 				TraceError{ClassId} << "Unable to initialize the pixmap for face #" << faceIndex << " !";
 
 				return this->setLoadSuccess(false);
 			}
 
-			if ( !m_faces.at(faceIndex).fill(color) )
+			if ( !m_faces[faceIndex].fill(color) )
 			{
 				TraceError{ClassId} << "Unable to fill the pixmap for face #" << faceIndex << " !";
 
@@ -768,7 +774,7 @@ namespace EmEn::Graphics
 			faceIndex = 0;
 		}
 
-		return m_faces.at(faceIndex);
+		return m_faces[faceIndex];
 	}
 
 	bool
@@ -861,7 +867,7 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			const auto & face = m_faces.at(faceIndex);
+			const auto & face = m_faces[faceIndex];
 			const auto faceSize = face.width();
 			const auto colorCount = static_cast< size_t >(face.colorCount());
 			const auto * data = face.data().data();
@@ -879,13 +885,15 @@ namespace EmEn::Graphics
 
 			for ( uint32_t row = 0; row < faceSize; row += step )
 			{
-				const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+				const auto t = (2.0F * (static_cast< float >(row) + 0.5F) * invSize) - 1.0F;
 
 				for ( uint32_t col = 0; col < faceSize; col += step )
 				{
-					const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+					const auto s = (2.0F * (static_cast< float >(col) + 0.5F) * invSize) - 1.0F;
 
-					float dx, dy, dz;
+					float dx = 0.0F;
+					float dy = 0.0F;
+					float dz = 0.0F;
 
 					switch ( faceIndex )
 					{
@@ -896,7 +904,7 @@ namespace EmEn::Graphics
 						default: /* NegativeZ */ dx = -s;   dy = -t;	dz = -1.0F; break;
 					}
 
-					const auto lengthSquared = dx * dx + dy * dy + dz * dz;
+					const auto lengthSquared = (dx * dx) + (dy * dy) + (dz * dz);
 					const auto upCosine = dy / std::sqrt(lengthSquared);
 
 					if ( upCosine <= 0.0F )
@@ -904,12 +912,12 @@ namespace EmEn::Graphics
 						continue;
 					}
 
-					const auto * texel = data + (static_cast< size_t >(row) * faceSize + col) * colorCount;
+					const auto * texel = data + ((static_cast< size_t >(row) * faceSize + col) * colorCount);
 
 					const auto luma =
-						0.2126F * s_linearLUT[texel[0]] +
-						0.7152F * s_linearLUT[texel[1]] +
-						0.0722F * s_linearLUT[texel[2]];
+						(0.2126F * s_linearLUT[texel[0]]) +
+						(0.7152F * s_linearLUT[texel[1]]) +
+						(0.0722F * s_linearLUT[texel[2]]);
 
 					const auto solidAngle = (4.0F * invSize * invSize) / (lengthSquared * std::sqrt(lengthSquared));
 

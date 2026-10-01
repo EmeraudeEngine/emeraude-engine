@@ -76,6 +76,32 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AnimatedTextureCubemap (const AnimatedTextureCubemap & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AnimatedTextureCubemap (AnimatedTextureCubemap && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AnimatedTextureCubemap &
+			 */
+			AnimatedTextureCubemap & operator= (const AnimatedTextureCubemap & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AnimatedTextureCubemap &
+			 */
+			AnimatedTextureCubemap & operator= (AnimatedTextureCubemap && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the animated texture cubemap resource.
 			 */
 			~AnimatedTextureCubemap () override
@@ -231,6 +257,10 @@ namespace EmEn::Graphics::TextureResource
 			bool load (const std::shared_ptr< CubemapMovieResource > & cubemapMovieResource) noexcept;
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
+			[[nodiscard]]
+			bool onDependencyFailed (const ResourceTrait & dependency) noexcept override;
 
 			std::shared_ptr< CubemapMovieResource > m_localData;
 			std::shared_ptr< Vulkan::Image > m_image;

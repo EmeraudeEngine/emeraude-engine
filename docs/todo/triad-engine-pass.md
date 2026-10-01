@@ -57,7 +57,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
-| 7 | `src/Graphics` (by sub-group) | 137 872 | ⬜ |
+| 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | 🟠 7a started |
 | 8 | `src/Saphir` | 31 645 | ⬜ |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
 | 10 | `src/Audio` | 18 919 | ⬜ |
@@ -635,4 +635,79 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
     forEachStaticEntities overloads clean; the same sequence on both GPUs: MCP 1707/0, console 4439/0, clean exit, no
     crash event; only the known citadel 12325 on NVIDIA, 0 VUID on AMD). The MSVC rehash abort path is gone.
   - ✅ 6e VALIDATED on Linux, macOS M2 and Windows NVIDIA + AMD.
+
+## Section 7 — `src/Graphics` (started 2026-10-01), seven sub-sections (owner, 2026-10-01)
+
+| Sub | Content | Lines | Status |
+|---|---|---|---|
+| 7a | Resources read from disk: images and textures (`ImageResource`, `CompressedImageResource`, `KTX2Decoder`, `TextureCompressor`, `VolumetricImageResource`, `TextureResource/`, `TextureCache`), cubemaps and IBL (`CubemapResource`, `IBLTexture`), video (`MovieResource`, `CubemapMovieResource`, `VideoFrameConverter`, `ExternalInput`), `FontResource`, `CloudShapeResource` | ~13 700 | 🟠 started |
+| 7b | `Material/` (JSON material definitions) | ~14 000 | ⬜ |
+| 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ⬜ |
+| 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ⬜ |
+| 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ⬜ |
+| 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ⬜ |
+| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ⬜ |
+
+Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2); 7c `BasicGroundResource` passes
+`DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d the
+`screenshot()` "did not complete in time" wording while an asset is still uploading (6a). Outside section 7: base
+`Animation/AnimationChannel.hpp:277` `-Wfloat-conversion` (6d), `SoundfontResource` unconfined `file` path (section 10).
+
+### 7a — resources read from disk (started 2026-10-01)
+- [x] (1) clang-tidy 21.1.6 baseline (21 TUs, the 7a files only): **171**: 71 parentheses, 28 constant-array-index, 17
+  designated-initializers, 17 reinterpret-cast, 7 init-variables, 7 special-member-functions, 6 isolate-declaration,
+  4 use-anonymous-namespace, 3 C arrays, 2 implicit-widening, 2 qualified-auto, 2 convert-to-static, and singles incl.
+  a clang-analyzer `core.BitwiseShift` in `KTX2Decoder` (a shift by 4294967295).
+- [x] (2) Review (trust boundary: files on disk). Findings:
+  - K1 `KTX2Decoder`: `firstFittingLevel()` answers `numLevels - 1` = 4294967295 for a 0-level texture, then shifted by
+    it; libktx forces ≥ 1 level but checks the count against the size with `1 << (levelCount - 1)`, itself UNDEFINED past
+    32 (`lib/checkheader.c`): a hostile header can pass it and the level walks shift by up to the count.
+  - K2 `TextureCache::tryLoad()`: a level's `dataSize` from the cache FILE is trusted: `resize()` up to 4 GiB × 20
+    levels, and a size that does not match the dimensions hands the upload a short buffer. The cache is a file on disk
+    (a truncated write, a disk error).
+  - K3 `MovieResource` / `CubemapMovieResource::extractCountWidth()`: `std::stoul()` on the JSON pattern `{…}` — throws
+    (abort) on "{abc}" or an out-of-range number; a huge width pads every frame name to gigabytes.
+  - K4 `MovieResource::loadParametric()`: `FrameCount` from JSON is unbounded, and a missing frame image silently gets
+    the store's DEFAULT image (a copy per frame): 4e9 frames = an out-of-memory abort (owner question).
+  - K5 `TextureCompressor`: `srcY * stride` in 32 bits wraps from a 32k × 32k source (an out-of-bounds read).
+  - K6 (cascade census of `std::sto*`, the section-2 lead): 4 sites — the two movie parsers (K3), `Console::Controller`
+    (port) and base `HTTPSClient` (Content-Length), both pre-validated (digits only, bounded length).
+  - K7 PRE-EXISTING, found by the hostile tests, not a 7a file: **a glTF with ONE unreadable image leaks GPU objects to
+    shutdown** — a corrupt JPEG in a copy of DamagedHelmet (or a KTX2 libktx refuses): 20 `vkDestroyDevice-05137`,
+    VMA "Some allocations were not freed", "device smart pointer still have 14 uses". The same asset intact: 0. The
+    failed-dependency path of the resource chain (section 2 / 3 territory) — owner question.
+  - Checked, sound: `CloudShapeResource` clamps every parameter; `VolumetricImageResource` has no file loader;
+    `VideoFrameConverter` refuses zero / odd dimensions; the cubemap face loops are bounded (the `.at()` lead: replaced
+    by `[]`).
+- [x] (3) Mechanical + the evident refusals (2026-10-01): K1 a container with 0 or > 32 levels is refused (and
+  `firstFittingLevel()` guards 0 itself); K2 a level whose size is not the BC7 size of its dimensions, or more than the
+  file holds, is a cache miss (a warning); K3 `std::from_chars`, a width of 1 to 10 digits, else the existing
+  "Invalid basename"; K5 the offsets in `size_t`; K6 `Controller` and `HTTPSClient` on `std::from_chars` too — 0
+  `std::sto*` left in the cascade. clang-tidy fix-its (parentheses, designated initializers, isolated declarations,
+  qualified auto) with **`--format-style=none`** (without it clang-tidy reformats the lines it touches), the
+  designated-initializer spacing normalized, float temporaries initialized to 0 (the fix-it's `NAN` + `<math.h>`
+  undone), `std::array` for the C arrays, copy / move deleted on the 6 texture classes and `CloudShapeResource`, the
+  KTX2 helpers and `testPatternBGR` in anonymous namespaces, the `KTX2Decoder` deleted constructor public, an
+  unambiguous `m_descriptorPool = nullptr`, `*` instead of `.value()`. Builds clean.
+  Hostile tests (Linux): 18 texture-cache entries corrupted (`dataSize` 0xFFFFFFF0) → 17 "ignored" warnings, the
+  textures recompressed, no abort, 0 VUID; a 40-level KTX2 → refused (by libktx itself here), engine alive.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - K4 a movie frame missing from the store REFUSES the movie (`isResourceExists()` before `getResource()`, for the
+    parametric pattern AND the explicit frame list, `MovieResource` and `CubemapMovieResource`).
+  - K7 investigated now. ROOT CAUSE: no failure path told the parents nor released the strong child ↔ parent links, and
+    `Container::getOrCreateResource()`'s async creation left a resource whose function returned false `Unloaded`
+    forever. Ruling: a failure always propagates and releases every link; each parent answers the new
+    `ResourceTrait::onDependencyFailed()` hook (default: fail in turn); the six texture types take their type's default
+    data (`TextureResource::Abstract::takeDefaultData()`). Also: `addDependency()` of an already-failed child is handled
+    as a failure, its own failing refusals release their links, the file-parse failures too, and the container fails an
+    unfinished manual creation (async and sync). Contract: `docs/subsystems/resources/04-development-patterns.md`;
+    caution-points § Resources.
+- [x] (4) Verified 2026-10-01 (Linux): cascade builds (0 warning); base 2170/2170 Release AND ASan/UBSan (the
+  `HTTPSClient` change); clangcheck 123 TUs 0, `-Wfloat-conversion` 0; clang-tidy 171 → 72 (on purpose, ledger).
+  Broken assets: DamagedHelmet with a corrupt JPEG and the KTX2 lamp with a 40-level texture now RENDER (the default
+  texture in place, a "goes on without its failed dependency" warning) and leak nothing (was: nothing rendered, 20
+  VUIDs, VMA asserts); a corrupted texture cache → 17 entries ignored, recompressed. Regression: citadel (MCP 1707/0,
+  console 4466/0, log classes = the 6b run), terrain, beams, lighten-marbles, the INTACT helmet / lamp / Fox: 0 VUID,
+  0 VMA, 0 error, 0 "goes on without", 0 "fails: its dependency".
+- [ ] (5) Commit + push on the owner's order; then the peers.
 

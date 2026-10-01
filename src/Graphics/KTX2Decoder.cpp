@@ -41,50 +41,127 @@ namespace EmEn::Graphics
 {
 	using namespace Base::PixelFactory;
 
-	/* The 12-byte KTX2 file identifier, as mandated by the KTX 2.0 specification. */
-	static constexpr std::array< uint8_t, 12 > KTX2Identifier{0xABU, 0x4BU, 0x54U, 0x58U, 0x20U, 0x32U, 0x30U, 0xBBU, 0x0DU, 0x0AU, 0x1AU, 0x0AU};
-
-	/* Linear <-> sRGB pairs for every block format the engine can meet. The transcoder
-	 * always targets BC7; the remaining entries only matter for a KTX2 that already
-	 * carries a real vkFormat and is passed through without transcoding. */
-	struct FormatPair
+	namespace
 	{
-		VkFormat linear;
-		VkFormat nonLinear;
-	};
+		/* The 12-byte KTX2 file identifier, as mandated by the KTX 2.0 specification. */
+		constexpr std::array< uint8_t, 12 > KTX2Identifier{0xABU, 0x4BU, 0x54U, 0x58U, 0x20U, 0x32U, 0x30U, 0xBBU, 0x0DU, 0x0AU, 0x1AU, 0x0AU};
 
-	static constexpr std::array< FormatPair, 9 > BlockFormatPairs{{
-		{VK_FORMAT_BC1_RGB_UNORM_BLOCK, VK_FORMAT_BC1_RGB_SRGB_BLOCK},
-		{VK_FORMAT_BC1_RGBA_UNORM_BLOCK, VK_FORMAT_BC1_RGBA_SRGB_BLOCK},
-		{VK_FORMAT_BC2_UNORM_BLOCK, VK_FORMAT_BC2_SRGB_BLOCK},
-		{VK_FORMAT_BC3_UNORM_BLOCK, VK_FORMAT_BC3_SRGB_BLOCK},
-		{VK_FORMAT_BC7_UNORM_BLOCK, VK_FORMAT_BC7_SRGB_BLOCK},
-		{VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK, VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK},
-		{VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK, VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK},
-		{VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK, VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK},
-		{VK_FORMAT_ASTC_4x4_UNORM_BLOCK, VK_FORMAT_ASTC_4x4_SRGB_BLOCK}
-	}};
+		/* Linear <-> sRGB pairs for every block format the engine can meet. The transcoder
+		 * always targets BC7; the remaining entries only matter for a KTX2 that already
+		 * carries a real vkFormat and is passed through without transcoding. */
+		struct FormatPair
+		{
+			VkFormat linear;
+			VkFormat nonLinear;
+		};
 
-	/* Normalizes a format to its linear variant. libktx derives the vkFormat of the
-	 * transcoded data from the container's transfer function, so an sRGB-tagged asset comes
-	 * back as *_SRGB_BLOCK. The bits are the same either way: the colour space belongs to
-	 * the texture's usage, decided by the consumer, so we hand back the linear variant and
-	 * let it choose. */
-	static
-	VkFormat
-	toLinearFormat (VkFormat format) noexcept
-	{
-		const auto pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
-			return pair.nonLinear == format;
-		});
+		constexpr std::array< FormatPair, 9 > BlockFormatPairs{{
+			{.linear = VK_FORMAT_BC1_RGB_UNORM_BLOCK, .nonLinear = VK_FORMAT_BC1_RGB_SRGB_BLOCK},
+			{.linear = VK_FORMAT_BC1_RGBA_UNORM_BLOCK, .nonLinear = VK_FORMAT_BC1_RGBA_SRGB_BLOCK},
+			{.linear = VK_FORMAT_BC2_UNORM_BLOCK, .nonLinear = VK_FORMAT_BC2_SRGB_BLOCK},
+			{.linear = VK_FORMAT_BC3_UNORM_BLOCK, .nonLinear = VK_FORMAT_BC3_SRGB_BLOCK},
+			{.linear = VK_FORMAT_BC7_UNORM_BLOCK, .nonLinear = VK_FORMAT_BC7_SRGB_BLOCK},
+			{.linear = VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK, .nonLinear = VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK},
+			{.linear = VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK, .nonLinear = VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK},
+			{.linear = VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK, .nonLinear = VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK},
+			{.linear = VK_FORMAT_ASTC_4x4_UNORM_BLOCK, .nonLinear = VK_FORMAT_ASTC_4x4_SRGB_BLOCK}
+		}};
 
-		return pairIt != BlockFormatPairs.cend() ? pairIt->linear : format;
+		/* Normalizes a format to its linear variant. libktx derives the vkFormat of the
+		 * transcoded data from the container's transfer function, so an sRGB-tagged asset comes
+		 * back as *_SRGB_BLOCK. The bits are the same either way: the colour space belongs to
+		 * the texture's usage, decided by the consumer, so we hand back the linear variant and
+		 * let it choose. */
+		VkFormat
+		toLinearFormat (VkFormat format) noexcept
+		{
+			const auto *const pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
+				return pair.nonLinear == format;
+			});
+
+			return pairIt != BlockFormatPairs.cend() ? pairIt->linear : format;
+		}
+
+		/* Opens a KTX2 blob and transcodes it, when needed, to the requested target.
+		 * Returns nullptr on failure, an owning ktxTexture2 * otherwise. */
+		ktxTexture2 *
+		openAndTranscode (std::span< const std::byte > bytes, ktx_transcode_fmt_e target, const std::string & label) noexcept
+		{
+			ktxTexture2 * texture = nullptr;
+
+			const auto createError = ktxTexture2_CreateFromMemory(
+				reinterpret_cast< const ktx_uint8_t * >(bytes.data()),
+				static_cast< ktx_size_t >(bytes.size()),
+				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+				&texture
+			);
+
+			if ( createError != KTX_SUCCESS || texture == nullptr )
+			{
+				TraceError{KTX2Decoder::ClassId} << "Unable to open the KTX2 container '" << label << "' : " << ktxErrorString(createError);
+
+				return nullptr;
+			}
+
+			/* NOTE: libktx guarantees at least one level, but checks the count against the size with a shift that is itself
+			 * undefined past 32 (lib/checkheader.c): a hostile header can pass it, and every level walk below shifts by the
+			 * level. 32 levels already cover a 2^31-texel dimension. */
+			if ( texture->numLevels == 0 || texture->numLevels > 32 )
+			{
+				TraceError{KTX2Decoder::ClassId} << "The KTX2 container '" << label << "' declares " << texture->numLevels << " mip levels (1 to 32 expected) !";
+
+				ktxTexture_Destroy(ktxTexture(texture));
+
+				return nullptr;
+			}
+
+			if ( ktxTexture2_NeedsTranscoding(texture) )
+			{
+				const auto transcodeError = ktxTexture2_TranscodeBasis(texture, target, 0);
+
+				if ( transcodeError != KTX_SUCCESS )
+				{
+					TraceError{KTX2Decoder::ClassId} << "Unable to transcode the KTX2 container '" << label << "' : " << ktxErrorString(transcodeError);
+
+					ktxTexture_Destroy(ktxTexture(texture));
+
+					return nullptr;
+				}
+			}
+
+			return texture;
+		}
+
+		/* Returns the first mip level whose dimensions fit within the clamp, and the count of
+		 * levels kept from there. A clamp bigger than the texture keeps everything. */
+		uint32_t
+		firstFittingLevel (const ktxTexture2 * texture, uint32_t maxDimension) noexcept
+		{
+			if ( maxDimension == 0 || texture->numLevels == 0 )
+			{
+				return 0;
+			}
+
+			for ( uint32_t level = 0; level < texture->numLevels; ++level )
+			{
+				const auto width = std::max(1U, texture->baseWidth >> level);
+				const auto height = std::max(1U, texture->baseHeight >> level);
+
+				if ( width <= maxDimension && height <= maxDimension )
+				{
+					return level;
+				}
+			}
+
+			/* Every level is oversized (a clamp below 1 pixel is nonsense) : keep the smallest. */
+			return texture->numLevels - 1;
+		}
 	}
 
 	VkFormat
 	KTX2Decoder::sRGBFormat (VkFormat format) noexcept
 	{
-		const auto pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
+		const auto *const pairIt = std::ranges::find_if(BlockFormatPairs, [format] (const auto & pair) {
 			return pair.linear == format;
 		});
 
@@ -100,71 +177,6 @@ namespace EmEn::Graphics
 		}
 
 		return std::memcmp(bytes.data(), KTX2Identifier.data(), KTX2Identifier.size()) == 0;
-	}
-
-	/* Opens a KTX2 blob and transcodes it, when needed, to the requested target.
-	 * Returns nullptr on failure, an owning ktxTexture2 * otherwise. */
-	static
-	ktxTexture2 *
-	openAndTranscode (std::span< const std::byte > bytes, ktx_transcode_fmt_e target, const std::string & label) noexcept
-	{
-		ktxTexture2 * texture = nullptr;
-
-		const auto createError = ktxTexture2_CreateFromMemory(
-			reinterpret_cast< const ktx_uint8_t * >(bytes.data()),
-			static_cast< ktx_size_t >(bytes.size()),
-			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-			&texture
-		);
-
-		if ( createError != KTX_SUCCESS || texture == nullptr )
-		{
-			TraceError{KTX2Decoder::ClassId} << "Unable to open the KTX2 container '" << label << "' : " << ktxErrorString(createError);
-
-			return nullptr;
-		}
-
-		if ( ktxTexture2_NeedsTranscoding(texture) )
-		{
-			const auto transcodeError = ktxTexture2_TranscodeBasis(texture, target, 0);
-
-			if ( transcodeError != KTX_SUCCESS )
-			{
-				TraceError{KTX2Decoder::ClassId} << "Unable to transcode the KTX2 container '" << label << "' : " << ktxErrorString(transcodeError);
-
-				ktxTexture_Destroy(ktxTexture(texture));
-
-				return nullptr;
-			}
-		}
-
-		return texture;
-	}
-
-	/* Returns the first mip level whose dimensions fit within the clamp, and the count of
-	 * levels kept from there. A clamp bigger than the texture keeps everything. */
-	static
-	uint32_t
-	firstFittingLevel (const ktxTexture2 * texture, uint32_t maxDimension) noexcept
-	{
-		if ( maxDimension == 0 )
-		{
-			return 0;
-		}
-
-		for ( uint32_t level = 0; level < texture->numLevels; ++level )
-		{
-			const auto width = std::max(1U, texture->baseWidth >> level);
-			const auto height = std::max(1U, texture->baseHeight >> level);
-
-			if ( width <= maxDimension && height <= maxDimension )
-			{
-				return level;
-			}
-		}
-
-		/* Every level is oversized (a clamp below 1 pixel is nonsense) : keep the smallest. */
-		return texture->numLevels - 1;
 	}
 
 	KTX2Decoder::Result

@@ -484,4 +484,18 @@ namespace EmEn::Graphics::TextureResource
 	{
 		return m_compressedData;
 	}
+
+	bool
+	Texture2D::onDependencyFailed (const ResourceTrait & dependency) noexcept
+	{
+		if ( !this->takeDefaultData(m_localData, dependency) )
+		{
+			return false;
+		}
+
+		/* The compressed path fell: the default IMAGE replaces it, the upload takes the uncompressed path. */
+		m_compressedData.reset();
+
+		return true;
+	}
 }

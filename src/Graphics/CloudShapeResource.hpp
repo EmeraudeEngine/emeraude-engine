@@ -141,6 +141,32 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			CloudShapeResource (const CloudShapeResource & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			CloudShapeResource (CloudShapeResource && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return CloudShapeResource &
+			 */
+			CloudShapeResource & operator= (const CloudShapeResource & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return CloudShapeResource &
+			 */
+			CloudShapeResource & operator= (CloudShapeResource && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the cloud shape resource.
 			 */
 			~CloudShapeResource () override

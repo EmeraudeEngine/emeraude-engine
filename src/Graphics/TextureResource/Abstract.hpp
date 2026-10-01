@@ -342,6 +342,40 @@ namespace EmEn::Graphics::TextureResource
 			 */
 			void applyFlipNormalMapY (Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
 
+			/**
+			 * @brief The onDependencyFailed() of a texture: takes its type's DEFAULT data in place of the failed one.
+			 * @note Owner ruling 2026-10-01: a texture whose image (movie, cubemap, volume…) failed shows the default data
+			 * of that type and its chain goes on — a glTF with one broken texture renders, the default one there, instead
+			 * of rendering nothing. The failure and the substitution are both logged by ResourceTrait.
+			 * @tparam data_t The type of the texture's data resource.
+			 * @param localData A reference to the texture's data pointer, replaced on success.
+			 * @param failed A reference to the dependency that failed.
+			 * @return bool False when no loaded default exists (the texture then fails in turn).
+			 */
+			template< typename data_t >
+			[[nodiscard]]
+			bool
+			takeDefaultData (std::shared_ptr< data_t > & localData, const ResourceTrait & failed) noexcept
+			{
+				auto * container = this->serviceProvider().template container< data_t >();
+
+				if ( container == nullptr )
+				{
+					return false;
+				}
+
+				auto fallback = container->getDefaultResource();
+
+				if ( fallback == nullptr || fallback.get() == &failed || !fallback->isLoaded() )
+				{
+					return false;
+				}
+
+				localData = std::move(fallback);
+
+				return true;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */

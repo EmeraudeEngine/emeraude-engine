@@ -875,6 +875,26 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Called when one of this resource's dependencies FAILED to load: answers whether this resource goes on
+			 * without it.
+			 * @note Owner ruling 2026-10-01: a failure is always propagated and every dependency link released. The child
+			 * and its parents held each other through strong pointers, so the whole chain (image, texture, material,
+			 * mesh…) leaked with its GPU objects, and the parents waited in Loading forever (a glTF with one unreadable
+			 * image rendered nothing). By default this resource fails in turn, up the chain. An override answering true
+			 * must have replaced what the dependency provided (a texture takes its type's default data); the dependency is
+			 * already removed from the waited list when this is called.
+			 * @param dependency A reference to the dependency that failed.
+			 * @return bool True to keep loading without it.
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			onDependencyFailed ([[maybe_unused]] const ResourceTrait & dependency) noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Extracts a relative resource name from a full filesystem path.
 			 *
 			 * Removes the store directory prefix and file extension from a path to generate
@@ -908,6 +928,31 @@ namespace EmEn::Resources
 			 * @see addDependency(), checkDependencies(), m_dependenciesToWaitFor
 			 */
 			void dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
+
+			/**
+			 * @brief Notification callback invoked by a child dependency that FAILED to load.
+			 * @note Removes it from the waited list, asks onDependencyFailed(), then goes on (checkDependencies()) or fails
+			 * in turn (releaseLinksAfterFailure(), which propagates up).
+			 * @param dependency Shared pointer to the dependency that failed.
+			 * @return void
+			 */
+			void dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
+
+			/**
+			 * @brief Releases every dependency link of a resource that just failed, and tells its parents.
+			 * @note Called on every failure path (setLoadSuccess(false), a failed onDependenciesLoaded(), a failed file
+			 * parse, a failed dependency): the waited children are dropped and each parent gets dependencyFailed().
+			 * @return void
+			 */
+			void releaseLinksAfterFailure () noexcept;
+
+			/**
+			 * @brief Asks onDependencyFailed() and, when this resource cannot go on, fails it (links released, parents told).
+			 * @param dependency A reference to the dependency that failed.
+			 * @return bool True when this resource goes on without it.
+			 */
+			[[nodiscard]]
+			bool goOnAfterDependencyFailure (const ResourceTrait & dependency) noexcept;
 
 			/**
 			 * @brief Checks if all dependencies are loaded and propagates notifications.

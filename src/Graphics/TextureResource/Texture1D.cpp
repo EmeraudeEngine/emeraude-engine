@@ -260,4 +260,10 @@ namespace EmEn::Graphics::TextureResource
 
 		return this->setLoadSuccess(true);
 	}
+
+	bool
+	Texture1D::onDependencyFailed (const ResourceTrait & dependency) noexcept
+	{
+		return this->takeDefaultData(m_localData, dependency);
+	}
 }

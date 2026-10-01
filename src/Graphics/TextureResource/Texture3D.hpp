@@ -123,6 +123,32 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Texture3D (const Texture3D & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Texture3D (Texture3D && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Texture3D &
+			 */
+			Texture3D & operator= (const Texture3D & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Texture3D &
+			 */
+			Texture3D & operator= (Texture3D && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the texture 3D resource.
 			 *
 			 * Automatically calls destroyTexture() to cleanup Vulkan objects (Image, ImageView, Sampler).
@@ -357,6 +383,10 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
+			[[nodiscard]]
+			bool onDependencyFailed (const ResourceTrait & dependency) noexcept override;
 
 			std::shared_ptr< VolumetricImageResource > m_localData; ///< Dependent VolumetricImageResource providing volumetric data.
 			std::shared_ptr< Vulkan::Image > m_image;			   ///< Vulkan Image object (VK_IMAGE_TYPE_3D) on GPU.

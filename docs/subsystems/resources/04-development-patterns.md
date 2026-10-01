@@ -38,6 +38,23 @@ bool onDependenciesLoaded() noexcept override {
 }
 ```
 
+### When a dependency FAILS (2026-10-01)
+
+A failure always propagates and releases every link (owner ruling). The child and its parents hold each other
+through strong pointers (`m_dependenciesToWaitFor` / `m_parentsToNotify`): a failed child that kept them leaked the
+whole chain with its GPU objects, and the parents waited in `Loading` forever — a glTF with ONE unreadable image
+rendered nothing and leaked to shutdown. Every failure path calls `releaseLinksAfterFailure()`: `setLoadSuccess(false)`,
+a failed `onDependenciesLoaded()`, a failed file parse, an `addDependency()` refusal that fails the resource, and the
+container's manual creation (`getOrCreateResource[Sync]()`: a function that returns false or leaves the resource
+unfinished now `failLoading()`s it). `addDependency()` of a child that ALREADY failed is handled the same way.
+
+Each parent is asked **`onDependencyFailed(const ResourceTrait & dependency)`** (protected virtual, default
+`false`): `true` means "I replaced what it provided, I go on" (logged as a warning), `false` means the parent fails in
+turn, up the chain (logged as an error). The six texture types answer through `TextureResource::Abstract::
+takeDefaultData()`: they take their type's DEFAULT data (image, volume, cubemap, movie) — a broken texture shows the
+default one and the asset still renders. A new resource type with a sensible fallback overrides the hook; the default
+is the safe one.
+
 ### Container API Methods (v0.8+)
 
 | Method | Purpose |

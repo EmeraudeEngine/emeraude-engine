@@ -298,4 +298,10 @@ namespace EmEn::Graphics::TextureResource
 
 		return this->setLoadSuccess(true);
 	}
+
+	bool
+	AnimatedTextureCubemap::onDependencyFailed (const ResourceTrait & dependency) noexcept
+	{
+		return this->takeDefaultData(m_localData, dependency);
+	}
 }

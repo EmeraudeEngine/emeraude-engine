@@ -27,6 +27,7 @@
 #include "TextureCompressor.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <algorithm>
 #include <bc7enc_rdo/bc7enc.h>
 #include <chrono>
@@ -99,10 +100,10 @@ namespace EmEn::Graphics
 			CompressedMipLevel result;
 			result.width = width;
 			result.height = height;
-			result.data.resize(totalBlocks * BlockBytes);
+			result.data.resize(static_cast< size_t >(totalBlocks) * BlockBytes);
 
 			/* Setup BC7 compression parameters. */
-			bc7enc_compress_block_params params;
+			bc7enc_compress_block_params params{};
 			bc7enc_compress_block_params_init(&params);
 
 			/* Fast quality preset: uber_level 0 (no extra refinement passes),
@@ -120,7 +121,7 @@ namespace EmEn::Graphics
 				const auto pixelY = blockY * BlockSize;
 
 				/* Extract 4x4 block of RGBA pixels, handling edge padding. */
-				uint8_t blockPixels[BlockSize * BlockSize * 4];
+				std::array< uint8_t, static_cast< size_t >(BlockSize) * BlockSize * 4 > blockPixels{};
 
 				for ( uint32_t row = 0; row < BlockSize; ++row )
 				{
@@ -129,8 +130,9 @@ namespace EmEn::Graphics
 						/* Clamp to edge for textures not multiple of 4. */
 						const auto srcX = std::min(pixelX + col, width - 1);
 						const auto srcY = std::min(pixelY + row, height - 1);
-						const auto srcOffset = (srcY * stride) + (srcX * 4);
-						const auto dstOffset = (row * BlockSize + col) * 4;
+						/* NOTE: In size_t: srcY * stride wrapped in 32 bits from a 32k x 32k source on (an out-of-bounds read). */
+						const auto srcOffset = (static_cast< size_t >(srcY) * stride) + (static_cast< size_t >(srcX) * 4);
+						const auto dstOffset = (static_cast< size_t >(row) * BlockSize + col) * 4;
 
 						std::memcpy(&blockPixels[dstOffset], &sourcePixels[srcOffset], 4);
 					}
@@ -139,7 +141,7 @@ namespace EmEn::Graphics
 				/* Compress the block. */
 				auto * outputBlock = &result.data[blockIndex * BlockBytes];
 
-				bc7enc_compress_block(outputBlock, blockPixels, &params);
+				bc7enc_compress_block(outputBlock, blockPixels.data(), &params);
 			}
 
 			const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - startTime).count();

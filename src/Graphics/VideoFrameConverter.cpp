@@ -55,14 +55,17 @@ namespace EmEn::Graphics
 {
 	using namespace Base;
 
-	/* Structured test pattern shared by the GLSL and C++ generators (gradients +
-	 * checkerboard: corruption is visually obvious, bytes stay deterministic). */
-	static void
-	testPatternBGR (uint32_t x, uint32_t y, uint32_t width, uint32_t height, int32_t & blue, int32_t & green, int32_t & red) noexcept
+	namespace
 	{
-		blue = static_cast< int32_t >(x * 255U / std::max(width - 1U, 1U));
-		green = static_cast< int32_t >(y * 255U / std::max(height - 1U, 1U));
-		red = static_cast< int32_t >((((x / 64U) + (y / 64U)) % 2U) * 255U);
+		/* Structured test pattern shared by the GLSL and C++ generators (gradients +
+		 * checkerboard: corruption is visually obvious, bytes stay deterministic). */
+		void
+		testPatternBGR (uint32_t x, uint32_t y, uint32_t width, uint32_t height, int32_t & blue, int32_t & green, int32_t & red) noexcept
+		{
+			blue = static_cast< int32_t >(x * 255U / std::max(width - 1U, 1U));
+			green = static_cast< int32_t >(y * 255U / std::max(height - 1U, 1U));
+			red = static_cast< int32_t >((((x / 64U) + (y / 64U)) % 2U) * 255U);
+		}
 	}
 
 	/* The conversion kernel: one invocation handles a 2x2 block (4 luma texels +
@@ -343,8 +346,8 @@ void main ()
 
 		{
 			const std::array< VkDescriptorImageInfo, 2 > imageInfos{{
-				{VK_NULL_HANDLE, m_lumaView->handle(), VK_IMAGE_LAYOUT_GENERAL},
-				{VK_NULL_HANDLE, m_chromaView->handle(), VK_IMAGE_LAYOUT_GENERAL}
+				{.sampler = VK_NULL_HANDLE, .imageView = m_lumaView->handle(), .imageLayout = VK_IMAGE_LAYOUT_GENERAL},
+				{.sampler = VK_NULL_HANDLE, .imageView = m_chromaView->handle(), .imageLayout = VK_IMAGE_LAYOUT_GENERAL}
 			}};
 
 			std::array< VkWriteDescriptorSet, 2 > writes{};
@@ -464,8 +467,8 @@ void main ()
 			}
 
 			const std::array< VkDescriptorImageInfo, 2 > imageInfos{{
-				{VK_NULL_HANDLE, m_lumaView->handle(), VK_IMAGE_LAYOUT_GENERAL},
-				{VK_NULL_HANDLE, m_chromaView->handle(), VK_IMAGE_LAYOUT_GENERAL}
+				{.sampler = VK_NULL_HANDLE, .imageView = m_lumaView->handle(), .imageLayout = VK_IMAGE_LAYOUT_GENERAL},
+				{.sampler = VK_NULL_HANDLE, .imageView = m_chromaView->handle(), .imageLayout = VK_IMAGE_LAYOUT_GENERAL}
 			}};
 
 			std::array< VkWriteDescriptorSet, 2 > writes{};
@@ -503,7 +506,7 @@ void main ()
 		}
 
 		m_descriptorSet.reset();
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 		m_computePipeline.reset();
 		m_pipelineLayout.reset();
 		m_descriptorSetLayout.reset();
@@ -641,13 +644,13 @@ void main ()
 		{
 			VkBufferImageCopy region{};
 			region.bufferOffset = 0;
-			region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-			region.imageExtent = {m_width, m_height, 1};
+			region.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+			region.imageExtent = {.width = m_width, .height = m_height, .depth = 1};
 
 			vkCmdCopyImageToBuffer(commandBuffer->handle(), m_lumaImage->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer->handle(), 1, &region);
 
 			region.bufferOffset = lumaBytes;
-			region.imageExtent = {m_width / 2, m_height / 2, 1};
+			region.imageExtent = {.width = m_width / 2, .height = m_height / 2, .depth = 1};
 
 			vkCmdCopyImageToBuffer(commandBuffer->handle(), m_chromaImage->handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer->handle(), 1, &region);
 		}
@@ -764,7 +767,7 @@ void main ()
 
 					testPatternBGR(col + dx, row + dy, m_width, m_height, blue, green, red);
 
-						cpuLuma[(row + dy) * m_width + (col + dx)] = static_cast< uint8_t >(std::clamp(((YCoefR * red + YCoefG * green + YCoefB * blue + 128) >> 8) + 16, 0, 255));
+						cpuLuma[((row + dy) * m_width) + (col + dx)] = static_cast< uint8_t >(std::clamp(((YCoefR * red + YCoefG * green + YCoefB * blue + 128) >> 8) + 16, 0, 255));
 
 						sumB += blue;
 						sumG += green;

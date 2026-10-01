@@ -27,6 +27,7 @@
 #include "MovieResource.hpp"
 
 /* STL inclusions. */
+#include <charconv>
 #include <algorithm>
 #include <array>
 #include <numeric>
@@ -86,7 +87,7 @@ namespace EmEn::Graphics
 					return this->setLoadSuccess(false);
 				}
 
-				if ( !m_frames[frameIndex].first.fill(colors.at(frameIndex)) )
+				if ( !m_frames[frameIndex].first.fill(colors[frameIndex]) )
 				{
 					TraceError{ClassId} << "Unable to fill the default pixmap for frame #" << frameIndex << " !";
 
@@ -216,11 +217,11 @@ namespace EmEn::Graphics
 
 		std::string replaceKey;
 
-		const auto nWidth = MovieResource::extractCountWidth(basename.value(), replaceKey);
+		const auto nWidth = MovieResource::extractCountWidth(*basename, replaceKey);
 
 		if ( nWidth == 0 )
 		{
-			TraceError{ClassId} << "Invalid basename '" << basename.value() << "' !";
+			TraceError{ClassId} << "Invalid basename '" << *basename << "' !";
 
 			return false;
 		}
@@ -253,7 +254,16 @@ namespace EmEn::Graphics
 		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
 			/* Sets the number as a string. */
-			const auto filename = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), basename.value());
+			const auto filename = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), *basename);
+
+			/* NOTE: A frame missing from the store refuses the movie (owner ruling 2026-10-01): getResource() would answer
+			 * the DEFAULT resource, copied once per frame, so a hostile frame count built billions of frames. */
+			if ( !imageContainer->isResourceExists(filename) )
+			{
+				TraceError{ClassId} << "The frame #" << frameIndex + 1 << " image '" << filename << "' of movie '" << this->name() << "' does not exist !";
+
+				return false;
+			}
 
 			const auto imageResource = imageContainer->getResource(filename, false);
 
@@ -287,8 +297,15 @@ namespace EmEn::Graphics
 		{
 			if ( const auto imageResourceName = FastJSON::getValue< std::string >(frame, JKImage) )
 			{
+				if ( !images->isResourceExists(*imageResourceName) )
+				{
+					TraceError{ClassId} << "The frame image '" << *imageResourceName << "' of movie '" << this->name() << "' does not exist !";
+
+					return false;
+				}
+
 				/* NOTE: The image must be loaded synchronously here. */
-				const auto imageResource = images->getResource(imageResourceName.value(), false);
+				const auto imageResource = images->getResource(*imageResourceName, false);
 				const auto duration = FastJSON::getValue< uint32_t >(frame, JKDuration).value_or(DefaultFrameDuration);
 
 				if ( !imageResource->isLoaded() )
@@ -417,7 +434,20 @@ namespace EmEn::Graphics
 
 		replaceKey = '{' + params[0] + '}';
 
-		return std::stoul(params[0]);
+		/* NOTE: The pattern comes from a JSON definition: std::stoul() threw (an abort here) on "{abc}" or an
+		 * out-of-range number, and a huge width padded every frame name to gigabytes. A width of 1 to 10 digits
+		 * (a 32-bit frame index has 10) is accepted, anything else answers 0, the caller's "Invalid basename". */
+		uint32_t width = 0;
+
+		const auto * first = params[0].data();
+		const auto * last = first + params[0].size();
+
+		if ( const auto [end, error] = std::from_chars(first, last, width); error != std::errc{} || end != last || width > 10 )
+		{
+			return 0;
+		}
+
+		return width;
 	}
 
 	bool
@@ -494,16 +524,16 @@ namespace EmEn::Graphics
 						const auto s = scale * frequency;
 						const auto z = static_cast< float >(octave) * 1.7F;
 
-						const auto sx = u * s + offsetX;
-						const auto sy = v * s + offsetY;
+						const auto sx = (u * s) + offsetX;
+						const auto sy = (v * s) + offsetY;
 
 						const auto n00 = perlin.generate(sx,	 sy,	 z);
 						const auto n10 = perlin.generate(sx - s, sy,	 z);
 						const auto n01 = perlin.generate(sx,	 sy - s, z);
 						const auto n11 = perlin.generate(sx - s, sy - s, z);
 
-						const auto nx0 = n00 + su * (n10 - n00);
-						const auto nx1 = n01 + su * (n11 - n01);
+						const auto nx0 = n00 + (su * (n10 - n00));
+						const auto nx1 = n01 + (su * (n11 - n01));
 
 						height += amplitude * (nx0 + sv * (nx1 - nx0));
 
@@ -511,7 +541,7 @@ namespace EmEn::Graphics
 						frequency *= 2.0F;
 					}
 
-					heights[static_cast< size_t >(row) * size + col] = height;
+					heights[(static_cast< size_t >(row) * size) + col] = height;
 				}
 			}
 
@@ -526,25 +556,25 @@ namespace EmEn::Graphics
 					const auto colPrev = (col - 1 + size) % size;
 					const auto colNext = (col + 1) % size;
 
-					const auto dx = heights[static_cast< size_t >(row) * size + colNext]
-								  - heights[static_cast< size_t >(row) * size + colPrev];
-					const auto dy = heights[static_cast< size_t >(rowNext) * size + col]
-								  - heights[static_cast< size_t >(rowPrev) * size + col];
+					const auto dx = heights[(static_cast< size_t >(row) * size) + colNext]
+								  - heights[(static_cast< size_t >(row) * size) + colPrev];
+					const auto dy = heights[(static_cast< size_t >(rowNext) * size) + col]
+								  - heights[(static_cast< size_t >(rowPrev) * size) + col];
 
 					/* Construct normal vector: (-dx * strength, -dy * strength, 1.0) and normalize. */
 					const auto nx = -dx * strength;
 					const auto ny = -dy * strength;
 					constexpr auto nz = 1.0F;
 
-					const auto invLen = 1.0F / std::sqrt(nx * nx + ny * ny + nz * nz);
+					const auto invLen = 1.0F / std::sqrt((nx * nx) + (ny * ny) + (nz * nz));
 
 					/* Encode to RGB: normal * 0.5 + 0.5 */
 					m_frames[frameIndex].first.setPixel(
 						col, row,
 						PixelFactory::Color< float >{
-							nx * invLen * 0.5F + 0.5F,
-							ny * invLen * 0.5F + 0.5F,
-							nz * invLen * 0.5F + 0.5F,
+							(nx * invLen * 0.5F) + 0.5F,
+							(ny * invLen * 0.5F) + 0.5F,
+							(nz * invLen * 0.5F) + 0.5F,
 							1.0F
 						}
 					);

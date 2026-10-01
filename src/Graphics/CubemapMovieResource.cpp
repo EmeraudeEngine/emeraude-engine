@@ -27,6 +27,7 @@
 #include "CubemapMovieResource.hpp"
 
 /* STL inclusions. */
+#include <charconv>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -90,7 +91,7 @@ namespace EmEn::Graphics
 						return this->setLoadSuccess(false);
 					}
 
-					if ( !m_frames[frameIndex].first[faceIndex].fill(colors.at(frameIndex)) )
+					if ( !m_frames[frameIndex].first[faceIndex].fill(colors[frameIndex]) )
 					{
 						TraceError{ClassId} << "Unable to fill the default pixmap for frame #" << frameIndex << ", face #" << faceIndex << " !";
 
@@ -223,11 +224,11 @@ namespace EmEn::Graphics
 
 		std::string replaceKey;
 
-		const auto nWidth = CubemapMovieResource::extractCountWidth(basename.value(), replaceKey);
+		const auto nWidth = CubemapMovieResource::extractCountWidth(*basename, replaceKey);
 
 		if ( nWidth == 0 )
 		{
-			TraceError{ClassId} << "Invalid basename '" << basename.value() << "' !";
+			TraceError{ClassId} << "Invalid basename '" << *basename << "' !";
 
 			return false;
 		}
@@ -260,7 +261,16 @@ namespace EmEn::Graphics
 		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
 			/* Sets the number as a string. */
-			const auto cubemapName = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), basename.value());
+			const auto cubemapName = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), *basename);
+
+			/* NOTE: A frame missing from the store refuses the movie (owner ruling 2026-10-01): getResource() would answer
+			 * the DEFAULT resource, copied once per frame, so a hostile frame count built billions of frames. */
+			if ( !cubemapContainer->isResourceExists(cubemapName) )
+			{
+				TraceError{ClassId} << "The frame #" << frameIndex + 1 << " cubemap '" << cubemapName << "' of cubemap movie '" << this->name() << "' does not exist !";
+
+				return false;
+			}
 
 			/* NOTE: The cubemap must be loaded synchronously here. */
 			const auto cubemapResource = cubemapContainer->getResource(cubemapName, false);
@@ -303,7 +313,14 @@ namespace EmEn::Graphics
 			if ( const auto cubemapResourceName = FastJSON::getValue< std::string >(frame, JKCubemap) )
 			{
 				/* NOTE: The cubemap must be loaded synchronously here. */
-				const auto cubemapResource = cubemaps->getResource(cubemapResourceName.value(), false);
+				if ( !cubemaps->isResourceExists(*cubemapResourceName) )
+				{
+					TraceError{ClassId} << "The frame cubemap '" << *cubemapResourceName << "' of cubemap movie '" << this->name() << "' does not exist !";
+
+					return false;
+				}
+
+				const auto cubemapResource = cubemaps->getResource(*cubemapResourceName, false);
 				const auto duration = FastJSON::getValue< uint32_t >(frame, JKDuration).value_or(DefaultFrameDuration);
 
 				if ( !cubemapResource->isLoaded() )
@@ -445,7 +462,20 @@ namespace EmEn::Graphics
 
 		replaceKey = '{' + params[0] + '}';
 
-		return std::stoul(params[0]);
+		/* NOTE: The pattern comes from a JSON definition: std::stoul() threw (an abort here) on "{abc}" or an
+		 * out-of-range number, and a huge width padded every frame name to gigabytes. A width of 1 to 10 digits
+		 * (a 32-bit frame index has 10) is accepted, anything else answers 0, the caller's "Invalid basename". */
+		uint32_t width = 0;
+
+		const auto * first = params[0].data();
+		const auto * last = first + params[0].size();
+
+		if ( const auto [end, error] = std::from_chars(first, last, width); error != std::errc{} || end != last || width > 10 )
+		{
+			return 0;
+		}
+
+		return width;
 	}
 
 	bool
@@ -505,14 +535,16 @@ namespace EmEn::Graphics
 			{
 				for ( uint32_t row = 0; row < faceSize; row++ )
 				{
-					const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+					const auto t = (2.0F * (static_cast< float >(row) + 0.5F) * invSize) - 1.0F;
 
 					for ( uint32_t col = 0; col < faceSize; col++ )
 					{
-						const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+						const auto s = (2.0F * (static_cast< float >(col) + 0.5F) * invSize) - 1.0F;
 
 						/* Compute the 3D direction vector for this texel based on face. */
-						float dx, dy, dz;
+						float dx = 0.0F;
+						float dy = 0.0F;
+						float dz = 0.0F;
 
 						switch ( faceIndex )
 						{
@@ -525,7 +557,7 @@ namespace EmEn::Graphics
 						}
 
 						/* Normalize the direction. */
-						const auto invLen = 1.0F / std::sqrt(dx * dx + dy * dy + dz * dz);
+						const auto invLen = 1.0F / std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 						const auto nx = dx * invLen;
 						const auto ny = dy * invLen;
 						const auto nz = dz * invLen;
@@ -534,13 +566,13 @@ namespace EmEn::Graphics
 						 * Invert: F2-F1 is small at cell edges (caustic lines),
 						 * but caustic lines should be the bright part. */
 						const auto causticValue = 1.0F - voronoi.caustic(
-							nx * scale + timeX,
-							ny * scale + timeY,
-							nz * scale + timeZ
+							(nx * scale) + timeX,
+							(ny * scale) + timeY,
+							(nz * scale) + timeZ
 						);
 
 						/* Map caustic value to intensity. */
-						const auto intensity = baseIntensity + causticValue * (causticIntensity - baseIntensity);
+						const auto intensity = baseIntensity + (causticValue * (causticIntensity - baseIntensity));
 
 						m_frames[frameIndex].first[faceIndex].setPixel(
 							col, row,
@@ -623,14 +655,16 @@ namespace EmEn::Graphics
 			{
 				for ( uint32_t row = 0; row < faceSize; row++ )
 				{
-					const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+					const auto t = (2.0F * (static_cast< float >(row) + 0.5F) * invSize) - 1.0F;
 
 					for ( uint32_t col = 0; col < faceSize; col++ )
 					{
-						const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+						const auto s = (2.0F * (static_cast< float >(col) + 0.5F) * invSize) - 1.0F;
 
 						/* Compute the 3D direction vector for this texel based on face. */
-						float dx, dy, dz;
+						float dx = 0.0F;
+						float dy = 0.0F;
+						float dz = 0.0F;
 
 						switch ( faceIndex )
 						{
@@ -643,10 +677,10 @@ namespace EmEn::Graphics
 						}
 
 						/* Normalize the direction. */
-						const auto invLen = 1.0F / std::sqrt(dx * dx + dy * dy + dz * dz);
-						auto nx = dx * invLen * scale + timeX;
-						auto ny = dy * invLen * scale + timeY;
-						auto nz = dz * invLen * scale + timeZ;
+						const auto invLen = 1.0F / std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+						auto nx = (dx * invLen * scale) + timeX;
+						auto ny = (dy * invLen * scale) + timeY;
+						auto nz = (dz * invLen * scale) + timeZ;
 
 						/* Simulate refractive caustics through domain warping and multi-octave noise.
 						 * Real underwater caustics are formed by light rays refracting through
@@ -694,7 +728,7 @@ namespace EmEn::Graphics
 						value = value * value;
 
 						/* Map to intensity range. */
-						const auto intensity = baseIntensity + value * (peakIntensity - baseIntensity);
+						const auto intensity = baseIntensity + (value * (peakIntensity - baseIntensity));
 
 						m_frames[frameIndex].first[faceIndex].setPixel(
 							col, row,

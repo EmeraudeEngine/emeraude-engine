@@ -27,6 +27,7 @@
 #include "Controller.hpp"
 
 /* STL inclusions. */
+#include <charconv>
 #include <algorithm>
 #include <ranges>
 #include <sstream>
@@ -209,9 +210,10 @@ namespace EmEn::Console
 			return false;
 		}
 
-		const auto value = std::stoul(portText);
+		/* NOTE: std::from_chars, not the throwing std::stoul (the text is digits only, at most five of them). */
+		uint32_t value = 0;
 
-		if ( value < 1 || value > 65535 )
+		if ( const auto [end, error] = std::from_chars(portText.data(), portText.data() + portText.size(), value); error != std::errc{} || value < 1 || value > 65535 )
 		{
 			return false;
 		}

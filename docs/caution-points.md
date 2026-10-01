@@ -2087,6 +2087,18 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 
 ## Resources / Loaders
 
+### A failed dependency leaked its whole chain — fixed 2026-10-01 (triad 7a)
+
+> [!CAUTION]
+> A copy of DamagedHelmet with ONE corrupt JPEG (or a KTX2 that libktx refuses) rendered NOTHING and leaked to shutdown:
+> 20 `VUID-vkDestroyDevice-device-05137`, VMA "Some allocations were not freed", "device smart pointer still have 14
+> uses". Two causes: the async manual creation (`Container::getOrCreateResource()`) left a resource whose function
+> returned false in `Unloaded` forever (its parents waiting), and no failure path ever told the parents nor released
+> the strong child ↔ parent links. Now every failure propagates (`ResourceTrait::releaseLinksAfterFailure()`), the
+> parents answer `onDependencyFailed()` (textures take their type's default data), and the same assets render with the
+> default texture in place, 0 VUID. Contract: `docs/subsystems/resources/04-development-patterns.md` § When a
+> dependency FAILS. Test assets: a copy of a sample with one image zeroed (`b[20:4000] = 0`) — never the sample itself.
+
 ### A JSON file with the wrong SHAPE aborted the engine — fixed 2026-09-30 (triad 6c)
 
 > [!CAUTION]

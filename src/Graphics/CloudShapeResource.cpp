@@ -82,7 +82,7 @@ namespace
 			float
 			range (float minimum, float maximum) noexcept
 			{
-				return minimum + (maximum - minimum) * this->next();
+				return minimum + ((maximum - minimum) * this->next());
 			}
 
 		private:
@@ -117,7 +117,7 @@ namespace
 	{
 		const auto h = std::max(blend - std::abs(a - b), 0.0F) / blend;
 
-		return std::min(a, b) - h * h * blend * 0.25F;
+		return std::min(a, b) - (h * h * blend * 0.25F);
 	}
 
 	/** @brief The voxel counts of a parameter set, after clamping. */
@@ -137,9 +137,9 @@ namespace
 		const auto depthRatio = std::clamp(parameters.depthRatio, 0.1F, 1.0F);
 
 		return {
-			width,
-			std::max(8U, static_cast< uint32_t >(std::lround(static_cast< float >(width) * heightRatio))),
-			std::max(8U, static_cast< uint32_t >(std::lround(static_cast< float >(width) * depthRatio)))
+			.width = width,
+			.height = std::max(8U, static_cast< uint32_t >(std::lround(static_cast< float >(width) * heightRatio))),
+			.depth = std::max(8U, static_cast< uint32_t >(std::lround(static_cast< float >(width) * depthRatio)))
 		};
 	}
 
@@ -311,7 +311,7 @@ namespace EmEn::Graphics
 		 * ellipsoid filling the box, cut flat at the base and narrower there — the shape of a
 		 * cumulus — and the puffs only BUD on its upper surface. A half-ellipsoid fills pi/6 of its
 		 * bounding box. */
-		const auto provisionalMargin = 2.0F * voxelSize + m_parameters.edgeSoftness;
+		const auto provisionalMargin = (2.0F * voxelSize) + m_parameters.edgeSoftness;
 		const auto usableHeight = std::max(2.0F * (halfY - provisionalMargin), 4.0F * voxelSize);
 
 		/* The dome keeps 18 % of the usable height for the buds that rise over it. flatBase moves its
@@ -322,7 +322,7 @@ namespace EmEn::Graphics
 		const auto margin = provisionalMargin + billowAmplitude;
 		const auto baseLevel = -halfY + margin;
 
-		const Vector< 3, float > coreCenter{0.0F, baseLevel + 0.5F * (1.0F - m_parameters.flatBase) * semiAxisY, 0.0F};
+		const Vector< 3, float > coreCenter{0.0F, baseLevel + (0.5F * (1.0F - m_parameters.flatBase) * semiAxisY), 0.0F};
 		const Vector< 3, float > coreAxes{
 			std::max(0.84F * (halfX - margin), 2.0F * voxelSize),
 			semiAxisY,
@@ -427,15 +427,15 @@ namespace EmEn::Graphics
 
 		for ( uint32_t zIndex = 0; zIndex < m_depth; ++zIndex )
 		{
-			const auto z = -halfZ + (static_cast< float >(zIndex) + 0.5F) * voxelSize;
+			const auto z = -halfZ + ((static_cast< float >(zIndex) + 0.5F) * voxelSize);
 
 			for ( uint32_t yIndex = 0; yIndex < m_height; ++yIndex )
 			{
-				const auto y = -halfY + (static_cast< float >(yIndex) + 0.5F) * voxelSize;
+				const auto y = -halfY + ((static_cast< float >(yIndex) + 0.5F) * voxelSize);
 
 				for ( uint32_t xIndex = 0; xIndex < m_width; ++xIndex )
 				{
-					const auto x = -halfX + (static_cast< float >(xIndex) + 0.5F) * voxelSize;
+					const auto x = -halfX + ((static_cast< float >(xIndex) + 0.5F) * voxelSize);
 					const Vector< 3, float > position{x, y, z};
 
 					/* The dome. The density follows I. Quilez's ellipsoid distance (*Ellipsoid SDF*, 2019),
@@ -466,7 +466,7 @@ namespace EmEn::Graphics
 					distance = std::max(distance, baseLevel - y);
 					lowerBound = std::max(lowerBound, baseLevel - y);
 
-					float density;
+					float density = 0.0F;
 
 					if ( distance > bandOutside )
 					{
@@ -480,7 +480,7 @@ namespace EmEn::Graphics
 					{
 						/* The billows push the surface OUT where the inverted cellular noise peaks. */
 						const auto bulge = billows.generateBillows(x * BillowFrequency, y * BillowFrequency, z * BillowFrequency, BillowOctaves);
-						const auto displaced = distance - billowAmplitude * (bulge - 0.5F) * 2.0F;
+						const auto displaced = distance - (billowAmplitude * (bulge - 0.5F) * 2.0F);
 
 						density = std::clamp(-displaced / m_parameters.edgeSoftness, 0.0F, 1.0F);
 					}

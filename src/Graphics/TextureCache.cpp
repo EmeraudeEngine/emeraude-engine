@@ -158,7 +158,7 @@ namespace EmEn::Graphics
 		static constexpr auto HexChars = "0123456789abcdef";
 
 		std::string filename;
-		filename.reserve(sizeof(key) * 2 + 8);
+		filename.reserve((sizeof(key) * 2) + 8);
 
 		for ( size_t shift = sizeof(key) * 8; shift > 0; shift -= 4 )
 		{
@@ -175,12 +175,17 @@ namespace EmEn::Graphics
 	{
 		const auto path = this->cacheFilePath(key);
 
-		std::ifstream file{path, std::ios::binary};
+		std::ifstream file{path, std::ios::binary | std::ios::ate};
 
 		if ( !file.is_open() )
 		{
 			return {};
 		}
+
+		/* The bytes the file holds: no level may claim more than what is left to read. */
+		const auto fileSize = static_cast< uint64_t >(file.tellg());
+
+		file.seekg(0, std::ios::beg);
 
 		/* Read and validate header. */
 		uint32_t magic = 0;
@@ -212,6 +217,18 @@ namespace EmEn::Graphics
 
 			if ( !file || width == 0 || height == 0 || dataSize == 0 )
 			{
+				return {};
+			}
+
+			/* NOTE: The cache is a file on disk (a truncated write, a disk error): a level's size must be exactly the
+			 * BC7 size of its dimensions (16 bytes per 4x4 block) — otherwise resize() could ask for gigabytes and the
+			 * upload would read past a short buffer. Anything else is a cache miss (triad 2026-10-01). */
+			const auto blockCount = ((static_cast< uint64_t >(width) + 3) / 4) * ((static_cast< uint64_t >(height) + 3) / 4);
+
+			if ( static_cast< uint64_t >(dataSize) != blockCount * 16 || static_cast< uint64_t >(file.tellg()) + dataSize > fileSize )
+			{
+				TraceWarning{ClassId} << "The texture cache entry '" << path << "' declares " << dataSize << " bytes for a " << width << 'x' << height << " BC7 level (or more than the file holds), ignored.";
+
 				return {};
 			}
 

@@ -353,4 +353,10 @@ namespace EmEn::Graphics::TextureResource
 
 		return this->setLoadSuccess(true);
 	}
+
+	bool
+	AnimatedTexture2D::onDependencyFailed (const ResourceTrait & dependency) noexcept
+	{
+		return this->takeDefaultData(m_localData, dependency);
+	}
 }

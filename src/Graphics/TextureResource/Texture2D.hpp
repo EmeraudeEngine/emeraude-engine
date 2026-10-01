@@ -120,6 +120,32 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Texture2D (const Texture2D & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Texture2D (Texture2D && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Texture2D &
+			 */
+			Texture2D & operator= (const Texture2D & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Texture2D &
+			 */
+			Texture2D & operator= (Texture2D && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs the texture 2D resource.
 			 *
 			 * Automatically calls destroyTexture() to cleanup Vulkan objects (Image, ImageView, Sampler).
@@ -403,6 +429,10 @@ namespace EmEn::Graphics::TextureResource
 			 */
 			[[nodiscard]]
 			bool createFromPixelData (Renderer & renderer) noexcept;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
+			[[nodiscard]]
+			bool onDependencyFailed (const ResourceTrait & dependency) noexcept override;
 
 			std::shared_ptr< ImageResource > m_localData;	 ///< Dependent ImageResource providing pixel data. Null when m_compressedData is used.
 			std::shared_ptr< CompressedImageResource > m_compressedData; ///< Dependent block-compressed image. Null when m_localData is used.

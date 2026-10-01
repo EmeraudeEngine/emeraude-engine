@@ -160,8 +160,7 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			static VkFormat sRGBFormat (VkFormat format) noexcept;
 
-		private:
-
+			/** @brief A namespace of functions: not constructible. */
 			KTX2Decoder () = delete;
 	};
 }
