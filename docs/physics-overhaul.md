@@ -172,6 +172,14 @@ firstCycle + count)`. Console / MCP (`Core.SceneManagerService`):
   every cycle of every station (0 differing samples, `DynTopCube`, the stack and the twin included). The isolated
   differences seen by polling were the one-cycle labelling offset — proven. Linux reproduces exactly; the divergence
   on Windows and macOS is now measurable to the cycle (next: the peers' recorded runs).
+- **macOS M2 (peer, 5 recorded launches, 1800 common cycles each)**: 13 stations bit-identical 5/5 — the twin
+  `BenchTipCube` INCLUDED (so on the M2 the single-pair twin is bit-repeatable). `DynTopCube` gives 5 distinct
+  trajectories that already differ at the FIRST recorded cycle 60 (x 0.85-2.87, ωz from -0.1 to -28.5): its split
+  happens in cycles 0-59, the loading window — consistent with its entity-level properties re-derived at a
+  machine-dependent moment. The stack: runs 1, 3, 5 bit-identical; run 2 already differs at cycle 60; run 4 is
+  IDENTICAL to run 1 over cycles 60-71 and splits at cycle 72 (the top box E first, then B, A) — long after the loads,
+  which fits the pair-ORDER half of the hypothesis (a different octree insertion order changing the Gauss-Seidel order
+  once several contacts interact), not the property half.
 
 ### Baseline — Linux, RTX 3070 Ti, engine `5c2b2c40` + the bench, 5 launches × 30 s of physics
 
