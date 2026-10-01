@@ -378,9 +378,9 @@ namespace EmEn::Graphics
 			const auto p = static_cast< float >(i + 1) / static_cast< float >(m_cascadeCount);
 
 			const auto logSplit = nearPlane * std::pow(farPlane / nearPlane, p);
-			const auto linearSplit = nearPlane + (farPlane - nearPlane) * p;
+			const auto linearSplit = nearPlane + ((farPlane - nearPlane) * p);
 
-			m_logicState.bufferData[CascadeSplitDistancesOffset + i] = m_lambda * logSplit + (1.0F - m_lambda) * linearSplit;
+			m_logicState.bufferData[CascadeSplitDistancesOffset + i] = (m_lambda * logSplit) + ((1.0F - m_lambda) * linearSplit);
 		}
 
 		/* Fill remaining slots with far plane distance. */
@@ -435,7 +435,7 @@ namespace EmEn::Graphics
 			m_logicState.cascadeFrustums[cascade].update(m_logicState.cascadeViewProjections[cascade]);
 
 			/* Copy matrix to buffer. */
-			std::memcpy(&m_logicState.bufferData[cascade * 16], m_logicState.cascadeViewProjections[cascade].data(), 16 * sizeof(float));
+			std::memcpy(&m_logicState.bufferData[static_cast< size_t >(cascade) * 16], m_logicState.cascadeViewProjections[cascade].data(), 16 * sizeof(float));
 
 			lastSplitDist = splitDist;
 		}
@@ -648,9 +648,9 @@ namespace EmEn::Graphics
 
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
+		const std::scoped_lock lock{m_GPUBufferAccessLock};
 
-		auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
+		const auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
 
 		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
 
@@ -671,7 +671,7 @@ namespace EmEn::Graphics
 	{
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
+		const std::scoped_lock lock{m_GPUBufferAccessLock};
 
 		m_descriptorSets.clear();
 		m_uniformBufferObjects.clear();

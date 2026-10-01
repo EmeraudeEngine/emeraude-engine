@@ -67,11 +67,11 @@ namespace EmEn::Graphics
 
 	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 		: m_device(device),
+		m_renderer(&renderer),
+		m_descriptorSetCreator(descriptorSetCreator),
 		m_uniformBlockSize(uniformBlockSize)
 	{
 		m_frameCount = std::max(1U, frameCount);
-		m_renderer = &renderer;
-		m_descriptorSetCreator = descriptorSetCreator;
 
 		/* ⚠️ Reserved ONCE, so no later growth can reallocate these vectors under a reader. See
 		 * MaxBankCount. */
@@ -209,7 +209,7 @@ namespace EmEn::Graphics
 		 * owners both see the same seat as free and both take it, ending up sharing a single UBO
 		 * offset. The corruption is silent: no error is reported, the two owners simply overwrite
 		 * each other's uniform block. */
-		const std::lock_guard< std::mutex > lock{m_elementsAccess};
+		const std::scoped_lock lock{m_elementsAccess};
 
 		offset = 0;
 
@@ -251,7 +251,7 @@ namespace EmEn::Graphics
 	void
 	SharedUniformBuffer::removeElement (const void * element) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_elementsAccess};
+		const std::scoped_lock lock{m_elementsAccess};
 
 		const auto elementIt = std::ranges::find_if(m_elements, [element] (const auto & seat) {
 			return seat == element;
@@ -266,7 +266,7 @@ namespace EmEn::Graphics
 	uint32_t
 	SharedUniformBuffer::elementCount () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_elementsAccess};
+		const std::scoped_lock lock{m_elementsAccess};
 
 		uint32_t count = 0;
 

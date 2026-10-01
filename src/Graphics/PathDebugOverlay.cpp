@@ -73,7 +73,7 @@ namespace EmEn::Graphics
 		constexpr size_t HeaderFloats{40};
 
 		/** @brief The initial buffer size: the header and 1024 points. */
-		constexpr VkDeviceSize InitialBytes{(HeaderFloats + 1024 * 8) * sizeof(float)};
+		constexpr VkDeviceSize InitialBytes{(HeaderFloats + (size_t{1024} * 8)) * sizeof(float)};
 
 		constexpr auto BlockDeclarations = R"GLSL(#version 450
 
@@ -402,7 +402,7 @@ void main()
 		const auto & points = instanceTransforms.debugPathPoints();
 
 		m_staging.clear();
-		m_staging.reserve(HeaderFloats + points.size() * 8);
+		m_staging.reserve(HeaderFloats + (points.size() * 8));
 		m_staging.insert(m_staging.end(), view.data(), view.data() + 16);
 		m_staging.insert(m_staging.end(), projection.data(), projection.data() + 16);
 		m_staging.insert(m_staging.end(), {eye[X], eye[Y], eye[Z], 1.0F, static_cast< float >(width), static_cast< float >(height), 0.0F, 0.0F});

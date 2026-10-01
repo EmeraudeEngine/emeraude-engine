@@ -195,7 +195,7 @@ namespace EmEn::Scenes::Component
 			 * projection matrices follow from them. This only declares the projection KIND and how
 			 * far the camera sees; switching back from an orthographic projection therefore
 			 * restores the lens that was already mounted.
-			 * @param distance The distance of view.
+			 * @param distance The distance of view, in metres. A value <= 0 is ignored (with a warning).
 			 * @return void
 			 */
 			void setPerspectiveProjection (float distance) noexcept;
@@ -244,7 +244,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets the maximal distance of the view.
-			 * @param distance The maximal distance of the view.
+			 * @param distance The maximal distance of the view, in metres. A value <= 0 is ignored (with a warning).
 			 * @return void
 			 */
 			void setDistance (float distance) noexcept;
@@ -289,7 +289,7 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets an orthographic projection.
 			 * @param near The near distance.
-			 * @param far The far distance.
+			 * @param far The far distance, in metres. A value <= 0 is ignored (with a warning).
 			 * @return void
 			 */
 			void setOrthographicProjection (float near, float far) noexcept;
@@ -314,7 +314,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets the far parameter for an orthographic projection camera.
-			 * @param distance A distance.
+			 * @param distance A distance, in metres. A value <= 0 is ignored (with a warning).
 			 * @return void
 			 */
 			void setFar (float distance) noexcept;

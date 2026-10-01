@@ -29,6 +29,12 @@ explicit reply. Checked types: `float`, `Vector< N, float >`, `Color< float >`, 
 not the setters taking a spline or a `CartesianFrame` (`setBezierPath`, `DirectionalLight::setDirection`,
 `MultipleVisuals::setLocalCoordinates`). A new numeric setter adds the same first line.
 
+A camera's view / far distance must be POSITIVE (owner ruling 2026-10-01, triad 7e): `Camera::setPerspectiveProjection`,
+`setDistance`, `setFar` and the far of `setOrthographicProjection` ignore a value <= 0 with a warning and keep the previous
+one (0 used to reach the projection: a far plane at 0, below the near one). `Core/Graphics/ViewDistance` outside
+(0, `MaxGraphicsViewDistance` = 1 000 000] m warns and takes the default 10 km (`Toolkit::viewDistanceSetting()`, the
+cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box always includes the camera plane).
+
 ### Available Components
 **Rendering:** Visual, MultipleVisuals — ⚠️ both take `Graphics::RenderableInstance::Lighting` (Lit/Unlit) as a REQUIRED last constructor argument since 2026-09-25: the former unlit default blacked out three sets of content (the last one every forest tree, lit only by the GI)
 **Lights:** DirectionalLight, PointLight, SpotLight, SunCourse (drives a DirectionalLight along the day), SkyFollowsSun (scales the background's luminance with a SunCourse)

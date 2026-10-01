@@ -68,6 +68,32 @@ namespace EmEn::Graphics
 			 */
 			~ViewMatrices2DUBO () override;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ViewMatrices2DUBO (const ViewMatrices2DUBO & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ViewMatrices2DUBO (ViewMatrices2DUBO && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ViewMatrices2DUBO &
+			 */
+			ViewMatrices2DUBO & operator= (const ViewMatrices2DUBO & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ViewMatrices2DUBO &
+			 */
+			ViewMatrices2DUBO & operator= (ViewMatrices2DUBO && copy) noexcept = delete;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > &

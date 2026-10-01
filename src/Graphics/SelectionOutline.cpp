@@ -544,8 +544,8 @@ void main()
 
 		const auto include = [&area, &anyInFront] (const Vector< 4, float > & point) noexcept {
 			/* NDC [-1, 1] to the texture space the composite samples: row 0 is NDC y = -1, like the depth pass viewport. */
-			const auto u = (point[X] / point[W]) * 0.5F + 0.5F;
-			const auto v = (point[Y] / point[W]) * 0.5F + 0.5F;
+			const auto u = ((point[X] / point[W]) * 0.5F) + 0.5F;
+			const auto v = ((point[Y] / point[W]) * 0.5F) + 0.5F;
 
 			area[0] = std::min(area[0], u);
 			area[1] = std::min(area[1], v);

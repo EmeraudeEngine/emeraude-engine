@@ -39,6 +39,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Graphics` 7b (`Material/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 23 constant-array-index, 7 static-cast-downcast, 1 use-enum-class. Before: 56. | Triad sub-section 7b |
 | `src/Graphics` 7c (`Geometry/`, `Renderable/`, `MDI/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 51, all ON PURPOSE (below) — 30 constant-array-index, 4 integer-division, 4 non-private members, 3 use-enum-class, 3 qualified-auto, 2 misc-no-recursion, 2 static-cast-downcast, 1 each special-member-functions, const-ref member, implicit-widening. Before: 95. | Triad sub-section 7c |
 | `src/Graphics` 7d (`Renderer` + console, `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 91, all ON PURPOSE (below) — 28 SIMD intrinsics, 26 reinterpret-cast, 21 constant-array-index, 5 convert-to-static, 4 owning-memory, 3 union access, 2 qualified-auto, 1 each use-after-move (false positive), use-enum-class. Before: 226. | Triad sub-section 7d |
+| `src/Graphics` 7e (`RenderTarget/`, `RenderableInstance/`, scene / intermediate / selection targets, view matrices, shared UBOs, bindless table, vertex formats, skinning, path overlay) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 109, all ON PURPOSE (below) — 80 constant-array-index, 16 reinterpret-cast, 7 qualified-auto, 2 use-enum-class, 2 non-private members, 1 each convert-to-static, unused parameter. Before: 205. | Triad sub-section 7e |
 
 ## Findings kept ON PURPOSE
 
@@ -231,4 +232,20 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **clang-analyzer-cplusplus.Move ×1** — `Renderer.cpp` `m_sceneTarget`: retired by move (a moved `shared_ptr` is
   null), then `renderFrameWithInternal()` is only called when it is non-null — the analyzer does not model the guard.
 - **use-enum-class ×1** — `Renderer::NotificationCode` (the observable notification convention).
+
+### `src/Graphics` 7e — targets, instances, views, buffers (2026-10-01)
+
+- **pro-bounds-constant-array-index ×80** — the view matrices' UBO float arrays (offsets named by constants, cascade and
+  face loops bounded by their counts), the per-frame banks, the instance data blocks.
+- **pro-type-reinterpret-cast ×16** — mapped GPU memory seen as floats / structures, Vulkan `pNext` chains.
+- **readability-qualified-auto ×7** — Vulkan handles (`VkPipeline`, `VkBuffer`, `VkCommandBuffer`, `VkPipelineLayout`):
+  a non-dispatchable handle is a 64-bit integer on 32-bit platforms, where `auto *` does not compile — `const auto`
+  stays (caution-points § qualified-auto).
+- **use-enum-class ×2** — `RenderableInstanceFlagBits`, `VertexBufferBindingFlagBits` (bit sets, the flag convention).
+- **non-private-member-variables ×2** — `RenderableInstance::Abstract::m_localDataAccess` (the mutex the subclasses
+  lock), `ViewMatricesInterface::m_nearestObjectDistance` (shared by the three view-matrix kinds).
+- **convert-member-functions-to-static ×1** — `IntermediateRenderTarget::endRenderPass()` (the pair of
+  `beginRenderPass()`, an instance API).
+- **misc-unused-parameters ×1** — `RenderTarget::Abstract`'s `viewDistance`: dead across every render-target
+  constructor, engine item `render-target-dead-view-distance-parameter`.
 

@@ -1329,10 +1329,8 @@ namespace EmEn::Graphics
 				{
 					if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
 					{
-						if ( this->writeIVFFrame(pkt->data.frame.buf, pkt->data.frame.sz, static_cast< uint64_t >(pkt->data.frame.pts)) )
-						{
-							frameCount++;
-						}
+						/* NOTE: these frames were counted as images when they went in: writeIVFFrame() counts them as written. */
+						static_cast< void >(this->writeIVFFrame(pkt->data.frame.buf, pkt->data.frame.sz, static_cast< uint64_t >(pkt->data.frame.pts)));
 
 						gotPackets = true;
 					}
@@ -1363,12 +1361,12 @@ namespace EmEn::Graphics
 
 		if ( writeFailed.load(std::memory_order_acquire) )
 		{
-			TraceError{Recorder::ClassId} << "Encoding session TRUNCATED: a write to " << outputPath << " failed, the frames after it are lost.";
+			TraceError{Recorder::ClassId} << "Encoding session TRUNCATED: " << writtenFrames << " frames written to " << outputPath << " before a write failed, the frames after it are lost.";
 
 			return;
 		}
 
-		TraceSuccess{Recorder::ClassId} << "Encoding session finalized: " << frameCount << " frames written to " << outputPath << " (" << duplicatedFrames << " CFR filler frames, " << skippedCaptures.load() << " captures skipped by backpressure).";
+		TraceSuccess{Recorder::ClassId} << "Encoding session finalized: " << writtenFrames << " frames written to " << outputPath << " (" << duplicatedFrames << " CFR filler frames, " << skippedCaptures.load() << " captures skipped by backpressure).";
 	}
 
 	Recorder::EncodingSession::~EncodingSession () noexcept
@@ -1475,7 +1473,14 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		return this->writeIVFFrameHeader(static_cast< uint32_t >(size), pts) && writeOutput(outputFile.get(), data, size, outputPath, writeFailed);
+		if ( !this->writeIVFFrameHeader(static_cast< uint32_t >(size), pts) || !writeOutput(outputFile.get(), data, size, outputPath, writeFailed) )
+		{
+			return false;
+		}
+
+		writtenFrames++;
+
+		return true;
 	}
 
 	bool
@@ -1493,7 +1498,7 @@ namespace EmEn::Graphics
 		}
 
 		std::array< uint8_t, 4 > buf{};
-		writeLE32(buf.data(), static_cast< uint32_t >(frameCount));
+		writeLE32(buf.data(), static_cast< uint32_t >(writtenFrames));
 
 		if ( std::fwrite(buf.data(), 1, buf.size(), outputFile.get()) != buf.size() )
 		{

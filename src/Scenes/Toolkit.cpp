@@ -49,6 +49,21 @@ namespace EmEn::Scenes
 
 	size_t Toolkit::s_autoEntityCount{0};
 
+	float
+	Toolkit::viewDistanceSetting () const noexcept
+	{
+		const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
+
+		if ( !std::isfinite(distance) || distance <= 0.0F || distance > MaxGraphicsViewDistance )
+		{
+			TraceWarning{ClassId} << "'" << GraphicsViewDistanceKey << "' = " << distance << " is outside (0, " << static_cast< uint32_t >(MaxGraphicsViewDistance) << "] m ! Using " << static_cast< uint32_t >(DefaultGraphicsViewDistance) << " m.";
+
+			return DefaultGraphicsViewDistance;
+		}
+
+		return distance;
+	}
+
 	std::shared_ptr< Material::Interface >
 	Toolkit::vegetationMaterial (const std::string & name, VegetationSurface surface) noexcept
 	{

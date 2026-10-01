@@ -205,7 +205,7 @@ namespace EmEn::Graphics
 				 * offset comparison keeps working untouched. */
 				const auto localIndex = elementIndex % m_maxElementCountPerUBO;
 
-				return static_cast< VkDeviceSize >(frameIndex) * m_frameStride + static_cast< VkDeviceSize >(localIndex) * m_blockAlignedSize;
+				return (static_cast< VkDeviceSize >(frameIndex) * m_frameStride) + (static_cast< VkDeviceSize >(localIndex) * m_blockAlignedSize);
 			}
 
 			/**
@@ -294,7 +294,7 @@ namespace EmEn::Graphics
 			 * flavour needs its renderer and its descriptor-set recipe to build the bank's
 			 * descriptor set; the plain flavour leaves both empty and grows through addBuffer(). */
 			Renderer * m_renderer{nullptr};
-			descriptor_set_creator_t m_descriptorSetCreator{};
+			descriptor_set_creator_t m_descriptorSetCreator;
 			uint32_t m_uniformBlockSize;
 			uint32_t m_maxElementCountPerUBO{0};
 			uint32_t m_blockAlignedSize{0};

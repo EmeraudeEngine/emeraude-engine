@@ -714,7 +714,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			createImages (const Renderer & renderer) noexcept
 			{
-				const auto device = renderer.device();
+				const auto & device = renderer.device();
 
 				/* The debug color buffer (optional). */
 				if ( this->precisions().colorBits() > 0 )
@@ -779,7 +779,7 @@ namespace EmEn::Graphics::RenderTarget
 					 * screenshot and impossible to attribute later. 1.0 is the far plane, i.e. the
 					 * "nothing occludes" value, and clearDepthImage() covers every array layer, so
 					 * cascades and cubemap faces are all initialised. */
-					auto & transferManager = renderer.transferManager();
+					const auto & transferManager = renderer.transferManager();
 
 					if ( !transferManager.transitionImageLayout(*m_depthImage, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) )
 					{

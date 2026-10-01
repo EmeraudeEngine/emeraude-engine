@@ -79,7 +79,7 @@ namespace EmEn::Graphics
 				{properties.maxPerStageUpdateAfterBindResources, "maxPerStageUpdateAfterBindResources"}
 			}};
 
-			return *std::min_element(limits.cbegin(), limits.cend(), [] (const auto & lhs, const auto & rhs) {
+			return *std::ranges::min_element(limits, [] (const auto & lhs, const auto & rhs) {
 				return lhs.first < rhs.first;
 			});
 		}
@@ -265,7 +265,7 @@ namespace EmEn::Graphics
 	BindlessTextureManager::onTerminate () noexcept
 	{
 		m_descriptorSet.reset();
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 		m_descriptorSetLayout.reset();
 		m_device.reset();
 
@@ -348,7 +348,7 @@ namespace EmEn::Graphics
 	BindlessTextureManager::createDescriptorPool () noexcept
 	{
 		/* Pool sizes for each texture type. */
-		std::vector< VkDescriptorPoolSize > poolSizes{
+		const std::vector< VkDescriptorPoolSize > poolSizes{
 			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_maxTextures1D + m_maxTextures2D + m_maxTextures3D + m_maxTexturesCube + m_maxTexturesCubeArray}
 		};
 
@@ -443,7 +443,7 @@ namespace EmEn::Graphics
 
 		const auto snapshot = set.snapshot();
 
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		/* Environment cubemap and its baked IBL derivatives occupy their reserved slots. Fall
 		 * back to the engine default when the active scene has none, so a scene switch never
@@ -553,7 +553,7 @@ namespace EmEn::Graphics
 		 * per-frame syncTextureSet, via UPDATE_AFTER_BIND); the leaving scene's textures stay alive
 		 * (the scene goes dormant). The drain that protects actual destruction lives at the
 		 * destruction site — Scenes::Manager::deleteScene waits idle before erasing the scene. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		/* Park each freed 2D slot on an engine-owned dummy so the descriptor never dangles. */
 		if ( const auto & dummy2D = m_renderer.getDummyColorProjectionTexture2D(); dummy2D != nullptr && dummy2D->isCreated() )
@@ -592,7 +592,7 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Protect the descriptor set writing. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		return this->writeTextureToDescriptorSet(Texture1DBinding, index, texture);
 	}
@@ -608,7 +608,7 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Protect the descriptor set writing. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		return this->writeTextureToDescriptorSet(Texture2DBinding, index, texture);
 	}
@@ -624,7 +624,7 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Protect the descriptor set writing. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		return this->writeTextureToDescriptorSet(Texture3DBinding, index, texture);
 	}
@@ -640,7 +640,7 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Protect the descriptor set writing. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		return this->writeTextureToDescriptorSet(TextureCubeBinding, index, texture);
 	}
@@ -656,7 +656,7 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Protect the descriptor set writing. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		return this->writeTextureToDescriptorSet(TextureCubeArrayBinding, index, texture);
 	}
@@ -710,7 +710,7 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Protect the descriptor set writing. */
-		const std::lock_guard< std::mutex > lock{m_indexMutex};
+		const std::scoped_lock lock{m_indexMutex};
 
 		return this->writeRawToDescriptorSet(Texture2DBinding, index, descriptorInfo);
 	}

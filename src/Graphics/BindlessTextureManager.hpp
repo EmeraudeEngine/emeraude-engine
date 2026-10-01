@@ -174,6 +174,32 @@ namespace EmEn::Graphics
 			~BindlessTextureManager () override;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			BindlessTextureManager (const BindlessTextureManager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			BindlessTextureManager (BindlessTextureManager && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return BindlessTextureManager &
+			 */
+			BindlessTextureManager & operator= (const BindlessTextureManager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return BindlessTextureManager &
+			 */
+			BindlessTextureManager & operator= (BindlessTextureManager && copy) noexcept = delete;
+
+			/**
 			 * @brief Sets the device that will be used with this manager.
 			 * @param device A reference to a device smart pointer.
 			 * @return void

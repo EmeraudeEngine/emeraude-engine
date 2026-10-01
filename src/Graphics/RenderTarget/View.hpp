@@ -180,14 +180,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isCubemap () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return std::is_same_v< view_matrices_t, ViewMatrices3DUBO >;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const */
@@ -472,7 +465,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			createImages (const Renderer & renderer) noexcept
 			{
-				const auto device = renderer.device();
+				const auto & device = renderer.device();
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )

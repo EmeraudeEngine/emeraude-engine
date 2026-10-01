@@ -71,10 +71,30 @@ namespace EmEn::Graphics
 			 */
 			~RendererFrameScope ();
 
-			/* A frame scope owns its frame's synchronization objects: never copied nor moved. */
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
 			RendererFrameScope (const RendererFrameScope & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
 			RendererFrameScope (RendererFrameScope && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return RendererFrameScope &
+			 */
 			RendererFrameScope & operator= (const RendererFrameScope & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return RendererFrameScope &
+			 */
 			RendererFrameScope & operator= (RendererFrameScope && copy) noexcept = delete;
 
 			/**

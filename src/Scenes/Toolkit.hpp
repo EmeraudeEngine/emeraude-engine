@@ -463,7 +463,7 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
+				const auto distance = this->viewDistanceSetting();
 
 				/* Create the camera component. */
 				auto builder = entity->template componentBuilder< Component::Camera >(entityName);
@@ -557,7 +557,7 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
+				const auto distance = this->viewDistanceSetting();
 
 				/* Create the camera component. */
 				auto builder = entity->template componentBuilder< Component::Camera >(entityName);
@@ -1405,6 +1405,14 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::Material::Interface > getColoredMaterialResource (const Base::PixelFactory::Color< float > & color) const noexcept;
 
 		private:
+
+			/**
+			 * @brief Returns the view distance of the cameras the toolkit builds, from the settings.
+			 * @note Owner ruling (2026-10-01): a value outside (0, MaxGraphicsViewDistance] warns and takes the default.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float viewDistanceSetting () const noexcept;
 
 			/* Flag names. */
 			static constexpr auto Debug{0UL};

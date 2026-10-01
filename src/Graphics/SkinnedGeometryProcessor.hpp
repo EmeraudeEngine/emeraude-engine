@@ -98,6 +98,32 @@ namespace EmEn::Graphics
 			~SkinnedGeometryProcessor () noexcept;
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SkinnedGeometryProcessor (const SkinnedGeometryProcessor & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			SkinnedGeometryProcessor (SkinnedGeometryProcessor && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SkinnedGeometryProcessor &
+			 */
+			SkinnedGeometryProcessor & operator= (const SkinnedGeometryProcessor & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return SkinnedGeometryProcessor &
+			 */
+			SkinnedGeometryProcessor & operator= (SkinnedGeometryProcessor && copy) noexcept = delete;
+
+			/**
 			 * @brief Initializes the compute pipeline.
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool

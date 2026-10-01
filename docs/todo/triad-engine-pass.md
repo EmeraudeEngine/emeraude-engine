@@ -644,7 +644,7 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 | 7b | `Material/` (JSON material definitions) | ~14 000 | ✅ pushed engine `1ee4a6c6`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ✅ pushed base `dce53a7`, engine `b1541d1c`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ✅ pushed (the engine 7d commit); peers pending |
-| 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ⬜ |
+| 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ✅ pushed (the engine 7e commit); peers pending |
 | 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ⬜ |
 | 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ⬜ |
 
@@ -831,4 +831,55 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   `triggerRenderDocCapture(101)` and `(0)` refused, screenshot + `temporalCapture(3)` saved, MCP 1707/0, console
   4466/0, 0 VUID, 0 leak; `getGPUTimings` with the profiler ON prints its table. Every test file was moved out of the
   owner's captures directory (unchanged). One unrelated crash: the known CEF MemoryInfra SIGILL (alpha item updated).
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 7d commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `9cc3659d`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning, the scalar converter on arm64): the range warnings word for word; a VP9 rush;
+    `ulimit -f 4096` + `trap '' XFSZ` → BOTH failure paths seen (a session still encoding in background after the stop,
+    and the live auto-stop), engine alive, 0 VUID; the RenderDoc refusals; MCP 1707/0, console 4445/0.
+  - macOS found (PRE-EXISTING, reproduced on Linux): the VP9 session reported and wrote "196 frames" in the IVF header
+    for a file of 181 — `frameCount` counted the images handed to the encoder AND, again, the packets of the final
+    flush (the 15 frames of the lookahead). Fixed (pushed with 7e): `EncodingSession::writtenFrames` counts the frames
+    actually written (the header's count and the final message); `frameCount` stays the statistics' input count.
+    Linux: log 181, header 181, ffprobe 181.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning, no C4267 from the size_t
+    indices): the range warnings; NVIDIA H.265 181 pictures, VP9 on both GPUs (the same 196 / 181 header defect, fixed
+    above); the RenderDoc refusals, screenshot + temporal capture, MCP 1707/0, console 4457/0; citadel NVIDIA only the
+    known 12325, AMD 0. The write-failure test was skipped (no small volume); Linux and macOS cover it.
+  - Windows found (PRE-EXISTING, not 7d): the AMD hardware H.265 rush works but raises 55 VUIDs (copies and transfer
+    barriers recorded on AMD's encode-only queue family, the padded 1280x768 coded extent) → engine item
+    `video-encoder-h265-transfer-on-encode-only-queue`. "IDR every 1 frames" is the intended all-intra layout.
+
+### 7e — targets, instances, views, buffers (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (25 TUs, the 7e files and their headers): **205**: 80 constant-array-index, 38
+  use-scoped-lock, 16 reinterpret-cast, 11 qualified-auto, 9 parentheses, 8 implicit-widening, 5 each of
+  special-member-functions and nested conditionals, 4 each of unnecessary copies, redundant boolean literals and
+  inconsistent parameter names, and singles.
+- [x] (2) Review. These files are the renderer's internals: their inputs come from the components (6d, finite
+  values), the console (validated there) and the renderer. Sound: the bindless table refuses an index past its capacity,
+  the shared UBO banks are reserved once, a view size <= 0 is refused. Findings:
+  - V1 a view distance of 0 reached the projection (far plane 0, below near): the `Core/Graphics/ViewDistance` setting
+    (the toolkit's cameras) and `Camera::setPerspectiveProjection` / `setDistance` (`>= 0` accepted) / `setFar`
+    (clamped UP to 0) (owner question).
+  - V2 `SharedUBOManager::createSharedUniformBuffer()` (no descriptor-set creator) took a `frameCount` and dropped it: a
+    caller asking for per-frame regions would get one shared by every frame in flight (no caller today).
+  - V3 every render-target constructor takes a `viewDistance` nothing reads (the base ignores it, each subclass only
+    forwards it): an API cleanup across every construction site, not mechanical → engine item
+    `render-target-dead-view-distance-parameter`.
+- [x] (3) Mechanical: fix-its with `--format-style=none` (scoped_lock, parentheses, designated initializers — spacing
+  normalized —, ranges, smart-pointer resets, the `if constexpr` boolean returns, references instead of copies,
+  parameter names, member initializers, a const vector), the four duplicated nested `stageFlags` conditionals → one
+  `perVertexPushConstantStages()`, the skinning `tbnMode` unnested, the 64-bit instance / cascade offsets, `const`
+  references (UBO, transfer manager), copy / move deleted explicitly with the engine's Doxygen block on the five
+  flagged classes (and on 7d's `RendererFrameScope`), the cube-face `fov` parameter documented as ignored, V2 (the
+  frame count passed through).
+- [x] (3b) Owner ruling (2026-10-01), as recommended, APPLIED: V1 a camera distance / far <= 0 is ignored with a warning
+  (the previous one kept, as `setNear` already did); the setting outside (0, 1 000 000] m warns and takes the default
+  (`MaxGraphicsViewDistance`, `Toolkit::viewDistanceSetting()`). Doc: `subsystems/scenes/02-scenes-specific-rules.md`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 124 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 205 → 109 (on purpose, ledger). `ViewDistance = 0` in a settings copy: sponza's
+  three toolkit cameras warn "'Core/Graphics/ViewDistance' = 0 is outside (0, 1000000] m ! Using 10000 m." and render;
+  the selection outline (light-and-shadow-debug, `highlightEntity(SmoothMesh4)`): 1 857 pixels change around the
+  sphere vs 76 of noise between two un-highlighted shots, the orange outline on the image; citadel MCP 1707/0, console
+  4466/0; terrain, particles, beams: 0 VUID, 0 error, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order, with the 7d frame-count fix): engine (the 7e commit); peers asked.
+

@@ -82,6 +82,7 @@ namespace EmEn::Graphics
 			 * @param name A reference to a string.
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties.
+			 * @param frameCount The number of per-frame regions (1 for data the GPU never reads while it changes).
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]

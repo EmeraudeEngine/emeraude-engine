@@ -143,8 +143,8 @@ namespace EmEn::Graphics::RenderTarget
 		/* NOTE: Set dynamic scissor. */
 		{
 			VkRect2D scissor{};
-			scissor.offset = {0, 0};
-			scissor.extent = {m_extent.width, m_extent.height};
+			scissor.offset = {.x = 0, .y = 0};
+			scissor.extent = {.width = m_extent.width, .height = m_extent.height};
 
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 		}

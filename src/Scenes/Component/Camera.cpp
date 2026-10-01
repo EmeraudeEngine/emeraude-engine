@@ -110,9 +110,14 @@ namespace EmEn::Scenes::Component
 		/* NOTE: No field of view here. The framing belongs to the optics and the lens already
 		 * mounted keeps it, which is exactly what one wants when coming back from an orthographic
 		 * projection: the focus and framing are found unchanged. */
-		if ( distance >= 0.0F )
+		/* NOTE: Owner ruling (2026-10-01): a distance <= 0 degenerates the projection (far below near): ignored. */
+		if ( distance > 0.0F )
 		{
 			m_distance = distance;
+		}
+		else
+		{
+			TraceWarning{ClassId} << "Camera '" << this->name() << "': a view distance of " << distance << " m is ignored (it must be positive), keeping " << m_distance << " m.";
 		}
 
 		/* Update existing connected render targets. */
@@ -221,9 +226,14 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		if ( distance >= 0.0F )
+		/* NOTE: Owner ruling (2026-10-01): a distance <= 0 degenerates the projection (far below near): ignored. */
+		if ( distance > 0.0F )
 		{
 			m_distance = distance;
+		}
+		else
+		{
+			TraceWarning{ClassId} << "Camera '" << this->name() << "': a view distance of " << distance << " m is ignored (it must be positive), keeping " << m_distance << " m.";
 		}
 
 		/* Update existing connected render targets (only if perspective projection is enabled). */
@@ -244,7 +254,16 @@ namespace EmEn::Scenes::Component
 		this->disableFlag(PerspectiveProjection);
 
 		m_near = std::min(0.0F, near);
-		m_far = std::max(0.0F, far);
+
+		/* NOTE: Owner ruling (2026-10-01): a far distance <= 0 degenerates the projection: ignored. */
+		if ( far > 0.0F )
+		{
+			m_far = far;
+		}
+		else
+		{
+			TraceWarning{ClassId} << "Camera '" << this->name() << "': an orthographic far distance of " << far << " m is ignored (it must be positive), keeping " << m_far << " m.";
+		}
 
 		/* Update existing connected render targets. */
 		if ( this->hasOutputConnected() )
@@ -278,7 +297,15 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		m_far = std::max(0.0F, distance);
+		/* NOTE: Owner ruling (2026-10-01): a far distance <= 0 degenerates the projection: ignored. */
+		if ( distance <= 0.0F )
+		{
+			TraceWarning{ClassId} << "Camera '" << this->name() << "': a far distance of " << distance << " m is ignored (it must be positive), keeping " << m_far << " m.";
+
+			return;
+		}
+
+		m_far = distance;
 
 		/* Update existing connected render targets (only for orthographic projection is enabled). */
 		if ( this->hasOutputConnected() && this->isOrthographicProjection() )

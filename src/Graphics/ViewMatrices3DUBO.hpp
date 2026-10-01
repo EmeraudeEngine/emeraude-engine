@@ -68,6 +68,32 @@ namespace EmEn::Graphics
 			 */
 			~ViewMatrices3DUBO () override;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ViewMatrices3DUBO (const ViewMatrices3DUBO & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ViewMatrices3DUBO (ViewMatrices3DUBO && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ViewMatrices3DUBO &
+			 */
+			ViewMatrices3DUBO & operator= (const ViewMatrices3DUBO & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ViewMatrices3DUBO &
+			 */
+			ViewMatrices3DUBO & operator= (ViewMatrices3DUBO && copy) noexcept = delete;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > &
@@ -149,7 +175,10 @@ namespace EmEn::Graphics
 				return m_descriptorSets[m_currentFrameRegion].get();
 			}
 
-			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
+			/**
+			 * @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties()
+			 * @note Six cube faces: the field of view is always a quarter revolution (90°), the fov parameter is ignored.
+			 */
 			void updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateOrthographicViewProperties() */

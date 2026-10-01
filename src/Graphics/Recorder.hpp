@@ -544,7 +544,8 @@ namespace EmEn::Graphics
 				uint32_t maxQueuedFrames{32}; ///< Grab buffer bound (for the adaptive-speed watermarks).
 				int cpuUsedBase{3}; ///< Preset encoder effort (quality target when the CPU keeps pace).
 				std::atomic< int > cpuUsedCurrent{3}; ///< Live encoder effort, adapted to sustain the capture rate.
-				uint64_t frameCount{0};
+				uint64_t frameCount{0}; ///< Images handed to the encoder (CFR fillers included), for the statistics.
+				uint64_t writtenFrames{0}; ///< Frames written to the IVF file: its frame count (the encoder's lookahead delays them).
 				uint64_t duplicatedFrames{0}; ///< CFR filler frames re-encoded from the previous image.
 				std::atomic< uint64_t > captureCount{0};
 				std::atomic< uint64_t > skippedCaptures{0};

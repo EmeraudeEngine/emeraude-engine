@@ -58,8 +58,8 @@ namespace EmEn::Graphics
 		 * both perspective and orthographic projections. */
 		for ( size_t column = 0; column < 4; ++column )
 		{
-			jittered[column * 4 + 0] += ndcOffset.x() * jittered[column * 4 + 3];
-			jittered[column * 4 + 1] += ndcOffset.y() * jittered[column * 4 + 3];
+			jittered[(column * 4) + 0] += ndcOffset.x() * jittered[(column * 4) + 3];
+			jittered[(column * 4) + 1] += ndcOffset.y() * jittered[(column * 4) + 3];
 		}
 
 		return jittered;
@@ -414,7 +414,7 @@ namespace EmEn::Graphics
 
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
+		const std::scoped_lock lock{m_GPUBufferAccessLock};
 
 		if ( frameIndex >= m_uniformBufferObjects.size() )
 		{
@@ -426,7 +426,7 @@ namespace EmEn::Graphics
 		/* ⚠️ Published BEFORE the mapping: every bind of this frame reads it. */
 		m_currentFrameRegion = frameIndex;
 
-		auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
+		const auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
 
 		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
 
@@ -456,7 +456,7 @@ namespace EmEn::Graphics
 	{
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
+		const std::scoped_lock lock{m_GPUBufferAccessLock};
 
 		m_descriptorSets.clear();
 		m_uniformBufferObjects.clear();

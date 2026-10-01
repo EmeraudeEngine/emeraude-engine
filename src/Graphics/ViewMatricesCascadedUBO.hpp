@@ -78,6 +78,32 @@ namespace EmEn::Graphics
 			 */
 			~ViewMatricesCascadedUBO () override;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ViewMatricesCascadedUBO (const ViewMatricesCascadedUBO & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			ViewMatricesCascadedUBO (ViewMatricesCascadedUBO && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ViewMatricesCascadedUBO &
+			 */
+			ViewMatricesCascadedUBO & operator= (const ViewMatricesCascadedUBO & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return ViewMatricesCascadedUBO &
+			 */
+			ViewMatricesCascadedUBO & operator= (ViewMatricesCascadedUBO && copy) noexcept = delete;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix() const */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > &

@@ -1284,7 +1284,7 @@ namespace EmEn::Graphics::RenderableInstance
 			bool
 			isAnimated () const noexcept
 			{
-				const auto renderable = this->renderable();
+				const auto * const renderable = this->renderable();
 
 				if ( !renderable->isReadyForInstantiation() )
 				{

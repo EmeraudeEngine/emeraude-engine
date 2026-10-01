@@ -171,7 +171,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * Sprites need both V (for orientation) and VP (for final transform).
 			 * The VBO contains position + scale, not full matrices.
 			 */
-			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/**
 			 * @brief Push constant strategy for Multiple (scene rendering).
@@ -194,7 +194,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * - **Billboard**: V needed to compute camera-facing orientation
 			 * - **Simple**: Just VP, shader computes final position as VP * M * vertex
 			 */
-			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]

@@ -107,7 +107,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * For classic 2D shadow maps, we compute and push the combined MVP matrix
 			 * to minimize push constant size.
 			 */
-			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/**
 			 * @brief Push constant strategy for Unique (scene rendering).
@@ -129,7 +129,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * When MergePushConstants is true, V and M are copied to a contiguous buffer
 			 * and pushed in a single vkCmdPushConstants call instead of two separate calls.
 			 */
-			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			void pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]

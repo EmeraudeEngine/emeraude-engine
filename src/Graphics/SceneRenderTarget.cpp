@@ -714,7 +714,7 @@ namespace EmEn::Graphics
 	bool
 	SceneRenderTarget::createImages (const Renderer & renderer) noexcept
 	{
-		const auto device = renderer.device();
+		const auto & device = renderer.device();
 
 		/* Color image: sampleable + color attachment + transfer source (for blit to grab pass). */
 		m_colorImage = std::make_shared< Vulkan::Image >(

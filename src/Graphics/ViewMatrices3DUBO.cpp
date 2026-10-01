@@ -225,7 +225,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	ViewMatrices3DUBO::updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept
+	ViewMatrices3DUBO::updatePerspectiveViewProperties (float width, float height, float /*fov*/, float distance) noexcept
 	{
 		if ( width * height <= 0.0 )
 		{
@@ -256,7 +256,7 @@ namespace EmEn::Graphics
 			"Perspective projection:" "\n"
 			"Size: " << width << " X " << height << "\n"
 			"Distance: " << distance << "\n"
-			"Field of view: " << fov << "\n"
+			"Field of view: 90 (a cube face)" "\n"
 			"Matrix: " << m_logicState.projection;*/
 
 		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
@@ -415,7 +415,7 @@ namespace EmEn::Graphics
 
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::lock_guard< std::mutex > lock{m_memoryAccess};
+		const std::scoped_lock lock{m_memoryAccess};
 
 		if ( frameIndex >= m_uniformBufferObjects.size() )
 		{
@@ -427,7 +427,7 @@ namespace EmEn::Graphics
 		/* ⚠️ Published BEFORE the mapping: every bind of this frame reads it. */
 		m_currentFrameRegion = frameIndex;
 
-		auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
+		const auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
 
 		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
 
@@ -448,7 +448,7 @@ namespace EmEn::Graphics
 	{
 		/* [VULKAN-CPU-SYNC] Maybe useless */
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::lock_guard< std::mutex > lock{m_memoryAccess};
+		const std::scoped_lock lock{m_memoryAccess};
 
 		m_descriptorSets.clear();
 		m_uniformBufferObjects.clear();

@@ -59,11 +59,11 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Reserve the actual data place to speed up the local storage. */
 		if ( this->renderable()->isSprite() )
 		{
-			m_localData.resize(m_instanceCount * SpriteVBOElementCount);
+			m_localData.resize(static_cast< size_t >(m_instanceCount) * SpriteVBOElementCount);
 		}
 		else
 		{
-			m_localData.resize(m_instanceCount * this->meshVBOElementCount());
+			m_localData.resize(static_cast< size_t >(m_instanceCount) * this->meshVBOElementCount());
 		}
 
 		if ( this->updateLocalData(instanceLocations, 0) )
@@ -110,11 +110,11 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Reserve the actual data place to speed up the local storage. */
 		if ( this->renderable()->isSprite() )
 		{
-			m_localData.resize(m_instanceCount * SpriteVBOElementCount);
+			m_localData.resize(static_cast< size_t >(m_instanceCount) * SpriteVBOElementCount);
 		}
 		else
 		{
-			m_localData.resize(m_instanceCount * this->meshVBOElementCount());
+			m_localData.resize(static_cast< size_t >(m_instanceCount) * this->meshVBOElementCount());
 		}
 
 		this->resetLocalData();
@@ -131,7 +131,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateLocalData (const CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Logic Thread) */
-		const std::lock_guard< std::mutex > lock{m_localDataAccess};
+		const std::scoped_lock lock{m_localDataAccess};
 
 		/* Check against the local data. */
 		if ( instanceIndex >= m_instanceCount )
@@ -144,7 +144,7 @@ namespace EmEn::Graphics::RenderableInstance
 		if ( this->renderable()->isSprite() )
 		{
 			/* Starting offset to write vectors */
-			size_t elementOffset = instanceIndex * SpriteVBOElementCount;
+			size_t elementOffset = static_cast< size_t >(instanceIndex) * SpriteVBOElementCount;
 
 			/* Position */
 			{
@@ -167,7 +167,7 @@ namespace EmEn::Graphics::RenderableInstance
 		else
 		{
 			/* Starting offset to write matrices */
-			size_t elementOffset = instanceIndex * this->meshVBOElementCount();
+			size_t elementOffset = static_cast< size_t >(instanceIndex) * this->meshVBOElementCount();
 
 			/* Motion history: archive the current model matrix into the previous-model slot
 			 * BEFORE overwriting it (one history step per logic update). */
@@ -201,7 +201,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateLocalData (const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Logic Thread) */
-		const std::lock_guard< std::mutex > lock{m_localDataAccess};
+		const std::scoped_lock lock{m_localDataAccess};
 
 		/* Check against the local data. */
 		if ( const auto endOffset = instanceOffset + instanceLocations.size(); endOffset > m_instanceCount )
@@ -342,7 +342,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::createOnHardware(const std::shared_ptr< Device > & device) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Render Thread) */
-		const std::lock_guard< std::mutex > lock{m_localDataAccess};
+		const std::scoped_lock lock{m_localDataAccess};
 
 		if ( this->isModelMatricesCreated() )
 		{
@@ -373,7 +373,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateVideoMemory() noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Render Thread) */
-		const std::lock_guard< std::mutex > lock{m_localDataAccess};
+		const std::scoped_lock lock{m_localDataAccess};
 
 		if constexpr ( IsDebug )
 		{

@@ -391,6 +391,8 @@ namespace EmEn
 		/* Far clip / render distance in world units (default ~10 km). */
 		constexpr auto GraphicsViewDistanceKey{"Core/Graphics/ViewDistance"};
 		constexpr auto DefaultGraphicsViewDistance{10000.0F}; /* NOTE: 10km */
+		/* Outside (0, MaxGraphicsViewDistance] the default applies, with a warning (owner ruling 2026-10-01). */
+		constexpr auto MaxGraphicsViewDistance{1000000.0F}; /* NOTE: 1000 km */
 		/* Vertical field of view in degrees. */
 		/* NOTE: The framing is authored as a LENS, never as an angle — a camera is configured
 		 * like a real appliance and the field of view is derived (see Scenes::Component::Camera).

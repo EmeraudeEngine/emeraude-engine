@@ -227,14 +227,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isCubemapTexture () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return std::is_same_v< view_matrices_t, ViewMatrices3DUBO >;
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::image() const noexcept */
@@ -272,14 +265,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			request3DTextureCoordinates () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return std::is_same_v< view_matrices_t, ViewMatrices3DUBO >;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
@@ -358,14 +344,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isCubemap () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return std::is_same_v< view_matrices_t, ViewMatrices3DUBO >;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const */
@@ -650,7 +629,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			createImages (const Renderer & renderer) noexcept
 			{
-				const auto device = renderer.device();
+				const auto & device = renderer.device();
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
@@ -660,7 +639,7 @@ namespace EmEn::Graphics::RenderTarget
 					 * and the extra usages it needs (blit source for the scratch cascade,
 					 * storage for the compute writes). Clamped for tiny probes. */
 					const bool convolved = m_GGXConvolutionRequested && this->isCubemap();
-					const uint32_t maxMipLevels = static_cast< uint32_t >(std::bit_width(this->extent().width));
+					const auto maxMipLevels = static_cast< uint32_t >(std::bit_width(this->extent().width));
 					const uint32_t colorMipLevels = convolved ? std::min(IBLTexture::PrefilteredMipLevels, maxMipLevels) : 1U;
 
 					/* NOTE: TRANSFER_SRC is unconditional on the COLOR attachment: it is what makes

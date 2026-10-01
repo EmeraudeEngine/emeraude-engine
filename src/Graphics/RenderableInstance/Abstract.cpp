@@ -27,6 +27,7 @@
 #include "Abstract.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <optional>
@@ -69,6 +70,28 @@ namespace EmEn::Graphics::RenderableInstance
 
 	namespace
 	{
+		/**
+		 * @brief Returns the shader stages a program's per-vertex push constants are visible to.
+		 * @param program A reference to the program.
+		 * @return VkShaderStageFlags
+		 */
+		[[nodiscard]]
+		VkShaderStageFlags
+		perVertexPushConstantStages (const Saphir::Program & program) noexcept
+		{
+			if ( program.hasMeshShader() )
+			{
+				return program.perVertexStageFlags();
+			}
+
+			if ( program.hasGeometryShader() )
+			{
+				return VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
+			}
+
+			return VK_SHADER_STAGE_VERTEX_BIT;
+		}
+
 		/**
 		 * @brief Records the draws of an adaptive geometry for one pass: its parts at the level the LOD
 		 * camera dictates, culled by the pass's own frustum, then the stitching between levels.
@@ -131,7 +154,7 @@ namespace EmEn::Graphics::RenderableInstance
 				{
 					const auto node = geometry.getAdaptiveDrawCallConstants(drawCallIndex);
 
-					std::copy(node.begin(), node.end(), nodeConstants.begin());
+					std::ranges::copy(node, nodeConstants.begin());
 
 					vkCmdPushConstants(commandBuffer.handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, program.heightfieldPushConstantOffset(), static_cast< uint32_t >(sizeof(nodeConstants)), nodeConstants.data());
 				}
@@ -356,7 +379,7 @@ namespace EmEn::Graphics::RenderableInstance
 			Tracer::error(TracerTag, "Unable to create skinning descriptor pool !");
 
 			m_skinningSSBO.reset();
-			m_skinningDescriptorPool.reset();
+			m_skinningDescriptorPool = nullptr;
 
 			return false;
 		}
@@ -380,7 +403,7 @@ namespace EmEn::Graphics::RenderableInstance
 				Tracer::error(TracerTag, "Unable to allocate/write a skinning descriptor set !");
 
 				m_skinningSSBO.reset();
-				m_skinningDescriptorPool.reset();
+				m_skinningDescriptorPool = nullptr;
 				m_skinningDescriptorSets.clear();
 
 				return false;
@@ -416,7 +439,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_skinningStagingMutex};
+		const std::scoped_lock lock{m_skinningStagingMutex};
 
 		/* Interleaved {current, previous} (stride 2) — matches the vertex shader layout
 		 * (double skinning for the motion vectors). The logic thread writes the CURRENT slots only:
@@ -452,7 +475,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto section = static_cast< uint32_t >(frameCursor % m_skinningDescriptorSets.size());
 
 		{
-			const std::lock_guard< std::mutex > lock{m_skinningStagingMutex};
+			const std::scoped_lock lock{m_skinningStagingMutex};
 
 			/* Empty staging (no animation played yet): the sections hold the identity poses
 			 * written at creation, binding the section as-is is correct. */
@@ -639,7 +662,17 @@ namespace EmEn::Graphics::RenderableInstance
 		m_rtSkinningPushConstants.dstAddress = builder.getBufferDeviceAddress(m_rtSkinnedMirrorBuffer->handle());
 		m_rtSkinningPushConstants.vertexCount = vbo->vertexCount();
 		m_rtSkinningPushConstants.floatsPerVertex = floatsPerVertex;
-		m_rtSkinningPushConstants.tbnMode = geometry.tangentSpaceEnabled() ? 2U : geometry.normalEnabled() ? 1U : 0U;
+		/* 2 = a full tangent space, 1 = normals only, 0 = positions only. */
+		m_rtSkinningPushConstants.tbnMode = 0U;
+
+		if ( geometry.tangentSpaceEnabled() )
+		{
+			m_rtSkinningPushConstants.tbnMode = 2U;
+		}
+		else if ( geometry.normalEnabled() )
+		{
+			m_rtSkinningPushConstants.tbnMode = 1U;
+		}
 		m_rtSkinningPushConstants.influenceOffset = floatsPerVertex - 8U;
 
 		TraceDebug{TracerTag} <<
@@ -1303,7 +1336,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = perVertexPushConstantStages(*program),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
 			/* A pulled-vertex geometry (a path, drawn by the selection depth pass): its model matrix and its points are
@@ -1430,7 +1463,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = perVertexPushConstantStages(*program),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
 			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
@@ -1652,7 +1685,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = perVertexPushConstantStages(*program),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled(),
 			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
@@ -1858,7 +1891,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const PushConstantContext pushContext{
 			.pipelineLayout = pipelineLayout.get(),
 			.layerIndex = layerIndex,
-			.stageFlags = program->hasMeshShader() ? program->perVertexStageFlags() : static_cast< VkShaderStageFlags >(program->hasGeometryShader() ? VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT : VK_SHADER_STAGE_VERTEX_BIT),
+			.stageFlags = perVertexPushConstantStages(*program),
 			.useAdvancedMatrices = program->wasAdvancedMatricesEnabled(),
 			.useBillboarding = program->wasBillBoardingEnabled()
 		};

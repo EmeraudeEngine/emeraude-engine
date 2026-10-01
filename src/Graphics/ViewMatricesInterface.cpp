@@ -45,7 +45,7 @@ namespace EmEn::Graphics
 		const auto tanSquared = tanHalfFov * tanHalfFov;
 		const auto aspectTerm = (aspectRatio * aspectRatio) + 1.0F;
 
-		return nearestObjectDistance / std::sqrt(1.0F + tanSquared * aspectTerm);
+		return nearestObjectDistance / std::sqrt(1.0F + (tanSquared * aspectTerm));
 	}
 
 	std::array< Vector< 3, float >, 8 >

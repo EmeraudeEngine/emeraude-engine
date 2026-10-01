@@ -113,6 +113,10 @@ Measured 2026-10-01 (Linux, RTX 3070 Ti, 2880×1620, `RLIMIT_FSIZE` + `SIGXFSZ` 
 hardware H.265 at 4 MiB → "Unable to write … (File too large)", stopped after ~65 frames, TRUNCATED, the file decodes
 (ffprobe: 66 HEVC frames); VP9 at 2 MiB → the same, 64 VP9 frames; with audio ON the next toggle saved the WAV; 0 VUID,
 exit 0. Without a limit: 181 frames in 6 s on both paths.
+⚠️ Two counters (2026-10-01): `frameCount` = images handed to the encoder (CFR fillers included, the `[Stats]
+Frames:` line); `writtenFrames` = frames in the file (the IVF header's count, "N frames written"). The encoder's
+lookahead (`g_lag_in_frames` 16) delays the packets, so the two differ during a session; counting the flush packets
+on top of the inputs reported 196 for a 181-frame file until then.
 
 ### Colorimetry (BT.709 — do not regress to BT.601)
 The BGRA→I420 conversion uses **BT.709 limited-range** coefficients — single source of truth:
