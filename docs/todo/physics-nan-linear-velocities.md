@@ -28,6 +28,12 @@ Measured on `balls-of-steel`: **3 of 41 sampled bodies** carry `linearVelocity =
 
 Read the state with `Core.SceneManagerService.getNodePhysics(<node>)`.
 
+**2026-10-01, after triad 11** (engine `a777ddf7`): `balls-of-steel`, every root node read through `getNodePhysics()`
+45 s after the load, 2 runs: **0 of 1001** nodes with a NaN or an infinity. Triad 11 removed two NaN producers that
+fit the symptom: a contact normal `mtv / depth`, which is NaN for a depth at or below epsilon (a 1-ulp overlap), and the
+explicit drag, which diverged to NaN for a light, fast body. It is NOT attributed: there is no pre-11 run on the same
+machine. Close this item only after a pre-11 run reproduces the NaN and the post-11 build shows 0.
+
 ## ⚠️ Traps
 
 - A finite position with a NaN velocity means the NaN has **not propagated yet**: something either
