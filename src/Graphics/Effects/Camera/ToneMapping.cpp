@@ -155,7 +155,7 @@ namespace
 	/* ---- GLSL Shader Sources ---- */
 
 	/* Extracts log-luminance from HDR input, averaging 4 bilinear taps. */
-	static constexpr auto LuminanceExtractFragmentShader = R"GLSL(
+	constexpr auto LuminanceExtractFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -205,7 +205,7 @@ void main()
 	 * Uses 4 bilinear taps placed at the centers of 4 quadrants within a 4x4 texel area.
 	 * Each bilinear tap averages a 2x2 region, giving 16 texels total per output pixel.
 	 * This achieves a 4x reduction per pass instead of 2x, halving the number of passes. */
-	static constexpr auto LuminanceDownsampleFragmentShader = R"GLSL(
+	constexpr auto LuminanceDownsampleFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -241,7 +241,7 @@ void main()
 	/* Temporal adaptation via asymmetric EMA.
 	 * Algorithm: standard eye-adaptation used in Frostbite, UE4, CryEngine.
 	 * Reference: Lagarde & de Rousiers, "Moving Frostbite to PBR", SIGGRAPH 2014. */
-	static constexpr auto AdaptationFragmentShader = R"GLSL(
+	constexpr auto AdaptationFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -321,7 +321,7 @@ void main()
 )GLSL";
 
 	/* Standard tone mapping without auto-exposure (unchanged from original). */
-	static constexpr auto ToneMappingFragmentShader = R"GLSL(
+	constexpr auto ToneMappingFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -414,7 +414,7 @@ void main()
 )GLSL";
 
 	/* Tone mapping with auto-exposure: reads adapted luminance from a 1x1 texture. */
-	static constexpr auto AutoExposureToneMappingFragmentShader = R"GLSL(
+	constexpr auto AutoExposureToneMappingFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -1234,7 +1234,7 @@ namespace EmEn::Graphics::Effects::Camera
 					region.bufferOffset = 0;
 					region.bufferRowLength = 0;
 					region.bufferImageHeight = 0;
-					region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+					region.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
 					region.imageOffset = {.x=0, .y=0, .z=0};
 					region.imageExtent = {.width=1, .height=1, .depth=1};
 

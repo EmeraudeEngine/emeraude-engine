@@ -49,13 +49,13 @@
 
 namespace
 {
-	static constexpr auto TracerTag{"DepthOfFieldEffect"};
+	constexpr auto TracerTag{"DepthOfFieldEffect"};
 
 	/* Auto-focus pass (1x1): measures the scene depth around the screen center and
 	 * relaxes the focus distance toward it (exponential rack focus). The 1x1 ping-pong
 	 * history stores R = focus distance, G = the write timestamp (for the frame delta).
 	 * Manual focus goes through the same relaxation: focus pulls are always smooth. */
-	static constexpr auto DoFFocusFragmentShader = R"GLSL(
+	constexpr auto DoFFocusFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -141,7 +141,7 @@ void main()
 	/* Setup pass (half-res): downsampled color + SIGNED normalized circle of confusion.
 	 * Thin lens model; positive CoC = far field (behind the focus plane), negative =
 	 * near field (in front of it). The sky (far plane) naturally lands in the far field. */
-	static constexpr auto DoFSetupFragmentShader = R"GLSL(
+	constexpr auto DoFSetupFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -206,7 +206,7 @@ void main()
 	/* Near-CoC dilation (separable max filter): spreads the near-field coverage BEYOND
 	 * the silhouettes so the foreground blur bleeds over the sharp background — the
 	 * defining trait of a real out-of-focus foreground. */
-	static constexpr auto DoFDilateFragmentShader = R"GLSL(
+	constexpr auto DoFDilateFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -246,7 +246,7 @@ void main()
 	 * Scatter-as-gather: a sample contributes when its OWN circle of confusion is wide
 	 * enough to reach the pixel being shaded. Near-field samples are excluded (a sharp
 	 * or foreground object must never smear into the background blur behind it). */
-	static constexpr auto DoFFarGatherFragmentShader = R"GLSL(
+	constexpr auto DoFFarGatherFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -307,7 +307,7 @@ void main()
 	/* Near-field gather (half-res): same spiral, but driven by the DILATED near CoC so
 	 * the foreground blur extends past its own silhouette. No occlusion rejection: the
 	 * out-of-focus foreground freely covers whatever is behind it. */
-	static constexpr auto DoFNearGatherFragmentShader = R"GLSL(
+	constexpr auto DoFNearGatherFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -375,7 +375,7 @@ void main()
 	/* Composite pass (full-res): sharp base, far field blended by its CoC factor, then
 	 * the near field composited OVER everything (foreground bleed). The per-pixel
 	 * material DoF mask (A channel low nibble) exempts HUD-like surfaces. */
-	static constexpr auto DoFCompositeFragmentShader = R"GLSL(
+	constexpr auto DoFCompositeFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -432,9 +432,9 @@ namespace EmEn::Graphics::Effects::Camera
 
 		/* Effect-quality knobs, engine-wide and persisted in the settings file.
 		 * The OPTICAL parameters are NOT settings: they belong to the active camera. */
-		m_parameters.maxCoCRadius = settings.getOrSetDefault< float >(GraphicsPPDepthOfFieldMaxRadiusKey, DefaultGraphicsPPDepthOfFieldMaxRadius);
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPDepthOfFieldSampleCountKey, DefaultGraphicsPPDepthOfFieldSampleCount);
-		m_parameters.autoFocusSpeed = settings.getOrSetDefault< float >(GraphicsPPDepthOfFieldAutoFocusSpeedKey, DefaultGraphicsPPDepthOfFieldAutoFocusSpeed);
+		m_parameters.maxCoCRadius = settings.getOrSetDefaultInRange< float >(GraphicsPPDepthOfFieldMaxRadiusKey, DefaultGraphicsPPDepthOfFieldMaxRadius, MinGraphicsPPDepthOfFieldMaxRadius, MaxGraphicsPPDepthOfFieldMaxRadius);
+		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPDepthOfFieldSampleCountKey, DefaultGraphicsPPDepthOfFieldSampleCount, MinGraphicsPPDepthOfFieldSampleCount, MaxGraphicsPPDepthOfFieldSampleCount);
+		m_parameters.autoFocusSpeed = settings.getOrSetDefaultInRange< float >(GraphicsPPDepthOfFieldAutoFocusSpeedKey, DefaultGraphicsPPDepthOfFieldAutoFocusSpeed, MinGraphicsPPDepthOfFieldAutoFocusSpeed, MaxGraphicsPPDepthOfFieldAutoFocusSpeed, true);
 		m_parameters.nearFieldEnabled = settings.getOrSetDefault< bool >(GraphicsPPDepthOfFieldNearFieldKey, DefaultGraphicsPPDepthOfFieldNearField);
 
 		m_focusValid = false;
@@ -900,7 +900,7 @@ namespace EmEn::Graphics::Effects::Camera
 				region.bufferOffset = 0;
 				region.bufferRowLength = 0;
 				region.bufferImageHeight = 0;
-				region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+				region.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
 				region.imageOffset = {.x=0, .y=0, .z=0};
 				region.imageExtent = {.width=1, .height=1, .depth=1};
 

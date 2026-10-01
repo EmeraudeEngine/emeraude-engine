@@ -605,8 +605,8 @@ namespace EmEn::Graphics
 		};
 
 		const std::array< DirectionPushConstants, 2 > directions{
-			DirectionPushConstants{1.0F, 0.0F, 0.0F, 0.0F},
-			DirectionPushConstants{0.0F, 1.0F, 0.0F, 0.0F}
+			DirectionPushConstants{.directionX = 1.0F, .directionY = 0.0F, .padding0 = 0.0F, .padding1 = 0.0F},
+			DirectionPushConstants{.directionX = 0.0F, .directionY = 1.0F, .padding0 = 0.0F, .padding1 = 0.0F}
 		};
 
 		for ( size_t pass = 0; pass < 2; ++pass )

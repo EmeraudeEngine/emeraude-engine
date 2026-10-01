@@ -952,7 +952,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * travel before "hit nothing" may be read as "sees the sky": the far plane is
 		 * the frame's own "nothing beyond this exists" bound, so distant geometry can
 		 * never be mistaken for open sky. */
-		static_cast< void >(m_denoiser.updateFrameData(frameIndex, context, GIDenoiser::FrameInputs{
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{
 			.traceMaxDistance = m_parameters.maxDistance,
 			.traceBias = m_parameters.bias,
 			.traceSampleCount = static_cast< float >(m_parameters.sampleCount),

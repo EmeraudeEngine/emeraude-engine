@@ -1872,7 +1872,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * deterministic but half-res and fed by a G-buffer the TAA jitters — a reflected silhouette
 		 * aliased at half resolution, and TAA cannot reproject a reflection (SettingKeys.hpp § Temporal).
 		 * Returns the raw trace when the chain is off. */
-		static_cast< void >(m_denoiser.updateFrameData(frameIndex, context, GIDenoiser::FrameInputs{}));
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{}));
 		m_temporalOutput = m_denoiser.recordResolve(commandBuffer, m_traceTarget, context, &m_coneTexture);
 
 		/* ---- Pass 1b: pre-convolved reflection pyramid build (glossy cone source) ---- */

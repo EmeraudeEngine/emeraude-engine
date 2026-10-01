@@ -60,7 +60,7 @@ namespace EmEn::Graphics::Effects::Style
 			auto blue = target[2] / std::max(neutral[2], 1.0e-6F);
 
 			/* A white balance moves the colour, not the brightness: keep the Rec.709 luminance. */
-			const auto luminance = std::max(0.2126F * red + 0.7152F * green + 0.0722F * blue, 1.0e-6F);
+			const auto luminance = std::max((0.2126F * red) + (0.7152F * green) + (0.0722F * blue), 1.0e-6F);
 
 			red /= luminance;
 			green /= luminance;

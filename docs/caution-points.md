@@ -6781,6 +6781,23 @@ was a MISSING TERM rather than a mis-tuned one.
 dimming the reflection of every material under 0.6 roughness in both lanes (stone control's saturation
 +27 %). Reverted; its only value was diagnostic.
 
+### A number read from the settings file is a trust boundary — `Settings::getOrSetDefaultInRange()` (2026-10-01)
+
+> [!CAUTION]
+> **A quality knob is a GPU workload.** `DepthOfField/SampleCount = 100000` makes the gather shader run until the
+> driver's timeout (device lost); `DepthOfField/MaxRadius = 1e9` overflowed its `int32_t` cast (UB); a view distance of
+> 0 put the far plane below the near one; `RushMaker/MaxQueuedFrames = 10000` is an out-of-memory abort. Since the
+> triad (7d-7f) such keys are read with `Settings::getOrSetDefaultInRange< T >(key, default, minimum, maximum,
+> minimumExclusive)`: outside the range (a NaN, an infinity) it warns once — `'<key>' = <value> is outside [<min>,
+> <max>] ! Using <default>.` — and returns the default; the file keeps what the user wrote. The ranges are named
+> `Min…` / `Max…` constants beside the defaults in `SettingKeys.hpp` (owner ruling 2026-10-01: range, else default).
+> Converted: `Core/Graphics/ViewDistance` (0, 1 000 000], RushMaker `VideoFramerate` [1, 240] and `MaxQueuedFrames`
+> [3, 240], post-process `TemporalAA/Alpha` (0, 1] and `VarianceGamma` (0, 10], `MotionBlur/SampleCount` [1, 128] and
+> `SoftDepthExtent` (0, 10], `Clouds/StepCount` [1, 512] and `LightStepCount` [1, 64], `DepthOfField/SampleCount`
+> [1, 256], `MaxRadius` [1, 128] and `AutoFocusSpeed` (0, 100]. A new numeric key that drives a loop, an allocation or
+> a cast takes the same call. Measured 2026-10-01: all twelve out of range in one settings copy → twelve warnings
+> (sponza, terrain), the scenes render, 0 VUID.
+
 ### The application SAVES its settings on exit — restore a debug key AFTER the process is gone (Sep 2026)
 
 `Core.shutdown()` writes the live settings back to `~/.config/LNIsle/projet-alpha/settings.json`.

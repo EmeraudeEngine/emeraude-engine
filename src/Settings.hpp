@@ -30,11 +30,13 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <shared_mutex>
+#include <sstream>
 #include <string>
 #include <variant>
 #include <vector>
@@ -681,6 +683,39 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the stored value at @p key like @ref getOrSetDefault(), refusing a value outside its range.
+			 * @note Ave Robustus (owner ruling 2026-10-01): a value outside [@p minimum, @p maximum] — or
+			 * (@p minimum, @p maximum] with @p minimumExclusive —, a NaN or an infinity, is traced as one warning naming the
+			 * key and the range, and @p defaultValue is returned. The stored value is left as the user wrote it.
+			 * @pre minimum <= defaultValue <= maximum (and minimum < defaultValue with minimumExclusive).
+			 * @tparam variable_t An arithmetic type, not bool.
+			 * @param key Slash-delimited path, e.g. @c "Core/Graphics/ViewDistance".
+			 * @param defaultValue Value to store when the key is absent, and to return when it is out of range.
+			 * @param minimum The lowest accepted value.
+			 * @param maximum The highest accepted value.
+			 * @param minimumExclusive True when @p minimum itself is refused. Default false.
+			 * @return variable_t
+			 */
+			template< SettingType variable_t >
+			requires (std::is_arithmetic_v< variable_t > && !std::is_same_v< variable_t, bool >)
+			[[nodiscard]]
+			variable_t
+			getOrSetDefaultInRange (const std::string & key, const variable_t & defaultValue, const variable_t & minimum, const variable_t & maximum, bool minimumExclusive = false)
+			{
+				const auto value = this->getOrSetDefault< variable_t >(key, defaultValue);
+
+				/* NOTE: every comparison with a NaN is false, and an infinity fails one bound. */
+				if ( (minimumExclusive ? value > minimum : value >= minimum) && value <= maximum )
+				{
+					return value;
+				}
+
+				TraceWarning{ClassId} << "'" << key << "' = " << Settings::printable(value) << " is outside " << ( minimumExclusive ? "(" : "[" ) << Settings::printable(minimum) << ", " << Settings::printable(maximum) << "] ! Using " << Settings::printable(defaultValue) << ".";
+
+				return defaultValue;
+			}
+
+			/**
 			 * @brief Returns all elements of a settings array coerced to @p variable_t.
 			 *
 			 * Iterates over every @ref SettingValue in the stored array and attempts to
@@ -891,6 +926,36 @@ namespace EmEn
 			static std::optional< SettingValue > jsonToSettingValue (const Json::Value & item) noexcept;
 
 		private:
+
+			/**
+			 * @brief Writes a number for a trace: an integral float without its exponent (1000000, not 1e+06).
+			 * @tparam value_t An arithmetic type.
+			 * @param value The number.
+			 * @return std::string
+			 */
+			template< typename value_t >
+			[[nodiscard]]
+			static
+			std::string
+			printable (value_t value) noexcept
+			{
+				if constexpr ( std::is_floating_point_v< value_t > )
+				{
+					if ( std::isfinite(value) && std::abs(value) < static_cast< value_t >(1e15) && std::trunc(value) == value )
+					{
+						return std::to_string(static_cast< int64_t >(value));
+					}
+
+					std::ostringstream stream;
+					stream << value;
+
+					return stream.str();
+				}
+				else
+				{
+					return std::to_string(value);
+				}
+			}
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;

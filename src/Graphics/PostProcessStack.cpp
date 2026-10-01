@@ -805,8 +805,8 @@ namespace EmEn::Graphics
 		}
 
 		const Effects::Atmosphere::VolumetricClouds::Parameters parameters{
-			.stepCount = std::max(settings.getOrSetDefault< uint32_t >(GraphicsPPCloudsStepCountKey, DefaultGraphicsPPCloudsStepCount), 1U),
-			.lightStepCount = std::max(settings.getOrSetDefault< uint32_t >(GraphicsPPCloudsLightStepCountKey, DefaultGraphicsPPCloudsLightStepCount), 1U),
+			.stepCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPCloudsStepCountKey, DefaultGraphicsPPCloudsStepCount, MinGraphicsPPCloudsStepCount, MaxGraphicsPPCloudsStepCount),
+			.lightStepCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPCloudsLightStepCountKey, DefaultGraphicsPPCloudsLightStepCount, MinGraphicsPPCloudsLightStepCount, MaxGraphicsPPCloudsLightStepCount),
 			.groundAlbedo = settings.getOrSetDefault< float >(GraphicsPPCloudsGroundAlbedoKey, DefaultGraphicsPPCloudsGroundAlbedo)
 		};
 
@@ -1407,7 +1407,7 @@ namespace EmEn::Graphics
 	void
 	PostProcessStack::publishFrameDiagnostics (const FrameDiagnostics & diagnostics) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+		const std::scoped_lock lock{m_frameDiagnosticsAccess};
 
 		m_frameDiagnostics = diagnostics;
 	}
@@ -1415,7 +1415,7 @@ namespace EmEn::Graphics
 	FrameDiagnostics
 	PostProcessStack::frameDiagnostics () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_frameDiagnosticsAccess};
+		const std::scoped_lock lock{m_frameDiagnosticsAccess};
 
 		return m_frameDiagnostics;
 	}

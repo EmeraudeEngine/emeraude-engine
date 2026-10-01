@@ -953,7 +953,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameContext & context, const FrameInputs & inputs) noexcept
+	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameInputs & inputs) noexcept
 	{
 		/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
 		const auto readStateIndex = this->renderer().currentReadStateIndex();
@@ -1056,7 +1056,7 @@ namespace EmEn::Graphics
 
 		CombineContribution contribution;
 		contribution.prefix = prefix;
-		contribution.samplers.emplace_back(CombineSamplerInput{"Moments", &this->momentsTexture()});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Moments", .texture = &this->momentsTexture()});
 		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{static_cast< float >(mode), 0.0F, 0.0F, 0.0F});
 
 		contribution.code =
@@ -1198,18 +1198,18 @@ namespace EmEn::Graphics
 			 * every frame — rewrite its input binding; the guides too. */
 			static_cast< void >(m_atrousPerFrame[0][frameIndex]->writeCombinedImageSampler(0, m_historyTargets[writeIdx]));
 
-			for ( size_t flavour = 0; flavour < m_atrousPerFrame.size(); ++flavour )
+			for ( auto & flavour : m_atrousPerFrame )
 			{
-				static_cast< void >(m_atrousPerFrame[flavour][frameIndex]->writeCombinedImageSampler(1, m_momentsTargets[writeIdx]));
+				static_cast< void >(flavour[frameIndex]->writeCombinedImageSampler(1, m_momentsTargets[writeIdx]));
 
 				if ( context.depth != nullptr )
 				{
-					static_cast< void >(m_atrousPerFrame[flavour][frameIndex]->writeCombinedImageSampler(2, *context.depth));
+					static_cast< void >(flavour[frameIndex]->writeCombinedImageSampler(2, *context.depth));
 				}
 
 				if ( context.normals != nullptr )
 				{
-					static_cast< void >(m_atrousPerFrame[flavour][frameIndex]->writeCombinedImageSampler(3, *context.normals));
+					static_cast< void >(flavour[frameIndex]->writeCombinedImageSampler(3, *context.normals));
 				}
 			}
 

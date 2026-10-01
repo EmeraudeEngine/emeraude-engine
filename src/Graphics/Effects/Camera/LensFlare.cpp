@@ -431,13 +431,13 @@ namespace EmEn::Graphics::Effects::Camera
 
 			/* A far point toward the light (opposite of its propagation). */
 			const auto toLight = (-mainLight->direction()).normalized();
-			const Math::Vector< 4, float > farPoint{cameraPosition[0] + toLight[0] * 10000.0F, cameraPosition[1] + toLight[1] * 10000.0F, cameraPosition[2] + toLight[2] * 10000.0F, 1.0F};
+			const Math::Vector< 4, float > farPoint{cameraPosition[0] + (toLight[0] * 10000.0F), cameraPosition[1] + (toLight[1] * 10000.0F), cameraPosition[2] + (toLight[2] * 10000.0F), 1.0F};
 			const auto clipPosition = projectionMatrix * (viewMatrix * farPoint);
 
 			if ( clipPosition[3] > 0.001F )
 			{
-				const auto screenX = (clipPosition[0] / clipPosition[3]) * 0.5F + 0.5F;
-				const auto screenY = (clipPosition[1] / clipPosition[3]) * 0.5F + 0.5F;
+				const auto screenX = ((clipPosition[0] / clipPosition[3]) * 0.5F) + 0.5F;
+				const auto screenY = ((clipPosition[1] / clipPosition[3]) * 0.5F) + 0.5F;
 
 				/* Fade near the screen edges: a sun leaving the frame takes its ghosts with it. */
 				const auto distanceFromCentre = std::hypot(screenX - 0.5F, screenY - 0.5F);
@@ -502,7 +502,7 @@ namespace EmEn::Graphics::Effects::Camera
 	{
 		CombineContribution contribution;
 		contribution.prefix = "lflare";
-		contribution.samplers.emplace_back(CombineSamplerInput{"Tex", &m_ghostTarget});
+		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_ghostTarget});
 
 		/* A pure additive blend of the ghosts: the sun's edge fade and visibility are already in the
 		 * injected disc, and a bright source of the image needs neither. Alpha forced to 1. */

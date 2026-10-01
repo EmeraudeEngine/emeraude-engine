@@ -81,6 +81,32 @@ namespace EmEn::Graphics
 			 */
 			~CombinePass () override;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			CombinePass (const CombinePass & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			CombinePass (CombinePass && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return CombinePass &
+			 */
+			CombinePass & operator= (const CombinePass & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return CombinePass &
+			 */
+			CombinePass & operator= (CombinePass && copy) noexcept = delete;
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
 			 * @note An INTERNAL component: owned by the effect that uses it (its pipeline helpers come from this base), never filed into a chain — PostProcessStack::addEffect() refuses this slot. */
 			[[nodiscard]]

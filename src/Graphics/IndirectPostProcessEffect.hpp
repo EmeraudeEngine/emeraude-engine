@@ -456,7 +456,7 @@ namespace EmEn::Graphics
 				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
 				 * centers; no history counterpart is exposed because nothing in the chain has to
 				 * undo a previous-frame offset (the jitter never travels through a matrix). */
-				Base::Math::Vector< 2, float > projectionJitter{};
+				Base::Math::Vector< 2, float > projectionJitter;
 				/* The exposure multiplier the tone mapper applies (ToneMapping::displayExposure()), nit -> display
 				 * value, or 0 when the chain has no tone mapper. An effect that weights by luminance BEFORE the tone
 				 * mapping (the TAA's Karis weights) needs a DISPLAY luminance: fed nits, `1 / (1 + L)` is `1 / L`. */
@@ -832,7 +832,7 @@ namespace EmEn::Graphics
 				bool needsDepth{false};
 				bool needsNormals{false};
 				/** @brief Per-frame scalar slot, exposed as a vec4 UBO member. */
-				Base::Math::Vector< 4, float > dynamics{};
+				Base::Math::Vector< 4, float > dynamics;
 				/** @brief The GLSL kernel snippet (assigns `vec4 <prefix>Result`). */
 				std::string code;
 			};

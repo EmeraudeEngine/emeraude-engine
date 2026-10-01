@@ -902,10 +902,14 @@ namespace EmEn
 			/* Blend weight of the CURRENT frame (0.1 = 90% history: strong AA, slower response). */
 			constexpr auto GraphicsPPTemporalAAAlphaKey{"Core/Graphics/PostProcessing/TemporalAA/Alpha"};
 			constexpr auto DefaultGraphicsPPTemporalAAAlpha{0.1F};
+			constexpr auto MinGraphicsPPTemporalAAAlpha{0.0F}; /* Exclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPTemporalAAAlpha{1.0F};
 			/* Variance clipping gamma: half-size of the YCoCg statistical AABB in standard
 			 * deviations (lower = less ghosting, more flicker). */
 			constexpr auto GraphicsPPTemporalAAVarianceGammaKey{"Core/Graphics/PostProcessing/TemporalAA/VarianceGamma"};
 			constexpr auto DefaultGraphicsPPTemporalAAVarianceGamma{1.0F};
+			constexpr auto MinGraphicsPPTemporalAAVarianceGamma{0.0F}; /* Exclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPTemporalAAVarianceGamma{10.0F};
 			/* Karis inverse-luminance blend weighting (HDR anti-firefly / anti-flicker). */
 			constexpr auto GraphicsPPTemporalAALumaWeightingKey{"Core/Graphics/PostProcessing/TemporalAA/LumaWeighting"};
 			constexpr auto DefaultGraphicsPPTemporalAALumaWeighting{true};
@@ -923,9 +927,13 @@ namespace EmEn
 			/* Samples walked along the dominant velocity (odd: one lands on the pixel centre). */
 			constexpr auto GraphicsPPMotionBlurSampleCountKey{"Core/Graphics/PostProcessing/MotionBlur/SampleCount"};
 			constexpr auto DefaultGraphicsPPMotionBlurSampleCount{24U};
+			constexpr auto MinGraphicsPPMotionBlurSampleCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPMotionBlurSampleCount{128U};
 			/* Depth interval, in meters, softening the foreground/background classification. */
 			constexpr auto GraphicsPPMotionBlurSoftDepthExtentKey{"Core/Graphics/PostProcessing/MotionBlur/SoftDepthExtent"};
 			constexpr auto DefaultGraphicsPPMotionBlurSoftDepthExtent{0.05F};
+			constexpr auto MinGraphicsPPMotionBlurSoftDepthExtent{0.0F}; /* Exclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPMotionBlurSoftDepthExtent{10.0F};
 
 			/* Volumetric light — the SCREEN-SPACE radial-blur god rays (Mitchell, GPU Gems 3).
 			 * ⚠️ These are radial-blur tuning knobs, NOT a participating medium: 'density' is a
@@ -957,9 +965,13 @@ namespace EmEn
 			 * shrinks with the distance, down to an eighth of that. */
 			constexpr auto GraphicsPPCloudsStepCountKey{"Core/Graphics/PostProcessing/Clouds/StepCount"};
 			constexpr auto DefaultGraphicsPPCloudsStepCount{64U};
+			constexpr auto MinGraphicsPPCloudsStepCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPCloudsStepCount{512U};
 			/* Steps toward the sun inside the cloud, per view step: the self-shadowing. */
 			constexpr auto GraphicsPPCloudsLightStepCountKey{"Core/Graphics/PostProcessing/Clouds/LightStepCount"};
 			constexpr auto DefaultGraphicsPPCloudsLightStepCount{6U};
+			constexpr auto MinGraphicsPPCloudsLightStepCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPCloudsLightStepCount{64U};
 			/* Lambertian albedo of the ground UNDER the clouds, in [0, 1]: the bounce that lights their
 			 * bottoms (L = albedo · E_ground / pi). An approximation of the integrator, not a scene fact. */
 			constexpr auto GraphicsPPCloudsGroundAlbedoKey{"Core/Graphics/PostProcessing/Clouds/GroundAlbedo"};
@@ -986,12 +998,18 @@ namespace EmEn
 			 * diameter, past which 48 spiral taps would start to ring. */
 			constexpr auto GraphicsPPDepthOfFieldMaxRadiusKey{"Core/Graphics/PostProcessing/DepthOfField/MaxRadius"};
 			constexpr auto DefaultGraphicsPPDepthOfFieldMaxRadius{32.0F};
+			constexpr auto MinGraphicsPPDepthOfFieldMaxRadius{1.0F}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPDepthOfFieldMaxRadius{128.0F};
 			/* Golden-spiral gather taps per pixel (bokeh quality). */
 			constexpr auto GraphicsPPDepthOfFieldSampleCountKey{"Core/Graphics/PostProcessing/DepthOfField/SampleCount"};
 			constexpr auto DefaultGraphicsPPDepthOfFieldSampleCount{48U};
+			constexpr auto MinGraphicsPPDepthOfFieldSampleCount{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPDepthOfFieldSampleCount{256U};
 			/* Auto-focus adaptation speed (rack focus), in 1/seconds. */
 			constexpr auto GraphicsPPDepthOfFieldAutoFocusSpeedKey{"Core/Graphics/PostProcessing/DepthOfField/AutoFocusSpeed"};
 			constexpr auto DefaultGraphicsPPDepthOfFieldAutoFocusSpeed{3.0F};
+			constexpr auto MinGraphicsPPDepthOfFieldAutoFocusSpeed{0.0F}; /* Exclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPDepthOfFieldAutoFocusSpeed{100.0F};
 			/* Near-field (foreground) blur with silhouette bleeding. */
 			constexpr auto GraphicsPPDepthOfFieldNearFieldKey{"Core/Graphics/PostProcessing/DepthOfField/NearField"};
 			constexpr auto DefaultGraphicsPPDepthOfFieldNearField{true};

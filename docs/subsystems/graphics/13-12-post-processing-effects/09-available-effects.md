@@ -47,3 +47,10 @@
 | **SSContactShadows** | `Effects/Lighting/SSContactShadows.hpp/cpp` | Multi-pass, FULL-res | Depth, Normals, MaterialProps (combine only), LightSet |
 | **LensFlare** | `Effects/Camera/LensFlare.hpp/cpp` | 2 passes, half res (source + ghosts) | Depth (the sun probe), HDR; the main directional light is OPTIONAL (it is the injected sun) |
 | **FogEnvironment** | `Effects/Atmosphere/FogEnvironment.hpp/cpp` | 1-pass | Depth |
+
+The quality keys an effect reads with `getOrSetDefault()` are BOUNDED (triad 7f, owner ruling 2026-10-01): outside
+its range a value warns and takes the default (`Settings::getOrSetDefaultInRange()`, the ranges beside the
+defaults in `SettingKeys.hpp`): `TemporalAA/Alpha` (0, 1], `TemporalAA/VarianceGamma` (0, 10],
+`MotionBlur/SampleCount` [1, 128], `MotionBlur/SoftDepthExtent` (0, 10], `Clouds/StepCount` [1, 512],
+`Clouds/LightStepCount` [1, 64], `DepthOfField/SampleCount` [1, 256], `DepthOfField/MaxRadius` [1, 128] px,
+`DepthOfField/AutoFocusSpeed` (0, 100]. `VolumetricLight`'s override keys above are not bounded yet (triad 7g).

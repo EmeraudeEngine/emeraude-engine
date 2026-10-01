@@ -331,10 +331,20 @@ namespace EmEn::Graphics
 						mark = " *";
 					}
 
+					const char * state = "not created";
+
+					if ( occupant->isCreated() )
+					{
+						state = "created";
+					}
+					else if ( occupant->hasCreationFailed() )
+					{
+						state = "CREATION FAILED";
+					}
+
 					outputs.emplace_back(Severity::Info, std::stringstream{} <<
 						"  " << mark << " " << occupant->label() <<
-						" (" << laneName(*occupant) << ", " <<
-						( occupant->isCreated() ? "created" : ( occupant->hasCreationFailed() ? "CREATION FAILED" : "not created" ) ) << ")"
+						" (" << laneName(*occupant) << ", " << state << ")"
 					);
 				}
 			}

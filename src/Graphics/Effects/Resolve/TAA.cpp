@@ -111,7 +111,7 @@ namespace
 
 	/* ⚠️ Split into adjacent raw literals (byte-identical once concatenated): MSVC caps ONE literal at 16380 bytes
 	 * (C2026, docs/caution-points.md). Keep every piece well under it when the shader grows. */
-	static constexpr auto TAAResolveFragmentShader = R"GLSL(
+	constexpr auto TAAResolveFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -567,8 +567,8 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* User-facing parameters, engine-wide and persisted in the settings file.
 		 * These override any constructor-provided values. */
 		auto & settings = renderer.primaryServices().settings();
-		m_parameters.alpha = settings.getOrSetDefault< float >(GraphicsPPTemporalAAAlphaKey, DefaultGraphicsPPTemporalAAAlpha);
-		m_parameters.varianceGamma = settings.getOrSetDefault< float >(GraphicsPPTemporalAAVarianceGammaKey, DefaultGraphicsPPTemporalAAVarianceGamma);
+		m_parameters.alpha = settings.getOrSetDefaultInRange< float >(GraphicsPPTemporalAAAlphaKey, DefaultGraphicsPPTemporalAAAlpha, MinGraphicsPPTemporalAAAlpha, MaxGraphicsPPTemporalAAAlpha, true);
+		m_parameters.varianceGamma = settings.getOrSetDefaultInRange< float >(GraphicsPPTemporalAAVarianceGammaKey, DefaultGraphicsPPTemporalAAVarianceGamma, MinGraphicsPPTemporalAAVarianceGamma, MaxGraphicsPPTemporalAAVarianceGamma, true);
 		m_parameters.lumaWeighting = settings.getOrSetDefault< bool >(GraphicsPPTemporalAALumaWeightingKey, DefaultGraphicsPPTemporalAALumaWeighting);
 		m_parameters.debugNonFinite = settings.getOrSetDefault< bool >(GraphicsPPDebugNonFiniteKey, DefaultGraphicsPPDebugNonFinite);
 		m_parameters.debugView = std::min(settings.getOrSetDefault< uint32_t >(GraphicsPPTemporalAADebugViewKey, DefaultGraphicsPPTemporalAADebugView), 3U);

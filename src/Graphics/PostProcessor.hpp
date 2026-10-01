@@ -492,7 +492,7 @@ namespace EmEn::Graphics
 			/** @brief Timestamp of the previous indirect-chain execution, for PushConstants::deltaTime.
 			 * Mutable because the chain executes from a const method (same idiom as
 			 * ViewMatrices2DUBO's cached jittered projection). */
-			mutable std::chrono::steady_clock::time_point m_lastChainFrameTime{};
+			mutable std::chrono::steady_clock::time_point m_lastChainFrameTime;
 			/* USER master switch, not a capability: it answers "is post-processing allowed",
 			 * never "is there anything to post-process" — that second question belongs to the
 			 * renderer, which alone knows the active scene's chain (Renderer::needsInternalTarget()).

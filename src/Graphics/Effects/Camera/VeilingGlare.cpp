@@ -55,7 +55,7 @@ namespace
 	 * docs/caution-points.md, "the auto-exposure EMA had no sanitisation". Asking for level 0
 	 * removes the whole mip path from the equation. */
 
-	static constexpr auto DownsampleFragmentShader = R"GLSL(
+	constexpr auto DownsampleFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -197,7 +197,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto UpsampleFragmentShader = R"GLSL(
+	constexpr auto UpsampleFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -245,7 +245,7 @@ void main()
 }
 )GLSL";
 
-	static constexpr auto CompositeFragmentShader = R"GLSL(
+	constexpr auto CompositeFragmentShader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -658,7 +658,8 @@ namespace EmEn::Graphics::Effects::Camera
 		for ( uint32_t mipLevel = 0; mipLevel < MipLevels; ++mipLevel )
 		{
 			/* Texel size of the INPUT texture for this pass. */
-			float inputW, inputH;
+			float inputW = 0.0F;
+			float inputH = 0.0F;
 
 			if ( mipLevel == 0 )
 			{

@@ -40,6 +40,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Graphics` 7c (`Geometry/`, `Renderable/`, `MDI/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 51, all ON PURPOSE (below) — 30 constant-array-index, 4 integer-division, 4 non-private members, 3 use-enum-class, 3 qualified-auto, 2 misc-no-recursion, 2 static-cast-downcast, 1 each special-member-functions, const-ref member, implicit-widening. Before: 95. | Triad sub-section 7c |
 | `src/Graphics` 7d (`Renderer` + console, `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 91, all ON PURPOSE (below) — 28 SIMD intrinsics, 26 reinterpret-cast, 21 constant-array-index, 5 convert-to-static, 4 owning-memory, 3 union access, 2 qualified-auto, 1 each use-after-move (false positive), use-enum-class. Before: 226. | Triad sub-section 7d |
 | `src/Graphics` 7e (`RenderTarget/`, `RenderableInstance/`, scene / intermediate / selection targets, view matrices, shared UBOs, bindless table, vertex formats, skinning, path overlay) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 109, all ON PURPOSE (below) — 80 constant-array-index, 16 reinterpret-cast, 7 qualified-auto, 2 use-enum-class, 2 non-private members, 1 each convert-to-static, unused parameter. Before: 205. | Triad sub-section 7e |
+| `src/Graphics` 7f (post-process: `PostProcessor`, `PostProcessStack`, the passes, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared / Resolve / Camera / Style) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 145, all ON PURPOSE (below) — 129 constant-array-index, 9 return-const-ref-from-parameter, 4 inefficient string concatenation, 2 macro-usage, 1 use-enum-class. Before: 192. | Triad sub-section 7f |
 
 ## Findings kept ON PURPOSE
 
@@ -248,4 +249,15 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   `beginRenderPass()`, an instance API).
 - **misc-unused-parameters ×1** — `RenderTarget::Abstract`'s `viewDistance`: dead across every render-target
   constructor, engine item `render-target-dead-view-distance-parameter`.
+
+### `src/Graphics` 7f — post-process (2026-10-01)
+
+- **pro-bounds-constant-array-index ×129** — the per-frame descriptor sets and targets (`frameIndex <
+  framesInFlight`), the ping-pong pairs (`index < 2`), the effect slots (`slot < EffectSlotCount`), the census counters.
+- **bugprone-return-const-ref-from-parameter ×9** — the chain's pass-through contract: an effect with nothing to do
+  returns its INPUT texture, owned by a render target, never a temporary.
+- **performance-inefficient-string-concatenation ×4** — `GIDenoiser` target names, built once per creation / resize.
+- **cppcoreguidelines-macro-usage ×2** — `EMEN_CLOUD_VOLUME_GLSL`, `GIDENOISER_REPROJECTION_GLSL`: GLSL text spliced
+  by adjacent-literal concatenation at compile time, which a `constexpr` pointer cannot do.
+- **use-enum-class ×1** — `OverflowCensus::CounterIndex` (indices into the counter array, now on `uint8_t`).
 

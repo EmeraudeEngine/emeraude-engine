@@ -52,16 +52,7 @@ namespace EmEn::Scenes
 	float
 	Toolkit::viewDistanceSetting () const noexcept
 	{
-		const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
-
-		if ( !std::isfinite(distance) || distance <= 0.0F || distance > MaxGraphicsViewDistance )
-		{
-			TraceWarning{ClassId} << "'" << GraphicsViewDistanceKey << "' = " << distance << " is outside (0, " << static_cast< uint32_t >(MaxGraphicsViewDistance) << "] m ! Using " << static_cast< uint32_t >(DefaultGraphicsViewDistance) << " m.";
-
-			return DefaultGraphicsViewDistance;
-		}
-
-		return distance;
+		return m_settings.getOrSetDefaultInRange< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance, 0.0F, MaxGraphicsViewDistance, true);
 	}
 
 	std::shared_ptr< Material::Interface >

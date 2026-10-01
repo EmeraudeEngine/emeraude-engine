@@ -343,12 +343,11 @@ namespace EmEn::Graphics
 			 * temporal parameters from Parameters, trace scalars from the owner), writes it
 			 * and advances the animated-noise sequence.
 			 * @param frameIndex The frame-in-flight index.
-			 * @param context The per-frame chain context.
 			 * @param inputs The owner's trace scalars.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateFrameData (uint32_t frameIndex, const FrameContext & context, const FrameInputs & inputs) noexcept;
+			bool updateFrameData (uint32_t frameIndex, const FrameInputs & inputs) noexcept;
 
 			/**
 			 * @brief Returns the combine contribution of the denoiser DEBUG views, drawn

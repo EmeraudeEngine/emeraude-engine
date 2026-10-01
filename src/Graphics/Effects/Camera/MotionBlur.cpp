@@ -365,8 +365,8 @@ namespace EmEn::Graphics::Effects::Camera
 		 * setting: it belongs to the active camera and is read per frame in execute(). */
 		auto & settings = renderer.primaryServices().settings();
 
-		m_parameters.sampleCount = settings.getOrSetDefault< uint32_t >(GraphicsPPMotionBlurSampleCountKey, DefaultGraphicsPPMotionBlurSampleCount);
-		m_parameters.softDepthExtent = settings.getOrSetDefault< float >(GraphicsPPMotionBlurSoftDepthExtentKey, DefaultGraphicsPPMotionBlurSoftDepthExtent);
+		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPMotionBlurSampleCountKey, DefaultGraphicsPPMotionBlurSampleCount, MinGraphicsPPMotionBlurSampleCount, MaxGraphicsPPMotionBlurSampleCount);
+		m_parameters.softDepthExtent = settings.getOrSetDefaultInRange< float >(GraphicsPPMotionBlurSoftDepthExtentKey, DefaultGraphicsPPMotionBlurSoftDepthExtent, MinGraphicsPPMotionBlurSoftDepthExtent, MaxGraphicsPPMotionBlurSoftDepthExtent, true);
 
 		/* The tile targets hold a 2D velocity in pixels: RG16F is enough (a 16-bit float
 		 * resolves any pixel count we can render). The output is the colour chain format. */

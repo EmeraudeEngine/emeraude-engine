@@ -644,8 +644,8 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 | 7b | `Material/` (JSON material definitions) | ~14 000 | ✅ pushed engine `1ee4a6c6`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ✅ pushed base `dce53a7`, engine `b1541d1c`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ✅ pushed (the engine 7d commit); peers pending |
-| 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ✅ pushed (the engine 7e commit); peers pending |
-| 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ⬜ |
+| 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ✅ pushed engine `11e574d8`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ✅ pushed (the engine 7f commit); peers pending |
 | 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ⬜ |
 
 Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2, done); 7c (done) `BasicGroundResource` passes
@@ -881,5 +881,54 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   the selection outline (light-and-shadow-debug, `highlightEntity(SmoothMesh4)`): 1 857 pixels change around the
   sphere vs 76 of noise between two un-highlighted shots, the orange outline on the image; citadel MCP 1707/0, console
   4466/0; terrain, particles, beams: 0 VUID, 0 error, 0 leak.
-- [x] (5) Pushed 2026-10-01 (owner's order, with the 7d frame-count fix): engine (the 7e commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order, with the 7d frame-count fix): engine `11e574d8`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): VP9 log = IVF header = frame records = 181 (the 7d fix holds); ViewDistance 0
+    → exactly 3 warnings on sponza, the scene renders; the outline on `SmoothMesh4`; citadel MCP 1707/0, console 4445/0,
+    the 7d console checks again; terrain, particles: 0 VUID, 0 UNASSIGNED, 0 error.
+  - macOS noticed the first VP9 pts was 1 (0 in its 7d run). Not 7e: a frame's pts IS its CFR slot on the wall clock
+    since the start (`Recorder::cfrSlotAt()`), and nothing fills the slots BEFORE the first capture; a first capture
+    landing more than 1/30 s after the toggle leaves slot 0 empty. Timing-dependent, pre-existing, and it keeps the
+    video aligned on the audio track, which starts at the toggle (a start_time of 1/30 s in ffprobe).
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): VP9 181 / 181 / 181;
+    ViewDistance 0 → 3 warnings on sponza, renders; the outline on both GPUs; citadel MCP 1707/0 on both, console 4457/0
+    on AMD and 4456/1 on NVIDIA (the known flaky flood check, item `console-last-refusal-lost-on-windows`); NVIDIA only
+    the known 12325; terrain, particles 0 VUID.
+
+### 7f — post-process (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (36 TUs, the 7f files and their headers): **192**: 131 constant-array-index, 16
+  static definitions in anonymous namespaces, 9 return-const-ref-from-parameter, 7 use-scoped-lock, 6 designated
+  initializers, and singles.
+- [x] (2) Review (trust boundaries: the `PostProcess` console commands, the effects' quality settings). The console
+  commands validate their slot / effect / lane names and say why they refuse. Findings:
+  - P1 the effect quality settings had no range: a huge `DepthOfField/SampleCount` or `MotionBlur/SampleCount` or
+    `Clouds/StepCount` runs the shader into the GPU timeout (device lost), a huge `DepthOfField/MaxRadius` overflowed its
+    `int32_t` cast (UB), a TAA alpha outside (0, 1] (owner question).
+  - P2 the "outside the range → warning + default" check was already written inline three times (7d RushMaker ×2, 7e
+    ViewDistance): where should it live (owner question).
+  - P3 `GIDenoiser::updateFrameData()` took a `FrameContext` it never read (SSGI, RTGI, RTR passed it).
+  - Checked, sound: the nine `return-const-ref-from-parameter` are the chain's pass-through contract (an effect with
+    nothing to do returns its INPUT texture, owned by a render target, never a temporary).
+  - Lead for 7g: `VolumetricLight` reads its override keys (`SampleCount`…) with `settings.get()`, unbounded.
+- [x] (3) Mechanical: fix-its with `--format-style=none` (`static` dropped inside anonymous namespaces, scoped_lock,
+  designated initializers — spacing normalized —, parentheses, redundant member initializers — `Vector`'s `m_data{}`
+  and `time_point` zero them —, isolated declarations initialized, a range-for, a smart-pointer reset), P3 (the unused
+  parameter removed with its three callers), the `getStatus` nested state conditional unnested, `CounterIndex` on
+  `uint8_t`, copy / move deleted on `CombinePass` and `DenoisePass`.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - P2 `Settings::getOrSetDefaultInRange< T >(key, default, minimum, maximum, minimumExclusive = false)`: a NaN, an
+    infinity or a value outside the range warns once (`'<key>' = <value> is outside [min, max] ! Using <default>.`, an
+    integral float printed without its exponent) and returns the default; the 7d / 7e inline checks moved to it.
+  - P1 the nine keys bounded through it, the ranges as `Min…` / `Max…` constants beside the defaults: TAA Alpha (0, 1],
+    VarianceGamma (0, 10]; MotionBlur SampleCount [1, 128], SoftDepthExtent (0, 10]; Clouds StepCount [1, 512],
+    LightStepCount [1, 64]; DepthOfField SampleCount [1, 256], MaxRadius [1, 128], AutoFocusSpeed (0, 100].
+    Docs: engine caution-points § Settings trust boundary, `13-12-post-processing-effects/09-available-effects.md`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 123 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 192 → 145 (on purpose, ledger). All twelve range keys out of range in one
+  settings copy: sponza → the ten DoF / MotionBlur / TAA / ViewDistance (×3) / RushMaker warnings, terrain → the two
+  Clouds ones; both render, 0 VUID. Sponza with TAA + DoF + motion blur: `testOverflowCensus()` PASS (the `uint8_t`
+  counters), `getStatus` complete, the frame against the pre-fix-it run: mean |diff| 0.05 level, 738 of 4.67 M pixels
+  over 24 (TAA noise); MCP 1707/0. citadel ScreenSpace ↔ RayTracing lane switches (the GI denoiser of SSGI / RTGI /
+  RTR), console 4466/0, 0 VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 7f commit); peers asked.
 

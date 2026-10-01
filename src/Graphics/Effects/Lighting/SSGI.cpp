@@ -923,7 +923,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		const bool animated = m_denoiser.temporalActive() && m_parameters.temporalAnimatedNoise;
 		const auto noiseFrameIndex = static_cast< float >(m_denoiser.noiseFrameIndex());
 
-		static_cast< void >(m_denoiser.updateFrameData(frameIndex, context, GIDenoiser::FrameInputs{}));
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{}));
 
 		/* ---- Pass 1: sky visibility (GTAO horizon search) ----
 		 * FIRST: the trace reads its result. */

@@ -82,6 +82,32 @@ namespace EmEn::Graphics
 			 */
 			~DenoisePass () override;
 
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			DenoisePass (const DenoisePass & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			DenoisePass (DenoisePass && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return DenoisePass &
+			 */
+			DenoisePass & operator= (const DenoisePass & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return DenoisePass &
+			 */
+			DenoisePass & operator= (DenoisePass && copy) noexcept = delete;
+
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::slot()
 			 * @note An INTERNAL component: owned by the effect that uses it (its pipeline helpers come from this base), never filed into a chain — PostProcessStack::addEffect() refuses this slot. */
 			[[nodiscard]]

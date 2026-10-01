@@ -208,7 +208,7 @@ main ()
 	constexpr VkDeviceSize RegionBytes{32};
 
 	/** @brief The GPU counters of one region, in the order of the GLSL block. */
-	enum CounterIndex : size_t
+	enum CounterIndex : uint8_t
 	{
 		CounterTested = 0,
 		CounterNaN = 1,
@@ -708,7 +708,7 @@ namespace EmEn::Graphics
 		m_pipelineArray.reset();
 		m_pipeline2D.reset();
 		m_pipelineLayout.reset();
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 		m_descriptorSetLayout.reset();
 		m_device.reset();
 		m_notedTargets.clear();
@@ -794,7 +794,7 @@ namespace EmEn::Graphics
 		{
 			slot.pending = false;
 
-			const std::lock_guard< std::mutex > lock{m_statisticsAccess};
+			const std::scoped_lock lock{m_statisticsAccess};
 
 			m_window.staleSlots++;
 		}
@@ -1047,7 +1047,7 @@ namespace EmEn::Graphics
 		 * frame's counts. Dropped, never counted as this frame. */
 		if ( header != slot.expectedSerial )
 		{
-			const std::lock_guard< std::mutex > lock{m_statisticsAccess};
+			const std::scoped_lock lock{m_statisticsAccess};
 
 			m_window.staleSlots++;
 
@@ -1106,7 +1106,7 @@ namespace EmEn::Graphics
 		}
 
 		{
-			const std::lock_guard< std::mutex > lock{m_statisticsAccess};
+			const std::scoped_lock lock{m_statisticsAccess};
 
 			/* A batch recorded for the self-test alone (census disarmed) is not a counted frame. */
 			if ( slot.countsFrame )
@@ -1247,7 +1247,7 @@ namespace EmEn::Graphics
 	{
 		const auto startsAfter = m_lastPreparedSerial.load(std::memory_order_acquire);
 
-		const std::lock_guard< std::mutex > lock{m_statisticsAccess};
+		const std::scoped_lock lock{m_statisticsAccess};
 
 		m_window = {};
 		m_window.startsAfterFrame = startsAfter;
@@ -1262,7 +1262,7 @@ namespace EmEn::Graphics
 		snapshot.available = this->available();
 		snapshot.armed = this->armed();
 
-		const std::lock_guard< std::mutex > lock{m_statisticsAccess};
+		const std::scoped_lock lock{m_statisticsAccess};
 
 		snapshot.latest = m_latest;
 		snapshot.window = m_window;

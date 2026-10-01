@@ -201,7 +201,8 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_targetFramerate = settings.getOrSetDefault< unsigned int >(RushMakerVideoFramerateKey, DefaultRushMakerVideoFramerate);
+		/* NOTE: Owner ruling (2026-10-01): a value outside its range (0 included) warns and takes the default. */
+		m_targetFramerate = settings.getOrSetDefaultInRange< unsigned int >(RushMakerVideoFramerateKey, DefaultRushMakerVideoFramerate, MinRushMakerVideoFramerate, MaxRushMakerVideoFramerate);
 		m_showStatistics = settings.getOrSetDefault< bool >(RushMakerShowInformationKey, DefaultRushMakerShowInformation);
 		m_forceCPUEncoding = settings.getOrSetDefault< bool >(RushMakerForceCPUEncodingKey, DefaultRushMakerForceCPUEncoding);
 
@@ -230,22 +231,7 @@ namespace EmEn::Graphics
 			m_qualityPreset = QualityPreset::Medium;
 		}
 
-		/* NOTE: Owner ruling (2026-10-01): a value outside its range warns and takes the default (0 included). */
-		if ( m_targetFramerate < MinRushMakerVideoFramerate || m_targetFramerate > MaxRushMakerVideoFramerate )
-		{
-			TraceWarning{ClassId} << "'" << RushMakerVideoFramerateKey << "' = " << m_targetFramerate << " is outside [" << MinRushMakerVideoFramerate << ", " << MaxRushMakerVideoFramerate << "] ! Using " << DefaultRushMakerVideoFramerate << ".";
-
-			m_targetFramerate = DefaultRushMakerVideoFramerate;
-		}
-
-		m_maxQueuedFrames = settings.getOrSetDefault< uint32_t >(RushMakerMaxQueuedFramesKey, DefaultRushMakerMaxQueuedFrames);
-
-		if ( m_maxQueuedFrames < MinRushMakerMaxQueuedFrames || m_maxQueuedFrames > MaxRushMakerMaxQueuedFrames )
-		{
-			TraceWarning{ClassId} << "'" << RushMakerMaxQueuedFramesKey << "' = " << m_maxQueuedFrames << " is outside [" << MinRushMakerMaxQueuedFrames << ", " << MaxRushMakerMaxQueuedFrames << "] ! Using " << DefaultRushMakerMaxQueuedFrames << ".";
-
-			m_maxQueuedFrames = DefaultRushMakerMaxQueuedFrames;
-		}
+		m_maxQueuedFrames = settings.getOrSetDefaultInRange< uint32_t >(RushMakerMaxQueuedFramesKey, DefaultRushMakerMaxQueuedFrames, MinRushMakerMaxQueuedFrames, MaxRushMakerMaxQueuedFrames);
 
 		/* Select the best BGRA-to-I420 conversion path based on CPU features. */
 #if IS_X86_ARCH
