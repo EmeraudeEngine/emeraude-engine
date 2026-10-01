@@ -923,13 +923,19 @@ namespace EmEn::Scenes
 
 			/**
 			 * @copydoc EmEn::Physics::MovableTrait::rotateFromPhysics()
-			 * @note Called by physics engine to update node rotation based on simulation.
-			 * @note Converts angle from degrees to radians and uses local space.
+			 * @note The axis is a WORLD direction (the solver's angular velocity); the node turns about its own origin.
+			 * ⚠️ It was applied as a LOCAL axis until 2026-10-01, so an already rotated body spun about the wrong axis —
+			 * proven by collision-debug's BenchSpinner (docs/physics-overhaul.md § 6). The world axis is now expressed in
+			 * the node's local frame (the inverse of its world rotation) before the local rotation.
 			 */
 			void
 			rotateFromPhysics (float radianAngle, const Base::Math::Vector< 3, float > & worldDirection) noexcept override
 			{
-				this->rotate(radianAngle, worldDirection, Base::Math::TransformSpace::Local);
+				auto toLocal = this->getWorldCoordinates().getRotationMatrix3();
+
+				toLocal.transpose();
+
+				this->rotate(radianAngle, toLocal * worldDirection, Base::Math::TransformSpace::Local);
 			}
 
 			/**

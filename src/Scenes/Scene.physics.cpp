@@ -26,13 +26,16 @@
 
 #include "Scene.hpp"
 
-/* Local inclusions. */
-#include "Physics/CollisionDetection.hpp"
-
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <span>
+
+/* Local inclusions. */
+#include "Math/RigidBody.hpp"
+#include "Math/Space3D/Contacts/ContactManifold.hpp"
+#include "Physics/NarrowPhase.hpp"
 
 namespace EmEn::Scenes
 {
@@ -91,9 +94,121 @@ namespace EmEn::Scenes
 		}
 	}
 
-	void
-	Scene::resolveCollisions () const noexcept
+	namespace
 	{
+		/** @brief The persistent key B of a ground manifold (no entity has this creation number). */
+		constexpr uint64_t GroundKey{std::numeric_limits< uint64_t >::max()};
+
+		/** @brief The default ground material (P2: GroundLevelInterface carries none): the body's own feel dominates. */
+		constexpr float GroundFriction{1.0F};
+		constexpr float GroundRestitution{0.0F};
+
+		/** @brief A support is a contact whose normal is within ~45° of the gravity direction. */
+		constexpr float SupportCosine{0.7F};
+
+		/** @brief Under this approach speed (m/s) a contact is no impact: a body RESTING on another approaches at ~1e-6
+		 * m/s, and notifying NodeCollision for it fired once per cycle per resting body (1001 per cycle in
+		 * balls-of-steel, 2026-10-01) — the former pipeline fired nothing at rest. */
+		constexpr float ImpactSpeedThreshold{0.05F};
+
+		/**
+		 * @brief Converts a base contact manifold into a solver manifold (the margin is removed from the depth).
+		 */
+		void
+		appendManifold (const Space3D::ContactManifold< float > & contact, uint32_t bodyA, uint32_t bodyB, uint64_t keyA, uint64_t keyB, uint64_t keySub, float friction, float restitution, std::vector< SoftStepSolver::Manifold > & manifolds) noexcept
+		{
+			if ( contact.empty() )
+			{
+				return;
+			}
+
+			SoftStepSolver::Manifold manifold;
+			manifold.normal = contact.normal();
+			manifold.keyA = keyA;
+			manifold.keyB = keyB;
+			manifold.keySub = keySub;
+			manifold.bodyA = bodyA;
+			manifold.bodyB = bodyB;
+			manifold.friction = friction;
+			manifold.restitution = restitution;
+
+			for ( const auto & point : contact.points() )
+			{
+				SoftStepSolver::Point solverPoint;
+				solverPoint.position = point.position();
+				/* Shape A was inflated by the speculative margin: the true separation is margin − depth. */
+				solverPoint.separation = SoftStepSolver::SpeculativeMargin - point.depth();
+				solverPoint.featureId = point.featureId();
+
+				manifold.points.push_back(solverPoint);
+			}
+
+			manifolds.push_back(manifold);
+		}
+
+		/**
+		 * @brief Collects the ground triangles under a body into solver manifolds.
+		 */
+		class GroundContactCollector final : public GroundTriangleVisitor
+		{
+			public:
+
+				GroundContactCollector (const CollisionModelInterface & model, const CartesianFrame< float > & frame, uint32_t bodyIndex, uint64_t creationNumber, float friction, float restitution, std::vector< SoftStepSolver::Manifold > & manifolds) noexcept
+					: m_model{model},
+					m_frame{frame},
+					m_manifolds{manifolds},
+					m_creationNumber{creationNumber},
+					m_bodyIndex{bodyIndex},
+					m_friction{friction},
+					m_restitution{restitution}
+				{
+
+				}
+
+				void
+				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t featureId) noexcept override
+				{
+					if ( NarrowPhase::generate(m_model, m_frame, triangle, SoftStepSolver::SpeculativeMargin, m_contact) )
+					{
+						/* A = the body, B = the static world; the sub key tells the triangles apart. */
+						appendManifold(m_contact, m_bodyIndex, 0, m_creationNumber, GroundKey, static_cast< uint64_t >(featureId) + 1, m_friction, m_restitution, m_manifolds);
+					}
+				}
+
+			private:
+
+				const CollisionModelInterface & m_model;
+				const CartesianFrame< float > & m_frame;
+				std::vector< SoftStepSolver::Manifold > & m_manifolds;
+				Space3D::ContactManifold< float > m_contact;
+				uint64_t m_creationNumber;
+				uint32_t m_bodyIndex;
+				float m_friction;
+				float m_restitution;
+		};
+
+		/** @brief Whether two world AABBs overlap, the first inflated by a margin. */
+		[[nodiscard]]
+		bool
+		boxesOverlap (const Space3D::AACuboid< float > & boxA, const Space3D::AACuboid< float > & boxB, float margin) noexcept
+		{
+			for ( size_t axis = 0; axis < 3; ++axis )
+			{
+				if ( boxA.minimum(axis) - margin > boxB.maximum(axis) || boxB.minimum(axis) > boxA.maximum(axis) + margin )
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+	}
+
+	void
+	Scene::resolveCollisions (std::vector< std::shared_ptr< AbstractEntity > > & movedEntities) const noexcept
+	{
+		movedEntities.clear();
+
 		if ( m_physicsOctree == nullptr )
 		{
 			return;
@@ -103,204 +218,353 @@ namespace EmEn::Scenes
 		 * concurrent modifications from other threads (e.g., checkEntityLocationInOctrees). */
 		const std::scoped_lock lock{m_physicsOctreeAccess};
 
+		constexpr float PhysicsStepSeconds = WorldPhysicsUpdateCycleDurationS< float >;
+		constexpr float SpeculativeContactMargin = SoftStepSolver::SpeculativeMargin;
+
+		auto & bodies = m_physicsBodies;
+		auto & bodyEntities = m_physicsBodyEntities;
+		auto & manifolds = m_physicsManifolds;
+		auto & bodyIndices = m_physicsBodyIndices;
+
+		bodies.clear();
+		bodyEntities.clear();
+		manifolds.clear();
+		bodyIndices.clear();
+
 		/* ============================================================
-		 * PHASE 1: STATIC COLLISIONS (Boundaries, Ground, StaticEntity)
-		 * - Accumulate position corrections from ALL static collisions
-		 * - Use dominant collision (deepest penetration) for velocity bounce
+		 * 1. THE BODIES, in creation order (index 0 = the static world).
 		 * ============================================================ */
-
-		/* Each movable is handled ONCE, at the single sector that OWNS it (forEachSector() visits
-		 * inner nodes too, which is where anything straddling a boundary lives). The statics it can
-		 * touch are the inherited ones (ancestors) plus those of its own sector's subtree, reached
-		 * through the subtree query in accumulateStaticEntityCorrections(). ⚠️ The former leaf-only
-		 * walk corrected a straddling body in the FIRST leaf that met it, against that leaf's
-		 * candidates only — the statics owned by the sibling leaves it also straddled were never
-		 * tested. */
-		m_physicsOctree->forEachSector([this] (const OctreeSector< AbstractEntity, true > & sector, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
-			/* An element the sector OWNS is fully inside it, so the sector's border flag settles
-			 * the boundary question for every element below. */
-			const bool entityAtBorder = sector.isTouchingRootBorder();
-
-			const std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates{candidates.data(), ownedOffset};
-
-			for ( size_t candidateIndex = ownedOffset; candidateIndex < candidates.size(); ++candidateIndex )
+		m_physicsOctree->forEachSector([&bodyEntities] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
+			for ( size_t index = ownedOffset; index < candidates.size(); ++index )
 			{
-				const auto & entity = candidates[candidateIndex];
-
-				/* Skip non-movable or paused entities. */
-				if ( !entity->hasMovableAbility() || entity->isSimulationPaused() )
-				{
-					continue;
-				}
-
-				auto * movable = entity->getMovableTrait();
-
-				if ( movable == nullptr || !movable->isMovable() )
-				{
-					continue;
-				}
-
-				/* Accumulation variables. */
-				Vector< 3, float > positionCorrection{0.0F, 0.0F, 0.0F};
-				Vector< 3, float > dominantNormal{0.0F, 0.0F, 0.0F};
-				float maxPenetration = 0.0F;
-				GroundedSource dominantSource{GroundedSource::None};
-				const MovableTrait * dominantEntity{nullptr};
-
-				/* 1.1 - Boundary collisions (only for sectors at world border). */
-				if ( entityAtBorder )
-				{
-					const float prevMax = maxPenetration;
-					this->accumulateBoundaryCorrection(entity, positionCorrection, dominantNormal, maxPenetration);
-
-					if ( maxPenetration > prevMax )
-					{
-						/* Only mark as grounded on Boundary if it's the floor (bottom face).
-						 * Side walls and ceiling cannot ground an entity.
-						 * ⚠️ +Y is UP, so the world box's FLOOR is its Y = -boundary plane, and the
-						 * contact normal there points from the body towards that wall — DOWNWARD.
-						 * The test below is therefore Y-UP correct as written: do not "fix" it. */
-						constexpr auto GroundNormalThreshold{0.7F};
-
-						if ( dominantNormal[Y] < -GroundNormalThreshold )
-						{
-							dominantSource = GroundedSource::Boundary;
-						}
-						dominantEntity = nullptr;
-					}
-				}
-
-				/* 1.2 - Ground collisions (track separately for grounded state). */
-				Vector< 3, float > groundNormal{0.0F, 0.0F, 0.0F};
-				float groundPenetration = 0.0F;
-				{
-					const float prevMax = maxPenetration;
-					this->accumulateGroundCorrection(entity, positionCorrection, dominantNormal, maxPenetration, groundNormal, groundPenetration);
-
-					if ( maxPenetration > prevMax )
-					{
-						dominantSource = GroundedSource::Ground;
-						dominantEntity = nullptr;
-					}
-				}
-
-				/* 1.3 - StaticEntity collisions. */
-				{
-					const float prevMax = maxPenetration;
-					const MovableTrait * collidedEntity = nullptr;
-					this->accumulateStaticEntityCorrections(entity, sector, inheritedCandidates, positionCorrection, dominantNormal, maxPenetration, collidedEntity);
-
-					if ( maxPenetration > prevMax )
-					{
-						/* Only mark as grounded on Entity if standing on top of it.
-						 * Hitting the side of a wall doesn't ground you.
-						 * ⚠️ +Y is UP: standing ON something means the contact normal points from
-						 * the body DOWN into it. Y-UP correct as written: do not "fix" it. */
-						constexpr auto GroundNormalThreshold{0.7F};
-
-						if ( dominantNormal[Y] < -GroundNormalThreshold )
-						{
-							dominantSource = GroundedSource::Entity;
-							dominantEntity = collidedEntity;
-						}
-					}
-				}
-
-				/* Apply corrections if any collision occurred. */
-				if ( maxPenetration > 0.0F )
-				{
-					/* Compute impact force from velocity component along collision normal.
-					 * This is done BEFORE applyCollisionResponse modifies velocity.
-					 * momentum = mass × velocity (N·s), then convert to force (N) by dividing by Δt.
-					 * F = (m × Δv) / Δt */
-					const float impactVelocity = Vector< 3, float >::dotProduct(movable->linearVelocity(), dominantNormal);
-					const float impactForce = std::max(0.0F, impactVelocity) * movable->getBodyPhysicalProperties().mass() / WorldPhysicsUpdateCycleDurationS< float >;
-
-					/* Apply position correction (move out of collision). */
-					movable->moveFromPhysics(positionCorrection);
-
-					/* Apply velocity bounce + grounded response. */
-					applyCollisionResponse(movable, dominantNormal, groundPenetration, dominantSource, dominantEntity);
-
-					/* Notify entity of collision event. */
-					if ( impactForce > 0.0F )
-					{
-						movable->onCollision(impactForce);
-					}
-				}
+				bodyEntities.push_back(candidates[index]);
 			}
 		});
 
+		std::ranges::sort(bodyEntities, [] (const auto & lhs, const auto & rhs) {
+			return lhs->creationNumber() < rhs->creationNumber();
+		});
+
+		/* The static world first. */
+		bodies.emplace_back();
+		bodyEntities.insert(bodyEntities.begin(), nullptr);
+
+		for ( size_t entityIndex = 1; entityIndex < bodyEntities.size(); ++entityIndex )
+		{
+			const auto & entity = bodyEntities[entityIndex];
+			const auto frame = entity->getWorldCoordinates();
+
+			if ( !entity->hasMovableAbility() || entity->getMovableTrait() == nullptr )
+			{
+				/* A static entity: part of the static world (it never moves). */
+				bodyIndices[entity.get()] = 0;
+				bodies.emplace_back();
+
+				continue;
+			}
+
+			auto * movable = entity->getMovableTrait();
+			SoftStepSolver::Body body;
+			body.position = frame.position();
+			body.orientation = frame.toQuaternion();
+
+			if ( movable->isMovable() )
+			{
+				const auto & properties = movable->getBodyPhysicalProperties();
+
+				body.movable = movable;
+				body.linearVelocity = movable->linearVelocity();
+				body.angularVelocity = movable->isRotationPhysicsEnabled() ? movable->angularVelocity() : Vector< 3, float >{};
+				body.inverseMass = properties.inverseMass();
+				body.inverseInertia = movable->isRotationPhysicsEnabled() ? movable->inverseWorldInertia() : Matrix< 3, float >{std::array< float, 9 >{}};
+				body.gravity = !movable->isFreeFlyModeEnabled() && !properties.isMassNull();
+				/* A sleeping body is solid but still; contact with an awake one wakes it (below). */
+				body.dynamic = !entity->isSimulationPaused();
+			}
+			else
+			{
+				/* KINEMATIC (an animated, non-movable node): infinite mass, the velocity of its own motion. */
+				const auto creation = entity->creationNumber();
+
+				if ( const auto previous = m_kinematicLastPositions.find(creation); previous != m_kinematicLastPositions.end() )
+				{
+					body.linearVelocity = (body.position - previous->second) * (1.0F / PhysicsStepSeconds);
+				}
+
+				m_kinematicLastPositions[creation] = body.position;
+			}
+
+			bodyIndices[entity.get()] = static_cast< uint32_t >(bodies.size());
+			bodies.push_back(body);
+		}
+
 		/* ============================================================
-		 * PHASE 2: DYNAMIC COLLISIONS (Node vs Node)
-		 * - Detection via collision models
-		 * - Resolution via Sequential Impulse Solver
+		 * 2. THE PAIRS (the octree's pairing contract: owned × owned, owned × inherited, each pair once).
 		 * ============================================================ */
+		const auto isActive = [&bodies] (uint32_t index) {
+			return index != 0 && bodies[index].movable != nullptr && bodies[index].dynamic;
+		};
 
-		std::vector< ContactManifold > dynamicManifolds;
-		std::vector< std::shared_ptr< AbstractEntity > > involvedEntities;
+		const auto isAsleep = [&bodies] (uint32_t index) {
+			return index != 0 && bodies[index].movable != nullptr && !bodies[index].dynamic;
+		};
 
-		/* Pairing contract of OctreeSector::forEachSector(): at each sector, test owned × owned and
-		 * owned × inherited, nothing else. Every pair whose bounds can overlap is produced exactly
-		 * once — two elements of disjoint subtrees have disjoint bounds by the storage invariant —
-		 * so there is NO cross-sector deduplication, and none must come back. ⚠️ The former version
-		 * paired ALL candidates in EVERY leaf and deduplicated with a hash set: every inherited ×
-		 * inherited pair was re-hashed once per leaf below it. Measured on game-logic (121 nodes):
-		 * 99 % of the logic thread, 23 ms per tick. */
-		const auto testPair = [&dynamicManifolds, &involvedEntities] (const std::shared_ptr< AbstractEntity > & entityA, bool entityAPaused, const std::shared_ptr< AbstractEntity > & entityB) {
-			/* Skip non-movable entities, or pairs where both are paused
-			 * (two sleeping bodies don't need collision testing).
-			 * An active entity must still collide with paused ones. */
-			if ( !entityB->hasMovableAbility() || (entityAPaused && entityB->isSimulationPaused()) )
+		Space3D::ContactManifold< float > contact;
+
+		const auto testPair = [&] (const std::shared_ptr< AbstractEntity > & entityA, const std::shared_ptr< AbstractEntity > & entityB) {
+			/* Canonical order: A has the lower creation number, whatever the octree's order. */
+			const auto & first = entityA->creationNumber() < entityB->creationNumber() ? entityA : entityB;
+			const auto & second = entityA->creationNumber() < entityB->creationNumber() ? entityB : entityA;
+			const uint32_t indexA = bodyIndices[first.get()];
+			const uint32_t indexB = bodyIndices[second.get()];
+
+			/* At least one active body; two sleeping ones (or a sleeping one and the static world) need no test. */
+			if ( !isActive(indexA) && !isActive(indexB) )
 			{
 				return;
 			}
 
-			/* Detect and collect collision manifold. */
-			if ( detectCollisionMovableToMovable(*entityA, *entityB, dynamicManifolds) )
+			if ( !first->hasCollisionModel() || !second->hasCollisionModel() )
 			{
-				involvedEntities.push_back(entityA);
-				involvedEntities.push_back(entityB);
+				return;
 			}
+
+			const auto frameA = first->getWorldCoordinates();
+			const auto frameB = second->getWorldCoordinates();
+			const auto * modelA = first->collisionModel();
+			const auto * modelB = second->collisionModel();
+
+			if ( !boxesOverlap(modelA->getAABB(frameA), modelB->getAABB(frameB), SpeculativeContactMargin) )
+			{
+				return;
+			}
+
+			if ( !NarrowPhase::generate(*modelA, frameA, *modelB, frameB, SpeculativeContactMargin, contact) )
+			{
+				return;
+			}
+
+			/* Wake a sleeping body touched by an active one: it takes part in this step. */
+			if ( isAsleep(indexA) )
+			{
+				bodies[indexA].dynamic = true;
+				first->pauseSimulation(false);
+			}
+
+			if ( isAsleep(indexB) )
+			{
+				bodies[indexB].dynamic = true;
+				second->pauseSimulation(false);
+			}
+
+			const auto & materialA = first->bodyPhysicalProperties();
+			const auto & materialB = second->bodyPhysicalProperties();
+			/* Box2D's mixing: friction = geometric mean, restitution = the larger (owner, P2). */
+			const float friction = std::sqrt(materialA.stickiness() * materialB.stickiness());
+			const float restitution = std::max(materialA.bounciness(), materialB.bounciness());
+
+			appendManifold(contact, indexA, indexB, first->creationNumber(), second->creationNumber(), 0, friction, restitution, manifolds);
 		};
 
 		m_physicsOctree->forEachSector([&testPair] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
 			for ( size_t indexA = ownedOffset; indexA < candidates.size(); ++indexA )
 			{
-				const auto & entityA = candidates[indexA];
-
-				/* Skip non-movable entities. */
-				if ( !entityA->hasMovableAbility() )
-				{
-					continue;
-				}
-
-				const bool entityAPaused = entityA->isSimulationPaused();
-
-				/* Owned × owned: the elements this sector owns after A. */
 				for ( size_t indexB = indexA + 1; indexB < candidates.size(); ++indexB )
 				{
-					testPair(entityA, entityAPaused, candidates[indexB]);
+					testPair(candidates[indexA], candidates[indexB]);
 				}
 
-				/* Owned × inherited: everything the ancestors own. */
 				for ( size_t indexB = 0; indexB < ownedOffset; ++indexB )
 				{
-					testPair(entityA, entityAPaused, candidates[indexB]);
+					testPair(candidates[indexA], candidates[indexB]);
 				}
 			}
 		});
 
-		/* Resolve dynamic collisions via impulse solver, then enforce boundaries. */
-		if ( !dynamicManifolds.empty() )
+		/* ============================================================
+		 * 3. THE GROUND: its rendered triangles under every active body.
+		 * ============================================================ */
+		if ( m_groundLevel != nullptr )
 		{
-			m_constraintSolver.solve(dynamicManifolds, WorldPhysicsUpdateCycleDurationS< float >);
-
-			/* Immediately clip all involved entities to boundaries.
-			 * This ensures impulse resolution cannot push entities outside. */
-			for ( const auto & entity : involvedEntities )
+			for ( size_t index = 1; index < bodies.size(); ++index )
 			{
-				this->clipInsideBoundaries(entity);
+				if ( !isActive(static_cast< uint32_t >(index)) )
+				{
+					continue;
+				}
+
+				const auto & entity = bodyEntities[index];
+
+				if ( !entity->hasCollisionModel() )
+				{
+					continue;
+				}
+
+				const auto frame = entity->getWorldCoordinates();
+				const auto * model = entity->collisionModel();
+				const auto & material = entity->bodyPhysicalProperties();
+				const auto bounds = model->getAABB(frame);
+				const Space3D::AACuboid< float > region{bounds.maximum() + Vector< 3, float >{SpeculativeContactMargin, SpeculativeContactMargin, SpeculativeContactMargin}, bounds.minimum() - Vector< 3, float >{SpeculativeContactMargin, SpeculativeContactMargin, SpeculativeContactMargin}};
+
+				GroundContactCollector collector{*model, frame, static_cast< uint32_t >(index), entity->creationNumber(), std::sqrt(material.stickiness() * GroundFriction), std::max(material.bounciness(), GroundRestitution), manifolds};
+
+				static_cast< void >(m_groundLevel->visitTriangles(region, collector));
+			}
+		}
+
+		/* ============================================================
+		 * 4. SOLVE, in a deterministic order.
+		 * ============================================================ */
+		std::ranges::sort(manifolds, [] (const auto & lhs, const auto & rhs) {
+			if ( lhs.keyA != rhs.keyA )
+			{
+				return lhs.keyA < rhs.keyA;
+			}
+
+			if ( lhs.keyB != rhs.keyB )
+			{
+				return lhs.keyB < rhs.keyB;
+			}
+
+			return lhs.keySub < rhs.keySub;
+		});
+
+		m_softStepSolver.step(bodies, manifolds, m_environmentPhysicalProperties.surfaceGravity(), PhysicsStepSeconds);
+
+		/* ============================================================
+		 * 5. WRITE BACK the dynamic bodies.
+		 * ============================================================ */
+		for ( size_t index = 1; index < bodies.size(); ++index )
+		{
+			auto & body = bodies[index];
+
+			if ( body.movable == nullptr || !body.dynamic )
+			{
+				continue;
+			}
+
+			body.movable->setLinearVelocity(body.linearVelocity);
+
+			if ( body.movable->isRotationPhysicsEnabled() )
+			{
+				body.movable->setAngularVelocity(body.angularVelocity);
+			}
+
+			bool moved = false;
+
+			if ( body.deltaPosition.lengthSquared() > 0.0F )
+			{
+				body.movable->moveFromPhysics(body.deltaPosition);
+				moved = true;
+			}
+
+			float angle = 0.0F;
+			Vector< 3, float > axis;
+
+			body.deltaRotation.toAngleAxis(angle, axis);
+
+			if ( std::abs(angle) > std::numeric_limits< float >::epsilon() )
+			{
+				body.movable->rotateFromPhysics(angle, axis);
+				moved = true;
+			}
+
+			if ( moved )
+			{
+				movedEntities.push_back(bodyEntities[index]);
+			}
+		}
+
+		/* ============================================================
+		 * 6. EVENTS and GROUNDED STATE, from the manifolds.
+		 * ============================================================ */
+		const auto down = m_environmentPhysicalProperties.surfaceGravity().normalized();
+
+		for ( const auto & manifold : manifolds )
+		{
+			bool pushing = false;
+			float approach = 0.0F;
+
+			for ( const auto & point : manifold.points )
+			{
+				pushing = pushing || point.maxNormalImpulse > 0.0F || point.normalImpulse > 0.0F;
+				approach = std::max(approach, -point.relativeVelocity);
+			}
+
+			if ( !pushing )
+			{
+				continue;
+			}
+
+			const bool impact = approach > ImpactSpeedThreshold;
+
+			const float alignment = Vector< 3, float >::dotProduct(manifold.normal, down);
+			auto & bodyA = bodies[manifold.bodyA];
+			auto & bodyB = bodies[manifold.bodyB];
+
+			/* The impact as the former pipeline reported it: mass × approach speed / step (NodeCollision). */
+			if ( bodyA.movable != nullptr && bodyA.dynamic && impact )
+			{
+				bodyA.movable->onCollision(approach * bodyA.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds);
+			}
+
+			if ( bodyB.movable != nullptr && bodyB.dynamic && impact )
+			{
+				bodyB.movable->onCollision(approach * bodyB.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds);
+			}
+
+			/* A stands on B when the normal (A → B) points down; B on A when it points up. */
+			if ( bodyA.movable != nullptr && bodyA.dynamic && alignment > SupportCosine )
+			{
+				if ( manifold.keyB == GroundKey )
+				{
+					bodyA.movable->setGrounded(GroundedSource::Ground);
+				}
+				else
+				{
+					bodyA.movable->setGrounded(GroundedSource::Entity, bodyB.movable);
+				}
+			}
+
+			if ( bodyB.movable != nullptr && bodyB.dynamic && alignment < -SupportCosine )
+			{
+				bodyB.movable->setGrounded(GroundedSource::Entity, bodyA.movable);
+			}
+		}
+
+		/* ============================================================
+		 * 7. THE WORLD BOUNDARIES: hard clip + bounce, after the solver (owner, P2).
+		 * ============================================================ */
+		for ( size_t index = 1; index < bodies.size(); ++index )
+		{
+			auto & body = bodies[index];
+
+			if ( body.movable == nullptr || !body.dynamic )
+			{
+				continue;
+			}
+
+			const auto & entity = bodyEntities[index];
+			Vector< 3, float > positionCorrection{0.0F, 0.0F, 0.0F};
+			Vector< 3, float > dominantNormal{0.0F, 0.0F, 0.0F};
+			float maxPenetration = 0.0F;
+
+			this->accumulateBoundaryCorrection(entity, positionCorrection, dominantNormal, maxPenetration);
+
+			if ( maxPenetration <= 0.0F )
+			{
+				continue;
+			}
+
+			/* Only the world box's FLOOR grounds (its normal points down, from the body into the wall). */
+			const auto source = dominantNormal[Y] < -SupportCosine ? GroundedSource::Boundary : GroundedSource::None;
+
+			body.movable->moveFromPhysics(positionCorrection);
+			applyCollisionResponse(body.movable, dominantNormal, 0.0F, source, nullptr);
+
+			if ( std::ranges::find(movedEntities, entity) == movedEntities.end() )
+			{
+				movedEntities.push_back(entity);
 			}
 		}
 	}
@@ -454,418 +718,6 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::clipAboveGround (const std::shared_ptr< AbstractEntity > & entity) const noexcept
-	{
-		if ( m_groundLevel == nullptr )
-		{
-			/* NOTE: There is no ground in this scene. */
-			return;
-		}
-
-		const auto position = entity->getWorldCoordinates().position();
-
-		/* No collision model means Point behavior. */
-		if ( !entity->hasCollisionModel() )
-		{
-			const auto groundLevel = m_groundLevel->getLevelAt(position);
-
-			/* ⚠️ +Y is UP: a point is above ground while position[Y] >= groundLevel, so the
-			 * violation to clip is position[Y] < groundLevel. */
-			if ( position[Y] < groundLevel )
-			{
-				entity->setYPosition(groundLevel, TransformSpace::World);
-			}
-
-			return;
-		}
-
-		const auto * model = entity->collisionModel();
-		const auto worldCoords = entity->getWorldCoordinates();
-
-		switch ( model->modelType() )
-		{
-			case CollisionModelType::Point :
-			{
-				const auto groundLevel = m_groundLevel->getLevelAt(position);
-
-				if ( position[Y] < groundLevel )
-				{
-					entity->setYPosition(groundLevel, TransformSpace::World);
-				}
-			}
-				break;
-
-			case CollisionModelType::Sphere :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-				const auto radius = aabb.width() * 0.5F;
-				const auto groundLevel = m_groundLevel->getLevelAt(position);
-				/* ⚠️ +Y is UP, so the lowest point of the sphere is position[Y] - radius, and
-				 * resting on the surface puts its CENTRE one radius ABOVE the ground level. */
-				const auto lowestPoint = position[Y] - radius;
-
-				if ( lowestPoint < groundLevel )
-				{
-					entity->setYPosition(groundLevel + radius, TransformSpace::World);
-				}
-			}
-				break;
-
-			case CollisionModelType::AABB :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-
-				/* ⚠️ +Y is UP, so the box's ground-facing face is its MINIMUM-Y one. The accessors
-				 * say which extremum they return rather than "bottom"/"top", so this choice is
-				 * explicit at the site that makes it.
-				 * ⚠️ This block is DUPLICATED THREE TIMES in this file. Changing one and not the
-				 * others is a silent half-migration: bodies would rest on the ground in one code path
-				 * and sink through it in another.
-				 * ⚠️⚠️ The corner CHOICE and the penetration ARITHMETIC below are ONE decision. The
-				 * Y-up flip moved the corners to minY* and left the subtraction reversed, which is
-				 * how this block ended up half-migrated INSIDE the warning telling it not to be. */
-				const std::array< Vector< 3, float >, 4 > groundFacingCorners{
-					aabb.minYSouthEast(),
-					aabb.minYSouthWest(),
-					aabb.minYNorthWest(),
-					aabb.minYNorthEast()
-				};
-
-				auto deepestPenetration = 0.0F;
-
-				for ( const auto & corner : groundFacingCorners )
-				{
-					const auto groundLevel = m_groundLevel->getLevelAt(corner);
-					/* ⚠️ +Y is UP: the corner is BELOW the surface when it sits at a LOWER Y, so the
-					 * penetration is (ground - corner). Written the other way round it measures the
-					 * CLEARANCE above the ground and reports every airborne body as colliding. */
-					const auto penetration = groundLevel - corner[Y];
-
-					deepestPenetration = std::max(penetration, deepestPenetration);
-				}
-
-				if ( deepestPenetration > 0.0F )
-				{
-					/* ⚠️ +Y is UP: clipping a body out of the ground moves it towards +Y. */
-					entity->moveY(deepestPenetration, TransformSpace::World);
-				}
-			}
-				break;
-
-			case CollisionModelType::Capsule :
-				/* TODO: Implement Capsule ground clipping. */
-				break;
-		}
-	}
-
-	void
-	Scene::detectBoundaryCollision (const std::shared_ptr< AbstractEntity > & entity, std::vector< ContactManifold > & manifolds) const noexcept
-	{
-		auto * movable = entity->getMovableTrait();
-
-		if ( movable == nullptr )
-		{
-			return;
-		}
-
-		/* No collision model means no collision simulation. */
-		if ( !entity->hasCollisionModel() )
-		{
-			return;
-		}
-
-		const auto * model = entity->collisionModel();
-		const auto worldCoords = entity->getWorldCoordinates();
-		const auto position = worldCoords.position();
-
-		switch ( model->modelType() )
-		{
-			case CollisionModelType::Point :
-			{
-				/* X+ boundary: entity beyond +X wall, normal points from entity towards wall (X+). */
-				if ( position[X] > m_boundary )
-				{
-					ContactManifold manifold(movable);
-					manifold.addContact({m_boundary, position[Y], position[Z]}, {1.0F, 0.0F, 0.0F}, position[X] - m_boundary);
-					manifolds.push_back(manifold);
-				}
-				/* X- boundary: entity beyond -X wall, normal points from entity towards wall (X-). */
-				else if ( position[X] < -m_boundary )
-				{
-					ContactManifold manifold(movable);
-					manifold.addContact({-m_boundary, position[Y], position[Z]}, {-1.0F, 0.0F, 0.0F}, -m_boundary - position[X]);
-					manifolds.push_back(manifold);
-				}
-
-				/* Y+ boundary: entity beyond +Y wall, normal points from entity towards wall (Y+). */
-				if ( position[Y] > m_boundary )
-				{
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], m_boundary, position[Z]}, {0.0F, 1.0F, 0.0F}, position[Y] - m_boundary);
-					manifolds.push_back(manifold);
-				}
-				/* Y- boundary: entity beyond -Y wall, normal points from entity towards wall (Y-). */
-				else if ( position[Y] < -m_boundary )
-				{
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], -m_boundary, position[Z]}, {0.0F, -1.0F, 0.0F}, -m_boundary - position[Y]);
-					manifolds.push_back(manifold);
-				}
-
-				/* Z+ boundary: entity beyond +Z wall, normal points from entity towards wall (Z+). */
-				if ( position[Z] > m_boundary )
-				{
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], position[Y], m_boundary}, {0.0F, 0.0F, 1.0F}, position[Z] - m_boundary);
-					manifolds.push_back(manifold);
-				}
-				/* Z- boundary: entity beyond -Z wall, normal points from entity towards wall (Z-). */
-				else if ( position[Z] < -m_boundary )
-				{
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], position[Y], -m_boundary}, {0.0F, 0.0F, -1.0F}, -m_boundary - position[Z]);
-					manifolds.push_back(manifold);
-				}
-			}
-				break;
-
-			case CollisionModelType::Sphere :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-				const auto radius = aabb.width() * 0.5F;
-
-				/* X+ boundary: normal points from entity towards wall (X+). */
-				if ( position[X] + radius > m_boundary )
-				{
-					const auto penetration = (position[X] + radius) - m_boundary;
-					ContactManifold manifold(movable);
-					manifold.addContact({m_boundary, position[Y], position[Z]}, {1.0F, 0.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-				/* X- boundary: normal points from entity towards wall (X-). */
-				else if ( position[X] - radius < -m_boundary )
-				{
-					const auto penetration = -m_boundary - (position[X] - radius);
-					ContactManifold manifold(movable);
-					manifold.addContact({-m_boundary, position[Y], position[Z]}, {-1.0F, 0.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-
-				/* Y+ boundary: normal points from entity towards wall (Y+). */
-				if ( position[Y] + radius > m_boundary )
-				{
-					const auto penetration = (position[Y] + radius) - m_boundary;
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], m_boundary, position[Z]}, {0.0F, 1.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-				/* Y- boundary: normal points from entity towards wall (Y-). */
-				else if ( position[Y] - radius < -m_boundary )
-				{
-					const auto penetration = -m_boundary - (position[Y] - radius);
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], -m_boundary, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-
-				/* Z+ boundary: normal points from entity towards wall (Z+). */
-				if ( position[Z] + radius > m_boundary )
-				{
-					const auto penetration = (position[Z] + radius) - m_boundary;
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], position[Y], m_boundary}, {0.0F, 0.0F, 1.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-				/* Z- boundary: normal points from entity towards wall (Z-). */
-				else if ( position[Z] - radius < -m_boundary )
-				{
-					const auto penetration = -m_boundary - (position[Z] - radius);
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], position[Y], -m_boundary}, {0.0F, 0.0F, -1.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-			}
-				break;
-
-			case CollisionModelType::AABB :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-
-				/* X+ boundary: normal points from entity towards wall (X+). */
-				if ( aabb.maximum(X) > m_boundary )
-				{
-					const auto penetration = aabb.maximum(X) - m_boundary;
-					ContactManifold manifold(movable);
-					manifold.addContact({m_boundary, position[Y], position[Z]}, {1.0F, 0.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-				/* X- boundary: normal points from entity towards wall (X-). */
-				else if ( aabb.minimum(X) < -m_boundary )
-				{
-					const auto penetration = -m_boundary - aabb.minimum(X);
-					ContactManifold manifold(movable);
-					manifold.addContact({-m_boundary, position[Y], position[Z]}, {-1.0F, 0.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-
-				/* Y+ boundary: normal points from entity towards wall (Y+). */
-				if ( aabb.maximum(Y) > m_boundary )
-				{
-					const auto penetration = aabb.maximum(Y) - m_boundary;
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], m_boundary, position[Z]}, {0.0F, 1.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-				/* Y- boundary: normal points from entity towards wall (Y-). */
-				else if ( aabb.minimum(Y) < -m_boundary )
-				{
-					const auto penetration = -m_boundary - aabb.minimum(Y);
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], -m_boundary, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-
-				/* Z+ boundary: normal points from entity towards wall (Z+). */
-				if ( aabb.maximum(Z) > m_boundary )
-				{
-					const auto penetration = aabb.maximum(Z) - m_boundary;
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], position[Y], m_boundary}, {0.0F, 0.0F, 1.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-				/* Z- boundary: normal points from entity towards wall (Z-). */
-				else if ( aabb.minimum(Z) < -m_boundary )
-				{
-					const auto penetration = -m_boundary - aabb.minimum(Z);
-					ContactManifold manifold(movable);
-					manifold.addContact({position[X], position[Y], -m_boundary}, {0.0F, 0.0F, -1.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-			}
-				break;
-
-			case CollisionModelType::Capsule :
-				/* TODO: Implement Capsule boundary collision. */
-				break;
-		}
-	}
-
-	void
-	Scene::detectGroundCollision (const std::shared_ptr< AbstractEntity > & entity, std::vector< ContactManifold > & manifolds) const noexcept
-	{
-		if ( m_groundLevel == nullptr )
-		{
-			return;
-		}
-
-		auto * movable = entity->getMovableTrait();
-
-		if ( movable == nullptr )
-		{
-			return;
-		}
-
-		/* No collision model means no collision simulation. */
-		if ( !entity->hasCollisionModel() )
-		{
-			return;
-		}
-
-		const auto * model = entity->collisionModel();
-		const auto worldCoords = entity->getWorldCoordinates();
-		const auto position = worldCoords.position();
-
-		switch ( model->modelType() )
-		{
-			case CollisionModelType::Point :
-			{
-				const auto groundLevel = m_groundLevel->getLevelAt(position);
-
-				/* ⚠️ +Y is UP, so position[Y] < groundLevel means below ground. */
-				if ( position[Y] < groundLevel )
-				{
-					const auto penetration = groundLevel - position[Y];
-					ContactManifold manifold(movable);
-					/* Normal points from bodyA (entity) towards bodyB (the ground), which is
-					 * DOWNWARD now that +Y is up. */
-					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-			}
-				break;
-
-			case CollisionModelType::Sphere :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-				const auto radius = aabb.width() * 0.5F;
-				const auto groundLevel = m_groundLevel->getLevelAt(position);
-				/* ⚠️ +Y is UP, so the lowest point of the sphere is position[Y] - radius. */
-				const auto lowestPoint = position[Y] - radius;
-
-				if ( lowestPoint < groundLevel )
-				{
-					const auto penetration = groundLevel - lowestPoint;
-					ContactManifold manifold(movable);
-					/* Normal points from bodyA (entity) towards bodyB (the ground), which is
-					 * DOWNWARD now that +Y is up. */
-					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
-					manifolds.push_back(manifold);
-				}
-			}
-				break;
-
-			case CollisionModelType::AABB :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-
-				/* ⚠️ +Y is UP, so the box's ground-facing face is its MINIMUM-Y one. The accessors
-				 * say which extremum they return rather than "bottom"/"top", so this choice is
-				 * explicit at the site that makes it.
-				 * ⚠️ This block is DUPLICATED THREE TIMES in this file. Changing one and not the
-				 * others is a silent half-migration: bodies would rest on the ground in one code path
-				 * and sink through it in another.
-				 * ⚠️⚠️ The corner CHOICE and the penetration ARITHMETIC below are ONE decision. The
-				 * Y-up flip moved the corners to minY* and left the subtraction reversed, which is
-				 * how this block ended up half-migrated INSIDE the warning telling it not to be. */
-				const std::array< Vector< 3, float >, 4 > groundFacingCorners{
-					aabb.minYSouthEast(),
-					aabb.minYSouthWest(),
-					aabb.minYNorthWest(),
-					aabb.minYNorthEast()
-				};
-
-				auto deepestPenetration = 0.0F;
-
-				for ( const auto & corner : groundFacingCorners )
-				{
-					const auto groundLevel = m_groundLevel->getLevelAt(corner);
-					/* ⚠️ +Y is UP: the corner is BELOW the surface when it sits at a LOWER Y, so the
-					 * penetration is (ground - corner). Written the other way round it measures the
-					 * CLEARANCE above the ground and reports every airborne body as colliding. */
-					const auto penetration = groundLevel - corner[Y];
-
-					deepestPenetration = std::max(penetration, deepestPenetration);
-				}
-
-				if ( deepestPenetration > 0.0F )
-				{
-					const auto groundLevel = m_groundLevel->getLevelAt(position);
-					ContactManifold manifold(movable);
-					/* Normal points from bodyA (entity) towards bodyB (the ground), which is
-					 * DOWNWARD now that +Y is up. */
-					manifold.addContact({position[X], groundLevel, position[Z]}, {0.0F, -1.0F, 0.0F}, deepestPenetration);
-					manifolds.push_back(manifold);
-				}
-			}
-				break;
-
-			case CollisionModelType::Capsule :
-				/* TODO: Implement Capsule ground collision. */
-				break;
-		}
-	}
-
-	void
 	Scene::accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept
 	{
 		/* No collision model means no boundary correction. */
@@ -997,229 +849,4 @@ namespace EmEn::Scenes
 		}
 	}
 
-	void
-	Scene::accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept
-	{
-		if ( m_groundLevel == nullptr )
-		{
-			return;
-		}
-
-		/* No collision model means no ground correction. */
-		if ( !entity->hasCollisionModel() )
-		{
-			return;
-		}
-
-		const auto * model = entity->collisionModel();
-		const auto worldCoords = entity->getWorldCoordinates();
-		const auto position = worldCoords.position();
-
-		/* Helper lambda to accumulate ground collision.
-		 * Gets the actual terrain normal at the contact position. */
-		auto accumulateCollision = [this, &positionCorrection, &dominantNormal, &maxPenetration, &groundNormal, &groundPenetration] (const Vector< 3, float > & contactPosition, float penetration) {
-			/* Get actual terrain normal at this position.
-			 * ⚠️ getNormalAt() returns the surface's OUTWARD normal, which points UP (+Y).
-			 * The file-wide contact convention is the opposite one — the normal points FROM the
-			 * body INTO the surface it penetrates — which is what applyCollisionResponse() reads
-			 * (vn > 0 means "moving into the surface") and what makes the correction below
-			 * (positionCorrection -= normal * penetration) push the body UP. Hence the negation:
-			 * it survived the Y-up flip unchanged, because BOTH sides of it flipped together. */
-			const auto normal = -m_groundLevel->getNormalAt(contactPosition);
-
-			/* Accumulate position correction (move opposite to normal = up). */
-			positionCorrection -= normal * penetration;
-
-			/* Track ground-specific collision for grounded state. */
-			groundNormal = normal;
-			groundPenetration = penetration;
-
-			/* Track dominant collision for velocity bounce. */
-			if ( penetration > maxPenetration )
-			{
-				maxPenetration = penetration;
-				dominantNormal = normal;
-			}
-		};
-
-		switch ( model->modelType() )
-		{
-			case CollisionModelType::Point :
-			{
-				const auto groundLevel = m_groundLevel->getLevelAt(position);
-
-				/* ⚠️ +Y is UP, so position[Y] < groundLevel means below ground. */
-				if ( position[Y] < groundLevel )
-				{
-					accumulateCollision(position, groundLevel - position[Y]);
-				}
-			}
-				break;
-
-			case CollisionModelType::Sphere :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-				const auto radius = aabb.width() * 0.5F;
-				const auto groundLevel = m_groundLevel->getLevelAt(position);
-				/* ⚠️ +Y is UP, so the lowest point of the sphere is position[Y] - radius. */
-				const auto lowestPoint = position[Y] - radius;
-
-				if ( lowestPoint < groundLevel )
-				{
-					accumulateCollision(position, groundLevel - lowestPoint);
-				}
-			}
-				break;
-
-			case CollisionModelType::AABB :
-			{
-				const auto aabb = model->getAABB(worldCoords);
-
-				/* ⚠️ +Y is UP, so the box's ground-facing face is its MINIMUM-Y one. The accessors
-				 * say which extremum they return rather than "bottom"/"top", so this choice is
-				 * explicit at the site that makes it.
-				 * ⚠️ This block is DUPLICATED THREE TIMES in this file. Changing one and not the
-				 * others is a silent half-migration: bodies would rest on the ground in one code path
-				 * and sink through it in another.
-				 * ⚠️⚠️ The corner CHOICE and the penetration ARITHMETIC below are ONE decision. The
-				 * Y-up flip moved the corners to minY* and left the subtraction reversed, which is
-				 * how this block ended up half-migrated INSIDE the warning telling it not to be. */
-				const std::array< Vector< 3, float >, 4 > groundFacingCorners{
-					aabb.minYSouthEast(),
-					aabb.minYSouthWest(),
-					aabb.minYNorthWest(),
-					aabb.minYNorthEast()
-				};
-
-				auto deepestPenetration = 0.0F;
-
-				for ( const auto & corner : groundFacingCorners )
-				{
-					const auto groundLevel = m_groundLevel->getLevelAt(corner);
-					/* ⚠️ +Y is UP: the corner is BELOW the surface when it sits at a LOWER Y, so the
-					 * penetration is (ground - corner). Written the other way round it measures the
-					 * CLEARANCE above the ground and reports every airborne body as colliding. */
-					const auto penetration = groundLevel - corner[Y];
-
-					deepestPenetration = std::max(penetration, deepestPenetration);
-				}
-
-				if ( deepestPenetration > 0.0F )
-				{
-					accumulateCollision(position, deepestPenetration);
-				}
-			}
-				break;
-
-			case CollisionModelType::Capsule :
-				/* TODO: Implement Capsule ground correction. */
-				break;
-		}
-	}
-
-	void
-	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, const MovableTrait *& collidedEntity) noexcept
-	{
-		/* No collision model means no collision simulation. */
-		if ( !entity->hasCollisionModel() )
-		{
-			return;
-		}
-
-		const auto * entityModel = entity->collisionModel();
-		const auto entityWorldCoords = entity->getWorldCoordinates();
-
-		/* STEP UP (MovableTrait::setStepHeight()): only for a grounded body that declares a step height. */
-		const auto * movable = entity->getMovableTrait();
-		const auto stepHeight = movable != nullptr && movable->isGrounded() ? movable->stepHeight() : 0.0F;
-		const auto feetY = stepHeight > 0.0F ? entityModel->getAABB(entityWorldCoords).minimum(Y) : 0.0F;
-
-		const auto accumulate = [&] (const AbstractEntity & otherEntity) {
-			/* Skip self. */
-			if ( entity.get() == &otherEntity )
-			{
-				return;
-			}
-
-			/* Skip if the other entity is movable (we only want static entities here). */
-			if ( otherEntity.hasMovableAbility() )
-			{
-				return;
-			}
-
-			/* Skip if the other entity has no collision model. */
-			if ( !otherEntity.hasCollisionModel() )
-			{
-				return;
-			}
-
-			const auto * otherModel = otherEntity.collisionModel();
-
-			/* Static entities with Point model are ignored (no volume). */
-			if ( otherModel->modelType() == CollisionModelType::Point )
-			{
-				return;
-			}
-
-			const auto otherWorldCoords = otherEntity.getWorldCoordinates();
-
-			/* Use the collision model interface for collision detection.
-			 * This handles all combinations through double dispatch. */
-			const auto results = entityModel->isCollidingWith(entityWorldCoords, *otherModel, otherWorldCoords);
-
-			if ( results.m_collisionDetected && results.m_depth > 0.0F )
-			{
-				/* MTV points in the direction to move the entity OUT of collision. */
-				auto correction = results.m_MTV;
-				auto depth = results.m_depth;
-				/* Normal points INTO the static entity (for bounce calculation). */
-				auto normal = -results.m_impactNormal;
-
-				/* STEP UP: pushed back SIDEWAYS by a static whose top stands no higher than the step height above
-				 * the feet, the body is lifted onto it instead — the normal then points down into it, so the
-				 * response keeps the horizontal velocity and grounds the body on the step. */
-				if ( stepHeight > 0.0F && std::abs(correction[Y]) < 0.3F * depth )
-				{
-					const auto rise = otherModel->getAABB(otherWorldCoords).maximum(Y) - feetY;
-
-					if ( rise > 0.0F && rise <= stepHeight )
-					{
-						constexpr auto Clearance{0.001F};
-
-						correction = {0.0F, rise + Clearance, 0.0F};
-						depth = rise;
-						normal = {0.0F, -1.0F, 0.0F};
-					}
-				}
-
-				positionCorrection += correction;
-
-				/* Track dominant collision for velocity bounce. */
-				if ( depth > maxPenetration )
-				{
-					maxPenetration = depth;
-					dominantNormal = normal;
-					/* Track the entity we collided with (for grounded source). */
-					collidedEntity = otherEntity.getMovableTrait();
-				}
-			}
-		};
-
-		/* Statics owned by the ancestors of the entity's sector: anything straddling a boundary
-		 * above it lives there — a ground plane straddles them all and sits at the root. */
-		for ( const auto & otherEntity : inheritedCandidates )
-		{
-			accumulate(*otherEntity);
-		}
-
-		/* Statics owned by the entity's own sector and by its subtree, bounded by the entity's
-		 * AABB: a body straddling the boundary between two child sectors must meet the small
-		 * statics of BOTH, which no single leaf's candidate set could offer. */
-		sector.forTouchedSector(entityModel->getAABB(entityWorldCoords), [&accumulate] (const OctreeSector< AbstractEntity, true > & touchedSector) {
-			for ( const auto & otherEntity : touchedSector.elements() )
-			{
-				accumulate(*otherEntity);
-			}
-		});
-	}
 }

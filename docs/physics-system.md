@@ -1,5 +1,13 @@
 # Physics System Architecture
 
+> [!IMPORTANT]
+> **2026-10-01, physics overhaul P2**: the EXECUTION described below (phase 1: hard clip + velocity inversion against
+> boundaries, ground and static entities; phase 2: Node ↔ Node through the old `ConstraintSolver`) is REPLACED by one
+> pipeline — every contact (ground triangles, statics, nodes) is a manifold solved by `Physics::SoftStepSolver`, the
+> boundaries keep their clip + bounce after it. Current pipeline: `docs/subsystems/physics/02-physics-specific-rules.md`;
+> analysis, decisions and measurements: `docs/physics-overhaul.md`. The four entity KINDS below remain the authoring
+> concepts; the gravity / grounded tables and the solver sections are history.
+
 This document provides detailed architecture for the physics system, including entity types, collision semantics, and execution flow.
 
 ## Quick Reference: Key Terminology

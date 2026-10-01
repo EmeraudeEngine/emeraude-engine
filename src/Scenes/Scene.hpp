@@ -41,6 +41,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <span>
 #include <vector>
@@ -77,7 +78,7 @@
 #include "OctreeSector.hpp"
 #include "ParticipatingMedium.hpp"
 #include "PhysicsRecorder.hpp"
-#include "Physics/ConstraintSolver.hpp"
+#include "Physics/SoftStepSolver.hpp"
 #include "RenderBatch.hpp"
 #include "SceneInstanceTransforms.hpp"
 #include "SceneMetaData.hpp"
@@ -243,7 +244,7 @@ namespace EmEn::Scenes
 	 *
 	 * **Physics Integration:**
 	 * - Collision detection via physics octree broad-phase
-	 * - Sequential Impulse Solver (ConstraintSolver) for realistic physics
+	 * - A soft-step contact solver (SoftStepSolver, Box2D v3 style) for the rigid bodies
 	 * - Scene boundary clipping (world cube limits)
 	 * - Integration with ground interface for ground collision
 	 *
@@ -408,7 +409,7 @@ namespace EmEn::Scenes
 			 * 5. Updates entity positions in octrees
 			 * 6. Run physics collision detection via octree broad-phase
 			 * 7. Handles scene boundary clipping
-			 * 8. Resolves collisions via Sequential Impulse Solver (ConstraintSolver)
+			 * 8. Runs the physics step (SoftStepSolver): integrates the collidable bodies, resolves the contacts
 			 * 9. Cleans dead nodes from the tree
 			 *
 			 * @note This method is thread-safe and uses mutex protection for entity lists.
@@ -2933,46 +2934,19 @@ namespace EmEn::Scenes
 			 * ============================================================ */
 
 			/**
-			 * @brief Runs the physics collision step on the physics octree.
+			 * @brief Runs the physics step on the physics octree (physics overhaul P2, docs/physics-overhaul.md § 1.6).
 			 *
-			 * Phase 1 corrects every movable against the boundaries, the ground and the static
-			 * entities; phase 2 detects movable-to-movable contacts and hands them to the
-			 * constraint solver. Both phases walk the octree with OctreeSector::forEachSector()
-			 * and follow its pairing contract: at each sector, owned × owned and owned × inherited,
-			 * nothing else, so no cross-sector deduplication exists.
+			 * ONE pipeline: the bodies in creation order (the static world first), the pairs from
+			 * OctreeSector::forEachSector()'s pairing contract (owned × owned, owned × inherited, each pair once,
+			 * no dedup set) in canonical order, the ground's rendered triangles under every active body, all of
+			 * them as contact manifolds sorted by their persistent keys, solved by the SoftStepSolver (which
+			 * integrates the collidable dynamic bodies); then the write-back, the collision events and the
+			 * grounded state, and the world boundaries' hard clip and bounce.
+			 *
+			 * @param movedEntities The entities the step moved (cleared first), for the caller to relocate in the
+			 * octrees once the physics octree lock is released.
 			 */
-			void resolveCollisions () const noexcept;
-
-			/**
-			 * @brief Detects collision between an entity and the world boundaries.
-			 *
-			 * Tests if the entity's bounding primitive intersects with any of the 6 boundary
-			 * planes (±X, ±Y, ±Z at m_boundary distance). Generates contact manifolds for
-			 * physics response (bounce).
-			 *
-			 * @param entity The entity to test.
-			 * @param manifolds Vector to append contact manifolds to.
-			 *
-			 * @note Only call for entities in sectors touching the root border (optimization).
-			 * @see clipInsideBoundaries() for hard clipping (safety).
-			 * @version 0.8.39
-			 */
-			void detectBoundaryCollision (const std::shared_ptr< AbstractEntity > & entity, std::vector< Physics::ContactManifold > & manifolds) const noexcept;
-
-			/**
-			 * @brief Detects collision between an entity and the ground.
-			 *
-			 * Tests if the entity's bounding primitive intersects with the ground surface.
-			 * Generates contact manifolds for physics response (bounce).
-			 *
-			 * @param entity The entity to test.
-			 * @param manifolds Vector to append contact manifolds to.
-			 *
-			 * @note Only called if m_groundLevel is valid.
-			 * @see clipAboveGround() for hard clipping (safety).
-			 * @version 0.8.39
-			 */
-			void detectGroundCollision (const std::shared_ptr< AbstractEntity > & entity, std::vector< Physics::ContactManifold > & manifolds) const noexcept;
+			void resolveCollisions (std::vector< std::shared_ptr< AbstractEntity > > & movedEntities) const noexcept;
 
 			/**
 			 * @brief Hard clips an entity inside the world boundaries (safety).
@@ -2990,21 +2964,6 @@ namespace EmEn::Scenes
 			void clipInsideBoundaries (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
 			/**
-			 * @brief Hard clips an entity above the ground (safety).
-			 *
-			 * Forces the entity position to be above the ground level.
-			 * This is a safety measure applied after physics resolution to prevent entities
-			 * from falling through the ground.
-			 *
-			 * @param entity The entity to clip.
-			 *
-			 * @note Only called if m_groundLevel is valid.
-			 * @see detectGroundCollision() for physics response.
-			 * @version 0.8.39
-			 */
-			void clipAboveGround (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
-
-			/**
 			 * @brief Accumulates position correction from boundary collisions.
 			 *
 			 * Detects boundary collisions and accumulates the correction vector.
@@ -3017,41 +2976,6 @@ namespace EmEn::Scenes
 			 * @version 0.8.39
 			 */
 			void accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
-
-			/**
-			 * @brief Accumulates position correction from ground collision.
-			 *
-			 * Detects ground collision and accumulates the correction vector.
-			 * Also tracks the dominant collision (deepest penetration) for velocity bounce.
-			 *
-			 * @param entity The entity to test.
-			 * @param positionCorrection [out] Accumulated position correction vector.
-			 * @param dominantNormal [out] Normal of the deepest penetration collision.
-			 * @param maxPenetration [out] Deepest penetration depth found.
-			 * @param groundNormal [out] Normal of the ground collision (for grounded state).
-			 * @param groundPenetration [out] Penetration depth of ground collision.
-			 * @version 0.8.41
-			 */
-			void accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, Base::Math::Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept;
-
-			/**
-			 * @brief Accumulates the corrections of a movable against every static entity it can touch.
-			 *
-			 * Detects collisions with the static entities among the inherited candidates (owned by the
-			 * ancestors of the movable's sector) and among the elements of the sector's subtree that
-			 * intersect the movable's AABB (OctreeSector::forTouchedSector()), and accumulates the
-			 * minimum translation vectors while tracking the deepest penetration.
-			 *
-			 * @param entity The movable entity, owned by @p sector.
-			 * @param sector The octree sector that OWNS the entity — the deepest that fully contains it.
-			 * @param inheritedCandidates The candidates inherited from the ancestors of @p sector, as
-			 * delivered by OctreeSector::forEachSector() before the owned offset.
-			 * @param positionCorrection Accumulated correction vector (in/out).
-			 * @param dominantNormal Normal of the deepest penetration (in/out).
-			 * @param maxPenetration Deepest penetration so far (in/out).
-			 * @param collidedEntity The movable trait of the deepest-penetration entity, when it has one (in/out).
-			 */
-			static void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, std::span< const std::shared_ptr< AbstractEntity > > inheritedCandidates, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]
@@ -3242,8 +3166,17 @@ namespace EmEn::Scenes
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			ParticipatingMedium m_participatingMedium{ParticipatingMedium::Vacuum()};
-			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */
-			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
+			/** @brief The physics step's contact solver (soft step, persistent impulses). Mutable: the step runs from the const resolveCollisions(). */
+			mutable Physics::SoftStepSolver m_softStepSolver;
+			/** @brief The step's working sets, reused from one step to the next (no allocation once warm). */
+			mutable std::vector< Physics::SoftStepSolver::Body > m_physicsBodies;
+			mutable std::vector< std::shared_ptr< AbstractEntity > > m_physicsBodyEntities;
+			mutable std::vector< Physics::SoftStepSolver::Manifold > m_physicsManifolds;
+			mutable std::unordered_map< const AbstractEntity *, uint32_t > m_physicsBodyIndices;
+			/** @brief The last position of each kinematic body (creation number → position), for its velocity. */
+			mutable std::unordered_map< uint64_t, Base::Math::Vector< 3, float > > m_kinematicLastPositions;
+			/** @brief The entities the last physics step moved (relocated in the octrees after it). */
+			std::vector< std::shared_ptr< AbstractEntity > > m_physicsMovedEntities;
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */
 			PhysicsRecorder m_physicsRecorder;
 			/** @brief The next entity creation number (AbstractEntity::creationNumber()). Mutable: an entity is constructed

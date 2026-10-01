@@ -12,67 +12,35 @@
 3. **StaticEntity**: Static objects with defined mass
 4. **Nodes**: Full dynamic entities (via MovableTrait)
 
-### Node-Centric Correction Philosophy
+### The physics step (physics overhaul P2, 2026-10-01 — `Scene.physics.cpp:resolveCollisions()`)
 
-**CRITICAL**: Only Nodes receive corrections. All other entity types are passive influences.
+⚠️ The former two phases (phase 1: each Node pushed out of boundaries / ground / statics and its velocity reflected,
+with no torque and a per-tick friction multiplier; phase 2: Node ↔ Node through the old `ConstraintSolver`) are GONE.
+Their defects and the measurements that replaced them: `docs/physics-overhaul.md` § 2 and § 6.
 
-| Collision Type | Who is corrected? | Influence |
-|----------------|-------------------|-----------|
-| Node ↔ Boundary | Node only | Infinite mass (100% absorption) |
-| Node ↔ Ground | Node only | Infinite mass (100% absorption) |
-| Node ↔ StaticEntity | Node only | Infinite mass (100% absorption) |
-| Node ↔ Node | Both Nodes | Mass-proportional distribution |
+ONE pipeline, once per logic cycle, under the physics octree lock:
+1. **Bodies**, every physics-octree element once, sorted by `AbstractEntity::creationNumber()`; index 0 is the static
+   world (ground, static entities). A movable Node is DYNAMIC (asleep when paused); a non-movable Node is KINEMATIC
+   (infinite mass, the velocity of its own motion between two cycles — what rests on it is carried).
+2. **Pairs** from `OctreeSector::forEachSector()`'s pairing contract (owned × owned, owned × inherited, each pair once,
+   NO dedup set), in canonical order (A = the lower creation number), AABB pre-filter, then
+   `Physics::NarrowPhase::generate()` → a base `Space3D::ContactManifold` (normal A → B). A sleeping body touched by an
+   active one wakes.
+3. **Ground**: `GroundLevelInterface::visitTriangles()` under every active body — its RENDERED triangles, one manifold
+   per triangle (keys: creation number, `GroundKey`, triangle feature id + 1).
+4. **Solve**: manifolds sorted by key, `Physics::SoftStepSolver::step()` (4 sub-steps: gravity, warm start, soft solve,
+   integrate, relax; restitution 4 passes; impulses cached by feature id). Materials: friction = √(μA μB),
+   restitution = max(eA, eB); the ground's default material is μ 1, e 0.
+5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
+   the events (`onCollision()` for an approach above 0.05 m/s) and the grounded state from the manifolds (a contact
+   within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.
+6. The moved entities are relocated in the octrees by `Scene::processLogics()` after the lock is released.
 
-**Mental model**: Instead of "resolve collision between A and B", think:
-> "What correction to apply to THIS Node, given what it touches?"
+A collidable body's gravity and motion happen in the step; `MovableTrait::updateSimulation(env, integratedByScene)`
+only applies the drag to it (a body without a collision model still integrates itself).
 
-The Node is the active subject; other entities are parameters influencing the correction.
+**Determinism**: Linux 5 launches bit-identical on every cycle of every bench station (2026-10-01); the other OS:
+`docs/physics-overhaul.md` § 6.
 
-### Correction Priority Order
-
-**CRITICAL**: Process corrections from MOST constraining to LEAST constraining.
-
-```
-1. Boundaries    → ABSOLUTE constraints (world limits, inviolable)
-2. Ground        → BASE constraints (where entities can exist)
-3. StaticEntity  → FIXED obstacles (walls, rocks, structures)
-4. Node ↔ Node   → DYNAMIC interactions (negotiable, flexible)
-```
-
-**Why this order matters**:
-- If Node↔Node corrected BEFORE Ground → Node could be pushed INTO the ground
-- If Ground corrected BEFORE Boundaries → Node could be pushed OUT of the world
-- Each pass respects constraints established by previous passes
-- Later passes adapt to the "remaining space" after hard constraints
-
-### Physics Execution Pipeline (`Scene.physics.cpp:simulatePhysics()`)
-
-Both phases walk the physics octree with `OctreeSector::forEachSector()` — every sector that owns
-elements, inner nodes included — and follow its pairing contract (`src/Scenes/AGENTS.md` § Octree
-storage and traversal): at each sector, `owned × owned` and `owned × inherited`, nothing else. ⚠️ No
-pair hash set, no "corrected" set: the traversal produces every geometrically possible pair exactly
-once. The leaf-only walk with a dedup set cost 23 ms per tick on 121 nodes (2026-09-03).
-
-**Phase 1: Static Collisions** (per-movable accumulation, at the sector that OWNS the movable)
-1. Accumulate boundary corrections (if the owning sector touches the world border)
-2. Accumulate ground corrections (track separately for grounded state)
-3. Accumulate StaticEntity corrections: inherited statics + `forTouchedSector(aabb)` over the
-   sector's subtree (a body straddling two child sectors meets the statics of BOTH)
-4. Apply combined position correction
-5. Apply velocity bounce + set grounded state with source
-
-**Phase 2: Dynamic Collisions** (Node ↔ Node)
-1. Iterate every octree sector owning elements; pair owned × owned-after and owned × inherited
-2. Skip non-movable entities; skip pairs where **both** are simulation-paused
-3. Test movable pairs via `detectCollisionMovableToMovable()`
-4. Collect ContactManifolds
-5. Resolve via `ConstraintSolver::solve()` (Sequential Impulse)
-6. Re-clip involved entities to boundaries
-
-**Sleep/Wake behavior:** Nodes at rest are paused by `checkSimulationInertia()`. A paused
-Node is still a solid body — active entities (with velocity) collide against it normally.
-Only pairs where both are paused are skipped (optimization for scenes with many resting
-objects, e.g., settled balls). When a collision impulse is applied, `addForce()` resumes
-simulation automatically via `pauseSimulation(false)`.
-
-See: `Scene.physics.cpp:simulatePhysics()`
+**Known P2 limits** (P3: oriented boxes): an AABB model collides as its WORLD envelope; a box with rotation physics
+that tilts gets no restoring torque (a box dropped flat rests tilted 5°, one dropped on an edge stays on it).

@@ -1,7 +1,7 @@
 ---
 id: physics-unified-contact-pipeline
 title: One contact pipeline for every solid — persistent manifolds, warm starting, soft step
-status: blocked
+status: in-progress
 priority: unranked
 scope: Physics (ConstraintSolver, ContactManifold, ContactPoint, MovableTrait), Scenes/Scene.physics.cpp
 opened: 2026-10-01
@@ -25,15 +25,24 @@ the ground's real triangles through a new `GroundLevelInterface` query; a creati
 manifold keys; Box2D v3 soft step; friction geometric mean, restitution max; walkers may regress until P4;
 `DynTopCube` moved to component properties; the old MTV overlap tests retired afterwards.
 
+## Done (2026-10-01)
+
+The pipeline, the narrow phase, the soft-step solver, persistent impulses, materials, gravity always on, grounded state
+from the manifolds, sorted manifolds, the boundary pass after the solver, kinematic bodies, world-axis rotation — see
+`docs/physics-overhaul.md` § 1b (P2.b/c) for the measurements. Linux 5 launches bit-identical.
+
 ## What remains
+
+- [ ] The peers' recorded bench (macOS, Windows NVIDIA + AMD): 0 differing samples on every station — the acceptance of
+  the determinism half (`physics-run-to-run-determinism`).
+- [ ] Retire the MTV overloads of the collision models and of base `Collisions/` (owner decision (i)); keep the boolean
+  overlaps.
 
 - [ ] Every solid contact becomes a manifold for the solver: ground (a static with inverse mass 0, normal and depth from
   the height field), static entities (inverse mass 0), movables. Phase 1's push-and-reflect goes away. Boundaries keep
   their hard clip as a final safety after the solver, outside it (owner decision, `docs/physics-overhaul.md` § 5).
 - [ ] Persistent manifolds keyed by the pair (stable entity ids) and matched point by point through the feature ids of
   `contact-manifold-generation`; accumulated impulses carried over and warm-started.
-- [ ] Restitution and position: the whole of `physics-solver-restitution-and-position-correction` (restitution from
-  the pre-solve normal velocity with a threshold, one `onCollision` per contact per tick, no double correction).
 - [ ] Stepping: soft step with sub-steps and relaxation (Box2D v3) at the fixed 60 Hz tick; choose the sub-step count
   on the P0 measurements.
 - [ ] Coulomb friction in the solver for every contact, including the ground; remove `v.xz *= 1 − stickiness` from

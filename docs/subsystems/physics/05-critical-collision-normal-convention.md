@@ -1,31 +1,14 @@
 ## Critical: Collision Normal Convention
 
 > [!CRITICAL]
-> **`isCollidingWith()` returns `m_impactNormal` pointing from B toward A** (direction to push A out of B).
-> **`m_MTV`** follows the same convention (Minimum Translation Vector to separate A from B).
+> **Since the physics overhaul P2 (2026-10-01) the step uses the base CONTACT MANIFOLDS, whose normal points FROM A TO
+> B** (`Base::Math::Space3D::ContactManifold`, emeraude-base `docs/subsystems/source-tree/17-math-space3d-contacts.md`),
+> the convention `Physics::SoftStepSolver` expects (relative velocity = vB − vA). No negation anywhere any more.
 >
-> The `ConstraintSolver` expects normals **from A toward B** (standard physics convention:
-> `relativeVelocity = velocityB - velocityA`, separating impulse when `Vn < 0`).
+> The OVERLAP tests keep the opposite convention: `CollisionModelInterface::isCollidingWith()` and the base
+> `Space3D::isColliding(A, B, mtv)` answer an MTV that pushes A OUT of B (from B towards A). The physics step no longer
+> calls them; their MTV overloads are to be retired (owner, P2 decision (i)), the boolean ones stay for lights, the
+> editor and the octree.
 >
-> **Consequence:** All code passing normals to `ContactManifold::addContact()` must **negate** the normal.
->
-> | Function | Normal passed to manifold | Why |
-> |----------|---------------------------|-----|
-> | `detectCollisionMovableToMovable()` | `-results.m_impactNormal` | Solver expects A→B |
-> | `detectCollisionMovableToStatic()` | `-results.m_impactNormal` | Same convention |
-> | `accumulateStaticEntityCorrections()` | `-results.m_impactNormal` (as `dominantNormal`) | For velocity bounce |
->
-> **Bug pattern (fixed Mar 2026):**
-> ```cpp
-> // BROKEN - normal points B→A, solver pushes A INTO B (attraction loop)
-> manifold.addContact(results.m_contact, results.m_impactNormal, results.m_depth);
->
-> // CORRECT - negate to get A→B convention
-> manifold.addContact(results.m_contact, -results.m_impactNormal, results.m_depth);
-> ```
->
-> **Code references:**
-> - `CollisionDetection.cpp:detectCollisionMovableToMovable()` - Negates normal
-> - `CollisionDetection.cpp:detectCollisionMovableToStatic()` - Negates normal
-> - `Scene.physics.cpp:accumulateStaticEntityCorrections()` - Negates for bounce
-> - `Base/Math/Space3D/Collisions/SamePrimitive.hpp:isColliding(AACuboid, AACuboid)` - MTV pushes A out of B
+> The former bug pattern (normals not negated before the old `ConstraintSolver`, fixed Mar 2026) is history: that
+> solver and `CollisionDetection.cpp` were removed on 2026-10-01.

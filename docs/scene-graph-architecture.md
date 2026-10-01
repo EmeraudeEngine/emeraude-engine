@@ -75,7 +75,7 @@ Use search for `[CONCEPT: RENDERING]`, `[CONCEPT: PHYSICS]`, etc. to navigate qu
 │   • Legacy position-correction OR impulse-based solver              │
 │   • Scene boundary clipping (world cube limits)                     │
 │   • Ground ground collision                                      │
-│   • ConstraintSolver for rigid body physics                         │
+│   • SoftStepSolver for rigid body physics (physics overhaul P2)     │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Audio-Visual Management:                                            │
 │   • AVConsole::Manager for Camera↔RenderTarget routing             │
@@ -607,9 +607,9 @@ Sequential Impulse Solver for realistic physics:
 
 ```cpp
 // In processLogics():
-1. Detect collisions → generate ContactManifold
+1. Detect collisions → generate base contact manifolds (NarrowPhase)
 2. Collect all manifolds (entity-entity + boundary collisions)
-3. ConstraintSolver::solve() applies velocity impulses
+3. SoftStepSolver::step() integrates and applies the contact impulses
 4. Positions naturally correct via integration
 ```
 

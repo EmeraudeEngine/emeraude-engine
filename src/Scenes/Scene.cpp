@@ -446,10 +446,16 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* NOTE: Simulate physical collisions. */
+		/* NOTE: The physics step: it integrates the collidable dynamic bodies and resolves the contacts. */
 		if ( enablePhysicalSimulation )
 		{
-			this->resolveCollisions();
+			this->resolveCollisions(m_physicsMovedEntities);
+
+			/* Relocated in the octrees once the step released the physics octree lock. */
+			for ( const auto & entity : m_physicsMovedEntities )
+			{
+				this->checkEntityLocationInOctrees(entity);
+			}
 		}
 
 		/* The end-of-cycle physics state, recorded only while a recording is armed (a measurement tool). */

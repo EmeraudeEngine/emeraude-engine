@@ -66,6 +66,6 @@ differing samples on every station, 5 runs, three OS.
 ## References
 
 - `projet-alpha/src/Builtin/CollisionDebug.cpp` (the dynamic rotation test), `Core.SceneManagerService.getNodePhysics()`.
-- Related physics items: `physics-solver-restitution-and-position-correction`, `physics-nan-linear-velocities`,
+- Related physics items (the solver one closed by P2, 2026-10-01): `physics-unified-contact-pipeline`, `physics-nan-linear-velocities`,
   `rotational-physics`.
 - projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 11 (the peer readings).

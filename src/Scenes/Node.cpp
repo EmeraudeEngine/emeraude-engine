@@ -910,7 +910,8 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const auto result = this->updateSimulation(scene.physicalEnvironmentProperties());
+		/* A body with a collision model is in the physics octree: the scene's physics step integrates it. */
+		const auto result = this->updateSimulation(scene.physicalEnvironmentProperties(), this->hasCollisionModel());
 
 		/* Sleep/Wake: check if entity has been stable long enough to pause simulation. */
 		if ( this->checkSimulationInertia() )

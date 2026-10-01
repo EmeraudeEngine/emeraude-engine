@@ -48,6 +48,34 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   CDLOD levels) answer their rendered triangles through `Scenes/GroundTriangles.hpp` and the base
   `Grid::forEachTriangleInRegion()`; feature id = (cellZ × cells + cellX) × 2 + half.
 
+- **P2.b/c (the pipeline and the solver, 2026-10-01)**: `Physics::NarrowPhase` (model → base primitive, speculative
+  margin 2 cm), `Physics::SoftStepSolver` (Box2D v3 soft step, 4 sub-steps, 30 Hz / ζ 10 soft contacts, pushout ≤ 3 m/s,
+  restitution from the pre-solve speed above 1 m/s in 4 passes, Coulomb disc friction, impulses cached by feature id),
+  `Scene::resolveCollisions()` rewritten (pipeline: `docs/subsystems/physics/02-physics-specific-rules.md`), the old
+  `ConstraintSolver` / `ContactManifold` / `ContactPoint` / `CollisionDetection` removed, `Node::rotateFromPhysics()`
+  takes a world axis. Bench, Linux, 5 launches × 1800 cycles:
+
+  | Station | P0 baseline | P2 |
+  |---|---|---|
+  | balls e 0.5 / 1.0 | 0.494 / 0.998 (static path) | 0.491 / 0.998 (solver) |
+  | 5-box stack | never settles, 0.16-0.33 m over 5 s | settles: Y 4.515 m at the top, residual 1.5 mm/s and 0.3° (envelope, P3) |
+  | box on an edge | stays at 45° | 44.4° (the envelope stays flat-bottomed: P3) |
+  | box dropped flat | flat | tilts 5.2° (sequential solve, nothing restores it: P3) |
+  | spinner (ω world Y) | turns about its LOCAL axis | upward Y and backward Y constant — world axis ✔ |
+  | twin `BenchTipCube` | limit cycle on its base | falls off, rests on its side |
+  | platform (kinematic) | box not carried | carried 10 → 14 m and back ✔ |
+  | run to run | Linux identical | Linux identical (0 differing samples) |
+
+  Measured on the way: (1) a symmetric sweep (relax pass backward) broke the solve / relax coherence (the stack
+  toppled) — reverted; (2) `Quaternion::toAngleAxis()` answered 0 for a small rotation (`2 acos(w)` in float): the
+  bodies never turned by less than ~1e-3 rad/s while the solver's ω grew — fixed in emeraude-base with `2 atan2(|v|,
+  w)` (base caution points § Math); (3) `onCollision()` fired for every resting contact (1001 per cycle in
+  balls-of-steel) — an impact now needs 0.05 m/s; (4) "pure virtual method called" at shutdown, 2 of 16
+  balls-of-steel runs: projet-alpha's `Stage::unloadActiveAct()` erased the act (its actors observe the nodes) while
+  the logic thread could still tick the scene — the scene is now disabled first (0 of 8 since).
+  Demos checked (no NaN, no error, clean exit): balls-of-steel, physics-debug, lighten-marbles, game-logic, collision,
+  citadel, animation-debug. The walkers' feel is not checked (keyboard; may regress until P4, owner).
+
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
   integrating itself in `MovableTrait::updateSimulation()`; `addForce()` and the drag are unchanged for the actors.
@@ -84,7 +112,7 @@ measured unless stated; P0 measures it.
 - No sweep, no time of impact, and the ray tests return neither a distance nor a normal (`Space3D/Intersections/`).
   `Line` is infinite: `LineSphere` / `LineCuboid` can answer a hit behind the origin.
 
-### C. Solver (`physics-solver-restitution-and-position-correction` has the detail)
+### C. Solver (the item `physics-solver-restitution-and-position-correction` held the detail; closed by P2)
 - Restitution re-applied on each of the 8 velocity iterations; position correction applied 3× with a stale depth, on
   top of the Baumgarte bias; no warm starting (manifolds rebuilt every tick, accumulated impulses lost); `onCollision`
   up to 8× per contact per tick; Gauss-Seidel order taken from the octree traversal.
@@ -135,7 +163,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 |---|---|---|
 | P0 bench | projet-alpha | `physics-collision-debug-bench` |
 | P1 foundation | emeraude-base | `contact-manifold-generation`, `shape-casts-with-hit-normal`, `collision-pair-test-defects`, `rigid-body-math-helpers` |
-| P2 solver | engine | `physics-unified-contact-pipeline` (absorbs `physics-solver-restitution-and-position-correction`; expected to close `physics-run-to-run-determinism`, `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
+| P2 solver | engine | `physics-unified-contact-pipeline` (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; expected to close `physics-run-to-run-determinism`, `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` (supersedes `physics-step-up-pass`), projet-alpha `actors-kinematic-character-migration` |
 | P5 later | engine | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` |
@@ -167,7 +195,7 @@ client reads ~7 samples per second per station (15 stations), enough for a bounc
 | `BenchSpinner` | free fly, pre-rotated 30° yaw + 30° pitch, ω = (0, 2, 0) WORLD | upward Y and backward Y constant |
 | `BenchSlopeBall`, `BenchSlopeBox` | above a 6 × 0.5 × 6 static slab rolled 30° | roll / slide down the slope |
 | `BenchStepA`…`H` | 8 steps, 0.29 m rise, 0.35 m tread | the walker climbs (P4) |
-| `BenchPlatform`, `BenchPlatformBox` | massless non-movable node animated 10 → 18 → 10 m in X (6 s), a box dropped on it | the box rides the platform |
+| `BenchPlatform`, `BenchPlatformBox` | massless non-movable node (kinematic): waits 1.5 s, 10 → 14 m in X in 1.8 s, waits 0.9 s, back in 1.8 s; a box resting on it | the box rides the platform |
 | `DynTopCube` | the pre-bench tipping test (unchanged) | rests on a face; same place every launch |
 | `BenchTipBase`, `BenchTipCube` | `DynTopCube`'s twin, properties on the component, shapes overridden | the same place on every launch and every machine |
 

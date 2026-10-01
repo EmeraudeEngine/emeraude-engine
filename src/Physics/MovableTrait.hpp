@@ -334,16 +334,15 @@ namespace EmEn::Physics
 			void stopMovement () noexcept;
 
 			/**
-			 * @brief Updates the velocity vector from the acceleration vector and return a reference to the new velocity.
-			 * This will in order:
-			 *  - Apply gravity force to acceleration vector.
-			 *  - Apply drag force to acceleration vector.
-			 *  - Add the acceleration vector to the velocity vector.
-			 * Then will return true if a movement occurs.
+			 * @brief Advances the body's own part of a physics cycle.
+			 * @note A body INTEGRATED BY THE SCENE (it collides: the scene's physics step moves it, gravity and contacts in
+			 * its sub-steps — physics overhaul P2) only gets its drag here. Any other body (no collision model) is integrated
+			 * here as before: gravity, drag, then the move.
 			 * @param envProperties A reference to physical environment properties.
-			 * @return bool
+			 * @param integratedByScene Whether the scene's physics step integrates this body.
+			 * @return bool True when this call moved the body.
 			 */
-			bool updateSimulation (const EnvironmentPhysicalProperties & envProperties) noexcept;
+			bool updateSimulation (const EnvironmentPhysicalProperties & envProperties, bool integratedByScene) noexcept;
 
 			/**
 			 * @brief Sets whether this is affected by all physical interactions.

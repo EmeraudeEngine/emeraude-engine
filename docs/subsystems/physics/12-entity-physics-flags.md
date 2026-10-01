@@ -17,7 +17,7 @@ AbstractEntity uses minimal flags for physics control:
 - **Otherwise, the mass.** Without an authored decision, `onComponentsUpdated()` derives it: collidable
   when at least one component declares a non-null mass.
 - ⚠️ **A static solid needs NO mass — it needs `setCollidable(true)`.** The constraint solver reads an
-  inverse mass of 0 for every non-movable body (`ConstraintSolver.cpp`), so a wall is infinitely heavy
+  inverse mass of 0 for every static and non-movable body (`SoftStepSolver`, physics overhaul P2), so a wall is infinitely heavy
   whatever it declares. Before 2026-09-28 the only way in was a FICTITIOUS mass (`GameLogic`'s
   buildings, `Liminal`'s `solidStone()`), and `onComponentsUpdated()` overwrote `setCollidable()` both
   ways on every component update: `citadel` was entirely walk-through, and a cloud made non-solid

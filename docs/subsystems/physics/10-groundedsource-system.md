@@ -4,21 +4,17 @@ MovableTrait tracks not just WHETHER an entity is grounded, but WHAT it's ground
 
 ### GroundedSource Enum (`MovableTrait.hpp:GroundedSource`)
 
-| Source | Description | Gravity | Friction |
-|--------|-------------|---------|----------|
-| `None` | Not grounded | Applied | No |
-| `Ground` | On terrain (GroundResource) | Blocked | Yes |
-| `Boundary` | On world boundary | Blocked | Yes |
-| `Entity` | On StaticEntity or Node | **Applied** | Yes |
+| Source | Description |
+|--------|-------------|
+| `None` | Not grounded |
+| `Ground` | On terrain (a ground triangle manifold) |
+| `Boundary` | On the world box's floor (the boundary pass) |
+| `Entity` | On a StaticEntity, a kinematic node or another Node (any manifold whose normal is within ~45° of gravity) |
 
-### Key Insight: Entity Grounding
-
-When grounded on an Entity (StaticEntity or another Node), gravity is **still applied**. This is because:
-- Entities can move (Nodes) or you can walk off them (StaticEntity)
-- Without gravity, entities would float in air after leaving a platform
-- The grace period prevents jitter but doesn't block gravity
-
-See: `MovableTrait.cpp:updateSimulation()` - `isOnStableSurface` check
+⚠️ Since the physics overhaul P2 (2026-10-01) **gravity always applies** and friction is the solver's (Coulomb, per
+contact): the former "stable surface" switch-off of gravity, the downward-velocity clamp and the per-tick friction
+multiplier are gone (`docs/physics-overhaul.md` § 2 D). The grounded state is set by the physics step from the
+manifolds and still decays over the 15-frame grace period (the walkers read it until the P4 character controller).
 
 ### Query Methods
 
@@ -42,13 +38,11 @@ See: `MovableTrait.cpp:updateGroundedState()`
 Callers must specify the source when setting grounded:
 
 ```cpp
-// In Scene.physics.cpp (static collisions)
-movable->setGrounded(GroundedSource::Ground);
+// In Scene.physics.cpp (the physics step, section 6: from the solved manifolds)
+movable->setGrounded(GroundedSource::Ground);                  // a ground triangle under it
+movable->setGrounded(GroundedSource::Entity, otherMovable);    // a static (nullptr), kinematic or dynamic support
+// ... and in the boundary pass (section 7), through applyCollisionResponse():
 movable->setGrounded(GroundedSource::Boundary);
-movable->setGrounded(GroundedSource::Entity, collidedEntityPtr);
-
-// In ConstraintSolver.cpp (dynamic collisions)
-bodyA->setGrounded(GroundedSource::Entity, bodyB);
 ```
 
-See: `Scene.physics.cpp:applyCollisionResponse()`, `ConstraintSolver.cpp:solveVelocityConstraints()`
+See: `Scene.physics.cpp:resolveCollisions()` (sections 6 and 7), `applyCollisionResponse()`

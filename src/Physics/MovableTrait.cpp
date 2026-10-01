@@ -86,49 +86,18 @@ namespace EmEn::Physics
 	}
 
 	bool
-	MovableTrait::updateSimulation (const EnvironmentPhysicalProperties & envProperties) noexcept
+	MovableTrait::updateSimulation (const EnvironmentPhysicalProperties & envProperties, bool integratedByScene) noexcept
 	{
 		const auto & objectProperties = this->getBodyPhysicalProperties();
 
-		/* Decay grounded state each frame. */
+		/* Decay grounded state each frame (the physics step re-arms it from its contacts). */
 		this->updateGroundedState();
 
-		/* Apply ground friction and gravity based on grounded source.
-		 * Ground/Boundary: stable surfaces - full friction, no gravity
-		 * Entity: dynamic surfaces - friction but gravity still applies (can fall off) */
-		const bool isOnStableSurface = this->isGroundedOnTerrain() || this->isGroundedOnBoundary();
-
-		if ( this->isGrounded() )
-		{
-			const auto frictionFactor = 1.0F - objectProperties.stickiness();
-
-			m_linearVelocity[X] *= frictionFactor;
-			m_linearVelocity[Z] *= frictionFactor;
-
-			/* Clamp DOWNWARD velocity to prevent micro-bounces, on stable surfaces only.
-			 * ⚠️ +Y is UP, so "downward" is NEGATIVE. This test read `> 0.0F` under the Y-down
-			 * convention, where a positive Y velocity meant sinking. Left as it was, it clamps
-			 * every UPWARD velocity instead — and since a body is still grounded on the frame it
-			 * pushes off, it silently ATE THE PLAYER'S JUMP: the force was applied, the velocity
-			 * went positive, and this line zeroed it before integration, every tick, so the
-			 * position never moved off the ground.
-			 * ⚠️⚠️ Symptom to recognise: velocity[Y] reads exactly ONE frame's worth of impulse
-			 * instead of an accumulating value. That signature means the velocity is being wiped
-			 * between frames, not that the force is missing. */
-			if ( isOnStableSurface && m_linearVelocity[Y] < 0.0F )
-			{
-				m_linearVelocity[Y] = 0.0F;
-			}
-
-			m_linearSpeed = m_linearVelocity.length();
-		}
-
-		/* Apply gravity if:
-		 * - Not grounded at all, OR
-		 * - Grounded on Entity (can fall off dynamic surfaces)
-		 * Exception: free fly mode or massless objects. */
-
-		if ( !isOnStableSurface && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
+		/* ⚠️ Physics overhaul P2: no gravity switch-off on a "stable surface", no downward-speed clamp, no
+		 * per-tick friction multiplier any more — resting and friction are the contact solver's job, and gravity
+		 * always applies (inside the step's sub-steps for a body the scene integrates). The former special cases
+		 * are recorded in docs/physics-overhaul.md § 2 D. */
+		if ( !integratedByScene && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
 		{
 			m_linearVelocity += envProperties.steppedSurfaceGravity();
 			m_linearSpeed = m_linearVelocity.length();
@@ -148,55 +117,37 @@ namespace EmEn::Physics
 			m_linearSpeed = m_linearVelocity.length();
 		}
 
+		/* Apply the drag on rotation if there is angular speed and rotation is enabled.
+		 * A simple damping coefficient: velocity *= 1 - drag per cycle (0 = perpetual rotation, 1 = immediate stop).
+		 * NOTE: tick-rate dependent; its exact integration is item `rotational-physics`. */
+		if ( m_rotationEnabled && m_angularSpeed > 0.0F )
+		{
+			m_angularVelocity *= 1.0F - objectProperties.angularDragCoefficient();
+			m_angularSpeed = m_angularVelocity.length();
+		}
+
+		/* A body the scene integrates is moved (and rotated) by the physics step. */
+		if ( integratedByScene )
+		{
+			return false;
+		}
+
 		bool isMoveOccurs = false;
 
-		/* Apply the movement */
 		if ( m_linearSpeed > 0.0F )
 		{
-			/* Dispatch the final move to the entity according to the new velocity. */
 			this->moveFromPhysics(m_linearVelocity * WorldPhysicsUpdateCycleDurationS< float >);
-
 			isMoveOccurs = true;
 		}
 
-		/* Apply the drag force on rotation if there is angular speed and rotation is enabled. */
-		if ( m_rotationEnabled && m_angularSpeed > 0.0F )
+		/* NOTE: Vector / s is NaN once |s| <= the float epsilon: 1 / speed stays finite above FLT_MIN. */
+		if ( m_rotationEnabled && m_angularSpeed > std::numeric_limits< float >::min() )
 		{
-			/*
-			 * Angular drag is implemented as a simple damping coefficient.
-			 * A more physically accurate implementation would use:
-			 * Td = B * m * (V / Vt) * L^2 * w
-			 * Where:
-			 *   Td = drag torque
-			 *   B = angular drag coefficient
-			 *   V = volume of a submerged portion of polyhedron
-			 *   Vt = total volume of polyhedron
-			 *   L = approximation of the average width of the polyhedron
-			 *   w = angular velocity
-			 *
-			 * For now, we use a simplified damping approach where the angular drag coefficient
-			 * (0.0 to 1.0) determines how much angular velocity is retained each frame.
-			 * 0.0 = no drag (perpetual rotation), 1.0 = immediate stop.
-			 */
-			const auto angularDrag = objectProperties.angularDragCoefficient();
-
-			/* Apply damping: velocity *= (1 - drag) */
-			m_angularVelocity *= 1.0F - angularDrag;
-			m_angularSpeed = m_angularVelocity.length();
-
-			/* NOTE: A drag of 1 ("immediate stop") zeroes the speed, and any drag makes it underflow after enough
-			 * frames. Vector / s is NaN once |s| <= the float epsilon: the NaN axis turned the orientation into NaN
-			 * for good (rotation(0, NaN) is NaN). 1 / speed stays finite above FLT_MIN. */
-			if ( m_angularSpeed > std::numeric_limits< float >::min() )
-			{
-				/* Dispatch the final rotation to the entity according to the new angular velocity. */
-				this->rotateFromPhysics(
-					m_angularSpeed * WorldPhysicsUpdateCycleDurationS< float >,
-					m_angularVelocity * (1.0F / m_angularSpeed)
-				);
-
-				isMoveOccurs = true;
-			}
+			this->rotateFromPhysics(
+				m_angularSpeed * WorldPhysicsUpdateCycleDurationS< float >,
+				m_angularVelocity * (1.0F / m_angularSpeed)
+			);
+			isMoveOccurs = true;
 		}
 
 		return isMoveOccurs;

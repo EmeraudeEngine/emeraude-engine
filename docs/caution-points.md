@@ -4835,7 +4835,8 @@ dereference what a resource accessor returns without checking it.**
 > - The inverse world inertia comes from base `Matrix::tryInverse()`: the former absolute singularity test left a small
 >   body's tensor un-inverted (0.004 instead of 250).
 > - The solver still re-applies restitution per iteration and over-corrects penetration: item
->   `physics-solver-restitution-and-position-correction`.
+>   `physics-solver-restitution-and-position-correction` — closed on 2026-10-01: the physics overhaul P2 replaced that
+>   solver (`docs/physics-overhaul.md` § 1b).
 
 ### Physics: the body properties set on an ENTITY are overwritten by its components — set them on the component (2026-10-01)
 
