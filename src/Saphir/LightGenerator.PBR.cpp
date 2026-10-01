@@ -225,7 +225,16 @@ namespace EmEn::Saphir
 	LightGenerator::generatePBRVertexShader (Generator::Abstract & generator, AbstractVertexStage & vertexShader, LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept
 	{
 		/* A line light passes its flat view matrix (4 locations), a spot its cone axis besides the distance vector. */
-		const uint32_t lightBlockLocations = lightType == LightType::Line ? 4 : (lightType == LightType::Spot ? 2 : 1);
+		uint32_t lightBlockLocations = 1;
+
+		if ( lightType == LightType::Line )
+		{
+			lightBlockLocations = 4;
+		}
+		else if ( lightType == LightType::Spot )
+		{
+			lightBlockLocations = 2;
+		}
 
 		Declaration::OutputBlock lightBlock{LightBlock, generator.getNextShaderVariableLocation(lightBlockLocations), ShaderVariable::Light};
 

@@ -40,6 +40,8 @@ namespace EmEn::Saphir
 	using namespace Saphir::Keys;
 	using namespace Vulkan;
 
+	namespace
+	{
 	/**
 	 * @brief Builds the GLSL condition stating that a projective light-space position falls INSIDE
 	 * the 2D shadow map volume, on all three axes.
@@ -58,7 +60,6 @@ namespace EmEn::Saphir
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	static
 	std::string
 	insideShadowVolumeCondition (const std::string & fragmentPosition)
 	{
@@ -88,6 +89,7 @@ namespace EmEn::Saphir
 		condition += ".w";
 
 		return condition;
+	}
 	}
 
 	bool

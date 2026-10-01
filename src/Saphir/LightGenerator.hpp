@@ -724,7 +724,8 @@ namespace EmEn::Saphir
 					return "0.04";
 				}
 
-				const auto base = "pow((" + m_surfaceMaterialIOR + " - 1.0) / (" + m_surfaceMaterialIOR + " + 1.0), 2.0)";
+				/* NOTE: not const, so the return below moves it. */
+				std::string base = "pow((" + m_surfaceMaterialIOR + " - 1.0) / (" + m_surfaceMaterialIOR + " + 1.0), 2.0)";
 
 				if ( m_useKHRSpecular )
 				{
@@ -755,7 +756,7 @@ namespace EmEn::Saphir
 			{
 				const auto F0 = variableName + "F0";
 
-				std::string code{"const vec3 " + F0 + " = " + F0Expression + ";\n"};
+				const std::string code{"const vec3 " + F0 + " = " + F0Expression + ";\n"};
 
 				const auto schlick = F0 + " + (vec3(1.0) - " + F0 + ") * pow(1.0 - " + NdotVExpression + ", 5.0)";
 

@@ -1397,7 +1397,6 @@ namespace EmEn::Saphir
 			 * without this the reflections contribute a fraction of a nit to a scene lit in
 			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
 			const auto iblIntensity = this->scaledIBLIntensity();
-			const auto roughness = m_surfaceRoughness.empty() ? "0.5" : m_surfaceRoughness;
 
 			/* Quality tier — the RENDERER decides, per program: a distant surface can take the
 			 * cheap branch. This is the hook the distance/LOD switch drives; it is no longer a

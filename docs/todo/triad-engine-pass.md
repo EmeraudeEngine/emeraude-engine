@@ -57,7 +57,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 4 | `src/Net` (+ the 2026-08-27 audit) | 9 429 | ✅ pushed 2026-09-30 (engine `e40abf15`); VALIDATED macOS M2 + Windows NVIDIA (the `.windows.cpp` / Apple branches compiled clean, cache round-trip, 0 VUID; no serial device on either) |
 | 5 | `src/Input` | 5 465 | ✅ pushed 2026-09-30 (engine `fe74dac0`, alpha `2856df1e`); VALIDATED macOS M2 + Windows NVIDIA (conformance unchanged, injection + refusals, 0 VUID; NO gamepad on any machine: the axis fix awaits a physical pad) |
 | 6 | `src/Scenes` (the rest, by sub-group: 6a-6e below) | ~59 000 | ✅ 6a-6e pushed and VALIDATED on the three OS (2026-10-01) |
-| 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed (7g peers pending) |
+| 7 | `src/Graphics` (by sub-group: 7a-7g below) | 137 872 | ✅ 7a-7g pushed and VALIDATED on the three OS (2026-10-01) |
 | 8 | `src/Saphir` (by sub-group: 8a-8c below) | 31 645 | 🟠 8a started |
 | 9 | `src/Vulkan` | 32 843 | ⬜ |
 | 10 | `src/Audio` | 18 919 | ⬜ |
@@ -646,7 +646,7 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 | 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ✅ pushed (the engine 7d commit); peers pending |
 | 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ✅ pushed engine `11e574d8`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ✅ pushed engine `cfcb91b7`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ✅ pushed engine `712bf0e7`; macOS M2 VALIDATED, Windows pending |
+| 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ✅ pushed engine `712bf0e7`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 
 Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2, done); 7c (done) `BasicGroundResource` passes
 `DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d (done) the
@@ -978,13 +978,19 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
     (56.7 ms each), water-world, terrain, citadel MCP 1707/0, console 4445/0; 0 VUID, 0 UNASSIGNED everywhere.
   - macOS noticed (PRE-EXISTING, projet-alpha): the XRay demo traces "1000 slices saved" while its write block is
     commented out → alpha item `geometry-generator-xray-claims-a-save`.
+  - Windows PASS on NVIDIA RTX 3060 Laptop AND the forced AMD iGPU (MSVC /W4 /WX 0 warning): citadel RayTracing lane
+    exactly the 11 lines, ScreenSpace lane exactly the 10, light-and-shadow-debug the VolumetricLight one ("Using 64"),
+    on both GPUs; renders, no hang. light-and-shadow-debug printed 22 lines on NVIDIA (both lanes' effects created) and
+    12 on AMD (the RT set): which effects a device creates, every value refused correctly. XRay 20.1 ms / 74.2 ms per
+    slice, water-world, terrain, citadel MCP 1707/0, console 4457/0 (NVIDIA) and 4454/2 (AMD, the known RST checks);
+    NVIDIA only the known 12325.
 
 ## Section 8 — `src/Saphir` (started 2026-10-01), three sub-sections (owner, 2026-10-01)
 
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 8a | Shader core: `ShaderManager` (the on-disk shader cache: the trust boundary), `Program`, `AbstractShader`, `AbstractVertexStage`, the stage classes (vertex, fragment, geometry, tessellation, mesh, task, compute), `CodeGeneratorInterface`, `Types`, `SetIndexes` | ~9 000 | ✅ pushed (the engine 8a commit); peers pending |
-| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ⬜ |
+| 8b | `LightGenerator` (+ `.PBR`, `.ShadowMap`) | ~5 000 | ✅ pushed (the engine 8b commit); peers pending |
 | 8c | `Declaration/`, `Generator/` | ~13 000 | ⬜ |
 
 ### 8a — shader core (2026-10-01)
@@ -1006,4 +1012,20 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   two text-generating edits produce the same strings); beams (path / beam ribbons), citadel (mesh shaders; MCP 1707/0,
   console 4466/0), terrain (heightfield fragment overrides), sponza: 0 shader compilation failure, 0 VUID, 0 leak.
 - [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8a commit); peers asked.
+
+### 8b — `LightGenerator` (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (3 TUs + the header): **15**: 9 convert-member-functions-to-static (the light
+  uniform-block accessors), and singles (a nested conditional, an anonymous-namespace function, a branch clone, an
+  unused non-trivial local, a missed automatic move, a const local).
+- [x] (2) Review. Generates the lighting GLSL from material and light descriptions built by the engine; no trust
+  boundary, no defect beyond an unused `roughness` string in the thin-surface transmission branch (computed, never
+  emitted). No owner question.
+- [x] (3) Mechanical: the dead local removed, the light-block location count unnested, `insideShadowVolumeCondition()`
+  in an anonymous namespace, `dielectricF0Expression()`'s local non-const so its return moves, `ambientFresnelDeclaration()`'s
+  prefix `const`.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 109 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 15 → 10 (on purpose, ledger). light-and-shadow-debug (point, spot, directional
+  shadows), beams (line lights), sponza (PBR), citadel: 0 shader compilation failure, 0 VUID, 0 leak.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 8b commit); peers asked.
 
