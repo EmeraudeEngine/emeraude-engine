@@ -17,7 +17,14 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    and the reproducibility target is the same machine + the same binary + the same inputs. Bit-exact results across
    the three OS are not a goal.
 4. **Order**: P0 → P1 → P2 → P3 → P4, then P5 (§ 4). Solid contacts first, the walker on top of them.
-5. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
+5. **P1 design (owner, 2026-10-01)**: (a) contacts live in a new header-only `Math/Space3D/Contacts/` folder of
+   emeraude-base — a manifold type (one normal, up to 4 points, each with its depth and a stable feature id) and one
+   function per pair; `isColliding()` stays the cheap overlap test. (b) A new `Space3D::OrientedBox` primitive
+   (centre, 3 axes, half extents); `Math/OrientedCuboid` stays for its current uses. (c) The manifold normal points
+   FROM A TO B (Box2D, Bullet, Jolt, and the engine solver); `isColliding()` keeps its MTV ("push A out of B").
+   (d) Order: box ↔ box, sphere ↔ box, capsule ↔ box, sphere / capsule ↔ triangle, the sphere / capsule pairs; then
+   the casts, the defects, the inertia helpers — each with its unit tests (Release + ASan/UBSan).
+6. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
 ## 2. Analysis of the physics as it stood on 2026-10-01
@@ -133,6 +140,7 @@ client reads ~7 samples per second per station (15 stations), enough for a bounc
 | `BenchStepA`…`H` | 8 steps, 0.29 m rise, 0.35 m tread | the walker climbs (P4) |
 | `BenchPlatform`, `BenchPlatformBox` | massless non-movable node animated 10 → 18 → 10 m in X (6 s), a box dropped on it | the box rides the platform |
 | `DynTopCube` | the pre-bench tipping test (unchanged) | rests on a face; same place every launch |
+| `BenchTipBase`, `BenchTipCube` | `DynTopCube`'s twin, properties on the component, shapes overridden | the same place on every launch and every machine |
 
 ⚠️ Bench traps (all measured on 2026-10-01):
 - The toolkit appends a process-wide counter to every name (`String::incrementalLabel()`): `BenchBallHalf` is
@@ -150,10 +158,49 @@ client reads ~7 samples per second per station (15 stations), enough for a bounc
 | Balls vs ground | e_eff 0.493-0.494 for e = 0.5; 0.997-0.998 for e = 1.0; 0 NaN | ✅ ground restitution is right |
 | `BenchBoxFlat` | rests at Y 0.500, upward 0° | ✅ |
 | `BenchBoxEdge` | rests ON ITS EDGE, Y 0.707, upward 45°, ω 0 — 5/5 | ❌ a ground contact makes no torque (§ 2 A) |
-| Stack | never settles: B…E keep a downward velocity of 0.2-1.6 m/s while "resting", Y amplitude 0.16-0.33 m over the last 5 s; final positions differ by up to 8 cm between runs | ❌ movable ↔ movable solver (§ 2 C), and the run-to-run divergence exists on Linux too |
+| Stack | never settles: B…E keep a downward velocity of 0.2-1.6 m/s while "resting", Y amplitude 0.16-0.33 m over the last 5 s | ❌ movable ↔ movable solver (§ 2 C) |
 | `BenchSpinner` | upward vector fixed at (0.250, 0.866, 0.433); backward Y swings −0.500 … +0.500 | ❌ PROVEN: it spins about its LOCAL up axis — `Node::rotateFromPhysics()` applies the world axis in local space |
 | Slope | ball and box rest at Y 4.217, ω 0, on the slab's axis-aligned envelope | ❌ rotated boxes collide as their world AABB (§ 2 B) |
 | Platform | the box is not carried: it ends on the ground at X 7.88, tilted 79° (platform 10 … 18 m) | ❌ an animated body has no velocity for the contacts (P2 / P4) |
 | `DynTopCube` | X 6.855, upward 140.9°, 5/5 identical | the same value as the two earlier Linux runs |
+
+### Baseline — macOS, Apple M2 (MoltenVK), the same commits, 5 launches × 30 s (peer, 2026-10-01)
+
+Every station gives the Linux verdict within sampling noise (e_eff 0.494-0.496 and 0.997-0.998; the edge box on its
+edge 5/5; the stack never settles, tail Y amplitude 0.17-0.32 m, different on every run; the spinner about its local
+axis; the slope bodies at Y 4.217; the platform box not carried, X 7.881, tilted 78.7°), 0 NaN — EXCEPT `DynTopCube`,
+which lands in a different place on every launch: X 12.597 / 14.966 / 4.714 / 10.862 / 5.530, upward 62.9° / 23.5° /
+5.4° / 62.7° / 54.6°, Y 1.09-1.40 (not resting on a face at 30 s). Linux gives X 6.855 and 140.9° on 5/5.
+
+### Baseline — Windows, RTX 3060 Laptop and the AMD iGPU (forced), the same commits, 5 + 5 launches (peer, 2026-10-01)
+
+Build clean under MSVC /WX. Every station gives the Linux verdict on both GPUs (e_eff 0.493-0.496 and 0.997-0.998; the
+edge box on its edge; the stack never settles, tail Y amplitude 0.15-0.39 m, StackA sometimes ending at Y 0.2; the
+spinner about its local axis; the slope bodies stopped dead at Y 4.217; the platform box not carried), 0 NaN.
+`DynTopCube`: on the AMD iGPU X 6.855, 140.91° on 5/5 — the Linux value; on the RTX 3060 X 10.217 / 18.230 / 18.072 /
+2.663 / 18.230 (runs 2 and 5 bit-identical), so a few discrete outcomes rather than noise.
+
+**Hypothesis (not measured yet)**: `DynTopCube` sets its body properties on the ENTITY and its AABB model is NOT marked
+overridden, so the asynchronous end of its geometry load re-derives both (mass from volume × density, bounciness and
+stickiness 0.5, the identity inertia; a merged shape) at a physics cycle that depends on the machine's loading speed.
+Test: the twin station `BenchTipBase` / `BenchTipCube` (row 3, Z = -60), declared the bench way (component properties,
+overridden shapes). If the twin repeats on every machine while `DynTopCube` does not, the hypothesis holds.
+
+### ⚠️ Comparing runs: by physics cycle, never by final state
+
+A body that never comes to rest (the stack, `BenchTipCube`) is sampled at a different cycle at the end of each run, so
+its final states differ while the simulations are identical. Compared AT THE SAME CYCLES (`tools/physics-bench.py
+--compare <dir>`), the 5 Linux runs are identical on every station (`DynTopCube`, the twin, the stack), except 1-2
+isolated samples per run that are equal again on the next common cycle. Each isolated gap is ONE CYCLE of the body's
+motion (the platform: 0.0427 m against 2.67 m/s ÷ 60 = 0.044 m): `getNodePhysics()` reads the position and `sceneCycle`
+from the console thread while the logic thread ticks, so a sample can be labelled one cycle off. A per-cycle recorder on
+the logic thread would remove it (item `physics-collision-debug-bench`). Linux reproduces cycle for cycle. The earlier reading "the stack
+differs run to run on Linux" (final states) was wrong and is withdrawn; the macOS stack reading is the same kind and
+proves nothing. `DynTopCube` on the RTX 3060 / M2 lands metres apart and RESTS (Y ≈ 1.1-1.4 m): a real divergence.
+
+**The twin** (Linux, 5 runs): `BenchTipCube` does NOT behave like `DynTopCube` — it stays on top of its base, tilted
+57-62°, and never rests (ω ≈ 1.47 rad/s and 0.2-0.4 m of motion over the last 5 s of 30 s): a LIMIT CYCLE, the solver
+feeding energy into a body tipping on its axis-aligned envelope. `DynTopCube` falls off and rests at X 6.855: the
+difference is the re-derived properties (§ Bench traps). Whether the twin repeats on the RTX 3060 / M2 is the test.
 
 Raw runs: kept outside the repository (one JSON per run, ~1.6 MB); re-run with the command in the script's header.

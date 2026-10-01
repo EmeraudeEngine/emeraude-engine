@@ -27,9 +27,15 @@ do not, so this is not an x86 / arm64 floating-point divergence. Something in th
 the next. A tipping cube is chaotic, so any tiny difference grows. The owner wants the physics reviewed as a whole
 ("il faudra revoir la physique").
 
-**2026-10-01, the P0 bench** (`docs/physics-overhaul.md` § 6, Linux, 5 launches): `DynTopCube` rests at x 6.855 on all
-5, but the 5-box stack (`BenchStack*`, movable ↔ movable contacts through the solver) ends at positions up to 8 cm apart
-and with different velocities from one launch to the next. The divergence exists on Linux too; it is not only Windows.
+**2026-10-01, the P0 bench** (`docs/physics-overhaul.md` § 6): compared at the same physics cycles
+(`tools/physics-bench.py --compare`), the 5 Linux runs are identical on every station. Bodies that never rest end at
+different final states only because their last sample falls on a different cycle — do not compare final states.
+
+**2026-10-01, the peers' bench** (`docs/physics-overhaul.md` § 6): `DynTopCube` repeats on Linux and on the Windows AMD
+iGPU (X 6.855, 5/5 each), not on the RTX 3060 (a few discrete outcomes, two runs bit-identical) nor the M2. Hypothesis:
+its entity-level properties and non-overridden shape are re-derived when the geometry load completes, at a cycle that
+depends on the machine (`docs/caution-points.md` § the body properties set on an entity are overwritten). Test: the
+twin station `BenchTipCube`.
 
 ## What remains
 
