@@ -1158,7 +1158,11 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
     refusal, 0 VUID. The dumps are re-asked from the peers with that fix.
   - Re-test with alpha `ad00545f`: macOS M2 PASS — `offscreen-rendering` 3/3 clean launches; the sRGB cubemap face
     dumped (a valid 1024×1024 PNG), `OffscreenRenderingCubemap` refused ("format 97, which cannot be downloaded"), 0
-    `VUID-…-pRegions-00183`, 0 VUID; `lighten-marbles` 0 VUID, 0 error. Windows pending.
+    `VUID-…-pRegions-00183`, 0 VUID; `lighten-marbles` 0 VUID, 0 error. Windows (NVIDIA RTX 3060 + AMD) PASS: no crash
+    (NVIDIA 5/5, AMD 1/1; it was 0xc0000005 5/5), the same dump / refusal, 0 VUID. The refusal names the image `''`:
+    Vulkan identifiers are empty in Release by design, and the console line after it names the target. Windows found
+    (not a triad regression): the FIRST dump of a session is sometimes solid blue (3/6), every later one is real — item
+    `dump-render-target-first-dump-solid-blue`.
 
 ### 9c — commands, pipelines, descriptors, sync (2026-10-01)
 
@@ -1190,7 +1194,7 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
 | Sub | Content | Lines | Status |
 |---|---|---|---|
 | 10a | The audio core: the resources read from disk (`SoundResource`, `MusicResource`, `PlaylistResource`, `SoundfontResource` — the unconfined `file` path lead of section 2), `Buffer`, `Manager` (+ console), `TrackMixer` (+ console), `Source`, `Listener`, `Ambience*`, `Recorder`, `ExternalInput`, `HardwareOutput`, `Utility` | ~12 000 | ✅ pushed (the engine 10a commit); peers pending |
-| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ✅ pushed (the engine 10b commit); peers pending |
+| 10b | `Effects/`, `Filters/`, `EffectSlot` (the EFX parameters, from JSON and the console) | ~7 000 | ✅ pushed (`2544c410`); macOS validated, Windows pending |
 
 ### 10a — the audio core (2026-10-01)
 
@@ -1224,7 +1228,10 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
     refused by FileSystem ("leaves its store … refused") then by `SoundfontResource`; the five audio keys out of range →
     their warnings and the defaults; a track plays (`nowPlaying()` advances); citadel MCP 1707/0, console 4445/0; 0 VUID,
     0 UNASSIGNED everywhere. The shutdown pair "`GlobalReleaseFlush` AL_INVALID_OPERATION" + "unread problem with AL" is
-    PRE-EXISTING (in ~20 logs from 6b to 9c, with or without music). Windows pending.
+    PRE-EXISTING (in ~20 logs from 6b to 9c, with or without music). Windows (NVIDIA + AMD) PASS: MSVC /W4 /WX 0
+    warning; the same Loaded / refused / refused (`C:/Windows/win.ini` too); the five audio warnings; a track plays;
+    citadel MCP 1707/0, console 4457/0 on both GPUs, AMD 0 VUID, NVIDIA only the known
+    `VUID-VkGraphicsPipelineCreateInfo-renderPass-12325` (mesh-shader multiview, RTX 3060).
 
 ### 10b — `Effects/`, `Filters/`, `EffectSlot` (2026-10-01)
 
@@ -1248,5 +1255,7 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   uses `EAXReverb`): the old `alEffectf(pan)` → 0xa002, the new `alEffectfv(pan)` → 0, read back `0.5 0 -0.25`; a NaN
   density → 0xa003 (what the new check stops first). citadel: a track plays (`nowPlaying()` 5 s), MCP 1707/0, console
   4466/0, 0 VUID, 0 UNASSIGNED.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 10b commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `2544c410`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning): citadel, a track plays (5.07 s advance in 5 s), MCP 1707/0, console 4445/0,
+    0 VUID, 0 UNASSIGNED, 0 error. Windows pending.
 
