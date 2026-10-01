@@ -67,7 +67,7 @@ namespace EmEn::Animations
 			/**
 			 * @brief Constructs a lamp flicker.
 			 * @param nominalCandela The luminous intensity of the lamp in perfect health.
-			 * @param health The condition of the lamp, 1 = new, 0 = dead. Default 1.
+			 * @param health The condition of the lamp, 1 = new, 0 = dead, clamped (NaN = 1). Default 1.
 			 */
 			explicit LampFlicker (float nominalCandela, float health = 1.0F) noexcept;
 
@@ -120,7 +120,7 @@ namespace EmEn::Animations
 			/**
 			 * @brief Sets the condition of the lamp.
 			 * @note Continuous on purpose: a lamp can degrade during play by walking this down.
-			 * @param health 1 = new, 0 = dead.
+			 * @param health 1 = new, 0 = dead, clamped (NaN: refused with a warning).
 			 * @return void
 			 */
 			void setHealth (float health) noexcept;
@@ -186,7 +186,7 @@ namespace EmEn::Animations
 			static constexpr auto BurstWindowCycles{45};
 			static constexpr auto BurstChanceMultiplier{12.0F};
 
-			Base::Randomizer< float > m_randomizer{};
+			Base::Randomizer< float > m_randomizer;
 			float m_nominalCandela;
 			float m_health{1.0F};
 			float m_phase{0.0F};

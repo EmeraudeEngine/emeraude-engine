@@ -68,6 +68,9 @@ namespace EmEn::Animations
 	{
 		public:
 
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"SkeletalAnimator"};
+
 			/**
 			 * @brief Constructs an empty animator.
 			 */
@@ -77,12 +80,18 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Sets the skeleton (shared, from resource system).
+			 * @note A skeleton whose hierarchy is invalid (Skeleton::isValid(): a parent out of range or after its
+			 * child) is refused with an error: the forward kinematics pass needs the parents first. A skin set earlier
+			 * that does not match the new skeleton is dropped (see setSkin()).
 			 * @param skeleton The skeleton resource.
 			 */
 			void setSkeleton (const std::shared_ptr< SkeletonResource > & skeleton) noexcept;
 
 			/**
 			 * @brief Sets the skin binding (per-mesh, value).
+			 * @note A skin that does not match the skeleton (a joint index outside it, or an inverse bind matrix count
+			 * different from the joint count) is refused with an error: no skinning matrices. Without a skeleton yet,
+			 * the check happens in setSkeleton().
 			 * @param skin The mesh-to-skeleton binding.
 			 */
 			void setSkin (Base::Animation::Skin< float > skin) noexcept;
@@ -159,7 +168,7 @@ namespace EmEn::Animations
 					names.push_back(name);
 				}
 
-				std::sort(names.begin(), names.end());
+				std::ranges::sort(names);
 
 				return names;
 			}
@@ -229,6 +238,13 @@ namespace EmEn::Animations
 			}
 
 		private:
+
+			/**
+			 * @brief Returns whether the skin can be evaluated against the current skeleton.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isSkinCompatible () const noexcept;
 
 			/**
 			 * @brief Per-joint local transform (T/R/S), used as intermediate evaluation result.

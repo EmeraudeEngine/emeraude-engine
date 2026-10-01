@@ -27,6 +27,7 @@
 #include "SkeletalAnimator.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -36,6 +37,7 @@
 #include "Math/Base.hpp"
 #include "Math/TransformUtils.hpp"
 #include "SkeletonResource.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Animations
 {
@@ -47,7 +49,18 @@ namespace EmEn::Animations
 	void
 	SkeletalAnimator::setSkeleton (const std::shared_ptr< SkeletonResource > & skeleton) noexcept
 	{
-		m_skeleton = skeleton;
+		/* NOTE: computeWorldMatrices() is ONE forward pass: a parent after its child would read a matrix not computed
+		 * yet, a parent out of range would read out of bounds. */
+		if ( skeleton != nullptr && !skeleton->skeleton().isValid() )
+		{
+			TraceError{ClassId} << "The skeleton '" << skeleton->name() << "' has an invalid hierarchy (a parent out of range or after its child), refused !";
+
+			m_skeleton = nullptr;
+		}
+		else
+		{
+			m_skeleton = skeleton;
+		}
 
 		if ( m_skeleton != nullptr )
 		{
@@ -56,13 +69,50 @@ namespace EmEn::Animations
 			m_localPoses.resize(jointCount);
 			m_worldMatrices.resize(jointCount);
 		}
+
+		if ( !m_skin.empty() && !this->isSkinCompatible() )
+		{
+			TraceError{ClassId} << "The skin does not match the skeleton, dropped !";
+
+			m_skin = {};
+			m_skinningMatrices.clear();
+		}
 	}
 
 	void
 	SkeletalAnimator::setSkin (Skin< float > skin) noexcept
 	{
 		m_skin = std::move(skin);
+
+		if ( !this->isSkinCompatible() )
+		{
+			TraceError{ClassId} << "The skin does not match the skeleton (a joint index outside it, or an inverse bind matrix count different from its joint count), refused !";
+
+			m_skin = {};
+		}
+
 		m_skinningMatrices.resize(m_skin.jointCount());
+	}
+
+	bool
+	SkeletalAnimator::isSkinCompatible () const noexcept
+	{
+		if ( m_skin.inverseBindMatrices().size() != m_skin.jointCount() )
+		{
+			return false;
+		}
+
+		/* Without a skeleton yet, only the skin's own consistency; setSkeleton() checks the rest. */
+		if ( m_skeleton == nullptr )
+		{
+			return true;
+		}
+
+		const auto jointCount = m_skeleton->skeleton().jointCount();
+
+		return std::ranges::all_of(m_skin.jointIndices(), [jointCount] (int32_t index) {
+			return index >= 0 && std::cmp_less(index, jointCount);
+		});
 	}
 
 	void
@@ -216,7 +266,7 @@ namespace EmEn::Animations
 		{
 			const auto & channel = clip.channel(c);
 
-			if ( channel.targetIndex < 0 || static_cast< size_t >(channel.targetIndex) >= jointCount )
+			if ( channel.targetIndex < 0 || std::cmp_greater_equal(channel.targetIndex, jointCount) )
 			{
 				continue;
 			}
@@ -279,6 +329,7 @@ namespace EmEn::Animations
 	void
 	SkeletalAnimator::computeSkinningMatrices () noexcept
 	{
+		/* NOTE: setSkin() / setSkeleton() guarantee every skin joint index is inside the skeleton. */
 		const auto skinJointCount = m_skin.jointCount();
 
 		m_skinningMatrices.resize(skinJointCount);
@@ -319,7 +370,7 @@ namespace EmEn::Animations
 
 				if ( cycle > duration )
 				{
-					return duration * 2.0F - cycle;
+					return (duration * 2.0F) - cycle;
 				}
 
 				return cycle;

@@ -40,6 +40,8 @@ namespace EmEn::Animations
 	/**
 	 * @brief Animation using a simple random value.
 	 * @note ie, This can be used to randomize something each logic cycle.
+	 * @note Each value is drawn between the minimum and the maximum, per component for the vectors, the color (alpha
+	 * included) and the cartesian frame (its position); a matrix gives a null value.
 	 * @extends EmEn::Animations::AnimationInterface This is an animation.
 	 */
 	class EMEN_API RandomValue final : public AnimationInterface

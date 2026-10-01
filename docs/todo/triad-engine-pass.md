@@ -62,7 +62,7 @@ to the whole engine. Rank order: Ave Robustus > Allocatus Reduxus > Ave Performu
 | 9 | `src/Vulkan` (by sub-group: 9a-9c below) | 32 843 | ✅ 9a-9c pushed and VALIDATED on the three OS (2026-10-01) |
 | 10 | `src/Audio` (by sub-group: 10a-10b below) | 18 919 | ✅ 10a-10b pushed and VALIDATED on the three OS (2026-10-01) |
 | 11 | `src/Physics` | 9 197 | ✅ pushed (peers pending) |
-| 12 | `src/Animations` | 3 488 | ⬜ |
+| 12 | `src/Animations` (+ the glTF skins and extents it led to) | 3 488 | ✅ pushed (peers pending) |
 | 13 | `src/Overlay` | 7 303 | ⬜ |
 | 14 | `src/PlatformSpecific` | 8 996 | ⬜ |
 | 15 | `src/Tool`, `src/Help`, root files | 1 292 + 40 files | ⬜ |
@@ -1320,4 +1320,68 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   particles, physics-debug — 0 VUID, 0 error, 0 property warning, the scenes intact; sponza pixel A/B for the
   `Matrix` change inside the noise (mean |Δ| 0.71 / 1.04 against 0.77 run-to-run, >8 levels 0.44-0.47 % against
   0.45 %); citadel MCP 1707/0, console 4466/0, 0 VUID.
-- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 11 commit), base `9d62d80`; peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine `a777ddf7`, base `9d62d80`; peers asked.
+  - macOS M2 PASS (AppleClang 0 warning, base 2184 = 2181 + 3 skipped): the five physics demos, sponza, citadel (MCP
+    1707/0, console 4445/0): 0 VUID, 0 UNASSIGNED, 0 error, 0 property warning; every root body finite
+    (`getNodePhysics()`). `collision-debug` `DynTopCube10` rests at x = 18.23 on macOS, 6.86 on Linux (identical over
+    2 Linux runs): a tipping cube is chaotic, read as an arm64 / x86 floating-point divergence (its tensor and drag are
+    not touched by 11 beyond ~4e-4 relative per frame); Windows asked for the same reading.
+  - Windows PASS on NVIDIA RTX 3060 Laptop and AMD (MSVC /W4 /WX 0 warning, base 2184 = 2181 + 3 skipped): the five
+    physics demos, sponza, citadel (MCP 1707/0, console 4457/0 on both): AMD 0 VUID, NVIDIA only the known
+    `renderPass-12325`; 0 property warning. The `DynTopCube10` reading CORRECTS the reading above: 4 launches of the
+    same binary on one machine rest at x = 18.87, 12.60, 10.86, 2.66 (`DynBottomCube9` identical in all). The physics is
+    NOT reproducible from one run to the next (Linux's two equal runs were a coincidence of regular pacing): not an
+    x86 / arm64 divergence. Raised with the owner.
+
+## Section 12 — `src/Animations` (started 2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (8 TUs + headers): **5** (prefer-member-initializer, redundant-member-init,
+  integer-sign-comparison, math-missing-parentheses, use-ranges).
+- [x] (2) Review (the clips and skeletons come from the loaders; `Sequence`, `RandomValue` and the flickers from code
+  and animations). Findings:
+  - N1 `SkeletalAnimator::computeWorldMatrices()` is one forward pass that needs parents first, but glTF allows the
+    joints of a skin in ANY order and `Skeleton::isValid()` was never called (an out-of-order skin: a child reads a
+    parent matrix not computed yet). `computeSkinningMatrices()` never checked that a skin joint index exists in the
+    skeleton (an out-of-bounds read per frame) (owner question).
+  - N2 (a section 3 gap, reached from the skins) fastgltf 0.9.0 bounds-checks nothing: `validate()` checks neither a
+    buffer view inside its buffer nor an accessor inside its view, and its `span` / `iterateAccessor()` have no check
+    (the type is an `assert`). Consequences: out-of-bounds reads at every accessor; heap WRITES past the vertex array
+    (an attribute longer than POSITION) and past `inverseBindMatrices` (glTF allows more matrices than joints);
+    `validate()` ITSELF indexes the sparse views, the channel sampler and the sampler accessors unchecked; a failed
+    meshopt decode served an empty span that was then read; a JOINTS_0 value past the skin is an unchecked GPU read
+    (`bones[JOINTS_0]`) (owner question).
+  - N3 `RandomValue` called `asFloat()` on vectors, colors and frames (always 0 plus a type-mismatch diagnostic); its
+    Windows build returned `Variant{0}` (an int) for the 8-bit types (owner question).
+  - N4 base `Utility::quickRandom()` for integers: a rand() truncated to a negative `int8_t` / `int16_t` (46 % of
+    `quickRandom< int8_t >(0, 10)` below 0), a signed overflow of `1 + max - min` on a wide `int32_t` range (owner
+    question).
+  - N5 `Sequence::addKeyFrame(float)` / `setCurrentTime(float)`: `clampToUnit(NaN)` is NaN and a NaN converted to
+    `uint32_t` is UB; `LampFlicker`: `std::clamp(NaN)` is NaN, a NaN health made a NaN light intensity.
+  - Sound: `Sequence` keyframes (a `std::map`: `normalizedEnd` > 0), the wrap modes, `FlameFlicker` (`std::max` drops a
+    NaN), `AnimationClipResource` / `SkeletonResource` (built by the loaders only).
+- [x] (3) Mechanical: N5 (NaN refused with a warning in the two `Sequence` setters and `setHealth()`; the `LampFlicker`
+  constructor and helpers take a NaN health as 1, the section 11 rule); the 5 fix-its (`m_phase` in the initializer
+  list after `m_randomizer`, `std::cmp_greater_equal`, `std::ranges::sort`, parentheses). The fix-its also touched
+  three base headers through the TU's includes: REVERTED (outside the section, the section 3 precedent).
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - N2 refuse the FILE: `hasValidatableIndices()` before `validate()`, `hasConsistentExtents()` after the node forest
+    check (views, accessors with sparse, attribute counts, SCALAR indices, skin joints, MAT4 FLOAT IBMs >= joints,
+    VEC3 / VEC4 animation outputs), only the first jointCount IBMs read, a failed meshopt view served as zeros of its
+    size and the file refused, a JOINTS_0 past its skin refused.
+  - N1 reorder: `parentFirstJointOrder()` (the identity when already parents first; a stable sort by memoized depth
+    otherwise), the `Skin` maps the glTF index to it, `loadAnimations()` the same; `SkeletalAnimator` refuses a
+    skeleton failing `isValid()` and a skin that does not match it (an index out of range, an IBM count ≠ joints).
+  - N3 per component (vectors, color with alpha, the frame position); the Windows special case removed.
+  - N4 base: computed in the unsigned type of the same width (`bool` excluded), always in range; RAND_MAX coverage
+    documented.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); base unit tests 2186/2186 (Release and
+  ASan/UBSan), the 2 new `BaseUtility` tests failing before the fix; clangcheck 112 TUs 0, `-Wfloat-conversion` 0;
+  clang-tidy Animations 5 → 0, `GLTFLoader.cpp` 0 new finding on the changed lines. A standalone fastgltf census
+  (323 parseable glTF-Sample-Assets + 11 store assets, 192 skins): 0 out-of-order skin, 0 IBM count / type issue, 0
+  view or accessor out of bounds, 0 JOINTS_0 out of its skin. The REAL loader over the 349 corpus files
+  (`Core.openFiles()`): 0 refused by the new checks, 0 animator refusal; the 18 that do not load are pre-existing (15
+  unsupported extensions at the parse, 3 point / line primitive modes); `NodePerformanceTest` alone (10 000 materials)
+  overflows the shared material buffer (7 232 slots), a known limit. 13 hand-crafted glTFs: the valid ones load (an
+  out-of-order skin, more IBMs than joints), the 10 hostile ones refused with their reason, 0 VUID. animation-debug
+  (the skinned Paladins animate), citadel MCP 1707/0, console 4466/0, 0 VUID.
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 12 commit), base `96cf9bc`; peers asked.

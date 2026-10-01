@@ -233,6 +233,8 @@ namespace EmEn::Scenes::Loaders
 			std::vector< std::shared_ptr< Animations::SkeletonResource > > m_skeletons;
 			std::vector< Base::Animation::Skin< float > > m_skins;
 			std::unordered_map< size_t, size_t > m_meshToSkinIndex;
+			/* The largest JOINTS_0 value of each mesh, checked against its skin's joint count. */
+			std::unordered_map< size_t, size_t > m_meshMaxJointIndex;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_nodeAnimationClips;
 			std::unordered_set< size_t > m_skinJointNodeIndices;

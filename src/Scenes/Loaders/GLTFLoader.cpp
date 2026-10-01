@@ -365,10 +365,26 @@ namespace EmEn::Scenes::Loaders
 				{
 					TraceError{GLTFLoader::ClassId} << "Unable to decode the meshopt-compressed buffer view " << bufferViewIndex << " !";
 
-					decoded.clear();
+					/* NOTE: fastgltf reads the accessors of this view from the span returned here, with no bounds
+					 * check: an empty span was read out of bounds. Serve zeros of the declared size instead, and
+					 * the load refuses the file at the end (decodeFailed()). */
+					decoded.assign(bufferView.byteLength, std::byte{0});
+
+					m_decodeFailed = true;
 				}
 
 				return ByteSpan{decoded.data(), decoded.size()};
+			}
+
+			/**
+			 * @brief Returns whether a buffer view failed to decode (its accessors read zeros).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			decodeFailed () const noexcept
+			{
+				return m_decodeFailed;
 			}
 
 			/**
@@ -490,6 +506,7 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			std::unordered_map< size_t, std::vector< std::byte > > m_decoded;
+			bool m_decodeFailed{false};
 	};
 
 	/**
@@ -1019,6 +1036,378 @@ namespace EmEn::Scenes::Loaders
 
 			return true;
 		}
+
+		/**
+		 * @brief Returns the parent node index of every node of the asset (NoParent for a root).
+		 * @pre The node hierarchy is a strict forest (isStrictNodeForest()).
+		 * @param asset A reference to the parsed asset.
+		 * @return std::vector< int32_t >
+		 */
+		[[nodiscard]]
+		std::vector< int32_t >
+		nodeParentTable (const fastgltf::Asset & asset) noexcept
+		{
+			std::vector< int32_t > nodeParents(asset.nodes.size(), Base::Animation::NoParent);
+
+			for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
+			{
+				for ( const auto childIdx : asset.nodes[nodeIdx].children )
+				{
+					nodeParents[childIdx] = static_cast< int32_t >(nodeIdx);
+				}
+			}
+
+			return nodeParents;
+		}
+
+		/**
+		 * @brief Returns the skeleton index of every joint of a glTF skin, parents first.
+		 * @note glTF allows the joints of a skin in ANY order, but the SkeletalAnimator computes the world matrices in
+		 * one forward pass that needs every parent before its children (Skeleton::isValid()). A skin already in that
+		 * order (every asset of the corpus, 2026-10-01) keeps its order: the identity. Otherwise the joints are sorted
+		 * by depth in the skin (stable), which puts every parent first.
+		 * @pre The node hierarchy is a strict forest and every joint node is in range (hasConsistentExtents()).
+		 * @param skin A reference to the glTF skin.
+		 * @param nodeParents A reference to the parent node table (nodeParentTable()).
+		 * @return std::vector< int32_t > The skeleton index, indexed by the skin-local (glTF) joint index.
+		 */
+		[[nodiscard]]
+		std::vector< int32_t >
+		parentFirstJointOrder (const fastgltf::Skin & skin, const std::vector< int32_t > & nodeParents) noexcept
+		{
+			const auto jointCount = skin.joints.size();
+
+			std::unordered_map< size_t, size_t > nodeToJoint;
+			nodeToJoint.reserve(jointCount);
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				nodeToJoint[skin.joints[joint]] = joint;
+			}
+
+			/* The in-skin parent of each joint: the closest ancestor node that is a joint of this skin. */
+			constexpr auto NoJoint = std::numeric_limits< size_t >::max();
+
+			std::vector< size_t > parentJoint(jointCount, NoJoint);
+			bool parentFirst = true;
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				auto parentNode = nodeParents[skin.joints[joint]];
+
+				while ( parentNode != Base::Animation::NoParent )
+				{
+					if ( const auto it = nodeToJoint.find(static_cast< size_t >(parentNode)); it != nodeToJoint.end() )
+					{
+						parentJoint[joint] = it->second;
+						parentFirst = parentFirst && it->second < joint;
+
+						break;
+					}
+
+					parentNode = nodeParents[static_cast< size_t >(parentNode)];
+				}
+			}
+
+			std::vector< int32_t > order(jointCount);
+
+			if ( parentFirst )
+			{
+				for ( size_t joint = 0; joint < jointCount; ++joint )
+				{
+					order[joint] = static_cast< int32_t >(joint);
+				}
+
+				return order;
+			}
+
+			/* Depth in the skin, memoized: each chain is walked once (O(joints)), even for a hostile deep skin. */
+			std::vector< size_t > depth(jointCount, NoJoint);
+			std::vector< size_t > chain;
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				auto current = joint;
+
+				while ( current != NoJoint && depth[current] == NoJoint )
+				{
+					chain.push_back(current);
+					current = parentJoint[current];
+				}
+
+				auto known = current == NoJoint ? size_t{0} : depth[current] + 1;
+
+				while ( !chain.empty() )
+				{
+					depth[chain.back()] = known++;
+					chain.pop_back();
+				}
+			}
+
+			std::vector< size_t > sorted(jointCount);
+
+			for ( size_t joint = 0; joint < jointCount; ++joint )
+			{
+				sorted[joint] = joint;
+			}
+
+			std::ranges::stable_sort(sorted, [&depth] (size_t lhs, size_t rhs) {
+				return depth[lhs] < depth[rhs];
+			});
+
+			for ( size_t position = 0; position < jointCount; ++position )
+			{
+				order[sorted[position]] = static_cast< int32_t >(position);
+			}
+
+			return order;
+		}
+
+		/**
+		 * @brief Checks the indices fastgltf::validate() ITSELF reads without a range check (fastgltf 0.9.0): the
+		 * sparse indices / values buffer views of an accessor, the sampler of an animation channel, the input and
+		 * output accessors of an animation sampler. The parser does not check them either, so validate() read out of
+		 * bounds on a hostile file (triad 12, 2026-10-01). Called BEFORE validate().
+		 * @param asset A reference to the parsed asset.
+		 * @param error A reference to the reason, filled on failure.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		hasValidatableIndices (const fastgltf::Asset & asset, std::string & error) noexcept
+		{
+			for ( size_t accessorIndex = 0; accessorIndex < asset.accessors.size(); ++accessorIndex )
+			{
+				const auto & sparse = asset.accessors[accessorIndex].sparse;
+
+				if ( sparse && (sparse->indicesBufferView >= asset.bufferViews.size() || sparse->valuesBufferView >= asset.bufferViews.size()) )
+				{
+					error = "the sparse data of the accessor #" + std::to_string(accessorIndex) + " uses an out-of-range buffer view";
+
+					return false;
+				}
+			}
+
+			for ( size_t animationIndex = 0; animationIndex < asset.animations.size(); ++animationIndex )
+			{
+				const auto & animation = asset.animations[animationIndex];
+
+				for ( const auto & channel : animation.channels )
+				{
+					if ( channel.samplerIndex >= animation.samplers.size() )
+					{
+						error = "a channel of the animation #" + std::to_string(animationIndex) + " uses an out-of-range sampler";
+
+						return false;
+					}
+				}
+
+				for ( const auto & sampler : animation.samplers )
+				{
+					if ( sampler.inputAccessor >= asset.accessors.size() || sampler.outputAccessor >= asset.accessors.size() )
+					{
+						error = "a sampler of the animation #" + std::to_string(animationIndex) + " uses an out-of-range accessor";
+
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}
+
+		/**
+		 * @brief Returns whether `count` elements of `elementSize` bytes, `stride` bytes apart from `offset`, fit in
+		 * `length` bytes, without any overflow.
+		 * @param offset The offset of the first element.
+		 * @param stride The distance between two elements.
+		 * @param count The number of elements, at least 1.
+		 * @param elementSize The size of one element.
+		 * @param length The size of the span they must fit in.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		elementsFit (size_t offset, size_t stride, size_t count, size_t elementSize, size_t length) noexcept
+		{
+			if ( count == 0 )
+			{
+				return true;
+			}
+
+			if ( elementSize > length || offset > length - elementSize )
+			{
+				return false;
+			}
+
+			const auto room = length - elementSize - offset;
+
+			return stride == 0 || count - 1 <= room / stride;
+		}
+
+		/**
+		 * @brief Checks the extents and the counts fastgltf::validate() does not, which every accessor read of this
+		 * loader relies on (triad 12, 2026-10-01): fastgltf's span and iterateAccessor() have no bounds check (the
+		 * accessor type is only an assert), so a hostile file read — and, for the inverse bind matrices and the
+		 * vertex attributes, WROTE — out of bounds.
+		 * @note Checked: every buffer view inside its buffer (a meshopt view: its compressed source inside its
+		 * buffer and count * byteStride == byteLength); every accessor inside its view, sparse indices and values
+		 * included; the attributes of a primitive with the POSITION count; a SCALAR index accessor; the skin joints in
+		 * range and a MAT4 FLOAT inverse bind matrix accessor of at least as many elements as joints; a VEC3
+		 * translation / scale and a VEC4 rotation animation output. The 323 glTF-Sample-Assets and the 11 store
+		 * assets pass.
+		 * @param asset A reference to the parsed and validated asset.
+		 * @param error A reference to the reason, filled on failure.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		hasConsistentExtents (const fastgltf::Asset & asset, std::string & error) noexcept
+		{
+			for ( size_t viewIndex = 0; viewIndex < asset.bufferViews.size(); ++viewIndex )
+			{
+				const auto & view = asset.bufferViews[viewIndex];
+
+				if ( view.meshoptCompression != nullptr )
+				{
+					const auto & compression = *view.meshoptCompression;
+					const auto source = bufferBytes(asset, compression.bufferIndex);
+
+					if ( !elementsFit(compression.byteOffset, 0, 1, compression.byteLength, source.size()) ||
+						 compression.byteStride == 0 || compression.count > view.byteLength / compression.byteStride ||
+						 compression.count * compression.byteStride != view.byteLength )
+					{
+						error = "the meshopt-compressed buffer view #" + std::to_string(viewIndex) + " is out of its buffer or of its declared size";
+
+						return false;
+					}
+
+					continue;
+				}
+
+				if ( !elementsFit(view.byteOffset, 0, 1, view.byteLength, bufferBytes(asset, view.bufferIndex).size()) )
+				{
+					error = "the buffer view #" + std::to_string(viewIndex) + " is out of its buffer";
+
+					return false;
+				}
+			}
+
+			for ( size_t accessorIndex = 0; accessorIndex < asset.accessors.size(); ++accessorIndex )
+			{
+				const auto & accessor = asset.accessors[accessorIndex];
+				const auto elementSize = fastgltf::getElementByteSize(accessor.type, accessor.componentType);
+
+				if ( accessor.bufferViewIndex.has_value() )
+				{
+					const auto & view = asset.bufferViews[accessor.bufferViewIndex.value()];
+					const auto stride = view.byteStride.value_or(elementSize);
+
+					if ( !elementsFit(accessor.byteOffset, stride, accessor.count, elementSize, view.byteLength) )
+					{
+						error = "the accessor #" + std::to_string(accessorIndex) + " is out of its buffer view";
+
+						return false;
+					}
+				}
+
+				if ( accessor.sparse && accessor.sparse->count > 0 )
+				{
+					const auto & sparse = *accessor.sparse;
+					const auto indexSize = fastgltf::getElementByteSize(fastgltf::AccessorType::Scalar, sparse.indexComponentType);
+
+					if ( sparse.count > accessor.count ||
+						 !elementsFit(sparse.indicesByteOffset, indexSize, sparse.count, indexSize, asset.bufferViews[sparse.indicesBufferView].byteLength) ||
+						 !elementsFit(sparse.valuesByteOffset, elementSize, sparse.count, elementSize, asset.bufferViews[sparse.valuesBufferView].byteLength) )
+					{
+						error = "the sparse data of the accessor #" + std::to_string(accessorIndex) + " is out of its buffer views";
+
+						return false;
+					}
+				}
+			}
+
+			for ( size_t meshIndex = 0; meshIndex < asset.meshes.size(); ++meshIndex )
+			{
+				for ( const auto & primitive : asset.meshes[meshIndex].primitives )
+				{
+					/* NOTE: The vertex array is sized from POSITION and every other attribute writes into it. */
+					const auto * position = primitive.findAttribute("POSITION");
+
+					if ( position != primitive.attributes.cend() )
+					{
+						const auto vertexCount = asset.accessors[position->accessorIndex].count;
+
+						for ( const auto & attribute : primitive.attributes )
+						{
+							if ( asset.accessors[attribute.accessorIndex].count != vertexCount )
+							{
+								error = "the attribute '" + std::string{attribute.name} + "' of the mesh #" + std::to_string(meshIndex) + " does not have the POSITION count";
+
+								return false;
+							}
+						}
+					}
+
+					if ( primitive.indicesAccessor.has_value() && asset.accessors[primitive.indicesAccessor.value()].type != fastgltf::AccessorType::Scalar )
+					{
+						error = "the index accessor of the mesh #" + std::to_string(meshIndex) + " is not SCALAR";
+
+						return false;
+					}
+				}
+			}
+
+			for ( size_t skinIndex = 0; skinIndex < asset.skins.size(); ++skinIndex )
+			{
+				const auto & skin = asset.skins[skinIndex];
+
+				for ( const auto jointNode : skin.joints )
+				{
+					if ( jointNode >= asset.nodes.size() )
+					{
+						error = "the skin #" + std::to_string(skinIndex) + " has an out-of-range joint node #" + std::to_string(jointNode);
+
+						return false;
+					}
+				}
+
+				if ( skin.inverseBindMatrices.has_value() )
+				{
+					const auto & ibm = asset.accessors[skin.inverseBindMatrices.value()];
+
+					if ( ibm.type != fastgltf::AccessorType::Mat4 || ibm.componentType != fastgltf::ComponentType::Float || ibm.count < skin.joints.size() )
+					{
+						error = "the inverse bind matrices of the skin #" + std::to_string(skinIndex) + " are not at least one MAT4 FLOAT per joint";
+
+						return false;
+					}
+				}
+			}
+
+			for ( size_t animationIndex = 0; animationIndex < asset.animations.size(); ++animationIndex )
+			{
+				const auto & animation = asset.animations[animationIndex];
+
+				for ( const auto & channel : animation.channels )
+				{
+					const auto & sampler = animation.samplers[channel.samplerIndex];
+					const auto outputType = asset.accessors[sampler.outputAccessor].type;
+					const bool vectorPath = channel.path == fastgltf::AnimationPath::Translation || channel.path == fastgltf::AnimationPath::Scale;
+
+					if ( asset.accessors[sampler.inputAccessor].type != fastgltf::AccessorType::Scalar ||
+						 (vectorPath && outputType != fastgltf::AccessorType::Vec3) ||
+						 (channel.path == fastgltf::AnimationPath::Rotation && outputType != fastgltf::AccessorType::Vec4) )
+					{
+						error = "a sampler of the animation #" + std::to_string(animationIndex) + " has the wrong accessor type for its path";
+
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}
 	}
 
 	bool
@@ -1143,6 +1532,14 @@ namespace EmEn::Scenes::Loaders
 		 * image, node, skin…): only validate() does. A hostile file — a dropped one — would otherwise index out of
 		 * bounds at every asset.X[i] below. Checked on the whole glTF-Sample-Assets corpus (314 assets) and the
 		 * data stores (11): none refused (owner decision 2026-09-30, plan Ave Robustus). */
+		/* NOTE: validate() itself indexes a few arrays without a range check: those indices first. */
+		if ( std::string indexError; !hasValidatableIndices(asset, indexError) )
+		{
+			TraceError{ClassId} << "The glTF '" << filepath.string() << "' is invalid, refused : " << indexError << '.';
+
+			return false;
+		}
+
 		if ( const auto validation = fastgltf::validate(asset); validation != fastgltf::Error::None )
 		{
 			TraceError{ClassId} << "The glTF '" << filepath.string() << "' is invalid, refused : " << fastgltf::getErrorMessage(validation);
@@ -1154,6 +1551,14 @@ namespace EmEn::Scenes::Loaders
 		if ( std::string hierarchyError; !isStrictNodeForest(asset, hierarchyError) )
 		{
 			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has an invalid node hierarchy, refused : " << hierarchyError << '.';
+
+			return false;
+		}
+
+		/* NOTE: validate() does not check the extents either; every accessor read below relies on them. */
+		if ( std::string extentError; !hasConsistentExtents(asset, extentError) )
+		{
+			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has inconsistent data extents, refused : " << extentError << '.';
 
 			return false;
 		}
@@ -1194,6 +1599,22 @@ namespace EmEn::Scenes::Loaders
 				this->loadAnimations(asset, output);
 			}
 
+			/* NOTE: The vertex shader reads bones[JOINTS_0] from the skinning buffer with no bounds check: a joint
+			 * index past the skin is an out-of-bounds GPU read. None of the corpus has one (2026-10-01). */
+			for ( const auto & [meshIdx, skinIdx] : m_meshToSkinIndex )
+			{
+				const auto maxJoint = m_meshMaxJointIndex.find(meshIdx);
+
+				if ( skinIdx < m_skins.size() && maxJoint != m_meshMaxJointIndex.end() && maxJoint->second >= m_skins[skinIdx].jointCount() )
+				{
+					TraceError{ClassId} << "The glTF '" << filepath.string() << "' has a mesh #" << meshIdx << " whose JOINTS_0 references joint " << maxJoint->second << " of a skin of " << m_skins[skinIdx].jointCount() << " joints, refused !";
+
+					m_bufferCache.reset();
+
+					return false;
+				}
+			}
+
 			/* Attach skeletal data to renderables that have associated skins. */
 			for ( const auto & [meshIdx, skinIdx] : m_meshToSkinIndex )
 			{
@@ -1225,6 +1646,16 @@ namespace EmEn::Scenes::Loaders
 			{
 				m_skinJointNodeIndices.insert(jointIndex);
 			}
+		}
+
+		/* NOTE: A view that failed to decode served zeros to its accessors: the data is not the file's. */
+		if ( m_bufferCache->decodeFailed() )
+		{
+			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has a meshopt-compressed buffer view that failed to decode, refused !";
+
+			m_bufferCache.reset();
+
+			return false;
 		}
 
 		/* Everything that reads an accessor is done : drop the decoded meshopt views, which are
@@ -2697,8 +3128,12 @@ namespace EmEn::Scenes::Loaders
 						{
 							const auto & jointsAccessor = asset.accessors[jointsIt->accessorIndex];
 							size_t index = 0;
+							/* The largest joint index of the mesh, checked against its skin once the skins are loaded. */
+							auto & maxJoint = m_meshMaxJointIndex[meshIndex];
 
 							if ( !readDracoAwareAttribute< fastgltf::math::u16vec4 >(asset, glTFPrimitive, "JOINTS_0", jointsAccessor, dracoCache, adapter, [&] (const fastgltf::math::u16vec4 & v) {
+								maxJoint = std::max({maxJoint, static_cast< size_t >(v.x()), static_cast< size_t >(v.y()), static_cast< size_t >(v.z()), static_cast< size_t >(v.w())});
+
 								vertices[globalVertexOffset + index].setInfluences(
 									static_cast< int32_t >(v.x()),
 									static_cast< int32_t >(v.y()),
@@ -3008,15 +3443,7 @@ namespace EmEn::Scenes::Loaders
 		 * conversion. */
 
 		/* Build a node-index → parent-node-index lookup from the node tree. */
-		std::vector< int32_t > nodeParents(asset.nodes.size(), Base::Animation::NoParent);
-
-		for ( size_t nodeIdx = 0; nodeIdx < asset.nodes.size(); ++nodeIdx )
-		{
-			for ( const auto childIdx : asset.nodes[nodeIdx].children )
-			{
-				nodeParents[childIdx] = static_cast< int32_t >(nodeIdx);
-			}
-		}
+		const auto nodeParents = nodeParentTable(asset);
 
 		for ( size_t skinIndex = 0; skinIndex < asset.skins.size(); ++skinIndex )
 		{
@@ -3072,7 +3499,13 @@ namespace EmEn::Scenes::Loaders
 					 * translation column as the uniform scale above does. Skinning stays coherent
 					 * because the joint world matrices are conjugated the same way, so the two M
 					 * cancel: (M·W·M)·(M·IBM·M)·(M·v) = M·(W·IBM·v). */
-					inverseBindMatrices[index] = ibm;
+					/* NOTE: glTF allows MORE matrices than joints (count >= joints): only the first ones are
+					 * the skin's, and writing past jointCount overflowed the vector. */
+					if ( index < jointCount )
+					{
+						inverseBindMatrices[index] = ibm;
+					}
+
 					index++;
 				}, adapter);
 			}
@@ -3084,19 +3517,23 @@ namespace EmEn::Scenes::Loaders
 				}
 			}
 
-			/* Build Joint array. For each skin joint, find its parent within the skin. */
+			/* Build Joint array, parents first (glTF allows any order: see parentFirstJointOrder()). For each skin
+			 * joint, find its parent within the skin. The Skin maps the glTF joint index (vertex JOINTS_0) to it. */
+			const auto skeletonIndex = parentFirstJointOrder(glTFSkin, nodeParents);
+
 			std::vector< Joint< float > > engineJoints(jointCount);
 
 			for ( size_t j = 0; j < jointCount; ++j )
 			{
 				const auto glTFNodeIndex = glTFSkin.joints[j];
 				const auto & glTFNode = asset.nodes[glTFNodeIndex];
+				auto & joint = engineJoints[static_cast< size_t >(skeletonIndex[j])];
 
-				engineJoints[j].name = std::string{glTFNode.name};
-				engineJoints[j].inverseBindMatrix = inverseBindMatrices[j];
+				joint.name = std::string{glTFNode.name};
+				joint.inverseBindMatrix = inverseBindMatrices[j];
 
 				/* Find parent joint: walk up the node tree until we find a node that is in this skin. */
-				engineJoints[j].parentIndex = NoParent;
+				joint.parentIndex = NoParent;
 				auto parentNodeIdx = nodeParents[glTFNodeIndex];
 
 				while ( parentNodeIdx != NoParent )
@@ -3105,7 +3542,7 @@ namespace EmEn::Scenes::Loaders
 
 					if ( it != nodeToJointIndex.end() )
 					{
-						engineJoints[j].parentIndex = it->second;
+						joint.parentIndex = skeletonIndex[static_cast< size_t >(it->second)];
 						break;
 					}
 
@@ -3115,27 +3552,21 @@ namespace EmEn::Scenes::Loaders
 				/* Extract local TRS from the node. GLTF stores parent-relative transforms. */
 				if ( const auto * trs = std::get_if< fastgltf::TRS >(&glTFNode.transform) )
 				{
-					engineJoints[j].translation = Vector< 3, float >{
+					joint.translation = Vector< 3, float >{
 						trs->translation.x() * m_options.uniformScale,
 						trs->translation.y() * m_options.uniformScale,
 						trs->translation.z() * m_options.uniformScale};
-					engineJoints[j].rotation = Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()};
+					joint.rotation = Quaternion< float >{trs->rotation.x(), trs->rotation.y(), trs->rotation.z(), trs->rotation.w()};
 					/* NOTE: A scale is invariant under the flip — M·diag(s)·M = diag(s). */
-					engineJoints[j].scale = {trs->scale.x(), trs->scale.y(), trs->scale.z()};
+					joint.scale = {trs->scale.x(), trs->scale.y(), trs->scale.z()};
 				}
 			}
 
 			Skeleton< float > skeleton{std::move(engineJoints)};
 
-			/* Build Skin: skin-local indices map 1:1. */
-			std::vector< int32_t > skinJointIndices(jointCount);
-
-			for ( size_t j = 0; j < jointCount; ++j )
-			{
-				skinJointIndices[j] = static_cast< int32_t >(j);
-			}
-
-			Skin< float > skin{std::move(skinJointIndices), std::move(inverseBindMatrices)};
+			/* Build Skin: a skin-local (glTF) index maps to its parent-first skeleton index; the inverse bind matrices
+			 * stay in skin-local order (the Skin indexes them by the vertex JOINTS_0 value). */
+			Skin< float > skin{skeletonIndex, std::move(inverseBindMatrices)};
 
 			/* Register the skeleton as a managed resource. */
 			const auto skinName = glTFSkin.name.empty() ?
@@ -3175,16 +3606,18 @@ namespace EmEn::Scenes::Loaders
 		 * whose bind pose is mirrored but whose clips are not snaps to the unmirrored pose on the
 		 * first animated frame — the classic symptom of a half-applied conversion. */
 
-		/* For mapping node indices to joint indices, we need the skin context. */
+		/* For mapping node indices to joint indices, we need the skin context: the SKELETON index, parents first,
+		 * exactly as loadSkins() orders the joints. */
 		std::unordered_map< size_t, int32_t > nodeToJointIndex;
 
 		if ( !asset.skins.empty() )
 		{
 			const auto & skin = asset.skins[0];
+			const auto skeletonIndex = parentFirstJointOrder(skin, nodeParentTable(asset));
 
 			for ( size_t j = 0; j < skin.joints.size(); ++j )
 			{
-				nodeToJointIndex[skin.joints[j]] = static_cast< int32_t >(j);
+				nodeToJointIndex[skin.joints[j]] = skeletonIndex[j];
 			}
 		}
 

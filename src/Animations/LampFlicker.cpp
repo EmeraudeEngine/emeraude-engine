@@ -33,6 +33,23 @@
 
 /* Local inclusions. */
 #include "Constants.hpp"
+#include "Tracer.hpp"
+
+namespace
+{
+	/**
+	 * @brief Returns a health clamped to [0, 1], a NaN being the default health (1, a new lamp).
+	 * @note std::clamp() keeps a NaN, which made a NaN light intensity.
+	 * @param health The health.
+	 * @return float
+	 */
+	[[nodiscard]]
+	float
+	unitHealth (float health) noexcept
+	{
+		return std::isnan(health) ? 1.0F : std::clamp(health, 0.0F, 1.0F);
+	}
+}
 
 namespace EmEn::Animations
 {
@@ -41,7 +58,7 @@ namespace EmEn::Animations
 
 	LampFlicker::LampFlicker (float nominalCandela, float health) noexcept
 		: m_nominalCandela{std::max(0.0F, nominalCandela)},
-		m_health{std::clamp(health, 0.0F, 1.0F)}
+		m_health{unitHealth(health)}
 	{
 
 	}
@@ -49,13 +66,20 @@ namespace EmEn::Animations
 	void
 	LampFlicker::setHealth (float health) noexcept
 	{
-		m_health = std::clamp(health, 0.0F, 1.0F);
+		if ( std::isnan(health) )
+		{
+			TraceWarning{ClassId} << "The health must be a number from 0.0 to 1.0 !";
+
+			return;
+		}
+
+		m_health = unitHealth(health);
 	}
 
 	Color< float >
 	LampFlicker::colorForHealth (const Color< float > & healthyColor, float health) noexcept
 	{
-		const auto clampedHealth = std::clamp(health, 0.0F, 1.0F);
+		const auto clampedHealth = unitHealth(health);
 
 		if ( clampedHealth >= 1.0F )
 		{

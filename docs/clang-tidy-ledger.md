@@ -51,6 +51,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Audio` 10a (the audio core) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 87, all ON PURPOSE (below) — 47 designated-initializers, 24 reinterpret-cast, 13 convert-to-static, 2 use-enum-class, 1 non-const global. Before: 121. | Triad sub-section 10a |
 | `src/Audio` 10b (`Effects/`, `Filters/`, `EffectSlot`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 1, ON PURPOSE (below) — 1 convert-member-functions-to-static. Before: 1. | Triad sub-section 10b |
 | `src/Physics` 11 | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 27, all ON PURPOSE (below) — 16 static-cast-downcast, 7 convert-member-functions-to-static, 2 constant-array-index, 1 use-enum-class, 1 special-member-functions. Before: 90. | Triad section 11 |
+| `src/Animations` 12 (+ `Scenes/Loaders/GLTFLoader.cpp` changes) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 0. Before: 5. `GLTFLoader.cpp`: 0 new finding on the changed lines (its 10 are the section 3 ones). The fix-its touched three base headers through the includes: reverted. | Triad section 12 |
 
 ## Findings kept ON PURPOSE
 

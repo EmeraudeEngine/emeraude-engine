@@ -404,6 +404,14 @@ namespace EmEn::Animations
 	void
 	Sequence::addKeyFrame (float position, const Variant & value, InterpolationType interpolation) noexcept
 	{
+		/* NOTE: clampToUnit() keeps a NaN, and a NaN converted to uint32_t is undefined behaviour. */
+		if ( std::isnan(position) )
+		{
+			TraceWarning{ClassId} << "A key frame position must be a number from 0.0 to 1.0 !";
+
+			return;
+		}
+
 		const auto timePoint = static_cast< float >(m_durationMS) * clampToUnit(position);
 
 		this->addKeyFrame(static_cast< uint32_t >(std::round(timePoint)), value, interpolation);
@@ -425,6 +433,14 @@ namespace EmEn::Animations
 	void
 	Sequence::setCurrentTime (float position) noexcept
 	{
+		/* NOTE: clampToUnit() keeps a NaN, and a NaN converted to uint32_t is undefined behaviour. */
+		if ( std::isnan(position) )
+		{
+			TraceWarning{ClassId} << "A time position must be a number from 0.0 to 1.0 !";
+
+			return;
+		}
+
 		const auto timePoint = static_cast< float >(m_durationMS) * clampToUnit(position);
 
 		this->setCurrentTime(static_cast< uint32_t >(std::round(timePoint)));

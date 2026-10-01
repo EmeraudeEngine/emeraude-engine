@@ -26,9 +26,6 @@
 
 #include "RandomValue.hpp"
 
-/* Project configuration. */
-#include "emeraude_platform.hpp"
-
 /* Local inclusions. */
 #include "Tracer.hpp"
 
@@ -55,11 +52,8 @@ namespace EmEn::Animations
 	{
 		switch ( m_minimumValue.type() )
 		{
-#if IS_WINDOWS
-			case Variant::Type::Integer8 :
-			case Variant::Type::UnsignedInteger8 :
-				return Variant{0};
-#else
+			/* NOTE: The Windows build returned Variant{0} (an int, not random) here, and the base quickRandom()
+			 * truncated rand() into a negative 8 / 16-bit value (out of range) everywhere: fixed in the base. */
 			case Variant::Type::Integer8 :
 
 				return Variant{static_cast< int8_t >(Utility::quickRandom(
@@ -72,7 +66,6 @@ namespace EmEn::Animations
 					m_minimumValue.asUnsignedInteger8(),
 					m_maximumValue.asUnsignedInteger8()
 				))};
-#endif
 
 			case Variant::Type::Integer16 :
 				return Variant{static_cast< int16_t >(Utility::quickRandom(
@@ -136,26 +129,43 @@ namespace EmEn::Animations
 
 				return Variant{false};
 
+			/* NOTE: The composite types are drawn per component, between the components of the minimum and the
+			 * maximum (asFloat() on them returned 0 with a type-mismatch diagnostic). */
 			case Variant::Type::Vector2Float :
+			{
+				const auto minimum = m_minimumValue.asVector2Float();
+				const auto maximum = m_maximumValue.asVector2Float();
+
 				return Variant{Math::Vector< 2, float >(
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat())
+					Utility::quickRandom(minimum[Math::X], maximum[Math::X]),
+					Utility::quickRandom(minimum[Math::Y], maximum[Math::Y])
 				)};
+			}
 
 			case Variant::Type::Vector3Float :
+			{
+				const auto minimum = m_minimumValue.asVector3Float();
+				const auto maximum = m_maximumValue.asVector3Float();
+
 				return Variant{Math::Vector< 3, float >(
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat())
+					Utility::quickRandom(minimum[Math::X], maximum[Math::X]),
+					Utility::quickRandom(minimum[Math::Y], maximum[Math::Y]),
+					Utility::quickRandom(minimum[Math::Z], maximum[Math::Z])
 				)};
+			}
 
 			case Variant::Type::Vector4Float :
+			{
+				const auto minimum = m_minimumValue.asVector4Float();
+				const auto maximum = m_maximumValue.asVector4Float();
+
 				return Variant{Math::Vector< 4, float >(
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					0.0F
+					Utility::quickRandom(minimum[Math::X], maximum[Math::X]),
+					Utility::quickRandom(minimum[Math::Y], maximum[Math::Y]),
+					Utility::quickRandom(minimum[Math::Z], maximum[Math::Z]),
+					Utility::quickRandom(minimum[Math::W], maximum[Math::W])
 				)};
+			}
 
 			case Variant::Type::Matrix2Float :
 			case Variant::Type::Matrix3Float :
@@ -163,17 +173,30 @@ namespace EmEn::Animations
 				return {};
 
 			case Variant::Type::CartesianFrameFloat :
+			{
+				/* A frame at a random position between the positions of the two frames. */
+				const auto minimum = m_minimumValue.asCartesianFrameFloat().position();
+				const auto maximum = m_maximumValue.asCartesianFrameFloat().position();
+
 				return Variant{Math::CartesianFrame< float >(Math::Vector< 3, float >(
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat()),
-					Utility::quickRandom(m_minimumValue.asFloat(), m_maximumValue.asFloat())
+					Utility::quickRandom(minimum[Math::X], maximum[Math::X]),
+					Utility::quickRandom(minimum[Math::Y], maximum[Math::Y]),
+					Utility::quickRandom(minimum[Math::Z], maximum[Math::Z])
 				))};
+			}
 
 			case Variant::Type::Color :
-				return Variant{PixelFactory::Color< float >::quickRandom(
-					m_minimumValue.asFloat(),
-					m_maximumValue.asFloat()
-				)};
+			{
+				const auto minimum = m_minimumValue.asColor();
+				const auto maximum = m_maximumValue.asColor();
+
+				return Variant{PixelFactory::Color< float >{
+					Utility::quickRandom(minimum.red(), maximum.red()),
+					Utility::quickRandom(minimum.green(), maximum.green()),
+					Utility::quickRandom(minimum.blue(), maximum.blue()),
+					Utility::quickRandom(minimum.alpha(), maximum.alpha())
+				}};
+			}
 
 			case Variant::Type::Null :
 				return {};

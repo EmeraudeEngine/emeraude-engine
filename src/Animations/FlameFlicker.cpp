@@ -41,10 +41,12 @@ namespace EmEn::Animations
 	FlameFlicker::FlameFlicker (float nominalCandela, float baseDiameter, uint32_t seed) noexcept
 		: m_randomizer{seed},
 		m_nominalCandela{std::max(0.0F, nominalCandela)},
-		m_frequency{FlameFlicker::puffingFrequency(baseDiameter)}
+		m_frequency{FlameFlicker::puffingFrequency(baseDiameter)},
+		/* Start anywhere in the cycle: two flames built on the same tick must not start in phase. NOTE: m_randomizer is
+		 * declared (so initialized) before m_phase. */
+		m_phase{m_randomizer.value(0.0F, 2.0F * std::numbers::pi_v< float >)}
 	{
-		/* Start anywhere in the cycle: two flames built on the same tick must not start in phase. */
-		m_phase = m_randomizer.value(0.0F, 2.0F * std::numbers::pi_v< float >);
+
 	}
 
 	float

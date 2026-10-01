@@ -12,6 +12,28 @@
      accessor, buffer view, image, node, skin…) and `isStrictNodeForest()` (at most one parent, no cycle — validate
      does not check the hierarchy): an invalid asset is REFUSED. Checked: 314 glTF-Sample-Assets + 11 store assets,
      none refused; 349 assets strict forests.
+   - **glTF extents (triad 12, 2026-10-01)**: fastgltf (0.9.0) bounds-checks NOTHING it reads — its `span` and
+     `iterateAccessor()` have no bounds check, the accessor type is an `assert` only — and `validate()` checks neither
+     that a buffer view fits in its buffer nor that an accessor fits in its view. Worse, `validate()` itself indexes the
+     sparse buffer views, the channel sampler and the sampler accessors without a range check. So, in that order:
+     `hasValidatableIndices()` (those indices) BEFORE `validate()`; then `hasConsistentExtents()`: every buffer view in
+     its buffer (a meshopt view: its source in its buffer, count × byteStride == byteLength), every accessor in its
+     view (sparse included), every attribute of a primitive with the POSITION count (the vertex array is sized from
+     POSITION: a longer NORMAL WROTE past it), a SCALAR index accessor, the skin joints in range, a MAT4 FLOAT
+     inverse bind matrix accessor of at least as many elements as joints (only the first jointCount are read: more is
+     LEGAL and overflowed the vector), a VEC3 translation / scale and a VEC4 rotation output. After the meshes, a
+     JOINTS_0 value past its skin's joint count is refused (the vertex shader reads `bones[JOINTS_0]` unchecked). A
+     meshopt view that fails to decode serves zeros of its declared size (it served an EMPTY span, read out of
+     bounds) and the file is refused at the end. Any failure refuses the whole file, with the reason.
+   - **glTF skins in any joint order**: glTF allows it, the `SkeletalAnimator` forward pass needs parents first.
+     `parentFirstJointOrder()` builds the skeleton parents first (the identity when the skin already is, so no asset
+     of the corpus changes), the `Skin` maps the glTF joint index (JOINTS_0) to it, and `loadAnimations()` uses the
+     same mapping for its channel targets. The animator refuses a skeleton that fails `Skeleton::isValid()` and a skin
+     that does not match its skeleton.
+   - Proof (triad 12): a standalone fastgltf census of the 323 parseable glTF-Sample-Assets and the 11 store assets
+     (192 skins): 0 out-of-order skin, 0 inverse-bind-matrix count or type issue, 0 view or accessor out of bounds,
+     0 JOINTS_0 out of its skin; 13 hand-crafted files through `Core.openFiles()`: the valid ones load (an out-of-order
+     skin, more matrices than joints), each hostile one refused with its reason, 0 VUID.
    - **WAD**: STRUCTURAL corruption is refused ("Corrupted WAD"): a lump outside the file, a TEXTURE1/2 table, entry or
      patch list larger than its lump, a BSP node reached twice (a cycle). An out-of-range CROSS-REFERENCE (sector,
      sidedef, patch) skips the element. A reserve() is bounded by what the lump can hold.
