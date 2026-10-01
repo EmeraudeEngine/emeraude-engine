@@ -1023,7 +1023,7 @@ can trigger a [RenderDoc](https://renderdoc.org/) frame capture from the console
 
 ```bash
 python3 tools/remote-console.py "Core.RendererService.triggerRenderDocCapture()"   # next frame
-python3 tools/remote-console.py "Core.RendererService.triggerRenderDocCapture(5)"   # next 5 frames
+python3 tools/remote-console.py "Core.RendererService.triggerRenderDocCapture(5)"   # next 5 frames (1 to 100; more is refused)
 ```
 
 - The optional argument is the number of consecutive frames to capture (default 1). Capturing a

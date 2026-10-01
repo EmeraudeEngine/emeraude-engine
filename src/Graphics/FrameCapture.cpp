@@ -122,7 +122,9 @@ namespace EmEn::Graphics
 		if ( frameBytes * frameCount > MaxCaptureBytes )
 		{
 			std::stringstream message;
-			message << frameCount << " frames of " << width << "x" << height << " need " << (frameBytes * frameCount) / (1024 * 1024) << " MiB of staging memory, above the " << MaxCaptureBytes / (1024 * 1024) << " MiB a capture may hold (at most " << MaxCaptureBytes / frameBytes << " frames at this size).";
+			constexpr uint64_t MiB{1024ULL * 1024ULL};
+
+			message << frameCount << " frames of " << width << "x" << height << " need " << (frameBytes * frameCount) / MiB << " MiB of staging memory, above the " << MaxCaptureBytes / MiB << " MiB a capture may hold (at most " << MaxCaptureBytes / frameBytes << " frames at this size).";
 			error = message.str();
 
 			return false;
@@ -222,7 +224,12 @@ namespace EmEn::Graphics
 				static_cast< void >(this->releaseIfCancelledAndDrained());
 			}
 
-			return {.files = {}, .error = "The capture did not complete in time and was cancelled (is the window rendering?).", .success = false};
+			/* NOTE: the capture cannot tell why no frame came: a minimized / hidden window, or a frame held back by a
+			 * load still running on the rendering path (an asset uploading, a scene building) — say both. */
+			std::stringstream message;
+			message << "No frame was presented within " << timeout.count() << " ms: the capture was cancelled. The window is not rendering, or a load (an asset upload, a scene still building) is holding the frames back: retry once it is done.";
+
+			return {.files = {}, .error = message.str(), .success = false};
 		}
 
 		m_resultReady = false;

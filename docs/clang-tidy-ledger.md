@@ -38,6 +38,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Graphics` 7a (resources read from disk: images, textures, KTX2, cubemaps, IBL, movies, font, cloud shape) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 72, all ON PURPOSE (below) — 53 constant-array-index, 17 reinterpret-cast, 2 convert-member-functions-to-static. Before: 171. The touched resource-chain TUs: 3 misc-no-recursion (the failure propagation). | Triad sub-section 7a |
 | `src/Graphics` 7b (`Material/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 31, all ON PURPOSE (below) — 23 constant-array-index, 7 static-cast-downcast, 1 use-enum-class. Before: 56. | Triad sub-section 7b |
 | `src/Graphics` 7c (`Geometry/`, `Renderable/`, `MDI/`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 51, all ON PURPOSE (below) — 30 constant-array-index, 4 integer-division, 4 non-private members, 3 use-enum-class, 3 qualified-auto, 2 misc-no-recursion, 2 static-cast-downcast, 1 each special-member-functions, const-ref member, implicit-widening. Before: 95. | Triad sub-section 7c |
+| `src/Graphics` 7d (`Renderer` + console, `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture`) | 2026-10-01 | clang-tidy 21.1.6 after the triad pass: 91, all ON PURPOSE (below) — 28 SIMD intrinsics, 26 reinterpret-cast, 21 constant-array-index, 5 convert-to-static, 4 owning-memory, 3 union access, 2 qualified-auto, 1 each use-after-move (false positive), use-enum-class. Before: 226. | Triad sub-section 7d |
 
 ## Findings kept ON PURPOSE
 
@@ -212,4 +213,22 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **avoid-const-or-ref-data-members ×1** — `ResourceGenerator::m_resources` (a non-owning service reference for the
   generator's lifetime).
 - **implicit-widening-of-multiplication-result ×1** — a `static_assert` on `sizeof(Uniforms)` (compile-time constants).
+
+### `src/Graphics` 7d — renderer and frame (2026-10-01)
+
+- **portability-simd-intrinsics ×28** — the SSE4.1 / AVX2 BGRA→I420 converters (dispatched on the CPU features, the
+  scalar path beside them).
+- **pro-type-reinterpret-cast ×26** — the SIMD loads / stores (`__m128i *` / `__m256i *` over the pixel bytes), the
+  console's image bytes, the RenderDoc API pointers.
+- **pro-bounds-constant-array-index ×21** — the recorder's slot arrays (`index < AsyncBufferCount` /
+  `HardwareSlotCount` loops), the renderer's clear colours and per-frame tables, the capture's file list.
+- **convert-member-functions-to-static ×5** — `RenderDocCapture`'s build without RenderDoc: the same instance API as
+  the real one.
+- **owning-memory ×4** — `fopen()` / `fclose()` around `Recorder::OutputFile` (`std::unique_ptr< FILE, FileCloser >`
+  IS the owner; gsl::owner is not used in the cascade).
+- **pro-type-union-access ×3** — libvpx's `vpx_codec_cx_pkt_t::data.frame` (its API is a union).
+- **readability-qualified-auto ×2** — Vulkan handles (`RendererFrameScope`), as in 7c.
+- **clang-analyzer-cplusplus.Move ×1** — `Renderer.cpp` `m_sceneTarget`: retired by move (a moved `shared_ptr` is
+  null), then `renderFrameWithInternal()` is only called when it is non-null — the analyzer does not model the guard.
+- **use-enum-class ×1** — `Renderer::NotificationCode` (the observable notification convention).
 

@@ -174,7 +174,7 @@ namespace EmEn::Graphics
 			}
 
 			void
-			setDevice (void *) noexcept
+			setDevice (void * /*device*/) noexcept
 			{
 
 			}
@@ -211,19 +211,19 @@ namespace EmEn::Graphics
 			}
 
 			void
-			triggerMultiFrameCapture (uint32_t) noexcept
+			triggerMultiFrameCapture (uint32_t /*frameCount*/) noexcept
 			{
 
 			}
 
 			void
-			setCaptureFilePath (const std::string &) noexcept
+			setCaptureFilePath (const std::string & /*pathTemplate*/) noexcept
 			{
 
 			}
 
 			void
-			setCaptureTitle (const std::string &) noexcept
+			setCaptureTitle (const std::string & /*title*/) noexcept
 			{
 
 			}

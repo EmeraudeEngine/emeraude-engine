@@ -1164,6 +1164,9 @@ namespace EmEn
 		/* RushMaker capture frame rate in FPS. */
 		constexpr auto RushMakerVideoFramerateKey{"Core/RushMaker/VideoFramerate"};
 		constexpr auto DefaultRushMakerVideoFramerate{30U};
+		/* Outside this range the default applies, with a warning. */
+		constexpr auto MinRushMakerVideoFramerate{1U};
+		constexpr auto MaxRushMakerVideoFramerate{240U};
 		/* Encoding quality preset. Values: "Low", "Medium", "High", "Ultra". */
 		constexpr auto RushMakerQualityPresetKey{"Core/RushMaker/QualityPreset"};
 		constexpr auto DefaultRushMakerQualityPreset{"Medium"};
@@ -1182,9 +1185,12 @@ namespace EmEn
 		 * rate output) so a slow encode cannot balloon RAM — one buffered frame costs
 		 * width x height x 4 bytes (default 90 = 3 s at 30 FPS, ~1.6 GB at 2880x1620).
 		 * Raise it for short takes when RAM allows: zero skip, the encoder finishes
-		 * in background. */
+		 * in background. Outside [3, 240] (8 s at 30 FPS) the default applies, with a
+		 * warning. */
 		constexpr auto RushMakerMaxQueuedFramesKey{"Core/RushMaker/MaxQueuedFrames"};
 		constexpr auto DefaultRushMakerMaxQueuedFrames{90U};
+		constexpr auto MinRushMakerMaxQueuedFrames{3U};
+		constexpr auto MaxRushMakerMaxQueuedFrames{240U};
 		/* Capture a microphone voice-over track. */
 		constexpr auto RushMakerEnableVoiceOverKey{"Core/RushMaker/EnableVoiceOver"};
 		constexpr auto DefaultRushMakerEnableVoiceOver{false};

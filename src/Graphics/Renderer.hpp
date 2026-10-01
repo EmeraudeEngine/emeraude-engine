@@ -136,11 +136,6 @@ namespace EmEn
 			class BatchBuilder;
 		}
 
-		namespace RenderableInstance
-		{
-			class Abstract;
-		}
-
 		namespace RenderTarget
 		{
 			class Abstract;

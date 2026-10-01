@@ -61,7 +61,7 @@ not a mode of this recorder.
    (renderer below the target FPS, or a backpressure skip); the finalisation line
    `N CFR filler frames` is the counter to read — a decoded-frame hash undercounts them on the
    hardware path, whose rate control re-encodes a duplicate slightly differently.
-2. **Bounded grab buffer** (`Core/RushMaker/MaxQueuedFrames`, default 32) — gives the encoder time
+2. **Bounded grab buffer** (`Core/RushMaker/MaxQueuedFrames`, default 90, range 3-240) — gives the encoder time
    to write the file; above the bound, captures are **skipped and counted** (backpressure) so a
    slow encode cannot balloon RAM
 3. **Dedicated encoding thread** — BGRA→I420 conversion (SIMD dispatched: scalar/SSE4.1/AVX2),
@@ -94,6 +94,25 @@ Buffer knob: `Core/RushMaker/MaxQueuedFrames` (default 90 ≈ 3 s of elasticity 
 one buffered frame = width×height×4 bytes ≈ 1.6 GB at 2880×1620 — raise it for short takes
 if RAM allows: zero skip, the encoder finishes in background). ⚠️ `getOrSetDefault` persists
 the first-seen value: an older settings.json may still carry 32.
+Ranges (owner ruling 2026-10-01, `SettingKeys.hpp`): `MaxQueuedFrames` 3-240 (240 = 8 s at 30 FPS, ~6.7 GB at
+2880×1620), `VideoFramerate` 1-240; a value outside its range (0 included) warns and takes the default.
+
+### When the file can no longer be written (owner ruling 2026-10-01)
+Every write goes through `writeOutput()` (`Recorder.cpp`, anonymous namespace): the IVF / Annex-B header, every
+packet, the flush; the final `fclose()` counts too (a failed final flush). The FIRST failure — a full disk, a removed
+drive, a file-size limit — is traced with the OS reason and latched in the session (`writeFailed`): nothing more is
+written, the software session stops encoding what is still queued (dropped, not encoded for nothing), and the
+recorder STOPS the recording at its next capture, on the render thread (`recordFrameCopy()` →
+`stopRecordingLocked()`, at a frame boundary). The session ends with `… TRUNCATED …` instead of `… finalized …`; the
+file holds the frames written before the failure and stays playable (an IVF's frame count is left at 0, the
+decoders count the frames). The output files are owned by a `std::unique_ptr< std::FILE, FileCloser >`.
+The rush itself (audio, voice-over) keeps running: `Core::rushRecording()` (video OR audio OR voice-over) is what the
+toggle (`Core.toggleRecording()`, Shift+Ctrl+F12) tests, so the next toggle STOPS the rest of the rush instead of
+starting a new one (which the "audio recorder is still active" guard would refuse).
+Measured 2026-10-01 (Linux, RTX 3070 Ti, 2880×1620, `RLIMIT_FSIZE` + `SIGXFSZ` ignored to fake a full disk):
+hardware H.265 at 4 MiB → "Unable to write … (File too large)", stopped after ~65 frames, TRUNCATED, the file decodes
+(ffprobe: 66 HEVC frames); VP9 at 2 MiB → the same, 64 VP9 frames; with audio ON the next toggle saved the WAV; 0 VUID,
+exit 0. Without a limit: 181 frames in 6 s on both paths.
 
 ### Colorimetry (BT.709 — do not regress to BT.601)
 The BGRA→I420 conversion uses **BT.709 limited-range** coefficients — single source of truth:
@@ -184,7 +203,8 @@ When a dedicated transfer queue family is available, the software path copies in
 - `Recorder.cpp:startRecording()` — VP9 init (incl. colour-space signalling), async resource creation, thread start
 - `Recorder.cpp:recordFrameCopy()` — Extent check + slot pick + in-frame copy (`recordHardwareCopy()` / `recordReadbackCopy()`, the latter with the backpressure gate)
 - `Recorder.cpp:retireCopies()` / `harvestTransfers()` — Frame fence retirement: queue the snapshot, read back, or start the DMA
-- `Recorder.cpp:stopRecording()` / `closeSession()` — Deferred stop
+- `Recorder.cpp:stopRecording()` / `stopRecordingLocked()` / `closeSession()` — Deferred stop (also taken when `outputWriteFailed()`)
+- `Recorder.cpp:writeOutput()` / `closeOutput()` — Checked writes, the first failure latched
 - `Recorder.cpp:encodingThreadFunc()` — CFR filler loop + BGRA→I420 + VP9 encode
 - `Recorder.cpp:EncodingSession::encodeImageAt()` — Encode current image at a given PTS (also duplicates into empty CFR slots)
 - `Renderer.cpp:renderFrame()` — The call sites (after the screenshot hook, the three submit outcomes, the fence wait)

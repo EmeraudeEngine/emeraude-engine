@@ -27,6 +27,7 @@
 #include "Renderer.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
@@ -271,7 +272,8 @@ namespace EmEn::Graphics
 						table << "  ";
 					}
 
-					table << std::left << std::setw(static_cast< int >(40 - timing.depth * 2)) << timing.label
+					/* The label column shrinks by the indent; a nesting deeper than 20 levels gets no padding, not a wrapped width. */
+					table << std::left << std::setw(static_cast< int >(40U - (std::min(timing.depth, 20U) * 2U))) << timing.label
 						<< " last " << std::setw(8) << timing.lastMS
 						<< " avg " << std::setw(8) << timing.averageMS
 						<< " max " << std::setw(8) << timing.maximumMS
@@ -489,12 +491,15 @@ namespace EmEn::Graphics
 
 		this->bindCommand("triggerRenderDocCapture", "Triggers a RenderDoc frame capture (requires launch under renderdoccmd).",
 			{
-				{"frameCount", "Number of consecutive frames to capture (at least 1): capturing past the first frame catches per-frame / state-tracking bugs.", 1}
+				{"frameCount", "Number of consecutive frames to capture (1 to 100): capturing past the first frame catches per-frame / state-tracking bugs.", 1}
 			},
 			[this] (int32_t requestedFrameCount) {
-				if ( requestedFrameCount < 1 )
+				/* NOTE: Owner ruling (2026-10-01): longer than 100 frames is not a debugging session. */
+				constexpr int32_t MaxFrameCount{100};
+
+				if ( requestedFrameCount < 1 || requestedFrameCount > MaxFrameCount )
 				{
-					return Console::CommandResult::error("triggerRenderDocCapture(): frameCount must be at least 1.");
+					return Console::CommandResult::error("triggerRenderDocCapture(): frameCount must be from 1 to " + std::to_string(MaxFrameCount) + ".");
 				}
 
 				auto & renderDoc = m_vulkanInstance.renderDocCapture();

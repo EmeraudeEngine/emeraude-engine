@@ -1151,6 +1151,15 @@ namespace EmEn
 			void stopAudioVideoRecording () noexcept;
 
 			/**
+			 * @brief Returns whether a part of the rush is still recording (video, audio or voice-over).
+			 * @note The video stops by itself when its file can no longer be written: the rush is then still running
+			 * while its audio is, and the toggle stops it rather than starting a new one.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool rushRecording () noexcept;
+
+			/**
 			 * @brief Dumps all framebuffers to files for debugging.
 			 * @details Saves each render target's content to separate image files.
 			 * Useful for debugging rendering pipeline issues.

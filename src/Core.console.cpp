@@ -78,7 +78,7 @@ namespace EmEn
 
 		this->bindCommand("toggleRecording", "Toggles the RushMaker audio/video recording (same as Shift+Ctrl+F12).", [this] () {
 			/* RushMaker toggle (same as Shift+Ctrl+F12), for AI-driven capture sessions. */
-			if ( m_graphicsRenderer.recorder().isRecording() )
+			if ( this->rushRecording() )
 			{
 				this->stopAudioVideoRecording();
 

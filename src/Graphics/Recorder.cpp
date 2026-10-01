@@ -28,8 +28,11 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <system_error>
 
 /* Third-party inclusions. */
 #include "vpx/vp8cx.h"
@@ -56,15 +59,17 @@ namespace EmEn::Graphics
 {
 	using namespace Base;
 
+	namespace
+	{
 	/* Helper to write a little-endian value to a byte buffer. */
-	static void
+	void
 	writeLE16 (uint8_t * dst, uint16_t value) noexcept
 	{
 		dst[0] = static_cast< uint8_t >(value & 0xFF);
 		dst[1] = static_cast< uint8_t >((value >> 8) & 0xFF);
 	}
 
-	static void
+	void
 	writeLE32 (uint8_t * dst, uint32_t value) noexcept
 	{
 		dst[0] = static_cast< uint8_t >(value & 0xFF);
@@ -73,7 +78,7 @@ namespace EmEn::Graphics
 		dst[3] = static_cast< uint8_t >((value >> 24) & 0xFF);
 	}
 
-	static void
+	void
 	writeLE64 (uint8_t * dst, uint64_t value) noexcept
 	{
 		for ( int i = 0; i < 8; i++ )
@@ -82,25 +87,87 @@ namespace EmEn::Graphics
 		}
 	}
 
+	/**
+	 * @brief Writes to a recording's output file; the first failure is traced and latched.
+	 * @note Owner ruling (2026-10-01): a failed write (a full disk, a removed drive) STOPS the recording — nothing more
+	 * is written after it, and the recorder closes the session at its next capture.
+	 * @param file The output file.
+	 * @param data The bytes.
+	 * @param size Their count.
+	 * @param path The file's path, for the trace.
+	 * @param failed The session's latch.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool
+	writeOutput (std::FILE * file, const void * data, size_t size, const std::filesystem::path & path, std::atomic< bool > & failed) noexcept
+	{
+		if ( failed.load(std::memory_order_acquire) || file == nullptr )
+		{
+			return false;
+		}
+
+		if ( std::fwrite(data, 1, size, file) == size )
+		{
+			return true;
+		}
+
+		const std::error_code error{errno, std::generic_category()};
+
+		TraceError{Recorder::ClassId} << "Unable to write to " << path << " (" << error.message() << ") ! The recording stops, the video is truncated.";
+
+		failed.store(true, std::memory_order_release);
+
+		return false;
+	}
+
+	/**
+	 * @brief Closes a recording's output file, a failed final flush counting as a failed write.
+	 * @param file The output file, released from its owner (may be nullptr).
+	 * @param path The file's path, for the trace.
+	 * @param failed The session's latch.
+	 */
+	void
+	closeOutput (std::FILE * file, const std::filesystem::path & path, std::atomic< bool > & failed) noexcept
+	{
+		if ( file == nullptr )
+		{
+			return;
+		}
+
+		if ( std::fclose(file) != 0 && !failed.load(std::memory_order_acquire) )
+		{
+			const std::error_code error{errno, std::generic_category()};
+
+			TraceError{Recorder::ClassId} << "Unable to close " << path << " (" << error.message() << ") ! The video is truncated.";
+
+			failed.store(true, std::memory_order_release);
+		}
+	}
+	}
+
 	/* BT.709 limited-range coefficients: the single source of truth lives in
 	 * VideoColorConversion.hpp, shared with the GPU compute converter. The VP9
 	 * bitstream is tagged accordingly at encoder setup (VP9E_SET_COLOR_SPACE). */
 	using namespace VideoColor;
 
+	namespace
+	{
 	/* Forward declarations for BGRA-to-I420 conversion variants. */
-	static void BGRAToI420_Scalar (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+	void BGRAToI420_Scalar (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
 
 #if IS_X86_ARCH
 	#ifndef _MSC_VER
-	__attribute__((target("sse4.1"))) static void BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+	__attribute__((target("sse4.1"))) void BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
 
-	__attribute__((target("avx2"))) static void BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+	__attribute__((target("avx2"))) void BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
 	#else
-	static void BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+	void BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
 
-	static void BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+	void BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
 	#endif
 #endif
+	}
 
 	const char *
 	Recorder::qualityPresetToString (QualityPreset preset) noexcept
@@ -163,15 +230,20 @@ namespace EmEn::Graphics
 			m_qualityPreset = QualityPreset::Medium;
 		}
 
-		if ( m_targetFramerate == 0 )
+		/* NOTE: Owner ruling (2026-10-01): a value outside its range warns and takes the default (0 included). */
+		if ( m_targetFramerate < MinRushMakerVideoFramerate || m_targetFramerate > MaxRushMakerVideoFramerate )
 		{
+			TraceWarning{ClassId} << "'" << RushMakerVideoFramerateKey << "' = " << m_targetFramerate << " is outside [" << MinRushMakerVideoFramerate << ", " << MaxRushMakerVideoFramerate << "] ! Using " << DefaultRushMakerVideoFramerate << ".";
+
 			m_targetFramerate = DefaultRushMakerVideoFramerate;
 		}
 
 		m_maxQueuedFrames = settings.getOrSetDefault< uint32_t >(RushMakerMaxQueuedFramesKey, DefaultRushMakerMaxQueuedFrames);
 
-		if ( m_maxQueuedFrames == 0 )
+		if ( m_maxQueuedFrames < MinRushMakerMaxQueuedFrames || m_maxQueuedFrames > MaxRushMakerMaxQueuedFrames )
 		{
+			TraceWarning{ClassId} << "'" << RushMakerMaxQueuedFramesKey << "' = " << m_maxQueuedFrames << " is outside [" << MinRushMakerMaxQueuedFrames << ", " << MaxRushMakerMaxQueuedFrames << "] ! Using " << DefaultRushMakerMaxQueuedFrames << ".";
+
 			m_maxQueuedFrames = DefaultRushMakerMaxQueuedFrames;
 		}
 
@@ -205,7 +277,18 @@ namespace EmEn::Graphics
 		TraceInfo{ClassId} << "BGRAToI420: using scalar path.";
 #endif
 
-		TraceInfo{ClassId} << "Video recording configured : " << m_targetFramerate << " FPS (studio CFR), Preset: " << qualityPresetToString(m_qualityPreset) << ", Encoder: " << (this->hardwarePath() ? "hardware H.265" : (m_forceCPUEncoding ? "software VP9 (forced by settings)" : "software VP9 (no hardware support)"));
+		const char * encoder = "software VP9 (no hardware support)";
+
+		if ( this->hardwarePath() )
+		{
+			encoder = "hardware H.265";
+		}
+		else if ( m_forceCPUEncoding )
+		{
+			encoder = "software VP9 (forced by settings)";
+		}
+
+		TraceInfo{ClassId} << "Video recording configured : " << m_targetFramerate << " FPS (studio CFR), Preset: " << qualityPresetToString(m_qualityPreset) << ", Encoder: " << encoder;
 
 		return true;
 	}
@@ -376,9 +459,9 @@ namespace EmEn::Graphics
 
 		/* Open output file. */
 #ifdef _WIN32
-		m_currentSession->outputFile = _wfopen(outputPath.c_str(), L"wb");
+		m_currentSession->outputFile.reset(_wfopen(outputPath.c_str(), L"wb"));
 #else
-		m_currentSession->outputFile = std::fopen(outputPath.c_str(), "wb");
+		m_currentSession->outputFile.reset(std::fopen(outputPath.c_str(), "wb"));
 #endif
 
 		if ( m_currentSession->outputFile == nullptr )
@@ -405,7 +488,7 @@ namespace EmEn::Graphics
 		cfg.g_w = m_recordWidth;
 		cfg.g_h = m_recordHeight;
 		cfg.g_timebase.num = 1;
-		cfg.g_timebase.den = m_targetFramerate;
+		cfg.g_timebase.den = static_cast< int >(m_targetFramerate); /* At most MaxRushMakerVideoFramerate. */
 
 		/* ONE mode, quality-first (studio — owner decision, Aug 2026): VBR with
 		 * lookahead. Encoder latency is irrelevant because missing capture slots are
@@ -525,6 +608,14 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		this->stopRecordingLocked();
+
+		return true;
+	}
+
+	void
+	Recorder::stopRecordingLocked () noexcept
+	{
 		/* No frame records a copy from here on. */
 		m_isRecording.store(false, std::memory_order_release);
 
@@ -534,12 +625,21 @@ namespace EmEn::Graphics
 		{
 			m_stopPending = true;
 
-			return true;
+			return;
 		}
 
 		this->closeSession();
+	}
 
-		return true;
+	bool
+	Recorder::outputWriteFailed () const noexcept
+	{
+		if ( m_hardwareSession != nullptr )
+		{
+			return m_hardwareSession->writeFailed.load(std::memory_order_acquire);
+		}
+
+		return m_currentSession != nullptr && m_currentSession->writeFailed.load(std::memory_order_acquire);
 	}
 
 	void
@@ -600,6 +700,16 @@ namespace EmEn::Graphics
 
 		if ( !m_isRecording || m_recordedSlot != NoSlot )
 		{
+			return false;
+		}
+
+		/* The encoding thread could not write the file (traced there): the recording stops here, at a frame boundary. */
+		if ( this->outputWriteFailed() )
+		{
+			TraceError{ClassId} << "Recording stopped: its output file can no longer be written.";
+
+			this->stopRecordingLocked();
+
 			return false;
 		}
 
@@ -789,7 +899,7 @@ namespace EmEn::Graphics
 			const auto frameBytes = static_cast< VkDeviceSize >(m_recordWidth) * m_recordHeight * 4;
 
 			if ( transferQueue == nullptr ||
-				!slot.transferCommandBuffer->reset() ||
+				!(*slot.transferCommandBuffer).reset() ||
 				!slot.transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 			{
 				slot.state = CopyState::Free;
@@ -799,7 +909,7 @@ namespace EmEn::Graphics
 
 			slot.transferCommandBuffer->copy(*slot.deviceLocalBuffer, *slot.stagingBuffer, 0, 0, frameBytes);
 
-			if ( !slot.transferCommandBuffer->end() || !slot.fence->reset() || !transferQueue->submit(*slot.transferCommandBuffer, Vulkan::SynchInfo{}.withFence(slot.fence->handle())) )
+			if ( !slot.transferCommandBuffer->end() || !(*slot.fence).reset() || !transferQueue->submit(*slot.transferCommandBuffer, Vulkan::SynchInfo{}.withFence(slot.fence->handle())) )
 			{
 				slot.state = CopyState::Free;
 
@@ -959,9 +1069,9 @@ namespace EmEn::Graphics
 		}
 
 		VkImageCopy region{};
-		region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-		region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-		region.extent = {m_recordWidth, m_recordHeight, 1};
+		region.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+		region.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+		region.extent = {.width = m_recordWidth, .height = m_recordHeight, .depth = 1};
 
 		commandBuffer.copyImage(image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, snapshot, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
 
@@ -1030,7 +1140,7 @@ namespace EmEn::Graphics
 
 				/* Speed 5 is the ceiling of libvpx's good-quality mode (6+ belongs to
 				 * the realtime path, which this recorder does not use). */
-				if ( depthAfterPop >= maxQueuedFrames - 2 && speed < 5 )
+				if ( depthAfterPop + 2 >= maxQueuedFrames && speed < 5 )
 				{
 					cpuUsedCurrent = speed + 1;
 					vpx_codec_control(&codec, VP8E_SET_CPUUSED, speed + 1);
@@ -1149,6 +1259,12 @@ namespace EmEn::Graphics
 	bool
 	Recorder::EncodingSession::encodeImageAt (vpx_codec_pts_t pts, uint64_t & encodedBytes) noexcept
 	{
+		/* The file can no longer be written: the frames still queued are dropped, not encoded for nothing. */
+		if ( writeFailed.load(std::memory_order_acquire) )
+		{
+			return true;
+		}
+
 		/* NOTE: GOOD_QUALITY deadline — the studio recorder has no realtime notion
 		 * (owner decision, Aug 2026): the encoder works in libvpx's quality path and
 		 * takes the time each frame needs. Throughput is protected by the ADAPTIVE
@@ -1178,13 +1294,11 @@ namespace EmEn::Graphics
 		{
 			if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
 			{
-				if ( !this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts) )
+				/* NOTE: a failed write is traced and latched once (writeOutput()); the recorder then stops the session. */
+				if ( this->writeIVFFrame(pkt->data.frame.buf, pkt->data.frame.sz, static_cast< uint64_t >(pkt->data.frame.pts)) )
 				{
-					std::cerr << "[" << ClassId << "] Warning: Failed to write IVF frame header in '" << outputPath << "'!" "\n";
+					encodedBytes += pkt->data.frame.sz;
 				}
-
-				std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, outputFile);
-				encodedBytes += pkt->data.frame.sz;
 			}
 		}
 
@@ -1197,7 +1311,7 @@ namespace EmEn::Graphics
 		/* Flush encoder: keep sending NULL frames until no packet comes out — with
 		 * g_lag_in_frames = 16 a single flush call would leave up to 16 lookahead
 		 * frames inside the encoder. */
-		if ( codecInitialized )
+		if ( codecInitialized && !writeFailed.load(std::memory_order_acquire) )
 		{
 			auto flushPts = lastEncodedPts + 1;
 			bool gotPackets = true;
@@ -1215,30 +1329,25 @@ namespace EmEn::Graphics
 				{
 					if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
 					{
-						if ( !this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts) )
+						if ( this->writeIVFFrame(pkt->data.frame.buf, pkt->data.frame.sz, static_cast< uint64_t >(pkt->data.frame.pts)) )
 						{
-							std::cerr << "[" << ClassId << "] Warning: Failed to write IVF frame header during flush in '" << outputPath << "'!" "\n";
+							frameCount++;
 						}
-						std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, outputFile);
-						frameCount++;
+
 						gotPackets = true;
 					}
 				}
 			}
 		}
 
-		/* Patch frame count in IVF header. */
-		if ( !this->patchIVFFrameCount() )
+		/* Patch frame count in IVF header (a truncated file keeps 0: its frames are what is there). */
+		if ( !writeFailed.load(std::memory_order_acquire) && !this->patchIVFFrameCount() )
 		{
-			std::cerr << "[" << ClassId << "] Warning: Failed to patch IVF frame count in '" << outputPath << "'!" "\n";
+			TraceWarning{Recorder::ClassId} << "Failed to patch the IVF frame count in " << outputPath << " !";
 		}
 
 		/* Close output file. */
-		if ( outputFile != nullptr )
-		{
-			std::fclose(outputFile);
-			outputFile = nullptr;
-		}
+		closeOutput(outputFile.release(), outputPath, writeFailed);
 
 		/* Destroy codec and image. */
 		if ( codecInitialized )
@@ -1251,6 +1360,13 @@ namespace EmEn::Graphics
 		/* Release frame buffers. */
 		frameQueue.clear();
 		freeFrames.clear();
+
+		if ( writeFailed.load(std::memory_order_acquire) )
+		{
+			TraceError{Recorder::ClassId} << "Encoding session TRUNCATED: a write to " << outputPath << " failed, the frames after it are lost.";
+
+			return;
+		}
 
 		TraceSuccess{Recorder::ClassId} << "Encoding session finalized: " << frameCount << " frames written to " << outputPath << " (" << duplicatedFrames << " CFR filler frames, " << skippedCaptures.load() << " captures skipped by backpressure).";
 	}
@@ -1270,11 +1386,7 @@ namespace EmEn::Graphics
 			codecInitialized = false;
 		}
 
-		if ( outputFile != nullptr )
-		{
-			std::fclose(outputFile);
-			outputFile = nullptr;
-		}
+		/* NOTE: the OutputFile deleter closes a file finalize() did not. */
 	}
 
 	void
@@ -1296,7 +1408,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Recorder::EncodingSession::writeIVFFileHeader () const noexcept
+	Recorder::EncodingSession::writeIVFFileHeader () noexcept
 	{
 		/* IVF file header: 32 bytes.
 		 * Bytes 0-3   : "DKIF" signature
@@ -1310,44 +1422,60 @@ namespace EmEn::Graphics
 		 * Bytes 24-27 : frame count (patched later)
 		 * Bytes 28-31 : unused (0)
 		 */
-		uint8_t header[32] = {};
+		std::array< uint8_t, 32 > header{};
 
 		header[0] = 'D';
 		header[1] = 'K';
 		header[2] = 'I';
 		header[3] = 'F';
 
-		writeLE16(header + 4, 0);	  /* Version. */
-		writeLE16(header + 6, 32);	 /* Header length. */
+		writeLE16(header.data() + 4, 0);	  /* Version. */
+		writeLE16(header.data() + 6, 32);	 /* Header length. */
 
 		header[8]  = 'V';
 		header[9]  = 'P';
 		header[10] = '9';
 		header[11] = '0';
 
-		writeLE16(header + 12, static_cast< uint16_t >(recordWidth));
-		writeLE16(header + 14, static_cast< uint16_t >(recordHeight));
-		writeLE32(header + 16, static_cast< uint32_t >(targetFramerate)); /* Time base denominator (ffmpeg reads as den). */
-		writeLE32(header + 20, 1);									/* Time base numerator (ffmpeg reads as num). */
-		writeLE32(header + 24, 0);			 /* Frame count (patched on stop). */
-		writeLE32(header + 28, 0);			 /* Unused. */
+		writeLE16(header.data() + 12, static_cast< uint16_t >(recordWidth));
+		writeLE16(header.data() + 14, static_cast< uint16_t >(recordHeight));
+		writeLE32(header.data() + 16, targetFramerate); /* Time base denominator (ffmpeg reads as den). */
+		writeLE32(header.data() + 20, 1);									/* Time base numerator (ffmpeg reads as num). */
+		writeLE32(header.data() + 24, 0);			 /* Frame count (patched on stop). */
+		writeLE32(header.data() + 28, 0);			 /* Unused. */
 
-		return std::fwrite(header, 1, sizeof(header), outputFile) == sizeof(header);
+		return writeOutput(outputFile.get(), header.data(), header.size(), outputPath, writeFailed);
 	}
 
 	bool
-	Recorder::EncodingSession::writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept
+	Recorder::EncodingSession::writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) noexcept
 	{
 		/* IVF frame header: 12 bytes.
 		 * Bytes 0-3 : frame size
 		 * Bytes 4-11: presentation timestamp
 		 */
-		uint8_t header[12];
+		std::array< uint8_t, 12 > header{};
 
-		writeLE32(header, frameSize);
-		writeLE64(header + 4, pts);
+		writeLE32(header.data(), frameSize);
+		writeLE64(header.data() + 4, pts);
 
-		return std::fwrite(header, 1, sizeof(header), outputFile) == sizeof(header);
+		return writeOutput(outputFile.get(), header.data(), header.size(), outputPath, writeFailed);
+	}
+
+	bool
+	Recorder::EncodingSession::writeIVFFrame (const void * data, size_t size, uint64_t pts) noexcept
+	{
+		/* An IVF frame size is 32 bits: a larger packet cannot be stored (a VP9 frame is far below it). */
+		if ( size > std::numeric_limits< uint32_t >::max() )
+		{
+			TraceError{Recorder::ClassId} << "A " << size << "-byte VP9 packet does not fit an IVF frame ! The recording stops.";
+
+			writeFailed.store(true, std::memory_order_release);
+
+			return false;
+		}
+
+		return this->writeIVFFrameHeader(static_cast< uint32_t >(size), pts) && writeOutput(outputFile.get(), data, size, outputPath, writeFailed);
 	}
 
 	bool
@@ -1359,21 +1487,21 @@ namespace EmEn::Graphics
 		}
 
 		/* Seek to byte 24 in the IVF header and write the frame count. */
-		if ( std::fseek(outputFile, 24, SEEK_SET) != 0 )
+		if ( std::fseek(outputFile.get(), 24, SEEK_SET) != 0 )
 		{
 			return false;
 		}
 
-		uint8_t buf[4];
-		writeLE32(buf, static_cast< uint32_t >(frameCount));
+		std::array< uint8_t, 4 > buf{};
+		writeLE32(buf.data(), static_cast< uint32_t >(frameCount));
 
-		if ( std::fwrite(buf, 1, 4, outputFile) != 4 )
+		if ( std::fwrite(buf.data(), 1, buf.size(), outputFile.get()) != buf.size() )
 		{
 			return false;
 		}
 
 		/* Seek back to end. */
-		std::fseek(outputFile, 0, SEEK_END);
+		static_cast< void >(std::fseek(outputFile.get(), 0, SEEK_END));
 
 		return true;
 	}
@@ -1510,8 +1638,8 @@ namespace EmEn::Graphics
 		for ( auto & slot : m_asyncSlots )
 		{
 			/* Transfer queue resources. */
-			slot.transferCommandBuffer.reset();
-			slot.fence.reset();
+			slot.transferCommandBuffer = nullptr;
+			slot.fence = nullptr;
 			slot.deviceLocalBuffer.reset();
 
 			/* Unmap persistently mapped staging buffer before destroying it. */
@@ -1625,9 +1753,9 @@ namespace EmEn::Graphics
 		m_hardwareSession->outputPath = outputPath;
 
 #ifdef _WIN32
-		m_hardwareSession->outputFile = _wfopen(outputPath.c_str(), L"wb");
+		m_hardwareSession->outputFile.reset(_wfopen(outputPath.c_str(), L"wb"));
 #else
-		m_hardwareSession->outputFile = std::fopen(outputPath.c_str(), "wb");
+		m_hardwareSession->outputFile.reset(std::fopen(outputPath.c_str(), "wb"));
 #endif
 
 		if ( m_hardwareSession->outputFile == nullptr )
@@ -1640,7 +1768,13 @@ namespace EmEn::Graphics
 		}
 
 		const auto & header = m_hardwareEncoder->headerBytes();
-		std::fwrite(header.data(), 1, header.size(), m_hardwareSession->outputFile);
+
+		if ( !writeOutput(m_hardwareSession->outputFile.get(), header.data(), header.size(), outputPath, m_hardwareSession->writeFailed) )
+		{
+			m_hardwareSession.reset();
+
+			return false;
+		}
 
 		m_recordStartTime = std::chrono::steady_clock::now();
 		m_lastCapturedSlot = -1;
@@ -1667,8 +1801,10 @@ namespace EmEn::Graphics
 		std::vector< uint8_t > packet;
 
 		const auto writePacket = [session, &packet] () {
-			std::fwrite(packet.data(), 1, packet.size(), session->outputFile);
-			session->frameCount++;
+			if ( writeOutput(session->outputFile.get(), packet.data(), packet.size(), session->outputPath, session->writeFailed) )
+			{
+				session->frameCount++;
+			}
 		};
 
 		while ( true )
@@ -1754,11 +1890,13 @@ namespace EmEn::Graphics
 			session->lastCfrSlot = cfrSlot;
 		}
 
-		if ( session->outputFile != nullptr )
-		{
-			std::fclose(session->outputFile);
+		closeOutput(session->outputFile.release(), session->outputPath, session->writeFailed);
 
-			session->outputFile = nullptr;
+		if ( session->writeFailed.load(std::memory_order_acquire) )
+		{
+			TraceError{ClassId} << "Hardware encoding session TRUNCATED: " << session->frameCount << " frames written to " << session->outputPath << " before a write failed.";
+
+			return;
 		}
 
 		TraceSuccess{ClassId} << "Hardware encoding session finalized: " << session->frameCount << " frames written to " << session->outputPath << " (" << session->duplicatedFrames << " CFR filler frames, " << session->skippedCaptures.load() << " captures skipped).";
@@ -1842,33 +1980,43 @@ namespace EmEn::Graphics
 	 * the top of this file and produce identical output.
 	 * ====================================================================== */
 
-	static void
+	namespace
+	{
+	void
 	BGRAToI420_Scalar (const uint8_t * bgra, uint32_t w, uint32_t h,
 		uint8_t * y, uint8_t * u, uint8_t * v) noexcept
 	{
-		const uint32_t uvW = w >> 1;
-		const uint32_t rowStride = w * 4;
+		const size_t uvW = w >> 1;
+		const size_t rowStride = static_cast< size_t >(w) * 4;
 
-		for ( uint32_t row = 0; row < h; row += 2 )
+		for ( size_t row = 0; row < h; row += 2 )
 		{
-			const uint8_t * row0 = bgra + row * rowStride;
+			const uint8_t * row0 = bgra + (row * rowStride);
 			const uint8_t * row1 = row0 + rowStride;
-			uint8_t * yRow0 = y + row * w;
+			uint8_t * yRow0 = y + (row * w);
 			uint8_t * yRow1 = yRow0 + w;
-			uint8_t * uRow = u + (row >> 1) * uvW;
-			uint8_t * vRow = v + (row >> 1) * uvW;
+			uint8_t * uRow = u + ((row >> 1) * uvW);
+			uint8_t * vRow = v + ((row >> 1) * uvW);
 
-			for ( uint32_t col = 0; col < w; col += 2 )
+			for ( size_t col = 0; col < w; col += 2 )
 			{
-				const auto * p00 = row0 + col * 4;
+				const auto * p00 = row0 + (col * 4);
 				const auto * p01 = p00 + 4;
-				const auto * p10 = row1 + col * 4;
+				const auto * p10 = row1 + (col * 4);
 				const auto * p11 = p10 + 4;
 
-				const int B00 = p00[0], G00 = p00[1], R00 = p00[2];
-				const int B01 = p01[0], G01 = p01[1], R01 = p01[2];
-				const int B10 = p10[0], G10 = p10[1], R10 = p10[2];
-				const int B11 = p11[0], G11 = p11[1], R11 = p11[2];
+				const int B00 = p00[0];
+				const int G00 = p00[1];
+				const int R00 = p00[2];
+				const int B01 = p01[0];
+				const int G01 = p01[1];
+				const int R01 = p01[2];
+				const int B10 = p10[0];
+				const int G10 = p10[1];
+				const int R10 = p10[2];
+				const int B11 = p11[0];
+				const int G11 = p11[1];
+				const int R11 = p11[2];
 
 				yRow0[col]	 = static_cast< uint8_t >(std::clamp(((YCoefR * R00 + YCoefG * G00 + YCoefB * B00 + 128) >> 8) + 16, 0, 255));
 				yRow0[col + 1] = static_cast< uint8_t >(std::clamp(((YCoefR * R01 + YCoefG * G01 + YCoefB * B01 + 128) >> 8) + 16, 0, 255));
@@ -1896,12 +2044,12 @@ namespace EmEn::Graphics
 #ifndef _MSC_VER
 	__attribute__((target("sse4.1")))
 #endif
-	static void
+	void
 	BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h,
 		uint8_t * y, uint8_t * u, uint8_t * v) noexcept
 	{
-		const uint32_t uvW = w >> 1;
-		const uint32_t rowStride = w * 4;
+		const size_t uvW = w >> 1;
+		const size_t rowStride = static_cast< size_t >(w) * 4;
 
 		/* BT.709 Y coefficients for _mm_madd_epi16 (signed 16-bit pairs).
 		 * Input byte order per pixel is B,G,R,A → coefficient pairs are [B,G] and [R,0].
@@ -1923,17 +2071,17 @@ namespace EmEn::Graphics
 		const __m128i zero = _mm_setzero_si128();
 
 		/* Pass 1: Y plane (full resolution). */
-		for ( uint32_t row = 0; row < h; row++ )
+		for ( size_t row = 0; row < h; row++ )
 		{
-			const uint8_t * srcRow = bgra + row * rowStride;
-			uint8_t * yRow = y + row * w;
-			uint32_t col = 0;
+			const uint8_t * srcRow = bgra + (row * rowStride);
+			uint8_t * yRow = y + (row * w);
+			size_t col = 0;
 
 			for ( ; col + 8 <= w; col += 8 )
 			{
 				/* Load 8 BGRA pixels = 32 bytes = 2 x 128-bit loads. */
-				const __m128i px0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + col * 4));	  /* pixels 0-3 */
-				const __m128i px1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + col * 4 + 16)); /* pixels 4-7 */
+				const __m128i px0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + (col * 4)));	  /* pixels 0-3 */
+				const __m128i px1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(srcRow + (col * 4) + 16)); /* pixels 4-7 */
 
 				/* Unpack BGRA bytes to 16-bit for _mm_madd_epi16. */
 				const __m128i lo0 = _mm_unpacklo_epi8(px0, zero); /* [B0,G0,R0,A0, B1,G1,R1,A1] as 16-bit */
@@ -1968,29 +2116,29 @@ namespace EmEn::Graphics
 			/* Scalar tail. */
 			for ( ; col < w; col++ )
 			{
-				const auto * px = srcRow + col * 4;
+				const auto * px = srcRow + (col * 4);
 
 				yRow[col] = static_cast< uint8_t >(std::clamp(((YCoefR * px[2] + YCoefG * px[1] + YCoefB * px[0] + 128) >> 8) + 16, 0, 255));
 			}
 		}
 
 		/* Pass 2: UV planes (2x2 subsampled). */
-		for ( uint32_t row = 0; row < h; row += 2 )
+		for ( size_t row = 0; row < h; row += 2 )
 		{
-			const uint8_t * row0 = bgra + row * rowStride;
+			const uint8_t * row0 = bgra + (row * rowStride);
 			const uint8_t * row1 = row0 + rowStride;
-			uint8_t * uRow = u + (row >> 1) * uvW;
-			uint8_t * vRow = v + (row >> 1) * uvW;
-			uint32_t col = 0;
+			uint8_t * uRow = u + ((row >> 1) * uvW);
+			uint8_t * vRow = v + ((row >> 1) * uvW);
+			size_t col = 0;
 
 			/* Process 8 pixels (= 4 chroma blocks) per iteration. */
 			for ( ; col + 8 <= w; col += 8 )
 			{
 				/* Load 8 BGRA pixels from each row. */
-				const __m128i r0a = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + col * 4));
-				const __m128i r0b = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + col * 4 + 16));
-				const __m128i r1a = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + col * 4));
-				const __m128i r1b = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + col * 4 + 16));
+				const __m128i r0a = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + (col * 4)));
+				const __m128i r0b = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + (col * 4) + 16));
+				const __m128i r1a = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + (col * 4)));
+				const __m128i r1b = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + (col * 4) + 16));
 
 				/* Unpack bytes to 16-bit for arithmetic.
 				 * Each 128-bit register holds 4 BGRA pixels = 16 bytes.
@@ -2043,7 +2191,18 @@ namespace EmEn::Graphics
 					outR = _mm_cvtsi128_si32(_mm_shuffle_epi32(sum32, _MM_SHUFFLE(2, 2, 2, 2)));
 				};
 
-				int32_t b0, g0, r0x, b1, g1, r1x, b2, g2, r2x, b3, g3, r3x;
+				int32_t b0 = 0;
+				int32_t g0 = 0;
+				int32_t r0x = 0;
+				int32_t b1 = 0;
+				int32_t g1 = 0;
+				int32_t r1x = 0;
+				int32_t b2 = 0;
+				int32_t g2 = 0;
+				int32_t r2x = 0;
+				int32_t b3 = 0;
+				int32_t g3 = 0;
+				int32_t r3x = 0;
 				extractBlockBGR(va_lo, b0, g0, r0x);
 				extractBlockBGR(va_hi, b1, g1, r1x);
 				extractBlockBGR(vb_lo, b2, g2, r2x);
@@ -2094,9 +2253,9 @@ namespace EmEn::Graphics
 			/* Scalar tail for UV. */
 			for ( ; col < w; col += 2 )
 			{
-				const auto * p00 = row0 + col * 4;
+				const auto * p00 = row0 + (col * 4);
 				const auto * p01 = p00 + 4;
-				const auto * p10 = row1 + col * 4;
+				const auto * p10 = row1 + (col * 4);
 				const auto * p11 = p10 + 4;
 
 				const auto avgR = (p00[2] + p01[2] + p10[2] + p11[2]) >> 2;
@@ -2118,12 +2277,12 @@ namespace EmEn::Graphics
 #ifndef _MSC_VER
 	__attribute__((target("avx2")))
 #endif
-	static void
+	void
 	BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h,
 		uint8_t * y, uint8_t * u, uint8_t * v) noexcept
 	{
-		const uint32_t uvW = w >> 1;
-		const uint32_t rowStride = w * 4;
+		const size_t uvW = w >> 1;
+		const size_t rowStride = static_cast< size_t >(w) * 4;
 
 		/* BT.709 Y coefficients for _mm256_madd_epi16 (signed 16-bit pairs).
 		 * Cannot use _mm256_maddubs_epi16 because G coefficient (157) exceeds signed char range. */
@@ -2147,17 +2306,17 @@ namespace EmEn::Graphics
 		const __m256i uvOffset256 = _mm256_set1_epi32(128);
 
 		/* Pass 1: Y plane. */
-		for ( uint32_t row = 0; row < h; row++ )
+		for ( size_t row = 0; row < h; row++ )
 		{
-			const uint8_t * srcRow = bgra + row * rowStride;
-			uint8_t * yRow = y + row * w;
-			uint32_t col = 0;
+			const uint8_t * srcRow = bgra + (row * rowStride);
+			uint8_t * yRow = y + (row * w);
+			size_t col = 0;
 
 			for ( ; col + 16 <= w; col += 16 )
 			{
 				/* Load 16 BGRA pixels = 64 bytes = 2 x 256-bit loads. */
-				const __m256i px0 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + col * 4));	  /* pixels 0-7 */
-				const __m256i px1 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + col * 4 + 32)); /* pixels 8-15 */
+				const __m256i px0 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + (col * 4)));	  /* pixels 0-7 */
+				const __m256i px1 = _mm256_loadu_si256(reinterpret_cast< const __m256i * >(srcRow + (col * 4) + 32)); /* pixels 8-15 */
 
 				/* Unpack BGRA bytes to 16-bit within each 128-bit lane. */
 				const __m256i lo0 = _mm256_unpacklo_epi8(px0, zero256); /* lane0: pix 0,1 | lane1: pix 4,5 */
@@ -2199,7 +2358,7 @@ namespace EmEn::Graphics
 			/* Scalar tail. */
 			for ( ; col < w; col++ )
 			{
-				const auto * px = srcRow + col * 4;
+				const auto * px = srcRow + (col * 4);
 
 				yRow[col] = static_cast< uint8_t >(std::clamp(((YCoefR * px[2] + YCoefG * px[1] + YCoefB * px[0] + 128) >> 8) + 16, 0, 255));
 			}
@@ -2207,32 +2366,39 @@ namespace EmEn::Graphics
 
 		/* Pass 2: UV planes (2x2 subsampled).
 		 * Process 16 pixels (= 8 chroma blocks) per iteration. */
-		for ( uint32_t row = 0; row < h; row += 2 )
+		for ( size_t row = 0; row < h; row += 2 )
 		{
-			const uint8_t * row0 = bgra + row * rowStride;
+			const uint8_t * row0 = bgra + (row * rowStride);
 			const uint8_t * row1 = row0 + rowStride;
-			uint8_t * uRow = u + (row >> 1) * uvW;
-			uint8_t * vRow = v + (row >> 1) * uvW;
-			uint32_t col = 0;
+			uint8_t * uRow = u + ((row >> 1) * uvW);
+			uint8_t * vRow = v + ((row >> 1) * uvW);
+			size_t col = 0;
 
 			for ( ; col + 16 <= w; col += 16 )
 			{
 				/* Load 16 BGRA pixels from each row (64 bytes each = 4 x 128-bit). */
-				const __m128i r0_0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + col * 4));
-				const __m128i r0_1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + col * 4 + 16));
-				const __m128i r0_2 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + col * 4 + 32));
-				const __m128i r0_3 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + col * 4 + 48));
-				const __m128i r1_0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + col * 4));
-				const __m128i r1_1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + col * 4 + 16));
-				const __m128i r1_2 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + col * 4 + 32));
-				const __m128i r1_3 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + col * 4 + 48));
+				const __m128i r0_0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + (col * 4)));
+				const __m128i r0_1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + (col * 4) + 16));
+				const __m128i r0_2 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + (col * 4) + 32));
+				const __m128i r0_3 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row0 + (col * 4) + 48));
+				const __m128i r1_0 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + (col * 4)));
+				const __m128i r1_1 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + (col * 4) + 16));
+				const __m128i r1_2 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + (col * 4) + 32));
+				const __m128i r1_3 = _mm_loadu_si128(reinterpret_cast< const __m128i * >(row1 + (col * 4) + 48));
 
 				/* Process 8 chroma blocks using the same logic as SSSE3 but for 8 blocks.
 				 * Each 128-bit register holds 4 BGRA pixels.
 				 * Unpack to 16-bit, vertical sum, then extract per-block channel sums. */
 
 				/* Unpack to 16-bit and vertical sum (avoids std::pair<__m128i> which triggers -Wignored-attributes). */
-				__m128i vs0_lo, vs0_hi, vs1_lo, vs1_hi, vs2_lo, vs2_hi, vs3_lo, vs3_hi;
+				__m128i vs0_lo;
+				__m128i vs0_hi;
+				__m128i vs1_lo;
+				__m128i vs1_hi;
+				__m128i vs2_lo;
+				__m128i vs2_hi;
+				__m128i vs3_lo;
+				__m128i vs3_hi;
 
 				{
 					auto vertSum = [&zero](const __m128i & a, const __m128i & b, __m128i & outLo, __m128i & outHi)
@@ -2262,8 +2428,30 @@ namespace EmEn::Graphics
 				};
 
 				/* Extract B,G,R for all 8 blocks and pack into 256-bit vectors. */
-				int32_t b0, g0, r0x, b1, g1, r1x, b2, g2, r2x, b3, g3, r3x;
-				int32_t b4, g4, r4x, b5, g5, r5x, b6, g6, r6x, b7, g7, r7x;
+				int32_t b0 = 0;
+				int32_t g0 = 0;
+				int32_t r0x = 0;
+				int32_t b1 = 0;
+				int32_t g1 = 0;
+				int32_t r1x = 0;
+				int32_t b2 = 0;
+				int32_t g2 = 0;
+				int32_t r2x = 0;
+				int32_t b3 = 0;
+				int32_t g3 = 0;
+				int32_t r3x = 0;
+				int32_t b4 = 0;
+				int32_t g4 = 0;
+				int32_t r4x = 0;
+				int32_t b5 = 0;
+				int32_t g5 = 0;
+				int32_t r5x = 0;
+				int32_t b6 = 0;
+				int32_t g6 = 0;
+				int32_t r6x = 0;
+				int32_t b7 = 0;
+				int32_t g7 = 0;
+				int32_t r7x = 0;
 				extractBlockBGR(vs0_lo, b0, g0, r0x);
 				extractBlockBGR(vs0_hi, b1, g1, r1x);
 				extractBlockBGR(vs1_lo, b2, g2, r2x);
@@ -2317,9 +2505,9 @@ namespace EmEn::Graphics
 			/* Scalar tail for UV. */
 			for ( ; col < w; col += 2 )
 			{
-				const auto * p00 = row0 + col * 4;
+				const auto * p00 = row0 + (col * 4);
 				const auto * p01 = p00 + 4;
-				const auto * p10 = row1 + col * 4;
+				const auto * p10 = row1 + (col * 4);
 				const auto * p11 = p10 + 4;
 
 				const auto avgR = (p00[2] + p01[2] + p10[2] + p11[2]) >> 2;
@@ -2334,4 +2522,5 @@ namespace EmEn::Graphics
 		}
 	}
 #endif /* IS_X86_ARCH */
+	}
 }

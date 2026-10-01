@@ -71,6 +71,12 @@ namespace EmEn::Graphics
 			 */
 			~RendererFrameScope ();
 
+			/* A frame scope owns its frame's synchronization objects: never copied nor moved. */
+			RendererFrameScope (const RendererFrameScope & copy) noexcept = delete;
+			RendererFrameScope (RendererFrameScope && copy) noexcept = delete;
+			RendererFrameScope & operator= (const RendererFrameScope & copy) noexcept = delete;
+			RendererFrameScope & operator= (RendererFrameScope && copy) noexcept = delete;
+
 			/**
 			 * @brief Initializes the command pool and the command buffer.
 			 * @param device A reference to the graphics device smart pointer.

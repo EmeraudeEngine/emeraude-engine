@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <cstdio>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -392,6 +393,33 @@ namespace EmEn::Graphics
 			 */
 			void closeSession () noexcept;
 
+			/**
+			 * @brief Stops the recording: closes the session now, or once the copies in flight have landed.
+			 * @pre m_captureAccess is held and a recording is running.
+			 */
+			void stopRecordingLocked () noexcept;
+
+			/**
+			 * @brief Returns whether the open session failed to write its output file (it is then stopped).
+			 * @pre m_captureAccess is held.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool outputWriteFailed () const noexcept;
+
+			/** @brief Closes a C stream (the output files' deleter). */
+			struct FileCloser
+			{
+				void
+				operator() (std::FILE * file) const noexcept
+				{
+					static_cast< void >(std::fclose(file));
+				}
+			};
+
+			/** @brief An owned output file. */
+			using OutputFile = std::unique_ptr< std::FILE, FileCloser >;
+
 			/** @brief Function signature for BGRA-to-I420 conversion implementations. */
 			using BGRAToI420Func = void (*)(const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v);
 
@@ -437,7 +465,8 @@ namespace EmEn::Graphics
 			 */
 			struct HardwareSession
 			{
-				std::FILE * outputFile{nullptr};
+				OutputFile outputFile;
+				std::atomic< bool > writeFailed{false}; ///< Set by the encoding thread on the first failed write: the session stops.
 				std::filesystem::path outputPath;
 				std::deque< size_t > readySlots;
 				std::mutex queueMutex;
@@ -493,7 +522,8 @@ namespace EmEn::Graphics
 				bool codecInitialized{false};
 
 				/* IVF output. */
-				std::FILE * outputFile{nullptr};
+				OutputFile outputFile;
+				std::atomic< bool > writeFailed{false}; ///< Set on the first failed write: nothing more is written, the recorder stops the session.
 				std::filesystem::path outputPath;
 
 				/* Frame queue (producer-consumer). */
@@ -539,15 +569,19 @@ namespace EmEn::Graphics
 				bool encodeImageAt (vpx_codec_pts_t pts, uint64_t & encodedBytes) noexcept;
 
 				/** @brief Writes the 32-byte IVF file header. */
-				[[nodiscard]] 
-				bool writeIVFFileHeader () const noexcept;
+				[[nodiscard]]
+				bool writeIVFFileHeader () noexcept;
 
 				/** @brief Writes a 12-byte IVF frame header. */
-				[[nodiscard]] 
-				bool writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept;
+				[[nodiscard]]
+				bool writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) noexcept;
+
+				/** @brief Writes an IVF frame: its header, then its payload. */
+				[[nodiscard]]
+				bool writeIVFFrame (const void * data, size_t size, uint64_t pts) noexcept;
 
 				/** @brief Patches the frame count at byte offset 24 in the IVF header. */
-				[[nodiscard]] 
+				[[nodiscard]]
 				bool patchIVFFrameCount () const noexcept;
 
 				/** @brief Flushes codec, patches IVF, closes file, destroys resources. */

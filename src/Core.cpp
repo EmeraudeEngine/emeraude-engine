@@ -2237,7 +2237,7 @@ namespace EmEn
 				case KeyF12 :
 					if ( isKeyboardModifierPressed(ModKeyControl, modifiers) )
 					{
-						if ( m_graphicsRenderer.recorder().isRecording() )
+						if ( this->rushRecording() )
 						{
 							this->stopAudioVideoRecording();
 						}
@@ -2538,6 +2538,12 @@ namespace EmEn
 		}
 
 		return true;
+	}
+
+	bool
+	Core::rushRecording () noexcept
+	{
+		return m_graphicsRenderer.recorder().isRecording() || m_audioManager.recorder().isRecording() || m_audioManager.externalInput().isRecording();
 	}
 
 	void

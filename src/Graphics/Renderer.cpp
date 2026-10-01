@@ -924,7 +924,7 @@ namespace EmEn::Graphics
 		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
 		m_rtDescriptorSetLayout.reset();
-		m_descriptorPool.reset();
+		m_descriptorPool = nullptr;
 
 		this->destroyRenderingSystem();
 
@@ -1294,6 +1294,8 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	namespace
+	{
 	/**
 	 * @brief Hashes the effective content of a sampler creation info.
 	 * @note Every field that differentiates two VkSampler objects is mixed in explicitly:
@@ -1303,7 +1305,6 @@ namespace EmEn::Graphics
 	 * @return size_t
 	 */
 	[[nodiscard]]
-	static
 	size_t
 	hashSamplerCreateInfo (const VkSamplerCreateInfo & createInfo) noexcept
 	{
@@ -1335,6 +1336,7 @@ namespace EmEn::Graphics
 		mix(createInfo.unnormalizedCoordinates);
 
 		return hash;
+	}
 	}
 
 	std::shared_ptr< Sampler >

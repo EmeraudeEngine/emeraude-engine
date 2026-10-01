@@ -642,14 +642,14 @@ node with a transform is never flattened) — check `Node`'s destructor and ever
 |---|---|---|---|
 | 7a | Resources read from disk: images and textures (`ImageResource`, `CompressedImageResource`, `KTX2Decoder`, `TextureCompressor`, `VolumetricImageResource`, `TextureResource/`, `TextureCache`), cubemaps and IBL (`CubemapResource`, `IBLTexture`), video (`MovieResource`, `CubemapMovieResource`, `VideoFrameConverter`, `ExternalInput`), `FontResource`, `CloudShapeResource` | ~13 700 | ✅ pushed base `10e23f3`, engine `4e4bda64` + MSVC hotfix `734b4422`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
 | 7b | `Material/` (JSON material definitions) | ~14 000 | ✅ pushed engine `1ee4a6c6`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
-| 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ✅ pushed base `dce53a7` + the engine 7c commit; peers pending |
-| 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ⬜ |
+| 7c | `Geometry/`, `Renderable/`, `MDI/` (grounds, terrains, seas, meshes) | ~20 500 | ✅ pushed base `dce53a7`, engine `b1541d1c`; VALIDATED macOS M2 + Windows NVIDIA + AMD |
+| 7d | Renderer and frame: `Renderer` (+ console), `RendererFrameScope`, `Recorder`, `FrameCapture`, `RenderDocCapture` | ~10 400 | ✅ pushed (the engine 7d commit); peers pending |
 | 7e | Targets, instances, views, buffers: `RenderTarget/`, `RenderableInstance/`, `SceneRenderTarget`, `IntermediateRenderTarget`, `ViewMatrices*`, `Frustum`, `Types`, `SharedUBO*`, `BindlessTextureManager`, `VertexBuffer*`, `FramebufferPrecisions`, `SkinnedGeometryProcessor`, `Selection*`, `PathDebugOverlay` | ~22 000 | ⬜ |
 | 7f | Post-process: `PostProcessor`, `PostProcessStack` (+ console), `IndirectPostProcessEffect`, `GrabPass`, `CombinePass`, `DenoisePass`, `GIDenoiser`, `OverflowCensus`, `Effects/` Shared, Resolve, Camera, Style | ~22 000 | ⬜ |
 | 7g | Lighting and atmosphere: `Effects/` Lighting, Atmosphere, `IrradianceProbeVolume`, `LTC*`, `Dummy*`, `CloudShadowMap`, `OceanWaves`, `ImposterAtlas`, `Compute/` | ~22 000 | ⬜ |
 
 Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2, done); 7c (done) `BasicGroundResource` passes
-`DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d the
+`DefaultGeometryFlags` as the grid's UV multiplier and calls `setLoadSuccess()` without `beginLoading()` (6c); 7d (done) the
 `screenshot()` "did not complete in time" wording while an asset is still uploading (6a). Outside section 7: base
 `Animation/AnimationChannel.hpp:277` `-Wfloat-conversion` (6d), `SoundfontResource` unconfined `file` path (section 10).
 
@@ -780,5 +780,55 @@ Leads carried: 7a `CubemapResource` `CubemapFaceNames.at(faceIndex)` (section 2,
   512-division terrain → `Loaded`; a 5000-division ground, a 20000-division terrain and an 8192-texel clip → `Failed`
   with the cap named; a single-mesh `Box.glb` in `Meshes/` → `Loaded` as both `SimpleMeshResource` and `MeshResource`.
   terrain and citadel: 0 VUID, 0 error, 0 leak, exit 0.
-- [x] (5) Pushed 2026-10-01 (owner's order): base `dce53a7`, engine (the 7c commit); peers asked.
+- [x] (5) Pushed 2026-10-01 (owner's order): base `dce53a7`, engine `b1541d1c`. VALIDATED the same day: macOS M2
+  (AppleClang 0 warning) and Windows (MSVC /W4 /WX 0 warning; NVIDIA RTX 3060 Laptop AND the forced AMD iGPU): base
+  2172 = 2169 + 3 skipped; the five `Grounds/` JSON and `Box.glb` give exactly the Linux statuses and errors (3 refusals,
+  nothing else), shutdown 0 VUID / 0 VMA / 0 "still have N uses"; terrain and citadel (MCP 1707/0) 0 VUID (Windows
+  NVIDIA: only the known 12325 of citadel), exit 0.
 
+### 7d — renderer and frame (2026-10-01)
+
+- [x] (1) clang-tidy 21.1.6 baseline (6 TUs, the 7d files only): **226**: 39 implicit-widening (the BGRA→I420 row
+  offsets), 39 parentheses, 28 SIMD intrinsics, 26 reinterpret-cast, 21 constant-array-index, 14 array-to-pointer
+  decay, 10 anonymous-namespace, 8 isolate-declaration, 5 each of owning-memory (`FILE *`), ambiguous smart-pointer
+  reset, union access (libvpx packets) and convert-to-static, and singles incl. a narrowing, a use-after-move.
+- [x] (2) Review (trust boundaries: the console commands, the RushMaker settings, the pipeline-cache file, the
+  output files). Findings:
+  - R1 `Recorder`: no `fwrite()` result was checked (headers, packets, flush): a full disk or a removed drive gave a
+    silently truncated video while encoding went on, ending "finalized: N frames written" (owner question).
+  - R2 RushMaker settings unbounded: `MaxQueuedFrames` (W×H×4 bytes per frame, 10 000 = an out-of-memory abort) and
+    `VideoFramerate`; `maxQueuedFrames - 2` wrapped for a value of 1 (owner question for the range).
+  - R3 console `triggerRenderDocCapture(frameCount)` up to INT32_MAX (owner question); `getGPUTimings` padding wrapped
+    past 20 nesting levels.
+  - R4 the output `FILE *` were owning raw pointers (a path closed none of them: none today, but no RAII).
+  - Checked, sound: `screenshot` / `temporalCapture` (bounded by `FrameCapture::MaxCaptureBytes`, unique stems), the
+    pipeline cache (header, device, driver and hash checked, the crash marker), the frame scopes, the use-after-move
+    (`m_sceneTarget` retired then tested; the dispatch requires it non-null: a false positive).
+  - R5 (the 6a lead) a capture whose frames never come answered "is the window rendering?" while the window did render
+    and a load held the frames back: the message now says "No frame was presented within N ms … the window is not
+    rendering, or a load (an asset upload, a scene still building) is holding the frames back" (wording only; not
+    reproduced here, the peers saw it on macOS).
+  - Lead (cascade-wide, section 2): `std::thread` construction (Recorder ×2, 8 more sites) is a throwing std call.
+- [x] (3) Mechanical: fix-its with `--format-style=none` (parentheses, isolated declarations, designated initializers,
+  smart-pointer resets, parameter names), the BGRA→I420 row / column indices and strides in `size_t` (the three
+  variants byte-identical before / after: scalar, SSE4.1, AVX2 × 8 sizes 2×2 to 7680×4320, a standalone harness),
+  the SIMD scratch integers initialized, the helpers and `hashSamplerCreateInfo()` in anonymous namespaces, C arrays →
+  `std::array`, the encoder-name ternary unnested, a redundant cast, the timebase cast, a `MiB` constant, an unused
+  forward declaration removed, `RendererFrameScope` copy / move deleted explicitly, R3's padding clamped.
+- [x] (3b) Owner rulings (2026-10-01), as recommended, APPLIED:
+  - R1 the first failed write (or final `fclose()`) is traced with the OS reason and latched; the recorder STOPS the
+    recording at its next capture; the session ends "TRUNCATED"; the output files are `std::unique_ptr< FILE >`.
+    Found while testing: with audio ON the video's own stop left the rush's audio running and the toggle could never
+    stop it (it tried to START a rush, refused by the "audio still active" guard): `Core::rushRecording()` (video OR
+    audio OR voice-over) is now what the toggle and Shift+Ctrl+F12 test.
+  - R2 `MaxQueuedFrames` 3-240, `VideoFramerate` 1-240, outside → warning + default (as 0 already did).
+  - R3 `triggerRenderDocCapture()` refuses outside 1-100.
+- [x] (4) Verified 2026-10-01 (Linux, RTX 3070 Ti): cascade builds (0 warning); clangcheck 112 TUs 0,
+  `-Wfloat-conversion` 0; clang-tidy 226 → 91 (on purpose, ledger), 0 new on the touched `Core` lines. RushMaker
+  hardware H.265 and VP9, 6 s each: 181 frames, decoded by ffprobe; with `RLIMIT_FSIZE` 4 MiB / 2 MiB (SIGXFSZ ignored)
+  "Unable to write … ! The recording stops", stopped at the next capture, TRUNCATED, the files decode (66 / 64 frames);
+  audio ON: the next toggle saved the WAV; settings 1000 FPS / 1 frame → warnings and the defaults. citadel:
+  `triggerRenderDocCapture(101)` and `(0)` refused, screenshot + `temporalCapture(3)` saved, MCP 1707/0, console
+  4466/0, 0 VUID, 0 leak; `getGPUTimings` with the profiler ON prints its table. Every test file was moved out of the
+  owner's captures directory (unchanged). One unrelated crash: the known CEF MemoryInfra SIGILL (alpha item updated).
+- [x] (5) Pushed 2026-10-01 (owner's order): engine (the 7d commit); peers asked.
