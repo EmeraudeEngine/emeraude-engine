@@ -28,6 +28,8 @@
 
 namespace EmEn::Scenes::Component
 {
+	CharacterController::~CharacterController () = default;
+
 	void
 	CharacterController::notifyEvents () noexcept
 	{

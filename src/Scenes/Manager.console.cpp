@@ -1334,6 +1334,7 @@ namespace EmEn::Scenes
 					const auto & controller = character->controller();
 
 					info << R"(,"character":{"grounded":)" << (controller.isGrounded() ? "true" : "false");
+					info << R"(,"flying":)" << (controller.isFlying() ? "true" : "false");
 					info << R"(,"velocity":)";
 					writeJSONVector(info, controller.velocity());
 					info << R"(,"groundNormal":)";
@@ -1346,7 +1347,7 @@ namespace EmEn::Scenes
 				return Console::CommandResult::json(info.str());
 			}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("setCharacterVelocity", "Sets the velocity a root-level node's kinematic character controller wants to move at (world, m/s; its vertical part is ignored).",
+		this->bindCommand("setCharacterVelocity", "Sets the velocity a root-level node's kinematic character controller wants to move at (world, m/s; its vertical part is ignored, except when the character flies).",
 			{
 				{"name", "The node name."},
 				{"x", "The world X velocity (m/s)."},

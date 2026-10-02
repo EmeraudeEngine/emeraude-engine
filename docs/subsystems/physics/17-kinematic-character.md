@@ -45,6 +45,18 @@ character->controller().jump(5.0F);                               // a launch sp
    walkable top, else a half-radius probe looks for the floor under the character (a walker standing against a 50°
    ramp stays grounded).
 
+### Flying (2026-10-02)
+
+The entity's free fly mode (`MovableTrait::enableFreeFlyMode()`, the flag a free-flying body already had) makes its
+character FLY: the scene sets `CharacterController::setFlying()` from it before each step. In flight: no gravity, no
+jump, no step-up, no ground probe; the WHOLE wanted velocity (up and down included) is reached with a response of
+10 / s (about 0.1 s to start or stop); the capsule still depenetrates, collides and slides. Flying keeps the velocity
+it had; back to walking, the flight's velocity splits into the horizontal velocity and a vertical speed (a fall). The
+movement mode of Unreal's `CharacterMovementComponent` (`MOVE_Flying`). Measured on citadel (projet-alpha's Player,
+10 m/s): W 9.97 m/s level, Space +10 m/s, Ctrl −10 m/s, stopped 0.1 s after the release, held against the barbican
+tower with W down, landed 1 s after V off from 6 m. Before (P4 as first pushed), the controller ignored the flag: the
+Player's former fly FORCE (500) became a wanted speed of 500 m/s horizontal, with gravity — "very fast, and it falls".
+
 ### Measured (`collision-debug`, ROW 6 and beside, 3 launches bit-identical)
 
 | Station | Result |
@@ -56,10 +68,26 @@ character->controller().jump(5.0F);                               // a launch sp
 | `BenchWalkPlatform`, on S9's platform | carried 4 m and back |
 | `BenchWalkOnBox`, on a static 1 m box | stands, Y amplitude 0 |
 | `BenchWalkPush` into a dynamic box | pushed it 8 m, then walked past it |
+| `BenchStandSlope`, still on a 30° ramp | does not move (0 creep over 30 s) |
+
+- citadel's west flight (34 steps of 0.29 m, the former `physics-step-up-pass` case): projet-alpha's Player walked up
+  from y 0 to 9.65 m in 9 s at 1.4 m/s, grounded all the way (keyboard path, `keyDown(87)`).
 
 ### Traps met
 
+- A character met TWICE by the physics step collided with its own capsule (0.91 m deep, normal +Y) and three
+  depenetration passes put it 2.3 m under the one-sided ground: the physics octree held entities in several sectors
+  (`OctreeSector::expand()`, fixed — `docs/subsystems/scenes/24-octree-storage-and-traversal-scenes-octreesector-hpp.md`).
+  The step skips the character's own INDEX: it is sound only on a list free of duplicates (checked in Debug).
+
+- A character standing still on a SLOPE crept downhill (1.3 cm/s on a terrain slope): the depenetration pushed it out
+  along the slope's normal, the ground probe snapped it straight down — a little downhill every step. Out of a walkable
+  surface the correction is now VERTICAL (the height that clears the same distance from the plane).
+
 - A character starting a step closer than the skin to the ground met the ground at fraction 0 in every sweep — even
   along it — and never moved: the depenetration restores the skin (step 1).
+- macOS: the component had every virtual inline, so the application held its own hidden typeinfo and the engine's
+  `dynamic_pointer_cast` to it answered nullptr — no character on macOS. It has an out-of-line destructor (its key
+  function); `docs/caution-points.md`, item `rtti-key-function-audit`.
 - A step's edge under the rounded bottom looked like a wall to the ground probe; the half-radius fallback probe, still
   behind the step, found the floor 0.2 m lower and snapped the walker back down: edges with a walkable top are support.

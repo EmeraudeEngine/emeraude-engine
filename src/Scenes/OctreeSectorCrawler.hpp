@@ -97,7 +97,8 @@ namespace EmEn::Scenes
 			void
 			populateStack (const std::shared_ptr< octree_t > & currentSector) noexcept
 			{
-				if ( currentSector->empty() || currentSector->isLeaf() )
+				/* ⚠️ Not on empty(): an empty sector does not prove an empty subtree (one element, one sector). */
+				if ( currentSector->isLeaf() )
 				{
 					return;
 				}

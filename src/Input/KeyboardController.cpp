@@ -40,6 +40,7 @@
 namespace EmEn::Input
 {
 	std::array< char, 349 > KeyboardController::s_deviceState{};
+	std::array< char, 349 > KeyboardController::s_injectedState{};
 
 	bool
 	KeyboardController::isKeyPressed (int32_t key) const noexcept
@@ -88,6 +89,16 @@ namespace EmEn::Input
 		}
 	}
 
+	void
+	KeyboardController::injectKeyState (int32_t key, bool held) noexcept
+	{
+		if ( key >= 0 && static_cast< size_t >(key) < s_injectedState.size() )
+		{
+			s_injectedState[static_cast< size_t >(key)] = held ? 1 : 0;
+			s_deviceState[static_cast< size_t >(key)] = held ? 1 : 0;
+		}
+	}
+
 	std::string
 	KeyboardController::getRawState () const noexcept
 	{
@@ -121,5 +132,10 @@ namespace EmEn::Input
 			s_deviceState[static_cast< size_t >(key)] = glfwGetKey(window.handle(), key) == GLFW_PRESS ? 1 : 0;
 		}
 #endif
+
+		/* The keys held by injection stay held (a console keyDown) whatever the hardware says. */
+		std::ranges::transform(s_deviceState, s_injectedState, s_deviceState.begin(), [] (char hardware, char injected) {
+			return injected != 0 ? static_cast< char >(1) : hardware;
+		});
 	}
 }

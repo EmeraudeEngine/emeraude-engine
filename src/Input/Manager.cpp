@@ -1137,6 +1137,45 @@ namespace EmEn::Input
 				return Console::CommandResult::success("Key event injected.");
 			});
 
+		/* A HELD key (keyPress releases at once): what a walk test needs (the actors read the key STATE every tick). */
+		this->bindCommand("keyDown", "Injects a key press and keeps the key held until keyUp. It reaches Core-level bindings, never a focused CEF field.",
+			{
+				{"key", "The GLFW key code (e.g. 87 for W)."},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[checkKey] (int32_t key, int32_t modifiers) {
+				std::string error;
+
+				if ( !checkKey(key, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
+
+				KeyboardController::injectKeyState(key, true);
+				Manager::injectKeyEvent(key, modifiers, GLFW_PRESS);
+
+				return Console::CommandResult::success("Key held.");
+			});
+
+		this->bindCommand("keyUp", "Injects a key release (the end of a keyDown).",
+			{
+				{"key", "The GLFW key code."},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[checkKey] (int32_t key, int32_t modifiers) {
+				std::string error;
+
+				if ( !checkKey(key, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
+
+				KeyboardController::injectKeyState(key, false);
+				Manager::injectKeyEvent(key, modifiers, GLFW_RELEASE);
+
+				return Console::CommandResult::success("Key released.");
+			});
+
 		/* NOTE: Read-only probe. The pointer lock is expressed twice — as m_pointerLocked (which
 		 * selects relative "FPS" dispatch over absolute dispatch, see cursorPositionCallback) and
 		 * as the GLFW cursor mode (which decides whether the OS cursor is drawn and grabbed).

@@ -27,8 +27,7 @@ the 0.29 m stairs, the moving platform, standing on a box, pushing a box, no ver
 ## What remains
 
 - [ ] projet-alpha: the actors on the controller (`actors-kinematic-character-migration`), citadel's stairs first.
-- [ ] Remove the dead teleport step-up: `MovableTrait::setStepHeight()` / `m_stepHeight` (its scene pass went with P2)
-  and its callers (`Player.cpp`); close `physics-step-up-pass`.
+- The dead teleport step-up is removed (`MovableTrait::setStepHeight()`, 2026-10-02) and `physics-step-up-pass` closed.
 
 ## ⚠️ Traps
 

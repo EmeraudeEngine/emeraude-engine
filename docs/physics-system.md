@@ -162,8 +162,9 @@ For each movable entity, once, at the sector that OWNS it:
         down into the step: the horizontal velocity is kept, the body grounds
         on it). Without it an AABB body stops dead against any step — the
         solver resolves along the smallest penetration, the horizontal one.
-        ⚠️ First version: stairs climb, "with problems" (owner, not yet
-        characterized) — docs/todo/physics-step-up-pass.md.
+        ⚠️ HISTORY: removed with the P2 pipeline and the P4 kinematic character
+        (2026-10-02): stairs are climbed by the character controller's
+        step-up (docs/subsystems/physics/17-kinematic-character.md).
 
 2. Track dominant collision source:
    → Which source had deepest penetration?

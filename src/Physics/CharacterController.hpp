@@ -112,7 +112,9 @@ namespace EmEn::Physics
 	 * slides along it (a walkable slope keeps the horizontal speed, a wall or a steeper slope only blocks, a ceiling
 	 * stops a rise), with a STEP-UP (up, forward, down, with a headroom test) against a low obstacle; a dynamic body hit
 	 * is pushed with a bounded force; (4) a GROUND PROBE snaps it back onto a walkable surface within the snap distance,
-	 * so walking down stairs and slopes does not go airborne. The approach of K. Fauerby, "Improved Collision Detection
+	 * so walking down stairs and slopes does not go airborne. FLYING (the entity's free fly mode): no gravity, no step,
+	 * no ground probe, the whole wanted velocity — up and down included — reached with a short response, the capsule
+	 * still colliding and sliding (Unreal's `MOVE_Flying` movement mode). The approach of K. Fauerby, "Improved Collision Detection
 	 * and Response" (2003), Jolt's `CharacterVirtual` (MIT) and Godot's `move_and_slide()` — no code taken from them.
 	 * @note The character's capsule stands on its FEET: the position is the bottom of the capsule.
 	 */
@@ -198,14 +200,30 @@ namespace EmEn::Physics
 			bool setPushForce (float force) noexcept;
 
 			/**
-			 * @brief Sets the velocity the character wants to move at (its vertical part is ignored).
+			 * @brief Sets the velocity the character wants to move at (its vertical part is ignored, except when flying).
 			 * @param velocity A reference to the world velocity (m/s), finite.
 			 * @return bool False for a non-finite velocity.
 			 */
 			bool setWantedVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept;
 
 			/**
-			 * @brief Requests a jump on the next step, effective only when the character is grounded.
+			 * @brief Makes the character fly or walk (the scene follows the entity's free fly mode).
+			 * @note Flying keeps the velocity it had; back to walking, the flight's vertical speed becomes a fall or a rise.
+			 * @param state The state.
+			 * @return void
+			 */
+			void setFlying (bool state) noexcept;
+
+			/** @brief Returns whether the character flies. */
+			[[nodiscard]]
+			bool
+			isFlying () const noexcept
+			{
+				return m_flying;
+			}
+
+			/**
+			 * @brief Requests a jump on the next step, effective only when the character is grounded (never in flight).
 			 * @param launchSpeed The launch speed (m/s), finite and > 0.
 			 * @return bool False for an invalid speed.
 			 */
@@ -352,12 +370,17 @@ namespace EmEn::Physics
 			[[nodiscard]]
 			bool probeGround (const CharacterWorldInterface & world, const Base::Math::Vector< 3, float > & position, const Base::Math::Vector< 3, float > & upward, float length, CharacterWorldInterface::Hit & hit) const noexcept;
 
+			/** @brief The flying step after the depenetration: answers the feet position reached. */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float > fly (CharacterWorldInterface & world, const Base::Math::Vector< 3, float > & start, const Base::Math::Vector< 3, float > & feet, const Base::Math::Vector< 3, float > & upward, float deltaTime) noexcept;
+
 			/** @brief Tries to climb a low obstacle with a horizontal motion; answers true with the position reached. */
 			[[nodiscard]]
 			bool stepUp (const CharacterWorldInterface & world, const Base::Math::Vector< 3, float > & position, const Base::Math::Vector< 3, float > & horizontalMotion, const Base::Math::Vector< 3, float > & upward, Base::Math::Vector< 3, float > & reached) const noexcept;
 
 			Base::Math::Vector< 3, float > m_wantedVelocity;
 			Base::Math::Vector< 3, float > m_horizontalVelocity;
+			Base::Math::Vector< 3, float > m_flyVelocity;
 			Base::Math::Vector< 3, float > m_velocity;
 			Base::Math::Vector< 3, float > m_groundNormal{0.0F, 1.0F, 0.0F};
 			Base::Math::Vector< 3, float > m_supportVelocity;
@@ -374,5 +397,6 @@ namespace EmEn::Physics
 			float m_jumpSpeed{0.0F};
 			bool m_grounded{false};
 			bool m_jumpRequested{false};
+			bool m_flying{false};
 	};
 }

@@ -64,6 +64,14 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    of impact; the ground recovery (step 1b) stays as the safety net.
 11. **Order (owner, 2026-10-02, after P5's continuous collision)**: P4 now (the kinematic character), then the two
    remaining P5 items (`physics-triangle-mesh-static-shapes`, `physics-simulation-islands`).
+12. **P4 migration (owner, 2026-10-02, the recommendations)**: (1) the physical Player takes the CharacterController
+   (a capsule of its size, its speed as the wanted velocity); the ethereal one is unchanged; (2) its jump becomes a
+   launch speed giving TODAY's height, √(2 g h), Shift keeping its ×2 on the height — the owner tunes the feel by
+   playing; (3) fall damage from the Landed event's fall speed, the thresholds converted to keep today's damage;
+   (4) Paladin and Fox: walk / run speeds instead of forces (Paladin 1.5 / 4.5 m/s, Fox 1.2 / 5 m/s, to tune on the
+   animations), their animation from the controller's real velocity; (5) the Drone stays a dynamic body (a flying
+   machine); (6) order: the Player on citadel's stairs, the Paladin, the Fox, the dead teleport step-up removed, the
+   walking demos checked.
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -210,6 +218,26 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   (the tumbling cubes: the arm64 values); balls-of-steel 0 ball under the exact surface, the energy only decreasing
   (plateau ≈ −408 k J/kg on both); 7 demos clean. macOS: 0 GPU device loss in 35 launches, 20 with the validation
   layers (0 VUID) — the 2 losses seen on `a5c27ef3` / `d7795acf` did not come back.
+- **P4 (2026-10-02)**: the engine's kinematic character (`subsystems/physics/17-kinematic-character.md`, engine
+  `40d347e7`) — ACCEPTED on Windows (31 stations at 0, NVIDIA = AMD, every walker = Linux). macOS found that NO walker
+  was a character there: the component had every virtual inline, the application held its own hidden typeinfo and the
+  engine's `dynamic_pointer_cast` to it answered nullptr (libc++ compares type_info by address) — fixed by an
+  out-of-line destructor (its key function), `caution-points.md`, item `rtti-key-function-audit`. Then the actors
+  (projet-alpha `docs/subsystems/actor/06-6-walking-actors.md`): the physical Player, the Paladin and the Fox on the
+  controller, the Drone dynamic, the jump a launch speed (the former heights), the landing into `onCollision()`, the
+  dead `MovableTrait::setStepHeight()` removed. Measured: citadel's west flight climbed 0 → 9.65 m in 9 s at 1.4 m/s
+  by the keyboard path (console `keyDown` / `keyUp`, new: a held key survives the per-frame hardware copy); the
+  animation-debug paladins and fox walk to the player and stop (they left at 50-80 m/s as dynamic bodies); default,
+  basic-scenery, beams, terrain, liminal, citadel, collision, game-logic, animation-debug and the physics demos: clean
+  exits, 0 NaN, no new error, every character grounded. One defect found on the way (terrain): a still character crept
+  downhill 1.3 cm/s — the walkable depenetration is now vertical (`BenchStandSlope`).
+- **P4, the owner's play test (2026-10-02, citadel)**: (1) the three paladins vanished — a character met twice by the
+  physics step (the octree's `expand()` kept a splitting sector's elements AND filed them in the children: ~100 statics
+  and a paladin 2 to 7 times per cycle) collided with its own capsule and sank under the ground. Fixed in the octree
+  (one element, one sector in every operation, the owner's choice; `docs/caution-points.md`): 0 duplicates, 0 falls in
+  4 runs, the bench bit-identical. (2) V no longer flew — the controller ignored the free fly flag; it now has a
+  FLYING mode (the owner's choice, `subsystems/physics/17-kinematic-character.md` § Flying). The Shift jump keeps its
+  former 2.69 m (owner).
 
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
@@ -300,7 +328,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 | P1 foundation | emeraude-base | `contact-manifold-generation`, `shape-casts-with-hit-normal`, `collision-pair-test-defects`, `rigid-body-math-helpers` |
 | P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
-| P4 walking | engine, then projet-alpha | `kinematic-character-controller` (supersedes `physics-step-up-pass`), projet-alpha `actors-kinematic-character-migration` |
+| P4 walking | engine, then projet-alpha | `kinematic-character-controller` (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
 | P5 later | engine | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` |
 
 ## 5. What must survive the overhaul

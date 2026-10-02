@@ -676,6 +676,16 @@ namespace EmEn::Scenes
 			return lhs->creationNumber() < rhs->creationNumber();
 		});
 
+		/* The octree files each entity in ONE sector, so each is met once (a duplicate made a character collide with
+		 * itself and sink under the ground, 2026-10-02). Debug only: a per-cycle walk. */
+		if constexpr ( IsDebug )
+		{
+			if ( const auto duplicate = std::ranges::adjacent_find(bodyEntities); duplicate != bodyEntities.end() )
+			{
+				TraceError{ClassId} << "The physics octree holds '" << (*duplicate)->name() << "' twice !";
+			}
+		}
+
 		/* ============================================================
 		 * 0. THE KINEMATIC CHARACTERS (P4): moved by their controller before anything is solved — collide and slide,
 		 * steps, slopes, the support's velocity, the ground probe. They are kinematic bodies below (their velocity is
@@ -698,6 +708,13 @@ namespace EmEn::Scenes
 			}
 
 			auto & controller = character->controller();
+
+			/* The entity's free fly mode makes its character fly (no gravity, the wanted velocity in 3D). */
+			{
+				const auto * movable = entity->getMovableTrait();
+
+				controller.setFlying(movable != nullptr && movable->isFreeFlyModeEnabled());
+			}
 
 			/* The capsule follows the controller's size (set after linking, or changed during the game). */
 			{

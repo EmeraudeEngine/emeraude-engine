@@ -123,6 +123,15 @@ namespace EmEn::Input
 			static void changeKeyState (int32_t key, bool pressed) noexcept;
 
 			/**
+			 * @brief Holds or releases a key by INJECTION (the console's keyDown / keyUp): the held state survives the
+			 * per-frame copy of the hardware state (readDeviceState()), until released.
+			 * @param key The GLFW key code (an out-of-range code is ignored).
+			 * @param held Whether the key is held.
+			 * @return void
+			 */
+			static void injectKeyState (int32_t key, bool held) noexcept;
+
+			/**
 			 * @brief This function is called by the input manager to update device state.
 			 * @note This must be called by the main thread.
 			 * @param window A reference to the window.
@@ -146,6 +155,8 @@ namespace EmEn::Input
 		private:
 
 			static std::array< char, 349 > s_deviceState;
+			/** @brief The keys held by injection, OR-ed into the hardware state after each copy. */
+			static std::array< char, 349 > s_injectedState;
 
 			bool m_disabled{false};
 	};

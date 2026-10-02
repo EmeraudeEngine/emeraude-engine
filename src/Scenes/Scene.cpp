@@ -553,27 +553,9 @@ namespace EmEn::Scenes
 
 		if ( keepElements )
 		{
-			const auto collect = [&elements] (const OctreeSector< AbstractEntity, false > & sector, const auto & self) -> void {
-				for ( const auto & element : sector.elements() )
-				{
-					elements.emplace_back(element);
-				}
-
-				if ( sector.isLeaf() )
-				{
-					return;
-				}
-
-				for ( const auto & subSector : sector.subSectors() )
-				{
-					if ( subSector != nullptr )
-					{
-						self(*subSector, self);
-					}
-				}
-			};
-
-			collect(*m_renderingOctree, collect);
+			m_renderingOctree->forEachElement([&elements] (const std::shared_ptr< AbstractEntity > & element) {
+				elements.emplace_back(element);
+			});
 
 			for ( const auto & element : m_renderingOctreeOverflow )
 			{
@@ -617,16 +599,17 @@ namespace EmEn::Scenes
 			m_physicsOctree->autoCollapseEnabled()
 		);
 
-		/* Transfer all elements from the previous oldOctree (only the root sector) to the new one. */
+		/* Transfer all elements from the previous octree to the new one: EVERY sector's own elements, not the root's
+		 * (an element lives in the deepest sector that contains it; the root owns only what straddles its first split,
+		 * and this transferred almost nothing — the same defect the rendering octree's rebuild had). */
 		if ( keepElements )
 		{
-			for ( const auto & element : m_physicsOctree->elements() )
-			{
+			m_physicsOctree->forEachElement([&newOctree] (const std::shared_ptr< AbstractEntity > & element) {
 				if ( element->isCollidable() )
 				{
-					newOctree->insert(element);
+					static_cast< void >(newOctree->insert(element));
 				}
-			}
+			});
 		}
 
 		m_physicsOctree = nullptr;
@@ -656,10 +639,9 @@ namespace EmEn::Scenes
 
 			if ( showTree )
 			{
-				for ( const auto & element : m_renderingOctree->elements() )
-				{
+				m_renderingOctree->forEachElement([&output] (const std::shared_ptr< AbstractEntity > & element) {
 					output << "\t" "- " << element->name() << "\n";
-				}
+				});
 			}
 		}
 
@@ -679,15 +661,9 @@ namespace EmEn::Scenes
 
 			if ( showTree )
 			{
-				for ( const auto & subSector : m_physicsOctree->subSectors() )
-				{
-					output << " Sector depth:" << subSector->getDistance() << ", slot:" << subSector->slot() << "\n";
-
-					for ( const auto & element : subSector->elements() )
-					{
-						output << "\t" "- " << element->name() << "\n";
-					}
-				}
+				m_physicsOctree->forEachElement([&output] (const std::shared_ptr< AbstractEntity > & element) {
+					output << "\t" "- " << element->name() << "\n";
+				});
 			}
 		}
 

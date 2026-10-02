@@ -2909,6 +2909,28 @@ atlases at 49 s / 59 s; screenshots from 55 s instead of 75 s. The octree's own 
 explodes at one pose only (here, the origin, where the early entities are) is a duplication before it is a
 cost.
 
+### Fixed: the physics octree met a body up to 7 times — a character collided with ITSELF and sank (Oct 2026)
+
+> **Symptom (2026-10-02, citadel, P4):** the owner found the three paladins gone. One gate guard sank through the
+> ground at the start (y −2.3 at the first sample, then free fall to −400 m); it depended on the run.
+
+The root cause of the section above, never fixed until then: `OctreeSector::expand()` kept a splitting sector's
+elements AND inserted them in every child they touched, so an element filed before a split lived in several sectors.
+The physics step collects its bodies from every sector's OWNED range and sorts them by creation number: about a
+hundred of citadel's statics came 2 to 7 times per cycle, and so did a paladin. Its character world skipped its own
+index, not its second copy: the capsule met itself (0.91 m deep, normal +Y), three depenetration passes put it 2.3 m
+under the one-sided ground, nothing was under it any more.
+
+**Fix:** the octree keeps ONE ELEMENT, ONE SECTOR in every operation (`expand()` moves, `collapse()` pulls up,
+`update()` refiles, `forEachElement()` lists — `docs/subsystems/scenes/24-octree-storage-and-traversal-scenes-octreesector-hpp.md`).
+Measured: 0 duplicates, 0 falls in 4 runs; the bench bit-identical. `rebuildPhysicsOctree()` transferred the root's
+elements only, projet-alpha's `Act::processLogics()` walked the actor octree's root only and updated it while walking:
+fixed on the way.
+
+**Rules:** `sector.elements()` is THAT sector's own set — all the elements are `forEachElement()`. Never move an
+element (`update()`, `erase()`, `insert()`) while walking the octree: gather first. A "self" test by index is only
+sound on a list proven free of duplicates (the physics step checks it in Debug).
+
 
 ### Fixed: a scene's first frame read the NEVER-WRITTEN slot of the triple buffer — every entity at the origin (Sep 2026)
 
@@ -4855,6 +4877,19 @@ dereference what a resource accessor returns without checking it.**
 > - Existing code that sets them on the entity (`collision-debug`'s `DynTopCube`) does not simulate what it declares.
 > - Whether the entity-level setter should keep existing is a decision for the physics overhaul
 >   (`docs/physics-overhaul.md`).
+
+### macOS: a dynamic_cast in the engine to a class whose virtuals are ALL inline fails if the application built it (2026-10-02)
+
+> [!CAUTION]
+> A polymorphic class with no out-of-line virtual function has no KEY FUNCTION: its vtable and typeinfo are emitted in
+> every image that constructs it, hidden by `-fvisibility=hidden`. When the APPLICATION builds the object (a
+> `componentBuilder< T >()` in projet-alpha) and the ENGINE casts it (`std::dynamic_pointer_cast< T >`), libc++ on Apple
+> compares the two type_info by ADDRESS (unique RTTI) and the cast answers nullptr; libstdc++ (Linux) and MSVC compare
+> names, so it works there — the defect is macOS-only and silent. Met with `Component::CharacterController`: on macOS
+> no walker was a character (`nm -m`: two "non-external" typeinfo copies, the framework's and the app's).
+> - Rule: an EMEN_API polymorphic class must have ONE out-of-line virtual function (the destructor, `= default` in its
+>   .cpp is enough). The audit of the existing ones: engine item `rtti-key-function-audit`.
+> - A tag check (`isComponent(ClassId)`) does not save a dynamic_cast that follows it.
 
 ### Physics: a triangle ground is a SURFACE — a body that crosses it in one step is pushed THROUGH it (fixed 2026-10-02)
 

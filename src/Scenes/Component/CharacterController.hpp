@@ -85,6 +85,15 @@ namespace EmEn::Scenes::Component
 				this->setContributesToEntityExtents(false);
 			}
 
+			/**
+			 * @brief Destructs the component.
+			 * @note ⚠️ Defined OUT OF LINE on purpose: it is the class's KEY FUNCTION, so its vtable and typeinfo live in
+			 * the engine library only. With every virtual inline they were emitted, hidden, in the application that
+			 * builds the component, and on macOS (libc++ compares type_info by address) the engine's dynamic_cast to it
+			 * failed: no character on macOS (2026-10-02). docs/caution-points.md.
+			 */
+			~CharacterController () override;
+
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
 			const char *

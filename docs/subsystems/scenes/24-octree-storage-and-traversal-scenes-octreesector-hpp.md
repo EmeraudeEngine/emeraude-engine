@@ -6,6 +6,33 @@
 *all-levels* storage, where an element was copied into every sector it touched at every depth —
 the cause of the 104 GB above.
 
+**Completed 2026-10-02 — every operation keeps it** (until then `expand()` still copied, see below):
+
+| Operation | What it does |
+|---|---|
+| `insert()` | descends while a child contains the element entirely, stores it there |
+| `expand()` | MOVES each element into the child that contains it entirely; a straddler stays in the parent |
+| `collapse()` | pulls every descendant's element back up before releasing the children (they lived in ONE sector) |
+| `update()` | finds the owner (first along the path the current volume would take, then the whole subtree); keeps it there while that sector still contains it whole and no child does, else erases it there and files it again from the root; an element outside the root stays AT the root |
+| `erase()` | stops where it is found |
+| `forEachElement()` | every element of the subtree, each ONCE — the way to list "all elements" (`elements()` is ONE sector's own set) |
+| `getFirstElementNamed()` | searches the subtree, not one sector |
+| auto-collapse (`isStillLeaf()`) | counts the SUBTREE (`subtreeElementCount()`), not the sector's own set |
+
+⚠️⚠️ **What the leftover copy did (2026-10-02, citadel):** `expand()` kept a splitting sector's elements AND
+inserted them in every child they touched (`insert()` tests overlap, not containment). An element filed before a
+split lived in 2 to 7 sectors — about a hundred of citadel's statics (towers, merlons, stairs) were met 2 to 7 times
+per physics cycle. A gate guard (a P4 kinematic character) met ITSELF: 0.91 m of penetration with its own capsule,
+normal +Y, three depenetration passes pushed it 2.3 m under the one-sided ground, and it fell forever. It depended
+on whether the paladin was filed before or after a split (4/4 falls polled from the first frames, 0/3 otherwise);
+after: 0 duplicates and 0 falls in 4 runs, the 32-station bench bit-identical to before (no duplicate there).
+`Scene::rebuildPhysicsOctree()` transferred only the ROOT's elements (the rendering rebuild had been fixed, this one
+not); projet-alpha's `Act::processLogics()` walked the root of its actor octree (past 256 actors the actors added
+after the split were never processed) and called `update()` inside that walk — both now use `forEachElement()`, the
+Act into a reused vector before anything moves. The physics step reports a duplicated body in Debug
+(`adjacent_find` after its creation-order sort). The rendering gathers' stamp
+(`AbstractEntity::markCollectedByRenderingGather()`) is redundant now and stays as a cheap guard.
+
 > [!CAUTION]
 > **The invariant changes what a traversal must read, and getting that wrong is silent.**
 >
@@ -60,7 +87,7 @@ the cause of the 104 GB above.
 > once, at its owning sector, against the inherited statics plus `forTouchedSector(aabb)` over the
 > sector's subtree (`Scene::accumulateStaticEntityCorrections()`).
 
-**The render lists QUERY the rendering octree since 2026-09-25** (owner: "use the octree"). ⚠️⚠️ **A scene is not drawn before its first state publication** (`Scene::hasPublishedStateForRendering()`, gated in `Core::renderingTask()`): the render thread's triple-buffer slot 0 is never written before it, so the first frame read every entity at the ORIGIN — `terrain` drew 817 745 LOD-0 tree instances, 55.7 G triangles, and hung the macOS/Windows GPUs (`docs/caution-points.md` § *NEVER-WRITTEN slot*). ⚠️⚠️ **Each gather DE-DUPLICATES** (`AbstractEntity::markCollectedByRenderingGather()`, a per-gather stamp): `OctreeSector::expand()` keeps a splitting sector's elements in the parent AND files them in the children, so an entity sits in several sectors — the first version drew every copy and hung the macOS and Windows GPUs on `terrain` (1.09 G triangles at the spawn instead of 40.6 M; `docs/caution-points.md` § *drew an entity once per sector copy*, item `octree-expand-keeps-parent-elements`).
+**The render lists QUERY the rendering octree since 2026-09-25** (owner: "use the octree"). ⚠️⚠️ **A scene is not drawn before its first state publication** (`Scene::hasPublishedStateForRendering()`, gated in `Core::renderingTask()`): the render thread's triple-buffer slot 0 is never written before it, so the first frame read every entity at the ORIGIN — `terrain` drew 817 745 LOD-0 tree instances, 55.7 G triangles, and hung the macOS/Windows GPUs (`docs/caution-points.md` § *NEVER-WRITTEN slot*). ⚠️⚠️ **Each gather DE-DUPLICATES** (`AbstractEntity::markCollectedByRenderingGather()`, a per-gather stamp): until 2026-10-02 `OctreeSector::expand()` kept a splitting sector's elements in the parent AND filed them in the children, so an entity sat in several sectors (fixed above; the stamp stays as a guard) — the first version drew every copy and hung the macOS and Windows GPUs on `terrain` (1.09 G triangles at the spawn instead of 40.6 M; `docs/caution-points.md` § *drew an entity once per sector copy*).
 `Scene::gatherRenderingCandidates(acceptsBox, candidates)` walks it with a box test and collects the
 entities the volume may see — a sector is an `AACuboid`, and every entity is owned by the deepest sector
 that FULLY contains its render box, so a missed sector is skipped with its subtree. The raster list uses the

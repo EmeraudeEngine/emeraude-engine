@@ -38,6 +38,7 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -62,14 +63,14 @@ namespace EmEn::Scenes
 	 *
 	 * This class implements a dynamic octree spatial partitioning structure used for both
 	 * rendering (frustum culling) and physics (collision broad-phase detection). The octree
-	 * subdivides 3D space into eight child sectors recursively, storing elements at all levels
-	 * they intersect for efficient spatial queries.
+	 * subdivides 3D space into eight child sectors recursively; each element is stored in ONE
+	 * sector, the deepest that contains it entirely.
 	 *
 	 * The template supports two modes via the enable_volume parameter:
-	 * - Point-based (enable_volume=false): Elements inserted based on their position point only.
-	 *   Used for rendering octrees where each element occupies a single leaf sector.
-	 * - Volume-based (enable_volume=true): Elements inserted based on their bounding volume
-	 *   (AABB or Sphere). Used for physics octrees where elements can span multiple sectors.
+	 * - Rendering (enable_volume=false): Elements filed by their visual extent, or their
+	 *   position point when they report none.
+	 * - Physics (enable_volume=true): Elements filed by their collision model's world AABB
+	 *   (their position for a point model).
 	 *
 	 * Key features:
 	 * - Zero-overhead callbacks: Template methods (forTouchedSector, forSurroundingSectors)
@@ -85,30 +86,19 @@ namespace EmEn::Scenes
 	 * @tparam element_t The type of elements stored in the octree. Must inherit from both
 	 *				   EmEn::Scenes::LocatableInterface (provides position/volume) and
 	 *				   EmEn::Base::NameableTrait (provides name for debugging).
-	 * @tparam enable_volume When true, uses element's bounding volume (AABB/Sphere) for
-	 *					   insertion, allowing elements to span multiple sectors (physics mode).
-	 *					   When false, uses only the element's position point (rendering mode).
+	 * @tparam enable_volume When true, files an element by its collision volume (physics mode);
+	 *					   when false, by its visual extent (rendering mode).
 	 *
-	 * @note DESIGN CONSIDERATION - Storage Strategy (All-Levels vs Leaf-Only):
-	 *	   Current implementation stores elements at ALL levels they touch (root to leaves).
-	 *	   Alternative: Store elements only in leaf sectors.
-	 *
-	 *	   Current (All-Levels) - CPU optimized:
-	 *	   + Fast early-exit: m_elements.empty() skips empty branches without traversal
-	 *	   + Local decisions: isStillLeaf() decides expand/collapse without checking children
-	 *	   + O(1) contains() at any level
-	 *	   - Higher memory: elements duplicated in parent sectors (shared_ptr overhead only)
-	 *
-	 *	   Alternative (Leaf-Only) - Memory optimized:
-	 *	   + Lower memory footprint
-	 *	   + Simpler erase() logic
-	 *	   - Must traverse to leaves to check emptiness
-	 *	   - Breaks current expand/collapse logic based on m_elements.size()
-	 *	   - No early-exit optimization
-	 *
-	 *	   Assessment: Current all-levels strategy prioritizes CPU performance over memory.
-	 *	   The memory overhead is acceptable (shared_ptr = pointer + refcount, not entity copy).
-	 *	   A compile-time template parameter could be added to switch strategies if needed.
+	 * @note STORAGE INVARIANT — ONE ELEMENT, ONE SECTOR (2026-08-09, completed 2026-10-02):
+	 *	   an element lives in the deepest sector that contains it ENTIRELY; what straddles a
+	 *	   boundary stays on the inner node. insert(), expand() (a split moves each element down
+	 *	   into the child containing it), collapse() (the children's elements come back up),
+	 *	   update() and erase() all keep it. A walker therefore visits INNER nodes too, and an
+	 *	   empty sector does not prove an empty subtree (walkSectors(), forTouchedSector()).
+	 *	   The former all-levels copy cost 104 GB on 20000 instances (8^depth copies); until
+	 *	   2026-10-02 expand() still kept it, so an element filed before a split lived in 2 to 7
+	 *	   sectors — the physics step met a character twice and its own capsule pushed it under
+	 *	   the ground (citadel's gate guards).
 	 *
 	 * @note OPTIMIZATION CONSIDERATION - Cached Sector Reference in Entity:
 	 *	   Potential optimization: store a pointer to the last known sector in the entity itself.
@@ -327,9 +317,8 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Checks whether this sector contains no elements.
 			 *
-			 * An empty sector has no elements registered at this level. Due to the all-levels
-			 * storage strategy, if a sector is empty, all its descendants are guaranteed to be
-			 * empty as well (enabling fast early-exit in traversal algorithms).
+			 * An empty sector has no elements registered at this level. ⚠️ Its descendants may hold
+			 * some (one element, one sector): this does not prove an empty subtree.
 			 *
 			 * @return True if no elements are stored in this sector, false otherwise.
 			 *
@@ -696,9 +685,8 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Checks whether an element is present in this sector.
 			 *
-			 * Tests if the element is registered in this specific sector's element set.
-			 * Due to the all-levels storage strategy, an element present in a child sector
-			 * will also be present in all its parent sectors.
+			 * Tests if the element is registered in this specific sector's element set. An element
+			 * lives in ONE sector: an element held by a child is absent from this one.
 			 *
 			 * @param element Shared pointer to the element to search for.
 			 *
@@ -742,7 +730,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Inserts an element into the octree at this sector level and all descendant sectors it touches.
+			 * @brief Inserts an element into the deepest sector of this subtree that contains it entirely.
 			 *
 			 * This is the primary insertion method that dispatches to the appropriate collision primitive
 			 * based on the template parameter enable_volume:
@@ -751,8 +739,8 @@ namespace EmEn::Scenes
 			 * - When enable_volume=true (physics octree): Uses the element's collision model AABB
 			 *   or position for Point types (as determined by element->collisionModel()).
 			 *
-			 * The element is inserted at this level if it collides with this sector, then recursively
-			 * inserted into all child sectors it touches (all-levels storage strategy).
+			 * The element descends while a child contains it entirely and is stored there; what
+			 * straddles a boundary is stored at this level (one element, one sector).
 			 *
 			 * @param element Shared pointer to the element to insert. Must provide position and
 			 *				(if enable_volume=true) collision detection model and bounding volume.
@@ -761,7 +749,6 @@ namespace EmEn::Scenes
 			 *		 false if the element is outside this sector's bounds or already present.
 			 *
 			 * @note Automatically triggers subdivision if element count exceeds maxElementPerSector.
-			 * @note For volume-based insertion, elements can span multiple sectors simultaneously.
 			 * @note Duplicate insertions of the same element are ignored (idempotent operation).
 			 *
 			 * @see insertWithPrimitive()
@@ -771,45 +758,9 @@ namespace EmEn::Scenes
 			bool
 			insert (const std::shared_ptr< element_t > & element) noexcept
 			{
-				if constexpr ( enable_volume )
-				{
-					/* If no collision model, use position as a point. */
-					if ( !element->hasCollisionModel() )
-					{
-						return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
-					}
-
-					const auto * model = element->collisionModel();
-
-					/* Point models use position directly. */
-					if ( model->modelType() == Physics::CollisionModelType::Point )
-					{
-						return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
-					}
-
-					/* All other models (Sphere, AABB, Capsule) use their world AABB. */
-					return this->insertWithPrimitive(element, model->getAABB(element->getWorldCoordinates()));
-				}
-				else
-				{
-					/* ⚠️ This branch used to insert every renderable as a POINT at its origin, so
-					 * a 250-unit terrain tile — or a cell holding a thousand instanced trees —
-					 * was culled by whether its ORIGIN landed in a visible sector. It vanished
-					 * while filling half the screen. The VISUAL extent is used instead, and the
-					 * point remains the fallback for anything that reports none. */
-					/* Detected at compile time rather than required: the octree is generic, and an
-					 * element type that knows nothing about rendering must not be forced to
-					 * implement it just to be stored. */
-					if constexpr ( requires { element->getWorldRenderBoundingBox(); } )
-					{
-						if ( const auto renderBox = element->getWorldRenderBoundingBox(); renderBox.isValid() )
-						{
-							return this->insertWithPrimitive(element, renderBox);
-						}
-					}
-
-					return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
-				}
+				return withPrimitive(element, [this, &element] (const auto & primitive) {
+					return this->insertWithPrimitive(element, primitive);
+				});
 			}
 
 			/**
@@ -866,27 +817,21 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Updates an element's position within the octree after it has moved.
 			 *
-			 * This method re-evaluates the element's position/volume and adjusts its placement
-			 * in the octree hierarchy. If the element has moved into different sectors, it will
-			 * be removed from old sectors and added to new ones.
-			 *
-			 * Algorithm behavior differs by template mode:
-			 * - enable_volume=false (rendering): Fast-path optimization checks if element is still
-			 *   in its last known leaf sector before full traversal.
-			 * - enable_volume=true (physics): Full re-evaluation since elements can span multiple sectors.
+			 * The element stays in its sector while that sector still contains it entirely and no
+			 * child of it does; otherwise it leaves it and is filed again from the root. The sector
+			 * holding it is searched first along the path its current volume would take.
 			 *
 			 * @param element Shared pointer to the element to update. Must already be in the octree.
 			 *
 			 * @return True if the element is still within the octree bounds, false if it moved
-			 *		 completely outside the root sector (element will be removed).
+			 *		 completely outside the root sector (it is then kept at the root, and filed
+			 *		 again when it comes back).
 			 *
 			 * @pre This method must be called on the root sector only. Debug builds will assert this.
-			 * @pre The element must already be present in the octree (use insert() for new elements).
+			 * @pre The element must already be present in the octree (use insert() for new elements);
+			 *	   an absent element is inserted.
 			 *
 			 * @note If the root sector is not expanded (still a leaf), this is a no-op that returns true.
-			 * @note For point-based octrees, includes fast-path: checks last leaf sector first.
-			 *
-			 * @todo Verify the specific fast-path check for point-based mode (enable_volume=false).
 			 *
 			 * @see insert()
 			 * @see updateOrInsert()
@@ -905,69 +850,21 @@ namespace EmEn::Scenes
 					}
 				}
 
-				/* NOTE: If the root sector is not split down, there is no need to check. */
+				/* NOTE: If the root sector is not split down, the element is in the root: nothing to move. */
 				if ( !m_isExpanded )
 				{
 					return true;
 				}
 
-				/* TODO: Verify the specific check when not using volume. */
-				if constexpr ( enable_volume )
-				{
-					/* If no collision model, use position as a point. */
-					if ( !element->hasCollisionModel() )
-					{
-						return this->checkElementOverlapWithPrimitive(element, element->getWorldCoordinates().position());
-					}
-
-					const auto * model = element->collisionModel();
-
-					/* Point models use position directly. */
-					if ( model->modelType() == Physics::CollisionModelType::Point )
-					{
-						return this->checkElementOverlapWithPrimitive(element, element->getWorldCoordinates().position());
-					}
-
-					/* All other models (Sphere, AABB, Capsule) use their world AABB. */
-					return this->checkElementOverlapWithPrimitive(element, model->getAABB(element->getWorldCoordinates()));
-				}
-				else
-				{
-					/* Same compile-time detection as insert(): the VISUAL extent when the element
-					 * has one, its position otherwise. */
-					if constexpr ( requires { element->getWorldRenderBoundingBox(); } )
-					{
-						if ( const auto renderBox = element->getWorldRenderBoundingBox(); renderBox.isValid() )
-						{
-							/* ⚠️ No "still in the same subsector" early-out here, unlike the point
-							 * path below. An element whose ORIGIN has not left its subsector can
-							 * still have grown — an animated pose, a rebuilt instance set — so its
-							 * box now spans sectors it is not registered in. The point shortcut is
-							 * only sound for something that has no extent. */
-							return this->checkElementOverlapWithPrimitive(element, renderBox);
-						}
-					}
-
-					const auto position = element->getWorldCoordinates().position();
-
-					/* NOTE: Does the element moved out the last registered subsector boundaries? */
-					const auto * lastSubSector = this->getDeepestSubSector(element);
-
-					if ( Base::Math::Space3D::isColliding(*lastSubSector, position) )
-					{
-						return true;
-					}
-
-					return this->checkElementOverlapWithPrimitive(element, position);
-				}
+				return withPrimitive(element, [this, &element] (const auto & primitive) {
+					return this->refileWithPrimitive(element, primitive);
+				});
 			}
 
 			/**
-			 * @brief Removes an element from the octree at this level and all descendant sectors.
+			 * @brief Removes an element from the sector of this subtree that holds it.
 			 *
-			 * Recursively removes the element from this sector and all child sectors. Due to the
-			 * all-levels storage strategy, the element must be removed from every sector it was
-			 * inserted into.
+			 * The element lives in ONE sector: the walk stops where it is found.
 			 *
 			 * If auto-collapse is enabled, this operation may trigger sector collapse if removing
 			 * the element reduces the sector's element count below the collapse threshold.
@@ -999,13 +896,16 @@ namespace EmEn::Scenes
 				 * erase anything. The whole subtree is walked instead. */
 				auto erased = m_elements.erase(element) > 0;
 
-				if ( !this->isLeaf() )
+				/* ONE sector holds it: found here, nothing below holds it too. */
+				if ( !erased && !this->isLeaf() )
 				{
 					for ( const auto & subSector : m_subSectors )
 					{
 						if ( subSector->erase(element, false) )
 						{
 							erased = true;
+
+							break;
 						}
 					}
 				}
@@ -1021,15 +921,14 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Returns the number of elements stored in this sector.
 			 *
-			 * Counts only elements at this specific sector level, not including descendants.
-			 * Due to the all-levels storage strategy, elements present in child sectors are
-			 * also counted in their parent sectors.
+			 * Counts only elements at this specific sector level, not including descendants (an
+			 * element lives in one sector).
 			 *
 			 * @return The number of elements in this sector's element set.
 			 *
 			 * @note This is an O(1) operation.
-			 * @note To count total unique elements in the entire octree, call this on leaf
-			 *	   sectors only and aggregate the results.
+			 * @note The elements of the whole octree are the sum over every sector, inner nodes
+			 *	   included (forEachElement()).
 			 */
 			[[nodiscard]]
 			size_t
@@ -1046,7 +945,7 @@ namespace EmEn::Scenes
 			 *
 			 * @return Const reference to the unordered_set of element shared pointers.
 			 *
-			 * @note Elements in this set are also present in all child sectors they intersect.
+			 * @note An element of this set is in no other sector.
 			 * @note Do not modify the returned set. Use insert() and erase() to modify octree contents.
 			 *
 			 * @see elementCount()
@@ -1059,19 +958,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Searches for the first element with a specific name in this sector.
+			 * @brief Searches for the first element with a specific name in this subtree.
 			 *
-			 * Performs a linear search through this sector's element set to find an element
-			 * matching the given name. Only searches the local sector, not descendants.
+			 * Performs a linear search through this sector's elements, then its descendants'.
 			 *
 			 * @param name The name to search for (compared via element->name()).
 			 *
 			 * @return Shared pointer to the first matching element, or nullptr if no element
-			 *		 with that name exists in this sector.
+			 *		 with that name exists in this subtree.
 			 *
-			 * @note This searches only the current sector. To search the entire octree, call
-			 *	   this on the root sector (which contains all elements due to all-levels storage).
-			 * @note Has O(n) complexity where n is the number of elements in this sector.
+			 * @note Call it on the root to search the entire octree.
+			 * @note Has O(n) complexity where n is the number of elements in this subtree.
 			 * @note If multiple elements share the same name, only the first one found is returned
 			 *	   (iteration order is unspecified due to unordered_set).
 			 */
@@ -1087,7 +984,43 @@ namespace EmEn::Scenes
 					}
 				}
 
+				if ( !this->isLeaf() )
+				{
+					for ( const auto & subSector : m_subSectors )
+					{
+						if ( auto element = subSector->getFirstElementNamed(name); element != nullptr )
+						{
+							return element;
+						}
+					}
+				}
+
 				return nullptr;
+			}
+
+			/**
+			 * @brief Calls a function on every element of this subtree, each once (one element, one sector).
+			 * @tparam function_t A callable taking a const reference to the element smart pointer.
+			 * @param function The callable.
+			 */
+			template< typename function_t >
+			void
+			forEachElement (function_t && function) const noexcept
+			{
+				for ( const auto & element : m_elements )
+				{
+					function(element);
+				}
+
+				if ( this->isLeaf() )
+				{
+					return;
+				}
+
+				for ( const auto & subSector : m_subSectors )
+				{
+					subSector->forEachElement(function);
+				}
 			}
 
 			/**
@@ -1211,8 +1144,8 @@ namespace EmEn::Scenes
 			 * collide with the provided geometric primitive (frustum, sphere, AABB, etc.). This is
 			 * the primary spatial query method for frustum culling, range queries, and collision detection.
 			 *
-			 * The traversal is optimized via early-exit: if a sector is empty (m_elements.empty()),
-			 * the entire subtree is skipped without recursion, thanks to the all-levels storage strategy.
+			 * ⚠️ An empty sector does not prove an empty subtree (one element, one sector): the
+			 * callback is skipped for it and the walk continues below.
 			 *
 			 * @tparam primitive_t The primitive type for collision testing (automatically deduced).
 			 *					 Supported: Vector<3,float> (point), Sphere, AACuboid, Frustum.
@@ -1640,7 +1573,7 @@ namespace EmEn::Scenes
 				if ( m_autoCollapseEnabled )
 				{
 					/* If the number of elements is below the sector limit, we merge the subsectors. */
-					if ( m_isExpanded && m_elements.size() < m_maxElementPerSector / 2 )
+					if ( m_isExpanded && this->subtreeElementCount() < m_maxElementPerSector / 2 )
 					{
 						this->collapse();
 
@@ -1773,66 +1706,220 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Internal update implementation that validates and adjusts element placement.
-			 *
-			 * This method recursively checks whether an element's primitive still intersects
-			 * the correct sectors after a position/volume change. It removes the element from
-			 * sectors it no longer touches and adds it to new sectors it now intersects.
-			 *
-			 * Algorithm at each sector:
-			 * 1. Test if primitive still collides with this sector
-			 * 2. If no collision and not root: remove element from this sector and descendants
-			 * 3. If collision but element missing: insert element (moved into this branch)
-			 * 4. If collision and element present: recursively check all child sectors
-			 *
-			 * @tparam primitive_t The primitive type for collision testing (automatically deduced).
-			 *					 Supported: Vector<3,float> (point), Sphere, AACuboid.
-			 * @param element Shared pointer to the element to update.
-			 * @param primitive The collision primitive representing the element's current spatial extent.
-			 *
-			 * @return True if the element still intersects the octree (remains in the root sector),
-			 *		 false if it moved completely outside the root bounds.
-			 *
-			 * @note This is called by the public update() method after determining the appropriate
-			 *	   primitive based on the element's collision detection model.
-			 * @note The root sector never removes the element, allowing it to be re-inserted if
-			 *	   it moves back into bounds.
-			 *
-			 * @see update()
-			 * @see insertWithPrimitive()
+			 * @brief Calls a function with the primitive an element is filed by.
+			 * @note The physics octree (enable_volume) files an element by its collision model's world AABB, or by its
+			 * position for a point model or none. The rendering octree files it by its VISUAL extent: this branch used
+			 * to insert every renderable as a POINT at its origin, so a 250-unit terrain tile — or a cell holding a
+			 * thousand instanced trees — was culled by whether its ORIGIN landed in a visible sector, and vanished while
+			 * filling half the screen. The point remains the fallback for anything that reports no extent. The render
+			 * extent is detected at compile time rather than required: the octree is generic, and an element type that
+			 * knows nothing about rendering must not be forced to implement it just to be stored.
+			 * @tparam function_t A callable taking the primitive (a point or an AACuboid) and returning a bool.
+			 * @param element A reference to the element smart pointer.
+			 * @param function The callable.
+			 * @return bool What the callable returned.
+			 */
+			template< typename function_t >
+			[[nodiscard]]
+			static bool
+			withPrimitive (const std::shared_ptr< element_t > & element, function_t && function) noexcept
+			{
+				if constexpr ( enable_volume )
+				{
+					if ( !element->hasCollisionModel() )
+					{
+						return std::forward< function_t >(function)(element->getWorldCoordinates().position());
+					}
+
+					const auto * model = element->collisionModel();
+
+					if ( model->modelType() == Physics::CollisionModelType::Point )
+					{
+						return std::forward< function_t >(function)(element->getWorldCoordinates().position());
+					}
+
+					/* All other models (Sphere, AABB, Capsule) use their world AABB. */
+					return std::forward< function_t >(function)(model->getAABB(element->getWorldCoordinates()));
+				}
+				else
+				{
+					if constexpr ( requires { element->getWorldRenderBoundingBox(); } )
+					{
+						if ( const auto renderBox = element->getWorldRenderBoundingBox(); renderBox.isValid() )
+						{
+							return std::forward< function_t >(function)(renderBox);
+						}
+					}
+
+					return std::forward< function_t >(function)(element->getWorldCoordinates().position());
+				}
+			}
+
+			/**
+			 * @brief Returns the child that contains a primitive ENTIRELY, if any.
+			 * @tparam primitive_t The primitive type.
+			 * @param primitive A reference to the primitive.
+			 * @return OctreeSector * The child, or nullptr on a leaf or when the primitive straddles the children.
+			 */
+			template< typename primitive_t >
+			[[nodiscard]]
+			OctreeSector *
+			childFullyContaining (const primitive_t & primitive) const noexcept
+			{
+				if ( this->isLeaf() )
+				{
+					return nullptr;
+				}
+
+				for ( const auto & subSector : m_subSectors )
+				{
+					if ( subSector->isFullyContaining(primitive) )
+					{
+						return subSector.get();
+					}
+				}
+
+				return nullptr;
+			}
+
+			/**
+			 * @brief Returns the sector that holds an element.
+			 * @note An element that moved a little is usually still where its current volume would be filed: that path
+			 * (each level's child containing the primitive) is searched first, then the whole subtree.
+			 * @tparam primitive_t The primitive type.
+			 * @param element A reference to the element smart pointer.
+			 * @param primitive The element's current primitive.
+			 * @return OctreeSector * The sector, or nullptr when the element is not in this subtree.
+			 */
+			template< typename primitive_t >
+			[[nodiscard]]
+			OctreeSector *
+			findOwner (const std::shared_ptr< element_t > & element, const primitive_t & primitive) noexcept
+			{
+				for ( auto * sector = this; sector != nullptr; sector = sector->childFullyContaining(primitive) )
+				{
+					if ( sector->m_elements.contains(element) )
+					{
+						return sector;
+					}
+				}
+
+				return this->findOwnerAnywhere(element);
+			}
+
+			/**
+			 * @brief Returns the sector of this subtree that holds an element, by a full walk.
+			 * @param element A reference to the element smart pointer.
+			 * @return OctreeSector * The sector, or nullptr.
+			 */
+			[[nodiscard]]
+			OctreeSector *
+			findOwnerAnywhere (const std::shared_ptr< element_t > & element) noexcept
+			{
+				if ( m_elements.contains(element) )
+				{
+					return this;
+				}
+
+				if ( this->isLeaf() )
+				{
+					return nullptr;
+				}
+
+				for ( const auto & subSector : m_subSectors )
+				{
+					if ( auto * owner = subSector->findOwnerAnywhere(element); owner != nullptr )
+					{
+						return owner;
+					}
+				}
+
+				return nullptr;
+			}
+
+			/**
+			 * @brief Moves an element to the sector its current volume belongs to (the root's update()).
+			 * @note ONE ELEMENT, ONE SECTOR: it stays where it is when that sector still contains it whole and no child
+			 * of it does; otherwise it leaves its sector and is filed again from the root. An element that left the
+			 * root entirely is KEPT at the root, so it is filed again when it comes back.
+			 * @tparam primitive_t The primitive type.
+			 * @param element A reference to the element smart pointer.
+			 * @param primitive The element's current primitive.
+			 * @return bool False when the element is outside the root.
 			 */
 			template< typename primitive_t >
 			bool
-			checkElementOverlapWithPrimitive (const std::shared_ptr< element_t > & element, const primitive_t & primitive) noexcept
+			refileWithPrimitive (const std::shared_ptr< element_t > & element, const primitive_t & primitive) noexcept
 			{
+				auto * owner = this->findOwner(element, primitive);
+
 				if ( !this->isCollidingWith(primitive) )
 				{
-					/* If this sector is not the root, we remove the element. */
-					if ( !this->isRoot() )
+					if ( owner != this )
 					{
-						this->erase(element);
+						if ( owner != nullptr )
+						{
+							owner->m_elements.erase(element);
+						}
+
+						m_elements.emplace(element);
 					}
 
 					return false;
 				}
 
-				/* If the element is not present to this sector.
-				 * We let the insertion algorithm do the work. */
-				if ( !m_elements.contains(element) )
+				if ( owner != nullptr )
 				{
-					return this->insertWithPrimitive(element, primitive);
+					if ( (owner == this || owner->isFullyContaining(primitive)) && owner->childFullyContaining(primitive) == nullptr )
+					{
+						return true;
+					}
+
+					owner->m_elements.erase(element);
 				}
 
-				/* It this sector is not a leaf, we propagate the current test below. */
+				return this->insertWithPrimitive(element, primitive);
+			}
+
+			/**
+			 * @brief Adds every element of this subtree to a set (a collapse pulls its children's elements up).
+			 * @param target A reference to the set.
+			 */
+			void
+			gatherElements (std::unordered_set< std::shared_ptr< element_t > > & target) const noexcept
+			{
+				target.insert(m_elements.begin(), m_elements.end());
+
+				if ( this->isLeaf() )
+				{
+					return;
+				}
+
+				for ( const auto & subSector : m_subSectors )
+				{
+					subSector->gatherElements(target);
+				}
+			}
+
+			/**
+			 * @brief Returns the number of elements of this subtree.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			subtreeElementCount () const noexcept
+			{
+				auto count = m_elements.size();
+
 				if ( !this->isLeaf() )
 				{
 					for ( const auto & subSector : m_subSectors )
 					{
-						subSector->checkElementOverlapWithPrimitive(element, primitive);
+						count += subSector->subtreeElementCount();
 					}
 				}
 
-				return true;
+				return count;
 			}
 
 			/**
@@ -1840,11 +1927,10 @@ namespace EmEn::Scenes
 			 *
 			 * Creates 8 child sectors by splitting this sector's volume along each axis at its center point.
 			 * Each child sector has half the width/height/depth of the parent. All elements currently in
-			 * this sector are redistributed to the appropriate child sectors based on their spatial extent.
+			 * this sector move into the child that contains them entirely.
 			 *
 			 * The eight child sectors are arranged according to the octant constants (slot indices 0-7).
-			 * This method allocates 8 std::make_shared<OctreeSector> and redistributes all elements
-			 * via recursive insert() calls.
+			 * This method allocates 8 std::make_shared<OctreeSector>.
 			 *
 			 * @note OPTIMIZATION CONSIDERATION: This method performs 8 std::make_shared allocations.
 			 *	   Potential improvements:
@@ -1853,8 +1939,8 @@ namespace EmEn::Scenes
 			 *	   Current assessment: Expansion is infrequent (only when exceeding m_maxElementPerSector),
 			 *	   so the optimization gain would be marginal compared to the implementation complexity.
 			 *
-			 * @note Element redistribution: All elements in this sector are re-inserted into child sectors.
-			 *	   Elements may be inserted into multiple child sectors if their volume spans boundaries.
+			 * @note Element redistribution: each element moves into the child that contains it entirely;
+			 *	   one that straddles a boundary stays in this sector.
 			 *
 			 * @note Called automatically by isStillLeaf() when element count exceeds maxElementPerSector.
 			 *
@@ -1931,29 +2017,35 @@ namespace EmEn::Scenes
 
 				m_subSectors[XNegativeYNegativeZNegative] = std::make_shared< OctreeSector >(tmp, tmp - size, parent, XNegativeYNegativeZNegative);
 
-				/* Now, we redistribute the sector elements to the subsectors. */
-				for ( const auto & element : m_elements )
-				{
-					for ( const auto & subSector : m_subSectors )
-					{
-						subSector->insert(element);
-					}
-				}
-
 				m_isExpanded = true;
+
+				/* ONE ELEMENT, ONE SECTOR: each element descends into the child that contains it ENTIRELY, and what
+				 * straddles a boundary stays here. This kept every element AND filed it in each child it touched: an
+				 * element filed before a split lived in 2 to 7 sectors (citadel, 2026-10-02), so the physics step met a
+				 * character twice and its own capsule pushed it under the ground. */
+				for ( auto iterator = m_elements.begin(); iterator != m_elements.end(); )
+				{
+					const auto & element = *iterator;
+					const auto moved = withPrimitive(element, [this, &element] (const auto & primitive) {
+						auto * child = this->childFullyContaining(primitive);
+
+						return child != nullptr && child->insertWithPrimitive(element, primitive);
+					});
+
+					iterator = moved ? m_elements.erase(iterator) : std::next(iterator);
+				}
 			}
 
 			/**
 			 * @brief Merges child sectors back into this sector (removes subdivision).
 			 *
 			 * Destroys all 8 child sectors by resetting their shared pointers, deallocating them
-			 * and transitioning this sector back to a leaf state. All elements remain in this
-			 * sector's element set (they were already present due to all-levels storage).
+			 * and transitioning this sector back to a leaf state. The children's elements come back
+			 * into this sector's set first: each lived in ONE sector.
 			 *
 			 * This operation is triggered automatically when auto-collapse is enabled and the
 			 * element count drops below maxElementPerSector / 2.
 			 *
-			 * @note Elements are not removed or re-inserted - they remain in this sector's set.
 			 * @note Child sectors are deallocated, freeing memory.
 			 * @note Only called when autoCollapseEnabled is true.
 			 *
@@ -1964,6 +2056,16 @@ namespace EmEn::Scenes
 			void
 			collapse () noexcept
 			{
+				/* The children's elements come back here: each lives in ONE sector, so releasing the children
+				 * would lose them. */
+				for ( const auto & subSector : m_subSectors )
+				{
+					if ( subSector != nullptr )
+					{
+						subSector->gatherElements(m_elements);
+					}
+				}
+
 				for ( auto & subSector : m_subSectors )
 				{
 					/* NOTE: releases the POINTER (the sector type has its own reset()). */

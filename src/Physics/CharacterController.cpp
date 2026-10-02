@@ -47,6 +47,9 @@ namespace EmEn::Physics
 		/** @brief A surface whose normal points this far down is a ceiling (cosine with upward). */
 		constexpr float CharacterCeilingCosine{-0.3F};
 
+		/** @brief How fast a flying character reaches its wanted velocity (1 / s: about 0.1 s to start or stop). */
+		constexpr float CharacterFlyResponse{10.0F};
+
 		/** @brief The least horizontal progress (m) that makes a step-up worth it. */
 		constexpr float CharacterStepProgress{1.0e-3F};
 
@@ -182,6 +185,28 @@ namespace EmEn::Physics
 		return true;
 	}
 
+	void
+	CharacterController::setFlying (bool state) noexcept
+	{
+		if ( state == m_flying )
+		{
+			return;
+		}
+
+		/* Airborne, the ground normal is the upward direction: the last step's velocity splits along it. */
+		if ( state )
+		{
+			m_flyVelocity = m_velocity;
+		}
+		else
+		{
+			m_verticalSpeed = Vector< 3, float >::dotProduct(m_velocity, m_groundNormal);
+			m_horizontalVelocity = withoutAlong(m_velocity, m_groundNormal);
+		}
+
+		m_flying = state;
+	}
+
 	Capsule< float >
 	CharacterController::localCapsule () const noexcept
 	{
@@ -214,14 +239,30 @@ namespace EmEn::Physics
 			auto skinned = this->capsuleAt(position, upward);
 			skinned.setRadius(m_radius + SkinWidth);
 
-			const auto correction = world.penetrationCorrection(skinned);
+			auto correction = world.penetrationCorrection(skinned);
+			const auto lengthSquared = correction.lengthSquared();
 
-			if ( correction.lengthSquared() < CharacterNegligibleMotion * CharacterNegligibleMotion )
+			if ( lengthSquared < CharacterNegligibleMotion * CharacterNegligibleMotion )
 			{
 				break;
 			}
 
+			/* Out of a WALKABLE surface the character goes straight up, by the height that clears the same distance from
+			 * its plane: out along a slope's normal, then snapped straight down by the ground probe, a character standing
+			 * still crept downhill (1.3 cm/s on a terrain slope). */
+			const auto rise = Vector< 3, float >::dotProduct(correction, upward);
+
+			if ( rise > 0.0F && rise * rise >= m_walkableCosine * m_walkableCosine * lengthSquared )
+			{
+				correction = upward * (lengthSquared / rise);
+			}
+
 			position += correction;
+		}
+
+		if ( m_flying )
+		{
+			return this->fly(world, position, feet, upward, deltaTime);
 		}
 
 		/* 2. The velocities of this step. */
@@ -341,6 +382,35 @@ namespace EmEn::Physics
 		}
 
 		m_grounded = grounded;
+		m_velocity = (position - feet) * (1.0F / deltaTime);
+
+		return position;
+	}
+
+	Vector< 3, float >
+	CharacterController::fly (CharacterWorldInterface & world, const Vector< 3, float > & start, const Vector< 3, float > & feet, const Vector< 3, float > & upward, float deltaTime) noexcept
+	{
+		/* No jump in flight: a request does not wait for the landing. */
+		m_jumpRequested = false;
+
+		const auto blend = std::min(1.0F, CharacterFlyResponse * deltaTime);
+
+		m_flyVelocity += (m_wantedVelocity - m_flyVelocity) * blend;
+
+		/* Collide and slide, without climbing steps: nothing to stand on. */
+		bool stepped = false;
+		const auto position = this->slide(world, start, m_flyVelocity * deltaTime, upward, false, deltaTime, stepped);
+
+		if ( m_grounded )
+		{
+			m_events.leftGround = true;
+		}
+
+		m_grounded = false;
+		m_verticalSpeed = 0.0F;
+		m_groundNormal = upward;
+		m_supportVelocity.reset();
+		m_supportKey = 0;
 		m_velocity = (position - feet) * (1.0F / deltaTime);
 
 		return position;
