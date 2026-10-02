@@ -42,6 +42,7 @@
 #include "Physics/NarrowPhase.hpp"
 #include "Physics/TriangleMeshCollisionModel.hpp"
 #include "Component/CharacterController.hpp"
+#include "Component/Vehicle.hpp"
 
 namespace EmEn::Scenes
 {
@@ -289,6 +290,68 @@ namespace EmEn::Scenes
 				float m_friction;
 				float m_restitution;
 		};
+
+		/**
+		 * @brief A wheel's sphere cast against the ground's triangles (one-sided: a triangle met from under it does not
+		 * hold a wheel); keeps the earliest hit.
+		 */
+		class WheelGroundCast final : public GroundTriangleVisitor
+		{
+			public:
+
+				WheelGroundCast (const Space3D::Sphere< float > & sphere, const Vector< 3, float > & motion) noexcept
+					: m_sphere{sphere},
+					m_motion{motion}
+				{
+
+				}
+
+				void
+				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+				{
+					Space3D::CastHit< float > hit;
+
+					if ( !Space3D::castSphere(m_sphere, m_motion, triangle, hit) || hit.normal()[Y] <= 0.0F || (m_found && hit.fraction() >= m_hit.fraction()) )
+					{
+						return;
+					}
+
+					m_hit = hit;
+					m_found = true;
+				}
+
+				[[nodiscard]]
+				bool
+				found () const noexcept
+				{
+					return m_found;
+				}
+
+				[[nodiscard]]
+				const Space3D::CastHit< float > &
+				hit () const noexcept
+				{
+					return m_hit;
+				}
+
+			private:
+
+				Space3D::Sphere< float > m_sphere;
+				Vector< 3, float > m_motion;
+				Space3D::CastHit< float > m_hit;
+				bool m_found{false};
+		};
+
+		/** @brief A vector turned about a unit axis (Rodrigues). */
+		[[nodiscard]]
+		Vector< 3, float >
+		rotatedAbout (const Vector< 3, float > & vector, const Vector< 3, float > & axis, float angle) noexcept
+		{
+			const auto cosine = std::cos(angle);
+			const auto sine = std::sin(angle);
+
+			return (vector * cosine) + (Vector< 3, float >::crossProduct(axis, vector) * sine) + (axis * (Vector< 3, float >::dotProduct(axis, vector) * (1.0F - cosine)));
+		}
 
 		/** @brief A fast body sweeps when it moved more than this fraction of its round core in one step. */
 		constexpr float ContinuousCoreFraction{0.5F};
@@ -944,6 +1007,167 @@ namespace EmEn::Scenes
 		}
 
 		/* ============================================================
+		 * 1d. VEHICLES (decisions 15): each vehicle's drive train, then each wheel's SPHERE CAST along its suspension
+		 * (the ground, the statics — meshes included — and the other bodies, never its chassis); the wheels join the
+		 * solver. A driver at the controls (a throttle, a steering not reached yet) wakes the chassis.
+		 * ============================================================ */
+		auto & wheels = m_physicsWheels;
+		auto & wheelOwners = m_physicsWheelOwners;
+
+		wheels.clear();
+		wheelOwners.clear();
+
+		for ( uint32_t index = 1; index < bodies.size(); ++index )
+		{
+			const auto & entity = bodyEntities[index];
+			auto vehicle = entity->vehicle();
+
+			if ( vehicle == nullptr || !vehicle->controller().isReady() || bodies[index].movable == nullptr )
+			{
+				continue;
+			}
+
+			auto & controller = vehicle->controller();
+			auto & body = bodies[index];
+
+			if ( !body.dynamic && controller.wantsToMove() )
+			{
+				body.dynamic = true;
+				body.movable->setSleepIsland(0);
+				entity->pauseSimulation(false);
+			}
+
+			if ( !body.dynamic )
+			{
+				continue;
+			}
+
+			const auto frame = entity->getWorldCoordinates();
+			const auto rotation = frame.getRotationMatrix3();
+
+			controller.prepareStep(Vector< 3, float >::dotProduct(body.linearVelocity, frame.forwardVector()), PhysicsStepSeconds);
+
+			const auto & settings = controller.settings();
+
+			for ( uint32_t wheelIndex = 0; wheelIndex < settings.wheels.size(); ++wheelIndex )
+			{
+				const auto & wheelSettings = settings.wheels[wheelIndex];
+				auto & state = controller.wheels()[wheelIndex];
+				const auto attachment = frame.position() + (rotation * wheelSettings.attachment);
+				const auto down = rotation * wheelSettings.suspensionDirection;
+				const auto up = -down;
+				const auto steered = rotatedAbout(rotation * wheelSettings.forward, up, state.steerAngle);
+				const Space3D::Sphere< float > sphere{wheelSettings.radius, attachment};
+				const auto motion = down * wheelSettings.suspensionMaxLength;
+				const auto swept = sweptCapsuleBounds(Space3D::Capsule< float >{attachment, attachment, wheelSettings.radius}, motion);
+
+				/* The earliest hit: the ground's triangles, then every other solid. */
+				bool found = false;
+				uint32_t groundIndex = 0;
+				Space3D::CastHit< float > hit;
+
+				if ( m_groundLevel != nullptr )
+				{
+					WheelGroundCast cast{sphere, motion};
+
+					static_cast< void >(m_groundLevel->visitTriangles(swept, cast));
+
+					if ( cast.found() )
+					{
+						hit = cast.hit();
+						found = true;
+					}
+				}
+
+				const Space3D::Capsule< float > caster{attachment, attachment, wheelSettings.radius};
+
+				for ( uint32_t other = 1; other < bodyEntities.size(); ++other )
+				{
+					const auto & obstacle = bodyEntities[other];
+
+					if ( other == index || !obstacle->hasCollisionModel() || !obstacle->isCollidable() )
+					{
+						continue;
+					}
+
+					const auto obstacleFrame = obstacle->getWorldCoordinates();
+					const auto * model = obstacle->collisionModel();
+
+					if ( !boxesOverlap(swept, model->getAABB(obstacleFrame), 0.0F) )
+					{
+						continue;
+					}
+
+					Space3D::CastHit< float > candidate;
+					bool met = false;
+
+					if ( model->modelType() == CollisionModelType::TriangleMesh )
+					{
+						const auto & mesh = static_cast< const TriangleMeshCollisionModel & >(*model);
+
+						mesh.forEachWorldTriangle(obstacleFrame, swept, [&] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t /*triangleIndex*/, uint8_t activeEdges) {
+							Space3D::CastHit< float > triangleHit;
+
+							if ( NarrowPhase::sweepCapsule(caster, motion, triangle, triangleHit) && (!met || triangleHit.fraction() < candidate.fraction()) && NarrowPhase::acceptMeshHit(triangle, faceNormal, activeEdges, mesh.isTwoSided(), triangleHit) )
+							{
+								candidate = triangleHit;
+								met = true;
+							}
+						});
+					}
+					else
+					{
+						met = NarrowPhase::sweepCapsule(caster, motion, *model, obstacleFrame, candidate);
+					}
+
+					if ( met && (!found || candidate.fraction() < hit.fraction()) )
+					{
+						hit = candidate;
+						found = true;
+						groundIndex = bodyIndices[obstacle.get()];
+					}
+				}
+
+				SoftStepSolver::Wheel wheel;
+
+				wheel.chassis = index;
+				wheel.ground = groundIndex;
+				wheel.longitudinalFriction = &wheelSettings.longitudinalFriction;
+				wheel.lateralFriction = &wheelSettings.lateralFriction;
+				wheel.suspensionMaxLength = wheelSettings.suspensionMaxLength;
+				wheel.suspensionFrequency = wheelSettings.suspensionFrequency;
+				wheel.suspensionDamping = wheelSettings.suspensionDamping;
+				wheel.radius = wheelSettings.radius;
+				wheel.inertia = wheelSettings.inertia;
+				wheel.angularDamping = wheelSettings.angularDamping;
+				wheel.angularVelocity = state.angularVelocity;
+				wheel.driveTorque = state.driveTorque;
+				wheel.brakeTorque = state.brakeTorque;
+				wheel.contact = found;
+
+				if ( found )
+				{
+					/* Already in the ground at the attachment: fully compressed, pushed straight up. */
+					const auto normal = hit.startedInside() ? up : hit.normal();
+					const auto rolling = steered - (normal * Vector< 3, float >::dotProduct(normal, steered));
+
+					wheel.suspensionLength = hit.startedInside() ? 0.0F : wheelSettings.suspensionMaxLength * hit.fraction();
+					wheel.contactPoint = hit.startedInside() ? attachment + (down * wheelSettings.radius) : hit.point();
+					wheel.normal = normal;
+					wheel.forward = rolling.lengthSquared() > 0.0F ? rolling.normalized() : steered;
+					wheel.side = Vector< 3, float >::crossProduct(normal, wheel.forward);
+				}
+				else
+				{
+					wheel.suspensionLength = wheelSettings.suspensionMaxLength;
+				}
+
+				wheels.push_back(wheel);
+				wheelOwners.emplace_back(vehicle, wheelIndex);
+			}
+		}
+
+		/* ============================================================
 		 * 1b. GROUND RECOVERY: a dynamic body whose centre crossed the ground within one step (a ball at 43 m/s moves
 		 * 0.72 m per step, more than its radius) is put back ON it, before any contact is built. The ground is the top
 		 * of a solid (owner, 2026-10-02): the bottom of the body's world box goes onto the surface vertically under its
@@ -1188,7 +1412,31 @@ namespace EmEn::Scenes
 			return lhs.keySub < rhs.keySub;
 		});
 
-		m_softStepSolver.step(bodies, manifolds, m_environmentPhysicalProperties.surfaceGravity(), PhysicsStepSeconds);
+		m_softStepSolver.step(bodies, manifolds, wheels, m_environmentPhysicalProperties.surfaceGravity(), PhysicsStepSeconds);
+
+		/* The wheels back to their vehicles, then each vehicle's end of step (its wheels follow each other). */
+		for ( size_t slot = 0; slot < wheels.size(); ++slot )
+		{
+			const auto & wheel = wheels[slot];
+			const auto & [vehicle, wheelIndex] = wheelOwners[slot];
+			auto & state = vehicle->controller().wheels()[wheelIndex];
+
+			state.angularVelocity = wheel.angularVelocity;
+			state.contact = wheel.contact;
+			state.contactPoint = wheel.contactPoint;
+			state.contactNormal = wheel.normal;
+			state.suspensionLength = wheel.suspensionLength;
+			state.slipRatio = wheel.slipRatio;
+			state.slipAngle = wheel.slipAngle;
+			state.suspensionImpulse = wheel.suspensionImpulse;
+			state.longitudinalImpulse = wheel.longitudinalImpulse;
+			state.lateralImpulse = wheel.lateralImpulse;
+
+			if ( slot + 1 == wheels.size() || wheelOwners[slot + 1].first != vehicle )
+			{
+				vehicle->controller().finishStep(PhysicsStepSeconds);
+			}
+		}
 
 		/* ============================================================
 		 * 4b. CONTINUOUS COLLISION of the fast bodies (P5, the owner's idea: the segment from the old to the new

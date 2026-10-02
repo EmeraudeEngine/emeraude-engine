@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
+#include "Math/PiecewiseLinear.hpp"
 #include "Math/Quaternion.hpp"
 #include "Math/Vector.hpp"
 #include "StaticVector.hpp"
@@ -160,6 +161,57 @@ namespace EmEn::Physics
 			/**
 			 * @brief Constructs a solver with an empty contact cache.
 			 */
+			/**
+			 * @brief A vehicle's wheel (decision 15): a soft suspension along the contact normal and a tyre's longitudinal
+			 * and lateral friction, solved with the contacts every sub-step; its spin is a degree of freedom of its own
+			 * (an inertia about its axle). A wheel off the ground only spins (its torques, its damping, its brake).
+			 * @note The accumulated impulses are per SUB-STEP and re-applied at each one (the warm start), as the contacts'.
+			 */
+			struct Wheel final
+			{
+				/** Where it touches (world), the normal from the ground towards the chassis, the rolling and the side
+				 * directions in the contact plane (unit). */
+				Base::Math::Vector< 3, float > contactPoint;
+				Base::Math::Vector< 3, float > normal{0.0F, 1.0F, 0.0F};
+				Base::Math::Vector< 3, float > forward;
+				Base::Math::Vector< 3, float > side;
+				/** The anchors from the bodies' centres (prepare). */
+				Base::Math::Vector< 3, float > anchorChassis;
+				Base::Math::Vector< 3, float > anchorGround;
+				/** The tyre's friction over the slip ratio and over the slip angle (degrees). */
+				const Base::Math::PiecewiseLinear< float, 16 > * longitudinalFriction{nullptr};
+				const Base::Math::PiecewiseLinear< float, 16 > * lateralFriction{nullptr};
+				uint32_t chassis{0};
+				uint32_t ground{0};
+				/** The suspension's length at the step's start and its maximum (its rest: the spring pushes towards it). */
+				float suspensionLength{0.0F};
+				/** The length as a function of the motion: length = adjusted + n · (moved chassis point − moved ground
+				 * point), the anchors' own offset taken out (prepare), as a contact's adjusted separation. */
+				float adjustedSuspensionLength{0.0F};
+				float suspensionMaxLength{0.0F};
+				float suspensionFrequency{1.5F};
+				float suspensionDamping{0.5F};
+				float radius{0.3F};
+				float inertia{1.0F};
+				float angularDamping{0.0F};
+				/** In: the spin at the step's start; out: at its end (rad / s). */
+				float angularVelocity{0.0F};
+				float driveTorque{0.0F};
+				float brakeTorque{0.0F};
+				/** The solver's: effective masses, slips (degrees for the angle), friction coefficients, impulses. */
+				float suspensionMass{0.0F};
+				float longitudinalMass{0.0F};
+				float lateralMass{0.0F};
+				float slipRatio{0.0F};
+				float slipAngle{0.0F};
+				float longitudinalCoefficient{0.0F};
+				float lateralCoefficient{0.0F};
+				float suspensionImpulse{0.0F};
+				float longitudinalImpulse{0.0F};
+				float lateralImpulse{0.0F};
+				bool contact{false};
+			};
+
 			SoftStepSolver () noexcept = default;
 
 			/**
@@ -172,7 +224,7 @@ namespace EmEn::Physics
 			 * @param deltaTime The step (s), > 0.
 			 * @return void
 			 */
-			void step (std::vector< Body > & bodies, std::vector< Manifold > & manifolds, const Base::Math::Vector< 3, float > & gravity, float deltaTime) noexcept;
+			void step (std::vector< Body > & bodies, std::vector< Manifold > & manifolds, std::vector< Wheel > & wheels, const Base::Math::Vector< 3, float > & gravity, float deltaTime) noexcept;
 
 			/**
 			 * @brief Forgets every cached impulse (a scene change).
@@ -251,6 +303,23 @@ namespace EmEn::Physics
 			 * @param useBias True for the soft solve, false for the relax pass (no bias, rigid).
 			 */
 			static void solveContacts (std::vector< Body > & bodies, std::vector< Manifold > & manifolds, float biasRate, float massScale, float impulseScale, float inverseSubStep, bool useBias) noexcept;
+
+			/**
+			 * @brief The wheels' anchors, effective masses, slips and friction coefficients, from the step's start.
+			 */
+			static void prepareWheels (const std::vector< Body > & bodies, std::vector< Wheel > & wheels) noexcept;
+
+			/**
+			 * @brief Re-applies the wheels' accumulated impulses (a sub-step's warm start).
+			 */
+			static void warmStartWheels (std::vector< Body > & bodies, std::vector< Wheel > & wheels) noexcept;
+
+			/**
+			 * @brief One pass over the wheels: the suspension (soft, with its own frequency), then the tyre's friction.
+			 * @param subStep The sub-step (s).
+			 * @param integrateSpin True once per sub-step (the main pass): the wheels' torques, damping and brake.
+			 */
+			static void solveWheels (std::vector< Body > & bodies, std::vector< Wheel > & wheels, float subStep, bool integrateSpin) noexcept;
 
 			/**
 			 * @brief Applies the restitution once, from the pre-solve normal speed.

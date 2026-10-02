@@ -33,6 +33,7 @@
 /* Local inclusions. */
 #include "Component/Camera.hpp"
 #include "Component/CharacterController.hpp"
+#include "Component/Vehicle.hpp"
 #include "Scene.hpp"
 #include "Component/CloudVolume.hpp"
 #include "Component/DirectionalLight.hpp"
@@ -148,6 +149,7 @@ namespace EmEn::Scenes
 		this->setRenderingAbilityState(false);
 
 		std::shared_ptr< Component::CharacterController > characterController;
+		std::shared_ptr< Component::Vehicle > vehicle;
 
 		{
 			const std::scoped_lock lock{m_componentsMutex};
@@ -158,6 +160,12 @@ namespace EmEn::Scenes
 				if ( characterController == nullptr && component->isComponent(Component::CharacterController::ClassId) )
 				{
 					characterController = std::dynamic_pointer_cast< Component::CharacterController >(component);
+				}
+
+				/* A wheeled vehicle: this entity is its chassis. */
+				if ( vehicle == nullptr && component->isComponent(Component::Vehicle::ClassId) )
+				{
+					vehicle = std::dynamic_pointer_cast< Component::Vehicle >(component);
 				}
 
 				/* Checks render ability, and accumulates the VISUAL extent that the rendering
@@ -279,6 +287,7 @@ namespace EmEn::Scenes
 			const std::scoped_lock lock{m_componentsMutex};
 
 			m_characterController = characterController;
+			m_vehicle = vehicle;
 		}
 
 		if ( characterController != nullptr )

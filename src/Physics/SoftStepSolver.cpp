@@ -249,6 +249,147 @@ namespace EmEn::Physics
 	}
 
 	void
+	SoftStepSolver::prepareWheels (const std::vector< Body > & bodies, std::vector< Wheel > & wheels) noexcept
+	{
+		/* Under this rolling speed (m/s) the slip ratio is measured against it (a wheel spinning at a standstill). */
+		constexpr float WheelSlipSpeedFloor{0.5F};
+
+		for ( auto & wheel : wheels )
+		{
+			wheel.suspensionImpulse = 0.0F;
+			wheel.longitudinalImpulse = 0.0F;
+			wheel.lateralImpulse = 0.0F;
+
+			if ( !wheel.contact )
+			{
+				continue;
+			}
+
+			const auto & ground = bodies[wheel.ground];
+			const auto & chassis = bodies[wheel.chassis];
+
+			wheel.anchorGround = wheel.contactPoint - ground.position;
+			wheel.anchorChassis = wheel.contactPoint - chassis.position;
+			wheel.adjustedSuspensionLength = wheel.suspensionLength - Vec3::dotProduct(wheel.normal, wheel.anchorChassis - wheel.anchorGround);
+			wheel.suspensionMass = effectiveMass(ground, chassis, wheel.anchorGround, wheel.anchorChassis, wheel.normal);
+			wheel.lateralMass = effectiveMass(ground, chassis, wheel.anchorGround, wheel.anchorChassis, wheel.side);
+
+			/* The rolling direction couples the bodies and the wheel's spin: 1 / (1 / m + r² / I). */
+			const auto rolling = effectiveMass(ground, chassis, wheel.anchorGround, wheel.anchorChassis, wheel.forward);
+			const auto inverse = (rolling > 0.0F ? 1.0F / rolling : 0.0F) + (wheel.radius * wheel.radius / wheel.inertia);
+
+			wheel.longitudinalMass = inverse > 0.0F ? 1.0F / inverse : 0.0F;
+
+			/* The slips, from the step's start (the chassis' point relative to the ground's). */
+			const Vec3 velocity = relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis);
+			const auto longitudinal = Vec3::dotProduct(velocity, wheel.forward);
+			const auto lateral = Vec3::dotProduct(velocity, wheel.side);
+
+			wheel.slipRatio = ((wheel.angularVelocity * wheel.radius) - longitudinal) / std::max(std::abs(longitudinal), WheelSlipSpeedFloor);
+			wheel.slipAngle = std::abs(longitudinal) > 0.0F || std::abs(lateral) > 0.0F ? std::atan2(std::abs(lateral), std::abs(longitudinal)) * (180.0F / std::numbers::pi_v< float >) : 0.0F;
+			wheel.longitudinalCoefficient = wheel.longitudinalFriction != nullptr ? std::max(0.0F, wheel.longitudinalFriction->value(std::abs(wheel.slipRatio))) : 0.0F;
+			wheel.lateralCoefficient = wheel.lateralFriction != nullptr ? std::max(0.0F, wheel.lateralFriction->value(wheel.slipAngle)) : 0.0F;
+		}
+	}
+
+	void
+	SoftStepSolver::warmStartWheels (std::vector< Body > & bodies, std::vector< Wheel > & wheels) noexcept
+	{
+		for ( auto & wheel : wheels )
+		{
+			if ( !wheel.contact )
+			{
+				continue;
+			}
+
+			auto & ground = bodies[wheel.ground];
+			auto & chassis = bodies[wheel.chassis];
+			const Vec3 impulse = (wheel.normal * wheel.suspensionImpulse) + (wheel.forward * wheel.longitudinalImpulse) + (wheel.side * wheel.lateralImpulse);
+
+			applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, impulse);
+			wheel.angularVelocity -= wheel.longitudinalImpulse * wheel.radius / wheel.inertia;
+		}
+	}
+
+	void
+	SoftStepSolver::solveWheels (std::vector< Body > & bodies, std::vector< Wheel > & wheels, float subStep, bool integrateSpin) noexcept
+	{
+		for ( auto & wheel : wheels )
+		{
+			/* The spin: its torques and damping, then the brake (towards 0, never past it). */
+			if ( integrateSpin )
+			{
+				wheel.angularVelocity += wheel.driveTorque / wheel.inertia * subStep;
+				wheel.angularVelocity /= 1.0F + (wheel.angularDamping * subStep);
+
+				const auto braking = wheel.brakeTorque / wheel.inertia * subStep;
+
+				wheel.angularVelocity = std::abs(wheel.angularVelocity) <= braking ? 0.0F : wheel.angularVelocity - std::copysign(braking, wheel.angularVelocity);
+			}
+
+			if ( !wheel.contact )
+			{
+				continue;
+			}
+
+			auto & ground = bodies[wheel.ground];
+			auto & chassis = bodies[wheel.chassis];
+
+			/* The suspension: a soft spring towards its rest (its maximum length), pushing only (Box2D's soft step with
+			 * the wheel's own frequency and damping ratio — both passes, as Box2D's wheel joint spring). */
+			{
+				const Vec3 movedGround = ground.deltaPosition + ground.deltaRotation.rotatedVector(wheel.anchorGround);
+				const Vec3 movedChassis = chassis.deltaPosition + chassis.deltaRotation.rotatedVector(wheel.anchorChassis);
+				const auto length = wheel.adjustedSuspensionLength + Vec3::dotProduct(wheel.normal, movedChassis - movedGround);
+				const auto compression = length - wheel.suspensionMaxLength;
+				const auto omega = 2.0F * std::numbers::pi_v< float > * wheel.suspensionFrequency;
+				const auto a1 = (2.0F * wheel.suspensionDamping) + (subStep * omega);
+				const auto a2 = subStep * omega * a1;
+				const auto a3 = 1.0F / (1.0F + a2);
+				const auto biasRate = a1 > 0.0F ? omega / a1 : 0.0F;
+				const auto speed = Vec3::dotProduct(wheel.normal, relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis));
+				const auto delta = (-wheel.suspensionMass * a2 * a3 * (speed + (biasRate * compression))) - (a3 * wheel.suspensionImpulse);
+				const auto impulse = std::max(wheel.suspensionImpulse + delta, 0.0F);
+
+				applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, wheel.normal * (impulse - wheel.suspensionImpulse));
+				wheel.suspensionImpulse = impulse;
+			}
+
+			/* The tyre: the contact point's rolling speed to the wheel's surface speed (the impulse spins the wheel), the
+			 * side speed to 0; each bounded by its coefficient × the load, both by the friction ellipse. */
+			{
+				const Vec3 velocity = relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis);
+				const auto rollingSlip = Vec3::dotProduct(velocity, wheel.forward) - (wheel.angularVelocity * wheel.radius);
+				const auto sideSlip = Vec3::dotProduct(velocity, wheel.side);
+				const auto maxLongitudinal = wheel.longitudinalCoefficient * wheel.suspensionImpulse;
+				const auto maxLateral = wheel.lateralCoefficient * wheel.suspensionImpulse;
+				auto longitudinal = std::clamp(wheel.longitudinalImpulse - (wheel.longitudinalMass * rollingSlip), -maxLongitudinal, maxLongitudinal);
+				auto lateral = std::clamp(wheel.lateralImpulse - (wheel.lateralMass * sideSlip), -maxLateral, maxLateral);
+
+				if ( maxLongitudinal > 0.0F && maxLateral > 0.0F )
+				{
+					const auto ellipse = ((longitudinal / maxLongitudinal) * (longitudinal / maxLongitudinal)) + ((lateral / maxLateral) * (lateral / maxLateral));
+
+					if ( ellipse > 1.0F )
+					{
+						const auto scale = 1.0F / std::sqrt(ellipse);
+
+						longitudinal *= scale;
+						lateral *= scale;
+					}
+				}
+
+				const auto appliedLongitudinal = longitudinal - wheel.longitudinalImpulse;
+
+				applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, (wheel.forward * appliedLongitudinal) + (wheel.side * (lateral - wheel.lateralImpulse)));
+				wheel.angularVelocity -= appliedLongitudinal * wheel.radius / wheel.inertia;
+				wheel.longitudinalImpulse = longitudinal;
+				wheel.lateralImpulse = lateral;
+			}
+		}
+	}
+
+	void
 	SoftStepSolver::applyRestitution (std::vector< Body > & bodies, std::vector< Manifold > & manifolds) noexcept
 	{
 		for ( auto & manifold : manifolds )
@@ -305,7 +446,7 @@ namespace EmEn::Physics
 	}
 
 	void
-	SoftStepSolver::step (std::vector< Body > & bodies, std::vector< Manifold > & manifolds, const Vec3 & gravity, float deltaTime) noexcept
+	SoftStepSolver::step (std::vector< Body > & bodies, std::vector< Manifold > & manifolds, std::vector< Wheel > & wheels, const Vec3 & gravity, float deltaTime) noexcept
 	{
 		if ( bodies.empty() || !(deltaTime > 0.0F) )
 		{
@@ -334,6 +475,7 @@ namespace EmEn::Physics
 		}
 
 		this->prepare(bodies, manifolds);
+		prepareWheels(bodies, wheels);
 
 		for ( uint32_t subStepIndex = 0; subStepIndex < SubStepCount; ++subStepIndex )
 		{
@@ -348,7 +490,9 @@ namespace EmEn::Physics
 
 			/* 2. Warm start, 3. the soft solve. */
 			warmStart(bodies, manifolds);
+			warmStartWheels(bodies, wheels);
 			solveContacts(bodies, manifolds, biasRate, massScale, impulseScale, inverseSubStep, true);
+			solveWheels(bodies, wheels, subStep, true);
 
 			/* 4. The positions: the dynamic bodies move, the kinematic ones carry their velocity. */
 			for ( auto & body : bodies )
@@ -372,6 +516,7 @@ namespace EmEn::Physics
 
 			/* 5. Relax: the rigid pass, no bias, removes the soft solve's velocity overshoot. */
 			solveContacts(bodies, manifolds, biasRate, massScale, impulseScale, inverseSubStep, false);
+			solveWheels(bodies, wheels, subStep, false);
 		}
 
 		for ( uint32_t iteration = 0; iteration < RestitutionIterations; ++iteration )

@@ -87,6 +87,13 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    body is swept against the other dynamic bodies at their end-of-step pose too (no "bullet" flag, as decision 10);
    (2) a BOX sweeps its own shape: GJK + conservative advancement in emeraude-base (`castBox()`), not its inscribed
    sphere.
+15. **The wheeled vehicle (owner, 2026-10-02; bonus phase)**: (1) a wheel finds the ground by a SPHERE CAST of its radius
+   along its suspension (not a ray: it neither drops into a slot nor hits a kerb edge); (2) the tyre: SLIP CURVES
+   (longitudinal friction from the slip ratio, lateral from the slip angle, simple tunable curves, combined in a friction
+   circle — Jolt's model), not Pacejka; (3) a COMPLETE drive train from the start (an engine torque curve, an automatic
+   gearbox with ratios and a clutch, differentials — Jolt's `WheeledVehicleController`); (4) the wheels act IN THE SOLVER
+   (each wheel on the ground a soft constraint solved with the contacts: the suspension a soft spring along the contact
+   normal, the friction bounded by the load), not as forces before it. Design: `subsystems/physics/19-wheeled-vehicle.md`.
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -279,6 +286,18 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   other 40 stations: identical to the P5 reference but `BenchFastBox` (1.4 mm) and `BenchBulletBox` (0.5 mm). Cost: the
   plain dynamic loop added 5 % of balls-of-steel's logic thread (7.35 vs 6.99 ms), the sweep and prune 1.8 % (7.12 ms,
   inside the ~3 % spread; medians of 5 launches). The bench: 45 stations, 3 launches bit-identical.
+- **Decision 14 ACCEPTED on macOS M2 and Windows** (2026-10-02, base `a4eb68f`, engine `6154b9a4`, alpha `b50628d4`):
+  0 warning (MSVC: 0 C4xxx, 0 LNK), 2297 base tests + 3 skipped (15/15 `MathSpace3DConvexDistance`); bench 2 runs × 45
+  stations at 0 differing (Windows: NVIDIA = AMD on every cycle); the values = Linux (BulletPairA / B end at x −1.275 /
+  −0.268, 1.007 m apart, at rest; HitBox x 43.4986 z 54.0026, straight; BulletAtBox behind it at 41.923; TurnedBox max
+  x −0.2469 at cycle 67); against the P5 runs only `BenchFastBox` (1.39 mm) and `BenchBulletBox` (0.50 mm) moved; 9
+  demos clean (macOS: a validated citadel 0 VUID, 0 device loss in 90 launches; Windows: citadel's known teardown VUIDs,
+  terrain's known slow shutdown). Continuous collision is accepted on the three OS.
+- **The wheeled vehicle (bonus phase, decisions 15; 2026-10-02, Linux)**: base `Math::PiecewiseLinear`, engine
+  `Physics::VehicleController` (drive train), the wheels in `SoftStepSolver`, `Component::Vehicle`, step 1d (the sphere
+  casts), the console (`getNodePhysics().vehicle`, `setVehicleInput`); bench ROW 9 (idle, straight + brake, a right
+  turn), 48 stations × 3 launches bit-identical, the 45 older unchanged. Design, measurements and traps:
+  `subsystems/physics/19-wheeled-vehicle.md`; item `physics-wheeled-vehicle`.
 - **P5 ACCEPTED on Windows** (2026-10-02, RTX 3060 + AMD iGPU, same commits): 2282 base tests (13/13 mesh); bench 2 runs
   per GPU, 40/40 at 0 differing, NVIDIA = AMD on every cycle; ROW 7 = Linux (MeshSlider y 1.0000 all along, ramp 3.0966,
   stairs 1.5100, UpBall apex 4.2463); 19 of the 32 old stations changed, the islands' sleep (PushedBox 0.45 m, the rest
@@ -398,6 +417,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
 | P5 | engine (+ base for the mesh and GJK) | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` — all CLOSED 2026-10-02 (§ 1b) |
+| Bonus: vehicle | engine (+ base for the curves) | `physics-wheeled-vehicle` — in progress (§ 1b) |
 
 ## 5. What must survive the overhaul
 

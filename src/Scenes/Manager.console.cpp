@@ -47,6 +47,7 @@
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "GroundTriangles.hpp"
 #include "Component/CharacterController.hpp"
+#include "Component/Vehicle.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
@@ -74,6 +75,31 @@ namespace EmEn::Scenes
 		 * @param vector A reference to the vector.
 		 * @return void
 		 */
+		/** @brief A JSON number: 9 significant digits, null when not finite (JSON has no NaN nor infinity). */
+		struct JSONNumber final
+		{
+			float value;
+
+			friend
+			std::ostream &
+			operator<< (std::ostream & output, const JSONNumber & number) noexcept
+			{
+				if ( std::isfinite(number.value) )
+				{
+					return output << std::setprecision(9) << number.value;
+				}
+
+				return output << "null";
+			}
+		};
+
+		[[nodiscard]]
+		JSONNumber
+		jsonNumber (float value) noexcept
+		{
+			return JSONNumber{value};
+		}
+
 		void
 		writeJSONVector (std::stringstream & output, const Math::Vector< 3, float > & vector) noexcept
 		{
@@ -1342,6 +1368,27 @@ namespace EmEn::Scenes
 					info << R"(,"supportKey":)" << controller.supportKey() << '}';
 				}
 
+				/* A wheeled vehicle: its drive train and its wheels (decisions 15). */
+				if ( const auto vehicle = node->vehicle(); vehicle != nullptr )
+				{
+					const auto & controller = vehicle->controller();
+
+					info << R"(,"vehicle":{"engineRPM":)" << jsonNumber(controller.engineRPM()) << R"(,"gear":)" << controller.gear() << R"(,"clutch":)" << jsonNumber(controller.clutch()) << R"(,"wheels":[)";
+
+					for ( size_t index = 0; index < controller.wheels().size(); ++index )
+					{
+						const auto & wheel = controller.wheels()[index];
+
+						info << (index > 0 ? "," : "") << R"({"contact":)" << (wheel.contact ? "true" : "false");
+						info << R"(,"suspensionLength":)" << jsonNumber(wheel.suspensionLength) << R"(,"angularVelocity":)" << jsonNumber(wheel.angularVelocity);
+						info << R"(,"steerAngle":)" << jsonNumber(wheel.steerAngle) << R"(,"slipRatio":)" << jsonNumber(wheel.slipRatio) << R"(,"slipAngle":)" << jsonNumber(wheel.slipAngle);
+						info << R"(,"suspensionImpulse":)" << jsonNumber(wheel.suspensionImpulse) << R"(,"longitudinalImpulse":)" << jsonNumber(wheel.longitudinalImpulse) << R"(,"lateralImpulse":)" << jsonNumber(wheel.lateralImpulse);
+						info << R"(,"driveTorque":)" << jsonNumber(wheel.driveTorque) << R"(,"brakeTorque":)" << jsonNumber(wheel.brakeTorque) << '}';
+					}
+
+					info << "]}";
+				}
+
 				info << "}";
 
 				return Console::CommandResult::json(info.str());
@@ -1380,6 +1427,42 @@ namespace EmEn::Scenes
 				}
 
 				return Console::CommandResult::success("Character '" + name + "' wants to move.");
+			});
+
+		this->bindCommand("setVehicleInput", "Sets the driver's inputs of a root-level node's wheeled vehicle (its input script, if any, overrides them every cycle).",
+			{
+				{"name", "The node name."},
+				{"forward", "The throttle, -1 to 1 (negative: reverse); clamped."},
+				{"right", "The steering, -1 (left) to 1 (right); clamped."},
+				{"brake", "The brake, 0 to 1; clamped."},
+				{"handBrake", "The hand brake, 0 to 1; clamped."}
+			},
+			[this] (const std::string & name, float forward, float right, float brake, float handBrake) {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				const auto node = m_activeScene->root()->findChild(name);
+
+				if ( node == nullptr )
+				{
+					return Console::CommandResult::error("Node '" + name + "' not found !");
+				}
+
+				const auto vehicle = node->vehicle();
+
+				if ( vehicle == nullptr )
+				{
+					return Console::CommandResult::error("Node '" + name + "' has no vehicle !");
+				}
+
+				if ( !vehicle->controller().setInput(forward, right, brake, handBrake) )
+				{
+					return Console::CommandResult::error("The inputs must be finite !");
+				}
+
+				return Console::CommandResult::success("Vehicle '" + name + "' driven.");
 			});
 
 		this->bindCommand("characterJump", "Makes a root-level node's kinematic character controller jump (only when it stands on the ground).",

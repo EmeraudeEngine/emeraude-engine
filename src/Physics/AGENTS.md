@@ -31,4 +31,5 @@ Context for developing the Emeraude Engine physics system.
 | Rigid-body rotation: who rotates, centre of mass, explicit / derived inertia, angular drag (P3) | [`docs/subsystems/physics/16-rigid-body-rotation.md`](../../docs/subsystems/physics/16-rigid-body-rotation.md) | 4 KB |
 | Kinematic character controller: use, one step, measurements, traps (P4) | [`docs/subsystems/physics/17-kinematic-character.md`](../../docs/subsystems/physics/17-kinematic-character.md) | 6 KB |
 | Static triangle meshes: use, where the step meets them, measurements (P5) | [`docs/subsystems/physics/18-triangle-mesh-statics.md`](../../docs/subsystems/physics/18-triangle-mesh-statics.md) | 4 KB |
+| Wheeled vehicle: the model, one step, use, console, measurements, traps (bonus phase, decisions 15) | [`docs/subsystems/physics/19-wheeled-vehicle.md`](../../docs/subsystems/physics/19-wheeled-vehicle.md) | 8 KB |
 | ⚠️ Physics overhaul (2026-10-01): analysis, owner decisions, phases P0-P5 and their items | [`docs/physics-overhaul.md`](../../docs/physics-overhaul.md) | 9 KB |

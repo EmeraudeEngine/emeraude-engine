@@ -3209,6 +3209,9 @@ namespace EmEn::Scenes
 			mutable std::vector< uint8_t > m_physicsIslandSlow;
 			mutable std::vector< uint64_t > m_physicsIslandKeys;
 			mutable std::vector< uint64_t > m_physicsWakingIslands;
+			/** @brief The vehicles' wheels of the physics step, and their vehicle and wheel index (reused storage). */
+			mutable std::vector< Physics::SoftStepSolver::Wheel > m_physicsWheels;
+			mutable std::vector< std::pair< std::shared_ptr< Component::Vehicle >, uint32_t > > m_physicsWheelOwners;
 			/** @brief The static world of the continuous pass, rebuilt each step (reused storage). */
 			mutable std::vector< ContinuousObstacle > m_continuousObstacles;
 			/** @brief Per body, its slot in m_continuousObstacles when it is a dynamic one (else the maximum). */

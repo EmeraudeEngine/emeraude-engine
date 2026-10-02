@@ -70,6 +70,7 @@ namespace EmEn
 		namespace Component
 		{
 			class CharacterController;
+			class Vehicle;
 		}
 	}
 }
@@ -399,6 +400,20 @@ namespace EmEn::Scenes
 				const std::scoped_lock lock{m_componentsMutex};
 
 				return m_characterController;
+			}
+
+			/**
+			 * @brief Returns the entity's vehicle component, if it has one (the wheeled vehicle, decisions 15).
+			 * @note Its chassis is this entity's dynamic body; the physics step casts and solves its wheels.
+			 * @return std::shared_ptr< Component::Vehicle > nullptr without one.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Component::Vehicle >
+			vehicle () const noexcept
+			{
+				const std::scoped_lock lock{m_componentsMutex};
+
+				return m_vehicle;
 			}
 
 			/**
@@ -1374,6 +1389,7 @@ namespace EmEn::Scenes
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
 			std::shared_ptr< Component::CharacterController > m_characterController; ///< The kinematic character controller component, if any (under m_componentsMutex).
+			std::shared_ptr< Component::Vehicle > m_vehicle; ///< The vehicle component, if any (under m_componentsMutex).
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			const uint64_t m_creationNumber{0};			 ///< Creation order in the scene (creationNumber()).
