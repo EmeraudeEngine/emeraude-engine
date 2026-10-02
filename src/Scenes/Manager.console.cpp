@@ -46,6 +46,7 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "GroundTriangles.hpp"
+#include "Component/CharacterController.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
@@ -1326,10 +1327,92 @@ namespace EmEn::Scenes
 				/* The physics cycle this state belongs to: a client polling at its own rate samples by cycle,
 				 * never by wall-clock time (the physics ticks at a fixed WorldPhysicsUpdateFrequency). */
 				info << "\"sceneCycle\":" << m_activeScene->cycle();
+
+				/* A kinematic character (P4): its controller's state (its node velocity is not what it does). */
+				if ( const auto character = node->characterController(); character != nullptr )
+				{
+					const auto & controller = character->controller();
+
+					info << R"(,"character":{"grounded":)" << (controller.isGrounded() ? "true" : "false");
+					info << R"(,"velocity":)";
+					writeJSONVector(info, controller.velocity());
+					info << R"(,"groundNormal":)";
+					writeJSONVector(info, controller.groundNormal());
+					info << R"(,"supportKey":)" << controller.supportKey() << '}';
+				}
+
 				info << "}";
 
 				return Console::CommandResult::json(info.str());
 			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("setCharacterVelocity", "Sets the velocity a root-level node's kinematic character controller wants to move at (world, m/s; its vertical part is ignored).",
+			{
+				{"name", "The node name."},
+				{"x", "The world X velocity (m/s)."},
+				{"y", "The world Y velocity (ignored: the controller handles gravity and jumps)."},
+				{"z", "The world Z velocity (m/s)."}
+			},
+			[this] (const std::string & name, float velocityX, float velocityY, float velocityZ) {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				const auto node = m_activeScene->root()->findChild(name);
+
+				if ( node == nullptr )
+				{
+					return Console::CommandResult::error("Node '" + name + "' not found !");
+				}
+
+				const auto character = node->characterController();
+
+				if ( character == nullptr )
+				{
+					return Console::CommandResult::error("Node '" + name + "' has no character controller !");
+				}
+
+				if ( !character->controller().setWantedVelocity({velocityX, velocityY, velocityZ}) )
+				{
+					return Console::CommandResult::error("The velocity must be finite !");
+				}
+
+				return Console::CommandResult::success("Character '" + name + "' wants to move.");
+			});
+
+		this->bindCommand("characterJump", "Makes a root-level node's kinematic character controller jump (only when it stands on the ground).",
+			{
+				{"name", "The node name."},
+				{"speed", "The launch speed (m/s), > 0."}
+			},
+			[this] (const std::string & name, float speed) {
+				if ( m_activeScene == nullptr )
+				{
+					return Console::CommandResult::error("No active scene !");
+				}
+
+				const auto node = m_activeScene->root()->findChild(name);
+
+				if ( node == nullptr )
+				{
+					return Console::CommandResult::error("Node '" + name + "' not found !");
+				}
+
+				const auto character = node->characterController();
+
+				if ( character == nullptr )
+				{
+					return Console::CommandResult::error("Node '" + name + "' has no character controller !");
+				}
+
+				if ( !character->controller().jump(speed) )
+				{
+					return Console::CommandResult::error("The speed must be finite and > 0 !");
+				}
+
+				return Console::CommandResult::success("Character '" + name + "' jumps.");
+			});
 
 		this->bindCommand("recordNodePhysics", "Records the physics state of root-level nodes of the active scene on EVERY logic cycle of a range, on the logic thread (after the collisions): the same cycles for every run, no sampling gap. Then getPhysicsRecordingStatus() until Complete, and savePhysicsRecording().",
 			{

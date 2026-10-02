@@ -36,7 +36,10 @@
 #include "Math/RigidBody.hpp"
 #include "Math/Space3D/Contacts/ContactManifold.hpp"
 #include "Physics/BodyInertia.hpp"
+#include "Physics/CapsuleCollisionModel.hpp"
+#include "Physics/CharacterController.hpp"
 #include "Physics/NarrowPhase.hpp"
+#include "Component/CharacterController.hpp"
 
 namespace EmEn::Scenes
 {
@@ -343,6 +346,279 @@ namespace EmEn::Scenes
 
 		/** @brief Whether two world AABBs overlap, the first inflated by a margin. */
 		[[nodiscard]]
+		bool boxesOverlap (const Space3D::AACuboid< float > & boxA, const Space3D::AACuboid< float > & boxB, float margin) noexcept;
+
+		/** @brief The world box of a capsule, stretched along a motion. */
+		[[nodiscard]]
+		Space3D::AACuboid< float >
+		sweptCapsuleBounds (const Space3D::Capsule< float > & capsule, const Vector< 3, float > & motion) noexcept
+		{
+			const auto radius = capsule.radius();
+			const Vector< 3, float > reach{radius, radius, radius};
+			const auto & start = capsule.startPoint();
+			const auto & end = capsule.endPoint();
+
+			Space3D::AACuboid< float > bounds{start + reach, start - reach};
+			bounds.merge(Space3D::AACuboid< float >{end + reach, end - reach});
+			bounds.merge(Space3D::AACuboid< float >{bounds.maximum() + motion, bounds.minimum() + motion});
+
+			return bounds;
+		}
+
+		/**
+		 * @brief The world as a kinematic character sees it during the physics step (P4): the ground's triangles and the
+		 * physics entities, the character itself excluded.
+		 */
+		class SceneCharacterWorld final : public CharacterWorldInterface
+		{
+			public:
+
+				SceneCharacterWorld (const std::vector< std::shared_ptr< AbstractEntity > > & entities, size_t self, const GroundLevelInterface * ground, const std::unordered_map< uint64_t, Vector< 3, float > > & lastKinematicPositions, float stepSeconds) noexcept
+					: m_entities{entities},
+					m_ground{ground},
+					m_lastKinematicPositions{lastKinematicPositions},
+					m_self{self},
+					m_stepSeconds{stepSeconds}
+				{
+
+				}
+
+				[[nodiscard]]
+				bool
+				sweep (const Space3D::Capsule< float > & capsule, const Vector< 3, float > & motion, Hit & hit) const noexcept override
+				{
+					const auto region = sweptCapsuleBounds(capsule, motion);
+					bool found = false;
+
+					/* The ground, one-sided: a triangle met from under it stops nothing. */
+					if ( m_ground != nullptr )
+					{
+						class Sweep final : public GroundTriangleVisitor
+						{
+							public:
+
+								Sweep (const Space3D::Capsule< float > & caster, const Vector< 3, float > & move, Hit & result, bool & foundAny) noexcept
+									: m_caster{caster}, m_move{move}, m_result{result}, m_found{foundAny}
+								{
+
+								}
+
+								void
+								onTriangle (const Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+								{
+									Space3D::CastHit< float > cast;
+
+									if ( !NarrowPhase::sweepCapsule(m_caster, m_move, triangle, cast) || cast.startedInside() || cast.normal()[Y] <= 0.0F || cast.fraction() >= m_result.fraction )
+									{
+										return;
+									}
+
+									m_result = Hit{.point = cast.point(), .normal = cast.normal(), .velocity = {}, .key = GroundKey, .fraction = cast.fraction(), .bodyIndex = 0, .dynamic = false};
+									m_found = true;
+								}
+
+							private:
+
+								const Space3D::Capsule< float > & m_caster;
+								const Vector< 3, float > & m_move;
+								Hit & m_result;
+								bool & m_found;
+						};
+
+						hit.fraction = 1.0F;
+
+						Sweep visitor{capsule, motion, hit, found};
+						static_cast< void >(m_ground->visitTriangles(region, visitor));
+					}
+					else
+					{
+						hit.fraction = 1.0F;
+					}
+
+					/* The entities. */
+					for ( size_t index = 0; index < m_entities.size(); ++index )
+					{
+						const auto & entity = m_entities[index];
+
+						if ( index == m_self || !entity->hasCollisionModel() || !entity->isCollidable() )
+						{
+							continue;
+						}
+
+						const auto frame = entity->getWorldCoordinates();
+
+						if ( !boxesOverlap(region, entity->collisionModel()->getAABB(frame), 0.0F) )
+						{
+							continue;
+						}
+
+						Space3D::CastHit< float > cast;
+
+						if ( !NarrowPhase::sweepCapsule(capsule, motion, *entity->collisionModel(), frame, cast) || cast.startedInside() || cast.fraction() >= hit.fraction )
+						{
+							continue;
+						}
+
+						const auto * movable = entity->getMovableTrait();
+						const bool dynamic = movable != nullptr && movable->isMovable() && entity->characterController() == nullptr;
+
+						hit = Hit{.point = cast.point(), .normal = cast.normal(), .velocity = this->velocityOf(entity, movable, dynamic), .key = entity->creationNumber(), .fraction = cast.fraction(), .bodyIndex = static_cast< uint32_t >(index), .dynamic = dynamic};
+						found = true;
+					}
+
+					return found;
+				}
+
+				[[nodiscard]]
+				Vector< 3, float >
+				penetrationCorrection (const Space3D::Capsule< float > & capsule) const noexcept override
+				{
+					Vector< 3, float > correction;
+					Space3D::ContactManifold< float > contact;
+
+					/* Out along each contact by its deepest depth, never twice along the same direction (two coplanar
+					 * triangles under the capsule both report it). */
+					const auto apply = [&correction] (const Space3D::ContactManifold< float > & manifold) {
+						const auto out = -manifold.normal();
+						const auto depth = manifold.maximumDepth();
+						const auto along = Vector< 3, float >::dotProduct(correction, out);
+
+						if ( depth > along )
+						{
+							correction += out * (depth - along);
+						}
+					};
+
+					const auto region = sweptCapsuleBounds(capsule, Vector< 3, float >{});
+
+					if ( m_ground != nullptr )
+					{
+						class Overlap final : public GroundTriangleVisitor
+						{
+							public:
+
+								Overlap (const Space3D::Capsule< float > & caster, const decltype(apply) & onContact) noexcept
+									: m_caster{caster}, m_onContact{onContact}
+								{
+
+								}
+
+								void
+								onTriangle (const Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+								{
+									Space3D::ContactManifold< float > manifold;
+
+									if ( NarrowPhase::capsuleGroundContacts(m_caster, triangle, manifold) )
+									{
+										m_onContact(manifold);
+									}
+								}
+
+							private:
+
+								const Space3D::Capsule< float > & m_caster;
+								const decltype(apply) & m_onContact;
+						};
+
+						Overlap visitor{capsule, apply};
+						static_cast< void >(m_ground->visitTriangles(region, visitor));
+					}
+
+					for ( size_t index = 0; index < m_entities.size(); ++index )
+					{
+						const auto & entity = m_entities[index];
+
+						if ( index == m_self || !entity->hasCollisionModel() || !entity->isCollidable() )
+						{
+							continue;
+						}
+
+						/* A dynamic body never pushes a character (decision 9.4). */
+						const auto * movable = entity->getMovableTrait();
+
+						if ( movable != nullptr && movable->isMovable() && entity->characterController() == nullptr )
+						{
+							continue;
+						}
+
+						const auto frame = entity->getWorldCoordinates();
+
+						if ( boxesOverlap(region, entity->collisionModel()->getAABB(frame), 0.0F) && NarrowPhase::capsuleContacts(capsule, *entity->collisionModel(), frame, contact) )
+						{
+							apply(contact);
+						}
+					}
+
+					return correction;
+				}
+
+				void
+				push (uint32_t bodyIndex, const Vector< 3, float > & point, const Vector< 3, float > & impulse) noexcept override
+				{
+					if ( bodyIndex >= m_entities.size() )
+					{
+						return;
+					}
+
+					const auto & entity = m_entities[bodyIndex];
+					auto * movable = entity->getMovableTrait();
+
+					if ( movable == nullptr || !movable->isMovable() )
+					{
+						return;
+					}
+
+					const auto & properties = entity->bodyPhysicalProperties();
+
+					if ( properties.isMassNull() )
+					{
+						return;
+					}
+
+					movable->setLinearVelocity(movable->linearVelocity() + (impulse * properties.inverseMass()));
+
+					if ( movable->isRotationPhysicsEnabled() && entity->hasCollisionModel() )
+					{
+						const auto frame = entity->getWorldCoordinates();
+						const auto rotation = frame.getRotationMatrix3();
+						const auto centre = frame.position() + (rotation * entity->collisionModel()->centerOfMassOffset(frame.scalingFactor()));
+						const auto inverseInertia = worldInverseInertia(localInverseInertia(properties, entity->collisionModel(), frame.scalingFactor()), rotation);
+
+						movable->setAngularVelocity(movable->angularVelocity() + (inverseInertia * Vector< 3, float >::crossProduct(point - centre, impulse)));
+					}
+				}
+
+			private:
+
+				/** @brief The velocity of an obstacle (a dynamic body's, or a kinematic body's motion since the last step). */
+				[[nodiscard]]
+				Vector< 3, float >
+				velocityOf (const std::shared_ptr< AbstractEntity > & entity, const MovableTrait * movable, bool dynamic) const noexcept
+				{
+					if ( dynamic )
+					{
+						return movable->linearVelocity();
+					}
+
+					const auto previous = m_lastKinematicPositions.find(entity->creationNumber());
+
+					if ( previous == m_lastKinematicPositions.end() )
+					{
+						return {};
+					}
+
+					return (entity->getWorldCoordinates().position() - previous->second) * (1.0F / m_stepSeconds);
+				}
+
+				const std::vector< std::shared_ptr< AbstractEntity > > & m_entities;
+				const GroundLevelInterface * m_ground;
+				const std::unordered_map< uint64_t, Vector< 3, float > > & m_lastKinematicPositions;
+				size_t m_self;
+				float m_stepSeconds;
+		};
+
+		/** @brief Whether two world AABBs overlap, the first inflated by a margin. */
+		[[nodiscard]]
 		bool
 		boxesOverlap (const Space3D::AACuboid< float > & boxA, const Space3D::AACuboid< float > & boxB, float margin) noexcept
 		{
@@ -400,6 +676,77 @@ namespace EmEn::Scenes
 			return lhs->creationNumber() < rhs->creationNumber();
 		});
 
+		/* ============================================================
+		 * 0. THE KINEMATIC CHARACTERS (P4): moved by their controller before anything is solved — collide and slide,
+		 * steps, slopes, the support's velocity, the ground probe. They are kinematic bodies below (their velocity is
+		 * their motion), so the dynamic bodies meet them where they now are.
+		 * ============================================================ */
+		m_physicsCharacters.clear();
+
+		const auto & gravity = m_environmentPhysicalProperties.surfaceGravity();
+		const auto gravityLength = gravity.length();
+		const auto upward = gravityLength > 0.0F ? gravity * (-1.0F / gravityLength) : Vector< 3, float >::positiveY();
+
+		for ( size_t index = 0; index < bodyEntities.size(); ++index )
+		{
+			const auto & entity = bodyEntities[index];
+			auto character = entity->characterController();
+
+			if ( character == nullptr )
+			{
+				continue;
+			}
+
+			auto & controller = character->controller();
+
+			/* The capsule follows the controller's size (set after linking, or changed during the game). */
+			{
+				const auto wanted = controller.localCapsule();
+				const auto * model = entity->collisionModel();
+				constexpr float SizeTolerance{1.0e-6F};
+				bool current = model != nullptr && model->modelType() == CollisionModelType::Capsule;
+
+				if ( current )
+				{
+					const auto & present = static_cast< const CapsuleCollisionModel * >(model)->localCapsule();
+
+					current = std::abs(present.radius() - wanted.radius()) <= SizeTolerance &&
+						(present.startPoint() - wanted.startPoint()).length() <= SizeTolerance &&
+						(present.endPoint() - wanted.endPoint()).length() <= SizeTolerance;
+				}
+
+				if ( !current )
+				{
+					entity->setCollisionModel(std::make_unique< CapsuleCollisionModel >(wanted, true));
+				}
+			}
+
+			SceneCharacterWorld world{bodyEntities, index, m_groundLevel.get(), m_kinematicLastPositions, PhysicsStepSeconds};
+			const auto feet = entity->getWorldCoordinates().position();
+			const auto reached = controller.step(world, feet, upward, gravityLength, PhysicsStepSeconds);
+
+			if ( (reached - feet).lengthSquared() > 0.0F )
+			{
+				entity->setPosition(reached, TransformSpace::World);
+				movedEntities.push_back(entity);
+			}
+
+			/* The grounded state the game already reads (MovableTrait). */
+			if ( auto * movable = entity->getMovableTrait(); movable != nullptr )
+			{
+				if ( controller.isGrounded() )
+				{
+					movable->setGrounded(controller.supportKey() == GroundKey ? GroundedSource::Ground : GroundedSource::Entity);
+				}
+				else
+				{
+					movable->clearGrounded();
+				}
+			}
+
+			m_physicsCharacters.push_back(std::move(character));
+		}
+
 		/* The static world first. */
 		bodies.emplace_back();
 		bodyEntities.insert(bodyEntities.begin(), nullptr);
@@ -427,7 +774,7 @@ namespace EmEn::Scenes
 			body.position = frame.position() + body.centerOffset;
 			body.orientation = frame.toQuaternion();
 
-			if ( movable->isMovable() )
+			if ( movable->isMovable() && entity->characterController() == nullptr )
 			{
 				const auto & properties = movable->getBodyPhysicalProperties();
 
@@ -443,7 +790,7 @@ namespace EmEn::Scenes
 			}
 			else
 			{
-				/* KINEMATIC (an animated, non-movable node): infinite mass, the velocity of its own motion. */
+				/* KINEMATIC (an animated, non-movable node, or a character): infinite mass, the velocity of its own motion. */
 				const auto creation = entity->creationNumber();
 
 				if ( const auto previous = m_kinematicLastPositions.find(creation); previous != m_kinematicLastPositions.end() )

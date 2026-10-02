@@ -147,5 +147,49 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			static bool sweepCore (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Vector< 3, float > & motion, const Base::Math::Space3D::Triangle< float > & triangle, Base::Math::Space3D::CastHit< float > & hit) noexcept;
+
+			/**
+			 * @brief Sweeps a world capsule (a kinematic character) along a motion against a collision model.
+			 * @param capsule A reference to the world capsule at its start. @pre capsule.isValid().
+			 * @param motion A reference to the motion.
+			 * @param model A reference to the obstacle.
+			 * @param frame A reference to the obstacle's world frame.
+			 * @param hit A reference to the first contact, written on a contact.
+			 * @return bool True on a contact before the end of the motion.
+			 */
+			[[nodiscard]]
+			static bool sweepCapsule (const Base::Math::Space3D::Capsule< float > & capsule, const Base::Math::Vector< 3, float > & motion, const CollisionModelInterface & model, const Base::Math::CartesianFrame< float > & frame, Base::Math::Space3D::CastHit< float > & hit) noexcept;
+
+			/**
+			 * @brief Sweeps a world capsule along a motion against a triangle.
+			 * @param capsule A reference to the world capsule at its start. @pre capsule.isValid().
+			 * @param motion A reference to the motion.
+			 * @param triangle A reference to the world triangle.
+			 * @param hit A reference to the first contact, written on a contact.
+			 * @return bool True on a contact before the end of the motion.
+			 */
+			[[nodiscard]]
+			static bool sweepCapsule (const Base::Math::Space3D::Capsule< float > & capsule, const Base::Math::Vector< 3, float > & motion, const Base::Math::Space3D::Triangle< float > & triangle, Base::Math::Space3D::CastHit< float > & hit) noexcept;
+
+			/**
+			 * @brief Generates the contacts of a world capsule (A) and a collision model (B).
+			 * @param capsule A reference to the world capsule.
+			 * @param model A reference to model B.
+			 * @param frame A reference to B's world frame.
+			 * @param manifold A reference to the manifold written (cleared first), normal from A to B.
+			 * @return bool True when they overlap.
+			 */
+			[[nodiscard]]
+			static bool capsuleContacts (const Base::Math::Space3D::Capsule< float > & capsule, const CollisionModelInterface & model, const Base::Math::CartesianFrame< float > & frame, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+
+			/**
+			 * @brief Generates the contacts of a world capsule (A) and a ground triangle (B), one-sided as generateGround().
+			 * @param capsule A reference to the world capsule.
+			 * @param triangle A reference to the world ground triangle.
+			 * @param manifold A reference to the manifold written (cleared first), normal from A to B.
+			 * @return bool True when they overlap and the contact pushes the capsule up.
+			 */
+			[[nodiscard]]
+			static bool capsuleGroundContacts (const Base::Math::Space3D::Capsule< float > & capsule, const Base::Math::Space3D::Triangle< float > & triangle, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
 	};
 }

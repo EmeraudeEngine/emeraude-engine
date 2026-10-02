@@ -29,4 +29,5 @@ Context for developing the Emeraude Engine physics system.
 | Particle Physics & Modifiers | [`docs/subsystems/physics/14-particle-physics-modifiers.md`](../../docs/subsystems/physics/14-particle-physics-modifiers.md) | 1 KB |
 | Detailed Documentation | [`docs/subsystems/physics/15-detailed-documentation.md`](../../docs/subsystems/physics/15-detailed-documentation.md) | 1 KB |
 | Rigid-body rotation: who rotates, centre of mass, explicit / derived inertia, angular drag (P3) | [`docs/subsystems/physics/16-rigid-body-rotation.md`](../../docs/subsystems/physics/16-rigid-body-rotation.md) | 4 KB |
+| Kinematic character controller: use, one step, measurements, traps (P4) | [`docs/subsystems/physics/17-kinematic-character.md`](../../docs/subsystems/physics/17-kinematic-character.md) | 6 KB |
 | ⚠️ Physics overhaul (2026-10-01): analysis, owner decisions, phases P0-P5 and their items | [`docs/physics-overhaul.md`](../../docs/physics-overhaul.md) | 9 KB |

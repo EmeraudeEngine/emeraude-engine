@@ -33,6 +33,7 @@
 /* Local inclusions. */
 #include "AnyValue.hpp"
 #include "Audio/HardwareOutput.hpp"
+#include "Component/CharacterController.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
@@ -455,6 +456,12 @@ namespace EmEn::Scenes
 			for ( const auto & entity : m_physicsMovedEntities )
 			{
 				this->checkEntityLocationInOctrees(entity);
+			}
+
+			/* The characters' events (landed, left the ground, hit a wall), outside the lock too. */
+			for ( const auto & character : m_physicsCharacters )
+			{
+				character->notifyEvents();
 			}
 
 			/* The impacts, emitted outside the lock too (NodeCollision): a handler may create or remove entities. */

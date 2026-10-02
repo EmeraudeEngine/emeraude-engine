@@ -32,6 +32,7 @@
 
 /* Local inclusions. */
 #include "Component/Camera.hpp"
+#include "Component/CharacterController.hpp"
 #include "Scene.hpp"
 #include "Component/CloudVolume.hpp"
 #include "Component/DirectionalLight.hpp"
@@ -47,6 +48,7 @@
 #include "Component/Visual.hpp"
 #include "Component/Weight.hpp"
 #include "Physics/BoxCollisionModel.hpp"
+#include "Physics/CapsuleCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 #include "Tracer.hpp"
 
@@ -145,11 +147,19 @@ namespace EmEn::Scenes
 		/* NOTE: Reset flags. The collision state is derived at the end, unless the author decided it. */
 		this->setRenderingAbilityState(false);
 
+		std::shared_ptr< Component::CharacterController > characterController;
+
 		{
 			const std::scoped_lock lock{m_componentsMutex};
 
 			for ( const auto & component : m_components )
 			{
+				/* A kinematic character controller (P4): found here, applied after the loop. */
+				if ( characterController == nullptr && component->isComponent(Component::CharacterController::ClassId) )
+				{
+					characterController = std::dynamic_pointer_cast< Component::CharacterController >(component);
+				}
+
 				/* Checks render ability, and accumulates the VISUAL extent that the rendering
 				 * octree places this entity with. Kept separate from the collision model on
 				 * purpose: culling asks "is any of this visible", collision asks "against what".
@@ -259,13 +269,26 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* A kinematic character: a capsule standing on the origin, and a solid whatever its mass (unless the author
+		 * decided otherwise). */
+		{
+			const std::scoped_lock lock{m_componentsMutex};
+
+			m_characterController = characterController;
+		}
+
+		if ( characterController != nullptr )
+		{
+			m_collisionModel = std::make_unique< CapsuleCollisionModel >(characterController->controller().localCapsule(), true);
+		}
+
 		/* The DERIVED collision state: a component with a mass makes the entity collidable. It never
 		 * overrides the author's setCollidable() — that used to be reset here on every component
 		 * update, both ways: a cloud made non-solid became solid again the moment a component with a
 		 * mass joined it, and a static wall could only be solid by declaring a fictitious mass. */
 		if ( !this->isFlagEnabled(IsCollisionAuthored) )
 		{
-			this->setFlag(IsCollisionDisabled, physicalEntityCount == 0);
+			this->setFlag(IsCollisionDisabled, physicalEntityCount == 0 && characterController == nullptr);
 		}
 
 		/* NOTE: Update bounding primitive visual representations. */

@@ -3198,6 +3198,8 @@ namespace EmEn::Scenes
 			std::vector< std::shared_ptr< AbstractEntity > > m_physicsMovedEntities;
 			/** @brief The impacts of the last physics step (emitted after it, outside the physics octree lock). */
 			std::vector< PhysicsImpact > m_physicsImpacts;
+			/** @brief The kinematic characters the last physics step moved (their events notified after it). */
+			mutable std::vector< std::shared_ptr< Component::CharacterController > > m_physicsCharacters;
 			/** @brief The static world of the continuous pass, rebuilt each step (reused storage). */
 			mutable std::vector< ContinuousObstacle > m_continuousObstacles;
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */

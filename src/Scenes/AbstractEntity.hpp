@@ -66,6 +66,11 @@ namespace EmEn
 	namespace Scenes
 	{
 		class AbstractEntity;
+
+		namespace Component
+		{
+			class CharacterController;
+		}
 	}
 }
 
@@ -380,6 +385,20 @@ namespace EmEn::Scenes
 			collisionModel () noexcept override
 			{
 				return m_collisionModel.get();
+			}
+
+			/**
+			 * @brief Returns the entity's kinematic character controller component, if it has one (physics overhaul P4).
+			 * @note An entity with one is moved by it, kinematic for the physics step, with a capsule collision model.
+			 * @return std::shared_ptr< Component::CharacterController > nullptr without one.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Component::CharacterController >
+			characterController () const noexcept
+			{
+				const std::scoped_lock lock{m_componentsMutex};
+
+				return m_characterController;
 			}
 
 			/**
@@ -1354,6 +1373,7 @@ namespace EmEn::Scenes
 			mutable std::recursive_mutex m_componentsMutex;   ///< Protects m_components. RECURSIVE by design (2026-09-13): a component may query or move its entity from its own processLogics(), which runs under this lock — a same-thread re-entry is legal by construction, never a deadlock.
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
+			std::shared_ptr< Component::CharacterController > m_characterController; ///< The kinematic character controller component, if any (under m_componentsMutex).
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			const uint64_t m_creationNumber{0};			 ///< Creation order in the scene (creationNumber()).

@@ -452,4 +452,94 @@ namespace EmEn::Physics
 
 		return sweepCoreAgainst(core, motion, triangle, hit);
 	}
+
+	bool
+	NarrowPhase::sweepCapsule (const Capsule< float > & capsule, const Vector< 3, float > & motion, const CollisionModelInterface & model, const CartesianFrame< float > & frame, CastHit< float > & hit) noexcept
+	{
+		const auto target = toWorldShape(model, frame, 0.0F);
+
+		if ( !capsule.isValid() || !target.valid )
+		{
+			return false;
+		}
+
+		switch ( target.kind )
+		{
+			case WorldShape::Kind::Sphere :
+				return target.sphere.radius() > 0.0F && castCapsule(capsule, motion, target.sphere, hit);
+
+			case WorldShape::Kind::Box :
+				return castCapsule(capsule, motion, target.box, hit);
+
+			case WorldShape::Kind::Capsule :
+				return castCapsule(capsule, motion, target.capsule, hit);
+		}
+
+		return false;
+	}
+
+	bool
+	NarrowPhase::sweepCapsule (const Capsule< float > & capsule, const Vector< 3, float > & motion, const Triangle< float > & triangle, CastHit< float > & hit) noexcept
+	{
+		if ( !capsule.isValid() )
+		{
+			return false;
+		}
+
+		return castCapsule(capsule, motion, triangle, hit);
+	}
+
+	bool
+	NarrowPhase::capsuleContacts (const Capsule< float > & capsule, const CollisionModelInterface & model, const CartesianFrame< float > & frame, ContactManifold< float > & manifold) noexcept
+	{
+		manifold.clear();
+
+		if ( !capsule.isValid() )
+		{
+			return false;
+		}
+
+		WorldShape shape;
+		shape.kind = WorldShape::Kind::Capsule;
+		shape.capsule = capsule;
+
+		return contactsOf(shape, toWorldShape(model, frame, 0.0F), manifold);
+	}
+
+	bool
+	NarrowPhase::capsuleGroundContacts (const Capsule< float > & capsule, const Triangle< float > & triangle, ContactManifold< float > & manifold) noexcept
+	{
+		manifold.clear();
+
+		Vector< 3, float > upward;
+
+		if ( !capsule.isValid() || !TriangleDetail::unitNormal(triangle, upward) )
+		{
+			return false;
+		}
+
+		if ( upward[Y] < 0.0F )
+		{
+			upward = -upward;
+		}
+
+		WorldShape shape;
+		shape.kind = WorldShape::Kind::Capsule;
+		shape.capsule = capsule;
+
+		if ( !contactsOfTriangle(shape, triangle, manifold) )
+		{
+			return false;
+		}
+
+		/* One-sided, as the ground contacts of the bodies. */
+		if ( Vector< 3, float >::dotProduct(manifold.normal(), upward) > 0.0F )
+		{
+			manifold.clear();
+
+			return false;
+		}
+
+		return true;
+	}
 }

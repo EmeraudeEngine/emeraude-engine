@@ -62,6 +62,8 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    of fast bodies — the owner's own idea: use the segment from a body's old to its new position to find what it would
    cross. A swept cast (P1's casts) of the body's round core against the static world, the body put back at the time
    of impact; the ground recovery (step 1b) stays as the safety net.
+11. **Order (owner, 2026-10-02, after P5's continuous collision)**: P4 now (the kinematic character), then the two
+   remaining P5 items (`physics-triangle-mesh-static-shapes`, `physics-simulation-islands`).
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -203,6 +205,11 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   over 1000 balls): 361 k → −64 k → −375 k → −421 k → −422 k J/kg at 10, 20, 35, 50, 65 s, kinetic 32 at 65 s — no
   pump. 0 ball under the exact surface at 5, 12 and 30 s on two launches. 23 stations, 3 runs bit-identical; the 14
   stations that never touch the change are bit-identical to P3.
+- **P5 continuous collision ACCEPTED on the three OS** (2026-10-02; engine `7b4835bb`, alpha `51fd9b11`): macOS M2 and
+  Windows NVIDIA + AMD, 0 differing samples on all recorded stations, 5 runs, NVIDIA r1 = AMD r1; every value = Linux
+  (the tumbling cubes: the arm64 values); balls-of-steel 0 ball under the exact surface, the energy only decreasing
+  (plateau ≈ −408 k J/kg on both); 7 demos clean. macOS: 0 GPU device loss in 35 launches, 20 with the validation
+  layers (0 VUID) — the 2 losses seen on `a5c27ef3` / `d7795acf` did not come back.
 
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps
