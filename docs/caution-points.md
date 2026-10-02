@@ -1551,6 +1551,39 @@ luminance scale; the reflection term always keeps it.
 > Anything read back from the rendered scene (grab pass, and by extension any screen-space capture)
 > is already an absolute luminance.
 
+### Fixed: a thin grab-pass glass scaled its transmission twice and kept a white diffuse ambient (2026-10-03)
+
+**Symptom** (projet-alpha citadel, Khronos' CarConcept at dusk, RT lane): the windows were a white halo
+around a cabin glowing orange and cream. In the `+ModelViewer` (daylight exposure) the same glass
+looked right. Hiding the glass nodes (`Visual.setDrawDistance(…, 100000, 0)`) showed the dark red
+cabin behind it. So the glass, not the cabin, made the light; switching the RT effects off made it
+whiter still.
+
+Two defects of the THIN-SURFACE branch (`LightGenerator.cpp`: transmission without a reflection or
+refraction component, the branch a glTF `KHR_materials_transmission` glass takes), read in the dumped
+ambient shader (`Core/Graphics/Shader/EnableSourceCodeDump`):
+
+- **(c) The transmission unit, again.** The (b) fix above went into the reflection + transmission block
+  only. The thin-surface block still multiplied its grab-pass sample by `scaledIBLIntensity()`. It now
+  takes the same `transmissionScale` rule: none for a scene-radiance source, the environment luminance
+  for a cubemap one.
+- **(d) The diffuse ambient was not weighted by the transmission.** Both ambient diffuse legs (the scalar
+  `albedo / π × ambient` and the IBL `albedo × irradiance × environment luminance`) were added at full
+  weight. The direct passes weight theirs (`kD × (1 − transmission)`, `diffuseWeightShaderExpression()`).
+  A clear glass (white base colour, transmission 1) took the whole ambient of a white Lambertian
+  surface: milky over the cabin once (c) was fixed. Both legs now take `(1 − transmission)`
+  (`KHR_materials_transmission`: what passes through is transmitted, not diffusely re-emitted).
+
+Measured from the same pose: the windshield centre went from cream (sRGB ≈ 111, 98, 73, with orange
+and white blown-out regions) to clear dark glass with the cabin behind it, as in Khronos' reference.
+`TransmissionTest` in the `+ModelViewer` still reads right. Citadel's water takes the reflection +
+transmission branch, which neither change touches; 0 `VUID-`.
+
+> [!WARNING]
+> **Open, not fixed here (the owner's call):** the same ambient diffuse legs are not weighted by
+> `(1 − metalness)` either, while the direct passes are. A metal (no diffuse lobe) takes the ambient of
+> a Lambertian surface of its base colour. Changing it changes every metal in every scene.
+
 ### A half-float target silently turns a physical luminance into NaN (Sep 2026)
 
 **Symptom:** the rewritten lens flare injected the sun as a disc of ~5e7 nits into its `RGBA16F`

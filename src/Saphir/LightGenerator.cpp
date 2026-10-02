@@ -1297,7 +1297,15 @@ namespace EmEn::Saphir
 		}
 		else
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
+			/* ⚠️ What a transmissive surface lets through is TRANSMITTED, not diffusely re-emitted: its diffuse
+			 * ambient legs take (1 - transmission), as its direct diffuse does (kD, diffuseWeightShaderExpression()).
+			 * Unweighted, a clear glass (white base colour, transmission 1 — CarConcept's windows) took the whole
+			 * ambient of a white Lambertian surface and turned milky over the cabin (2026-10-03). */
+			const auto transmissionWeight = m_useTransmission && !m_surfaceTransmissionFactor.empty()
+				? " * (1.0 - " + m_surfaceTransmissionFactor + ")"
+				: std::string{};
+
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << transmissionWeight << ";";
 
 			/* IBL diffuse irradiance: the cubemap stores E/pi, so the raw base color
 			 * (no 1/pi) times the sample times the environment luminance is the outgoing
@@ -1306,7 +1314,7 @@ namespace EmEn::Saphir
 			 * drives the ambient (see Scene::refreshAmbientLightProperties). */
 			if ( useIBL )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblDiffuseIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << ";";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblDiffuseIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << transmissionWeight << ";";
 			}
 		}
 
@@ -1398,6 +1406,14 @@ namespace EmEn::Saphir
 			 * thousands. The surface's own IBLIntensity stays the artistic weight. */
 			const auto iblIntensity = this->scaledIBLIntensity();
 
+			/* ⚠️ Only a CUBEMAP transmission takes that scale. A GRAB-PASS transmission is a copy of the rendered
+			 * scene, already in nits (the combined branch above, the water's blowout): scaling it multiplied the
+			 * scene behind a thin glass by the sky luminance — CarConcept's windows turned the cabin white and
+			 * orange at citadel's dusk exposure (2026-10-03), while the model viewer's daylight exposure hid it. */
+			const auto transmissionScale = m_transmissionIsSceneRadiance
+				? std::string{}
+				: " * " + iblIntensity;
+
 			/* Quality tier — the RENDERER decides, per program: a distant surface can take the
 			 * cheap branch. This is the hook the distance/LOD switch drives; it is no longer a
 			 * user setting. */
@@ -1417,7 +1433,7 @@ namespace EmEn::Saphir
 					"/* Fresnel gate: reflected light can't be transmitted. */" "\n"
 					"const float transNdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
 					this->ambientFresnelDeclaration("fresnelT", "vec3(" + this->dielectricF0Expression() + ")", "transNdotV") <<
-					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (vec3(1.0) - fresnelT) * " << iblIntensity << ";";
+					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * (vec3(1.0) - fresnelT)" << transmissionScale << ";";
 			}
 			else
 			{
@@ -1430,7 +1446,7 @@ namespace EmEn::Saphir
 					"transmittedLight *= transAbsorption;" "\n"
 					"/* Tinted by the base colour (KHR_materials_transmission). */" "\n"
 					"transmittedLight *= " << this->albedoShaderExpression() << ".rgb;" "\n" <<
-					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * 0.96 * " << iblIntensity << ";";
+					m_fragmentColor << ".rgb += transmittedLight * " << m_surfaceTransmissionFactor << " * 0.96" << transmissionScale << ";";
 			}
 		}
 	}
