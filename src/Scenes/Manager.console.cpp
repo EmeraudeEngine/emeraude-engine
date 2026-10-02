@@ -45,6 +45,7 @@
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
+#include "GroundTriangles.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
@@ -632,7 +633,7 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success("Ground set with material '" + matName + "'.");
 			});
 
-		this->bindCommand("getGroundLevel", "Returns the ground height of the active scene at a world X/Z as JSON (the bilinear height field, getLevelAt()), and the ground normal there.",
+		this->bindCommand("getGroundLevel", "Returns the ground height of the active scene at a world X/Z as JSON: 'position' from the bilinear height field (getLevelAt()), 'surface' the exact height of the rendered triangle there (what the physics collides; null outside the ground), and the ground normal.",
 			{
 				{"x", "The world X coordinate."},
 				{"z", "The world Z coordinate."}
@@ -658,9 +659,54 @@ namespace EmEn::Scenes
 				const Math::Vector< 3, float > position{positionX, 0.0F, positionZ};
 				const auto level = groundLevel->getLevelAt(position);
 
+				/* The exact surface: the rendered triangle over the point. */
+				class SurfaceProbe final : public GroundTriangleVisitor
+				{
+					public:
+
+						SurfaceProbe (float x, float z) noexcept : m_x{x}, m_z{z} { }
+
+						void
+						onTriangle (const Math::Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+						{
+							if ( !m_found )
+							{
+								m_found = surfaceHeightOver(triangle, m_x, m_z, m_height);
+							}
+						}
+
+						[[nodiscard]]
+						bool found () const noexcept { return m_found; }
+
+						[[nodiscard]]
+						float height () const noexcept { return m_height; }
+
+					private:
+
+						float m_x;
+						float m_z;
+						float m_height{0.0F};
+						bool m_found{false};
+				};
+
+				SurfaceProbe probe{positionX, positionZ};
+				constexpr float ProbeReach{0.01F};
+				static_cast< void >(groundLevel->visitTriangles(Math::Space3D::AACuboid< float >{Math::Vector< 3, float >{positionX + ProbeReach, 0.0F, positionZ + ProbeReach}, Math::Vector< 3, float >{positionX - ProbeReach, 0.0F, positionZ - ProbeReach}}, probe));
+
 				std::stringstream info;
 				info << R"({"position":)";
 				writeJSONVector(info, Math::Vector< 3, float >{positionX, level, positionZ});
+				info << R"(,"surface":)";
+
+				if ( probe.found() && std::isfinite(probe.height()) )
+				{
+					info << std::setprecision(9) << probe.height();
+				}
+				else
+				{
+					info << "null";
+				}
+
 				info << R"(,"normal":)";
 				writeJSONVector(info, groundLevel->getNormalAt(position));
 				info << '}';

@@ -34,6 +34,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/Casts/ShapeCast.hpp"
 #include "Math/Space3D/Contacts/ContactManifold.hpp"
 #include "Math/Space3D/Triangle.hpp"
 
@@ -81,23 +82,70 @@ namespace EmEn::Physics
 			static bool generate (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float margin, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
 
 			/**
-			 * @brief Generates the contacts of a collision model (A) and a GROUND triangle (B): one-sided, and solid below.
-			 * @note A height-field ground is the top of a solid, not a thin shell (owner, 2026-10-02; the approach of Jolt's
-			 * height fields and Box2D v3's one-sided chains). (1) A's centre OVER the triangle's plane: the contact
-			 * generators, a manifold whose normal would push A down dropped. (2) A's centre UNDER the plane (it crossed the
-			 * surface within one step — a ball at 43 m/s moves 0.72 m per step): the low points of A (the bottom of a
-			 * sphere, of each capsule end, the four lowest box corners) that project inside the triangle are pushed back up
-			 * along the face normal by their depth. Before, case (2) got a normal pointing DOWN and the body went through.
+			 * @brief Answers the height of A's centre over a ground triangle, when the centre lies VERTICALLY over or under it.
+			 * @note What tells a body that crossed the ground within one step (a negative height on the triangle vertically
+			 * under its centre): `Scene::resolveCollisions()` puts it back on the surface before its contacts.
+			 * @param modelA A reference to model A.
+			 * @param frameA A reference to A's world frame.
+			 * @param triangle A reference to the world ground triangle.
+			 * @param height A reference to the height written (negative = under the surface).
+			 * @param normal A reference to the triangle's unit normal written (its up side, +Y).
+			 * @return bool False when the centre is not over or under this triangle (or the triangle is vertical).
+			 */
+			[[nodiscard]]
+			static bool heightOverGround (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float & height, Base::Math::Vector< 3, float > & normal) noexcept;
+
+			/**
+			 * @brief Generates the contacts of a collision model (A) and a GROUND triangle (B): one-sided.
+			 * @note A height-field ground is the top of a solid, not a thin shell (owner, 2026-10-02): a manifold whose normal
+			 * would push A DOWN is dropped (a body whose centre crossed a triangle got a normal pointing down and was pushed
+			 * through). A body under the ground is put back on it by the scene before its contacts (heightOverGround()).
 			 * @param modelA A reference to model A.
 			 * @param frameA A reference to A's world frame.
 			 * @param triangle A reference to the world ground triangle (its up side is the side of +Y).
 			 * @param margin The speculative margin added to A (m), >= 0.
-			 * @param claimedLowPoints A writable bit set of A's low points already given to a triangle (bit = the point's
-			 * stable index), zero for each body: a point on an edge shared by two triangles belongs to the first only.
 			 * @param manifold A reference to the manifold written (cleared first).
-			 * @return bool True when the inflated shape touches the triangle, or is under it.
+			 * @return bool True when the inflated shape touches the triangle.
 			 */
 			[[nodiscard]]
-			static bool generateGround (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float margin, uint32_t & claimedLowPoints, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+			static bool generateGround (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float margin, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+
+			/**
+			 * @brief Returns the radius of the round CORE a fast body is swept with (continuous collision): a sphere's radius,
+			 * a capsule's radius, a box's smallest half extent (its inscribed sphere, Bullet's "ccdSweptSphereRadius"), 0 for
+			 * a point (a ray).
+			 * @param model A reference to the collision model.
+			 * @param frame A reference to its world frame.
+			 * @return float 0 for an unusable shape too.
+			 */
+			[[nodiscard]]
+			static float coreRadius (const CollisionModelInterface & model, const Base::Math::CartesianFrame< float > & frame) noexcept;
+
+			/**
+			 * @brief Sweeps the round core of A (coreRadius()) along a motion against a collision model B.
+			 * @note The core of a box is its inscribed sphere: conservative, a box never passes a solid, it stops a little
+			 * later than its true faces would.
+			 * @param modelA A reference to the moving model.
+			 * @param frameA A reference to A's world frame at the motion's start.
+			 * @param motion A reference to the motion.
+			 * @param modelB A reference to the obstacle.
+			 * @param frameB A reference to B's world frame.
+			 * @param hit A reference to the first contact, written on a contact.
+			 * @return bool True on a contact before the end of the motion.
+			 */
+			[[nodiscard]]
+			static bool sweepCore (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Vector< 3, float > & motion, const CollisionModelInterface & modelB, const Base::Math::CartesianFrame< float > & frameB, Base::Math::Space3D::CastHit< float > & hit) noexcept;
+
+			/**
+			 * @brief Sweeps the round core of A (coreRadius()) along a motion against a triangle (a ground triangle).
+			 * @param modelA A reference to the moving model.
+			 * @param frameA A reference to A's world frame at the motion's start.
+			 * @param motion A reference to the motion.
+			 * @param triangle A reference to the world triangle.
+			 * @param hit A reference to the first contact, written on a contact.
+			 * @return bool True on a contact before the end of the motion.
+			 */
+			[[nodiscard]]
+			static bool sweepCore (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Vector< 3, float > & motion, const Base::Math::Space3D::Triangle< float > & triangle, Base::Math::Space3D::CastHit< float > & hit) noexcept;
 	};
 }

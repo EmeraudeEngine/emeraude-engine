@@ -48,6 +48,20 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    JSON stays code-only (`InertiaKey` is not read). (d) Rotation is ON by default for every dynamic body; actors and
    the player keep it off (their final state: the P4 controller never takes its rotation from the physics).
    (e) The angular drag keeps today's feel at the reference rate, integrated exactly: `ω *= (1 − c)^(dt · rate)`.
+9. **P4 design (owner, 2026-10-02, the recommendations)**: (1) a `CharacterController` COMPONENT on a `Node`, the
+   node made kinematic (the P2 kinematic path: its velocity from its motion, a solid for the others, carried by what
+   it stands on); (2) a capsule, feet at the node origin; (3) it moves in the physics step, BEFORE the solver, on the
+   logic thread; (4) it pushes dynamic bodies with a bounded force and is not pushed back (except by what carries
+   it); (5) the jump is a launch velocity; (6) per-character parameters on the component (step height, walkable
+   slope, ground snap distance, air control, push force), no JSON key yet; (7) order: the engine controller and its
+   `collision-debug` station (flat, 30° and 50° slopes, 0.29 m steps, moving platform, standing on a box, no
+   vertical jitter), then projet-alpha's Player, Paladin, Fox, Drone, then the teleport step-up removed; first
+   acceptance: citadel's stairs. A WHEELED VEHICLE (a dynamic chassis, wheels by casts: suspension and tyre friction)
+   is a BONUS phase after the overhaul (owner: "on fera le véhicule en bonus").
+10. **Order revised (owner, 2026-10-02)**: P5 BEFORE P4 ("on inverse P4 et P5"), starting with the CONTINUOUS collision
+   of fast bodies — the owner's own idea: use the segment from a body's old to its new position to find what it would
+   cross. A swept cast (P1's casts) of the body's round core against the static world, the body put back at the time
+   of impact; the ground recovery (step 1b) stays as the safety net.
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -166,6 +180,29 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   contacts from the low points, merged per plane, did not cure it either (a flat box over a grid also had its
   corners ON the cells' diagonals, claimed by two triangles — kept: one triangle per low point). The margin is P5's
   (`physics-continuous-collision`), with the solver's impact behaviour.
+- **Peers on `a5c27ef3` (2026-10-02)**: bench accepted on macOS and Windows (19 / 19 stations, NVIDIA = AMD), but 1-2
+  balls of balls-of-steel per launch still went under a hilly terrain, some 100 m deep. Two defects of that first fix,
+  found with a per-body trace: (1) "under the ground" was decided per TRIANGLE — near a ridge the centre was under one
+  plane and over its neighbour's; (2) the low points were taken along the steep face's NORMAL, up to a radius sideways,
+  out of every visited triangle's footprint — "underground, 8 triangles, 0 manifold". Then the solver's 3 m/s pushout
+  recovered a ball entering a hillside at 26 m/s slower than it sank. Replaced by the RECOVERY of step 1b (decided once
+  per body on the triangle vertically under its centre, the body put back on the surface, its velocity bounced) — the
+  former height test, for the bodies that crossed only. `getGroundLevel()` also answers the triangles' exact
+  `surface` (the bilinear `position` is metres off on a steep 1 m cell: it reported false "under the ground").
+- **P5 continuous collision (2026-10-02, order revised, decision 10)**: step 4b (`subsystems/physics/02-…`). Bench
+  `BenchBulletBall` (0.1 m ball) and `BenchBulletBox` (0.2 m box) shot at 80 m/s (1.33 m per step) at a 0.2 m wall:
+  they stop at x = −0.205 (the wall face −0.1, their half size 0.1, the 5 mm slop) and bounce at 40 m/s (e 0.5);
+  `BenchFastBall` no longer sinks (lowest centre 0.443 vs −0.022), `BenchFastBox` no longer slides (−21.999, −75.000).
+  Trap met and fixed: a ball the sweep stopped every step against a triangle the contacts ignored (met from under it)
+  stayed FROZEN while gravity kept adding to its velocity (110 m/s after 25 s, then it flew off) — the sweep is now
+  one-sided like the contacts, and it bounces the velocity itself. A second freeze, in animation-debug: a walker
+  sliding along a wall a few mm off was stopped every step by a TANGENTIAL hit that bounced nothing while its own
+  controller kept accelerating it (369 m/s) — the sweep now stops only a CROSSING (the centre ending past the surface
+  met), as Box2D v3 and Bullet use their continuous pass; `BenchFastBall` then sinks 12 cm for one step (lowest centre
+  0.383) and the contacts take it back. Energy check (balls-of-steel, the sum of ½v² + g·y
+  over 1000 balls): 361 k → −64 k → −375 k → −421 k → −422 k J/kg at 10, 20, 35, 50, 65 s, kinetic 32 at 65 s — no
+  pump. 0 ball under the exact surface at 5, 12 and 30 s on two launches. 23 stations, 3 runs bit-identical; the 14
+  stations that never touch the change are bit-identical to P3.
 
 - **P2 implementation decisions (owner, 2026-10-01)**: (1) a COLLIDABLE dynamic body is integrated by the scene's
   physics step (gravity and position inside the sub-steps); a non-collidable one (`setCollidable(false)`) keeps

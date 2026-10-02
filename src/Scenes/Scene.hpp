@@ -2809,6 +2809,15 @@ namespace EmEn::Scenes
 
 		private:
 
+			/** @brief An obstacle of the continuous pass: a non-dynamic collidable body, its world pose and box. */
+			struct ContinuousObstacle final
+			{
+				Base::Math::CartesianFrame< float > frame;
+				Base::Math::Space3D::AACuboid< float > bounds;
+				const Physics::CollisionModelInterface * model{nullptr};
+				uint32_t index{0};
+			};
+
 			/** @brief One impact of a physics step, emitted after it (outside the physics octree lock). */
 			struct PhysicsImpact final
 			{
@@ -3189,6 +3198,8 @@ namespace EmEn::Scenes
 			std::vector< std::shared_ptr< AbstractEntity > > m_physicsMovedEntities;
 			/** @brief The impacts of the last physics step (emitted after it, outside the physics octree lock). */
 			std::vector< PhysicsImpact > m_physicsImpacts;
+			/** @brief The static world of the continuous pass, rebuilt each step (reused storage). */
+			mutable std::vector< ContinuousObstacle > m_continuousObstacles;
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */
 			PhysicsRecorder m_physicsRecorder;
 			/** @brief The next entity creation number (AbstractEntity::creationNumber()). Mutable: an entity is constructed

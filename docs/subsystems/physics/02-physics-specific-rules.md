@@ -26,15 +26,24 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
    NO dedup set), in canonical order (A = the lower creation number), AABB pre-filter, then
    `Physics::NarrowPhase::generate()` → a base `Space3D::ContactManifold` (normal A → B). A sleeping body touched by an
    active one wakes.
+1b. **Ground recovery** (2026-10-02): a dynamic body whose centre is UNDER the ground — the height on the rendered
+   triangle vertically under its centre (`NarrowPhase::heightOverGround()`) is negative: it crossed the surface within
+   one step — is put back ON it before any contact: the bottom of its world box onto that surface, its approaching
+   velocity bounced off the triangle's normal with the pair's restitution. The ground is the top of a solid.
 3. **Ground**: `GroundLevelInterface::visitTriangles()` under every active body — its RENDERED triangles, one manifold
    per triangle (keys: creation number, `GroundKey`, triangle feature id + 1), through
-   `NarrowPhase::generateGround()`: the ground is ONE-SIDED and SOLID BELOW (2026-10-02). A body whose centre is over
-   a triangle's plane gets the generators' contact, dropped if its normal would push the body down; a body whose
-   centre is UNDER the plane (it crossed the surface in one step) gets its low points pushed back up along the face
-   normal, each low point given to one triangle only.
+   `NarrowPhase::generateGround()`: ONE-SIDED — a manifold whose normal would push the body down is dropped.
 4. **Solve**: manifolds sorted by key, `Physics::SoftStepSolver::step()` (4 sub-steps: gravity, warm start, soft solve,
    integrate, relax; restitution 4 passes; impulses cached by feature id). Materials: friction = √(μA μB),
    restitution = max(eA, eB); the ground's default material is μ 1, e 0.
+4b. **Continuous collision** (P5, 2026-10-02): a dynamic body that moved more than half its round core in the step
+   (`NarrowPhase::coreRadius()`: a sphere, a capsule, a box's INSCRIBED sphere, a point's ray) sweeps that core along
+   its motion (`NarrowPhase::sweepCore()`, P1's casts) against the ground triangles (one-sided: a triangle met from
+   under it stops nothing) and the static, kinematic and sleeping bodies. ONLY A CROSSING is stopped — the body's centre
+   ending the step on the far side of the surface met: it is put back 5 mm short of the contact and its approaching
+   velocity bounces off the hit normal with the pair's restitution (so the next step's contact adds nothing). A body
+   ending on the near side (sliding along a wall, or sinking less than its centre) is the contacts' business.
+   Dynamic ↔ dynamic is not swept.
 5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
    the impacts (an approach above 0.05 m/s) are COLLECTED and the grounded state set from the manifolds (a contact
    within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.

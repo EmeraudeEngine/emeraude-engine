@@ -148,6 +148,72 @@ namespace EmEn::Scenes
 		}
 
 		/**
+		 * @brief Finds the height of a body's centre over the ground triangle vertically over or under it.
+		 */
+		class GroundHeightProbe final : public GroundTriangleVisitor
+		{
+			public:
+
+				GroundHeightProbe (const CollisionModelInterface & model, const CartesianFrame< float > & frame) noexcept
+					: m_model{model},
+					m_frame{frame}
+				{
+
+				}
+
+				void
+				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+				{
+					/* The first triangle in the grid order: deterministic for a centre on a shared edge. */
+					if ( !m_found && NarrowPhase::heightOverGround(m_model, m_frame, triangle, m_height, m_normal) )
+					{
+						m_found = true;
+					}
+				}
+
+				/**
+				 * @brief Returns whether the centre is under the ground.
+				 * @return bool
+				 */
+				[[nodiscard]]
+				bool
+				isUnderground () const noexcept
+				{
+					return m_found && m_height < 0.0F;
+				}
+
+				/**
+				 * @brief Returns the centre's height over the surface under it (negative = under).
+				 * @return float
+				 */
+				[[nodiscard]]
+				float
+				height () const noexcept
+				{
+					return m_height;
+				}
+
+				/**
+				 * @brief Returns the normal of the triangle under the centre (up side).
+				 * @return const Vector< 3, float > &
+				 */
+				[[nodiscard]]
+				const Vector< 3, float > &
+				normal () const noexcept
+				{
+					return m_normal;
+				}
+
+			private:
+
+				const CollisionModelInterface & m_model;
+				const CartesianFrame< float > & m_frame;
+				Vector< 3, float > m_normal;
+				float m_height{0.0F};
+				bool m_found{false};
+		};
+
+		/**
 		 * @brief Collects the ground triangles under a body into solver manifolds.
 		 */
 		class GroundContactCollector final : public GroundTriangleVisitor
@@ -169,8 +235,8 @@ namespace EmEn::Scenes
 				void
 				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t featureId) noexcept override
 				{
-					/* One-sided and solid below (NarrowPhase::generateGround()). */
-					if ( NarrowPhase::generateGround(m_model, m_frame, triangle, SoftStepSolver::SpeculativeMargin, m_claimedLowPoints, m_contact) )
+					/* One-sided (NarrowPhase::generateGround()). */
+					if ( NarrowPhase::generateGround(m_model, m_frame, triangle, SoftStepSolver::SpeculativeMargin, m_contact) )
 					{
 						/* A = the body, B = the static world; the sub key tells the triangles apart. */
 						appendManifold(m_contact, m_bodyIndex, 0, m_creationNumber, GroundKey, static_cast< uint64_t >(featureId) + 1, m_friction, m_restitution, m_manifolds);
@@ -185,9 +251,94 @@ namespace EmEn::Scenes
 				Space3D::ContactManifold< float > m_contact;
 				uint64_t m_creationNumber;
 				uint32_t m_bodyIndex;
-				uint32_t m_claimedLowPoints{0};
 				float m_friction;
 				float m_restitution;
+		};
+
+		/** @brief A fast body sweeps when it moved more than this fraction of its round core in one step. */
+		constexpr float ContinuousCoreFraction{0.5F};
+
+		/** @brief The distance a swept body stops short of its first contact (m). */
+		constexpr float ContinuousSlop{0.005F};
+
+		/**
+		 * @brief Sweeps a body's round core against the ground triangles of a region; keeps the earliest contact.
+		 */
+		class ContinuousGroundSweep final : public GroundTriangleVisitor
+		{
+			public:
+
+				ContinuousGroundSweep (const CollisionModelInterface & model, const CartesianFrame< float > & frame, const Vector< 3, float > & motion) noexcept
+					: m_model{model},
+					m_frame{frame},
+					m_motion{motion}
+				{
+
+				}
+
+				void
+				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+				{
+					Space3D::CastHit< float > hit;
+
+					/* Touching at the start is the contacts' business, not a crossing; and the ground is one-sided: a triangle
+					 * met from UNDER it stops nothing (the recovery, step 1b, lifts a body under the ground). Without the
+					 * second rule a ball stopped every step by a triangle the contacts ignored stayed frozen while gravity
+					 * kept adding to its velocity — 110 m/s after 25 s. */
+					if ( !NarrowPhase::sweepCore(m_model, m_frame, m_motion, triangle, hit) || hit.startedInside() || hit.normal()[Y] <= 0.0F )
+					{
+						return;
+					}
+
+					if ( hit.fraction() < m_earliest )
+					{
+						m_earliest = hit.fraction();
+						m_normal = hit.normal();
+						m_point = hit.point();
+					}
+				}
+
+				/**
+				 * @brief Returns the contact point of the earliest contact.
+				 * @return const Vector< 3, float > &
+				 */
+				[[nodiscard]]
+				const Vector< 3, float > &
+				point () const noexcept
+				{
+					return m_point;
+				}
+
+				/**
+				 * @brief Returns the surface normal at the earliest contact (towards the body).
+				 * @return const Vector< 3, float > &
+				 */
+				[[nodiscard]]
+				const Vector< 3, float > &
+				normal () const noexcept
+				{
+					return m_normal;
+				}
+
+				/**
+				 * @brief Returns the earliest contact fraction (1 = none).
+				 * @return float
+				 */
+				[[nodiscard]]
+				float
+				earliest () const noexcept
+				{
+					return m_earliest;
+				}
+
+			private:
+
+				const CollisionModelInterface & m_model;
+				const CartesianFrame< float > & m_frame;
+				const Vector< 3, float > & m_motion;
+				Vector< 3, float > m_normal;
+				Vector< 3, float > m_point;
+				float m_earliest{1.0F};
 		};
 
 		/** @brief Whether two world AABBs overlap, the first inflated by a margin. */
@@ -305,6 +456,67 @@ namespace EmEn::Scenes
 
 			bodyIndices[entity.get()] = static_cast< uint32_t >(bodies.size());
 			bodies.push_back(body);
+		}
+
+		/* ============================================================
+		 * 1b. GROUND RECOVERY: a dynamic body whose centre crossed the ground within one step (a ball at 43 m/s moves
+		 * 0.72 m per step, more than its radius) is put back ON it, before any contact is built. The ground is the top
+		 * of a solid (owner, 2026-10-02): the bottom of the body's world box goes onto the surface vertically under its
+		 * centre, and its velocity bounces off that surface as a contact would. Before, such a body got a contact normal
+		 * pointing DOWN and went through (balls-of-steel: 82 of 400 balls under the terrain); recovering it with the
+		 * solver's 3 m/s pushout let a ball entering a hillside at 26 m/s sink deeper faster than it came back up.
+		 * ============================================================ */
+		if ( m_groundLevel != nullptr )
+		{
+			for ( size_t index = 1; index < bodies.size(); ++index )
+			{
+				auto & body = bodies[index];
+				const auto & entity = bodyEntities[index];
+
+				if ( body.movable == nullptr || !body.dynamic || !entity->hasCollisionModel() )
+				{
+					continue;
+				}
+
+				const auto frame = entity->getWorldCoordinates();
+				const auto * model = entity->collisionModel();
+				const auto bounds = model->getAABB(frame);
+				const Space3D::AACuboid< float > region{bounds.maximum() + Vector< 3, float >{SpeculativeContactMargin, SpeculativeContactMargin, SpeculativeContactMargin}, bounds.minimum() - Vector< 3, float >{SpeculativeContactMargin, SpeculativeContactMargin, SpeculativeContactMargin}};
+
+				GroundHeightProbe probe{*model, frame};
+				static_cast< void >(m_groundLevel->visitTriangles(region, probe));
+
+				if ( !probe.isUnderground() )
+				{
+					continue;
+				}
+
+				/* The surface under the centre (body.position IS the shape's centroid, P3), the box bottom onto it. */
+				const auto surface = body.position[Y] - probe.height();
+				const auto lift = surface - bounds.minimum(Y);
+
+				if ( !(lift > 0.0F) || !std::isfinite(lift) )
+				{
+					continue;
+				}
+
+				const Vector< 3, float > shift{0.0F, lift, 0.0F};
+
+				body.position += shift;
+				body.movable->moveFromPhysics(shift);
+				movedEntities.push_back(entity);
+
+				/* The bounce a contact would have given: v' = v − (1 + e) (v · n) n, approaching only. */
+				const auto & normal = probe.normal();
+				const auto approach = Vector< 3, float >::dotProduct(body.linearVelocity, normal);
+
+				if ( approach < 0.0F )
+				{
+					const auto restitution = std::max(entity->bodyPhysicalProperties().bounciness(), GroundRestitution);
+
+					body.linearVelocity -= normal * ((1.0F + restitution) * approach);
+				}
+			}
 		}
 
 		/* ============================================================
@@ -439,6 +651,125 @@ namespace EmEn::Scenes
 		});
 
 		m_softStepSolver.step(bodies, manifolds, m_environmentPhysicalProperties.surfaceGravity(), PhysicsStepSeconds);
+
+		/* ============================================================
+		 * 4b. CONTINUOUS COLLISION of the fast bodies (P5, the owner's idea: the segment from the old to the new
+		 * position): a dynamic body that moved more than half its round core in this step sweeps that core along its
+		 * motion against the static world (the ground's triangles, the static solids, the kinematic bodies) and is put
+		 * back just before the first contact; the next step's contact then stops or bounces it. Without it a body
+		 * moving more than its size per step went through a wall (and the ground, before step 1b).
+		 * ============================================================ */
+		auto & obstacles = m_continuousObstacles;
+		obstacles.clear();
+
+		for ( size_t index = 1; index < bodies.size(); ++index )
+		{
+			const auto & entity = bodyEntities[index];
+
+			if ( !bodies[index].dynamic && entity->hasCollisionModel() && entity->isCollidable() )
+			{
+				const auto obstacleFrame = entity->getWorldCoordinates();
+
+				obstacles.push_back(ContinuousObstacle{.frame = obstacleFrame, .bounds = entity->collisionModel()->getAABB(obstacleFrame), .model = entity->collisionModel(), .index = static_cast< uint32_t >(index)});
+			}
+		}
+
+		for ( size_t index = 1; index < bodies.size(); ++index )
+		{
+			auto & body = bodies[index];
+			const auto & entity = bodyEntities[index];
+
+			if ( body.movable == nullptr || !body.dynamic || !entity->hasCollisionModel() )
+			{
+				continue;
+			}
+
+			const auto * model = entity->collisionModel();
+			const auto frame = entity->getWorldCoordinates();
+			const auto motion = body.deltaPosition;
+			const auto distance = motion.length();
+			const auto radius = NarrowPhase::coreRadius(*model, frame);
+
+			if ( !(distance > std::max(radius * ContinuousCoreFraction, SpeculativeContactMargin)) )
+			{
+				continue;
+			}
+
+			/* The swept region: the body's box at the start, stretched along the motion. */
+			const auto startBounds = model->getAABB(frame);
+			auto sweptBounds = startBounds;
+			sweptBounds.merge(Space3D::AACuboid< float >{startBounds.maximum() + motion, startBounds.minimum() + motion});
+
+			float earliest = 1.0F;
+			Vector< 3, float > normal;
+			Vector< 3, float > point;
+			float restitution = 0.0F;
+			Space3D::CastHit< float > hit;
+			const auto & material = entity->bodyPhysicalProperties();
+
+			/* The ground's triangles. */
+			if ( m_groundLevel != nullptr )
+			{
+				ContinuousGroundSweep sweep{*model, frame, motion};
+				static_cast< void >(m_groundLevel->visitTriangles(sweptBounds, sweep));
+
+				if ( sweep.earliest() < earliest )
+				{
+					earliest = sweep.earliest();
+					normal = sweep.normal();
+					point = sweep.point();
+					restitution = std::max(material.bounciness(), GroundRestitution);
+				}
+			}
+
+			/* The static solids, the kinematic and the sleeping bodies (the static world for this body). */
+			for ( const auto & obstacle : obstacles )
+			{
+				if ( obstacle.index == index || !boxesOverlap(sweptBounds, obstacle.bounds, 0.0F) )
+				{
+					continue;
+				}
+
+				if ( NarrowPhase::sweepCore(*model, frame, motion, *obstacle.model, obstacle.frame, hit) && !hit.startedInside() && hit.fraction() < earliest )
+				{
+					earliest = hit.fraction();
+					normal = hit.normal();
+					point = hit.point();
+					restitution = std::max(material.bounciness(), bodyEntities[obstacle.index]->bodyPhysicalProperties().bounciness());
+				}
+			}
+
+			if ( earliest >= 1.0F )
+			{
+				continue;
+			}
+
+			/* A sweep only prevents a CROSSING: if the body's centre ends this step on the near side of the surface it
+			 * met, the contacts handle it. Without this rule a walker sliding along a wall a few millimetres off was
+			 * stopped every step by a tangential hit that bounced nothing, while its own controller kept accelerating
+			 * it — frozen at 369 m/s. */
+			if ( Vector< 3, float >::dotProduct(body.position - point, normal) >= 0.0F )
+			{
+				continue;
+			}
+
+			/* Back to just before the contact (a slop short of it, never behind the start). */
+			const auto allowed = std::max(0.0F, (earliest * distance) - ContinuousSlop) / distance;
+			const auto kept = motion * allowed;
+
+			body.position += kept - motion;
+			body.deltaPosition = kept;
+
+			/* The impact, as a contact would give it: the approaching velocity bounces off the surface with the pair's
+			 * restitution (the maximum, as the solver combines it). The next step's contact then sees a body leaving and
+			 * adds nothing; a body the sweep stopped can no longer keep a velocity into the obstacle. */
+			const auto approach = Vector< 3, float >::dotProduct(body.linearVelocity, normal);
+
+			if ( approach < 0.0F )
+			{
+				body.linearVelocity -= normal * ((1.0F + restitution) * approach);
+			}
+		}
 
 		/* ============================================================
 		 * 5. WRITE BACK the dynamic bodies.

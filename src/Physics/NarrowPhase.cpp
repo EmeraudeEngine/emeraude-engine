@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 /* Local inclusions. */
@@ -39,7 +40,6 @@
 #include "Math/Space3D/Contacts/SphereBox.hpp"
 #include "Math/Space3D/Contacts/SphereTriangle.hpp"
 #include "Math/Space3D/OrientedBox.hpp"
-#include "StaticVector.hpp"
 #include "BoxCollisionModel.hpp"
 #include "CapsuleCollisionModel.hpp"
 #include "CollisionModelInterface.hpp"
@@ -201,9 +201,6 @@ namespace EmEn::Physics
 			return false;
 		}
 
-		/** @brief A feature id bit for the half-space contacts of a ground triangle (never produced by the generators). */
-		constexpr uint32_t GroundHalfSpaceFeature{0x80000000U};
-
 		/** @brief The centre of a world shape. */
 		[[nodiscard]]
 		Vector< 3, float >
@@ -224,88 +221,23 @@ namespace EmEn::Physics
 			return {};
 		}
 
-		/** @brief A low point of a shape over a ground plane: its position, height over the plane and stable index. */
-		struct LowPoint final
-		{
-			Vector< 3, float > position;
-			float height{0.0F};
-			uint32_t index{0};
-		};
-
 		/**
-		 * @brief The points of a world shape lower than a reach over a plane, the four lowest at most: the bottom of a
-		 * sphere, the bottom of each capsule end, the box corners. Their index is stable (the box corner index, the
-		 * capsule end), so a solver can carry their impulse from one step to the next.
+		 * @brief Whether a point lies VERTICALLY over or under a triangle (its X/Z footprint, edges included, either
+		 * winding): a height field gives every point of the plane to the triangle above or under it.
 		 */
-		void
-		lowPoints (const WorldShape & shape, const Vector< 3, float > & upward, const Vector< 3, float > & planePoint, float reach, Base::StaticVector< LowPoint, 4 > & points) noexcept
-		{
-			points.clear();
-
-			/* Eight box corners at most. */
-			Base::StaticVector< LowPoint, 8 > candidates;
-
-			const auto add = [&] (const Vector< 3, float > & position, uint32_t index) {
-				const auto height = Vector< 3, float >::dotProduct(position - planePoint, upward);
-
-				if ( height < reach && !candidates.full() )
-				{
-					candidates.push_back(LowPoint{.position = position, .height = height, .index = index});
-				}
-			};
-
-			switch ( shape.kind )
-			{
-				case WorldShape::Kind::Sphere :
-					add(shape.sphere.position() - (upward * shape.sphere.radius()), 0);
-					break;
-
-				case WorldShape::Kind::Capsule :
-				{
-					const auto rim = upward * shape.capsule.radius();
-
-					add(shape.capsule.startPoint() - rim, 0);
-					add(shape.capsule.endPoint() - rim, 1);
-				}
-					break;
-
-				case WorldShape::Kind::Box :
-					for ( uint32_t index = 0; index < 8; ++index )
-					{
-						add(shape.box.corner(index), index);
-					}
-					break;
-			}
-
-			/* The four lowest, ties broken by the index: deterministic. */
-			std::ranges::sort(candidates, [] (const LowPoint & lhs, const LowPoint & rhs) {
-				return lhs.height != rhs.height ? lhs.height < rhs.height : lhs.index < rhs.index;
-			});
-
-			for ( const auto & candidate : candidates )
-			{
-				if ( points.full() )
-				{
-					break;
-				}
-
-				points.push_back(candidate);
-			}
-		}
-
-		/** @brief Whether a point projects inside a triangle along its unit normal (edges included). */
 		[[nodiscard]]
 		bool
-		projectsInside (const Vector< 3, float > & point, const Triangle< float > & triangle, const Vector< 3, float > & normal) noexcept
+		insideFootprint (const Vector< 3, float > & point, const Triangle< float > & triangle) noexcept
 		{
-			const auto onInnerSide = [&point, &normal] (const Vector< 3, float > & from, const Vector< 3, float > & to) {
-				return Vector< 3, float >::dotProduct(Vector< 3, float >::crossProduct(to - from, point - from), normal) >= 0.0F;
+			const auto side = [&point] (const Vector< 3, float > & from, const Vector< 3, float > & to) {
+				return ((to[X] - from[X]) * (point[Z] - from[Z])) - ((to[Z] - from[Z]) * (point[X] - from[X]));
 			};
 
-			return
-				onInnerSide(triangle.pointA(), triangle.pointB()) &&
-				onInnerSide(triangle.pointB(), triangle.pointC()) &&
-				onInnerSide(triangle.pointC(), triangle.pointA());
+			const auto sideAB = side(triangle.pointA(), triangle.pointB());
+			const auto sideBC = side(triangle.pointB(), triangle.pointC());
+			const auto sideCA = side(triangle.pointC(), triangle.pointA());
+
+			return (sideAB >= 0.0F && sideBC >= 0.0F && sideCA >= 0.0F) || (sideAB <= 0.0F && sideBC <= 0.0F && sideCA <= 0.0F);
 		}
 	}
 
@@ -331,7 +263,39 @@ namespace EmEn::Physics
 	}
 
 	bool
-	NarrowPhase::generateGround (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Triangle< float > & triangle, float margin, uint32_t & claimedLowPoints, ContactManifold< float > & manifold) noexcept
+	NarrowPhase::heightOverGround (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Triangle< float > & triangle, float & height, Vector< 3, float > & normal) noexcept
+	{
+		const auto shape = toWorldShape(modelA, frameA, 0.0F);
+
+		if ( !shape.valid )
+		{
+			return false;
+		}
+
+		const auto centre = centerOf(shape);
+
+		if ( !insideFootprint(centre, triangle) || !TriangleDetail::unitNormal(triangle, normal) || normal[Y] == 0.0F )
+		{
+			return false;
+		}
+
+		/* A height-field triangle faces +Y whatever its winding. */
+		if ( normal[Y] < 0.0F )
+		{
+			normal = -normal;
+		}
+
+		/* The surface height under the centre, on the triangle's plane. */
+		const auto & corner = triangle.pointA();
+		const auto surface = corner[Y] - (((normal[X] * (centre[X] - corner[X])) + (normal[Z] * (centre[Z] - corner[Z]))) / normal[Y]);
+
+		height = centre[Y] - surface;
+
+		return true;
+	}
+
+	bool
+	NarrowPhase::generateGround (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Triangle< float > & triangle, float margin, ContactManifold< float > & manifold) noexcept
 	{
 		manifold.clear();
 
@@ -350,54 +314,142 @@ namespace EmEn::Physics
 
 		const auto shape = toWorldShape(modelA, frameA, margin);
 
-		if ( !shape.valid )
+		if ( !shape.valid || !contactsOfTriangle(shape, triangle, manifold) )
 		{
 			return false;
 		}
 
-		const auto centreHeight = Vector< 3, float >::dotProduct(centerOf(shape) - triangle.pointA(), upward);
-
-		/* 1. The centre is OVER the plane (every body that did not cross the surface): the contact generators, one-sided —
-		 * the ground may only push a body up (the normal A → B points down). */
-		if ( centreHeight >= 0.0F )
+		/* One-sided: the ground may only push a body up (the normal A → B points down). */
+		if ( Vector< 3, float >::dotProduct(manifold.normal(), upward) > 0.0F )
 		{
-			if ( !contactsOfTriangle(shape, triangle, manifold) )
-			{
-				return false;
-			}
+			manifold.clear();
 
-			if ( Vector< 3, float >::dotProduct(manifold.normal(), upward) > 0.0F )
-			{
-				manifold.clear();
-
-				return false;
-			}
-
-			return true;
+			return false;
 		}
 
-		/* 2. The centre is UNDER the plane (the body crossed the surface within one step): the ground is solid below, the
-		 * low points of A that project inside this triangle go back up along the face normal. */
-		Base::StaticVector< LowPoint, 4 > low;
-		lowPoints(shape, upward, triangle.pointA(), 0.0F, low);
+		return true;
+	}
 
-		manifold.setNormal(-upward);
-
-		for ( const auto & point : low )
+	namespace
+	{
+		/** @brief The round core of a world shape: a sphere (a box's inscribed one, a point's of radius 0) or a capsule. */
+		struct SweptCore final
 		{
-			const auto bit = 1U << point.index;
+			Sphere< float > sphere;
+			Capsule< float > capsule;
+			bool isCapsule{false};
+			bool valid{false};
+		};
 
-			if ( (claimedLowPoints & bit) != 0U || !projectsInside(point.position, triangle, upward) )
+		[[nodiscard]]
+		SweptCore
+		sweptCoreOf (const CollisionModelInterface & model, const CartesianFrame< float > & frame) noexcept
+		{
+			SweptCore core;
+			const auto shape = toWorldShape(model, frame, 0.0F);
+
+			if ( !shape.valid )
 			{
-				continue;
+				return core;
 			}
 
-			claimedLowPoints |= bit;
+			switch ( shape.kind )
+			{
+				case WorldShape::Kind::Sphere :
+					core.sphere = shape.sphere;
+					core.valid = true;
+					break;
 
-			/* The (inflated) point is under the plane by -height: halfway to it, as the generators place a point. */
-			static_cast< void >(manifold.addPoint(ContactPoint< float >{point.position - (upward * (point.height * 0.5F)), -point.height, GroundHalfSpaceFeature | point.index}));
+				case WorldShape::Kind::Box :
+				{
+					const auto & half = shape.box.halfExtents();
+
+					core.sphere = Sphere< float >{std::min({half[X], half[Y], half[Z]}), shape.box.center()};
+					core.valid = true;
+				}
+					break;
+
+				case WorldShape::Kind::Capsule :
+					core.capsule = shape.capsule;
+					core.isCapsule = true;
+					core.valid = core.capsule.isValid();
+					break;
+			}
+
+			return core;
 		}
 
-		return !manifold.empty();
+		/** @brief Sweeps a core against any base target (box, sphere, capsule, triangle). */
+		template< typename target_t >
+		[[nodiscard]]
+		bool
+		sweepCoreAgainst (const SweptCore & core, const Vector< 3, float > & motion, const target_t & target, CastHit< float > & hit) noexcept
+		{
+			if ( core.isCapsule )
+			{
+				return castCapsule(core.capsule, motion, target, hit);
+			}
+
+			/* A point is swept as a ray (a sphere of radius 0 is not a valid sphere). */
+			if ( !(core.sphere.radius() > 0.0F) )
+			{
+				return castRay(core.sphere.position(), motion, target, hit);
+			}
+
+			return castSphere(core.sphere, motion, target, hit);
+		}
+	}
+
+	float
+	NarrowPhase::coreRadius (const CollisionModelInterface & model, const CartesianFrame< float > & frame) noexcept
+	{
+		const auto core = sweptCoreOf(model, frame);
+
+		if ( !core.valid )
+		{
+			return 0.0F;
+		}
+
+		return core.isCapsule ? core.capsule.radius() : core.sphere.radius();
+	}
+
+	bool
+	NarrowPhase::sweepCore (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Vector< 3, float > & motion, const CollisionModelInterface & modelB, const CartesianFrame< float > & frameB, CastHit< float > & hit) noexcept
+	{
+		const auto core = sweptCoreOf(modelA, frameA);
+		const auto target = toWorldShape(modelB, frameB, 0.0F);
+
+		if ( !core.valid || !target.valid )
+		{
+			return false;
+		}
+
+		switch ( target.kind )
+		{
+			case WorldShape::Kind::Sphere :
+				/* A point obstacle (a zero-radius sphere) cannot stop anything. */
+				return target.sphere.radius() > 0.0F && sweepCoreAgainst(core, motion, target.sphere, hit);
+
+			case WorldShape::Kind::Box :
+				return sweepCoreAgainst(core, motion, target.box, hit);
+
+			case WorldShape::Kind::Capsule :
+				return sweepCoreAgainst(core, motion, target.capsule, hit);
+		}
+
+		return false;
+	}
+
+	bool
+	NarrowPhase::sweepCore (const CollisionModelInterface & modelA, const CartesianFrame< float > & frameA, const Vector< 3, float > & motion, const Triangle< float > & triangle, CastHit< float > & hit) noexcept
+	{
+		const auto core = sweptCoreOf(modelA, frameA);
+
+		if ( !core.valid )
+		{
+			return false;
+		}
+
+		return sweepCoreAgainst(core, motion, triangle, hit);
 	}
 }

@@ -4864,8 +4864,13 @@ dereference what a resource accessor returns without checking it.**
 > UNDER a ground triangle: the normal then points down and the solver pushes it on through. Measured in balls-of-steel
 > (balls dropped from the scene's top, up to 66 m/s): 82 of 400 sampled balls under the terrain after 25 s, down to the
 > lower boundary 167 m below, where they bounced back and hit the ground from underneath.
-> - Fix: `Physics::NarrowPhase::generateGround()` — the ground is one-sided and solid below (a contact that pushes a
->   body down is dropped; a centre under the plane gets its low points pushed back up along the face normal).
+> - Fix: the ground is one-sided (`Physics::NarrowPhase::generateGround()` drops a contact that pushes a body down), a
+>   body whose centre crossed it is put back on it before its contacts (`Scene::resolveCollisions()` step 1b), and a
+>   fast body is swept along its motion (step 4b, continuous collision).
+> - ⚠️ A sweep that STOPS a body must also stop its velocity: a ball held every step 5 mm short of a triangle the
+>   contacts ignored kept its velocity, gravity added 0.16 m/s per step, and it left at 110 m/s.
+> - ⚠️ A sweep must stop only a CROSSING (the centre ending past the surface): stopped by a tangential hit, a walker
+>   sliding along a wall stayed frozen while its controller accelerated it to 369 m/s.
 > - Probe: `Core.SceneManagerService.getGroundLevel(x, z)` against `getNodePhysics()` positions; bench stations
 >   `BenchFastBall` / `BenchFastBox` (`collision-debug`, 95 m drops).
 > - A wall or a thin solid still tunnels at those speeds: continuous collision is P5 (`physics-continuous-collision`).

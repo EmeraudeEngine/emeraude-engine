@@ -61,4 +61,56 @@ namespace EmEn::Scenes
 			visitor.onTriangle(Base::Math::Space3D::Triangle< float >{pointA, pointB, pointC}, featureId);
 		});
 	}
+
+	/**
+	 * @brief Answers the height of a ground triangle's surface over a world X/Z, when that point lies in its footprint.
+	 * @note The exact surface the physics collides, unlike GroundLevelInterface::getLevelAt() (bilinear over a cell:
+	 * several metres off on a steep 1 m cell).
+	 * @param triangle A reference to the triangle.
+	 * @param positionX The world X.
+	 * @param positionZ The world Z.
+	 * @param height A reference to the height written.
+	 * @return bool False when the point is outside the footprint or the triangle is vertical.
+	 */
+	[[nodiscard]]
+	inline
+	bool
+	surfaceHeightOver (const Base::Math::Space3D::Triangle< float > & triangle, float positionX, float positionZ, float & height) noexcept
+	{
+		using Base::Math::X;
+		using Base::Math::Y;
+		using Base::Math::Z;
+
+		const auto & pointA = triangle.pointA();
+		const auto & pointB = triangle.pointB();
+		const auto & pointC = triangle.pointC();
+
+		const auto side = [positionX, positionZ] (const Base::Math::Vector< 3, float > & from, const Base::Math::Vector< 3, float > & to) {
+			return ((to[X] - from[X]) * (positionZ - from[Z])) - ((to[Z] - from[Z]) * (positionX - from[X]));
+		};
+
+		const auto sideAB = side(pointA, pointB);
+		const auto sideBC = side(pointB, pointC);
+		const auto sideCA = side(pointC, pointA);
+
+		/* Inside for either winding. */
+		const bool inside = (sideAB >= 0.0F && sideBC >= 0.0F && sideCA >= 0.0F) || (sideAB <= 0.0F && sideBC <= 0.0F && sideCA <= 0.0F);
+
+		if ( !inside )
+		{
+			return false;
+		}
+
+		const auto normal = Base::Math::Vector< 3, float >::crossProduct(pointB - pointA, pointC - pointA);
+
+		if ( normal[Y] == 0.0F )
+		{
+			return false;
+		}
+
+		height = pointA[Y] - (((normal[X] * (positionX - pointA[X])) + (normal[Z] * (positionZ - pointA[Z]))) / normal[Y]);
+
+		return true;
+	}
 }
+
