@@ -120,3 +120,6 @@ move OR whose world frame changed since its last logic-thread filing (`AbstractE
 `recordFiledFrame()`, position + upward + backward). The second test catches what a node's own `processLogics()`
 never reports: a child moved by its parent, a frame set by a component (a vehicle's wheels), an animated hierarchy,
 any non-collidable mover — before it, such a node stayed in its first sector and was culled with it.
+Accepted on the three OS (engine `86a4fc38`, 2026-10-02): macOS M2 and Windows NVIDIA keep the car's four wheels
+visible to x -202 in citadel (before, they vanished once the car left its first sector), the physics bench is
+identical in full state, and 10 demos are clean (0 new `VUID-`).
