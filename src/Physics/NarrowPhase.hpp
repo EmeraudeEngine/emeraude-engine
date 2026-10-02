@@ -111,9 +111,9 @@ namespace EmEn::Physics
 			static bool generateGround (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Space3D::Triangle< float > & triangle, float margin, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
 
 			/**
-			 * @brief Returns the radius of the round CORE a fast body is swept with (continuous collision): a sphere's radius,
-			 * a capsule's radius, a box's smallest half extent (its inscribed sphere, Bullet's "ccdSweptSphereRadius"), 0 for
-			 * a point (a ray).
+			 * @brief Returns the size that decides whether a body is FAST (continuous collision): a sphere's radius, a
+			 * capsule's radius, a box's smallest half extent (its inscribed sphere, Bullet's "ccdSweptSphereRadius"), 0 for a
+			 * point (a ray).
 			 * @param model A reference to the collision model.
 			 * @param frame A reference to its world frame.
 			 * @return float 0 for an unusable shape too.
@@ -122,9 +122,9 @@ namespace EmEn::Physics
 			static float coreRadius (const CollisionModelInterface & model, const Base::Math::CartesianFrame< float > & frame) noexcept;
 
 			/**
-			 * @brief Sweeps the round core of A (coreRadius()) along a motion against a collision model B.
-			 * @note The core of a box is its inscribed sphere: conservative, a box never passes a solid, it stops a little
-			 * later than its true faces would.
+			 * @brief Sweeps A (translated) along a motion against a collision model B.
+			 * @note A sphere, a capsule or a point sweeps itself; a BOX sweeps its faces, edges and corners (base
+			 * `castBox()`, GJK — P5, decision 14; before 2026-10-02 its inscribed sphere, which stopped later).
 			 * @param modelA A reference to the moving model.
 			 * @param frameA A reference to A's world frame at the motion's start.
 			 * @param motion A reference to the motion.
@@ -137,7 +137,7 @@ namespace EmEn::Physics
 			static bool sweepCore (const CollisionModelInterface & modelA, const Base::Math::CartesianFrame< float > & frameA, const Base::Math::Vector< 3, float > & motion, const CollisionModelInterface & modelB, const Base::Math::CartesianFrame< float > & frameB, Base::Math::Space3D::CastHit< float > & hit) noexcept;
 
 			/**
-			 * @brief Sweeps the round core of A (coreRadius()) along a motion against a triangle (a ground triangle).
+			 * @brief Sweeps A (translated, a box by its own shape) along a motion against a triangle (a ground triangle).
 			 * @param modelA A reference to the moving model.
 			 * @param frameA A reference to A's world frame at the motion's start.
 			 * @param motion A reference to the motion.

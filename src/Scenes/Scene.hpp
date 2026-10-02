@@ -44,6 +44,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <span>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -2816,6 +2817,8 @@ namespace EmEn::Scenes
 				Base::Math::Space3D::AACuboid< float > bounds;
 				const Physics::CollisionModelInterface * model{nullptr};
 				uint32_t index{0};
+				/** A dynamic body at its END-of-step pose (P5, decision 14), not part of the static world. */
+				bool dynamic{false};
 			};
 
 			/** @brief One impact of a physics step, emitted after it (outside the physics octree lock). */
@@ -3208,6 +3211,10 @@ namespace EmEn::Scenes
 			mutable std::vector< uint64_t > m_physicsWakingIslands;
 			/** @brief The static world of the continuous pass, rebuilt each step (reused storage). */
 			mutable std::vector< ContinuousObstacle > m_continuousObstacles;
+			/** @brief Per body, its slot in m_continuousObstacles when it is a dynamic one (else the maximum). */
+			mutable std::vector< uint32_t > m_continuousObstacleSlots;
+			/** @brief The dynamic obstacles sorted along X (their minimum X, their slot), a one-axis sweep and prune. */
+			mutable std::vector< std::pair< float, uint32_t > > m_continuousDynamicOrder;
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */
 			PhysicsRecorder m_physicsRecorder;
 			/** @brief The next entity creation number (AbstractEntity::creationNumber()). Mutable: an entity is constructed

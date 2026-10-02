@@ -338,12 +338,15 @@ namespace EmEn::Physics
 
 	namespace
 	{
-		/** @brief The round core of a world shape: a sphere (a box's inscribed one, a point's of radius 0) or a capsule. */
+		/** @brief What a world shape sweeps: a sphere (a point's of radius 0), a capsule, or its BOX (P5, decision 14: exact,
+		 * by GJK; the sphere then is the box's inscribed one, the size that decides whether the body is fast). */
 		struct SweptCore final
 		{
 			Sphere< float > sphere;
 			Capsule< float > capsule;
+			OrientedBox< float > box;
 			bool isCapsule{false};
+			bool isBox{false};
 			bool valid{false};
 		};
 
@@ -371,6 +374,8 @@ namespace EmEn::Physics
 					const auto & half = shape.box.halfExtents();
 
 					core.sphere = Sphere< float >{std::min({half[X], half[Y], half[Z]}), shape.box.center()};
+					core.box = shape.box;
+					core.isBox = true;
 					core.valid = true;
 				}
 					break;
@@ -394,6 +399,12 @@ namespace EmEn::Physics
 			if ( core.isCapsule )
 			{
 				return castCapsule(core.capsule, motion, target, hit);
+			}
+
+			/* A box sweeps its faces, edges and corners (before 2026-10-02: its inscribed sphere, which stopped later). */
+			if ( core.isBox )
+			{
+				return castBox(core.box, motion, target, hit);
 			}
 
 			/* A point is swept as a ray (a sphere of radius 0 is not a valid sphere). */

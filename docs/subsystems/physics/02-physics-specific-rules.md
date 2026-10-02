@@ -40,14 +40,17 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
 4. **Solve**: manifolds sorted by key, `Physics::SoftStepSolver::step()` (4 sub-steps: gravity, warm start, soft solve,
    integrate, relax; restitution 4 passes; impulses cached by feature id). Materials: friction = √(μA μB),
    restitution = max(eA, eB); the ground's default material is μ 1, e 0.
-4b. **Continuous collision** (P5, 2026-10-02): a dynamic body that moved more than half its round core in the step
-   (`NarrowPhase::coreRadius()`: a sphere, a capsule, a box's INSCRIBED sphere, a point's ray) sweeps that core along
-   its motion (`NarrowPhase::sweepCore()`, P1's casts) against the ground triangles (one-sided: a triangle met from
-   under it stops nothing) and the static, kinematic and sleeping bodies. ONLY A CROSSING is stopped — the body's centre
-   ending the step on the far side of the surface met: it is put back 5 mm short of the contact and its approaching
-   velocity bounces off the hit normal with the pair's restitution (so the next step's contact adds nothing). A body
-   ending on the near side (sliding along a wall, or sinking less than its centre) is the contacts' business.
-   Dynamic ↔ dynamic is not swept.
+4b. **Continuous collision** (P5, 2026-10-02): a dynamic body that moved more than half its core size in the step
+   (`NarrowPhase::coreRadius()`: a sphere's or a capsule's radius, a box's smallest half extent, 0 for a point) sweeps
+   ITSELF along its motion (`NarrowPhase::sweepCore()`: a sphere, a capsule, a point's ray, a BOX by its faces, edges
+   and corners — base `castBox()`, GJK, decision 14) against the ground triangles (one-sided: a triangle met from under
+   it stops nothing), the static, kinematic and sleeping bodies, and the OTHER DYNAMIC BODIES at their end-of-step pose
+   (translated; decision 14, Box2D v3's "bullet" method for every fast body — found through a one-axis sweep and prune
+   along X, a total order). ONLY A CROSSING is stopped — the body's centre ending the step on the far side of the surface
+   met: it is put back 5 mm short of the contact and its approaching velocity bounces off the hit normal with the pair's
+   restitution — against a dynamic body the RELATIVE velocity, an impulse shared by the two masses (momentum kept) — so
+   the next step's contact adds nothing. A body ending on the near side (sliding along a wall, or sinking less than its
+   centre — up to its radius into a thin wall) is the contacts' business.
 5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
    the impacts (an approach above 0.05 m/s) are COLLECTED and the grounded state set from the manifolds (a contact
    within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.

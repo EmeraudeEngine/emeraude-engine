@@ -83,6 +83,10 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    option — existing scenes do not change; a glTF / USD loader option comes after. Order: islands, then meshes; the
    BVH in emeraude-base (a binary SAH tree built once, Wald 2007); internal edges by edge flags computed at build time
    (Jolt's `MeshShape` "active edges").
+14. **The end of continuous collision (owner, 2026-10-02, the recommendations)**: (1) DYNAMIC ↔ dynamic: every fast
+   body is swept against the other dynamic bodies at their end-of-step pose too (no "bullet" flag, as decision 10);
+   (2) a BOX sweeps its own shape: GJK + conservative advancement in emeraude-base (`castBox()`), not its inscribed
+   sphere.
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -267,6 +271,14 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   inside the ~3 % spread — NOT a P5 change. The macOS / Linux gap (~3 vs 0.61 ms, while balls-of-steel agrees) stays a
   platform observation; the methods differ (wall-clock samples outside `sleep_for`, which count a blocked or
   descheduled thread, vs CPU time) — `thread_info(THREAD_BASIC_INFO)` would give the Linux measure.
+- **P5 continuous collision completed (2026-10-02, decision 14)**: dynamic ↔ dynamic sweeps and exact box sweeps (step
+  4b, `subsystems/physics/02-…`; base `ConvexDistance.hpp` + `castBox()`, 15 tests, ASan/UBSan green). Bench ROW 8 and
+  S17: two balls at ±60 m/s stop where they meet (1.0 m apart; without the dynamic sweep they interpenetrated 0.91 m),
+  a ball at 80 m/s pushes a 10 kg box straight (without: it climbed it, the box turned and left sideways), a box turned
+  45° stops with its EDGE at the wall (centre x −0.2469 for −0.246; its inscribed sphere let the edge 4 cm in). The
+  other 40 stations: identical to the P5 reference but `BenchFastBox` (1.4 mm) and `BenchBulletBox` (0.5 mm). Cost: the
+  plain dynamic loop added 5 % of balls-of-steel's logic thread (7.35 vs 6.99 ms), the sweep and prune 1.8 % (7.12 ms,
+  inside the ~3 % spread; medians of 5 launches). The bench: 45 stations, 3 launches bit-identical.
 - **P5 ACCEPTED on Windows** (2026-10-02, RTX 3060 + AMD iGPU, same commits): 2282 base tests (13/13 mesh); bench 2 runs
   per GPU, 40/40 at 0 differing, NVIDIA = AMD on every cycle; ROW 7 = Linux (MeshSlider y 1.0000 all along, ramp 3.0966,
   stairs 1.5100, UpBall apex 4.2463); 19 of the 32 old stations changed, the islands' sleep (PushedBox 0.45 m, the rest
@@ -385,7 +397,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 | P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
-| P5 | engine (+ base for the mesh) | `physics-continuous-collision` (in progress: dynamic ↔ dynamic, box caster), `physics-triangle-mesh-static-shapes` and `physics-simulation-islands` — both CLOSED 2026-10-02 (§ 1b) |
+| P5 | engine (+ base for the mesh and GJK) | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` — all CLOSED 2026-10-02 (§ 1b) |
 
 ## 5. What must survive the overhaul
 

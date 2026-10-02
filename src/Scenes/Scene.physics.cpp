@@ -1193,24 +1193,63 @@ namespace EmEn::Scenes
 		/* ============================================================
 		 * 4b. CONTINUOUS COLLISION of the fast bodies (P5, the owner's idea: the segment from the old to the new
 		 * position): a dynamic body that moved more than half its round core in this step sweeps that core along its
-		 * motion against the static world (the ground's triangles, the static solids, the kinematic bodies) and is put
-		 * back just before the first contact; the next step's contact then stops or bounces it. Without it a body
-		 * moving more than its size per step went through a wall (and the ground, before step 1b).
+		 * motion against the static world (the ground's triangles, the static solids, the kinematic bodies) AND the
+		 * other dynamic bodies at their end-of-step pose (decision 14, Box2D v3's "bullet" method, for every fast body),
+		 * and is put back just before the first contact; the next step's contact then stops or bounces it. Without it a
+		 * body moving more than its size per step went through a wall (and the ground, before step 1b).
 		 * ============================================================ */
 		auto & obstacles = m_continuousObstacles;
+		auto & obstacleSlots = m_continuousObstacleSlots;
 		obstacles.clear();
+		obstacleSlots.assign(bodies.size(), std::numeric_limits< uint32_t >::max());
 
 		for ( size_t index = 1; index < bodies.size(); ++index )
 		{
 			const auto & entity = bodyEntities[index];
 
-			if ( !bodies[index].dynamic && entity->hasCollisionModel() && entity->isCollidable() )
+			if ( !entity->hasCollisionModel() || !entity->isCollidable() )
 			{
-				const auto obstacleFrame = entity->getWorldCoordinates();
+				continue;
+			}
 
-				obstacles.push_back(ContinuousObstacle{.frame = obstacleFrame, .bounds = entity->collisionModel()->getAABB(obstacleFrame), .model = entity->collisionModel(), .index = static_cast< uint32_t >(index)});
+			auto obstacleFrame = entity->getWorldCoordinates();
+			const bool dynamic = bodies[index].movable != nullptr && bodies[index].dynamic;
+
+			/* A dynamic body where the solver left it (translated; its rotation over one step is neglected). */
+			if ( dynamic )
+			{
+				obstacleFrame.setPosition(obstacleFrame.position() + bodies[index].deltaPosition);
+				obstacleSlots[index] = static_cast< uint32_t >(obstacles.size());
+			}
+
+			obstacles.push_back(ContinuousObstacle{.frame = obstacleFrame, .bounds = entity->collisionModel()->getAABB(obstacleFrame), .model = entity->collisionModel(), .index = static_cast< uint32_t >(index), .dynamic = dynamic});
+		}
+
+		/* The dynamic obstacles sorted along X (a one-axis sweep and prune): a fast body meets only those whose X range
+		 * may overlap its swept box, not all of them (balls-of-steel: +5 % of the logic thread with the plain loop). The
+		 * order is TOTAL (the X, then the body index): the same on every standard library. A body put back afterwards
+		 * keeps its place; the window is widened by the largest put-back so it is never missed. */
+		auto & dynamicOrder = m_continuousDynamicOrder;
+		dynamicOrder.clear();
+
+		float widestDynamic = 0.0F;
+
+		for ( uint32_t slot = 0; slot < obstacles.size(); ++slot )
+		{
+			const auto & obstacle = obstacles[slot];
+
+			if ( obstacle.dynamic )
+			{
+				dynamicOrder.emplace_back(obstacle.bounds.minimum(X), slot);
+				widestDynamic = std::max(widestDynamic, obstacle.bounds.maximum(X) - obstacle.bounds.minimum(X));
 			}
 		}
+
+		std::ranges::sort(dynamicOrder, [&obstacles] (const auto & lhs, const auto & rhs) {
+			return lhs.first != rhs.first ? lhs.first < rhs.first : obstacles[lhs.second].index < obstacles[rhs.second].index;
+		});
+
+		float largestPutBack = 0.0F;
 
 		for ( size_t index = 1; index < bodies.size(); ++index )
 		{
@@ -1242,6 +1281,8 @@ namespace EmEn::Scenes
 			Vector< 3, float > normal;
 			Vector< 3, float > point;
 			float restitution = 0.0F;
+			/* The dynamic body met first, if it is one (its velocity takes its share of the impact). */
+			uint32_t dynamicTarget = 0;
 			Space3D::CastHit< float > hit;
 			const auto & material = entity->bodyPhysicalProperties();
 
@@ -1260,12 +1301,11 @@ namespace EmEn::Scenes
 				}
 			}
 
-			/* The static solids, the kinematic and the sleeping bodies (the static world for this body). */
-			for ( const auto & obstacle : obstacles )
-			{
+			/* The static solids, the kinematic and the sleeping bodies, and the other dynamic bodies at their end pose. */
+			const auto meet = [&] (const ContinuousObstacle & obstacle) {
 				if ( obstacle.index == index || !boxesOverlap(sweptBounds, obstacle.bounds, 0.0F) )
 				{
-					continue;
+					return;
 				}
 
 				if ( obstacle.model->modelType() == CollisionModelType::TriangleMesh )
@@ -1285,7 +1325,7 @@ namespace EmEn::Scenes
 						}
 					});
 
-					continue;
+					return;
 				}
 
 				if ( NarrowPhase::sweepCore(*model, frame, motion, *obstacle.model, obstacle.frame, hit) && !hit.startedInside() && hit.fraction() < earliest )
@@ -1294,6 +1334,26 @@ namespace EmEn::Scenes
 					normal = hit.normal();
 					point = hit.point();
 					restitution = std::max(material.bounciness(), bodyEntities[obstacle.index]->bodyPhysicalProperties().bounciness());
+					dynamicTarget = obstacle.dynamic ? obstacle.index : 0;
+				}
+			};
+
+			for ( const auto & obstacle : obstacles )
+			{
+				if ( !obstacle.dynamic )
+				{
+					meet(obstacle);
+				}
+			}
+
+			{
+				const auto low = sweptBounds.minimum(X) - widestDynamic - largestPutBack;
+				const auto high = sweptBounds.maximum(X) + largestPutBack;
+				auto candidate = std::ranges::lower_bound(dynamicOrder, low, {}, [] (const auto & entry) { return entry.first; });
+
+				for ( ; candidate != dynamicOrder.end() && candidate->first <= high; ++candidate )
+				{
+					meet(obstacles[candidate->second]);
 				}
 			}
 
@@ -1317,15 +1377,43 @@ namespace EmEn::Scenes
 
 			body.position += kept - motion;
 			body.deltaPosition = kept;
+			largestPutBack = std::max(largestPutBack, (motion - kept).length());
+
+			/* Its end pose as a target for the bodies swept after it. */
+			if ( const auto slot = obstacleSlots[index]; slot != std::numeric_limits< uint32_t >::max() )
+			{
+				auto & self = obstacles[slot];
+
+				self.frame.setPosition(frame.position() + kept);
+				self.bounds = model->getAABB(self.frame);
+			}
 
 			/* The impact, as a contact would give it: the approaching velocity bounces off the surface with the pair's
 			 * restitution (the maximum, as the solver combines it). The next step's contact then sees a body leaving and
-			 * adds nothing; a body the sweep stopped can no longer keep a velocity into the obstacle. */
-			const auto approach = Vector< 3, float >::dotProduct(body.linearVelocity, normal);
-
-			if ( approach < 0.0F )
+			 * adds nothing; a body the sweep stopped can no longer keep a velocity into the obstacle. Against a dynamic
+			 * body the RELATIVE velocity bounces, an impulse shared by their masses (momentum kept). */
+			if ( dynamicTarget != 0 )
 			{
-				body.linearVelocity -= normal * ((1.0F + restitution) * approach);
+				auto & target = bodies[dynamicTarget];
+				const auto approach = Vector< 3, float >::dotProduct(body.linearVelocity - target.linearVelocity, normal);
+				const auto inverseMasses = body.inverseMass + target.inverseMass;
+
+				if ( approach < 0.0F && inverseMasses > 0.0F )
+				{
+					const auto impulse = -(1.0F + restitution) * approach / inverseMasses;
+
+					body.linearVelocity += normal * (impulse * body.inverseMass);
+					target.linearVelocity -= normal * (impulse * target.inverseMass);
+				}
+			}
+			else
+			{
+				const auto approach = Vector< 3, float >::dotProduct(body.linearVelocity, normal);
+
+				if ( approach < 0.0F )
+				{
+					body.linearVelocity -= normal * ((1.0F + restitution) * approach);
+				}
 			}
 		}
 
