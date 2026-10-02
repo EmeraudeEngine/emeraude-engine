@@ -36,6 +36,16 @@ next resize cascades on the lost device:
 The overlay upload, like the rest, keeps submitting after the device is lost. The unbounded `Window.resize` console
 command is the trigger: triad section 15 (`Window.cpp`).
 
+**A third path, the owner's log 2026-10-02** (the RTX 3500 Ada laptop, Linux, `cmake-build-release`, engine 0.9.82):
+the GPU came up on Mesa's NVK (`libvulkan_nouveau.so`, "NVK AD104"; the loader dropped `libGLX_nvidia.so.0` for
+having no device — the proprietary module was not loaded; no ray tracing, no mesh shaders). `citadel` loaded, then
+the first frame's shadow-map submits died in the kernel: `DRM_NOUVEAU_EXEC failed: No such device
+(VK_ERROR_DEVICE_LOST)`, no `VK_EXT_device_fault`. The engine went on: the IBL bake, texture uploads, the
+post-process targets and the overlay all kept submitting (`VUID-vkResetFences-pFences-01123`,
+`VUID-vkQueueSubmit-fence-00064`, `VUID-vkBeginCommandBuffer-commandBuffer-00049`), a window resize re-created the
+targets, and `beginFrame()` ended in its `std::abort()` (`Renderer.cpp`, "Something wrong happens while waiting the
+fence"): exit 134. The loss itself is the driver's (an NVK / nouveau kernel fault); the abort after it is this item.
+
 ## What remains
 
 - On `VK_ERROR_DEVICE_LOST` from any submit or wait: mark the renderer lost, report once with the dump, stop
