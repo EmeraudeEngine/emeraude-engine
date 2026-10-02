@@ -44,3 +44,7 @@ A building, a staircase or a ramp collides as ITS TRIANGLES instead of a box (ow
 - Rolling back on the ground afterwards, `BenchMeshBullet` is kicked upward three times on the FLAT ground (not the
   mesh): item `ground-kicks-fast-rolling-ball`.
 - A station's lane must be its own: a walker going on past its ramp climbed the stairs placed on the same line.
+- A new `CollisionModelType` must reach EVERY `switch ( model->modelType() )`: the Linux GCC build passed with
+  `clipInsideBoundaries()` and `accumulateBoundaryCorrection()` missing `TriangleMesh`, macOS clang refused them
+  (`-Werror,-Wswitch`, engine `8a890f9f`; the mesh is clamped by its world box there, as a box). Run the clang
+  syntax pre-check on the touched TUs before pushing.

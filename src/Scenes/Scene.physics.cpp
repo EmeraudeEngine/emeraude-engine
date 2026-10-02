@@ -1669,6 +1669,8 @@ namespace EmEn::Scenes
 			}
 				break;
 
+			/* A mesh is clamped by its world box, as a box (it moves only as a kinematic node). */
+			case CollisionModelType::TriangleMesh :
 			case CollisionModelType::Box :
 			{
 				const auto aabb = model->getAABB(worldCoords);
@@ -1801,6 +1803,8 @@ namespace EmEn::Scenes
 			}
 				break;
 
+			/* A mesh is clamped by its world box, as a box (it moves only as a kinematic node). */
+			case CollisionModelType::TriangleMesh :
 			case CollisionModelType::Box :
 			{
 				const auto aabb = model->getAABB(worldCoords);
