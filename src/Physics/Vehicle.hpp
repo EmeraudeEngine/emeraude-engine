@@ -126,7 +126,7 @@ namespace EmEn::Physics
 	/**
 	 * @brief A whole vehicle.
 	 */
-	struct VehicleSettings final
+	struct EMEN_API VehicleSettings final
 	{
 		Base::StaticVector< WheelSettings, 8 > wheels;
 		Base::StaticVector< DifferentialSettings, 4 > differentials;
