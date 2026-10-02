@@ -256,6 +256,25 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   (`subsystems/physics/18-triangle-mesh-statics.md`): a box crosses 288 coplanar triangles with y exactly constant, a
   mesh ramp = a box ramp to the cycle, mesh stairs climbed, one-sided and two-sided panels as expected, an 80 m/s ball
   stopped by a zero-thickness mesh panel. Found on the way: `ground-kicks-fast-rolling-ball` (the flat ground).
+- **P5 ACCEPTED on macOS M2** (2026-10-02, base `daea2d6`, engine `d4f38cfe`, alpha `1493e92f`): 2282 base tests (13/13
+  mesh); bench 40 stations, run 2 = run 1 = a third run, 0 differing; ROW 7 = Linux (MeshSlider y 1.0000 all along,
+  mesh ramp max y 3.0966, stairs 1.5100, UpBall apex 4.2463, UpBallTwo 2.4990, the bullet stopped at x 74.495); the old
+  stations changed where bodies now sleep; 9 demos clean, a validated citadel run 0 VUID, 0 device loss (0 in 77).
+  Logic thread (Apple `sample`, busy outside `sleep_for`): balls-of-steel 6.68 ms per cycle (Linux 7.0), lighten-marbles
+  2.84 ms (Linux 0.61, `/proc` CPU ticks) — ~0.9 ms in the terrain's `visitTriangles` (ground contacts and the
+  continuous sweep), ~0.8 ms in `checkEntityLocationInOctrees` (`OctreeSector::erase`). Not compared with a pre-P5 build
+  on macOS: then measured (3 launches each, the same `sample` method): P5 2.999 ms, pre-P5 (`b5dc8297`) 2.949 ms, +1.7 %
+  inside the ~3 % spread — NOT a P5 change. The macOS / Linux gap (~3 vs 0.61 ms, while balls-of-steel agrees) stays a
+  platform observation; the methods differ (wall-clock samples outside `sleep_for`, which count a blocked or
+  descheduled thread, vs CPU time) — `thread_info(THREAD_BASIC_INFO)` would give the Linux measure.
+- **P5 ACCEPTED on Windows** (2026-10-02, RTX 3060 + AMD iGPU, same commits): 2282 base tests (13/13 mesh); bench 2 runs
+  per GPU, 40/40 at 0 differing, NVIDIA = AMD on every cycle; ROW 7 = Linux (MeshSlider y 1.0000 all along, ramp 3.0966,
+  stairs 1.5100, UpBall apex 4.2463); 19 of the 32 old stations changed, the islands' sleep (PushedBox 0.45 m, the rest
+  ≤ 3.4 cm); 9 demos clean with validation, except citadel's known teardown VUIDs and terrain's known slow shutdown. ⚠️
+  `--first-cycle 1` starts when the console comes up (cycle 7 macOS, 15 Windows): an event before it is not recorded.
+  P5 is accepted on the three OS.
+- Two build breaks of `8a890f9f` / `abfe615` found by the peers, fixed: a `switch` without `TriangleMesh` (clang
+  `-Wswitch`, engine `d4f38cfe`) and a local named `far` (windef.h's empty macro, MSVC C3329, base `daea2d6`).
 - **P4 follow-up ACCEPTED on macOS M2** (2026-10-02, engine `b5dc8297`, alpha `302a5d8c`): `nm -m` — the
   component's typeinfo DEFINED in the framework only, the app imports it; bench 2 runs × 32 stations at 0 differing,
   the 23 non-walker stations bit-identical to the previous run, the walkers = Linux (WalkFlat 29.98 m, ramp max y 3.097,
