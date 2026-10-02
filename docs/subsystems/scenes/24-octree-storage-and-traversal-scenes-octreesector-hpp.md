@@ -111,3 +111,12 @@ DRAWN and TRACED forever*.
 > `StaticEntity::isVisibleTo()` tests the **collision model** AABB, or a bare point when there is
 > none. The `renderBoundingBox()` introduced for exactly this purpose is read by no culling path
 > yet — the render/collision split is only half wired.
+
+### When the scene refiles an entity (2026-10-02)
+`Scene::checkEntityLocationInOctrees()` files an entity in the rendering and physics octrees. It runs on a content
+notification (any thread; `setCollisionModel()` notifies too, so a body enters the physics step at once), after the
+physics step for the bodies it moved, and in the logic cycle's node crawl for a node whose `processLogics()` reports a
+move OR whose world frame changed since its last logic-thread filing (`AbstractEntity::movedSinceFiled()` /
+`recordFiledFrame()`, position + upward + backward). The second test catches what a node's own `processLogics()`
+never reports: a child moved by its parent, a frame set by a component (a vehicle's wheels), an animated hierarchy,
+any non-collidable mover — before it, such a node stayed in its first sector and was culled with it.

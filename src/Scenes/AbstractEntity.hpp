@@ -771,6 +771,39 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Records the world frame the scene has just filed the entity with [LOGIC THREAD].
+			 * @param worldCoordinates The entity's world coordinates at that filing.
+			 * @return void
+			 */
+			void
+			recordFiledFrame (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept
+			{
+				m_filedPosition = worldCoordinates.position();
+				m_filedUpward = worldCoordinates.upwardVector();
+				m_filedBackward = worldCoordinates.backwardVector();
+				m_filedFrameRecorded = true;
+			}
+
+			/**
+			 * @brief Returns whether the scene must refile the entity: never recorded since it became renderable, or its
+			 * world frame moved since [LOGIC THREAD].
+			 * @note An entity's own processLogics() reports only ITS moves, and never a non-collidable one's: a child moved
+			 * by its parent, a frame set by a component (a wheel's suspension), an animated hierarchy stayed in its first
+			 * sector and was culled with it (the car's wheels vanished, 2026-10-02).
+			 * @param worldCoordinates The entity's current world coordinates.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			movedSinceFiled (const Base::Math::CartesianFrame< float > & worldCoordinates) const noexcept
+			{
+				return !m_filedFrameRecorded ||
+					m_filedPosition != worldCoordinates.position() ||
+					m_filedUpward != worldCoordinates.upwardVector() ||
+					m_filedBackward != worldCoordinates.backwardVector();
+			}
+
+			/**
 			 * @brief Returns the scene time when the entity was created (in milliseconds).
 			 *
 			 * @return uint32_t Entity creation timestamp in scene time (milliseconds).
@@ -1396,9 +1429,13 @@ namespace EmEn::Scenes
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
 			mutable uint64_t m_renderingGatherStamp{0};	 ///< The last rendering gather that collected the entity (markCollectedByRenderingGather()).
 			Base::Math::CartesianFrame< float > m_deferredMoveCoordinates; ///< World coordinates of a move requested from a component's processLogics(), dispatched after the component loop.
+			Base::Math::Vector< 3, float > m_filedPosition; ///< World position at the last logic-thread filing (recordFiledFrame()).
+			Base::Math::Vector< 3, float > m_filedUpward; ///< World upward at the last logic-thread filing.
+			Base::Math::Vector< 3, float > m_filedBackward; ///< World backward at the last logic-thread filing.
 			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).
 			bool m_dispatchingComponentLogics{false};	   ///< True while processLogics() walks the components under m_componentsMutex (logic thread only).
 			bool m_containerMoveDeferred{false};			///< A move arrived during the component loop: dispatch m_deferredMoveCoordinates after it.
+			bool m_filedFrameRecorded{false};				///< recordFiledFrame() ran (logic thread only).
 	};
 
 	template< typename component_t >

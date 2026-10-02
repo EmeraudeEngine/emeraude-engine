@@ -2932,6 +2932,26 @@ element (`update()`, `erase()`, `insert()`) while walking the octree: gather fir
 sound on a list proven free of duplicates (the physics step checks it in Debug).
 
 
+### Fixed: a child / non-collidable node stayed in its first rendering sector — the car's wheels vanished (Oct 2026)
+
+> **Symptom (2026-10-02, the owner, citadel):** driving up the southern hill then right (west), the car lost its
+> wheels: only the green chassis was drawn.
+
+`Node::onProcessLogics()` returns false at once for a non-collidable node, and nothing refiled the children of a moving
+node: the wheel nodes (moved by their chassis and by `Component::Vehicle`) stayed filed in the rendering octree's
+sector where they were born (one of 8 octants of 512 m). Once the car crossed x = 0 and the camera turned its back to
+that octant, the renderer culled them with it. The same defect hit every animated child hierarchy and every movable
+node that does not collide.
+
+**Fix (owner, 2026-10-02):** the node crawl also refiles a renderable node whose WORLD frame changed since its last
+logic-thread filing (`movedSinceFiled()`, recorded by `recordFiledFrame()` in the crawl and after the physics step, so
+a body the step moved is not refiled twice) — `docs/subsystems/scenes/24-…` § When the scene refiles. Measured: the
+owner's route, wheels drawn all along; the bench full-state identical (48); balls-of-steel's logic 7.10 ms (median of
+5; 7.12-7.35 before); 7 demos clean.
+
+**BenchSpinner (the section below): accepted on Windows (NVIDIA + AMD: 146.50° at cycle 60 in all 6 runs, full state
+identical on 48 stations and across the GPUs) and macOS (the same; its earlier runs all had the varying phase).**
+
 ### Fixed: a body entered the physics step only when its VISUAL finished loading (Oct 2026)
 
 > **Symptom (2026-10-02, the Windows peer):** `BenchSpinner` (free fly, ω = 2 rad/s, it never moves) had a different

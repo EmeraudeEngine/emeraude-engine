@@ -427,9 +427,13 @@ namespace EmEn::Scenes
 			{
 				const auto & currentNode = crawler.currentNode();
 
-				if ( currentNode->processLogics(*this, engineCycle) )
+				/* A node is refiled when it reports its move, but also when its WORLD frame changed without one: a
+				 * parent moved it, a component set its frame, an animation, or it does not collide (its processLogics()
+				 * never reports). Otherwise it stays in its first sector and is culled with it. */
+				if ( currentNode->processLogics(*this, engineCycle) || (currentNode->isRenderable() && currentNode->movedSinceFiled(currentNode->getWorldCoordinates())) )
 				{
 					this->checkEntityLocationInOctrees(currentNode);
+					currentNode->recordFiledFrame(currentNode->getWorldCoordinates());
 				}
 			}
 
@@ -456,6 +460,7 @@ namespace EmEn::Scenes
 			for ( const auto & entity : m_physicsMovedEntities )
 			{
 				this->checkEntityLocationInOctrees(entity);
+				entity->recordFiledFrame(entity->getWorldCoordinates());
 			}
 
 			/* The characters' events (landed, left the ground, hit a wall), outside the lock too. */

@@ -129,3 +129,6 @@ parked at different heights because citadel's seeded TERRAIN differed per OS (st
 - **The 100 m scene boundary is a wall**: the bench's first right-turn circle (from z 80) met it at z ≈ 100 and the car
   rolled over. A station's whole path must stay inside the boundary.
 - The wheels do not cast against their own chassis, and a non-collidable wheel node is never a solid.
+- **The wheel nodes vanished far from the spawn** (owner, 2026-10-02): child, non-collidable nodes were never refiled in
+  the rendering octree. Fixed in the scene's node crawl (engine `docs/caution-points.md`, "a child / non-collidable node
+  stayed in its first rendering sector").
