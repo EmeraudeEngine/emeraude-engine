@@ -28,9 +28,10 @@ sphere-cast wheels, slip-curve tyres, a complete drive train, the wheels in the 
 - [x] V3 solver: the wheel constraints in `SoftStepSolver` (suspension, longitudinal + lateral friction, wheel spin).
 - [x] V4 scene: `Component::Vehicle`, the wheels' sphere casts in the physics step, the wheel visuals, the console.
 - [x] `collision-debug` ROW 9: idle, straight + brake, turn (measured: `docs/subsystems/physics/19-wheeled-vehicle.md`).
-- [ ] The peers' validation (macOS, Windows NVIDIA + AMD): build, bench 48 stations at 0 differing, the car values.
-- [ ] Stations still to add: a ramp, a bump, an overturn (and a car meeting a dynamic body).
-- [ ] Driving one in projet-alpha (the player at the wheel, a dedicated demo or not): owner's choice, not asked yet.
+- [x] The peers' validation of `9360d863` (+ `1ab2bbb9`): macOS and Windows accepted (19-wheeled-vehicle.md § Validated).
+- [x] Driving one in projet-alpha: citadel's plain, E to board, a chase camera (owner, 2026-10-02).
+- [ ] The peers' validation of the brake fix (the locked wheel, the 1 mm/s slip floor): the cars' new values.
+- [ ] Stations still to add (owner: after): a ramp, a bump, an overturn, a car meeting a dynamic body.
 
 ## References
 

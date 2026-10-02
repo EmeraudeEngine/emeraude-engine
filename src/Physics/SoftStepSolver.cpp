@@ -251,14 +251,18 @@ namespace EmEn::Physics
 	void
 	SoftStepSolver::prepareWheels (const std::vector< Body > & bodies, std::vector< Wheel > & wheels) noexcept
 	{
-		/* Under this rolling speed (m/s) the slip ratio is measured against it (a wheel spinning at a standstill). */
-		constexpr float WheelSlipSpeedFloor{0.5F};
+		/* Under this rolling speed (m/s) the slip ratio is measured against it (a wheel spinning at a standstill). Jolt's
+		 * 1 mm/s: a 0.5 m/s floor made a few mm/s of creep a tiny slip, hence a tiny grip — a braked car crept down a
+		 * 6° slope at 0.24 m/s. */
+		constexpr float WheelSlipSpeedFloor{1.0e-3F};
 
 		for ( auto & wheel : wheels )
 		{
 			wheel.suspensionImpulse = 0.0F;
 			wheel.longitudinalImpulse = 0.0F;
 			wheel.lateralImpulse = 0.0F;
+			wheel.brakeImpulse = 0.0F;
+			wheel.locked = false;
 
 			if ( !wheel.contact )
 			{
@@ -279,6 +283,7 @@ namespace EmEn::Physics
 			const auto inverse = (rolling > 0.0F ? 1.0F / rolling : 0.0F) + (wheel.radius * wheel.radius / wheel.inertia);
 
 			wheel.longitudinalMass = inverse > 0.0F ? 1.0F / inverse : 0.0F;
+			wheel.rollingMass = rolling;
 
 			/* The slips, from the step's start (the chassis' point relative to the ground's). */
 			const Vec3 velocity = relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis);
@@ -307,7 +312,12 @@ namespace EmEn::Physics
 			const Vec3 impulse = (wheel.normal * wheel.suspensionImpulse) + (wheel.forward * wheel.longitudinalImpulse) + (wheel.side * wheel.lateralImpulse);
 
 			applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, impulse);
-			wheel.angularVelocity -= wheel.longitudinalImpulse * wheel.radius / wheel.inertia;
+
+			/* A locked wheel's rolling impulse went through its brake, not its spin. */
+			if ( !wheel.locked )
+			{
+				wheel.angularVelocity -= wheel.longitudinalImpulse * wheel.radius / wheel.inertia;
+			}
 		}
 	}
 
@@ -316,15 +326,29 @@ namespace EmEn::Physics
 	{
 		for ( auto & wheel : wheels )
 		{
-			/* The spin: its torques and damping, then the brake (towards 0, never past it). */
+			/* The spin: its torques and damping, then the brake. A brake stronger than what stops the wheel within the
+			 * sub-step LOCKS it: its spin 0, its surplus the bound of the tyre's rolling impulse (Jolt's model: the
+			 * brake inside the solve; applied outside it, the light wheel spun back up every iteration and the car
+			 * crept). Otherwise the brake slows the wheel. */
 			if ( integrateSpin )
 			{
 				wheel.angularVelocity += wheel.driveTorque / wheel.inertia * subStep;
 				wheel.angularVelocity /= 1.0F + (wheel.angularDamping * subStep);
 
-				const auto braking = wheel.brakeTorque / wheel.inertia * subStep;
+				const auto lockTorque = std::abs(wheel.angularVelocity) * wheel.inertia / subStep;
 
-				wheel.angularVelocity = std::abs(wheel.angularVelocity) <= braking ? 0.0F : wheel.angularVelocity - std::copysign(braking, wheel.angularVelocity);
+				if ( wheel.brakeTorque > 0.0F && wheel.brakeTorque > lockTorque )
+				{
+					wheel.angularVelocity = 0.0F;
+					wheel.brakeImpulse = (wheel.brakeTorque - lockTorque) * subStep / wheel.radius;
+					wheel.locked = true;
+				}
+				else
+				{
+					wheel.angularVelocity -= std::copysign(wheel.brakeTorque / wheel.inertia * subStep, wheel.angularVelocity);
+					wheel.brakeImpulse = 0.0F;
+					wheel.locked = false;
+				}
 			}
 
 			if ( !wheel.contact )
@@ -361,9 +385,11 @@ namespace EmEn::Physics
 				const Vec3 velocity = relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis);
 				const auto rollingSlip = Vec3::dotProduct(velocity, wheel.forward) - (wheel.angularVelocity * wheel.radius);
 				const auto sideSlip = Vec3::dotProduct(velocity, wheel.side);
-				const auto maxLongitudinal = wheel.longitudinalCoefficient * wheel.suspensionImpulse;
+				/* A locked wheel holds the contact still through its brake: the bodies' mass alone, at most the brake's
+				 * surplus. A free one rolls: its spin takes part (the impulse spins it). */
+				const auto maxLongitudinal = wheel.locked ? std::min(wheel.longitudinalCoefficient * wheel.suspensionImpulse, wheel.brakeImpulse) : wheel.longitudinalCoefficient * wheel.suspensionImpulse;
 				const auto maxLateral = wheel.lateralCoefficient * wheel.suspensionImpulse;
-				auto longitudinal = std::clamp(wheel.longitudinalImpulse - (wheel.longitudinalMass * rollingSlip), -maxLongitudinal, maxLongitudinal);
+				auto longitudinal = std::clamp(wheel.longitudinalImpulse - ((wheel.locked ? wheel.rollingMass : wheel.longitudinalMass) * rollingSlip), -maxLongitudinal, maxLongitudinal);
 				auto lateral = std::clamp(wheel.lateralImpulse - (wheel.lateralMass * sideSlip), -maxLateral, maxLateral);
 
 				if ( maxLongitudinal > 0.0F && maxLateral > 0.0F )
@@ -382,7 +408,11 @@ namespace EmEn::Physics
 				const auto appliedLongitudinal = longitudinal - wheel.longitudinalImpulse;
 
 				applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, (wheel.forward * appliedLongitudinal) + (wheel.side * (lateral - wheel.lateralImpulse)));
-				wheel.angularVelocity -= appliedLongitudinal * wheel.radius / wheel.inertia;
+
+				if ( !wheel.locked )
+				{
+					wheel.angularVelocity -= appliedLongitudinal * wheel.radius / wheel.inertia;
+				}
 				wheel.longitudinalImpulse = longitudinal;
 				wheel.lateralImpulse = lateral;
 			}

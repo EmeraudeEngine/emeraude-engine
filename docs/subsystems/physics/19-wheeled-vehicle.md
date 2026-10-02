@@ -34,12 +34,14 @@ Bullet's `btRaycastVehicle` (zlib) as references — no code taken. Work item: `
      μ_long(slip ratio) × the suspension impulse;
    - the LATERAL friction: the contact point's side velocity driven to 0, bounded by μ_lat(slip angle) × the suspension
      impulse; both bounded together by the friction circle;
-   - the wheel's spin integrates its drive torque, its brake (an impulse towards ω = 0, at most brake torque × h) and its
-     angular damping. A dynamic ground body takes the reactions.
+   - the wheel's spin integrates its drive torque and its angular damping, then the BRAKE (Jolt's model): a brake
+     stronger than what stops the wheel within the sub-step (|ω| · I / h) LOCKS it — ω = 0, and its surplus
+     ((T − |ω| I / h) · h / r) bounds the tyre's rolling impulse, solved between the ground and the chassis alone (the
+     wheel's inertia out); a weaker brake slows the wheel. A dynamic ground body takes the reactions.
 4. **After the solver**: the wheels' spin and rotation angle, the engine RPM, the visual wheels (the component moves the
    nodes attached to it: suspension offset, steering, spin).
 
-Slip ratio = (ω·r − v_long) / max(|v_long|, ε); slip angle = atan2(v_lat, |v_long|) (degrees in the curves). A curve
+Slip ratio = (ω·r − v_long) / max(|v_long|, ε), ε = 1 mm/s (Jolt's); slip angle = atan2(v_lat, |v_long|) (degrees in the curves). A curve
 is a piecewise-linear function (base `Math::PiecewiseLinear`).
 
 ### Determinism
@@ -77,13 +79,28 @@ bit-identical to the reference of decision 14 (the cars do not disturb them).
 
 | Station | Inputs | Result |
 |---|---|---|
-| `BenchCarIdle` | none | settles on its suspension at y 0.8207 (0.371 m of suspension, 12.9 cm of sag), drifts 0.09 mm, then SLEEPS |
-| `BenchCarStraight` | full throttle from cycle 60, full brake from cycle 300 | 2.1 / 6.5 / 10.8 / 14.9 m/s after 1 / 2 / 3 / 4 s, squatting 1.4°; stops in 2.30 s over 15.9 m (≈ 6.5 m/s², 0.66 g) diving 2.3°; at rest straight (0.026° tilt), asleep |
+| `BenchCarIdle` | none | settles on its suspension at y 0.8207 (0.371 m of suspension, 12.9 cm of sag), then SLEEPS (no drift) |
+| `BenchCarStraight` | full throttle from cycle 60, full brake from cycle 300 | 2.1 / 6.5 / 10.8 / 14.85 m/s after 1 / 2 / 3 / 4 s, squatting 1.4°; stops in 2.33 s over 17.4 m (≈ 6.4 m/s², 0.65 g, the wheels locked) diving 2.2°; at rest straight, asleep |
 | `BenchCarTurn` | half throttle, half steering to the RIGHT from cycle 60 | a steady circle to the right: 9.28 m/s, yaw rate −0.860 rad/s (R = v / ω = 10.8 m), the body rolled 7.5° OUTWARDS; the mirror of the left turn measured before the sign fix (+0.860, the same speed and roll) |
 
 The visuals were checked on screenshots: the wheels on the ground at the idle sag, the spokes left at their spin
 angles after the straight run, the front wheels of the parked car steered (`setVehicleInput(…, 0, 1, 0, 0)`: both at
 −0.524 rad, under the chassis' edges). Demos without vehicles: unchanged (8 demos, 0 NaN, 0 VUID, clean exits).
+
+### Driven by a player (projet-alpha, 2026-10-02)
+projet-alpha's citadel parks this car on its plain (`Actor::Car`, its hand brake pulled); E boards it, the movement keys
+drive it, a chase camera follows it (projet-alpha `docs/subsystems/actor/07-7-driving.md`): 13.5 m/s after 5 s uphill,
+a right turn at 14 m/s, braking then reversing, stepping out; 0 VUID with validation.
+
+### Validated (2026-10-02)
+macOS M2 and Windows (RTX 3060 + AMD iGPU), base `1e3728f`, engine `9360d863` (+ `1ab2bbb9` on Windows: the
+`VehicleSettings` export), alpha `89595b75`: 0 warning; 2301 base tests + 3 skipped (4/4 `MathPiecewiseLinear`);
+bench 2 runs × 48 stations at 0 differing on each OS (Windows NVIDIA = AMD), the 45 older bit-identical to the
+decision-14 runs; collision-debug with validation 0 VUID. The cars across OS (each bit-identical run to run):
+CarStraight 14.92 / 14.967 / 14.909 m/s at cycle 300 and a stop at cycle 438 / 437 / 437 (Linux / macOS / Windows);
+CarTurn equal to the third decimal (9.28 m/s, −0.860 rad/s). The small cross-OS gap is probably the math library
+(`cos`, `sin`, `atan2`, `exp` may differ by an ulp between the C libraries; NOT proven) amplified by the wheelspin;
+cross-OS bit identity was never a requirement, only run to run. Before the brake fix above: the peers will re-run.
 
 ### ⚠️ Traps and limits
 - **The suspension is solved like a contact's separation**: `prepareWheels()` keeps an ADJUSTED length (the cast
@@ -92,6 +109,12 @@ angles after the straight run, the front wheels of the parked car steered (`setV
 - **The gearbox shifts on the GROUND speed, the clutch closed**: shifting on the wheels' spin made it cycle 1-2-1 under
   wheelspin. The bench car spins its rear wheels in first gear at full throttle (Jolt's 500 N·m through 2.66 × 3.42
   exceeds the rear tyres' grip): it stays in first until 16 m/s. Realistic for the gearing; no traction control.
+- **A braked wheel must be solved INSIDE the solve** (found in citadel, 2026-10-02): applied once per sub-step before
+  the friction, the brake stopped the wheel, then the friction impulse (its effective mass mostly the light wheel's,
+  ≈ 7 kg) spun it back up every iteration: a parked car with its hand brake pulled crept down a 6° slope at 0.24 m/s
+  for good. With the lock and the surplus impulse it holds (3 cm while dropping onto its suspension, then asleep).
+- **The slip floor is 1 mm/s, not 0.5 m/s**: under the floor the slip ratio is measured against it, so a 0.5 m/s floor
+  made a creep of a few mm/s a tiny slip, a tiny grip (the curves start at (0, 0)) — the same creep.
 - **A chassis on its wheels is not `grounded`** (`groundedSource` None): the wheels hold it, not its own contacts. A
   game reads the wheels' `contact` (the console's `vehicle.wheels[].contact`).
 - **Steering sign**: `WheelState::steerAngle` is right-handed about the suspension's up, so POSITIVE turns LEFT (the

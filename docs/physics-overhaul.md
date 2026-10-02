@@ -298,6 +298,14 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   casts), the console (`getNodePhysics().vehicle`, `setVehicleInput`); bench ROW 9 (idle, straight + brake, a right
   turn), 48 stations × 3 launches bit-identical, the 45 older unchanged. Design, measurements and traps:
   `subsystems/physics/19-wheeled-vehicle.md`; item `physics-wheeled-vehicle`.
+- **The vehicle ACCEPTED on macOS M2 and Windows** (2026-10-02, base `1e3728f`, engine `9360d863`, alpha `89595b75`;
+  Windows needed `1ab2bbb9`, the `VehicleSettings` export — MSVC LNK2019, invisible on ELF / Mach-O): 48 stations × 2
+  runs at 0 differing, the 45 older bit-identical, the cars within 0.3 % across OS (probably the math library, not proven), 0 VUID. The
+  Windows peer also found `BenchSpinner`'s phase varying run to run since P2 (positions-only `--compare` cannot see it):
+  projet-alpha items `physics-bench-spinner-phase`, `physics-bench-compare-full-state`.
+- **Driven in citadel (2026-10-02)**: a parked car crept down a 6° slope with its hand brake pulled — the brake was
+  solved outside the friction, and the slip floor (0.5 m/s) hid a creep. Fixed on Jolt's model (a locked wheel, its
+  surplus brake impulse on the ground; a 1 mm/s floor): `subsystems/physics/19-wheeled-vehicle.md` § Traps.
 - **P5 ACCEPTED on Windows** (2026-10-02, RTX 3060 + AMD iGPU, same commits): 2282 base tests (13/13 mesh); bench 2 runs
   per GPU, 40/40 at 0 differing, NVIDIA = AMD on every cycle; ROW 7 = Linux (MeshSlider y 1.0000 all along, ramp 3.0966,
   stairs 1.5100, UpBall apex 4.2463); 19 of the 32 old stations changed, the islands' sleep (PushedBox 0.45 m, the rest
