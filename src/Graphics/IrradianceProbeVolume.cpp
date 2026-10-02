@@ -60,6 +60,7 @@
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/Sync/MemoryBarrier.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+#include "PortableRandom.hpp"
 
 namespace
 {
@@ -1037,7 +1038,7 @@ namespace EmEn::Graphics
 
 		/* A uniformly random rotation (Shoemake, Graphics Gems III) applied to the whole ray set:
 		 * the probes see a new set of directions every frame and the hysteresis integrates them. */
-		std::uniform_real_distribution< float > unit{0.0F, 1.0F};
+		const PortableRandom::UniformReal< float > unit{0.0F, 1.0F};
 		const float u1 = unit(m_random);
 		const float u2 = unit(m_random);
 		const float u3 = unit(m_random);

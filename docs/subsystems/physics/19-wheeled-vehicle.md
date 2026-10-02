@@ -100,7 +100,10 @@ decision-14 runs; collision-debug with validation 0 VUID. The cars across OS (ea
 CarStraight 14.92 / 14.967 / 14.909 m/s at cycle 300 and a stop at cycle 438 / 437 / 437 (Linux / macOS / Windows);
 CarTurn equal to the third decimal (9.28 m/s, −0.860 rad/s). The small cross-OS gap is probably the math library
 (`cos`, `sin`, `atan2`, `exp` may differ by an ulp between the C libraries; NOT proven) amplified by the wheelspin;
-cross-OS bit identity was never a requirement, only run to run. Before the brake fix above: the peers will re-run.
+cross-OS bit identity was never a requirement, only run to run. The brake fix (engine `dac34dc0`, alpha `2402cd78`)
+was accepted on macOS and Windows the same day (the 3 cars changed only; citadel driving works). Their citadel car
+parked at different heights because citadel's seeded TERRAIN differed per OS (std's random facilities), fixed by base
+`PortableRandom` (base `docs/subsystems/source-tree/23-portable-random.md`).
 
 ### ⚠️ Traps and limits
 - **The suspension is solved like a contact's separation**: `prepareWheels()` keeps an ADJUSTED length (the cast
