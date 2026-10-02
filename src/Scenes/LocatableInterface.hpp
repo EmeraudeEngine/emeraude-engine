@@ -266,6 +266,8 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Sets the collision model for narrow-phase collision detection [PHYSICS].
+			 * @note An entity notifies its content change: the scene files it in the physics octree at once (its
+			 * visual's asynchronous load no longer decides when its body enters the physics step).
 			 * @param model A unique pointer to the collision model.
 			 */
 			virtual void setCollisionModel (std::unique_ptr< Physics::CollisionModelInterface > model) noexcept = 0;

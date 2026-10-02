@@ -2932,6 +2932,25 @@ element (`update()`, `erase()`, `insert()`) while walking the octree: gather fir
 sound on a list proven free of duplicates (the physics step checks it in Debug).
 
 
+### Fixed: a body entered the physics step only when its VISUAL finished loading (Oct 2026)
+
+> **Symptom (2026-10-02, the Windows peer):** `BenchSpinner` (free fly, ω = 2 rad/s, it never moves) had a different
+> rotation phase in every run: it started turning at cycle 21 / 29 / 30, while the falling references started at the
+> same cycle every run. Its position never moved, so the positions-only `--compare` never saw it (since P2).
+
+A body is in the physics step only once the scene filed it in the physics octree, and the scene files an entity on a
+move or a CONTENT notification. A body with a collision model reports no move of its own (the step moves it), and
+`setCollisionModel()` notified nothing: the entity waited for its visual's resource. The falling boxes share a mesh
+already loaded (notified at once); the spinner was alone with its magenta material, notified by the asynchronous
+load: 20-30 cycles late on Windows, before the first step on Linux (never reproduced there, even on 2 cores).
+
+**Fix:** `AbstractEntity::setCollisionModel()` calls `onContentModified()`: a body declared with its model is filed,
+and simulated, from the next step, whatever its visual's load. `Node` / `StaticEntity::onContentModified()` skip the
+notification for an entity not yet owned by a shared pointer (`weak_from_this()`; `shared_from_this()` would abort
+under `-fno-exceptions`). Linux: the bench bit-identical (48 × 3), 8 demos clean. `tools/physics-bench.py --compare`
+now compares the full recorded state (orientation, velocities, pause), each quantity reported.
+
+
 ### Fixed: a scene's first frame read the NEVER-WRITTEN slot of the triple buffer — every entity at the origin (Sep 2026)
 
 > **Symptom:** after the de-duplication above, `terrain` still hung the macOS GPU. Its last statistic before the

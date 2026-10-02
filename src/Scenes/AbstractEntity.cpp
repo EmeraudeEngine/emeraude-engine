@@ -350,6 +350,11 @@ namespace EmEn::Scenes
 	AbstractEntity::setCollisionModel (std::unique_ptr< CollisionModelInterface > model) noexcept
 	{
 		m_collisionModel = std::move(model);
+
+		/* The scene files the entity in its physics octree NOW: until a content notification it is not in the physics
+		 * step, and a body alone with its material was notified only when its visual finished loading (asynchronous:
+		 * BenchSpinner started turning 20-30 cycles late on Windows, 2026-10-02). */
+		this->onContentModified();
 	}
 
 	void

@@ -911,7 +911,12 @@ namespace EmEn::Scenes
 	void
 	Node::onContentModified () noexcept
 	{
-		this->notify(EntityContentModified, this->shared_from_this());
+		/* Not yet owned by a shared pointer (still being built): no scene observes it yet. shared_from_this() would
+		 * abort (-fno-exceptions). */
+		if ( const auto self = this->weak_from_this().lock(); self != nullptr )
+		{
+			this->notify(EntityContentModified, self);
+		}
 	}
 
 	std::shared_ptr< Node >

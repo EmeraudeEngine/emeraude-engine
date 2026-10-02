@@ -545,6 +545,11 @@ overridden shapes). If the twin repeats on every machine while `DynTopCube` does
 
 ### ⚠️ Comparing runs: by physics cycle, never by final state
 
+Since 2026-10-02 `--compare` checks the FULL recorded state per cycle — position, upward, backward, linear and angular
+velocity, `simulationPaused` — each quantity under `quantities` (`BenchSpinner`'s phase differed for months with its
+position identical: engine `docs/caution-points.md`, "a body entered the physics step only when its VISUAL finished
+loading").
+
 A body that never comes to rest (the stack, `BenchTipCube`) is sampled at a different cycle at the end of each run, so
 its final states differ while the simulations are identical. Compared AT THE SAME CYCLES (`tools/physics-bench.py
 --compare <dir>`), the 5 Linux runs are identical on every station (`DynTopCube`, the twin, the stack), except 1-2
