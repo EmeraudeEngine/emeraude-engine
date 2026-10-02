@@ -7284,3 +7284,10 @@ coarsest level — the one the imposter replaces). Graphics `AGENTS.md` § 15e.
   the cascade fitting while the map is still drawn and sampled. No shadow on/off command exists; item
   `light-shadow-runtime-toggle`. Test a new setter on a real scene, both ways, before exposing it.
 
+### A flat collision mesh had an INVALID box — `AACuboid::isValid()` refuses zero thickness (Oct 2026)
+
+`Space3D::AACuboid::isValid()` requires `maximum > minimum` on EVERY axis, and `merge()` skips an invalid box. A flat
+triangle mesh (a floor, a panel) has a box of zero thickness along its normal: built as an `AACuboid` it would be
+refused — not inserted in the physics octree, never overlapping anything. `TriangleMeshCollisionModel` thickens its
+boxes by 1 mm (`BoundsPadding`), and the base `TriangleMesh` keeps its node bounds as plain min / max vectors.
+**Rule:** never build an `AACuboid` from data that may be flat (a plane, an axis-aligned triangle) without a padding.

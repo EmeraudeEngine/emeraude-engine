@@ -609,6 +609,7 @@ namespace EmEn::Scenes::Editor
 				}
 					break;
 
+				case CollisionModelType::TriangleMesh :
 				case CollisionModelType::Box :
 				case CollisionModelType::Capsule :
 				{

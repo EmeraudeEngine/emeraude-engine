@@ -51,7 +51,9 @@ namespace EmEn::Physics
 		Point,
 		Sphere,
 		Box,
-		Capsule
+		Capsule,
+		/* A static triangle mesh (P5): never a body of its own, only what bodies meet. */
+		TriangleMesh
 	};
 
 	/**

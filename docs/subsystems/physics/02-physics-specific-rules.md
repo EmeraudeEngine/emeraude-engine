@@ -25,7 +25,11 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
 2. **Pairs** from `OctreeSector::forEachSector()`'s pairing contract (owned × owned, owned × inherited, each pair once,
    NO dedup set), in canonical order (A = the lower creation number), AABB pre-filter, then
    `Physics::NarrowPhase::generate()` → a base `Space3D::ContactManifold` (normal A → B). A sleeping body touched by an
-   active one wakes.
+   active one — or by a MOVING kinematic one (a platform, a character, faster than 1 mm/s) — wakes; the rest of its
+   island wakes at step 1c of the next step. A body ↔ TRIANGLE MESH pair gives one manifold per triangle met
+   (one-sided, internal edges corrected — `18-triangle-mesh-statics.md`).
+1c. **Islands wake as a whole** (P5, 2026-10-02): a body woken since the last step (a contact, a push, a force, a move)
+   wakes every body that fell asleep with the same island key.
 1b. **Ground recovery** (2026-10-02): a dynamic body whose centre is UNDER the ground — the height on the rendered
    triangle vertically under its centre (`NarrowPhase::heightOverGround()`) is negative: it crossed the surface within
    one step — is put back ON it before any contact: the bottom of its world box onto that surface, its approaching
@@ -47,6 +51,13 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
 5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
    the impacts (an approach above 0.05 m/s) are COLLECTED and the grounded state set from the manifolds (a contact
    within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.
+8. **Islands and sleep** (P5, decision 13): a union-find over the step's contacts links the awake dynamic bodies (the
+   static world and the kinematic bodies do not link), rebuilt EVERY step (Jolt's `IslandBuilder`, Bullet's
+   `btSimulationIslandManager`). A body is slow below 5 cm/s and 0.05 rad/s; an island whose bodies have ALL been slow
+   for 30 steps (0.5 s) sleeps as a whole — velocities zeroed, `pauseSimulation(true)`, each body keyed by the island's
+   lowest creation number (`MovableTrait::sleepIsland()`). On ANY support: a box on a box sleeps (before, a body slept
+   only on the ground or the world floor, alone, `MovableTrait::checkSimulationInertia()` — removed). A sleeping body is
+   solid and still: the solver treats it as infinite mass.
 6. After the lock is released, `Scene::processLogics()` relocates the moved entities in the octrees, then EMITS the
    impacts (`MovableTrait::onCollision()` → `NodeCollision`) in manifold order. ⚠️ Never emit them inside the step: it
    holds `m_physicsOctreeAccess` (a plain `std::mutex`), and a handler that creates or removes an entity would take it

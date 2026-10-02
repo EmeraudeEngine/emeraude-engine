@@ -234,6 +234,10 @@ namespace EmEn::Scenes
 						case CollisionModelType::Capsule :
 							m_collisionModel->mergeShapeParameters(component->localBoundingBox());
 							break;
+
+						case CollisionModelType::TriangleMesh :
+							/* Its triangles are its shape (never fitted to the visuals). */
+							break;
 					}
 				}
 			}
@@ -324,6 +328,10 @@ namespace EmEn::Scenes
 				case CollisionModelType::Box :
 				case CollisionModelType::Capsule :
 					m_collisionModel->mergeShapeParameters(component->localBoundingBox());
+					break;
+
+				case CollisionModelType::TriangleMesh :
+					/* Its triangles are its shape (never fitted to the visuals). */
 					break;
 			}
 		}

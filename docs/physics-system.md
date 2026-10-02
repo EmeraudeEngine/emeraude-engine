@@ -205,18 +205,14 @@ For each movable entity, once, at the sector that OWNS it:
 
 ### Node Sleep/Wake System
 
-Nodes at rest are automatically paused by `checkSimulationInertia()` to avoid unnecessary
-collision testing (critical for scenes with many settled objects, e.g., ball pits).
+⚠️ HISTORY: the per-node sleep (`checkSimulationInertia()`: 30 stable frames ON the ground or the world floor) was
+replaced by the physics step's ISLANDS (P5, 2026-10-02): `docs/subsystems/physics/02-physics-specific-rules.md` steps 1c,
+2 and 8.
 
-**Sleep rules:**
-- A Node is paused when its velocity drops below threshold for long enough
-- **Paused ≠ non-collidable.** Paused nodes are still solid bodies in the physics octree
-- Phase 2 only skips pairs where **both** entities are paused
-- An active entity (with velocity) always tests against paused nodes
-
-**Wake rules:**
-- Collision impulses call `addForce()` → `pauseSimulation(false)` → Node wakes up
-- A sleeping cube hit by a moving player wakes up and receives the impulse normally
+- **Paused ≠ non-collidable.** A sleeping body is still a solid body in the physics octree (infinite mass for the solver).
+- An island (the dynamic bodies linked by contacts) sleeps when ALL its bodies have been slow for 0.5 s, on any support.
+- It wakes as a whole: a contact with an active or a moving kinematic body, an impulse or a force (`addForce()` →
+  `pauseSimulation(false)`), a move of one of its bodies.
 
 ### Collision Normal Convention
 

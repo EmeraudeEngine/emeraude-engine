@@ -191,5 +191,50 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			static bool capsuleGroundContacts (const Base::Math::Space3D::Capsule< float > & capsule, const Base::Math::Space3D::Triangle< float > & triangle, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+
+			/**
+			 * @brief Generates the contacts of a body (A) and ONE world triangle of a triangle-mesh model (B), P5.
+			 * @note One-sided unless two-sided (the front face only pushes a body out of its front); a contact on an
+			 * inactive (flat or concave) edge or vertex takes the face normal, so a body crossing two coplanar triangles
+			 * does not bump on their shared edge.
+			 * @param model A reference to the body's collision model.
+			 * @param frame A reference to the body's world frame.
+			 * @param worldTriangle A reference to the world triangle (TriangleMeshCollisionModel::forEachWorldTriangle()).
+			 * @param faceNormal Its unit world front normal.
+			 * @param activeEdges Its active edge flags.
+			 * @param twoSided Whether its back face collides too.
+			 * @param margin The speculative margin (m).
+			 * @param manifold A reference to the manifold written, normal from A to B.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool generateMeshTriangle (const CollisionModelInterface & model, const Base::Math::CartesianFrame< float > & frame, const Base::Math::Space3D::Triangle< float > & worldTriangle, const Base::Math::Vector< 3, float > & faceNormal, uint8_t activeEdges, bool twoSided, float margin, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+
+			/**
+			 * @brief Generates the contacts of a world capsule (A) and one world triangle of a mesh (B), as
+			 * generateMeshTriangle() (the character's depenetration).
+			 * @param capsule A reference to the world capsule.
+			 * @param worldTriangle A reference to the world triangle.
+			 * @param faceNormal Its unit world front normal.
+			 * @param activeEdges Its active edge flags.
+			 * @param twoSided Whether its back face collides too.
+			 * @param manifold A reference to the manifold written (cleared first), normal from A to B.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool capsuleMeshTriangleContacts (const Base::Math::Space3D::Capsule< float > & capsule, const Base::Math::Space3D::Triangle< float > & worldTriangle, const Base::Math::Vector< 3, float > & faceNormal, uint8_t activeEdges, bool twoSided, Base::Math::Space3D::ContactManifold< float > & manifold) noexcept;
+
+			/**
+			 * @brief Filters a sweep's hit on a mesh triangle: one-sided unless two-sided, its normal corrected on an
+			 * inactive edge or vertex (the face normal).
+			 * @param worldTriangle A reference to the world triangle hit.
+			 * @param faceNormal Its unit world front normal.
+			 * @param activeEdges Its active edge flags.
+			 * @param twoSided Whether its back face collides too.
+			 * @param hit A reference to the hit (its normal may be replaced).
+			 * @return bool False when the hit is on the back of a one-sided triangle (to ignore).
+			 */
+			[[nodiscard]]
+			static bool acceptMeshHit (const Base::Math::Space3D::Triangle< float > & worldTriangle, const Base::Math::Vector< 3, float > & faceNormal, uint8_t activeEdges, bool twoSided, Base::Math::Space3D::CastHit< float > & hit) noexcept;
 	};
 }

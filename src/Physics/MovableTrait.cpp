@@ -235,48 +235,4 @@ namespace EmEn::Physics
 	{
 		return m_groundedFrames > 0 ? m_groundedSource : GroundedSource::None;
 	}
-
-	bool
-	MovableTrait::checkSimulationInertia () noexcept
-	{
-		constexpr auto VelocityThreshold{0.05F}; /* 5 cm/s */
-
-		/* Check if velocity is negligible. */
-		const bool isStable = (m_linearSpeed < VelocityThreshold) && (m_angularSpeed < VelocityThreshold);
-
-		/* Sleep only allowed when ACTIVELY touching a stable surface this frame.
-		 * m_groundedFrames == GroundedGracePeriod means we just touched the surface.
-		 * Grace period alone (bouncing but not touching) must not allow sleep. */
-		const bool isActivelyOnStableSurface =
-			(m_groundedFrames == GroundedGracePeriod) &&
-			(m_groundedSource == GroundedSource::Ground || m_groundedSource == GroundedSource::Boundary);
-
-		if ( isStable && isActivelyOnStableSurface )
-		{
-			/* Increment stable frames counter. */
-			if ( m_stableFrames < StableFramesThreshold )
-			{
-				m_stableFrames++;
-			}
-
-			/* After enough stable frames, entity can sleep. */
-			if ( m_stableFrames >= StableFramesThreshold )
-			{
-				/* Clamp micro-velocities to zero. */
-				m_linearVelocity.reset();
-				m_angularVelocity.reset();
-				m_linearSpeed = 0.0F;
-				m_angularSpeed = 0.0F;
-
-				return true;
-			}
-		}
-		else
-		{
-			/* Reset stable frames counter on any significant movement. */
-			m_stableFrames = 0;
-		}
-
-		return false;
-	}
 }

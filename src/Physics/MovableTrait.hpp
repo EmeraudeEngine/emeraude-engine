@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 
 /* Local inclusions for usages. */
 #include "BodyPhysicalProperties.hpp"
@@ -349,12 +350,55 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Check for simulation inertia.
-			 * @warning This method is not physically correct, and its aim is to reduce useless physics computation.
-			 * @return bool
+			 * @brief Counts the consecutive physics steps the body was slow (the scene's islands decide the sleep, P5).
+			 * @param slow Whether the body was slow this step.
+			 * @return void
 			 */
+			void
+			accountSlowness (bool slow) noexcept
+			{
+				if ( !slow )
+				{
+					m_slowSteps = 0;
+				}
+				else if ( m_slowSteps < std::numeric_limits< uint16_t >::max() )
+				{
+					++m_slowSteps;
+				}
+			}
+
+			/** @brief Returns the consecutive physics steps the body was slow. */
 			[[nodiscard]]
-			bool checkSimulationInertia () noexcept;
+			uint16_t
+			slowSteps () const noexcept
+			{
+				return m_slowSteps;
+			}
+
+			/**
+			 * @brief Sets the island the body fell asleep with (0: awake). The scene wakes the whole island when one of its
+			 * bodies wakes.
+			 * @param key The island's key (the lowest creation number of its bodies), or 0.
+			 * @return void
+			 */
+			void
+			setSleepIsland (uint64_t key) noexcept
+			{
+				m_sleepIsland = key;
+
+				if ( key == 0 )
+				{
+					m_slowSteps = 0;
+				}
+			}
+
+			/** @brief Returns the island the body fell asleep with (0: none). */
+			[[nodiscard]]
+			uint64_t
+			sleepIsland () const noexcept
+			{
+				return m_sleepIsland;
+			}
 
 			/**
 			 * @brief Returns the world position (public accessor for physics engine).
@@ -506,19 +550,18 @@ namespace EmEn::Physics
 
 		private:
 
-			/** @brief Threshold for considering entity stable (in frames). ~500ms at 60 FPS. */
-			static constexpr uint8_t StableFramesThreshold{30};
 			/** @brief Grace period before losing grounded state (in frames). ~250ms at 60 FPS. */
 			static constexpr uint8_t GroundedGracePeriod{15};
 
 			Base::Math::Vector< 3, float > m_linearVelocity;
 			Base::Math::Vector< 3, float > m_angularVelocity; // Omega
 			const MovableTrait * m_groundedOn{nullptr}; ///< Entity we're grounded on (if source is Entity).
+			uint64_t m_sleepIsland{0}; ///< The island it fell asleep with (0: awake).
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};
 			GroundedSource m_groundedSource{GroundedSource::None}; ///< Type of surface we're grounded on.
 			uint8_t m_groundedFrames{0}; ///< Grace period countdown.
-			uint8_t m_stableFrames{0}; ///< Consecutive frames with negligible velocity.
+			uint16_t m_slowSteps{0}; ///< Consecutive physics steps slow enough to sleep.
 			bool m_isMovable{true};
 			/* On by default for every dynamic body (P3, decision 8d); a character turns it off. */
 			bool m_rotationEnabled{true};

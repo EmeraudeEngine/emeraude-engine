@@ -72,6 +72,17 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
    animations), their animation from the controller's real velocity; (5) the Drone stays a dynamic body (a flying
    machine); (6) order: the Player on citadel's stairs, the Paladin, the Fox, the dead teleport step-up removed, the
    walking demos checked.
+13. **P5's last two items (owner, 2026-10-02, the recommendations; "Ok pour les derniers points")**: (1) ISLANDS are
+   rebuilt every step by a union-find over the step's contacts (Jolt's `IslandBuilder`, Bullet's
+   `btSimulationIslandManager`), not Box2D v3's persistent islands; an island sleeps when all its bodies have been slow
+   (< 5 cm/s) for 0.5 s, on any support; it wakes as a whole when an active body touches it, a push or a force reaches
+   it; the static world and the kinematic bodies do not link islands. (2) Static TRIANGLE MESHES are ONE-SIDED by
+   default (the front face collides: glTF winding, normals out — like the ground, PhysX and Jolt by default), with a
+   two-sided option for open geometry (a thin panel, a `doubleSided` material). (3) The mesh is an EXPLICIT
+   `TriangleMeshCollisionModel` built from a geometry (the visual's or a simplified one), per entity, with a Toolkit
+   option — existing scenes do not change; a glTF / USD loader option comes after. Order: islands, then meshes; the
+   BVH in emeraude-base (a binary SAH tree built once, Wald 2007); internal edges by edge flags computed at build time
+   (Jolt's `MeshShape` "active edges").
 7. **Branch**: every change of the overhaul goes to the `physics_overhaul` branch of EACH repository (projet-alpha,
    emeraude-engine, emeraude-base), created on 2026-10-01 from `main` / `develop` / `develop`.
 
@@ -231,6 +242,32 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   basic-scenery, beams, terrain, liminal, citadel, collision, game-logic, animation-debug and the physics demos: clean
   exits, 0 NaN, no new error, every character grounded. One defect found on the way (terrain): a still character crept
   downhill 1.3 cm/s — the walkable depenetration is now vertical (`BenchStandSlope`).
+- **P5 ISLANDS (2026-10-02, decision 13)**: step 8 of the physics step (`subsystems/physics/02-…`): a union-find over the
+  step's contacts, rebuilt every step; an island sleeps when all its bodies have been slow (< 5 cm/s, < 0.05 rad/s) for
+  30 steps, on any support; a woken body wakes its island at step 1c; a MOVING kinematic body (a platform, a character)
+  wakes a sleeping body it touches. `MovableTrait::checkSimulationInertia()` (a body alone, on the ground or the world
+  floor only) is gone. Measured, the logic thread's CPU per cycle (median of 5 launches, 15 s after 20 s): balls-of-steel
+  7.025 → 6.994 ms, lighten-marbles 0.614 → 0.614 ms — no gain there: their bodies never rest (balls roll on, marbles
+  live and die; 15-30 of 400 sampled asleep); game-logic 155 of 161 asleep after 25 s (0.703 ms). The bench: the stack
+  now SLEEPS (it crept 1 mm/s before), 1 mm higher; a creeping ball on the slope sleeps 2 cm short; the pushed box
+  wakes one step after the walker's push and ends 45 cm further; 3 launches bit-identical.
+- **P5 STATIC TRIANGLE MESHES (2026-10-02, decision 13)**: base `Space3D::TriangleMesh` (13 tests, ASan/UBSan green),
+  engine `Physics::TriangleMeshCollisionModel` + `Toolkit::generateTriangleMeshInstance()`, ROW 7 of the bench
+  (`subsystems/physics/18-triangle-mesh-statics.md`): a box crosses 288 coplanar triangles with y exactly constant, a
+  mesh ramp = a box ramp to the cycle, mesh stairs climbed, one-sided and two-sided panels as expected, an 80 m/s ball
+  stopped by a zero-thickness mesh panel. Found on the way: `ground-kicks-fast-rolling-ball` (the flat ground).
+- **P4 follow-up ACCEPTED on macOS M2** (2026-10-02, engine `b5dc8297`, alpha `302a5d8c`): `nm -m` — the
+  component's typeinfo DEFINED in the framework only, the app imports it; bench 2 runs × 32 stations at 0 differing,
+  the 23 non-walker stations bit-identical to the previous run, the walkers = Linux (WalkFlat 29.98 m, ramp max y 3.097,
+  steep blocked at 1.8 m, stairs max y 2.330, StandSlope still); citadel's paladins at y ≥ 0.0100 over 3600 cycles; the
+  flying Player 10.00 m/s, ±10 m/s vertical, lands at V off; 9 demos clean, a validated citadel run 0 VUID; 0 device
+  loss (0 in 61 launches since the two).
+- **P4 follow-up ACCEPTED on Windows** (2026-10-02, RTX 3060 + AMD iGPU): bench 2 runs × 32 stations at 0 differing on
+  each GPU, NVIDIA = AMD; BenchStandSlope still (y range 2.4e-7); the paladins at y ≥ 0.0100; the flying Player
+  10.000 m/s, ±10 m/s, lands at V off; citadel's west flight climbed grounded at 1.4 m/s (top y 10.01); 18 demo
+  launches clean. Seen there, not physics: citadel's teardown VUIDs (item `texture-destroyed-while-upload-in-flight`),
+  terrain's 60 s shutdown during its loads (`shutdown-hangs-after-act-removal`), the PerLight race twice on NVIDIA
+  (`lighten-marbles-perlight-descriptor-race`).
 - **P4, the owner's play test (2026-10-02, citadel)**: (1) the three paladins vanished — a character met twice by the
   physics step (the octree's `expand()` kept a splitting sector's elements AND filed them in the children: ~100 statics
   and a paladin 2 to 7 times per cycle) collided with its own capsule and sank under the ground. Fixed in the octree
@@ -329,7 +366,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 | P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
-| P5 later | engine | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` |
+| P5 | engine (+ base for the mesh) | `physics-continuous-collision` (in progress: dynamic ↔ dynamic, box caster), `physics-triangle-mesh-static-shapes` and `physics-simulation-islands` — both CLOSED 2026-10-02 (§ 1b) |
 
 ## 5. What must survive the overhaul
 

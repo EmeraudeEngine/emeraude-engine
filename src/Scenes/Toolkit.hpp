@@ -44,6 +44,7 @@
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Physics/SphereCollisionModel.hpp"
+#include "Physics/TriangleMeshCollisionModel.hpp"
 #include "Graphics/CloudShapeResource.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
@@ -957,6 +958,48 @@ namespace EmEn::Scenes
 				}
 
 				return this->generateRenderableInstance< entity_t >(entityName, geometryResource, materialResource, physicalProperties, enableLighting);
+			}
+
+			/**
+			 * @brief Generates a mesh instance from a shape that COLLIDES AS ITS TRIANGLES (physics overhaul P5).
+			 * @note The instance of generateRenderableInstance(shape), then a Physics::TriangleMeshCollisionModel built
+			 * from the same shape replaces the box the entity fits to its visual, and the entity is made solid
+			 * (setCollidable(true)) whatever its mass. One-sided unless two-sided. A shape with no valid triangle keeps
+			 * the box (an error is traced).
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @param entityName A reference to a string.
+			 * @param shape A reference to a vertex factory shape.
+			 * @param materialResource A reference to a material smart pointer. Default material resource.
+			 * @param physicalProperties A reference to a body physical properties (its contact material). Default properties.
+			 * @param twoSided Whether the back faces collide too (a thin panel, an open surface). Default false.
+			 * @param enableLighting Enable the lighting. Default true.
+			 * @return BuiltEntity< entity_t, Component::Visual >
+			 */
+			template< typename entity_t = StaticEntity >
+			BuiltEntity< entity_t, Component::Visual >
+			generateTriangleMeshInstance (const std::string & entityName, const Base::VertexFactory::Shape< float > & shape, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool twoSided = false, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			{
+				auto built = this->generateRenderableInstance< entity_t >(entityName, shape, materialResource, physicalProperties, enableLighting);
+
+				if ( built.entity() == nullptr )
+				{
+					return built;
+				}
+
+				auto model = Physics::TriangleMeshCollisionModel::fromShape(shape, twoSided);
+
+				if ( model == nullptr )
+				{
+					TraceError{ClassId} << "The shape of '" << entityName << "' has no valid triangle: it keeps its box collider !";
+
+					return built;
+				}
+
+				built.entity()->setCollisionModel(std::move(model));
+				built.entity()->setCollidable(true);
+
+				return built;
 			}
 
 			/**

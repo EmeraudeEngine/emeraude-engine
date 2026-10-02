@@ -44,6 +44,7 @@
 #include "CapsuleCollisionModel.hpp"
 #include "CollisionModelInterface.hpp"
 #include "SphereCollisionModel.hpp"
+#include "Math/Space3D/TriangleMesh.hpp"
 
 namespace EmEn::Physics
 {
@@ -124,6 +125,11 @@ namespace EmEn::Physics
 					shape.kind = WorldShape::Kind::Capsule;
 					shape.capsule = Capsule< float >{capsule.startPoint(), capsule.endPoint(), capsule.radius() + margin};
 				}
+					break;
+
+				case CollisionModelType::TriangleMesh :
+					/* Not ONE shape: its triangles are met one by one (generateMeshTriangle() and its siblings). */
+					shape.valid = false;
 					break;
 			}
 
@@ -538,6 +544,77 @@ namespace EmEn::Physics
 			manifold.clear();
 
 			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	NarrowPhase::generateMeshTriangle (const CollisionModelInterface & model, const CartesianFrame< float > & frame, const Triangle< float > & worldTriangle, const Vector< 3, float > & faceNormal, uint8_t activeEdges, bool twoSided, float margin, ContactManifold< float > & manifold) noexcept
+	{
+		if ( !NarrowPhase::generate(model, frame, worldTriangle, margin, manifold) )
+		{
+			return false;
+		}
+
+		/* One-sided: the front face only pushes a body out of its front (the normal A → B points into the face). */
+		if ( !twoSided && Vector< 3, float >::dotProduct(manifold.normal(), faceNormal) > 0.0F )
+		{
+			manifold.clear();
+
+			return false;
+		}
+
+		static_cast< void >(TriangleMesh< float >::correctInternalEdgeNormal(worldTriangle, faceNormal, activeEdges, manifold));
+
+		return true;
+	}
+
+	bool
+	NarrowPhase::capsuleMeshTriangleContacts (const Capsule< float > & capsule, const Triangle< float > & worldTriangle, const Vector< 3, float > & faceNormal, uint8_t activeEdges, bool twoSided, ContactManifold< float > & manifold) noexcept
+	{
+		manifold.clear();
+
+		if ( !capsule.isValid() )
+		{
+			return false;
+		}
+
+		WorldShape shape;
+		shape.kind = WorldShape::Kind::Capsule;
+		shape.capsule = capsule;
+
+		if ( !contactsOfTriangle(shape, worldTriangle, manifold) )
+		{
+			return false;
+		}
+
+		if ( !twoSided && Vector< 3, float >::dotProduct(manifold.normal(), faceNormal) > 0.0F )
+		{
+			manifold.clear();
+
+			return false;
+		}
+
+		static_cast< void >(TriangleMesh< float >::correctInternalEdgeNormal(worldTriangle, faceNormal, activeEdges, manifold));
+
+		return true;
+	}
+
+	bool
+	NarrowPhase::acceptMeshHit (const Triangle< float > & worldTriangle, const Vector< 3, float > & faceNormal, uint8_t activeEdges, bool twoSided, CastHit< float > & hit) noexcept
+	{
+		/* The hit normal points from the triangle back to the caster: a front-face hit leans with the face normal. */
+		if ( !twoSided && Vector< 3, float >::dotProduct(hit.normal(), faceNormal) <= 0.0F )
+		{
+			return false;
+		}
+
+		auto normal = hit.normal();
+
+		if ( TriangleMesh< float >::correctInternalEdgeNormal(worldTriangle, faceNormal, activeEdges, hit.point(), normal) )
+		{
+			hit = CastHit< float >{hit.fraction(), hit.point(), normal, hit.startedInside()};
 		}
 
 		return true;

@@ -106,6 +106,7 @@ namespace EmEn::Scenes
 							meshResource = AbstractEntity::getBoundingSphereVisualDebug(resourceManager);
 							break;
 
+						case CollisionModelType::TriangleMesh :
 						case CollisionModelType::Box :
 						case CollisionModelType::Capsule : /* TODO: Implement capsule visual debug mesh. */
 							meshResource = AbstractEntity::getBoundingBoxVisualDebug(resourceManager);
@@ -189,6 +190,7 @@ namespace EmEn::Scenes
 							renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
 							break;
 
+						case CollisionModelType::TriangleMesh :
 						case CollisionModelType::Box :
 						{
 							/* The box turns with the entity (P3): drawn in local space, like the collider. */
@@ -366,6 +368,7 @@ namespace EmEn::Scenes
 					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
 					break;
 
+				case CollisionModelType::TriangleMesh :
 				case CollisionModelType::Box :
 				{
 					/* The box turns with the entity (P3): drawn in local space, like the collider. */

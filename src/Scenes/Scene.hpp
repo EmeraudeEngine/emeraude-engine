@@ -3200,6 +3200,12 @@ namespace EmEn::Scenes
 			std::vector< PhysicsImpact > m_physicsImpacts;
 			/** @brief The kinematic characters the last physics step moved (their events notified after it). */
 			mutable std::vector< std::shared_ptr< Component::CharacterController > > m_physicsCharacters;
+			/** @brief The islands of the physics step (P5): the union-find parents, per root whether all its bodies are slow
+			 * and its key, and the sleeping islands to wake (reused storage). */
+			mutable std::vector< uint32_t > m_physicsIslandParents;
+			mutable std::vector< uint8_t > m_physicsIslandSlow;
+			mutable std::vector< uint64_t > m_physicsIslandKeys;
+			mutable std::vector< uint64_t > m_physicsWakingIslands;
 			/** @brief The static world of the continuous pass, rebuilt each step (reused storage). */
 			mutable std::vector< ContinuousObstacle > m_continuousObstacles;
 			/** @brief Per-cycle physics recording of chosen root nodes (a measurement tool, sampled by processLogics()). */

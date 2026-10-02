@@ -33,6 +33,13 @@ Nothing to do with WADs: ANY load that fails after creating textures (glTF, FBX,
 dependency fails) takes the same path. The frames-in-flight rule (graphics doc 25) has no counterpart for the
 transfer / compute work of an upload.
 
+## Seen again — citadel's teardown (Windows RTX 3060, validation ON, 2026-10-02)
+
+The Windows peer, P4 follow-up (engine `b5dc8297`), citadel shut down after 20 s: 12 VUIDs, ALL in the teardown
+after the resources were unloaded — 4 × `vkDestroyImage-image-01000` ("currently in use by VkCommandBuffer"),
+4 × `vkDestroyBuffer-buffer-00922`, 2 × `vkFreeMemory-memory-00677`, 2 × `vkDestroyDevice-device-05137`. The same
+set as above; an earlier citadel teardown on that machine was clean (timing). Not a physics change.
+
 ## Repro
 
 1. Copy `/usr/share/games/doom/doom1.wad`, and in the copy set the right child of the ROOT BSP node of E1M1 to the

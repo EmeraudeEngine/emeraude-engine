@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <span>
 
 /* Local inclusions. */
@@ -39,6 +40,7 @@
 #include "Physics/CapsuleCollisionModel.hpp"
 #include "Physics/CharacterController.hpp"
 #include "Physics/NarrowPhase.hpp"
+#include "Physics/TriangleMeshCollisionModel.hpp"
 #include "Component/CharacterController.hpp"
 
 namespace EmEn::Scenes
@@ -49,6 +51,36 @@ namespace EmEn::Scenes
 
 	namespace
 	{
+		/** @brief Below this speed (m/s) a body counts as slow for its island's sleep (P5, decision 13). */
+		constexpr float SleepLinearSpeed{0.05F};
+
+		/** @brief Below this angular speed (rad/s) a body counts as slow. */
+		constexpr float SleepAngularSpeed{0.05F};
+
+		/** @brief How many consecutive slow steps every body of an island needs before it sleeps (0.5 s at 60 Hz). */
+		constexpr uint16_t SleepSteps{30};
+
+		/** @brief Above this speed (m/s) a kinematic body (a platform, a character) wakes a sleeping one it touches. */
+		constexpr float KinematicWakeSpeed{1.0e-3F};
+
+		/**
+		 * @brief Whether an entity is a body the solver moves: movable, not a kinematic character, not a triangle mesh (a
+		 * mesh is never solved as a body — on a movable entity it is kinematic, P5).
+		 */
+		[[nodiscard]]
+		bool
+		isSolvedBody (const AbstractEntity & entity, const MovableTrait * movable) noexcept
+		{
+			if ( movable == nullptr || !movable->isMovable() || entity.characterController() != nullptr )
+			{
+				return false;
+			}
+
+			const auto * model = entity.collisionModel();
+
+			return model == nullptr || model->modelType() != CollisionModelType::TriangleMesh;
+		}
+
 		/**
 		 * @brief Applies complete collision response: velocity bounce + grounded state.
 		 * @param movable The movable trait to update.
@@ -454,13 +486,39 @@ namespace EmEn::Scenes
 
 						Space3D::CastHit< float > cast;
 
-						if ( !NarrowPhase::sweepCapsule(capsule, motion, *entity->collisionModel(), frame, cast) || cast.startedInside() || cast.fraction() >= hit.fraction )
+						if ( entity->collisionModel()->modelType() == CollisionModelType::TriangleMesh )
+						{
+							/* A mesh: its earliest front-face hit (P5). */
+							const auto & mesh = static_cast< const TriangleMeshCollisionModel & >(*entity->collisionModel());
+							bool met = false;
+
+							mesh.forEachWorldTriangle(frame, region, [&] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t /*triangleIndex*/, uint8_t activeEdges) {
+								Space3D::CastHit< float > candidate;
+
+								if ( !NarrowPhase::sweepCapsule(capsule, motion, triangle, candidate) || candidate.startedInside() || candidate.fraction() >= hit.fraction || (met && candidate.fraction() >= cast.fraction()) )
+								{
+									return;
+								}
+
+								if ( NarrowPhase::acceptMeshHit(triangle, faceNormal, activeEdges, mesh.isTwoSided(), candidate) )
+								{
+									cast = candidate;
+									met = true;
+								}
+							});
+
+							if ( !met )
+							{
+								continue;
+							}
+						}
+						else if ( !NarrowPhase::sweepCapsule(capsule, motion, *entity->collisionModel(), frame, cast) || cast.startedInside() || cast.fraction() >= hit.fraction )
 						{
 							continue;
 						}
 
 						const auto * movable = entity->getMovableTrait();
-						const bool dynamic = movable != nullptr && movable->isMovable() && entity->characterController() == nullptr;
+						const bool dynamic = isSolvedBody(*entity, movable);
 
 						hit = Hit{.point = cast.point(), .normal = cast.normal(), .velocity = this->velocityOf(entity, movable, dynamic), .key = entity->creationNumber(), .fraction = cast.fraction(), .bodyIndex = static_cast< uint32_t >(index), .dynamic = dynamic};
 						found = true;
@@ -536,14 +594,30 @@ namespace EmEn::Scenes
 						/* A dynamic body never pushes a character (decision 9.4). */
 						const auto * movable = entity->getMovableTrait();
 
-						if ( movable != nullptr && movable->isMovable() && entity->characterController() == nullptr )
+						if ( isSolvedBody(*entity, movable) )
 						{
 							continue;
 						}
 
 						const auto frame = entity->getWorldCoordinates();
 
-						if ( boxesOverlap(region, entity->collisionModel()->getAABB(frame), 0.0F) && NarrowPhase::capsuleContacts(capsule, *entity->collisionModel(), frame, contact) )
+						if ( !boxesOverlap(region, entity->collisionModel()->getAABB(frame), 0.0F) )
+						{
+							continue;
+						}
+
+						if ( entity->collisionModel()->modelType() == CollisionModelType::TriangleMesh )
+						{
+							const auto & mesh = static_cast< const TriangleMeshCollisionModel & >(*entity->collisionModel());
+
+							mesh.forEachWorldTriangle(frame, region, [&] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t /*triangleIndex*/, uint8_t activeEdges) {
+								if ( NarrowPhase::capsuleMeshTriangleContacts(capsule, triangle, faceNormal, activeEdges, mesh.isTwoSided(), contact) )
+								{
+									apply(contact);
+								}
+							});
+						}
+						else if ( NarrowPhase::capsuleContacts(capsule, *entity->collisionModel(), frame, contact) )
 						{
 							apply(contact);
 						}
@@ -791,7 +865,7 @@ namespace EmEn::Scenes
 			body.position = frame.position() + body.centerOffset;
 			body.orientation = frame.toQuaternion();
 
-			if ( movable->isMovable() && entity->characterController() == nullptr )
+			if ( isSolvedBody(*entity, movable) )
 			{
 				const auto & properties = movable->getBodyPhysicalProperties();
 
@@ -820,6 +894,53 @@ namespace EmEn::Scenes
 
 			bodyIndices[entity.get()] = static_cast< uint32_t >(bodies.size());
 			bodies.push_back(body);
+		}
+
+		/* ============================================================
+		 * 1c. A SLEEPING ISLAND WAKES AS A WHOLE (P5, decision 13): one of its bodies woken since the last step — a
+		 * contact, a push, a force, a move — wakes the others, which fell asleep with the same island key.
+		 * ============================================================ */
+		{
+			auto & waking = m_physicsWakingIslands;
+
+			waking.clear();
+
+			for ( size_t index = 1; index < bodies.size(); ++index )
+			{
+				const auto & body = bodies[index];
+
+				if ( body.movable != nullptr && body.dynamic && body.movable->sleepIsland() != 0 )
+				{
+					waking.push_back(body.movable->sleepIsland());
+				}
+			}
+
+			if ( !waking.empty() )
+			{
+				std::ranges::sort(waking);
+
+				const auto duplicates = std::ranges::unique(waking);
+
+				waking.erase(duplicates.begin(), duplicates.end());
+
+				for ( size_t index = 1; index < bodies.size(); ++index )
+				{
+					auto & body = bodies[index];
+
+					if ( body.movable == nullptr || body.movable->sleepIsland() == 0 || !std::ranges::binary_search(waking, body.movable->sleepIsland()) )
+					{
+						continue;
+					}
+
+					body.movable->setSleepIsland(0);
+
+					if ( !body.dynamic )
+					{
+						body.dynamic = true;
+						bodyEntities[index]->pauseSimulation(false);
+					}
+				}
+			}
 		}
 
 		/* ============================================================
@@ -894,6 +1015,12 @@ namespace EmEn::Scenes
 			return index != 0 && bodies[index].movable != nullptr && !bodies[index].dynamic;
 		};
 
+		/* A kinematic body in motion (a platform, a character) wakes a sleeping body it touches (Box2D v3 does the same):
+		 * a box asleep on a stopped platform would otherwise be crossed when the platform leaves. */
+		const auto isMovingKinematic = [&bodies] (uint32_t index) {
+			return index != 0 && bodies[index].movable == nullptr && bodies[index].linearVelocity.lengthSquared() > KinematicWakeSpeed * KinematicWakeSpeed;
+		};
+
 		Space3D::ContactManifold< float > contact;
 
 		const auto testPair = [&] (const std::shared_ptr< AbstractEntity > & entityA, const std::shared_ptr< AbstractEntity > & entityB) {
@@ -903,8 +1030,9 @@ namespace EmEn::Scenes
 			const uint32_t indexA = bodyIndices[first.get()];
 			const uint32_t indexB = bodyIndices[second.get()];
 
-			/* At least one active body; two sleeping ones (or a sleeping one and the static world) need no test. */
-			if ( !isActive(indexA) && !isActive(indexB) )
+			/* At least one active body; two sleeping ones (or a sleeping one and the static world) need no test; a
+			 * sleeping one and a moving kinematic one do (it wakes). */
+			if ( !isActive(indexA) && !isActive(indexB) && !(isMovingKinematic(indexA) && isAsleep(indexB)) && !(isMovingKinematic(indexB) && isAsleep(indexA)) )
 			{
 				return;
 			}
@@ -924,31 +1052,77 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			if ( !NarrowPhase::generate(*modelA, frameA, *modelB, frameB, SpeculativeContactMargin, contact) )
-			{
-				return;
-			}
-
-			/* Wake a sleeping body touched by an active one: it takes part in this step. */
-			if ( isAsleep(indexA) )
-			{
-				bodies[indexA].dynamic = true;
-				first->pauseSimulation(false);
-			}
-
-			if ( isAsleep(indexB) )
-			{
-				bodies[indexB].dynamic = true;
-				second->pauseSimulation(false);
-			}
-
 			const auto & materialA = first->bodyPhysicalProperties();
 			const auto & materialB = second->bodyPhysicalProperties();
 			/* Box2D's mixing: friction = geometric mean, restitution = the larger (owner, P2). */
 			const float friction = std::sqrt(materialA.stickiness() * materialB.stickiness());
 			const float restitution = std::max(materialA.bounciness(), materialB.bounciness());
 
-			appendManifold(contact, indexA, indexB, first->creationNumber(), second->creationNumber(), 0, friction, restitution, manifolds);
+			/* A TRIANGLE MESH (P5): one manifold per triangle met, the sub key tells them apart. Two meshes never meet. */
+			const bool meshA = modelA->modelType() == CollisionModelType::TriangleMesh;
+			const bool meshB = modelB->modelType() == CollisionModelType::TriangleMesh;
+
+			if ( meshA && meshB )
+			{
+				return;
+			}
+
+			if ( meshA || meshB )
+			{
+				const auto & mesh = static_cast< const TriangleMeshCollisionModel & >(meshA ? *modelA : *modelB);
+				const auto & meshFrame = meshA ? frameA : frameB;
+				const auto * bodyModel = meshA ? modelB : modelA;
+				const auto & bodyFrame = meshA ? frameB : frameA;
+				const auto bounds = bodyModel->getAABB(bodyFrame);
+				const Vector< 3, float > margin{SpeculativeContactMargin, SpeculativeContactMargin, SpeculativeContactMargin};
+				bool touched = false;
+
+				mesh.forEachWorldTriangle(meshFrame, Space3D::AACuboid< float >{bounds.maximum() + margin, bounds.minimum() - margin}, [&] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t triangleIndex, uint8_t activeEdges) {
+					if ( !NarrowPhase::generateMeshTriangle(*bodyModel, bodyFrame, triangle, faceNormal, activeEdges, mesh.isTwoSided(), SpeculativeContactMargin, contact) )
+					{
+						return;
+					}
+
+					/* The manifold goes from A to B: from the body to the mesh, flipped when the mesh is A. */
+					if ( meshA )
+					{
+						contact.flip();
+					}
+
+					touched = true;
+					appendManifold(contact, indexA, indexB, first->creationNumber(), second->creationNumber(), static_cast< uint64_t >(triangleIndex) + 1, friction, restitution, manifolds);
+				});
+
+				if ( !touched )
+				{
+					return;
+				}
+			}
+			else if ( !NarrowPhase::generate(*modelA, frameA, *modelB, frameB, SpeculativeContactMargin, contact) )
+			{
+				return;
+			}
+
+			/* Wake a sleeping body touched by an active (or moving kinematic) one: it takes part in this step, the rest of
+			 * its island next step (1c). */
+			if ( isAsleep(indexA) )
+			{
+				bodies[indexA].dynamic = true;
+				bodies[indexA].movable->accountSlowness(false);
+				first->pauseSimulation(false);
+			}
+
+			if ( isAsleep(indexB) )
+			{
+				bodies[indexB].dynamic = true;
+				bodies[indexB].movable->accountSlowness(false);
+				second->pauseSimulation(false);
+			}
+
+			if ( !meshA && !meshB )
+			{
+				appendManifold(contact, indexA, indexB, first->creationNumber(), second->creationNumber(), 0, friction, restitution, manifolds);
+			}
 		};
 
 		m_physicsOctree->forEachSector([&testPair] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
@@ -1091,6 +1265,26 @@ namespace EmEn::Scenes
 			{
 				if ( obstacle.index == index || !boxesOverlap(sweptBounds, obstacle.bounds, 0.0F) )
 				{
+					continue;
+				}
+
+				if ( obstacle.model->modelType() == CollisionModelType::TriangleMesh )
+				{
+					/* A mesh: its earliest front-face hit (P5). */
+					const auto & mesh = static_cast< const TriangleMeshCollisionModel & >(*obstacle.model);
+
+					mesh.forEachWorldTriangle(obstacle.frame, sweptBounds, [&] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t /*triangleIndex*/, uint8_t activeEdges) {
+						Space3D::CastHit< float > candidate;
+
+						if ( NarrowPhase::sweepCore(*model, frame, motion, triangle, candidate) && !candidate.startedInside() && candidate.fraction() < earliest && NarrowPhase::acceptMeshHit(triangle, faceNormal, activeEdges, mesh.isTwoSided(), candidate) )
+						{
+							earliest = candidate.fraction();
+							normal = candidate.normal();
+							point = candidate.point();
+							restitution = std::max(material.bounciness(), bodyEntities[obstacle.index]->bodyPhysicalProperties().bounciness());
+						}
+					});
+
 					continue;
 				}
 
@@ -1274,6 +1468,94 @@ namespace EmEn::Scenes
 			if ( std::ranges::find(movedEntities, entity) == movedEntities.end() )
 			{
 				movedEntities.push_back(entity);
+			}
+		}
+
+		/* ============================================================
+		 * 8. ISLANDS AND SLEEP (P5, decision 13): the awake dynamic bodies linked by this step's contacts, a union-find
+		 * rebuilt every step (Jolt's IslandBuilder, Bullet's btSimulationIslandManager — no code taken). An island whose
+		 * bodies have ALL been slow for SleepSteps sleeps as a whole, on any support, keyed by its lowest creation number
+		 * (deterministic). The static world and the kinematic bodies do not link islands.
+		 * ============================================================ */
+		{
+			const auto isAwakeDynamic = [&bodies] (uint32_t index) {
+				return index != 0 && bodies[index].movable != nullptr && bodies[index].dynamic;
+			};
+
+			auto & parents = m_physicsIslandParents;
+
+			parents.resize(bodies.size());
+			std::iota(parents.begin(), parents.end(), 0U);
+
+			const auto findRoot = [&parents] (uint32_t index) {
+				while ( parents[index] != index )
+				{
+					parents[index] = parents[parents[index]];
+					index = parents[index];
+				}
+
+				return index;
+			};
+
+			for ( const auto & manifold : manifolds )
+			{
+				if ( !isAwakeDynamic(manifold.bodyA) || !isAwakeDynamic(manifold.bodyB) )
+				{
+					continue;
+				}
+
+				const auto rootA = findRoot(manifold.bodyA);
+				const auto rootB = findRoot(manifold.bodyB);
+
+				if ( rootA != rootB )
+				{
+					parents[std::max(rootA, rootB)] = std::min(rootA, rootB);
+				}
+			}
+
+			auto & islandSlow = m_physicsIslandSlow;
+			auto & islandKeys = m_physicsIslandKeys;
+
+			islandSlow.assign(bodies.size(), 1);
+			islandKeys.assign(bodies.size(), std::numeric_limits< uint64_t >::max());
+
+			for ( uint32_t index = 1; index < bodies.size(); ++index )
+			{
+				if ( !isAwakeDynamic(index) )
+				{
+					continue;
+				}
+
+				auto * movable = bodies[index].movable;
+				const auto root = findRoot(index);
+
+				movable->accountSlowness(movable->linearVelocity().lengthSquared() < SleepLinearSpeed * SleepLinearSpeed && movable->angularVelocity().lengthSquared() < SleepAngularSpeed * SleepAngularSpeed);
+
+				if ( movable->slowSteps() < SleepSteps )
+				{
+					islandSlow[root] = 0;
+				}
+
+				islandKeys[root] = std::min(islandKeys[root], bodyEntities[index]->creationNumber());
+			}
+
+			for ( uint32_t index = 1; index < bodies.size(); ++index )
+			{
+				if ( !isAwakeDynamic(index) )
+				{
+					continue;
+				}
+
+				const auto root = findRoot(index);
+
+				if ( islandSlow[root] == 0 )
+				{
+					continue;
+				}
+
+				bodies[index].movable->stopMovement();
+				bodies[index].movable->setSleepIsland(islandKeys[root]);
+				bodyEntities[index]->pauseSimulation(true);
 			}
 		}
 	}

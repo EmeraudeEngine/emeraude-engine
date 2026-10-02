@@ -17,6 +17,12 @@ Windows peer session (RTX 3060 Laptop, 2026-09-22), in 1 of 2 `relief` POM runs:
 and the process kept looping. A second `Core.shutdown()` connected but never executed. It left only after a
 plain `taskkill` (WM_CLOSE). The other run shut down cleanly. Not seen on Linux today.
 
+## Seen on `terrain` (Windows, NVIDIA and AMD, 2026-10-02)
+
+`Core.shutdown()` 20 s after launch got no reply within 30 s and the process exited ~60 s after the command: the
+shutdown came while the act was still loading (clouds being grown, the CDLOD clipmap uploading); "Removing the act"
+waited for those loads, a `logicsTask` of 2580 ms. On both GPUs of the machine (not only NVIDIA as above).
+
 ## Re-measured, 2026-09-22 (Windows, second pass)
 
 It is SLOW, not hung. From `Core.shutdown()` to exit: 47 s (relief NM), 56 s (window-less), > 60 s (POM, which
