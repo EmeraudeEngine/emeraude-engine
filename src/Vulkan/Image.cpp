@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <numeric>
-#include <ranges>
 
 /* Third-party inclusions. */
 #include "vk_mem_alloc.h"
@@ -655,14 +654,16 @@ namespace EmEn::Vulkan
 		const auto & frames = movieResource->frames();
 
 		const size_t totalBytes = std::accumulate(frames.cbegin(), frames.cend(), 0, [] (auto sum, const auto & frame) {
-			return sum + frame.first.bytes();
+			return sum + frame.pixmap().bytes();
 		});
 
 		return transferManager.uploadImage(*this, totalBytes, [&frames] (const Buffer & stagingBuffer) {
 			size_t offset = 0;
 
-			for ( const auto & pixmap : std::ranges::views::keys(frames) )
+			for ( const auto & frame : frames )
 			{
+				const auto & pixmap = frame.pixmap();
+
 				if ( !stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
 				{
 					TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";

@@ -30,7 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <ranges>
+#include <memory>
 #include <utility>
 
 /* Local inclusions for inheritances. */
@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "json/json.h"
+#include "ImageResource.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
 
@@ -67,8 +68,106 @@ namespace EmEn::Graphics
 
 		public:
 
-			/** @brief A frame from the movie with duration in milliseconds. */
-			using Frame = std::pair< Base::PixelFactory::Pixmap< uint8_t >, uint32_t >;
+			/**
+			 * @brief A frame from the movie: its pixels, either a store image's (shared, never copied) or its own
+			 * (a generated frame), and its duration in milliseconds.
+			 */
+			class Frame final
+			{
+				public:
+
+					/**
+					 * @brief Constructs an empty frame, to be generated in place (ownedPixmap(), setDuration()).
+					 */
+					Frame () noexcept = default;
+
+					/**
+					 * @brief Constructs a frame owning its pixels.
+					 * @param pixmap The pixels, moved in.
+					 * @param duration The duration in milliseconds.
+					 */
+					Frame (Base::PixelFactory::Pixmap< uint8_t > && pixmap, uint32_t duration) noexcept
+						: m_pixmap{std::move(pixmap)},
+						m_duration{duration}
+					{
+
+					}
+
+					/**
+					 * @brief Constructs a frame showing a store image's pixels, without copying them.
+					 * @param image The loaded image, kept alive by the frame.
+					 * @param duration The duration in milliseconds.
+					 */
+					Frame (std::shared_ptr< const ImageResource > image, uint32_t duration) noexcept
+						: m_image{std::move(image)},
+						m_duration{duration}
+					{
+
+					}
+
+					/**
+					 * @brief Returns the frame's pixels: the image's when the frame shows one, else its own.
+					 * @return const Base::PixelFactory::Pixmap< uint8_t > &
+					 */
+					[[nodiscard]]
+					const Base::PixelFactory::Pixmap< uint8_t > &
+					pixmap () const noexcept
+					{
+						return m_image != nullptr ? m_image->data() : m_pixmap;
+					}
+
+					/**
+					 * @brief Returns the frame's own pixels, to generate them in place.
+					 * @note A frame showing an image ignores them (pixmap() answers the image's).
+					 * @return Base::PixelFactory::Pixmap< uint8_t > &
+					 */
+					[[nodiscard]]
+					Base::PixelFactory::Pixmap< uint8_t > &
+					ownedPixmap () noexcept
+					{
+						return m_pixmap;
+					}
+
+					/**
+					 * @brief Returns the bytes of the pixels the frame owns: 0 for a frame showing a store image (counted
+					 * by the images' container).
+					 * @return size_t
+					 */
+					[[nodiscard]]
+					size_t
+					ownedBytes () const noexcept
+					{
+						return m_pixmap.bytes< size_t >();
+					}
+
+					/**
+					 * @brief Returns the frame duration in milliseconds.
+					 * @return uint32_t
+					 */
+					[[nodiscard]]
+					uint32_t
+					duration () const noexcept
+					{
+						return m_duration;
+					}
+
+					/**
+					 * @brief Sets the frame duration in milliseconds.
+					 * @param duration The duration.
+					 * @return void
+					 */
+					void
+					setDuration (uint32_t duration) noexcept
+					{
+						m_duration = duration;
+					}
+
+				private:
+
+					std::shared_ptr< const ImageResource > m_image;
+					Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
+					uint32_t m_duration{0};
+			};
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MovieResource"};
@@ -140,9 +239,9 @@ namespace EmEn::Graphics
 			{
 				size_t bytes = sizeof(*this);
 
-				for ( const auto & pixmap : m_frames | std::views::keys )
+				for ( const auto & frame : m_frames )
 				{
-					bytes += pixmap.bytes< size_t >();
+					bytes += frame.ownedBytes();
 				}
 
 				return bytes;
@@ -176,7 +275,7 @@ namespace EmEn::Graphics
 			uint32_t
 			width () const noexcept
 			{
-				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].first.width());
+				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].pixmap().width());
 			}
 
 			/**
@@ -188,7 +287,7 @@ namespace EmEn::Graphics
 			uint32_t
 			height () const noexcept
 			{
-				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].first.height());
+				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].pixmap().height());
 			}
 
 			/**

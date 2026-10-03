@@ -20,11 +20,15 @@ per frame).
 Split from `cpu-copies-retained-after-upload` by the owner (2026-10-03): a different mechanism from the release /
 reload of GPU-uploaded copies.
 
-**The frames are held TWICE** (found 2026-10-04): `MovieResource::load()` / `loadManual()` COPY each frame's pixmap
-out of a store `ImageResource` (`m_frames.emplace_back(imageResource->data(), …)`), and the store keeps that image.
-Citadel: 508 MiB of the 775 MiB of images are held by the store alone (`memoryCensus()` `unusedBytes`) against
-492 MiB of movie frames — the same pixels. Holding the `std::shared_ptr< ImageResource >` (or moving the pixmap out
-of an image only the movie uses) removes the copy without touching the streaming question.
+**The frames were held TWICE — FIXED 2026-10-04 for `MovieResource`** (owner: "image or owned pixmap"): a
+`MovieResource::Frame` now either SHOWS a store `ImageResource` (kept alive, never copied) or OWNS its pixels (the
+generated frames: debug, noise, parametric, `load(frames)`, the WAD flats); `Frame::pixmap()` answers either, and
+`memoryOccupied()` counts only the owned bytes (the shared ones are the images' container's). Citadel census
+2690 → 2198 MiB (movies 492 → 0, images held by the store alone 508 → 16 MiB), RSS at rest 5855 → 5515 MiB,
+0 VUID. ⚠️ `CubemapMovieResource` still COPIES its frames out of store cubemaps (`m_frames.emplace_back(
+cubemapResource->faces(), …)`, `CubemapMovieResource.cpp` load paths): same fix to do (none loaded in citadel).
+
+What stays open here is the residency itself: every frame decoded, for the movie's whole life.
 
 ## What remains
 

@@ -79,6 +79,9 @@ the resource, never only in the data:
   (`isBinaryAlphaMask()`, which `Texture2D` now delegates to), the hemisphere illuminance factor. Until it runs, the
   accessors compute from the pixels as before (owner decision: "extracted at release", zero cost for a resource
   never released). The release calls it FIRST.
+- **Movies share their frames** (2026-10-04): a `MovieResource::Frame` shows a store `ImageResource` (no copy) or
+  owns generated pixels; read it through `Frame::pixmap()`. A movie therefore keeps its images alive, and a release
+  of an image's pixels (phase 2) covers the movie frames showing it.
 - A new per-frame or late reader of a CPU copy adds its value to that metadata — or declares the resource
   "CPU too" — instead of reading the data.
 - Verified 2026-10-04 (citadel, a local probe): with every image's pixels, every cubemap's faces and every

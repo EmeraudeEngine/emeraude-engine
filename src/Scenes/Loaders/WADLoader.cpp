@@ -1040,8 +1040,8 @@ namespace EmEn::Scenes::Loaders
 					continue;
 				}
 
-				const auto frameWidth = static_cast< float >(frames[0].first.width());
-				const auto frameHeight = static_cast< float >(frames[0].first.height());
+				const auto frameWidth = static_cast< float >(frames[0].pixmap().width());
+				const auto frameHeight = static_cast< float >(frames[0].pixmap().height());
 				const auto resourceSuffix = std::string{range.startName} + '-' + range.endName;
 
 				/* ⚠️ Captured BY VALUE (moved): these lambdas run on the resource manager's loading

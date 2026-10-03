@@ -80,21 +80,21 @@ namespace EmEn::Graphics
 
 			for ( size_t frameIndex = 0; frameIndex < frameCountDefault; frameIndex++ )
 			{
-				if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGB) )
+				if ( !m_frames[frameIndex].ownedPixmap().initialize(size, size, PixelFactory::ChannelMode::RGB) )
 				{
 					TraceError{ClassId} << "Unable to load the default pixmap for frame #" << frameIndex << " !";
 
 					return this->setLoadSuccess(false);
 				}
 
-				if ( !m_frames[frameIndex].first.fill(colors[frameIndex]) )
+				if ( !m_frames[frameIndex].ownedPixmap().fill(colors[frameIndex]) )
 				{
 					TraceError{ClassId} << "Unable to fill the default pixmap for frame #" << frameIndex << " !";
 
 					return this->setLoadSuccess(false);
 				}
 
-				m_frames[frameIndex].second = debugFrameDuration;
+				m_frames[frameIndex].setDuration(debugFrameDuration);
 			}
 		}
 		else
@@ -106,13 +106,13 @@ namespace EmEn::Graphics
 
 			for ( size_t frameIndex = 0; frameIndex < frameCountDefault; frameIndex++ )
 			{
-				if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGB) ||
-					 !m_frames[frameIndex].first.noise(true) )
+				if ( !m_frames[frameIndex].ownedPixmap().initialize(size, size, PixelFactory::ChannelMode::RGB) ||
+					 !m_frames[frameIndex].ownedPixmap().noise(true) )
 				{
 					return this->setLoadSuccess(false);
 				}
 
-				m_frames[frameIndex].second = DefaultFrameDuration;
+				m_frames[frameIndex].setDuration(DefaultFrameDuration);
 			}
 		}
 
@@ -275,7 +275,7 @@ namespace EmEn::Graphics
 			}
 
 			/* Save frame data. */
-			m_frames.emplace_back(imageResource->data(), frameDuration);
+			m_frames.emplace_back(imageResource, frameDuration);
 		}
 
 		return true;
@@ -313,7 +313,7 @@ namespace EmEn::Graphics
 					return false;
 				}
 
-				m_frames.emplace_back(imageResource->data(), duration);
+				m_frames.emplace_back(imageResource, duration);
 			}
 			else
 			{
@@ -338,7 +338,7 @@ namespace EmEn::Graphics
 	MovieResource::updateDuration () noexcept
 	{
 		m_duration = std::accumulate(m_frames.cbegin(), m_frames.cend(), 0U, [] (uint32_t duration, const auto & frame) {
-			return duration + frame.second;
+			return duration + frame.duration();
 		});
 	}
 
@@ -352,19 +352,19 @@ namespace EmEn::Graphics
 			frameIndex = 0;
 		}
 
-		return m_frames[frameIndex].first;
+		return m_frames[frameIndex].pixmap();
 	}
 
 	bool
 	MovieResource::isGrayScale () const noexcept
 	{
 		return std::ranges::all_of(m_frames, [] (const auto & frame) {
-			if ( !frame.first.isValid() )
+			if ( !frame.pixmap().isValid() )
 			{
 				return false;
 			}
 
-			return frame.first.isGrayScale();
+			return frame.pixmap().isGrayScale();
 		});
 	}
 
@@ -382,9 +382,9 @@ namespace EmEn::Graphics
 		auto green = 0.0F;
 		auto blue = 0.0F;
 
-		for ( const auto & frame : std::ranges::views::keys(m_frames) )
+		for ( const auto & frame : m_frames )
 		{
-			const auto average = frame.averageColor();
+			const auto average = frame.pixmap().averageColor();
 
 			red += average.red() * ratio;
 			green += average.green() * ratio;
@@ -410,12 +410,12 @@ namespace EmEn::Graphics
 
 			for ( uint32_t index = 0; index < frameCount; index++ )
 			{
-				if ( m_frames[index].second >= time )
+				if ( m_frames[index].duration() >= time )
 				{
 					return index;
 				}
 
-				time -= m_frames[index].second;
+				time -= m_frames[index].duration();
 			}
 		}
 
@@ -479,14 +479,14 @@ namespace EmEn::Graphics
 		/* Pre-initialize all pixmap sequentially (fast, catches allocation failures early). */
 		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
-			if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGBA) )
+			if ( !m_frames[frameIndex].ownedPixmap().initialize(size, size, PixelFactory::ChannelMode::RGBA) )
 			{
 				TraceError{ClassId} << "Unable to initialize pixmap for water normals frame #" << frameIndex << " !";
 
 				return this->setLoadSuccess(false);
 			}
 
-			m_frames[frameIndex].second = frameDuration;
+			m_frames[frameIndex].setDuration(frameDuration);
 		}
 
 		/* Per-frame generation lambda. Each invocation allocates its own heights buffer
@@ -569,7 +569,7 @@ namespace EmEn::Graphics
 					const auto invLen = 1.0F / std::sqrt((nx * nx) + (ny * ny) + (nz * nz));
 
 					/* Encode to RGB: normal * 0.5 + 0.5 */
-					m_frames[frameIndex].first.setPixel(
+					m_frames[frameIndex].ownedPixmap().setPixel(
 						col, row,
 						PixelFactory::Color< float >{
 							(nx * invLen * 0.5F) + 0.5F,
@@ -620,8 +620,8 @@ namespace EmEn::Graphics
 		/* ⚠️ Uniform dimensions are a HARD requirement of the upload path, which reads the extent
 		 * from frame 0 and then concatenates every frame blindly. Refusing here turns a silent
 		 * texture corruption into a load failure with a name in the log. */
-		const auto width = frames[0].first.width();
-		const auto height = frames[0].first.height();
+		const auto width = frames[0].pixmap().width();
+		const auto height = frames[0].pixmap().height();
 
 		if ( width == 0 || height == 0 )
 		{
@@ -632,7 +632,7 @@ namespace EmEn::Graphics
 
 		for ( size_t frameIndex = 0; frameIndex < frames.size(); ++frameIndex )
 		{
-			const auto & pixmap = frames[frameIndex].first;
+			const auto & pixmap = frames[frameIndex].pixmap();
 
 			if ( pixmap.width() != width || pixmap.height() != height )
 			{

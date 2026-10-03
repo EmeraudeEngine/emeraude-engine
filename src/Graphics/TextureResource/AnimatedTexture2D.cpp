@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <ranges>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -69,9 +68,9 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	AnimatedTexture2D::createTexture (Renderer & renderer) noexcept
 	{
-		for ( const auto & pixmap: m_localData->frames() | std::views::keys )
+		for ( const auto & frame : m_localData->frames() )
 		{
-			if ( !this->validateTexture(pixmap, !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+			if ( !this->validateTexture(frame.pixmap(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
 			{
 				return false;
 			}
