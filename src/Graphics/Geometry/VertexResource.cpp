@@ -86,7 +86,16 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Create hardware buffers from local data. */
-		return this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.vertexCount(), vertexElementCount);
+		if ( !this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.vertexCount(), vertexElementCount) )
+		{
+			return false;
+		}
+
+		/* NOTE: The shape is final once in video memory: its construction-time merge indexes only serve a later
+		 * edit, which rebuilds them (citadel, 2026-10-03: 360 MiB of 1359 MiB of geometry). */
+		m_localData.releaseConstructionIndexes();
+
+		return true;
 	}
 
 	bool

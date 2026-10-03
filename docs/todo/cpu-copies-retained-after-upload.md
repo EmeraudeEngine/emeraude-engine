@@ -69,9 +69,11 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
 3. **Reload, asynchronous**: from the store source, else a GPU readback; a request answers "not resident" and the
    reader skips that frame.
 4. **Owner decisions after phase 0 (2026-10-03):**
-   - **The construction-time hash indexes are dropped AT UPLOAD**, independently of the release: the engine calls a
-     base `Shape` "finish construction" step before the upload (the three indexes swapped empty); a shape edited later
-     rebuilds them lazily in `addEdge()` / `addVertex()`. Citadel: −360 MiB with no reload needed. To do first.
+   - **The construction-time hash indexes are dropped AT UPLOAD** — DONE 2026-10-03: `IndexedVertexResource` /
+     `VertexResource::createOnHardware()` call base `Shape::releaseConstructionIndexes()` after a successful upload; a
+     later edit rebuilds them (base `vertexfactory/07`). Census, geometry container: citadel 1359 → 998 MiB (−361),
+     forest 1328 → 984 (−344), terrain 3286 → 2411 (−875); RSS at rest (untrimmed: glibc keeps part of it) citadel
+     6046 → 5855 MiB, terrain 9508 → 9249.
    - **Decoded music and movie frames are separate items**: `decoded-music-stays-resident`,
      `movie-frames-stay-resident` (streaming is another mechanism).
 
@@ -94,6 +96,10 @@ pixmap, then `malloc_trim(0)`, then `/proc/<pid>/smaps_rollup`. Each figure is o
   vertices 542 MiB, the construction-time unpaired-edge index 360, triangles 200, vertex colours 147, edges 109; the
   vertex / colour merge indexes < 1. The trees' LOD0 shapes are 116 MiB each (Broadleaf: 511 k vertices).
 - `unusedBytes` = 508 MiB of citadel's 775 MiB of images are held by the store alone (no texture refers to them).
+- **macOS M2 (peer, 2026-10-03)**: 2322 tests green; citadel census 2972 MiB — images, movies, music identical to
+  Linux, geometry 1311 MiB (−48: libc++ sizes the hash indexes and vectors differently). Footprint 8.1 GB, of which
+  MALLOC_LARGE 2.99 GB (≈ the census) beside ~3.5 GB of graphics allocations in the same unified memory; 2.6 GB were
+  swapped out (memory pressure).
 - The rest of the census: decoded movie frames (citadel 492 MiB, 7 movies), decoded music (367 MiB, 32 tracks).
 - **glibc keeps freed memory**: `malloc_trim(0)` alone gave back 0.7–1 GiB in every demo (loading garbage). A release
   measured without a trim under-reports; a release that must lower the RSS may need a trim after it.
