@@ -160,6 +160,10 @@ half-fix taken deliberately:
 - [ ] `KHR_texture_transform`'s per-`TextureInfo` **`texCoord` override** — the multi-UV gap
       (`GLTFLoader.cpp:1000`). Walls into
       [`vertex-attribute-presence-belongs-to-geometry.md`](vertex-attribute-presence-belongs-to-geometry.md).
+      ⚠️ **Seen in a demo (2026-10-03)**: Khronos' CarConcept (citadel's car) bakes its occlusion on `TEXCOORD_1`
+      (`occlusionTexture.texCoord: 1`, 25 of its 29 materials, the paint included). Read with set 0, the bake
+      lays dark patches over the red paint ("blotchy", Windows and Linux shots). The loader ignores every
+      `TextureInfo.texCoord`, not only the transform's override.
 - [ ] ⚠️ **The node-HIERARCHY import path is not covered by the entity-name fix.**
       `SceneDataConsumer` also builds children with `createChild(nodeDesc.name)` (the `+ModelViewer`
       file path, `AssetRoot`); whether that registry tolerates a duplicate is UNVERIFIED. Measure it

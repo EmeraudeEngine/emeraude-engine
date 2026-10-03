@@ -116,6 +116,11 @@ namespace EmEn::Physics
 			return false;
 		}
 
+		if ( !std::isfinite(maxSlopeAngle) || maxSlopeAngle < 0.0F || maxSlopeAngle > Radian(90.0F) )
+		{
+			return false;
+		}
+
 		for ( const auto & wheel : wheels )
 		{
 			if ( !isFiniteVector(wheel.attachment) || !isUnit(wheel.suspensionDirection) || !isUnit(wheel.forward) ||

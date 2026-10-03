@@ -299,9 +299,11 @@ namespace EmEn::Scenes
 		{
 			public:
 
-				WheelGroundCast (const Space3D::Sphere< float > & sphere, const Vector< 3, float > & motion) noexcept
+				WheelGroundCast (const Space3D::Sphere< float > & sphere, const Vector< 3, float > & motion, const Vector< 3, float > & wheelUp, float minimumCosine) noexcept
 					: m_sphere{sphere},
-					m_motion{motion}
+					m_motion{motion},
+					m_wheelUp{wheelUp},
+					m_minimumCosine{minimumCosine}
 				{
 
 				}
@@ -311,7 +313,10 @@ namespace EmEn::Scenes
 				{
 					Space3D::CastHit< float > hit;
 
-					if ( !Space3D::castSphere(m_sphere, m_motion, triangle, hit) || hit.normal()[Y] <= 0.0F || (m_found && hit.fraction() >= m_hit.fraction()) )
+					/* The ground is solid below (its normal up), and the wheel only takes a contact its suspension faces
+					 * (VehicleSettings::maxSlopeAngle). */
+					if ( !Space3D::castSphere(m_sphere, m_motion, triangle, hit) || hit.normal()[Y] <= 0.0F ||
+						Vector< 3, float >::dotProduct(hit.normal(), m_wheelUp) < m_minimumCosine || (m_found && hit.fraction() >= m_hit.fraction()) )
 					{
 						return;
 					}
@@ -338,7 +343,9 @@ namespace EmEn::Scenes
 
 				Space3D::Sphere< float > m_sphere;
 				Vector< 3, float > m_motion;
+				Vector< 3, float > m_wheelUp;
 				Space3D::CastHit< float > m_hit;
+				float m_minimumCosine;
 				bool m_found{false};
 		};
 
@@ -1060,6 +1067,8 @@ namespace EmEn::Scenes
 				const Space3D::Sphere< float > sphere{wheelSettings.radius, attachment};
 				const auto motion = down * wheelSettings.suspensionMaxLength;
 				const auto swept = sweptCapsuleBounds(Space3D::Capsule< float >{attachment, attachment, wheelSettings.radius}, motion);
+				/* A contact whose normal deviates more than the slope limit from the suspension's up is not the road. */
+				const auto minimumCosine = std::cos(settings.maxSlopeAngle);
 
 				/* The earliest hit: the ground's triangles, then every other solid. */
 				bool found = false;
@@ -1068,7 +1077,7 @@ namespace EmEn::Scenes
 
 				if ( m_groundLevel != nullptr )
 				{
-					WheelGroundCast cast{sphere, motion};
+					WheelGroundCast cast{sphere, motion, up, minimumCosine};
 
 					static_cast< void >(m_groundLevel->visitTriangles(swept, cast));
 
@@ -1108,7 +1117,7 @@ namespace EmEn::Scenes
 						mesh.forEachWorldTriangle(obstacleFrame, swept, [&] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t /*triangleIndex*/, uint8_t activeEdges) {
 							Space3D::CastHit< float > triangleHit;
 
-							if ( NarrowPhase::sweepCapsule(caster, motion, triangle, triangleHit) && (!met || triangleHit.fraction() < candidate.fraction()) && NarrowPhase::acceptMeshHit(triangle, faceNormal, activeEdges, mesh.isTwoSided(), triangleHit) )
+							if ( NarrowPhase::sweepCapsule(caster, motion, triangle, triangleHit) && Vector< 3, float >::dotProduct(triangleHit.normal(), up) >= minimumCosine && (!met || triangleHit.fraction() < candidate.fraction()) && NarrowPhase::acceptMeshHit(triangle, faceNormal, activeEdges, mesh.isTwoSided(), triangleHit) )
 							{
 								candidate = triangleHit;
 								met = true;
@@ -1120,7 +1129,7 @@ namespace EmEn::Scenes
 						met = NarrowPhase::sweepCapsule(caster, motion, *model, obstacleFrame, candidate);
 					}
 
-					if ( met && (!found || candidate.fraction() < hit.fraction()) )
+					if ( met && Vector< 3, float >::dotProduct(candidate.normal(), up) >= minimumCosine && (!found || candidate.fraction() < hit.fraction()) )
 					{
 						hit = candidate;
 						found = true;

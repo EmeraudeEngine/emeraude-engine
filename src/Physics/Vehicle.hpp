@@ -33,6 +33,7 @@
 #include <cstdint>
 
 /* Local inclusions for usages. */
+#include "Math/Base.hpp"
 #include "Math/PiecewiseLinear.hpp"
 #include "Math/Vector.hpp"
 #include "StaticVector.hpp"
@@ -132,6 +133,13 @@ namespace EmEn::Physics
 		Base::StaticVector< DifferentialSettings, 4 > differentials;
 		EngineSettings engine;
 		GearboxSettings gearbox;
+		/**
+		 * @brief The steepest contact a wheel accepts, radians in [0, π/2]: a contact whose normal deviates more than this
+		 * from the wheel's suspension axis (its "up") is ignored. Jolt's VehicleCollisionTester::mMaxSlopeAngle, 80° by
+		 * default. An overturned or capsized car's wheels then touch nothing (2026-10-03: on its roof, a car reported its
+		 * four wheels in contact — their casts start inside the ground, which they took for a road).
+		 */
+		float maxSlopeAngle{Base::Math::Radian(80.0F)};
 
 		/**
 		 * @brief Fills the curves and the gear ratios with Jolt's defaults (a road car).
@@ -141,7 +149,8 @@ namespace EmEn::Physics
 
 		/**
 		 * @brief Checks the settings: at least one wheel, every value finite, radius, travel, frequencies and inertias
-		 * positive, unit directions, a ratio for every gear, the differentials' wheels existing.
+		 * positive, unit directions, a ratio for every gear, the differentials' wheels existing, the slope angle in
+		 * [0, π/2].
 		 * @return bool
 		 */
 		[[nodiscard]]

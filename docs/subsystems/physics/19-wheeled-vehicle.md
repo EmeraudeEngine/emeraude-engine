@@ -21,7 +21,9 @@ Bullet's `btRaycastVehicle` (zlib) as references — no code taken. Work item: `
 1. **Wheel casts** (the scene, before the pairs): each wheel sweeps a sphere of its radius from its attachment along the
    suspension direction over its maximum length, against the ground triangles, the statics (meshes included) and the
    other bodies — never its own chassis. A hit gives the contact point, the normal, the ground body and the suspension
-   length; no hit: the wheel hangs at its maximum length.
+   length; no hit: the wheel hangs at its maximum length. A hit whose normal deviates more than
+   `VehicleSettings::maxSlopeAngle` (80° by default, Jolt's `VehicleCollisionTester::mMaxSlopeAngle`) from the
+   wheel's suspension up is ignored (2026-10-03): an overturned or capsized car's wheels touch nothing.
 2. **Drive train** (before the solver): the engine RPM from the driven wheels' spin through the differentials and the
    gear (clutch engaged), the automatic gearbox's decision, the engine torque from its curve × the throttle, split to the
    driven wheels by the differentials; the brake torques.
@@ -82,6 +84,7 @@ bit-identical to the reference of decision 14 (the cars do not disturb them).
 | `BenchCarIdle` | none | settles on its suspension at y 0.8207 (0.371 m of suspension, 12.9 cm of sag), then SLEEPS (no drift) |
 | `BenchCarStraight` | full throttle from cycle 60, full brake from cycle 300 | 2.1 / 6.5 / 10.8 / 14.85 m/s after 1 / 2 / 3 / 4 s, squatting 1.4°; stops in 2.33 s over 17.4 m (≈ 6.4 m/s², 0.65 g, the wheels locked) diving 2.2°; at rest straight, asleep |
 | `BenchCarTurn` | half throttle, half steering to the RIGHT from cycle 60 | a steady circle to the right: 9.28 m/s, yaw rate −0.860 rad/s (R = v / ω = 10.8 m), the body rolled 7.5° OUTWARDS; the mirror of the left turn measured before the sign fix (+0.860, the same speed and roll) |
+| `BenchCarFlipped` (2026-10-03) | none; built turned 180° about its forward | falls on its roof and rests at y 0.25 (up (0, −1, 0)), its four wheels in the air (`contact` false, suspension 0.5). Without `maxSlopeAngle`: two wheels in contact at a suspension length of 0 (their casts start inside the ground); the CarConcept on its roof reported all four (macOS) |
 
 The visuals were checked on screenshots: the wheels on the ground at the idle sag, the spokes left at their spin
 angles after the straight run, the front wheels of the parked car steered (`setVehicleInput(…, 0, 1, 0, 0)`: both at
@@ -128,6 +131,11 @@ parked at different heights because citadel's seeded TERRAIN differed per OS (st
   about the chassis centre.
 - **The 100 m scene boundary is a wall**: the bench's first right-turn circle (from z 80) met it at z ≈ 100 and the car
   rolled over. A station's whole path must stay inside the boundary.
+- **A wheel took the ground for a road from any orientation** (macOS peer, citadel, 2026-10-03): the ground cast only
+  checked that the triangle faced world up. On its roof, a car's wheel casts start INSIDE the ground (`startedInside`,
+  the normal is the separating direction, world up). The car reported its wheels in contact, and the suspension pushed
+  along the body's up, which then pointed down. Fixed by `maxSlopeAngle`, on the ground triangles, the static meshes
+  (per triangle, before the earliest one is kept) and the other solids.
 - The wheels do not cast against their own chassis, and a non-collidable wheel node is never a solid.
 - **The wheel nodes vanished far from the spawn** (owner, 2026-10-02): child, non-collidable nodes were never refiled in
   the rendering octree. Fixed in the scene's node crawl (engine `docs/caution-points.md`, "a child / non-collidable node
