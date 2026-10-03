@@ -1579,10 +1579,48 @@ and white blown-out regions) to clear dark glass with the cabin behind it, as in
 `TransmissionTest` in the `+ModelViewer` still reads right. Citadel's water takes the reflection +
 transmission branch, which neither change touches; 0 `VUID-`.
 
-> [!WARNING]
-> **Open, not fixed here (the owner's call):** the same ambient diffuse legs are not weighted by
-> `(1 − metalness)` either, while the direct passes are. A metal (no diffuse lobe) takes the ambient of
-> a Lambertian surface of its base colour. Changing it changes every metal in every scene.
+### Fixed: the ambient diffuse of a metal was not weighted by (1 − metalness) (2026-10-03, owner)
+
+The ambient pass's diffuse legs (the scalar `albedo / π × ambient`, the IBL `albedo × irradiance ×
+environment luminance`, and their `mix()` forms beside a reflection or refraction component) took no
+`(1 − metalness)`, while the direct passes (`kD`) and the RTGI composite (the G-buffer albedo's alpha
+`(1 − metalness)(1 − transmission)`) did. A metal took the ambient of a Lambertian surface of its base
+colour on top of its specular IBL. Every leg now takes `diffuseWeightShaderExpression()`, the direct
+passes' weight (metalness and transmission; `1.0`, i.e. nothing, for a material with neither).
+
+**Where it shows:** only where the raster ambient is not zeroed: a sky-lit scene WITHOUT an
+indirect-diffuse provider. With RTGI or SSGI on, `IBLDiffuseWeight` is 0 and the scalar ambient is
+zeroed by a sky-derived scene, so those legs weigh nothing. The `+ModelViewer` (two direct lights)
+does not move either. Measured A/B (a build with the old weight against the new one, everything else
+equal):
+- `+ModelViewer` MetalRoughSpheres and CarConcept: 0.00 % / 0.02 % of pixels changed.
+- Citadel, screen-space lane: 0.06 %, below the run-to-run noise of 0.09 %.
+- Citadel, screen-space lane with `PostProcess.disable(IndirectDiffuse)`: 4.7–5.1 % of the pixels
+  change, all on the CarConcept (its paint is metallic: no `metallicFactor`, so 1 under a clearcoat),
+  99–100 % of them darker. The flat bright red of a matte surface becomes the reflective dark red of
+  the RT lane.
+
+### Fixed: a glTF emissive texture dropped its emissiveFactor (2026-10-03, owner)
+
+glTF's emitted colour is `emissiveFactor × emissiveTexture` (× `KHR_materials_emissive_strength`). The
+texture path sampled the texel alone. It is now multiplied by the material's `AutoIlluminationColor`,
+as the albedo's texel is by `AlbedoColor`. Both texture setters (the one the loaders call, and the JSON
+`Texture` filling) set that colour to WHITE, the identity, since its default is black. The glTF loader
+then writes `emissiveFactor` there. FBX keeps white: a texture connected to FBX's emissive colour
+replaces it.
+
+Measured A/B in the `+ModelViewer` (deterministic to the pixel):
+- `DamagedHelmet` (factor 1, 1, 1): 0 pixels changed.
+- `CompareAlphaCoverage` (factor 0.118 on the fur): the "glTF" logo, white and blown out before, glows
+  at its factor; 1.2 % of the pixels changed.
+
+⚠️ Per the spec, an emissive texture with the default factor (0, 0, 0) emits NOTHING now.
+
+⚠️ The logo is now FAINTER than on Khronos' reference, where it shows through half-way. That is not
+the factor: the loader anchors emissive 1.0 at 2000 nits (`EmissiveLuminanceAnchor`, an Aug 2026
+experiment), so 0.118 × 2000 ≈ 240 nits disappears against a fur lit by the viewer's sunny-16
+exposure. Khronos' viewer adds the emissive in display units. The emissive's photometric unit is an
+open design question, separate from this fix.
 
 ### A half-float target silently turns a physical luminance into NaN (Sep 2026)
 

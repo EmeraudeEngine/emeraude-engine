@@ -952,6 +952,14 @@ namespace EmEn::Saphir
 			aoFactor += " * vegetationAmbientAO";
 		}
 
+		/* ⚠️ The ambient DIFFUSE legs take the same weight as the direct diffuse (kD): (1 - metalness), a metal having no
+		 * diffuse lobe (its base colour is the specular F0), and (1 - transmission), what passes through being transmitted.
+		 * Unweighted (until 2026-10-03), a metal took the ambient of a Lambertian surface of its base colour on top of its
+		 * specular IBL, and a clear glass the ambient of a white wall. RTGI already weighted its indirect diffuse (the
+		 * G-buffer albedo's alpha), so only the raster legs disagreed. */
+		const auto diffuseWeightExpression = this->diffuseWeightShaderExpression();
+		const auto diffuseWeight = diffuseWeightExpression == "1.0" ? std::string{} : " * " + diffuseWeightExpression;
+
 		if ( m_useReflection && m_useRefraction && generator.highQualityEnabled() )
 		{
 			/* NOTE: PBR Glass/transparent materials with both reflection and refraction.
@@ -1258,7 +1266,7 @@ namespace EmEn::Saphir
 		}
 		else if ( m_useReflection )
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << diffuseWeight << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
 
 			/* IBL (non-PBR reflective, e.g. Standard): the same diffuse/reflection mix, lit
 			 * by the irradiance instead of the scalar — the reflection color is a prefiltered
@@ -1269,17 +1277,17 @@ namespace EmEn::Saphir
 				{
 					/* Render-target reflection: already an absolute luminance — only the
 					 * sky-derived diffuse leg takes the environment luminance. */
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ");";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ");";
 				}
 				else
 				{
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
 				}
 			}
 		}
 		else if ( m_useRefraction )
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << diffuseWeight << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
 
 			if ( useIBL )
 			{
@@ -1287,25 +1295,19 @@ namespace EmEn::Saphir
 				{
 					/* Render-target refraction: already an absolute luminance — only the
 					 * sky-derived diffuse leg takes the environment luminance. */
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ");";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ");";
 				}
 				else
 				{
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
+					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
 				}
 			}
 		}
 		else
 		{
-			/* ⚠️ What a transmissive surface lets through is TRANSMITTED, not diffusely re-emitted: its diffuse
-			 * ambient legs take (1 - transmission), as its direct diffuse does (kD, diffuseWeightShaderExpression()).
-			 * Unweighted, a clear glass (white base colour, transmission 1 — CarConcept's windows) took the whole
-			 * ambient of a white Lambertian surface and turned milky over the cabin (2026-10-03). */
-			const auto transmissionWeight = m_useTransmission && !m_surfaceTransmissionFactor.empty()
-				? " * (1.0 - " + m_surfaceTransmissionFactor + ")"
-				: std::string{};
-
-			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << transmissionWeight << ";";
+			/* The diffuse weight above: CarConcept's windows (white base colour, transmission 1) turned milky over the
+			 * cabin without it (2026-10-03). */
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << diffuseWeight << ";";
 
 			/* IBL diffuse irradiance: the cubemap stores E/pi, so the raw base color
 			 * (no 1/pi) times the sample times the environment luminance is the outgoing
@@ -1314,7 +1316,7 @@ namespace EmEn::Saphir
 			 * drives the ambient (see Scene::refreshAmbientLightProperties). */
 			if ( useIBL )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblDiffuseIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << transmissionWeight << ";";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << iblDiffuseTint << ".rgb * iblDiffuseIrradiance * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << aoFactor << diffuseWeight << ";";
 			}
 		}
 

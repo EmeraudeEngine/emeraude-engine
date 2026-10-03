@@ -629,6 +629,8 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
+				/* The texel is multiplied by the emissive colour: white, the identity (its default is black). */
+				this->setAutoIlluminationColor(PixelFactory::White);
 				this->setAutoIlluminationAmount(FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount));
 			}
 				return true;
@@ -4143,7 +4145,10 @@ namespace EmEn::Graphics::Material
 
 		/* Auto-Illumination (emissive) component. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AutoIllumination, component) << ");";
+			/* The texel times the emissive colour, as the albedo's texel times its colour: glTF's emissiveTexture ×
+			 * emissiveFactor. The colour is WHITE (the identity) unless a loader tints it (2026-10-03: the factor was
+			 * dropped, CarConcept's dashboard glowed in its texture's raw grey instead of orange). */
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AutoIllumination, component) << ") * " << MaterialUB(UniformBlock::Component::AutoIlluminationColor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -5245,6 +5250,10 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
+
+		/* The texel is multiplied by the emissive colour: white, the identity (its default is black). A loader whose
+		 * format tints the texture (glTF's emissiveFactor) sets it afterwards with setAutoIlluminationColor(). */
+		this->setAutoIlluminationColor(PixelFactory::White);
 
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);

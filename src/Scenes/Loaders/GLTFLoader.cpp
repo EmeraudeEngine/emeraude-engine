@@ -2842,10 +2842,12 @@ namespace EmEn::Scenes::Loaders
 						}
 					}
 
-					/* Emissive. */
+					/* Emissive: the texture × emissiveFactor (glTF 2.0 § material.emissiveFactor), the factor in the
+					 * material's emissive colour, which the shader multiplies with the texel — the albedo's way. */
 					if ( emissiveTex != nullptr )
 					{
 						materialResource.setAutoIlluminationComponent(emissiveTex, emissiveStrength);
+						materialResource.setAutoIlluminationColor(emissiveColor);
 
 						if ( emissiveUVTransform.present )
 						{
