@@ -31,7 +31,6 @@
 
 /* Local inclusions. */
 #include "FileSystem.hpp"
-#include "Graphics/AlphaCoverage.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/TextureCompressor.hpp"
 #include "Resources/Manager.hpp"
@@ -353,7 +352,7 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		return m_localData->data().isGrayScale();
+		return m_localData->isGrayScale();
 	}
 
 	PixelFactory::Color< float >
@@ -365,7 +364,7 @@ namespace EmEn::Graphics::TextureResource
 			return PixelFactory::Black;
 		}
 
-		return m_localData->data().averageColor();
+		return m_localData->averageColor();
 	}
 
 	bool
@@ -379,7 +378,7 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		return AlphaCoverage::isBinaryMask(m_localData->data());
+		return m_localData->isBinaryAlphaMask();
 	}
 
 	bool

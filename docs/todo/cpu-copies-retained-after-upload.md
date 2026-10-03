@@ -61,8 +61,9 @@ mark of the construction (freed blocks not decommitted).
 
 Phase 0 is done (the census and the measurement below; the reader inventory further down). The owner's order:
 
-1. **Metadata extraction**: every per-frame reader of a CPU copy (bounds, dimensions, durations, the binary-alpha
-   flag, the sky's illuminance) reads a value kept on the resource, not the shape / pixmap.
+1. **Metadata extraction** — DONE 2026-10-04 for geometries, images and cubemaps (owner: bounds cached on the
+   resource; pixel facts "extracted at release"): `docs/subsystems/resources/03-resources-specific-rules.md`
+   § CPU Copies. Movies, sounds and music keep theirs in their own items.
 2. **Release by declared usage**: "GPU only" (default for meshes and textures) frees the CPU copy after the one-shot
    consumers; "CPU too" for grounds / terrains. A release SWAPS with empty containers (`clear()` keeps the capacity,
    base `vertexfactory/07`). A resource gains a "not resident" state (no `Loaded → Unloaded` exists today).
@@ -74,8 +75,18 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
      later edit rebuilds them (base `vertexfactory/07`). Census, geometry container: citadel 1359 → 998 MiB (−361),
      forest 1328 → 984 (−344), terrain 3286 → 2411 (−875); RSS at rest (untrimmed: glibc keeps part of it) citadel
      6046 → 5855 MiB, terrain 9508 → 9249.
+     ACCEPTED macOS M2 2026-10-04: 2324 tests (Release + ASan/UBSan), citadel geometry 1311 → 998 MiB (= Linux: the
+     libc++ gap was all in the indexes), phys_footprint 8125 → 7835 MB (MALLOC_SMALL −208, MALLOC_LARGE −83).
+     ACCEPTED Windows (NVIDIA) 2026-10-04: 2324 tests, citadel geometry 1328 → 998 MiB, census 2989 → 2659 MiB,
+     private bytes 7470 → 6943 MiB (−527), working set 5102 → 4617 MiB.
    - **Decoded music and movie frames are separate items**: `decoded-music-stays-resident`,
      `movie-frames-stay-resident` (streaming is another mechanism).
+
+5. **The memory the census does not see**: citadel after the index release, census 2.66 GiB against Windows private
+   bytes 6.9 GiB (Linux: anonymous 4.9 GiB, of which ~0.9 GiB glibc gives back on a trim). Candidates: the driver's
+   host allocations, resources outside every container (LOD levels, generated grids, the physics' triangle meshes,
+   octrees), loading intermediates kept at the allocator's high-water mark. To be split (heaptrack / VMA statistics)
+   before deciding anything there.
 
 ## Phase 0 — the measurement (2026-10-03, Linux, RTX 3070 Ti, Release)
 
@@ -97,7 +108,7 @@ pixmap, then `malloc_trim(0)`, then `/proc/<pid>/smaps_rollup`. Each figure is o
   vertex / colour merge indexes < 1. The trees' LOD0 shapes are 116 MiB each (Broadleaf: 511 k vertices).
 - `unusedBytes` = 508 MiB of citadel's 775 MiB of images are held by the store alone (no texture refers to them).
 - **macOS M2 (peer, 2026-10-03)**: 2322 tests green; citadel census 2972 MiB — images, movies, music identical to
-  Linux, geometry 1311 MiB (−48: libc++ sizes the hash indexes and vectors differently). Footprint 8.1 GB, of which
+  Linux, geometry 1311 MiB (−48: libc++ sizes the hash indexes differently — gone once they are released). Footprint 8.1 GB, of which
   MALLOC_LARGE 2.99 GB (≈ the census) beside ~3.5 GB of graphics allocations in the same unified memory; 2.6 GB were
   swapped out (memory pressure).
 - The rest of the census: decoded movie frames (citadel 492 MiB, 7 movies), decoded music (367 MiB, 32 tracks).
@@ -149,6 +160,14 @@ Who reads a CPU copy after its upload (file:line in the session's report; the ma
   whole shape); LOD levels and some grids live outside any container.
 
 ## ⚠️ Traps
+
+- **Late readers found during phase 1, for phase 2's declared usage**: `CursorAtlas::setCursor()` reads an image's
+  pixels whenever a cursor is set (a cursor image is "CPU too"); `MovieResource` copies frame pixels at its load;
+  ground / terrain displacement reads an image at the ground's load; automatic LOD (`MeshResource` /
+  `MultiLayerMeshResource::generateLODLevel`) decimates the source shape once; a texture created later from an
+  already-released image needs the pixels back (reload).
+- `extractMetadata()` and the release must not run while another thread reads the resource: phase 2 decides the
+  thread and the moment.
 
 - Windows `Get-Process` private bytes include memory the heap no longer uses but has not decommitted: a fix can free
   blocks without the number dropping. Measure the peak AND the value after the scene settles, and compare with a

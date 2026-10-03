@@ -187,7 +187,7 @@ namespace EmEn::Graphics::Geometry
 			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				return m_localData.boundingBox();
+				return m_boundingBox;
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
@@ -195,7 +195,7 @@ namespace EmEn::Graphics::Geometry
 			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				return m_localData.boundingSphere();
+				return m_boundingSphere;
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::vertexBufferObject() */
@@ -289,6 +289,18 @@ namespace EmEn::Graphics::Geometry
 		private:
 
 			/**
+			 * @brief Copies the local data's bounding volumes, the per-frame readers' metadata (culling, LOD): they
+			 * must outlive a release of the local data.
+			 * @return void
+			 */
+			void
+			cacheBoundingVolumes () noexcept
+			{
+				m_boundingBox = m_localData.boundingBox();
+				m_boundingSphere = m_localData.boundingSphere();
+			}
+
+			/**
 			 * @brief Creates a hardware buffer on the device.
 			 * @param transferManager A reference to the transfer manager.
 			 * @param vertexAttributes A reference to a vertex attribute vector.
@@ -302,6 +314,8 @@ namespace EmEn::Graphics::Geometry
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			Base::VertexFactory::Shape< float > m_localData;
 			std::vector< SubGeometry > m_subGeometries;
+			Base::Math::Space3D::AACuboid< float > m_boundingBox;
+			Base::Math::Space3D::Sphere< float > m_boundingSphere;
 	};
 }
 

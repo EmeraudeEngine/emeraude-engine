@@ -261,7 +261,7 @@ namespace EmEn::Graphics
 			uint32_t
 			width () const noexcept
 			{
-				return m_pixmap.width();
+				return m_metadataExtracted ? m_width : m_pixmap.width();
 			}
 
 			/**
@@ -274,7 +274,7 @@ namespace EmEn::Graphics
 			uint32_t
 			height () const noexcept
 			{
-				return m_pixmap.height();
+				return m_metadataExtracted ? m_height : m_pixmap.height();
 			}
 
 			/**
@@ -292,7 +292,7 @@ namespace EmEn::Graphics
 			bool
 			isGrayScale () const noexcept
 			{
-				return m_pixmap.isGrayScale();
+				return m_metadataExtracted ? m_grayScale : m_pixmap.isGrayScale();
 			}
 
 			/**
@@ -310,7 +310,37 @@ namespace EmEn::Graphics
 			Base::PixelFactory::Color< float >
 			averageColor () const noexcept
 			{
-				return m_pixmap.averageColor();
+				return m_metadataExtracted ? m_averageColor : m_pixmap.averageColor();
+			}
+
+			/**
+			 * @brief Returns whether the alpha channel is a binary coverage mask rather than graded translucency
+			 * (AlphaCoverage::isBinaryMask()).
+			 * @note Computed from the pixels, O(width * height), until extractMetadata() freezes it.
+			 * @return bool False when the image carries no alpha channel.
+			 */
+			[[nodiscard]]
+			bool isBinaryAlphaMask () const noexcept;
+
+			/**
+			 * @brief Computes once and keeps what the readers derive from the pixels — the dimensions, grey-scale,
+			 * average colour and binary-alpha answers — so they outlive a release of the pixels.
+			 * @note Afterwards width(), height(), isGrayScale(), averageColor() and isBinaryAlphaMask() answer the
+			 * kept values. Idempotent.
+			 * @pre The image is loaded, and no other thread reads it meanwhile (the release's own contract).
+			 * @return void
+			 */
+			void extractMetadata () noexcept;
+
+			/**
+			 * @brief Returns whether extractMetadata() ran.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			metadataExtracted () const noexcept
+			{
+				return m_metadataExtracted;
 			}
 
 			/**
@@ -342,6 +372,12 @@ namespace EmEn::Graphics
 		private:
 
 			Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
+			Base::PixelFactory::Color< float > m_averageColor;
+			uint32_t m_width{0};
+			uint32_t m_height{0};
+			bool m_grayScale{false};
+			bool m_binaryAlphaMask{false};
+			bool m_metadataExtracted{false};
 	};
 }
 

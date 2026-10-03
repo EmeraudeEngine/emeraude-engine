@@ -780,6 +780,11 @@ namespace EmEn::Graphics
 	bool
 	CubemapResource::isGrayScale () const noexcept
 	{
+		if ( m_metadataExtracted )
+		{
+			return m_grayScale;
+		}
+
 		return std::ranges::all_of(m_faces, [] (const auto & pixmap) {
 			if ( !pixmap.isValid() )
 			{
@@ -804,6 +809,11 @@ namespace EmEn::Graphics
 			return m_averageColorHDR;
 		}
 
+		if ( m_metadataExtracted )
+		{
+			return m_averageColor;
+		}
+
 		constexpr auto ratio{1.0F / static_cast< float >(CubemapFaceCount)};
 
 		auto red = 0.0F;
@@ -826,7 +836,8 @@ namespace EmEn::Graphics
 	{
 		constexpr auto pi = std::numbers::pi_v< float >;
 
-		if ( m_hemisphereIlluminanceFactor > 0.0F )
+		/* NOTE: Once extractMetadata() ran, the faces may be released: the kept factor is the only answer. */
+		if ( m_metadataExtracted || m_hemisphereIlluminanceFactor > 0.0F )
 		{
 			return m_hemisphereIlluminanceFactor;
 		}
@@ -933,4 +944,19 @@ namespace EmEn::Graphics
 		return m_hemisphereIlluminanceFactor;
 	}
 
+
+	void
+	CubemapResource::extractMetadata () noexcept
+	{
+		if ( m_metadataExtracted )
+		{
+			return;
+		}
+
+		m_grayScale = this->isGrayScale();
+		m_averageColor = this->averageColor();
+		m_hemisphereIlluminanceFactor = this->hemisphereIlluminanceFactor();
+		m_cubeSize = this->cubeSize();
+		m_metadataExtracted = true;
+	}
 }

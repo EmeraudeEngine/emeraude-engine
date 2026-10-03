@@ -67,3 +67,20 @@ bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
 - `onDependenciesLoaded()` for finalization (GPU upload, etc.)
 - Automatic parent-child event propagation
 - Reference counting with `std::shared_ptr`
+
+### CPU Copies: Metadata Outlives the Data (2026-10-04)
+The CPU copy of an uploaded resource (a geometry's shape, an image's pixels) is meant to be released once the GPU
+holds it (`docs/todo/cpu-copies-retained-after-upload.md`). What a reader needs AFTER the upload therefore lives on
+the resource, never only in the data:
+- **Geometries** (`IndexedVertexResource`, `VertexResource`): `boundingBox()` / `boundingSphere()` answer a copy
+  taken at every load path and again at the upload (`cacheBoundingVolumes()`), not the shape's.
+- **Images** (`ImageResource`) and **cubemaps** (`CubemapResource`): `extractMetadata()` computes once and keeps
+  what the readers derive from the pixels — dimensions / cube size, grey-scale, average colour, binary alpha
+  (`isBinaryAlphaMask()`, which `Texture2D` now delegates to), the hemisphere illuminance factor. Until it runs, the
+  accessors compute from the pixels as before (owner decision: "extracted at release", zero cost for a resource
+  never released). The release calls it FIRST.
+- A new per-frame or late reader of a CPU copy adds its value to that metadata — or declares the resource
+  "CPU too" — instead of reading the data.
+- Verified 2026-10-04 (citadel, a local probe): with every image's pixels, every cubemap's faces and every
+  geometry's whole shape freed after extraction, 393 + 2 + 339 resources answered identically, and the frame was
+  unchanged except the animated actors (0.2 % of the pixels).

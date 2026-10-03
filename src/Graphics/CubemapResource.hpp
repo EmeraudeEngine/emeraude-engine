@@ -224,7 +224,7 @@ namespace EmEn::Graphics
 			uint32_t
 			cubeSize () const noexcept
 			{
-				return m_isHDR ? m_cubeSize : m_faces[0].width();
+				return m_isHDR || m_metadataExtracted ? m_cubeSize : m_faces[0].width();
 			}
 
 			/**
@@ -254,6 +254,27 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			float hemisphereIlluminanceFactor () const noexcept;
 
+			/**
+			 * @brief Computes once and keeps what the readers derive from the faces — the cube size, grey-scale,
+			 * average colour and hemisphere illuminance factor — so they outlive a release of the faces.
+			 * @note Afterwards cubeSize(), isGrayScale(), averageColor() and hemisphereIlluminanceFactor() answer the
+			 * kept values. Idempotent.
+			 * @pre The cubemap is loaded, and no other thread reads it meanwhile (the release's own contract).
+			 * @return void
+			 */
+			void extractMetadata () noexcept;
+
+			/**
+			 * @brief Returns whether extractMetadata() ran.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			metadataExtracted () const noexcept
+			{
+				return m_metadataExtracted;
+			}
+
 		private:
 
 			/* JSON keys */
@@ -278,9 +299,12 @@ namespace EmEn::Graphics
 			CubemapPixmaps m_faces;
 			std::array< std::vector< uint16_t >, CubemapFaceCount > m_facesHDR{};
 			Base::PixelFactory::Color< float > m_averageColorHDR;
+			Base::PixelFactory::Color< float > m_averageColor;
 			mutable float m_hemisphereIlluminanceFactor{-1.0F};
 			uint32_t m_cubeSize{0};
 			bool m_isHDR{false};
+			bool m_grayScale{false};
+			bool m_metadataExtracted{false};
 	};
 }
 

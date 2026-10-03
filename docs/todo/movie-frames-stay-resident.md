@@ -20,6 +20,12 @@ per frame).
 Split from `cpu-copies-retained-after-upload` by the owner (2026-10-03): a different mechanism from the release /
 reload of GPU-uploaded copies.
 
+**The frames are held TWICE** (found 2026-10-04): `MovieResource::load()` / `loadManual()` COPY each frame's pixmap
+out of a store `ImageResource` (`m_frames.emplace_back(imageResource->data(), …)`), and the store keeps that image.
+Citadel: 508 MiB of the 775 MiB of images are held by the store alone (`memoryCensus()` `unusedBytes`) against
+492 MiB of movie frames — the same pixels. Holding the `std::shared_ptr< ImageResource >` (or moving the pixmap out
+of an image only the movie uses) removes the copy without touching the streaming question.
+
 ## What remains
 
 1. Find who reads the frames after the animated texture's upload (the frame count and durations are read every frame

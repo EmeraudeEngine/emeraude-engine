@@ -27,6 +27,7 @@
 #include "ImageResource.hpp"
 
 /* Local inclusions. */
+#include "AlphaCoverage.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Processor.hpp"
@@ -128,5 +129,32 @@ namespace EmEn::Graphics
 		Tracer::error(ClassId, "This method can't be used !");
 
 		return this->setLoadSuccess(false);
+	}
+
+	bool
+	ImageResource::isBinaryAlphaMask () const noexcept
+	{
+		if ( m_metadataExtracted )
+		{
+			return m_binaryAlphaMask;
+		}
+
+		return AlphaCoverage::isBinaryMask(m_pixmap);
+	}
+
+	void
+	ImageResource::extractMetadata () noexcept
+	{
+		if ( m_metadataExtracted )
+		{
+			return;
+		}
+
+		m_width = m_pixmap.width();
+		m_height = m_pixmap.height();
+		m_grayScale = m_pixmap.isGrayScale();
+		m_averageColor = m_pixmap.averageColor();
+		m_binaryAlphaMask = AlphaCoverage::isBinaryMask(m_pixmap);
+		m_metadataExtracted = true;
 	}
 }

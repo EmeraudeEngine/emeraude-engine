@@ -60,6 +60,9 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
+		/* NOTE: The shape is final at the upload: its bounds are copied again in case it was edited after its load. */
+		this->cacheBoundingVolumes();
+
 		if ( !Interface::buildSubGeometries(m_subGeometries, m_localData) )
 		{
 			TraceError{ClassId} << "Resource '" << this->name() << "' fails to build sub-geometries !";
@@ -191,6 +194,8 @@ namespace EmEn::Graphics::Geometry
 
 		m_localData = ShapeGenerator::generateCuboid(1.0F, 1.0F, 1.0F, options);
 
+		this->cacheBoundingVolumes();
+
 		return this->setLoadSuccess(true);
 	}
 
@@ -227,6 +232,8 @@ namespace EmEn::Graphics::Geometry
 
 		m_localData = std::move(loadResult.shape);
 
+		this->cacheBoundingVolumes();
+
 		/* NOTE: Skeletal data (loadResult.skeleton, loadResult.skin) is available here
 		 * but will be propagated to the Renderable level in a subsequent step. */
 
@@ -262,6 +269,8 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		m_localData = shape;
+
+		this->cacheBoundingVolumes();
 
 		return this->setLoadSuccess(true);
 	}
