@@ -108,6 +108,11 @@ was accepted on macOS and Windows the same day (the 3 cars changed only; citadel
 parked at different heights because citadel's seeded TERRAIN differed per OS (std's random facilities), fixed by base
 `PortableRandom` (base `docs/subsystems/source-tree/23-portable-random.md`).
 
+The slope limit (`maxSlopeAngle`, engine `dccc0329`, alpha `dd61f85a`, 2026-10-03) was accepted on the three OS:
+bench 49 stations, the 48 older identical in full state run against run (Windows NVIDIA = AMD on all 49);
+`BenchCarFlipped` rests on its roof at y 0.250 with its four wheels out of contact (suspension 0.5) on Linux, macOS
+and Windows; 0 `VUID-`.
+
 ### ⚠️ Traps and limits
 - **The suspension is solved like a contact's separation**: `prepareWheels()` keeps an ADJUSTED length (the cast
   length minus the anchors' current offset along the normal) and every sub-step measures it against the moved anchors.
