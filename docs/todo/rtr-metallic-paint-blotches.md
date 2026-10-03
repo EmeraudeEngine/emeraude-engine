@@ -22,6 +22,9 @@ Isolated by A/B, same pose:
 - With `disable(Reflections)` the car goes nearly black: this metallic paint takes almost all its light
   from reflection, so that concept carries the patches.
 - The ScreenSpace lane (SSR) renders the paint smooth.
+- Confirmed on Windows (NVIDIA, 2026-10-03), same A/B: paint pixels (R > 1.6 G) in the front area n 3602,
+  mean R 69.1, sd 22.3 with the reflections; with `disable(Reflections)` the body goes almost uniformly black,
+  no patch (10 pixels left in the mask).
 
 It was first attributed to the multi-UV gap (the occlusion baked on `TEXCOORD_1`). That was WRONG: a
 metal has no ambient diffuse for an occlusion to darken (`docs/caution-points.md`, the metalness weight).

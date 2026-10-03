@@ -478,7 +478,10 @@ with any map on set 1 gets `UseSecondaryTextureCoordinates`, whose vertex code d
   ignored. A warning names the material. Never the plain material: its shader would read an attribute
   the mesh may not carry.
 - **Measured** (Linux, `+ModelViewer`, 0 `VUID-`): `MultiUVTest` (its logo is the emissive on set 1)
-  lays the logo on each face as Khronos' reference does. CarConcept (25 of 29 materials bake their
+  lays the logo on each face as Khronos' reference does. Accepted on macOS M2 by A/B: the old build showed
+  the asset's set-0 fallback text ("Multiple UVs not supported in this viewer"), the new one the logo; base
+  2320 tests (3 skipped) in Release and under ASan/UBSan; Sponza and citadel unchanged; 0 `VUID-`. Accepted on
+  Windows (NVIDIA): 2320 tests (3 skipped), MultiUVTest laid out as Khronos' reference, Sponza normal. CarConcept (25 of 29 materials bake their
   occlusion on set 1): the viewer barely moves (0.01 %), because the baked occlusion only darkens the
   raster ambient, which is ~0 there and under an indirect-diffuse provider.
 - ⚠️ **The CarConcept's "blotchy paint" was NOT this gap** (the 2026-10-03 attribution was wrong). The
