@@ -31,6 +31,9 @@
 
 /* Local inclusions. */
 #include "Version.hpp"
+#include "Device.hpp"
+#include "PhysicalDevice.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -255,5 +258,38 @@ namespace EmEn::Vulkan
 		}
 
 		return output.str();
+	}
+
+	bool
+	pipelineCreationFeedbackAvailable (const Device & device) noexcept
+	{
+		const auto physicalDevice = device.physicalDevice();
+
+		if ( physicalDevice == nullptr )
+		{
+			return false;
+		}
+
+		const auto version = physicalDevice->APIDriver();
+
+		return version.major() > 1 || (version.major() == 1 && version.minor() >= 3);
+	}
+
+	void
+	reportPipelineCreation (const char * classId, const std::string & identifier, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback) noexcept
+	{
+		if ( elapsed < SlowPipelineCreationThreshold )
+		{
+			return;
+		}
+
+		const char * cache = "the pipeline cache's answer unknown";
+
+		if ( feedback != nullptr && (feedback->flags & VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT) != 0 )
+		{
+			cache = (feedback->flags & VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT) != 0 ? "a pipeline cache HIT" : "a pipeline cache MISS";
+		}
+
+		TraceWarning{classId} << "Slow pipeline creation: '" << identifier << "' took " << std::chrono::duration_cast< std::chrono::milliseconds >(elapsed).count() << " ms on this thread (" << cache << ").";
 	}
 }

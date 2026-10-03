@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -76,4 +77,30 @@ namespace EmEn::Vulkan
 	 */
 	[[nodiscard]]
 	EMEN_API std::string getItemListAsString (const char * type, const std::vector< VkExtensionProperties > & extensions) noexcept;
+
+	class Device;
+
+	/** @brief A pipeline creation that takes longer than this is reported (three frames at 60 Hz). */
+	inline constexpr std::chrono::milliseconds SlowPipelineCreationThreshold{50};
+
+	/**
+	 * @brief Returns whether a device accepts VkPipelineCreationFeedbackCreateInfo (core in Vulkan 1.3): whether the
+	 * pipeline cache served a creation.
+	 * @param device A reference to the device.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool pipelineCreationFeedbackAvailable (const Device & device) noexcept;
+
+	/**
+	 * @brief Reports a slow pipeline creation: its duration, whether the pipeline cache served it, the creating
+	 * thread (the Tracer's thread ID). A runtime compile is a stall on its thread — hundreds of ms under MoltenVK
+	 * (SPIR-V to MSL, then a Metal library) — and was invisible until 2026-10-03.
+	 * @param classId The pipeline class.
+	 * @param identifier The pipeline's identifier.
+	 * @param elapsed The creation's duration.
+	 * @param feedback The creation feedback, nullptr when unavailable.
+	 * @return void
+	 */
+	EMEN_API void reportPipelineCreation (const char * classId, const std::string & identifier, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback) noexcept;
 }
