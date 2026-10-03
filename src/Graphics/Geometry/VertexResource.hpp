@@ -253,8 +253,8 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				// TODO ...
-				return 0;
+				/* NOTE: The local data's own size is in sizeof(*this) already. */
+				return sizeof(*this) - sizeof(m_localData) + m_localData.memoryOccupied() + (m_subGeometries.capacity() * sizeof(SubGeometry));
 			}
 
 			/**

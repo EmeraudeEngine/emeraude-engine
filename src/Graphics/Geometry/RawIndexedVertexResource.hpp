@@ -254,7 +254,7 @@ namespace EmEn::Graphics::Geometry
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				return 0;
+				return sizeof(*this);
 			}
 
 			/**

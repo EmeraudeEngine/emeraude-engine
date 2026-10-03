@@ -132,8 +132,8 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				// TODO ...
-				return 0;
+				/* NOTE: The geometry is a resource of its own, counted where it is stored. */
+				return sizeof(*this);
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */

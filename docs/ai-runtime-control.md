@@ -1249,6 +1249,7 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 |---------|---------|-------------|
 | **ResourcesManagerService** | `listContainers()` | JSON array of all resource containers |
 | | `listResources(containerNameOrId)` | JSON array of available resource names |
+| | `memoryCensus()` | JSON: the CPU memory of the loaded resources per container (not the GPU memory), largest first |
 | **SceneManagerService** | `createScene(name, boundary, camNode, x, y, z [, bg [, ground]])` | Create full scene |
 | | `setGround([material])` | Add/replace ground (default: "default") |
 | | `setBackground(skyboxName [, applyLighting])` | Set skybox on active scene; `true` as second argument derives the scene lighting (ambient + stars) from the sky's photometric manifest |

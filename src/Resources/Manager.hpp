@@ -215,7 +215,8 @@ namespace EmEn::Resources
 			 *
 			 * @return Total memory occupied in bytes across all resource containers.
 			 *
-			 * @note This includes GPU and CPU memory for graphics resources.
+			 * @note CPU memory only (the resources' local data), never their GPU memory; a resource still
+			 * loading is skipped.
 			 * @note Thread-safe operation.
 			 *
 			 * @see unusedMemoryOccupied() For memory consumed only by unused resources.
@@ -235,7 +236,8 @@ namespace EmEn::Resources
 			 *
 			 * @return Total memory occupied by unused resources in bytes.
 			 *
-			 * @note This includes GPU and CPU memory for graphics resources.
+			 * @note CPU memory only (the resources' local data), never their GPU memory; a resource still
+			 * loading is skipped.
 			 * @note Thread-safe operation.
 			 *
 			 * @see memoryOccupied() For total memory consumption.

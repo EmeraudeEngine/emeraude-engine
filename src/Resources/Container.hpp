@@ -286,8 +286,9 @@ namespace EmEn::Resources
 			 * @brief Returns the total memory consumed by all loaded resources.
 			 *
 			 * Calculates the sum of memory occupied by all resources currently loaded in the container,
-			 * regardless of whether they are actively being used. This includes GPU memory for graphics
-			 * resources, audio buffers, and other resource-specific allocations.
+			 * regardless of whether they are actively being used: the CPU memory of each resource (its
+			 * local data: pixmaps, shapes, audio buffers…), NOT its GPU memory. A resource still loading
+			 * is skipped (a loader thread is writing its data).
 			 *
 			 * @return Total memory occupied in bytes.
 			 * @see unusedMemoryOccupied() For memory used by unused resources only
@@ -301,7 +302,7 @@ namespace EmEn::Resources
 			 *
 			 * Calculates memory occupied by resources that are loaded but not currently referenced
 			 * by any external code (use_count == 1, only held by the container). These resources
-			 * are candidates for unloading to free memory.
+			 * are candidates for unloading to free memory. CPU memory only, as memoryOccupied().
 			 *
 			 * @return Total unused memory in bytes.
 			 * @see unloadUnusedResources() To free this memory
@@ -703,6 +704,12 @@ namespace EmEn::Resources
 
 				for ( const auto & resource : m_resources | std::views::values )
 				{
+					/* NOTE: A loading resource's data is being written by a loader thread. */
+					if ( !resource->isLoaded() )
+					{
+						continue;
+					}
+
 					bytes += resource->memoryOccupied();
 				}
 
@@ -720,6 +727,12 @@ namespace EmEn::Resources
 
 				for ( const auto & resource : m_resources | std::views::values )
 				{
+					/* NOTE: A loading resource's data is being written by a loader thread. */
+					if ( !resource->isLoaded() )
+					{
+						continue;
+					}
+
 					if ( resource.use_count() == 1 )
 					{
 						bytes += resource->memoryOccupied();

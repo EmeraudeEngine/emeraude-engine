@@ -27,7 +27,10 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <functional>
 #include <ranges>
+#include <vector>
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
@@ -53,6 +56,53 @@ namespace EmEn::Resources
 			}
 
 			return Console::CommandResult::json(Base::FastJSON::stringify(containers));
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("memoryCensus", "Returns the CPU memory the loaded resources hold (their local data, not their GPU memory) per container, largest first, as JSON.", [this] () {
+			struct Line final
+			{
+				const ContainerInterface * container{nullptr};
+				size_t bytes{0};
+				size_t unusedBytes{0};
+			};
+
+			std::vector< Line > lines;
+			lines.reserve(m_containers.size());
+
+			size_t totalBytes = 0;
+			size_t totalUnusedBytes = 0;
+
+			for ( const auto & container : std::views::values(m_containers) )
+			{
+				const Line line{.container = container.get(), .bytes = container->memoryOccupied(), .unusedBytes = container->unusedMemoryOccupied()};
+
+				totalBytes += line.bytes;
+				totalUnusedBytes += line.unusedBytes;
+
+				lines.push_back(line);
+			}
+
+			std::ranges::sort(lines, std::ranges::greater{}, &Line::bytes);
+
+			Json::Value containers{Json::arrayValue};
+
+			for ( const auto & line : lines )
+			{
+				Json::Value entry{Json::objectValue};
+				entry["id"] = line.container->resourceClassId();
+				entry["loaded"] = static_cast< Json::UInt64 >(line.container->resourceCount());
+				entry["bytes"] = static_cast< Json::UInt64 >(line.bytes);
+				entry["unusedBytes"] = static_cast< Json::UInt64 >(line.unusedBytes);
+
+				containers.append(std::move(entry));
+			}
+
+			Json::Value census{Json::objectValue};
+			census["totalBytes"] = static_cast< Json::UInt64 >(totalBytes);
+			census["totalUnusedBytes"] = static_cast< Json::UInt64 >(totalUnusedBytes);
+			census["containers"] = std::move(containers);
+
+			return Console::CommandResult::json(Base::FastJSON::stringify(census));
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("listResources", "Lists the available resources of a container as JSON.",

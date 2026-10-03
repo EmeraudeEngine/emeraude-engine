@@ -12,6 +12,7 @@
 |---|---|
 | `listContainers()` | Containers as JSON (class id, name, resource count). |
 | `listResources(containerName)` | Names available in a container (`ImageResource`, `MeshResource`, …). |
+| `memoryCensus()` | The CPU memory the LOADED resources hold (their local data — pixmaps, shapes, decoded audio / movie frames — never their GPU memory), per container, largest first: `{totalBytes, totalUnusedBytes, containers: [{id, loaded, bytes, unusedBytes}]}`. `unusedBytes` = held by the store alone. A resource still loading is skipped; a resource outside every container (LOD levels, a ground's generated grid) is not counted. Measurements: `docs/todo/cpu-copies-retained-after-upload.md`. |
 | `loadResource(containerName, resourceName)` | Requests the asynchronous loading of a store resource — an `ExternalData` one is downloaded first by `Net::Manager`. Fails when the name is not in the store. |
 | `resourceStatus(containerName, resourceName)` | `Unloaded` / `Enqueuing` / `ManualEnqueuing` / `Loading` / `Loaded` / `Failed`; error when the name is unknown. Poll it after `loadResource()`. |
 
