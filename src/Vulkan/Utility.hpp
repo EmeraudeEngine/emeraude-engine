@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <source_location>
 #include <string>
 #include <vector>
 
@@ -94,13 +95,14 @@ namespace EmEn::Vulkan
 
 	/**
 	 * @brief Reports a slow pipeline creation: its duration, whether the pipeline cache served it, the creating
-	 * thread (the Tracer's thread ID). A runtime compile is a stall on its thread — hundreds of ms under MoltenVK
+	 * thread (its native ID, printed in the line). A runtime compile is a stall on its thread — hundreds of ms under MoltenVK
 	 * (SPIR-V to MSL, then a Metal library) — and was invisible until 2026-10-03.
 	 * @param classId The pipeline class.
-	 * @param identifier The pipeline's identifier.
+	 * @param label The pipeline's label (empty: reported as unlabelled).
 	 * @param elapsed The creation's duration.
 	 * @param feedback The creation feedback, nullptr when unavailable.
+	 * @param location The caller's location (the creation site, not this function).
 	 * @return void
 	 */
-	EMEN_API void reportPipelineCreation (const char * classId, const std::string & identifier, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback) noexcept;
+	EMEN_API void reportPipelineCreation (const char * classId, const std::string & label, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback, const std::source_location & location = std::source_location::current()) noexcept;
 }

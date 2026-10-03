@@ -1560,6 +1560,9 @@ namespace EmEn::Scenes
 		 * components is visited (and its component lock taken).
 		 * NOTE: A cubemap skips the volume test (its 6 faces cover all directions); a CSM skips the distance test
 		 * (see the note at the top) but culls to the cascade of this pass. */
+		/* One buffer for the caster walk below, reused for every entity. */
+		std::vector< std::shared_ptr< Graphics::RenderableInstance::Abstract > > casterInstances;
+
 		const auto castFrom = [&] (const AbstractEntity & entity) noexcept {
 			/* Check whether the entity contains something to render. */
 			if ( !entity.isRenderable() )
@@ -1580,26 +1583,32 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			entity.forEachComponent([&] (const Component::Abstract & component) {
-				const auto renderableInstance = component.getRenderableInstance();
+			/* ⚠️ Copied under the components lock, prepared outside it: checkRenderableInstanceForShadowCasting() may
+			 * generate a shadow program and its pipelines, and the logic thread takes the same lock (see
+			 * populateRenderLists(), 2026-10-03). */
+			casterInstances.clear();
 
-				if ( renderableInstance == nullptr )
+			entity.forEachComponent([&casterInstances] (const Component::Abstract & component) {
+				if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 				{
-					return;
+					casterInstances.emplace_back(std::move(renderableInstance));
 				}
+			});
 
+			for ( const auto & renderableInstance : casterInstances )
+			{
 				if ( this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
 				{
-					return;
+					continue;
 				}
 
 				if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
 				{
-					return;
+					continue;
 				}
 
 				this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
-			});
+			}
 		};
 
 		/* The entities: the rendering octree first, culled to the caster volume (the light's range for a cubemap). */
@@ -1910,6 +1919,24 @@ namespace EmEn::Scenes
 			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F, cameraPosition, advanceModelHistory);
 		}
 
+		/* ⚠️ An entity's components lock is held only to COPY its renderable instances, never across their preparation:
+		 * checkRenderableInstanceForRendering() may generate a program and create its pipelines (hundreds of ms each under
+		 * MoltenVK on a cold Metal cache), and the logic thread takes the same lock in AbstractEntity::processLogics(). Held
+		 * across it, the logic stalled 2-11 s per entity on macOS (2026-10-03, the peer's samples). The shared_ptr copies
+		 * keep an instance alive even if its component is removed meanwhile. One buffer, reused for every entity. */
+		std::vector< std::shared_ptr< Graphics::RenderableInstance::Abstract > > entityInstances;
+
+		const auto collectRenderableInstances = [&entityInstances] (const AbstractEntity & entity) noexcept {
+			entityInstances.clear();
+
+			entity.forEachComponent([&entityInstances] (const Component::Abstract & component) {
+				if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
+				{
+					entityInstances.emplace_back(std::move(renderableInstance));
+				}
+			});
+		};
+
 		/* The RT list: ONE batch per renderable. Per-sub-geometry materials are looked up by the RT trace shader via
 		 * materialIndices[geometryIndex] (multi-geometry BLAS). Distance-only culling, no frustum: a reflection or a
 		 * bounce reaches what the camera does not see. */
@@ -1927,29 +1954,25 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			entity.forEachComponent([&] (const Component::Abstract & component) {
-				const auto renderableInstance = component.getRenderableInstance();
+			collectRenderableInstances(entity);
 
-				if ( renderableInstance == nullptr )
-				{
-					return;
-				}
-
+			for ( const auto & renderableInstance : entityInstances )
+			{
 				if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
 				{
-					return;
+					continue;
 				}
 
 				if ( renderableInstance->isRayTracingDisabled() || renderableInstance->isBakeOnly() || renderableInstance->isBeyondDrawDistance(distance) )
 				{
-					return;
+					continue;
 				}
 
 				const auto * renderable = renderableInstance->renderable();
 
 				if ( renderable == nullptr )
 				{
-					return;
+					continue;
 				}
 
 				const auto layerCount = renderable->layerCount();
@@ -1973,7 +1996,7 @@ namespace EmEn::Scenes
 
 					RenderBatch::create(isLighted ? m_RTOpaqueLightedList : m_RTOpaqueList, distance, renderableInstance, &worldCoordinates, 0);
 				}
-			});
+			}
 		};
 
 		/* The raster lists: distance and frustum culling of the ENTITY before any of its components is visited, then
@@ -1995,26 +2018,22 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			entity.forEachComponent([&] (const Component::Abstract & component) {
-				const auto renderableInstance = component.getRenderableInstance();
+			collectRenderableInstances(entity);
 
-				if ( renderableInstance == nullptr )
-				{
-					return;
-				}
-
+			for ( const auto & renderableInstance : entityInstances )
+			{
 				if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
 				{
-					return;
+					continue;
 				}
 
 				if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
 				{
-					return;
+					continue;
 				}
 
 				this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
-			});
+			}
 		};
 
 		/* The entities: the rendering octree first — the frustum (the view range for a cubemap) for the raster, the
@@ -2397,6 +2416,11 @@ namespace EmEn::Scenes
 	void
 	Scene::forEachRenderableInstance (const std::function< void (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept
 	{
+		/* ⚠️ The instances are GATHERED under the locks and handed to the function with no lock held: the function may
+		 * generate programs and create pipelines (initializeRenderTarget()), and holding the scene's static-entity and
+		 * node locks, or an entity's components lock, across that stalled the logic thread (2026-10-03, macOS). */
+		std::vector< std::shared_ptr< RenderableInstance::Abstract > > instances;
+
 		for ( const auto & visualComponent : m_sceneVisualComponents )
 		{
 			if ( visualComponent == nullptr )
@@ -2413,7 +2437,7 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			function(renderableInstance);
+			instances.emplace_back(renderableInstance);
 		}
 
 		/* Check renderable objects from scene static entities. */
@@ -2429,15 +2453,11 @@ namespace EmEn::Scenes
 				}
 
 				/* Go through each entity component to update visuals. */
-				staticEntity->forEachComponent([&function] (const Component::Abstract & component) {
-					const auto renderableInstance = component.getRenderableInstance();
-
-					if ( renderableInstance == nullptr )
+				staticEntity->forEachComponent([&instances] (const Component::Abstract & component) {
+					if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 					{
-						return;
+						instances.emplace_back(std::move(renderableInstance));
 					}
-
-					function(renderableInstance);
 				});
 			}
 		}
@@ -2460,17 +2480,18 @@ namespace EmEn::Scenes
 				}
 
 				/* Go through each entity component to update visuals. */
-				currentNode->forEachComponent([&function] (const Component::Abstract & component) {
-					const auto renderableInstance = component.getRenderableInstance();
-
-					if ( renderableInstance == nullptr )
+				currentNode->forEachComponent([&instances] (const Component::Abstract & component) {
+					if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 					{
-						return;
+						instances.emplace_back(std::move(renderableInstance));
 					}
-
-					function(renderableInstance);
 				});
 			}
+		}
+
+		for ( const auto & renderableInstance : instances )
+		{
+			function(renderableInstance);
 		}
 	}
 

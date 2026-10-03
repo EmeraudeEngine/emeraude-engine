@@ -42,6 +42,9 @@
 #if IS_LINUX || IS_MACOS
 #include <unistd.h>
 #endif
+#if IS_MACOS
+#include <pthread.h>
+#endif
 
 /* Local inclusions. */
 #include "Arguments.hpp"
@@ -593,17 +596,26 @@ namespace EmEn
 	void
 	Tracer::injectProcessInfo (std::stringstream & stream) const noexcept
 	{
-#if IS_LINUX
-		const auto tid = gettid();
-#elif IS_MACOS
-		const auto tid = -1;
-#elif IS_WINDOWS
-		const auto tid = GetCurrentThreadId();
-#else
-		const auto tid = -1;
-#endif
+		/* ⚠️ macOS printed -1 until 2026-10-03: a thread could not be told from another there. */
+		stream << "\n\t" "[PPID:" << m_parentProcessID << "][PID:" << m_processID << "][TID:" << Tracer::currentThreadID() << ']';
+	}
 
-		stream << "\n\t" "[PPID:" << m_parentProcessID << "][PID:" << m_processID << "][TID:" << tid << ']';
+	uint64_t
+	Tracer::currentThreadID () noexcept
+	{
+#if IS_LINUX
+		return static_cast< uint64_t >(gettid());
+#elif IS_MACOS
+		uint64_t threadID = 0;
+
+		static_cast< void >(pthread_threadid_np(nullptr, &threadID));
+
+		return threadID;
+#elif IS_WINDOWS
+		return static_cast< uint64_t >(GetCurrentThreadId());
+#else
+		return 0;
+#endif
 	}
 
 	bool

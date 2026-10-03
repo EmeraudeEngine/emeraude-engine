@@ -301,6 +301,14 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the calling thread's native ID: Linux gettid(), macOS pthread_threadid_np() (the number
+			 * `sample` and Instruments show), Windows GetCurrentThreadId(); 0 elsewhere.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			static uint64_t currentThreadID () noexcept;
+
+			/**
 			 * @brief Disables all Tracer output (both console and file).
 			 *
 			 * When disabled, all trace() calls become no-ops, producing no output.

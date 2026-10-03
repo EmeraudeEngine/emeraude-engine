@@ -1083,7 +1083,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		reportPipelineCreation(ClassId, this->identifier(), elapsed, withFeedback ? &feedback : nullptr);
+		reportPipelineCreation(ClassId, m_label, elapsed, withFeedback ? &feedback : nullptr);
 
 		this->setVulkanObjectName(this->device()->handle(), VK_OBJECT_TYPE_PIPELINE, reinterpret_cast< uint64_t >(m_handle));
 

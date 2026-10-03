@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -400,6 +401,18 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			size_t getHash (const RenderPass & renderPass) const noexcept;
 
+			/**
+			 * @brief Names the pipeline for the slow-creation report (reportPipelineCreation()): kept in Release, where the
+			 * Vulkan object identifier is compiled out.
+			 * @param label The label (the generating program's name).
+			 * @return void
+			 */
+			void
+			setLabel (std::string label) noexcept
+			{
+				m_label = std::move(label);
+			}
+
 		private:
 
 			/**
@@ -432,5 +445,6 @@ namespace EmEn::Vulkan
 			VkPipelineColorBlendStateCreateInfo m_colorBlendState{};
 			Base::StaticVector< VkDynamicState, 16 > m_dynamicStates;
 			VkPipelineDynamicStateCreateInfo m_dynamicState{};
+			std::string m_label;
 	};
 }

@@ -276,7 +276,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	reportPipelineCreation (const char * classId, const std::string & identifier, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback) noexcept
+	reportPipelineCreation (const char * classId, const std::string & label, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback, const std::source_location & location) noexcept
 	{
 		if ( elapsed < SlowPipelineCreationThreshold )
 		{
@@ -290,6 +290,11 @@ namespace EmEn::Vulkan
 			cache = (feedback->flags & VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT) != 0 ? "a pipeline cache HIT" : "a pipeline cache MISS";
 		}
 
-		TraceWarning{classId} << "Slow pipeline creation: '" << identifier << "' took " << std::chrono::duration_cast< std::chrono::milliseconds >(elapsed).count() << " ms on this thread (" << cache << ").";
+		std::stringstream message;
+
+		message << "Slow pipeline creation: " << (label.empty() ? std::string{"an unlabelled pipeline"} : "'" + label + "'") <<
+			" took " << std::chrono::duration_cast< std::chrono::milliseconds >(elapsed).count() << " ms on thread " << Tracer::currentThreadID() << " (" << cache << ").";
+
+		Tracer::warning(classId, message.str(), location);
 	}
 }

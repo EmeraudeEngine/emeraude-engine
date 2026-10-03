@@ -1,6 +1,6 @@
 ---
 id: logic-stalls-on-runtime-pipeline-compile
-title: Multi-second logic stalls on macOS after a shader change (runtime pipeline compiles)
+title: Compile pipelines off the render-list walk (the render thread still stalls on a runtime compile)
 status: open
 priority: unranked
 scope: Vulkan (GraphicsPipeline, ComputePipeline, the pipeline cache), Graphics (program generation), Core (logic / render threads)
@@ -8,7 +8,7 @@ opened: 2026-10-03
 tags: [macos, moltenvk, pipeline-cache, stall, threads]
 ---
 
-# Multi-second logic stalls on macOS after a shader change (runtime pipeline compiles)
+# Compile pipelines off the render-list walk (the render thread still stalls on a runtime compile)
 
 ## Why
 
@@ -39,10 +39,40 @@ The Tracer's thread ID (always in the file log, in the console with `enableThrea
 Linux proof: with the threshold at 0, 548 creations on a cold cache reported, all MISS with valid feedback,
 0 `VUID-`. All took under 1 ms (NVIDIA's own disk shader cache); at 50 ms, a cold cache logs nothing.
 
+## The cause, caught (macOS, 2026-10-03)
+
+The trigger is MSL NEW TO THE MACHINE: macOS keeps a per-app Metal shader cache
+(`$(getconf DARWIN_USER_CACHE_DIR)org.ln-isle.projet-alpha/{com.apple.metal, com.apple.metalfe, com.apple.gpuarchiver}`,
+284 MB there). An engine-cache miss whose MSL that cache already holds compiles in under 50 ms. With those
+directories moved aside for one launch, 15 logic stalls of 2.1–11.3 s and 446 slow creations (all MISS,
+50–501 ms, 83.8 s in all).
+
+The stacks (`sample`):
+- LOGIC, 77 % blocked: `AbstractEntity::processLogics()` → `std::recursive_mutex::lock()` on `m_componentsMutex`.
+- RENDER, 100 %: `Scene::populateRenderLists()` → `entity.forEachComponent(…)` → `checkRenderableInstanceForRendering()`
+  → `getReadyForRender()` → `generateShaderProgram()` → `vkCreateGraphicsPipelines` → the Metal compile.
+
+`forEachComponent()` holds the entity's components lock for the whole callback, so the render thread held it across
+every compile. The logic thread waited entity after entity.
+
+**Fixed (owner: prepare outside the lock).** `populateRenderLists()` (raster and RT walks), the shadow-caster walk
+and `forEachRenderableInstance()` (it held the scene-wide node and static-entity locks across
+`initializeRenderTarget()`'s preparations) now COPY the renderable instances (`shared_ptr`) under the locks and
+prepare them with none held. Linux proof, a PROOF-TEMP 150 ms delay in every graphics pipeline creation, cold cache:
+532 slow creations (≈ 80 s of compile on the render thread), logic max 45 ms, 0 cycles over 500 ms, 0 `VUID-`.
+
+The report was completed the same day. It names the pipeline by a label kept in Release (the generator's pass, e.g.
+`RenderableInstanceSpotLightPassFull`; an effect's own pipeline is "unlabelled"), and the thread by its native ID
+(`Tracer::currentThreadID()`; macOS printed `-1` before). The caller's location is passed through.
+
+A second finding: with the Metal cache cold, MoltenVK's `vkCreatePipelineCache` eagerly compiles every shader
+library of the restored engine cache, synchronously, on the MAIN thread at init (`Renderer::loadPipelineCache` →
+`MVKPipelineCache::readData` → `MVKMetalCompiler::compile`). A 153 s start there. A bigger engine pipeline cache means
+a slower cold start on macOS: relevant to the cache's size and trim policy.
+
 ## What remains
 
-- Catch one stall with the report on: on macOS, warm the cache with an older engine (e.g. `dccc0329`), then the
-  first citadel launch of a newer one whose shaders differ, under `sample`. The report names which pipelines
-  compiled and on which thread; the stacks say what the logic thread waits on.
-- Then decide the cure with the owner: compile pipelines off the critical threads (asynchronously, with a
-  fallback draw or a skipped draw meanwhile), warm the cache at load, or release the lock the logic waits on.
+- The RENDER thread still stalls on a runtime compile: a missed frame per slow pipeline, seconds in all on a cold
+  Metal cache. Cure, with the owner: compile asynchronously (a background queue, the instance skipped or drawn with
+  a fallback until ready), and/or warm the pipelines at load.
+- The cold-start compile of the restored pipeline cache on macOS (above).

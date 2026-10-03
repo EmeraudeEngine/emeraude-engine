@@ -189,6 +189,7 @@ namespace EmEn::Saphir::Generator
 		/* Create a graphics pipeline base and configure it before letting the renderer handle the final invocation on GPU.  */
 		auto graphicsPipeline = std::make_shared< GraphicsPipeline >(renderer.device());
 		graphicsPipeline->setIdentifier(TracerTag, this->name(), "GraphicsPipeline");
+		graphicsPipeline->setLabel(this->name());
 
 		{
 			auto shaderModules = renderer.shaderManager().getShaderModules(renderer.device(), m_shaderProgram, this->generatorClassId());

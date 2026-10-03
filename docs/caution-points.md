@@ -1579,6 +1579,20 @@ and white blown-out regions) to clear dark glass with the cabin behind it, as in
 `TransmissionTest` in the `+ModelViewer` still reads right. Citadel's water takes the reflection +
 transmission branch, which neither change touches; 0 `VUID-`.
 
+### Fixed: the render thread held an entity's components lock across a pipeline compile (2026-10-03)
+
+**Symptom** (macOS M2, citadel, the first launch with MSL new to the machine's Metal cache): `logicsTask`
+cycles of 2.1–11.3 s. `AbstractEntity::forEachComponent()` holds `m_componentsMutex` for its whole callback,
+and `Scene::populateRenderLists()` prepared instances inside it (`checkRenderableInstanceForRendering()` →
+program generation → `vkCreateGraphicsPipelines`, hundreds of ms each under MoltenVK). The logic thread takes
+the same lock in `AbstractEntity::processLogics()`. Linux never showed it: NVIDIA compiles in under 1 ms.
+
+**Rule:** a lock the logic thread takes (an entity's components, the scene's nodes or static entities) is held
+only to COPY what is needed (`shared_ptr` instances), never across a preparation that may generate a program or
+create a pipeline. Applied to the raster, RT and shadow-caster walks and to `forEachRenderableInstance()`.
+Proof and the remaining render-thread stall: `docs/todo/logic-stalls-on-runtime-pipeline-compile.md`. A slow
+pipeline creation (≥ 50 ms) is reported with its pass, thread and cache hit / miss (`reportPipelineCreation()`).
+
 ### Fixed: the ambient diffuse of a metal was not weighted by (1 − metalness) (2026-10-03, owner)
 
 The ambient pass's diffuse legs (the scalar `albedo / π × ambient`, the IBL `albedo × irradiance ×
