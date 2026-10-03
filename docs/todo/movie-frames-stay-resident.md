@@ -20,13 +20,14 @@ per frame).
 Split from `cpu-copies-retained-after-upload` by the owner (2026-10-03): a different mechanism from the release /
 reload of GPU-uploaded copies.
 
-**The frames were held TWICE — FIXED 2026-10-04 for `MovieResource`** (owner: "image or owned pixmap"): a
+**The frames were held TWICE — FIXED 2026-10-04** (owner: "image or owned pixmap"): a
 `MovieResource::Frame` now either SHOWS a store `ImageResource` (kept alive, never copied) or OWNS its pixels (the
 generated frames: debug, noise, parametric, `load(frames)`, the WAD flats); `Frame::pixmap()` answers either, and
 `memoryOccupied()` counts only the owned bytes (the shared ones are the images' container's). Citadel census
 2690 → 2198 MiB (movies 492 → 0, images held by the store alone 508 → 16 MiB), RSS at rest 5855 → 5515 MiB,
-0 VUID. ⚠️ `CubemapMovieResource` still COPIES its frames out of store cubemaps (`m_frames.emplace_back(
-cubemapResource->faces(), …)`, `CubemapMovieResource.cpp` load paths): same fix to do (none loaded in citadel).
+0 VUID. `CubemapMovieResource` got the same `Frame` (a store `CubemapResource`'s six faces, or owned generated
+faces; `Frame::faces()`), 2026-10-04: a temporary store movie of two store cubemaps loaded with its frames counted
+once (the cubemaps' container +91.5 MiB, the movies' unchanged), 0 VUID; liminal's generated caustics unchanged.
 
 What stays open here is the residency itself: every frame decoded, for the movie's whole life.
 

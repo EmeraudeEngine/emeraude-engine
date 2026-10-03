@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -38,6 +39,7 @@
 
 /* Local inclusions for usages. */
 #include "json/json.h"
+#include "CubemapResource.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "Types.hpp"
@@ -65,8 +67,101 @@ namespace EmEn::Graphics
 
 		public:
 
-			/** @brief A frame from the cubemap movie with 6 face pixmaps and duration in milliseconds. */
-			using Frame = std::pair< CubemapPixmaps, uint32_t >;
+			/**
+			 * @brief A frame from the movie: its six faces, either a store cubemap's (shared, never copied) or its
+			 * own (a generated frame), and its duration in milliseconds.
+			 */
+			class Frame final
+			{
+				public:
+
+					/**
+					 * @brief Constructs an empty frame, to be generated in place (ownedFaces(), setDuration()).
+					 */
+					Frame () noexcept = default;
+
+					/**
+					 * @brief Constructs a frame showing a store cubemap's faces, without copying them.
+					 * @param cubemap The loaded cubemap, kept alive by the frame.
+					 * @param duration The duration in milliseconds.
+					 */
+					Frame (std::shared_ptr< const CubemapResource > cubemap, uint32_t duration) noexcept
+						: m_cubemap{std::move(cubemap)},
+						m_duration{duration}
+					{
+
+					}
+
+					/**
+					 * @brief Returns the frame's faces: the cubemap's when the frame shows one, else its own.
+					 * @return const CubemapPixmaps &
+					 */
+					[[nodiscard]]
+					const CubemapPixmaps &
+					faces () const noexcept
+					{
+						return m_cubemap != nullptr ? m_cubemap->faces() : m_faces;
+					}
+
+					/**
+					 * @brief Returns the frame's own faces, to generate them in place.
+					 * @note A frame showing a cubemap ignores them (faces() answers the cubemap's).
+					 * @return CubemapPixmaps &
+					 */
+					[[nodiscard]]
+					CubemapPixmaps &
+					ownedFaces () noexcept
+					{
+						return m_faces;
+					}
+
+					/**
+					 * @brief Returns the bytes of the faces the frame owns: 0 for a frame showing a store cubemap (counted
+					 * by the cubemaps' container).
+					 * @return size_t
+					 */
+					[[nodiscard]]
+					size_t
+					ownedBytes () const noexcept
+					{
+						size_t bytes = 0;
+
+						for ( const auto & face : m_faces )
+						{
+							bytes += face.bytes< size_t >();
+						}
+
+						return bytes;
+					}
+
+					/**
+					 * @brief Returns the frame duration in milliseconds.
+					 * @return uint32_t
+					 */
+					[[nodiscard]]
+					uint32_t
+					duration () const noexcept
+					{
+						return m_duration;
+					}
+
+					/**
+					 * @brief Sets the frame duration in milliseconds.
+					 * @param duration The duration.
+					 * @return void
+					 */
+					void
+					setDuration (uint32_t duration) noexcept
+					{
+						m_duration = duration;
+					}
+
+				private:
+
+					std::shared_ptr< const CubemapResource > m_cubemap;
+					CubemapPixmaps m_faces{};
+					uint32_t m_duration{0};
+			};
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"CubemapMovieResource"};
@@ -138,12 +233,9 @@ namespace EmEn::Graphics
 			{
 				size_t bytes = sizeof(*this);
 
-				for ( const auto & [faces, duration] : m_frames )
+				for ( const auto & frame : m_frames )
 				{
-					for ( const auto & pixmap : faces )
-					{
-						bytes += pixmap.bytes< size_t >();
-					}
+					bytes += frame.ownedBytes();
 				}
 
 				return bytes;
@@ -178,7 +270,7 @@ namespace EmEn::Graphics
 			uint32_t
 			cubeSize () const noexcept
 			{
-				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].first[0].width());
+				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].faces()[0].width());
 			}
 
 			/**

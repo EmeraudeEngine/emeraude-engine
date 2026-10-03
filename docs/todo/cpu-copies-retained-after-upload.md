@@ -63,7 +63,11 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
 
 1. **Metadata extraction** — DONE 2026-10-04 for geometries, images and cubemaps (owner: bounds cached on the
    resource; pixel facts "extracted at release"): `docs/subsystems/resources/03-resources-specific-rules.md`
-   § CPU Copies. Movies, sounds and music keep theirs in their own items.
+   § CPU Copies. Movies, sounds and music keep theirs in their own items. ACCEPTED macOS M2 2026-10-04 (engine
+   939b3fc2): 0 VUID on citadel and sponza; sponza's cutouts identical to a44b3135 (binary-alpha promotion now via
+   `ImageResource::isBinaryAlphaMask()`); citadel census unchanged (2658.8 MiB).
+   ACCEPTED Windows (NVIDIA) 2026-10-04: census unchanged (2659 MiB), sponza's cutouts intact; the only VUIDs are
+   the known pre-existing `renderPass-12325` (mesh-shader shadow pipeline viewMask on that laptop GPU).
 2. **Release by declared usage**: "GPU only" (default for meshes and textures) frees the CPU copy after the one-shot
    consumers; "CPU too" for grounds / terrains. A release SWAPS with empty containers (`clear()` keeps the capacity,
    base `vertexfactory/07`). A resource gains a "not resident" state (no `Loaded → Unloaded` exists today).

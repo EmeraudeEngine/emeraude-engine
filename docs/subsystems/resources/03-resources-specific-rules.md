@@ -80,7 +80,8 @@ the resource, never only in the data:
   accessors compute from the pixels as before (owner decision: "extracted at release", zero cost for a resource
   never released). The release calls it FIRST.
 - **Movies share their frames** (2026-10-04): a `MovieResource::Frame` shows a store `ImageResource` (no copy) or
-  owns generated pixels; read it through `Frame::pixmap()`. A movie therefore keeps its images alive, and a release
+  owns generated pixels, read through `Frame::pixmap()`; a `CubemapMovieResource::Frame` likewise shows a store
+  `CubemapResource` or owns its faces, read through `Frame::faces()`. A movie therefore keeps its images alive, and a release
   of an image's pixels (phase 2) covers the movie frames showing it.
 - A new per-frame or late reader of a CPU copy adds its value to that metadata — or declares the resource
   "CPU too" — instead of reading the data.

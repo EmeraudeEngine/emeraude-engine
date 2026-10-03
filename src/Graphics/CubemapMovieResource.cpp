@@ -84,14 +84,14 @@ namespace EmEn::Graphics
 			{
 				for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 				{
-					if ( !m_frames[frameIndex].first[faceIndex].initialize(size, size, PixelFactory::ChannelMode::RGBA) )
+					if ( !m_frames[frameIndex].ownedFaces()[faceIndex].initialize(size, size, PixelFactory::ChannelMode::RGBA) )
 					{
 						TraceError{ClassId} << "Unable to load the default pixmap for frame #" << frameIndex << ", face #" << faceIndex << " !";
 
 						return this->setLoadSuccess(false);
 					}
 
-					if ( !m_frames[frameIndex].first[faceIndex].fill(colors[frameIndex]) )
+					if ( !m_frames[frameIndex].ownedFaces()[faceIndex].fill(colors[frameIndex]) )
 					{
 						TraceError{ClassId} << "Unable to fill the default pixmap for frame #" << frameIndex << ", face #" << faceIndex << " !";
 
@@ -99,7 +99,7 @@ namespace EmEn::Graphics
 					}
 				}
 
-				m_frames[frameIndex].second = debugFrameDuration;
+				m_frames[frameIndex].setDuration(debugFrameDuration);
 			}
 		}
 		else
@@ -113,14 +113,14 @@ namespace EmEn::Graphics
 			{
 				for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 				{
-					if ( !m_frames[frameIndex].first[faceIndex].initialize(size, size, PixelFactory::ChannelMode::RGBA) ||
-						 !m_frames[frameIndex].first[faceIndex].noise(true) )
+					if ( !m_frames[frameIndex].ownedFaces()[faceIndex].initialize(size, size, PixelFactory::ChannelMode::RGBA) ||
+						 !m_frames[frameIndex].ownedFaces()[faceIndex].noise(true) )
 					{
 						return this->setLoadSuccess(false);
 					}
 				}
 
-				m_frames[frameIndex].second = BaseTime / 10;
+				m_frames[frameIndex].setDuration(BaseTime / 10);
 			}
 		}
 
@@ -290,7 +290,7 @@ namespace EmEn::Graphics
 			}
 
 			/* Save frame data by copying the 6 faces. */
-			m_frames.emplace_back(cubemapResource->faces(), frameDuration);
+			m_frames.emplace_back(cubemapResource, frameDuration);
 		}
 
 		return true;
@@ -328,7 +328,7 @@ namespace EmEn::Graphics
 					return false;
 				}
 
-				m_frames.emplace_back(cubemapResource->faces(), duration);
+				m_frames.emplace_back(cubemapResource, duration);
 			}
 			else
 			{
@@ -353,7 +353,7 @@ namespace EmEn::Graphics
 	CubemapMovieResource::updateDuration () noexcept
 	{
 		m_duration = std::accumulate(m_frames.cbegin(), m_frames.cend(), 0U, [] (uint32_t duration, const auto & frame) {
-			return duration + frame.second;
+			return duration + frame.duration();
 		});
 	}
 
@@ -374,14 +374,14 @@ namespace EmEn::Graphics
 			faceIndex = 0;
 		}
 
-		return m_frames[frameIndex].first[faceIndex];
+		return m_frames[frameIndex].faces()[faceIndex];
 	}
 
 	bool
 	CubemapMovieResource::isGrayScale () const noexcept
 	{
 		return std::ranges::all_of(m_frames, [] (const auto & frame) {
-			return std::ranges::all_of(frame.first, [] (const auto & pixmap) {
+			return std::ranges::all_of(frame.faces(), [] (const auto & pixmap) {
 				if ( !pixmap.isValid() )
 				{
 					return false;
@@ -407,9 +407,9 @@ namespace EmEn::Graphics
 		auto green = 0.0F;
 		auto blue = 0.0F;
 
-		for ( const auto & faces : m_frames | std::views::keys )
+		for ( const auto & frame : m_frames )
 		{
-			for ( const auto & face : faces )
+			for ( const auto & face : frame.faces() )
 			{
 				const auto average = face.averageColor();
 
@@ -438,12 +438,12 @@ namespace EmEn::Graphics
 
 			for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 			{
-				if ( m_frames[frameIndex].second >= time )
+				if ( m_frames[frameIndex].duration() >= time )
 				{
 					return frameIndex;
 				}
 
-				time -= m_frames[frameIndex].second;
+				time -= m_frames[frameIndex].duration();
 			}
 		}
 
@@ -510,7 +510,7 @@ namespace EmEn::Graphics
 		{
 			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{
-				if ( !m_frames[frameIndex].first[faceIndex].initialize(faceSize, faceSize, PixelFactory::ChannelMode::RGBA) )
+				if ( !m_frames[frameIndex].ownedFaces()[faceIndex].initialize(faceSize, faceSize, PixelFactory::ChannelMode::RGBA) )
 				{
 					TraceError{ClassId} << "Unable to initialize pixmap for caustics frame #" << frameIndex << ", face #" << faceIndex << " !";
 
@@ -518,7 +518,7 @@ namespace EmEn::Graphics
 				}
 			}
 
-			m_frames[frameIndex].second = frameDuration;
+			m_frames[frameIndex].setDuration(frameDuration);
 		}
 
 		/* Per-frame generation lambda. Each frame writes to its own pixmap,
@@ -574,7 +574,7 @@ namespace EmEn::Graphics
 						/* Map caustic value to intensity. */
 						const auto intensity = baseIntensity + (causticValue * (causticIntensity - baseIntensity));
 
-						m_frames[frameIndex].first[faceIndex].setPixel(
+						m_frames[frameIndex].ownedFaces()[faceIndex].setPixel(
 							col, row,
 							PixelFactory::Color< float >{intensity, intensity, intensity, 1.0F}
 						);
@@ -632,7 +632,7 @@ namespace EmEn::Graphics
 		{
 			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{
-				if ( !m_frames[frameIndex].first[faceIndex].initialize(faceSize, faceSize, PixelFactory::ChannelMode::RGBA) )
+				if ( !m_frames[frameIndex].ownedFaces()[faceIndex].initialize(faceSize, faceSize, PixelFactory::ChannelMode::RGBA) )
 				{
 					TraceError{ClassId} << "Unable to initialize pixmap for refractive caustics frame #" << frameIndex << ", face #" << faceIndex << " !";
 
@@ -640,7 +640,7 @@ namespace EmEn::Graphics
 				}
 			}
 
-			m_frames[frameIndex].second = frameDuration;
+			m_frames[frameIndex].setDuration(frameDuration);
 		}
 
 		/* Per-frame generation lambda. */
@@ -730,7 +730,7 @@ namespace EmEn::Graphics
 						/* Map to intensity range. */
 						const auto intensity = baseIntensity + (value * (peakIntensity - baseIntensity));
 
-						m_frames[frameIndex].first[faceIndex].setPixel(
+						m_frames[frameIndex].ownedFaces()[faceIndex].setPixel(
 							col, row,
 							PixelFactory::Color< float >{intensity, intensity, intensity, 1.0F}
 						);

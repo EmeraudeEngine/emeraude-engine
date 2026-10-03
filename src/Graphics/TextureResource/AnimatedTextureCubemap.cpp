@@ -63,9 +63,9 @@ namespace EmEn::Graphics::TextureResource
 	AnimatedTextureCubemap::createTexture (Renderer & renderer) noexcept
 	{
 		/* Validate all faces of all frames. */
-		for ( const auto & [faces, duration] : m_localData->frames() )
+		for ( const auto & frame : m_localData->frames() )
 		{
-			for ( const auto & pixmap : faces )
+			for ( const auto & pixmap : frame.faces() )
 			{
 				if ( !this->validateTexture(pixmap, !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
 				{

@@ -698,9 +698,9 @@ namespace EmEn::Vulkan
 		/* Get the total bytes requested for all frames x all faces. */
 		size_t totalBytes = 0;
 
-		for ( const auto & [faces, duration] : frames )
+		for ( const auto & frame : frames )
 		{
-			for ( const auto & pixmap : faces )
+			for ( const auto & pixmap : frame.faces() )
 			{
 				totalBytes += pixmap.bytes();
 			}
@@ -711,9 +711,9 @@ namespace EmEn::Vulkan
 		return transferManager.uploadImage(*this, totalBytes, [&frames] (const Buffer & stagingBuffer) {
 			size_t offset = 0;
 
-			for ( const auto & [faces, duration] : frames )
+			for ( const auto & frame : frames )
 			{
-				for ( const auto & pixmap : faces )
+				for ( const auto & pixmap : frame.faces() )
 				{
 					if ( !stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
 					{
