@@ -70,9 +70,19 @@ library of the restored engine cache, synchronously, on the MAIN thread at init 
 `MVKPipelineCache::readData` → `MVKMetalCompiler::compile`). A 153 s start there. A bigger engine pipeline cache means
 a slower cold start on macOS: relevant to the cache's size and trim policy.
 
+**Accepted on macOS M2** (engine `e743b244`, the catch scenario: a cold Metal cache, the engine pipeline cache and
+shader binaries removed, validation on). The miss workload was the same as the catch: 446 slow creations, all MISS,
+82.5 s against 83.8 s. `logicsTask` over 500 ms: 0 against 15; the max is 278 ms against 11 324 ms. 0 `VUID-`. The
+"on thread" IDs match `sample`'s exactly: 422 creations on the render thread, 22 on the main thread at start-up,
+and 2 on the LOGIC thread (below).
+
 ## What remains
 
 - The RENDER thread still stalls on a runtime compile: a missed frame per slow pipeline, seconds in all on a cold
   Metal cache. Cure, with the owner: compile asynchronously (a background queue, the instance skipped or drawn with
   a fallback until ready), and/or warm the pipelines at load.
 - The cold-start compile of the restored pipeline cache on macOS (above).
+- Two COMPUTE pipelines are created on the LOGIC thread itself (macOS, 124 and 144 ms, unlabelled, right after
+  "Scene will use environment cubemap …": most likely the IBL baker's). A cold miss there lands on the logic.
+  Move that creation off the logic thread, or pre-create the baker's pipelines at start-up.
+- Label the effects' and compute pipelines too (46 "an unlabelled pipeline" lines on macOS).
