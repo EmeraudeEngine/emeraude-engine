@@ -73,7 +73,9 @@ namespace EmEn::Graphics::Geometry
 			vertexAttributes,
 			this->getNormalsFormat(),
 			this->getPrimaryTextureCoordinatesFormat(),
-			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None
+			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None,
+			VertexFactory::SkeletalAnimationType::None,
+			this->getSecondaryTextureCoordinatesFormat()
 		);
 
 		if ( vertexAttributes.empty() || vertexElementCount == 0 )
@@ -121,7 +123,9 @@ namespace EmEn::Graphics::Geometry
 			vertexAttributes,
 			this->getNormalsFormat(),
 			this->getPrimaryTextureCoordinatesFormat(),
-			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None
+			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None,
+			VertexFactory::SkeletalAnimationType::None,
+			this->getSecondaryTextureCoordinatesFormat()
 		);
 
 		Tracer::error(ClassId, "Updating geometry in video memory is not handled yet !");

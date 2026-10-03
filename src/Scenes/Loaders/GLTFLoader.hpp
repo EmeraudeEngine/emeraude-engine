@@ -227,6 +227,12 @@ namespace EmEn::Scenes::Loaders
 			 * primitives. Enabling the flag on the shared resource would make the shader read an
 			 * attribute those primitives' geometry does not provide. */
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materialsVertexColor;
+			/* Whether each glTF material samples the secondary texture coordinates (TEXCOORD_1) with a map, and its
+			 * `…-uv0` variant: every map back on TEXCOORD_0, for a primitive that lacks TEXCOORD_1 (an invalid asset —
+			 * glTF requires the set a material samples). Without it that primitive's shader would read an attribute its
+			 * mesh may not carry (the presence wall: docs/todo/vertex-attribute-presence-belongs-to-geometry.md). */
+			std::vector< uint8_t > m_materialSamplesSecondarySet;
+			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materialsPrimarySetOnly;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
 			std::vector< std::shared_ptr< Base::VertexFactory::Shape< float > > > m_shapes;
 			/* Skeletal animation data — indexed by glTF skin index. */

@@ -325,9 +325,9 @@ texel. Each loader owns the translation from its format's semantics:
   applied UNCONDITIONALLY at the sampling sites (shader program cache contract — values through
   the UBO, never GLSL literals). ⚠️ Ignoring the extension does not fail: the texture renders
   STRETCHED over the whole UV range (measured on CarConcept: tire treads, brake discs, paint
-  flake maps with scales up to [200,400]). ⚠️ NOT supported, logged and ignored: the extension's
-  `rotation` and its `texCoord` override (multi-UV gap). ⚠️ RT hit shading does NOT apply the
-  transforms yet (raster-only) — known parity gap.
+  flake maps with scales up to [200,400]). The extension's `rotation` is applied since 2026-09-14
+  and its `texCoord` override since 2026-10-03 (the secondary set: `03-implemented-loaders/01-gltfloader.md`).
+  ⚠️ RT hit shading does NOT apply the transforms yet (raster-only) — known parity gap.
 - **`KHR_materials_transmission` goes through the GRAB PASS** (`setTransmissionComponentFromGrabPass`):
   the extension's semantics is seeing THROUGH the surface — a car window shows the interior.
   The cubemap variant refracts the sky only (measured on CarConcept: the glass hid the cabin).

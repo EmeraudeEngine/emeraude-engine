@@ -86,7 +86,7 @@ reflection from a sharp transmission. Unresolvable with this metric, not a defec
 defect**, plus one probe of ours. Not a percentage of glTF 2.0 — the corpus holds 148 models, and
 the gaps the bench does not exercise at all are unchanged and
 listed in [`src/Scenes/Loaders/AGENTS.md`](../../src/Scenes/Loaders/AGENTS.md) § *Known gaps*: no
-multi-UV, four skin influences, no morph targets, `TRIANGLES` only, no rigid-node animation, no GPU
+`TEXCOORD_2+` (sets 0 and 1 are read since 2026-10-03), four skin influences, no morph targets, `TRIANGLES` only, no rigid-node animation, no GPU
 instancing — plus `KHR_materials_transmission`'s texture, the last extension reading only its
 scalar factor.
 
@@ -157,13 +157,6 @@ half-fix taken deliberately:
       out of the 2026-09-14 fix on purpose, to keep the rows without a coat normal map bit-exact as
       the control. Fixing it moves `Simple coating` and `Roughness variations`, so it needs its own
       before/after.
-- [ ] `KHR_texture_transform`'s per-`TextureInfo` **`texCoord` override** — the multi-UV gap
-      (`GLTFLoader.cpp:1000`). Walls into
-      [`vertex-attribute-presence-belongs-to-geometry.md`](vertex-attribute-presence-belongs-to-geometry.md).
-      ⚠️ **Seen in a demo (2026-10-03)**: Khronos' CarConcept (citadel's car) bakes its occlusion on `TEXCOORD_1`
-      (`occlusionTexture.texCoord: 1`, 25 of its 29 materials, the paint included). Read with set 0, the bake
-      lays dark patches over the red paint ("blotchy", Windows and Linux shots). The loader ignores every
-      `TextureInfo.texCoord`, not only the transform's override.
 - [ ] ⚠️ **The node-HIERARCHY import path is not covered by the entity-name fix.**
       `SceneDataConsumer` also builds children with `createChild(nodeDesc.name)` (the `+ModelViewer`
       file path, `AssetRoot`); whether that registry tolerates a duplicate is UNVERIFIED. Measure it

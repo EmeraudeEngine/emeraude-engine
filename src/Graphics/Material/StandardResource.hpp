@@ -435,6 +435,25 @@ namespace EmEn::Graphics::Material
 			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultTextureFactor, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
+			 * @brief Selects the texture coordinate SET a texture component samples (glTF's TextureInfo.texCoord): 0 the
+			 * primary, 1 the secondary (a geometry built with EnableSecondaryTextureCoordinates must then carry it).
+			 * @note Before the resource is created. The set rides the component's UVW table entry (a UBO value): no
+			 * program per combination.
+			 * @param componentType The texture component.
+			 * @param channel The set, 0 or 1.
+			 * @return bool False when created, the set does not exist, or the component is not a texture.
+			 */
+			bool setComponentUVWChannel (ComponentType componentType, uint32_t channel) noexcept;
+
+			/**
+			 * @brief Puts every texture component back on the primary texture coordinates (a loader's fallback for a
+			 * geometry that lacks the secondary set its source material asks for).
+			 * @note Before the resource is created.
+			 * @return bool False when the resource is created.
+			 */
+			bool usePrimaryTextureCoordinatesOnly () noexcept;
+
+			/**
 			 * @brief Sets the UV transform of a texture component (KHR_texture_transform).
 			 * @warning This function is available before creation time. The rotation part of the
 			 * extension is NOT supported (logged and ignored by the loaders).
@@ -1911,6 +1930,9 @@ namespace EmEn::Graphics::Material
 			static constexpr auto UVWTransformTableOffset{56UL};
 			static constexpr auto UVWRotationTableOffset{72UL};
 			static constexpr auto UVWIndexTableOffset{88UL};
+			/** @brief The bit of a UVW table entry that selects the secondary texture coordinates (bits 0-2: the transform slot). */
+			static constexpr auto SecondaryTextureCoordinatesBit{8.0F};
+			static_assert(UVWTransformSlots <= 8UL, "the UVW table entry packs the transform slot in bits 0-2, the texture coordinate set in bit 3");
 			/** @brief POM parameters vec4: (max layer count, fade start, fade end, unused). */
 			static constexpr auto ParallaxParametersOffset{116UL};
 			/** @brief POM handover vec4 on a mesh-shading surface: (geometry-to-parallax start, end, unused, unused). */

@@ -81,7 +81,9 @@ namespace EmEn::Graphics::Geometry
 			this->getNormalsFormat(),
 			this->getPrimaryTextureCoordinatesFormat(),
 			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None,
-			skeletalAnimationType
+			skeletalAnimationType,
+			/* The shape's secondary set (glTF TEXCOORD_1), after the primary one in the vertex format. */
+			this->getSecondaryTextureCoordinatesFormat()
 		);
 
 		if ( vertexAttributes.empty() || indices.empty() || vertexElementCount == 0 )

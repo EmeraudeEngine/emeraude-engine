@@ -1495,6 +1495,44 @@ namespace EmEn::Graphics::Material
 			m_materialProperties[UVWIndexTableOffset + index] = 0.0F;
 		}
 
+		/* The texture coordinate SET of each map (glTF's TextureInfo.texCoord, JSON "Channel"), folded into the same
+		 * UBO entry as its transform: bit 3 (+8) selects the secondary set, bits 0-2 the transform slot (fewer than 8
+		 * slots). A VALUE, never a literal: two materials differing only in a map's set share a program (2026-10-03). */
+		bool usesSecondarySet = false;
+
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component->type() != Component::Type::Texture )
+			{
+				continue;
+			}
+
+			const auto * textureComponent = static_cast< const Texture * >(component.get());
+
+			/* A volumetric map keeps its plain 3D lookup (transformedTexCoords()). */
+			if ( textureComponent->isVolumetricTexture() )
+			{
+				continue;
+			}
+
+			const auto channel = textureComponent->UVWChannel();
+
+			if ( channel == 1 )
+			{
+				usesSecondarySet = true;
+				m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] = SecondaryTextureCoordinatesBit;
+			}
+			else if ( channel > 1 )
+			{
+				TraceWarning{ClassId} << "PBR material '" << this->name() << "' samples a map with texture coordinate set " << channel << "; only sets 0 and 1 exist, set 0 is used.";
+			}
+		}
+
+		if ( usesSecondarySet )
+		{
+			this->enableFlag(UseSecondaryTextureCoordinates);
+		}
+
 		/* ⚠️ EVERY texture component, not a fixed list of six. The transform belongs to the
 		 * component (`Texture::UVWScale/UVWOffset/UVWRotation`), so the sheen, clear coat,
 		 * specular, iridescence, transmission and volume maps all carry one — they simply had
@@ -1569,7 +1607,8 @@ namespace EmEn::Graphics::Material
 				m_materialProperties[UVWRotationTableOffset + (slot * 4) + 1] = sine;
 			}
 
-			m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] = static_cast< float >(slot);
+			/* The set bit written above is kept: the transform slot is added to it. */
+			m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] += static_cast< float >(slot);
 		}
 
 		if ( overflowed )
@@ -1605,6 +1644,62 @@ namespace EmEn::Graphics::Material
 		textureComponent->setUVWScale({scale[0], scale[1], 1.0F});
 		textureComponent->setUVWOffset({offset[0], offset[1], 0.0F});
 		textureComponent->setUVWRotation(rotation);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setComponentUVWChannel (ComponentType componentType, uint32_t channel) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to change a component texture coordinate set.";
+
+			return false;
+		}
+
+		if ( channel > 1 )
+		{
+			TraceWarning{ClassId} << "PBR material '" << this->name() << "': texture coordinate set " << channel << " does not exist (0 or 1).";
+
+			return false;
+		}
+
+		const auto componentIt = m_components.find(componentType);
+
+		if ( componentIt == m_components.cend() || componentIt->second->type() != Component::Type::Texture )
+		{
+			TraceWarning{ClassId} << "PBR material '" << this->name() << "' has no texture component to set a texture coordinate set on.";
+
+			return false;
+		}
+
+		static_cast< Texture * >(componentIt->second.get())->setUVWChannel(channel);
+
+		return true;
+	}
+
+	bool
+	StandardResource::usePrimaryTextureCoordinatesOnly () noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to change the texture coordinate sets.";
+
+			return false;
+		}
+
+		for ( auto & [componentType, component] : m_components )
+		{
+			if ( component->type() == Component::Type::Texture )
+			{
+				static_cast< Texture * >(component.get())->setUVWChannel(0);
+			}
+		}
 
 		return true;
 	}
@@ -3294,7 +3389,20 @@ namespace EmEn::Graphics::Material
 		const auto slot = static_cast< size_t >(componentType);
 		const auto index =
 			std::string{MaterialUB(UniformBlock::Component::UVWIndex)} + "[" + std::to_string(slot / 4) + "][" + std::to_string(slot % 4) + "]";
-		const auto entry = "int(" + index + ")";
+		/* With the secondary set in use, the entry also carries the map's set in bit 3 (syncComponentUVWTransforms()). */
+		const bool secondarySet = this->usingSecondaryTextureCoordinates();
+		const auto entry = secondarySet ? "(int(" + index + ") & 7)" : "int(" + index + ")";
+		std::string baseCoordinates = coordinates;
+
+		if ( baseCoordinates.empty() )
+		{
+			baseCoordinates = std::string{textCoords(component)};
+
+			if ( secondarySet )
+			{
+				baseCoordinates = "((int(" + index + ") & 8) != 0 ? " + std::string{ShaderVariable::Secondary2DTextureCoordinates} + " : " + baseCoordinates + ")";
+			}
+		}
 		const auto transform = std::string{MaterialUB(UniformBlock::Component::UVWTransform)} + "[" + entry + "]";
 		const auto rotation = std::string{MaterialUB(UniformBlock::Component::UVWRotation)} + "[" + entry + "]";
 
@@ -3313,7 +3421,7 @@ namespace EmEn::Graphics::Material
 		std::stringstream expression;
 		expression <<
 			"(mat2(" << rotation << ".x, -" << rotation << ".y, " << rotation << ".y, " << rotation << ".x)"
-			" * (" << (coordinates.empty() ? std::string{textCoords(component)} : coordinates) << " * " << transform << ".xy)"
+			" * (" << baseCoordinates << " * " << transform << ".xy)"
 			" + " << transform << ".zw)";
 
 		return expression.str();

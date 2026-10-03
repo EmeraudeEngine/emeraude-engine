@@ -52,6 +52,12 @@ Then no material variant is needed, and the same fix generalises to every other 
 (`TEXCOORD_1+`, a second joint set, …), which is the real prize: those gaps will hit exactly this
 wall.
 
+⚠️ **`TEXCOORD_1` hit it (2026-10-03, owner: the UV set as a UBO value) and got the same answer**: the set
+attribute goes into the mesh's VBO when one primitive needs it, and a primitive whose material samples
+set 1 without `TEXCOORD_1` gets a `…-uv0` material variant (every map on set 0). It is the second
+variant family of the glTF loader (`docs/subsystems/scenes-loaders/03-implemented-loaders/01-gltfloader.md`);
+the refactor above would retire both.
+
 ## ⚠️ Traps
 
 - **`StandardResource::albedoExpression()` is `const` and is called from sites with no generator in

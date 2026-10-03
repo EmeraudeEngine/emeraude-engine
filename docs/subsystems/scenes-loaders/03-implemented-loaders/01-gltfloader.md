@@ -266,11 +266,11 @@ one asset**, 8 bitstreams — renders with its transmissive lenses. emeraude-bas
 #### Known gaps (glTF 2.0)
 
 Not a wish list — these are silent today, so a diagnosis that assumes them present starts wrong:
-`TRIANGLES` is the only primitive mode read; no `TEXCOORD_1+` (no multi-UV), no `JOINTS_1/WEIGHTS_1`
-(4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are read — the
-filters are not, nor is the per-`TextureInfo` `texCoord` index; all of `KHR_texture_transform` is applied
-(offset, scale **and rotation**) on **every** map since 2026-09-14, except its `texCoord` override, which is
-the multi-UV gap;
+`TRIANGLES` is the only primitive mode read; no `TEXCOORD_2+` (sets 0 and 1 only, below), no
+`JOINTS_1/WEIGHTS_1` (4 influences max); no morph targets; of the glTF sampler only `wrapS`/`wrapT` are
+read — the filters are not; all of `KHR_texture_transform` is applied (offset, scale **and rotation**) on
+**every** map since 2026-09-14, and its `texCoord` override since 2026-10-03 (below); the anisotropy,
+iridescence and volume maps sample set 0 whatever their `texCoord` (a warning names the material);
 every extension in the parser mask is now read;
 ⚠️ when one is nevertheless missing the loader **names** it: `reportMissingExtensions()` re-parses
 with every extension fastgltf knows — the only way to recover `extensionsRequired` from a file
@@ -459,7 +459,32 @@ VUID**, which is the real proof the variant split is right: a material/geometry 
 the vertex input state on those 17 shared materials.
 ⚠️ **The architecture is still upside down** and it is recorded as such:
 [`docs/todo/vertex-attribute-presence-belongs-to-geometry.md`](../../../todo/vertex-attribute-presence-belongs-to-geometry.md).
-The next optional attribute (`TEXCOORD_1+`, a second joint set) will hit exactly this wall.
+`TEXCOORD_1` hit exactly this wall and got the same answer (below: the `…-uv0` variant).
+
+**`TEXCOORD_1`, the secondary texture coordinates (owner, 2026-10-03)**. Every `TextureInfo.texCoord`
+(and its `KHR_texture_transform` override) is read with the map's transform (`UVTransform`,
+`applyTextureCoordinates()`). The set goes to the material: `StandardResource::setComponentUVWChannel()`
+stores it on the texture component (its `UVWChannel`, which the JSON `"Channel"` key also sets). The
+material folds it into the component's UBO UVW entry: bit 3 = set 1, bits 0–2 = the transform slot.
+`transformedTexCoords()` picks the set per map at run time, so no program per combination. A material
+with any map on set 1 gets `UseSecondaryTextureCoordinates`, whose vertex code declares the attribute.
+- **The geometry** (per MESH, as `COLOR_0`): `EnableSecondaryTextureCoordinates` as soon as one primitive
+  has `TEXCOORD_1` AND its material samples set 1. The set is read for those primitives only, the others
+  keep (0, 0). An asset whose second unwrap no material samples (Sponza.ktx2: `TEXCOORD_1` on 371
+  primitives, 0 of its 37 materials) pays nothing.
+- **The `…-uv0` variant**: a primitive whose material samples set 1 but which lacks `TEXCOORD_1` (invalid
+  glTF) gets that material with every map back on set 0 (`usePrimaryTextureCoordinatesOnly()`, inside
+  `configure` before the load success, which may create the resource). Its `COLOR_0`, if any, is
+  ignored. A warning names the material. Never the plain material: its shader would read an attribute
+  the mesh may not carry.
+- **Measured** (Linux, `+ModelViewer`, 0 `VUID-`): `MultiUVTest` (its logo is the emissive on set 1)
+  lays the logo on each face as Khronos' reference does. CarConcept (25 of 29 materials bake their
+  occlusion on set 1): the viewer barely moves (0.01 %), because the baked occlusion only darkens the
+  raster ambient, which is ~0 there and under an indirect-diffuse provider.
+- ⚠️ **The CarConcept's "blotchy paint" was NOT this gap** (the 2026-10-03 attribution was wrong). The
+  paint is metallic, so it has no ambient diffuse for an occlusion to darken. The patches are in the RT
+  lane's ray-traced reflections; the screen-space lane is smooth:
+  [`docs/todo/rtr-metallic-paint-blotches.md`](../../../todo/rtr-metallic-paint-blotches.md).
 
 **Authored `TANGENT` is READ since 2026-08-28** (it was ignored and always recomputed, and the
 bitangent handedness did not exist). glTF's `TANGENT` is a **vec4** whose W is the bitangent
@@ -538,5 +563,6 @@ conformance asset declares one on them.
 
 > [!NOTE]
 > Two of those gaps are **live on the compressed Sponza**, which is now the reference asset:
-> `Sponza.ktx2.glb` declares `TEXCOORD_1` on 371 of its 448 primitives and `COLOR_0` on 67. Both
-> are read past in silence. "The second UV set is missing" is a known gap, not a KTX2 regression.
+> `Sponza.ktx2.glb` declares `TEXCOORD_1` on 371 of its 448 primitives and `COLOR_0` on 67. Since
+> 2026-10-03 `TEXCOORD_1` is read for the primitives whose material samples it: none of Sponza's 37 materials
+> does, so it is still skipped there, on purpose.

@@ -295,6 +295,78 @@ namespace
 
 		return earliest;
 	}
+
+	/* A texture's UV transform (KHR_texture_transform) and its texture coordinate SET: glTF's TextureInfo.texCoord,
+	 * overridden by the transform's own texCoord. `present` is set when either applies: an identity transform is
+	 * harmless, and the set must reach the material (2026-10-03: the set was ignored, every map sampled TEXCOORD_0 —
+	 * CarConcept's occlusion, baked on TEXCOORD_1, blotched its paint). */
+	struct UVTransform final
+	{
+		Vector< 2, float > scale{1.0F, 1.0F};
+		Vector< 2, float > offset{0.0F, 0.0F};
+		float rotation{0.0F};
+		uint32_t set{0};
+		bool present{false};
+	};
+
+	/* The texture coordinate set a texture info samples (0 without one). */
+	template< typename texture_info_t >
+	[[nodiscard]]
+	uint32_t
+	textureCoordinateSet (const texture_info_t & textureInfoOpt) noexcept
+	{
+		if ( !textureInfoOpt.has_value() )
+		{
+			return 0;
+		}
+
+		if ( textureInfoOpt->transform != nullptr && textureInfoOpt->transform->texCoordIndex.has_value() )
+		{
+			return static_cast< uint32_t >(*textureInfoOpt->transform->texCoordIndex);
+		}
+
+		return static_cast< uint32_t >(textureInfoOpt->texCoordIndex);
+	}
+
+	/* Whether a glTF material samples the secondary set with a map the engine binds with its set. */
+	[[nodiscard]]
+	bool
+	materialSamplesSecondarySet (const fastgltf::Material & material) noexcept
+	{
+		const auto & pbr = material.pbrData;
+		bool secondary = textureCoordinateSet(pbr.baseColorTexture) == 1 || textureCoordinateSet(pbr.metallicRoughnessTexture) == 1 ||
+			textureCoordinateSet(material.normalTexture) == 1 || textureCoordinateSet(material.occlusionTexture) == 1 ||
+			textureCoordinateSet(material.emissiveTexture) == 1;
+
+		if ( material.sheen != nullptr )
+		{
+			secondary = secondary || textureCoordinateSet(material.sheen->sheenColorTexture) == 1 || textureCoordinateSet(material.sheen->sheenRoughnessTexture) == 1;
+		}
+
+		if ( material.clearcoat != nullptr )
+		{
+			secondary = secondary || textureCoordinateSet(material.clearcoat->clearcoatTexture) == 1 || textureCoordinateSet(material.clearcoat->clearcoatRoughnessTexture) == 1 || textureCoordinateSet(material.clearcoat->clearcoatNormalTexture) == 1;
+		}
+
+		if ( material.specular != nullptr )
+		{
+			secondary = secondary || textureCoordinateSet(material.specular->specularTexture) == 1 || textureCoordinateSet(material.specular->specularColorTexture) == 1;
+		}
+
+		return secondary;
+	}
+
+	/* Applies a texture's UV transform and its texture coordinate set to its material component. */
+	void
+	applyTextureCoordinates (Material::StandardResource & material, ComponentType componentType, const UVTransform & transform) noexcept
+	{
+		material.setComponentUVWTransform(componentType, transform.scale, transform.offset, transform.rotation);
+
+		if ( transform.set == 1 )
+		{
+			static_cast< void >(material.setComponentUVWChannel(componentType, 1));
+		}
+	}
 }
 
 namespace EmEn::Scenes::Loaders
@@ -2196,6 +2268,8 @@ namespace EmEn::Scenes::Loaders
 	{
 		m_materials.resize(asset.materials.size());
 		m_materialsVertexColor.resize(asset.materials.size());
+		m_materialsPrimarySetOnly.resize(asset.materials.size());
+		m_materialSamplesSecondarySet.assign(asset.materials.size(), 0);
 		m_textures.resize(asset.textures.size());
 
 		/* Which materials does a COLOR_0 primitive actually use?
@@ -2216,6 +2290,49 @@ namespace EmEn::Scenes::Loaders
 				if ( primitive.findAttribute("COLOR_0") != primitive.attributes.end() && primitive.materialIndex.has_value() )
 				{
 					materialsUsedWithVertexColor.insert(primitive.materialIndex.value());
+				}
+			}
+		}
+
+		/* Which materials sample TEXCOORD_1, and which of them a primitive WITHOUT it uses (an invalid asset: they get
+		 * the `…-uv0` variant, every map on TEXCOORD_0). */
+		std::unordered_set< size_t > materialsNeedingPrimarySetOnly;
+
+		for ( size_t materialIndex = 0; materialIndex < asset.materials.size(); ++materialIndex )
+		{
+			const auto & material = asset.materials[materialIndex];
+
+			m_materialSamplesSecondarySet[materialIndex] = materialSamplesSecondarySet(material) ? 1 : 0;
+
+			/* The maps bound without their set (no UV transform path either): said, not silently mis-sampled. */
+			const bool unsupportedSet =
+				( material.anisotropy != nullptr && textureCoordinateSet(material.anisotropy->anisotropyTexture) != 0 ) ||
+				( material.iridescence != nullptr && ( textureCoordinateSet(material.iridescence->iridescenceTexture) != 0 || textureCoordinateSet(material.iridescence->iridescenceThicknessTexture) != 0 ) ) ||
+				( material.volume != nullptr && textureCoordinateSet(material.volume->thicknessTexture) != 0 );
+
+			if ( unsupportedSet )
+			{
+				TraceWarning{ClassId} << "Material '" << material.name << "': an anisotropy, iridescence or volume map samples a texture coordinate set other than 0, which those maps do not support; they sample set 0.";
+			}
+		}
+
+		for ( const auto & glTFMesh : asset.meshes )
+		{
+			for ( const auto & primitive : glTFMesh.primitives )
+			{
+				if ( !primitive.materialIndex.has_value() || primitive.materialIndex.value() >= asset.materials.size() )
+				{
+					continue;
+				}
+
+				const auto materialIndex = primitive.materialIndex.value();
+
+				if ( m_materialSamplesSecondarySet[materialIndex] != 0 && primitive.findAttribute("TEXCOORD_1") == primitive.attributes.end() )
+				{
+					if ( materialsNeedingPrimarySetOnly.insert(materialIndex).second )
+					{
+						TraceWarning{ClassId} << "Material " << materialIndex << " samples TEXCOORD_1, which a primitive of mesh '" << glTFMesh.name << "' lacks (invalid glTF): that primitive samples TEXCOORD_0.";
+					}
 				}
 			}
 		}
@@ -2352,17 +2469,22 @@ namespace EmEn::Scenes::Loaders
 			 * `StandardResource::transformedTexCoords()` for the composition order and the sign
 			 * convention, both of which the extension specifies and both of which are easy to
 			 * invert into a plausible-looking wrong result.
-			 * A texCoordIndex override is still NOT supported: logged. */
-			struct UVTransform
-			{
-				Vector< 2, float > scale{1.0F, 1.0F};
-				Vector< 2, float > offset{0.0F, 0.0F};
-				float rotation{0.0F};
-				bool present{false};
-			};
-
+			 * The texture coordinate SET (TextureInfo.texCoord and the transform's override) rides the same struct
+			 * since 2026-10-03 (UVTransform, applyTextureCoordinates()). */
 			const auto readUVTransform = [&glTFMaterial] (const auto & textureInfoOpt) -> UVTransform {
 				UVTransform out;
+
+				const auto set = textureCoordinateSet(textureInfoOpt);
+
+				if ( set == 1 )
+				{
+					out.set = 1;
+					out.present = true;
+				}
+				else if ( set > 1 )
+				{
+					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': texture coordinate set " << set << " is not supported (sets 0 and 1), set 0 is used.";
+				}
 
 				if ( !textureInfoOpt.has_value() || textureInfoOpt->transform == nullptr )
 				{
@@ -2374,11 +2496,6 @@ namespace EmEn::Scenes::Loaders
 				out.offset = {transform.uvOffset.x(), transform.uvOffset.y()};
 				out.rotation = static_cast< float >(transform.rotation);
 				out.present = true;
-
-				if ( transform.texCoordIndex.has_value() && *transform.texCoordIndex != 0 )
-				{
-					TraceWarning{ClassId} << "Material '" << glTFMaterial.name << "': KHR_texture_transform texCoord override is not supported (multi-UV gap), ignored.";
-				}
 
 				return out;
 			};
@@ -2761,7 +2878,7 @@ namespace EmEn::Scenes::Loaders
 					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex), specularUVTransform, specularColorUVTransform,
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
-				] (auto & materialResource) {
+				] (auto & materialResource, bool primarySetOnly = false) {
 					/* Albedo. */
 					/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
 					 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
@@ -2774,7 +2891,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( albedoUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Albedo, albedoUVTransform.scale, albedoUVTransform.offset, albedoUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::Albedo, albedoUVTransform);
 						}
 					}
 					else
@@ -2796,8 +2913,8 @@ namespace EmEn::Scenes::Loaders
 						/* ONE glTF texture info, TWO engine components: same transform on both. */
 						if ( metallicRoughnessUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Roughness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset, metallicRoughnessUVTransform.rotation);
-							materialResource.setComponentUVWTransform(ComponentType::Metalness, metallicRoughnessUVTransform.scale, metallicRoughnessUVTransform.offset, metallicRoughnessUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::Roughness, metallicRoughnessUVTransform);
+							applyTextureCoordinates(materialResource, ComponentType::Metalness, metallicRoughnessUVTransform);
 						}
 					}
 					else
@@ -2827,7 +2944,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( normalUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Normal, normalUVTransform.scale, normalUVTransform.offset, normalUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::Normal, normalUVTransform);
 						}
 					}
 
@@ -2838,7 +2955,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( aoUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::AmbientOcclusion, aoUVTransform.scale, aoUVTransform.offset, aoUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::AmbientOcclusion, aoUVTransform);
 						}
 					}
 
@@ -2851,7 +2968,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( emissiveUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::AutoIllumination, emissiveUVTransform.scale, emissiveUVTransform.offset, emissiveUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::AutoIllumination, emissiveUVTransform);
 						}
 					}
 					else if ( hasEmissiveColor )
@@ -2881,12 +2998,12 @@ namespace EmEn::Scenes::Loaders
 
 						if ( clearcoatUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::ClearCoat, clearcoatUVTransform.scale, clearcoatUVTransform.offset, clearcoatUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::ClearCoat, clearcoatUVTransform);
 						}
 
 						if ( clearcoatRoughnessTex != nullptr && clearcoatRoughnessUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::ClearCoatRoughness, clearcoatRoughnessUVTransform.scale, clearcoatRoughnessUVTransform.offset, clearcoatRoughnessUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::ClearCoatRoughness, clearcoatRoughnessUVTransform);
 						}
 
 						if ( clearcoatNormalTex != nullptr )
@@ -2895,7 +3012,7 @@ namespace EmEn::Scenes::Loaders
 
 							if ( clearcoatNormalUVTransform.present )
 							{
-								materialResource.setComponentUVWTransform(ComponentType::ClearCoatNormal, clearcoatNormalUVTransform.scale, clearcoatNormalUVTransform.offset, clearcoatNormalUVTransform.rotation);
+								applyTextureCoordinates(materialResource, ComponentType::ClearCoatNormal, clearcoatNormalUVTransform);
 							}
 						}
 					}
@@ -2918,7 +3035,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( sheenColorUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::Sheen, sheenColorUVTransform.scale, sheenColorUVTransform.offset, sheenColorUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::Sheen, sheenColorUVTransform);
 						}
 
 						if ( sheenRoughnessTex != nullptr )
@@ -2927,7 +3044,7 @@ namespace EmEn::Scenes::Loaders
 
 							if ( sheenRoughnessUVTransform.present )
 							{
-								materialResource.setComponentUVWTransform(ComponentType::SheenRoughness, sheenRoughnessUVTransform.scale, sheenRoughnessUVTransform.offset, sheenRoughnessUVTransform.rotation);
+								applyTextureCoordinates(materialResource, ComponentType::SheenRoughness, sheenRoughnessUVTransform);
 							}
 						}
 					}
@@ -3017,7 +3134,7 @@ namespace EmEn::Scenes::Loaders
 
 					if ( specularTex != nullptr && specularUVTransform.present )
 					{
-						materialResource.setComponentUVWTransform(ComponentType::Specular, specularUVTransform.scale, specularUVTransform.offset, specularUVTransform.rotation);
+						applyTextureCoordinates(materialResource, ComponentType::Specular, specularUVTransform);
 					}
 
 					if ( specularColorTex != nullptr )
@@ -3026,7 +3143,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( specularColorUVTransform.present )
 						{
-							materialResource.setComponentUVWTransform(ComponentType::SpecularColor, specularColorUVTransform.scale, specularColorUVTransform.offset, specularColorUVTransform.rotation);
+							applyTextureCoordinates(materialResource, ComponentType::SpecularColor, specularColorUVTransform);
 						}
 					}
 					else
@@ -3049,6 +3166,12 @@ namespace EmEn::Scenes::Loaders
 					if ( isAlphaMask )
 					{
 						materialResource.enableAlphaTest(alphaCutoff);
+					}
+
+					/* The `…-uv0` variant: every map back on TEXCOORD_0, BEFORE the load success (which may create it). */
+					if ( primarySetOnly )
+					{
+						static_cast< void >(materialResource.usePrimaryTextureCoordinatesOnly());
 					}
 
 					return materialResource.setManualLoadSuccess(true);
@@ -3092,6 +3215,25 @@ namespace EmEn::Scenes::Loaders
 				else
 				{
 					m_materialsVertexColor[materialIndex] = std::move(vertexColorMaterial);
+				}
+			}
+
+			/* The primary-set-only variant (see m_materialsPrimarySetOnly). */
+			if ( materialsNeedingPrimarySetOnly.contains(materialIndex) )
+			{
+				auto primarySetMaterial = std::static_pointer_cast< Material::Interface >(
+					m_resources.container< Material::StandardResource >()->getOrCreateResource(name + "-uv0", [configure] (auto & materialResource) {
+						return configure(materialResource, true);
+					})
+				);
+
+				if ( primarySetMaterial == nullptr )
+				{
+					TraceWarning{ClassId} << "Material " << materialIndex << " ('" << name << "-uv0') primary-set variant failed to create; the primitives lacking TEXCOORD_1 use the default material.";
+				}
+				else
+				{
+					m_materialsPrimarySetOnly[materialIndex] = std::move(primarySetMaterial);
 				}
 			}
 		}
@@ -3242,6 +3384,16 @@ namespace EmEn::Scenes::Loaders
 					break;
 				}
 			}
+
+			/* The secondary texture coordinates go into the mesh's VBO as soon as ONE primitive declares TEXCOORD_1 AND
+			 * its material samples it; they are read for those primitives only, the others keep (0, 0) — their
+			 * materials never read them (a material that does gets the `…-uv0` variant there). */
+			const auto primitiveSamplesSecondarySet = [this] (const fastgltf::Primitive & primitive) {
+				return primitive.materialIndex.has_value() && primitive.materialIndex.value() < m_materialSamplesSecondarySet.size() &&
+					m_materialSamplesSecondarySet[primitive.materialIndex.value()] != 0 && primitive.findAttribute("TEXCOORD_1") != primitive.attributes.end();
+			};
+
+			const bool anyPrimitiveSamplesSecondarySet = std::ranges::any_of(glTFMesh.primitives, primitiveSamplesSecondarySet);
 
 			/* ⚠️⚠️ The colour vector is sized INSIDE `Shape::build()` below, never here:
 			 * `build()` starts with `clear()`, which wipes `m_vertexColors`, and its callback is
@@ -3412,6 +3564,22 @@ namespace EmEn::Scenes::Loaders
 						}
 					}
 
+					/* The secondary texture coordinates, for a primitive whose material samples them. */
+					if ( primitiveSamplesSecondarySet(glTFPrimitive) )
+					{
+						const auto * const secondaryIt = glTFPrimitive.findAttribute("TEXCOORD_1");
+						const auto & secondaryAccessor = asset.accessors[secondaryIt->accessorIndex];
+						size_t index = 0;
+
+						if ( !readDracoAwareAttribute< fastgltf::math::fvec2 >(asset, glTFPrimitive, "TEXCOORD_1", secondaryAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec2 & v) {
+							vertices[globalVertexOffset + index].setSecondaryTextureCoordinates(Vector< 2, float >{v.x(), v.y()});
+							index++;
+						}) )
+						{
+							primitiveReadFailed = true;
+						}
+					}
+
 					if ( !m_options.skipSkinning )
 					{
 						/* Read bone joint indices (JOINTS_0) for skeletal animation. */
@@ -3575,6 +3743,11 @@ namespace EmEn::Scenes::Loaders
 				geometryFlags |= EnableVertexColor;
 			}
 
+			if ( anyPrimitiveSamplesSecondarySet )
+			{
+				geometryFlags |= EnableSecondaryTextureCoordinates;
+			}
+
 			/* Phase 2: Tangent computation + GPU upload on thread pool.
 			 *
 			 * ⚠️ The computation is SKIPPED when the asset authored its tangents — glTF requires
@@ -3622,8 +3795,19 @@ namespace EmEn::Scenes::Loaders
 					 * the `UseVertexColors` flag (whose codegen reads a vertex input attribute).
 					 * The `…-vc` variant exists only for the materials a COLOR_0 primitive uses. */
 					const auto primitiveHasVertexColors = primitive.findAttribute("COLOR_0") != primitive.attributes.end();
+					/* A material sampling TEXCOORD_1 on a primitive without it (an invalid asset): its `…-uv0` variant. */
+					const auto primitiveLacksItsSecondarySet = materialIndex < m_materialSamplesSecondarySet.size() && m_materialSamplesSecondarySet[materialIndex] != 0 &&
+						primitive.findAttribute("TEXCOORD_1") == primitive.attributes.end();
 
-					if ( primitiveHasVertexColors && materialIndex < m_materialsVertexColor.size() && m_materialsVertexColor[materialIndex] != nullptr )
+					if ( primitiveLacksItsSecondarySet )
+					{
+						/* ⚠️ The variant carries no vertex colour: such a primitive's COLOR_0, if any, is ignored. Without the
+						 * variant, the default material (never the plain one: its shader reads an absent attribute). */
+						const auto hasVariant = materialIndex < m_materialsPrimarySetOnly.size() && m_materialsPrimarySetOnly[materialIndex] != nullptr;
+
+						materialList.push_back(hasVariant ? m_materialsPrimarySetOnly[materialIndex] : defaultMaterial());
+					}
+					else if ( primitiveHasVertexColors && materialIndex < m_materialsVertexColor.size() && m_materialsVertexColor[materialIndex] != nullptr )
 					{
 						materialList.push_back(m_materialsVertexColor[materialIndex]);
 					}

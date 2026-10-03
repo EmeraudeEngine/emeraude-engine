@@ -1600,6 +1600,9 @@ equal):
   99–100 % of them darker. The flat bright red of a matte surface becomes the reflective dark red of
   the RT lane.
 
+Accepted (engine `cdcf68e7`): macOS M2 by A/B — the paint's mean luminance 32.0 → 15.1, the rest of the frame
+identical, 0 `VUID-`. Windows NVIDIA — the paint 40 % darker on the screen-space lane without indirect diffuse.
+
 ### Fixed: a glTF emissive texture dropped its emissiveFactor (2026-10-03, owner)
 
 glTF's emitted colour is `emissiveFactor × emissiveTexture` (× `KHR_materials_emissive_strength`). The
@@ -1613,6 +1616,9 @@ Measured A/B in the `+ModelViewer` (deterministic to the pixel):
 - `DamagedHelmet` (factor 1, 1, 1): 0 pixels changed.
 - `CompareAlphaCoverage` (factor 0.118 on the fur): the "glTF" logo, white and blown out before, glows
   at its factor; 1.2 % of the pixels changed.
+
+Accepted (engine `cdcf68e7`): macOS M2 by A/B — DamagedHelmet 0 pixels changed, CompareAlphaCoverage's white
+logo gone; Windows NVIDIA — the same. 0 `VUID-`.
 
 ⚠️ Per the spec, an emissive texture with the default factor (0, 0, 0) emits NOTHING now.
 
