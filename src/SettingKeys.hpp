@@ -163,6 +163,22 @@ namespace EmEn
 		/* Seconds between a CPU copy becoming releasable and its release (a loading burst reuses it). [0, 3600]. */
 		constexpr auto ResourcesLocalDataReleaseDelayKey{"Core/Resources/LocalDataReleaseDelay"};
 		constexpr auto DefaultResourcesLocalDataReleaseDelay{5.0F};
+		/* Resource sharing (docs/subsystems/resources/12-resource-sharing.md): this engine serves its data stores
+		 * read-only over HTTP. OFF by default; a non-loopback address refuses to start without a bearer token. */
+		constexpr auto ResourcesSharingEnabledKey{"Core/Resources/Sharing/Enabled"};
+		constexpr auto DefaultResourcesSharingEnabled{false};
+		constexpr auto ResourcesSharingAddressKey{"Core/Resources/Sharing/Address"};
+		constexpr auto DefaultResourcesSharingAddress{"127.0.0.1"};
+		constexpr auto ResourcesSharingPortKey{"Core/Resources/Sharing/Port"};
+		constexpr auto DefaultResourcesSharingPort{static_cast< uint16_t >(17790)};
+		constexpr auto ResourcesSharingBearerTokenKey{"Core/Resources/Sharing/BearerToken"};
+		constexpr auto DefaultResourcesSharingBearerToken{""};
+		/* A peer engine's sharing server ("http://host:port"): its store resources this engine lacks are added as
+		 * downloads, and its files can be fetched (console). Empty = none. Cleartext to private addresses only. */
+		constexpr auto ResourcesPeerURLKey{"Core/Resources/Peer/URL"};
+		constexpr auto DefaultResourcesPeerURL{""};
+		constexpr auto ResourcesPeerBearerTokenKey{"Core/Resources/Peer/BearerToken"};
+		constexpr auto DefaultResourcesPeerBearerToken{""};
 
 		/* Audio layer */
 		/* Master switch for the whole audio subsystem. */

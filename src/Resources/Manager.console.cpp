@@ -35,6 +35,8 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "PeerStore.hpp"
+#include "SharingServer.hpp"
 #include "String.hpp"
 
 namespace EmEn::Resources
@@ -42,6 +44,53 @@ namespace EmEn::Resources
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
+		this->bindCommand("sharingStatus", "Returns the resource sharing state as JSON: this engine's server (Core/Resources/Sharing/*) and its peer (Core/Resources/Peer/*).", [this] () {
+			Json::Value status{Json::objectValue};
+			status["serving"] = m_sharingServer != nullptr && m_sharingServer->isRunning();
+			status["serverURL"] = m_sharingServer != nullptr ? m_sharingServer->baseURL() : std::string{};
+			status["peer"] = m_peerStore != nullptr ? m_peerStore->baseURL() : std::string{};
+
+			return Console::CommandResult::json(Base::FastJSON::stringify(status));
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("fetchFromPeer", "Copies a data-store file, or every file under a data-store directory, from the peer (Core/Resources/Peer/URL) into this engine's data stores, in the background; each file is verified by its SHA-256. Follow it with peerFetchStatus().",
+			{
+				{"path", "The path relative to data-stores/, '/' separated, e.g. 'USD/WorldLobby.usdz' or 'Images'. Empty = everything."}
+			},
+			[this] (const std::string & path) {
+				if ( m_peerStore == nullptr )
+				{
+					return Console::CommandResult::error("No peer: set 'Core/Resources/Peer/URL' (and its BearerToken), then restart.");
+				}
+
+				if ( !m_peerStore->fetch(path) )
+				{
+					return Console::CommandResult::error("A fetch from the peer is already running (peerFetchStatus()).");
+				}
+
+				return Console::CommandResult::success(Base::String::concatenate("Fetching '", path, "' from ", m_peerStore->baseURL(), " ..."));
+			});
+
+		this->bindCommand("peerFetchStatus", "Returns the state of the last fetchFromPeer() as JSON (files listed, fetched, kept, failed; the current file's progress; the errors).", [this] () {
+			if ( m_peerStore == nullptr )
+			{
+				return Console::CommandResult::error("No peer: 'Core/Resources/Peer/URL' is empty.");
+			}
+
+			return Console::CommandResult::json(Base::FastJSON::stringify(m_peerStore->status()));
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("cancelPeerFetch", "Stops a running fetchFromPeer() at its next read (the file in flight is not kept).", [this] () {
+			if ( m_peerStore == nullptr )
+			{
+				return Console::CommandResult::error("No peer: 'Core/Resources/Peer/URL' is empty.");
+			}
+
+			m_peerStore->cancel();
+
+			return Console::CommandResult::success("Cancellation requested.");
+		});
+
 		this->bindCommand("listContainers", "Lists all resource containers with loaded/available counts as JSON.", [this] () {
 			Json::Value containers{Json::arrayValue};
 

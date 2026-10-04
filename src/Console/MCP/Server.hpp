@@ -29,18 +29,17 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <optional>
-#include <set>
 #include <string>
-#include <thread>
 #include <vector>
 
 /* Third-party inclusions. */
-#include "asio.hpp"
-#include "Network/asio_throw_exception.hpp"
 #include "json/json.h"
+
+/* Local inclusions for usages. */
+#include "Network/HTTPServer.hpp"
 
 namespace EmEn::Console
 {
@@ -49,10 +48,10 @@ namespace EmEn::Console
 
 namespace EmEn::Console::MCP
 {
-	class Connection;
-
 	/**
 	 * @brief The engine's MCP server: Streamable HTTP on one endpoint (`/mcp`), dual-era (see Protocol.hpp).
+	 * @note The HTTP/1.1 layer — parsing, limits, timeouts, the Host / Origin / bearer checks — is emeraude-base's
+	 * Network::HTTPServer (shared with resource sharing since 2026-10-04). This class is the MCP protocol on top.
 	 * @note Threading, the rule that makes it safe: every socket operation happens on the server's own
 	 * network thread, and the console tree is only read on the MAIN thread. A request that needs the tree
 	 * (`tools/list`, `tools/call`) is queued; Controller::poll() calls processPendingRequests() between two
@@ -155,7 +154,7 @@ namespace EmEn::Console::MCP
 
 		private:
 
-			friend class Connection;
+			using Connection = Base::Network::HTTPServerConnection;
 
 			/** @brief A request that needs the main thread. */
 			struct PendingRequest
@@ -167,11 +166,54 @@ namespace EmEn::Console::MCP
 				bool modern{false};
 			};
 
+			/** @brief What a notification stream asked for. Network thread only. */
+			struct Stream
+			{
+				Json::Value subscriptionId;
+				bool modern{false};
+				bool toolsListChanged{false};
+			};
+
 			/**
-			 * @brief Starts accepting connections (network thread).
+			 * @brief Applies the MCP routing to a request that passed the HTTP checks (network thread).
+			 * @param connection The connection.
 			 * @return void
 			 */
-			void accept () noexcept;
+			void handleRequest (const std::shared_ptr< Connection > & connection) noexcept;
+
+			/**
+			 * @brief Handles one JSON-RPC message: validation, era, dispatch (network thread).
+			 * @param connection The connection.
+			 * @return void
+			 */
+			void handlePost (const std::shared_ptr< Connection > & connection) noexcept;
+
+			/**
+			 * @brief Answers the handshake era's `initialize` (network thread).
+			 * @param connection The connection.
+			 * @param id The request id.
+			 * @param params The request parameters.
+			 * @return void
+			 */
+			static void handleInitialize (Connection & connection, const Json::Value & id, const Json::Value & params) noexcept;
+
+			/**
+			 * @brief Turns a connection into a notification stream (network thread).
+			 * @param connection The connection.
+			 * @param modern Whether it is a `subscriptions/listen` stream (acknowledged, tagged).
+			 * @param subscriptionId The subscription id (the request id), for a modern stream.
+			 * @param toolsListChanged Whether list changes are wanted.
+			 * @return void
+			 */
+			void startStream (Connection & connection, bool modern, const Json::Value & subscriptionId, bool toolsListChanged) noexcept;
+
+			/**
+			 * @brief Ends a notification stream at shutdown: a modern subscription gets its final response (network
+			 * thread).
+			 * @param connection The connection.
+			 * @return void
+			 */
+			void closeStreamGracefully (Connection & connection) noexcept;
 
 			/**
 			 * @brief Queues a request for the main thread (network thread).
@@ -182,13 +224,6 @@ namespace EmEn::Console::MCP
 			bool enqueue (PendingRequest request) noexcept;
 
 			/**
-			 * @brief Forgets a closed connection (network thread).
-			 * @param connection The connection.
-			 * @return void
-			 */
-			void removeConnection (const std::shared_ptr< Connection > & connection) noexcept;
-
-			/**
 			 * @brief Sends `notifications/tools/list_changed` on every notification stream that asked for it
 			 * (network thread).
 			 * @return void
@@ -196,44 +231,20 @@ namespace EmEn::Console::MCP
 			void broadcastToolsListChanged () noexcept;
 
 			/**
-			 * @brief Returns whether a Host header names this server (loopback binding only).
-			 * @param host The Host header value.
-			 * @return bool
+			 * @brief Posts a JSON answer to a connection, if it is still open (any thread).
+			 * @param connection The connection.
+			 * @param body The serialized JSON [std::move].
+			 * @return void
 			 */
-			[[nodiscard]]
-			bool isAcceptedHost (const std::string & host) const noexcept;
+			void postAnswer (const std::weak_ptr< Connection > & connection, std::string body) noexcept;
 
-			/**
-			 * @brief Returns whether an Origin header is acceptable (absent, or this server itself).
-			 * @param origin The Origin header value.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool isAcceptedOrigin (const std::string & origin) const noexcept;
-
-			/**
-			 * @brief Returns whether an Authorization header carries the bearer token (constant-time compare).
-			 * @param authorization The Authorization header value.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool isAuthorized (const std::string & authorization) const noexcept;
-
-			std::string m_address;
-			std::string m_bearerToken;
-			asio::io_context m_ioContext;
-			std::optional< asio::executor_work_guard< asio::io_context::executor_type > > m_workGuard;
-			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;
-			std::thread m_networkThread;
-			/** @brief The open connections, touched on the network thread only. */
-			std::set< std::shared_ptr< Connection > > m_connections;
+			Base::Network::HTTPServer m_http;
+			/** @brief The notification streams by connection id, touched on the network thread only. */
+			std::map< uint64_t, Stream > m_streams;
 			std::mutex m_queueMutex;
 			std::vector< PendingRequest > m_pendingRequests;
 			/** @brief The tool-name refusals last traced (main thread), so each is reported once. */
 			std::vector< std::string > m_reportedRejections;
 			uint64_t m_announcedTreeRevision{0};
-			uint16_t m_port;
-			bool m_running{false};
-			bool m_loopback{false};
 	};
 }

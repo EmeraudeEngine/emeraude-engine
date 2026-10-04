@@ -146,13 +146,24 @@ namespace EmEn::Net
 			}
 
 			/**
+			 * @brief Registers an engine peer (resource sharing) [Thread-safe].
+			 * @note Its http:// URLs become downloadable — spoken in cleartext, and only when the host resolves to
+			 * private addresses (Base::Network::HTTPSClientOptions::allowPrivateCleartext) — and every request to its
+			 * origin carries its bearer token. Any other http:// URL stays refused.
+			 * @param baseURL The peer's "http://host:port" (or https).
+			 * @param bearerToken The token, empty for none.
+			 * @return bool False when the URL has no usable origin.
+			 */
+			bool registerPeer (const Base::Network::URI & baseURL, std::string bearerToken) noexcept;
+
+			/**
 			 * @brief Requests a file and returns its ticket [Thread-safe].
 			 * @note A URL already in flight returns the ticket of that transfer; a URL already in
 			 * the cache returns a ticket that completes on the next dispatchCompleted(). In every
 			 * case the consumer waits for FileDownloaded carrying that ticket.
-			 * @param url The https:// URL.
+			 * @param url The https:// URL, or an http:// one of a registered peer (registerPeer()).
 			 * @return int The ticket (>= 1), or InvalidTicket when downloads are disabled, the URL
-			 * is not https, or no thread pool is available.
+			 * is neither https nor a peer's, or no thread pool is available.
 			 */
 			[[nodiscard]]
 			int download (const Base::Network::URI & url) noexcept;
@@ -366,6 +377,9 @@ namespace EmEn::Net
 			std::map< std::string, int > m_ticketByURL;
 			std::mutex m_eventsAccess;
 			std::vector< Event > m_events;
+			/* Registered peers: origin ("scheme://host:port", lowercase) -> bearer token. */
+			mutable std::mutex m_peersAccess;
+			std::map< std::string, std::string > m_peerTokens;
 			size_t m_inFlight{0};
 			std::string m_disabledReason;
 			uint64_t m_cacheBudget{0};

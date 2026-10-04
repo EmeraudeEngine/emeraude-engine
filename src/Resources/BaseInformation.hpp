@@ -85,6 +85,25 @@ namespace EmEn::Resources
 			static constexpr auto ClassId{"ResourcesBaseInformation"};
 
 			/**
+			 * @brief JSON key name for the resource name field.
+			 * @note Public: a file-format contract (the resource sharing index writes entries with it, 2026-10-04).
+			 * @version 0.8.35
+			 */
+			static constexpr auto NameKey{"Name"};
+
+			/**
+			 * @brief JSON key name for the resource source type field.
+			 * @version 0.8.35
+			 */
+			static constexpr auto SourceKey{"Source"};
+
+			/**
+			 * @brief JSON key name for the resource data field.
+			 * @version 0.8.35
+			 */
+			static constexpr auto DataKey{"Data"};
+
+			/**
 			 * @brief Default constructor.
 			 *
 			 * Initializes a BaseInformation object with undefined source type and empty name and data.
@@ -288,24 +307,6 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			bool parseData (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept;
-
-			/**
-			 * @brief JSON key name for the resource name field.
-			 * @version 0.8.35
-			 */
-			static constexpr auto NameKey{"Name"};
-
-			/**
-			 * @brief JSON key name for the resource source type field.
-			 * @version 0.8.35
-			 */
-			static constexpr auto SourceKey{"Source"};
-
-			/**
-			 * @brief JSON key name for the resource data field.
-			 * @version 0.8.35
-			 */
-			static constexpr auto DataKey{"Data"};
 
 			/**
 			 * @brief The resource name extracted from the JSON "Name" field.

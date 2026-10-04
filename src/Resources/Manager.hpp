@@ -33,6 +33,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <memory>
 #include <typeindex>
 #include <unordered_map>
 
@@ -53,6 +54,9 @@ namespace EmEn
 
 namespace EmEn::Resources
 {
+	class PeerStore;
+	class SharingServer;
+
 	/**
 	 * @class Manager
 	 * @brief The central resource management service for the Emeraude Engine.
@@ -112,15 +116,39 @@ namespace EmEn::Resources
 			 *
 			 * @since 0.8.35
 			 */
-			explicit
-			Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
-				: ServiceInterface{ClassId},
-				ControllableTrait{ClassId},
-				AbstractServiceProvider{primaryServices, graphicsRenderer, audioManager},
-				m_primaryServices{primaryServices}
-			{
+			explicit Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept;
 
-			}
+			/**
+			 * @brief Destructs the resource manager.
+			 * @note Out of line, like the constructor: the sharing members are incomplete types here.
+			 */
+			~Manager () override;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Manager (const Manager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Manager (Manager && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Manager &
+			 */
+			Manager & operator= (const Manager & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Manager &
+			 */
+			Manager & operator= (Manager && copy) noexcept = delete;
 
 			/**
 			 * @brief Updates resource stores from a JSON definition.
@@ -549,6 +577,36 @@ namespace EmEn::Resources
 			[[nodiscard]]
 			static std::vector< std::string > getResourcesIndexFiles (const FileSystem & fileSystem) noexcept;
 
+			/**
+			 * @brief Builds the index the sharing server publishes (`/index.json`) [Thread-safe].
+			 * @note A local file becomes its `Path` relative to `data-stores/` and its `Size`; an external or direct
+			 * entry is copied as it is. Stores and names sorted, so two calls give the same document.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string buildSharingIndex () const noexcept;
+
+			/**
+			 * @brief Adds the peer's resources this engine lacks to the stores, as downloads from the peer.
+			 * @note The caller holds m_localStoresAccess. A local resource always wins over the peer's.
+			 * @param index The peer's index root.
+			 * @return size_t The number of resources added.
+			 */
+			size_t mergePeerIndex (const Json::Value & index) noexcept;
+
+			/**
+			 * @brief Reads the sharing and peer settings: the peer's index is merged, the server started.
+			 * @note Called by onInitialize() with m_localStoresAccess held, before the containers exist.
+			 * @return void
+			 */
+			void connectPeer () noexcept;
+
+			/**
+			 * @brief Starts the sharing server when 'Core/Resources/Sharing/Enabled' says so.
+			 * @return void
+			 */
+			void startSharingServer () noexcept;
+
 			/** @brief Reference to the engine's primary services provider. */
 			PrimaryServices & m_primaryServices;
 			/** @brief Map of resource stores, indexed by store name, containing resource metadata. */
@@ -557,6 +615,10 @@ namespace EmEn::Resources
 			std::unordered_map< std::type_index, std::unique_ptr< ContainerInterface > > m_containers;
 			/** @brief Mutex protecting concurrent access to m_localStores. */
 			mutable std::mutex m_localStoresAccess;
+			/** @brief The peer engine (Core/Resources/Peer/URL), when one is configured. */
+			std::unique_ptr< PeerStore > m_peerStore;
+			/** @brief This engine's sharing server (Core/Resources/Sharing/Enabled). */
+			std::unique_ptr< SharingServer > m_sharingServer;
 			/** @brief Flag indicating whether verbose logging is enabled for resource operations. */
 			bool m_showInformation{false};
 			/** @brief Flag indicating whether resource conversion should suppress output messages. */

@@ -601,6 +601,22 @@ This is NOT the download manager: `Core.NetManagerService.*` fetches files into 
 deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
 [`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
 
+### Sharing resources between machines (`Core.ResourcesManagerService.*`, 2026-10-04)
+
+An engine can serve its data stores to a peer engine over HTTP (`Core/Resources/Sharing/*`, OFF by default, a token
+mandatory off loopback), and an engine pointed at a peer (`Core/Resources/Peer/URL` + `BearerToken`) gets the peer's
+store resources it lacks as lazy downloads. A file loaded by path is copied explicitly:
+
+```text
+Core.ResourcesManagerService.sharingStatus()
+Core.ResourcesManagerService.fetchFromPeer("USD/WorldLobby.usdz")   # a file or a directory under data-stores/
+Core.ResourcesManagerService.peerFetchStatus()                       # poll: fetched / kept / failed, bytes, errors
+Core.ResourcesManagerService.cancelPeerFetch()
+```
+
+Each fetched file is verified by its SHA-256 before it is put in place. Endpoints, settings, limits:
+[`docs/subsystems/resources/12-resource-sharing.md`](subsystems/resources/12-resource-sharing.md).
+
 ### Driving an entity's components (`Core.SceneManagerService.<Type>.*`, 2026-09-27)
 
 Owner decision: one set of TYPED commands per component type, and **explicit addressing** — every

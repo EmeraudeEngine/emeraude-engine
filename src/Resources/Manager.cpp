@@ -81,10 +81,15 @@
 #include "Arguments.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
+#include "IO/IO.hpp"
+#include "Net/Manager.hpp"
+#include "Network/URI.hpp"
+#include "PeerStore.hpp"
 #include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "SharingServer.hpp"
 
 namespace EmEn::Resources
 {
@@ -118,6 +123,22 @@ namespace EmEn::Resources
 		}
 
 		return containerIt->second.get();
+	}
+
+	Manager::Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
+		: ServiceInterface{ClassId},
+		ControllableTrait{ClassId},
+		AbstractServiceProvider{primaryServices, graphicsRenderer, audioManager},
+		m_primaryServices{primaryServices}
+	{
+
+	}
+
+	Manager::~Manager ()
+	{
+		/* NOTE: normally already done by onTerminate(); the server first, its index reads the stores. */
+		m_sharingServer.reset();
+		m_peerStore.reset();
 	}
 
 	std::shared_ptr< std::unordered_map< std::string, BaseInformation > >
@@ -683,6 +704,9 @@ namespace EmEn::Resources
 				}
 			}
 
+			/* A peer's resources this engine lacks join the stores BEFORE the containers capture them. */
+			this->connectPeer();
+
 			m_containers.emplace(typeid(Animations::SkeletonResource), std::make_unique< Skeletons >("Skeleton manager", m_primaryServices, *this, this->getLocalStore("Animations")));
 			m_containers.emplace(typeid(Animations::AnimationClipResource), std::make_unique< AnimationClips >("Animation clip manager", m_primaryServices, *this, this->getLocalStore("Animations")));
 			m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >("Sound manager", m_primaryServices, *this, this->getLocalStore("Sounds")));
@@ -743,12 +767,18 @@ namespace EmEn::Resources
 			}
 		}
 
+		this->startSharingServer();
+
 		return true;
 	}
 
 	bool
 	Manager::onTerminate () noexcept
 	{
+		/* The sharing server reads the stores, a peer fetch writes into the data stores: both stop first. */
+		m_sharingServer.reset();
+		m_peerStore.reset();
+
 		/* A release pass running on a pool worker uses the containers: wait for it. */
 		m_releaseLocalData = false;
 
@@ -932,5 +962,277 @@ namespace EmEn::Resources
 		output << obj;
 
 		return output.str();
+	}
+
+	std::string
+	Manager::buildSharingIndex () const noexcept
+	{
+		const auto & dataDirectories = m_primaryServices.fileSystem().dataDirectories();
+
+		/* A local file is published by its path under some data directory's data-stores/ (the peer asks for it by
+		 * that path), never by its absolute path on this machine. */
+		const auto storeRelative = [&dataDirectories] (const std::filesystem::path & filepath) -> std::string {
+			for ( const auto & dataDirectory : dataDirectories )
+			{
+				const auto relative = filepath.lexically_relative(dataDirectory / DataStores);
+
+				if ( relative.empty() || *relative.begin() == std::filesystem::path{".."} )
+				{
+					continue;
+				}
+
+				auto text = IO::toU8String(relative);
+
+				if constexpr ( IsWindows )
+				{
+					text = String::replace('\\', '/', text);
+				}
+
+				return text;
+			}
+
+			return {};
+		};
+
+		Json::Value stores{Json::objectValue};
+
+		{
+			const std::scoped_lock lock{m_localStoresAccess};
+
+			std::vector< std::string > storeNames;
+			storeNames.reserve(m_localStores.size());
+
+			for ( const auto & storeName : m_localStores | std::views::keys )
+			{
+				storeNames.emplace_back(storeName);
+			}
+
+			std::ranges::sort(storeNames);
+
+			for ( const auto & storeName : storeNames )
+			{
+				const auto & store = *m_localStores.at(storeName);
+
+				std::vector< const BaseInformation * > entries;
+				entries.reserve(store.size());
+
+				for ( const auto & information : store | std::views::values )
+				{
+					entries.emplace_back(&information);
+				}
+
+				std::ranges::sort(entries, {}, [] (const BaseInformation * information) -> const std::string & {
+					return information->name();
+				});
+
+				Json::Value storeArray{Json::arrayValue};
+
+				for ( const auto * information : entries )
+				{
+					Json::Value entry{Json::objectValue};
+					entry[BaseInformation::NameKey] = information->name();
+
+					switch ( information->sourceType() )
+					{
+						case SourceType::LocalData :
+						{
+							const auto filepath = information->dataString();
+
+							if ( !filepath )
+							{
+								continue;
+							}
+
+							const auto path = IO::u8path(*filepath);
+							const auto relative = storeRelative(path);
+
+							if ( relative.empty() )
+							{
+								continue;
+							}
+
+							std::error_code errorCode;
+							const auto size = std::filesystem::file_size(path, errorCode);
+
+							entry["Path"] = relative;
+							entry["Size"] = static_cast< Json::UInt64 >(errorCode ? 0 : size);
+						}
+							break;
+
+						case SourceType::ExternalData :
+							entry[BaseInformation::SourceKey] = ExternalDataString;
+							entry[BaseInformation::DataKey] = information->data();
+							break;
+
+						case SourceType::DirectData :
+							entry[BaseInformation::SourceKey] = DirectDataString;
+							entry[BaseInformation::DataKey] = information->data();
+							break;
+
+						case SourceType::Undefined :
+							continue;
+					}
+
+					storeArray.append(std::move(entry));
+				}
+
+				stores[storeName] = std::move(storeArray);
+			}
+		}
+
+		Json::Value root{Json::objectValue};
+		root["FormatVersion"] = "1.0.0";
+		root[StoresKey] = std::move(stores);
+
+		return FastJSON::stringify(root);
+	}
+
+	size_t
+	Manager::mergePeerIndex (const Json::Value & index) noexcept
+	{
+		if ( m_peerStore == nullptr || !index.isObject() || !index.isMember(StoresKey) || !index[StoresKey].isObject() )
+		{
+			return 0;
+		}
+
+		const auto & remoteStores = index[StoresKey];
+		Json::Value missing{Json::objectValue};
+
+		for ( const auto & storeName : remoteStores.getMemberNames() )
+		{
+			const auto & remoteStore = remoteStores[storeName];
+
+			if ( !remoteStore.isArray() )
+			{
+				continue;
+			}
+
+			const auto localStoreIt = m_localStores.find(storeName);
+			Json::Value additions{Json::arrayValue};
+
+			for ( const auto & remoteEntry : remoteStore )
+			{
+				if ( !remoteEntry.isObject() )
+				{
+					continue;
+				}
+
+				const auto name = FastJSON::getValue< std::string >(remoteEntry, BaseInformation::NameKey);
+
+				/* A local resource always wins: the peer only fills the gaps. */
+				if ( !name || ( localStoreIt != m_localStores.end() && localStoreIt->second->contains(*name) ) )
+				{
+					continue;
+				}
+
+				if ( const auto path = FastJSON::getValue< std::string >(remoteEntry, "Path"); path.has_value() )
+				{
+					Json::Value entry{Json::objectValue};
+					entry[BaseInformation::NameKey] = *name;
+					entry[BaseInformation::SourceKey] = ExternalDataString;
+					entry[BaseInformation::DataKey] = m_peerStore->fileURL(*path);
+
+					additions.append(std::move(entry));
+				}
+				else
+				{
+					/* An external or direct entry of the peer: as it is (BaseInformation::parse() checks it). */
+					additions.append(remoteEntry);
+				}
+			}
+
+			if ( !additions.empty() )
+			{
+				missing[storeName] = std::move(additions);
+			}
+		}
+
+		if ( missing.empty() )
+		{
+			return 0;
+		}
+
+		size_t count = 0;
+
+		for ( const auto & storeName : missing.getMemberNames() )
+		{
+			count += missing[storeName].size();
+		}
+
+		static_cast< void >(this->parseStores(m_primaryServices.fileSystem(), missing, m_showInformation));
+
+		return count;
+	}
+
+	void
+	Manager::connectPeer () noexcept
+	{
+		auto & settings = m_primaryServices.settings();
+
+		const auto peerURL = settings.getOrSetDefault< std::string >(ResourcesPeerURLKey, DefaultResourcesPeerURL);
+		auto peerBearerToken = settings.getOrSetDefault< std::string >(ResourcesPeerBearerTokenKey, DefaultResourcesPeerBearerToken);
+
+		if ( peerURL.empty() )
+		{
+			return;
+		}
+
+		const Network::URI baseURL{peerURL};
+
+		/* A settings value (trust boundary): only an http(s) URL with a host. */
+		if ( const auto scheme = String::toLower(baseURL.scheme()); ( scheme != "http" && scheme != "https" ) || baseURL.uriDomain().hostname().name().empty() )
+		{
+			TraceError{ClassId} << "The setting '" << ResourcesPeerURLKey << "' must be an http(s)://host:port URL, '" << peerURL << "' is ignored.";
+
+			return;
+		}
+
+		if ( !m_primaryServices.netManager().registerPeer(baseURL, peerBearerToken) )
+		{
+			return;
+		}
+
+		m_peerStore = std::make_unique< PeerStore >(m_primaryServices.fileSystem(), m_primaryServices.threadPool(), baseURL, std::move(peerBearerToken));
+
+		const auto start = std::chrono::steady_clock::now();
+		const auto index = m_peerStore->fetchIndex();
+
+		if ( !index )
+		{
+			TraceWarning{ClassId} << "The peer " << m_peerStore->baseURL() << " is not reachable: no resource from it this run (its files can still be fetched later).";
+
+			return;
+		}
+
+		const auto added = this->mergePeerIndex(*index);
+		const auto milliseconds = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - start).count();
+
+		TraceSuccess{ClassId} << added << " resource(s) of the peer " << m_peerStore->baseURL() << " added to the stores (downloaded on first use), index read in " << milliseconds << " ms.";
+	}
+
+	void
+	Manager::startSharingServer () noexcept
+	{
+		auto & settings = m_primaryServices.settings();
+
+		/* NOTE: like the console and MCP keys, written on first run even when the server stays off. */
+		const auto enabled = settings.getOrSetDefault< bool >(ResourcesSharingEnabledKey, DefaultResourcesSharingEnabled);
+		const auto address = settings.getOrSetDefault< std::string >(ResourcesSharingAddressKey, DefaultResourcesSharingAddress);
+		const auto port = settings.getOrSetDefault< uint16_t >(ResourcesSharingPortKey, DefaultResourcesSharingPort);
+		auto bearerToken = settings.getOrSetDefault< std::string >(ResourcesSharingBearerTokenKey, DefaultResourcesSharingBearerToken);
+
+		if ( !enabled )
+		{
+			return;
+		}
+
+		auto server = std::make_unique< SharingServer >(m_primaryServices.fileSystem(), m_primaryServices.threadPool(), [this] () {
+			return this->buildSharingIndex();
+		});
+
+		if ( server->start(address, port, std::move(bearerToken)) )
+		{
+			m_sharingServer = std::move(server);
+		}
 	}
 }

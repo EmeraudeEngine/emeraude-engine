@@ -56,6 +56,42 @@ namespace EmEn::Net
 {
 	using namespace Base;
 
+	namespace
+	{
+		/**
+		 * @brief Returns the origin of a URL: "scheme://host:port", lowercase, the port made explicit.
+		 * @param url The URL.
+		 * @return std::string Empty when the URL has no host, or another scheme than http(s).
+		 */
+		[[nodiscard]]
+		std::string
+		originOf (const Network::URI & url) noexcept
+		{
+			const auto scheme = String::toLower(url.scheme());
+
+			if ( ( scheme != "http" && scheme != "https" ) || url.uriDomain().hasInvalidPort() )
+			{
+				return {};
+			}
+
+			const auto host = String::toLower(url.uriDomain().hostname().name());
+
+			if ( host.empty() )
+			{
+				return {};
+			}
+
+			auto port = url.uriDomain().port();
+
+			if ( port == 0 )
+			{
+				port = scheme == "https" ? 443 : 80;
+			}
+
+			return scheme + "://" + host + ":" + std::to_string(port);
+		}
+	}
+
 	struct Manager::Impl
 	{
 		asio::ssl::context tlsContext{asio::ssl::context::tls_client};
@@ -122,6 +158,9 @@ namespace EmEn::Net
 		Network::HTTPSClientOptions options;
 		options.userAgent = DefaultUserAgent;
 		options.totalTimeout = std::chrono::seconds{m_settings.getOrSetDefault< uint32_t >(NetDownloadTimeoutKey, DefaultNetDownloadTimeout)};
+		/* NOTE: the transport reaches only private addresses in cleartext, and download() lets an http:// URL
+		 * through only for a registered peer (resource sharing, 2026-10-04). */
+		options.allowPrivateCleartext = true;
 
 		m_impl->client = std::make_unique< Network::HTTPSClient >(m_impl->tlsContext, options);
 
@@ -475,6 +514,27 @@ namespace EmEn::Net
 
 	/* ---- Requests ---- */
 
+	bool
+	Manager::registerPeer (const Network::URI & baseURL, std::string bearerToken) noexcept
+	{
+		auto origin = originOf(baseURL);
+
+		if ( origin.empty() )
+		{
+			TraceError{ClassId} << "The peer URL '" << baseURL << "' has no usable origin (http(s)://host:port).";
+
+			return false;
+		}
+
+		TraceInfo{ClassId} << "Peer " << origin << " registered (" << ( bearerToken.empty() ? "no token" : "bearer token" ) << ").";
+
+		const std::scoped_lock lock{m_peersAccess};
+
+		m_peerTokens[std::move(origin)] = std::move(bearerToken);
+
+		return true;
+	}
+
 	int
 	Manager::download (const Network::URI & url) noexcept
 	{
@@ -498,9 +558,20 @@ namespace EmEn::Net
 
 		if ( String::toLower(url.scheme()) != "https" )
 		{
-			TraceError{ClassId} << "Only https:// URLs are downloadable, '" << url << "' refused.";
+			bool peer = false;
 
-			return InvalidTicket;
+			{
+				const std::scoped_lock lock{m_peersAccess};
+
+				peer = m_peerTokens.contains(originOf(url));
+			}
+
+			if ( !peer )
+			{
+				TraceError{ClassId} << "Only https:// URLs (and a registered peer's) are downloadable, '" << url << "' refused.";
+
+				return InvalidTicket;
+			}
 		}
 
 		const auto urlString = to_string(url);
@@ -699,8 +770,18 @@ namespace EmEn::Net
 		};
 
 		Network::DownloadReport report;
+		Network::HTTPRequestOptions requestOptions;
 
-		bool success = m_impl->client->download(url, partialFilepath, progressHook, &report);
+		{
+			const std::scoped_lock lock{m_peersAccess};
+
+			if ( const auto peerIt = m_peerTokens.find(originOf(url)); peerIt != m_peerTokens.end() && !peerIt->second.empty() )
+			{
+				requestOptions.headers.emplace_back("Authorization", "Bearer " + peerIt->second);
+			}
+		}
+
+		bool success = m_impl->client->download(url, partialFilepath, std::move(requestOptions), progressHook, &report);
 
 		if ( success )
 		{

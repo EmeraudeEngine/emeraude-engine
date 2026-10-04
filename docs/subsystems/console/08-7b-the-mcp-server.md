@@ -8,7 +8,7 @@ view (settings, connecting Claude Code, security): [`docs/ai-runtime-control.md`
 | File | Role |
 |---|---|
 | `MCP/Protocol.hpp/.cpp` | Everything that is not a socket: tool names, `collectTools()`, `toolDefinition()` (schema from the signature), `jsonToArguments()`, `callResult()` (image reduction), JSON-RPC envelopes, the safe JSON accessors |
-| `MCP/Server.hpp/.cpp` | Asio HTTP/1.1 + SSE on one endpoint `/mcp`, dual-era dispatch, security checks, the main-thread queue |
+| `MCP/Server.hpp/.cpp` | The MCP protocol on emeraude-base `Network::HTTPServer` (HTTP/1.1, limits, Host / Origin / bearer checks, SSE streams — extracted there 2026-10-04 for resource sharing, base `docs/subsystems/source-tree/24-network-http-server.md`): one endpoint `/mcp`, dual-era dispatch, the main-thread queue, the stream registry by connection id |
 
 **Rules that keep it solid — each one answers a defect found while building it:**
 
