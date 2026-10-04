@@ -112,6 +112,81 @@ namespace EmEn::Resources
 			return Console::CommandResult::success(Base::String::concatenate(std::to_string(released), " CPU copies released."));
 		});
 
+		this->bindCommand("acquireLocalData", "Takes a lease on the CPU copy of a held resource, reloading it when released (store source, else GPU readback), then drops it: reports the outcome as JSON (diagnostic).",
+			{
+				{"container", "The container id or name (listContainers() lists them), e.g. 'ImageResource'."},
+				{"resource", "The resource name."}
+			},
+			[this] (const std::string & containerName, const std::string & resourceName) {
+				for ( const auto & container : std::views::values(m_containers) )
+				{
+					if ( containerName != container->resourceClassId() && containerName != container->name() )
+					{
+						continue;
+					}
+
+					const auto resource = container->findResource(resourceName);
+
+					if ( resource == nullptr )
+					{
+						return Console::CommandResult::error(Base::String::concatenate("The container '", containerName, "' holds no resource '", resourceName, "' !"));
+					}
+
+					Json::Value report{Json::objectValue};
+					report["residentBefore"] = resource->isLocalDataResident();
+					report["bytesBefore"] = static_cast< Json::UInt64 >(resource->memoryOccupied());
+
+					{
+						const auto lease = resource->acquireLocalData();
+
+						report["leased"] = lease.isValid();
+						report["bytesLeased"] = static_cast< Json::UInt64 >(resource->memoryOccupied());
+					}
+
+					report["residentAfter"] = resource->isLocalDataResident();
+
+					return Console::CommandResult::json(Base::FastJSON::stringify(report));
+				}
+
+				return Console::CommandResult::error(Base::String::concatenate("Container '", containerName, "' not found !"));
+			});
+
+		this->bindCommand("requestLocalData", "Asks for the CPU copy of a held resource without waiting: answers whether it was leased (resident), otherwise schedules its reload on the thread pool (diagnostic; ask again later).",
+			{
+				{"container", "The container id or name (listContainers() lists them), e.g. 'ImageResource'."},
+				{"resource", "The resource name."}
+			},
+			[this] (const std::string & containerName, const std::string & resourceName) {
+				for ( const auto & container : std::views::values(m_containers) )
+				{
+					if ( containerName != container->resourceClassId() && containerName != container->name() )
+					{
+						continue;
+					}
+
+					const auto resource = container->findResource(resourceName);
+
+					if ( resource == nullptr )
+					{
+						return Console::CommandResult::error(Base::String::concatenate("The container '", containerName, "' holds no resource '", resourceName, "' !"));
+					}
+
+					Json::Value report{Json::objectValue};
+
+					{
+						const auto lease = resource->requestLocalData();
+
+						report["leased"] = lease.isValid();
+					}
+
+					report["bytes"] = static_cast< Json::UInt64 >(resource->memoryOccupied());
+
+					return Console::CommandResult::json(Base::FastJSON::stringify(report));
+				}
+
+				return Console::CommandResult::error(Base::String::concatenate("Container '", containerName, "' not found !"));
+			});
+
 		this->bindCommand("listResources", "Lists the available resources of a container as JSON.",
 			{
 				{"container", "The container id or name (listContainers() lists them), e.g. 'SkyBoxResource'."}

@@ -69,8 +69,8 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	AnimatedTexture2D::createTexture (Renderer & renderer) noexcept
 	{
-		/* NOTE: The upload reads the images the movie's frames show: they stay resident until it ends
-		 * (docs/subsystems/resources/03 § CPU Copies). */
+		/* NOTE: The upload reads the images the movie's frames show: they stay resident until it ends, a released copy
+		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */
 		std::vector< Resources::ResourceTrait::LocalDataLease > localDataLeases;
 
 		if ( !m_localData->leaseFrameImages(localDataLeases) )

@@ -99,19 +99,8 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		if ( !PixelFactory::FileIO::read(filepath, m_pixmap) )
+		if ( !this->readLocalData(filepath) )
 		{
-			TraceError{ClassId} << "Unable to load the image file '" << filepath << "' !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_pixmap) )
-		{
-			TraceError{ClassId} << "Unable to use the pixmap from file '" << filepath << "' to create an image !";
-
-			m_pixmap.clear();
-
 			return this->setLoadSuccess(false);
 		}
 
@@ -156,5 +145,43 @@ namespace EmEn::Graphics
 		m_averageColor = m_pixmap.averageColor();
 		m_binaryAlphaMask = AlphaCoverage::isBinaryMask(m_pixmap);
 		m_metadataExtracted = true;
+	}
+
+	bool
+	ImageResource::readLocalData (const std::filesystem::path & filepath) noexcept
+	{
+		PixelFactory::Pixmap< uint8_t > pixmap;
+
+		if ( !PixelFactory::FileIO::read(filepath, pixmap) )
+		{
+			TraceError{ClassId} << "Unable to load the image file '" << filepath << "' !";
+
+			return false;
+		}
+
+		if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), pixmap) )
+		{
+			TraceError{ClassId} << "Unable to use the pixmap from file '" << filepath << "' to create an image !";
+
+			return false;
+		}
+
+		m_pixmap = std::move(pixmap);
+
+		return true;
+	}
+
+	bool
+	ImageResource::reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept
+	{
+		/* NOTE: Only a file source: this type has no JSON definition. */
+		if ( source.sourceType() != Resources::SourceType::LocalData )
+		{
+			return false;
+		}
+
+		const auto filepath = source.dataString();
+
+		return filepath.has_value() && this->readLocalData(std::filesystem::path{*filepath});
 	}
 }

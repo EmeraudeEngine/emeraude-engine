@@ -65,8 +65,8 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	AnimatedTextureCubemap::createTexture (Renderer & renderer) noexcept
 	{
-		/* NOTE: The upload reads the cubemaps the movie's frames show: they stay resident until it ends
-		 * (docs/subsystems/resources/03 § CPU Copies). */
+		/* NOTE: The upload reads the cubemaps the movie's frames show: they stay resident until it ends, a released copy
+		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */
 		std::vector< Resources::ResourceTrait::LocalDataLease > localDataLeases;
 
 		if ( !m_localData->leaseFrameCubemaps(localDataLeases) )

@@ -214,31 +214,12 @@ namespace EmEn::Graphics::Geometry
 		this->enableFlag(EnableTangentSpace);
 		this->enableFlag(EnablePrimaryTextureCoordinates);
 
-		VertexFactory::ReadOptions options{};
-		/* NOTE: flipYAxis is gone with the Y-up convention -- it mirrored the geometry to compensate
-		 * the renderer's mirror. flipV stays: the texture V flip is a real OBJ convention difference
-		 * and has nothing to do with the world axis, which is exactly why the two were separated. */
-		options.flipV = true;
-		options.requestNormal = this->isFlagEnabled(EnableNormal);
-		options.requestTangentSpace = this->isFlagEnabled(EnableTangentSpace);
-		options.requestTextureCoordinates = this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates);
-		options.requestVertexColor = this->isFlagEnabled(EnableVertexColor);
-
-		VertexFactory::ShapeLoadResult< float > loadResult;
-
-		if ( !VertexFactory::FileIO::read(filepath, loadResult, options) )
+		if ( !this->readLocalData(filepath) )
 		{
-			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
-
 			return this->setLoadSuccess(false);
 		}
 
-		m_localData = std::move(loadResult.shape);
-
 		this->cacheBoundingVolumes();
-
-		/* NOTE: Skeletal data (loadResult.skeleton, loadResult.skin) is available here
-		 * but will be propagated to the Renderable level in a subsequent step. */
 
 		return this->setLoadSuccess(true);
 	}
@@ -276,5 +257,57 @@ namespace EmEn::Graphics::Geometry
 		this->cacheBoundingVolumes();
 
 		return this->setLoadSuccess(true);
+	}
+
+	bool
+	IndexedVertexResource::readLocalData (const std::filesystem::path & filepath) noexcept
+	{
+		VertexFactory::ReadOptions options{};
+		/* NOTE: flipYAxis is gone with the Y-up convention -- it mirrored the geometry to compensate
+		 * the renderer's mirror. flipV stays: the texture V flip is a real OBJ convention difference
+		 * and has nothing to do with the world axis, which is exactly why the two were separated. */
+		options.flipV = true;
+		options.requestNormal = this->isFlagEnabled(EnableNormal);
+		options.requestTangentSpace = this->isFlagEnabled(EnableTangentSpace);
+		options.requestTextureCoordinates = this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates);
+		options.requestVertexColor = this->isFlagEnabled(EnableVertexColor);
+
+		VertexFactory::ShapeLoadResult< float > loadResult;
+
+		if ( !VertexFactory::FileIO::read(filepath, loadResult, options) )
+		{
+			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
+
+			return false;
+		}
+
+		m_localData = std::move(loadResult.shape);
+
+		/* NOTE: Skeletal data (loadResult.skeleton, loadResult.skin) is available here
+		 * but will be propagated to the Renderable level in a subsequent step. */
+
+		return true;
+	}
+
+	bool
+	IndexedVertexResource::reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept
+	{
+		/* NOTE: Only a file source: a JSON definition is not loadable for this type. */
+		if ( source.sourceType() != Resources::SourceType::LocalData )
+		{
+			return false;
+		}
+
+		const auto filepath = source.dataString();
+
+		if ( !filepath.has_value() || !this->readLocalData(std::filesystem::path{*filepath}) )
+		{
+			return false;
+		}
+
+		/* NOTE: The bounding volumes are NOT re-cached: the file did not change, and the render thread reads them. */
+		m_localData.releaseConstructionIndexes();
+
+		return true;
 	}
 }

@@ -76,7 +76,12 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
    owner, 2026-10-04 — trim once per release burst, on the pass's pool worker (the trim costs 1-60 ms and holds the
    arena locks), and the pass itself on a pool worker (up to ~165 ms measured on the logic thread). RSS release ON vs
    default (45 s): **citadel 5435 → 2508 MiB, terrain 8813 → 4085 MiB**; logic overruns citadel 1 = 1, terrain ~10
-   extra of 17-21 ms (under the 33 ms cycle, the warning fires at 16.66). A late reader found as designed:
+   extra of 17-21 ms (under the 33 ms cycle, the warning fires at 16.66). ACCEPTED macOS M2 2026-10-04 (engine
+   96e7f2c7, release ON vs OFF): 0 VUID on citadel / terrain / liminal / sponza, scenes intact, flames animate; census
+   citadel 2167 → 386 MiB, terrain 3517 → 461; **the macOS allocator returns the freed LARGE blocks by itself** (no
+   trim: citadel MALLOC_LARGE 2602 → 715 MB, phys_footprint 7512 → 5588 MB). Open observation: terrain's MALLOC_SMALL
+   GREW by 556 MB with the release ON (swap differed between the runs: 5.1 vs 2.5 GB) — to re-measure. Sponza keeps
+   2.2 GiB: its `CompressedImageResource` (1792 MiB), outside this scope. A late reader found as designed:
    a `SimpleMeshResource` created after the release from a released geometry renders (GPU buffers) but gets no
    automatic LOD — phase 3's case. Owner decisions: **deferred + leases**; **type default + code override**;
    scope **indexed / plain geometries, images, cubemaps**. Design:
@@ -93,8 +98,20 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
      first, then a SWAP with empty containers (`clear()` keeps the capacity, base `vertexfactory/07`).
    - Movies read their frame images' metadata (`ImageResource::width()` …) instead of the frame pixels;
      cubemap movies the cubemaps' `cubeSize()`.
-3. **Reload, asynchronous**: from the store source, else a GPU readback; a request answers "not resident" and the
-   reader skips that frame.
+3. **Reload** — owner decisions 2026-10-04: every late reader today is a LOAD-TIME reader, so **`acquireLocalData()`
+   reloads in the caller's own context** (loader / pool thread, or the thread of a synchronous load, which did its
+   I/O there already) and is refused on the render thread; **`requestLocalData()`** keeps the "async + not resident"
+   contract for any future per-frame reader. Sources: the store entry's file / JSON re-read by the type's own reading
+   code (factored out of `load()`, no status change); **without a source, a GPU readback** (geometries: vertex /
+   index buffers back into a shape; images: an RGBA8 texture read back; an image whose only texture went BC7 stays
+   resident). Order 3a (reader API + source reload) → 3b (geometry readback) → 3c (image readback);
+   **3a DONE 2026-10-04** (`docs/subsystems/resources/03` § CPU Copies), Linux, release ON, citadel: a texture's image
+   reloaded from its file in 26 ms (4 MiB), a movie-frame image 10 ms, the store geometry 'Furnitures/MetalBarrel'
+   11 ms, the cubemap 'StormyDays' 103 ms (24 MiB); each released again after the grace delay (census back to 418
+   MiB); `requestLocalData()` answers "not resident" then leases 150 ms later; with automatic LOD on, the late
+   `SimpleMeshResource` reloads its geometry and gets its LOD (0 skipped). The procedural tree 'Aspen0LOD2' cannot
+   come back yet (3b). 0 VUID.
+   `Core/Resources/ReleaseLocalData` flips to ON in a last commit once all three pass on the three OS.
 4. **Owner decisions after phase 0 (2026-10-03):**
    - **The construction-time hash indexes are dropped AT UPLOAD** — DONE 2026-10-03: `IndexedVertexResource` /
      `VertexResource::createOnHardware()` call base `Shape::releaseConstructionIndexes()` after a successful upload; a

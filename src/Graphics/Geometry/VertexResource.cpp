@@ -198,23 +198,12 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		VertexFactory::ShapeLoadResult< float > loadResult;
-
-		if ( !FileIO::read(filepath, loadResult) )
+		if ( !this->readLocalData(filepath) )
 		{
-			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
-
 			return this->setLoadSuccess(false);
 		}
 
-		m_localData = std::move(loadResult.shape);
-
 		this->cacheBoundingVolumes();
-
-		/* NOTE: The geometric flipYAxis() is gone with the Y-up convention -- it compensated the
-		 * renderer's mirror. The V flip stays: it is an OBJ texture convention, not a world axis.
-		 * FIXME: Should set that at reading step. */
-		m_localData.flipTextureV();
 
 		return this->setLoadSuccess(true);
 	}
@@ -252,5 +241,49 @@ namespace EmEn::Graphics::Geometry
 		this->cacheBoundingVolumes();
 
 		return this->setLoadSuccess(true);
+	}
+
+	bool
+	VertexResource::readLocalData (const std::filesystem::path & filepath) noexcept
+	{
+		VertexFactory::ShapeLoadResult< float > loadResult;
+
+		if ( !FileIO::read(filepath, loadResult) )
+		{
+			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
+
+			return false;
+		}
+
+		m_localData = std::move(loadResult.shape);
+
+		/* NOTE: The geometric flipYAxis() is gone with the Y-up convention -- it compensated the
+		 * renderer's mirror. The V flip stays: it is an OBJ texture convention, not a world axis.
+		 * FIXME: Should set that at reading step. */
+		m_localData.flipTextureV();
+
+		return true;
+	}
+
+	bool
+	VertexResource::reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept
+	{
+		/* NOTE: Only a file source: a JSON definition is not loadable for this type. */
+		if ( source.sourceType() != Resources::SourceType::LocalData )
+		{
+			return false;
+		}
+
+		const auto filepath = source.dataString();
+
+		if ( !filepath.has_value() || !this->readLocalData(std::filesystem::path{*filepath}) )
+		{
+			return false;
+		}
+
+		/* NOTE: The bounding volumes are NOT re-cached: the file did not change, and the render thread reads them. */
+		m_localData.releaseConstructionIndexes();
+
+		return true;
 	}
 }

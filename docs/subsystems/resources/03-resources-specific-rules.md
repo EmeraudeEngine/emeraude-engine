@@ -96,8 +96,17 @@ the resource, never only in the data:
   holds the arena locks; without it citadel's RSS barely moves, 5143 MiB untrimmed vs ~2.5 GiB). **OFF by default**
   (`Core/Resources/ReleaseLocalData` = false) until the reload exists (owner, 2026-10-04). Console:
   `Core.ResourcesManagerService.releaseLocalData()` releases now, whatever the setting, without the grace delay.
-- **Every reader of a releasable copy takes a lease** (`ResourceTrait::leaseLocalData()`, RAII, copyable; an
-  asynchronous job captures it) and tests it: an invalid lease = "not resident". Leases today: the texture uploads
+- **Every reader of a releasable copy takes a lease** (RAII, copyable; an asynchronous job captures it) and tests it.
+  Three ways (phase 3, 2026-10-04): `acquireLocalData()` RELOADS a released copy first, blocking the caller — the
+  late readers are all load-time ones (loader / pool threads, or a synchronous load that did its I/O there already);
+  refused on the render thread (`forbidBlockingLocalDataReload()`, called by `Core::renderingTask()`).
+  `requestLocalData()` never waits: "not resident" + the reload scheduled on the pool, for a per-frame reader that
+  asks again later. `leaseLocalData()` never reloads. The reload re-reads the STORE ENTRY the container recorded
+  before the load (`setLocalDataSource()`) with the type's own reading code (`reloadLocalDataFromSource()`:
+  geometries and images from their file, `readLocalData()` shared with `load()`; a cubemap through a temporary
+  `CubemapResource` of the SAME name — a packed / equirectangular definition finds its image by the name), else a
+  GPU readback (`reloadLocalDataFromGPU()`, phase 3b / 3c); a reloaded copy is releasable again after the grace
+  delay. A procedural resource (`load(shape)`, generated pixels) has no store source. Leases today: the texture uploads
   (Texture1D / 2D / Cubemap, the animated textures through `MovieResource::leaseFrameImages()` /
   `CubemapMovieResource::leaseFrameCubemaps()`), the automatic LOD jobs, the ground / terrain displacement, the
   cursor, projet-alpha's terrain heightmap. ⚠️ Reading `localData()` / `data()` / `faces()` of a releasable

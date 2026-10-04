@@ -62,12 +62,13 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture1D::createTexture (Renderer & renderer) noexcept
 	{
-		/* NOTE: The upload reads the pixels: they stay resident until it ends (docs/subsystems/resources/03 § CPU Copies). */
-		const auto localDataLease = m_localData->leaseLocalData();
+		/* NOTE: The upload reads the pixels: they stay resident until it ends, a released copy
+		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */
+		const auto localDataLease = m_localData->acquireLocalData();
 
 		if ( !localDataLease.isValid() )
 		{
-			TraceError{ClassId} << "The pixels of texture '" << this->name() << "' are not resident (their CPU copy was released) !";
+			TraceError{ClassId} << "The pixels of texture '" << this->name() << "' could not come back (their released CPU copy failed to reload) !";
 
 			return false;
 		}

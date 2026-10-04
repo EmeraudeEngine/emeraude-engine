@@ -657,7 +657,7 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			auto lease = frame.image()->leaseLocalData();
+			auto lease = frame.image()->acquireLocalData();
 
 			if ( !lease.isValid() )
 			{

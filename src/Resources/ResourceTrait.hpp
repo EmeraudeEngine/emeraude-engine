@@ -34,9 +34,11 @@
 #include <cstdint>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <typeindex>
@@ -54,6 +56,7 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "BaseInformation.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -755,7 +758,8 @@ namespace EmEn::Resources
 			 * held, the copy is never released.
 			 * @note Take it BEFORE reading the copy, keep it for as long as the reading lasts (an asynchronous job
 			 * captures it), test it: an invalid lease means the copy is not resident.
-			 * @see ResourceTrait::leaseLocalData(), docs/subsystems/resources/03-resources-specific-rules.md § CPU Copies.
+			 * @see ResourceTrait::acquireLocalData() (reloads a released copy), requestLocalData() (never waits),
+			 * leaseLocalData() (never reloads), docs/subsystems/resources/03-resources-specific-rules.md § CPU Copies.
 			 */
 			class LocalDataLease final
 			{
@@ -868,6 +872,42 @@ namespace EmEn::Resources
 			LocalDataLease leaseLocalData () const noexcept;
 
 			/**
+			 * @brief Takes a lease on the CPU copy, RELOADING it first when it was released: from the resource's store
+			 * source, else from the GPU copy. The reload runs in the caller's context and blocks it — for a load-time
+			 * reader (a loader or pool thread, or a synchronous load), never per frame.
+			 * @note Thread-safe: a second caller waits for the first one's reload. Refused on a thread that called
+			 * forbidBlockingLocalDataReload() (the render thread).
+			 * @return LocalDataLease Invalid when the copy could not come back.
+			 */
+			[[nodiscard]]
+			LocalDataLease acquireLocalData () noexcept;
+
+			/**
+			 * @brief Takes a lease on the CPU copy when it is resident; otherwise answers "not resident" (an invalid
+			 * lease) and schedules its reload on the thread pool — for a reader that must never wait (a per-frame one):
+			 * it asks again later.
+			 * @note Thread-safe.
+			 * @return LocalDataLease Invalid while the copy is not resident.
+			 */
+			[[nodiscard]]
+			LocalDataLease requestLocalData () noexcept;
+
+			/**
+			 * @brief Records where the resource was loaded from (the store entry): a released CPU copy is reloaded
+			 * from it. Set by the resource container before a store load.
+			 * @param source A reference to the store entry.
+			 * @return void
+			 */
+			void setLocalDataSource (const BaseInformation & source) noexcept;
+
+			/**
+			 * @brief Forbids the CALLING thread to reload a released copy by blocking (acquireLocalData() refuses):
+			 * the render thread calls it once at its start.
+			 * @return void
+			 */
+			static void forbidBlockingLocalDataReload () noexcept;
+
+			/**
 			 * @brief Declares that the CPU copy must stay resident for the resource's whole life ("CPU too"): code that
 			 * reads it at any time (a cursor image, a queried shape) says so. One way.
 			 * @note Thread-safe.
@@ -933,6 +973,35 @@ namespace EmEn::Resources
 			onReleaseLocalData () noexcept
 			{
 
+			}
+
+			/**
+			 * @brief Reads the CPU copy back from the store source, with the type's own reading code (no status
+			 * change). Default false (the type cannot).
+			 * @note Called with no lease held and no other reload running.
+			 * @param source A reference to the store entry the resource was loaded from.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			reloadLocalDataFromSource (const BaseInformation & /*source*/) noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Rebuilds the CPU copy from the GPU copy (a readback), for a resource without a store source.
+			 * Default false (the type cannot).
+			 * @note Called with no lease held and no other reload running.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			reloadLocalDataFromGPU () noexcept
+			{
+				return false;
 			}
 
 			/**
@@ -1199,6 +1268,14 @@ namespace EmEn::Resources
 			 */
 			void lowerLocalDataLeases () const noexcept;
 
+			/**
+			 * @brief Reloads a released copy (store source, else GPU readback), then makes it resident and leased, or
+			 * leaves it released. Ends the reload started by the caller (m_localDataReloading).
+			 * @return LocalDataLease Invalid when the copy could not come back.
+			 */
+			[[nodiscard]]
+			LocalDataLease completeLocalDataReload () noexcept;
+
 			static constexpr uint32_t DirectLoading = 1U << 31;
 
 			AbstractServiceProvider & m_serviceProvider;
@@ -1207,10 +1284,13 @@ namespace EmEn::Resources
 			std::atomic< Status > m_status{Status::Unloaded};
 			mutable std::mutex m_dependenciesAccess;
 			mutable std::mutex m_localDataAccess;
+			std::condition_variable m_localDataReloaded;
+			std::optional< BaseInformation > m_localDataSource;
 			mutable std::chrono::steady_clock::time_point m_localDataReleasableSince;
 			mutable uint32_t m_localDataLeases{0};
 			mutable bool m_localDataReleasable{false};
 			bool m_localDataRetained{false};
 			bool m_localDataReleased{false};
+			bool m_localDataReloading{false};
 	};
 }

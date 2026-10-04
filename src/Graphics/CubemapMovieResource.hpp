@@ -86,7 +86,7 @@ namespace EmEn::Graphics
 					 * @param cubemap The loaded cubemap, kept alive by the frame.
 					 * @param duration The duration in milliseconds.
 					 */
-					Frame (std::shared_ptr< const CubemapResource > cubemap, uint32_t duration) noexcept
+					Frame (std::shared_ptr< CubemapResource > cubemap, uint32_t duration) noexcept
 						: m_cubemap{std::move(cubemap)},
 						m_duration{duration}
 					{
@@ -106,10 +106,10 @@ namespace EmEn::Graphics
 
 					/**
 					 * @brief Returns the store cubemap the frame shows.
-					 * @return const std::shared_ptr< const CubemapResource > & Null for a generated frame.
+					 * @return const std::shared_ptr< CubemapResource > & Null for a generated frame.
 					 */
 					[[nodiscard]]
-					const std::shared_ptr< const CubemapResource > &
+					const std::shared_ptr< CubemapResource > &
 					cubemap () const noexcept
 					{
 						return m_cubemap;
@@ -231,7 +231,7 @@ namespace EmEn::Graphics
 
 				private:
 
-					std::shared_ptr< const CubemapResource > m_cubemap;
+					std::shared_ptr< CubemapResource > m_cubemap;
 					CubemapPixmaps m_faces{};
 					uint32_t m_duration{0};
 			};
@@ -335,9 +335,10 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Takes a lease on every store cubemap the frames show, for an upload reading their faces.
+			 * @brief Takes a lease on every store cubemap the frames show, for an upload reading their faces; a released
+			 * cubemap is reloaded first (ResourceTrait::acquireLocalData(): blocking, load-time readers only).
 			 * @param leases The leases, appended.
-			 * @return bool False when one of those cubemaps is not resident.
+			 * @return bool False when one of those cubemaps could not come back.
 			 */
 			[[nodiscard]]
 			bool leaseFrameCubemaps (std::vector< LocalDataLease > & leases) const noexcept;

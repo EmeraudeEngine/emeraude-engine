@@ -286,6 +286,10 @@ namespace EmEn::Graphics
 				return true;
 			}
 
+			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromSource() */
+			[[nodiscard]]
+			bool reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept override;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
 			void
 			onReleaseLocalData () noexcept override

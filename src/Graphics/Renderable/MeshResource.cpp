@@ -382,13 +382,14 @@ namespace EmEn::Graphics::Renderable
 		{
 			auto sourceGeometry = std::dynamic_pointer_cast< IndexedVertexResource >(m_geometry[0]);
 
-			/* NOTE: The LOD job reads the whole source shape, possibly long after the geometry's upload: it leases it
-			 * (docs/subsystems/resources/03 § CPU Copies). A released shape is not decimated. */
-			auto sourceLease = sourceGeometry != nullptr ? sourceGeometry->leaseLocalData() : Resources::ResourceTrait::LocalDataLease{};
+			/* NOTE: The LOD job reads the whole source shape, possibly long after the geometry's upload: it leases it,
+			 * reloading a released one (docs/subsystems/resources/03 § CPU Copies). A shape that cannot come back is not
+			 * decimated. */
+			auto sourceLease = sourceGeometry != nullptr ? sourceGeometry->acquireLocalData() : Resources::ResourceTrait::LocalDataLease{};
 
 			if ( sourceGeometry != nullptr && !sourceLease.isValid() )
 			{
-				TraceWarning{ClassId} << "The geometry of '" << this->name() << "' is not resident (its CPU copy was released): no automatic LOD.";
+				TraceWarning{ClassId} << "The geometry of '" << this->name() << "' could not come back (its released CPU copy failed to reload): no automatic LOD.";
 			}
 			else if ( sourceGeometry != nullptr )
 			{

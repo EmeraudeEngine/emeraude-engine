@@ -260,6 +260,14 @@ namespace EmEn::Resources
 			virtual std::optional< Status > resourceStatus (const std::string & name) const noexcept = 0;
 
 			/**
+			 * @brief Returns a resource the container already holds, without loading or creating anything.
+			 * @param name A reference to the resource name.
+			 * @return std::shared_ptr< ResourceTrait > Null when the container holds no such resource.
+			 */
+			[[nodiscard]]
+			virtual std::shared_ptr< ResourceTrait > findResource (const std::string & name) const noexcept = 0;
+
+			/**
 			 * @brief Initializes the container and prepares it for resource management.
 			 *
 			 * This method is called during the engine startup sequence to set up the container's
@@ -700,6 +708,21 @@ namespace EmEn::Resources
 				}
 
 				return std::nullopt;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::findResource() */
+			[[nodiscard]]
+			std::shared_ptr< ResourceTrait >
+			findResource (const std::string & name) const noexcept override
+			{
+				const std::scoped_lock scopeLock{m_resourcesAccess};
+
+				if ( const auto resourceIt = m_resources.find(name); resourceIt != m_resources.cend() )
+				{
+					return resourceIt->second;
+				}
+
+				return nullptr;
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::memoryOccupied() const noexcept */
@@ -1891,6 +1914,9 @@ namespace EmEn::Resources
 				this->notify(LoadingProcessStarted);
 
 				const auto & infos = request.baseInformation();
+
+				/* NOTE: A released CPU copy is reloaded from this entry (docs/subsystems/resources/03 § CPU Copies). */
+				request.resource()->setLocalDataSource(infos);
 
 				auto success = false;
 

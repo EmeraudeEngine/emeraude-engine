@@ -262,13 +262,13 @@ namespace EmEn::Graphics::Renderable
 
 					/* Applies the height map on the geometry; the image's pixels are leased for the reading
 					 * (docs/subsystems/resources/03 § CPU Copies). */
-					if ( const auto lease = imageResource->leaseLocalData(); lease.isValid() )
+					if ( const auto lease = imageResource->acquireLocalData(); lease.isValid() )
 					{
 						geometryResource->localData().applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale);
 					}
 					else
 					{
-						TraceWarning{ClassId} << "Image '" << *imageName << "' is not resident (its CPU copy was released): no displacement !";
+						TraceWarning{ClassId} << "Image '" << *imageName << "' could not come back (its released CPU copy failed to reload): no displacement !";
 					}
 				}
 				else

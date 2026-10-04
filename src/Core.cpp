@@ -231,6 +231,9 @@ namespace EmEn
 	void
 	Core::renderingTask () noexcept
 	{
+		/* NOTE: A released CPU copy is never reloaded by blocking the frame (docs/subsystems/resources/03 § CPU Copies). */
+		Resources::ResourceTrait::forbidBlockingLocalDataReload();
+
 		uint64_t frames = 0;
 
 		/* NOTE: On-demand safety re-check period (one 60 FPS frame). On timeout the thread merely

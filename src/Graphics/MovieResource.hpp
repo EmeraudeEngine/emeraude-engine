@@ -99,7 +99,7 @@ namespace EmEn::Graphics
 					 * @param image The loaded image, kept alive by the frame.
 					 * @param duration The duration in milliseconds.
 					 */
-					Frame (std::shared_ptr< const ImageResource > image, uint32_t duration) noexcept
+					Frame (std::shared_ptr< ImageResource > image, uint32_t duration) noexcept
 						: m_image{std::move(image)},
 						m_duration{duration}
 					{
@@ -119,10 +119,10 @@ namespace EmEn::Graphics
 
 					/**
 					 * @brief Returns the store image the frame shows.
-					 * @return const std::shared_ptr< const ImageResource > & Null for a generated frame.
+					 * @return const std::shared_ptr< ImageResource > & Null for a generated frame.
 					 */
 					[[nodiscard]]
-					const std::shared_ptr< const ImageResource > &
+					const std::shared_ptr< ImageResource > &
 					image () const noexcept
 					{
 						return m_image;
@@ -226,7 +226,7 @@ namespace EmEn::Graphics
 
 				private:
 
-					std::shared_ptr< const ImageResource > m_image;
+					std::shared_ptr< ImageResource > m_image;
 					Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
 					uint32_t m_duration{0};
 			};
@@ -329,9 +329,10 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Takes a lease on every store image the frames show, for an upload reading their pixels.
+			 * @brief Takes a lease on every store image the frames show, for an upload reading their pixels; a released
+			 * image is reloaded first (ResourceTrait::acquireLocalData(): blocking, load-time readers only).
 			 * @param leases The leases, appended.
-			 * @return bool False when one of those images is not resident.
+			 * @return bool False when one of those images could not come back.
 			 */
 			[[nodiscard]]
 			bool leaseFrameImages (std::vector< LocalDataLease > & leases) const noexcept;

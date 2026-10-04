@@ -380,6 +380,19 @@ namespace EmEn::Graphics
 				return true;
 			}
 
+			/**
+			 * @brief Reads and validates the image file into the pixels (no status change): load() and the reload share
+			 * it.
+			 * @param filepath A reference to the file path.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool readLocalData (const std::filesystem::path & filepath) noexcept;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromSource() */
+			[[nodiscard]]
+			bool reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept override;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
 			void
 			onReleaseLocalData () noexcept override

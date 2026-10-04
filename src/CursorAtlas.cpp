@@ -169,11 +169,11 @@ namespace EmEn
 		 * docs/subsystems/resources/03 § CPU Copies). */
 		imageResource->retainLocalData();
 
-		const auto lease = imageResource->leaseLocalData();
+		const auto lease = imageResource->acquireLocalData();
 
 		if ( !lease.isValid() )
 		{
-			TraceWarning{ClassId} << "The cursor image '" << imageResource->name() << "' is not resident (its CPU copy was released) !";
+			TraceWarning{ClassId} << "The cursor image '" << imageResource->name() << "' could not come back (its released CPU copy failed to reload) !";
 
 			return;
 		}

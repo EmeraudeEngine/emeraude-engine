@@ -959,4 +959,44 @@ namespace EmEn::Graphics
 		m_cubeSize = this->cubeSize();
 		m_metadataExtracted = true;
 	}
+
+	bool
+	CubemapResource::reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept
+	{
+		/* NOTE: A temporary cubemap runs the type's whole loading code (packed, equirectangular, the HDR calibration)
+		 * on the same store entry, then its faces are moved in: no second copy of that code. A cubemap has no GPU work
+		 * of its own (TextureCubemap uploads it), so the temporary costs only the reading. */
+		/* NOTE: The same name: a packed / equirectangular definition finds its image file from the resource name. */
+		const auto temporary = std::make_shared< CubemapResource >(this->serviceProvider(), this->name(), this->flags());
+
+		auto loaded = false;
+
+		switch ( source.sourceType() )
+		{
+			case Resources::SourceType::LocalData :
+				if ( const auto filepath = source.dataString(); filepath.has_value() )
+				{
+					loaded = temporary->load(std::filesystem::path{*filepath});
+				}
+				break;
+
+			case Resources::SourceType::DirectData :
+				loaded = temporary->load(source.data());
+				break;
+
+			case Resources::SourceType::ExternalData :
+			case Resources::SourceType::Undefined :
+				break;
+		}
+
+		if ( !loaded || !temporary->isLoaded() || temporary->m_isHDR != m_isHDR )
+		{
+			return false;
+		}
+
+		m_faces = std::move(temporary->m_faces);
+		m_facesHDR = std::move(temporary->m_facesHDR);
+
+		return true;
+	}
 }

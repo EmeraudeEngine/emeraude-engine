@@ -317,6 +317,18 @@ namespace EmEn::Graphics::Geometry
 				return true;
 			}
 
+			/**
+			 * @brief Reads the geometry file into the local data (no status change): load() and the reload share it.
+			 * @param filepath A reference to the file path.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool readLocalData (const std::filesystem::path & filepath) noexcept;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromSource() */
+			[[nodiscard]]
+			bool reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept override;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
 			void
 			onReleaseLocalData () noexcept override

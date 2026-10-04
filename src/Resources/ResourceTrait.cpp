@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
@@ -40,7 +41,9 @@
 #include "FastJSON.hpp"
 #include "IO/IO.hpp"
 #include "String.hpp"
+#include "ThreadPool.hpp"
 #include "Manager.hpp"
+#include "PrimaryServices.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Resources
@@ -62,6 +65,19 @@ namespace EmEn::Resources
 			static std::mutex graphAccess;
 
 			return graphAccess;
+		}
+
+		/**
+		 * @brief Returns whether the current thread may not reload a released copy by blocking (the render thread).
+		 * @return bool &
+		 */
+		[[nodiscard]]
+		bool &
+		blockingLocalDataReloadForbidden () noexcept
+		{
+			thread_local bool forbidden{false};
+
+			return forbidden;
 		}
 	}
 
@@ -785,5 +801,163 @@ namespace EmEn::Resources
 		{
 			--m_localDataLeases;
 		}
+	}
+
+	ResourceTrait::LocalDataLease
+	ResourceTrait::acquireLocalData () noexcept
+	{
+		auto self = this->weak_from_this().lock();
+
+		if ( self == nullptr )
+		{
+			TraceError{TracerTag} << "The resource '" << this->name() << "' is not owned by a shared pointer: no lease on its local data !";
+
+			return {};
+		}
+
+		{
+			std::unique_lock lock{m_localDataAccess};
+
+			/* NOTE: Another caller is reloading the copy: wait for its outcome. */
+			m_localDataReloaded.wait(lock, [this] {
+				return !m_localDataReloading;
+			});
+
+			if ( !m_localDataReleased )
+			{
+				++m_localDataLeases;
+
+				return LocalDataLease{std::move(self)};
+			}
+
+			if ( blockingLocalDataReloadForbidden() )
+			{
+				TraceError{TracerTag} << "The local data of '" << this->name() << "' is released and this thread may not reload it by blocking (requestLocalData() instead) !";
+
+				return {};
+			}
+
+			m_localDataReloading = true;
+		}
+
+		return this->completeLocalDataReload();
+	}
+
+	ResourceTrait::LocalDataLease
+	ResourceTrait::requestLocalData () noexcept
+	{
+		auto self = this->weak_from_this().lock();
+
+		if ( self == nullptr )
+		{
+			TraceError{TracerTag} << "The resource '" << this->name() << "' is not owned by a shared pointer: no lease on its local data !";
+
+			return {};
+		}
+
+		{
+			const std::scoped_lock scopeLock{m_localDataAccess};
+
+			if ( m_localDataReloading )
+			{
+				return {};
+			}
+
+			if ( !m_localDataReleased )
+			{
+				++m_localDataLeases;
+
+				return LocalDataLease{std::move(self)};
+			}
+
+			m_localDataReloading = true;
+		}
+
+		const auto threadPool = m_serviceProvider.primaryServices().threadPool();
+
+		if ( threadPool == nullptr || !threadPool->enqueue([self] {
+			static_cast< void >(self->completeLocalDataReload());
+		}) )
+		{
+			{
+				const std::scoped_lock scopeLock{m_localDataAccess};
+
+				m_localDataReloading = false;
+			}
+
+			m_localDataReloaded.notify_all();
+		}
+
+		return {};
+	}
+
+	void
+	ResourceTrait::setLocalDataSource (const BaseInformation & source) noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		m_localDataSource = source;
+	}
+
+	void
+	ResourceTrait::forbidBlockingLocalDataReload () noexcept
+	{
+		blockingLocalDataReloadForbidden() = true;
+	}
+
+	ResourceTrait::LocalDataLease
+	ResourceTrait::completeLocalDataReload () noexcept
+	{
+		/* NOTE: The copy is released and m_localDataReloading is set: no lease exists, no release can run, no other
+		 * reload starts — the data is this call's alone, without holding the lock through the I/O. */
+		auto self = this->weak_from_this().lock();
+		std::optional< BaseInformation > source;
+
+		{
+			const std::scoped_lock scopeLock{m_localDataAccess};
+
+			source = m_localDataSource;
+		}
+
+		auto reloaded = source.has_value() && this->reloadLocalDataFromSource(*source);
+		const auto fromSource = reloaded;
+
+		if ( !reloaded )
+		{
+			reloaded = this->reloadLocalDataFromGPU();
+		}
+
+		LocalDataLease lease;
+
+		{
+			const std::scoped_lock scopeLock{m_localDataAccess};
+
+			m_localDataReloading = false;
+
+			if ( reloaded && self != nullptr )
+			{
+				m_localDataReleased = false;
+				/* NOTE: Back to releasable: released again once its new readers are done. */
+				m_localDataReleasable = true;
+				m_localDataReleasableSince = std::chrono::steady_clock::now();
+
+				++m_localDataLeases;
+
+				lease = LocalDataLease{std::move(self)};
+			}
+		}
+
+		m_localDataReloaded.notify_all();
+
+		if ( reloaded )
+		{
+			TraceInfo{TracerTag} << "The local data of '" << this->name() << "' was reloaded from its " << (fromSource ? "store source" : "GPU copy") << '.';
+		}
+		else
+		{
+			TraceError{TracerTag} << "The local data of '" << this->name() << "' could not be reloaded (no usable store source, no GPU readback) !";
+		}
+
+		return lease;
 	}
 }
