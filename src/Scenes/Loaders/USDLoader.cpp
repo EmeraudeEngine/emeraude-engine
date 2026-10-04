@@ -2263,18 +2263,47 @@ namespace EmEn::Scenes::Loaders
 			arcOptions.references.allow_parent_relative_paths = true;
 			arcOptions.payload.allow_parent_relative_paths = true;
 
-			if ( !tinyusdz::CompositeAllArcs(resolver, sublayered, composited.get(), &warning, &error, arcOptions) )
-			{
-				TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' : " << error;
+			/* ⚠️ ONE `CompositeAllArcs()` pass is not a composition: it applies references BEFORE payloads, so an arc
+			 * that a payload brings in (a Kit export's `prepend references` inside the payloaded `assets_*.usd`
+			 * layers) is left unresolved. tinyusdz's own driver (examples/tusdcat) repeats it until no arc is left
+			 * unresolved; so does this one, bounded (an asset that cannot be found keeps its arc forever). */
+			constexpr uint32_t MaxCompositionPasses{16};
 
-				return false;
+			const auto hasUnresolvedArcs = [] (const tinyusdz::Layer & layer) {
+				return layer.check_unresolved_references() || layer.check_unresolved_payload() || layer.check_unresolved_inherits() || layer.check_unresolved_variant() || layer.check_unresolved_specializes();
+			};
+
+			auto current = std::move(sublayered);
+			uint32_t pass = 0;
+
+			while ( pass < MaxCompositionPasses && hasUnresolvedArcs(current) )
+			{
+				tinyusdz::Layer next;
+
+				if ( !tinyusdz::CompositeAllArcs(resolver, current, &next, &warning, &error, arcOptions) )
+				{
+					TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' (pass " << pass + 1 << ") : " << error;
+
+					return false;
+				}
+
+				if ( !warning.empty() )
+				{
+					TraceWarning{ClassId} << "While compositing the arcs of '" << filepath.filename().string() << "' (pass " << pass + 1 << ") : " << warning;
+					warning.clear();
+				}
+
+				current = std::move(next);
+				++pass;
 			}
 
-			if ( !warning.empty() )
+
+			if ( hasUnresolvedArcs(current) )
 			{
-				TraceWarning{ClassId} << "While compositing the arcs of '" << filepath.filename().string() << "' : " << warning;
-				warning.clear();
+				TraceWarning{ClassId} << "'" << filepath.filename().string() << "' still has unresolved arcs after " << pass << " composition passes (a missing asset, or a deeper nesting).";
 			}
+
+			*composited = std::move(current);
 		}
 		else
 		{
@@ -2358,6 +2387,15 @@ namespace EmEn::Scenes::Loaders
 		 * like the asset never had any. */
 		env.asset_resolver = resolver;
 		env.set_search_paths(searchPaths);
+
+		/* ⚠️ METADATA ONLY: the engine decodes every texture itself (archiveTexture() / resolveTexture(), from the
+		 * archive or the stage directory) and reads nothing but `asset_identifier`. Left at its default (true), Tydra
+		 * decoded all of them first — in fp32 for the 8-bit sRGB ones — then stored the UNRESOLVED asset path, which a
+		 * Kit export's composition anchors TWICE (`<layer dir>/<layer dir>/../../Materials/Bake/…`): the 85 baked
+		 * textures of WorldLobby.usdz were "not in the archive" and its materials kept their flat colour. The
+		 * metadata-only branch stores the path resolved by tinyusdz's own resolver, which strips that doubled anchor
+		 * (2026-10-04). */
+		env.scene_config.load_texture_assets = false;
 
 		tinyusdz::tydra::RenderSceneConverter converter;
 		tinyusdz::tydra::RenderScene renderScene;

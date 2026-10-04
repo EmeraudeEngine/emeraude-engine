@@ -25,5 +25,12 @@ triplet; what would collapse is the clipping figure.
 
 ## What remains
 
+⚠️ **2026-10-04: the measurements above were taken WITHOUT the baked textures** — the 85
+`Materials/Bake/baked_textures_*` were "not in the archive" (the materials wore flat colours) and a third of the
+layers (furniture, plants, lamps) were not composed (engine `docs/scene-loaders-usd.md` § 11.8, fixed). The
+suspicion is now testable for real: re-measure the floor / wall luminances WITH the baked base colours before
+deciding anything.
+
+
 - [ ] **Verification without launching anything**: sample the base colour of those materials and
   look for shading gradients baked into the texels.

@@ -1124,3 +1124,34 @@ EARLIER, at the shader-graph lookup (`diffuseColor connection could not be resol
 UsdUVTexture — Cannot find path </World/Looks/Ash_01> in the Stage`). An image path that is never
 reached cannot be rejected, so the warnings' disappearance is **not evidence** that the resolver
 flag fixed them. That attribution is open.
+
+
+### 11.8 The scene loaded HALF of itself — three defects, one black frame (2026-10-04)
+
+**Symptom:** `--load-demo world-lobby --demo-options 1` loaded without an error in ~8 s and showed a near-black
+frame (the DNCity sky): 741 meshes, 27 materials, 26 lights, 85 × "Texture '…' is not in the archive". August's
+counts were 942 meshes, 141 materials, 29 interior lights.
+
+1. **ONE `CompositeAllArcs()` pass.** tinyusdz applies references (R) BEFORE payloads (P) inside one pass, so the
+   arcs a PAYLOAD brings in are left unresolved. A Kit export payloads `Source/Lobby/assets_Lobby_*.usd`, and each
+   furniture / plant / lamp prim inside says `delete payload = @X@` + `prepend references = @X@`: those references
+   were never followed — **24 of the archive's 38 layers never read** (every `Assets/…`). tinyusdz's own driver
+   (`examples/tusdcat`, `kMaxIteration = 128`) repeats the call until no arc is left unresolved; `USDLoader::load()`
+   now does too, bounded at 16 passes, warning when arcs remain (a missing asset). WorldLobby: **2 passes, 1.3 s**,
+   38/38 layers, 942 meshes, 155 materials composed / 141 translated, 348 textures, 30 lights. Only the
+   `resolveReferences` path loops (WorldLobby, JungleRuins per element); the default path still composes sublayers
+   only (§ 4.2).
+2. **Tydra decoded the textures and kept the UNRESOLVED path.** `RenderSceneConverterEnv::scene_config
+   .load_texture_assets` defaults to true: Tydra decoded every image (fp32 for the 8-bit sRGB ones) — work the
+   engine redoes from the archive — and stored `asset_identifier = assetPath.GetAssetPath()`, which a Kit
+   composition anchors TWICE (`<layer dir>/<layer dir>/../../Materials/Bake/…`). tinyusdz's resolver copes (it
+   retries without the leading components), `USDZArchive::resolve()` does not: the 85 baked textures were "not in
+   the archive". The engine now sets `load_texture_assets = false`: Tydra's metadata-only branch stores the path
+   RESOLVED by its resolver. Faster too (no decode in Tydra).
+3. **The spawn was mirrored in Z.** `WorldLobby` wrote its viewpoint in ENGINE coordinates; the Y-up convention
+   change mirrored it to z = +18.39 while the hall lies at z ≈ −18…−26: the camera started outside, facing the night
+   sky — a frame that reads as "nothing loaded". The viewpoint is now written in the ASSET's units through the demo's
+   `bakeUSDPoint()` (the same bake as the geometry), so a future convention change moves both together.
+
+Result, release ON: census 420 MiB (the 167 images have their archive range as source), the hall lit and textured
+with its furniture; 0 VUID. Peak memory (VmHWM) ~7.8 GB during the load.
