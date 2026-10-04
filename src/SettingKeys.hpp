@@ -699,6 +699,14 @@ namespace EmEn
 			constexpr auto GraphicsPPCutFrameAroundTranslucencyKey{"Core/Graphics/PostProcessing/CutFrameAroundTranslucency"};
 			constexpr auto DefaultGraphicsPPCutFrameAroundTranslucency{true};
 
+			/* Deferred punctual lights (owner decision 2026-10-04): the unshadowed, unprojected point and spot lights of
+			 * the eligible materials are shaded by ONE fullscreen resolve from the G-buffer (Graphics::DeferredLightResolve)
+			 * instead of one forward pass per light and per batch. OFF restores the forward passes — an A/B switch for
+			 * measurement, also live through Core.RendererService.setDeferredPunctualLights(). Engine
+			 * docs/todo/mrt-single-pass-deferred.md. */
+			constexpr auto GraphicsDeferredPunctualLightsEnabledKey{"Core/Graphics/DeferredPunctualLights/Enabled"};
+			constexpr auto DefaultGraphicsDeferredPunctualLightsEnabled{true};
+
 			/* Post-processing > DEBUG VIEW of the NON-FINITE values (2026-09-13). ON, the chain PAINTS
 			 * every NaN/Inf it meets instead of hiding it: the SSR resolve paints WHICH input is
 			 * non-finite (RED = the grabbed scene colour, BLUE = the colour pyramid, GREEN = the trace

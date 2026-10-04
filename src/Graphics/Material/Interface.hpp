@@ -588,6 +588,23 @@ namespace EmEn::Graphics::Material
 			}
 
 			/**
+			 * @brief Returns whether the unshadowed, unprojected point and spot lights of this material are resolved
+			 * DEFERRED (Graphics::DeferredLightResolve) instead of by one forward pass per light.
+			 * @note The CPU half of a two-sided contract: the material's ambient program publishes the deferred-lighting
+			 * bit of the material-properties G-buffer under the GPU half (Saphir::LightGenerator::declareDeferredLightingCondition()),
+			 * and Scenes::Scene skips the matching forward passes when this answers true. The two must agree at every
+			 * frame, or a lamp is counted twice or not at all. The default, false, keeps every forward pass.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			deferredLightingEligible () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Returns a GLSL float expression in [0, 1] for the REACTIVE MASK at this fragment, or an empty string
 			 * when the material leaves it alone (the default: the attachment keeps its clear value, 0).
 			 * @note The reactive mask tells the temporal passes how far to distrust their history at a pixel: light the

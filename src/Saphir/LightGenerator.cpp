@@ -247,8 +247,14 @@ namespace EmEn::Saphir
 			? std::string{"1.0"}
 			: "clamp(" + m_surfaceDoFMask + ", 0.0, 1.0)";
 
+		/* Deferred-lighting bit (R low nibble, bit 0): the surface is lit by the deferred light resolve
+		 * (Graphics::DeferredLightResolve) for the unshadowed, unprojected point and spot lights. */
+		const auto deferredBit = m_deferredLightingCondition.empty()
+			? std::string{"0u"}
+			: "((" + m_deferredLightingCondition + ") ? 1u : 0u)";
+
 		/* Encode nibble-packed vec4:
-		 * R = (reflectivity << 4 | reserved) / 255
+		 * R = (reflectivity << 4 | deferredLighting) / 255 — the low nibble's bits 1-3 are reserved
 		 * G = (aoResponse << 4 | shadowResponse) / 255	— shadowResponse=15 (full)
 		 * B = (bloomContrib << 4 | emissiveMask) / 255	 — bloomContrib=15 (full)
 		 * A = (fogResponse << 4 | dofMask) / 255
@@ -265,7 +271,7 @@ namespace EmEn::Saphir
 		 * .5 tie is implementation-defined in GLSL. x is clamped to [0,1] upstream, so
 		 * x * 15.0 + 0.5 stays in [0.5, 15.5] and can never overflow the nibble. */
 		return "vec4("
-			"float(uint(" + reflectivity + " * 15.0 + 0.5) << 4u) / 255.0, "
+			"float((uint(" + reflectivity + " * 15.0 + 0.5) << 4u) | " + deferredBit + ") / 255.0, "
 			"float((uint(" + aoResponse + " * 15.0 + 0.5) << 4u) | 15u) / 255.0, "
 			"float((15u << 4u) | uint(" + emissiveMask + " * 15.0 + 0.5)) / 255.0, "
 			"float((uint(" + fogResponse + " * 15.0 + 0.5) << 4u) | uint(" + dofMask + " * 15.0 + 0.5)) / 255.0)";

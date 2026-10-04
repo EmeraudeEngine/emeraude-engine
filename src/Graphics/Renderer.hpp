@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <any>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -63,6 +64,7 @@
 #include "PostProcessor.hpp"
 #include "PathDebugOverlay.hpp"
 #include "SelectionOutline.hpp"
+#include "DeferredLightResolve.hpp"
 #include "TextureCache.hpp"
 #include "TextureCompressor.hpp"
 #include "FrameCapture.hpp"
@@ -653,6 +655,29 @@ namespace EmEn::Graphics
 			selectionOutline () noexcept
 			{
 				return m_selectionOutline;
+			}
+
+			/**
+			 * @brief Switches the deferred resolve of the unshadowed punctual lights on or off (the forward passes come back).
+			 * @note Takes effect on the next recorded frame: the snapshot is taken per frame.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableDeferredPunctualLights (bool state) noexcept
+			{
+				m_deferredPunctualLightsEnabled.store(state, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns whether the unshadowed punctual lights are resolved deferred.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDeferredPunctualLightsEnabled () const noexcept
+			{
+				return m_deferredPunctualLightsEnabled.load(std::memory_order_relaxed);
 			}
 
 			/**
@@ -1797,6 +1822,8 @@ namespace EmEn::Graphics
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
 			/** @brief The outline of the scene's highlighted entities (internal-target frames). */
 			SelectionOutline m_selectionOutline{*this};
+			/** @brief The deferred resolve of the unshadowed punctual lights (internal-target frames with a G-buffer). */
+			DeferredLightResolve m_deferredLightResolve{*this};
 			/** @brief The paths in debug mode, always on top after the tone mapping (internal-target frames). */
 			PathDebugOverlay m_pathDebugOverlay{*this};
 			ExternalInput m_externalInput{m_primaryServices};
@@ -1910,6 +1937,8 @@ namespace EmEn::Graphics
 			bool m_windowLess{false};
 			/** @brief Settings: cut the frame around the translucent pass so a glass transmits the indirect diffuse (see EffectSlot::isPreTranslucencySlot). An A/B switch, default true. */
 			bool m_cutFrameAroundTranslucency{true};
+			/** @brief Settings: resolve the unshadowed punctual lights deferred (DeferredLightResolve). An A/B switch, default true. */
+			std::atomic< bool > m_deferredPunctualLightsEnabled{true};
 			/** @brief Settings: may the ACTIVE CAMERA materialize its depth of field / motion blur?
 			 * @note A user-level refusal of two expensive, intrusive photographic effects. It
 			 * OVERRIDES the camera, which only ever requests them. */

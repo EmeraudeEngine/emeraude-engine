@@ -537,6 +537,7 @@ namespace EmEn::Graphics
 		}
 
 		m_cutFrameAroundTranslucency = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPCutFrameAroundTranslucencyKey, DefaultGraphicsPPCutFrameAroundTranslucency);
+		m_deferredPunctualLightsEnabled.store(m_primaryServices.settings().getOrSetDefault< bool >(GraphicsDeferredPunctualLightsEnabledKey, DefaultGraphicsDeferredPunctualLightsEnabled), std::memory_order_relaxed);
 		m_depthOfFieldAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPDepthOfFieldEnabledKey, DefaultGraphicsPPDepthOfFieldEnabled);
 		m_motionBlurAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPMotionBlurEnabledKey, DefaultGraphicsPPMotionBlurEnabled);
 		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
@@ -921,6 +922,7 @@ namespace EmEn::Graphics
 		/* Its descriptor sets come from the pool released below. */
 		m_selectionOutline.destroy();
 		m_pathDebugOverlay.destroy();
+		m_deferredLightResolve.destroy();
 
 		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
@@ -2299,11 +2301,41 @@ namespace EmEn::Graphics
 		};
 		const auto sceneClearValues = m_sceneTarget->clearValues(clearPalette);
 
+		/* The deferred punctual lights (DeferredLightResolve): ONE snapshot per frame, read both by the opaque half
+		 * (which skips their forward passes) and by the resolve. An empty snapshot keeps the single scene pass. */
+		bool deferredLightsResolved = false;
+
+		if ( sceneHasContent && m_deferredPunctualLightsEnabled.load(std::memory_order_relaxed) && scenePtr->lightSet().isEnabled() && m_sceneTarget->resumeFramebuffer() != nullptr )
+		{
+			deferredLightsResolved = m_deferredLightResolve.prepare(*m_sceneTarget, scenePtr->lightSet(), scenePtr->preparedReadStateIndex(), m_sceneTarget->viewMatrices(), this->isShadowMapsEnabled());
+		}
+
 		commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
 
 		if ( sceneHasContent )
 		{
-			scenePtr->renderOpaque(m_sceneTarget, *commandBuffer);
+			if ( deferredLightsResolved )
+			{
+				scenePtr->renderOpaque(m_sceneTarget, *commandBuffer, m_deferredLightResolve.lights());
+
+				/* The scene pass is CUT: the resolve samples the opaque G-buffer, then the translucent half LOADS every
+				 * attachment back in the RESUME variant of the scene pass — render-pass compatible with the pipelines
+				 * sealed against the CLEAR one (the post-process LOAD variant is not: it carries subpass dependencies). */
+				commandBuffer->endRenderPass();
+
+				{
+					const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "DeferredLights"};
+
+					static_cast< void >(m_deferredLightResolve.record(*commandBuffer, *m_sceneTarget, scenePtr->preparedReadStateIndex(), m_sceneTarget->viewMatrices()));
+				}
+
+				commandBuffer->beginRenderPass(*m_sceneTarget->resumeFramebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
+			}
+			else
+			{
+				scenePtr->renderOpaque(m_sceneTarget, *commandBuffer);
+			}
+
 			scenePtr->renderTranslucent(m_sceneTarget, *commandBuffer);
 
 			if ( m_TBNSpaceRenderingEnabled )

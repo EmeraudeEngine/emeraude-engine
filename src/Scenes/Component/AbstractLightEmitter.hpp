@@ -574,8 +574,6 @@ namespace EmEn::Scenes::Component
 				return false;
 			}
 
-		protected:
-
 			/**
 			 * @brief Returns the published uniform block of a render state slot.
 			 * @note Render-thread read; the slot must be the one latched by the frame. This is the
@@ -590,6 +588,8 @@ namespace EmEn::Scenes::Component
 			{
 				return m_publishedBlocks[readStateIndex];
 			}
+
+		protected:
 
 			/**
 			 * @brief Constructs an abstract light emitter.

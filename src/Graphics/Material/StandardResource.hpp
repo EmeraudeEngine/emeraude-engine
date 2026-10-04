@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <atomic>
 #include <unordered_map>
 
 /* Local inclusions for inheritances. */
@@ -270,6 +271,10 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::setupLightGenerator() */
 			[[nodiscard]]
 			bool setupLightGenerator (Saphir::LightGenerator & lightGenerator) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::deferredLightingEligible() */
+			[[nodiscard]]
+			bool deferredLightingEligible () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::generateVertexShaderCode() */
 			[[nodiscard]]
@@ -1175,6 +1180,26 @@ namespace EmEn::Graphics::Material
 			bool declaresTransmission () const noexcept;
 
 			/**
+			 * @brief Returns whether the material's STRUCTURE lets the deferred light resolve shade it: lit, opaque, and
+			 * none of the features the resolve does not model (clear coat, sheen, subsurface, anisotropy, iridescence,
+			 * transmission, refraction, KHR specular maps, shore foam).
+			 * @note Evaluated when the light generator is set up — some features are switched on by a VALUE at that time
+			 * (a clear coat factor above 0) — and memorised in m_deferredLightingCompiled, which is what the CPU half
+			 * reads: what the compiled ambient program writes, not what the parameters say later.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool deferredLightingStructure () const noexcept;
+
+			/**
+			 * @brief Returns whether the material's DYNAMIC parameters keep the resolve's F0 = 0.04 assumption true: IOR 1.5
+			 * and a neutral KHR specular factor and colour. The GPU half evaluates the same test on the uniform block.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool deferredLightingParameters () const noexcept;
+
+			/**
 			 * @brief Enables or disables depth-based opacity for GrabPass transmission.
 			 * @warning This function is available before creation time.
 			 * @note When enabled, the fragment shader samples the grab pass depth buffer to compute the water
@@ -2032,6 +2057,8 @@ namespace EmEn::Graphics::Material
 			bool m_reflectionSourceIsAbsolute{false};
 			/** @brief Refraction source is a render target: absolute luminance, no environment luminance scale. */
 			bool m_refractionSourceIsAbsolute{false};
+			/** @brief The deferred-lighting structure the last generated program was compiled with (deferredLightingStructure()). */
+			mutable std::atomic< bool > m_deferredLightingCompiled{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_isUsingEnvironmentCubemapForTransmission{false};
 			bool m_isUsingGrabPassForTransmission{false};

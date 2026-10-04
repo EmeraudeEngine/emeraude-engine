@@ -319,6 +319,23 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the GLSL condition under which this surface publishes the DEFERRED-LIGHTING bit.
+			 * @note Packed into the material-properties G-buffer R channel, low nibble (bit 0,
+			 * Graphics::DeferredLighting::MaterialPropertiesBit). A pixel carrying it is lit by the deferred
+			 * light resolve for the unshadowed, unprojected point and spot lights, whose forward passes the
+			 * scene then skips for this material. The condition MUST be the GPU half of the material's
+			 * Material::Interface::deferredLightingEligible(): the two disagreeing means a lamp counted twice
+			 * or not at all. Undeclared means never.
+			 * @param condition A GLSL boolean expression (material uniform reads, no varying).
+			 * @return void
+			 */
+			void
+			declareDeferredLightingCondition (const std::string & condition) noexcept
+			{
+				m_deferredLightingCondition = condition;
+			}
+
+			/**
 			 * @brief Declares a per-pixel reflectivity map for the G-buffer material properties output.
 			 * @param valueVariableName The GLSL variable name of the sampled reflectivity map (luminance).
 			 * @return void
@@ -1267,6 +1284,7 @@ namespace EmEn::Saphir
 			std::string m_surfaceAOIntensity;
 			std::string m_surfaceFogResponse;
 			std::string m_surfaceDoFMask;
+			std::string m_deferredLightingCondition;
 			std::string m_surfaceClearCoatFactor;
 			std::string m_surfaceClearCoatRoughness;
 			std::string m_surfaceClearCoatNormal;

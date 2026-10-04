@@ -861,15 +861,14 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasMaterialPropertiesAttachment )
 			{
 				/* Write material properties to MRT attachment 2 for post-process effect modulation.
-				 * Nibble-packed RGBA: R[hi:lo]=reflection:reserved, G[hi:lo]=aoResponse:shadowResponse,
-				 * B[hi:lo]=bloomContrib:emissiveMask, A[hi:lo]=fogResponse:dofMask.
+				 * Nibble-packed RGBA: R[hi:lo]=reflection:deferredLighting (bit 0, the rest reserved),
+				 * G[hi:lo]=aoResponse:shadowResponse, B[hi:lo]=bloomContrib:emissiveMask, A[hi:lo]=fogResponse:dofMask.
 				 * Values derived from declared surface properties (metalness, roughness, AO, emissive).
 				 *
-				 * RGB is preserved across light passes via additive blend (write 0, add 0).
-				 * Alpha uses REPLACE blend (srcAlpha=ONE, dstAlpha=ZERO) in light passes, so we
-				 * MUST write A=1.0 to preserve the AmbientPass-encoded fogResponse/dofMask nibbles;
-				 * writing vec4(0.0) here would zero out alpha and break AtmosphericFog/DepthOfField
-				 * material modulation in every lit pixel. */
+				 * Only the ambient/simple pass writes them: a light pass has its colour write mask ZEROED on every
+				 * G-buffer attachment (onGraphicsPipelineConfiguration()), so the constant it outputs below reaches
+				 * nothing. (Until 2026-10-04 this comment said the light passes blended into the alpha and had to write
+				 * A = 1 to preserve the fog/DoF nibbles: stale since the write mask, verified in the pipeline state.) */
 				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
 				{
 					if ( m_lightGenerator.useOpacity() )

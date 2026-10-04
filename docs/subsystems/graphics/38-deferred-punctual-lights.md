@@ -1,0 +1,108 @@
+# Deferred punctual lights — one resolve instead of one forward pass per light (Oct 2026)
+
+`Graphics::DeferredLightResolve` (`src/Graphics/DeferredLightResolve.{hpp,cpp}`) shades the **unshadowed,
+unprojected point and spot lights** of the eligible materials in ONE fullscreen pass from the G-buffer. The forward
+path draws every lit batch once per light that touches it (`Scene::renderLightedSelection()`), and on Sponza with
+its 22 lamps that cost 36 of the 45 ms of `ScenePass` — ≈ 87 % of it GEOMETRY re-submission, not fill (three OS
+measured, engine `docs/todo/mrt-single-pass-deferred.md` § Measured cost). Owner decision 2026-10-04, design
+decisions 1-7 in the same item.
+
+## The contract — three parties, one frame
+
+| Party | Code | What it does |
+|---|---|---|
+| The light predicate | `Scenes::LightSet::isDeferredPunctualLight()` | enabled, no colour projection, no ACTIVE shadow (global switch AND casting flag AND shadow descriptor set). A shadowed light stays forward for every instance. |
+| The snapshot | `DeferredLightResolve::prepare()` (Renderer, once per frame, before the scene pass) | applies the predicate ONCE, uploads the lights in VIEW space from their **published block** of the frame's render state (`AbstractLightEmitter::publishedBlock()`, the very bytes the forward UBO receives), sorts the pointers. |
+| The forward skip | `Scene::renderOpaque(…, deferredLights)` → `renderLightedSelection()` | skips the point/spot passes of the snapshot's lights, for the batches whose material answers `Material::Interface::deferredLightingEligible()`. OPAQUE lists only: a translucent list is drawn after the resolve, it keeps every pass. |
+| The material bit | `Saphir::LightGenerator::declareDeferredLightingCondition()` | the ambient program writes bit 0 of the material-properties R LOW nibble under the GPU half of the material's condition; the resolve shades only those pixels. |
+
+⚠️ The CPU half and the GPU half of a material's eligibility MUST agree every frame: disagreeing counts a lamp twice
+or not at all. `StandardResource` keeps them identical by construction:
+
+- the STRUCTURE (lit, opaque, no clear coat / sheen / subsurface / anisotropy / iridescence / transmission /
+  refraction / KHR specular map / shore foam — some switched on by a value at program generation) is evaluated in
+  `setupLightGenerator()` and memorised in `m_deferredLightingCompiled`: the CPU reads what the compiled program
+  writes, never what the parameters say later;
+- the PARAMETERS (IOR 1.5, neutral `specularFactor` and `specularColorFactor`: F0 = 0.04 exactly) are tested by the
+  shader on the uniform block and by the CPU on the same `m_materialProperties` floats.
+
+A material class that does not override `deferredLightingEligible()` (the default: false) keeps every forward pass —
+a new material type is safe by default.
+
+## The frame
+
+```
+ScenePass (CLEAR pass)  : opaque — ambient, sun, the NON-deferred lights' passes
+  end render pass
+  barrier               : normals / material properties / albedo → SHADER_READ_ONLY, depth → DEPTH_STENCIL_READ_ONLY
+  DeferredLights        : own render pass (scene colour, LOAD, additive ONE/ONE, RGB only), fullscreen triangle
+  barrier               : back to attachment layouts + a global memory barrier (colour, velocity, reactive)
+  RESUME pass (LOAD)    : translucent, TBN debug
+```
+
+- The split happens only when the snapshot is not empty: a scene without an eligible light records the single pass
+  exactly as before, and never compiles the resolve pipeline.
+- **The RESUME pass is NOT the post-process LOAD variant.** `SceneRenderTarget::buildScenePass(renderer, true)` is the
+  CLEAR pass with LOAD operations and attachment-layout initial layouts, otherwise IDENTICAL — no subpass dependency.
+  Vulkan render-pass compatibility ignores only load/store operations and layouts; the post-process variant carries
+  two dependencies, and drawing the translucent objects' pipelines (sealed against the CLEAR pass) in it raised
+  `VUID-vkCmdDrawIndexed-renderPass-02684` ("dependencyCount is incompatible … 2 != 0", 20 per run, 2026-10-04).
+  Its synchronisation is therefore the resolve's own barriers.
+- `prepare()` makes every resource the frame needs BEFORE the scene skips a single pass; `record()` cannot fail
+  afterwards (a call-order defect returns false, logged nowhere because it cannot happen in the renderer's order).
+
+## The shading — the forward pass, term for term
+
+Read off a generated `RenderableInstancePointLightPassFragmentShader` (`Core/Graphics/Shader/EnableSourceCodeDump`):
+GGX, Smith-Schlick with k = (r + 1)² / 8, Fresnel-Schlick, kD = (1 − F)(1 − m), the shared windowed inverse square
+(`Effects/Shared/LightFalloffGLSL.hpp`), the spot cone with the forward pass's epsilon guard. G-buffer inputs:
+
+| Input | Source |
+|---|---|
+| Position | depth × the inverse of the frame's JITTERED projection (`projectionMatrix(readStateIndex)`), view space |
+| N | `normals.rgb` — ALREADY oriented toward the viewer by the ambient pass, from the geometric side |
+| Roughness | `normals.a` minus the metal flag (`a ≥ 1.5 → a − 2`): the SAA-widened value (owner decision) |
+| Base colour | `albedo.rgb` (RGBA8 sRGB, decoded on read) |
+| Metalness | `1 − albedo.a` (the diffuse weight; an eligible surface does not transmit) |
+| F0 | `mix(0.04, albedo, m)` |
+
+⚠️ **Never re-orient N in the resolve** from the normal itself (`dot(N, V) < 0 ? -N : N`). The first version did, and
+lit the mortar grooves of Sponza's walls (deferred brighter in 88 % of the big-difference pixels of the wall,
+2026-10-04): a normal-map texel leaning away from a grazing view is legitimate on a front face — the forward pass
+decides the side from the GEOMETRIC normal (`LightGenerator.PBR.cpp`, `docs/caution-points.md` § Two-sided normals).
+
+## Measured (RTX 3070 Ti, 2880×1620, Sponza launch pose, 2026-10-04)
+
+| | forward | deferred |
+|---|---|---|
+| `ScenePass`, every scene effect bypassed | 45.5 ms | 13.8 ms (of which `DeferredLights` 0.64 ms) |
+| Full frame, RT lane, everything on | 111 ms (9 FPS) | 80 ms (13 FPS) |
+| `VUID-` with `VK_LAYER_KHRONOS_validation` | 0 | 0 |
+
+Fidelity, NIGHT (`--demo-options 1,60`: the 22 lamps alone light 95 % of the pixels; pinned f/2.8 1/30 ISO 3200;
+same instance, `Core.RendererService.setDeferredPunctualLights(0|1)`; two deferred captures bit-identical):
+
+| Configuration | pixels > 2 levels | > 32 levels | lamp energy deferred / forward |
+|---|---|---|---|
+| As shipped (SAA roughness) | 7.9 % | 0.50 % | 0.985 |
+| G-buffer roughness raw (experiment) | 5.0 % | 0.47 % | 0.987 |
+| Raw roughness + forward slope bias 0 (experiment) | 0.2 % | 0.02 % | 0.9997 |
+
+The remainder is NOT the resolve's: with the SAA and the forward's depth-bias leak taken out, the two paths agree to
+0.03 % of the lamp energy. The leak: the forward light passes test `LEQUAL` with a slope-scaled bias of −1, so a
+hidden layer within the bias of the front one ADDS its lighting — dense foliage (Sponza's ivy, its cypress) reads
+brighter in forward than in deferred, which shades only the visible surface (engine item
+`forward-light-pass-depth-bias-leaks-hidden-layers`).
+
+⚠️ In DAYLIGHT the 22 lamps add almost nothing a camera sees (0.01 % of the pixels gain more than 4 levels with the
+sun off and the sky's ambient on): compare at night, or the comparison proves nothing.
+
+## A/B and diagnosis
+
+- `Core/Graphics/DeferredPunctualLights/Enabled` (launch, default true), `Core.RendererService.setDeferredPunctualLights(0|1)` (live).
+- GPU profiler: the `DeferredLights` scope inside `ScenePass` (`Core/Graphics/GPUProfiler/Enabled`).
+
+## Not yet
+
+Line lights (LTC) and the sun stay forward (the sun is the next step toward ONE geometry pass); tiled light culling
+only if the per-pixel loop is measured to need it (0.64 ms for 22 lamps at 4.7 Mpx). See the item.

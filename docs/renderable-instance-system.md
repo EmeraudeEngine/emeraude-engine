@@ -120,6 +120,11 @@ struct ProgramCacheKey {
 
 The engine uses **forward rendering multi-pass**. A lit object is rendered multiple times:
 
+> ⚠️ Since 2026-10-04 the unshadowed, unprojected point and spot lights of the eligible materials are NOT drawn by
+> their light passes when the frame renders into the scene target: `Graphics::DeferredLightResolve` shades them from
+> the G-buffer in one fullscreen pass ([`subsystems/graphics/38-deferred-punctual-lights.md`](subsystems/graphics/38-deferred-punctual-lights.md)).
+> Every other light, every translucent list and every target without a G-buffer keeps the passes below.
+
 ```cpp
 enum class RenderPassType : uint8_t {
     SimplePass = 0,

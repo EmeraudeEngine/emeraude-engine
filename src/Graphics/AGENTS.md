@@ -95,3 +95,4 @@
 | Paths — polylines and curves drawn by vertex pulling (Sep 2026) | [`docs/subsystems/graphics/35-paths-polylines-and-curves.md`](../../docs/subsystems/graphics/35-paths-polylines-and-curves.md) | 7 KB |
 | Line lights — LTC, and the beam that lights the scene (Sep 2026) | [`docs/subsystems/graphics/36-line-lights-ltc-and-the-beam-that-lights.md`](../../docs/subsystems/graphics/36-line-lights-ltc-and-the-beam-that-lights.md) | 8 KB |
 | GPU memory — the budget warning (98 %) and the allocation report (`getGPUMemory`, `writeGPUMemoryReport`) (Oct 2026) | [`docs/subsystems/graphics/37-gpu-memory-budget-and-report.md`](../../docs/subsystems/graphics/37-gpu-memory-budget-and-report.md) | 3 KB |
+| Deferred punctual lights — one resolve instead of a forward pass per light; the resume pass; the material bit (Oct 2026) | [`docs/subsystems/graphics/38-deferred-punctual-lights.md`](../../docs/subsystems/graphics/38-deferred-punctual-lights.md) | 7 KB |

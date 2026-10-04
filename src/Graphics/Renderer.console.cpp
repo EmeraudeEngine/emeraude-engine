@@ -480,6 +480,19 @@ namespace EmEn::Graphics
 					"Post-processing forbidden from the next frame: every frame takes the direct swap-chain path.");
 			}, Console::CommandHint::Idempotent);
 
+		this->bindCommand("setDeferredPunctualLights", "Switches the deferred resolve of the unshadowed, unprojected point and spot lights on or off (DeferredLightResolve; the settings key Core/Graphics/DeferredPunctualLights/Enabled at launch). Off, every light gets its forward pass per batch again — the A/B of the two paths, same frame, same pose.",
+			{
+				{"enabled", "1 (true) resolves them deferred (the default), 0 (false) restores the forward passes."}
+			},
+			[this] (bool enabled) {
+				/* Read by the render thread at its next frame: the snapshot is taken per frame. */
+				this->enableDeferredPunctualLights(enabled);
+
+				return Console::CommandResult::success(enabled ?
+					"Deferred punctual lights ON from the next frame (the GPU profiler shows the 'DeferredLights' scope when a light is resolved)." :
+					"Deferred punctual lights OFF from the next frame: every point and spot light is drawn by forward passes.");
+			}, Console::CommandHint::Idempotent);
+
 		this->bindCommand("resetOverflowCensus", "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.", [this] () {
 			auto * census = m_postProcessor.overflowCensus();
 

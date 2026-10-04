@@ -1003,7 +1003,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderOpaque (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	Scene::renderOpaque (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > deferredLights) noexcept
 	{
 		if ( !m_renderLists[Opaque].empty() )
 		{
@@ -1056,7 +1056,7 @@ namespace EmEn::Scenes
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[OpaqueLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS, deferredLights);
 		}
 	}
 
@@ -2199,7 +2199,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS) const noexcept
+	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights) const noexcept
 	{
 		/* State tracker for redundant bind elimination (lighted list is state-sorted). */
 		RenderableInstance::RenderStateTracker tracker{};
@@ -2251,6 +2251,21 @@ namespace EmEn::Scenes
 				instanceWorldSphere = Base::Math::Space3D::Sphere< float >{worldRadius, batchCoordinates->position()};
 			}
 
+			/* The deferred resolve shades this batch's unshadowed point and spot lights when its material publishes the
+			 * deferred-lighting bit (Material::Interface::deferredLightingEligible()): their forward passes are skipped. */
+			bool batchLightsDeferred = false;
+
+			if ( !deferredLights.empty() )
+			{
+				const auto * batchMaterial = renderBatch.renderableInstance()->renderable()->material(renderBatch.subGeometryIndex());
+
+				batchLightsDeferred = batchMaterial != nullptr && batchMaterial->deferredLightingEligible();
+			}
+
+			const auto isDeferred = [batchLightsDeferred, deferredLights] (const Component::AbstractLightEmitter * light) noexcept {
+				return batchLightsDeferred && std::ranges::binary_search(deferredLights, light);
+			};
+
 			/* Loop through all directional lights. */
 			for ( const auto & light : directionalLights )
 			{
@@ -2298,7 +2313,7 @@ namespace EmEn::Scenes
 			/* Loop through all point lights. */
 			for ( const auto & light : pointLights )
 			{
-				if ( !light->isEnabled() )
+				if ( !light->isEnabled() || isDeferred(light.get()) )
 				{
 					continue;
 				}
@@ -2341,7 +2356,7 @@ namespace EmEn::Scenes
 			/* Loop through all spotlights. */
 			for ( const auto & light : spotLights )
 			{
-				if ( !light->isEnabled() )
+				if ( !light->isEnabled() || isDeferred(light.get()) )
 				{
 					continue;
 				}

@@ -283,8 +283,22 @@ namespace EmEn::Graphics
 	std::shared_ptr< Vulkan::RenderPass >
 	SceneRenderTarget::createRenderPass (Renderer & renderer) const noexcept
 	{
+		return this->buildScenePass(renderer, false);
+	}
+
+	std::shared_ptr< Vulkan::RenderPass >
+	SceneRenderTarget::buildScenePass (Renderer & renderer, bool resume) const noexcept
+	{
 		auto renderPass = std::make_shared< Vulkan::RenderPass >(renderer.device(), 0);
-		renderPass->setIdentifier(ClassId, this->id(), "RenderPass");
+		renderPass->setIdentifier(ClassId, this->id(), resume ? "ResumeRenderPass" : "RenderPass");
+
+		/* The RESUME variant LOADS every attachment in its attachment layout and is otherwise IDENTICAL — no subpass
+		 * dependency either: Vulkan render pass compatibility ignores only the load/store operations and the layouts, so
+		 * the pipelines sealed against the CLEAR pass draw in it (the post-process LOAD variant, which carries two
+		 * dependencies, is not compatible). Its synchronisation is the caller's (DeferredLightResolve's barriers). */
+		const auto loadOp = resume ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+		const auto colorInitialLayout = resume ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+		const auto depthInitialLayout = resume ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
 
 		Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
@@ -295,11 +309,11 @@ namespace EmEn::Graphics
 			.flags = 0,
 			.format = m_colorFormat,
 			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.loadOp = loadOp,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 			.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.initialLayout = colorInitialLayout,
 			.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 		});
 
@@ -314,11 +328,11 @@ namespace EmEn::Graphics
 				.flags = 0,
 				.format = m_normalsFormat,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = loadOp,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.initialLayout = colorInitialLayout,
 				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			});
 
@@ -333,11 +347,11 @@ namespace EmEn::Graphics
 				.flags = 0,
 				.format = m_materialPropertiesFormat,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = loadOp,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.initialLayout = colorInitialLayout,
 				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			});
 
@@ -352,11 +366,11 @@ namespace EmEn::Graphics
 				.flags = 0,
 				.format = m_albedoFormat,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = loadOp,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.initialLayout = colorInitialLayout,
 				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			});
 
@@ -371,11 +385,11 @@ namespace EmEn::Graphics
 				.flags = 0,
 				.format = m_velocityFormat,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = loadOp,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.initialLayout = colorInitialLayout,
 				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			});
 
@@ -391,11 +405,11 @@ namespace EmEn::Graphics
 				.flags = 0,
 				.format = m_reactiveFormat,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = loadOp,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.initialLayout = colorInitialLayout,
 				.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			});
 
@@ -410,11 +424,11 @@ namespace EmEn::Graphics
 				.flags = 0,
 				.format = m_depthFormat,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.loadOp = loadOp,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.initialLayout = depthInitialLayout,
 				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 			});
 
@@ -652,6 +666,31 @@ namespace EmEn::Graphics
 	}
 
 	bool
+	SceneRenderTarget::createResumeFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
+	{
+		/* Same attachments, same order as the CLEAR framebuffer (buildScenePass()). */
+		m_resumeFramebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
+		m_resumeFramebuffer->setIdentifier(ClassId, this->id(), "ResumeFramebuffer");
+
+		for ( const auto & imageView : {m_colorImageView, m_normalsImageView, m_materialPropertiesImageView, m_albedoImageView, m_velocityImageView, m_reactiveImageView, m_depthImageView} )
+		{
+			if ( imageView != nullptr )
+			{
+				m_resumeFramebuffer->addAttachment(imageView->handle());
+			}
+		}
+
+		if ( !m_resumeFramebuffer->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the resume framebuffer for '" << this->id() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
 	SceneRenderTarget::onCreate (Renderer & renderer) noexcept
 	{
 		if ( !this->createImages(renderer) )
@@ -683,6 +722,14 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* The resume variant of the scene pass: the translucent half after the deferred light resolve. */
+		const auto resumeRP = this->buildScenePass(renderer, true);
+
+		if ( resumeRP == nullptr || !this->createResumeFramebuffer(resumeRP) )
+		{
+			return false;
+		}
+
 		m_isReadyForRendering = true;
 
 		return true;
@@ -693,6 +740,7 @@ namespace EmEn::Graphics
 	{
 		m_isReadyForRendering = false;
 
+		m_resumeFramebuffer.reset();
 		m_postProcessFramebuffer.reset();
 		m_framebuffer.reset();
 		m_depthImageView.reset();
@@ -947,7 +995,8 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Depth image: depth attachment + transfer source (for depth blit to grab pass). */
+		/* Depth image: depth attachment + transfer source (for depth blit to grab pass) + sampled (the deferred light
+		 * resolve reconstructs positions from it between the two halves of the scene pass). */
 		if ( m_depthFormat != VK_FORMAT_UNDEFINED )
 		{
 			m_depthStencilImage = std::make_shared< Vulkan::Image >(
@@ -955,7 +1004,7 @@ namespace EmEn::Graphics
 				VK_IMAGE_TYPE_2D,
 				m_depthFormat,
 				this->extent(),
-				VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+				VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 			);
 			m_depthStencilImage->setIdentifier(ClassId, this->id(), "DepthImage");
 

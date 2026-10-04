@@ -510,6 +510,30 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns whether a point or spot light is shaded by the deferred light resolve
+			 * (Graphics::DeferredLightResolve) instead of by forward light passes.
+			 * @note THE predicate of the deferred punctual lights: enabled, no colour projection, and no ACTIVE shadow
+			 * (the global switch, the light's own casting flag and its shadow descriptor set — the same three the forward
+			 * pass selection reads). A shadowed light keeps its forward passes for every instance, receiving or not.
+			 * The renderer evaluates it ONCE per frame into a snapshot that both the forward skip and the resolve read.
+			 * @param light A reference to the light (point or spot).
+			 * @param shadowMapsEnabled The renderer's global shadow switch.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static
+			bool
+			isDeferredPunctualLight (const Component::AbstractLightEmitter & light, bool shadowMapsEnabled) noexcept
+			{
+				if ( !light.isEnabled() || light.hasColorProjectionTexture() )
+				{
+					return false;
+				}
+
+				return !(shadowMapsEnabled && light.isShadowCastingEnabled() && light.hasShadowDescriptorSet());
+			}
+
+			/**
 			 * @brief Returns the line light list.
 			 * @return const std::set< std::shared_ptr< Component::LineLight > > &
 			 */

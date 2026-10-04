@@ -246,6 +246,18 @@ namespace EmEn::Scenes::Component
 				return m_radius;
 			}
 
+			/** @brief Offsets (in floats) of the uniform block, published per render state (AbstractLightEmitter::publishedBlock()):
+			 * public for the readers that consume the published block directly (Graphics::DeferredLightResolve). */
+			static constexpr auto ColorOffset{0UL};
+			static constexpr auto PositionOffset{4UL};
+			static constexpr auto IntensityOffset{8UL};
+			static constexpr auto RadiusOffset{9UL};
+			static constexpr auto PCFRadiusOffset{10UL};
+			static constexpr auto ShadowBiasOffset{11UL};
+			static constexpr auto ColorProjectionIndexOffset{12UL};
+			static constexpr auto ColorProjectionFrameIndexOffset{13UL};
+			static constexpr auto ColorProjectionBoostOffset{14UL};
+
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
@@ -305,15 +317,6 @@ namespace EmEn::Scenes::Component
 			 * float PCFRadius: float 10
 			 * float ShadowBias: float 11
 			 */
-			static constexpr auto ColorOffset{0UL};
-			static constexpr auto PositionOffset{4UL};
-			static constexpr auto IntensityOffset{8UL};
-			static constexpr auto RadiusOffset{9UL};
-			static constexpr auto PCFRadiusOffset{10UL};
-			static constexpr auto ShadowBiasOffset{11UL};
-			static constexpr auto ColorProjectionIndexOffset{12UL};
-			static constexpr auto ColorProjectionFrameIndexOffset{13UL};
-			static constexpr auto ColorProjectionBoostOffset{14UL};
 
 			std::shared_ptr< Graphics::RenderTarget::Abstract > m_shadowMap; /* NOTE: std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > */
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;

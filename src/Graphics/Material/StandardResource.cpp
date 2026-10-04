@@ -2898,7 +2898,90 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* The deferred-lighting bit: the structure is fixed by THIS program, the parameters are read live from the
+		 * uniform block — exactly the two halves deferredLightingEligible() tests on the CPU. */
+		const bool deferredStructure = this->deferredLightingStructure();
+
+		m_deferredLightingCompiled.store(deferredStructure, std::memory_order_relaxed);
+
+		if ( deferredStructure )
+		{
+			lightGenerator.declareDeferredLightingCondition(
+				"(" + MaterialUB(UniformBlock::Component::RefractionIOR) + " == 1.5 && " +
+				MaterialUB(UniformBlock::Component::SpecularFactor) + " == 1.0 && " +
+				"all(equal(" + MaterialUB(UniformBlock::Component::SpecularColorFactor) + ".rgb, vec3(1.0))))"
+			);
+		}
+
 		return true;
+	}
+
+	bool
+	StandardResource::deferredLightingStructure () const noexcept
+	{
+		if ( this->isFlagEnabled(UnlitEnabled) || this->isFlagEnabled(BlendingEnabled) || this->isFlagEnabled(ShoreFoamEnabled) )
+		{
+			return false;
+		}
+
+		/* Refraction and transmission: the surface lets light through, the resolve shades an opaque one. */
+		if ( this->declaresTransmission() || m_isUsingEnvironmentCubemapForRefraction )
+		{
+			return false;
+		}
+
+		/* Every lobe the resolve does not model, whether a map or a factor switched it on (setupLightGenerator()). */
+		constexpr std::array< ComponentType, 13 > UnmodelledComponents{
+			ComponentType::Refraction,
+			ComponentType::ClearCoat,
+			ComponentType::ClearCoatRoughness,
+			ComponentType::ClearCoatNormal,
+			ComponentType::Subsurface,
+			ComponentType::SubsurfaceThickness,
+			ComponentType::Sheen,
+			ComponentType::SheenRoughness,
+			ComponentType::Anisotropy,
+			ComponentType::Iridescence,
+			ComponentType::IridescenceThickness,
+			ComponentType::Specular,
+			ComponentType::SpecularColor
+		};
+
+		for ( const auto componentType : UnmodelledComponents )
+		{
+			if ( m_components.contains(componentType) )
+			{
+				return false;
+			}
+		}
+
+		return
+			m_materialProperties[ClearCoatFactorOffset] <= 0.0F &&
+			m_materialProperties[SubsurfaceIntensityOffset] <= 0.0F &&
+			m_materialProperties[SheenColorOffset + 0] <= 0.0F &&
+			m_materialProperties[SheenColorOffset + 1] <= 0.0F &&
+			m_materialProperties[SheenColorOffset + 2] <= 0.0F &&
+			m_materialProperties[AnisotropyOffset] == 0.0F &&
+			m_materialProperties[IridescenceFactorOffset] <= 0.0F;
+	}
+
+	bool
+	StandardResource::deferredLightingParameters () const noexcept
+	{
+		/* F0 = ((ior - 1) / (ior + 1))² · specularFactor · specularColor = 0.04 exactly, the resolve's assumption. The
+		 * GPU half is the condition declared in setupLightGenerator(): the same comparisons on the same values. */
+		return
+			m_materialProperties[IOROffset] == DefaultIOR &&
+			m_materialProperties[SpecularFactorOffset] == DefaultSpecularFactor &&
+			m_materialProperties[SpecularColorOffset + 0] == 1.0F &&
+			m_materialProperties[SpecularColorOffset + 1] == 1.0F &&
+			m_materialProperties[SpecularColorOffset + 2] == 1.0F;
+	}
+
+	bool
+	StandardResource::deferredLightingEligible () const noexcept
+	{
+		return m_deferredLightingCompiled.load(std::memory_order_relaxed) && this->deferredLightingParameters();
 	}
 
 	std::string

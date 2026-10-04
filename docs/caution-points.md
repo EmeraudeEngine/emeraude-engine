@@ -5612,6 +5612,18 @@ writer is announced (it was undefined behaviour already).
 
 ## Vulkan Validation
 
+### A LOAD variant of a render pass must be IDENTICAL but for its load/store ops and layouts — subpass dependencies included (2026-10-04)
+
+The deferred light resolve cuts the scene pass in two, and its first version resumed the translucent half in the
+scene target's post-process LOAD framebuffer: `VUID-vkCmdDrawIndexed-renderPass-02684` ×20 per run, "dependencyCount
+is incompatible between VkRenderPass … and VkRenderPass … (from VkPipeline), 2 != 0". The translucent pipelines are
+sealed against the CLEAR scene pass (no subpass dependency); render-pass COMPATIBILITY ignores only the load/store
+operations and the layouts (Vulkan spec, "Render Pass Compatibility"), so two extra dependencies make the passes
+incompatible even though the rendering looked right. **Fix:** a RESUME variant built by the same function as the CLEAR
+pass (`SceneRenderTarget::buildScenePass(renderer, true)`), synchronised by the caller's barriers. ⚠️ The
+`TranslucentGB` pass draws in the post-process variant too — with pipelines built for that very framebuffer; never
+draw a CLEAR-pass pipeline in it. Doc: [`subsystems/graphics/38-deferred-punctual-lights.md`](subsystems/graphics/38-deferred-punctual-lights.md).
+
 ### Fixed: a GPU download reserved a transfer operation forever — one leaked staging buffer per call (2026-10-04)
 
 `TransferManager`'s reusable transfer operations are freed by THEIR OWN fence (`isAvailable()` = the operation's fence

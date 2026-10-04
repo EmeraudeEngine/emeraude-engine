@@ -279,6 +279,21 @@ namespace EmEn::Scenes::Component
 				return m_outerAngle;
 			}
 
+			/** @brief Offsets (in floats) of the uniform block, published per render state (AbstractLightEmitter::publishedBlock()):
+			 * public for the readers that consume the published block directly (Graphics::DeferredLightResolve). */
+			static constexpr auto ColorOffset{0UL};
+			static constexpr auto PositionOffset{4UL};
+			static constexpr auto DirectionOffset{8UL};
+			static constexpr auto IntensityOffset{12UL};
+			static constexpr auto RadiusOffset{13UL};
+			static constexpr auto InnerCosAngleOffset{14UL};
+			static constexpr auto OuterCosAngleOffset{15UL};
+			static constexpr auto LightMatrixOffset{16UL};
+			static constexpr auto PCFRadiusOffset{32UL};
+			static constexpr auto ShadowBiasOffset{33UL};
+			static constexpr auto ColorProjectionIndexOffset{34UL};
+			static constexpr auto ColorProjectionBoostOffset{35UL};
+
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
@@ -362,18 +377,6 @@ namespace EmEn::Scenes::Component
 			 *   float ShadowBias: float 33
 			 *   float padding: floats 34-35
 			 */
-			static constexpr auto ColorOffset{0UL};
-			static constexpr auto PositionOffset{4UL};
-			static constexpr auto DirectionOffset{8UL};
-			static constexpr auto IntensityOffset{12UL};
-			static constexpr auto RadiusOffset{13UL};
-			static constexpr auto InnerCosAngleOffset{14UL};
-			static constexpr auto OuterCosAngleOffset{15UL};
-			static constexpr auto LightMatrixOffset{16UL};
-			static constexpr auto PCFRadiusOffset{32UL};
-			static constexpr auto ShadowBiasOffset{33UL};
-			static constexpr auto ColorProjectionIndexOffset{34UL};
-			static constexpr auto ColorProjectionBoostOffset{35UL};
 
 			std::shared_ptr< Graphics::RenderTarget::Abstract > m_shadowMap; /* NOTE: std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > */
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;

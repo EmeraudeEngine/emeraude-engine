@@ -136,6 +136,18 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			const Vulkan::Framebuffer * postProcessFramebuffer () const noexcept override;
 
+			/**
+			 * @brief Returns the framebuffer of the RESUME variant of the scene pass: every attachment LOADED, render-pass
+			 * compatible with the pipelines of the CLEAR pass. The translucent half after the deferred light resolve.
+			 * @return const Vulkan::Framebuffer *
+			 */
+			[[nodiscard]]
+			const Vulkan::Framebuffer *
+			resumeFramebuffer () const noexcept
+			{
+				return m_resumeFramebuffer.get();
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const */
 			[[nodiscard]]
 			const ViewMatricesInterface & viewMatrices () const noexcept override;
@@ -300,6 +312,62 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the color (HDR scene colour) image view.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			colorImageView () const noexcept
+			{
+				return m_colorImageView;
+			}
+
+			/**
+			 * @brief Returns the normals image view, for sampling between the opaque and the translucent halves of the scene pass.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			normalsImageView () const noexcept
+			{
+				return m_normalsImageView;
+			}
+
+			/**
+			 * @brief Returns the material properties image view, for sampling between the two halves of the scene pass.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			materialPropertiesImageView () const noexcept
+			{
+				return m_materialPropertiesImageView;
+			}
+
+			/**
+			 * @brief Returns the albedo image view, for sampling between the two halves of the scene pass.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			albedoImageView () const noexcept
+			{
+				return m_albedoImageView;
+			}
+
+			/**
+			 * @brief Returns the depth image view (depth aspect). The image carries the SAMPLED usage: the deferred light
+			 * resolve reads it in DEPTH_STENCIL_READ_ONLY_OPTIMAL between the two halves of the scene pass.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			depthImageView () const noexcept
+			{
+				return m_depthImageView;
+			}
+
+			/**
 			 * @brief Returns the velocity image view for sampling operations (motion vectors).
 			 * @return std::shared_ptr< Vulkan::ImageView >
 			 */
@@ -397,6 +465,24 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool createPostProcessFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept;
 
+			/**
+			 * @brief Creates the framebuffer of the RESUME variant of the scene pass (buildScenePass(renderer, true)).
+			 * @param renderPass A reference to the resume render pass smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createResumeFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept;
+
+			/**
+			 * @brief Builds the scene pass: CLEAR (createRenderPass()) or its RESUME variant (every attachment LOADED in its
+			 * attachment layout, otherwise identical — render-pass-compatible with the CLEAR pass's pipelines).
+			 * @param renderer A reference to the renderer.
+			 * @param resume True for the resume variant.
+			 * @return std::shared_ptr< Vulkan::RenderPass >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::RenderPass > buildScenePass (Renderer & renderer, bool resume) const noexcept;
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]
 			bool onCreate (Renderer & renderer) noexcept override;
@@ -443,6 +529,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			std::shared_ptr< Vulkan::Framebuffer > m_postProcessFramebuffer;
+			std::shared_ptr< Vulkan::Framebuffer > m_resumeFramebuffer;
 			ViewMatricesInterface * m_sourceViewMatrices{nullptr};
 			ViewMatrices2DUBO m_viewMatrices;
 			Base::Math::CartesianFrame< float > m_worldCoordinates;

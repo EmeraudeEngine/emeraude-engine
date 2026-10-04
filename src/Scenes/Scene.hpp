@@ -2145,8 +2145,11 @@ namespace EmEn::Scenes
 			 * @note Must be called after prepareRender().
 			 * @param renderTarget The destination (View, Texture, or SwapChain).
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 * @param deferredLights The lights the deferred resolve (Graphics::DeferredLightResolve) shades after this pass:
+			 * their forward passes are skipped for the materials that publish the deferred-lighting bit. Sorted by
+			 * address. Empty (the default) keeps every forward pass — any target without the resolve.
 			 */
-			void renderOpaque (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+			void renderOpaque (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}) noexcept;
 
 			/**
 			 * @brief Renders all translucent objects (back-to-front for correct blending).
@@ -2893,9 +2896,11 @@ namespace EmEn::Scenes
 			 * @param renderBatches A reference to a render batch.
 			 * @param bindlessTexturesManager A pointer to the bindless texture manager. Can be nullptr.
 			 * @param sceneTransformsDS
+			 * @param deferredLights The lights resolved deferred, sorted by address (see renderOpaque()). Empty for a
+			 * translucent list, which is drawn after the resolve.
 			 * @return void
 			 */
-			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS) const noexcept;
+			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}) const noexcept;
 
 			/**
 			 * @brief Initializes a render target with all scene renderable instances.

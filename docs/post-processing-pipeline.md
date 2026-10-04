@@ -104,6 +104,12 @@ Three things this settles:
   shadow casters is a ratio of 1.28 — a single light. The `objects × (1 + lights)` cost only bites
   with several lights; here the scene pass is 8.6 ms and 13 % of the frame. Do not cite Sponza as
   evidence for or against a clustered-forward rewrite.
+  ⚠️⚠️ **SUPERSEDED 2026-10-04: that census predates Sponza's 22 lamps** (switched on 2026-09-13,
+  "as Intel intended"). With them the multi-pass IS the ceiling: `ScenePass` 45 ms of a 112 ms
+  frame (RTX 3070 Ti, 2880×1620), **linear in the lamps** — 8.9 / 10.9 / 27 / 45 ms at
+  0 / 1 / 11 / 22 lamps on, ≈ 1.65 ms per 10 m unshadowed point light; Apple M2: 265 ms of 343.
+  Measurement and the causes read in the code: [`todo/mrt-single-pass-deferred.md`](todo/mrt-single-pass-deferred.md)
+  § Measured cost.
 
 ⚠️ **RenderDoc attributes per DRAW and cannot split a fullscreen pass.** It is the right tool for
 the pass/draw/barrier census above, and the wrong one for the 40 ms inside a single trace draw —
