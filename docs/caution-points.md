@@ -5368,6 +5368,14 @@ misleading.
 
 ## Platform-Specific
 
+### macOS DEFINES `TARGET_OS_IPHONE` (as 0): test its VALUE, never `defined()` (2026-10-04)
+
+Apple's `TargetConditionals.h` defines `TARGET_OS_IPHONE` and `TARGET_IPHONE_SIMULATOR` on EVERY Apple platform, 0 on
+macOS. tinyusdz's `io-util.cc` tested `defined(TARGET_OS_IPHONE)`, took its "non posix" branch on macOS, compiled
+mmap out, and `MMapFile()` failed WITHOUT a message: no `.usdz` opened on macOS. Fixed in two places (owner,
+option (c)): ext-deps-generator `patches/tinyusdz.patch` tests the value; `USDZArchive::open()` reads the archive
+into memory when the mapping fails, saying why (a USDZ entry's byte range stays a file offset either way).
+
 ### ⚠️⚠️ The engine's `.mm` files were compiled WITHOUT ARC — written for it, they leaked everything (fixed 2026-10-01, triad 14)
 
 > [!CAUTION]

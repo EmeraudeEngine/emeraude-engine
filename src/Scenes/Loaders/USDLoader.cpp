@@ -125,14 +125,30 @@ namespace EmEn::Scenes::Loaders
 			{
 				std::string error;
 
-				if ( !tinyusdz::io::MMapFile(filepath.string(), &m_handle, false, &error) )
+				if ( tinyusdz::io::MMapFile(filepath.string(), &m_handle, false, &error) )
 				{
-					TraceError{USDLoader::ClassId} << "Unable to map the archive '" << filepath.string() << "' : " << error;
+					m_mapped = true;
+					m_base = m_handle.addr;
+					m_size = static_cast< size_t >(m_handle.size);
+				}
+				else
+				{
+					/* NOTE: A platform without tinyusdz's mmap (macOS took the "non posix" branch until the
+					 * ext-deps-generator patch of 2026-10-04: TARGET_OS_IPHONE is defined there, as 0) fails here
+					 * without a reason: the archive is read into memory instead. */
+					TraceWarning{USDLoader::ClassId} << "Unable to map the archive '" << filepath.string() << "' (" << (error.empty() ? std::string{"no reason given: mmap not available in tinyusdz"} : error) << "), reading it into memory.";
 
-					return false;
+					if ( !Base::IO::fileGetContents(filepath, m_memory) || m_memory.empty() )
+					{
+						TraceError{USDLoader::ClassId} << "Unable to read the archive '" << filepath.string() << "' !";
+
+						return false;
+					}
+
+					m_base = m_memory.data();
+					m_size = m_memory.size();
 				}
 
-				m_mapped = true;
 				m_filepath = filepath;
 
 				std::string warning;
@@ -140,7 +156,7 @@ namespace EmEn::Scenes::Loaders
 				/* ⚠️ `assetOnMemory` = true: the table keeps a POINTER into our mapping instead of
 				 * copying the whole archive into `USDZAsset::data`. That is the difference between
 				 * 21 MB and 1.6 GB resident before a single prim is read. */
-				if ( !tinyusdz::ReadUSDZAssetInfoFromMemory(m_handle.addr, static_cast< size_t >(m_handle.size), true, &m_asset, &warning, &error) )
+				if ( !tinyusdz::ReadUSDZAssetInfoFromMemory(m_base, m_size, true, &m_asset, &warning, &error) )
 				{
 					TraceError{USDLoader::ClassId} << "Unable to read the asset table of '" << filepath.filename().string() << "' : " << error;
 
@@ -183,7 +199,7 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				TraceInfo{USDLoader::ClassId} <<
-					"Archive '" << filepath.filename().string() << "' mapped: " << m_asset.asset_map.size() <<
+					"Archive '" << filepath.filename().string() << "' " << (m_mapped ? "mapped" : "read into memory") << ": " << m_asset.asset_map.size() <<
 					" entries, root layer '" << m_rootAssetName << "'.";
 
 				return true;
@@ -392,7 +408,9 @@ namespace EmEn::Scenes::Loaders
 			{
 				const auto it = m_asset.asset_map.find(resolvedName);
 
-				if ( it == m_asset.asset_map.cend() || it->second.second <= it->second.first || m_asset.addr != m_handle.addr )
+				/* NOTE: The offsets are file offsets only when the table points at the start of the whole file (mapped or
+				 * read). */
+				if ( it == m_asset.asset_map.cend() || it->second.second <= it->second.first || m_asset.addr != m_base )
 				{
 					return std::nullopt;
 				}
@@ -585,6 +603,9 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			tinyusdz::io::MMapFileHandle m_handle{};
+			std::vector< uint8_t > m_memory;
+			const uint8_t * m_base{nullptr};
+			size_t m_size{0};
 			tinyusdz::USDZAsset m_asset;
 			std::string m_rootAssetName;
 			std::string m_baseDirectory;

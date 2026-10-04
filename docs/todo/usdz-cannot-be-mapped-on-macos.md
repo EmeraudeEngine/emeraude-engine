@@ -1,7 +1,7 @@
 ---
 id: usdz-cannot-be-mapped-on-macos
 title: No .usdz opens on macOS — tinyusdz disables mmap because TARGET_OS_IPHONE is defined (as 0)
-status: open
+status: in-progress
 priority: unranked
 scope: Scenes/Loaders/USDLoader (USDZArchive::open), tinyusdz (ext-deps-generator)
 opened: 2026-10-04
@@ -25,11 +25,16 @@ unrelated to the CPU-copy work, but it blocks its USDZ path on macOS (the entry 
 
 ## What remains
 
-Owner decision, then the fix, then a macOS run opening a .usdz:
-- (a) patch tinyusdz in ext-deps-generator to test the VALUE (`defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE`, the
-  same for `TARGET_IPHONE_SIMULATOR`); worth upstreaming;
-- (b) in `USDZArchive::open()`, read the archive into memory when `MMapFile()` fails;
-- (c) both.
+Owner decision 2026-10-04: **(c) both** — done on Linux the same day:
+- ext-deps-generator `patches/tinyusdz.patch` gains a hunk for `src/io-util.cc` testing the VALUE
+  (`(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)`, the same for the simulator); `git apply --check` passes on
+  the target commit. Takes effect with the next macOS dependency build (and is worth upstreaming).
+- `USDZArchive::open()` reads the archive into memory when `MMapFile()` fails, logging why ("no reason given: mmap
+  not available in tinyusdz" when empty). Proven on Linux by forcing the failure: texture-cat-plane.usdz imported,
+  its image released and reloaded from its archive byte range.
+
+Left: a macOS run opening a .usdz (works with the engine fallback alone; mapped again after the dependency rebuild),
+then this file is deleted.
 
 ## References
 
