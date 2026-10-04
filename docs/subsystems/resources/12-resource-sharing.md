@@ -96,3 +96,15 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   directory fetch takes the siblings).
 - One peer only (`Core/Resources/Peer/URL`).
 - The index is merged once, at start-up: a resource the peer gains later needs a restart.
+
+## Validated on the three OS (2026-10-04)
+
+- **Windows**: build 0 warnings; base 2342 + 3 skipped; MCP conformance 1826/0; a Windows peer of the Linux server
+  merged 4505 resources (the Linux data repository's git-ignored `data-stores/ExternalData/`, 4504 entries — the 9892
+  others were already local) in 110 ms; `WorldLobby.usdz` fetched in 15.8 s, SHA-256 equal; a cancel 0.3 s later left
+  nothing; as a server, every index `Path` uses '/', a Range 206 byte-exact, `../` and `%5C` 404.
+- **macOS M2**: build 0 warnings; base Release 2342 + 3, ASan 2345/2345; MCP conformance 1826/0; peer: 4505 merged
+  in 97 ms; `Musics/Kyrandia2` 32 kept; `WorldLobby.usdz` fetched in about 26 s, byte-identical. The fetch target
+  there is the bundle's `Contents/Resources/data/data-stores` (a link to the data repository).
+- `currentBytes` is the per-file progress; `bytesReceived` adds a file once verified. The last seconds of a large
+  file are the two SHA-256 passes, then the rename.

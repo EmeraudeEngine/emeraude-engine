@@ -1160,3 +1160,9 @@ Windows' validation run (same counts, spawn inside the hall) caught a fourth, ha
 `Stage metrics` line (after the conversion) printed garbage time codes (`6.36599e-314`, `0 to inf`, `-3.05e-05`).
 It read `metas` from the layer the converter had already consumed. The time codes are now copied with `upAxis` and
 `metersPerUnit`, before the conversion; the line reads `100 to 600` like the first one.
+
+Validated on the three OS (2026-10-04): Windows and macOS M2 give exactly Linux's counts (942 meshes, 141 materials,
+348 textures, 167 images, 30 lights), 2 composition passes, 0 "not in the archive", both metrics lines "100 to 600",
+the spawn inside the lit hall. macOS (archive mapped, validation ON, release ON): 0 VUID, first draw 6.6 s, peak RSS
+4517 MiB, census 388 MiB. Windows ran with the release OFF (its settings copy kept the old false): peak private
+6860 MiB.
