@@ -105,8 +105,13 @@ the resource, never only in the data:
   before the load (`setLocalDataSource()`) with the type's own reading code (`reloadLocalDataFromSource()`:
   geometries and images from their file, `readLocalData()` shared with `load()`; a cubemap through a temporary
   `CubemapResource` of the SAME name — a packed / equirectangular definition finds its image by the name), else a
-  GPU readback (`reloadLocalDataFromGPU()`, phase 3b / 3c); a reloaded copy is releasable again after the grace
-  delay. A procedural resource (`load(shape)`, generated pixels) has no store source. Leases today: the texture uploads
+  GPU readback (`reloadLocalDataFromGPU()`); a reloaded copy is releasable again after the grace delay. A procedural
+  resource (`load(shape)`, generated pixels) has no store source. **Geometry readback** (phase 3b): the vertex and
+  index buffers carry `VK_BUFFER_USAGE_TRANSFER_SRC_BIT`; `TransferManager::downloadBuffer()` copies one into a
+  temporary host-readable buffer on the graphics queue and waits (load-time readers only); the shape is rebuilt by
+  base `Shape::readIndexedVertexBuffer()` / `readVertexBuffer()` with the upload's own formats
+  (`skeletalAnimationFormat()` is shared by both) and the sub-geometries as groups — what the GPU draws, not the
+  original shape (base `vertexfactory/07`). Leases today: the texture uploads
   (Texture1D / 2D / Cubemap, the animated textures through `MovieResource::leaseFrameImages()` /
   `CubemapMovieResource::leaseFrameCubemaps()`), the automatic LOD jobs, the ground / terrain displacement, the
   cursor, projet-alpha's terrain heightmap. ⚠️ Reading `localData()` / `data()` / `faces()` of a releasable

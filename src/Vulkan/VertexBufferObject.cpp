@@ -36,7 +36,8 @@ namespace EmEn::Vulkan
 			device,
 			0,
 			static_cast< size_t >(vertexCount) * vertexElementCount * sizeof(float),
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | (device->rayTracingEnabled() ? (VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR) : 0U),
+			/* NOTE: TRANSFER_SRC: a released CPU copy is rebuilt from this buffer (Resources § CPU Copies, readback). */
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | (device->rayTracingEnabled() ? (VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR) : 0U),
 			hostVisible
 		},
 		m_vertexCount{vertexCount},

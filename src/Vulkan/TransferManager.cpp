@@ -26,6 +26,11 @@
 
 #include "TransferManager.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cstddef>
+#include <span>
+
 /* Local inclusions. */
 #include "Buffer.hpp"
 #include "CommandBuffer.hpp"
@@ -230,6 +235,101 @@ namespace EmEn::Vulkan
 		}
 
 		image.setCurrentImageLayout(newLayout);
+
+		return true;
+	}
+
+	bool
+	TransferManager::downloadBuffer (const Buffer & sourceBuffer, std::span< std::byte > destination) noexcept
+	{
+		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
+		const std::scoped_lock lock{m_transferOperationsAccess};
+
+		if ( !this->usable() )
+		{
+			TraceError{ClassId} << "The transfer manager is not usable !";
+
+			return false;
+		}
+
+		if ( (sourceBuffer.createInfo().usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT) == 0 )
+		{
+			TraceError{ClassId} << "The buffer '" << sourceBuffer.identifier() << "' has not been created with VK_BUFFER_USAGE_TRANSFER_SRC_BIT, it cannot be downloaded !";
+
+			return false;
+		}
+
+		const auto bytes = sourceBuffer.bytes();
+
+		if ( bytes == 0 || destination.size() != bytes )
+		{
+			TraceError{ClassId} << "The buffer '" << sourceBuffer.identifier() << "' holds " << bytes << " bytes, the destination " << destination.size() << " !";
+
+			return false;
+		}
+
+		/* NOTE: A temporary staging buffer of its own, CPU-cached for the read: a reusable transfer operation is only
+		 * freed by its own fence, which a download does not signal. */
+		const auto stagingBuffer = std::make_unique< Buffer >(m_device, 0, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
+		stagingBuffer->setHostReadable(true);
+		stagingBuffer->setIdentifier(ClassId, "BufferDownload", "Buffer");
+
+		if ( !stagingBuffer->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create a " << bytes << " bytes download buffer !";
+
+			return false;
+		}
+
+		const auto commandPool = m_graphicsCommandPool ? m_graphicsCommandPool : m_transferCommandPool;
+		const auto commandBuffer = std::make_unique< CommandBuffer >(commandPool, true);
+		commandBuffer->setIdentifier(ClassId, "BufferDownload", "CommandBuffer");
+
+		if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			TraceError{ClassId} << "Unable to begin the buffer download command buffer !";
+
+			return false;
+		}
+
+		commandBuffer->copy(sourceBuffer, *stagingBuffer, 0, 0, bytes);
+
+		if ( !commandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the buffer download command buffer !";
+
+			return false;
+		}
+
+		const auto downloadFence = std::make_unique< Sync::Fence >(m_device, 0);
+		downloadFence->setIdentifier(ClassId, "BufferDownload", "Fence");
+
+		if ( !downloadFence->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the buffer download fence !";
+
+			return false;
+		}
+
+		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+
+		if ( !queue->submit(*commandBuffer, SynchInfo{}.withFence(downloadFence->handle())) || !downloadFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to download the buffer '" << sourceBuffer.identifier() << "' !";
+
+			return false;
+		}
+
+		const auto * pointer = stagingBuffer->mapMemoryAs< const std::byte >();
+
+		if ( pointer == nullptr )
+		{
+			return false;
+		}
+
+		std::copy_n(pointer, bytes, destination.data());
+
+		stagingBuffer->unmapMemory();
 
 		return true;
 	}

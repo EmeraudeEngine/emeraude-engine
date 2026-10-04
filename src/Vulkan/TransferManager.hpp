@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -346,6 +347,18 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+
+			/**
+			 * @brief Downloads a whole buffer from GPU memory: a copy into a temporary host-readable (cached) buffer on
+			 * the graphics queue, then a wait.
+			 * @note Blocking: for a load-time reader (a released CPU copy rebuilt from its GPU copy), never per frame.
+			 * The source must have been created with VK_BUFFER_USAGE_TRANSFER_SRC_BIT.
+			 * @param sourceBuffer A reference to the source buffer.
+			 * @param destination The bytes to fill, exactly the buffer's size.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool downloadBuffer (const Buffer & sourceBuffer, std::span< std::byte > destination) noexcept;
 
 			/**
 			 * @brief Clears a depth image to a specific depth value.

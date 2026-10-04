@@ -81,7 +81,10 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
    citadel 2167 → 386 MiB, terrain 3517 → 461; **the macOS allocator returns the freed LARGE blocks by itself** (no
    trim: citadel MALLOC_LARGE 2602 → 715 MB, phys_footprint 7512 → 5588 MB). Open observation: terrain's MALLOC_SMALL
    GREW by 556 MB with the release ON (swap differed between the runs: 5.1 vs 2.5 GB) — to re-measure. Sponza keeps
-   2.2 GiB: its `CompressedImageResource` (1792 MiB), outside this scope. A late reader found as designed:
+   2.2 GiB: its `CompressedImageResource` (1792 MiB), outside this scope. ACCEPTED Windows (NVIDIA) 2026-10-04: **the
+   Windows heap returns the memory by itself** — citadel 45 s, release ON vs OFF: census 386 vs 2167 MiB, private bytes
+   4659 vs 6405 MiB (−1746), working set 2254 vs 4084 MiB; ground probes identical, the car driven after the release,
+   0 "not resident". (Citadel's private bytes when the item opened: 7470 MiB.) A late reader found as designed:
    a `SimpleMeshResource` created after the release from a released geometry renders (GPU buffers) but gets no
    automatic LOD — phase 3's case. Owner decisions: **deferred + leases**; **type default + code override**;
    scope **indexed / plain geometries, images, cubemaps**. Design:
@@ -110,7 +113,19 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
    11 ms, the cubemap 'StormyDays' 103 ms (24 MiB); each released again after the grace delay (census back to 418
    MiB); `requestLocalData()` answers "not resident" then leases 150 ms later; with automatic LOD on, the late
    `SimpleMeshResource` reloads its geometry and gets its LOD (0 skipped). The procedural tree 'Aspen0LOD2' cannot
-   come back yet (3b). 0 VUID.
+   come back yet (3b). 0 VUID. ACCEPTED macOS M2 2026-10-04 (engine b7f650ce): the same reloads (bytes +32 / −40 = the
+   libc++ object overhead), `requestLocalData()` false then true, scene intact, 0 VUID. macOS terrain ABBA
+   re-measure (release OFF / ON / ON / OFF, 45 s): MALLOC_LARGE −2.7 to −2.9 GB with the release ON, returned by the
+   allocator itself, reproducible; **MALLOC_SMALL GROWS** with it ON (+461, +160 MB; +556 in phase 2) against an OFF
+   baseline stable to 1 MB — the frees run on a pool worker, other than the allocating threads (hypothesis:
+   per-thread magazine caches); phys_footprint 11 GB → 8.9-9.3 GB. ACCEPTED Windows (NVIDIA) 2026-10-04: the three store-backed
+   copies come back (bytes +112 / +280: MSVC's larger containers), the tree refuses as expected, census +28 MiB = the
+   leases; 0 VUID beyond the known renderPass-12325.
+   **3b DONE 2026-10-04** (geometry readback): citadel, release ON, the procedural trees come back from their GPU
+   copy — Aspen0LOD2 7 MiB in 18 ms, Conifer1LOD1 19 MiB in 38 ms, Broadleaf0LOD0 72 MiB in 58-116 ms — and a local
+   probe re-encoding each read-back shape found the vertex and index buffers byte-IDENTICAL to the downloaded ones
+   (9.2 M floats for Broadleaf0LOD0): the readback uses the upload's formats. Released again after the grace delay,
+   0 VUID, 0 error.
    `Core/Resources/ReleaseLocalData` flips to ON in a last commit once all three pass on the three OS.
 4. **Owner decisions after phase 0 (2026-10-03):**
    - **The construction-time hash indexes are dropped AT UPLOAD** — DONE 2026-10-03: `IndexedVertexResource` /

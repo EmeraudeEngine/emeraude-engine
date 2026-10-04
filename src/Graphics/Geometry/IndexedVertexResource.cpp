@@ -26,7 +26,13 @@
 
 #include "IndexedVertexResource.hpp"
 
+/* STL inclusions. */
+#include <span>
+#include <utility>
+#include <vector>
+
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
 #include "VertexFactory/FileIO.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -74,17 +80,13 @@ namespace EmEn::Graphics::Geometry
 		std::vector< float > vertexAttributes;
 		std::vector< uint32_t > indices;
 
-		const auto skeletalAnimationType = (this->isFlagEnabled(EnableInfluence) && this->isFlagEnabled(EnableWeight))
-			? VertexFactory::SkeletalAnimationType::Weighted4
-			: VertexFactory::SkeletalAnimationType::None;
-
 		const auto vertexElementCount = m_localData.createIndexedVertexBuffer(
 			vertexAttributes,
 			indices,
 			this->getNormalsFormat(),
 			this->getPrimaryTextureCoordinatesFormat(),
 			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None,
-			skeletalAnimationType,
+			this->skeletalAnimationFormat(),
 			/* The shape's secondary set (glTF TEXCOORD_1), after the primary one in the vertex format. */
 			this->getSecondaryTextureCoordinatesFormat()
 		);
@@ -306,6 +308,54 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* NOTE: The bounding volumes are NOT re-cached: the file did not change, and the render thread reads them. */
+		m_localData.releaseConstructionIndexes();
+
+		return true;
+	}
+
+	VertexFactory::SkeletalAnimationType
+	IndexedVertexResource::skeletalAnimationFormat () const noexcept
+	{
+		return (this->isFlagEnabled(EnableInfluence) && this->isFlagEnabled(EnableWeight)) ? VertexFactory::SkeletalAnimationType::Weighted4 : VertexFactory::SkeletalAnimationType::None;
+	}
+
+	bool
+	IndexedVertexResource::reloadLocalDataFromGPU () noexcept
+	{
+		if ( m_vertexBufferObject == nullptr || m_indexBufferObject == nullptr )
+		{
+			return false;
+		}
+
+		auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
+
+		/* NOTE: The buffers hold exactly the createIndexedVertexBuffer() output of the upload, in the same formats. */
+		std::vector< float > vertexAttributes(m_vertexBufferObject->bytes() / sizeof(float));
+		std::vector< uint32_t > indices(m_indexBufferObject->bytes() / sizeof(uint32_t));
+
+		if ( !transferManager.downloadBuffer(*m_vertexBufferObject, std::as_writable_bytes(std::span{vertexAttributes})) || !transferManager.downloadBuffer(*m_indexBufferObject, std::as_writable_bytes(std::span{indices})) )
+		{
+			return false;
+		}
+
+		std::vector< std::pair< uint32_t, uint32_t > > groups;
+		groups.reserve(m_subGeometries.size());
+
+		for ( const auto & subGeometry : m_subGeometries )
+		{
+			groups.emplace_back(subGeometry.offset() / 3, subGeometry.length() / 3);
+		}
+
+		Shape< float, uint32_t > shape;
+
+		if ( !shape.readIndexedVertexBuffer(vertexAttributes, indices, groups, this->getNormalsFormat(), this->getPrimaryTextureCoordinatesFormat(), this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None, this->skeletalAnimationFormat(), this->getSecondaryTextureCoordinatesFormat()) )
+		{
+			TraceError{ClassId} << "The GPU copy of '" << this->name() << "' does not read back as a shape !";
+
+			return false;
+		}
+
+		m_localData = std::move(shape);
 		m_localData.releaseConstructionIndexes();
 
 		return true;

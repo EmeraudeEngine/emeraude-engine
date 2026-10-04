@@ -26,7 +26,13 @@
 
 #include "VertexResource.hpp"
 
+/* STL inclusions. */
+#include <span>
+#include <utility>
+#include <vector>
+
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
 #include "VertexFactory/FileIO.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -282,6 +288,47 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* NOTE: The bounding volumes are NOT re-cached: the file did not change, and the render thread reads them. */
+		m_localData.releaseConstructionIndexes();
+
+		return true;
+	}
+
+	bool
+	VertexResource::reloadLocalDataFromGPU () noexcept
+	{
+		if ( m_vertexBufferObject == nullptr )
+		{
+			return false;
+		}
+
+		auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
+
+		/* NOTE: The buffer holds exactly the createVertexBuffer() output of the upload, in the same formats. */
+		std::vector< float > vertexAttributes(m_vertexBufferObject->bytes() / sizeof(float));
+
+		if ( !transferManager.downloadBuffer(*m_vertexBufferObject, std::as_writable_bytes(std::span{vertexAttributes})) )
+		{
+			return false;
+		}
+
+		std::vector< std::pair< uint32_t, uint32_t > > groups;
+		groups.reserve(m_subGeometries.size());
+
+		for ( const auto & subGeometry : m_subGeometries )
+		{
+			groups.emplace_back(subGeometry.offset() / 3, subGeometry.length() / 3);
+		}
+
+		Shape< float > shape;
+
+		if ( !shape.readVertexBuffer(vertexAttributes, groups, this->getNormalsFormat(), this->getPrimaryTextureCoordinatesFormat(), this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None, VertexFactory::SkeletalAnimationType::None, this->getSecondaryTextureCoordinatesFormat()) )
+		{
+			TraceError{ClassId} << "The GPU copy of '" << this->name() << "' does not read back as a shape !";
+
+			return false;
+		}
+
+		m_localData = std::move(shape);
 		m_localData.releaseConstructionIndexes();
 
 		return true;

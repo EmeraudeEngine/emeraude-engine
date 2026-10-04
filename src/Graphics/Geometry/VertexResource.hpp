@@ -310,6 +310,10 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			bool reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromGPU() */
+			[[nodiscard]]
+			bool reloadLocalDataFromGPU () noexcept override;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
 			void
 			onReleaseLocalData () noexcept override

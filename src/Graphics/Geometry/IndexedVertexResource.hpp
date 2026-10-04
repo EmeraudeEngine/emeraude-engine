@@ -329,6 +329,17 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			bool reloadLocalDataFromSource (const Resources::BaseInformation & source) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromGPU() */
+			[[nodiscard]]
+			bool reloadLocalDataFromGPU () noexcept override;
+
+			/**
+			 * @brief Returns the skeletal attributes the vertex buffer carries: the upload and the readback share it.
+			 * @return VertexFactory::SkeletalAnimationType
+			 */
+			[[nodiscard]]
+			Base::VertexFactory::SkeletalAnimationType skeletalAnimationFormat () const noexcept;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
 			void
 			onReleaseLocalData () noexcept override
