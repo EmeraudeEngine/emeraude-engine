@@ -36,6 +36,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <cstddef>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -133,7 +134,18 @@ namespace EmEn::Scenes::Loaders
 		private:
 
 			[[nodiscard]]
-			bool loadImages (const ufbx_scene & scene, const std::filesystem::path & basePath) noexcept;
+			bool loadImages (const ufbx_scene & scene, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept;
+
+			/**
+			 * @brief Re-reads the encoded bytes of a texture embedded in an FBX (an image's EncodedSource: ufbx gives no
+			 * file offset for embedded content), the FBX parsed without geometry, animation or external files.
+			 * @param filepath The FBX file.
+			 * @param index The texture's index in the scene.
+			 * @param bytes The encoded bytes.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool readEmbeddedTexture (const std::filesystem::path & filepath, uint32_t index, std::vector< std::byte > & bytes) noexcept;
 
 			[[nodiscard]]
 			bool loadMaterials (const ufbx_scene & scene) noexcept;

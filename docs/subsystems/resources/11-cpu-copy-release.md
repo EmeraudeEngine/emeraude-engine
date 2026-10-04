@@ -32,6 +32,12 @@ State of the art the design follows: Unity (`Mesh.UploadMeshData(markNoLongerRea
   **`requestLocalData()` never waits**; reload from the recorded store entry, else the **geometry GPU readback**;
   **images and cubemaps without a store source are never released** (their texture is BC7 on every BC-capable GPU).
   macOS `malloc_zone_pressure_relief()`: measured, no effect, **not adopted**.
+- 2026-10-04: model images get a source (item `model-embedded-image-sources`): **files + byte ranges + FBX**
+  (whole external files, byte ranges in `.glb` / `.bin` / USDZ, the FBX re-parsed for its embedded content), stored
+  in `ImageResource` as an `EncodedSource`. Every kind reloaded with pixels IDENTICAL to the original (a checksum
+  probe): CarConcept / DragonPigHigh / Fox `.glb` ranges (10-185 ms), the Paladin FBX's embedded textures (80-92 ms,
+  re-parse), Fox `.gltf` external PNG, a split Fox `.gltf` + `.bin` range, a USDZ entry range, a `.usda`'s external
+  JPEG. Census, release ON, 45 s: citadel 499 → 418 MiB, liminal 728 → 500, terrain 529 → 493.
 - 2026-10-04: `Core/Resources/ReleaseLocalData` **ON by default** after the three-OS validation. ⚠️ An existing
   `settings.json` keeps the `false` its first run wrote (`getOrSetDefault()`): set it to `true` by hand.
 
@@ -46,8 +52,8 @@ State of the art the design follows: Unity (`Mesh.UploadMeshData(markNoLongerRea
 - Linux RSS with the trim: citadel 5435 → 2508 MiB, terrain 8813 → 4085 MiB. Windows citadel private bytes 6414 →
   4752 MiB (7470 when the item opened). macOS phys_footprint citadel 7512 → 5588 MB, terrain 11 GB → 8.9-9.3 GB.
 - What stays: decoded music (367 MiB everywhere, item `decoded-music-stays-resident`), sponza's
-  `CompressedImageResource` (1792 MiB, not in this scope), the source-less images (citadel 81, liminal 228 MiB: the
-  CarConcept / DragonPig embedded textures), movie frames the movies own (generated ones).
+  `CompressedImageResource` (1792 MiB, not in this scope), movie frames the movies own (generated ones), generated
+  images. (The model-embedded images — citadel 81, liminal 228 MiB — have a source since 2026-10-04.)
 - Where citadel's 1359 MiB of geometry went before (phase 0): vertices 542, the construction-time unpaired-edge index
   360, triangles 200, vertex colours 147, edges 109 MiB; a tree LOD0 = 116 MiB.
 - Reload costs (Linux, citadel): an image from its file 26 ms (4 MiB), a cubemap 103 ms (24 MiB), a store geometry
@@ -78,5 +84,4 @@ State of the art the design follows: Unity (`Mesh.UploadMeshData(markNoLongerRea
 
 `memory-outside-the-census` (terrain: 8.1 GB private for a 497 MiB census), `decoded-music-stays-resident`,
 `movie-frames-stay-resident` (the residency of decoded frames), `automatic-lod-buffers-destroyed-in-use`,
-`normal-map-flip-mutates-shared-image`. Not decided: give an embedded image its model file as a source (liminal's
-228 MiB).
+`normal-map-flip-mutates-shared-image`.

@@ -30,7 +30,13 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
@@ -47,6 +53,120 @@ namespace EmEn::Resources
 
 namespace EmEn::Graphics
 {
+	/**
+	 * @brief Where the encoded pixels of an image built by a scene loader live, so they can be read and decoded again
+	 * once the image released its CPU copy (owner decision 2026-10-04: files + byte ranges + FBX).
+	 * @note Decoded exactly as the loaders do: forced to RGBA (`ReadOptions{.targetChannelMode = RGBA}`).
+	 */
+	class EncodedSource final
+	{
+		public:
+
+			/** @brief Reads the encoded bytes of a texture embedded in a model file (a loader-provided function). */
+			using EmbeddedReader = bool (*) (const std::filesystem::path & filepath, uint32_t index, std::vector< std::byte > & bytes) noexcept;
+
+			/**
+			 * @brief A whole image file, its decoder picked from its extension.
+			 * @param filepath The image file.
+			 * @return EncodedSource
+			 */
+			[[nodiscard]]
+			static
+			EncodedSource
+			file (std::filesystem::path filepath) noexcept
+			{
+				EncodedSource source;
+				source.m_filepath = std::move(filepath);
+				source.m_kind = Kind::File;
+
+				return source;
+			}
+
+			/**
+			 * @brief A byte range of a file holding an encoded image (a .glb's BIN chunk, an external .bin, an
+			 * uncompressed archive entry).
+			 * @param filepath The container file.
+			 * @param offset The first byte of the encoded image.
+			 * @param length Its size in bytes.
+			 * @param format The encoding.
+			 * @return EncodedSource
+			 */
+			[[nodiscard]]
+			static
+			EncodedSource
+			fileRange (std::filesystem::path filepath, uint64_t offset, uint64_t length, Base::PixelFactory::Pixmap< uint8_t >::Format format) noexcept
+			{
+				EncodedSource source;
+				source.m_filepath = std::move(filepath);
+				source.m_offset = offset;
+				source.m_length = length;
+				source.m_format = format;
+				source.m_kind = Kind::FileRange;
+
+				return source;
+			}
+
+			/**
+			 * @brief An image embedded in a model file without a known byte position (FBX): a loader function reads its
+			 * bytes back by index.
+			 * @param filepath The model file.
+			 * @param index The image's index in the model.
+			 * @param length The size the encoded image had: a different one refuses the reload (the file changed).
+			 * @param format The encoding.
+			 * @param reader The loader function. Not null.
+			 * @return EncodedSource
+			 */
+			[[nodiscard]]
+			static
+			EncodedSource
+			embedded (std::filesystem::path filepath, uint32_t index, uint64_t length, Base::PixelFactory::Pixmap< uint8_t >::Format format, EmbeddedReader reader) noexcept
+			{
+				EncodedSource source;
+				source.m_filepath = std::move(filepath);
+				source.m_offset = index;
+				source.m_length = length;
+				source.m_format = format;
+				source.m_reader = reader;
+				source.m_kind = Kind::Embedded;
+
+				return source;
+			}
+
+			/**
+			 * @brief Reads and decodes the image to RGBA.
+			 * @param pixmap A reference to the pixmap to fill.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool decode (Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
+
+			/**
+			 * @brief Returns a description for the logs.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string describe () const noexcept;
+
+		private:
+
+			/** @brief The kinds of source. */
+			enum class Kind : uint8_t
+			{
+				File,
+				FileRange,
+				Embedded
+			};
+
+			EncodedSource () noexcept = default;
+
+			std::filesystem::path m_filepath;
+			uint64_t m_offset{0};
+			uint64_t m_length{0};
+			EmbeddedReader m_reader{nullptr};
+			Base::PixelFactory::Pixmap< uint8_t >::Format m_format{Base::PixelFactory::Pixmap< uint8_t >::Format::None};
+			Kind m_kind{Kind::File};
+	};
+
 	/**
 	 * @class ImageResource
 	 * @brief Provides 2D image data as a loadable resource for texture rendering.
@@ -344,6 +464,18 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Records where a scene loader read the image from, so its released CPU copy can come back
+			 * (EncodedSource). Set it before load().
+			 * @param source The encoded source.
+			 * @return void
+			 */
+			void
+			setEncodedSource (EncodedSource source) noexcept
+			{
+				m_encodedSource = std::move(source);
+			}
+
+			/**
 			 * @brief Loads the image resource from a pre-built pixmap (procedural texture creation).
 			 *
 			 * Moves the provided pixmap into the resource and marks it as successfully loaded.
@@ -377,11 +509,15 @@ namespace EmEn::Graphics
 			releasesLocalData () const noexcept override
 			{
 				/* NOTE: GPU only by type, WHEN the pixels can come back from a store entry: the texture uploads lease them,
-				 * then declare them releasable. An image without a source (embedded in a glTF / FBX model, generated)
-				 * stays resident: its texture is BC7 on every BC-capable GPU, a lossy copy that cannot give the pixels
-				 * back (owner decision 2026-10-04). */
-				return this->hasLocalDataSource();
+				 * then declare them releasable. A scene loader's image comes back from its EncodedSource; an image
+				 * without either (a generated one, a base64 data: URI) stays resident: its texture is BC7 on every
+				 * BC-capable GPU, a lossy copy that cannot give the pixels back (owner decisions 2026-10-04). */
+				return this->hasLocalDataSource() || m_encodedSource.has_value();
 			}
+
+			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromOwnSource() */
+			[[nodiscard]]
+			bool reloadLocalDataFromOwnSource () noexcept override;
 
 			/**
 			 * @brief Reads and validates the image file into the pixels (no status change): load() and the reload share
@@ -405,7 +541,9 @@ namespace EmEn::Graphics
 				m_pixmap = {};
 			}
 
+
 			Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
+			std::optional< EncodedSource > m_encodedSource;
 			Base::PixelFactory::Color< float > m_averageColor;
 			uint32_t m_width{0};
 			uint32_t m_height{0};

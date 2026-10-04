@@ -110,7 +110,8 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 
 ### `src/Scenes/Loaders` (2026-09-30)
 
-- **pro-type-union-access ×141** — FBXLoader only: the ufbx API is unions (`ufbx_vec3::x`, …).
+- **pro-type-union-access ×143** — FBXLoader only: the ufbx API is unions (`ufbx_vec3::x`, …; +2 in
+  `readEmbeddedTexture()`, 2026-10-04).
 - **pro-bounds-constant-array-index ×18** — each one checked bounded: FBX (`texIdx` checked, `k < 3`, `wi < take ≤ 4`,
   ufbx indices consistent by construction), glTF (texture index checked, literal loops), USD (literal 4×4 loops), WAD
   (counts derived from the lump size; cross-references checked).

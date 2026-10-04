@@ -1000,6 +1000,20 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Reads the CPU copy back from a source the resource keeps itself (an image's encoded source, set by a
+			 * scene loader), tried after the store entry. Default false (the type has none).
+			 * @note Called with no lease held and no other reload running.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			reloadLocalDataFromOwnSource () noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Rebuilds the CPU copy from the GPU copy (a readback), for a resource without a store source.
 			 * Default false (the type cannot).
 			 * @note Called with no lease held and no other reload running.

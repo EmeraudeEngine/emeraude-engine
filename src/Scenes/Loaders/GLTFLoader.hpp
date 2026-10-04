@@ -160,7 +160,7 @@ namespace EmEn::Scenes::Loaders
 		private:
 
 			[[nodiscard]]
-			bool loadImages (const fastgltf::Asset & asset, const std::filesystem::path & basePath) noexcept;
+			bool loadImages (const fastgltf::Asset & asset, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept;
 
 			[[nodiscard]]
 			bool loadMaterials (const fastgltf::Asset & asset) noexcept;

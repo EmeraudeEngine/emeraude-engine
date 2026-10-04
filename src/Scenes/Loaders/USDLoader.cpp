@@ -28,16 +28,18 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
-#include <numbers>
-#include <system_error>
+#include <filesystem>
 #include <memory>
+#include <numbers>
+#include <optional>
 #include <ranges>
+#include <system_error>
+#include <tuple>
 #include <utility>
 #include <vector>
-#include <array>
-#include <tuple>
 
 /* STL inclusions. */
 #include <cstring>
@@ -131,6 +133,7 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				m_mapped = true;
+				m_filepath = filepath;
 
 				std::string warning;
 
@@ -377,6 +380,37 @@ namespace EmEn::Scenes::Loaders
 				return reinterpret_cast< const std::byte * >(m_asset.addr) + it->second.first;
 			}
 
+			/**
+			 * @brief Returns where an entry lies in the archive FILE: (offset, length). A USDZ stores its entries
+			 * uncompressed, and the asset table's offsets are relative to the start of the mapped file.
+			 * @param resolvedName The entry name.
+			 * @return std::optional< std::pair< uint64_t, uint64_t > >
+			 */
+			[[nodiscard]]
+			std::optional< std::pair< uint64_t, uint64_t > >
+			entryRange (const std::string & resolvedName) const noexcept
+			{
+				const auto it = m_asset.asset_map.find(resolvedName);
+
+				if ( it == m_asset.asset_map.cend() || it->second.second <= it->second.first || m_asset.addr != m_handle.addr )
+				{
+					return std::nullopt;
+				}
+
+				return std::pair< uint64_t, uint64_t >{it->second.first, it->second.second - it->second.first};
+			}
+
+			/**
+			 * @brief Returns the archive file.
+			 * @return const std::filesystem::path &
+			 */
+			[[nodiscard]]
+			const std::filesystem::path &
+			filepath () const noexcept
+			{
+				return m_filepath;
+			}
+
 		private:
 
 			/** @brief Whether an archive entry name designates a USD layer. */
@@ -554,6 +588,7 @@ namespace EmEn::Scenes::Loaders
 			tinyusdz::USDZAsset m_asset;
 			std::string m_rootAssetName;
 			std::string m_baseDirectory;
+			std::filesystem::path m_filepath;
 			const tinyusdz::AssetResolutionResolver * m_resolver{nullptr};
 			bool m_mapped{false};
 	};
@@ -1338,8 +1373,16 @@ namespace EmEn::Scenes::Loaders
 		 * gone; a bare pointer into the mapping would be read from an unmapped range, minutes later,
 		 * on a worker. The shared pointer keeps the mapping alive exactly as long as some factory
 		 * still needs it, and costs nothing but a refcount. */
+		/* NOTE: The entry's byte range in the archive file: a released CPU copy comes back from it. */
+		std::optional< EncodedSource > source;
+
+		if ( const auto range = m_archive->entryRange(entryName); range.has_value() )
+		{
+			source = EncodedSource::fileRange(m_archive->filepath(), range->first, range->second, format);
+		}
+
 		auto image = m_resources.container< ImageResource >()
-			->getOrCreateResource(m_resourcePrefix + "/image/" + entryName, [archive = m_archive, entryName, format] (auto & imageResource) {
+			->getOrCreateResource(m_resourcePrefix + "/image/" + entryName, [archive = m_archive, entryName, format, source = std::move(source)] (auto & imageResource) {
 				size_t size = 0;
 				const auto * data = archive->bytes(entryName, size);
 
@@ -1358,6 +1401,11 @@ namespace EmEn::Scenes::Loaders
 				if ( !StreamIO::read(data, size, format, pixmap, options) )
 				{
 					return false;
+				}
+
+				if ( source.has_value() )
+				{
+					imageResource.setEncodedSource(*source);
 				}
 
 				return imageResource.load(std::move(pixmap));
@@ -1487,6 +1535,9 @@ namespace EmEn::Scenes::Loaders
 					{
 						return false;
 					}
+
+					/* NOTE: The file itself: a released CPU copy comes back from it. */
+					imageResource.setEncodedSource(Graphics::EncodedSource::file(fullPath));
 
 					return imageResource.load(std::move(pixmap));
 				});

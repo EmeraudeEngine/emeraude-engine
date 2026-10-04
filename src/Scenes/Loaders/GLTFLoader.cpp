@@ -29,9 +29,14 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <numbers>
+#include <optional>
 #include <span>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
@@ -73,6 +78,7 @@
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/StreamIO.hpp"
 #include "VertexFactory/Shape.hpp"
+#include "FastJSON.hpp"
 #include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
 #include "Tracer.hpp"
@@ -88,6 +94,119 @@ namespace
 
 	/* The byte span type fastgltf hands to accessor readers. */
 	using ByteSpan = decltype(fastgltf::DefaultBufferDataAdapter{}(std::declval< const fastgltf::Asset & >(), std::size_t{}));
+
+	/* Where a glTF buffer lies in a FILE (an image's encoded source, docs/subsystems/resources/03 § CPU Copies). */
+	struct BufferLocation final
+	{
+		std::filesystem::path filepath;
+		uint64_t offset{0};
+	};
+
+	/* Reads a little-endian 32-bit value (the GLB header's encoding). */
+	uint32_t
+	readLE32 (const std::vector< std::byte > & bytes, size_t offset) noexcept
+	{
+		if ( offset + 4 > bytes.size() )
+		{
+			return 0;
+		}
+
+		return std::to_integer< uint32_t >(bytes[offset]) | (std::to_integer< uint32_t >(bytes[offset + 1]) << 8U) | (std::to_integer< uint32_t >(bytes[offset + 2]) << 16U) | (std::to_integer< uint32_t >(bytes[offset + 3]) << 24U);
+	}
+
+	/* Locates every buffer of a glTF in a file, from the model's OWN JSON (fastgltf keeps either a copy or a view of
+	 * the bytes, depending on its version): the BIN chunk of a .glb (the buffer without "uri"), or an external .bin.
+	 * A data: URI buffer, or anything unreadable, gets no location. */
+	std::vector< std::optional< BufferLocation > >
+	locateBuffers (const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept
+	{
+		constexpr uint32_t GLBMagic{0x46546C67}; /* "glTF" */
+		constexpr uint32_t JSONChunk{0x4E4F534A}; /* "JSON" */
+		constexpr uint32_t BINChunk{0x004E4942}; /* "BIN\0" */
+		constexpr uint64_t GLBHeaderBytes{12};
+		constexpr uint64_t ChunkHeaderBytes{8};
+
+		std::vector< std::optional< BufferLocation > > locations;
+		std::string json;
+		std::optional< uint64_t > binDataOffset;
+		std::vector< std::byte > header;
+
+		if ( Base::IO::fileGetRange(filepath, 0, GLBHeaderBytes + ChunkHeaderBytes, header) && readLE32(header, 0) == GLBMagic )
+		{
+			const uint64_t jsonLength = readLE32(header, 12);
+			std::vector< std::byte > jsonBytes;
+
+			if ( readLE32(header, 16) != JSONChunk || !Base::IO::fileGetRange(filepath, GLBHeaderBytes + ChunkHeaderBytes, jsonLength, jsonBytes) )
+			{
+				return locations;
+			}
+
+			json.resize(jsonBytes.size());
+
+			std::ranges::transform(jsonBytes, json.begin(), [] (std::byte value) {
+				return static_cast< char >(value);
+			});
+
+			const auto binHeaderOffset = GLBHeaderBytes + ChunkHeaderBytes + jsonLength;
+
+			if ( std::vector< std::byte > binHeader; Base::IO::fileGetRange(filepath, binHeaderOffset, ChunkHeaderBytes, binHeader) && readLE32(binHeader, 4) == BINChunk )
+			{
+				binDataOffset = binHeaderOffset + ChunkHeaderBytes;
+			}
+		}
+		else if ( !Base::IO::fileGetContents(filepath, json) )
+		{
+			return locations;
+		}
+
+		const auto root = Base::FastJSON::getRootFromString(json, 64, true);
+
+		if ( !root.has_value() || !root->isObject() )
+		{
+			return locations;
+		}
+
+		const auto buffers = Base::FastJSON::getArray(*root, "buffers");
+
+		if ( !buffers.has_value() )
+		{
+			return locations;
+		}
+
+		for ( const auto & buffer : *buffers )
+		{
+			const auto uri = buffer.isObject() ? Base::FastJSON::getValue< std::string >(buffer, "uri") : std::nullopt;
+
+			if ( !uri.has_value() )
+			{
+				/* NOTE: Only the FIRST buffer of a .glb may omit its uri: it is the BIN chunk. */
+				if ( buffer.isObject() && binDataOffset.has_value() && locations.empty() )
+				{
+					locations.emplace_back(BufferLocation{.filepath = filepath, .offset = *binDataOffset});
+				}
+				else
+				{
+					locations.emplace_back();
+				}
+
+				continue;
+			}
+
+			if ( uri->starts_with("data:") )
+			{
+				locations.emplace_back();
+
+				continue;
+			}
+
+			/* NOTE: The same resolution as an image's uri (fastgltf decodes the percent-escapes). */
+			const fastgltf::URI parsedURI{std::string_view{*uri}};
+
+			locations.emplace_back(BufferLocation{.filepath = basePath / std::filesystem::path{std::string{parsedURI.path()}}, .offset = 0});
+		}
+
+		return locations;
+	}
 
 	/* Translates a glTF sampler wrap mode. The three values are the whole of what glTF can
 	 * express (GL_REPEAT, GL_MIRRORED_REPEAT, GL_CLAMP_TO_EDGE), so this conversion is total. */
@@ -1923,7 +2042,7 @@ namespace EmEn::Scenes::Loaders
 		m_bufferCache = std::make_unique< MeshoptBufferCache >();
 
 		/* Load pipeline: Images → Materials → Meshes → Skins → Animations → Node descriptors. */
-		if ( !this->loadImages(asset, parentPath) )
+		if ( !this->loadImages(asset, filepath, parentPath) )
 		{
 			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
 		}
@@ -2063,8 +2182,11 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	bool
-	GLTFLoader::loadImages (const fastgltf::Asset & asset, const std::filesystem::path & basePath) noexcept
+	GLTFLoader::loadImages (const fastgltf::Asset & asset, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept
 	{
+		/* Where the buffers lie in files: an image in a buffer view gets its byte range as encoded source. */
+		const auto bufferLocations = locateBuffers(filepath, basePath);
+
 		m_images.resize(asset.images.size());
 		m_compressedImages.resize(asset.images.size());
 
@@ -2095,7 +2217,7 @@ namespace EmEn::Scenes::Loaders
 			 * NOTE: The blob is copied into a shared_ptr because the creation function is enqueued
 			 * on the thread pool and outlives this scope. That also means the KTX2 transcode of the
 			 * whole asset runs in parallel across the workers. */
-			const auto buildFromBytes = [&] (const std::byte * data, size_t size, fastgltf::MimeType mime) -> bool {
+			const auto buildFromBytes = [&] (const std::byte * data, size_t size, fastgltf::MimeType mime, std::optional< EncodedSource > source) -> bool {
 				auto blob = std::make_shared< std::vector< std::byte > >(data, data + size);
 
 				if ( Graphics::KTX2Decoder::isKTX2(*blob) )
@@ -2144,7 +2266,7 @@ namespace EmEn::Scenes::Loaders
 
 				/* Ordinary encoded image (PNG, JPEG). */
 				auto image = m_resources.container< ImageResource >()
-					->getOrCreateResource(name, [blob, format = mimeToPixmapFormat(mime)] (auto & resource) {
+					->getOrCreateResource(name, [blob, format = mimeToPixmapFormat(mime), source = std::move(source)] (auto & resource) {
 						Pixmap< uint8_t > pixmap;
 
 						constexpr ReadOptions options{
@@ -2154,6 +2276,12 @@ namespace EmEn::Scenes::Loaders
 						if ( !StreamIO::read(*blob, format, pixmap, options) )
 						{
 							return false;
+						}
+
+						/* NOTE: Where the encoded bytes lie, so a released CPU copy can come back. */
+						if ( source.has_value() )
+						{
+							resource.setEncodedSource(*source);
 						}
 
 						return resource.load(std::move(pixmap));
@@ -2189,7 +2317,7 @@ namespace EmEn::Scenes::Loaders
 							return false;
 						}
 
-						return buildFromBytes(content.data(), content.size(), fastgltf::MimeType::KTX2);
+						return buildFromBytes(content.data(), content.size(), fastgltf::MimeType::KTX2, std::nullopt);
 					}
 
 					auto image = m_resources.container< ImageResource >()
@@ -2204,6 +2332,9 @@ namespace EmEn::Scenes::Loaders
 							{
 								return false;
 							}
+
+							/* NOTE: The file itself: a released CPU copy comes back from it. */
+							imageResource.setEncodedSource(EncodedSource::file(fullPath));
 
 							return imageResource.load(std::move(pixmap));
 						});
@@ -2230,12 +2361,29 @@ namespace EmEn::Scenes::Loaders
 						return false;
 					}
 
-					return buildFromBytes(bytes.data(), bytes.size(), bufferView.mimeType);
+					/* NOTE: The byte range in the file, unless the view is meshopt-compressed or its buffer is not a
+					 * file (a data: URI). */
+					std::optional< EncodedSource > source;
+
+					if ( bufferView.bufferViewIndex < asset.bufferViews.size() )
+					{
+						const auto & view = asset.bufferViews[bufferView.bufferViewIndex];
+
+						if ( view.meshoptCompression == nullptr && view.bufferIndex < bufferLocations.size() && bufferLocations[view.bufferIndex].has_value() && view.byteLength == bytes.size() )
+						{
+							const auto & location = *bufferLocations[view.bufferIndex];
+
+							source = EncodedSource::fileRange(location.filepath, location.offset + view.byteOffset, view.byteLength, mimeToPixmapFormat(bufferView.mimeType));
+						}
+					}
+
+					return buildFromBytes(bytes.data(), bytes.size(), bufferView.mimeType, std::move(source));
 				},
 
 				/* Inline base64 data (Array source). */
 				[&] (const fastgltf::sources::Array & array) -> bool {
-					return buildFromBytes(array.bytes.data(), array.bytes.size_bytes(), array.mimeType);
+					/* NOTE: A base64 data: URI has no byte range in a file: the image stays resident. */
+					return buildFromBytes(array.bytes.data(), array.bytes.size_bytes(), array.mimeType, std::nullopt);
 				},
 
 				/* Fallback for unhandled source types. */

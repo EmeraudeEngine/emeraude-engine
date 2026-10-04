@@ -308,7 +308,7 @@ namespace EmEn::Scenes::Loaders
 		 * Step 1 scope: meshes + node descriptors only. Images, materials, skins
 		 * and animations are stubbed — meshes get the default PBR material. */
 
-		if ( !this->loadImages(*scene, parentPath) )
+		if ( !this->loadImages(*scene, filepath, parentPath) )
 		{
 			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
 		}
@@ -372,7 +372,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	bool
-	FBXLoader::loadImages (const ufbx_scene & scene, const std::filesystem::path & basePath) noexcept
+	FBXLoader::loadImages (const ufbx_scene & scene, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept
 	{
 		m_images.resize(scene.textures.count);
 
@@ -412,8 +412,12 @@ namespace EmEn::Scenes::Loaders
 				const auto * dataPtr = static_cast< const std::byte * >(tex.content.data);
 				auto bytes = std::make_shared< std::vector< std::byte > >(dataPtr, dataPtr + tex.content.size);
 
+				/* NOTE: ufbx gives no file offset for embedded content: a released CPU copy comes back by re-parsing the
+				 * FBX for this texture (readEmbeddedTexture()), its size checked. */
+				auto source = EncodedSource::embedded(filepath, static_cast< uint32_t >(textureIndex), tex.content.size, format, &FBXLoader::readEmbeddedTexture);
+
 				image = m_resources.container< ImageResource >()
-					->getOrCreateResource(name, [bytes, format] (auto & imageResource) {
+					->getOrCreateResource(name, [bytes, format, source = std::move(source)] (auto & imageResource) {
 						Pixmap< uint8_t > pixmap;
 
 						constexpr ReadOptions options{
@@ -424,6 +428,8 @@ namespace EmEn::Scenes::Loaders
 						{
 							return false;
 						}
+
+						imageResource.setEncodedSource(source);
 
 						return imageResource.load(std::move(pixmap));
 					});
@@ -472,6 +478,9 @@ namespace EmEn::Scenes::Loaders
 						{
 							return false;
 						}
+
+						/* NOTE: The file itself: a released CPU copy comes back from it. */
+						imageResource.setEncodedSource(EncodedSource::file(fullPath));
 
 						return imageResource.load(std::move(pixmap));
 					});
@@ -1896,5 +1905,46 @@ namespace EmEn::Scenes::Loaders
 				}
 			}
 		}
+	}
+
+	bool
+	FBXLoader::readEmbeddedTexture (const std::filesystem::path & filepath, uint32_t index, std::vector< std::byte > & bytes) noexcept
+	{
+		/* NOTE: Only the texture list is needed: no geometry, no animation, no external file. The texture order is the
+		 * FBX file's object order, unchanged by those options. */
+		ufbx_load_opts opts{};
+		opts.ignore_geometry = true;
+		opts.ignore_animation = true;
+		opts.load_external_files = false;
+
+		ufbx_error error{};
+		ufbx_scene * scene = ufbx_load_file(filepath.string().c_str(), &opts, &error);
+
+		if ( scene == nullptr )
+		{
+			TraceError{ClassId} << "Unable to re-read the FBX '" << filepath << "' for its embedded texture #" << index << " !";
+
+			return false;
+		}
+
+		const std::unique_ptr< ufbx_scene, decltype(&ufbx_free_scene) > sceneGuard{scene, ufbx_free_scene};
+
+		if ( index >= scene->textures.count )
+		{
+			return false;
+		}
+
+		const auto & texture = *scene->textures.data[index];
+
+		if ( texture.content.size == 0 )
+		{
+			return false;
+		}
+
+		const auto * data = static_cast< const std::byte * >(texture.content.data);
+
+		bytes.assign(data, data + texture.content.size);
+
+		return true;
 	}
 }

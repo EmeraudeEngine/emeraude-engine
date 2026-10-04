@@ -31,6 +31,8 @@
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "PixelFactory/StreamIO.hpp"
+#include "IO/IO.hpp"
 #include "TextureResource/Abstract.hpp"
 #include "Tracer.hpp"
 
@@ -183,5 +185,88 @@ namespace EmEn::Graphics
 		const auto filepath = source.dataString();
 
 		return filepath.has_value() && this->readLocalData(std::filesystem::path{*filepath});
+	}
+
+	bool
+	EncodedSource::decode (PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept
+	{
+		/* NOTE: The scene loaders' own decoding: forced to 4 channels, no flip, no premultiplication. */
+		constexpr PixelFactory::ReadOptions options{
+			.targetChannelMode = PixelFactory::TargetChannelMode::RGBA
+		};
+
+		switch ( m_kind )
+		{
+			case Kind::File :
+				return PixelFactory::FileIO::read(m_filepath, pixmap, options);
+
+			case Kind::FileRange :
+			{
+				std::vector< std::byte > bytes;
+
+				return IO::fileGetRange(m_filepath, m_offset, m_length, bytes) && PixelFactory::StreamIO::read(bytes, m_format, pixmap, options);
+			}
+
+			case Kind::Embedded :
+			{
+				std::vector< std::byte > bytes;
+
+				if ( m_reader == nullptr || !m_reader(m_filepath, static_cast< uint32_t >(m_offset), bytes) )
+				{
+					return false;
+				}
+
+				/* NOTE: The model file changed since the load: refuse rather than decode another image. */
+				if ( bytes.size() != m_length )
+				{
+					return false;
+				}
+
+				return PixelFactory::StreamIO::read(bytes, m_format, pixmap, options);
+			}
+		}
+
+		return false;
+	}
+
+	std::string
+	EncodedSource::describe () const noexcept
+	{
+		switch ( m_kind )
+		{
+			case Kind::File :
+				return "file " + m_filepath.string();
+
+			case Kind::FileRange :
+				return "bytes [" + std::to_string(m_offset) + ", +" + std::to_string(m_length) + ") of " + m_filepath.string();
+
+			case Kind::Embedded :
+				return "embedded image #" + std::to_string(m_offset) + " of " + m_filepath.string();
+		}
+
+		return {};
+	}
+
+	bool
+	ImageResource::reloadLocalDataFromOwnSource () noexcept
+	{
+		if ( !m_encodedSource.has_value() )
+		{
+			return false;
+		}
+
+		PixelFactory::Pixmap< uint8_t > pixmap;
+
+		if ( !m_encodedSource->decode(pixmap) || !pixmap.isValid() )
+		{
+			TraceError{ClassId} << "The image '" << this->name() << "' cannot be read back from its " << m_encodedSource->describe() << " !";
+
+			return false;
+		}
+
+		m_pixmap = std::move(pixmap);
+
+
+		return true;
 	}
 }

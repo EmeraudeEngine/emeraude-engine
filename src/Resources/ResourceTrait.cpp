@@ -927,11 +927,18 @@ namespace EmEn::Resources
 			source = m_localDataSource;
 		}
 
+		const char * origin = "store source";
 		auto reloaded = source.has_value() && this->reloadLocalDataFromSource(*source);
-		const auto fromSource = reloaded;
 
 		if ( !reloaded )
 		{
+			origin = "own source";
+			reloaded = this->reloadLocalDataFromOwnSource();
+		}
+
+		if ( !reloaded )
+		{
+			origin = "GPU copy";
 			reloaded = this->reloadLocalDataFromGPU();
 		}
 
@@ -959,11 +966,11 @@ namespace EmEn::Resources
 
 		if ( reloaded )
 		{
-			TraceInfo{TracerTag} << "The local data of '" << this->name() << "' was reloaded from its " << (fromSource ? "store source" : "GPU copy") << '.';
+			TraceInfo{TracerTag} << "The local data of '" << this->name() << "' was reloaded from its " << origin << '.';
 		}
 		else
 		{
-			TraceError{TracerTag} << "The local data of '" << this->name() << "' could not be reloaded (no usable store source, no GPU readback) !";
+			TraceError{TracerTag} << "The local data of '" << this->name() << "' could not be reloaded (no usable store source, own source or GPU readback) !";
 		}
 
 		return lease;
