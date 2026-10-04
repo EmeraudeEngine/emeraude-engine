@@ -416,18 +416,17 @@ namespace EmEn::Vulkan
 
 		const size_t requiredBytes = static_cast< size_t >(extent.width) * extent.height * bytesPerPixel;
 
-		/* Get staging buffer from transfer operation. */
-		auto * const transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+		/* NOTE: A temporary staging buffer of its own, CPU-cached for the read. A reusable image transfer operation is
+		 * only freed by its own fence, which this download never signalled: every call used to leave one reserved for
+		 * the engine's life (measured 2026-10-04: 13 operations busy after 13 downloads). */
+		const auto stagingBuffer = std::make_unique< Buffer >(m_device, 0, requiredBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
+		stagingBuffer->setHostReadable(true);
+		stagingBuffer->setIdentifier(ClassId, "ImageDownload", "Buffer");
 
-		if ( transferOperation == nullptr )
+		if ( !stagingBuffer->createOnHardware() )
 		{
-			return false;
-		}
+			TraceError{ClassId} << "Unable to create a " << requiredBytes << " bytes download buffer !";
 
-		auto * stagingBuffer = transferOperation->stagingBuffer();
-
-		if ( stagingBuffer == nullptr )
-		{
 			return false;
 		}
 
@@ -575,14 +574,11 @@ namespace EmEn::Vulkan
 		}
 
 		/* Copy data from staging buffer to pixmap. */
-		if ( !pixmap.initialize(extent.width, extent.height, channelMode, {pointer, requiredBytes}) )
-		{
-			return false;
-		}
+		const auto copied = pixmap.initialize(extent.width, extent.height, channelMode, {pointer, requiredBytes});
 
 		stagingBuffer->unmapMemory();
 
-		return true;
+		return copied;
 	}
 
 	BufferTransferOperation *

@@ -5600,6 +5600,17 @@ writer is announced (it was undefined behaviour already).
 
 ## Vulkan Validation
 
+### Fixed: a GPU download reserved a transfer operation forever — one leaked staging buffer per call (2026-10-04)
+
+`TransferManager`'s reusable transfer operations are freed by THEIR OWN fence (`isAvailable()` = the operation's fence
+is signalled; `setRequestedForTransfer()` resets it). `downloadImage()` reserved one, then submitted with a fence of
+its own: the operation's fence was never signalled, so the operation and its image-sized staging buffer stayed
+reserved for the engine's life, and the next transfer allocated a new one. Measured on citadel with
+`writeImposterAtlases()`: 13 operations busy after 13 downloads; fixed, 4 operations and 0 busy after 36, the dumped
+atlas pixel-identical. **A download (GPU → CPU) uses a temporary host-readable (`setHostReadable(true)`, CPU-cached)
+buffer of its own** — `downloadImage()` and `downloadBuffer()` both — never a reusable upload operation. And unmap
+before any early return: the staging buffer is destroyed right after.
+
 ### Fixed: a 3D image uploaded ONE slice, and its mips filtered one slice (Sep 2026)
 
 **Symptom:** the volumetric clouds' shapes (`Graphics::CloudShapeResource`, `VK_IMAGE_TYPE_3D`)
