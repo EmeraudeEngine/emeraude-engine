@@ -115,10 +115,6 @@ Sponza (RTX 3070 Ti, 2880×1620): `ScenePass` 45.5 → 13.8 ms (resolve 0.64 ms)
 
 What remains, in order:
 
-- [ ] The forward lamp passes LEFT on Sponza (Linux 4.0 ms, M2 ≈ 29 ms) are the cypress's `LeafSpring` leaves:
-      a glTF `BLEND` material, so translucent, drawn forward by design (hidden: 4.0 → 0.7 ms). Leaves authored as a
-      coverage mask belong in `MASK` (alpha test → opaque → deferred; `docs/subsystems/graphics/31-alpha-coverage-a-mask-is-not-a-gradient.md`):
-      an owner decision on the asset or on a loader policy, not a resolve change.
 - [ ] Line lights (LTC) in the resolve (the LTC tables as one more binding).
 - [ ] The SUN (directional, CSM shadow) in the resolve: the step that brings an eligible batch to ONE
       geometry pass (ambient only) — the item's title. Sponza's `ScenePass` at 0 lamps is 8.9 ms for

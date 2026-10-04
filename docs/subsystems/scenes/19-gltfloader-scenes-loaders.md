@@ -72,6 +72,7 @@ consumer.build(sceneData, scene, parentNode);    // Node mode
 |--------|---------|--------|
 | `LoaderOptions::skipSkinning` | `false` | Skip phases 4-5, ignore bone weights (load as static mesh) |
 | `LoaderOptions::excludedNodeNames` | empty | Skip named nodes and their subtrees entirely |
+| `LoaderOptions::cutoutMaterialNames` | empty | Load the named materials as a binary CUTOUT (alphaMode MASK, their alphaCutoff) whatever the file says: a coverage mask exported BLEND (2026-10-04, Sponza's `LeafSpring`) |
 
 **On the consumer** (affects scene building):
 

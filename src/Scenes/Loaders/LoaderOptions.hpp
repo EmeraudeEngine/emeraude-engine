@@ -51,6 +51,15 @@ namespace EmEn::Scenes::Loaders
 	{
 		std::unordered_set< std::string > excludedNodeNames;
 		/**
+		 * @brief Materials (by their name in the file) loaded as a binary CUTOUT (glTF alphaMode MASK) whatever their
+		 * authored alpha mode, at their authored alphaCutoff (0.5 when the file gives none).
+		 * @note For an asset that exported a COVERAGE mask (leaves, grilles: the alpha is a shape, not a transparency)
+		 * as BLEND: translucent, such a material sorts per object, writes no depth and stays out of the G-buffer and of
+		 * the deferred light resolve. The owner's call per asset — Sponza's cypress `LeafSpring` (2026-10-04).
+		 * Honoured by the glTF loader.
+		 */
+		std::unordered_set< std::string > cutoutMaterialNames;
+		/**
 		 * @brief Optional per-mesh hook invoked right after a mesh's renderable, geometry
 		 * and materials have been registered. Lets the caller patch the descriptor in place
 		 * (e.g. enable IBL reflection on PBR materials, override geometry, swap a renderable).

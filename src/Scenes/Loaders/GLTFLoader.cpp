@@ -2992,9 +2992,11 @@ namespace EmEn::Scenes::Loaders
 			 * fastgltf already initialises `Material::ior` to the spec default 1.5. */
 			const auto materialIOR = static_cast< float >(glTFMaterial.ior);
 
-			/* Alpha mode (OPAQUE, MASK, BLEND). */
-			const bool isAlphaBlend = glTFMaterial.alphaMode == fastgltf::AlphaMode::Blend;
-			const bool isAlphaMask = glTFMaterial.alphaMode == fastgltf::AlphaMode::Mask;
+			/* Alpha mode (OPAQUE, MASK, BLEND). The caller may declare a material a CUTOUT whatever the file says
+			 * (LoaderOptions::cutoutMaterialNames): a coverage mask exported as BLEND. */
+			const bool isForcedCutout = m_options.cutoutMaterialNames.contains(std::string{glTFMaterial.name.data(), glTFMaterial.name.size()});
+			const bool isAlphaBlend = !isForcedCutout && glTFMaterial.alphaMode == fastgltf::AlphaMode::Blend;
+			const bool isAlphaMask = isForcedCutout || glTFMaterial.alphaMode == fastgltf::AlphaMode::Mask;
 			const auto alphaCutoff = static_cast< float >(glTFMaterial.alphaCutoff);
 
 			/* Async material creation — lambda is fully self-contained, no this/reference captures.
