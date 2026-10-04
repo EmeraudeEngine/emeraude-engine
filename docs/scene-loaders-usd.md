@@ -312,6 +312,12 @@ Every `PI_*.usd` composes, prototypes included, with `LoaderOptions::resolveRefe
 | `PI_Anthurium` | 6 | 138 | 1.9 s | 46 MB |
 | **Total** | **778** | **8 674 676** | **~23 min** | **18 GB (peak, one element)** |
 
+**Re-measured 2026-10-04** (option 5, the composition now repeated to a fixpoint, § 11.8): every element gives the
+SAME instance count as above (`PI_Pyramid_GrassB` still 0: `grass_b_classes.usda` not found), and the whole scene's
+entities appear at **317 s** — about 5 minutes against ~23. Peak RSS 78 GB, all elements together (the table's 18 GB
+is ONE element alone). The renderer then lost the device (RTX 3070 Ti, NVIDIA Xid 109 CTX SWITCH TIMEOUT, last GPU
+markers `AS-build:end`): item `jungle-ruins-fence-timeout-abort`.
+
 The cost is **not** proportional to instance count: `RiverSeedling` delivers 2.2 M instances in
 9 seconds, while `QueenForest` needs 12 minutes for 0.6 M. What it follows is the size of the
 `*_classes.usda` prototype layer (236 MB and 196 MB for the two slow ones). The bottleneck is

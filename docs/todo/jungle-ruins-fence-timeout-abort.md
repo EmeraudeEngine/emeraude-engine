@@ -41,6 +41,12 @@ Zero Vulkan validation errors before the abort.
 
 GPU selected in the failing runs: RTX 3070 Ti (8 GB).
 
+**2026-10-04, option 5 (full scene + all vegetation, 8.63 M instances):** the load completes (entities at 317 s), then
+20 s later `VK_ERROR_DEVICE_LOST` → SIGABRT. Kernel: `NVRM: Xid 109 … CTX SWITCH TIMEOUT` (the GPU stayed in one
+context too long). The device-fault checkpoints show the last regions reached as `AS-build:end` on several queues and
+image-layout transitions: the acceleration-structure builds of millions of instances are the first suspect (one
+submission too long for the driver's watchdog). Peak RSS 78 GB. Log kept only in the session scratchpad.
+
 ## References
 
 - Same temporal signature as `compressed-gltf-sigill-at-idle.md` (different signal) and as
