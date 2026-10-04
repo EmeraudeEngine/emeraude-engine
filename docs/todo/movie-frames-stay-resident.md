@@ -28,6 +28,11 @@ generated frames: debug, noise, parametric, `load(frames)`, the WAD flats); `Fra
 0 VUID. `CubemapMovieResource` got the same `Frame` (a store `CubemapResource`'s six faces, or owned generated
 faces; `Frame::faces()`), 2026-10-04: a temporary store movie of two store cubemaps loaded with its frames counted
 once (the cubemaps' container +91.5 MiB, the movies' unchanged), 0 VUID; liminal's generated caustics unchanged.
+ACCEPTED macOS M2 2026-10-04 (engine e9517d53): citadel census 2659 → 2167 MiB (movies 492 → 0, store-only images
+508 → 16), phys_footprint 7387 MB; 0 VUID on citadel and liminal; a fixed-camera A/B shows the torch flames, the
+braziers, liminal's water and caustics animating and the static walls at 0 % change.
+ACCEPTED Windows (NVIDIA) 2026-10-04: census 2659 → 2167 MiB, private bytes 6943 → 6437 MiB (−506), working set
+4617 → 4114 MiB; the brazier flame changes 22-25 % of its pixels between shots, a wall control 0 %.
 
 What stays open here is the residency itself: every frame decoded, for the movie's whole life.
 

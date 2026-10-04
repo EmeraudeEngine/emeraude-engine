@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -749,7 +750,190 @@ namespace EmEn::Resources
 				return sizeof(*this);
 			}
 
+			/**
+			 * @brief A reader's hold on a resource's CPU copy (its "local data": a shape, pixels): while one lease is
+			 * held, the copy is never released.
+			 * @note Take it BEFORE reading the copy, keep it for as long as the reading lasts (an asynchronous job
+			 * captures it), test it: an invalid lease means the copy is not resident.
+			 * @see ResourceTrait::leaseLocalData(), docs/subsystems/resources/03-resources-specific-rules.md § CPU Copies.
+			 */
+			class LocalDataLease final
+			{
+				public:
+
+					/**
+					 * @brief Constructs an invalid lease (the copy was not resident).
+					 */
+					LocalDataLease () noexcept = default;
+
+					/**
+					 * @brief Constructs a lease on a resource whose lease counter was already raised.
+					 * @param resource The leased resource, kept alive by the lease.
+					 */
+					explicit
+					LocalDataLease (std::shared_ptr< const ResourceTrait > resource) noexcept
+						: m_resource{std::move(resource)}
+					{
+
+					}
+
+					/**
+					 * @brief Copy constructor: a second hold on the same copy.
+					 * @param copy A reference to the copied instance.
+					 */
+					LocalDataLease (const LocalDataLease & copy) noexcept
+						: m_resource{copy.m_resource}
+					{
+						if ( m_resource != nullptr )
+						{
+							m_resource->raiseLocalDataLeases();
+						}
+					}
+
+					/**
+					 * @brief Move constructor.
+					 * @param copy A reference to the moved instance.
+					 */
+					LocalDataLease (LocalDataLease && copy) noexcept = default;
+
+					/**
+					 * @brief Copy assignment.
+					 * @param copy A reference to the copied instance.
+					 * @return LocalDataLease &
+					 */
+					LocalDataLease &
+					operator= (const LocalDataLease & copy) noexcept
+					{
+						if ( this != &copy )
+						{
+							LocalDataLease other{copy};
+
+							std::swap(m_resource, other.m_resource);
+						}
+
+						return *this;
+					}
+
+					/**
+					 * @brief Move assignment.
+					 * @param copy A reference to the moved instance.
+					 * @return LocalDataLease &
+					 */
+					LocalDataLease &
+					operator= (LocalDataLease && copy) noexcept
+					{
+						if ( this != &copy )
+						{
+							LocalDataLease other{std::move(copy)};
+
+							std::swap(m_resource, other.m_resource);
+						}
+
+						return *this;
+					}
+
+					/**
+					 * @brief Destructs the lease, lowering the resource's lease counter.
+					 */
+					~LocalDataLease ()
+					{
+						if ( m_resource != nullptr )
+						{
+							m_resource->lowerLocalDataLeases();
+						}
+					}
+
+					/**
+					 * @brief Returns whether the lease holds the copy (it was resident).
+					 * @return bool
+					 */
+					[[nodiscard]]
+					bool
+					isValid () const noexcept
+					{
+						return m_resource != nullptr;
+					}
+
+				private:
+
+					std::shared_ptr< const ResourceTrait > m_resource;
+			};
+
+			/**
+			 * @brief Takes a lease on the CPU copy: the copy stays resident until the lease is destroyed.
+			 * @note Thread-safe. A resource whose type never releases its copy always answers a valid lease.
+			 * @return LocalDataLease Invalid when the copy was already released.
+			 */
+			[[nodiscard]]
+			LocalDataLease leaseLocalData () const noexcept;
+
+			/**
+			 * @brief Declares that the CPU copy must stay resident for the resource's whole life ("CPU too"): code that
+			 * reads it at any time (a cursor image, a queried shape) says so. One way.
+			 * @note Thread-safe.
+			 * @return void
+			 */
+			void retainLocalData () noexcept;
+
+			/**
+			 * @brief Returns whether the CPU copy is declared retained (retainLocalData()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool localDataRetained () const noexcept;
+
+			/**
+			 * @brief Returns whether the CPU copy is still resident (not released).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isLocalDataResident () const noexcept;
+
+			/**
+			 * @brief Declares the CPU copy releasable: its upload consumed it (a geometry's own upload, a texture's
+			 * upload from an image). The release happens later, after the grace delay and with no lease held.
+			 * @note Thread-safe; the first call starts the grace delay, the next ones do nothing. Ignored by a type
+			 * that never releases its copy.
+			 * @return void
+			 */
+			void markLocalDataReleasable () const noexcept;
+
+			/**
+			 * @brief Releases the CPU copy when it may: the type releases it, it is loaded, releasable for at least the
+			 * grace delay, not retained, not already released, and no lease is held. Its metadata is extracted first
+			 * (onReleaseLocalData()).
+			 * @note Thread-safe. Called by the resource manager's release pass.
+			 * @param now The current time.
+			 * @param graceDelay The minimal time since the copy became releasable.
+			 * @return bool True when the copy was released by this call.
+			 */
+			bool releaseLocalDataIfIdle (std::chrono::steady_clock::time_point now, std::chrono::steady_clock::duration graceDelay) noexcept;
+
 		protected:
+
+			/**
+			 * @brief Returns whether this type releases its CPU copy once uploaded ("GPU only" by type). Default false.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			releasesLocalData () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Extracts what the readers keep needing (the metadata), then frees the CPU copy.
+			 * @note Called under the local-data lock, with no lease held: no reader can be inside the copy.
+			 * @return void
+			 */
+			virtual
+			void
+			onReleaseLocalData () noexcept
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an abstract resource with a name and initial flags.
@@ -1003,6 +1187,18 @@ namespace EmEn::Resources
 			[[nodiscard]]
 			bool wouldCreateCycle (const std::shared_ptr< ResourceTrait > & dependency) const noexcept;
 
+			/**
+			 * @brief Raises the lease counter of a resident copy (LocalDataLease's copy).
+			 * @return void
+			 */
+			void raiseLocalDataLeases () const noexcept;
+
+			/**
+			 * @brief Lowers the lease counter (LocalDataLease's destruction).
+			 * @return void
+			 */
+			void lowerLocalDataLeases () const noexcept;
+
 			static constexpr uint32_t DirectLoading = 1U << 31;
 
 			AbstractServiceProvider & m_serviceProvider;
@@ -1010,5 +1206,11 @@ namespace EmEn::Resources
 			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor;
 			std::atomic< Status > m_status{Status::Unloaded};
 			mutable std::mutex m_dependenciesAccess;
+			mutable std::mutex m_localDataAccess;
+			mutable std::chrono::steady_clock::time_point m_localDataReleasableSince;
+			mutable uint32_t m_localDataLeases{0};
+			mutable bool m_localDataReleasable{false};
+			bool m_localDataRetained{false};
+			bool m_localDataReleased{false};
 	};
 }

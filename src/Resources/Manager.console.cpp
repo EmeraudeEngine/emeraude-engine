@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <functional>
 #include <ranges>
+#include <string>
 #include <vector>
 
 /* Local inclusions. */
@@ -104,6 +105,12 @@ namespace EmEn::Resources
 
 			return Console::CommandResult::json(Base::FastJSON::stringify(census));
 		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("releaseLocalData", "Releases now, whatever 'Core/Resources/ReleaseLocalData' says and without the grace delay, the CPU copy of every uploaded geometry / image / cubemap no reader holds (diagnostic; a later reader of a released copy fails until the reload exists). Returns the count.", [this] () {
+			const auto released = this->releaseLocalData(true);
+
+			return Console::CommandResult::success(Base::String::concatenate(std::to_string(released), " CPU copies released."));
+		});
 
 		this->bindCommand("listResources", "Lists the available resources of a container as JSON.",
 			{

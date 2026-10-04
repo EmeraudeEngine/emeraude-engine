@@ -102,6 +102,10 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   since 2026-09-30.)
 - **cppcoreguidelines-avoid-do-while ×1** — `Manager::unloadUnusedResources()`: "one pass, then again while a pass
   frees something" (freeing a resource frees its dependencies on the next pass) — owner decision 2026-09-30.
+- **portability-template-virtual-member-function ×16** (recorded 2026-10-04; 15 pre-existing, + `releaseIdleLocalData()`)
+  — `Container< resource_t >`: the `ContainerInterface` virtuals are implemented by the container TEMPLATE, the
+  manager's type-erased access to every container (the design itself). Every specialisation is instantiated by
+  `Manager::onInitialize()`, so no compiler leaves one out.
 
 ### `src/Scenes/Loaders` (2026-09-30)
 

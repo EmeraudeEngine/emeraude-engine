@@ -185,6 +185,9 @@ namespace EmEn
 				/* User-application cyclic update. */
 				this->onCoreProcessLogics(m_cycle);
 
+				/* The release pass of the uploaded resources' CPU copies (about once a second, when enabled). */
+				m_resourceManager.releaseIdleLocalData();
+
 				m_lifetime += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 				m_cycle++;
 			}

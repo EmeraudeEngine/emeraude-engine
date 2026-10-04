@@ -26,6 +26,9 @@
 
 #include "AnimatedTextureCubemap.hpp"
 
+/* STL inclusions. */
+#include <vector>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Resources/Container.hpp"
@@ -62,6 +65,17 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	AnimatedTextureCubemap::createTexture (Renderer & renderer) noexcept
 	{
+		/* NOTE: The upload reads the cubemaps the movie's frames show: they stay resident until it ends
+		 * (docs/subsystems/resources/03 § CPU Copies). */
+		std::vector< Resources::ResourceTrait::LocalDataLease > localDataLeases;
+
+		if ( !m_localData->leaseFrameCubemaps(localDataLeases) )
+		{
+			TraceError{ClassId} << "The cubemaps of animated texture '" << this->name() << "' are not resident (their CPU copy was released) !";
+
+			return false;
+		}
+
 		/* Validate all faces of all frames. */
 		for ( const auto & frame : m_localData->frames() )
 		{
@@ -148,6 +162,9 @@ namespace EmEn::Graphics::TextureResource
 
 			return false;
 		}
+
+		/* The upload consumed the cubemaps: their CPU copy may be released. */
+		m_localData->markFrameCubemapsReleasable();
 
 		return true;
 	}

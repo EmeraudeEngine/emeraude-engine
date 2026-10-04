@@ -288,6 +288,23 @@ namespace EmEn::Graphics::Geometry
 
 		private:
 
+			/** @copydoc EmEn::Resources::ResourceTrait::releasesLocalData() const noexcept */
+			[[nodiscard]]
+			bool
+			releasesLocalData () const noexcept override
+			{
+				/* NOTE: GPU only by type: culling and LOD read the cached bounding volumes, the automatic LOD jobs lease
+				 * the shape. */
+				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
+			void
+			onReleaseLocalData () noexcept override
+			{
+				m_localData = {};
+			}
+
 			/**
 			 * @brief Copies the local data's bounding volumes, the per-frame readers' metadata (culling, LOD): they
 			 * must outlive a release of the local data.

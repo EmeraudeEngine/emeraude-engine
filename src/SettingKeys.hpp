@@ -155,6 +155,13 @@ namespace EmEn
 		/* Scan resource directories dynamically at runtime instead of relying on a static index. */
 		constexpr auto ResourcesUseDynamicScanKey{"Core/Resources/UseDynamicScan"};
 		constexpr auto DefaultResourcesUseDynamicScan{true};
+		/* Release the CPU copy of an uploaded geometry / image / cubemap once its readers are done
+		 * (docs/subsystems/resources/03 § CPU Copies). OFF until the reload exists (owner, 2026-10-04). */
+		constexpr auto ResourcesReleaseLocalDataKey{"Core/Resources/ReleaseLocalData"};
+		constexpr auto DefaultResourcesReleaseLocalData{false};
+		/* Seconds between a CPU copy becoming releasable and its release (a loading burst reuses it). [0, 3600]. */
+		constexpr auto ResourcesLocalDataReleaseDelayKey{"Core/Resources/LocalDataReleaseDelay"};
+		constexpr auto DefaultResourcesLocalDataReleaseDelay{5.0F};
 
 		/* Audio layer */
 		/* Master switch for the whole audio subsystem. */

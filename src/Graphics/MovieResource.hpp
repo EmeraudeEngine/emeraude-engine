@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <memory>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
@@ -114,6 +115,67 @@ namespace EmEn::Graphics
 					pixmap () const noexcept
 					{
 						return m_image != nullptr ? m_image->data() : m_pixmap;
+					}
+
+					/**
+					 * @brief Returns the store image the frame shows.
+					 * @return const std::shared_ptr< const ImageResource > & Null for a generated frame.
+					 */
+					[[nodiscard]]
+					const std::shared_ptr< const ImageResource > &
+					image () const noexcept
+					{
+						return m_image;
+					}
+
+					/**
+					 * @brief Returns the frame width in pixels: the image's kept metadata when the frame shows one (its
+					 * pixels may be released).
+					 * @return uint32_t
+					 */
+					[[nodiscard]]
+					uint32_t
+					width () const noexcept
+					{
+						return m_image != nullptr ? m_image->width() : m_pixmap.width();
+					}
+
+					/**
+					 * @brief Returns the frame height in pixels, as width().
+					 * @return uint32_t
+					 */
+					[[nodiscard]]
+					uint32_t
+					height () const noexcept
+					{
+						return m_image != nullptr ? m_image->height() : m_pixmap.height();
+					}
+
+					/**
+					 * @brief Returns whether the frame is valid and grey-scale, as width().
+					 * @return bool
+					 */
+					[[nodiscard]]
+					bool
+					isGrayScale () const noexcept
+					{
+						if ( m_image != nullptr )
+						{
+							return m_image->width() > 0 && m_image->isGrayScale();
+						}
+
+						return m_pixmap.isValid() && m_pixmap.isGrayScale();
+					}
+
+					/**
+					 * @brief Returns the frame's average colour, as width().
+					 * @return Base::PixelFactory::Color< float >
+					 */
+					[[nodiscard]]
+					Base::PixelFactory::Color< float >
+					averageColor () const noexcept
+					{
+						return m_image != nullptr ? m_image->averageColor() : m_pixmap.averageColor();
 					}
 
 					/**
@@ -267,6 +329,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Takes a lease on every store image the frames show, for an upload reading their pixels.
+			 * @param leases The leases, appended.
+			 * @return bool False when one of those images is not resident.
+			 */
+			[[nodiscard]]
+			bool leaseFrameImages (std::vector< LocalDataLease > & leases) const noexcept;
+
+			/**
+			 * @brief Declares the store images the frames show releasable: an upload consumed their pixels.
+			 * @return void
+			 */
+			void markFrameImagesReleasable () const noexcept;
+
+			/**
 			 * @brief Returns the width of the movie.
 			 * @note Returns the width of the first frame.
 			 * @return uint32_t
@@ -275,7 +351,7 @@ namespace EmEn::Graphics
 			uint32_t
 			width () const noexcept
 			{
-				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].pixmap().width());
+				return m_frames.empty() ? 0 : m_frames[0].width();
 			}
 
 			/**
@@ -287,7 +363,7 @@ namespace EmEn::Graphics
 			uint32_t
 			height () const noexcept
 			{
-				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].pixmap().height());
+				return m_frames.empty() ? 0 : m_frames[0].height();
 			}
 
 			/**

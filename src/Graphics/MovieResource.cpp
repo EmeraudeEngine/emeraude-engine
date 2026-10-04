@@ -359,12 +359,7 @@ namespace EmEn::Graphics
 	MovieResource::isGrayScale () const noexcept
 	{
 		return std::ranges::all_of(m_frames, [] (const auto & frame) {
-			if ( !frame.pixmap().isValid() )
-			{
-				return false;
-			}
-
-			return frame.pixmap().isGrayScale();
+			return frame.isGrayScale();
 		});
 	}
 
@@ -384,7 +379,7 @@ namespace EmEn::Graphics
 
 		for ( const auto & frame : m_frames )
 		{
-			const auto average = frame.pixmap().averageColor();
+			const auto average = frame.averageColor();
 
 			red += average.red() * ratio;
 			green += average.green() * ratio;
@@ -650,5 +645,40 @@ namespace EmEn::Graphics
 		this->updateDuration();
 
 		return this->setLoadSuccess(true);
+	}
+
+	bool
+	MovieResource::leaseFrameImages (std::vector< LocalDataLease > & leases) const noexcept
+	{
+		for ( const auto & frame : m_frames )
+		{
+			if ( frame.image() == nullptr )
+			{
+				continue;
+			}
+
+			auto lease = frame.image()->leaseLocalData();
+
+			if ( !lease.isValid() )
+			{
+				return false;
+			}
+
+			leases.emplace_back(std::move(lease));
+		}
+
+		return true;
+	}
+
+	void
+	MovieResource::markFrameImagesReleasable () const noexcept
+	{
+		for ( const auto & frame : m_frames )
+		{
+			if ( frame.image() != nullptr )
+			{
+				frame.image()->markLocalDataReleasable();
+			}
+		}
 	}
 }

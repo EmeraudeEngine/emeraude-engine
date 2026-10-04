@@ -26,9 +26,20 @@
 
 #include "Manager.hpp"
 
+/* Project configuration. */
+#include "emeraude_platform.hpp"
+
+/* Third-party inclusions. */
+#if IS_LINUX && defined(__GLIBC__)
+#include <malloc.h>
+#endif
+
 /* STL inclusions. */
+#include <chrono>
+#include <cmath>
 #include <ranges>
 #include <regex>
+#include <thread>
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
@@ -155,6 +166,106 @@ namespace EmEn::Resources
 		}
 
 		return bytes;
+	}
+
+	void
+	Manager::releaseIdleLocalData () noexcept
+	{
+		if ( !m_releaseLocalData )
+		{
+			return;
+		}
+
+		constexpr std::chrono::seconds PassInterval{1};
+
+		const auto now = std::chrono::steady_clock::now();
+
+		if ( now - m_lastLocalDataReleasePass < PassInterval )
+		{
+			return;
+		}
+
+		/* NOTE: One pass at a time, on a pool worker: a pass extracts metadata (full scans of large images) and frees
+		 * memory, up to ~165 ms measured on terrain (2026-10-04) — never on the logic loop (owner decision). */
+		if ( m_localDataReleasePassRunning.exchange(true) )
+		{
+			return;
+		}
+
+		m_lastLocalDataReleasePass = now;
+
+		const auto threadPool = m_primaryServices.threadPool();
+
+		if ( threadPool == nullptr || !threadPool->enqueue([this, now] {
+			this->runLocalDataReleasePass(now);
+
+			m_localDataReleasePassRunning = false;
+		}) )
+		{
+			m_localDataReleasePassRunning = false;
+		}
+	}
+
+	void
+	Manager::runLocalDataReleasePass (std::chrono::steady_clock::time_point now) noexcept
+	{
+		size_t released = 0;
+
+		for ( const auto & container : m_containers | std::views::values )
+		{
+			released += container->releaseIdleLocalData(now, m_localDataReleaseDelay);
+		}
+
+		if ( released > 0 )
+		{
+			/* NOTE: A load releases its copies over several passes: the memory is given back once, when the burst
+			 * ends (owner decision 2026-10-04). */
+			m_releaseBurstInProgress = true;
+
+			if ( m_showInformation )
+			{
+				TraceInfo{ClassId} << released << " CPU cop" << (released > 1 ? "ies" : "y") << " of uploaded resources released.";
+			}
+		}
+		else if ( m_releaseBurstInProgress )
+		{
+			m_releaseBurstInProgress = false;
+
+			Manager::returnFreedMemoryToSystem();
+		}
+	}
+
+	size_t
+	Manager::releaseLocalData (bool ignoreGraceDelay) noexcept
+	{
+		const auto now = std::chrono::steady_clock::now();
+		const auto graceDelay = ignoreGraceDelay ? std::chrono::steady_clock::duration::zero() : m_localDataReleaseDelay;
+
+		size_t released = 0;
+
+		for ( const auto & container : m_containers | std::views::values )
+		{
+			released += container->releaseIdleLocalData(now, graceDelay);
+		}
+
+		if ( released > 0 )
+		{
+			Manager::returnFreedMemoryToSystem();
+		}
+
+		return released;
+	}
+
+	void
+	Manager::returnFreedMemoryToSystem () noexcept
+	{
+		/* NOTE: glibc keeps freed blocks in its arenas: without a trim the released copies barely lower the RSS (citadel
+		 * with the release on: 5143 MiB untrimmed, ~2.5 GiB trimmed). A trim costs 1-60 ms and holds the arena locks
+		 * (measured 2026-10-04): it runs in the release pass's pool worker or the console's call, never on the logic
+		 * loop, once per release burst (owner decisions 2026-10-04; Linux / glibc only, nothing elsewhere). */
+#if IS_LINUX && defined(__GLIBC__)
+		static_cast< void >(malloc_trim(0));
+#endif
 	}
 
 	size_t
@@ -529,6 +640,23 @@ namespace EmEn::Resources
 			arguments.isSwitchPresent("--show-resources-infos");
 		m_quietConversion = settings.getOrSetDefault< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
 		m_useDynamicScan = settings.getOrSetDefault< bool >(ResourcesUseDynamicScanKey, DefaultResourcesUseDynamicScan);
+		m_releaseLocalData = settings.getOrSetDefault< bool >(ResourcesReleaseLocalDataKey, DefaultResourcesReleaseLocalData);
+
+		/* NOTE: A settings value (trust boundary): a non-finite or out-of-range delay falls back to the default. */
+		{
+			constexpr auto MaximumDelay{3600.0F};
+
+			auto delay = settings.getOrSetDefault< float >(ResourcesLocalDataReleaseDelayKey, DefaultResourcesLocalDataReleaseDelay);
+
+			if ( !std::isfinite(delay) || delay < 0.0F || delay > MaximumDelay )
+			{
+				TraceWarning{ClassId} << "The setting '" << ResourcesLocalDataReleaseDelayKey << "' must be a number of seconds in [0, " << MaximumDelay << "], " << DefaultResourcesLocalDataReleaseDelay << " is used.";
+
+				delay = DefaultResourcesLocalDataReleaseDelay;
+			}
+
+			m_localDataReleaseDelay = std::chrono::duration_cast< std::chrono::steady_clock::duration >(std::chrono::duration< float >{delay});
+		}
 
 		/* NOTE: Initialize the store service. */
 		{
@@ -621,6 +749,14 @@ namespace EmEn::Resources
 	bool
 	Manager::onTerminate () noexcept
 	{
+		/* A release pass running on a pool worker uses the containers: wait for it. */
+		m_releaseLocalData = false;
+
+		while ( m_localDataReleasePassRunning )
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds{1});
+		}
+
 		/* Terminate primary services. */
 		for ( const auto & resourceContainer : m_containers | std::views::values )
 		{

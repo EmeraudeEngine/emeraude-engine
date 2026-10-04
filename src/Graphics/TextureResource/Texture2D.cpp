@@ -221,6 +221,16 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::createFromPixelData (Renderer & renderer) noexcept
 	{
+		/* NOTE: The upload reads the pixels: they stay resident until it ends (docs/subsystems/resources/03 § CPU Copies). */
+		const auto localDataLease = m_localData->leaseLocalData();
+
+		if ( !localDataLease.isValid() )
+		{
+			TraceError{ClassId} << "The pixels of texture '" << this->name() << "' are not resident (their CPU copy was released) !";
+
+			return false;
+		}
+
 		/* Apply normal map Y flip if requested (id Tech â engine convention). */
 		if ( this->isFlipNormalMapYEnabled() )
 		{
@@ -313,6 +323,9 @@ namespace EmEn::Graphics::TextureResource
 				return false;
 			}
 		}
+		/* The upload consumed the pixels: their CPU copy may be released. */
+		m_localData->markLocalDataReleasable();
+
 		return true;
 	}
 

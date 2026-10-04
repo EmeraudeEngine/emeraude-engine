@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <any>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -324,6 +325,14 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			virtual size_t unloadUnusedResources () noexcept = 0;
+
+			/**
+			 * @brief Releases the CPU copies that may be released (ResourceTrait::releaseLocalDataIfIdle()).
+			 * @param now The current time.
+			 * @param graceDelay The minimal time since a copy became releasable.
+			 * @return size_t The number of copies released.
+			 */
+			virtual size_t releaseIdleLocalData (std::chrono::steady_clock::time_point now, std::chrono::steady_clock::duration graceDelay) noexcept = 0;
 
 			/**
 			 * @brief Returns the dependency complexity level of the resource type.
@@ -740,6 +749,38 @@ namespace EmEn::Resources
 				}
 
 				return bytes;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::releaseIdleLocalData() */
+			size_t
+			releaseIdleLocalData (std::chrono::steady_clock::time_point now, std::chrono::steady_clock::duration graceDelay) noexcept override
+			{
+				/* NOTE: A release extracts metadata and frees memory (up to ~100 ms for a large image): it runs OUTSIDE the
+				 * container lock, so a load asking this container never waits for it; each resource locks itself. */
+				std::vector< std::shared_ptr< resource_t > > candidates;
+
+				{
+					const std::scoped_lock scopeLock{m_resourcesAccess};
+
+					candidates.reserve(m_resources.size());
+
+					for ( const auto & resource : m_resources | std::views::values )
+					{
+						candidates.emplace_back(resource);
+					}
+				}
+
+				size_t released = 0;
+
+				for ( const auto & resource : candidates )
+				{
+					if ( resource->releaseLocalDataIfIdle(now, graceDelay) )
+					{
+						++released;
+					}
+				}
+
+				return released;
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::unloadUnusedResources() noexcept */

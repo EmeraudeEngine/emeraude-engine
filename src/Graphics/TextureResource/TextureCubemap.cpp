@@ -65,6 +65,16 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	TextureCubemap::createTexture (Renderer & renderer) noexcept
 	{
+		/* NOTE: The upload reads the faces: they stay resident until it ends (docs/subsystems/resources/03 § CPU Copies). */
+		const auto localDataLease = m_localData->leaseLocalData();
+
+		if ( !localDataLease.isValid() )
+		{
+			TraceError{ClassId} << "The faces of texture '" << this->name() << "' are not resident (their CPU copy was released) !";
+
+			return false;
+		}
+
 		/* NOTE: HDR faces are raw RGBA16F texels, the LDR pixmap validation does not apply. */
 		if ( !m_localData->isHDR() )
 		{
@@ -166,6 +176,9 @@ namespace EmEn::Graphics::TextureResource
 
 			return false;
 		}
+
+		/* The upload consumed the faces: their CPU copy may be released. */
+		m_localData->markLocalDataReleasable();
 
 		return true;
 	}

@@ -277,6 +277,25 @@ namespace EmEn::Graphics
 
 		private:
 
+			/** @copydoc EmEn::Resources::ResourceTrait::releasesLocalData() const noexcept */
+			[[nodiscard]]
+			bool
+			releasesLocalData () const noexcept override
+			{
+				/* NOTE: GPU only by type: the cubemap texture uploads lease the faces, then declare them releasable. */
+				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
+			void
+			onReleaseLocalData () noexcept override
+			{
+				this->extractMetadata();
+
+				m_faces = {};
+				m_facesHDR = {};
+			}
+
 			/* JSON keys */
 			static constexpr auto PackedKey{"Packed"};
 			static constexpr auto EquirectangularKey{"Equirectangular"};

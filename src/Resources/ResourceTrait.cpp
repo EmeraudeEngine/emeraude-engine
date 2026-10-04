@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <chrono>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
@@ -676,5 +677,113 @@ namespace EmEn::Resources
 		}
 
 		return false;
+	}
+
+	ResourceTrait::LocalDataLease
+	ResourceTrait::leaseLocalData () const noexcept
+	{
+		auto self = this->weak_from_this().lock();
+
+		if ( self == nullptr )
+		{
+			TraceError{TracerTag} << "The resource '" << this->name() << "' is not owned by a shared pointer: no lease on its local data !";
+
+			return {};
+		}
+
+		{
+			const std::scoped_lock scopeLock{m_localDataAccess};
+
+			if ( m_localDataReleased )
+			{
+				return {};
+			}
+
+			++m_localDataLeases;
+		}
+
+		return LocalDataLease{std::move(self)};
+	}
+
+	void
+	ResourceTrait::retainLocalData () noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		m_localDataRetained = true;
+	}
+
+	bool
+	ResourceTrait::localDataRetained () const noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		return m_localDataRetained;
+	}
+
+	bool
+	ResourceTrait::isLocalDataResident () const noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		return !m_localDataReleased;
+	}
+
+	void
+	ResourceTrait::markLocalDataReleasable () const noexcept
+	{
+		if ( !this->releasesLocalData() )
+		{
+			return;
+		}
+
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		if ( !m_localDataReleasable )
+		{
+			m_localDataReleasable = true;
+			m_localDataReleasableSince = std::chrono::steady_clock::now();
+		}
+	}
+
+	bool
+	ResourceTrait::releaseLocalDataIfIdle (std::chrono::steady_clock::time_point now, std::chrono::steady_clock::duration graceDelay) noexcept
+	{
+		if ( !this->releasesLocalData() || !this->isLoaded() )
+		{
+			return false;
+		}
+
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		if ( !m_localDataReleasable || m_localDataRetained || m_localDataReleased || m_localDataLeases > 0 || now - m_localDataReleasableSince < graceDelay )
+		{
+			return false;
+		}
+
+		this->onReleaseLocalData();
+
+		m_localDataReleased = true;
+
+		return true;
+	}
+
+	void
+	ResourceTrait::raiseLocalDataLeases () const noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		++m_localDataLeases;
+	}
+
+	void
+	ResourceTrait::lowerLocalDataLeases () const noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		if ( m_localDataLeases > 0 )
+		{
+			--m_localDataLeases;
+		}
 	}
 }

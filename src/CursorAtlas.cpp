@@ -165,6 +165,19 @@ namespace EmEn
 			return;
 		}
 
+		/* NOTE: A cursor image is read whenever a cursor is set: its pixels stay resident ("CPU too",
+		 * docs/subsystems/resources/03 § CPU Copies). */
+		imageResource->retainLocalData();
+
+		const auto lease = imageResource->leaseLocalData();
+
+		if ( !lease.isValid() )
+		{
+			TraceWarning{ClassId} << "The cursor image '" << imageResource->name() << "' is not resident (its CPU copy was released) !";
+
+			return;
+		}
+
 		this->setCursor(window, imageResource->name(), imageResource->data(), hotSpot);
 	}
 

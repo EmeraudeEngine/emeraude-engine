@@ -371,6 +371,24 @@ namespace EmEn::Graphics
 
 		private:
 
+			/** @copydoc EmEn::Resources::ResourceTrait::releasesLocalData() const noexcept */
+			[[nodiscard]]
+			bool
+			releasesLocalData () const noexcept override
+			{
+				/* NOTE: GPU only by type: the texture uploads lease the pixels, then declare them releasable. */
+				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onReleaseLocalData() noexcept */
+			void
+			onReleaseLocalData () noexcept override
+			{
+				this->extractMetadata();
+
+				m_pixmap = {};
+			}
+
 			Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
 			Base::PixelFactory::Color< float > m_averageColor;
 			uint32_t m_width{0};

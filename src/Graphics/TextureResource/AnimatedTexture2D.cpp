@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <vector>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -68,6 +69,17 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	AnimatedTexture2D::createTexture (Renderer & renderer) noexcept
 	{
+		/* NOTE: The upload reads the images the movie's frames show: they stay resident until it ends
+		 * (docs/subsystems/resources/03 § CPU Copies). */
+		std::vector< Resources::ResourceTrait::LocalDataLease > localDataLeases;
+
+		if ( !m_localData->leaseFrameImages(localDataLeases) )
+		{
+			TraceError{ClassId} << "The images of animated texture '" << this->name() << "' are not resident (their CPU copy was released) !";
+
+			return false;
+		}
+
 		for ( const auto & frame : m_localData->frames() )
 		{
 			if ( !this->validateTexture(frame.pixmap(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
@@ -193,6 +205,9 @@ namespace EmEn::Graphics::TextureResource
 
 			return false;
 		}
+
+		/* The upload consumed the images: their CPU copy may be released. */
+		m_localData->markFrameImagesReleasable();
 
 		return true;
 	}

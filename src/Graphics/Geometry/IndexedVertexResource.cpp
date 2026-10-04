@@ -106,6 +106,9 @@ namespace EmEn::Graphics::Geometry
 		 * edit, which rebuilds them (citadel, 2026-10-03: 360 MiB of 1359 MiB of geometry). */
 		m_localData.releaseConstructionIndexes();
 
+		/* The upload consumed the shape: its CPU copy may be released (docs/subsystems/resources/03 § CPU Copies). */
+		this->markLocalDataReleasable();
+
 		return true;
 	}
 

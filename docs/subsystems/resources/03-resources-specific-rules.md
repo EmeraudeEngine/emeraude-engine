@@ -83,6 +83,25 @@ the resource, never only in the data:
   owns generated pixels, read through `Frame::pixmap()`; a `CubemapMovieResource::Frame` likewise shows a store
   `CubemapResource` or owns its faces, read through `Frame::faces()`. A movie therefore keeps its images alive, and a release
   of an image's pixels (phase 2) covers the movie frames showing it.
+- **The release (phase 2, 2026-10-04)**: `IndexedVertexResource`, `VertexResource`, `ImageResource` and
+  `CubemapResource` are "GPU only" by type (`releasesLocalData()`); code that reads a copy at any time declares it
+  "CPU too" with `retainLocalData()` (`CursorAtlas` for its images). A copy becomes releasable after the upload that
+  consumed it (`markLocalDataReleasable()`: a geometry's own upload; a texture's upload for an image / cubemap — an
+  image no texture ever read stays resident). About once a second `Core::logicsTask()` SCHEDULES a release pass on a
+  pool worker (one at a time; the logic loop never runs it: a pass measured up to ~165 ms on terrain — metadata scans
+  of large images and frees); the worker releases the copies releasable for `Core/Resources/LocalDataReleaseDelay`
+  seconds (default 5) that no lease holds — each container snapshots its resources under its lock and releases
+  OUTSIDE it — `onReleaseLocalData()` extracts the metadata then frees. When a release burst ends (the first pass that
+  frees nothing after one that did), the worker gives the memory back on Linux / glibc (`malloc_trim(0)`: 1-60 ms,
+  holds the arena locks; without it citadel's RSS barely moves, 5143 MiB untrimmed vs ~2.5 GiB). **OFF by default**
+  (`Core/Resources/ReleaseLocalData` = false) until the reload exists (owner, 2026-10-04). Console:
+  `Core.ResourcesManagerService.releaseLocalData()` releases now, whatever the setting, without the grace delay.
+- **Every reader of a releasable copy takes a lease** (`ResourceTrait::leaseLocalData()`, RAII, copyable; an
+  asynchronous job captures it) and tests it: an invalid lease = "not resident". Leases today: the texture uploads
+  (Texture1D / 2D / Cubemap, the animated textures through `MovieResource::leaseFrameImages()` /
+  `CubemapMovieResource::leaseFrameCubemaps()`), the automatic LOD jobs, the ground / terrain displacement, the
+  cursor, projet-alpha's terrain heightmap. ⚠️ Reading `localData()` / `data()` / `faces()` of a releasable
+  resource WITHOUT a lease races the release.
 - A new per-frame or late reader of a CPU copy adds its value to that metadata — or declares the resource
   "CPU too" — instead of reading the data.
 - Verified 2026-10-04 (citadel, a local probe): with every image's pixels, every cubemap's faces and every

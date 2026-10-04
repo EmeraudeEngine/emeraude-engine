@@ -668,7 +668,15 @@ namespace EmEn::Graphics::Renderable
 		{
 			auto sourceGeometry = std::dynamic_pointer_cast< IndexedVertexResource >(m_geometry[0]);
 
-			if ( sourceGeometry != nullptr )
+			/* NOTE: The LOD job reads the whole source shape, possibly long after the geometry's upload: it leases it
+			 * (docs/subsystems/resources/03 § CPU Copies). A released shape is not decimated. */
+			auto sourceLease = sourceGeometry != nullptr ? sourceGeometry->leaseLocalData() : Resources::ResourceTrait::LocalDataLease{};
+
+			if ( sourceGeometry != nullptr && !sourceLease.isValid() )
+			{
+				TraceWarning{ClassId} << "The geometry of '" << this->name() << "' is not resident (its CPU copy was released): no automatic LOD.";
+			}
+			else if ( sourceGeometry != nullptr )
 			{
 				const auto triangleCount = sourceGeometry->localData().triangles().size();
 				const auto minTriangleCount = static_cast< size_t >(settings.getOrSetDefault< uint32_t >(GraphicsLODMinTriangleCountKey, DefaultGraphicsLODMinTriangleCount));
@@ -690,7 +698,7 @@ namespace EmEn::Graphics::Renderable
 				{
 					TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
 
-					this->serviceProvider().primaryServices().threadPool()->enqueue([this, sourceGeometry, levelsToGenerate, reductionRatio] {
+					this->serviceProvider().primaryServices().threadPool()->enqueue([this, sourceGeometry, sourceLease, levelsToGenerate, reductionRatio] {
 						float levelRatio = reductionRatio;
 
 						for ( uint32_t level = 1; level <= levelsToGenerate; level++ )

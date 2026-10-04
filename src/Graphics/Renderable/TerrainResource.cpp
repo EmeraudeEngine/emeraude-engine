@@ -373,8 +373,16 @@ namespace EmEn::Graphics::Renderable
 					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
 					const auto mode = magic_enum::enum_cast< PointTransformationMode >(modeString).value_or(PointTransformationMode::Replace);
 
-					/* Applies the height map on the geometry. */
-					m_localData->applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
+					/* Applies the height map on the geometry; the image's pixels are leased for the reading
+					 * (docs/subsystems/resources/03 § CPU Copies). */
+					if ( const auto lease = imageResource->leaseLocalData(); lease.isValid() )
+					{
+						m_localData->applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
+					}
+					else
+					{
+						TraceWarning{ClassId} << "A height map image is not resident (its CPU copy was released): no displacement !";
+					}
 				}
 			}
 			else

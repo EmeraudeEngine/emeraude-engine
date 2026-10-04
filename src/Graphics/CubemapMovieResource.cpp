@@ -381,14 +381,7 @@ namespace EmEn::Graphics
 	CubemapMovieResource::isGrayScale () const noexcept
 	{
 		return std::ranges::all_of(m_frames, [] (const auto & frame) {
-			return std::ranges::all_of(frame.faces(), [] (const auto & pixmap) {
-				if ( !pixmap.isValid() )
-				{
-					return false;
-				}
-
-				return pixmap.isGrayScale();
-			});
+			return frame.isGrayScale();
 		});
 	}
 
@@ -400,8 +393,7 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		const auto totalFaces = static_cast< float >(m_frames.size() * CubemapFaceCount);
-		const auto ratio = 1.0F / totalFaces;
+		const auto ratio = 1.0F / static_cast< float >(m_frames.size());
 
 		auto red = 0.0F;
 		auto green = 0.0F;
@@ -409,14 +401,11 @@ namespace EmEn::Graphics
 
 		for ( const auto & frame : m_frames )
 		{
-			for ( const auto & face : frame.faces() )
-			{
-				const auto average = face.averageColor();
+			const auto average = frame.averageColor();
 
-				red += average.red() * ratio;
-				green += average.green() * ratio;
-				blue += average.blue() * ratio;
-			}
+			red += average.red() * ratio;
+			green += average.green() * ratio;
+			blue += average.blue() * ratio;
 		}
 
 		return {red, green, blue, 1.0F};
@@ -754,5 +743,40 @@ namespace EmEn::Graphics
 		this->updateDuration();
 
 		return this->setLoadSuccess(true);
+	}
+
+	bool
+	CubemapMovieResource::leaseFrameCubemaps (std::vector< LocalDataLease > & leases) const noexcept
+	{
+		for ( const auto & frame : m_frames )
+		{
+			if ( frame.cubemap() == nullptr )
+			{
+				continue;
+			}
+
+			auto lease = frame.cubemap()->leaseLocalData();
+
+			if ( !lease.isValid() )
+			{
+				return false;
+			}
+
+			leases.emplace_back(std::move(lease));
+		}
+
+		return true;
+	}
+
+	void
+	CubemapMovieResource::markFrameCubemapsReleasable () const noexcept
+	{
+		for ( const auto & frame : m_frames )
+		{
+			if ( frame.cubemap() != nullptr )
+			{
+				frame.cubemap()->markLocalDataReleasable();
+			}
+		}
 	}
 }

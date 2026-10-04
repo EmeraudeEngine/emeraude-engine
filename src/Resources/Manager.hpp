@@ -30,6 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <typeindex>
 #include <unordered_map>
@@ -269,7 +271,40 @@ namespace EmEn::Resources
 			 */
 			size_t unloadUnusedResources () noexcept;
 
+			/**
+			 * @brief Schedules the release pass of the CPU copies, called every logic cycle: about once a second, when
+			 * "Core/Resources/ReleaseLocalData" is on, a pool worker releases every copy releasable for the grace delay
+			 * ("Core/Resources/LocalDataReleaseDelay") and lease-free, then gives the memory back to the system when a
+			 * release burst ends (docs/subsystems/resources/03 § CPU Copies). One pass at a time.
+			 * @note Logic thread; the pass itself never runs there.
+			 * @return void
+			 */
+			void releaseIdleLocalData () noexcept;
+
+			/**
+			 * @brief Releases now, whatever the setting, every releasable and lease-free CPU copy (the console's
+			 * releaseLocalData()).
+			 * @param ignoreGraceDelay Whether a copy that became releasable within the grace delay is released too.
+			 * @return size_t The number of copies released.
+			 */
+			size_t releaseLocalData (bool ignoreGraceDelay) noexcept;
+
 		private:
+
+			/**
+			 * @brief One release pass (releaseIdleLocalData()'s pool worker).
+			 * @param now The time the pass was scheduled.
+			 * @return void
+			 */
+			void runLocalDataReleasePass (std::chrono::steady_clock::time_point now) noexcept;
+
+			/**
+			 * @brief Gives the memory freed by a CPU-copy release back to the system where the allocator keeps it
+			 * (glibc: malloc_trim(), 1-60 ms measured, holding the arena locks). Nothing elsewhere. Never on the logic
+			 * loop.
+			 * @return void
+			 */
+			static void returnFreedMemoryToSystem () noexcept;
 
 			/**
 			 * @brief Initializes the resource manager service.
@@ -526,8 +561,19 @@ namespace EmEn::Resources
 			bool m_showInformation{false};
 			/** @brief Flag indicating whether resource conversion should suppress output messages. */
 			bool m_quietConversion{false};
+			/** @brief The grace delay of the CPU-copy release pass. */
+			std::chrono::steady_clock::duration m_localDataReleaseDelay{std::chrono::seconds{5}};
+			/** @brief When the CPU-copy release pass last ran. */
+			std::chrono::steady_clock::time_point m_lastLocalDataReleasePass;
 			/** @brief Flag indicating whether dynamic directory scanning is used instead of JSON indexing. */
 			bool m_useDynamicScan{false};
+			/** @brief Flag indicating whether the CPU-copy release pass is on ("Core/Resources/ReleaseLocalData"). */
+			bool m_releaseLocalData{false};
+			/** @brief Whether a release pass runs on a pool worker (one at a time; onTerminate() waits for it). */
+			std::atomic< bool > m_localDataReleasePassRunning{false};
+			/** @brief Flag indicating that the last release pass released copies: the memory is returned when it ends
+			 * (touched by the pass worker only). */
+			bool m_releaseBurstInProgress{false};
 	};
 
 	/**

@@ -68,9 +68,31 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
    `ImageResource::isBinaryAlphaMask()`); citadel census unchanged (2658.8 MiB).
    ACCEPTED Windows (NVIDIA) 2026-10-04: census unchanged (2659 MiB), sponza's cutouts intact; the only VUIDs are
    the known pre-existing `renderPass-12325` (mesh-shader shadow pipeline viewMask on that laptop GPU).
-2. **Release by declared usage**: "GPU only" (default for meshes and textures) frees the CPU copy after the one-shot
-   consumers; "CPU too" for grounds / terrains. A release SWAPS with empty containers (`clear()` keeps the capacity,
-   base `vertexfactory/07`). A resource gains a "not resident" state (no `Loaded → Unloaded` exists today).
+2. **Release by declared usage** — DONE 2026-10-04, behind `Core/Resources/ReleaseLocalData` (OFF until phase 3,
+   owner; grace delay `Core/Resources/LocalDataReleaseDelay` = 5 s, owner): `docs/subsystems/resources/03` § CPU
+   Copies. Linux, release ON, 0 VUID / 0 new error everywhere: census citadel 2198 → 418 MiB (geometries 998 → 0,
+   images 775 → 16: the images no texture read), forest 431, terrain 493, liminal 500, sponza 2210 (of which
+   `CompressedImageResource` 1792, out of this scope). glibc kept the freed memory (citadel RSS 5143 MiB untrimmed):
+   owner, 2026-10-04 — trim once per release burst, on the pass's pool worker (the trim costs 1-60 ms and holds the
+   arena locks), and the pass itself on a pool worker (up to ~165 ms measured on the logic thread). RSS release ON vs
+   default (45 s): **citadel 5435 → 2508 MiB, terrain 8813 → 4085 MiB**; logic overruns citadel 1 = 1, terrain ~10
+   extra of 17-21 ms (under the 33 ms cycle, the warning fires at 16.66). A late reader found as designed:
+   a `SimpleMeshResource` created after the release from a released geometry renders (GPU buffers) but gets no
+   automatic LOD — phase 3's case. Owner decisions: **deferred + leases**; **type default + code override**;
+   scope **indexed / plain geometries, images, cubemaps**. Design:
+   - `ResourceTrait` gains a local-data state (resident / released), a per-resource mutex, a lease counter and a
+     "retained" flag (GPU only by default for the three types; `retainLocalData()` = "CPU too", one way).
+   - A reader of the data takes an RAII **lease** (`leaseLocalData()`): it fails ("not resident") once released;
+     the release only happens with no lease held. Leases go in: the automatic LOD jobs (`MeshResource`,
+     `MultiLayerMeshResource`), every texture upload (Texture1D / 2D incl. the BC7 cache, TextureCubemap, the
+     animated textures through their movies' frames), the ground / terrain displacement.
+   - A resource becomes **releasable** after its own upload (geometries) or after a texture upload that read it
+     (images, cubemaps: an image no texture ever read stays resident). `CursorAtlas` marks its images retained.
+   - The `Resources::Manager` releases the releasable, lease-free, not-retained copies about once a second from the
+     logic cadence (`Core::logicsTask()`), after a grace delay since they became releasable: `extractMetadata()`
+     first, then a SWAP with empty containers (`clear()` keeps the capacity, base `vertexfactory/07`).
+   - Movies read their frame images' metadata (`ImageResource::width()` …) instead of the frame pixels;
+     cubemap movies the cubemaps' `cubeSize()`.
 3. **Reload, asynchronous**: from the store source, else a GPU readback; a request answers "not resident" and the
    reader skips that frame.
 4. **Owner decisions after phase 0 (2026-10-03):**

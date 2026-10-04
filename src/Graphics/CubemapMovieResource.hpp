@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -101,6 +102,78 @@ namespace EmEn::Graphics
 					faces () const noexcept
 					{
 						return m_cubemap != nullptr ? m_cubemap->faces() : m_faces;
+					}
+
+					/**
+					 * @brief Returns the store cubemap the frame shows.
+					 * @return const std::shared_ptr< const CubemapResource > & Null for a generated frame.
+					 */
+					[[nodiscard]]
+					const std::shared_ptr< const CubemapResource > &
+					cubemap () const noexcept
+					{
+						return m_cubemap;
+					}
+
+					/**
+					 * @brief Returns the face size in pixels: the cubemap's kept metadata when the frame shows one (its
+					 * faces may be released).
+					 * @return uint32_t
+					 */
+					[[nodiscard]]
+					uint32_t
+					cubeSize () const noexcept
+					{
+						return m_cubemap != nullptr ? m_cubemap->cubeSize() : m_faces[0].width();
+					}
+
+					/**
+					 * @brief Returns whether every face is valid and grey-scale, as cubeSize().
+					 * @return bool
+					 */
+					[[nodiscard]]
+					bool
+					isGrayScale () const noexcept
+					{
+						if ( m_cubemap != nullptr )
+						{
+							return m_cubemap->isGrayScale();
+						}
+
+						return std::ranges::all_of(m_faces, [] (const auto & pixmap) {
+							return pixmap.isValid() && pixmap.isGrayScale();
+						});
+					}
+
+					/**
+					 * @brief Returns the mean of the six faces' average colours, as cubeSize().
+					 * @return Base::PixelFactory::Color< float >
+					 */
+					[[nodiscard]]
+					Base::PixelFactory::Color< float >
+					averageColor () const noexcept
+					{
+						if ( m_cubemap != nullptr )
+						{
+							return m_cubemap->averageColor();
+						}
+
+						constexpr auto ratio{1.0F / static_cast< float >(CubemapFaceCount)};
+
+						auto red = 0.0F;
+						auto green = 0.0F;
+						auto blue = 0.0F;
+
+						for ( const auto & face : m_faces )
+						{
+							const auto average = face.averageColor();
+
+							red += average.red() * ratio;
+							green += average.green() * ratio;
+							blue += average.blue() * ratio;
+						}
+
+						return {red, green, blue, 1.0F};
 					}
 
 					/**
@@ -262,6 +335,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Takes a lease on every store cubemap the frames show, for an upload reading their faces.
+			 * @param leases The leases, appended.
+			 * @return bool False when one of those cubemaps is not resident.
+			 */
+			[[nodiscard]]
+			bool leaseFrameCubemaps (std::vector< LocalDataLease > & leases) const noexcept;
+
+			/**
+			 * @brief Declares the store cubemaps the frames show releasable: an upload consumed their faces.
+			 * @return void
+			 */
+			void markFrameCubemapsReleasable () const noexcept;
+
+			/**
 			 * @brief Returns the cube size (width/height of one face).
 			 * @note Returns the width of the first face of the first frame.
 			 * @return uint32_t
@@ -270,7 +357,7 @@ namespace EmEn::Graphics
 			uint32_t
 			cubeSize () const noexcept
 			{
-				return m_frames.empty() ? 0 : static_cast< uint32_t >(m_frames[0].faces()[0].width());
+				return m_frames.empty() ? 0 : m_frames[0].cubeSize();
 			}
 
 			/**
