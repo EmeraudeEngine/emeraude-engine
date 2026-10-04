@@ -2314,6 +2314,10 @@ namespace EmEn::Scenes::Loaders
 		const auto & metas = composited->metas();
 		const auto upAxis = metas.upAxis.get_value();
 		const auto metersPerUnit = static_cast< float >(metas.metersPerUnit.get_value());
+		/* NOTE: copied here too — the log at the end runs after the converter consumed the layer, and read
+		 * garbage there (denormals, "0 to inf") until 2026-10-04. */
+		const auto startTimeCode = metas.startTimeCode.get_value();
+		const auto endTimeCode = metas.endTimeCode.get_value();
 
 		if ( upAxis != tinyusdz::Axis::Z )
 		{
@@ -2466,7 +2470,7 @@ namespace EmEn::Scenes::Loaders
 		TraceInfo{ClassId} <<
 			"Stage metrics: upAxis " << ( upAxis == tinyusdz::Axis::Z ? "Z" : "non-Z" ) <<
 			", metersPerUnit " << metersPerUnit <<
-			", timeCodes " << metas.startTimeCode.get_value() << " to " << metas.endTimeCode.get_value() << ".";
+			", timeCodes " << startTimeCode << " to " << endTimeCode << ".";
 
 		/* An element made entirely of instances builds no drawable node at all, and is still a
 		 * complete success. Judging on meshes alone would call the vegetation a failure. */

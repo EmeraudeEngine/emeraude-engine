@@ -1155,3 +1155,8 @@ counts were 942 meshes, 141 materials, 29 interior lights.
 
 Result, release ON: census 420 MiB (the 167 images have their archive range as source), the hall lit and textured
 with its furniture; 0 VUID. Peak memory (VmHWM) ~7.8 GB during the load.
+
+Windows' validation run (same counts, spawn inside the hall) caught a fourth, harmless-looking one: the SECOND
+`Stage metrics` line (after the conversion) printed garbage time codes (`6.36599e-314`, `0 to inf`, `-3.05e-05`).
+It read `metas` from the layer the converter had already consumed. The time codes are now copied with `upAxis` and
+`metersPerUnit`, before the conversion; the line reads `100 to 600` like the first one.
