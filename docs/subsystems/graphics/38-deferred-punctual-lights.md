@@ -101,6 +101,14 @@ Once, in one of six deferred/deferred pairs, 2669 px of speckles on stone near t
 not reproduced in the five other pairs; forward/forward and deferred/deferred otherwise differ by the same few
 hundred ivy pixels on that GPU. Watch for it.
 
+Windows (Windows-PA, 2026-10-04, 1280×720, validation on, MSVC 0 warning): RTX 3060 Laptop `ScenePass` 101 → 30 ms,
+frame 130 → 59 ms (8 → 16 FPS, RT lane); AMD Radeon iGPU `ScenePass` 251 → 75 ms (effects bypassed), its frame
+still ~710 ms because RTGI's trace alone is 541 ms there. 0 VUID on both, every switch, the night runs, `lighten-marbles`
+and `simple-room`. Night fidelity, both GPUs within 0.04 points of each other: deferred/deferred bit-identical,
+deferred vs forward 11.7 % of the pixels > 2 levels, 1.2 % > 32, lamp energy 0.953 (linear), forward brighter in
+99.9 % of the > 32-level pixels — on the foliage and as thin lines along silhouettes (the depth-bias leak); the gap
+is larger at 720p than at 2880×1620 (a pixel covers more foliage layers and edges, and the SAA widens more).
+
 What is left of the forward lamp passes on Sponza (Linux 4.0 ms of 13.4) is the cypress's `LeafSpring` leaves, a
 glTF `BLEND` material: translucent, forward by design (hidden: 0.7 ms left).
 

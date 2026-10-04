@@ -108,14 +108,13 @@ for shadowed / projected lights and for translucent lists.
    frame's render state (the forward UBO's bytes) in view space — the shared RT SSBO and its consumers
    are untouched; its own race is item `rt-light-ssbo-rewritten-while-in-flight`.
 
-**Step 1 DONE (2026-10-04, engine 8c461d12; Linux, macOS M2 validated — numbers in the reference doc; Windows asked)** — point and spot lights:
+**Step 1 DONE (2026-10-04, engine 8c461d12; Linux, macOS M2, Windows NVIDIA + AMD validated — numbers in the reference doc)** — point and spot lights:
 `Graphics::DeferredLightResolve`, reference `docs/subsystems/graphics/38-deferred-punctual-lights.md`.
 Sponza (RTX 3070 Ti, 2880×1620): `ScenePass` 45.5 → 13.8 ms (resolve 0.64 ms), frame 111 → 80 ms,
 0 VUID; night fidelity and its decomposition in the reference doc. A/B: `setDeferredPunctualLights`.
 
 What remains, in order:
 
-- [ ] Windows (NVIDIA + AMD) validation of step 1.
 - [ ] The forward lamp passes LEFT on Sponza (Linux 4.0 ms, M2 ≈ 29 ms) are the cypress's `LeafSpring` leaves:
       a glTF `BLEND` material, so translucent, drawn forward by design (hidden: 4.0 → 0.7 ms). Leaves authored as a
       coverage mask belong in `MASK` (alpha test → opaque → deferred; `docs/subsystems/graphics/31-alpha-coverage-a-mask-is-not-a-gradient.md`):
