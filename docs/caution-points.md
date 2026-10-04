@@ -5375,6 +5375,10 @@ macOS. tinyusdz's `io-util.cc` tested `defined(TARGET_OS_IPHONE)`, took its "non
 mmap out, and `MMapFile()` failed WITHOUT a message: no `.usdz` opened on macOS. Fixed in two places (owner,
 option (c)): ext-deps-generator `patches/tinyusdz.patch` tests the value; `USDZArchive::open()` reads the archive
 into memory when the mapping fails, saying why (a USDZ entry's byte range stays a file offset either way).
+Validated on macOS M2 2026-10-04: the fallback alone imports texture-cat-plane.usdz ("read into memory") and its
+image reloads from its archive range; with tinyusdz rebuilt through ext-deps-generator (a135bed, a LOCAL build) the
+archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predates the patch until the next release
+(owner): until then macOS uses the in-memory fallback.
 
 ### ⚠️⚠️ The engine's `.mm` files were compiled WITHOUT ARC — written for it, they leaked everything (fixed 2026-10-01, triad 14)
 
