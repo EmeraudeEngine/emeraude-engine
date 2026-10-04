@@ -52,6 +52,7 @@
 #include "Overlay/Manager.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimaryServices.hpp"
+#include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "SettingKeys.hpp"
@@ -1606,6 +1607,8 @@ namespace EmEn::Graphics
 			m_postProcessor.onFrameSlotRetired(m_currentFrameIndex);
 
 			currentFrameScope.prepareForNewFrame();
+
+			this->checkMemoryBudget();
 		}
 		else
 		{
@@ -1623,6 +1626,66 @@ namespace EmEn::Graphics
 		m_acquiredImageIndex = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
 
 		return m_acquiredImageIndex.has_value();
+	}
+
+	void
+	Renderer::checkMemoryBudget () noexcept
+	{
+		constexpr auto Interval = std::chrono::seconds{2};
+
+		const auto now = std::chrono::steady_clock::now();
+
+		if ( now - m_lastMemoryBudgetCheck < Interval || m_device == nullptr )
+		{
+			return;
+		}
+
+		m_lastMemoryBudgetCheck = now;
+
+		for ( const auto & heap : m_device->memoryBudgets() )
+		{
+			if ( !heap.deviceLocal || heap.heapIndex >= 64 || heap.budget == 0 )
+			{
+				continue;
+			}
+
+			const auto bit = uint64_t{1} << heap.heapIndex;
+			constexpr auto MiB = 1048576.0;
+
+			/* NOTE: AT the budget, not over it: VMA stops a device-local heap at its budget and places the rest in
+			 * system memory (JungleRuins: usage 7154 MiB = budget 7154 MiB, 22 GB spilled), so "usage > budget" misses
+			 * exactly the case that matters. */
+			const auto atBudget = static_cast< double >(heap.usage) >= 0.98 * static_cast< double >(heap.budget);
+
+			if ( atBudget && (m_overBudgetHeaps & bit) == 0 )
+			{
+				m_overBudgetHeaps |= bit;
+
+				TraceWarning{ClassId} <<
+					"GPU memory AT ITS BUDGET on device-local heap " << heap.heapIndex << ": " <<
+					( static_cast< double >(heap.usage) / MiB ) << " MiB used for a budget of " << ( static_cast< double >(heap.budget) / MiB ) << " MiB "
+					"(heap " << ( static_cast< double >(heap.size) / MiB ) << " MiB, this engine's allocations " << ( static_cast< double >(heap.allocationBytes) / MiB ) << " MiB). "
+					"New allocations go to system memory: frames may stall for seconds, a device may be lost. "
+					"Breakdown: Core.RendererService.getGPUMemory().";
+
+				/* Once per crossing, the largest groups straight into the log: the run that crosses the budget may
+				 * lose its device before anyone can ask (JungleRuins, 2026-10-04). */
+				for ( const auto & group : this->gpuAllocationGroups(12) )
+				{
+					TraceWarning{ClassId} <<
+						"  GPU memory group: heap " << FastJSON::getValue< uint32_t >(group, "heap").value_or(0) << ", " <<
+						FastJSON::getValue< std::string >(group, "kind").value_or("?") << " " << FastJSON::getValue< std::string >(group, "usage").value_or("?") << ": " <<
+						FastJSON::getValue< uint64_t >(group, "count").value_or(0) << " allocations, " << FastJSON::getValue< double >(group, "MiB").value_or(0.0) << " MiB (largest " <<
+						FastJSON::getValue< double >(group, "largestMiB").value_or(0.0) << " MiB).";
+				}
+			}
+			else if ( (m_overBudgetHeaps & bit) != 0 && static_cast< double >(heap.usage) < 0.9 * static_cast< double >(heap.budget) )
+			{
+				m_overBudgetHeaps &= ~bit;
+
+				TraceInfo{ClassId} << "GPU memory back under budget on device-local heap " << heap.heapIndex << ": " << ( static_cast< double >(heap.usage) / MiB ) << " MiB of " << ( static_cast< double >(heap.budget) / MiB ) << " MiB.";
+			}
+		}
 	}
 
 	void

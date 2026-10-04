@@ -601,6 +601,12 @@ This is NOT the download manager: `Core.NetManagerService.*` fetches files into 
 deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
 [`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
 
+### GPU memory: who holds it (`Core.RendererService.*`, 2026-10-04)
+
+`getGPUMemory(20)` answers each heap's budget and usage and the allocations grouped by heap, kind and usage flags;
+`writeGPUMemoryReport()` writes VMA's full report. A heap at 98 % of its budget is also WARNED in the log, with its
+largest groups. How to read them: [`docs/subsystems/graphics/37-gpu-memory-budget-and-report.md`](subsystems/graphics/37-gpu-memory-budget-and-report.md).
+
 ### Sharing resources between machines (`Core.ResourcesManagerService.*`, 2026-10-04)
 
 An engine can serve its data stores to a peer engine over HTTP (`Core/Resources/Sharing/*`, OFF by default, a token

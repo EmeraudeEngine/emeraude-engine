@@ -28,6 +28,12 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <vector>
+#include <tuple>
+#include <optional>
+#include <map>
+#include <charconv>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
@@ -36,6 +42,7 @@
 #include <string_view>
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
@@ -51,6 +58,158 @@
 namespace EmEn::Graphics
 {
 	using namespace Base;
+
+	namespace
+	{
+		/**
+		 * @brief Names the usage flags of a buffer or an image (the bits that tell resources apart).
+		 * @param image Whether the flags are image usage flags.
+		 * @param flags The flags.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		usageNames (bool image, uint64_t flags) noexcept
+		{
+			struct Bit
+			{
+				uint64_t mask;
+				const char * name;
+			};
+
+			static constexpr std::array< Bit, 10 > BufferBits{{
+				{.mask = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, .name = "VERTEX"},
+				{.mask = VK_BUFFER_USAGE_INDEX_BUFFER_BIT, .name = "INDEX"},
+				{.mask = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, .name = "UNIFORM"},
+				{.mask = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, .name = "STORAGE"},
+				{.mask = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, .name = "INDIRECT"},
+				{.mask = VK_BUFFER_USAGE_TRANSFER_SRC_BIT, .name = "TRANSFER_SRC"},
+				{.mask = VK_BUFFER_USAGE_TRANSFER_DST_BIT, .name = "TRANSFER_DST"},
+				{.mask = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, .name = "DEVICE_ADDRESS"},
+				{.mask = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR, .name = "AS_STORAGE"},
+				{.mask = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, .name = "AS_INPUT"}
+			}};
+
+			static constexpr std::array< Bit, 7 > ImageBits{{
+				{.mask = VK_IMAGE_USAGE_SAMPLED_BIT, .name = "SAMPLED"},
+				{.mask = VK_IMAGE_USAGE_STORAGE_BIT, .name = "STORAGE"},
+				{.mask = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, .name = "COLOR_ATTACHMENT"},
+				{.mask = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, .name = "DEPTH_STENCIL"},
+				{.mask = VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, .name = "INPUT_ATTACHMENT"},
+				{.mask = VK_IMAGE_USAGE_TRANSFER_SRC_BIT, .name = "TRANSFER_SRC"},
+				{.mask = VK_IMAGE_USAGE_TRANSFER_DST_BIT, .name = "TRANSFER_DST"}
+			}};
+
+			std::string names;
+
+			const auto append = [&names, flags] (const auto & bits) {
+				for ( const auto & bit : bits )
+				{
+					if ( (flags & bit.mask) != 0 )
+					{
+						if ( !names.empty() )
+						{
+							names += '|';
+						}
+
+						names += bit.name;
+					}
+				}
+			};
+
+			if ( image )
+			{
+				append(ImageBits);
+			}
+			else
+			{
+				append(BufferBits);
+			}
+
+			return names.empty() ? std::string{"NONE"} : names;
+		}
+
+		/** @brief Allocations of one heap, kind and usage. */
+		struct AllocationGroup
+		{
+			uint64_t bytes{0};
+			uint64_t largest{0};
+			size_t count{0};
+		};
+
+		/**
+		 * @brief Walks VMA's detailed statistics and sums the allocations by (heap, kind, usage).
+		 * @note Any object carrying "Type" (a string other than FREE), "Size" and "Usage" is an allocation; the memory
+		 * type comes from the enclosing "Type <n>" key of the pools. Defensive: an unexpected shape is skipped.
+		 * @param node The JSON node.
+		 * @param memoryType The memory type of the enclosing pool, when known.
+		 * @param device The device (memory type → heap).
+		 * @param groups The groups [in/out].
+		 * @param depth The recursion depth (bounded).
+		 * @return void
+		 */
+		void
+		collectAllocations (const Json::Value & node, std::optional< uint32_t > memoryType, const Vulkan::Device & device, std::map< std::tuple< uint32_t, std::string, std::string >, AllocationGroup > & groups, int depth) noexcept
+		{
+			if ( depth > 16 )
+			{
+				return;
+			}
+
+			if ( node.isArray() )
+			{
+				for ( const auto & child : node )
+				{
+					collectAllocations(child, memoryType, device, groups, depth + 1);
+				}
+
+				return;
+			}
+
+			if ( !node.isObject() )
+			{
+				return;
+			}
+
+			const auto type = FastJSON::getValue< std::string >(node, "Type");
+			const auto size = FastJSON::getValue< uint64_t >(node, "Size");
+			const auto usage = FastJSON::getValue< uint64_t >(node, "Usage");
+
+			if ( type && size && usage && memoryType )
+			{
+				if ( *type != "FREE" )
+				{
+					const auto isImage = type->starts_with("IMAGE");
+					const auto heap = device.memoryTypeHeapIndex(*memoryType).value_or(UINT32_MAX);
+					auto & group = groups[{heap, isImage ? std::string{"IMAGE"} : *type, usageNames(isImage, *usage)}];
+
+					group.bytes += *size;
+					group.largest = std::max(group.largest, *size);
+					++group.count;
+				}
+
+				return;
+			}
+
+			for ( const auto & key : node.getMemberNames() )
+			{
+				auto childType = memoryType;
+
+				/* "Type 3": the pools of memory type 3. */
+				if ( key.starts_with("Type ") )
+				{
+					uint32_t index = 0;
+
+					if ( const auto [end, error] = std::from_chars(key.data() + 5, key.data() + key.size(), index); error == std::errc{} && end == key.data() + key.size() )
+					{
+						childType = index;
+					}
+				}
+
+				collectAllocations(node[key], childType, device, groups, depth + 1);
+			}
+		}
+	}
 
 	void
 	Renderer::onRegisterToConsole () noexcept
@@ -551,6 +710,66 @@ namespace EmEn::Graphics
 			return Console::CommandResult::info(status.str());
 		}, Console::CommandHint::ReadOnly);
 
+		this->bindCommand("getGPUMemory", "Returns the GPU memory as JSON: each heap's budget and usage (VK_EXT_memory_budget), then the allocations grouped by heap, kind (buffer / image) and usage flags, largest first (at most 'top' groups).",
+			{
+				{"top", "How many groups to return (default 20)."}
+			},
+			[this] (std::optional< int > top) {
+				if ( m_device == nullptr )
+				{
+					return Console::CommandResult::error("No device.");
+				}
+
+				Json::Value heaps{Json::arrayValue};
+
+				for ( const auto & heap : m_device->memoryBudgets() )
+				{
+					Json::Value entry{Json::objectValue};
+					entry["heap"] = heap.heapIndex;
+					entry["deviceLocal"] = heap.deviceLocal;
+					entry["sizeMiB"] = static_cast< double >(heap.size) / 1048576.0;
+					entry["budgetMiB"] = static_cast< double >(heap.budget) / 1048576.0;
+					entry["usageMiB"] = static_cast< double >(heap.usage) / 1048576.0;
+					entry["allocatedMiB"] = static_cast< double >(heap.allocationBytes) / 1048576.0;
+					entry["reservedMiB"] = static_cast< double >(heap.blockBytes) / 1048576.0;
+					entry["atBudget"] = static_cast< double >(heap.usage) >= 0.98 * static_cast< double >(heap.budget);
+
+					heaps.append(std::move(entry));
+				}
+
+				const auto limit = static_cast< size_t >(std::clamp(top.value_or(20), 1, 1000));
+
+				Json::Value report{Json::objectValue};
+				report["heaps"] = std::move(heaps);
+				report["groups"] = this->gpuAllocationGroups(limit);
+
+				return Console::CommandResult::json(FastJSON::stringify(report));
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("writeGPUMemoryReport", "Writes VMA's detailed statistics (every block and allocation) as JSON into the captures directory and answers its path.", [this] () {
+			if ( m_device == nullptr )
+			{
+				return Console::CommandResult::error("No device.");
+			}
+
+			const auto json = m_device->memoryDetailedStatisticsJSON();
+
+			if ( json.empty() )
+			{
+				return Console::CommandResult::error("No memory allocator.");
+			}
+
+			const auto seconds = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+			const auto filepath = m_primaryServices.fileSystem().userDataDirectory("captures") / ("gpu-memory-" + std::to_string(seconds) + ".json");
+
+			if ( !IO::filePutContents(filepath, json, false, true) )
+			{
+				return Console::CommandResult::error("Unable to write " + IO::toU8String(filepath) + " !");
+			}
+
+			return Console::CommandResult::success(IO::toU8String(filepath));
+		}, Console::CommandHint::ReadOnly);
+
 		this->bindCommand("getMDIStats", "Returns Multi-Draw Indirect statistics from the last frame as JSON (batched/fallback/skipped counts, batched ratio %).", [this] () {
 			std::stringstream json;
 
@@ -581,5 +800,46 @@ namespace EmEn::Graphics
 
 			return Console::CommandResult::json(json.str());
 		}, Console::CommandHint::ReadOnly);
+	}
+
+	Json::Value
+	Renderer::gpuAllocationGroups (size_t top) const noexcept
+	{
+		Json::Value list{Json::arrayValue};
+
+		if ( m_device == nullptr )
+		{
+			return list;
+		}
+
+		std::map< std::tuple< uint32_t, std::string, std::string >, AllocationGroup > groups;
+
+		if ( const auto statistics = FastJSON::getRootFromString(m_device->memoryDetailedStatisticsJSON(), 32, true); statistics )
+		{
+			collectAllocations(*statistics, std::nullopt, *m_device, groups, 0);
+		}
+
+		std::vector< std::pair< std::tuple< uint32_t, std::string, std::string >, AllocationGroup > > sorted{groups.begin(), groups.end()};
+
+		std::ranges::sort(sorted, std::ranges::greater{}, [] (const auto & entry) {
+			return entry.second.bytes;
+		});
+
+		for ( size_t index = 0; index < sorted.size() && index < top; ++index )
+		{
+			const auto & [key, group] = sorted[index];
+
+			Json::Value entry{Json::objectValue};
+			entry["heap"] = std::get< 0 >(key);
+			entry["kind"] = std::get< 1 >(key);
+			entry["usage"] = std::get< 2 >(key);
+			entry["count"] = static_cast< Json::UInt64 >(group.count);
+			entry["MiB"] = static_cast< double >(group.bytes) / 1048576.0;
+			entry["largestMiB"] = static_cast< double >(group.largest) / 1048576.0;
+
+			list.append(std::move(entry));
+		}
+
+		return list;
 	}
 }

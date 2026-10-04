@@ -33,6 +33,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -222,6 +223,48 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			std::string memoryStatisticsString () const noexcept;
+
+			/** @brief One memory heap: its budget (VK_EXT_memory_budget through VMA) and what this process holds. */
+			struct MemoryHeapBudget
+			{
+				uint32_t heapIndex{0};
+				/** @brief What the process may use before the driver starts paging or failing (an estimate). */
+				uint64_t budget{0};
+				/** @brief What the process uses on that heap, all allocators included (an estimate). */
+				uint64_t usage{0};
+				/** @brief What VMA's allocations hold on it. */
+				uint64_t allocationBytes{0};
+				/** @brief What VMA reserved from the driver on it (its blocks). */
+				uint64_t blockBytes{0};
+				/** @brief The heap's size. */
+				uint64_t size{0};
+				bool deviceLocal{false};
+			};
+
+			/**
+			 * @brief Returns the budget and usage of every memory heap.
+			 * @note Without VK_EXT_memory_budget, VMA estimates the budget as 80 % of the heap size.
+			 * @return std::vector< MemoryHeapBudget > Empty without an allocator.
+			 */
+			[[nodiscard]]
+			std::vector< MemoryHeapBudget > memoryBudgets () const noexcept;
+
+			/**
+			 * @brief Returns VMA's detailed statistics as JSON: every block and every allocation (type, size,
+			 * usage flags, name when one was set), per memory type.
+			 * @note Megabytes on a large scene; built on demand only (a console report), never per frame.
+			 * @return std::string Empty without an allocator.
+			 */
+			[[nodiscard]]
+			std::string memoryDetailedStatisticsJSON () const noexcept;
+
+			/**
+			 * @brief Returns the heap index of a memory type.
+			 * @param memoryTypeIndex The memory type index.
+			 * @return std::optional< uint32_t > Nothing for an out-of-range index or without an allocator.
+			 */
+			[[nodiscard]]
+			std::optional< uint32_t > memoryTypeHeapIndex (uint32_t memoryTypeIndex) const noexcept;
 
 			/**
 			 * @brief Returns the memory allocator handle.

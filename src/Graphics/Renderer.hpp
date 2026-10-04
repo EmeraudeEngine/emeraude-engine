@@ -1464,6 +1464,27 @@ namespace EmEn::Graphics
 			void prepareFrameJitter (const Scenes::Scene * scene) noexcept;
 
 			/**
+			 * @brief Every 2 seconds, compares each device-local heap's usage with its budget (VK_EXT_memory_budget):
+			 * a warning (with the largest allocation groups) when a heap reaches 98 % of it, an info when it comes back
+			 * under 90 %.
+			 * @note Over budget, the driver pages allocations to system memory: a frame can stall for seconds and an
+			 * NVIDIA GPU loses the device (Xid 109, CTX SWITCH TIMEOUT) — JungleRuins, 28.7 GB on 8 GB, 2026-10-04.
+			 * Before this check, such a run looked like a GPU hang with nothing in the log.
+			 * @return void
+			 */
+			void checkMemoryBudget () noexcept;
+
+			/**
+			 * @brief Groups the GPU allocations by heap, kind (buffer / image) and usage flags, largest first.
+			 * @note Builds VMA's detailed statistics (every allocation): a few milliseconds on a large scene. On demand
+			 * only — the console, and once when a heap first goes over budget.
+			 * @param top How many groups to keep.
+			 * @return Json::Value An array of {heap, kind, usage, count, MiB, largestMiB}.
+			 */
+			[[nodiscard]]
+			Json::Value gpuAllocationGroups (size_t top) const noexcept;
+
+			/**
 			 * @brief Waits for the next frame slot and acquires the swap-chain image it will render to [RENDER THREAD].
 			 * @note ⚠️⚠️ Called OUTSIDE the active scene lock (Core::renderingTask()), and that is the point of it:
 			 * vkAcquireNextImageKHR waits on the PRESENTATION ENGINE, without any bound but its 60 s timeout. Done
@@ -1845,6 +1866,9 @@ namespace EmEn::Graphics
 			uint32_t m_temporalJitterIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
 			std::chrono::high_resolution_clock::time_point m_frameStartTime;
+			std::chrono::steady_clock::time_point m_lastMemoryBudgetCheck;
+			/** @brief One bit per heap reported over budget, so each crossing is traced once. */
+			uint64_t m_overBudgetHeaps{0};
 			std::chrono::nanoseconds m_frameDuration{0}; // 0 = frame limiter disabled
 			uint32_t m_frameRateLimit{0}; // 0 = disabled, otherwise FPS target
 			/** @brief Monotonic rendered-frame counter feeding the skinning frame cursor (render thread only). */

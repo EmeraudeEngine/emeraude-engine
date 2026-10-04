@@ -54,7 +54,10 @@
 #include "Device.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <algorithm>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <vector>
 
@@ -101,6 +104,94 @@ namespace EmEn::Vulkan
 		output << ".";
 
 		return output.str();
+	}
+
+	std::vector< Device::MemoryHeapBudget >
+	Device::memoryBudgets () const noexcept
+	{
+		std::vector< MemoryHeapBudget > heaps;
+
+		if ( m_memoryAllocatorHandle == VK_NULL_HANDLE )
+		{
+			return heaps;
+		}
+
+		const VkPhysicalDeviceMemoryProperties * memoryProperties = nullptr;
+		vmaGetMemoryProperties(m_memoryAllocatorHandle, &memoryProperties);
+
+		if ( memoryProperties == nullptr )
+		{
+			return heaps;
+		}
+
+		std::array< VmaBudget, VK_MAX_MEMORY_HEAPS > budgets{};
+		vmaGetHeapBudgets(m_memoryAllocatorHandle, budgets.data());
+
+		const auto heapCount = std::min< uint32_t >(memoryProperties->memoryHeapCount, VK_MAX_MEMORY_HEAPS);
+		const std::span< const VmaBudget > budgetView{budgets.data(), heapCount};
+		const auto heapView = std::span{memoryProperties->memoryHeaps}.first(heapCount);
+		heaps.reserve(heapCount);
+
+		for ( uint32_t heapIndex = 0; heapIndex < heapCount; ++heapIndex )
+		{
+			const auto & budget = budgetView[heapIndex];
+			const auto & heap = heapView[heapIndex];
+
+			heaps.push_back(MemoryHeapBudget{
+				.heapIndex = heapIndex,
+				.budget = budget.budget,
+				.usage = budget.usage,
+				.allocationBytes = budget.statistics.allocationBytes,
+				.blockBytes = budget.statistics.blockBytes,
+				.size = heap.size,
+				.deviceLocal = (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0
+			});
+		}
+
+		return heaps;
+	}
+
+	std::string
+	Device::memoryDetailedStatisticsJSON () const noexcept
+	{
+		if ( m_memoryAllocatorHandle == VK_NULL_HANDLE )
+		{
+			return {};
+		}
+
+		char * statistics = nullptr;
+		vmaBuildStatsString(m_memoryAllocatorHandle, &statistics, VK_TRUE);
+
+		if ( statistics == nullptr )
+		{
+			return {};
+		}
+
+		std::string json{statistics};
+		vmaFreeStatsString(m_memoryAllocatorHandle, statistics);
+
+		return json;
+	}
+
+	std::optional< uint32_t >
+	Device::memoryTypeHeapIndex (uint32_t memoryTypeIndex) const noexcept
+	{
+		if ( m_memoryAllocatorHandle == VK_NULL_HANDLE )
+		{
+			return std::nullopt;
+		}
+
+		const VkPhysicalDeviceMemoryProperties * memoryProperties = nullptr;
+		vmaGetMemoryProperties(m_memoryAllocatorHandle, &memoryProperties);
+
+		if ( memoryProperties == nullptr || memoryTypeIndex >= memoryProperties->memoryTypeCount || memoryTypeIndex >= VK_MAX_MEMORY_TYPES )
+		{
+			return std::nullopt;
+		}
+
+		const auto types = std::span{memoryProperties->memoryTypes}.first(memoryProperties->memoryTypeCount);
+
+		return types[memoryTypeIndex].heapIndex;
 	}
 
 	bool
