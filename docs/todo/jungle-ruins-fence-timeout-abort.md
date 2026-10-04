@@ -51,3 +51,12 @@ submission too long for the driver's watchdog). Peak RSS 78 GB. Log kept only in
 
 - Same temporal signature as `compressed-gltf-sigill-at-idle.md` (different signal) and as
   `wayland-surface-lost-protocol-error.md` (the swap-chain timeout is the CONSEQUENCE there).
+
+**2026-10-04, later — the device loss explained and fixed; the timeout remains.** The Xid 109 was VRAM
+oversubscription (28.9 GB on 8 GB, 23 GB of it duplicated forest geometry: `docs/scene-loaders-usd.md`, item
+`geometry-content-dedup`). With the geometry shared: 5.57 GB, no device loss — and the original symptom of this
+item comes back: the first frame's fence does not signal within 60 s (`VK_TIMEOUT` → `std::abort()`). The frame
+is the cause: 613 806 QueenForest and 2.4 M RiverForest instances of 750k-940k-vertex trees, no geometry LOD, no
+imposter, no draw-distance cut on instance cells. What remains here: the vegetation drawn with the engine's own
+techniques (owner, 2026-10-04) — octahedral imposters (graphics 15e), automatic geometry LOD (15b), a distance cut
+per cell — then re-measure the first frame.

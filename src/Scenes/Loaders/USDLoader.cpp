@@ -58,6 +58,7 @@
 /* Local inclusions. */
 #include "IO/IO.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "GeometryDeduplicator.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
@@ -1759,6 +1760,13 @@ namespace EmEn::Scenes::Loaders
 
 		size_t skippedClassCount = 0;
 
+		/* ⚠️ One geometry per CONTENT, one mesh per (geometry, material, sides): JungleRuins' forests give each of
+		 * their 195 instancers its own prototype, three trees in all — built one per instancer, that was 6 meshes × 65
+		 * copies, 23 GB of GPU memory and a lost device (2026-10-04, item geometry-content-dedup). */
+		GeometryDeduplicator deduplicator;
+		std::map< std::tuple< const void *, const void *, bool >, std::shared_ptr< Renderable::MeshResource > > sharedMeshes;
+		size_t sharedMeshCount = 0;
+
 		std::map< std::string, tinyusdz::value::matrix4d > prototypeRootMatrices;
 
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
@@ -1986,13 +1994,17 @@ namespace EmEn::Scenes::Loaders
 
 			const auto resourceName = m_resourcePrefix + "/mesh/" + ( renderMesh.prim_name.empty() ? std::to_string(meshIndex) : renderMesh.prim_name ) + "-" + std::to_string(meshIndex);
 
-			auto geometry = m_resources.container< Geometry::IndexedVertexResource >()
-				->getOrCreateResource(resourceName, [shape] (auto & geometryResource) {
-					shape->computeTriangleTangent();
-					shape->computeVertexTangent();
+			constexpr auto GeometryFlags = Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates;
 
-					return geometryResource.load(*shape);
-				}, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates);
+			auto geometry = deduplicator.getOrCreate(*shape, GeometryFlags, [this, &resourceName, &shape] () {
+				return m_resources.container< Geometry::IndexedVertexResource >()
+					->getOrCreateResource(resourceName, [shape] (auto & geometryResource) {
+						shape->computeTriangleTangent();
+						shape->computeVertexTangent();
+
+						return geometryResource.load(*shape);
+					}, GeometryFlags);
+			});
 
 			if ( geometry == nullptr )
 			{
@@ -2017,10 +2029,26 @@ namespace EmEn::Scenes::Loaders
 				rasterization.setCullingMode(CullingMode::None);
 			}
 
-			auto mesh = m_resources.container< Renderable::MeshResource >()
-				->getOrCreateResource(resourceName, [geometry, material, rasterization] (auto & meshResource) {
-					return meshResource.load(geometry, material, rasterization);
-				});
+			const auto meshKey = std::make_tuple(static_cast< const void * >(geometry.get()), static_cast< const void * >(material.get()), renderMesh.doubleSided);
+			std::shared_ptr< Renderable::MeshResource > mesh;
+
+			if ( const auto sharedIt = sharedMeshes.find(meshKey); sharedIt != sharedMeshes.end() )
+			{
+				mesh = sharedIt->second;
+				sharedMeshCount++;
+			}
+			else
+			{
+				mesh = m_resources.container< Renderable::MeshResource >()
+					->getOrCreateResource(resourceName, [geometry, material, rasterization] (auto & meshResource) {
+						return meshResource.load(geometry, material, rasterization);
+					});
+
+				if ( mesh != nullptr )
+				{
+					sharedMeshes.emplace(meshKey, mesh);
+				}
+			}
 
 			if ( mesh == nullptr )
 			{
@@ -2055,6 +2083,13 @@ namespace EmEn::Scenes::Loaders
 
 			builtCount++;
 			meshIndex++;
+		}
+
+		if ( deduplicator.sharedCount() > 0 )
+		{
+			TraceInfo{ClassId} <<
+				deduplicator.sharedCount() << " mesh(es) reused an identical geometry (" << deduplicator.sharedVertexCount() << " vertices not built again), " <<
+				sharedMeshCount << " an identical mesh.";
 		}
 
 		return builtCount;

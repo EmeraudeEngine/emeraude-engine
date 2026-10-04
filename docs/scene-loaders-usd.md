@@ -318,6 +318,18 @@ entities appear at **317 s** — about 5 minutes against ~23. Peak RSS 78 GB, al
 is ONE element alone). The renderer then lost the device (RTX 3070 Ti, NVIDIA Xid 109 CTX SWITCH TIMEOUT, last GPU
 markers `AS-build:end`): item `jungle-ruins-fence-timeout-abort`.
 
+**The cause (2026-10-04, VMA's report written at the end of the load):** 28.9 GB allocated on the 8 GB card — the
+device heap AT its budget, 22 GB placed in system memory. 23 GB were COPIES: `PI_S_QueenForest` and
+`PI_S_RiverForest` give each of their 195 instancers its own prototype, three trees per element, and the loader built
+one geometry per instancer — 6 vertex buffers of 37-83 MB × 65 (21.4 GB) and their index buffers × 65 (1.75 GB). The
+ray-tracing lane was not involved (the `ScreenSpace` lane lost the device the same way).
+
+**Fixed by `GeometryDeduplicator`** (owner: by content, in a helper the loaders call before creating a geometry):
+381 meshes of the two forests reuse a geometry, **GPU memory 28.7 GB → 5.57 GB**, peak RSS 62 → 30 GB, the budget
+warning silent. The frame then times out instead (60 s fence → `std::abort()`, no device loss): drawing 8.6 M instances
+of 750k-940k-vertex trees with no LOD, imposter or distance cut is beyond any GPU. Next: the engine's vegetation
+techniques (owner, 2026-10-04), item `jungle-ruins-fence-timeout-abort`.
+
 The cost is **not** proportional to instance count: `RiverSeedling` delivers 2.2 M instances in
 9 seconds, while `QueenForest` needs 12 minutes for 0.6 M. What it follows is the size of the
 `*_classes.usda` prototype layer (236 MB and 196 MB for the two slow ones). The bottleneck is
