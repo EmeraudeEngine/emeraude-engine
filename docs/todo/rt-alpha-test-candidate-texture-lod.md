@@ -18,6 +18,13 @@ trace fixed the same defect for its hit SHADING on 2026-09-13 (ray-cone LOD, Ray
 ch. 20); the cutout edges of the palm leaves reflected in `light-and-shadow-debug` still come
 from an unfiltered opacity test, and so do every alpha-tested shadow ray and RTGI/RTAO candidate.
 
+## Measured (2026-10-05)
+
+The opacity micromap prototype on Sponza's cypress made this defect visible: with the implicit-LOD `texture()` the
+shader confirmed the micromap's unknown sub-triangles inconsistently (image 7 % darker, rays stopped early, a fake
+"38 → 17 ms" RTGI gain); with `textureLod(…, 0.0)` the paths agree. Without micromaps the implicit LOD and mip 0
+differ on ~3 % of the pixels by > 8 levels. `docs/caution-points.md` § Opacity micromaps measured on Sponza's cypress.
+
 ## What remains
 - Carry a ray-cone width into the macro (it needs the ray's spread and distance — the callers have
   them) and sample with `textureLod()`; the cutoff comparison on a filtered alpha is the usual

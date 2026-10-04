@@ -113,7 +113,13 @@ What was left of the forward lamp passes on Sponza (Linux 4.0 ms of 13.4) was th
 glTF `BLEND` material: translucent, forward by design. Their alpha is a leaf SILHOUETTE, not a translucency (owner,
 2026-10-04): the demo now loads them as a cutout (`LoaderOptions::cutoutMaterialNames`) — opaque, deferred-lit.
 `ScenePass` 13.8 → 10.2 ms (effects bypassed), frame 80 → 73.5 ms (14 FPS), 0 VUID; the cypress reads denser and
-sharper (the BLEND let the background through, sorted per object), mean luminance unchanged (106.96 → 106.90).
+sharper (the BLEND let the background through, sorted per object), mean luminance unchanged (106.96 → 106.90). On
+the M2 (macOS-PA): `ScenePass` 100 → 75.6 ms, the forward remainder 29.4 → 1.6 ms, deferred/deferred captures now
+bit-identical (the per-run noise in the tree came from the translucent cypress); the cutout adds 3.4 ms to the base
+pass there (a `discard` defeats the tile GPU's hidden-surface removal) and SSGI/SSR +6 ms (they now see the tree).
+The lantern speckle stays a watch item: it was on STONE, not in the tree. Windows (Windows-PA): deferred
+`ScenePass` 31.4 → 23.3 ms on the RTX 3060 Laptop (−26 %), ~75.5 → 52.5 ms on the AMD iGPU (−30 %) at 1280×720,
+0 VUID on both; the cypress's foliage coverage rises in every height band (top band 10 → 28 %), none loses any.
 
 ⚠️ In DAYLIGHT the 22 lamps add almost nothing a camera sees (0.01 % of the pixels gain more than 4 levels with the
 sun off and the sky's ambient on): compare at night, or the comparison proves nothing.
