@@ -94,6 +94,16 @@ hidden layer within the bias of the front one ADDS its lighting — dense foliag
 brighter in forward than in deferred, which shades only the visible surface (engine item
 `forward-light-pass-depth-bias-leaks-hidden-layers`).
 
+Apple M2 (MoltenVK, 2560×1440, macOS-PA, 2026-10-04): `ScenePass` 268 → 100 ms, frame 346 → 178 ms, 0 VUID; the
+split's store/load ≈ 0.2 ms on that tile-based GPU; `DeferredLights` 4.1 ms; night comparison as on Linux (deferred
+brighter in only 1.4 % of the > 32-level pixels). `lighten-marbles` (127 point lights): `ScenePass` 332 → 15 ms.
+Once, in one of six deferred/deferred pairs, 2669 px of speckles on stone near the right lantern (max 34 levels) —
+not reproduced in the five other pairs; forward/forward and deferred/deferred otherwise differ by the same few
+hundred ivy pixels on that GPU. Watch for it.
+
+What is left of the forward lamp passes on Sponza (Linux 4.0 ms of 13.4) is the cypress's `LeafSpring` leaves, a
+glTF `BLEND` material: translucent, forward by design (hidden: 0.7 ms left).
+
 ⚠️ In DAYLIGHT the 22 lamps add almost nothing a camera sees (0.01 % of the pixels gain more than 4 levels with the
 sun off and the sky's ambient on): compare at night, or the comparison proves nothing.
 
