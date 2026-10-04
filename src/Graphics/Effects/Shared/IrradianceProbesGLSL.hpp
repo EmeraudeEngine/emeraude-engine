@@ -75,6 +75,7 @@ layout(set = )GLSL" #setIndex R"GLSL(, binding = 3, std140) uniform IrradiancePr
 	vec4 rotation0;       /* COLUMNS of the per-frame random rotation of the ray set. */
 	vec4 rotation1;
 	vec4 rotation2;
+	vec4 skyStarMask;     /* xyz: direction toward the in-texture celestial body, w: cone half-angle in radians (0 = none) — StarMaskGLSL.hpp. */
 } probeVolume;
 
 layout(set = )GLSL" #setIndex R"GLSL(, binding = 4) uniform sampler2DArray probeIrradianceAtlas;

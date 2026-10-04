@@ -1032,7 +1032,8 @@ namespace EmEn::Graphics
 			},
 			/* THE SKY IS A LIGHT SOURCE — the scalars come straight from the producer
 			 * (0 = no sky term for the screen-space producers). */
-			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, static_cast< float >(inputs.lightCount)}
+			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, static_cast< float >(inputs.lightCount)},
+			.skyStarMask = inputs.skyStarMask
 		};
 
 		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));

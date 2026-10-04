@@ -1457,6 +1457,7 @@ namespace EmEn::Graphics
 			.lightSet = lightSet,
 			.camera = activeCamera,
 			.skyLuminance = skyLuminance,
+			.skyStarMask = m_skyStarMask,
 			.ambientIlluminance = ambientIlluminance,
 			.medium = medium,
 			.clouds = clouds,

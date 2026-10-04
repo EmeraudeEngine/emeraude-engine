@@ -431,6 +431,10 @@ namespace EmEn::Graphics
 				 * reserved slot — so this scalar also acts as the "there is a sky" flag, since
 				 * that slot falls back to the engine default cubemap. */
 				float skyLuminance{0.0F};
+				/* The celestial body declared IN the environment texture (the sun of a photo sky): direction toward it,
+				 * cone half-angle in radians (w = 0: none). Its light reaches the scene through the analytic directional
+				 * light, WITH shadows: a traced sky lookup must not read it a second time (StarMaskGLSL.hpp). */
+				std::array< float, 4 > skyStarMask{0.0F, 0.0F, 0.0F, 0.0F};
 				/* The ambient illuminance the SHADING uses, in lux — Scene::effectiveAmbientIlluminance().
 				 * ⚠️ NOT LightSet::ambientLightIntensity(): when the sky drives the ambient the
 				 * raster reads the irradiance cubemap and pushes a ZERO scalar, while the LightSet

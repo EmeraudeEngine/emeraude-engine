@@ -107,6 +107,9 @@ namespace EmEn::Graphics
 				std::array< float, 4 > bounceParams;
 				/* sky luminance in nits (0 = no sky), sky ray distance, ambient-occlusion lane range, RT light count. */
 				std::array< float, 4 > skyParams;
+				/* The in-texture celestial body mask: direction toward the body, cone half-angle in radians (0 = none) —
+				 * Scenes::Scene::environmentStarMask(), Graphics/Effects/Shared/StarMaskGLSL.hpp. */
+				std::array< float, 4 > skyStarMask;
 			};
 
 			/**
@@ -182,6 +185,8 @@ namespace EmEn::Graphics
 				 * exactly these. Walking the SSBO's capacity instead counted a stale copy of a disabled light
 				 * twice (the packer never clears the tail). 0 for the screen-space producers. */
 				uint32_t lightCount{0};
+				/* The in-texture celestial body mask (direction, cone half-angle; w = 0: none). */
+				std::array< float, 4 > skyStarMask{0.0F, 0.0F, 0.0F, 0.0F};
 			};
 
 			/**

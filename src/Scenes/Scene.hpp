@@ -2514,6 +2514,18 @@ namespace EmEn::Scenes
 			 */
 			void forEachRenderableInstance (const std::function< void (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept;
 
+			/**
+			 * @brief Builds the IBL bake mask from the background's celestial bodies.
+			 * @note A body declared IN the texture ("InTexture") is masked out of the irradiance and
+			 * prefiltered bakes, because its energy reaches the scene through the analytic directional
+			 * light derived from it — WITH shadows. Kept in the bake, the same body would light every
+			 * surface a second time, unshadowed, from the texture. The brightest in-texture body wins;
+			 * the mask is disabled when the background declares none.
+			 * @return Graphics::Compute::IBLBaker::StarMask
+			 */
+			[[nodiscard]]
+			Graphics::Compute::IBLBaker::StarMask environmentStarMask () const noexcept;
+
 		private:
 
 			/* ============================================================
@@ -2769,17 +2781,6 @@ namespace EmEn::Scenes
 			 */
 			void updateEnvironmentIBL () noexcept;
 
-			/**
-			 * @brief Builds the IBL bake mask from the background's celestial bodies.
-			 * @note A body declared IN the texture ("InTexture") is masked out of the irradiance and
-			 * prefiltered bakes, because its energy reaches the scene through the analytic directional
-			 * light derived from it — WITH shadows. Kept in the bake, the same body would light every
-			 * surface a second time, unshadowed, from the texture. The brightest in-texture body wins;
-			 * the mask is disabled when the background declares none.
-			 * @return Graphics::Compute::IBLBaker::StarMask
-			 */
-			[[nodiscard]]
-			Graphics::Compute::IBLBaker::StarMask environmentStarMask () const noexcept;
 
 			/**
 			 * @brief Hands the ambient pass' DIFFUSE IBL leg over to an indirect-diffuse

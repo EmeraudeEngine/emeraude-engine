@@ -31,6 +31,7 @@
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
+#include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
 
 /* Local inclusions. */
 #include "Graphics/IrradianceProbeVolume.hpp"
@@ -126,6 +127,7 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = unused (the clamp died with the screen-history feedback), z = variance-clip gamma, w = accumulation cap. */
 	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = RT light count. */
+	vec4 skyStarMask;	/* xyz = direction toward the in-texture celestial body, w = cone half-angle in radians (0 = none). */
 };
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cubemap array whose
@@ -146,9 +148,13 @@ const uint EnvironmentCubemapSlot = 0u;
  * luminance — the same value the skybox renders with, so the lighting and the visible sky cannot
  * disagree. THE SKY IS A LIGHT SOURCE: without this, a ray that escapes contributes nothing and
  * every shadow is lit by bounces alone (Sponza on the Moon).
- * @note No sun-disc exclusion: an LDR cubemap clamps a painted sun to the sky's own luminance,
- * and a ~0.5-degree disc is ~2e-5 of a cosine-weighted hemisphere — 0.002% of the sky's
- * irradiance, far below the sampling noise. An HDR sky would need one. */
+ * ⚠️ The celestial body declared IN the texture is MASKED (emMaskStar, the IBL bake's own mask): its light
+ * comes from the analytic directional light, with shadows. This note used to say no exclusion was needed — true
+ * of an LDR sky, whose painted sun clamps to the sky's level, false of an HDR one: on Sponza's Kloppenheim 05 the
+ * disc carries ~80 % of the sky's illuminance, and a GI ray landing on it brought the sun back a second time,
+ * unshadowed, as rare enormous samples (2026-10-05, Effects/Shared/StarMaskGLSL.hpp; on the probe volume, which
+ * shares the defect, they flashed whole frames). */
+)GLSL" EMEN_STAR_MASK_GLSL R"GLSL(
 vec3 skyRadiance (vec3 direction)
 {
 	if (skyParams.x <= 0.0)
@@ -161,7 +167,11 @@ vec3 skyRadiance (vec3 direction)
 	 * the code below already sampled the raw direction, so the text described a compensation that
 	 * was no longer there. Same contract as the skybox (Material/Helpers.cpp) and the material
 	 * reflections: no negation anywhere. */
-	return texture(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], direction).rgb * skyParams.x;
+	/* The mask's rim is widened by one texel of the cubemap's top level. */
+	const float rimWidening = 1.5707963 / float(textureSize(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], 0).x);
+	const vec3 skyDirection = emMaskStar(direction, skyStarMask, rimWidening);
+
+	return texture(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], skyDirection).rgb * skyParams.x;
 }
 
 /* NOTE: GLSL has no built-in PI constant. */
@@ -962,7 +972,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
 			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
 			.occlusionMaxDistance = m_occlusionLaneRange,
-			.lightCount = this->renderer().rtLightCount()
+			.lightCount = this->renderer().rtLightCount(),
+			.skyStarMask = context.skyStarMask
 		}));
 
 		/* ---- Pass 1: Ray Trace GI ---- */

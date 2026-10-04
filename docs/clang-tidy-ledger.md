@@ -298,7 +298,9 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   returns its INPUT texture, owned by a render target, never a temporary.
 - **performance-inefficient-string-concatenation ×4** — `GIDenoiser` target names, built once per creation / resize.
 - **cppcoreguidelines-macro-usage ×2** — `EMEN_CLOUD_VOLUME_GLSL`, `GIDENOISER_REPROJECTION_GLSL`: GLSL text spliced
-  by adjacent-literal concatenation at compile time, which a `constexpr` pointer cannot do.
+  by adjacent-literal concatenation at compile time, which a `constexpr` pointer cannot do. Same reason, added
+  2026-10-05: `EMEN_STAR_MASK_GLSL` (`Effects/Shared/StarMaskGLSL.hpp`, the in-texture body mask; the only finding on
+  the lines that change touched in `IBLBaker`, `RTGI`, the probe volume, `GIDenoiser`, `PostProcessor`, `Renderer`).
 - **use-enum-class ×1** — `OverflowCensus::CounterIndex` (indices into the counter array, now on `uint8_t`).
 
 ### `src/Graphics` 7g — lighting and atmosphere (2026-10-01)

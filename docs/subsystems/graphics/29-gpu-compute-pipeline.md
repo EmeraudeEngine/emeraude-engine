@@ -63,7 +63,9 @@ zero half-angle = no mask — so the borrowed prefilter pipeline is unaffected. 
 mip)` in the common block redirects any sample inside the cone to the rim, the cone widened by the
 footprint of the source mip read (`(π/2)·2^mip / sourceSize`); all three sample sites go through it
 (mirror copy, prefilter loop, irradiance loop). `Scene::environmentStarMask()` builds it from the
-background's brightest `InTexture` star, and the mask is part of the bake identity.
+background's brightest `InTexture` star, and the mask is part of the bake identity. Since 2026-10-05
+`maskStar()` delegates to the shared `emMaskStar()` (`Graphics/Effects/Shared/StarMaskGLSL.hpp`), the
+one mask RTGI and the irradiance probe volume apply to their raw-cubemap sky term too.
 
 `bakeEnvironment(source, irradiance, prefiltered, starMask)` (lot 2): per-environment assets in ONE
 blocking submission, re-baked at every sky change. Both passes use **filtered importance

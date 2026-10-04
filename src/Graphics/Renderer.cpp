@@ -105,6 +105,26 @@ namespace
 	}
 
 	/**
+	 * @brief Returns the scene's in-texture celestial body mask for the traced sky lookups (direction, cone half-angle;
+	 * w = 0 when the scene has none). The SAME mask as its IBL bake: the body's light reaches the scene through the
+	 * analytic directional light, with shadows (Graphics/Effects/Shared/StarMaskGLSL.hpp).
+	 * @param scene A pointer to the scene, may be nullptr.
+	 * @return std::array< float, 4 >
+	 */
+	std::array< float, 4 >
+	sceneStarMask (const EmEn::Scenes::Scene * scene) noexcept
+	{
+		if ( scene == nullptr )
+		{
+			return {0.0F, 0.0F, 0.0F, 0.0F};
+		}
+
+		const auto mask = scene->environmentStarMask();
+
+		return {mask.direction[0], mask.direction[1], mask.direction[2], mask.halfAngleRadians};
+	}
+
+	/**
 	 * @brief Returns the scene's participating medium, or nullptr when it declares none.
 	 * @note The medium is a property of the SCENE, like its gravity — not of whichever effect
 	 * happens to integrate it. Null when the scene is a vacuum, which is the default and therefore
@@ -2182,7 +2202,8 @@ namespace EmEn::Graphics
 
 				/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the
 				 * frame, before any traced effect reads it. */
-				this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
+				m_postProcessor.setSkyStarMask(sceneStarMask(scenePtr));
+			this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
 			}
 			else
 			{
@@ -2367,6 +2388,7 @@ namespace EmEn::Graphics
 
 			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the frame,
 			 * before any traced effect reads it. */
+			m_postProcessor.setSkyStarMask(sceneStarMask(scenePtr));
 			this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
 		}
 		else
@@ -3127,7 +3149,8 @@ namespace EmEn::Graphics
 			.cameraPosition = {inv[12], inv[13], inv[14]},
 			.ambient = ambientColor * ambientIlluminance,
 			.skyLuminance = sceneSkyLuminance(scene),
-			.lightCount = this->rtLightCount()
+			.lightCount = this->rtLightCount(),
+			.skyStarMask = sceneStarMask(scene)
 		};
 
 		const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "IrradianceProbes"};

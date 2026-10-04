@@ -41,7 +41,9 @@ A background manifest (store `Backgrounds`) declares the FULL photometric descri
   (`IBLBaker::StarMask`, GLSL `maskStar()`, widened by the footprint of the source mip being read so
   the coarse mips cannot leak the body back in). The analytic star carries that energy with shadows;
   the visible skybox keeps the body. On Kloppenheim 05 the in-texture sun is 80 % of the ground
-  illuminance — unmasked it was a second, unshadowed sun. Zero stars is legitimate: pure ambiance
+  illuminance — unmasked it was a second, unshadowed sun. The ray-traced lanes (RTGI, irradiance
+  probes) apply the same mask to their raw-cubemap sky term since 2026-10-05 (`emMaskStar()`,
+  `Effects/Shared/StarMaskGLSL.hpp`): without it they flashed. Zero stars is legitimate: pure ambiance
   (overcast, nebula, cave).
 - ⚠️⚠️ **`Direction` is in the WORLD frame, UP = +Y — every store body was MEASURED in its picture on
   2026-09-25** (`tools/sky-manifest.py --locate`, owner: "corriger tout ce bordel"). Until then 13

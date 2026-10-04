@@ -30,6 +30,7 @@
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
+#include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 
 /* STL inclusions. */
@@ -158,7 +159,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL EMEN_STAR_MASK_GLSL R"GLSL(
 /* Direct IRRADIANCE at a hit (no albedo): the RTGI bounce shading, light for light. Only the
  * lights that cast shadows in the raster get a shadow ray — the others shine through geometry on
  * screen and the cached light must match the image. */
@@ -246,8 +247,13 @@ vec3 skyRadiance (vec3 direction)
 		return vec3(0.0);
 	}
 
+	/* The celestial body declared IN the texture is masked like the IBL bake masks it (its light is the analytic
+	 * directional light's, with shadows): a probe ray landing on Sponza's HDR sun disc used to flash the whole volume
+	 * (2026-10-05, StarMaskGLSL.hpp). The rim is widened by one top-level texel. */
+	const float rimWidening = 1.5707963 / float(textureSize(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], 0).x);
+
 	/* Explicit LOD: a compute shader has no derivatives to pick one. */
-	return textureLod(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], direction, 0.0).rgb * probeVolume.skyAmbient.x;
+	return textureLod(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], emMaskStar(direction, probeVolume.skyStarMask, rimWidening), 0.0).rgb * probeVolume.skyAmbient.x;
 }
 
 void main ()
@@ -1076,6 +1082,7 @@ namespace EmEn::Graphics
 		block.rotation0 = {1.0F - (2.0F * (qy * qy + qz * qz)), 2.0F * (qx * qy + qz * qw), 2.0F * (qx * qz - qy * qw), 0.0F};
 		block.rotation1 = {2.0F * (qx * qy - qz * qw), 1.0F - (2.0F * (qx * qx + qz * qz)), 2.0F * (qy * qz + qx * qw), 0.0F};
 		block.rotation2 = {2.0F * (qx * qz + qy * qw), 2.0F * (qy * qz - qx * qw), 1.0F - (2.0F * (qx * qx + qy * qy)), 0.0F};
+		block.skyStarMask = inputs.skyStarMask;
 
 		if ( frameIndex < m_parameterBuffers.size() )
 		{

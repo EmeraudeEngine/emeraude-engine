@@ -466,6 +466,74 @@ under a threshold (owner decision: accumulated, not instantaneous). What the fir
 
 ## Ray Tracing / Acceleration Structures
 
+### Opacity micromaps measured on Sponza's cypress: correct, but NO gain — the cost is the foliage traversal (2026-10-05)
+
+The cypress leaves (`LeafSpring`, ~1.35 M alpha-tested card triangles) cost ~20 ms of RTGI trace and ~9 ms of RTR
+trace on an RTX 3070 Ti at 2880×1620 (cypress hidden: 37.9 → 20.4 ms; every candidate accepted without a fetch:
+→ 17.7 ms; the texture fetch alone ≈ 3 ms). A VK_EXT_opacity_micromap PROTOTYPE (owner decision, then abandoned;
+patch not kept in the tree) baked the cutout alpha on the GPU (4-state, the specification's space-filling curve,
+10 samples per sub-triangle) and attached it to the BLAS. Measured, `--window-less` (no input can move the camera):
+
+| RTGI trace | without | with |
+|---|---|---|
+| exact 4-state, level 3 (2880×1620, windowed) | 37.6 ms | 39.6 ms |
+| exact 4-state, level 4 (1280×720) | 9.0 ms | 8.8 ms |
+| 2-state FORCED on the GI rays (`gl_RayFlagsForceOpacityMicromap2StateEXT`) | 38.4 ms | 33.7 ms |
+
+- **Correct**: at steady state the image with and without micromaps agree (0.5 % of pixels > 8 levels, the 10-sample
+  classification). It works on Ampere (driver: subdivision up to level 12), 0 VUID with validation.
+- **No gain** because needle cards are thinner than any affordable sub-triangle: 54-67 % of the sub-triangles stay
+  "unknown" and still reach the shader; and even with NO shader call (2-state) the ray still TRAVERSES 1.35 M
+  overlapping triangles. A real gain needs less foliage geometry in the BLAS, not a finer opacity.
+- ⚠️ **A first "38 → 17 ms" was an ARTEFACT**: the shader alpha test samples with `texture()` (implicit LOD,
+  undefined in a ray-query loop) and, combined with the micromap, confirmed unknown sub-triangles as solid — rays
+  stopped early, the image 7 % darker. Item `rt-alpha-test-candidate-texture-lod`.
+- Traps met, for whoever retries: the instance flag `FORCE_NO_OPAQUE` turns the micromap's OPAQUE sub-triangles back
+  into candidates (Vulkan spec, "Ray Opacity Culling") — an instance with micromaps must drop it; the micromap
+  barriers exist only in synchronization2; a bake in the same rebuild that REGISTERS the textures reads empty
+  bindless slots (`BindlessTextureManager` copies the scene's set later) — every sub-triangle came out transparent;
+  `centroid` is a GLSL reserved word; the irradiance probes converge in tens of seconds — compare converged frames,
+  window-less, or a clicked test window moves the camera.
+
+### The in-texture sun was counted twice by the ray-traced lanes: whole-frame probe flashes (2026-10-05)
+
+Since 2026-09-13 the IBL bake masks the brightest `InTexture` celestial body (its energy is the analytic directional
+light's, WITH shadows). But two readers of the RAW environment cubemap (bindless cube slot 0) did not: the RTGI sky
+term (`skyRadiance()`, a GI ray that escapes the scene) and the irradiance probe volume's sky term (a probe ray that
+escapes). On Sponza (Kloppenheim 05, whose sun disc carries ~80 % of the sky's illuminance on the ground) a ray landing
+on the disc brought the sun back a second time, UNSHADOWED, as rare enormous samples; on the probes (one sample feeds a
+whole probe) they made whole-frame FLASHES — mean luminance 57.4 → 65-74 on isolated frames, then a decay through the
+0.97 hysteresis.
+- **Measured**, RTX 3070 Ti, `sponza --window-less`, deterministic settings copy (RTGI / RTR temporal, animated noise,
+  TAA, motion blur, depth of field OFF; exposure pinned f/11 1/250 ISO 1600), 40 captures ~1.5 s apart after 60 s:
+
+  | Run | Median | Max | Flashes (> median + 3) | Per-pixel temporal σ |
+  |---|---|---|---|---|
+  | shipped | 57.72 | 68.97 | 2 / 40 | — |
+  | probes OFF | 56.91 | 56.91 | 0 / 40 | 0.00 |
+  | sky clamped (diagnostic only, biased) | 57.58 | 57.65 | 0 / 40 | 0.12 |
+  | **star mask (the fix)** | 57.74 | 58.27 | **0 / 40** | 0.29 |
+  | star mask, validation layers ON | 57.73 | 58.10 | 0 / 40, **0 VUID** | — |
+
+  The median does not move (the body's energy was already the directional light's); the residual σ is the uniform
+  Monte Carlo noise of the probe update (random ray rotation every frame), no hot spot left.
+- ⚠️ **The GI GRAINS of those test frames are NOT the sun**: isolated bright pixels (> +60 over a 5×5 median) are
+  ~14.1 k per frame shipped, masked, sky-clamped and probes off alike — they are the raw 8-sample half-resolution RTGI
+  with its temporal accumulation switched OFF by the test settings. RTGI gets the mask for consistency (same
+  double count, rarer per pixel), not because it cured a measured symptom.
+- **The fix**: ONE mask for every reader, `Graphics/Effects/Shared/StarMaskGLSL.hpp` (`emMaskStar(L, starMask,
+  rimWidening)`: L outside the cone, the cone's rim inside it), used by the IBL bake (`maskStar()` now delegates to it,
+  same logic), RTGI (`FrameData.skyStarMask`, filled from `PostProcessor::setSkyStarMask()` →
+  `FrameContext::skyStarMask`) and the probe volume (`IrradianceProbeParams.skyStarMask`, the UBO now 11 vec4). The
+  Renderer computes it once per frame from `Scene::environmentStarMask()` (now public). The rim is widened by one
+  top-level texel of the cube read.
+- ⚠️ **A new reader of the environment cubemap that LIGHTS a surface (diffuse or glossy, not a view of the sky) must
+  go through `emMaskStar()`** — or read the baked IBL, already masked. A view of the sky (the skybox, a refraction
+  through glass) keeps the body.
+- ⚠️ The micromap prototype seemed to "cure" the flashes: fewer candidates reached the alpha-test shader, so a
+  different set of rays escaped — a coincidence of the ray distribution, not a fix. Attribute a flash by switching
+  ONE contributor at a time (here `Core/Graphics/RayTracing/IrradianceProbes/Enabled`), converged frames only.
+
 ### CDLOD terrain — what the adaptive grid taught, and the traps of its replacement (2026-09-22)
 
 Every `TerrainResource` floor is `Geometry::CDLODTerrainResource` since 2026-09-22: one shared patch

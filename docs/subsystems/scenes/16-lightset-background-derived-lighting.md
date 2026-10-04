@@ -65,6 +65,10 @@ in-texture sun is 80 % of the illuminance the whole sky pours on the ground. The
 the bake identity (`m_IBLBakedStarMask`): a manifest change re-bakes.
 `applyStars = false` (Sponza: the asset's own `SUN` is the sun) still masks the body — the mask
 follows the MANIFEST, not the stage, which is what makes the two paths consistent.
+⚠️ **Since 2026-10-05 the SAME mask applies to the ray-traced lanes** that read the raw cubemap
+(RTGI's and the irradiance probe volume's sky term, `Graphics/Effects/Shared/StarMaskGLSL.hpp`):
+unmasked, a ray landing on the disc brought the sun back unshadowed — whole-frame probe flashes on
+Sponza (`docs/caution-points.md` § The in-texture sun was counted twice by the ray-traced lanes).
 
 ⚠️⚠️ **FIXED 2026-09-25 — the store manifests' `Direction` vectors were Y-DOWN legacy** (found
 2026-09-13): 13 manifests declared a negative Y where the doc says "toward the body, UP = +Y"; the

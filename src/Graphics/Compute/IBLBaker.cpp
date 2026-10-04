@@ -37,6 +37,7 @@
 #include <vector>
 
 /* Local inclusions. */
+#include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
 #include "Graphics/IBLTexture.hpp"
 #include "Math/Base.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -254,37 +255,11 @@ float sourceTexelSolidAngle ()
  * shadows — and a bake that kept it would light every surface a second time, unshadowed. The cone
  * is widened by the footprint of the source mip being read: the coarse mips average the body into
  * their texels, and a rim sample taken there would leak it back in. */
+)" EMEN_STAR_MASK_GLSL R"(
 vec3 maskStar (vec3 L, float mip)
 {
-	if ( pc.starMask.w <= 0.0 )
-	{
-		return L;
-	}
-
-	const vec3 S = pc.starMask.xyz;
-	const float cosAngle = dot(L, S);
 	/* One source texel spans about (PI/2) / sourceSize radians at a face centre, times 2^mip. */
-	const float rim = pc.starMask.w + (1.5707963 * exp2(max(mip, 0.0)) / float(pc.sourceSize));
-
-	if ( cosAngle <= cos(rim) )
-	{
-		return L;
-	}
-
-	vec3 perpendicular = L - S * cosAngle;
-	const float perpendicularLength = length(perpendicular);
-
-	if ( perpendicularLength < 1e-4 )
-	{
-		/* Looking straight at the body: any point of the rim circle will do. */
-		perpendicular = normalize(cross(S, abs(S.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
-	}
-	else
-	{
-		perpendicular /= perpendicularLength;
-	}
-
-	return normalize(S * cos(rim) + perpendicular * sin(rim));
+	return emMaskStar(L, pc.starMask, 1.5707963 * exp2(max(mip, 0.0)) / float(pc.sourceSize));
 }
 )";
 

@@ -164,6 +164,9 @@ namespace EmEn::Graphics
 				float skyLuminance{0.0F};
 				/** @brief Lights in the RT light SSBO. */
 				uint32_t lightCount{0};
+				/** @brief The in-texture celestial body mask (direction toward it, cone half-angle in radians; w = 0: none):
+				 * a probe ray that escapes reads the sky at the rim of that cone, never the body (StarMaskGLSL.hpp). */
+				std::array< float, 4 > skyStarMask{0.0F, 0.0F, 0.0F, 0.0F};
 			};
 
 			/**
@@ -324,9 +327,10 @@ namespace EmEn::Graphics
 				std::array< float, 4 > rotation0;
 				std::array< float, 4 > rotation1;
 				std::array< float, 4 > rotation2;
+				std::array< float, 4 > skyStarMask;
 			};
 
-			static_assert(sizeof(ParametersUBO) == 160, "The parameters block must stay 10 vec4 wide (std140 mirror).");
+			static_assert(sizeof(ParametersUBO) == 176, "The parameters block must stay 11 vec4 wide (std140 mirror).");
 
 			/** @brief Reads the settings into m_parameters, sanitizing what the shaders assume. */
 			void readSettings (Renderer & renderer) noexcept;

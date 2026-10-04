@@ -375,6 +375,18 @@ namespace EmEn::Graphics
 			void recordBlit (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
+			 * @brief Sets the frame's in-texture celestial body mask (Scenes::Scene::environmentStarMask()): the traced
+			 * sky lookups of the chain (RTGI) read the sky at the rim of that cone, never the body (StarMaskGLSL.hpp).
+			 * @param mask Direction toward the body (xyz), cone half-angle in radians (w; 0 = none).
+			 * @return void
+			 */
+			void
+			setSkyStarMask (const std::array< float, 4 > & mask) noexcept
+			{
+				m_skyStarMask = mask;
+			}
+
+			/**
 			 * @brief Executes multi-pass scene effects outside any active render pass.
 			 * @note Must be called after recordBlit() and before the RP2 restart.
 			 * Each effect in the chain receives the output of the previous one.
@@ -493,6 +505,8 @@ namespace EmEn::Graphics
 			 * Mutable because the chain executes from a const method (same idiom as
 			 * ViewMatrices2DUBO's cached jittered projection). */
 			mutable std::chrono::steady_clock::time_point m_lastChainFrameTime;
+			/** @brief The in-texture celestial body mask of the frame (setSkyStarMask()). */
+			std::array< float, 4 > m_skyStarMask{0.0F, 0.0F, 0.0F, 0.0F};
 			/* USER master switch, not a capability: it answers "is post-processing allowed",
 			 * never "is there anything to post-process" — that second question belongs to the
 			 * renderer, which alone knows the active scene's chain (Renderer::needsInternalTarget()).
