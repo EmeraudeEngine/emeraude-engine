@@ -16,7 +16,7 @@ tags: [memory, audio]
 memory census (`Core.ResourcesManagerService.memoryCensus()`, 2026-10-03, Linux) counts **367 MiB for 32 tracks** in
 citadel, forest and terrain alike: the playlist loads every track up front, and one plays at a time.
 
-Split from `cpu-copies-retained-after-upload` by the owner (2026-10-03): streaming decode is a different mechanism
+Split from the CPU-copy release work (`docs/subsystems/resources/11-cpu-copy-release.md`) by the owner (2026-10-03): streaming decode is a different mechanism
 from the release / reload of GPU-uploaded copies.
 
 ## What remains
@@ -34,5 +34,5 @@ from the release / reload of GPU-uploaded copies.
 
 ## References
 
-- `src/Audio/MusicResource.hpp` (`m_localData`, `memoryOccupied()`), `docs/todo/cpu-copies-retained-after-upload.md`
+- `src/Audio/MusicResource.hpp` (`m_localData`, `memoryOccupied()`), `docs/subsystems/resources/11-cpu-copy-release.md`
   § Phase 0.

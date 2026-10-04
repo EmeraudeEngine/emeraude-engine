@@ -17,7 +17,7 @@ life. The memory census (`Core.ResourcesManagerService.memoryCensus()`, 2026-10-
 movies in citadel** (terrain the same; forest 12 MiB for 6). `CubemapMovieResource` follows the same pattern (six faces
 per frame).
 
-Split from `cpu-copies-retained-after-upload` by the owner (2026-10-03): a different mechanism from the release /
+Split from the CPU-copy release work (`docs/subsystems/resources/11-cpu-copy-release.md`) by the owner (2026-10-03): a different mechanism from the release /
 reload of GPU-uploaded copies.
 
 **The frames were held TWICE — FIXED 2026-10-04** (owner: "image or owned pixmap"): a
@@ -47,4 +47,4 @@ What stays open here is the residency itself: every frame decoded, for the movie
 ## References
 
 - `src/Graphics/MovieResource.hpp`, `src/Graphics/CubemapMovieResource.hpp`,
-  `docs/todo/cpu-copies-retained-after-upload.md` § Phase 0.
+  `docs/subsystems/resources/11-cpu-copy-release.md`.

@@ -155,10 +155,11 @@ namespace EmEn
 		/* Scan resource directories dynamically at runtime instead of relying on a static index. */
 		constexpr auto ResourcesUseDynamicScanKey{"Core/Resources/UseDynamicScan"};
 		constexpr auto DefaultResourcesUseDynamicScan{true};
-		/* Release the CPU copy of an uploaded geometry / image / cubemap once its readers are done
-		 * (docs/subsystems/resources/03 § CPU Copies). OFF until the reload exists (owner, 2026-10-04). */
+		/* Release the CPU copy of an uploaded geometry / image / cubemap once its readers are done; a later reader
+		 * reloads it (docs/subsystems/resources/03 § CPU Copies). ON since 2026-10-04 (owner, after the three-OS
+		 * validation); ⚠️ an existing settings.json keeps the false its first run wrote. */
 		constexpr auto ResourcesReleaseLocalDataKey{"Core/Resources/ReleaseLocalData"};
-		constexpr auto DefaultResourcesReleaseLocalData{false};
+		constexpr auto DefaultResourcesReleaseLocalData{true};
 		/* Seconds between a CPU copy becoming releasable and its release (a loading burst reuses it). [0, 3600]. */
 		constexpr auto ResourcesLocalDataReleaseDelayKey{"Core/Resources/LocalDataReleaseDelay"};
 		constexpr auto DefaultResourcesLocalDataReleaseDelay{5.0F};

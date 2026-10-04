@@ -23,3 +23,4 @@ Context for developing the Emeraude Engine resource management system.
 | Removed Files (v0.8.35) | [`docs/subsystems/resources/08-removed-files.md`](../../docs/subsystems/resources/08-removed-files.md) | 1 KB |
 | Future Improvements (suggestions) | [`docs/subsystems/resources/09-future-improvements.md`](../../docs/subsystems/resources/09-future-improvements.md) | 1 KB |
 | Detailed Documentation | [`docs/subsystems/resources/10-detailed-documentation.md`](../../docs/subsystems/resources/10-detailed-documentation.md) | 1 KB |
+| CPU copies: release and reload — history, decisions, measurements | [`docs/subsystems/resources/11-cpu-copy-release.md`](../../docs/subsystems/resources/11-cpu-copy-release.md) | 7 KB |

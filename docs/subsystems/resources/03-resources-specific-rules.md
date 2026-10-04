@@ -70,7 +70,7 @@ bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
 
 ### CPU Copies: Metadata Outlives the Data (2026-10-04)
 The CPU copy of an uploaded resource (a geometry's shape, an image's pixels) is meant to be released once the GPU
-holds it (`docs/todo/cpu-copies-retained-after-upload.md`). What a reader needs AFTER the upload therefore lives on
+holds it (history and measurements: [`11-cpu-copy-release.md`](11-cpu-copy-release.md)). What a reader needs AFTER the upload therefore lives on
 the resource, never only in the data:
 - **Geometries** (`IndexedVertexResource`, `VertexResource`): `boundingBox()` / `boundingSphere()` answer a copy
   taken at every load path and again at the upload (`cacheBoundingVolumes()`), not the shape's.
@@ -96,8 +96,8 @@ the resource, never only in the data:
   seconds (default 5) that no lease holds — each container snapshots its resources under its lock and releases
   OUTSIDE it — `onReleaseLocalData()` extracts the metadata then frees. When a release burst ends (the first pass that
   frees nothing after one that did), the worker gives the memory back on Linux / glibc (`malloc_trim(0)`: 1-60 ms,
-  holds the arena locks; without it citadel's RSS barely moves, 5143 MiB untrimmed vs ~2.5 GiB). **OFF by default**
-  (`Core/Resources/ReleaseLocalData` = false) until the reload exists (owner, 2026-10-04). Console:
+  holds the arena locks; without it citadel's RSS barely moves, 5143 MiB untrimmed vs ~2.5 GiB). **ON by default** since 2026-10-04
+  (`Core/Resources/ReleaseLocalData`; ⚠️ an existing `settings.json` keeps the `false` its first run wrote). Console:
   `Core.ResourcesManagerService.releaseLocalData()` releases now, whatever the setting, without the grace delay.
 - **Every reader of a releasable copy takes a lease** (RAII, copyable; an asynchronous job captures it) and tests it.
   Three ways (phase 3, 2026-10-04): `acquireLocalData()` RELOADS a released copy first, blocking the caller — the

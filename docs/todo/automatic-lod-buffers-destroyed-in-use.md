@@ -34,4 +34,4 @@ Broadleaf, Conifer, Colonized — built with LOD0/1/2 per species) and the CarCo
 
 - `geometry-lod-storage-architecture` (where the generated levels live, a separate question).
 - `MeshResource::onDependenciesLoaded()` / `generateLODLevel()` (the `_LOD<n>` geometries), the same in
-  `MultiLayerMeshResource`; `docs/todo/cpu-copies-retained-after-upload.md` (the lease taken by the LOD job).
+  `MultiLayerMeshResource`; `docs/subsystems/resources/11-cpu-copy-release.md` (the lease taken by the LOD job).
