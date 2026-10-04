@@ -42,6 +42,7 @@
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "Math/Vector.hpp"
+#include "VertexFactory/Shape.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
@@ -62,6 +63,11 @@ namespace tinyusdz
 namespace EmEn::Resources
 {
 	class Manager;
+}
+
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
 }
 
 namespace EmEn::Graphics::Material
@@ -200,6 +206,17 @@ namespace EmEn::Scenes::Loaders
 
 			[[nodiscard]]
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
+
+			/**
+			 * @brief Builds the coarser levels of a heavy mesh (LoaderOptions::generateLevelsOfDetail).
+			 * @note Synchronous: called before the finest geometry's factory, which writes the same shape's tangents.
+			 * @param finest The finest shape.
+			 * @param resourceName The finest geometry's resource name; the levels append "-lod<n>".
+			 * @return std::vector< std::shared_ptr< Graphics::Geometry::Interface > > The coarser levels, coarsest last;
+			 * empty when nothing worth a level came out.
+			 */
+			[[nodiscard]]
+			std::vector< std::shared_ptr< Graphics::Geometry::Interface > > buildLevelsOfDetail (const Base::VertexFactory::Shape< float, uint32_t > & finest, const std::string & resourceName) const noexcept;
 
 			/**
 			 * @brief Translates the render scene's meshes into engine resources and descriptors.

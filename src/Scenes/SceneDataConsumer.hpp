@@ -38,6 +38,7 @@
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "DirectionalShadowOptions.hpp"
+#include "InstanceCluster.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -125,7 +126,25 @@ namespace EmEn::Scenes
 			{
 				if ( count > 0 )
 				{
-					m_instanceTargetPerCell = count;
+					m_instanceClusterOptions.targetInstancesPerCell = count;
+				}
+			}
+
+			/**
+			 * @brief Sets how the instance sets become cells: count per cell, draw and shadow distances, shadow LOD bias.
+			 * @note The CALLER's policy (owner, 2026-10-04): a loader does not know what is vegetation. The defaults of
+			 * InstanceClusterOptions are finite on purpose. `lightingEnabled` is ignored: each mesh decides it.
+			 * @param options The options.
+			 * @return void
+			 */
+			void
+			setInstanceClusterOptions (const InstanceClusterOptions & options) noexcept
+			{
+				m_instanceClusterOptions = options;
+
+				if ( m_instanceClusterOptions.targetInstancesPerCell == 0 )
+				{
+					m_instanceClusterOptions.targetInstancesPerCell = InstanceClusterOptions{}.targetInstancesPerCell;
 				}
 			}
 
@@ -197,7 +216,7 @@ namespace EmEn::Scenes
 			std::unordered_map< size_t, std::shared_ptr< Node > > m_animatedNodes;
 
 			DirectionalShadowOptions m_directionalLightShadows;
-			size_t m_instanceTargetPerCell{1024};
+			InstanceClusterOptions m_instanceClusterOptions;
 			bool m_flattenHierarchy{false};
 			bool m_createLights{false};
 			/** @brief Set when a node could not be created during the current build(). */

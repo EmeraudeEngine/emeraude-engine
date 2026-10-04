@@ -102,6 +102,21 @@ namespace EmEn::Scenes
 		 * IBL terms would otherwise count twice.
 		 */
 		bool lightingEnabled{true};
+		/**
+		 * @brief Distance beyond which a cell is not drawn, in world units; 0 = no limit.
+		 * @note FINITE by default (owner, 2026-10-04): an instance set from a loaded scene carries no LOD of its own,
+		 * and without a limit every instance goes to the GPU — JungleRuins' 8.6 M instances of 900k-vertex trees never
+		 * finished their first frame. Measured from the cell's centroid (Scene::selectLODLevel / draw range).
+		 */
+		float drawDistance{1000.0F};
+		/**
+		 * @brief Distance beyond which a cell casts no shadow, in world units; 0 = no limit.
+		 * @note A sun's shadow map covers kilometres: without a limit every tree is drawn into it (the terrain demo
+		 * measured 3.24 billion shadow triangles).
+		 */
+		float shadowCastingDistance{200.0F};
+		/** @brief How many levels coarser than the view the shadow pass draws (a shadow needs no leaves). */
+		uint32_t shadowLevelOfDetailBias{0};
 	};
 
 	/**

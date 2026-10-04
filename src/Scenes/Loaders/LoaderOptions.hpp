@@ -58,6 +58,10 @@ namespace EmEn::Scenes::Loaders
 		 */
 		std::function< void (MeshDescriptor &) > onMeshLoaded;
 		/**
+		 * @brief The triangle count from which a mesh gets a level-of-detail chain (generateLevelsOfDetail).
+		 */
+		uint32_t levelOfDetailMinimumTriangles{20000};
+		/**
 		 * @brief Resolves references, payloads, inherits and variants in addition to sublayers.
 		 *
 		 * @note USD-only. Sublayer composition alone yields a stage's own geometry; anything
@@ -68,6 +72,15 @@ namespace EmEn::Scenes::Loaders
 		 * was killed. Enable it per ELEMENT, never on a full stage, until deferred loading exists.
 		 */
 		bool resolveReferences{false};
+		/**
+		 * @brief Builds a chain of simplified levels (Base::VertexFactory::simplifyShape, meshoptimizer) for every mesh of
+		 * at least levelOfDetailMinimumTriangles, drawn as a MultiLayerMeshResource the view selects from by distance.
+		 *
+		 * @note USD only for now (owner, 2026-10-04: the engine's own techniques for a loaded scene's vegetation). Off by
+		 * default: it costs load time, and an asset that carries its own levels does not need it. Up to 3 levels, each
+		 * about a quarter of the previous one; foliage the quadric pass cannot reduce falls back to the "sloppy" one.
+		 */
+		bool generateLevelsOfDetail{false};
 		bool skipSkinning{false};
 
 		/**

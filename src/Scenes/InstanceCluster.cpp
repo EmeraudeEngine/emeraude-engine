@@ -168,6 +168,13 @@ namespace EmEn::Scenes
 			 * Not hard-coded to Lit: content carrying its own baked lighting must stay OFF the lit
 			 * path, or the ambient and IBL terms double-count what is already in the vertices. */
 			entity->componentBuilder< Component::MultipleVisuals >(entityName + "/Visuals")
+				.setup([&options] (Component::MultipleVisuals & visuals) {
+					/* The same three limits as the terrain demo's forest (projet-alpha Terrain.cpp). */
+					visuals.getRenderableInstance()
+						->setShadowCastingDistance(options.shadowCastingDistance)
+						->setShadowLevelOfDetailBias(options.shadowLevelOfDetailBias)
+						->setDrawDistanceRange(0.0F, options.drawDistance);
+				})
 				.build(renderable, localFrames, options.lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 
 			builtCount++;

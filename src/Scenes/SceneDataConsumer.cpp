@@ -181,8 +181,7 @@ namespace EmEn::Scenes
 			return 0;
 		}
 
-		InstanceClusterOptions options;
-		options.targetInstancesPerCell = m_instanceTargetPerCell;
+		auto options = m_instanceClusterOptions;
 
 		size_t cellCount = 0;
 		size_t instanceCount = 0;
@@ -244,7 +243,8 @@ namespace EmEn::Scenes
 
 		TraceInfo{ClassId} <<
 			sceneData.instanceSets.size() << " instance sets built: " <<
-			instanceCount << " instances over " << cellCount << " cells, targeting " << m_instanceTargetPerCell << " instances each.";
+			instanceCount << " instances over " << cellCount << " cells, targeting " << options.targetInstancesPerCell << " instances each, drawn to " <<
+			options.drawDistance << ", shadows to " << options.shadowCastingDistance << ".";
 
 		return cellCount;
 	}

@@ -663,6 +663,20 @@ demand. No blind optimisation.
 
 ## 8. JungleRuins — the Engine's Benchmark Scene, and its Holy Grail
 
+> **How the scene is meant to be drawn (research, 2026-10-04).** Authored in **Blender 4.2 with the GScatter add-on**
+> (205 scattering systems; the help document `Jungle Ruins_1.0.1b_HelpDoc.pdf`), exported to USD with a root named
+> `JungleRuins_Karma.usda` (Houdini Karma, an offline path tracer, by its name). Intel Labs (Visual Compute and Graphics)
+> renders it in real time with its own research **path tracer**, not a public engine: **1 sample per pixel, 1440p,
+> 30 FPS on an Arc B580**, neural denoising + supersampling. The geometry: **one BLAS per unique mesh, one TLAS over
+> every instance**, everything resident in GPU memory (no streaming) — the "trillion triangles" exist only as
+> instances, which a ray tracer pays logarithmically. Their stated difficulty: updating the TLAS for **more than
+> 9 million animated instances** blew the 30 FPS budget. Related: Intel's neural level of detail (70-95 % compression),
+> and NVIDIA's "Real-time Path Tracing of Massive Dynamic Foliage" (RTX Mega Geometry). Sources: Intel blog series
+> "Path Tracing a Trillion Triangles" / "Path Tracing Massive Dynamic Geometry in Jungle Ruins" (May 2025), Intel GPU
+> Research Samples page. ⚠️ So the scene is a RAY TRACING workload: rasterizing its millions of trees is not how it
+> was ever drawn — our raster path needs imposters and LOD to approach it; our RT path needs one TLAS instance per
+> instance (item `tlas-one-instance-per-multiple-visuals`).
+
 > [!IMPORTANT]
 > **This scene is the GOLD GOAL** — the owner's own words, *"le Saint Graal"*.
 >

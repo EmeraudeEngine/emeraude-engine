@@ -59,6 +59,7 @@
 #include "IO/IO.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "GeometryDeduplicator.hpp"
+#include "VertexFactory/ShapeSimplifier.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
@@ -66,6 +67,7 @@
 #include "PixelFactory/StreamIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Resources/Manager.hpp"
 #include "String.hpp"
 #include "SceneData.hpp"
@@ -1696,6 +1698,66 @@ namespace EmEn::Scenes::Loaders
 		return materials;
 	}
 
+	std::vector< std::shared_ptr< Graphics::Geometry::Interface > >
+	USDLoader::buildLevelsOfDetail (const Base::VertexFactory::Shape< float, uint32_t > & finest, const std::string & resourceName) const noexcept
+	{
+		using namespace Graphics;
+		using namespace Base::VertexFactory;
+
+		/* Each level about a quarter of the previous one, the allowed error growing with the distance it is seen from. */
+		constexpr std::array< ShapeSimplifierOptions, 3 > Levels{{
+			{.targetRatio = 0.25F, .targetError = 0.01F, .allowSloppy = true},
+			{.targetRatio = 0.25F, .targetError = 0.04F, .allowSloppy = true},
+			{.targetRatio = 0.25F, .targetError = 0.1F, .allowSloppy = true}
+		}};
+
+		constexpr size_t MinimumTriangles{200};
+
+		std::vector< std::shared_ptr< Geometry::Interface > > levels;
+		const Shape< float > * previous = &finest;
+		std::shared_ptr< Shape< float > > current;
+
+		for ( size_t level = 0; level < Levels.size(); ++level )
+		{
+			auto simplified = simplifyShape(*previous, Levels[level]);
+
+			/* A level that vanishes or barely shrinks ends the chain: the previous one stays the coarsest. */
+			if ( !simplified || simplified->triangles().size() < MinimumTriangles || simplified->triangles().size() * 10 > previous->triangles().size() * 9 )
+			{
+				TraceInfo{ClassId} <<
+					"Level of detail " << level + 1 << " of '" << resourceName << "' not kept: " << previous->triangles().size() << " triangles became " <<
+					( simplified ? std::to_string(simplified->triangles().size()) : std::string{"nothing"} ) << ".";
+
+				break;
+			}
+
+			current = std::make_shared< Shape< float > >(std::move(*simplified));
+
+			auto geometry = m_resources.container< Geometry::IndexedVertexResource >()
+				->getOrCreateResource(resourceName + "-lod" + std::to_string(level + 1), [current] (auto & geometryResource) {
+					current->computeTriangleTangent();
+					current->computeVertexTangent();
+
+					return geometryResource.load(*current);
+				}, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates);
+
+			if ( geometry == nullptr )
+			{
+				break;
+			}
+
+			levels.emplace_back(std::move(geometry));
+			previous = current.get();
+		}
+
+		if ( !levels.empty() )
+		{
+			TraceInfo{ClassId} << "Level-of-detail chain of '" << resourceName << "': " << finest.triangles().size() << " triangles, then " << levels.size() << " coarser level(s) down to " << previous->triangles().size() << ".";
+		}
+
+		return levels;
+	}
+
 	size_t
 	USDLoader::buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept
 	{
@@ -1764,8 +1826,11 @@ namespace EmEn::Scenes::Loaders
 		 * their 195 instancers its own prototype, three trees in all — built one per instancer, that was 6 meshes × 65
 		 * copies, 23 GB of GPU memory and a lost device (2026-10-04, item geometry-content-dedup). */
 		GeometryDeduplicator deduplicator;
-		std::map< std::tuple< const void *, const void *, bool >, std::shared_ptr< Renderable::MeshResource > > sharedMeshes;
+		std::map< std::tuple< const void *, const void *, bool >, std::shared_ptr< Renderable::Abstract > > sharedMeshes;
 		size_t sharedMeshCount = 0;
+		/* The level-of-detail chains, by their finest geometry (LoaderOptions::generateLevelsOfDetail). */
+		std::map< const void *, std::pair< std::vector< std::shared_ptr< Geometry::Interface > >, size_t > > levelOfDetailChains;
+		size_t levelOfDetailMeshCount = 0;
 
 		std::map< std::string, tinyusdz::value::matrix4d > prototypeRootMatrices;
 
@@ -1996,7 +2061,16 @@ namespace EmEn::Scenes::Loaders
 
 			constexpr auto GeometryFlags = Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates;
 
-			auto geometry = deduplicator.getOrCreate(*shape, GeometryFlags, [this, &resourceName, &shape] () {
+			std::vector< std::shared_ptr< Geometry::Interface > > coarserLevels;
+
+			auto geometry = deduplicator.getOrCreate(*shape, GeometryFlags, [this, &resourceName, &shape, &coarserLevels] () {
+				/* The coarser levels are simplified HERE, before the finest geometry's factory runs on the pool: that
+				 * factory writes the tangents of this very shape. */
+				if ( m_options.generateLevelsOfDetail && shape->triangles().size() >= m_options.levelOfDetailMinimumTriangles )
+				{
+					coarserLevels = this->buildLevelsOfDetail(*shape, resourceName);
+				}
+
 				return m_resources.container< Geometry::IndexedVertexResource >()
 					->getOrCreateResource(resourceName, [shape] (auto & geometryResource) {
 						shape->computeTriangleTangent();
@@ -2005,6 +2079,16 @@ namespace EmEn::Scenes::Loaders
 						return geometryResource.load(*shape);
 					}, GeometryFlags);
 			});
+
+			if ( geometry != nullptr && !coarserLevels.empty() )
+			{
+				std::vector< std::shared_ptr< Geometry::Interface > > chain{geometry};
+				chain.insert(chain.end(), coarserLevels.begin(), coarserLevels.end());
+
+				/* A layer per sub-geometry (group), all with the mesh's one material: the trees carry an empty group
+				 * beside the real one, and a chain given fewer layers than sub-geometries is refused at load. */
+				levelOfDetailChains.emplace(geometry.get(), std::make_pair(std::move(chain), std::max< size_t >(1, shape->groups().size())));
+			}
 
 			if ( geometry == nullptr )
 			{
@@ -2030,12 +2114,28 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			const auto meshKey = std::make_tuple(static_cast< const void * >(geometry.get()), static_cast< const void * >(material.get()), renderMesh.doubleSided);
-			std::shared_ptr< Renderable::MeshResource > mesh;
+			std::shared_ptr< Renderable::Abstract > mesh;
 
 			if ( const auto sharedIt = sharedMeshes.find(meshKey); sharedIt != sharedMeshes.end() )
 			{
 				mesh = sharedIt->second;
 				sharedMeshCount++;
+			}
+			else if ( const auto chainIt = levelOfDetailChains.find(geometry.get()); chainIt != levelOfDetailChains.end() )
+			{
+				/* Finest first; one layer per sub-geometry, every one with the mesh's material and rasterization. */
+				const auto & [chain, layerCount] = chainIt->second;
+
+				mesh = m_resources.container< Renderable::MultiLayerMeshResource >()
+					->getOrCreateResource(resourceName, [chain, layerCount, material, rasterization] (auto & meshResource) {
+						return meshResource.load(chain, std::vector< std::shared_ptr< Material::Interface > >(layerCount, material), std::vector< RasterizationOptions >(layerCount, rasterization));
+					});
+
+				if ( mesh != nullptr )
+				{
+					sharedMeshes.emplace(meshKey, mesh);
+					levelOfDetailMeshCount++;
+				}
 			}
 			else
 			{
@@ -2090,6 +2190,11 @@ namespace EmEn::Scenes::Loaders
 			TraceInfo{ClassId} <<
 				deduplicator.sharedCount() << " mesh(es) reused an identical geometry (" << deduplicator.sharedVertexCount() << " vertices not built again), " <<
 				sharedMeshCount << " an identical mesh.";
+		}
+
+		if ( levelOfDetailMeshCount > 0 )
+		{
+			TraceInfo{ClassId} << levelOfDetailMeshCount << " mesh(es) drawn through a level-of-detail chain (meshoptimizer).";
 		}
 
 		return builtCount;
@@ -2297,6 +2402,15 @@ namespace EmEn::Scenes::Loaders
 			tinyusdz::AllArcsCompositionOptions arcOptions;
 			arcOptions.references.allow_parent_relative_paths = true;
 			arcOptions.payload.allow_parent_relative_paths = true;
+
+			/* ⚠️ The parsed-layer cache (tinyusdz 73cf5f680, "owned by the caller and kept alive across the whole
+			 * fixed-point loop"). Without it every reference arc re-reads and re-parses its file: JungleRuins'
+			 * QueenForest read its 248 MB `queenforest_classes.usda` about 190 times — 46 GB in 145 s, 87 % of the
+			 * scene's load with RiverForest (measured 2026-10-04 from /proc/<pid>/io). Copy-on-write values also
+			 * make every referencing prim SHARE the parsed arrays. */
+			std::map< std::string, tinyusdz::Layer > layerCache;
+			arcOptions.references.layer_cache = &layerCache;
+			arcOptions.payload.layer_cache = &layerCache;
 
 			/* ⚠️ ONE `CompositeAllArcs()` pass is not a composition: it applies references BEFORE payloads, so an arc
 			 * that a payload brings in (a Kit export's `prepend references` inside the payloaded `assets_*.usd`
