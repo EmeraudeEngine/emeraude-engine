@@ -84,7 +84,10 @@ the resource, never only in the data:
   `CubemapResource` or owns its faces, read through `Frame::faces()`. A movie therefore keeps its images alive, and a release
   of an image's pixels (phase 2) covers the movie frames showing it.
 - **The release (phase 2, 2026-10-04)**: `IndexedVertexResource`, `VertexResource`, `ImageResource` and
-  `CubemapResource` are "GPU only" by type (`releasesLocalData()`); code that reads a copy at any time declares it
+  `CubemapResource` are "GPU only" by type (`releasesLocalData()`) — **an image or a cubemap only when it has a store
+  source** (`hasLocalDataSource()`, phase 3c): one embedded in a glTF / FBX model or generated stays resident, its
+  texture being BC7 on every BC-capable GPU, a lossy copy that cannot give the pixels back (owner, 2026-10-04;
+  citadel 81 MiB, liminal 228, the Fox + FBX demos 36 kept); code that reads a copy at any time declares it
   "CPU too" with `retainLocalData()` (`CursorAtlas` for its images). A copy becomes releasable after the upload that
   consumed it (`markLocalDataReleasable()`: a geometry's own upload; a texture's upload for an image / cubemap — an
   image no texture ever read stays resident). About once a second `Core::logicsTask()` SCHEDULES a release pass on a

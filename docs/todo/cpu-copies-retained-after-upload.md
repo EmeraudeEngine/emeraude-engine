@@ -125,7 +125,18 @@ Phase 0 is done (the census and the measurement below; the reader inventory furt
    copy — Aspen0LOD2 7 MiB in 18 ms, Conifer1LOD1 19 MiB in 38 ms, Broadleaf0LOD0 72 MiB in 58-116 ms — and a local
    probe re-encoding each read-back shape found the vertex and index buffers byte-IDENTICAL to the downloaded ones
    (9.2 M floats for Broadleaf0LOD0): the readback uses the upload's formats. Released again after the grace delay,
-   0 VUID, 0 error.
+   0 VUID, 0 error. ACCEPTED macOS M2 2026-10-04 (the same bytes −40, libc++; ASan green). **macOS
+   `malloc_zone_pressure_relief()` at a burst's end: NOT adopted** (owner rule "only if measured"): terrain ABBA with
+   it, MALLOC_SMALL ON 1566 / 1948 MB vs OFF 1550 / 1637 — the small zone's noise is ±150-200 MB run to run, no
+   effect shown; MALLOC_LARGE and phys_footprint identical to unpatched.
+   **3c DONE 2026-10-04** — owner: images and cubemaps WITHOUT a store source are never released (the embedded glTF /
+   FBX textures go BC7 on every BC-capable GPU: no pixels to read back), so no image readback exists. Linux, release
+   ON, 45 s: census citadel 499 MiB (+81 kept), terrain 529, forest 467, liminal 728, sponza 2246
+   (`CompressedImageResource` 1792); 0 VUID, 0 copy that cannot come back, 0 error on the five demos. A possible later
+   gain, not decided: give an embedded image its model file as source (liminal's 228 MiB).
+   **What remains of the item:** the three-OS validation of 3c, then the last commit flipping
+   `Core/Resources/ReleaseLocalData` to true (owner); then the item closes (its knowledge is in
+   `docs/subsystems/resources/03` § CPU Copies and base `vertexfactory/07`).
    `Core/Resources/ReleaseLocalData` flips to ON in a last commit once all three pass on the three OS.
 4. **Owner decisions after phase 0 (2026-10-03):**
    - **The construction-time hash indexes are dropped AT UPLOAD** — DONE 2026-10-03: `IndexedVertexResource` /

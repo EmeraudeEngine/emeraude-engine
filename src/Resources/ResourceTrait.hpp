@@ -964,6 +964,15 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Returns whether the resource was loaded from a store entry (setLocalDataSource()): its released copy
+			 * can be re-read from it.
+			 * @note Thread-safe.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasLocalDataSource () const noexcept;
+
+			/**
 			 * @brief Extracts what the readers keep needing (the metadata), then frees the CPU copy.
 			 * @note Called under the local-data lock, with no lease held: no reader can be inside the copy.
 			 * @return void

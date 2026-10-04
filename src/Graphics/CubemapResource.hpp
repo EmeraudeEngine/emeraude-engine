@@ -282,8 +282,9 @@ namespace EmEn::Graphics
 			bool
 			releasesLocalData () const noexcept override
 			{
-				/* NOTE: GPU only by type: the cubemap texture uploads lease the faces, then declare them releasable. */
-				return true;
+				/* NOTE: GPU only by type, WHEN the faces can come back from a store entry (the texture uploads lease them,
+				 * then declare them releasable); a generated cubemap stays resident (owner decision 2026-10-04). */
+				return this->hasLocalDataSource();
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromSource() */

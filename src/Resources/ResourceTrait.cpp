@@ -899,6 +899,14 @@ namespace EmEn::Resources
 		m_localDataSource = source;
 	}
 
+	bool
+	ResourceTrait::hasLocalDataSource () const noexcept
+	{
+		const std::scoped_lock scopeLock{m_localDataAccess};
+
+		return m_localDataSource.has_value();
+	}
+
 	void
 	ResourceTrait::forbidBlockingLocalDataReload () noexcept
 	{

@@ -376,8 +376,11 @@ namespace EmEn::Graphics
 			bool
 			releasesLocalData () const noexcept override
 			{
-				/* NOTE: GPU only by type: the texture uploads lease the pixels, then declare them releasable. */
-				return true;
+				/* NOTE: GPU only by type, WHEN the pixels can come back from a store entry: the texture uploads lease them,
+				 * then declare them releasable. An image without a source (embedded in a glTF / FBX model, generated)
+				 * stays resident: its texture is BC7 on every BC-capable GPU, a lossy copy that cannot give the pixels
+				 * back (owner decision 2026-10-04). */
+				return this->hasLocalDataSource();
 			}
 
 			/**
