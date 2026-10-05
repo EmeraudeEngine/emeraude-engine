@@ -139,7 +139,7 @@ namespace EmEn::Physics
 			isMoveOccurs = true;
 		}
 
-		/* NOTE: Vector / s is NaN once |s| <= the float epsilon: 1 / speed stays finite above FLT_MIN. */
+		/* NOTE: A zero speed would make an infinite or NaN axis (IEEE 754 division): 1 / speed stays finite above FLT_MIN. */
 		if ( m_rotationEnabled && m_angularSpeed > std::numeric_limits< float >::min() )
 		{
 			this->rotateFromPhysics(

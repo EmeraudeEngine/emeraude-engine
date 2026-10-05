@@ -5056,7 +5056,9 @@ dereference what a resource accessor returns without checking it.**
 >   to the explicit one at low speed (an 80 kg body at 5 m/s: 1e-6 apart).
 > - Base `Vector / s` is NaN once `|s| <= epsilon` (not inf): an angular speed decayed by the drag (or a 1-ulp contact
 >   depth) made a NaN rotation axis or contact normal, then a NaN orientation or position FOR GOOD. Test
->   `s > std::numeric_limits< float >::min()` and multiply by `1 / s`.
+>   `s > std::numeric_limits< float >::min()` and multiply by `1 / s`. Since 2026-10-05 the base `Vector` and
+>   `Quaternion` scalar divisions follow IEEE 754 (a sub-epsilon divisor divides normally, an exact 0 gives ±inf or
+>   NaN): the guard is still needed for a speed or a depth that reaches 0.
 > - The inverse world inertia comes from base `Matrix::tryInverse()`: the former absolute singularity test left a small
 >   body's tensor un-inverted (0.004 instead of 250).
 > - The solver still re-applies restitution per iteration and over-corrects penetration: item
