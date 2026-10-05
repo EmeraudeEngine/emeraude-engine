@@ -230,7 +230,17 @@ namespace EmEn
 #endif
 
 	/* NOTE: Must be defined here, where Impl is a complete type (std::unique_ptr requirement). */
-	PrimaryServices::~PrimaryServices () = default;
+	PrimaryServices::~PrimaryServices ()
+	{
+		m_impl.reset();
+
+		/* NOTE: Close the log file HERE, while main() is still running, instead of leaving it to the Tracer
+		 * singleton's destructor. On Windows that destructor runs at DLL_PROCESS_DETACH, inside ExitProcess(), after
+		 * the system has already terminated the logger thread: the pending entries and the "Log file closed properly"
+		 * footer were never written (measured 2026-10-05). The services (thread pool included) are gone at this point,
+		 * so no other engine thread traces any more (disableLogger() precondition). */
+		Tracer::getInstance().disableLogger();
+	}
 
 	bool
 	PrimaryServices::Impl::initialize () noexcept

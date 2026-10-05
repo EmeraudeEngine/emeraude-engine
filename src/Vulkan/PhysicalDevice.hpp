@@ -389,16 +389,16 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the driver version as a string.
-			 * @note Shortcut to PhysicalDevice::properties().
+			 * @brief Returns the driver version as a string, decoded with the vendor's own packing.
+			 * @note VkPhysicalDeviceProperties::driverVersion is vendor-encoded, unlike apiVersion: NVIDIA packs
+			 * 10.8.8.6 bits ("615.71.09", "616.92"), Intel on Windows 18.14 bits ("101.5333"), and on macOS every device
+			 * reports the MoltenVK version as 10000 * major + 100 * minor + patch ("MoltenVK 1.4.1"); the others follow
+			 * VK_MAKE_API_VERSION. DriverVersion() keeps the generic decoding (wrong for those cases).
 			 * @return std::string
+			 * @version 1.0.0
 			 */
 			[[nodiscard]]
-			std::string
-			DriverVersionString () const noexcept
-			{
-				return to_string(this->DriverVersion());
-			}
+			std::string DriverVersionString () const noexcept;
 
 			/**
 			 * @brief Returns the vendor enum.

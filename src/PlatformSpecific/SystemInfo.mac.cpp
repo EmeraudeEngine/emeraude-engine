@@ -62,10 +62,17 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		if ( major >= 20 )
+		if ( major >= 25 )
 		{
-			// macOS 11 and newer
-			m_OSInformation.systemName = (std::stringstream{} << "Apple MacOS " << (major - 9) << '.' << minor).str();
+			/* NOTE: macOS 26 (Tahoe) jumped from 15 to the year number while Darwin went from 24 to 25: Darwin 25 is
+			 * macOS 26 (measured: Darwin 25.6 = macOS 26.6, which the old "- 9" called 16.6, 2026-10-05). */
+			m_OSInformation.systemName = (std::stringstream{} << "Apple macOS " << (major + 1) << '.' << minor).str();
+			m_OSInformation.systemVersion = (std::stringstream{} << major << '.' << minor).str();
+		}
+		else if ( major >= 20 )
+		{
+			// macOS 11 to 15
+			m_OSInformation.systemName = (std::stringstream{} << "Apple macOS " << (major - 9) << '.' << minor).str();
 			m_OSInformation.systemVersion = (std::stringstream{} << major << '.' << minor).str();
 		}
 		else
@@ -206,5 +213,19 @@ namespace EmEn::PlatformSpecific
 			position == std::string::npos ?
 			realPath :
 			realPath.substr(0, position);
+	}
+
+	std::string
+	SystemInfo::platformCPUBrandString () noexcept
+	{
+		std::array< char, 256 > brand{};
+		size_t length = brand.size() - 1;
+
+		if ( sysctlbyname("machdep.cpu.brand_string", brand.data(), &length, nullptr, 0) != 0 )
+		{
+			return {};
+		}
+
+		return std::string{brand.data()};
 	}
 }

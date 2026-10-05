@@ -34,6 +34,7 @@
 #endif
 #include "hwloc.h"
 #include "SettingKeys.hpp"
+#include "String.hpp"
 
 namespace EmEn::PlatformSpecific
 {
@@ -67,7 +68,14 @@ namespace EmEn::PlatformSpecific
 
 		m_CPUInformation.vendorName = "Apple";
 		m_CPUInformation.vendorID = cpuInfo.implementer;
-		m_CPUInformation.deviceName = "Apple M?";
+		/* NOTE: cpu_features has no brand string on Apple Silicon; the OS does ("Apple M2"). The "model" below is
+		 * hw.cpufamily (e.g. 0xDA33D83D for the M2, negative once stored signed), not garbage. */
+		m_CPUInformation.deviceName = platformCPUBrandString();
+
+		if ( m_CPUInformation.deviceName.empty() )
+		{
+			m_CPUInformation.deviceName = "Apple Silicon";
+		}
 		m_CPUInformation.deviceID = cpuInfo.variant;
 		m_CPUInformation.family = -1;
 		m_CPUInformation.model = cpuInfo.part;
@@ -77,7 +85,8 @@ namespace EmEn::PlatformSpecific
 
 		m_CPUInformation.vendorName = cpuInfo.vendor;
 		m_CPUInformation.vendorID = 0;
-		m_CPUInformation.deviceName = cpuInfo.brand_string;
+		/* NOTE: The CPUID brand string is padded with spaces (e.g. "AMD Ryzen 7 6800HS with Radeon Graphics         "). */
+		m_CPUInformation.deviceName = Base::String::trim(cpuInfo.brand_string);
 		m_CPUInformation.deviceID = 0;
 		m_CPUInformation.family = cpuInfo.family;
 		m_CPUInformation.model = cpuInfo.model;

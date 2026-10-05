@@ -220,4 +220,11 @@ namespace EmEn::PlatformSpecific
 			realPath :
 			realPath.substr(0, position);
 	}
+
+	std::string
+	SystemInfo::platformCPUBrandString () noexcept
+	{
+		/* NOTE: cpu_features reads the brand string (CPUID) on this platform. */
+		return {};
+	}
 }

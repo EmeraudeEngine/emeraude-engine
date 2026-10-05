@@ -63,6 +63,7 @@ namespace EmEn::Vulkan
 		Nvidia = 0x10DE,
 		ARM = 0x13B5,
 		Qualcomm = 0x5143,
+		Apple = 0x106B,
 		Intel = 0x8086
 	};
 
@@ -91,6 +92,9 @@ namespace EmEn::Vulkan
 
 			case static_cast< uint32_t >(Vendor::Qualcomm) :
 				return Vendor::Qualcomm;
+
+			case static_cast< uint32_t >(Vendor::Apple) :
+				return Vendor::Apple;
 
 			case static_cast< uint32_t >(Vendor::Intel) :
 				return Vendor::Intel;
@@ -126,6 +130,9 @@ namespace EmEn::Vulkan
 
 			case Vendor::Qualcomm :
 				return "Qualcomm";
+
+			case Vendor::Apple :
+				return "Apple";
 
 			case Vendor::Intel :
 				return "Intel";

@@ -857,4 +857,63 @@ namespace EmEn::Vulkan
 
 		return output.str();
 	}
+
+	std::string
+	PhysicalDevice::DriverVersionString () const noexcept
+	{
+		const auto version = m_properties.properties.driverVersion;
+
+		/* NOTE: On macOS every device goes through MoltenVK (Apple, AMD or Intel GPU alike), which reports ITS own
+		 * version as 10000 * major + 100 * minor + patch (measured: 10401 = MoltenVK 1.4.1, generic decoding said
+		 * "0.2.2209", 2026-10-05). */
+		if constexpr ( IsMacOS )
+		{
+			return "MoltenVK " + std::to_string(version / 10000U) + '.' + std::to_string((version / 100U) % 100U) + '.' + std::to_string(version % 100U);
+		}
+		else
+		{
+			/* NOTE: Decoding conventions of the Vulkan Hardware Database (vulkan.gpuinfo.org). Measured on 2026-10-05:
+			 * NVIDIA Linux 615.71.09 (generic decoding said "615.284.576"), NVIDIA Windows 616.92 ("616.368.0"). */
+			switch ( this->vendor() )
+			{
+				case Vendor::Nvidia :
+				{
+					const auto major = (version >> 22U) & 0x3FFU;
+					const auto minor = (version >> 14U) & 0xFFU;
+					const auto secondary = (version >> 6U) & 0xFFU;
+					const auto tertiary = version & 0x3FU;
+
+					std::stringstream output;
+					output << major << '.' << minor;
+
+					if ( secondary != 0 || tertiary != 0 )
+					{
+						/* NOTE: NVIDIA prints this part on two digits (e.g. Linux "615.71.09"). */
+						output << '.' << std::setw(2) << std::setfill('0') << secondary;
+					}
+
+					if ( tertiary != 0 )
+					{
+						output << '.' << tertiary;
+					}
+
+					return output.str();
+				}
+
+				case Vendor::Intel :
+					if constexpr ( IsWindows )
+					{
+						return std::to_string(version >> 14U) + '.' + std::to_string(version & 0x3FFFU);
+					}
+					else
+					{
+						/* NOTE: Mesa (Linux) uses the generic packing. */
+						return to_string(this->DriverVersion());
+					}
+
+				default :
+					return to_string(this->DriverVersion());
+			}
+		}
+	}
 }

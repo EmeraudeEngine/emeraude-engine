@@ -27,8 +27,11 @@
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
+#include <charconv>
 #include <iostream>
 #include <string>
+#include <string_view>
+#include <system_error>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -67,6 +70,22 @@ namespace EmEn::PlatformSpecific
 
 			m_OSInformation.systemName = convertWideToUTF8(systemName.value());
 			m_OSInformation.systemVersion = convertWideToUTF8(systemVersion.value());
+
+			/* NOTE: Windows 11 kept "Windows 10 ..." as the registry ProductName (measured on build 26300, 2026-10-05):
+			 * the build number decides, Windows 11 starts at 22000. */
+			constexpr unsigned long FirstWindows11Build{22000};
+			constexpr std::string_view Windows10Prefix{"Windows 10"};
+
+			if ( m_OSInformation.systemName.starts_with(Windows10Prefix) )
+			{
+				unsigned long buildNumber = 0;
+				const auto & build = m_OSInformation.systemVersion;
+
+				if ( const auto [pointer, errorCode] = std::from_chars(build.data(), build.data() + build.size(), buildNumber); errorCode == std::errc{} && buildNumber >= FirstWindows11Build )
+				{
+					m_OSInformation.systemName.replace(0, Windows10Prefix.size(), "Windows 11");
+				}
+			}
 		}
 
 		/* NOTE: Get the DNS host name (matches Node.js os.hostname() on Windows). */
@@ -322,5 +341,12 @@ namespace EmEn::PlatformSpecific
 		}
 
 		return std::filesystem::path{realPath}.parent_path();
+	}
+
+	std::string
+	SystemInfo::platformCPUBrandString () noexcept
+	{
+		/* NOTE: cpu_features reads the brand string (CPUID) on this platform. */
+		return {};
 	}
 }

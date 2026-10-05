@@ -172,6 +172,14 @@ namespace EmEn::PlatformSpecific
 			bool fetchCPUInformation () noexcept;
 
 			/**
+			 * @brief Returns the CPU brand string the OS provides, when cpu_features cannot read one.
+			 * @note Apple Silicon only (sysctl machdep.cpu.brand_string, e.g. "Apple M2"); empty elsewhere.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			static std::string platformCPUBrandString () noexcept;
+
+			/**
 			 * @brief Returns the total memory available on the system.
 			 * @return size_t
 			 */

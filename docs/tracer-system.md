@@ -171,6 +171,11 @@ flushed after each batch, so the lines written before a crash are on disk).
   replacing the older one — so the complete log of the previous run survives the next launch. This is what lets
   an application report a crash at the next startup (app_system: `docs/crash-report.md`).
 
+- **Closing** (since 1.0.0): `~PrimaryServices()` calls `disableLogger()` once its services are destroyed, which
+  writes the pending entries and the `====== Log file closed properly ======` footer while `main()` still runs. Left to
+  the `Tracer` singleton's destructor, Windows never wrote them: it runs at `DLL_PROCESS_DETACH` inside `ExitProcess()`,
+  after the logger thread was killed. A journal without the footer therefore means an abnormal end on every OS.
+
 > [!WARNING]
 > ⚠️ **The rotation happens in the `Core` constructor**, before any application code runs: the journal of the
 > crashed run is `journal-<name>.previous.*` from then on, not `journal-<name>.*`.
