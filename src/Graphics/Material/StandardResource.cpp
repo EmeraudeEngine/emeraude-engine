@@ -103,6 +103,8 @@ namespace EmEn::Graphics::Material
 		Json::Value componentData{};
 
 		/* Try "Albedo" first, fallback to "Diffuse" for Standard material compatibility. */
+		const char * blockKey = AlbedoString;
+
 		if ( !parseComponentBase(data, AlbedoString, fillingType, componentData, true) )
 		{
 			return false;
@@ -110,6 +112,8 @@ namespace EmEn::Graphics::Material
 
 		if ( fillingType == FillingType::None )
 		{
+			blockKey = DiffuseString;
+
 			/* Fallback: try "Diffuse" key from Standard material format. */
 			if ( !parseComponentBase(data, DiffuseString, fillingType, componentData, true) )
 			{
@@ -145,6 +149,16 @@ namespace EmEn::Graphics::Material
 
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				/* Rule 2 of the opacity contract on the ALBEDO's alpha (owner, 2026-10-05): an explicit AlphaThreshold
+				 * in the albedo block selects the binary CUTOUT on the alpha the albedo texture carries — one texture,
+				 * no separate opacity map (a foliage card). Alpha test, the material STAYS OPAQUE: depth write, the
+				 * G-buffer and the deferred resolve, cutout shadows and RT hits. The glTF loader's alphaMode MASK takes
+				 * the same path. A dedicated Opacity component, when also declared, owns the alpha instead. */
+				if ( const auto threshold = FastJSON::getValue< float >(data[blockKey], JKAlphaThreshold) )
+				{
+					this->enableAlphaTest(threshold.value());
+				}
 			}
 				return true;
 

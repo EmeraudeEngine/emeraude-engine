@@ -701,6 +701,10 @@ light->setShadowMapRenderedOnce(true);  // A static light among static casters (
 light->refreshShadowMap();              // The light or a caster moved: render it again once
 ```
 
+- macOS M2 (2026-10-05, `735d9a83`): the same behaviour, 0 VUID; a point-light cubemap costs ~23 ms there, so the
+  four switched-off lights took ScenePass 65.3 → 36.3 ms and the frame 82 → 53 ms. Its once/continuous A/B is not
+  bit-exact only because the ScreenSpace lane's temporal effects and the wind move every frame: the differing pixels
+  are the fronds alone, and two frames of the same state differ more.
 - ⚠️ **Rendered once means NOT followed** (owner, 2026-10-05: that is why it is an option, off by default): an
   animated caster keeps the shadow of the pose it had at the render, a moved light keeps its first map.
 - Refused for a cascaded directional map (`shadowMapFollowsTheView()`): it is refitted to the camera every frame.

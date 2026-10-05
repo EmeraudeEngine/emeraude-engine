@@ -43,7 +43,7 @@ Every component block carries a `Type` and, for most types, a `Data`:
 
 | Key | Types | Extra keys |
 |---|---|---|
-| `Albedo` (or `Diffuse`) | Color, Texture… | |
+| `Albedo` (or `Diffuse`) | Color, Texture… | `AlphaThreshold` (Texture: cutout on the albedo's alpha) |
 | `Roughness` | Value, Texture… | |
 | `Metalness` | Value, Texture… | |
 | `Normal` | Texture | `Scale` |
@@ -51,6 +51,16 @@ Every component block carries a `Type` and, for most types, a `Data`:
 | `AmbientOcclusion` | Texture | |
 | `Opacity` | Value, Texture | `AlphaThreshold` |
 | `AutoIlluminationColor` | Color, Texture | `Amount` |
+
+**A cutout from ONE texture** (2026-10-05, owner): `AlphaThreshold` in the `Albedo` block makes the material a binary
+CUTOUT on the alpha the albedo carries — alpha test, the material stays OPAQUE (depth write, G-buffer, deferred
+lights, cutout shadows, RT hits), no separate opacity map. The opacity contract's rule 2, the same as
+`AlphaThreshold` in an `Opacity` texture block and as glTF `alphaMode: MASK`. Without it, an alpha in the albedo
+does nothing; with an `Opacity` component also declared, that component owns the alpha.
+
+```json
+"Albedo": { "Type": "Texture", "Data": { "Name": "Vegetals/palm_leaves-albedo" }, "AlphaThreshold": 0.5 }
+```
 
 `Height` drives the parallax occlusion mapping, and the displacement of a mesh-shading surface
 (`Geometry::MeshShadingSurface`, e.g. `DisplacedGridResource`). Its extra keys (2026-09-27):
