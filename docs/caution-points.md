@@ -517,6 +517,11 @@ whole probe) they made whole-frame FLASHES — mean luminance 57.4 → 65-74 on 
 
   The median does not move (the body's energy was already the directional light's); the residual σ is the uniform
   Monte Carlo noise of the probe update (random ray rotation every frame), no hot spot left.
+- **Peers (2026-10-05, engine `a7409def`)**: Windows NVIDIA RTX 3060 Laptop + AMD Radeon iGPU — MSVC /W4 /WX clean,
+  sponza with validation 0 VUID / 0 `[Error]`, RT lane, temporal ON, 40 pinned captures: 0/40 flashes on both
+  (NVIDIA median 59.36, max − median 0.21; AMD 79.20, a slow monotonic convergence, no flash). macOS M2 — Apple clang
+  clean, 0 VUID, the IBL bake unchanged within launch noise (A/B against `5a748fd2`); the M2 has no RT lane, so the
+  RTGI / probe splices were not compiled to Metal there.
 - ⚠️ **The GI GRAINS of those test frames are NOT the sun**: isolated bright pixels (> +60 over a 5×5 median) are
   ~14.1 k per frame shipped, masked, sky-clamped and probes off alike — they are the raw 8-sample half-resolution RTGI
   with its temporal accumulation switched OFF by the test settings. RTGI gets the mask for consistency (same
