@@ -642,10 +642,17 @@ namespace EmEn
 			 * @see Scenes::Loaders::Interface::loadAsync()
 			 * @see PlatformSpecific::executeCommandPumpingEvents(), which applies this to the Linux
 			 * native dialogs: without it a zenity/kdialog box gets the application force-quit prompt.
+			 * @note A no-op until the window exists: a native dialog may run before GLFW is initialized (or after it
+			 * failed to), where glfwPollEvents() would raise GLFW_NOT_INITIALIZED at every pump.
 			 */
 			void
 			pumpEvents () const noexcept
 			{
+				if ( m_handle == nullptr )
+				{
+					return;
+				}
+
 				glfwPollEvents();
 			}
 

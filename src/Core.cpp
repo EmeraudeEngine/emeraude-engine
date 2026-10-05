@@ -489,7 +489,8 @@ namespace EmEn
 		{
 			Tracer::fatal(ClassId, "The application failed to start ! Exiting ...");
 
-			this->stop();
+			/* NOTE: A failed start is a failed run: without the code, the process would exit with success. */
+			this->stop(EXIT_FAILURE);
 		}
 
 		auto lastTop = std::chrono::steady_clock::now();
