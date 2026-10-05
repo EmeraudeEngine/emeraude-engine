@@ -318,6 +318,14 @@ namespace EmEn::Scenes::Component
 				return m_usesCSM;
 			}
 
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowMapFollowsTheView() const noexcept */
+			[[nodiscard]]
+			bool
+			shadowMapFollowsTheView () const noexcept override
+			{
+				return m_usesCSM;
+			}
+
 			/**
 			 * @brief Returns the number of cascades.
 			 * @return uint32_t

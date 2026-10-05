@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -158,7 +159,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isRenderOutOfDate () const noexcept
 			{
-				return m_renderOutOfDate;
+				return m_renderOutOfDate.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -169,7 +170,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isAutomaticRendering () const noexcept
 			{
-				return m_automaticRendering;
+				return m_automaticRendering.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -180,11 +181,11 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			setAutomaticRenderingState (bool state) noexcept
 			{
-				m_automaticRendering = state;
+				m_automaticRendering.store(state, std::memory_order_release);
 
-				if ( this->isAutomaticRendering() )
+				if ( state )
 				{
-					m_renderOutOfDate = true;
+					m_renderOutOfDate.store(true, std::memory_order_release);
 				}
 			}
 
@@ -201,7 +202,7 @@ namespace EmEn::Graphics::RenderTarget
 					return;
 				}
 
-				m_renderOutOfDate = true;
+				m_renderOutOfDate.store(true, std::memory_order_release);
 			}
 
 			/**
@@ -217,7 +218,33 @@ namespace EmEn::Graphics::RenderTarget
 					return;
 				}
 
-				m_renderOutOfDate = false;
+				m_renderOutOfDate.store(false, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Suspends or resumes the rendering of this target, whatever its update policy.
+			 * @note A shadow map whose light is switched off is suspended by that light
+			 * (Scenes::Component::AbstractLightEmitter): nothing samples it, and it used to cost its full render
+			 * every frame (2026-10-05, basic-scenery: about 3 ms per point light cubemap). Set from the logic thread,
+			 * read by the render thread. The content of a suspended target is kept as it was.
+			 * @param state True to suspend.
+			 * @return void
+			 */
+			void
+			suspendRendering (bool state) noexcept
+			{
+				m_renderingSuspended.store(state, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Returns whether the rendering of this target is suspended.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderingSuspended () const noexcept
+			{
+				return m_renderingSuspended.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -858,8 +885,10 @@ namespace EmEn::Graphics::RenderTarget
 			VkClearColorValue m_clearColorOverride{};
 			bool m_isOrthographicProjection{false};
 			bool m_enableSyncPrimitive{false};
-			bool m_renderOutOfDate{false};
-			bool m_automaticRendering{false};
+			/* NOTE: Set by the logic thread (a light, an on-demand refresh), read by the render thread. */
+			std::atomic< bool > m_renderOutOfDate{false};
+			std::atomic< bool > m_automaticRendering{false};
+			std::atomic< bool > m_renderingSuspended{false};
 			bool m_suspendableByPostProcessReflections{false};
 			bool m_hasBeenRendered{false};
 			bool m_hasClearColorOverride{false};

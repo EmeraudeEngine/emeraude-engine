@@ -30,6 +30,13 @@ With the validation layers ON (`Core/Video/VulkanInstance/EnableDebug`): **0 VUI
 from a shader (instruction pointer fault), not an API misuse the layers see: a buffer device address or a bindless
 index the demo's raw geometry leaves dangling is the first suspect.
 
+## Peers (2026-10-05)
+
+- macOS M2 (MoltenVK, ScreenSpace lane only: no RT, no acceleration structure): NO device loss, 3/3 launches with
+  validation, 0 VUID, clean shutdown. The first discriminator to run on Linux is therefore
+  `LightingLane = ScreenSpace` at launch: if the loss goes away, the faulting read is in an RT pass or a BLAS/TLAS
+  address.
+
 ## What remains
 
 - Attribute: the GPU profiler / checkpoints of the frame, then switch the post-process lane (`None`, `ScreenSpace`)

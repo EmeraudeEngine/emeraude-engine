@@ -1026,7 +1026,7 @@ namespace EmEn::Scenes
 			 * @return std::shared_ptr< Graphics::Material::Interface > Null when neither exists (the reason is traced).
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::Material::Interface > vegetationMaterial (const std::string & name, VegetationSurface surface) noexcept;
+			std::shared_ptr< Graphics::Material::Interface > vegetationMaterial (const std::string & name, VegetationSurface surface) const noexcept;
 
 			/**
 			 * @brief Builds a renderable from a generated tree: bark on layer 0, leaf cards on layer 1,

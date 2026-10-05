@@ -307,7 +307,38 @@ namespace EmEn::Scenes::Component
 				}
 
 				this->setFlag(ShadowMapEnabled, state);
+
+				this->syncShadowMapRendering();
 			}
+
+			/**
+			 * @brief Renders the shadow map ONCE instead of every frame. Off by default.
+			 * @note For a light that never moves, among casters that never move (owner, 2026-10-05: basic-scenery's
+			 * Bulb). ⚠️ The map is not followed any more: an animated caster keeps the shadow of the pose it had when
+			 * the map was rendered, and a moved light keeps its first map — refreshShadowMap() renders it again.
+			 * Refused for a map that follows the view (a cascaded directional map), which a single render cannot
+			 * cover. The state is kept when set before the light is created on the GPU.
+			 * @param state True to render the map once.
+			 * @return bool False when refused.
+			 */
+			bool setShadowMapRenderedOnce (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the shadow map is rendered once instead of every frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowMapRenderedOnce () const noexcept
+			{
+				return this->isFlagEnabled(ShadowMapRenderedOnce);
+			}
+
+			/**
+			 * @brief Renders a shadow map rendered once again, on the next frame (a no-op on a continuous one).
+			 * @return void
+			 */
+			void refreshShadowMap () const noexcept;
 
 			/**
 			 * @brief Returns whether the shadow casting is enabled.
@@ -736,11 +767,32 @@ namespace EmEn::Scenes::Component
 			 */
 			virtual void onIntensityChange (float intensity) noexcept = 0;
 
+			/**
+			 * @brief Returns whether the shadow map follows the view (a cascaded directional map): it cannot be rendered once.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			shadowMapFollowsTheView () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Hands the light's state to its shadow map: suspended while the light is off,
+			 * on demand when rendered once. The setters call it on every change, enableShadowCasting(true) included,
+			 * which every light calls once its map exists.
+			 * @return void
+			 */
+			void syncShadowMapRendering () const noexcept;
+
 			/* Flag names */
 			static constexpr auto Enabled{UnusedFlag + 0UL};
 			/* NOTE: VideoMemoryUpdateRequested was retired in Aug 2026 — a single dirty flag cannot
 			 * drive N render state slots without leaving one of them stale. See m_logicGeneration. */
 			static constexpr auto ShadowMapEnabled{UnusedFlag + 2UL};
+			static constexpr auto ShadowMapRenderedOnce{UnusedFlag + 3UL};
 
 			Base::PixelFactory::Color< float > m_color{DefaultColor};
 			/** @brief m_color scaled to unit luminance (setColor()); DefaultColor is white, hence (1, 1, 1). */

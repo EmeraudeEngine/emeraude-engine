@@ -210,6 +210,8 @@ namespace EmEn::Scenes::Component
 		{
 			++m_logicGeneration;
 		}
+
+		this->syncShadowMapRendering();
 	}
 
 	bool
@@ -219,6 +221,8 @@ namespace EmEn::Scenes::Component
 		{
 			this->disableFlag(Enabled);
 
+			this->syncShadowMapRendering();
+
 			return false;
 		}
 
@@ -226,7 +230,56 @@ namespace EmEn::Scenes::Component
 
 		++m_logicGeneration;
 
+		this->syncShadowMapRendering();
+
 		return true;
+	}
+
+	bool
+	AbstractLightEmitter::setShadowMapRenderedOnce (bool state) noexcept
+	{
+		if ( state && this->shadowMapFollowsTheView() )
+		{
+			TraceWarning{TracerTag} << "The shadow map of light '" << this->name() << "' follows the view (cascaded) : it cannot be rendered once !";
+
+			return false;
+		}
+
+		this->setFlag(ShadowMapRenderedOnce, state);
+
+		this->syncShadowMapRendering();
+
+		return true;
+	}
+
+	void
+	AbstractLightEmitter::refreshShadowMap () const noexcept
+	{
+		if ( const auto shadowMap = this->shadowMap(); shadowMap != nullptr )
+		{
+			shadowMap->setRenderOutOfDate();
+		}
+	}
+
+	void
+	AbstractLightEmitter::syncShadowMapRendering () const noexcept
+	{
+		const auto shadowMap = this->shadowMap();
+
+		if ( shadowMap == nullptr )
+		{
+			return;
+		}
+
+		/* Off: the light draws nothing, so nothing samples its map. It keeps its content; a light switched back on
+		 * renders it on the next frame, before the frame that lights with it.
+		 * ⚠️ NOT on "casts no shadow": switched off at runtime, the raster shaders keep sampling the map (engine item
+		 * light-shadow-runtime-toggle), and a suspended map would freeze what they read. */
+		shadowMap->suspendRendering(!this->isEnabled());
+
+		/* Continuous (the default) or on demand. Switching to on demand keeps the pending render of a continuous map
+		 * (automatic rendering leaves it out of date), so a map is always rendered at least once. */
+		shadowMap->setAutomaticRenderingState(!this->isShadowMapRenderedOnce());
 	}
 
 	void

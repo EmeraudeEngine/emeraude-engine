@@ -684,6 +684,34 @@ light->setPCFRadius(2.0F);  // Filter radius in texels
 
 Larger radius = softer shadows but more blurring.
 
+### When a shadow map is rendered (2026-10-05)
+
+Every map used to render every frame, whatever its light did. The shadow loop (`Renderer::renderShadowMaps()`) now
+asks the render target two things, both set by the light (`AbstractLightEmitter::syncShadowMapRendering()`, called
+by `enable()`, `toggle()`, `enableShadowCasting()` and `setShadowMapRenderedOnce()`):
+
+| Light state | Map | Measured (basic-scenery, RTX 3070 Ti, 1280×720) |
+|---|---|---|
+| switched OFF | **suspended** (`RenderTarget::Abstract::suspendRendering()`), content kept; switched back on, it renders on the next frame, before the frame that lights with it | four point-light cubemaps (~3 ms each) stop; their sample counts freeze; 0 VUID |
+| on, default | continuous (the `ShadowMap` constructors set automatic rendering) | unchanged |
+| on, `setShadowMapRenderedOnce(true)` | on demand: rendered once, then while out of date only (`refreshShadowMap()`, or the console command, renders it again) | the Bulb's cubemap: 1 render instead of one per frame (~3.2 ms per frame saved); image pixel-identical to the continuous map (max difference 0, Bulb alone) |
+
+```cpp
+light->setShadowMapRenderedOnce(true);  // A static light among static casters (OFF by default)
+light->refreshShadowMap();              // The light or a caster moved: render it again once
+```
+
+- ⚠️ **Rendered once means NOT followed** (owner, 2026-10-05: that is why it is an option, off by default): an
+  animated caster keeps the shadow of the pose it had at the render, a moved light keeps its first map.
+- Refused for a cascaded directional map (`shadowMapFollowsTheView()`): it is refitted to the camera every frame.
+- ⚠️ "Casts no shadow" (`enableShadowCasting(false)`) does NOT suspend the map: switched at runtime the raster
+  shaders keep sampling it (engine item `light-shadow-runtime-toggle`), and a suspended map would freeze what they
+  read.
+- The render target's update flags (`m_automaticRendering`, `m_renderOutOfDate`, the suspension) are atomics: the
+  logic thread sets them, the render thread reads them.
+- Volumetric scattering lit a switched-off sun with its cascaded map; it now scatters nothing from a sun that is off
+  (the map is suspended, so a frozen one is multiplied by zero).
+
 ## Light Descriptor Sets
 
 Each light uses one of two descriptor set configurations:

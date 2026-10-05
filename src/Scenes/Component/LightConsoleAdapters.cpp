@@ -91,6 +91,7 @@ namespace EmEn::Scenes::Component
 			Json::Value shadow{Json::objectValue};
 			shadow["mapResolution"] = light.shadowMapResolution();
 			shadow["casting"] = light.isShadowCastingEnabled();
+			shadow["renderedOnce"] = light.isShadowMapRenderedOnce();
 			shadow["PCFRadius"] = static_cast< double >(light.PCFRadius());
 			shadow["bias"] = static_cast< double >(light.shadowBias());
 			state["shadow"] = std::move(shadow);
@@ -282,6 +283,31 @@ namespace EmEn::Scenes::Component
 						light.setPCFRadius(radius);
 
 						return changed(light, "Light '" + light.name() + "' shadow filter radius set to " + std::to_string(radius) + ".");
+					});
+				}, Console::CommandHint::Idempotent);
+
+			adapter.bindCommand("setShadowMapRenderedOnce", "Renders a light's shadow map once instead of every frame (for a static light among static casters: an animated caster keeps its first shadow), or every frame again. Refused for a light built without a shadow map, and for a cascaded map (it follows the view).",
+				{
+					EntityParameter,
+					ComponentParameter,
+					{"enabled", "1 (true) renders the map once (and once more now), 0 (false) every frame."}
+				},
+				[&adapter] (const std::string & entity, const std::string & component, bool enabled) {
+					return adapter.act(entity, component, [enabled] (light_t & light) {
+						if ( light.shadowMapResolution() == 0 )
+						{
+							return Console::CommandResult::error("Light '" + light.name() + "' was built without a shadow map.");
+						}
+
+						if ( !light.setShadowMapRenderedOnce(enabled) )
+						{
+							return Console::CommandResult::error("Light '" + light.name() + "' has a shadow map that follows the view (cascaded): it cannot be rendered once.");
+						}
+
+						/* Asked from the console, "once" means "from the current state": render it again now. */
+						light.refreshShadowMap();
+
+						return changed(light, "Light '" + light.name() + ( enabled ? "' shadow map rendered once." : "' shadow map rendered every frame." ));
 					});
 				}, Console::CommandHint::Idempotent);
 

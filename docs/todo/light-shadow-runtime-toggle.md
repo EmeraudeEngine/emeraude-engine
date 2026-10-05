@@ -33,6 +33,10 @@ for that reason.
    visibility when it is off, the shadow pass must skip the light, and the CSM/light-space matrices must
    be refreshed again when it is switched back on — then add the console command back.
 
+- Since 2026-10-05 a switched-OFF light suspends its shadow map (`docs/shadow-mapping.md` § When a shadow map is
+  rendered), but "casts no shadow" deliberately does not: the shaders still sample the map. A runtime shadow
+  switch would suspend it too, once the shaders read the per-light flag.
+
 ## ⚠️ Traps
 
 - Compare at a PINNED exposure and look at the image: under auto-exposure a darkening can be absorbed.

@@ -2557,6 +2557,21 @@ namespace EmEn::Graphics
 				return;
 			}
 
+			/* A switched-off light suspends its map: nothing samples it. Every map used
+			 * to render every frame whatever its light did — four switched-off point lights of basic-scenery still
+			 * cost about 3 ms of cubemap each (2026-10-05). */
+			if ( shadowMap->isRenderingSuspended() )
+			{
+				return;
+			}
+
+			/* The update policy of the render target: a map rendered ONCE (a static light's, on request) renders only
+			 * while out of date. A continuous map is automatic (the ShadowMap constructors). */
+			if ( !shadowMap->isAutomaticRendering() && !shadowMap->isRenderOutOfDate() )
+			{
+				return;
+			}
+
 			const auto commandBuffer = currentFrameScope.getCommandBuffer(shadowMap.get());
 
 			if ( !commandBuffer->begin() )
@@ -2626,6 +2641,9 @@ namespace EmEn::Graphics
 			 * hasBeenRendered() answered "never" for a map that renders every single frame — a
 			 * false negative that sent a CSM investigation chasing a phantom empty map. */
 			shadowMap->markRendered();
+
+			/* A no-op on a continuous map; an on-demand one is up to date until the next request. */
+			shadowMap->setRenderFinished();
 		});
 	}
 

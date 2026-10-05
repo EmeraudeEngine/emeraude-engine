@@ -105,7 +105,9 @@ namespace EmEn::Graphics::RenderTarget
 					true
 				}
 			{
-
+				/* Continuous by default: a light that renders its map only once switches it to on-demand
+				 * (AbstractLightEmitter::setShadowMapRenderedOnce()). */
+				this->setAutomaticRenderingState(true);
 			}
 
 			/**
@@ -127,7 +129,9 @@ namespace EmEn::Graphics::RenderTarget
 					true
 				}
 			{
-
+				/* Continuous by default: a light that renders its map only once switches it to on-demand
+				 * (AbstractLightEmitter::setShadowMapRenderedOnce()). */
+				this->setAutomaticRenderingState(true);
 			}
 
 			/**
@@ -153,7 +157,9 @@ namespace EmEn::Graphics::RenderTarget
 				m_viewMatrices{cascadeCount, lambda},
 				m_cascadeCount{std::clamp(cascadeCount, 1U, MaxCascadeCount)}
 			{
-
+				/* Continuous by default: a light that renders its map only once switches it to on-demand
+				 * (AbstractLightEmitter::setShadowMapRenderedOnce()). */
+				this->setAutomaticRenderingState(true);
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */

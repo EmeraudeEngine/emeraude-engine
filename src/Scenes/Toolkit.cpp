@@ -56,7 +56,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Material::Interface >
-	Toolkit::vegetationMaterial (const std::string & name, VegetationSurface surface) noexcept
+	Toolkit::vegetationMaterial (const std::string & name, VegetationSurface surface) const noexcept
 	{
 		auto * materials = m_resourceManager.container< Material::StandardResource >();
 
@@ -72,15 +72,15 @@ namespace EmEn::Scenes
 			return images->isResourceExists(name + suffix);
 		};
 
-		if ( !hasImage("-color_a") )
+		if ( !hasImage("-albedo") )
 		{
-			TraceError{ClassId} << "No vegetation material '" << name << "': neither a store material nor the image '" << name << "-color_a' !";
+			TraceError{ClassId} << "No vegetation material '" << name << "': neither a store material nor the image '" << name << "-albedo' !";
 
 			return nullptr;
 		}
 
 		auto * textures = m_resourceManager.container< TextureResource::Texture2D >();
-		const auto albedo = textures->getResource(name + "-color_a", false);
+		const auto albedo = textures->getResource(name + "-albedo", false);
 		const auto normal = hasImage("-normal") ? textures->getResource(name + "-normal", false) : nullptr;
 		const bool foliage = surface == VegetationSurface::Foliage;
 		const auto alphaMask = foliage && hasImage("-alpha") ? textures->getResource(name + "-alpha", false) : nullptr;
