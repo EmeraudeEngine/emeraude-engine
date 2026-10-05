@@ -237,6 +237,15 @@ Shutdown is veto-able. `stop()` calls `onBeforeCoreStop()` first; returning `fal
 - **Wait More** (any other index, including dismissal) → reset the counter to 0 and return without stopping
 
 The counter resets to 0 whenever the user chooses "Wait More", so each fresh batch of vetoes gets the full tolerance.
+⚠️ Until 2026-10-05 the code did NOT reset it (this paragraph described the intent): after "Wait More" the very next
+close request popped the dialog again at once.
+
+**One dialog at a time** (2026-10-05). The dialog's modal loop keeps pumping the window events — the zenity wait on
+Linux pumps GLFW, the `MessageBox` loop dispatches on Windows — so a close request arriving while it is on screen (a
+second click on the close button, the desktop's own "not responding" handling) re-entered `stop()` and stacked another
+dialog, then another: "Wait More" / "Force Quit" in a loop (reported by the owner). `m_forceQuitDialogOpen` makes
+`stop()` return at once while the dialog is open: the open dialog already answers the question. Never turn it into a
+once-per-session latch: after "Wait More", the dialog is the user's only way out of a frozen application.
 
 **Final cleanup chance on force-quit**. When the user confirms "Force Quit", Core does NOT immediately tear down. It first calls `setAppReadyToQuit(ForceQuitExitCode)` (sets `m_userApplicationReadyToQuit = true` and overrides the exit code with the `ForceQuitExitCode` sentinel `= 99` so the OS can distinguish a force-quit from a clean shutdown), then invokes `onBeforeCoreStop()` one last time with the return value discarded. This gives the application a final opportunity to release resources and save critical state before shutdown — even if its normal policy would still want to veto.
 

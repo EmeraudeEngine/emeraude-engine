@@ -1536,6 +1536,16 @@ namespace EmEn
 	{
 		using namespace PlatformSpecific::Desktop::Dialog;
 
+		/* NOTE: Re-entrancy guard. The force-quit dialog below runs a modal loop that keeps pumping the window events
+		 * (the zenity wait on Linux, the MessageBox loop on Windows): a close request arriving meanwhile — the user
+		 * clicking the close button again, the desktop's own "not responding" handling — re-entered stop() and stacked
+		 * another dialog, then another ("Wait More" / "Force Quit" in a loop). One question at a time: the open dialog
+		 * already answers it. */
+		if ( m_forceQuitDialogOpen )
+		{
+			return;
+		}
+
 		/* Save the user exit code. */
 		m_userExitCode = userExitCode;
 
@@ -1559,11 +1569,19 @@ namespace EmEn
 				MessageType::Question
 			};
 
+			m_forceQuitDialogOpen = true;
+
 			dialog.execute(m_window, false);
+
+			m_forceQuitDialogOpen = false;
 
 			/* Index 0 = "Force Quit". Anything else (1 = "Wait More", -1 = dismissed) keeps waiting. */
 			if ( dialog.getClickedButtonIndex() != 0 )
 			{
+				/* NOTE: "Wait More" grants a NEW grace period: without the reset, the counter stayed at the threshold and
+				 * the very next close request popped the dialog again at once. */
+				m_stopVetoCount = 0;
+
 				return;
 			}
 

@@ -1831,6 +1831,7 @@ namespace EmEn
 			 * exchange(false) — a plain bool raced, and a refresh landing between the read and the reset was lost. */
 			std::atomic< bool > m_windowChanged{false};
 			bool m_userApplicationReadyToQuit{false};
+			bool m_forceQuitDialogOpen{false}; ///< The force-quit dialog of stop() is on screen: a re-entrant stop() is ignored. Main thread only.
 			/** @} */ // End of Member Variables group
 	};
 }
