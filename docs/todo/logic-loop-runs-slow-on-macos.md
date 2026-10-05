@@ -26,7 +26,8 @@ Consequence: everything simulated runs at ~73 % of real time on macOS (the playe
 
 - Owner decision (architectural): an absolute-deadline loop (`sleep_until` the next tick, catching up a missed one),
   a higher thread QoS on macOS (`QOS_CLASS_USER_INTERACTIVE`) for the logic thread, both — or a platform timer.
-- Measure Windows and Linux the same way (scene cycles over 10 s of wall clock).
+- Windows (2026-10-05, NVIDIA, simple-room): 564 / 562 / 564 cycles in 3 × 10 s = 56.2-56.4 cycles/s — slow too,
+  less than macOS. Measure Linux the same way (scene cycles over 10 s of wall clock).
 
 ## ⚠️ Traps
 

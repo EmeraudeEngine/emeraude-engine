@@ -46,20 +46,11 @@ is created and a background cubemap bound **after** the act was removed — some
 while the shutdown was already tearing one down. `pure virtual method called` is then the textbook
 consequence: a virtual dispatch on an object whose derived part is already destroyed.
 
-## Seen again (2026-10-05)
+## Not the same defect: the DevTools popup path (2026-10-05)
 
-Once in 4 runs of `--window-less --load-demo sprite` (Release, Linux, RTX 3070 Ti, engine `a7409def`), after
-`Core.shutdown()`, during the web-view teardown — the line before the abort names it:
-
-```
-[Info][WebView] The application request to close the web view 'ApplicationMenuCEF'.
-[Info][WebView] Web-view 'ApplicationMenuCEF' has a DevTools popup browser — closing it first.
-pure virtual method called
-terminate called without an active exception
-```
-
-So the window is the CEF teardown with a DevTools popup open, not the scene. The 3
-other runs and a run of the previous build exited cleanly.
+The same message twice on 2026-10-05 (sprite, basic-scenery), each time while closing a CEF popup nobody had opened
+(filed as "the DevTools", its render process segfaulted): projet-alpha item `cef-phantom-devtools-popup-aborts-shutdown`.
+The 2026-09-10 occurrence below had no popup — a scene created during the shutdown — and stays here.
 
 ## What remains
 

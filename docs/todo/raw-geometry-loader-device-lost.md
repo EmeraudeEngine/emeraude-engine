@@ -37,6 +37,15 @@ index the demo's raw geometry leaves dangling is the first suspect.
   `LightingLane = ScreenSpace` at launch: if the loss goes away, the faulting read is in an RT pass or a BLAS/TLAS
   address.
 
+- Windows (2026-10-05, engine `735d9a83`): lost on BOTH GPUs. NVIDIA: `VK_ERROR_DEVICE_LOST` on a fence wait within
+  40 s, exit 0xc0000409, 0 VUID before. AMD: lost at the `Queue::submit` of the IBL BAKE of the background (`DarkSky`),
+  `VK_EXT_device_fault`: `addr=0x0 type=READ_INVALID` — a NULL-address read; 26 VUIDs, all after the loss.
+- NOT the in-texture star mask of the IBL bake / RT lanes (`a7409def`, which touches `IBLBaker`): on Linux, the build
+  with that commit's code reversed still loses the device, 2/2 (2026-10-05). On Linux the loss also comes before any
+  "Environment IBL baked" line.
+- Lead: a null address read on the RT-capable devices only (the M2 has no RT and no loss) — a buffer device address
+  of an empty or not-yet-uploaded geometry (a raw geometry without indices?) in a BLAS / TLAS or an RT material table.
+
 ## What remains
 
 - Attribute: the GPU profiler / checkpoints of the frame, then switch the post-process lane (`None`, `ScreenSpace`)
