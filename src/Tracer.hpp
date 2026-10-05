@@ -352,11 +352,59 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Sets the application default of the file logger, used while the settings hold no value for it.
+			 *
+			 * The engine default (DefaultTracerEnableLogger) is false. An application that wants a log file on every
+			 * run without asking its users to edit the settings chooses its own default here. The setting
+			 * Core/Tracer/EnableLogger still wins once it holds a value.
+			 *
+			 * @pre Called before the primary services are initialized (i.e. before the Core or PrimaryServices
+			 * constructor): lateSetup() reads the default while the settings are loaded. A later call has no effect
+			 * on the running process.
+			 * @param state The default state of the file logger.
+			 * @version 1.0.0
+			 */
+			void
+			setLoggerEnabledByDefault (bool state) noexcept
+			{
+				m_loggerEnabledByDefault = state;
+			}
+
+			/**
+			 * @brief Returns the application default of the file logger.
+			 * @see setLoggerEnabledByDefault()
+			 * @return bool
+			 * @version 1.0.0
+			 */
+			[[nodiscard]]
+			bool
+			isLoggerEnabledByDefault () const noexcept
+			{
+				return m_loggerEnabledByDefault;
+			}
+
+			/**
+			 * @brief Returns where the journal of the previous execution is kept for a log file path.
+			 *
+			 * enableLogger() never truncates an existing journal: it first renames it with a ".previous" suffix
+			 * before the extension ("journal-main.log" becomes "journal-main.previous.log"), so the complete log of
+			 * the previous run (e.g. one that crashed) survives the next launch. One generation is kept.
+			 *
+			 * @param logFilepath The path of a log file, as given to enableLogger().
+			 * @return std::filesystem::path
+			 * @version 1.0.0
+			 */
+			[[nodiscard]]
+			static std::filesystem::path previousLogFilepath (const std::filesystem::path & logFilepath) noexcept;
+
+			/**
 			 * @brief Enables file logging with the specified log file path.
 			 *
 			 * Creates a TracerLogger instance and starts the worker thread to write
 			 * log entries to the specified file. If a logger is already active, this
-			 * method returns immediately.
+			 * method returns immediately. An existing file is first renamed to
+			 * previousLogFilepath() (replacing the older one), so the journal of the
+			 * previous run is kept complete instead of being truncated.
 			 *
 			 * @pre No other thread traces yet (startup): m_logger is read unlocked by trace() on every thread.
 			 * @param filepath The path to the log file to create/open.
@@ -662,6 +710,8 @@ namespace EmEn
 			bool m_threadInfosEnabled{false};
 			bool m_isTracerDisabled{false};
 			bool m_loggerRequestedAtStartup{false};
+			/* NOTE: Mirrors DefaultTracerEnableLogger (SettingKeys.hpp is not included by this widely used header). */
+			bool m_loggerEnabledByDefault{false};
 	};
 
 	/* ==================================================================================================================== */

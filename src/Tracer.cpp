@@ -407,7 +407,7 @@ namespace EmEn
 		/* TODO: Clarify this behavior! */
 		const auto argument = arguments.get("-l", "--enable-log");
 
-		if ( settings.getOrSetDefault< bool >(TracerEnableLoggerKey, DefaultTracerEnableLogger) || argument.has_value() )
+		if ( settings.getOrSetDefault< bool >(TracerEnableLoggerKey, m_loggerEnabledByDefault) || argument.has_value() )
 		{
 			m_loggerRequestedAtStartup = true;
 
@@ -460,12 +460,38 @@ namespace EmEn
 		return cacheDirectory.append(filename.str());
 	}
 
+	std::filesystem::path
+	Tracer::previousLogFilepath (const std::filesystem::path & logFilepath) noexcept
+	{
+		auto previousFilepath = logFilepath;
+		previousFilepath.replace_filename(IO::u8path(IO::toU8String(logFilepath.stem()) + ".previous" + IO::toU8String(logFilepath.extension())));
+
+		return previousFilepath;
+	}
+
 	bool
 	Tracer::enableLogger (const std::filesystem::path & filepath) noexcept
 	{
 		if ( m_logger != nullptr )
 		{
 			return true;
+		}
+
+		/* NOTE: Keep the complete journal of the previous run instead of truncating it: after a crash, it is the only
+		 * record of what happened, and the relaunch would otherwise erase it before anyone could read it. */
+		if ( std::error_code errorCode; std::filesystem::exists(filepath, errorCode) )
+		{
+			const auto previousFilepath = previousLogFilepath(filepath);
+
+			std::filesystem::rename(filepath, previousFilepath, errorCode);
+
+			if ( errorCode )
+			{
+				std::stringstream message;
+				message << "Unable to keep the previous log file as '" << IO::toU8String(previousFilepath) << "' (" << errorCode.message() << "), it will be overwritten.";
+
+				this->trace(Severity::Warning, ClassId, message.str());
+			}
 		}
 
 		m_logger = std::make_unique< TracerLogger >(filepath, m_logFormat);

@@ -64,7 +64,8 @@ namespace EmEn
 		/* Append the originating thread id/name to each trace entry. */
 		constexpr auto TracerEnableThreadInfosKey{"Core/Tracer/EnableThreadInfos"};
 		constexpr auto DefaultTracerEnableThreadInfos{false};
-		/* Also write traces to a log file, in addition to the console. */
+		/* Also write traces to a log file, in addition to the console. An application may choose another default
+		 * with Tracer::setLoggerEnabledByDefault() before the Core constructor. */
 		constexpr auto TracerEnableLoggerKey{"Core/Tracer/EnableLogger"};
 		constexpr auto DefaultTracerEnableLogger{false};
 		/* Log file output format. Default "Text". */

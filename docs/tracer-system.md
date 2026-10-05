@@ -152,6 +152,32 @@ after exit would change the shell's behaviour behind the user's back.
 > the *behaviour* is also wrong (`IO::fileExists()` failing on a file that exists), the
 > data is corrupted; if only the display is wrong, it is the console.
 
+## Log File (TracerLogger)
+
+Besides the console, the Tracer can write every entry to a file through `TracerLogger` (a worker thread,
+flushed after each batch, so the lines written before a crash are on disk).
+
+- **When**: `Core/Tracer/EnableLogger` (engine default `false`) or the `-l/--enable-log <path>` argument, read in
+  `Tracer::lateSetup()` — i.e. inside `PrimaryServices::initialize()`, in the `Core` constructor.
+- **Where**: `<cache directory>/journal-<process name>.<log|json|html>` (`generateLogFilepath()`; the main
+  process is named `main`). A child process started with `--disable-log` (a CEF helper, for instance) opens its
+  own file later, under a name it chooses.
+- **Application default** (since 1.0.0): `Tracer::getInstance().setLoggerEnabledByDefault(true)` replaces the
+  engine default for one application. It must run **before the `Core`/`PrimaryServices` constructor** (in
+  `main()`): `lateSetup()` reads it while the settings are loaded. The setting still wins once it holds a value —
+  a settings file that already persisted `false` keeps it.
+- **The previous journal is kept** (since 1.0.0): `enableLogger()` never truncates an existing journal any more.
+  It first renames it to `Tracer::previousLogFilepath(path)` — `journal-main.log` → `journal-main.previous.log`,
+  replacing the older one — so the complete log of the previous run survives the next launch. This is what lets
+  an application report a crash at the next startup (app_system: `docs/crash-report.md`).
+
+> [!WARNING]
+> ⚠️ **The rotation happens in the `Core` constructor**, before any application code runs: the journal of the
+> crashed run is `journal-<name>.previous.*` from then on, not `journal-<name>.*`.
+> ⚠️ Two instances of one application share the same journal names: the second one rotates (and then rewrites)
+> the journal of the first. On Windows the rename of a file the other instance holds open fails; the failure is
+> traced as a warning and the file is truncated as before.
+
 ## Implementation Details
 
 The Trace classes use the **CRTP pattern** (`T_TraceHelperBase`) to avoid code duplication while maintaining zero overhead. The message is accumulated internally via `operator<<` and flushed as a single log entry when the object is destroyed (RAII).
