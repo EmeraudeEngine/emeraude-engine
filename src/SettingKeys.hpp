@@ -290,7 +290,7 @@ namespace EmEn
 
 		/* Video Capture (Graphics::ExternalInput) */
 		/* Enable video capture input (webcam). NOTE: the key path below points to "Core/Audio/Capture/Enable" and collides with AudioCaptureEnableKey - likely a typo, should be "Core/Video/Capture/Enable". */
-		constexpr auto VideoCaptureEnableKey{"Core/Audio/Capture/Enable"};
+		constexpr auto VideoCaptureEnableKey{"Core/Video/Capture/Enable"};
 		constexpr auto DefaultVideoCaptureEnable{false};
 		/* Capture device index. -1 = auto (first available). */
 		constexpr auto VideoCaptureDeviceIndexKey{"Core/Video/Capture/DeviceIndex"};
