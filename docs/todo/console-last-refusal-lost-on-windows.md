@@ -1,7 +1,7 @@
 ---
 id: console-last-refusal-lost-on-windows
 title: The remote console's last refusal line can be lost on Windows (reset instead of a graceful close)
-status: open
+status: in-progress
 priority: unranked
 scope: Console/RemoteListener
 opened: 2026-10-01
@@ -26,11 +26,19 @@ Linux and macOS pass both checks every time.
 (RFC 1122 § 4.2.2.13). On Windows, a RST that reaches the client before it reads makes `recv()` fail with 10054 and
 discards the refusal already queued on its side. Both failing checks expect that last line, so they fail.
 
+## Done (2026-10-06, Linux)
+
+The owner chose ONE graceful close in emeraude-base for both servers: `Network::GracefulCloser` (shutdown(send), then
+read and discard until the client closes, bounded by 1 s, 64 KiB and `MaxClients` lingering sockets). `disconnect()`
+uses it; `respond()` and the session's `doRead()` check the client's membership, removed under the write lock. Linux:
+`console-conformance` 4864/0 three times (flood and over-long line included), MCP 1881/0. The same day the base test
+`NetworkHTTPServer.BoundsConnections` failed 3 % on Windows for the same reason (base caution-points § Network).
+
 ## What remains
 
 - [ ] Reproduce on Windows with the conformance tool and confirm the RST, for example with a capture showing the
   refusal segment followed by a RST.
-- [ ] Choose the graceful close (an owner decision), for example:
+- [x] Choose the graceful close (owner, 2026-10-06: the base GracefulCloser, above). Former options:
   - `shutdown(shutdown_send)` after the last write, then drain the receive side for a short bounded time (or until
     the client closes) before `close()`;
   - or `SO_LINGER` with a short timeout.

@@ -94,6 +94,13 @@ namespace EmEn::Console
 			void
 			doRead () noexcept
 			{
+				/* Disconnected (too many pending commands, from enqueueCommand() in the handler below): its socket now
+				 * belongs to the GracefulCloser, which drains it. */
+				if ( !m_listener.isClient(m_socket) )
+				{
+					return;
+				}
+
 				auto self(this->shared_from_this());
 
 				asio::async_read_until(*m_socket, m_buffer, '\n', [this, self] (const asio::error_code & ec, [[maybe_unused]] std::size_t length) {
@@ -299,8 +306,9 @@ namespace EmEn::Console
 		{
 			const std::scoped_lock writeLock{m_writeMutex};
 
-			/* NOTE: checked under the write lock — disconnect() closes the socket under the same lock. */
-			if ( !client->is_open() )
+			/* NOTE: checked under the write lock — disconnect() removes the client and hands its socket over under
+			 * the same lock; a socket lingering in the GracefulCloser is still open but no longer a client. */
+			if ( !client->is_open() || !this->isClient(client) )
 			{
 				return;
 			}
@@ -445,17 +453,28 @@ namespace EmEn::Console
 		{
 			const std::scoped_lock writeLock{m_writeMutex};
 
+			/* Removed under the write lock: respond() checks the membership under it. */
+			this->removeClient(client);
+
 			if ( client->is_open() )
 			{
 				asio::error_code ec;
-				static_cast< void >(asio::write(*client, asio::buffer(line + '\n'), ec));
 				/* NOTE: best effort — the client is disconnected either way. */
-				client->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-				client->close(ec);
+				static_cast< void >(asio::write(*client, asio::buffer(line + '\n'), ec));
+
+				/* NOT shutdown(both) + close(): the client may still be sending (the flood, the rest of an over-long
+				 * line), and closing over unread bytes is a RST that, on Windows, discards this last line. */
+				m_gracefulCloser.close(client);
 			}
 		}
+	}
 
-		this->removeClient(client);
+	bool
+	RemoteListener::isClient (const std::shared_ptr< asio::ip::tcp::socket > & socket) noexcept
+	{
+		const std::scoped_lock lock{m_clientsMutex};
+
+		return m_clients.contains(socket);
 	}
 
 	void
