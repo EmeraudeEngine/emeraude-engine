@@ -120,7 +120,8 @@ What remains, in order:
       geometry pass (ambient only) — the item's title. Sponza's `ScenePass` at 0 lamps is 8.9 ms for
       2 passes per batch.
 - [ ] Shadowed / projected point and spot lights in the resolve (shadow maps sampled per light).
-- [ ] Tiled light culling only if the per-pixel loop is measured to need it.
+- Tiled light culling: DONE 2026-10-06 (`labyrinth`'s 548 lamps needed it; `MaxLights` 1024, one bit per light per
+  tile, bit-identical to the per-pixel loop) — reference doc § Tiled culling.
 
 ## ⚠️ Measurement protocol (mandatory, `src/Graphics/AGENTS.md`)
 

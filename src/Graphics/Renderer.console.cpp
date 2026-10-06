@@ -493,7 +493,7 @@ namespace EmEn::Graphics
 					"Deferred punctual lights OFF from the next frame: every point and spot light is drawn by forward passes.");
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("getDeferredLightStatistics", "Returns what the last frame did with the unshadowed, unprojected point and spot lights (DeferredLightResolve): how many were eligible, how many missed the camera frustum (drawn by nobody), how many the resolve shaded (at most 128, the closest to the camera), and how many visible ones were left to the forward passes.", [this] () {
+		this->bindCommand("getDeferredLightStatistics", "Returns what the last frame did with the unshadowed, unprojected point and spot lights (DeferredLightResolve): how many were eligible, how many missed the camera frustum (drawn by nobody), how many the resolve shaded (at most DeferredLightResolve::MaxLights = 1024, the closest to the camera, tile-culled), and how many visible ones were left to the forward passes.", [this] () {
 			const auto statistics = m_deferredLightResolve.statistics();
 
 			std::stringstream message;
@@ -506,6 +506,18 @@ namespace EmEn::Graphics
 
 			return Console::CommandResult::success(message.str());
 		});
+
+		this->bindCommand("setDeferredLightTileCulling", "Switches the tile culling of the deferred resolve on or off (DeferredLightResolve, 16 x 16 tiles). Off, every tile holds every resolved light: the per-pixel loop of before. The exactness A/B — both frames must be bit-identical, only the DeferredLights time differs.",
+			{
+				{"enabled", "1 (true) culls per tile (the default), 0 (false) gives every tile every light."}
+			},
+			[this] (bool enabled) {
+				m_deferredLightResolve.enableTileCulling(enabled);
+
+				return Console::CommandResult::success(enabled ?
+					"Deferred light tile culling ON from the next frame." :
+					"Deferred light tile culling OFF from the next frame: every tile holds every resolved light.");
+			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("resetOverflowCensus", "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.", [this] () {
 			auto * census = m_postProcessor.overflowCensus();

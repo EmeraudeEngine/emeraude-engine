@@ -47,6 +47,7 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class CommandBuffer;
+		class ComputePipeline;
 		class DescriptorSet;
 		class DescriptorSetLayout;
 		class Framebuffer;
@@ -116,6 +117,14 @@ namespace EmEn::Graphics
 	 *  - RESOLVED: the MaxLights visible lights CLOSEST to the camera, by max(0, distance - radius) (an unbounded light
 	 *    ranks by its distance). The first MaxLights in the set's order used to be taken, wherever they were.
 	 *  - FORWARD: the visible lights beyond MaxLights, shaded by the forward path as before (the same BRDF).
+	 *
+	 * TILED culling (2026-10-06, owner decision, asked by 'labyrinth': 370 lamps occluded by walls went forward): a
+	 * compute pass splits the frame into TileSize × TileSize tiles, reduces each tile's view-space depth range over the
+	 * pixels carrying the deferred-lighting bit, and tests every resolved light's sphere against the tile's four side
+	 * planes and that range. The result is ONE BIT per light per tile (LightWordCount words: no per-tile cap, no
+	 * overflow); the resolve loops over its tile's bits only, in light order. A lamp behind a wall falls beyond the
+	 * tile's depth range and costs nothing there. References: J. Andersson, "DirectX 11 Rendering in Battlefield 3",
+	 * GDC 2011; A. Lauritzen, "Deferred Rendering for Current and Future Rendering Pipelines", SIGGRAPH 2010.
 	 */
 	class EMEN_API DeferredLightResolve final
 	{
@@ -124,8 +133,18 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"DeferredLightResolve"};
 
-			/** @brief The most lights one frame resolves (the size of the per-frame light buffer). */
-			static constexpr uint32_t MaxLights{128};
+			/** @brief The most lights one frame resolves (the size of the per-frame light buffer): 128 until the tiled
+			 * culling (2026-10-06). */
+			static constexpr uint32_t MaxLights{1024};
+
+			/** @brief The side of a culling tile, in pixels (the compute workgroup is TileSize × TileSize). */
+			static constexpr uint32_t TileSize{16};
+
+			/** @brief The 32-bit words of one tile's light mask: one bit per light. */
+			static constexpr uint32_t LightWordCount{MaxLights / 32};
+
+			static_assert(MaxLights % 32 == 0, "The tile mask packs the lights by 32.");
+			static_assert(TileSize * TileSize >= LightWordCount, "One invocation clears / writes each mask word.");
 
 			/** @brief The bit an eligible surface sets in the LOW nibble of the material-properties R channel. */
 			static constexpr uint32_t DeferredLightingBit{1U};
@@ -197,6 +216,30 @@ namespace EmEn::Graphics
 				/** @brief The visible ones beyond MaxLights, left to the forward passes. */
 				uint32_t forward{0};
 			};
+
+			/**
+			 * @brief Switches the tile culling on or off (the exactness A/B: off, every tile holds every resolved light,
+			 * which is the per-pixel loop of before; the two frames must be bit-identical).
+			 * @note Thread-safe, read when the next frame is recorded.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableTileCulling (bool state) noexcept
+			{
+				m_tileCullingEnabled.store(state, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns whether the tile culling is on.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isTileCullingEnabled () const noexcept
+			{
+				return m_tileCullingEnabled.load(std::memory_order_relaxed);
+			}
 
 			/**
 			 * @brief Returns what the last prepare() did with the eligible lights.
@@ -281,7 +324,13 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::RenderPass > m_renderPass;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
-			Base::StaticVector< const Scenes::Component::AbstractLightEmitter *, MaxLights > m_lights;
+			/** @brief The tile culling pass (target independent). */
+			std::unique_ptr< Vulkan::ComputePipeline > m_cullPipeline;
+			/** @brief One tile-mask buffer per frame in flight, sized for the scene target (device local). */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_tileMaskBuffers;
+			/** @brief The frame's resolved lights, sorted by address (render thread, MaxLights reserved once: 8 KiB, over
+			 * the StaticVector bound of Allocatus Reduxus). */
+			std::vector< const Scenes::Component::AbstractLightEmitter * > m_lights;
 			/** @brief The frame's invisible lights, sorted by address (render thread only, capacity kept across frames). */
 			std::vector< const Scenes::Component::AbstractLightEmitter * > m_invisibleLights;
 			/** @brief The frame's visible eligible lights before the selection (render thread only, capacity kept). */
@@ -293,6 +342,9 @@ namespace EmEn::Graphics
 			std::atomic< uint32_t > m_statisticInvisible{0};
 			std::atomic< uint32_t > m_statisticResolved{0};
 			std::atomic< uint32_t > m_statisticForward{0};
+			std::atomic< bool > m_tileCullingEnabled{true};
+			uint32_t m_tileCountX{0};
+			uint32_t m_tileCountY{0};
 			bool m_sharedResourcesCreated{false};
 	};
 }

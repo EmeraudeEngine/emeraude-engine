@@ -45,6 +45,7 @@
 #include "Settings.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/ComputePipeline.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
@@ -81,17 +82,21 @@ namespace EmEn::Graphics
 
 		static_assert(sizeof(DeferredLightData) == 64, "DeferredLightData must be 64 bytes (std430).");
 
-		/** @brief Push constants of the resolve (80 bytes, the GLSL block below). */
+		/** @brief Push constants of the resolve and of the tile culling (96 bytes, the GLSL blocks below). */
 		struct ResolvePushConstants
 		{
 			std::array< float, 16 > inverseProjection;
 			float inverseExtentX;
 			float inverseExtentY;
 			uint32_t lightCount;
-			uint32_t padding;
+			/* The tiles per row of the culling grid. */
+			uint32_t tileCountX;
+			/* 0 = every light in every tile (the per-pixel loop of before, the exactness A/B), else culled. */
+			uint32_t tileCullingEnabled;
+			std::array< uint32_t, 3 > padding;
 		};
 
-		static_assert(sizeof(ResolvePushConstants) == 80, "ResolvePushConstants must be 80 bytes.");
+		static_assert(sizeof(ResolvePushConstants) == 96, "ResolvePushConstants must be 96 bytes.");
 
 		/** @brief The shared fullscreen triangle (IndirectPostProcessEffect's, same name: one module). */
 		constexpr auto FullscreenVertexShader = R"GLSL(
@@ -132,13 +137,26 @@ layout(std430, set = 0, binding = 4) readonly buffer DeferredLights
 	DeferredLight lights[];
 };
 
+/* One bit per light per tile (TileCullComputeShader). */
+layout(std430, set = 0, binding = 5) readonly buffer TileMasks
+{
+	uint tileMasks[];
+};
+
 layout(push_constant) uniform PushConstants
 {
 	mat4 inverseProjection;
 	vec2 inverseExtent;
 	uint lightCount;
-	uint padding;
+	uint tileCountX;
+	uint tileCullingEnabled;
+	uint padding0;
+	uint padding1;
+	uint padding2;
 };
+
+#define TILE_SIZE 16u
+#define LIGHT_WORD_COUNT 32u
 
 )GLSL" EMEN_LIGHT_FALLOFF_GLSL R"GLSL(
 
@@ -204,57 +222,243 @@ void main()
 
 	vec3 radianceSum = vec3(0.0);
 
-	for ( uint index = 0u; index < lightCount; ++index )
+	/* Only the lights of this pixel's tile, in light order (the bits ascend): the culling pass dropped the others,
+	 * those whose reach misses the tile's frustum or its depth range. */
+	const uint tileIndex = (uint(pixel.y) / TILE_SIZE) * tileCountX + (uint(pixel.x) / TILE_SIZE);
+	const uint wordCount = (lightCount + 31u) / 32u;
+
+	for ( uint word = 0u; word < wordCount; ++word )
 	{
-		const vec4 positionRadius = lights[index].positionRadius;
-		const vec3 toLight = positionRadius.xyz - P;
-		const float distanceSquared = dot(toLight, toLight);
-		const float radius = positionRadius.w;
+		uint bits = tileMasks[tileIndex * LIGHT_WORD_COUNT + word];
 
-		/* Out of reach: the falloff window is exactly zero there. */
-		if ( radius > 0.0 && distanceSquared >= radius * radius )
+		while ( bits != 0u )
 		{
-			continue;
+			const uint index = word * 32u + uint(findLSB(bits));
+
+			bits &= bits - 1u;
+
+				const vec4 positionRadius = lights[index].positionRadius;
+				const vec3 toLight = positionRadius.xyz - P;
+				const float distanceSquared = dot(toLight, toLight);
+				const float radius = positionRadius.w;
+
+				/* Out of reach: the falloff window is exactly zero there. */
+				if ( radius > 0.0 && distanceSquared >= radius * radius )
+				{
+					continue;
+				}
+
+				const float lightDistance = sqrt(distanceSquared);
+				const vec3 L = toLight / max(lightDistance, 0.0001);
+
+				float lightFactor = emLightFalloff(lightDistance, radius);
+
+				/* The spot cone, with the forward pass's epsilon guard (a hard-edged spot has inner == outer). */
+				if ( lights[index].directionType.w > 1.5 )
+				{
+					const vec4 cone = lights[index].cone;
+					const float theta = dot(-L, lights[index].directionType.xyz);
+					const float epsilon = max(cone.x - cone.y, 0.0001);
+
+					lightFactor *= clamp((theta - cone.y) / epsilon, 0.0, 1.0);
+				}
+
+				const float NdotL = max(dot(N, L), 0.0);
+
+				if ( lightFactor <= 0.0 || NdotL <= 0.0 )
+				{
+					continue;
+				}
+
+				const vec3 H = normalize(V + L);
+
+				const float NDF = distributionGGX(N, H, roughness);
+				const float G = geometryV * geometrySchlickGGX(NdotL, roughness);
+				const vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+				const vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
+				const vec3 kD = (vec3(1.0) - F) * (1.0 - metalness);
+
+				const vec4 colorIntensity = lights[index].colorIntensity;
+				const vec3 radiance = colorIntensity.rgb * colorIntensity.a * lightFactor;
+
+				radianceSum += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
 		}
-
-		const float lightDistance = sqrt(distanceSquared);
-		const vec3 L = toLight / max(lightDistance, 0.0001);
-
-		float lightFactor = emLightFalloff(lightDistance, radius);
-
-		/* The spot cone, with the forward pass's epsilon guard (a hard-edged spot has inner == outer). */
-		if ( lights[index].directionType.w > 1.5 )
-		{
-			const vec4 cone = lights[index].cone;
-			const float theta = dot(-L, lights[index].directionType.xyz);
-			const float epsilon = max(cone.x - cone.y, 0.0001);
-
-			lightFactor *= clamp((theta - cone.y) / epsilon, 0.0, 1.0);
-		}
-
-		const float NdotL = max(dot(N, L), 0.0);
-
-		if ( lightFactor <= 0.0 || NdotL <= 0.0 )
-		{
-			continue;
-		}
-
-		const vec3 H = normalize(V + L);
-
-		const float NDF = distributionGGX(N, H, roughness);
-		const float G = geometryV * geometrySchlickGGX(NdotL, roughness);
-		const vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-		const vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
-		const vec3 kD = (vec3(1.0) - F) * (1.0 - metalness);
-
-		const vec4 colorIntensity = lights[index].colorIntensity;
-		const vec3 radiance = colorIntensity.rgb * colorIntensity.a * lightFactor;
-
-		radianceSum += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
 	}
 
 	outColor = vec4(radianceSum, 0.0);
+}
+)GLSL";
+
+		static_assert(DeferredLightResolve::TileSize == 16 && DeferredLightResolve::LightWordCount == 32, "TILE_SIZE / LIGHT_WORD_COUNT are written in the GLSL.");
+
+		/* The tile culling: one 16 × 16 workgroup per tile. Its depth range over the pixels the resolve shades (the
+		 * deferred-lighting bit), then every light's sphere against the tile's four side planes and that range, one bit per
+		 * light. A tile without such a pixel keeps an empty mask. The planes come from the same JITTERED inverse projection
+		 * the resolve rebuilds its positions with; each one passes through two depths of a tile edge, so a perspective or
+		 * an orthographic projection both work, and it is oriented by the tile's centre (no handedness assumed). */
+		constexpr auto TileCullComputeShader = R"GLSL(
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 1) uniform sampler2D materialPropertiesTex;
+layout(set = 0, binding = 3) uniform sampler2D depthTex;
+
+struct DeferredLight
+{
+	vec4 positionRadius;
+	vec4 colorIntensity;
+	vec4 directionType;
+	vec4 cone;
+};
+
+layout(std430, set = 0, binding = 4) readonly buffer DeferredLights
+{
+	DeferredLight lights[];
+};
+
+layout(std430, set = 0, binding = 5) writeonly buffer TileMasks
+{
+	uint tileMasks[];
+};
+
+layout(push_constant) uniform PushConstants
+{
+	mat4 inverseProjection;
+	vec2 inverseExtent;
+	uint lightCount;
+	uint tileCountX;
+	uint tileCullingEnabled;
+	uint padding0;
+	uint padding1;
+	uint padding2;
+};
+
+#define TILE_SIZE 16u
+#define LIGHT_WORD_COUNT 32u
+
+shared uint sMinZ;
+shared uint sMaxZ;
+shared uint sHasPixel;
+shared uint sMask[LIGHT_WORD_COUNT];
+
+/* A float as an unsigned integer of the same order (negative values included), for the atomic min / max. */
+uint orderedFromFloat (float value)
+{
+	const uint bits = floatBitsToUint(value);
+
+	return (bits & 0x80000000u) != 0u ? ~bits : (bits | 0x80000000u);
+}
+
+float floatFromOrdered (uint ordered)
+{
+	return uintBitsToFloat((ordered & 0x80000000u) != 0u ? (ordered & 0x7FFFFFFFu) : ~ordered);
+}
+
+vec3 unproject (vec2 pixelPosition, float ndcDepth)
+{
+	const vec4 position = inverseProjection * vec4(pixelPosition * inverseExtent * 2.0 - 1.0, ndcDepth, 1.0);
+
+	return position.xyz / position.w;
+}
+
+void main()
+{
+	const uint invocation = gl_LocalInvocationIndex;
+
+	if ( invocation == 0u )
+	{
+		sMinZ = 0xFFFFFFFFu;
+		sMaxZ = 0u;
+		sHasPixel = 0u;
+	}
+
+	if ( invocation < LIGHT_WORD_COUNT )
+	{
+		sMask[invocation] = 0u;
+	}
+
+	barrier();
+
+	const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+	const ivec2 extent = textureSize(depthTex, 0);
+
+	if ( pixel.x < extent.x && pixel.y < extent.y )
+	{
+		const uint materialBits = uint(texelFetch(materialPropertiesTex, pixel, 0).r * 255.0 + 0.5);
+
+		if ( (materialBits & 1u) != 0u )
+		{
+			const float viewZ = unproject(vec2(pixel) + 0.5, texelFetch(depthTex, pixel, 0).r).z;
+
+			atomicMin(sMinZ, orderedFromFloat(viewZ));
+			atomicMax(sMaxZ, orderedFromFloat(viewZ));
+			atomicOr(sHasPixel, 1u);
+		}
+	}
+
+	barrier();
+
+	if ( sHasPixel != 0u )
+	{
+		const float minZ = floatFromOrdered(sMinZ);
+		const float maxZ = floatFromOrdered(sMaxZ);
+
+		const vec2 tileMin = vec2(gl_WorkGroupID.xy * TILE_SIZE);
+		const vec2 tileMax = min(tileMin + float(TILE_SIZE), vec2(extent));
+		const vec2 corners[4] = vec2[4](tileMin, vec2(tileMax.x, tileMin.y), tileMax, vec2(tileMin.x, tileMax.y));
+		const vec3 center = unproject((tileMin + tileMax) * 0.5, 0.5);
+
+		vec4 planes[4];
+
+		for ( int edge = 0; edge < 4; ++edge )
+		{
+			const vec3 nearA = unproject(corners[edge], 0.25);
+			const vec3 farA = unproject(corners[edge], 0.75);
+			const vec3 nearB = unproject(corners[(edge + 1) & 3], 0.25);
+
+			vec3 normal = normalize(cross(farA - nearA, nearB - nearA));
+
+			if ( dot(normal, center - nearA) < 0.0 )
+			{
+				normal = -normal;
+			}
+
+			planes[edge] = vec4(normal, -dot(normal, nearA));
+		}
+
+		for ( uint index = invocation; index < lightCount; index += TILE_SIZE * TILE_SIZE )
+		{
+			const vec4 positionRadius = lights[index].positionRadius;
+			const float radius = positionRadius.w;
+
+			/* An unbounded light (radius 0) reaches every tile; culling off, every light does. */
+			bool touches = true;
+
+			if ( tileCullingEnabled != 0u && radius > 0.0 )
+			{
+				touches = positionRadius.z + radius >= minZ && positionRadius.z - radius <= maxZ;
+
+				for ( int edge = 0; edge < 4 && touches; ++edge )
+				{
+					touches = dot(planes[edge].xyz, positionRadius.xyz) + planes[edge].w >= -radius;
+				}
+			}
+
+			if ( touches )
+			{
+				atomicOr(sMask[index >> 5u], 1u << (index & 31u));
+			}
+		}
+	}
+
+	barrier();
+
+	if ( invocation < LIGHT_WORD_COUNT )
+	{
+		tileMasks[(gl_WorkGroupID.y * tileCountX + gl_WorkGroupID.x) * LIGHT_WORD_COUNT + invocation] = sMask[invocation];
+	}
 }
 )GLSL";
 
@@ -343,11 +547,14 @@ void main()
 		{
 			auto newLayout = layoutManager.prepareNewDescriptorSetLayout(ClassId);
 			newLayout->setIdentifier(ClassId, "Resolve", "DescriptorSetLayout");
+			/* One set for both passes: the tile culling (compute) reads the material bits, the depth and the lights,
+			 * and writes the tile masks the resolve (fragment) reads. */
 			newLayout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT);
-			newLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
+			newLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 			newLayout->declareCombinedImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT);
-			newLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT);
-			newLayout->declareStorageBuffer(4, VK_SHADER_STAGE_FRAGMENT_BIT);
+			newLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+			newLayout->declareStorageBuffer(4, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+			newLayout->declareStorageBuffer(5, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 
 			if ( !layoutManager.createDescriptorSetLayout(newLayout) )
 			{
@@ -404,7 +611,7 @@ void main()
 
 		m_pipelineLayout = layoutManager.getPipelineLayout(sets, {
 			VkPushConstantRange{
-				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
 				.offset = 0,
 				.size = sizeof(ResolvePushConstants)
 			}
@@ -416,6 +623,34 @@ void main()
 
 			return false;
 		}
+
+		/* The tile culling: independent of the target's size (the grid is a push constant, the masks a binding). */
+		{
+			const auto computeModule = m_renderer.shaderManager().getShaderModuleFromSourceCode(m_renderer.device(), "DeferredLightTileCullCS", Saphir::ShaderType::ComputeShader, TileCullComputeShader);
+
+			if ( computeModule == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to compile the tile culling shader !");
+
+				return false;
+			}
+
+			auto cullPipeline = std::make_unique< ComputePipeline >(m_pipelineLayout);
+			cullPipeline->setIdentifier(ClassId, "TileCull", "ComputePipeline");
+			cullPipeline->setShaderModule(computeModule->handle());
+
+			if ( !cullPipeline->createOnHardware() )
+			{
+				Tracer::error(ClassId, "Unable to create the tile culling pipeline !");
+
+				return false;
+			}
+
+			m_cullPipeline = std::move(cullPipeline);
+		}
+
+		/* MaxLights at most: prepare() never grows it again. */
+		m_lights.reserve(MaxLights);
 
 		m_sharedResourcesCreated = true;
 
@@ -444,6 +679,41 @@ void main()
 		}
 
 		m_targetColorView.reset();
+
+		for ( auto & tileMaskBuffer : m_tileMaskBuffers )
+		{
+			deferredDestructor.retireObject(std::move(tileMaskBuffer));
+		}
+
+		m_tileMaskBuffers.clear();
+
+		/* The tile masks, one buffer per frame in flight (written by this frame's culling, read by its resolve), device
+		 * local: LightWordCount words per tile. */
+		{
+			const auto & targetExtent = sceneTarget.extent();
+
+			m_tileCountX = (targetExtent.width + TileSize - 1) / TileSize;
+			m_tileCountY = (targetExtent.height + TileSize - 1) / TileSize;
+
+			const auto maskBytes = static_cast< VkDeviceSize >(m_tileCountX) * m_tileCountY * LightWordCount * sizeof(uint32_t);
+
+			for ( uint32_t frameIndex = 0; frameIndex < m_renderer.framesInFlight(); ++frameIndex )
+			{
+				auto tileMaskBuffer = std::make_unique< ShaderStorageBufferObject >(m_renderer.device(), maskBytes, false);
+				tileMaskBuffer->setIdentifier(ClassId, "TileMasks", "ShaderStorageBufferObject");
+
+				if ( !tileMaskBuffer->createOnHardware() )
+				{
+					Tracer::error(ClassId, "Unable to create a tile mask buffer !");
+
+					m_tileMaskBuffers.clear();
+
+					return false;
+				}
+
+				m_tileMaskBuffers.emplace_back(std::move(tileMaskBuffer));
+			}
+		}
 
 		/* The scene colour alone, LOADED and stored back: the resolve ADDS onto what the ambient and the forward light
 		 * passes wrote. Same layouts as the scene target's own passes (COLOR_ATTACHMENT_OPTIMAL on both ends). */
@@ -792,7 +1062,17 @@ void main()
 		const auto & albedoImage = *sceneTarget.albedoImage();
 		const auto & depthImage = *sceneTarget.depthStencilImage();
 
-		const auto & descriptorSet = *m_descriptorSets[m_renderer.currentFrameIndex() % m_descriptorSets.size()];
+		if ( m_cullPipeline == nullptr || m_tileMaskBuffers.empty() )
+		{
+			return false;
+		}
+
+		const auto frameSlot = m_renderer.currentFrameIndex();
+		const auto & descriptorSet = *m_descriptorSets[frameSlot % m_descriptorSets.size()];
+		const auto & tileMaskBuffer = *m_tileMaskBuffers[frameSlot % m_tileMaskBuffers.size()];
+		const auto maskBytes = static_cast< uint32_t >(static_cast< VkDeviceSize >(m_tileCountX) * m_tileCountY * LightWordCount * sizeof(uint32_t));
+
+		static_cast< void >(descriptorSet.writeStorageBuffer(5, tileMaskBuffer.getDescriptorInfo(0, maskBytes)));
 
 		static_cast< void >(descriptorSet.writeCombinedImageSampler(0, *sceneTarget.normalsImageView(), *m_sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 		static_cast< void >(descriptorSet.writeCombinedImageSampler(1, *sceneTarget.materialPropertiesImageView(), *m_sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
@@ -808,7 +1088,7 @@ void main()
 				Sync::ImageMemoryBarrier{depthImage, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT}.get()
 			};
 
-			commandBuffer.pipelineBarrier(barriers, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			commandBuffer.pipelineBarrier(barriers, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 		}
 
 		const auto & extent = sceneTarget.extent();
@@ -819,7 +1099,28 @@ void main()
 		pushConstants.inverseExtentX = 1.0F / static_cast< float >(extent.width);
 		pushConstants.inverseExtentY = 1.0F / static_cast< float >(extent.height);
 		pushConstants.lightCount = static_cast< uint32_t >(m_lights.size());
-		pushConstants.padding = 0;
+		pushConstants.tileCountX = m_tileCountX;
+		pushConstants.tileCullingEnabled = m_tileCullingEnabled.load(std::memory_order_relaxed) ? 1U : 0U;
+
+		/* The tile culling: one workgroup per tile; then its masks to the resolve's fragment reads. The previous frame
+		 * that used this slot's masks was fenced before recording. */
+		commandBuffer.bind(*m_cullPipeline);
+		commandBuffer.bind(descriptorSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants), &pushConstants);
+		commandBuffer.dispatch(m_tileCountX, m_tileCountY, 1);
+
+		{
+			const std::array< VkMemoryBarrier, 1 > maskBarrier{
+				VkMemoryBarrier{
+					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+					.pNext = nullptr,
+					.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+				}
+			};
+
+			commandBuffer.pipelineBarrier(maskBarrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+		}
 
 		const std::array< VkClearValue, 1 > clearValues{};
 
@@ -840,7 +1141,7 @@ void main()
 		const VkRect2D scissor = sceneTarget.renderArea();
 		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
-		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstants), &pushConstants);
+		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants), &pushConstants);
 
 		commandBuffer.bind(descriptorSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 
@@ -885,6 +1186,10 @@ void main()
 		m_framebuffer.reset();
 		m_renderPass.reset();
 		m_targetColorView.reset();
+		m_cullPipeline.reset();
+		m_tileMaskBuffers.clear();
+		m_tileCountX = 0;
+		m_tileCountY = 0;
 		m_pipelineLayout.reset();
 		m_descriptorSets.clear();
 		m_lightBuffers.clear();

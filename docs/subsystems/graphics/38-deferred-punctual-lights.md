@@ -59,8 +59,8 @@ asked by the `labyrinth` demo: 548 ceiling lamps).
 | Set | Rule | Drawn by |
 |---|---|---|
 | INVISIBLE | radius > 0 and its sphere misses the main camera's frustum (`Frustum::isSeeing(Sphere)`, the frame's state) | nobody: `invisibleLights()`, skipped by `Scene::renderOpaque()` for EVERY opaque batch of that target, whatever its material |
-| RESOLVED | the `MaxLights` (128) visible ones closest to the camera, by `max(0, distance - radius)`; an unbounded light (radius 0) ranks by its distance | the resolve |
-| FORWARD | the visible ones beyond 128 | the forward passes, as before (same BRDF) |
+| RESOLVED | the `MaxLights` (1024 since the tiled culling; 128 before) visible ones closest to the camera, by `max(0, distance - radius)`; an unbounded light (radius 0) ranks by its distance | the resolve, tile-culled (§ Tiled culling) |
+| FORWARD | the visible ones beyond 1024 | the forward passes, as before (same BRDF) |
 
 - The INVISIBLE skip is exact: the G-buffer holds only what the frustum sees, so a light whose reach misses the
   frustum lights no visible pixel. Light-volume culling of deferred shading (S. Hargreaves, "Deferred Shading",
@@ -81,8 +81,8 @@ asked by the `labyrinth` demo: 548 ceiling lamps).
 ⚠️ **A frustum is not an occlusion test.** In a maze, from the `labyrinth` spawn looking north, 498 of 548 lamps are
 INSIDE the frustum behind the walls: 128 resolved, 370 left to the forward passes. Measured (RTX 3070 Ti, 2880×1620,
 RT lane, validation ON, same pose, 2026-10-06): `ScenePass` 31.5 ms forward-only → 18.0 ms with the resolve
-(`DeferredLights` 1.6 ms); 0 VUID. The remaining forward cost is the occluded lamps (item
-`deferred-resolve-occluded-lights-go-forward`).
+(`DeferredLights` 1.6 ms); 0 VUID. The remaining forward cost was the occluded lamps — gone with the tiled culling
+the same day (§ Tiled culling: 0 forward, `ScenePass` 1.25 ms).
 
 Exactness of the INVISIBLE skip (same instance, same pose, the 55 flickering lamps switched off, scene effects
 bypassed; 493 eligible, 46 invisible, 128 resolved, 319 forward): deferred/deferred captures bit-identical; deferred vs
@@ -99,6 +99,36 @@ macOS (macOS-PA, Apple M2, MoltenVK, 2560×1440, validation ON, 2026-10-06, engi
 Windows (Windows-PA, 1280×720, validation ON, 2026-10-06): same selection on both GPUs; `ScenePass` RTX 3060 Laptop
 21.9 → 14.2 ms (−35 %), AMD iGPU 69.1 → 48.8 ms (−30 %); `lighten-marbles` never sends a light forward; 0 VUID,
 0 MSVC warning.
+
+## Tiled culling — the occluded lamps (2026-10-06)
+
+Owner decisions 2026-10-06 (item `deferred-resolve-occluded-lights-go-forward`, closed): tiled culling, `MaxLights`
+128 → 1024, one BIT per light per tile (no per-tile cap, no overflow path). References: J. Andersson, "DirectX 11
+Rendering in Battlefield 3", GDC 2011; A. Lauritzen, "Deferred Rendering for Current and Future Rendering Pipelines",
+SIGGRAPH 2010.
+
+- `record()` dispatches `TileCullComputeShader` before the resolve: one 16 × 16 workgroup per tile (`TileSize`). It
+  reduces the tile's view-space z range over the pixels carrying the deferred-lighting bit (atomic min / max on
+  order-preserving integers), builds the tile's four side planes from the frame's JITTERED inverse projection (each
+  plane through two depths of a tile edge — perspective or orthographic — oriented by the tile centre), and sets a
+  light's bit when its sphere meets the planes and the z range (an unbounded light: every tile). A tile without an
+  eligible pixel keeps an empty mask. Masks: `LightWordCount` (32) words per tile, one device-local buffer per frame
+  in flight, sized with the scene target (2.35 MB at 2880×1620); a global memory barrier hands them to the fragment.
+- The resolve walks its tile's bits with `findLSB`, in light order — the same terms, in the same order, as the
+  per-pixel loop minus lights that add exactly nothing. A lamp behind a wall lies beyond the tile's depth range.
+- The descriptor set (bindings 1, 3, 4, 5) and the 96-byte push constants serve both stages; the cull pipeline is
+  target-independent, the masks are recreated with the target (deferred destructor).
+- A/B: `Core.RendererService.setDeferredLightTileCulling(0|1)` — off, every tile holds every resolved light (the
+  per-pixel loop of before). **The two frames are BIT-IDENTICAL** (0 differing pixels): `labyrinth` at 2880×1620 and at
+  2885×1616 (partial tiles), Sponza's launch pose — the exactness proof of the culling.
+
+Measured (RTX 3070 Ti, validation ON, 2026-10-06), `labyrinth` spawn, 2880×1620: 548 eligible, 50 invisible, **498
+resolved, 0 forward** (370 forward before); `ScenePass` **18.0 → 1.25 ms**, `DeferredLights` 0.66-0.74 ms (6.2 ms for
+the same 447 lights with the culling off), frame ≈ 35 → 18.5 ms; with the 55 flickering lamps off and the scene effects
+bypassed, deferred vs forward-only: 1.41 % > 2 levels, 0.045 % > 32, energy 1.00005 — the same figures as before the
+tiles (the forward depth-bias leak). Sponza: 21 resolved, `DeferredLights` 0.77-1.3 ms, culling on/off bit-identical.
+`lighten-marbles`: 127 eligible, 65 invisible, 62 resolved, `DeferredLights` 0.17 ms. Three window sizes, 0 VUID; MCP
+conformance 1881/0, console 4864/0.
 
 ## The shading — the forward pass, term for term
 
@@ -179,8 +209,9 @@ sun off and the sky's ambient on): compare at night, or the comparison proves no
 - GPU profiler: the `DeferredLights` scope inside `ScenePass` (`Core/Graphics/GPUProfiler/Enabled`).
 - `Core.RendererService.getDeferredLightStatistics()`: what the last frame did with the eligible lights (§ The frame's
   selection).
+- `Core.RendererService.setDeferredLightTileCulling(0|1)`: the tile culling's exactness A/B (§ Tiled culling).
 
 ## Not yet
 
-Line lights (LTC) and the sun stay forward (the sun is the next step toward ONE geometry pass); tiled light culling
-only if the per-pixel loop is measured to need it (0.64 ms for 22 lamps at 4.7 Mpx). See the item.
+Line lights (LTC) and the sun stay forward (the sun is the next step toward ONE geometry pass). Tiled light culling
+is DONE (§ Tiled culling). See the item `mrt-single-pass-deferred`.
