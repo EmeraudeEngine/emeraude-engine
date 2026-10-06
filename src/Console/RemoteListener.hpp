@@ -214,7 +214,7 @@ namespace EmEn::Console
 			 * pending commands). Everything queued for that client afterwards is dropped by respond().
 			 * The client is removed from the set under the write lock, then its socket goes to the
 			 * GracefulCloser (FIN after the line, bounded drain): closing over the bytes the client still
-			 * sends was a RST, which on Windows discarded the last line (item console-last-refusal-lost-on-windows).
+			 * sends was a RST, which on Windows discarded the last line (docs/subsystems/console/11-critical-points.md).
 			 * @pre On the network thread (the GracefulCloser runs there).
 			 * @param client The client socket.
 			 * @param line The last line, from RemoteProtocol, without its terminating newline.
@@ -226,7 +226,7 @@ namespace EmEn::Console
 			asio::io_context m_ioContext;
 			/** @brief The disconnected clients' graceful closes (network thread only). Declared after m_ioContext:
 			 * destroyed first, it holds weak references only; the lingering sockets die with the context's handlers. */
-			Base::Network::GracefulCloser m_gracefulCloser{MaxClients};
+			Base::Network::GracefulCloser m_gracefulCloser;
 			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;
 			std::thread m_networkThread;
 			std::mutex m_clientsMutex;
