@@ -91,6 +91,15 @@ BRIGHTER in 99.9 % of the > 32-level pixels — the forward depth-bias leak docu
 wrongly skipped lamp would DARKEN the deferred frame over a whole pool). `lighten-marbles` at launch: 33 eligible, 23
 invisible, 10 resolved, 0 forward, 0 VUID.
 
+macOS (macOS-PA, Apple M2, MoltenVK, 2560×1440, validation ON, 2026-10-06, engine 5a8fe394): same selection at the
+`labyrinth` spawn (548 / 50 / 128 / 370); `ScenePass` 108.7 ms forward-only → 81.3 ms (−25 %, Linux −43 %),
+`DeferredLights` 10.3 ms, frame 149.8 ms; `lighten-marbles` 0 forward; 0 VUID, 0 UNASSIGNED. ⚠️ Its profiler lists
+`DeferredLights` under `FinalComposite` (item `gpu-profiler-deferred-lights-scope-misparented`).
+
+Windows (Windows-PA, 1280×720, validation ON, 2026-10-06): same selection on both GPUs; `ScenePass` RTX 3060 Laptop
+21.9 → 14.2 ms (−35 %), AMD iGPU 69.1 → 48.8 ms (−30 %); `lighten-marbles` never sends a light forward; 0 VUID,
+0 MSVC warning.
+
 ## The shading — the forward pass, term for term
 
 Read off a generated `RenderableInstancePointLightPassFragmentShader` (`Core/Graphics/Shader/EnableSourceCodeDump`):
