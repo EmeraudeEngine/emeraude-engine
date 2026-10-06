@@ -130,6 +130,20 @@ tiles (the forward depth-bias leak). Sponza: 21 resolved, `DeferredLights` 0.77-
 `lighten-marbles`: 127 eligible, 65 invisible, 62 resolved, `DeferredLights` 0.17 ms. Three window sizes, 0 VUID; MCP
 conformance 1881/0, console 4864/0.
 
+macOS (macOS-PA, Apple M2, 2560×1440, validation ON, engine 15501821, 2026-10-06): PASS, 0 VUID / UNASSIGNED / [Error];
+`labyrinth` 498 resolved, 0 forward; `ScenePass` 81.3 → **5.2 ms**, `DeferredLights` 10.3 → 3.9 ms, frame 149.8 →
+74.4 ms; culling on/off **bit-identical** at 2560×1440 and at 2566×1434 (partial tiles on both axes; the Mac refuses a
+1923×1077 window); `DeferredLights` 5 ms on vs 39.4 ms off. Sponza: on/off bit-identical apart from a fixed cluster of
+6-9 pixels that flips between two captures at the SAME setting too (the M2's pre-existing Sponza run noise);
+`DeferredLights` 4.4 ms on vs 6.2 off. `lighten-marbles`: 0 forward.
+
+Windows (Windows-PA, RTX 3060 Laptop + AMD Radeon iGPU, 1280×720, validation ON, 2026-10-06): PASS on both, 0 MSVC
+warning, 0 VUID on 8 launches. `labyrinth` 498 resolved, 0 forward; `ScenePass` NVIDIA 14.2 → **0.64 ms**, AMD 48.8 →
+**3.56 ms**; culling on/off **bit-identical** on both GPUs at 1280×720 and 1907×1027 (partial tiles on both axes; the
+laptop refuses 1923×1077); `DeferredLights` on vs off at 1907×1027: NVIDIA 0.70-0.85 vs 7.79 ms, AMD 2.4 vs 18.1 ms.
+Sponza on/off bit-identical (two outliers traced to the scene still settling / still loading, not to the culling).
+**Accepted on the three OS** (2026-10-06).
+
 ## The shading — the forward pass, term for term
 
 Read off a generated `RenderableInstancePointLightPassFragmentShader` (`Core/Graphics/Shader/EnableSourceCodeDump`):

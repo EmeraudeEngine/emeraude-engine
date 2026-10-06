@@ -18,6 +18,10 @@ forward-only (`setDeferredPunctualLights(0)`), validation ON or OFF alike. `docs
 recorded 13.8 ms / 45.5 ms on 2026-10-04 (then 10.2 ms after the cypress cutout). `getRenderStatistics()` reported
 454 batches, **12 833 689 triangles, all at "LOD 3"**.
 
+Windows-PA saw it too (engine 15501821, 2026-10-06): `ScenePass` RTX 3060 Laptop 20-23 ms at 1280×720 and 38-40 ms at
+1907×1027 (its 2026-10-04 record: 30 → 23.3 ms at 720p after the cutout), AMD iGPU ~55 / ~90 ms; macOS M2 ~72.5 ms at
+2560×1440 (its record: 75.6 ms). The Mac does NOT show the gap; Linux and Windows NVIDIA do.
+
 NOT caused by the frame light selection or the tiled culling: the forward-only path does not run that code, the
 resolve costs 0.77-1.3 ms, and the culling on/off frames are bit-identical. The cause is NOT investigated.
 
