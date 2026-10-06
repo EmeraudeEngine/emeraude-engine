@@ -397,6 +397,15 @@ namespace EmEn::Vulkan
 			return true;
 		}
 
+		/* NOTE: An upload returns once SUBMITTED: when one still writes this image, the handles go to the
+		 * device's deferred path instead of being destroyed under the GPU (VUID-vkDestroyImage-image-01000). */
+		if ( this->hasDevice() && this->destroyAfterPendingSubmissions() )
+		{
+			this->setDestroyed();
+
+			return true;
+		}
+
 		/* NOTE: Imported images (external memory) never belong to VMA — always destroy them manually. */
 		const auto result =
 			this->device()->useMemoryAllocator() && !m_isImportedImage ?
@@ -524,6 +533,46 @@ namespace EmEn::Vulkan
 			vmaGetAllocationMemoryProperties(this->device()->memoryAllocatorHandle(), m_memoryAllocation, &chosenFlags);
 			TraceInfo{ClassId} << "Host-visible image '" << this->identifier() << "' placed by VMA in " << (((chosenFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0U) ? "DEVICE_LOCAL (VRAM)" : "host (system RAM)") << " memory.";
 		}
+
+		return true;
+	}
+
+	bool
+	Image::destroyAfterPendingSubmissions () noexcept
+	{
+		const auto pending = m_pendingSubmissions.takeUnreached();
+
+		if ( pending.empty() || m_handle == VK_NULL_HANDLE )
+		{
+			return false;
+		}
+
+		const auto device = this->device();
+		const auto handle = m_handle;
+
+		/* NOTE: Imported images (external memory) never belong to VMA, like in destroyFromHardware(). */
+		if ( device->useMemoryAllocator() && !m_isImportedImage )
+		{
+			const auto allocation = m_memoryAllocation;
+
+			device->destroyAfter(pending, [device, handle, allocation] () {
+				vmaDestroyImage(device->memoryAllocatorHandle(), handle, allocation);
+			});
+		}
+		else
+		{
+			/* NOTE: std::function needs a copyable callable: the memory travels in a shared_ptr. */
+			std::shared_ptr< DeviceMemory > memory{std::move(m_deviceMemory)};
+
+			device->destroyAfter(pending, [device, handle, memory] () mutable {
+				vkDestroyImage(device->handle(), handle, VK_NULL_HANDLE);
+
+				memory.reset();
+			});
+		}
+
+		m_handle = VK_NULL_HANDLE;
+		m_memoryAllocation = VK_NULL_HANDLE;
 
 		return true;
 	}

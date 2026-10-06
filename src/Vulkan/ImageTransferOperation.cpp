@@ -204,12 +204,16 @@ namespace EmEn::Vulkan
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
-			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+			uint64_t transferValue = 0;
+
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer an image (1/2) !");
 
 				return false;
 			}
+
+			dstImage.recordPendingSubmission(*queue, transferValue);
 
 			dstImage.setCurrentImageLayout(dstImage.createInfo().mipLevels > 1 ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		}
@@ -351,12 +355,16 @@ namespace EmEn::Vulkan
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle())) )
+			uint64_t graphicsValue = 0;
+
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer an image (2/2) !");
 
 				return false;
 			}
+
+			dstImage.recordPendingSubmission(*queue, graphicsValue);
 
 			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
@@ -415,12 +423,16 @@ namespace EmEn::Vulkan
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
-			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+			uint64_t transferValue = 0;
+
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer compressed image (1/2) !");
 
 				return false;
 			}
+
+			dstImage.recordPendingSubmission(*queue, transferValue);
 		}
 		else
 		{
@@ -454,12 +466,16 @@ namespace EmEn::Vulkan
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle())) )
+			uint64_t graphicsValue = 0;
+
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer compressed image (2/2) !");
 
 				return false;
 			}
+
+			dstImage.recordPendingSubmission(*queue, graphicsValue);
 
 			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
@@ -527,12 +543,16 @@ namespace EmEn::Vulkan
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
-			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+			uint64_t transferValue = 0;
+
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer an image region (1/2) !");
 
 				return false;
 			}
+
+			dstImage.recordPendingSubmission(*queue, transferValue);
 		}
 		else
 		{
@@ -566,12 +586,16 @@ namespace EmEn::Vulkan
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle())) )
+			uint64_t graphicsValue = 0;
+
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer an image region (2/2) !");
 
 				return false;
 			}
+
+			dstImage.recordPendingSubmission(*queue, graphicsValue);
 
 			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}

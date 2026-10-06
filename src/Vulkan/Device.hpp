@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -49,6 +50,7 @@ using VmaAllocator = struct VmaAllocator_T *;
 /* Local inclusions for usages. */
 #include "PhysicalDevice.hpp"
 #include "DeviceQueueConfiguration.hpp"
+#include "PendingSubmissions.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -56,6 +58,7 @@ namespace EmEn::Vulkan
 {
 	class Instance;
 	class DeviceRequirements;
+	class DeferredDestructor;
 }
 
 namespace EmEn::Vulkan
@@ -71,6 +74,9 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanDevice"};
+
+			/** @brief The wait granted by destroyAfter() without a renderer: far above any upload, below a hung device. */
+			static constexpr uint64_t DestroyAfterTimeoutNanoseconds{10'000'000'000ULL};
 
 			/**
 			 * @brief Constructs a device.
@@ -310,6 +316,27 @@ namespace EmEn::Vulkan
 			{
 				return m_hostQueryResetEnabled;
 			}
+
+			/**
+			 * @brief Registers the renderer's deferred-destruction queue (nullptr unregisters it).
+			 * @note Destroying a GPU object still written by a pending upload goes through it
+			 * (destroyAfter()). The renderer unregisters it BEFORE flushing it at its termination.
+			 * @param deferredDestructor A pointer to the queue, owned by the renderer, or nullptr.
+			 * @return void
+			 */
+			void setDeferredDestructor (DeferredDestructor * deferredDestructor) noexcept;
+
+			/**
+			 * @brief Runs a destruction once the GPU has completed every submission that still uses the object.
+			 * @note THE path of a Vulkan object released while an upload writes it (VUID-vkDestroyBuffer-buffer-00922,
+			 * VUID-vkDestroyImage-image-01000): with a registered deferred destructor, the destruction is retired
+			 * there (frames-in-flight delay AND the points reached); without one (no renderer, its termination), the
+			 * calling thread waits for the points, then destroys.
+			 * @param points The completion points not reached yet (PendingSubmissions::takeUnreached()).
+			 * @param destruction The destruction, owning the handles it destroys.
+			 * @return void
+			 */
+			void destroyAfter (const PendingSubmissions::Points & points, std::function< void () > destruction) noexcept;
 
 			/**
 			 * @brief Returns whether VK_EXT_mesh_shader is enabled on this device (task and mesh stages).
@@ -870,6 +897,8 @@ namespace EmEn::Vulkan
 			DeviceQueueConfiguration m_transferQueueConfiguration;
 			DeviceQueueConfiguration m_videoEncodeQueueConfiguration;
 			mutable std::mutex m_logicalDeviceAccess;
+			DeferredDestructor * m_deferredDestructor{nullptr};
+			std::mutex m_deferredDestructorAccess;
 			mutable std::atomic_bool m_deviceLostReported{false};
 			bool m_showInformation{false};
 			bool m_basicSupport{false};

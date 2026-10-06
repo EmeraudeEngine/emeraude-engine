@@ -127,7 +127,8 @@ namespace EmEn::Vulkan
 				m_entries.emplace_back(Entry{
 					.retiredAtTick = m_currentTick,
 					.object = std::move(object),
-					.action = nullptr
+					.action = nullptr,
+					.isReady = nullptr
 				});
 			}
 
@@ -166,7 +167,36 @@ namespace EmEn::Vulkan
 				m_entries.emplace_back(Entry{
 					.retiredAtTick = m_currentTick,
 					.object = nullptr,
-					.action = std::move(action)
+					.action = std::move(action),
+					.isReady = nullptr
+				});
+			}
+
+			/**
+			 * @brief Retires a destruction action executed after the delay AND once a condition holds.
+			 * @note For an object still written by work the frame fences do not cover — an upload on the
+			 * transfer path, whose completion is a queue timeline value (Vulkan::PendingSubmissions). The
+			 * condition is polled at each tick once the delay elapsed; it must be cheap and thread-safe.
+			 * flush() runs the action without asking: its caller guarantees an idle device.
+			 * @param isReady The condition, true once nothing on the GPU uses the object any more.
+			 * @param action The destruction action.
+			 * @return void
+			 */
+			void
+			retireActionWhen (std::function< bool () > isReady, std::function< void () > action) noexcept
+			{
+				if ( action == nullptr )
+				{
+					return;
+				}
+
+				const std::scoped_lock lock{m_mutex};
+
+				m_entries.emplace_back(Entry{
+					.retiredAtTick = m_currentTick,
+					.object = nullptr,
+					.action = std::move(action),
+					.isReady = std::move(isReady)
 				});
 			}
 
@@ -187,11 +217,26 @@ namespace EmEn::Vulkan
 
 					++m_currentTick;
 
-					while ( !m_entries.empty() && m_currentTick - m_entries.front().retiredAtTick >= m_delayTicks )
+					/* NOTE: Entries are in retirement order, so the scan stops at the first one still inside the
+					 * delay. A conditional entry whose condition does not hold yet stays, without holding back the
+					 * entries behind it. */
+					for ( auto entryIt = m_entries.begin(); entryIt != m_entries.end(); )
 					{
-						expired.emplace_back(std::move(m_entries.front()));
+						if ( m_currentTick - entryIt->retiredAtTick < m_delayTicks )
+						{
+							break;
+						}
 
-						m_entries.pop_front();
+						if ( entryIt->isReady != nullptr && !entryIt->isReady() )
+						{
+							++entryIt;
+
+							continue;
+						}
+
+						expired.emplace_back(std::move(*entryIt));
+
+						entryIt = m_entries.erase(entryIt);
 					}
 				}
 
@@ -239,6 +284,8 @@ namespace EmEn::Vulkan
 				uint64_t retiredAtTick{0};
 				std::shared_ptr< void > object;
 				std::function< void () > action;
+				/* NOTE: Null for a plain retirement (the delay alone). */
+				std::function< bool () > isReady;
 			};
 
 			std::mutex m_mutex;

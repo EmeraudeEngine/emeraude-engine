@@ -927,6 +927,9 @@ namespace EmEn::Vulkan
 			requirements.featuresVK12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 		}
 		requirements.featuresVK12().bufferDeviceAddress = VK_TRUE; // Required for buffer device addresses (VBO/IBO for RT, etc.)
+		/* Required (core in Vulkan 1.2, mandatory there): each queue numbers its tracked submissions with a timeline,
+		 * and an object released while an upload writes it is destroyed once that value is reached. */
+		requirements.featuresVK12().timelineSemaphore = VK_TRUE;
 		requestOptionalVK12(&VkPhysicalDeviceVulkan12Features::hostQueryReset, "hostQueryReset", "GPU timing of the shadow maps and render-to-textures");
 		/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
 		requirements.featuresVK10().multiDrawIndirect = VK_TRUE; // Required for vkCmdDrawIndexedIndirect with drawCount > 1

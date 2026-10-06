@@ -68,6 +68,7 @@
 #include "Utility.hpp"
 #include "Instance.hpp"
 #include "DeviceRequirements.hpp"
+#include "DeferredDestructor.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
@@ -223,6 +224,14 @@ namespace EmEn::Vulkan
 
 			const auto & queue = m_queues.emplace_back(std::make_unique< Queue >(this->shared_from_this(), queueHandle, queueFamilyIndex));
 			queue->setIdentifier(ClassId, (std::stringstream{} << queueFamilyIndex << '.' << queueIndex).str(), "Queue");
+
+			/* NOTE: The timeline numbers the tracked submissions (uploads) whose completion a destruction waits for. */
+			if ( !queue->createTimeline() )
+			{
+				TraceError{ClassId} << "Unable to create the timeline semaphore of the queue #" << queueIndex << " (family #" << queueFamilyIndex << ") !";
+
+				return false;
+			}
 
 			configuration.registerQueue(queue.get(), QueuePriority::High);
 		}
@@ -1199,5 +1208,45 @@ namespace EmEn::Vulkan
 		data.resize(size);
 
 		return true;
+	}
+
+	void
+	Device::setDeferredDestructor (DeferredDestructor * deferredDestructor) noexcept
+	{
+		const std::scoped_lock lock{m_deferredDestructorAccess};
+
+		m_deferredDestructor = deferredDestructor;
+	}
+
+	void
+	Device::destroyAfter (const PendingSubmissions::Points & points, std::function< void () > destruction) noexcept
+	{
+		if ( destruction == nullptr )
+		{
+			return;
+		}
+
+		if ( !points.empty() )
+		{
+			const std::scoped_lock lock{m_deferredDestructorAccess};
+
+			if ( m_deferredDestructor != nullptr )
+			{
+				m_deferredDestructor->retireActionWhen([points] () {
+					return PendingSubmissions::areReached(points);
+				}, std::move(destruction));
+
+				return;
+			}
+		}
+
+		/* NOTE: No renderer to defer to (none yet, or terminated): the GPU work is waited for here. A failed
+		 * wait means a lost device, where destroying is allowed again — it is logged, then done. */
+		if ( !PendingSubmissions::waitUntilReached(points, DestroyAfterTimeoutNanoseconds) )
+		{
+			TraceError{ClassId} << "A pending submission could not be waited for before a destruction !";
+		}
+
+		destruction();
 	}
 }

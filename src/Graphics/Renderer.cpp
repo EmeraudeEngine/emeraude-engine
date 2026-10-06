@@ -233,7 +233,14 @@ namespace EmEn::Graphics
 		this->observe(&m_window);
 	}
 
-	Renderer::~Renderer () = default;
+	Renderer::~Renderer ()
+	{
+		/* NOTE: The device outlives the renderer (the Vulkan instance owns it): never leave it a dangling queue. */
+		if ( m_device != nullptr )
+		{
+			m_device->setDeferredDestructor(nullptr);
+		}
+	}
 
 	bool
 	Renderer::initializeSubServices () noexcept
@@ -578,6 +585,10 @@ namespace EmEn::Graphics
 
 			/* The driver pipeline cache must exist BEFORE any pipeline is created. */
 			this->loadPipelineCache();
+
+			/* NOTE: An object released while an upload still writes it is destroyed through this queue
+			 * (Vulkan::Device::destroyAfter()), once the upload's timeline value is reached. */
+			m_device->setDeferredDestructor(&m_deferredDestructor);
 		}
 		else
 		{
@@ -886,6 +897,9 @@ namespace EmEn::Graphics
 		{
 			this->requestShutdown();
 		}
+
+		/* NOTE: From here, a destruction behind a pending upload waits for it in place: the queue is flushed below. */
+		m_device->setDeferredDestructor(nullptr);
 
 		/* NOTE: Final device idle to ensure all GPU work is complete. */
 		m_device->waitIdle("Renderer::onTerminate()");

@@ -42,6 +42,7 @@ using VmaAllocation = struct VmaAllocation_T *;
 /* Local inclusions for usages. */
 #include "DeviceMemory.hpp"
 #include "MemoryRegion.hpp"
+#include "PendingSubmissions.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -136,6 +137,18 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::destroyFromHardware() */
 			bool destroyFromHardware () noexcept final;
+
+			/**
+			 * @brief Records a submission that writes this buffer (an upload), so its destruction outlives it.
+			 * @param queue A reference to the queue of the submission.
+			 * @param value The timeline value received from SynchInfo::tracksCompletion().
+			 * @return void
+			 */
+			void
+			recordPendingSubmission (const Queue & queue, uint64_t value) noexcept
+			{
+				m_pendingSubmissions.record(queue, value);
+			}
 
 			/**
 			 * @brief Recreates a new buffer on the device.
@@ -438,11 +451,19 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool destroyWithVMA () noexcept;
 
+			/**
+			 * @brief Hands the buffer and its memory to Device::destroyAfter() when an upload still writes it.
+			 * @return bool True when the destruction was handed over (nothing left to destroy here).
+			 */
+			[[nodiscard]]
+			bool destroyAfterPendingSubmissions () noexcept;
+
 			VkBuffer m_handle{VK_NULL_HANDLE};
 			VkBufferCreateInfo m_createInfo{};
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			VkDeviceSize m_minimumAlignment{0};
+			PendingSubmissions m_pendingSubmissions;
 			mutable std::mutex m_hostMemoryAccess;
 			bool m_hostVisible{false};
 			bool m_hostReadable{false};

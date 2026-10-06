@@ -27,6 +27,7 @@
 #include "Queue.hpp"
 
 /* Local inclusions. */
+#include "StaticVector.hpp"
 #include "CommandBuffer.hpp"
 #include "Device.hpp"
 #include "Tracer.hpp"
@@ -82,9 +83,47 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		const auto tracked = synchInfo.timelineValue != nullptr;
+
+		if ( tracked )
+		{
+			*synchInfo.timelineValue = 0;
+
+			if ( m_timeline == VK_NULL_HANDLE )
+			{
+				TraceError{ClassId} << "The queue '" << this->identifier() << "' has no timeline semaphore: a tracked submission is refused !";
+
+				return false;
+			}
+		}
+
+		/* NOTE: A tracked submission signals the caller's semaphores plus the queue timeline. The values of
+		 * the binary semaphores are ignored by Vulkan but the arrays must have the same length. */
+		Base::StaticVector< VkSemaphore, MaxTrackedSignalSemaphores > signalSemaphores;
+		Base::StaticVector< uint64_t, MaxTrackedSignalSemaphores > signalValues;
+
+		if ( tracked )
+		{
+			if ( synchInfo.signalSemaphores.size() >= MaxTrackedSignalSemaphores )
+			{
+				TraceError{ClassId} << "A tracked submission signals at most " << (MaxTrackedSignalSemaphores - 1) << " semaphores of its own !";
+
+				return false;
+			}
+
+			for ( const auto semaphore : synchInfo.signalSemaphores )
+			{
+				signalSemaphores.push_back(semaphore);
+				signalValues.push_back(0);
+			}
+		}
+
 		VkCommandBuffer commandBufferHandle = commandBuffer.handle();
 
-		const VkSubmitInfo submitInfo
+		VkTimelineSemaphoreSubmitInfo timelineInfo{};
+		timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+
+		VkSubmitInfo submitInfo
 		{
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			.pNext = nullptr,
@@ -100,6 +139,23 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
 		const std::scoped_lock lock{*m_device};
 
+		/* NOTE: The value is taken under the lock that serializes every submission, so the timeline is
+		 * signalled in increasing order on this queue. */
+		const auto value = m_lastTimelineValue + 1;
+
+		if ( tracked )
+		{
+			signalSemaphores.push_back(m_timeline);
+			signalValues.push_back(value);
+
+			timelineInfo.signalSemaphoreValueCount = static_cast< uint32_t >(signalValues.size());
+			timelineInfo.pSignalSemaphoreValues = signalValues.data();
+
+			submitInfo.pNext = &timelineInfo;
+			submitInfo.signalSemaphoreCount = static_cast< uint32_t >(signalSemaphores.size());
+			submitInfo.pSignalSemaphores = signalSemaphores.data();
+		}
+
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
@@ -110,6 +166,12 @@ namespace EmEn::Vulkan
 			}
 
 			return false;
+		}
+
+		if ( tracked )
+		{
+			m_lastTimelineValue = value;
+			*synchInfo.timelineValue = value;
 		}
 
 		return true;
@@ -212,6 +274,102 @@ namespace EmEn::Vulkan
 		if ( const auto result = vkQueueWaitIdle(m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the queue to complete : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return true;
+	}
+	bool
+	Queue::createTimeline () noexcept
+	{
+		if ( m_timeline != VK_NULL_HANDLE )
+		{
+			return true;
+		}
+
+		VkSemaphoreTypeCreateInfo typeCreateInfo{};
+		typeCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+		typeCreateInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+		typeCreateInfo.initialValue = 0;
+
+		VkSemaphoreCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		createInfo.pNext = &typeCreateInfo;
+
+		if ( const auto result = vkCreateSemaphore(m_device->handle(), &createInfo, nullptr, &m_timeline); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create the timeline semaphore of the queue '" << this->identifier() << "' : " << vkResultToCString(result) << " !";
+
+			m_timeline = VK_NULL_HANDLE;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	void
+	Queue::destroyTimeline () noexcept
+	{
+		if ( m_timeline == VK_NULL_HANDLE || m_device == nullptr )
+		{
+			return;
+		}
+
+		vkDestroySemaphore(m_device->handle(), m_timeline, nullptr);
+
+		m_timeline = VK_NULL_HANDLE;
+	}
+
+	bool
+	Queue::isReached (uint64_t value) const noexcept
+	{
+		if ( value == 0 )
+		{
+			return true;
+		}
+
+		if ( m_timeline == VK_NULL_HANDLE )
+		{
+			return false;
+		}
+
+		uint64_t completedValue = 0;
+
+		if ( const auto result = vkGetSemaphoreCounterValue(m_device->handle(), m_timeline, &completedValue); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to read the timeline of the queue '" << this->identifier() << "' : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return completedValue >= value;
+	}
+
+	bool
+	Queue::waitUntilReached (uint64_t value, uint64_t timeoutNanoseconds) const noexcept
+	{
+		if ( value == 0 )
+		{
+			return true;
+		}
+
+		if ( m_timeline == VK_NULL_HANDLE )
+		{
+			return false;
+		}
+
+		VkSemaphoreWaitInfo waitInfo{};
+		waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+		waitInfo.semaphoreCount = 1;
+		waitInfo.pSemaphores = &m_timeline;
+		waitInfo.pValues = &value;
+
+		/* [VULKAN-CPU-SYNC] vkWaitSemaphores() */
+		if ( const auto result = vkWaitSemaphores(m_device->handle(), &waitInfo, timeoutNanoseconds); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Waiting the timeline value " << value << " of the queue '" << this->identifier() << "' failed : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

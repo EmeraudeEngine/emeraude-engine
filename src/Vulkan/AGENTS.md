@@ -24,7 +24,7 @@ Context for developing the Emeraude Engine Vulkan abstraction layer.
 | Development Patterns | [`docs/subsystems/vulkan/09-development-patterns.md`](../../docs/subsystems/vulkan/09-development-patterns.md) | 8 KB |
 | Queue Family Ownership Transfer (buffer uploads) | [`docs/subsystems/vulkan/10-queue-family-ownership-transfer.md`](../../docs/subsystems/vulkan/10-queue-family-ownership-transfer.md) | 3 KB |
 | TLAS Async Build (Inline Command Buffer Recording) | [`docs/subsystems/vulkan/11-tlas-async-build.md`](../../docs/subsystems/vulkan/11-tlas-async-build.md) | 2 KB |
-| Critical: Deferred destruction contract (`DeferredDestructor`) | [`docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md`](../../docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md) | 3 KB |
+| Critical: Deferred destruction contract (`DeferredDestructor`) + uploads still running (queue timelines, `PendingSubmissions`, `Device::destroyAfter()`) | [`docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md`](../../docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md) | 6 KB |
 | Critical: Ray Query vs RT Pipeline Stage Flags | [`docs/subsystems/vulkan/13-critical-ray-query-vs-rt-pipeline-stage-flags.md`](../../docs/subsystems/vulkan/13-critical-ray-query-vs-rt-pipeline-stage-flags.md) | 1 KB |
 | External-Memory Image Import (zero-copy CEF accelerated paint) | [`docs/subsystems/vulkan/14-external-memory-image-import.md`](../../docs/subsystems/vulkan/14-external-memory-image-import.md) | 3 KB |
 | Multi-Draw Indirect Support | [`docs/subsystems/vulkan/15-multi-draw-indirect-support.md`](../../docs/subsystems/vulkan/15-multi-draw-indirect-support.md) | 2 KB |

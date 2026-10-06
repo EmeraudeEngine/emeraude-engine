@@ -41,3 +41,38 @@
 > Known candidates NOT yet migrated: `Overlay::Surface` framebuffer recreation,
 > material/shared-UBO teardown paths, `LightSet::terminate()` (scene teardown — currently
 > in-place).
+
+## Critical: an object released while its UPLOAD runs (queue timelines, 2026-10-07)
+
+> [!CRITICAL]
+> The frame delay above does not cover uploads. `TransferManager` returns as soon as a copy is **submitted**; the
+> operation's fence is read only when the pool next looks for a free operation. A buffer or image released in
+> between (a loader that refuses its file after creating its textures, a LOD level dropped right after its
+> upload) was destroyed under the copy: `VUID-vkDestroyBuffer-buffer-00922` / `VUID-vkDestroyImage-image-01000`,
+> and since the validation layer then SKIPS the destroy, as many `VUID-vkDestroyDevice-device-05137` at shutdown.
+>
+> **The mechanism (owner's choice, 2026-10-07: timeline + deferred retirement):**
+> - Every `Vulkan::Queue` owns a **timeline semaphore** (Vulkan 1.2 core; the device requires `timelineSemaphore`).
+>   `SynchInfo::tracksCompletion(value)` makes a submission also signal it, with a value taken under the device
+>   lock that serializes `vkQueueSubmit()` — increasing per queue. `Queue::isReached(value)` /
+>   `waitUntilReached(value, timeout)` read it.
+> - `ImageTransferOperation` / `BufferTransferOperation` track BOTH submissions of a transfer (the copy on the
+>   transfer queue, the ownership acquire on the graphics queue) and record them on the destination:
+>   `Image::recordPendingSubmission()` / `Buffer::recordPendingSubmission()` (`Vulkan::PendingSubmissions`, one
+>   point per queue).
+> - `Image` / `Buffer::destroyFromHardware()` hand the handle and its memory (VMA allocation, or `DeviceMemory`)
+>   to `Device::destroyAfter()` while a point is unreached. With the renderer's queue registered
+>   (`Device::setDeferredDestructor()`, done when the renderer gets its device, undone at the top of
+>   `Renderer::onTerminate()` and in its destructor) it becomes a `DeferredDestructor::retireActionWhen()` entry:
+>   destroyed after the frame delay AND once the points are reached. Without it, the calling thread waits for the
+>   points (10 s bound), then destroys.
+> - Any other path that writes a buffer or an image asynchronously must do the same: `tracksCompletion()` on its
+>   submission, `recordPendingSubmission()` on the object.
+>
+> Proof (Linux, RTX 3070 Ti, validation on): citadel with `Core/Graphics/LOD/EnableAutomaticGeneration` true, 60 s:
+> **40 VUIDs → 0** (20 × 00922 + 20 × 05137), the same 94 LOD levels ready. citadel, sponza, gltf-loader: 0 VUID.
+> The culprit of that run: `MultiLayerMeshResource::generateLODLevel()` drops every generated level of a mesh that
+> carries its own levels, right after its upload (item `automatic-lod-decimates-meshes-with-explicit-levels`).
+> ⚠️ NOT covered: an image destroyed by another thread while it is still being CREATED (`vkBindImageMemory`
+> on an invalid handle, seen once in three runs of the cyclic-BSP WAD) — an ownership race, item
+> `texture-destroyed-while-being-created`.

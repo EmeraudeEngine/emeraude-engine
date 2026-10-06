@@ -5696,6 +5696,19 @@ writer is announced (it was undefined behaviour already).
 
 ## Vulkan Validation
 
+### ⚠️⚠️ An upload returns once SUBMITTED — a buffer / image released right after it was destroyed under the copy (2026-10-07, FIXED)
+
+> [!CAUTION]
+> `VUID-vkDestroyBuffer-buffer-00922` / `VUID-vkDestroyImage-image-01000` ("currently in use by VkCommandBuffer")
+> during a LOAD, followed by the same count of `VUID-vkDestroyDevice-device-05137` at shutdown, is this: the
+> `TransferManager` does not wait for its copies, and the object died before its copy ran. The 05137s are a
+> CONSEQUENCE — the validation layer skips a destroy it rejects, so the object is still there at `vkDestroyDevice`.
+> Found by a gdb breakpoint on `DebugMessenger::debugCallback` (the VUID is emitted synchronously inside the
+> destroy call, so the backtrace names the releaser): `MultiLayerMeshResource::generateLODLevel()` on a pool thread.
+> Fixed by queue timelines + `Device::destroyAfter()` (`docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md`):
+> citadel with automatic LOD, 40 VUIDs → 0. **An asynchronous writer of a buffer / image must track its submission
+> (`SynchInfo::tracksCompletion()`) and record it on the object (`recordPendingSubmission()`).**
+
 ### A LOAD variant of a render pass must be IDENTICAL but for its load/store ops and layouts — subpass dependencies included (2026-10-04)
 
 The deferred light resolve cuts the scene pass in two, and its first version resumed the translucent half in the

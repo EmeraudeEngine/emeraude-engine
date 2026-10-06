@@ -140,7 +140,16 @@ namespace EmEn::Vulkan
 			/* NOTE: Get a pure transfer queue or the transfer queue for graphics. */
 			const auto * transferQueue = device->getGraphicsTransferQueue(QueuePriority::High);
 
-			return transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.withFence(m_operationFence->handle()));
+			uint64_t transferValue = 0;
+
+			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.withFence(m_operationFence->handle()).tracksCompletion(transferValue)) )
+			{
+				return false;
+			}
+
+			dstBuffer.recordPendingSubmission(*transferQueue, transferValue);
+
+			return true;
 		}
 
 		/* Two families: release the buffer on the transfer queue, acquire it on the graphics
@@ -212,24 +221,32 @@ namespace EmEn::Vulkan
 			/* NOTE: Get a pure transfer queue or the transfer queue for graphics. */
 			const auto * transferQueue = device->getGraphicsTransferQueue(QueuePriority::High);
 
-			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+			uint64_t transferValue = 0;
+
+			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer a buffer (1/2) !");
 
 				return false;
 			}
+
+			dstBuffer.recordPendingSubmission(*transferQueue, transferValue);
 		}
 
 		VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
 		const auto * graphicsQueue = device->getGraphicsQueue(QueuePriority::High);
 
-		if ( !graphicsQueue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle())) )
+		uint64_t graphicsValue = 0;
+
+		if ( !graphicsQueue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
 		{
 			Tracer::error(ClassId, "Unable to acquire the buffer ownership on the graphics queue (2/2) !");
 
 			return false;
 		}
+
+		dstBuffer.recordPendingSubmission(*graphicsQueue, graphicsValue);
 
 		return true;
 	}

@@ -48,6 +48,7 @@ using VmaAllocation = struct VmaAllocation_T *;
 /* Local inclusions for usages. */
 #include "DeviceMemory.hpp"
 #include "ExternalImageDescriptor.hpp"
+#include "PendingSubmissions.hpp"
 #include "PixelFactory/Pixmap.hpp"
 
 #if IS_WINDOWS
@@ -175,6 +176,18 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::destroyFromHardware() */
 			bool destroyFromHardware () noexcept override;
+
+			/**
+			 * @brief Records a submission that writes this image (an upload), so its destruction outlives it.
+			 * @param queue A reference to the queue of the submission.
+			 * @param value The timeline value received from SynchInfo::tracksCompletion().
+			 * @return void
+			 */
+			void
+			recordPendingSubmission (const Queue & queue, uint64_t value) noexcept
+			{
+				m_pendingSubmissions.record(queue, value);
+			}
 
 			/**
 			 * @brief Returns the image vulkan handle.
@@ -763,11 +776,19 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool destroyWithVMA () noexcept;
 
+			/**
+			 * @brief Hands the image and its memory to Device::destroyAfter() when an upload still writes it.
+			 * @return bool True when the destruction was handed over (nothing left to destroy here).
+			 */
+			[[nodiscard]]
+			bool destroyAfterPendingSubmissions () noexcept;
+
 			VkImage m_handle{VK_NULL_HANDLE};
 			VkImageCreateInfo m_createInfo{};
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			VkImageLayout m_currentImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
+			PendingSubmissions m_pendingSubmissions;
 			bool m_isSwapChainImage{false};
 			/* NOTE: True when the image memory was imported from an external handle (CEF accelerated paint).
 			 * Destruction always goes through the manual path — VMA never owned this allocation. */

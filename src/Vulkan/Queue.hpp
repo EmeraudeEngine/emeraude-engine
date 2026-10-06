@@ -95,10 +95,27 @@ namespace EmEn::Vulkan
 			return *this;
 		}
 
+		/**
+		 * @brief Asks the submission to also signal the queue's timeline semaphore, and to report the value.
+		 * @note The value is the submission's completion point on this queue: Queue::isReached(value) turns
+		 * true once every command submitted up to it has completed. A resource written by the submission
+		 * records it (Vulkan::PendingSubmissions) so its destruction waits for it.
+		 * @param signalledValue A writable reference receiving the timeline value, 0 if the submission failed.
+		 * @return SynchInfo &
+		 */
+		SynchInfo &
+		tracksCompletion (uint64_t & signalledValue)
+		{
+			timelineValue = &signalledValue;
+
+			return *this;
+		}
+
 		std::span< const VkSemaphore > waitSemaphores;
 		std::span< const VkPipelineStageFlags > waitStages;
 		std::span< const VkSemaphore > signalSemaphores;
 		VkFence fence{VK_NULL_HANDLE};
+		uint64_t * timelineValue{nullptr};
 	};
 
 	/**
@@ -111,6 +128,9 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanQueue"};
+
+			/** @brief The signal-semaphore capacity of a tracked submission, the queue timeline included. */
+			static constexpr size_t MaxTrackedSignalSemaphores{8};
 
 			static inline std::atomic_int s_queueInstanceCounter{0};
 
@@ -161,10 +181,51 @@ namespace EmEn::Vulkan
 			 */
 			~Queue () override
 			{
+				this->destroyTimeline();
+
 				m_device.reset();
 
 				this->setDestroyed();
 			}
+
+			/**
+			 * @brief Creates the timeline semaphore that numbers the tracked submissions of this queue.
+			 * @note Called once by the device after the queue is retrieved. Timeline semaphores are core in
+			 * Vulkan 1.2 and the device requires the feature. Without it, a tracked submission is refused.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createTimeline () noexcept;
+
+			/**
+			 * @brief Returns whether the queue owns its timeline semaphore.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasTimeline () const noexcept
+			{
+				return m_timeline != VK_NULL_HANDLE;
+			}
+
+			/**
+			 * @brief Returns whether every submission tracked up to a timeline value has completed.
+			 * @note A value of 0 (nothing tracked) is always reached. A failed counter read answers false: the
+			 * caller keeps waiting rather than destroying something the GPU may still use.
+			 * @param value A value received from SynchInfo::tracksCompletion().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isReached (uint64_t value) const noexcept;
+
+			/**
+			 * @brief Blocks until every submission tracked up to a timeline value has completed.
+			 * @param value A value received from SynchInfo::tracksCompletion().
+			 * @param timeoutNanoseconds The maximum wait.
+			 * @return bool False on a timeout or an error (a lost device).
+			 */
+			[[nodiscard]]
+			bool waitUntilReached (uint64_t value, uint64_t timeoutNanoseconds) const noexcept;
 
 			/**
 			 * @brief Returns this queue uses the queue family index of the physical device.
@@ -239,8 +300,18 @@ namespace EmEn::Vulkan
 
 		private:
 
+			/**
+			 * @brief Destroys the timeline semaphore.
+			 * @return void
+			 */
+			void destroyTimeline () noexcept;
+
 			std::shared_ptr< Device > m_device;
 			VkQueue m_handle;
+			VkSemaphore m_timeline{VK_NULL_HANDLE};
+			/* NOTE: Written under the device lock that also serializes vkQueueSubmit(), so the values reach
+			 * the queue in increasing order — the timeline's own validity rule. */
+			mutable uint64_t m_lastTimelineValue{0};
 			uint32_t m_familyQueueIndex;
 	};
 }

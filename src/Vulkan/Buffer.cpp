@@ -49,6 +49,7 @@ namespace EmEn::Vulkan
 		m_deviceMemory{std::move(other.m_deviceMemory)},
 		m_memoryAllocation{other.m_memoryAllocation},
 		m_minimumAlignment{other.m_minimumAlignment},
+		m_pendingSubmissions{std::move(other.m_pendingSubmissions)},
 		m_hostVisible{other.m_hostVisible},
 		m_hostReadable{other.m_hostReadable},
 		m_dedicatedMemory{other.m_dedicatedMemory}
@@ -76,6 +77,7 @@ namespace EmEn::Vulkan
 			m_deviceMemory = std::move(other.m_deviceMemory);
 			m_memoryAllocation = other.m_memoryAllocation;
 			m_minimumAlignment = other.m_minimumAlignment;
+			m_pendingSubmissions = std::move(other.m_pendingSubmissions);
 			m_hostVisible = other.m_hostVisible;
 			m_hostReadable = other.m_hostReadable;
 			m_dedicatedMemory = other.m_dedicatedMemory;
@@ -133,6 +135,15 @@ namespace EmEn::Vulkan
 	bool
 	Buffer::destroyFromHardware () noexcept
 	{
+		/* NOTE: An upload returns once SUBMITTED: when one still writes this buffer, the handles go to the
+		 * device's deferred path instead of being destroyed under the GPU (VUID-vkDestroyBuffer-buffer-00922). */
+		if ( this->hasDevice() && this->destroyAfterPendingSubmissions() )
+		{
+			this->setDestroyed();
+
+			return true;
+		}
+
 		const auto result =
 			this->device()->useMemoryAllocator() ?
 			this->destroyWithVMA() :
@@ -266,6 +277,45 @@ namespace EmEn::Vulkan
 
 			return false;
 		}
+
+		return true;
+	}
+
+	bool
+	Buffer::destroyAfterPendingSubmissions () noexcept
+	{
+		const auto pending = m_pendingSubmissions.takeUnreached();
+
+		if ( pending.empty() || m_handle == VK_NULL_HANDLE )
+		{
+			return false;
+		}
+
+		const auto device = this->device();
+		const auto handle = m_handle;
+
+		if ( device->useMemoryAllocator() )
+		{
+			const auto allocation = m_memoryAllocation;
+
+			device->destroyAfter(pending, [device, handle, allocation] () {
+				vmaDestroyBuffer(device->memoryAllocatorHandle(), handle, allocation);
+			});
+		}
+		else
+		{
+			/* NOTE: std::function needs a copyable callable: the memory travels in a shared_ptr. */
+			std::shared_ptr< DeviceMemory > memory{std::move(m_deviceMemory)};
+
+			device->destroyAfter(pending, [device, handle, memory] () mutable {
+				vkDestroyBuffer(device->handle(), handle, VK_NULL_HANDLE);
+
+				memory.reset();
+			});
+		}
+
+		m_handle = VK_NULL_HANDLE;
+		m_memoryAllocation = VK_NULL_HANDLE;
 
 		return true;
 	}
