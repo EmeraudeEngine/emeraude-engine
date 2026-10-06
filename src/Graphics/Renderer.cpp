@@ -2324,10 +2324,12 @@ namespace EmEn::Graphics
 
 		/* The deferred punctual lights (DeferredLightResolve): ONE snapshot per frame, read both by the opaque half
 		 * (which skips their forward passes) and by the resolve. An empty snapshot keeps the single scene pass. */
+		bool deferredLightsPrepared = false;
 		bool deferredLightsResolved = false;
 
 		if ( sceneHasContent && m_deferredPunctualLightsEnabled.load(std::memory_order_relaxed) && scenePtr->lightSet().isEnabled() && m_sceneTarget->resumeFramebuffer() != nullptr )
 		{
+			deferredLightsPrepared = true;
 			deferredLightsResolved = m_deferredLightResolve.prepare(*m_sceneTarget, scenePtr->lightSet(), scenePtr->preparedReadStateIndex(), m_sceneTarget->viewMatrices(), this->isShadowMapsEnabled());
 		}
 
@@ -2337,7 +2339,7 @@ namespace EmEn::Graphics
 		{
 			if ( deferredLightsResolved )
 			{
-				scenePtr->renderOpaque(m_sceneTarget, *commandBuffer, m_deferredLightResolve.lights());
+				scenePtr->renderOpaque(m_sceneTarget, *commandBuffer, m_deferredLightResolve.lights(), m_deferredLightResolve.invisibleLights());
 
 				/* The scene pass is CUT: the resolve samples the opaque G-buffer, then the translucent half LOADS every
 				 * attachment back in the RESUME variant of the scene pass — render-pass compatible with the pipelines
@@ -2351,6 +2353,12 @@ namespace EmEn::Graphics
 				}
 
 				commandBuffer->beginRenderPass(*m_sceneTarget->resumeFramebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
+			}
+			else if ( deferredLightsPrepared )
+			{
+				/* Nothing to resolve, yet prepare() classified this frame's lights for this target: the invisible ones
+				 * still skip their forward passes. */
+				scenePtr->renderOpaque(m_sceneTarget, *commandBuffer, {}, m_deferredLightResolve.invisibleLights());
 			}
 			else
 			{

@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
+#include "Graphics/Frustum.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SceneRenderTarget.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -604,6 +605,8 @@ void main()
 	DeferredLightResolve::prepare (const SceneRenderTarget & sceneTarget, const Scenes::LightSet & lightSet, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, bool shadowMapsEnabled) noexcept
 	{
 		m_lights.clear();
+		m_invisibleLights.clear();
+		m_candidates.clear();
 
 		if ( !hasGeometryBuffer(sceneTarget) )
 		{
@@ -628,80 +631,132 @@ void main()
 		}
 
 		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		const auto & frustum = viewMatrices.frustum(readStateIndex, 0);
+		const auto & viewPosition = viewMatrices.position(readStateIndex);
 
-		/* Snapshot and buffer are built in the SAME order, then the snapshot is sorted for the forward skip's lookup:
-		 * the buffer order is free, the lookup only asks "is this light in it". */
+		size_t visibleCount = 0;
+
 		{
 			const std::scoped_lock lock{lightSet.mutex()};
 
+			/* 1. Classify every eligible light from its published block, the frame's render state: INVISIBLE when its
+			 * reach misses the frustum (an unbounded light never does), else a candidate ranked by its distance to the
+			 * camera, minus its reach. */
+			uint32_t order = 0;
+
+			const auto classify = [&] (const Scenes::Component::AbstractLightEmitter & light, const Vector< 3, float > & position, float radius, bool isSpot) {
+				if ( radius > 0.0F && !frustum.isSeeing(Space3D::Sphere< float >{radius, position}) )
+				{
+					m_invisibleLights.emplace_back(&light);
+				}
+				else
+				{
+					const auto distance = (position - viewPosition).length();
+
+					m_candidates.emplace_back(Candidate{
+						.light = &light,
+						.rank = radius > 0.0F ? std::max(0.0F, distance - radius) : distance,
+						.order = order,
+						.isSpot = isSpot
+					});
+				}
+
+				++order;
+			};
+
+			using Scenes::Component::PointLight;
+			using Scenes::Component::SpotLight;
+
 			for ( const auto & light : lightSet.pointLights() )
 			{
-				if ( m_lights.full() )
+				if ( Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
 				{
-					break;
+					const auto & block = light->publishedBlock(readStateIndex);
+
+					classify(*light, {block[PointLight::PositionOffset + 0], block[PointLight::PositionOffset + 1], block[PointLight::PositionOffset + 2]}, block[PointLight::RadiusOffset], false);
 				}
-
-				if ( !Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
-				{
-					continue;
-				}
-
-				using Scenes::Component::PointLight;
-
-				const auto & block = light->publishedBlock(readStateIndex);
-				auto & entry = gpuData[m_lights.size()];
-
-				writeCommonTerms< PointLight::PositionOffset, PointLight::ColorOffset, PointLight::IntensityOffset, PointLight::RadiusOffset >(block, viewMatrix, entry);
-
-				entry.directionType[0] = 0.0F;
-				entry.directionType[1] = 0.0F;
-				entry.directionType[2] = 0.0F;
-				entry.directionType[3] = 1.0F;
-				entry.cone[0] = 0.0F;
-				entry.cone[1] = 0.0F;
-				entry.cone[2] = 0.0F;
-				entry.cone[3] = 0.0F;
-
-				m_lights.emplace_back(light.get());
 			}
 
 			for ( const auto & light : lightSet.spotLights() )
 			{
-				if ( m_lights.full() )
+				if ( Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
 				{
-					break;
+					const auto & block = light->publishedBlock(readStateIndex);
+
+					classify(*light, {block[SpotLight::PositionOffset + 0], block[SpotLight::PositionOffset + 1], block[SpotLight::PositionOffset + 2]}, block[SpotLight::RadiusOffset], true);
 				}
+			}
 
-				if ( !Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
-				{
-					continue;
-				}
+			visibleCount = m_candidates.size();
 
-				using Scenes::Component::SpotLight;
+			/* 2. Keep the MaxLights closest (ties by walk order: the same frame state always selects the same lights),
+			 * then put them back in walk order, so a scene under the limit fills the buffer exactly as before. */
+			if ( m_candidates.size() > MaxLights )
+			{
+				const auto closerFirst = [] (const Candidate & lhs, const Candidate & rhs) noexcept {
+					return lhs.rank < rhs.rank || (!(rhs.rank < lhs.rank) && lhs.order < rhs.order);
+				};
 
-				const auto & block = light->publishedBlock(readStateIndex);
+				const auto keptEnd = m_candidates.begin() + static_cast< std::ptrdiff_t >(MaxLights);
+
+				std::ranges::nth_element(m_candidates, keptEnd, closerFirst);
+
+				m_candidates.erase(keptEnd, m_candidates.end());
+
+				std::ranges::sort(m_candidates, {}, &Candidate::order);
+			}
+
+			/* 3. The snapshot and the buffer, in the SAME order; the snapshot is then sorted for the forward skip's
+			 * lookup (the buffer order is free, the lookup only asks "is this light in it"). At most MaxLights
+			 * candidates remain: every emplace_back() below is within capacity. */
+			for ( const auto & candidate : m_candidates )
+			{
+				const auto & block = candidate.light->publishedBlock(readStateIndex);
 				auto & entry = gpuData[m_lights.size()];
 
-				writeCommonTerms< SpotLight::PositionOffset, SpotLight::ColorOffset, SpotLight::IntensityOffset, SpotLight::RadiusOffset >(block, viewMatrix, entry);
+				if ( candidate.isSpot )
+				{
+					writeCommonTerms< SpotLight::PositionOffset, SpotLight::ColorOffset, SpotLight::IntensityOffset, SpotLight::RadiusOffset >(block, viewMatrix, entry);
 
-				/* The direction is a vector: rotated, not translated, then normalised (the view matrix may carry a scale). */
-				const Vector< 4, float > worldDirection{block[SpotLight::DirectionOffset + 0], block[SpotLight::DirectionOffset + 1], block[SpotLight::DirectionOffset + 2], 0.0F};
-				const auto viewDirection4 = viewMatrix * worldDirection;
-				auto viewDirection = Vector< 3, float >{viewDirection4[X], viewDirection4[Y], viewDirection4[Z]};
-				viewDirection.normalize();
+					/* The direction is a vector: rotated, not translated, then normalised (the view matrix may carry a scale). */
+					const Vector< 4, float > worldDirection{block[SpotLight::DirectionOffset + 0], block[SpotLight::DirectionOffset + 1], block[SpotLight::DirectionOffset + 2], 0.0F};
+					const auto viewDirection4 = viewMatrix * worldDirection;
+					auto viewDirection = Vector< 3, float >{viewDirection4[X], viewDirection4[Y], viewDirection4[Z]};
+					viewDirection.normalize();
 
-				entry.directionType[0] = viewDirection[X];
-				entry.directionType[1] = viewDirection[Y];
-				entry.directionType[2] = viewDirection[Z];
-				entry.directionType[3] = 2.0F;
-				entry.cone[0] = block[SpotLight::InnerCosAngleOffset];
-				entry.cone[1] = block[SpotLight::OuterCosAngleOffset];
-				entry.cone[2] = 0.0F;
-				entry.cone[3] = 0.0F;
+					entry.directionType[0] = viewDirection[X];
+					entry.directionType[1] = viewDirection[Y];
+					entry.directionType[2] = viewDirection[Z];
+					entry.directionType[3] = 2.0F;
+					entry.cone[0] = block[SpotLight::InnerCosAngleOffset];
+					entry.cone[1] = block[SpotLight::OuterCosAngleOffset];
+					entry.cone[2] = 0.0F;
+					entry.cone[3] = 0.0F;
+				}
+				else
+				{
+					writeCommonTerms< PointLight::PositionOffset, PointLight::ColorOffset, PointLight::IntensityOffset, PointLight::RadiusOffset >(block, viewMatrix, entry);
 
-				m_lights.emplace_back(light.get());
+					entry.directionType[0] = 0.0F;
+					entry.directionType[1] = 0.0F;
+					entry.directionType[2] = 0.0F;
+					entry.directionType[3] = 1.0F;
+					entry.cone[0] = 0.0F;
+					entry.cone[1] = 0.0F;
+					entry.cone[2] = 0.0F;
+					entry.cone[3] = 0.0F;
+				}
+
+				m_lights.emplace_back(candidate.light);
 			}
 		}
+
+		std::ranges::sort(m_invisibleLights);
+
+		m_statisticEligible.store(static_cast< uint32_t >(m_invisibleLights.size() + visibleCount), std::memory_order_relaxed);
+		m_statisticInvisible.store(static_cast< uint32_t >(m_invisibleLights.size()), std::memory_order_relaxed);
+		m_statisticResolved.store(static_cast< uint32_t >(m_lights.size()), std::memory_order_relaxed);
+		m_statisticForward.store(static_cast< uint32_t >(visibleCount - m_lights.size()), std::memory_order_relaxed);
 
 		lightBuffer.unmapMemory();
 
@@ -824,6 +879,8 @@ void main()
 	DeferredLightResolve::destroy () noexcept
 	{
 		m_lights.clear();
+		m_invisibleLights.clear();
+		m_candidates.clear();
 		m_pipeline.reset();
 		m_framebuffer.reset();
 		m_renderPass.reset();

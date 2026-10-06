@@ -1861,12 +1861,10 @@ namespace EmEn::Graphics::Material
 	StandardResource::markVideoMemoryDirty () noexcept
 	{
 		/* One registration per flush: the flag is cleared by updateVideoMemory(). */
-		if ( m_videoMemoryUpdated )
+		if ( m_videoMemoryUpdated.exchange(true, std::memory_order_acq_rel) )
 		{
 			return;
 		}
-
-		m_videoMemoryUpdated = true;
 
 		/* Before creation the flag is consumed by create() itself. After it, nothing ever
 		 * consumed it until 2026-09-13: every "dynamic property" setter of this class raised a
@@ -1886,14 +1884,17 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Lowered BEFORE the properties are read: a change made by another thread during the write registers the
+		 * material again (lowered after, it was lost until the next change — a panel could stay lit after its lamp
+		 * went out, 2026-10-06). */
+		m_videoMemoryUpdated.store(false, std::memory_order_release);
+
 		/* NOTE: Frame region 0 — a material UBO is not frame-partitioned; its content does not
 		 * change while the GPU reads it. */
 		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, 0, m_materialProperties.data()) )
 		{
 			return false;
 		}
-
-		m_videoMemoryUpdated = false;
 
 		return true;
 	}

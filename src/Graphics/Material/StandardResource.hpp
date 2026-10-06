@@ -2048,7 +2048,7 @@ namespace EmEn::Graphics::Material
 			std::shared_ptr< ImposterAtlas > m_imposterAtlas;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine, outlives every material).
 			uint32_t m_sharedUBOIndex{0};
-			bool m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty(), cleared by updateVideoMemory().
+			std::atomic< bool > m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty() (any thread), lowered by updateVideoMemory() (render thread) BEFORE it reads the properties.
 			bool m_invertRoughness{false};
 			bool m_isUsingEnvironmentCubemap{false};
 			/** @brief Explicitly authored cubemap reflection (texture mode): never replaced by SSR/RTR. */

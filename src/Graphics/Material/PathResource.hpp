@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -531,7 +532,7 @@ namespace EmEn::Graphics::Material
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine).
 			float m_luminance{DefaultLuminance};
 			uint32_t m_sharedUBOIndex{0};
-			bool m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty(), cleared by updateVideoMemory().
+			std::atomic< bool > m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty() (any thread), lowered by updateVideoMemory() (render thread) BEFORE it reads the properties.
 	};
 }
 

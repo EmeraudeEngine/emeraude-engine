@@ -664,7 +664,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	LightSet::updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept
+	LightSet::updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex, const std::optional< Vector< 3, float > > & viewPosition) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -755,10 +755,27 @@ namespace EmEn::Scenes
 					lightIndex++;
 				}
 
+				/* The punctual and line-segment lights COMPETE for the entries the directional lights left: gathered with
+				 * their rank, the closest to the view position kept. */
+				m_RTLightCandidates.clear();
+
+				uint32_t order = 0;
+
+				const auto rankOf = [&viewPosition] (const Vector< 3, float > & nearestPoint, float reach) noexcept {
+					if ( !viewPosition.has_value() )
+					{
+						return 0.0F;
+					}
+
+					const auto distance = (nearestPoint - *viewPosition).length();
+
+					return reach > 0.0F ? std::max(0.0F, distance - reach) : distance;
+				};
+
 				/* Point lights (type = 1). */
 				for ( const auto & light : m_pointLights )
 				{
-					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
+					if ( !light->isEnabled() )
 					{
 						continue;
 					}
@@ -767,7 +784,11 @@ namespace EmEn::Scenes
 					const auto & position = worldCoords.position();
 					const auto & lightColor = light->emissionChromaticity();
 
-					auto & entry = gpuData[lightIndex];
+					auto & candidate = m_RTLightCandidates.emplace_back();
+					candidate.rank = rankOf(position, light->radius());
+					candidate.order = order++;
+
+					auto & entry = candidate.data;
 					entry.colorR = lightColor[Math::X];
 					entry.colorG = lightColor[Math::Y];
 					entry.colorB = lightColor[Math::Z];
@@ -786,14 +807,12 @@ namespace EmEn::Scenes
 					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
 					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
 					entry.pad1 = 0.0F;
-
-					lightIndex++;
 				}
 
 				/* Spotlights (type = 2). */
 				for ( const auto & light : m_spotLights )
 				{
-					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
+					if ( !light->isEnabled() )
 					{
 						continue;
 					}
@@ -803,7 +822,11 @@ namespace EmEn::Scenes
 					const auto direction = worldCoords.forwardVector();
 					const auto & lightColor = light->emissionChromaticity();
 
-					auto & entry = gpuData[lightIndex];
+					auto & candidate = m_RTLightCandidates.emplace_back();
+					candidate.rank = rankOf(position, light->radius());
+					candidate.order = order++;
+
+					auto & entry = candidate.data;
 					entry.colorR = lightColor[Math::X];
 					entry.colorG = lightColor[Math::Y];
 					entry.colorB = lightColor[Math::Z];
@@ -822,8 +845,6 @@ namespace EmEn::Scenes
 					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
 					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
 					entry.pad1 = 0.0F;
-
-					lightIndex++;
 				}
 
 				/* Line lights (type = 3): ONE entry per segment of the published polyline — pos = its start, dir = start →
@@ -838,12 +859,31 @@ namespace EmEn::Scenes
 
 					const auto line = light->publishedLine(readStateIndex);
 
-					for ( uint32_t segment = 0; segment + 1 < line.pointCount && lightIndex < MaxRTLights; ++segment )
+					for ( uint32_t segment = 0; segment + 1 < line.pointCount; ++segment )
 					{
 						const auto & start = line.points[segment];
 						const auto direction = line.points[segment + 1] - start;
 
-						auto & entry = gpuData[lightIndex];
+						/* The segment's point nearest to the view position (a degenerate segment is its start). */
+						auto nearestPoint = start;
+
+						if ( viewPosition.has_value() )
+						{
+							const auto lengthSquared = Vector< 3, float >::dotProduct(direction, direction);
+
+							if ( lengthSquared > 0.0F )
+							{
+								const auto t = std::clamp(Vector< 3, float >::dotProduct(*viewPosition - start, direction) / lengthSquared, 0.0F, 1.0F);
+
+								nearestPoint = start + (direction * t);
+							}
+						}
+
+						auto & candidate = m_RTLightCandidates.emplace_back();
+						candidate.rank = rankOf(nearestPoint, line.reach);
+						candidate.order = order++;
+
+						auto & entry = candidate.data;
 						entry.colorR = line.color[Math::X];
 						entry.colorG = line.color[Math::Y];
 						entry.colorB = line.color[Math::Z];
@@ -860,9 +900,33 @@ namespace EmEn::Scenes
 						entry.outerCosAngle = 0.0F;
 						entry.pad0 = 0.0F;
 						entry.pad1 = 0.0F;
-
-						lightIndex++;
 					}
+				}
+
+				/* Keep the closest (ties by walk order: the same frame state always selects the same lights), then upload
+				 * them in walk order, so a scene under the limit fills the SSBO exactly as before. */
+				const auto freeEntries = static_cast< size_t >(MaxRTLights - lightIndex);
+
+				if ( m_RTLightCandidates.size() > freeEntries )
+				{
+					const auto closerFirst = [] (const RTLightCandidate & lhs, const RTLightCandidate & rhs) noexcept {
+						return lhs.rank < rhs.rank || (!(rhs.rank < lhs.rank) && lhs.order < rhs.order);
+					};
+
+					const auto keptEnd = m_RTLightCandidates.begin() + static_cast< std::ptrdiff_t >(freeEntries);
+
+					std::ranges::nth_element(m_RTLightCandidates, keptEnd, closerFirst);
+
+					m_RTLightCandidates.erase(keptEnd, m_RTLightCandidates.end());
+
+					std::ranges::sort(m_RTLightCandidates, {}, &RTLightCandidate::order);
+				}
+
+				for ( const auto & candidate : m_RTLightCandidates )
+				{
+					gpuData[lightIndex] = candidate.data;
+
+					lightIndex++;
 				}
 
 				m_RTLightSSBO->unmapMemory();

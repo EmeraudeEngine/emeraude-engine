@@ -493,6 +493,20 @@ namespace EmEn::Graphics
 					"Deferred punctual lights OFF from the next frame: every point and spot light is drawn by forward passes.");
 			}, Console::CommandHint::Idempotent);
 
+		this->bindCommand("getDeferredLightStatistics", "Returns what the last frame did with the unshadowed, unprojected point and spot lights (DeferredLightResolve): how many were eligible, how many missed the camera frustum (drawn by nobody), how many the resolve shaded (at most 128, the closest to the camera), and how many visible ones were left to the forward passes.", [this] () {
+			const auto statistics = m_deferredLightResolve.statistics();
+
+			std::stringstream message;
+			message <<
+				"Deferred punctual lights (last prepared frame): " << statistics.eligible << " eligible, " <<
+				statistics.invisible << " outside the frustum, " <<
+				statistics.resolved << " resolved (max " << DeferredLightResolve::MaxLights << "), " <<
+				statistics.forward << " left to the forward passes." <<
+				( m_deferredPunctualLightsEnabled.load(std::memory_order_relaxed) ? "" : " The resolve is switched OFF: these counts are from before." );
+
+			return Console::CommandResult::success(message.str());
+		});
+
 		this->bindCommand("resetOverflowCensus", "Opens a new statistics window of the overflow census (maxima, frames with an overflow), from the next rendered frame.", [this] () {
 			auto * census = m_postProcessor.overflowCensus();
 

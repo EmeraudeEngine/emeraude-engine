@@ -2148,8 +2148,11 @@ namespace EmEn::Scenes
 			 * @param deferredLights The lights the deferred resolve (Graphics::DeferredLightResolve) shades after this pass:
 			 * their forward passes are skipped for the materials that publish the deferred-lighting bit. Sorted by
 			 * address. Empty (the default) keeps every forward pass — any target without the resolve.
+			 * @param invisibleLights The lights whose reach misses THIS target's frustum (Graphics::DeferredLightResolve::
+			 * invisibleLights()): their forward passes are skipped for every opaque batch, whatever its material. Sorted
+			 * by address. Empty (the default) keeps every forward pass.
 			 */
-			void renderOpaque (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}) noexcept;
+			void renderOpaque (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}, std::span< const Component::AbstractLightEmitter * const > invisibleLights = {}) noexcept;
 
 			/**
 			 * @brief Renders all translucent objects (back-to-front for correct blending).
@@ -2899,9 +2902,11 @@ namespace EmEn::Scenes
 			 * @param sceneTransformsDS
 			 * @param deferredLights The lights resolved deferred, sorted by address (see renderOpaque()). Empty for a
 			 * translucent list, which is drawn after the resolve.
+			 * @param invisibleLights The lights whose reach misses the target's frustum, sorted by address (see
+			 * renderOpaque()). Empty for a translucent list.
 			 * @return void
 			 */
-			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}) const noexcept;
+			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}, std::span< const Component::AbstractLightEmitter * const > invisibleLights = {}) const noexcept;
 
 			/**
 			 * @brief Initializes a render target with all scene renderable instances.

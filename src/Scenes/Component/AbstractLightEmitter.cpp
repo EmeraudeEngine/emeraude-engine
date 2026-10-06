@@ -27,9 +27,11 @@
 #include "AbstractLightEmitter.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 /* Local inclusions. */
 #include "Scenes/BindlessTextureSet.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -212,6 +214,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->syncShadowMapRendering();
+		this->syncLinkedEmissiveMaterial();
 	}
 
 	bool
@@ -222,6 +225,7 @@ namespace EmEn::Scenes::Component
 			this->disableFlag(Enabled);
 
 			this->syncShadowMapRendering();
+			this->syncLinkedEmissiveMaterial();
 
 			return false;
 		}
@@ -231,6 +235,7 @@ namespace EmEn::Scenes::Component
 		++m_logicGeneration;
 
 		this->syncShadowMapRendering();
+		this->syncLinkedEmissiveMaterial();
 
 		return true;
 	}
@@ -311,6 +316,61 @@ namespace EmEn::Scenes::Component
 		this->onIntensityChange(m_intensity);
 
 		this->requestVideoMemoryUpdate();
+
+		this->syncLinkedEmissiveMaterial();
+	}
+
+	bool
+	AbstractLightEmitter::linkEmissiveMaterial (const std::shared_ptr< Graphics::Material::StandardResource > & material, float emissiveStrength) noexcept
+	{
+		if ( material == nullptr )
+		{
+			Tracer::error(this->getComponentType(), "linkEmissiveMaterial() refused a null material !");
+
+			return false;
+		}
+
+		if ( !std::isfinite(emissiveStrength) || emissiveStrength < 0.0F )
+		{
+			TraceError{this->getComponentType()} << "linkEmissiveMaterial() refused the emissive strength " << emissiveStrength << " (finite, >= 0) !";
+
+			return false;
+		}
+
+		if ( !(m_intensity > 0.0F) )
+		{
+			TraceError{this->getComponentType()} << "linkEmissiveMaterial() needs a positive intensity to follow (it is " << m_intensity << ") !";
+
+			return false;
+		}
+
+		m_linkedEmissiveMaterial = material;
+		m_linkedEmissiveStrength = emissiveStrength;
+		m_linkedIntensity = m_intensity;
+
+		this->syncLinkedEmissiveMaterial();
+
+		return true;
+	}
+
+	void
+	AbstractLightEmitter::unlinkEmissiveMaterial () noexcept
+	{
+		m_linkedEmissiveMaterial.reset();
+	}
+
+	void
+	AbstractLightEmitter::syncLinkedEmissiveMaterial () const noexcept
+	{
+		if ( m_linkedEmissiveMaterial == nullptr )
+		{
+			return;
+		}
+
+		/* m_linkedIntensity > 0 by linkEmissiveMaterial(); an intensity <= 0 shows no emission. */
+		const auto emissiveStrength = this->isEnabled() ? m_linkedEmissiveStrength * std::max(0.0F, m_intensity) / m_linkedIntensity : 0.0F;
+
+		m_linkedEmissiveMaterial->setEmissiveStrengthValue(emissiveStrength);
 	}
 
 	uint32_t

@@ -51,6 +51,46 @@ ScenePass (CLEAR pass)  : opaque — ambient, sun, the NON-deferred lights' pass
 - `prepare()` makes every resource the frame needs BEFORE the scene skips a single pass; `record()` cannot fail
   afterwards (a call-order defect returns false, logged nowhere because it cannot happen in the renderer's order).
 
+## The frame's selection — invisible, resolved, forward (2026-10-06)
+
+`prepare()` sorts every eligible light, from its published block, into ONE of three sets (owner decision 2026-10-06,
+asked by the `labyrinth` demo: 548 ceiling lamps).
+
+| Set | Rule | Drawn by |
+|---|---|---|
+| INVISIBLE | radius > 0 and its sphere misses the main camera's frustum (`Frustum::isSeeing(Sphere)`, the frame's state) | nobody: `invisibleLights()`, skipped by `Scene::renderOpaque()` for EVERY opaque batch of that target, whatever its material |
+| RESOLVED | the `MaxLights` (128) visible ones closest to the camera, by `max(0, distance - radius)`; an unbounded light (radius 0) ranks by its distance | the resolve |
+| FORWARD | the visible ones beyond 128 | the forward passes, as before (same BRDF) |
+
+- The INVISIBLE skip is exact: the G-buffer holds only what the frustum sees, so a light whose reach misses the
+  frustum lights no visible pixel. Light-volume culling of deferred shading (S. Hargreaves, "Deferred Shading",
+  GDC 2004; O. Shishkovtsov, GPU Gems 2 ch. 9, 2005). An unbounded light is never invisible.
+- It applies to the opaque lists of the MAIN scene target only — the one `prepare()` was given. Cubemaps, render to
+  textures and the translucent lists keep every forward pass. It is passed even on a frame with nothing to resolve
+  (`Renderer`: `prepare()` ran, answered false, the invisible set is still this target's).
+- The 128 used to be the first 128 of the light SET's order — a `std::set` of `shared_ptr`, i.e. ADDRESS order,
+  wherever the lamps were. Ties are broken by the walk order, and the kept ones are put back in that order: a scene
+  under 128 visible lights fills the buffer exactly as before.
+- The RT light SSBO (`LightSet::updateVideoMemory()`, `MaxRTLights` 128) ranks the same way around the main camera
+  (`Scene::updateVideoMemory()` passes `mainRenderTarget()->viewMatrices().position()`), directional lights first,
+  WITHOUT a frustum test (rays leave the screen). A stopgap: light sampling is the real answer (item
+  `rt-many-lights-sampling`). No main target = no ranking, the sets' order.
+- `Core.RendererService.getDeferredLightStatistics()`: eligible / outside the frustum / resolved / left to the forward
+  passes, for the last prepared frame (atomics: render thread writes, console reads).
+
+⚠️ **A frustum is not an occlusion test.** In a maze, from the `labyrinth` spawn looking north, 498 of 548 lamps are
+INSIDE the frustum behind the walls: 128 resolved, 370 left to the forward passes. Measured (RTX 3070 Ti, 2880×1620,
+RT lane, validation ON, same pose, 2026-10-06): `ScenePass` 31.5 ms forward-only → 18.0 ms with the resolve
+(`DeferredLights` 1.6 ms); 0 VUID. The remaining forward cost is the occluded lamps (item
+`deferred-resolve-occluded-lights-go-forward`).
+
+Exactness of the INVISIBLE skip (same instance, same pose, the 55 flickering lamps switched off, scene effects
+bypassed; 493 eligible, 46 invisible, 128 resolved, 319 forward): deferred/deferred captures bit-identical; deferred vs
+forward-only (which draws all 493) 1.41 % of the pixels > 2 levels, 0.045 % > 32, frame energy ratio 1.00005, forward
+BRIGHTER in 99.9 % of the > 32-level pixels — the forward depth-bias leak documented above, not a dropped light (a
+wrongly skipped lamp would DARKEN the deferred frame over a whole pool). `lighten-marbles` at launch: 33 eligible, 23
+invisible, 10 resolved, 0 forward, 0 VUID.
+
 ## The shading — the forward pass, term for term
 
 Read off a generated `RenderableInstancePointLightPassFragmentShader` (`Core/Graphics/Shader/EnableSourceCodeDump`):
@@ -128,6 +168,8 @@ sun off and the sky's ambient on): compare at night, or the comparison proves no
 
 - `Core/Graphics/DeferredPunctualLights/Enabled` (launch, default true), `Core.RendererService.setDeferredPunctualLights(0|1)` (live).
 - GPU profiler: the `DeferredLights` scope inside `ScenePass` (`Core/Graphics/GPUProfiler/Enabled`).
+- `Core.RendererService.getDeferredLightStatistics()`: what the last frame did with the eligible lights (§ The frame's
+  selection).
 
 ## Not yet
 

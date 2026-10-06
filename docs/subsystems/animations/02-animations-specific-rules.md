@@ -76,6 +76,28 @@ light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlick
 light->setColor(LampFlicker::colorForHealth(healthyColor, 0.5F));
 ```
 
+### A lamp's visible panel follows it — `linkEmissiveMaterial()` (2026-10-06)
+
+A flickering light whose bulb, panel or tube keeps a steady glow reads wrong. A SECOND animation on the material
+would desynchronise (two `AnimationInterface` registrations advance independently, see above), so the LIGHT drives
+the material (owner decision 2026-10-06, `labyrinth`):
+
+```cpp
+/* Linked while the light is at its NOMINAL intensity: the panel's nominal luminance is the reference. */
+light->linkEmissiveMaterial(panelMaterial, panelNominalNits);
+light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlicker >(candela, health));
+```
+
+- `AbstractLightEmitter::linkEmissiveMaterial(material, emissiveStrength)` records the intensity at the call (I₀ > 0,
+  refused otherwise); after every intensity change — any `Intensity` animation, the console, `setLuminousPower()` —
+  and every `enable()`/`toggle()`, the material's emissive strength becomes `emissiveStrength × I / I₀`, and 0 while
+  the light is disabled. Written through `StandardResource::setEmissiveStrengthValue()` (the dynamic path, uploaded
+  on the next frame). `unlinkEmissiveMaterial()` stops it.
+- ONE material per light (a shared one follows the last light that changed), LOADED before the link
+  (`getOrCreateResourceSync()`: no loading thread may write it concurrently).
+- Proof (`labyrinth`, 2026-10-06): switching its 55 flickering lamps off from the console takes their panel from 133
+  to 19.6 (the ceiling around it), back on 133; a steady lamp's panel 168.8 → 169.0.
+
 ### FlameFlicker — a flame is not a failing lamp (2026-09-28)
 
 `LampFlicker` models a bad contact: steady, then cuts. An open flame never cuts; it BREATHES, at a

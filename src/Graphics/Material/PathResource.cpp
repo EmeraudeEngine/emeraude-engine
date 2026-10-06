@@ -231,14 +231,17 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* Lowered BEFORE the properties are read: a change made by another thread during the write registers the
+		 * material again (lowered after, it was lost until the next change — a panel could stay lit after its lamp
+		 * went out, 2026-10-06). */
+		m_videoMemoryUpdated.store(false, std::memory_order_release);
+
 		/* NOTE: Frame region 0, like every material UBO: only the LOOK lives here, and a look change reaching a frame
 		 * in flight one frame early is harmless. The points, which move every tick, never come here. */
 		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, 0, m_properties.data()) )
 		{
 			return false;
 		}
-
-		m_videoMemoryUpdated = false;
 
 		return true;
 	}
@@ -247,12 +250,10 @@ namespace EmEn::Graphics::Material
 	PathResource::markVideoMemoryDirty () noexcept
 	{
 		/* One registration per flush: the flag is cleared by updateVideoMemory(). Before creation, create() uploads. */
-		if ( m_videoMemoryUpdated || m_renderer == nullptr || !this->isCreated() )
+		if ( m_renderer == nullptr || !this->isCreated() || m_videoMemoryUpdated.exchange(true, std::memory_order_acq_rel) )
 		{
 			return;
 		}
-
-		m_videoMemoryUpdated = true;
 
 		m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
 	}

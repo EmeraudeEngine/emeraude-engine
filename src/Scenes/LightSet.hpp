@@ -34,6 +34,7 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <type_traits>
 #include <utility>
@@ -80,7 +81,11 @@ namespace EmEn::Scenes
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"LightSet"};
 
-			/** @brief Maximum number of lights in the RT SSBO. */
+			/**
+			 * @brief Maximum number of lights in the RT SSBO.
+			 * @note The directional lights take their entries first; the point, spot and line-segment lights then compete
+			 * for the rest, the closest to the camera first (updateVideoMemory(), 2026-10-06).
+			 */
 			static constexpr uint32_t MaxRTLights{128};
 
 			/**
@@ -605,13 +610,18 @@ namespace EmEn::Scenes
 			void destroyRetiredLights (Scene & scene, uint32_t framesInFlight) noexcept;
 
 			/**
-			 * @brief Uploads every light's PUBLISHED uniform block to the GPU.
+			 * @brief Uploads every light's PUBLISHED uniform block to the GPU, and fills the RT light SSBO.
+			 * @note Beyond MaxRTLights, the RT SSBO keeps the directional lights and the punctual and line-segment lights
+			 * CLOSEST to the view position, by max(0, distance - reach) (an unbounded light ranks by its distance). No
+			 * frustum test: the rays leave the screen. A stopgap for many lights — light sampling (light BVH, ReSTIR) is
+			 * the real answer (engine docs/todo/rt-many-lights-sampling.md).
 			 * @param readStateIndex The render state-valid index to read data.
 			 * @param frameIndex The frame-in-flight region to write.
+			 * @param viewPosition The main camera's world position, or nothing (no ranking: the sets' order, as before).
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept;
+			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex, const std::optional< Base::Math::Vector< 3, float > > & viewPosition) const noexcept;
 
 			/**
 			 * @brief Returns the RT light SSBO for binding in descriptor sets.
@@ -653,6 +663,17 @@ namespace EmEn::Scenes
 			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayoutWithShadow (Vulkan::LayoutManager & layoutManager) noexcept;
 
 		private:
+
+			/** @brief A punctual or line-segment entry competing for the RT SSBO. */
+			struct RTLightCandidate
+			{
+				/** @brief The entry, written as it will be uploaded. */
+				GPULightData data{};
+				/** @brief max(0, distance to the view position - reach), the distance for an unbounded light, 0 without a view position. */
+				float rank{0.0F};
+				/** @brief The position in the sets' walk: the tie-break and the upload order. */
+				uint32_t order{0};
+			};
 
 			/**
 			 * @brief Creates the descriptor set for a light within the shared uniform buffer object.
@@ -700,6 +721,9 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_lineLightUBO;
 			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTLightSSBO;
 			mutable uint32_t m_RTLightCount{0};
+			/** @brief The punctual and line-segment entries competing for the RT SSBO (updateVideoMemory(), render thread,
+			 * guarded by m_lightsAccess, capacity kept across frames). */
+			mutable std::vector< RTLightCandidate > m_RTLightCandidates;
 			mutable std::mutex m_lightsAccess;
 			/** @brief Lights removed from the sets, each stamped with the render frame counter at removal. Guarded by m_lightsAccess. */
 			std::vector< std::pair< std::shared_ptr< Component::AbstractLightEmitter >, uint64_t > > m_retiredLights;

@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -105,6 +106,16 @@ namespace EmEn::Graphics
 	 * Rendering for Current and Future Rendering Pipelines", SIGGRAPH 2010 course. A per-pixel loop over the snapshot,
 	 * rejected by distance first (owner decision); tiled culling (J. Andersson, "DirectX 11 Rendering in Battlefield 3",
 	 * GDC 2011) only if it is measured to be needed.
+	 *
+	 * The frame's selection (2026-10-06, owner decision): prepare() sorts every eligible light into ONE of three sets.
+	 *  - INVISIBLE: its reach (a sphere, radius > 0) misses the main camera's frustum. It cannot light a pixel of this
+	 *    target — the G-buffer holds only what the frustum sees — so neither the resolve nor the forward path draws it
+	 *    (invisibleLights(), skipped by Scene::renderOpaque() for every opaque batch). The light-volume culling of
+	 *    deferred shading: S. Hargreaves, "Deferred Shading", GDC 2004; O. Shishkovtsov, "Deferred Shading in
+	 *    S.T.A.L.K.E.R.", GPU Gems 2, ch. 9, 2005. An unbounded light (radius 0) is never invisible.
+	 *  - RESOLVED: the MaxLights visible lights CLOSEST to the camera, by max(0, distance - radius) (an unbounded light
+	 *    ranks by its distance). The first MaxLights in the set's order used to be taken, wherever they were.
+	 *  - FORWARD: the visible lights beyond MaxLights, shaded by the forward path as before (the same BRDF).
 	 */
 	class EMEN_API DeferredLightResolve final
 	{
@@ -162,6 +173,50 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the frame's eligible lights whose reach misses the main camera's frustum, sorted by address.
+			 * @note Valid for the target prepare() was given, whatever prepare() answered: Scene::renderOpaque() skips
+			 * their forward passes for every opaque batch of that target. Empty before the first prepare() of a frame.
+			 * @return std::span< const Scenes::Component::AbstractLightEmitter * const >
+			 */
+			[[nodiscard]]
+			std::span< const Scenes::Component::AbstractLightEmitter * const >
+			invisibleLights () const noexcept
+			{
+				return {m_invisibleLights.data(), m_invisibleLights.size()};
+			}
+
+			/** @brief What the last prepare() did with the eligible lights (a console snapshot; the counts are read apart). */
+			struct Statistics
+			{
+				/** @brief The eligible lights (unshadowed, unprojected, enabled point and spot lights). */
+				uint32_t eligible{0};
+				/** @brief Those whose reach missed the frustum: drawn by nobody. */
+				uint32_t invisible{0};
+				/** @brief Those the resolve shades. */
+				uint32_t resolved{0};
+				/** @brief The visible ones beyond MaxLights, left to the forward passes. */
+				uint32_t forward{0};
+			};
+
+			/**
+			 * @brief Returns what the last prepare() did with the eligible lights.
+			 * @note Thread-safe (written by the render thread, read by the console). Zeros before the first prepare(),
+			 * and the last values stay while the renderer does not call prepare() (resolve switched off, no scene).
+			 * @return Statistics
+			 */
+			[[nodiscard]]
+			Statistics
+			statistics () const noexcept
+			{
+				return {
+					.eligible = m_statisticEligible.load(std::memory_order_relaxed),
+					.invisible = m_statisticInvisible.load(std::memory_order_relaxed),
+					.resolved = m_statisticResolved.load(std::memory_order_relaxed),
+					.forward = m_statisticForward.load(std::memory_order_relaxed)
+				};
+			}
+
+			/**
 			 * @brief Records the resolve, OUTSIDE any render pass, after the opaque half of the scene pass.
 			 * @note Leaves every G-buffer attachment back in its attachment layout, ready for the translucent half.
 			 * @param commandBuffer A reference to the command buffer.
@@ -189,6 +244,19 @@ namespace EmEn::Graphics
 
 		private:
 
+			/** @brief A visible eligible light competing for the resolve. */
+			struct Candidate
+			{
+				/** @brief The light (its published block carries everything the buffer needs). */
+				const Scenes::Component::AbstractLightEmitter * light{nullptr};
+				/** @brief max(0, distance to the camera - radius), the distance for an unbounded light. */
+				float rank{0.0F};
+				/** @brief The position in the light set's walk (points, then spots): the tie-break and the buffer order. */
+				uint32_t order{0};
+				/** @brief True for a spot light, false for a point light. */
+				bool isSpot{false};
+			};
+
 			/**
 			 * @brief Creates the sampler, the descriptor set layout, the per-frame sets and buffers and the pipeline layout.
 			 * @return bool
@@ -214,9 +282,17 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
 			Base::StaticVector< const Scenes::Component::AbstractLightEmitter *, MaxLights > m_lights;
+			/** @brief The frame's invisible lights, sorted by address (render thread only, capacity kept across frames). */
+			std::vector< const Scenes::Component::AbstractLightEmitter * > m_invisibleLights;
+			/** @brief The frame's visible eligible lights before the selection (render thread only, capacity kept). */
+			std::vector< Candidate > m_candidates;
 			/** @brief The scene colour view the framebuffer was made for: a recreated scene target brings a new one (a weak
 			 * reference: an expired one can never compare equal to its successor, whatever address it reuses). */
 			std::weak_ptr< Vulkan::ImageView > m_targetColorView;
+			std::atomic< uint32_t > m_statisticEligible{0};
+			std::atomic< uint32_t > m_statisticInvisible{0};
+			std::atomic< uint32_t > m_statisticResolved{0};
+			std::atomic< uint32_t > m_statisticForward{0};
 			bool m_sharedResourcesCreated{false};
 	};
 }

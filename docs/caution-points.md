@@ -1372,6 +1372,15 @@ sat on one).
 > structural hazard. Frame-partitioning the material UBO is the day a property must be exact per
 > frame. **Rule:** a "dynamic property" is only dynamic if something uploads it — grep the consumer
 > of a dirty flag before trusting the word in a doc comment.
+>
+> **Addendum (2026-10-06): the flag was lowered AFTER the upload, a lost update.** A change made by
+> the logic thread between `writeElementData()` and `m_videoMemoryUpdated = false` found the flag
+> still up, did not register, and was then forgotten until the NEXT change — the last value of a
+> sequence (a lamp switched off, its linked panel: `AbstractLightEmitter::linkEmissiveMaterial()`)
+> could stay on the GPU for ever. `StandardResource`, `BeamResource` and `PathResource` now hold a
+> `std::atomic< bool >`, raised by `exchange(true)` and lowered BEFORE the properties are read. The
+> property floats themselves are still written by one thread while another copies them (engine item
+> `material-properties-written-across-threads`).
 
 ### Fixed: a component moving its OWN entity from processLogics() deadlocked the logic thread (Sep 2026)
 

@@ -61,6 +61,11 @@ namespace EmEn
 	{
 		class SharedUniformBuffer;
 
+		namespace Material
+		{
+			class StandardResource;
+		}
+
 		namespace RenderTarget
 		{
 			class Abstract;
@@ -209,6 +214,29 @@ namespace EmEn::Scenes::Component
 			 * @return void
 			 */
 			void setIntensity (float intensity) noexcept;
+
+			/**
+			 * @brief Links a material whose EMISSION follows this light: the visible panel, bulb or tube of a lamp.
+			 * @note From now on its emissive strength is `emissiveStrength × intensity() / I₀` (I₀ = the intensity at this
+			 * call) after every intensity change — an Intensity animation (Animations::LampFlicker), the console,
+			 * setLuminousPower() — and 0 while the light is disabled. ONE driver for both, so they never desynchronise
+			 * (two animations would: AnimatableInterface advances them independently). Owner decision 2026-10-06.
+			 * Written through StandardResource::setEmissiveStrengthValue(), the material's dynamic path (flushed to the
+			 * GPU on the next frame). One material per light: a material shared by several lights follows the last one.
+			 * @pre The material is LOADED (its factory has run: getOrCreateResourceSync()), so no loading thread writes
+			 * its properties concurrently.
+			 * @param material A reference to the material smart pointer.
+			 * @param emissiveStrength The emissive strength (nits) the material shows at the CURRENT intensity, finite, >= 0.
+			 * @return bool False (traced) on a null material, a refused strength, or a current intensity <= 0 (no ratio).
+			 */
+			[[nodiscard]]
+			bool linkEmissiveMaterial (const std::shared_ptr< Graphics::Material::StandardResource > & material, float emissiveStrength) noexcept;
+
+			/**
+			 * @brief Stops driving the linked material (it keeps its last emissive strength).
+			 * @return void
+			 */
+			void unlinkEmissiveMaterial () noexcept;
 
 			/**
 			 * @brief Returns the colour as it was authored (setColor()).
@@ -664,6 +692,12 @@ namespace EmEn::Scenes::Component
 			void removeFromSharedUniformBuffer () noexcept;
 
 			/**
+			 * @brief Writes the linked material's emissive strength from the current intensity and enabled state.
+			 * @return void
+			 */
+			void syncLinkedEmissiveMaterial () const noexcept;
+
+			/**
 			 * @brief Declares to update light on the GPU.
 			 * @return void
 			 */
@@ -828,6 +862,12 @@ namespace EmEn::Scenes::Component
 			uint32_t m_currentFrameRegion{0};
 			uint32_t m_sharedUBOIndex{0};
 			std::shared_ptr< Vulkan::TextureInterface > m_colorProjectionTexture;
+			/** @brief The material whose emission follows this light (linkEmissiveMaterial()), or none. Logic thread. */
+			std::shared_ptr< Graphics::Material::StandardResource > m_linkedEmissiveMaterial;
+			/** @brief The linked material's emissive strength at m_linkedIntensity. */
+			float m_linkedEmissiveStrength{0.0F};
+			/** @brief The intensity at the link, > 0. */
+			float m_linkedIntensity{0.0F};
 			uint32_t m_colorProjectionBindlessIndex{NoColorProjectionTexture};
 			float m_colorProjectionBoost{0.0F};
 	};

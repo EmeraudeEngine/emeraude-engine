@@ -530,7 +530,16 @@ namespace EmEn::Scenes
 			}
 		});
 
-		if ( !m_lightSet.updateVideoMemory(readStateIndex, frameIndex) )
+		/* The RT light SSBO keeps the lights closest to the MAIN camera when there are more than it holds
+		 * (LightSet::MaxRTLights). Published render state, like everything this frame reads. */
+		std::optional< Vector< 3, float > > viewPosition;
+
+		if ( const auto mainRenderTarget = m_AVConsoleManager.graphicsRenderer().mainRenderTarget(); mainRenderTarget != nullptr )
+		{
+			viewPosition = mainRenderTarget->viewMatrices().position(readStateIndex);
+		}
+
+		if ( !m_lightSet.updateVideoMemory(readStateIndex, frameIndex, viewPosition) )
 		{
 			Tracer::error(ClassId, "Unable to update the light set data to the video memory !");
 		}
@@ -1003,7 +1012,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderOpaque (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > deferredLights) noexcept
+	Scene::renderOpaque (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > deferredLights, std::span< const Component::AbstractLightEmitter * const > invisibleLights) noexcept
 	{
 		if ( !m_renderLists[Opaque].empty() )
 		{
@@ -1056,7 +1065,7 @@ namespace EmEn::Scenes
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[OpaqueLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS, deferredLights);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS, deferredLights, invisibleLights);
 		}
 	}
 
@@ -2199,7 +2208,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights) const noexcept
+	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights, std::span< const Component::AbstractLightEmitter * const > invisibleLights) const noexcept
 	{
 		/* State tracker for redundant bind elimination (lighted list is state-sorted). */
 		RenderableInstance::RenderStateTracker tracker{};
@@ -2262,8 +2271,10 @@ namespace EmEn::Scenes
 				batchLightsDeferred = batchMaterial != nullptr && batchMaterial->deferredLightingEligible();
 			}
 
-			const auto isDeferred = [batchLightsDeferred, deferredLights] (const Component::AbstractLightEmitter * light) noexcept {
-				return batchLightsDeferred && std::ranges::binary_search(deferredLights, light);
+			/* A light whose reach misses the target's frustum lights no visible pixel, whatever the material
+			 * (Graphics::DeferredLightResolve::invisibleLights()): both skips are "nothing to draw here". */
+			const auto isSkippedLight = [batchLightsDeferred, deferredLights, invisibleLights] (const Component::AbstractLightEmitter * light) noexcept {
+				return (batchLightsDeferred && std::ranges::binary_search(deferredLights, light)) || std::ranges::binary_search(invisibleLights, light);
 			};
 
 			/* Loop through all directional lights. */
@@ -2313,7 +2324,7 @@ namespace EmEn::Scenes
 			/* Loop through all point lights. */
 			for ( const auto & light : pointLights )
 			{
-				if ( !light->isEnabled() || isDeferred(light.get()) )
+				if ( !light->isEnabled() || isSkippedLight(light.get()) )
 				{
 					continue;
 				}
@@ -2356,7 +2367,7 @@ namespace EmEn::Scenes
 			/* Loop through all spotlights. */
 			for ( const auto & light : spotLights )
 			{
-				if ( !light->isEnabled() || isDeferred(light.get()) )
+				if ( !light->isEnabled() || isSkippedLight(light.get()) )
 				{
 					continue;
 				}
