@@ -67,9 +67,11 @@ namespace EmEn::Graphics
 
 		m_cacheDirectory = m_primaryServices.fileSystem().cacheDirectory(CacheDirectoryName);
 
-		if ( std::error_code error; !std::filesystem::exists(m_cacheDirectory, error) )
+		/* Through the base IO:: wrappers: a cache directory past MAX_PATH works on Windows (\\?\), even without the
+		 * system's LongPathsEnabled (Windows, 2026-10-07: the raw calls disabled the cache under a long --cache-directory). */
+		if ( !Base::IO::directoryExists(m_cacheDirectory) )
 		{
-			if ( !std::filesystem::create_directories(m_cacheDirectory, error) )
+			if ( !Base::IO::createDirectory(m_cacheDirectory) )
 			{
 				TraceError{ClassId} << "Failed to create the texture cache directory '" << m_cacheDirectory << "' ! The cache is disabled.";
 
@@ -116,7 +118,7 @@ namespace EmEn::Graphics
 				return true;
 			}
 
-			if ( std::filesystem::remove(entry.path(), error) )
+			if ( Base::IO::eraseFile(entry.path()) )
 			{
 				++erasedCount;
 			}
@@ -175,7 +177,7 @@ namespace EmEn::Graphics
 	{
 		const auto path = this->cacheFilePath(key);
 
-		std::ifstream file{path, std::ios::binary | std::ios::ate};
+		std::ifstream file{Base::IO::systemPath(path), std::ios::binary | std::ios::ate};
 
 		if ( !file.is_open() )
 		{
@@ -260,7 +262,7 @@ namespace EmEn::Graphics
 
 		const auto path = this->cacheFilePath(key);
 
-		std::ofstream file{path, std::ios::binary | std::ios::trunc};
+		std::ofstream file{Base::IO::systemPath(path), std::ios::binary | std::ios::trunc};
 
 		if ( !file.is_open() )
 		{
