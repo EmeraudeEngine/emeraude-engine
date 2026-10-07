@@ -378,7 +378,22 @@ namespace EmEn::Graphics::Renderable
 		auto & settings = this->serviceProvider().primaryServices().settings();
 		const auto lodEnabled = settings.getOrSetDefault< bool >(GraphicsLODEnableAutomaticGenerationKey, DefaultGraphicsLODEnableAutomaticGeneration);
 
-		if ( lodEnabled )
+		/* NOTE: A mesh that carries its own levels is left alone (owner, 2026-10-07): generateLODLevel() appends a level
+		 * only at m_geometry.size() == LODLevel, so every automatic level of such a mesh was decimated, uploaded, then
+		 * dropped (citadel: the 36 levels of the 12 tree-stock meshes, ~120 k triangles each, for nothing). */
+		size_t carriedLevels = 0;
+
+		{
+			const std::scoped_lock lock{m_geometryMutex};
+
+			carriedLevels = m_geometry.size();
+		}
+
+		if ( lodEnabled && carriedLevels > 1 )
+		{
+			TraceInfo{ClassId} << "'" << this->name() << "' carries its own " << carriedLevels << " LOD levels: no automatic LOD.";
+		}
+		else if ( lodEnabled )
 		{
 			auto sourceGeometry = std::dynamic_pointer_cast< IndexedVertexResource >(m_geometry[0]);
 

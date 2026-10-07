@@ -5708,6 +5708,23 @@ writer is announced (it was undefined behaviour already).
 > Fixed by queue timelines + `Device::destroyAfter()` (`docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md`):
 > citadel with automatic LOD, 40 VUIDs → 0. **An asynchronous writer of a buffer / image must track its submission
 > (`SynchInfo::tracksCompletion()`) and record it on the object (`recordPendingSubmission()`).**
+> Accepted on the three OS (engine 3c498654, 2026-10-07): macOS M2, Windows NVIDIA + AMD (the citadel teardown's 12
+> VUIDs of 2026-10-02 gone, 0 / 6 runs).
+
+### ⚠️⚠️ `onDependenciesLoaded()` ran TWICE at once — the second texture creation destroyed the first one's image (2026-10-07, FIXED)
+
+> [!CAUTION]
+> A validation error `vkBindImageMemory(): image is VK_NULL_HANDLE` (`UNASSIGNED-GeneralParameterError-RequiredHandle` —
+> a `grep VUID-` does NOT count it) or `VUID-vkBindImageMemory-image-parameter`, during a texture-heavy load, rare
+> (~1 run in 10). `ResourceTrait::checkDependencies()` decided under the lock that every dependency was loaded, then
+> called `onDependenciesLoaded()` outside it WITHOUT changing the status: the last dependency's completion (pool thread
+> A) and the resource's own `setLoadSuccess()` (pool thread B) both passed. Two `Texture2D::createFromPixelData()` on
+> one texture: B's `m_image = std::make_shared< Image >(…)` released A's image while VMA was creating it. Now the
+> finalization is CLAIMED under the lock (`m_dependenciesFinalizing`). How it was found: a temporary trap in
+> `Image::destroyFromHardware()` when another thread was inside `createOnHardware()` of the same object, run under gdb
+> (`thread apply all bt`): the destroyer's stack showed `createFromPixelData()` → shared_ptr release.
+> Not re-run: the 2026-09-30 variant `VUID-vkCmdCopyBufferToImage-dstImage-parameter` (an upload recorded after its
+> image was destroyed — the same double creation fits it) and the "20 heavy glTF loads then shutdown" teardown.
 
 ### A LOAD variant of a render pass must be IDENTICAL but for its load/store ops and layouts — subpass dependencies included (2026-10-04)
 

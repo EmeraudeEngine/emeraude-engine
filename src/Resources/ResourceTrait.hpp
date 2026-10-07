@@ -1315,5 +1315,7 @@ namespace EmEn::Resources
 			bool m_localDataRetained{false};
 			bool m_localDataReleased{false};
 			bool m_localDataReloading{false};
+			/* NOTE: Guarded by m_dependenciesAccess: true while ONE thread runs onDependenciesLoaded() (checkDependencies()). */
+			bool m_dependenciesFinalizing{false};
 	};
 }

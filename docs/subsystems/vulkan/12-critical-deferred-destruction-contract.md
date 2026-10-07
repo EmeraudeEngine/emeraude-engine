@@ -70,9 +70,14 @@
 >   submission, `recordPendingSubmission()` on the object.
 >
 > Proof (Linux, RTX 3070 Ti, validation on): citadel with `Core/Graphics/LOD/EnableAutomaticGeneration` true, 60 s:
-> **40 VUIDs → 0** (20 × 00922 + 20 × 05137), the same 94 LOD levels ready. citadel, sponza, gltf-loader: 0 VUID.
-> The culprit of that run: `MultiLayerMeshResource::generateLODLevel()` drops every generated level of a mesh that
-> carries its own levels, right after its upload (item `automatic-lod-decimates-meshes-with-explicit-levels`).
-> ⚠️ NOT covered: an image destroyed by another thread while it is still being CREATED (`vkBindImageMemory`
-> on an invalid handle, seen once in three runs of the cyclic-BSP WAD) — an ownership race, item
-> `texture-destroyed-while-being-created`.
+> **40 VUIDs → 0** (20 × 00922 + 20 × 05137), the same 94 LOD levels ready. citadel, sponza, asset-loader,
+> light-and-shadow-debug: 0 validation error (⚠️ the first record named `gltf-loader`, a demo id that no longer exists:
+> that run loaded nothing; re-measured with `asset-loader`). **ACCEPTED on the three OS (engine 3c498654,
+> 2026-10-07):** macOS M2 (MoltenVK exposes the timeline) citadel LOD 0 VUID / 0 SYNC-HAZARD, 94 levels; Windows
+> NVIDIA RTX 3060 + AMD iGPU citadel LOD 94 levels, 0 upload VUID, and the 2026-10-02 citadel teardown (12 VUIDs)
+> 0 / 6 runs.
+> The culprit of that run: `MultiLayerMeshResource::generateLODLevel()` dropped every generated level of a mesh that
+> carried its own levels, right after its upload — such a mesh is now skipped (graphics doc 20-15b, 2026-10-07).
+> ⚠️ NOT covered by this mechanism, and fixed separately (2026-10-07): an image destroyed by another thread while
+> it was still being CREATED (`vkBindImageMemory` on `VK_NULL_HANDLE`) — `onDependenciesLoaded()` ran twice at once
+> (resources doc 07, "`onDependenciesLoaded()` runs ONCE").

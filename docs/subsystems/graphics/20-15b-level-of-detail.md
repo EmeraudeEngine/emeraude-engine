@@ -15,6 +15,11 @@ LOD behavior is controlled via `Core/Graphics/LOD/` settings in `SettingKeys.hpp
 
 When `EnableAutomaticGeneration = true`, LOD meshes are generated automatically in `onDependenciesLoaded()` for both `SimpleMeshResource` and `MeshResource`:
 
+0. **Skip a mesh that carries its own levels** (`m_geometry.size() > 1`, owner 2026-10-07; same in
+   `MultiLayerMeshResource`): a generated level is appended only at `m_geometry.size() == LODLevel`, so every level
+   of such a mesh used to be decimated, uploaded and dropped. citadel: 130 levels asked → 94 (the 36 of the 12
+   tree-stock meshes, ~120 k triangles each, no longer computed), 94 ready either way. Log: "'<name>' carries its own
+   N LOD levels: no automatic LOD."
 1. Check if source geometry is `IndexedVertexResource` with local data
 2. Determine levels to generate based on triangle count and `MinTriangleCount`
 3. Submit decimation tasks to engine `ThreadPool` (NOT `std::async`)

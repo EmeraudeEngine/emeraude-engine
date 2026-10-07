@@ -445,6 +445,16 @@ namespace EmEn::Resources
 				/* This is the state where we want to know if dependencies are loaded. */
 				case Status::Loading :
 				{
+					/* NOTE: Another thread already runs onDependenciesLoaded() for this resource. The last dependency
+					 * completing (its thread) and the resource's own setLoadSuccess() (another thread) both reach this
+					 * point with every dependency loaded: without this claim, both ran onDependenciesLoaded() at once —
+					 * two Texture2D::createFromPixelData() on one texture, the second destroying the image the first was
+					 * creating (vkBindImageMemory on VK_NULL_HANDLE, 2026-10-07). */
+					if ( m_dependenciesFinalizing )
+					{
+						return;
+					}
+
 					/* NOTE: If any of the dependencies are in a loading state. */
 					if ( std::ranges::any_of(m_dependenciesToWaitFor, [] (const auto & dependency) {return !dependency->isLoaded();}) )
 					{
@@ -456,7 +466,8 @@ namespace EmEn::Resources
 						TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has no more dependency to wait for loading !";
 					}
 
-					/* NOTE: Mark that we need to call onDependenciesLoaded() outside the lock. */
+					/* NOTE: Mark that we need to call onDependenciesLoaded() outside the lock, and claim it. */
+					m_dependenciesFinalizing = true;
 					pendingAction = Action::CallOnDependenciesLoaded;
 				}
 					break;
@@ -490,6 +501,8 @@ namespace EmEn::Resources
 
 			{
 				const std::scoped_lock lock{m_dependenciesAccess};
+
+				m_dependenciesFinalizing = false;
 
 				if ( success )
 				{
