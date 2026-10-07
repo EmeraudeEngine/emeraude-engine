@@ -25,6 +25,7 @@ those whose file is inside the module (the header filter also reports every incl
 
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
+| `src/Graphics/Geometry/Interface.cpp` (identity RT index list for a non-indexed triangle list) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | RT NULL index address |
 | `src/Resources/ResourceTrait.cpp` / `.hpp` (`checkDependencies()` claims `onDependenciesLoaded()`) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines (the TU's 5 misc-no-recursion + 1 use-enum-class predate them). | Resource finalization race |
 | `src/Graphics/Renderable/MeshResource.cpp`, `MultiLayerMeshResource.cpp` (automatic LOD skips a mesh carrying its own levels) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | Automatic LOD |
 | `src/Vulkan/PendingSubmissions.*` (new), the changed lines of `Queue.cpp` (timeline), `Device.cpp` (`destroyAfter()`), `Buffer.cpp`, `Image.cpp`, `ImageTransferOperation.cpp`, `BufferTransferOperation.cpp`, `Instance.cpp`, `Graphics/Renderer.cpp`; headers `DeferredDestructor.hpp`, `Queue.hpp`, `Device.hpp` | 2026-10-07 | clang-tidy 21.1.6: 6 on the changed lines — 1 fixed (prefer-member-initializer, the `PendingSubmissions` move constructor), 5 ON PURPOSE: readability-qualified-auto ×5 on Vulkan / VMA handles (`const auto` kept: a non-dispatchable handle is a pointer on some platforms only, caution-points § qualified-auto). | Upload lifetime (queue timelines) |

@@ -5696,6 +5696,16 @@ writer is announced (it was undefined behaviour already).
 
 ## Vulkan Validation
 
+### ⚠️⚠️ A DEVICE_LOST with 0 VUID and `READ_INVALID addr=0x0` = a shader read through a NULL buffer address (2026-10-07, FIXED)
+
+> [!CAUTION]
+> The validation layers do not see a buffer-device-address read: a geometry without an index buffer left its RT mesh
+> metadata's index address at 0 and the hit shaders read it. Method that found it in four runs: switch the
+> `LightingLane` to `ScreenSpace` at launch (the loss vanished → RT), read which shader fetches through which address
+> (`getMeshAccessor()`), then an A/B on the scene content (the two `RawVertexResource` entities). Fixed by an identity RT
+> index list for non-indexed triangle lists (scenes doc 14, BLAS Building). **Every address written into an RT metadata
+> table must be valid for every traced instance, or the instance must not be traced.**
+
 ### ⚠️⚠️ An upload returns once SUBMITTED — a buffer / image released right after it was destroyed under the copy (2026-10-07, FIXED)
 
 > [!CAUTION]

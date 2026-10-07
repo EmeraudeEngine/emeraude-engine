@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <iterator>
+#include <numeric>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -190,9 +191,14 @@ namespace EmEn::Graphics::Geometry
 		sharedHeader.vertexCount = vbo->vertexCount();
 		sharedHeader.vertexStride = vbo->vertexElementCount() * sizeof(float);
 
-		/* For TriangleStrip topologies, convert indices to TriangleList via the virtual override. */
+		/* For TriangleStrip topologies, convert indices to TriangleList via the virtual override.
+		 * A NON-INDEXED triangle list gets the identity list 0..n-1 the same way: the hit shaders (the alpha
+		 * test, RTR, RTGI) always fetch three indices through the instance's index-buffer address, and a
+		 * geometry without an index buffer left that address at 0 — a NULL read on the GPU and a DEVICE_LOST
+		 * (raw-geometry-loader, 2026-10-07; owner's choice over a shader branch or an exclusion from the TLAS). */
 		std::vector< uint32_t > convertedIndices;
 		uint32_t totalIndexCount = 0;
+		const auto * ibo = this->indexBufferObject();
 
 		if ( dedicatedIBO != nullptr )
 		{
@@ -211,7 +217,33 @@ namespace EmEn::Graphics::Geometry
 
 				return;
 			}
+		}
+		else if ( ibo != nullptr && ibo->isCreated() )
+		{
+			/* TriangleList: use existing GPU index buffer directly. */
+			sharedHeader.indexBuffer = ibo->handle();
+			sharedHeader.indexType = VK_INDEX_TYPE_UINT32;
+			totalIndexCount = ibo->indexCount();
+		}
+		else
+		{
+			/* Non-indexed triangle list: every three vertices are a triangle. A trailing partial triangle is
+			 * not part of any primitive, so it is left out. */
+			const auto vertexCount = vbo->vertexCount();
+			const auto tracedVertexCount = vertexCount - (vertexCount % 3U);
 
+			if ( tracedVertexCount == 0 )
+			{
+				return;
+			}
+
+			convertedIndices.resize(tracedVertexCount);
+
+			std::iota(convertedIndices.begin(), convertedIndices.end(), 0U);
+		}
+
+		if ( !convertedIndices.empty() )
+		{
 			/* Create a persistent RT index buffer for shader access (UV/normal lookup).
 			 * The BLAS build also uses these indices via cpuIndices. */
 			auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
@@ -236,18 +268,6 @@ namespace EmEn::Graphics::Geometry
 				sharedHeader.cpuIndices = convertedIndices.data();
 				sharedHeader.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
 				totalIndexCount = sharedHeader.cpuIndexCount;
-			}
-		}
-		else
-		{
-			/* TriangleList: use existing GPU index buffer directly. */
-			const auto * ibo = this->indexBufferObject();
-
-			if ( ibo != nullptr && ibo->isCreated() )
-			{
-				sharedHeader.indexBuffer = ibo->handle();
-				sharedHeader.indexType = VK_INDEX_TYPE_UINT32;
-				totalIndexCount = ibo->indexCount();
 			}
 		}
 
