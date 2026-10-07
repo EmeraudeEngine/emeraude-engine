@@ -111,7 +111,11 @@ had unloaded it — the job captured a raw `this`. Three rules now (`MeshResourc
   cancelBackgroundWork()` as soon as the main loop is left; a LOD job checks `isBackgroundWorkCancelled()` before each
   level. Without it the drain waited for the whole generation.
 
-Measured on `sponza` (Linux): 5/5 clean exits, 0 VUID, 373 levels published. Shutdown time — quitting 3 s after the
-load: 62.8 s with the drain alone → **8.8 s** with the cancellation (6.25 s without automatic LODs, the load itself
-still running); at 40 s: 25.7 s → **7.7 s** (1.05 s without). The rest is the decimations already RUNNING, which
-finish their level: a cancellation inside the decimator (emeraude-base `ShapeDecimator`) would remove it.
+- **The running decimation is interrupted too:** `generateLODLevel()` hands the flag to the decimator
+  (`ShapeDecimator::setCancellationFlag(&serviceProvider().backgroundWorkCancellation())`, read between its stages and
+  every 4096 collapses); a cancelled decimation returns without a warning.
+
+Measured on `sponza` (Linux): 5/5 clean exits, 0 VUID, 373 levels published. Shutdown time, quitting 3 s after the load
+(the load itself still running): drain alone 62.8 s → flag 8.8 s → decimator interrupted **8.2–9.1 s** (6.7–6.9 s
+without automatic LODs); at 40 s: 25.7 s → 7.7 s → **2.2 s** (1.05 s without). The rest, ~1.5 s: the decimator stages
+that are not interruptible inside (deduplication, queue build of a large mesh).

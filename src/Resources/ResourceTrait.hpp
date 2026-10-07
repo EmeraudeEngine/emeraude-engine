@@ -296,6 +296,18 @@ namespace EmEn::Resources
 				return m_backgroundWorkCancelled.load(std::memory_order_acquire);
 			}
 
+			/**
+			 * @brief Returns the cancellation flag itself, for a long computation that reads it while it runs (the LOD
+			 * decimation: VertexFactory::ShapeDecimator::setCancellationFlag()).
+			 * @return const std::atomic_bool &
+			 */
+			[[nodiscard]]
+			const std::atomic_bool &
+			backgroundWorkCancellation () const noexcept
+			{
+				return m_backgroundWorkCancelled;
+			}
+
 		protected:
 
 			/**

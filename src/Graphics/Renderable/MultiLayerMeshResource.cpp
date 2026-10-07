@@ -763,8 +763,17 @@ namespace EmEn::Graphics::Renderable
 	MultiLayerMeshResource::generateLODLevel (const std::shared_ptr< IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept
 	{
 		/* Decimate the source mesh (preserves multi-group structure). */
-		const VertexFactory::ShapeDecimator decimator{sourceGeometry->localData(), ratio};
+		VertexFactory::ShapeDecimator decimator{sourceGeometry->localData(), ratio};
+
+		/* A decimation of a large mesh lasts seconds: the shutdown interrupts it (an empty shape comes back). */
+		decimator.setCancellationFlag(&this->serviceProvider().backgroundWorkCancellation());
+
 		auto decimatedShape = decimator.decimate();
+
+		if ( decimator.isCancelled() )
+		{
+			return;
+		}
 
 		if ( !decimatedShape.isValid() || decimatedShape.triangles().empty() )
 		{
