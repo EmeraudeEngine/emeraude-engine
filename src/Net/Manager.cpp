@@ -540,7 +540,7 @@ namespace EmEn::Net
 	{
 		if ( !m_downloadEnabled )
 		{
-			TraceDebug{ClassId} << "Downloads are disabled, '" << url << "' refused.";
+			TraceDebug{ClassId} << "Downloads are disabled, '" << url.redacted() << "' refused.";
 
 			return InvalidTicket;
 		}
@@ -550,7 +550,7 @@ namespace EmEn::Net
 
 			if ( m_shuttingDown )
 			{
-				TraceDebug{ClassId} << "The service is shutting down, '" << url << "' refused.";
+				TraceDebug{ClassId} << "The service is shutting down, '" << url.redacted() << "' refused.";
 
 				return InvalidTicket;
 			}
@@ -568,7 +568,7 @@ namespace EmEn::Net
 
 			if ( !peer )
 			{
-				TraceError{ClassId} << "Only https:// URLs (and a registered peer's) are downloadable, '" << url << "' refused.";
+				TraceError{ClassId} << "Only https:// URLs (and a registered peer's) are downloadable, '" << url.redacted() << "' refused.";
 
 				return InvalidTicket;
 			}
@@ -608,7 +608,7 @@ namespace EmEn::Net
 						/* ⚠️ A failed URL used to keep its terminal ticket forever: the same
 						 * request after the network came back replayed the old Error instead of
 						 * trying again. A new attempt is started on the same ticket. */
-						TraceInfo{ClassId} << "'" << url << "' failed before; retrying on ticket #" << ticket << ".";
+						TraceInfo{ClassId} << "'" << url.redacted() << "' failed before; retrying on ticket #" << ticket << ".";
 
 						item.resetForRetry();
 
@@ -675,7 +675,7 @@ namespace EmEn::Net
 
 		if ( threadPool == nullptr )
 		{
-			TraceError{ClassId} << "No thread pool available, '" << url << "' fails.";
+			TraceError{ClassId} << "No thread pool available, '" << url.redacted() << "' fails.";
 
 			{
 				const std::scoped_lock lock{m_itemsAccess};
@@ -696,7 +696,7 @@ namespace EmEn::Net
 		 * reached a terminal state. */
 		if ( !threadPool->enqueue([this, ticket] { this->performDownload(ticket); }) )
 		{
-			TraceError{ClassId} << "The thread pool refused the task, '" << url << "' fails.";
+			TraceError{ClassId} << "The thread pool refused the task, '" << url.redacted() << "' fails.";
 
 			{
 				const std::scoped_lock lock{m_itemsAccess};
@@ -750,7 +750,7 @@ namespace EmEn::Net
 			m_items[static_cast< size_t >(ticket) - 1].setTransferring();
 		}
 
-		TraceInfo{ClassId} << "Downloading '" << url << "' (ticket #" << ticket << ") ...";
+		TraceInfo{ClassId} << "Downloading '" << url.redacted() << "' (ticket #" << ticket << ") ...";
 
 		/* Stream into a side file, then rename: a reader never sees a half-written cache file,
 		 * and a failed transfer leaves nothing under the final name. */
@@ -805,7 +805,7 @@ namespace EmEn::Net
 		}
 		else
 		{
-			TraceError{ClassId} << "Download of '" << url << "' (ticket #" << ticket << ") failed: " << Network::to_cstring(report.outcome) << ( report.statusCode > 0 ? " (HTTP " + std::to_string(report.statusCode) + ")" : std::string{} ) << ".";
+			TraceError{ClassId} << "Download of '" << url.redacted() << "' (ticket #" << ticket << ") failed: " << Network::to_cstring(report.outcome) << ( report.statusCode > 0 ? " (HTTP " + std::to_string(report.statusCode) + ")" : std::string{} ) << ".";
 		}
 
 		{
@@ -822,7 +822,7 @@ namespace EmEn::Net
 
 				this->enforceCacheBudget();
 
-				TraceSuccess{ClassId} << "'" << url << "' downloaded (" << bytes << " bytes) into '" << IO::toU8String(filepath) << "'.";
+				TraceSuccess{ClassId} << "'" << url.redacted() << "' downloaded (" << bytes << " bytes) into '" << IO::toU8String(filepath) << "'.";
 			}
 			else
 			{

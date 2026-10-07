@@ -263,14 +263,14 @@ namespace EmEn::Net
 	{
 		if ( !m_enabled )
 		{
-			TraceDebug{ClassId} << "API calls are disabled, '" << url << "' refused.";
+			TraceDebug{ClassId} << "API calls are disabled, '" << url.redacted() << "' refused.";
 
 			return InvalidTicket;
 		}
 
 		if ( String::toLower(url.scheme()) != "https" )
 		{
-			TraceError{ClassId} << "Only https:// URLs are callable, '" << url << "' refused.";
+			TraceError{ClassId} << "Only https:// URLs are callable, '" << url.redacted() << "' refused.";
 
 			return InvalidTicket;
 		}
@@ -282,7 +282,7 @@ namespace EmEn::Net
 
 			if ( m_shuttingDown )
 			{
-				TraceDebug{ClassId} << "The service is shutting down, '" << url << "' refused.";
+				TraceDebug{ClassId} << "The service is shutting down, '" << url.redacted() << "' refused.";
 
 				return InvalidTicket;
 			}
@@ -313,7 +313,7 @@ namespace EmEn::Net
 		{
 			if ( !Network::HTTPSClient::isRequestHeaderAcceptable(name, value) )
 			{
-				TraceError{ClassId} << "The request header '" << name << "' is refused, '" << url << "' not issued.";
+				TraceError{ClassId} << "The request header '" << name << "' is refused, '" << url.redacted() << "' not issued.";
 
 				return InvalidTicket;
 			}
@@ -350,7 +350,7 @@ namespace EmEn::Net
 
 		if ( threadPool == nullptr )
 		{
-			TraceError{ClassId} << "No thread pool available, '" << url << "' fails.";
+			TraceError{ClassId} << "No thread pool available, '" << url.redacted() << "' fails.";
 
 			{
 				const std::scoped_lock lock{m_itemsAccess};
@@ -375,7 +375,7 @@ namespace EmEn::Net
 		 * reach a terminal state. */
 		if ( !threadPool->enqueue([this, ticket] { this->performRequest(ticket); }) )
 		{
-			TraceError{ClassId} << "The thread pool refused the task, '" << url << "' fails.";
+			TraceError{ClassId} << "The thread pool refused the task, '" << url.redacted() << "' fails.";
 
 			{
 				const std::scoped_lock lock{m_itemsAccess};
@@ -454,7 +454,7 @@ namespace EmEn::Net
 			itemIt->second.setInFlight();
 		}
 
-		TraceInfo{ClassId} << "Calling " << Network::HTTPRequest::method(method) << " '" << url << "' (ticket #" << ticket << ") ...";
+		TraceInfo{ClassId} << "Calling " << Network::HTTPRequest::method(method) << " '" << url.redacted() << "' (ticket #" << ticket << ") ...";
 
 		Network::DownloadReport report;
 
@@ -470,7 +470,7 @@ namespace EmEn::Net
 
 			if ( !parsed )
 			{
-				TraceWarning{ClassId} << "'" << url << "' (ticket #" << ticket << ") declared '" << report.contentType << "' but its body is not valid JSON; it stays readable as text.";
+				TraceWarning{ClassId} << "'" << url.redacted() << "' (ticket #" << ticket << ") declared '" << report.contentType << "' but its body is not valid JSON; it stays readable as text.";
 			}
 		}
 
@@ -509,13 +509,13 @@ namespace EmEn::Net
 					item.setJSON(std::move(*parsed));
 				}
 
-				TraceSuccess{ClassId} << "'" << url << "' (ticket #" << ticket << ") answered HTTP " << statusCode << " (" << item.responseBody().size() << " bytes).";
+				TraceSuccess{ClassId} << "'" << url.redacted() << "' (ticket #" << ticket << ") answered HTTP " << statusCode << " (" << item.responseBody().size() << " bytes).";
 			}
 			else
 			{
 				item.setError(report.outcome, report.statusCode);
 
-				TraceError{ClassId} << "'" << url << "' (ticket #" << ticket << ") failed: " << Network::to_cstring(report.outcome)
+				TraceError{ClassId} << "'" << url.redacted() << "' (ticket #" << ticket << ") failed: " << Network::to_cstring(report.outcome)
 					<< ( report.statusCode > 0 ? " (HTTP " + std::to_string(report.statusCode) + ")" : std::string{} ) << ".";
 			}
 
@@ -783,7 +783,7 @@ namespace EmEn::Net
 
 		for ( const auto & [ticket, item] : m_items )
 		{
-			tickets.emplace_back(ticket, Network::HTTPRequest::method(item.method()), to_string(item.url()), item.status(), item.statusCode());
+			tickets.emplace_back(ticket, Network::HTTPRequest::method(item.method()), item.url().redacted(), item.status(), item.statusCode());
 		}
 
 		return tickets;
