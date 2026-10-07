@@ -25,6 +25,7 @@ those whose file is inside the module (the header filter also reports every incl
 
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
+| `src/Graphics/Renderable/MeshResource.*`, `MultiLayerMeshResource.*` (lock-free level reads, `publishLevel()`) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | engine geometry() lock (profile) |
 | ALL `src/` TUs — **move / copy audit** (`modernize-pass-by-value`, `performance-unnecessary-value-param`, `performance-move-const-arg`, `performance-unnecessary-copy-initialization`, nothing else enabled) | 2026-10-07 | clang-tidy 21.1.6: **0** findings — emeraude-base 132 TUs, emeraude-engine 460, projet-alpha 109 (canary file checked: the four checks fire). The triad pass (Allocatus Reduxus, 2026-09-30 / 10-01) had already removed them. | base std-move-function-args (closed) |
 | `src/Graphics/Renderable/SpriteResource.cpp` / `.hpp` (`computeBillboardVolumes()` in `onDependenciesLoaded()`), `src/Saphir/AbstractVertexStage.cpp` (GLSL `computeYAxis()`) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | sprite-disappears-at-some-angles |
 | `src/Scenes/Scene.physics.cpp` (step 4b: the sweep reports its impacts) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | engine physics-continuous-collision follow-up |

@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <memory>
+#include <atomic>
 #include <mutex>
 
 /* Local inclusions for inheritances. */
@@ -192,7 +193,7 @@ namespace EmEn::Graphics::Renderable
 			const Base::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+				return m_publishedLevelCount.load(std::memory_order_acquire) > 0 && m_geometry[0] != nullptr ?
 					m_geometry[0]->boundingBox() :
 					NullBoundingBox;
 			}
@@ -202,7 +203,7 @@ namespace EmEn::Graphics::Renderable
 			const Base::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				return !m_geometry.empty() && m_geometry[0] != nullptr ?
+				return m_publishedLevelCount.load(std::memory_order_acquire) > 0 && m_geometry[0] != nullptr ?
 					m_geometry[0]->boundingSphere() :
 					NullBoundingSphere;
 			}
@@ -245,10 +246,24 @@ namespace EmEn::Graphics::Renderable
 			 */
 			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
 
+			/**
+			 * @brief Appends a level of detail and publishes it to the lock-free readers.
+			 * @pre m_geometryMutex is held and the array is not full.
+			 * @param geometryResource The level's geometry.
+			 * @return void
+			 */
+			void publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept;
+
+			/* ⚠️ APPEND-ONLY, read WITHOUT a lock (2026-10-07, profile-driven: geometry() took this mutex on every draw).
+			 * The array is a StaticVector (it never reallocates) and a level, once there, is never replaced nor removed.
+			 * The writers (setGeometry() at load, generateLODLevel() on a worker) append under m_geometryMutex, then
+			 * publish the new count (release); the readers load the count (acquire) and never look past it — so a slot
+			 * they read is fully constructed. Never read m_geometry.size() from a reader: it is the writers' counter. */
 			Base::StaticVector< std::shared_ptr< Geometry::Interface >, Geometry::MaxLODLevels > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
 			RasterizationOptions m_rasterizationOptions;
 			mutable std::mutex m_geometryMutex;
+			std::atomic< uint32_t > m_publishedLevelCount{0};
 	};
 }
 

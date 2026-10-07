@@ -50,24 +50,30 @@ namespace EmEn::Graphics::Renderable
 	const Geometry::Interface *
 	MeshResource::geometry (uint32_t LODIndex) const noexcept
 	{
-		const std::scoped_lock lock{m_geometryMutex};
+		/* Lock-free: see m_geometry. */
+		const auto levelCount = m_publishedLevelCount.load(std::memory_order_acquire);
 
-		if ( m_geometry.empty() )
+		if ( levelCount == 0 )
 		{
 			return nullptr;
 		}
 
-		const auto clamped = std::min(LODIndex, static_cast< uint32_t >(m_geometry.size() - 1));
+		return m_geometry[std::min(LODIndex, levelCount - 1)].get();
+	}
 
-		return m_geometry[clamped].get();
+	void
+	MeshResource::publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept
+	{
+		m_geometry.emplace_back(std::move(geometryResource));
+
+		/* The slot is written: publish it (pairs with the acquire loads of the readers). */
+		m_publishedLevelCount.store(static_cast< uint32_t >(m_geometry.size()), std::memory_order_release);
 	}
 
 	uint32_t
 	MeshResource::levelOfDetailCount () const noexcept
 	{
-		const std::scoped_lock lock{m_geometryMutex};
-
-		return static_cast< uint32_t >(m_geometry.size());
+		return m_publishedLevelCount.load(std::memory_order_acquire);
 	}
 
 	bool
@@ -309,21 +315,25 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* ⚠️ m_geometry is a StaticVector of Geometry::MaxLODLevels: its emplace_back() does not grow, it
-		 * calls std::abort() when full, this build having no exceptions. Refusing here turns a
-		 * process kill into a traced failure. */
-		if ( m_geometry.size() >= Geometry::MaxLODLevels )
 		{
-			TraceError{ClassId} <<
-				"The renderable object '" << this->name() << "' already holds " << Geometry::MaxLODLevels <<
-				" levels of detail, the geometry is refused.";
+			const std::scoped_lock lock{m_geometryMutex};
 
-			return false;
+			/* ⚠️ m_geometry is a StaticVector of Geometry::MaxLODLevels: its emplace_back() does not grow, it
+			 * calls std::abort() when full, this build having no exceptions. Refusing here turns a
+			 * process kill into a traced failure. */
+			if ( m_geometry.size() >= Geometry::MaxLODLevels )
+			{
+				TraceError{ClassId} <<
+					"The renderable object '" << this->name() << "' already holds " << Geometry::MaxLODLevels <<
+					" levels of detail, the geometry is refused.";
+
+				return false;
+			}
+
+			this->setReadyForInstantiation(false);
+
+			this->publishLevel(geometryResource);
 		}
-
-		this->setReadyForInstantiation(false);
-
-		m_geometry.emplace_back(geometryResource);
 
 		return this->addDependency(geometryResource);
 	}
@@ -486,9 +496,9 @@ namespace EmEn::Graphics::Renderable
 			const std::scoped_lock lock{m_geometryMutex};
 
 			/* Ensure sequential filling: LOD levels must be added in order. */
-			if ( m_geometry.size() == LODLevel )
+			if ( m_geometry.size() == LODLevel && LODLevel < Geometry::MaxLODLevels )
 			{
-				m_geometry.emplace_back(std::move(lodGeometry));
+				this->publishLevel(std::move(lodGeometry));
 
 				TraceSuccess{ClassId} <<
 					"LOD " << LODLevel << " ready for '" << this->name() << "' "

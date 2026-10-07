@@ -80,3 +80,19 @@ dependency's *content*.
 `std::abort()`** when full — this build has no exceptions. `setGeometry()` refuses past the
 ceiling with a trace, in both `MeshResource` and `MultiLayerMeshResource`. Until 2026-09-24 the
 multi-layer mesh sized it with the VIEW ladder (4) through the unqualified name; `terrain` files 6.
+
+## The level array is read WITHOUT a lock (2026-10-07)
+
+`MeshResource` and `MultiLayerMeshResource` keep their levels in an APPEND-ONLY `StaticVector` (it never reallocates;
+a level is never replaced nor removed). The writers — the load (`setGeometry()`) and the automatic LOD job on a worker
+(`generateLODLevel()`) — append under `m_geometryMutex` and then publish the count `m_publishedLevelCount` (release);
+the readers — `geometry()`, `levelOfDetailCount()`, `boundingBox()`, `boundingSphere()`, `subGeometryCount()` — load
+that count (acquire) and never index past it, so a slot they read is fully constructed. **Rule:** a reader never uses
+`m_geometry.size()` (the writers' counter) and nothing ever replaces a published slot.
+
+Why: `geometry()` locked the mutex on every draw, and `boundingBox()` / `subGeometryCount()` read the array with NO
+lock while a LOD job appended — a data race. Measured: no frame-time gain (`balls-of-steel`, GPU-bound at 93–99 %:
+294.5 vs 294.5 FPS, 2.69 vs 2.74 CPU-ms per frame, medians of 5 and 3 alternated runs) — kept for the race (Ave
+Robustus), not for speed. Validated with automatic LODs on: `citadel` 94 levels and `sponza` 371 levels published
+during rendering, 0 VUID. ⚠️ `sponza` then crashes at shutdown — a pre-existing use after free of the LOD job, item
+`lod-job-outlives-its-mesh`.
