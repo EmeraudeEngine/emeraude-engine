@@ -34,6 +34,10 @@ tags: [vulkan, shaders]                   # optional
   re-opens the investigation by accident. It must say *why* in the body.
 - `status: blocked` — waiting on another item (`blocked-by`) or on an owner decision.
 - `priority: unranked` — the owner never ranked it. Do not invent a priority.
+- **A defect is `high` by default** (owner, 2026-10-07): an item describing something that works WRONGLY (a crash,
+  a validation error, a race, a wrong result or image, a lie in a log) is opened at `priority: high` without asking.
+  Only a non-defect (a feature, a performance or memory gain, tooling, a clean-up, an investigation) waits for the
+  owner's ranking — `unranked` until then. When it is unclear whether an item is a defect, ask.
 
 ## Body layout
 

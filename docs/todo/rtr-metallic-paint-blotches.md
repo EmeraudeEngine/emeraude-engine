@@ -2,7 +2,7 @@
 id: rtr-metallic-paint-blotches
 title: The RT lane's reflections blotch a curved metallic paint (CarConcept in citadel)
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Effects/Lighting (RTR, its denoiser), the metallic / clear-coat path
 opened: 2026-10-03
 tags: [ray-tracing, reflections, denoise, metal, clearcoat]

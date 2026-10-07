@@ -2,7 +2,7 @@
 id: ground-kicks-fast-rolling-ball
 title: A ball rolling fast on the flat ground is kicked upward at some points (ghost contacts?)
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Scene.physics.cpp (ground contacts, continuous pass), Physics/NarrowPhase
 opened: 2026-10-02
 tags: [physics, physics-overhaul, ground]

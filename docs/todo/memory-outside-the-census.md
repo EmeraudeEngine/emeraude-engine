@@ -2,7 +2,7 @@
 id: memory-outside-the-census
 title: Host RAM — most of a scene's private memory is outside the resource census (terrain 8.1 GB for 0.5 GB)
 status: open
-priority: unranked
+priority: medium
 scope: Resources census, Graphics (CDLOD terrain, LOD levels, imposters), physics, driver host allocations
 opened: 2026-10-04
 tags: [memory, diagnostics]

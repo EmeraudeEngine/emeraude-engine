@@ -2,7 +2,7 @@
 id: program-failure-destroys-visual
 title: One failed shader program destroys the whole visual component, for good
 status: open
-priority: unranked
+priority: high
 scope: Graphics/RenderableInstance, Scenes/Component/Visual, Scenes/AbstractEntity
 opened: 2026-09-26
 tags: [robustness, shaders, lifecycle]

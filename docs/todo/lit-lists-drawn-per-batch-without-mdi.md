@@ -2,7 +2,7 @@
 id: lit-lists-drawn-per-batch-without-mdi
 title: The LIT render lists are drawn batch by batch, outside multi-draw-indirect — lighting a forest costs ~45 ms
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Scene.rendering, Graphics/MDI
 opened: 2026-09-25
 tags: [performance, mdi, vegetation, measured]

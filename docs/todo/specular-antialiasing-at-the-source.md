@@ -2,7 +2,7 @@
 id: specular-antialiasing-at-the-source
 title: Specular antialiasing in the material, so a far normal-mapped surface does not alias before the TAA
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Material/StandardResource, Saphir (lighting code), texture mip generation
 opened: 2026-09-23
 tags: [antialiasing, specular, normal-map, taa]

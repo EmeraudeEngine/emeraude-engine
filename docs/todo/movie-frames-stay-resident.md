@@ -2,7 +2,7 @@
 id: movie-frames-stay-resident
 title: Host RAM — every movie resource holds all its frames decoded as pixmaps
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/MovieResource, Graphics/CubemapMovieResource, animated textures
 opened: 2026-10-03
 tags: [memory, textures]

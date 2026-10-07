@@ -2,7 +2,7 @@
 id: x11-multimonitor-nvidia-freeze
 title: Linux/X11 multi-monitor freeze with the NVIDIA proprietary driver
 status: parked
-priority: unranked
+priority: low
 scope: Platform/Window
 opened: unknown
 tags: [linux, nvidia, third-party]

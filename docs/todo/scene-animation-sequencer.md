@@ -2,7 +2,7 @@
 id: scene-animation-sequencer
 title: Scene animation sequencer — entities on a timeline, values on channels
 status: open
-priority: unranked
+priority: low
 scope: Animations
 opened: unknown
 blocked-by: [animatable-properties-coverage]

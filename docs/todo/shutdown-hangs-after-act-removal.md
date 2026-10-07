@@ -2,7 +2,7 @@
 id: shutdown-hangs-after-act-removal
 title: Core.shutdown() takes up to a minute on NVIDIA, re-creating a scene target after removing the act
 status: open
-priority: unranked
+priority: high
 scope: Core shutdown sequence, Scenes/Manager
 opened: 2026-09-22
 tags: [shutdown, intermittent, windows]

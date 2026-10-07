@@ -2,7 +2,7 @@
 id: queue-waitidle-holds-the-device-lock
 title: Queue::waitIdle() holds the device-wide mutex for the whole GPU wait, blocking every submit and present
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/Queue, Vulkan/Device, Graphics/VideoFrameConverter, Vulkan/VideoEncoderH265, Graphics/Compute
 opened: 2026-09-25
 tags: [vulkan, threading, stall, video]

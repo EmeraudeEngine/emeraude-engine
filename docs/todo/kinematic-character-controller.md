@@ -2,7 +2,7 @@
 id: kinematic-character-controller
 title: Kinematic character controller — a walking state that is not a collision bounce
 status: in-progress
-priority: unranked
+priority: medium
 scope: Physics, Scenes (Node), a new character trait or component
 opened: 2026-10-01
 tags: [physics, character-controller, physics-overhaul]

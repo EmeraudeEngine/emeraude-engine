@@ -2,7 +2,7 @@
 id: raw-geometry-loader-device-lost
 title: raw-geometry-loader loses the device on its first frames (GPU read fault, 0 VUID)
 status: open
-priority: unranked
+priority: high
 scope: Graphics (attribution open), projet-alpha demo raw-geometry-loader
 opened: 2026-10-05
 tags: [device-lost, crash, measured]

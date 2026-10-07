@@ -2,7 +2,7 @@
 id: amd-far-field-texture-sampling-difference
 title: The far field of a tiled ground samples differently on AMD, with repeat lines toward the horizon
 status: open
-priority: unranked
+priority: high
 scope: Graphics/TextureResource samplers (anisotropy, LOD), Vulkan/Sampler
 opened: 2026-09-22
 tags: [amd, sampling, cross-platform-bench]

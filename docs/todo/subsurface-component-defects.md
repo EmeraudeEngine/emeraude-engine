@@ -2,7 +2,7 @@
 id: subsurface-component-defects
 title: The Subsurface material component — missing 1/π, NaN at radius 0, dead intensity with a texture, and stale docs
 status: open
-priority: unranked
+priority: high
 scope: Saphir/LightGenerator (PBR light pass, ambient pass), Graphics/Material/StandardResource, docs
 opened: 2026-09-25
 tags: [material, subsurface, photometry]

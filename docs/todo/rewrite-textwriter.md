@@ -2,7 +2,7 @@
 id: rewrite-textwriter
 title: Rewrite TextWriter as the text component of an interactive composed surface
 status: open
-priority: unranked
+priority: low
 scope: Overlay
 opened: unknown
 tags: [overlay, ui, text]

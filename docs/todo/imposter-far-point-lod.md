@@ -2,7 +2,7 @@
 id: imposter-far-point-lod
 title: A last level beyond the octahedral imposters — a single coloured point
 status: open
-priority: unranked
+priority: low
 scope: Graphics/Renderable (imposters), Scenes (vegetation)
 opened: 2026-09-25
 tags: [vegetation, lod, imposter]

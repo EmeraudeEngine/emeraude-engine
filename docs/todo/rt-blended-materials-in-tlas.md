@@ -2,7 +2,7 @@
 id: rt-blended-materials-in-tlas
 title: Blended (alphaMode BLEND) materials enter the TLAS as opaque instances
 status: open
-priority: unranked
+priority: high
 scope: Scenes/SceneMetaData, Graphics/Effects/Lighting (RTGI, RTAO, RTR, ContactShadows)
 opened: 2026-08-30
 tags: [ray-tracing, transparency, measurement]

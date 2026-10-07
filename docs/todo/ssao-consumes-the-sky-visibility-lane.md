@@ -2,7 +2,7 @@
 id: ssao-consumes-the-sky-visibility-lane
 title: SSAO could consume SSGI's horizon visibility instead of running its own hemisphere kernel
 status: open
-priority: unranked
+priority: low
 scope: Graphics (Effects/Lighting SSAO, SSGI; PostProcessStack::syncSlotPairings)
 opened: 2026-09-13
 tags: [rendering, lighting, screen-space, ambient-occlusion, performance]

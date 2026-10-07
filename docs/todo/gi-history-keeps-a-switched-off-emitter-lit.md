@@ -2,7 +2,7 @@
 id: gi-history-keeps-a-switched-off-emitter-lit
 title: GI temporal history keeps a switched-off emitter lit for many frames
 status: open
-priority: unranked
+priority: high
 scope: Graphics/PostProcessing (SSGI, GI denoiser history)
 opened: 2026-10-06
 tags: [gi, temporal]

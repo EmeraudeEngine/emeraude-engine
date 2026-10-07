@@ -2,7 +2,7 @@
 id: rt-alpha-test-candidate-texture-lod
 title: Sample the alpha-test opacity at an explicit LOD in the shared RT candidate confirmation
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Effects/Shared
 opened: 2026-09-13
 tags: [ray-tracing, alpha-test, aliasing]

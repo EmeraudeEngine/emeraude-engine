@@ -2,7 +2,7 @@
 id: program-cache-key-codegen-inputs-audit
 title: Audit the program cache key for generator inputs that change the GLSL and are not in it
 status: open
-priority: unranked
+priority: high
 scope: Saphir/Generator/SceneRendering, Graphics/Shader caches
 opened: 2026-09-08
 tags: [shaders, cache, silent-failure]

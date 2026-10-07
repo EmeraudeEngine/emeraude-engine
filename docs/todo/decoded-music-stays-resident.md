@@ -2,7 +2,7 @@
 id: decoded-music-stays-resident
 title: Host RAM — every loaded music track is held fully decoded (16-bit PCM) for its whole life
 status: open
-priority: unranked
+priority: medium
 scope: Audio/MusicResource, Audio track mixer / streaming
 opened: 2026-10-03
 tags: [memory, audio]

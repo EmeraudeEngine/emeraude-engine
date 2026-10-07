@@ -2,7 +2,7 @@
 id: physics-wheeled-vehicle
 title: A wheeled vehicle — a dynamic chassis on cast wheels (bonus phase)
 status: in-progress
-priority: unranked
+priority: medium
 scope: Physics, Scenes (a vehicle component)
 opened: 2026-10-02
 tags: [physics, vehicle, physics-overhaul]

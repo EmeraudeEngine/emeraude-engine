@@ -2,7 +2,7 @@
 id: compute-shader-particle-system
 title: Create a particle system using compute shaders
 status: open
-priority: unranked
+priority: low
 scope: Physics
 opened: unknown
 tags: [compute, gpu]

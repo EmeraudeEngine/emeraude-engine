@@ -2,7 +2,7 @@
 id: terrain-pack-vertex-and-height-data
 title: Pack the terrain's CPU source heights — a 16 km grid is 1 GB of floats
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Renderable/TerrainResource, emeraude-base VertexFactory
 opened: 2026-09-22
 tags: [terrain, memory]

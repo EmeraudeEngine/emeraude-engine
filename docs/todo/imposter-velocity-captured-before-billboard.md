@@ -2,7 +2,7 @@
 id: imposter-velocity-captured-before-billboard
 title: The imposter's velocity is synthesized before its billboard exists (raw quad positions)
 status: open
-priority: unranked
+priority: high
 scope: Saphir / Graphics::Material::StandardResource
 opened: 2026-09-28
 tags: [taa, velocity, imposter, saphir]

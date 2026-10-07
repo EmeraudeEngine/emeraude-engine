@@ -2,7 +2,7 @@
 id: specular-occlusion-from-the-bent-normal
 title: Specular occlusion from the bent normal and V, on the raster's specular IBL leg
 status: open
-priority: unranked
+priority: medium
 scope: Graphics (Effects/Lighting SSGI), Saphir (LightGenerator specular IBL leg)
 opened: 2026-09-13
 tags: [rendering, lighting, screen-space, ibl, specular]

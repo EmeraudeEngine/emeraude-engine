@@ -2,7 +2,7 @@
 id: render-target-dead-view-distance-parameter
 title: Every render-target constructor takes a viewDistance that nothing reads
 status: open
-priority: unranked
+priority: low
 scope: Graphics/RenderTarget, Graphics/SceneRenderTarget, Graphics/SelectionDepthTarget, Vulkan/SwapChain
 opened: 2026-10-01
 tags: [cleanup, api, render-target]

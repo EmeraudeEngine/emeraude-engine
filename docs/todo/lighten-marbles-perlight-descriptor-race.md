@@ -2,7 +2,7 @@
 id: lighten-marbles-perlight-descriptor-race
 title: The terrain is drawn once before its PerLight descriptor set exists (lighten-marbles)
 status: open
-priority: unranked
+priority: high
 scope: Graphics (RenderableInstance, the sealed pipeline layouts), Scenes (terrain creation, LightSet)
 opened: 2026-10-02
 tags: [rendering, race, descriptor-sets]

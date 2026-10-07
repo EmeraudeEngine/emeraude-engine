@@ -2,7 +2,7 @@
 id: forward-light-pass-depth-bias-leaks-hidden-layers
 title: Forward light passes add the lighting of hidden layers within their depth bias (foliage reads too bright)
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/GraphicsPipeline, Scenes/Scene.rendering
 opened: 2026-10-04
 tags: [lighting, forward, depth, foliage]

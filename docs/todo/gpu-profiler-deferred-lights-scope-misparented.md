@@ -2,7 +2,7 @@
 id: gpu-profiler-deferred-lights-scope-misparented
 title: GPU profiler prints DeferredLights under FinalComposite on macOS
 status: open
-priority: unranked
+priority: high
 scope: Graphics/GPUProfiler, Graphics/Renderer
 opened: 2026-10-06
 tags: [profiling, macos]

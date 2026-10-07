@@ -2,7 +2,7 @@
 id: renderable-instance-readiness-any-program
 title: isReadyToRender() accepts ANY program of the renderable, so lit and unlit instances cannot coexist
 status: open
-priority: unranked
+priority: high
 scope: Graphics/RenderableInstance, Graphics/Renderable, Scenes/Scene.rendering
 opened: 2026-09-25
 tags: [shaders, readiness, silent-failure, measured]

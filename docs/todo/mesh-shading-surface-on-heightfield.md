@@ -2,7 +2,7 @@
 id: mesh-shading-surface-on-heightfield
 title: Real displaced micro-geometry on a heightfield terrain (TerrainResource) through task + mesh shaders
 status: in-progress
-priority: unranked
+priority: medium
 scope: Graphics/Geometry (CDLODTerrainResource, MeshShadingSurface), Saphir/Generator (HeightfieldSurfaceHelper, MeshShadingSurfaceHelper)
 opened: 2026-09-27
 blocked-by: [mesh-shader-displaced-surface]

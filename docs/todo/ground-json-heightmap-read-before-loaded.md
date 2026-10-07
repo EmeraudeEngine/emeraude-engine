@@ -2,7 +2,7 @@
 id: ground-json-heightmap-read-before-loaded
 title: A JSON ground reads its heightmap's pixels before the image is loaded
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Renderable/TerrainResource, Graphics/Renderable/BasicGroundResource
 opened: 2026-09-22
 tags: [terrain, resources, loading]

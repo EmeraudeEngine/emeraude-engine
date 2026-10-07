@@ -2,7 +2,7 @@
 id: lod-simplifier-stalls-on-disconnected-cards
 title: Automatic LOD stalls on disconnected cards (Sponza's ivy keeps 2.1 M triangles at every level) and logs the target ratio
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Renderable (MeshResource, MultiLayerMeshResource), base VertexFactory/ShapeSimplifier
 opened: 2026-10-04
 tags: [lod, geometry, performance]

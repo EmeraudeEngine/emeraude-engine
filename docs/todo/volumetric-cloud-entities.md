@@ -2,7 +2,7 @@
 id: volumetric-cloud-entities
 title: Volumetric clouds as hand-placed scene entities the camera can fly through
 status: in-progress
-priority: unranked
+priority: medium
 scope: Graphics, Scenes/Component
 opened: 2026-09-24
 tags: [participating-medium, shaders, procedural, voxels]

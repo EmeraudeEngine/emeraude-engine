@@ -2,7 +2,7 @@
 id: gltf-bench-animated-capture
 title: The glTF conformance bench captures every asset at rest only — an animated skin defect goes unseen
 status: open
-priority: unranked
+priority: medium
 scope: tools/gltf-conformance-bench (bench.py, README)
 opened: 2026-10-01
 tags: [gltf, conformance, skinning, animation, tooling]

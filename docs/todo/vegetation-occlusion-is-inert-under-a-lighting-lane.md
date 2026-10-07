@@ -2,7 +2,7 @@
 id: vegetation-occlusion-is-inert-under-a-lighting-lane
 title: The vegetation baked occlusion is nearly inert while a lighting lane owns the indirect diffuse
 status: open
-priority: unranked
+priority: high
 scope: Saphir/LightGenerator, Graphics/PostProcessing
 tags: [vegetation, lighting, indirect-diffuse]
 opened: 2026-09-22

@@ -2,7 +2,7 @@
 id: rtti-removal
 title: Build the engine without RTTI — replace every dynamic_cast, typeid, type_index and std::any
 status: open
-priority: unranked
+priority: low
 scope: cascade-wide (Resources, Scenes, Graphics/Renderable, Vulkan/TextureInterface, Observer payload)
 opened: 2026-09-08
 blocked-by: [rtti-free-observer-payload]

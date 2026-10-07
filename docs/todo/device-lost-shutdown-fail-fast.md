@@ -2,7 +2,7 @@
 id: device-lost-shutdown-fail-fast
 title: After a DEVICE_LOST, the Windows shutdown ends in a 0xc0000409 fail-fast instead of a clean exit
 status: open
-priority: unranked
+priority: high
 scope: Vulkan device-loss handling, Core shutdown (Windows; the other OS not checked)
 opened: 2026-10-01
 tags: [vulkan, device-lost, shutdown, windows, robustness]

@@ -2,7 +2,7 @@
 id: light-shadow-runtime-toggle
 title: Switching a light's shadow off at runtime puts the scene IN shadow instead of out of it
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Component/AbstractLightEmitter, Scenes/Scene.lighting.cpp, shadow passes
 opened: 2026-09-27
 tags: [shadows, lights, csm, console]

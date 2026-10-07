@@ -2,7 +2,7 @@
 id: directional-light-direction-accessor
 title: DirectionalLight::direction() reads the UBO lane — invalid before the first update
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Component/DirectionalLight
 opened: 2026-08-30
 tags: [api, lighting]

@@ -2,7 +2,7 @@
 id: material-properties-written-across-threads
 title: Material dynamic properties — the floats are written and read by two threads
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Material (StandardResource, BeamResource, PathResource)
 opened: 2026-10-06
 tags: [threading, robustness]

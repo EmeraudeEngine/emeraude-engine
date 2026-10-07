@@ -2,7 +2,7 @@
 id: foliage-takes-most-of-its-light-from-the-reflection
 title: Foliage washed out to grey — the reflection effects owed the ENVIRONMENT BRDF (resolved; residual tracked)
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Effects/Lighting (RTR, SSR), Saphir/LightGenerator
 opened: 2026-09-15
 blocked-by: []

@@ -2,7 +2,7 @@
 id: engine-fuzz-harness-for-loaders
 title: A libFuzzer harness for the engine's scene loaders (glTF, FBX, USD, WAD)
 status: open
-priority: unranked
+priority: medium
 scope: Scenes/Loaders, tooling
 opened: 2026-09-30
 tags: [fuzzing, robustness, loaders, owner-request]

@@ -2,7 +2,7 @@
 id: net-cache-managed-by-cef-helper-processes
 title: CEF helper processes start the download manager and sweep / evict the cache the main process is using
 status: open
-priority: unranked
+priority: high
 scope: Net (Manager) / PrimaryServices in helper processes
 opened: 2026-09-30
 tags: [net, cef, multi-process, race]

@@ -2,7 +2,7 @@
 id: gltf-recursive-skeletons-render-as-one-straight-column
 title: glTF RecursiveSkeletons (a mesh reused by several skins, skins sharing a skeleton) renders as one straight column
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Loaders (GLTFLoader skins) / skinned rendering
 opened: 2026-09-30
 tags: [gltf, conformance, skinning]

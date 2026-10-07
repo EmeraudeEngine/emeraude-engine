@@ -2,7 +2,7 @@
 id: rt-reflections-curved-reflector
 title: RTR glossy cone — account for the reflector's curvature
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Effects/Lighting/RTR
 opened: 2026-08-30
 tags: [ray-tracing, reflections, measurement]

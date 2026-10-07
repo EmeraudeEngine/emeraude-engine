@@ -2,7 +2,7 @@
 id: segment-rendering-beams-curves-outlines
 title: Graphics — segment rendering (selection silhouette, paths and curves, lasers and electric arcs)
 status: in-progress
-priority: unranked
+priority: medium
 scope: Graphics / Saphir
 opened: 2026-09-28
 tags: [graphics, shaders, lines, beams, photometry, owner-request]

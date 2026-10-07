@@ -2,7 +2,7 @@
 id: shared-material-buffer-capacity
 title: An asset with more materials than the shared uniform buffer holds loses its meshes
 status: open
-priority: unranked
+priority: high
 scope: Graphics/SharedUniformBuffer, Graphics/Material
 opened: 2026-10-01
 tags: [graphics, materials, capacity, measured]

@@ -2,7 +2,7 @@
 id: console-json-non-finite-numbers
 title: Console JSON answers written with a stream can contain NaN/Inf, which is not JSON
 status: open
-priority: unranked
+priority: high
 scope: Console / Scenes/Manager.console.cpp
 opened: 2026-09-27
 tags: [console, mcp, json]

@@ -2,7 +2,7 @@
 id: particles-emitter-timeout-unit
 title: ParticlesEmitter::start(duration) arms its timeout in microseconds, documented as milliseconds
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Component/ParticlesEmitter
 opened: 2026-09-27
 tags: [particles, time, threading]

@@ -2,7 +2,7 @@
 id: staging-buffers-retained-after-load
 title: Staging buffers stay allocated after a load — 385 MiB on WorldLobby (macOS)
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/TransferManager
 opened: 2026-10-04
 tags: [memory, vulkan, transfer]

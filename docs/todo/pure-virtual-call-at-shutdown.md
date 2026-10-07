@@ -2,7 +2,7 @@
 id: pure-virtual-call-at-shutdown
 title: "'pure virtual method called' at shutdown, once in ~12 runs — not reproduced, not attributed"
 status: open
-priority: unranked
+priority: high
 scope: Scenes / Core shutdown
 opened: 2026-09-10
 tags: [shutdown, lifetime, crash, intermittent]

@@ -2,7 +2,7 @@
 id: multi-layer-splat-material
 title: Multi-layer splat material — blend N texture sets under a mask, on large surfaces only
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Material
 opened: 2026-09-13
 tags: [materials, terrain, saphir, shaders]

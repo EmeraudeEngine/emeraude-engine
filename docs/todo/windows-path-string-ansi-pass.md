@@ -2,7 +2,7 @@
 id: windows-path-string-ansi-pass
 title: path::string() is ANSI on Windows, and throws outside the code page (about 120 sites)
 status: open
-priority: unranked
+priority: high
 scope: the whole engine (log lines, console / MCP outputs, paths handed to APIs); projet-alpha
 opened: 2026-10-01
 tags: [windows, unicode, paths, cascade]

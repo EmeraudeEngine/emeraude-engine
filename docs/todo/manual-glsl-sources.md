@@ -2,7 +2,7 @@
 id: manual-glsl-sources
 title: Prepare a way to use manual GLSL sources
 status: open
-priority: unranked
+priority: low
 scope: Saphir
 opened: unknown
 tags: [shaders]

@@ -2,7 +2,7 @@
 id: normal-map-flip-mutates-shared-image
 title: Texture2D flips a normal map's green channel IN the shared ImageResource
 status: open
-priority: unranked
+priority: high
 scope: Graphics/TextureResource/Texture2D (createFromPixelData), ImageResource::mutableData()
 opened: 2026-10-04
 tags: [textures, normal-maps]

@@ -2,7 +2,7 @@
 id: mesh-shader-multiview-view-count-limit
 title: A mesh-shader pipeline with more views than maxMeshMultiviewViewCount breaks cubemap shadow casting
 status: open
-priority: unranked
+priority: high
 scope: Vulkan / Saphir / shadow mapping
 opened: 2026-09-30
 tags: [vulkan, mesh-shader, multiview, shadows, windows]

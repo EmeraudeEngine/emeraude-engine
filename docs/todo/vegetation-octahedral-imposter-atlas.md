@@ -2,7 +2,7 @@
 id: vegetation-octahedral-imposter-atlas
 title: Vegetation — bake an octahedral imposter atlas for the last LOD
 status: open
-priority: unranked
+priority: medium
 scope: Graphics
 tags: [vegetation, lod, offscreen]
 opened: 2026-09-21

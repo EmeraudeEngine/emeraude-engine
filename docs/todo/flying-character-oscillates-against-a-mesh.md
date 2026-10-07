@@ -2,7 +2,7 @@
 id: flying-character-oscillates-against-a-mesh
 title: A flying character pushed into a model swings back and forth before it settles
 status: open
-priority: unranked
+priority: high
 scope: Physics/CharacterController (flying mode)
 opened: 2026-10-05
 tags: [physics, character, measured]

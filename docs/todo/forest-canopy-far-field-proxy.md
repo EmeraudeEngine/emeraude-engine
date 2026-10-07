@@ -2,7 +2,7 @@
 id: forest-canopy-far-field-proxy
 title: Far-field forest canopy — one coarse baked shell per wooded tile, beyond the imposters
 status: parked
-priority: unranked
+priority: low
 scope: Scenes/Toolkit (vegetation), Graphics
 opened: 2026-09-25
 tags: [vegetation, lod, imposters, terrain, performance]

@@ -2,7 +2,7 @@
 id: index-upload-read-after-write-hazard
 title: Index buffers are drawn after their upload copy without a transfer → index-input dependency (SYNC-HAZARD-READ-AFTER-WRITE)
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/TransferManager, geometry upload, shadow maps
 opened: 2026-10-04
 tags: [vulkan, synchronisation, upload]

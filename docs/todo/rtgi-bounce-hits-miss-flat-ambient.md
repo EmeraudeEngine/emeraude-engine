@@ -2,7 +2,7 @@
 id: rtgi-bounce-hits-miss-flat-ambient
 title: RTGI's bounce hits add no flat scene ambient — the only traced consumer without it
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Effects/Lighting/RTGI (hit shading)
 opened: 2026-09-25
 tags: [ray-tracing, gi, ambient, parity]

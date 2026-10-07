@@ -2,7 +2,7 @@
 id: rt-light-ssbo-rewritten-while-in-flight
 title: The RT light SSBO is one host-mapped buffer rewritten while frames in flight read it, from live coordinates
 status: open
-priority: unranked
+priority: high
 scope: Scenes/LightSet, Graphics/Effects/Lighting (RTGI, RTR, probes)
 opened: 2026-10-04
 tags: [ray-tracing, lighting, synchronisation]

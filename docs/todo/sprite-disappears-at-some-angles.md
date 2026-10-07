@@ -2,7 +2,7 @@
 id: sprite-disappears-at-some-angles
 title: Graphics — a sprite disappears from some viewing angles
 status: open
-priority: unranked
+priority: high
 scope: Graphics
 opened: 2026-09-28
 tags: [graphics, sprites]

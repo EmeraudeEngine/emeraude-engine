@@ -2,7 +2,7 @@
 id: tick-timers-truncate-to-16-ms
 title: Tick-based timers add 16 ms per 60 Hz tick instead of 16.67 — every Sequence and lifetime runs 4 % slow
 status: open
-priority: unranked
+priority: high
 scope: Animations/Sequence.cpp, Audio/Ambience.cpp, Physics/Particle.cpp; projet-alpha actors (Explosion, Fire, Smoke)
 opened: 2026-09-26
 tags: [timing, animation, correctness]

@@ -2,7 +2,7 @@
 id: video-capture-enable-key-typo
 title: The video capture enable key is "Core/Audio/Capture/Enable", the audio capture's key
 status: open
-priority: unranked
+priority: high
 scope: SettingKeys.hpp, Graphics/ExternalInput, the settings of existing installs
 opened: 2026-10-01
 tags: [settings, video-capture, audio-capture]

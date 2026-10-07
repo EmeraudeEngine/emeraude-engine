@@ -2,7 +2,7 @@
 id: logic-loop-runs-slow-on-macos
 title: The logic loop runs at ~44 cycles/s on macOS instead of 60 (sleep overshoot)
 status: open
-priority: unranked
+priority: high
 scope: Core (logicsTask), platform timers
 opened: 2026-10-05
 tags: [timing, macos, determinism, measured]

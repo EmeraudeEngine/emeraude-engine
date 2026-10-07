@@ -2,7 +2,7 @@
 id: gltf-khr-meshopt-compression
 title: glTF files that require KHR_meshopt_compression are refused (fastgltf 0.9.0)
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Loaders/GLTFLoader, the vendored fastgltf
 opened: 2026-10-01
 tags: [gltf, compression, meshopt, dependency]

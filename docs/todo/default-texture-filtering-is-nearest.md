@@ -2,7 +2,7 @@
 id: default-texture-filtering-is-nearest
 title: The default texture filtering is "nearest" with 1 mip level and no anisotropy
 status: open
-priority: unranked
+priority: medium
 scope: SettingKeys.hpp (Core/Graphics/Texture/*), Graphics/TextureResource
 opened: 2026-09-08
 tags: [quality, defaults, settings]

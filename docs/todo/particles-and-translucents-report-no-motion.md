@@ -2,7 +2,7 @@
 id: particles-and-translucents-report-no-motion
 title: Particles and translucent surfaces give the temporal passes no correct motion
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Component/ParticlesEmitter, Graphics/RenderableInstance/Multiple, Saphir/Generator/SceneRendering
 opened: 2026-09-26
 tags: [taa, temporal, velocity, particles, translucency]

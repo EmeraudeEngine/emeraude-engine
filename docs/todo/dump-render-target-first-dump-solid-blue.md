@@ -2,7 +2,7 @@
 id: dump-render-target-first-dump-solid-blue
 title: The first dumpRenderTarget of a session sometimes writes a solid blue image
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Manager.console (dumpRenderTarget), Vulkan/TransferManager (downloadImage), Graphics/Renderer (render-to-texture submission)
 opened: 2026-10-01
 tags: [console, render-target, transfer, synchronization, windows]

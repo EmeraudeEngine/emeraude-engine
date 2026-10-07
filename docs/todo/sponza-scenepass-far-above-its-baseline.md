@@ -2,7 +2,7 @@
 id: sponza-scenepass-far-above-its-baseline
 title: Sponza's ScenePass is far above its 2026-10-04 baseline (12.8 M triangles at "LOD 3")
 status: open
-priority: unranked
+priority: high
 scope: Graphics (geometry LOD, scene pass), projet-alpha sponza demo
 opened: 2026-10-06
 tags: [performance, lod, regression]

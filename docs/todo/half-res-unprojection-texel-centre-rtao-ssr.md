@@ -2,7 +2,7 @@
 id: half-res-unprojection-texel-centre-rtao-ssr
 title: Unproject the fetched texel's centre in the half-res RTAO and SSR passes
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Effects/Lighting
 opened: 2026-09-13
 tags: [ray-tracing, screen-space, g-buffer]

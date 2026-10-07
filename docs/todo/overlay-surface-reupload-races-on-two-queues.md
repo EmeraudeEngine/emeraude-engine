@@ -2,7 +2,7 @@
 id: overlay-surface-reupload-races-on-two-queues
 title: A re-upload of an overlay surface races the previous upload under synchronization validation
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/ImageTransferOperation, Vulkan/TransferManager, Overlay/Surface
 opened: 2026-09-26
 tags: [vulkan, synchronization, validation, overlay, queues]

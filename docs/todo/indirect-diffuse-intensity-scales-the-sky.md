@@ -2,7 +2,7 @@
 id: indirect-diffuse-intensity-scales-the-sky
 title: IndirectDiffuse/Intensity scales the SKY too, so handing the sky to an effect costs 20 % of it
 status: open
-priority: unranked
+priority: medium
 scope: Graphics (Effects/Lighting RTGI, SSGI combines), Scenes (indirect-diffuse ownership)
 opened: 2026-09-14
 tags: [rendering, lighting, photometry, owner-decision]

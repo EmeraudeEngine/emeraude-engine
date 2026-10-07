@@ -2,7 +2,7 @@
 id: logic-tick-rate-under-render-load
 title: The logic may run below 60 ticks per second under a heavy render — to MEASURE before anything else
 status: open
-priority: unranked
+priority: medium
 scope: Core (logics task), Animations (tick-based time)
 opened: 2026-09-26
 tags: [timing, logic, measure-first]

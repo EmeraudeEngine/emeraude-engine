@@ -2,7 +2,7 @@
 id: terrain-cdlod-heightmap-clipmap
 title: CDLOD terrain over a height clipmap — replace AdaptiveVertexGridResource
 status: in-progress
-priority: unranked
+priority: medium
 scope: Graphics/Geometry, Graphics/Renderable/TerrainResource, Saphir
 opened: 2026-09-22
 tags: [terrain, cdlod, clipmap, saphir, ray-tracing]

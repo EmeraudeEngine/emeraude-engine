@@ -2,7 +2,7 @@
 id: sprite-texture-clamp-to-edge
 title: Check sprite texture clamping to edges
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Sprite
 opened: unknown
 tags: [sampler]

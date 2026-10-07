@@ -2,7 +2,7 @@
 id: temporal-upscalers-fsr-xess-dlss
 title: Temporal upscalers — AMD FSR, Intel XeSS and NVIDIA DLSS as upscaling options
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Renderer, Graphics/PostProcessStack, Graphics/Effects/Resolve
 opened: 2026-09-28
 tags: [upscaling, fsr, xess, dlss, taa, temporal, render-resolution, owner-request]

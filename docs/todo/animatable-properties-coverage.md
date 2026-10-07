@@ -2,7 +2,7 @@
 id: animatable-properties-coverage
 title: Make every scene object animatable — a pass over all of them
 status: open
-priority: unranked
+priority: low
 scope: Animations
 opened: unknown
 tags: [animation, scene]

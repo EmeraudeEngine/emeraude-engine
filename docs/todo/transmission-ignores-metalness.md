@@ -2,7 +2,7 @@
 id: transmission-ignores-metalness
 title: A metallic transmissive material transmits like a dielectric
 status: open
-priority: unranked
+priority: high
 scope: Saphir/LightGenerator (Reflection + Transmission branch)
 opened: 2026-09-22
 tags: [pbr, transmission, gltf-conformance, cross-platform-bench]

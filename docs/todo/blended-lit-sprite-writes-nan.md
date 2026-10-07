@@ -2,7 +2,7 @@
 id: blended-lit-sprite-writes-nan
 title: A blended, lit sprite writes NaN into the scene colour buffer on its transparent texels
 status: open
-priority: unranked
+priority: high
 scope: Saphir / Graphics/Renderable/SpriteResource
 opened: 2026-09-13
 tags: [sprite, blending, nan, ssr]

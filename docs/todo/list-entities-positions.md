@@ -2,7 +2,7 @@
 id: list-entities-positions
 title: Give entity positions in SceneManager listEntities()
 status: open
-priority: unranked
+priority: low
 scope: Scenes/Manager.console.cpp
 opened: 2026-09-27
 tags: [console, mcp]

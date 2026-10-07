@@ -2,7 +2,7 @@
 id: editor-world-rotation-of-nested-nodes
 title: Scenes — Node::rotate(TransformSpace::World) rotates in the parent's space
 status: open
-priority: unranked
+priority: high
 scope: Scenes / Node
 opened: 2026-09-29
 tags: [scenes, node, transforms, editor]

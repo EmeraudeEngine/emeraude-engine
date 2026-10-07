@@ -2,7 +2,7 @@
 id: macos-video-capture-ignores-requested-size
 title: macOS video capture delivers 1920x1080 frames while it logs the requested 640x480
 status: open
-priority: unranked
+priority: high
 scope: PlatformSpecific/VideoCaptureDevice.mac.mm
 opened: 2026-10-01
 tags: [macos, video-capture, avfoundation]

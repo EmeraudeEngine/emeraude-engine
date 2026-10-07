@@ -2,7 +2,7 @@
 id: character-node-velocity
 title: A kinematic character's node velocity reads 0 — mirror the controller's velocity, or document it
 status: open
-priority: unranked
+priority: high
 scope: Scenes (AbstractEntity / Node), Physics (CharacterController)
 opened: 2026-10-02
 tags: [physics, physics-overhaul, character]

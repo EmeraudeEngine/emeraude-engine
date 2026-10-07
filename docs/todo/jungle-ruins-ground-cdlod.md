@@ -2,7 +2,7 @@
 id: jungle-ruins-ground-cdlod
 title: JungleRuins' ground drawn by the engine's CDLOD terrain instead of the raw USD mesh
 status: open
-priority: unranked
+priority: low
 scope: src/Scenes/Loaders/USDLoader, Graphics/Renderable/TerrainResource
 opened: 2026-10-04
 blocked-by: [geometry-content-dedup]

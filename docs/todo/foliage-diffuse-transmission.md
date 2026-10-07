@@ -2,7 +2,7 @@
 id: foliage-diffuse-transmission
 title: Leaf translucency — a thin diffuse transmission lobe (KHR_materials_diffuse_transmission) in both lanes
 status: blocked
-priority: unranked
+priority: medium
 blocked-by: [tlas-one-instance-per-multiple-visuals, rt-thin-two-sided-hit-normal, rtcontactshadows-backlit-self-hit, subsurface-component-defects]
 scope: Graphics/Material (StandardResource), Saphir (LightGenerator light + ambient passes), RT hit shaders (RTGI, RTR, IrradianceProbeVolume), ImposterAtlas/ImposterBake, glTF loader, Scenes::Toolkit vegetation material
 opened: 2026-09-25

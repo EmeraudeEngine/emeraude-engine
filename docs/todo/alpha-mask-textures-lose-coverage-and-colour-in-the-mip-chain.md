@@ -2,7 +2,7 @@
 id: alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain
 title: An alpha mask loses its COVERAGE and half its COLOUR down a box-filtered mip chain
 status: in-progress
-priority: unranked
+priority: high
 scope: Graphics/TextureCompressor, Graphics/TextureResource, Vulkan/ImageTransferOperation
 opened: 2026-09-15
 blocked-by: []

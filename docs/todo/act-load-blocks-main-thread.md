@@ -2,7 +2,7 @@
 id: act-load-blocks-main-thread
 title: A built-in act is loaded on the main thread, which stops answering the window system for its whole duration
 status: open
-priority: unranked
+priority: high
 scope: projet-alpha Stage/Loader, engine Core (main loop)
 opened: 2026-09-25
 tags: [wayland, loading, responsiveness]

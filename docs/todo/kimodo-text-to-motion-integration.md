@@ -2,7 +2,7 @@
 id: kimodo-text-to-motion-integration
 title: Generate character animation from a text prompt (Kimodo, dev-time)
 status: blocked
-priority: unranked
+priority: low
 scope: Animations
 opened: 2026-08-31
 blocked-by: [skeletal-animation-retargeting]

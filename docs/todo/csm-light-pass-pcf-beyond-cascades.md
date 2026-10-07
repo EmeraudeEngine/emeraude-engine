@@ -2,7 +2,7 @@
 id: csm-light-pass-pcf-beyond-cascades
 title: The CSM light pass runs its PCF loop on fragments beyond the last cascade — the far imposters pay it for nothing
 status: open
-priority: unranked
+priority: medium
 scope: Saphir/LightGenerator.ShadowMap (CSM sampling), Scenes (lit lists)
 opened: 2026-09-25
 tags: [shadows, performance, vegetation]

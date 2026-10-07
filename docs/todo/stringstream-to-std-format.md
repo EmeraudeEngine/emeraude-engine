@@ -2,7 +2,7 @@
 id: stringstream-to-std-format
 title: Replace std::stringstream by std::format for simple key/name building
 status: open
-priority: unranked
+priority: low
 scope: cascade-wide
 opened: unknown
 tags: [cpp, c++20]

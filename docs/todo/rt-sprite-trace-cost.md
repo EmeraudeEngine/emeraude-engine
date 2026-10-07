@@ -2,7 +2,7 @@
 id: rt-sprite-trace-cost
 title: One alpha-tested sprite in the TLAS costs ~35 ms of ray-traced passes
 status: open
-priority: unranked
+priority: high
 scope: Graphics/RayTracing, Scenes/SceneMetaData
 opened: 2026-09-26
 tags: [ray-tracing, sprite, performance, measured]

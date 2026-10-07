@@ -2,7 +2,7 @@
 id: console-camera-burst-tears-a-frame
 title: A burst of console lookAt() renders an occasional single tilted, motion-blurred frame
 status: open
-priority: unranked
+priority: high
 scope: Console, Scenes (camera / player nodes), logic-to-render state publication
 opened: 2026-09-25
 tags: [console, camera, threading]

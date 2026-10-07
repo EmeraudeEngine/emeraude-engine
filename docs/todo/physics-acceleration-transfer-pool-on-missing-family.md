@@ -2,7 +2,7 @@
 id: physics-acceleration-transfer-pool-on-missing-family
 title: Physics acceleration fails at startup: its transfer manager uses a queue family the compute device does not have
 status: open
-priority: unranked
+priority: high
 scope: Physics/Manager, Vulkan/TransferManager, Vulkan/Instance (getComputeDevice)
 opened: 2026-10-01
 tags: [physics, vulkan, compute, validation]

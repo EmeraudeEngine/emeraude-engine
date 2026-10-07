@@ -2,7 +2,7 @@
 id: forced-directory-must-exist
 title: A --cache-directory (or --config-directory) that does not exist stops the engine at startup
 status: open
-priority: unranked
+priority: high
 scope: FileSystem (the forced directories of the command line)
 opened: 2026-10-01
 tags: [filesystem, command-line, startup, robustness]

@@ -2,7 +2,7 @@
 id: renderer-fail-fast-on-device-loss
 title: A lost device waits 60 s on a fence and aborts — fail fast, dump, shut down cleanly
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Renderer (beginFrame, renderFrame, discardAcquiredImage), Vulkan/Queue
 opened: 2026-09-25
 tags: [vulkan, device-lost, robustness, diagnostics]

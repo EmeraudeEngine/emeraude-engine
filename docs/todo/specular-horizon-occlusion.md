@@ -2,7 +2,7 @@
 id: specular-horizon-occlusion
 title: Fade the environment reflection of normal-mapped texels whose reflection dips below the surface
 status: open
-priority: unranked
+priority: medium
 scope: Graphics/Material (declareEnvironmentFrame, IBL specular), Saphir (LightGenerator ambient pass), Graphics/Effects/Lighting (SSR, RTR composite)
 opened: 2026-09-28
 tags: [ibl, reflections, normal-mapping, specular-occlusion, state-of-the-art]

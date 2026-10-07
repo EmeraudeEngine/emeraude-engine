@@ -2,7 +2,7 @@
 id: video-encoder-h265-transfer-on-encode-only-queue
 title: The H.265 hardware encoder records copies and transfer barriers on an encode-only queue (AMD: 55 VUIDs per rush)
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/VideoEncoderH265
 opened: 2026-10-01
 tags: [vulkan, video, amd, rushmaker, validation]

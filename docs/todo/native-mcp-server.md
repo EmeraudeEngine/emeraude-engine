@@ -2,7 +2,7 @@
 id: native-mcp-server
 title: Native MCP server in the engine, projected from the console command registry
 status: in-progress
-priority: unranked
+priority: medium
 scope: Console
 opened: 2026-09-27
 tags: [console, mcp, network, ai-runtime]

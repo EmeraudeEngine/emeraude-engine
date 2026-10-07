@@ -2,7 +2,7 @@
 id: ocean-fft-surface
 title: An animated sea — FFT spectral waves on a camera-following LOD grid, MoltenVK included
 status: in-progress
-priority: unranked
+priority: medium
 scope: Graphics/Geometry, Graphics/Renderable, Saphir/Generator, Graphics/Renderer (per-frame compute)
 opened: 2026-09-28
 tags: [water, ocean, fft, compute, lod, state-of-the-art]

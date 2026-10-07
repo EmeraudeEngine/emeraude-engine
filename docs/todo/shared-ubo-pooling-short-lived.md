@@ -2,7 +2,7 @@
 id: shared-ubo-pooling-short-lived
 title: Extend SharedUniformBuffer pooling to short-lived entities
 status: open
-priority: unranked
+priority: low
 scope: Vulkan
 opened: unknown
 tags: [vulkan, memory, performance]

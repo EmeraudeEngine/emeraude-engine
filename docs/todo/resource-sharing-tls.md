@@ -2,7 +2,7 @@
 id: resource-sharing-tls
 title: Resource sharing over TLS — a pinned self-signed certificate instead of cleartext
 status: open
-priority: unranked
+priority: medium
 scope: src/Resources, emeraude-base src/Network
 opened: 2026-10-04
 blocked-by: [resource-sharing-server]

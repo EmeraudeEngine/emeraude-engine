@@ -2,7 +2,7 @@
 id: compute-device-missing-portability-subset
 title: The physics compute device is created without VK_KHR_portability_subset on MoltenVK
 status: open
-priority: unranked
+priority: high
 scope: Vulkan/Instance (getComputeDevice), Physics/Manager
 opened: 2026-10-01
 tags: [physics, vulkan, macos, moltenvk, validation]

@@ -2,7 +2,7 @@
 id: mesh-shader-displaced-surface
 title: Real displaced micro-geometry near the camera through task + mesh shaders
 status: in-progress
-priority: unranked
+priority: medium
 scope: Graphics/Renderable, Saphir/Generator, Vulkan (optional mesh stage)
 opened: 2026-09-22
 tags: [mesh-shaders, relief, geometry]

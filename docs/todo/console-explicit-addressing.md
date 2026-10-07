@@ -2,7 +2,7 @@
 id: console-explicit-addressing
 title: Replace the stateful targeting commands (targetScene/targetNode/…) by explicit addressing
 status: open
-priority: unranked
+priority: medium
 scope: Scenes/Manager.console.cpp
 opened: 2026-09-27
 tags: [console, mcp]

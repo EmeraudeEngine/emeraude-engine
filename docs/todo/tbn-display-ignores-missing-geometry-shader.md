@@ -2,7 +2,7 @@
 id: tbn-display-ignores-missing-geometry-shader
 title: TBN-space display is built on a device without geometryShader (MoltenVK) — 1848 VUIDs and a shutdown race
 status: open
-priority: unranked
+priority: high
 scope: Graphics/RenderableInstance
 opened: 2026-09-27
 tags: [vulkan, validation, macos, moltenvk]

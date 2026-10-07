@@ -2,7 +2,7 @@
 id: skeletal-animation-retargeting
 title: Retarget an animation clip from one skeleton to another
 status: open
-priority: unranked
+priority: low
 scope: Animations
 opened: 2026-08-31
 tags: [animation, skeleton, mocap]

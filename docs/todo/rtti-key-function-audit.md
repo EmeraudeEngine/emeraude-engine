@@ -2,7 +2,7 @@
 id: rtti-key-function-audit
 title: Audit the engine's polymorphic classes for a key function (macOS dynamic_cast across images)
 status: open
-priority: unranked
+priority: medium
 scope: every EMEN_API polymorphic class the application may construct, every dynamic_cast / dynamic_pointer_cast in the engine
 opened: 2026-10-02
 tags: [macos, rtti, abi]

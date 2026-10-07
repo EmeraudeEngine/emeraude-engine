@@ -2,7 +2,7 @@
 id: logic-stalls-on-runtime-pipeline-compile
 title: Compile pipelines off the render-list walk (the render thread still stalls on a runtime compile)
 status: open
-priority: unranked
+priority: medium
 scope: Vulkan (GraphicsPipeline, ComputePipeline, the pipeline cache), Graphics (program generation), Core (logic / render threads)
 opened: 2026-10-03
 tags: [macos, moltenvk, pipeline-cache, stall, threads]

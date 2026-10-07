@@ -2,7 +2,7 @@
 id: rt-many-lights-sampling
 title: RT lane — sample many lights instead of keeping the 128 closest
 status: open
-priority: unranked
+priority: medium
 scope: Scenes/LightSet, Graphics RT effects
 opened: 2026-10-06
 tags: [raytracing, lighting]

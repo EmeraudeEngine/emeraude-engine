@@ -2,7 +2,7 @@
 id: geometry-content-dedup
 title: Loaders share identical geometry by content — JungleRuins built 6 trees 65 times (23 GB)
 status: in-progress
-priority: unranked
+priority: high
 scope: src/Scenes/Loaders
 opened: 2026-10-04
 tags: [memory, loaders, usd, gpu]

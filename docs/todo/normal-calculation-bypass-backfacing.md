@@ -2,7 +2,7 @@
 id: normal-calculation-bypass-backfacing
 title: Re-enable the normal-calculation bypass when a surface does not face a light
 status: open
-priority: unranked
+priority: low
 scope: Saphir/LightGenerator
 opened: unknown
 tags: [shaders, performance]

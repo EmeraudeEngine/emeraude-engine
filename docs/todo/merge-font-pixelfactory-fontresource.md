@@ -2,7 +2,7 @@
 id: merge-font-pixelfactory-fontresource
 title: Merge Font from PixelFactory and FontResource
 status: open
-priority: unranked
+priority: low
 scope: Resources
 opened: unknown
 tags: [resources, text]

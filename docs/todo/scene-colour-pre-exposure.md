@@ -2,7 +2,7 @@
 id: scene-colour-pre-exposure
 title: Pre-expose the fp16 scene colour so no target stores absolute nits past 65 504
 status: in-progress
-priority: unranked
+priority: high
 scope: Graphics (Renderer, PostProcessor, ToneMapping, Effects/Lighting, Effects/Atmosphere, Effects/Camera, GIDenoiser, IrradianceProbeVolume), Saphir (Generator/SceneRendering, LightGenerator)
 opened: 2026-09-25
 tags: [hdr, fp16, exposure, photometry, overflow, owner-decision, design]

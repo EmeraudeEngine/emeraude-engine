@@ -2,7 +2,7 @@
 id: composedsurface-native-menu
 title: Rework ComposedSurface into a native menu
 status: open
-priority: unranked
+priority: low
 scope: Overlay
 opened: unknown
 tags: [overlay, ui]

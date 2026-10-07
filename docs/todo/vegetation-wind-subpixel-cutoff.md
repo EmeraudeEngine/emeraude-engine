@@ -2,7 +2,7 @@
 id: vegetation-wind-subpixel-cutoff
 title: Stop computing the vegetation wind where its motion is smaller than a pixel
 status: open
-priority: unranked
+priority: low
 scope: Saphir/AbstractVertexStage (vegetation wind), Scenes/SceneInstanceTransforms
 opened: 2026-09-25
 tags: [vegetation, wind, performance]

@@ -2,7 +2,7 @@
 id: sprite-uniform-scale
 title: Sprites — decide what a sprite definition's UniformScale means
 status: open
-priority: unranked
+priority: low
 scope: Graphics
 opened: 2026-09-28
 tags: [graphics, data, measured]

@@ -2,7 +2,7 @@
 id: rtcontactshadows-backlit-self-hit
 title: RTContactShadows crushes a back-lit leaf — its ray hits the pixel's own card
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Effects/Lighting/RTContactShadows
 opened: 2026-09-25
 tags: [ray-tracing, contact-shadows, vegetation]

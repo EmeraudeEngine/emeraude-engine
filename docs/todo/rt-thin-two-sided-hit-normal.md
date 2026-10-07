@@ -2,7 +2,7 @@
 id: rt-thin-two-sided-hit-normal
 title: RT hit shading is one-sided on the unoriented vertex normal — a leaf hit from behind is lit from its far side
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Effects/Lighting (RTGI, RTR), Graphics/IrradianceProbeVolume, Graphics/Material/GPURTMaterialData
 opened: 2026-09-25
 tags: [ray-tracing, vegetation, two-sided]

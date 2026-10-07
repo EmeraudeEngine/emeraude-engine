@@ -2,7 +2,7 @@
 id: json-resource-describes-subresources
 title: A resource JSON must be able to DESCRIBE its sub-resources, not only point at them
 status: open
-priority: unranked
+priority: medium
 scope: Resources
 opened: unknown
 tags: [resources, json, scene]

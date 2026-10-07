@@ -2,7 +2,7 @@
 id: rt-light-ssbo-unbound-with-disabled-light-set
 title: A scene whose light set is disabled leaves the RT effects' light SSBO binding unwritten
 status: open
-priority: unranked
+priority: high
 scope: Graphics (RT effects descriptor set) / Scenes (LightSet)
 opened: 2026-09-30
 tags: [vulkan, validation, ray-tracing, lighting]

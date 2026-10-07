@@ -2,7 +2,7 @@
 id: light-cull-sphere-ignores-local-centre-and-scale
 title: The forward light cull centres the bounding sphere on the node origin and ignores the renderable's scale
 status: open
-priority: unranked
+priority: high
 scope: Scenes/Scene.rendering
 opened: 2026-10-04
 tags: [lighting, forward, culling]

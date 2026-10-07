@@ -2,7 +2,7 @@
 id: reusable-shadow-map-ephemeral-lights
 title: Reusable shadow map for ephemeral lights
 status: open
-priority: unranked
+priority: low
 scope: Graphics/ShadowMap
 opened: unknown
 tags: [shadow-map, memory]

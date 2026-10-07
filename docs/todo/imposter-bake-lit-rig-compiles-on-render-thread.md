@@ -2,7 +2,7 @@
 id: imposter-bake-lit-rig-compiles-on-render-thread
 title: The lit imposter bake rig compiles ~28 programs per variant synchronously on the render thread
 status: open
-priority: unranked
+priority: high
 scope: Graphics/RenderTarget/ImposterBake, Scenes/Toolkit (bakeTreeImposter), Saphir program generation
 opened: 2026-09-25
 tags: [vegetation, imposter, stall, startup]

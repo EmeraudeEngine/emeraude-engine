@@ -2,7 +2,7 @@
 id: sun-unlit-without-shadow-mapping
 title: With shadow mapping disabled, a CASCADED (CSM) directional light adds no light at all
 status: open
-priority: unranked
+priority: high
 scope: Saphir (LightGenerator light-pass selection), Scenes (LightSet), Graphics/Renderer
 opened: 2026-09-28
 tags: [lighting, shadows, directional-light, csm, settings, measured]

@@ -2,7 +2,7 @@
 id: tlas-one-instance-per-multiple-visuals
 title: Verify (then fix) the TLAS holding ONE instance per MultipleVisuals component — a grove traced as one tree
 status: open
-priority: unranked
+priority: high
 scope: Scenes (Scene.rendering.cpp RT list, SceneMetaData TLAS build), Graphics/RenderableInstance/Multiple
 opened: 2026-09-25
 tags: [ray-tracing, tlas, vegetation, instancing]

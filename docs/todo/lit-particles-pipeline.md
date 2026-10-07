@@ -2,7 +2,7 @@
 id: lit-particles-pipeline
 title: Graphics — a LIT particle emitter has no valid pipeline
 status: open
-priority: unranked
+priority: high
 scope: Graphics
 opened: 2026-09-28
 tags: [graphics, particles, measured]

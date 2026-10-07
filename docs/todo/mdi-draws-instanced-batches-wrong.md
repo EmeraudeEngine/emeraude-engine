@@ -2,7 +2,7 @@
 id: mdi-draws-instanced-batches-wrong
 title: With MDI enabled, an instanced batch would be drawn as ONE instance at LOD 0 — the MDI path ignores instancing and LODs
 status: open
-priority: unranked
+priority: high
 scope: Graphics/MDI (BatchBuilder), Scenes/Scene.rendering (Opaque list)
 opened: 2026-09-25
 tags: [mdi, instancing, latent-bug]

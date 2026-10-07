@@ -2,7 +2,7 @@
 id: screenshot-lost-across-scene-switch
 title: A screenshot requested right after a scene switch stays pending and its file is lost
 status: open
-priority: unranked
+priority: high
 scope: Graphics/Renderer
 opened: 2026-09-24
 tags: [capture, console]
