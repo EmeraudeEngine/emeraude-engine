@@ -917,7 +917,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	TrackMixer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	TrackMixer::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(MusicResource::getClassUID()) )
 		{

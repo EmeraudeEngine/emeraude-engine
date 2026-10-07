@@ -31,7 +31,7 @@ Inventory (2026-09-08, excluding comments):
 | `typeid` | 34 registrations + 2 lookups | `Resources/Manager.cpp:535-568`, `Resources/ResourceTrait.hpp:215,247` |
 | `typeid` exact-type comparisons | ~25 | `Scenes/AbstractEntity.cpp:313-395` (link/unlink dispatch) |
 | `std::type_index` | 1 map key + 2 virtuals | `Resources/Manager.hpp:520`, `ResourceTrait.hpp:315,336` |
-| `std::any` / `any_cast` | 36 files, 24 casts | Observer payload (contract owned by emeraude-base) |
+| ~~`std::any` / `any_cast`~~ | 0 since 2026-10-07 | Observer payload migrated to base `Base::Any` (group E done) |
 
 Not affected: `std::function` (only `target()` needs RTTI), `std::variant`, `shared_ptr` other
 than `dynamic_pointer_cast`. Third-party headers compiled in our TUs are clean: nlohmann json,
@@ -79,8 +79,8 @@ classes.
 
 - [ ] `Scenes/AbstractEntity.cpp:313-395` (`linkComponent` / `unlinkComponent` specific
       notifications): replace the `typeid(*pointer) == typeid(X)` chain with `isComponent(X::ClassId)`
-      (or a per-leaf `classUID()` compare, decision 3). The comment there already notes that
-      `std::any` typeinfo consistency across the DLL boundary forced this code into the `.cpp`.
+      (or a per-leaf `classUID()` compare, decision 3). The `.cpp` placement was forced by `std::any`'s
+      typeinfo identity across the DLL boundary; `Base::Any` (type-name hash) no longer needs it.
 
 ### Group D — `Resources::Manager` type key
 
@@ -93,9 +93,9 @@ classes.
 
 ### Group E — Observer payload
 
-- [ ] After `rtti-free-observer-payload` lands: mechanical migration of the 36 files / 24
-      `any_cast` sites to the base type (`std::shared_ptr< Component::* >`, `std::string`,
-      `std::shared_ptr< Node >`, `std::vector< std::filesystem::path >`, `int`, pairs).
+Done 2026-10-07 with base `Base::Any` (owner decision A): every `onNotification()` / `notify()` of the engine carries
+a `const Base::Any &`; the reads already went through `Base::anyValue< T >()` (no `any_cast` was left). No
+`std::any` / `<any>` remains in `src/`.
 
 ### Verification and flip
 

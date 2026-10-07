@@ -33,7 +33,6 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <cstddef>
-#include <any>
 #include <atomic>
 #include <chrono>
 #include <array>
@@ -435,7 +434,7 @@ namespace EmEn::Overlay
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
 			bool onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override;

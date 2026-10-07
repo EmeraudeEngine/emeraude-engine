@@ -838,7 +838,7 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(Window::getClassUID()) )
 		{

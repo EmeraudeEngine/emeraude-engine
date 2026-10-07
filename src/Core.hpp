@@ -119,7 +119,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <array>
 #include <atomic>
 #include <condition_variable>
@@ -213,7 +212,7 @@ namespace EmEn
 			 *
 			 * Example usage:
 			 * @code
-			 * void MyObserver::onNotification(const ObservableTrait* obs, int code, const std::any& data)
+			 * void MyObserver::onNotification(const ObservableTrait* obs, int code, const Base::Any& data)
 			 * {
 			 *	 if (code == Core::ExecutionPaused) {
 			 *		 // Pause audio, physics, etc.
@@ -1308,7 +1307,7 @@ namespace EmEn
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept final;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept final;
 
 			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
@@ -1712,7 +1711,7 @@ namespace EmEn
 			 */
 			virtual
 			bool
-			onCoreNotification ([[maybe_unused]] const ObservableTrait * observable, [[maybe_unused]] int notificationCode, [[maybe_unused]] const std::any & data) noexcept
+			onCoreNotification ([[maybe_unused]] const ObservableTrait * observable, [[maybe_unused]] int notificationCode, [[maybe_unused]] const Base::Any & data) noexcept
 			{
 				return true;
 			}

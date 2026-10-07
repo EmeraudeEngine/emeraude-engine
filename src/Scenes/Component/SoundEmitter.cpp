@@ -27,7 +27,6 @@
 #include "SoundEmitter.hpp"
 
 /* STL inclusions. */
-#include <any>
 #include <memory>
 
 /* Local inclusions. */
@@ -68,7 +67,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	SoundEmitter::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	SoundEmitter::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(SoundResource::getClassUID()) )
 		{

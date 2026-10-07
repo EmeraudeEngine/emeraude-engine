@@ -37,7 +37,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <array>
 #include <string>
 
@@ -631,7 +630,7 @@ namespace EmEn::Scenes
 		private:
 
 			/** @copydoc EmEn::Scenes::AbstractEntity::onUnhandledNotification() */
-			bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::onLocationDataUpdate()

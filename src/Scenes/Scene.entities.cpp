@@ -455,7 +455,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::checkRootNodeNotification (int notificationCode, const std::any & data) noexcept
+	Scene::checkRootNodeNotification (int notificationCode, const Base::Any & data) noexcept
 	{
 		switch ( notificationCode )
 		{
@@ -517,7 +517,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::checkEntityNotification (int notificationCode, const std::any & data) noexcept
+	Scene::checkEntityNotification (int notificationCode, const Base::Any & data) noexcept
 	{
 		switch ( notificationCode )
 		{

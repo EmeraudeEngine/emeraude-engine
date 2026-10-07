@@ -743,7 +743,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
+	Scene::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept
 	{
 		/* Handle Renderer resize notifications to resize the post-process stack. */
 		if ( observable->is(Renderer::getClassUID()) )

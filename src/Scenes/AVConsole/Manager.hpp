@@ -30,7 +30,6 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <any>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -419,7 +418,7 @@ namespace EmEn::Scenes::AVConsole
 
 			/** @copydoc EmEn::Base:ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;

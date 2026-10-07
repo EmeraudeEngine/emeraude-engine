@@ -31,7 +31,6 @@
 #include "Constants.hpp"
 
 /* STL inclusions. */
-#include <any>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -942,7 +941,7 @@ namespace EmEn::Scenes
 			 * @copydoc EmEn::Scenes::AbstractEntity::onUnhandledNotification()
 			 * @note Handles notifications from child nodes, components, and physical properties.
 			 */
-			bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Animations::AnimatableInterface::playAnimation()

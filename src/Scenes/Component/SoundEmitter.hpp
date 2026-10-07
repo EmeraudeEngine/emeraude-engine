@@ -30,7 +30,6 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <any>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -338,7 +337,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/**
 			 * @brief Updates the source properties with the entity.

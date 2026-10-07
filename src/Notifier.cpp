@@ -216,7 +216,7 @@ namespace EmEn
 	}
 
 	bool
-	Notifier::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	Notifier::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(Overlay::Manager::getClassUID()) )
 		{

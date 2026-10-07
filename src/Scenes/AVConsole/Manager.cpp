@@ -628,7 +628,7 @@ namespace EmEn::Scenes::AVConsole
 	}
 
 	bool
-	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<

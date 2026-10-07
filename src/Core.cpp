@@ -2667,7 +2667,7 @@ namespace EmEn
 	}
 
 	bool
-	Core::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
+	Core::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept
 	{
 		if ( observable == &m_consoleController )
 		{

@@ -126,7 +126,7 @@ namespace EmEn::Animations
 			/**
 			 * @brief Plays the identified animations.
 			 * @param animationID The animation ID.
-			 * @param value A reference to a std::any.
+			 * @param value A reference to the animated value.
 			 * @param cycle The current engine cycle.
 			 * @return bool
 			 */

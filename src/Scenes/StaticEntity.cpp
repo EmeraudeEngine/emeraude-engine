@@ -153,7 +153,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	StaticEntity::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	StaticEntity::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(BodyPhysicalProperties::getClassUID()) ) [[likely]]
 		{

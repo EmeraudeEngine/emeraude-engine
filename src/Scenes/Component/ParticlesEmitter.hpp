@@ -473,7 +473,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/**
 			 * @brief Returns the lifetime for a new particle.

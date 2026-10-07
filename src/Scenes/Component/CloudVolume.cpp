@@ -153,7 +153,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	CloudVolume::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	CloudVolume::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable != m_shape.get() )
 		{

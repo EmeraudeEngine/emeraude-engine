@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -172,7 +171,7 @@ namespace EmEn::Scenes
 			 * @param args Constructor arguments for the component (forwarded after componentName and entity).
 			 * @return std::shared_ptr< component_t > Shared pointer to the created component, or nullptr if entity is full (MaxComponentCount reached).
 			 *
-			 * @note This method handles notification dispatch in the .cpp file to ensure std::any typeinfo consistency across dynamic library boundaries.
+			 * @note This method handles notification dispatch in the .cpp file to ensure a single notification site (it was a requirement of std::any's typeinfo identity across the shared library; Base::Any compares a type-name hash, which does not need it).
 			 */
 			template< typename... ctor_args >
 			std::shared_ptr< component_t >
@@ -232,7 +231,7 @@ namespace EmEn::Scenes
 			 * components with appropriate subsystems (Graphics, Audio, Physics).
 			 *
 			 * @note Component-specific codes (CameraCreated, VisualCreated, etc.) carry
-			 *	   std::shared_ptr< component_t > in the notification data (std::any).
+			 *	   std::shared_ptr< component_t > in the notification data (a Base::Any).
 			 * @note Generic codes (ComponentCreated, ComponentDestroyed) carry
 			 *	   std::shared_ptr< Component::Abstract >.
 			 */
@@ -1229,7 +1228,7 @@ namespace EmEn::Scenes
 			 * Delegates unhandled notifications to derived classes via onUnhandledNotification().
 			 */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept final;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept final;
 
 			/**
 			 * @brief Recalculates entity properties when components change.
@@ -1273,7 +1272,7 @@ namespace EmEn::Scenes
 			 * @param isPrimaryDevice True if this is a primary Camera/Microphone (triggers PrimaryCameraCreated/PrimaryMicrophoneCreated).
 			 * @return bool True if component was linked successfully, false if m_components is full (MaxComponentCount reached).
 			 *
-			 * @note This method must be in .cpp to ensure std::any typeinfo consistency across dynamic library boundaries.
+			 * @note This method must be in .cpp to ensure a single notification site (it was a requirement of std::any's typeinfo identity across the shared library; Base::Any compares a type-name hash, which does not need it).
 			 */
 			bool linkComponent (const std::shared_ptr< Component::Abstract > & component, bool isPrimaryDevice = false) noexcept;
 
@@ -1416,13 +1415,13 @@ namespace EmEn::Scenes
 			 *
 			 * @param observable Pointer to the observable that sent the notification.
 			 * @param notificationCode The notification code sent.
-			 * @param data Additional data passed with the notification (std::any).
+			 * @param data Additional data passed with the notification (a Base::Any).
 			 * @return bool True if notification was handled, false to auto-detach observer.
 			 *
 			 * @note If returns false, the observer relationship is automatically broken.
 			 * @todo [GENERAL] Should use dedicated method. Rethink the purpose.
 			 */
-			virtual bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
+			virtual bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept = 0;
 
 			/**
 			 * @brief Derived class location update hook.
@@ -1472,7 +1471,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Link component to entity. The linkComponent() method handles all notifications
-		 * in the .cpp file to ensure std::any typeinfo consistency across dynamic library boundaries. */
+		 * in the .cpp file to ensure a single notification site (it was a requirement of std::any's typeinfo identity across the shared library; Base::Any compares a type-name hash, which does not need it). */
 		if ( !m_entity.linkComponent(component, m_isPrimaryDevice) )
 		{
 			return nullptr;

@@ -25,6 +25,7 @@ those whose file is inside the module (the header filter also reports every incl
 
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
+| ~38 files of `src/` (every `onNotification()` / `notify()` signature: `const Base::Any &` instead of `const std::any &`), checked through `src/Scenes/AbstractEntity.cpp` | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines (signature-only change). | base rtti-free-observer-payload |
 | `src/Net/TCPClient.cpp` (`connect()` through base `Network::connectFirstReachable()`, Happy Eyeballs) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines (the file's 5 older findings are outside them). | base httpsclient-happy-eyeballs |
 | `src/Graphics/TextureCache.cpp` (directory, erase and streams through base `IO::`) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | base windows-long-paths |
 | `src/Core.cpp`, `Tracer.cpp` / `TracerLogger.hpp`, `Audio/ExternalInput.*`, `Audio/Recorder.*`, `Audio/TrackMixer.*`, `Console/RemoteListener.*`, `Graphics/Recorder.*`, `PlatformSpecific/Helpers.linux.cpp`, `Scenes/Component/ParticlesEmitter.cpp` (threads on base `Base::Thread`) | 2026-10-07 | clang-tidy 21.1.6: 1 on the changed lines, fixed (readability-ambiguous-smartptr-reset-call in `ParticlesEmitter`). 0 left. `Notification.windows.cpp` not analysable on Linux. | base non-throwing-thread-start |

@@ -2700,7 +2700,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::checkAVConsoleNotification (int notificationCode, const std::any & data) noexcept
+	Scene::checkAVConsoleNotification (int notificationCode, const Base::Any & data) noexcept
 	{
 		switch ( notificationCode )
 		{

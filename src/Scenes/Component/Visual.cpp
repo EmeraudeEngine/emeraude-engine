@@ -198,7 +198,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	Visual::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	Visual::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable == m_renderableInterface.lock().get() )
 		{

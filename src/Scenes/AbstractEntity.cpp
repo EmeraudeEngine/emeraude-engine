@@ -63,7 +63,7 @@ namespace EmEn::Scenes
 	constexpr auto TracerTag{"AbstractEntity"};
 
 	bool
-	AbstractEntity::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
+	AbstractEntity::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept
 	{
 		bool identifiedObservable = false;
 
@@ -439,7 +439,7 @@ namespace EmEn::Scenes
 
 		/* NOTE: Send specific component type notifications.
 		 * This must be done here (in the .cpp) rather than in the template ComponentBuilder::build()
-		 * to ensure std::any typeinfo consistency when Emeraude is used as a dynamic library. */
+		 * for a single notification site (it was a requirement of std::any's typeinfo identity in a shared library; Base::Any compares a type-name hash, which does not need it). */
 		auto * pointer = component.get();
 
 		if ( typeid(*pointer) == typeid(Component::Camera) )

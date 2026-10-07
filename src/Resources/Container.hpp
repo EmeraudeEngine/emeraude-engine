@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <any>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -1519,7 +1518,7 @@ namespace EmEn::Resources
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			bool
-			onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
+			onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override
 			{
 				if ( ServiceAccess::isNetManagerObservable(observable) )
 				{

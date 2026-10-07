@@ -523,7 +523,7 @@ namespace EmEn::Scenes::Component
 		}
 	}
 	bool
-	AbstractLightEmitter::onNotification (const Base::ObservableTrait * /*observable*/, int notificationCode, const std::any & /*data*/) noexcept
+	AbstractLightEmitter::onNotification (const Base::ObservableTrait * /*observable*/, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 		{

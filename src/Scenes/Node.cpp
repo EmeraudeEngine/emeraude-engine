@@ -1140,7 +1140,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Node::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
+	Node::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept
 	{
 		if ( observable->is(Component::Abstract::getClassUID()) || observable->is(BodyPhysicalProperties::getClassUID()) )
 		{

@@ -278,7 +278,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Ambience::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	Ambience::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(SoundResource::getClassUID()) )
 		{

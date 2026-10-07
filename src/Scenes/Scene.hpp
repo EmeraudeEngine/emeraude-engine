@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -2539,7 +2538,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/**
 			 * @brief Checks a notification from the audio video console manager.
@@ -2547,7 +2546,7 @@ namespace EmEn::Scenes
 			 * @param data A reference to the notification payload.
 			 * @return void
 			 */
-			void checkAVConsoleNotification (int notificationCode, const std::any & data) noexcept;
+			void checkAVConsoleNotification (int notificationCode, const Base::Any & data) noexcept;
 
 			/**
 			 * @brief Checks a notification from a scene node.
@@ -2556,7 +2555,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkRootNodeNotification (int notificationCode, const std::any & data) noexcept;
+			bool checkRootNodeNotification (int notificationCode, const Base::Any & data) noexcept;
 
 			/**
 			 * @brief Checks a notification from a scene entity.
@@ -2564,7 +2563,7 @@ namespace EmEn::Scenes
 			 * @param data A reference to the notification payload.
 			 * @return bool
 			 */
-			bool checkEntityNotification (int notificationCode, const std::any & data) noexcept;
+			bool checkEntityNotification (int notificationCode, const Base::Any & data) noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CORE/LIFECYCLE]

@@ -2826,7 +2826,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	Renderer::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
 	{
 		if ( observable->is(Window::getClassUID()) )
 		{
