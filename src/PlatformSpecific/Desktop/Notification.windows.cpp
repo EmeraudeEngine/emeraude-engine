@@ -27,8 +27,8 @@
 #include "Notification.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <string>
-#include <thread>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -48,6 +48,54 @@ namespace EmEn::PlatformSpecific::Desktop
 {
 	namespace
 	{
+		/** @brief How long the notification icon stays after the balloon shows (Windows displays it ~5 s). */
+		constexpr UINT NotificationLifetimeMS{6000};
+
+		/** @brief Marks, in a timer id, a notification that created its own message-only window. */
+		constexpr UINT_PTR OwnsWindowFlag{0x40000000};
+
+		/**
+		 * @brief Returns a fresh notification id: the icon's uID and its removal timer's id. A fixed id made a second
+		 * notification within 6 s fail NIM_ADD (the first icon was still there).
+		 * @return UINT In [1, OwnsWindowFlag).
+		 */
+		[[nodiscard]]
+		UINT
+		nextNotificationID () noexcept
+		{
+			static std::atomic< UINT > counter{0};
+
+			return (counter.fetch_add(1) % static_cast< UINT >(OwnsWindowFlag - 1)) + 1;
+		}
+
+		/**
+		 * @brief Removes a notification icon (and its own window), on the thread that owns the window: SetTimer() calls
+		 * it from that thread's message dispatch. DestroyWindow() fails from any other thread — the former detached
+		 * cleanup thread leaked every message-only window.
+		 * @param window The window of the icon.
+		 * @param message Unused (WM_TIMER).
+		 * @param timerID The notification id, with OwnsWindowFlag when the window is the notification's own.
+		 * @param time Unused.
+		 * @return void
+		 */
+		VOID CALLBACK
+		removeNotification (HWND window, UINT /*message*/, UINT_PTR timerID, DWORD /*time*/) noexcept
+		{
+			KillTimer(window, timerID);
+
+			NOTIFYICONDATAW nidCleanup = {};
+			nidCleanup.cbSize = sizeof(nidCleanup);
+			nidCleanup.hWnd = window;
+			nidCleanup.uID = static_cast< UINT >(timerID & ~OwnsWindowFlag);
+
+			Shell_NotifyIconW(NIM_DELETE, &nidCleanup);
+
+			if ( (timerID & OwnsWindowFlag) != 0 )
+			{
+				DestroyWindow(window);
+			}
+		}
+
 		DWORD
 		toNiifIcon (NotificationIcon icon) noexcept
 		{
@@ -129,7 +177,7 @@ namespace EmEn::PlatformSpecific::Desktop
 		NOTIFYICONDATAW nid = {};
 		nid.cbSize = sizeof(nid);
 		nid.hWnd = hwnd;
-		nid.uID = 1;
+		nid.uID = nextNotificationID();
 		nid.uFlags = NIF_ICON | NIF_TIP | NIF_INFO | NIF_SHOWTIP;
 
 		/* Load a system icon for the tray. */
@@ -168,27 +216,17 @@ namespace EmEn::PlatformSpecific::Desktop
 		nid.uVersion = NOTIFYICON_VERSION_4;
 		Shell_NotifyIconW(NIM_SETVERSION, &nid);
 
-		/*
-		 * Schedule cleanup after a delay to allow the notification to display.
-		 * Use a separate thread to avoid blocking.
-		 */
-		std::thread([hwnd, uID = nid.uID, ownsWindow]() {
-			/* Wait for notification to be visible (Windows displays for ~5 seconds by default). */
-			Sleep(6000);
+		/* The icon is removed later, on the thread that owns the window (no thread of its own: owner decision,
+		 * 2026-10-07). ⚠️ That thread must dispatch messages — the main thread does (the window's event pump). */
+		const UINT_PTR timerID = static_cast< UINT_PTR >(nid.uID) | (ownsWindow ? OwnsWindowFlag : 0);
 
-			/* Remove the notification icon. */
-			NOTIFYICONDATAW nidCleanup = {};
-			nidCleanup.cbSize = sizeof(nidCleanup);
-			nidCleanup.hWnd = hwnd;
-			nidCleanup.uID = uID;
-			Shell_NotifyIconW(NIM_DELETE, &nidCleanup);
+		if ( SetTimer(hwnd, timerID, NotificationLifetimeMS, &removeNotification) == 0 )
+		{
+			/* Not this thread's window, or no timer left: remove it now rather than leave an orphan icon. */
+			removeNotification(hwnd, WM_TIMER, timerID, 0);
 
-			/* Destroy the temporary window only if we created it. */
-			if ( ownsWindow )
-			{
-				DestroyWindow(hwnd);
-			}
-		}).detach();
+			return false;
+		}
 
 		return true;
 	}

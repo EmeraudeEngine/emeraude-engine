@@ -213,13 +213,25 @@ namespace EmEn::Console
 
 		this->accept();
 
-		m_networkThread = std::thread([this] () {
+		const auto started = m_networkThread.start([this] () {
 			TraceInfo{ClassId} << "Starting ASIO AI Remote Console on " << m_address << ':' << m_port << ".";
 
 			static_cast< void >(m_ioContext.run());
 
 			TraceInfo{ClassId} << "ASIO AI Remote Console thread stopped.";
 		});
+
+		if ( !started )
+		{
+			/* The system refused the thread (Base::Thread traced why): the remote console is refused (owner policy,
+			 * 2026-10-07) — not listening, isRunning() false. The pending accept never runs (no context runs). */
+			TraceError{ClassId} << "Unable to start the network thread: the remote console on " << m_address << ':' << m_port << " is disabled !";
+
+			m_running = false;
+
+			/* NOTE: best effort — the acceptor is going away, a failure leaves nothing to do. */
+			m_acceptor->close(ec);
+		}
 	}
 
 	RemoteListener::~RemoteListener ()
@@ -261,10 +273,7 @@ namespace EmEn::Console
 
 		m_ioContext.stop();
 
-		if ( m_networkThread.joinable() )
-		{
-			m_networkThread.join();
-		}
+		m_networkThread.join();
 
 		m_acceptor.reset();
 	}

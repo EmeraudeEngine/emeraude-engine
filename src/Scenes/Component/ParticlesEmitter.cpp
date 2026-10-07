@@ -263,7 +263,16 @@ namespace EmEn::Scenes::Component
 				duration,
 				true
 			);
-			m_timedEvent->start();
+
+			/* A duration that cannot be timed is refused, not left emitting forever (Base::Thread traced the refusal). */
+			if ( !m_timedEvent->start() )
+			{
+				TraceError{ClassId} << "The emission timer could not start: the timed emission is refused !";
+
+				m_timedEvent = nullptr;
+
+				this->disableFlag(IsEmitting);
+			}
 		}
 	}
 }

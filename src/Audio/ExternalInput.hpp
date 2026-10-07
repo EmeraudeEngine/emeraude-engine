@@ -44,6 +44,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Thread.hpp"
 #include "WaveFactory/Types.hpp"
 
 /* Forward declarations. */
@@ -102,15 +103,18 @@ namespace EmEn::Audio
 			/**
 			 * @brief Starts the recording in memory mode.
 			 * @note Samples are accumulated in RAM. Use saveRecord() to write them to disk.
+			 * @return bool False without a capture device, while already recording, or when the system refused the
+			 * recording thread (traced): nothing records then.
 			 */
-			void start () noexcept;
+			[[nodiscard]]
+			bool start () noexcept;
 
 			/**
 			 * @brief Starts the recording in streaming mode.
 			 * @details Samples are written directly to a WAV file as they are captured.
 			 * The file header is patched when stop() is called.
 			 * @param outputPath The output WAV file path.
-			 * @return true if the file was opened successfully.
+			 * @return true if the file was opened and the recording thread started.
 			 */
 			[[nodiscard]]
 			bool start (const std::filesystem::path & outputPath) noexcept;
@@ -150,6 +154,13 @@ namespace EmEn::Audio
 			void recordingTask () noexcept;
 
 			/**
+			 * @brief Starts the recording thread of a recording just begun; on a refusal, ends that recording.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool startRecordingThread () noexcept;
+
+			/**
 			 * @brief Writes a standard 44-byte WAV header.
 			 * @param stream The output stream to write to.
 			 * @param dataSize The size of the data chunk (0 for placeholder).
@@ -174,7 +185,7 @@ namespace EmEn::Audio
 			std::ofstream m_outputFileStream;
 			uint32_t m_streamByteCount{0};
 			/* Common. */
-			std::thread m_process;
+			Base::Thread m_process;
 			bool m_showInformation{false};
 			bool m_isRecording{false};
 			bool m_streamingMode{false};

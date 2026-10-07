@@ -195,10 +195,7 @@ namespace EmEn::Audio
 	{
 		auto & settings = m_primaryServices.settings();
 
-		if ( m_process.joinable() )
-		{
-			m_process.join();
-		}
+		m_process.join();
 
 		/* NOTE: Release the output audio device. */
 		if ( m_device != nullptr )
@@ -220,12 +217,12 @@ namespace EmEn::Audio
 		return true;
 	}
 
-	void
+	bool
 	ExternalInput::start () noexcept
 	{
 		if ( m_device == nullptr || m_isRecording )
 		{
-			return;
+			return false;
 		}
 
 		m_samples.clear();
@@ -235,7 +232,7 @@ namespace EmEn::Audio
 
 		m_isRecording = true;
 
-		m_process = std::thread(&ExternalInput::recordingTask, this);
+		return this->startRecordingThread();
 	}
 
 	bool
@@ -272,9 +269,30 @@ namespace EmEn::Audio
 
 		m_isRecording = true;
 
-		m_process = std::thread(&ExternalInput::recordingTask, this);
+		return this->startRecordingThread();
+	}
 
-		return true;
+	bool
+	ExternalInput::startRecordingThread () noexcept
+	{
+		if ( m_process.start([this] { this->recordingTask(); }) )
+		{
+			return true;
+		}
+
+		/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
+		TraceError{ClassId} << "Unable to start the recording thread: the recording is refused !";
+
+		alcCaptureStop(m_device);
+
+		m_isRecording = false;
+
+		if ( m_outputFileStream.is_open() )
+		{
+			m_outputFileStream.close();
+		}
+
+		return false;
 	}
 
 	void
@@ -290,10 +308,7 @@ namespace EmEn::Audio
 		m_isRecording = false;
 
 		/* Join the recording thread to ensure all data is flushed. */
-		if ( m_process.joinable() )
-		{
-			m_process.join();
-		}
+		m_process.join();
 
 		/* Streaming mode: finalize the WAV header and close the file. */
 		if ( m_streamingMode && m_outputFileStream.is_open() )

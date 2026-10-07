@@ -34,6 +34,9 @@
 #include <cstdlib>
 #include <thread>
 
+/* Local inclusions. */
+#include "Thread.hpp"
+
 namespace EmEn::PlatformSpecific
 {
 	bool
@@ -155,32 +158,22 @@ namespace EmEn::PlatformSpecific
 			return executeCommand(command, exitCode);
 		}
 
-		/* ⚠️ No try/catch in the engine, and it is built with -fno-exceptions by at least one
-		 * consumer: std::async would terminate the process when no thread is available instead of
-		 * being caught. A plain std::thread plus a flag reports that failure as a value. */
+		/* ⚠️ No try/catch in the engine, and it is built with -fno-exceptions: std::async — or a std::thread — would
+		 * terminate the process when no thread is available. Base::Thread reports that failure as a value. */
 		int childExitCode = -1;
 		std::string childOutput;
 		std::atomic< bool > finished{false};
 
-		std::thread worker;
+		Base::Thread worker;
 
-		{
-			/* A thread that cannot be created reports it here rather than by throwing: on POSIX
-			 * the constructor of an unstartable std::thread is the only failure point, so the
-			 * spawn is attempted and immediately validated by joinable(). */
-			std::thread candidate{[&command, &childExitCode, &childOutput, &finished] () noexcept {
-				childOutput = executeCommand(command, childExitCode);
+		if ( !worker.start([&command, &childExitCode, &childOutput, &finished] () noexcept {
+			childOutput = executeCommand(command, childExitCode);
 
-				finished.store(true, std::memory_order_release);
-			}};
-
-			worker = std::move(candidate);
-		}
-
-		if ( !worker.joinable() )
+			finished.store(true, std::memory_order_release);
+		}) )
 		{
 			/* The child was never spawned, so falling back to the blocking form only costs the
-			 * unresponsive-window prompt, never a lost dialog. */
+			 * unresponsive-window prompt, never a lost dialog (owner policy, 2026-10-07). */
 			return executeCommand(command, exitCode);
 		}
 

@@ -5494,6 +5494,20 @@ misleading.
 
 ## Platform-Specific
 
+### ⚠️⚠️ Threads start through base `Base::Thread` — a refused thread is a value, not an abort (2026-10-07)
+
+`std::thread`'s constructor throws when the system cannot start a thread; under `-fno-exceptions` the process
+aborted. Every engine thread now starts through `Base::Thread::start()` (base `docs/caution-points.md` § Threads) and
+handles the refusal (owner policy): `Core::run()` ends the start-up with `EXIT_FAILURE` when the logic or the
+rendering thread is refused; the `TracerLogger` writes SYNCHRONOUSLY (same format, nothing lost);
+`Audio::ExternalInput::start()` / `start(path)`, `Audio::Recorder`, `TrackMixer`, `RemoteListener` (`isRunning()`),
+`Graphics::Recorder` (studio and hardware sessions) refuse their feature with a trace and release what they had
+set up; `executeCommandPumpingEvents()` blocks instead; `ParticlesEmitter::start(duration)` refuses a timed emission
+whose timer cannot start (it would emit forever). `Notification.windows.cpp` has no thread any more: the icon is
+removed by `SetTimer()` on the window's own thread (`DestroyWindow()` fails from another thread — the detached
+cleanup thread leaked every message-only window), one id per notification (a fixed `uID = 1` failed `NIM_ADD` for a
+second notification within 6 s). **Rule:** never `std::thread` in the engine.
+
 ### macOS DEFINES `TARGET_OS_IPHONE` (as 0): test its VALUE, never `defined()` (2026-10-04)
 
 Apple's `TargetConditionals.h` defines `TARGET_OS_IPHONE` and `TARGET_IPHONE_SIMULATOR` on EVERY Apple platform, 0 on

@@ -34,6 +34,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <queue>
 #include <source_location>
@@ -43,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
+#include "Thread.hpp"
 
 namespace EmEn
 {
@@ -288,13 +290,38 @@ namespace EmEn
 			 */
 			void task () noexcept;
 
+			/**
+			 * @brief Writes the file start of the log format.
+			 * @param file The log file.
+			 * @return void
+			 */
+			void writeHeader (std::ostream & file) const noexcept;
+
+			/**
+			 * @brief Writes one entry in the log format.
+			 * @param file The log file.
+			 * @param entry The entry.
+			 * @return void
+			 */
+			void writeEntry (std::ostream & file, const TracerEntry & entry) const noexcept;
+
+			/**
+			 * @brief Writes the file end of the log format.
+			 * @param file The log file.
+			 * @return void
+			 */
+			void writeFooter (std::ostream & file) const noexcept;
+
 			std::filesystem::path m_filepath;
 			std::queue< TracerEntry > m_entries;
 			LogFormat m_logFormat;
-			std::thread m_thread;
+			Base::Thread m_thread;
+			/** @brief The log file written on each trace's thread when the system refused the writing thread. */
+			std::fstream m_synchronousFile;
 			std::mutex m_entriesAccess;
 			std::condition_variable m_condition;
 			std::atomic_bool m_isUsable{false};
 			std::atomic_bool m_isRunning{false};
+			std::atomic_bool m_isSynchronous{false};
 	};
 }

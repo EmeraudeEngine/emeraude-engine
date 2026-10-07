@@ -43,6 +43,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Thread.hpp"
 #include "MusicResource.hpp"
 #include "PlaylistResource.hpp"
 #include "Source.hpp"
@@ -510,7 +511,7 @@ namespace EmEn::Audio
 			std::vector< std::shared_ptr< MusicResource > > m_playlist;
 			std::shared_ptr< PlaylistResource > m_loadedPlaylist;
 			std::shared_ptr< MusicResource > m_loadingTrack;
-			std::thread m_eventThread;
+			Base::Thread m_eventThread;
 			mutable std::mutex m_stateAccess;
 			std::condition_variable m_fadeCv;
 			std::atomic_bool m_stopThread{false};

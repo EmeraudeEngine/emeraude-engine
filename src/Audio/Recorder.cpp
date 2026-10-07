@@ -199,9 +199,16 @@ namespace EmEn::Audio
 		/* Start the render thread for audio passthrough. */
 		m_renderRunning = true;
 
-		m_renderThread = std::thread{[this] {
-			this->renderThreadFunc();
-		}};
+		if ( !m_renderThread.start([this] { this->renderThreadFunc(); }) )
+		{
+			/* The system refused the thread (Base::Thread traced why): the recorder is refused (owner policy,
+			 * 2026-10-07). onTerminate() releases everything created above and restores the previous context. */
+			Tracer::error(ClassId, "Unable to start the loopback render thread: the audio recorder is disabled !");
+
+			static_cast< void >(this->onTerminate());
+
+			return false;
+		}
 
 		Tracer::success(ClassId, "ALC_SOFT_loopback available, using loopback passthrough.");
 
@@ -220,10 +227,7 @@ namespace EmEn::Audio
 		/* Stop the render thread. */
 		m_renderRunning = false;
 
-		if ( m_renderThread.joinable() )
-		{
-			m_renderThread.join();
-		}
+		m_renderThread.join();
 
 		/* Restore the previous global context before destroying loopback resources. */
 		alcMakeContextCurrent(m_previousGlobalContext);

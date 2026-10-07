@@ -45,6 +45,7 @@
 #include "Network/GracefulCloser.hpp"
 
 /* Local inclusions for usages. */
+#include "Thread.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Console
@@ -228,7 +229,7 @@ namespace EmEn::Console
 			 * destroyed first, it holds weak references only; the lingering sockets die with the context's handlers. */
 			Base::Network::GracefulCloser m_gracefulCloser;
 			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;
-			std::thread m_networkThread;
+			Base::Thread m_networkThread;
 			std::mutex m_clientsMutex;
 			std::set< std::shared_ptr< asio::ip::tcp::socket > > m_clients;
 			/** @brief Serializes every write and close on the client sockets: the network thread (transport

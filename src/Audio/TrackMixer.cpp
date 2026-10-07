@@ -127,7 +127,17 @@ namespace EmEn::Audio
 		/* NOTE: Console registration is handled by AudioManager via registerToObject(). */
 
 		m_stopThread = false;
-		m_eventThread = std::thread{&TrackMixer::eventLoop, this};
+
+		if ( !m_eventThread.start([this] { this->eventLoop(); }) )
+		{
+			/* The system refused the thread (Base::Thread traced why): the track mixer is refused (owner policy,
+			 * 2026-10-07). onTerminate() releases the tracks allocated above. */
+			Tracer::error(ClassId, "Unable to start the track mixer event thread: the track mixer is disabled !");
+
+			static_cast< void >(this->onTerminate());
+
+			return false;
+		}
 
 		return true;
 	}
@@ -138,10 +148,7 @@ namespace EmEn::Audio
 		m_stopThread = true;
 		m_fadeCv.notify_one();
 
-		if ( m_eventThread.joinable() )
-		{
-			m_eventThread.join();
-		}
+		m_eventThread.join();
 
 		if ( m_trackA != nullptr )
 		{

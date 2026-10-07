@@ -98,15 +98,33 @@ namespace EmEn
 	{
 		this->stop();
 
-		if ( m_thread.joinable() )
+		m_thread.join();
+
+		if ( m_isSynchronous )
 		{
-			m_thread.join();
+			const std::scoped_lock lock{m_entriesAccess};
+
+			this->writeFooter(m_synchronousFile);
+
+			m_synchronousFile.close();
 		}
 	}
 
 	void
 	TracerLogger::push (Severity severity, const char * tag, std::string message, const std::source_location & location) noexcept
 	{
+		/* No writing thread (start() fell back): written here, under the same lock. */
+		if ( m_isSynchronous )
+		{
+			const std::scoped_lock lock{m_entriesAccess};
+
+			this->writeEntry(m_synchronousFile, TracerEntry{severity, tag, std::move(message), location, std::this_thread::get_id()});
+
+			m_synchronousFile.flush();
+
+			return;
+		}
+
 		{
 			/* NOTE: Lock between the writing logs task in a file and the push/pop method. */
 			const std::scoped_lock lock{m_entriesAccess};
@@ -133,7 +151,25 @@ namespace EmEn
 
 		m_isRunning = true;
 
-		m_thread = std::thread{&TracerLogger::task, this};
+		if ( m_thread.start([this] { this->task(); }) )
+		{
+			return true;
+		}
+
+		/* The system refused the writing thread (Base::Thread traced it): the logger writes SYNCHRONOUSLY, on the
+		 * thread of each trace, so nothing is lost (owner policy, 2026-10-07). */
+		m_isRunning = false;
+
+		m_synchronousFile.open(m_filepath, std::ios::out | std::ios::app);
+
+		if ( !m_synchronousFile.is_open() )
+		{
+			return false;
+		}
+
+		this->writeHeader(m_synchronousFile);
+
+		m_isSynchronous = true;
 
 		return true;
 	}
@@ -162,6 +198,44 @@ namespace EmEn
 		std::fstream file{m_filepath, std::ios::out | std::ios::app};
 
 		/* NOTE: Write the file start. */
+		this->writeHeader(file);
+
+		while ( m_isRunning )
+		{
+			std::queue< TracerEntry > localQueue;
+
+			{
+				std::unique_lock< std::mutex > lock{m_entriesAccess};
+
+				/* NOTE: Wait for the thread to be a wake-up. */
+				m_condition.wait(lock, [&] {
+					return !m_entries.empty() || !m_isRunning;
+				});
+
+				if ( !m_entries.empty() )
+				{
+					m_entries.swap(localQueue);
+				}
+			}
+
+			while ( !localQueue.empty() )
+			{
+				this->writeEntry(file, localQueue.front());
+
+				localQueue.pop();
+			}
+
+			/* NOTE: Force to write into the file. */
+			file.flush();
+		}
+
+		/* NOTE: Write the file end. */
+		this->writeFooter(file);
+	}
+
+	void
+	TracerLogger::writeHeader (std::ostream & file) const noexcept
+	{
 		switch ( m_logFormat )
 		{
 			case LogFormat::Text :
@@ -185,79 +259,57 @@ namespace EmEn
 					"\t\t" "<p>Beginning at " << std::chrono::steady_clock::now().time_since_epoch().count() << "</p>" "\n";
 				break;
 		}
+	}
 
-		while ( m_isRunning )
+	void
+	TracerLogger::writeEntry (std::ostream & file, const TracerEntry & entry) const noexcept
+	{
+		switch ( m_logFormat )
 		{
-			std::queue< TracerEntry > localQueue;
+			case LogFormat::Text :
+				file <<
+					"[" << entry.time().time_since_epoch().count() << "]"
+					"[" << entry.tag() << "]"
+					"[" << to_string(entry.severity()) << "]"
+					"[" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << "`]" "\n"
+					<< entry.message() << '\n';
+				break;
 
-			{
-				std::unique_lock< std::mutex > lock{m_entriesAccess};
+			case LogFormat::JSON :
+				file <<
+					"\t" "{" "\n"
+					"\t\t" "\"tag\" : " << entry.tag() << " @ <small><i>" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+					"\t\t" "\"filename\" : " << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+					"\t\t" "\"line\" : " <<  entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+					"\t\t" "\"column\" :" << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+					"\t\t" "\"function\" : " << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+					"\t\t" "<p class=\"entry-time\">Time: " << entry.time().time_since_epoch().count() << "</p>" "\n"
+					"\t\t" "<p class=\"entry-thread\">Thread: " << entry.threadId() << "</p>" "\n"
+					"\t\t" "<p class=\"entry-severity\">Severity: " << to_string(entry.severity()) << "<p/>" "\n"
+					"\t\t" "<pre class=\"entry-message\">" "\n"
+					<< entry.message() << "\n"
+					"\t\t" "</pre>" "\n"
+					"\t" "}" "\n";
+				break;
 
-				/* NOTE: Wait for the thread to be a wake-up. */
-				m_condition.wait(lock, [&] {
-					return !m_entries.empty() || !m_isRunning;
-				});
-
-				if ( !m_entries.empty() )
-				{
-					m_entries.swap(localQueue);
-				}
-			}
-
-			while ( !localQueue.empty() )
-			{
-				const auto & entry = localQueue.front();
-
-				switch ( m_logFormat )
-				{
-					case LogFormat::Text :
-						file <<
-							"[" << entry.time().time_since_epoch().count() << "]"
-							"[" << entry.tag() << "]"
-							"[" << to_string(entry.severity()) << "]"
-							"[" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << "`]" "\n"
-							<< entry.message() << '\n';
-						break;
-
-					case LogFormat::JSON :
-						file <<
-							"\t" "{" "\n"
-							"\t\t" "\"tag\" : " << entry.tag() << " @ <small><i>" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
-							"\t\t" "\"filename\" : " << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
-							"\t\t" "\"line\" : " <<  entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
-							"\t\t" "\"column\" :" << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
-							"\t\t" "\"function\" : " << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
-							"\t\t" "<p class=\"entry-time\">Time: " << entry.time().time_since_epoch().count() << "</p>" "\n"
-							"\t\t" "<p class=\"entry-thread\">Thread: " << entry.threadId() << "</p>" "\n"
-							"\t\t" "<p class=\"entry-severity\">Severity: " << to_string(entry.severity()) << "<p/>" "\n"
-							"\t\t" "<pre class=\"entry-message\">" "\n"
-							<< entry.message() << "\n"
-							"\t\t" "</pre>" "\n"
-							"\t" "}" "\n";
-						break;
-
-					case LogFormat::HTML :
-						file <<
-							"\t\t" "<div>" "\n"
-							"\t\t\t" "<h2 class=\"entry-tag\">" << entry.tag() << " @ <small><i>" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
-							"\t\t\t" "<p class=\"entry-time\">Time: " << entry.time().time_since_epoch().count() << "</p>" "\n"
-							"\t\t\t" "<p class=\"entry-thread\">Thread: " << entry.threadId() << "</p>" "\n"
-							"\t\t\t" "<p class=\"entry-severity\">Severity: " << to_string(entry.severity()) << "<p/>" "\n"
-							"\t\t\t" "<pre class=\"entry-message\">" "\n"
-							<< entry.message() << "\n"
-							"\t\t\t" "</pre>" "\n"
-							"\t\t" "</div>" "\n";
-						break;
-				}
-
-				localQueue.pop();
-			}
-
-			/* NOTE: Force to write into the file. */
-			file.flush();
+			case LogFormat::HTML :
+				file <<
+					"\t\t" "<div>" "\n"
+					"\t\t\t" "<h2 class=\"entry-tag\">" << entry.tag() << " @ <small><i>" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+					"\t\t\t" "<p class=\"entry-time\">Time: " << entry.time().time_since_epoch().count() << "</p>" "\n"
+					"\t\t\t" "<p class=\"entry-thread\">Thread: " << entry.threadId() << "</p>" "\n"
+					"\t\t\t" "<p class=\"entry-severity\">Severity: " << to_string(entry.severity()) << "<p/>" "\n"
+					"\t\t\t" "<pre class=\"entry-message\">" "\n"
+					<< entry.message() << "\n"
+					"\t\t\t" "</pre>" "\n"
+					"\t\t" "</div>" "\n";
+				break;
 		}
+	}
 
-		/* NOTE: Write the file end. */
+	void
+	TracerLogger::writeFooter (std::ostream & file) const noexcept
+	{
 		switch ( m_logFormat )
 		{
 			case LogFormat::Text :

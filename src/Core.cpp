@@ -28,6 +28,7 @@
 
 /* Project configuration. */
 #include "AnyValue.hpp"
+#include "Thread.hpp"
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
@@ -465,32 +466,40 @@ namespace EmEn
 
 		/* NOTE: Create the logic loop and the rendering loop into threads
 		 * automatically joined at the end of this function. */
-		std::thread logicsThread{[this] {
-			this->logicsTask();
-		}};
+		Thread logicsThread;
+		Thread renderingThread;
 
-		std::thread renderingThread{[this] {
-			this->renderingTask();
-		}};
+		const auto loopsStarted = logicsThread.start([this] { this->logicsTask(); }) && renderingThread.start([this] { this->renderingTask(); });
 
-		Tracer::success(ClassId, "Core level execution started !");
-
-		/* Launch the application level. */
-		if ( this->onCoreStarted(m_primaryServices.arguments(), m_primaryServices.settings()) )
+		if ( !loopsStarted )
 		{
-			Tracer::success(ClassId, "The application successfully started.");
+			/* The system refused a thread (Base::Thread traced why): a clean start-up failure (owner policy,
+			 * 2026-10-07). stop() lowers the loop flags, so the thread that did start ends and is joined below. */
+			Tracer::fatal(ClassId, "The system refused to start the logics or the rendering thread ! Exiting ...");
 
-			/* Dispatch the entering in main loop event,
-			 * first by sending the event,
-			 * then directly to the sub application. */
-			this->notify(EnteringMainLoop);
+			this->stop(EXIT_FAILURE);
 		}
 		else
 		{
-			Tracer::fatal(ClassId, "The application failed to start ! Exiting ...");
+			Tracer::success(ClassId, "Core level execution started !");
 
-			/* NOTE: A failed start is a failed run: without the code, the process would exit with success. */
-			this->stop(EXIT_FAILURE);
+			/* Launch the application level. */
+			if ( this->onCoreStarted(m_primaryServices.arguments(), m_primaryServices.settings()) )
+			{
+				Tracer::success(ClassId, "The application successfully started.");
+
+				/* Dispatch the entering in main loop event,
+				 * first by sending the event,
+				 * then directly to the sub application. */
+				this->notify(EnteringMainLoop);
+			}
+			else
+			{
+				Tracer::fatal(ClassId, "The application failed to start ! Exiting ...");
+
+				/* NOTE: A failed start is a failed run: without the code, the process would exit with success. */
+				this->stop(EXIT_FAILURE);
+			}
 		}
 
 		auto lastTop = std::chrono::steady_clock::now();

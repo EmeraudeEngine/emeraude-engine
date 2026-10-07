@@ -304,10 +304,7 @@ namespace EmEn::Graphics
 		/* Force-join all background encoding sessions at shutdown. */
 		for ( auto & session : m_finishingSessions )
 		{
-			if ( session->encodingThread.joinable() )
-			{
-				session->encodingThread.join();
-			}
+			session->encodingThread.join();
 		}
 
 		m_finishingSessions.clear();
@@ -571,13 +568,24 @@ namespace EmEn::Graphics
 		m_recordedSlot = NoSlot;
 		m_stopPending = false;
 		m_extentMismatchTraced = false;
-		m_sessionOpen.store(true, std::memory_order_release);
-		m_isRecording.store(true, std::memory_order_release);
 		m_currentSession->threadRunning = true;
 
-		m_currentSession->encodingThread = std::thread{[session = m_currentSession.get()] {
-			session->encodingThreadFunc();
-		}};
+		if ( !m_currentSession->encodingThread.start([session = m_currentSession.get()] { session->encodingThreadFunc(); }) )
+		{
+			/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
+			TraceError{ClassId} << "Unable to start the encoding thread: the recording is refused !";
+
+			m_currentSession->threadRunning = false;
+
+			this->destroyAsyncResources();
+
+			m_currentSession.reset();
+
+			return false;
+		}
+
+		m_sessionOpen.store(true, std::memory_order_release);
+		m_isRecording.store(true, std::memory_order_release);
 
 		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [Studio / " << qualityPresetToString(m_qualityPreset) << "] -> " << outputPath;
 
@@ -1357,10 +1365,7 @@ namespace EmEn::Graphics
 
 	Recorder::EncodingSession::~EncodingSession () noexcept
 	{
-		if ( encodingThread.joinable() )
-		{
-			encodingThread.join();
-		}
+		encodingThread.join();
 
 		/* Safety net: clean up if finalize() was not called. */
 		if ( codecInitialized )
@@ -1379,10 +1384,7 @@ namespace EmEn::Graphics
 		std::erase_if(m_finishingSessions, [] (const auto & session) {
 			if ( session->finished.load() )
 			{
-				if ( session->encodingThread.joinable() )
-				{
-					session->encodingThread.join();
-				}
+				session->encodingThread.join();
 
 				return true;
 			}
@@ -1773,9 +1775,18 @@ namespace EmEn::Graphics
 		m_stopPending = false;
 		m_extentMismatchTraced = false;
 		m_hardwareSession->threadRunning = true;
-		m_hardwareSession->encodingThread = std::thread{[this] {
-			this->hardwareEncodingLoop();
-		}};
+
+		if ( !m_hardwareSession->encodingThread.start([this] { this->hardwareEncodingLoop(); }) )
+		{
+			/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
+			TraceError{ClassId} << "Unable to start the hardware encoding thread: the recording is refused !";
+
+			m_hardwareSession->threadRunning = false;
+
+			m_hardwareSession.reset();
+
+			return false;
+		}
 
 		m_sessionOpen.store(true, std::memory_order_release);
 		m_isRecording.store(true, std::memory_order_release);
@@ -1900,10 +1911,7 @@ namespace EmEn::Graphics
 		m_hardwareSession->threadRunning = false;
 		m_hardwareSession->queueCV.notify_all();
 
-		if ( m_hardwareSession->encodingThread.joinable() )
-		{
-			m_hardwareSession->encodingThread.join();
-		}
+		m_hardwareSession->encodingThread.join();
 
 		/* No snapshot copy is on the GPU any more (closeSession() waits for the frames that carried them), and the
 		 * encoding thread converted every queued one before leaving. */

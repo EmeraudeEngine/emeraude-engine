@@ -44,6 +44,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
+#include "Thread.hpp"
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
@@ -471,7 +472,7 @@ namespace EmEn::Graphics
 				std::deque< size_t > readySlots;
 				std::mutex queueMutex;
 				std::condition_variable queueCV;
-				std::thread encodingThread;
+				Base::Thread encodingThread;
 				std::atomic< bool > threadRunning{false};
 				uint64_t frameCount{0};
 				uint64_t duplicatedFrames{0};
@@ -533,7 +534,7 @@ namespace EmEn::Graphics
 				std::condition_variable queueCV;
 
 				/* Thread control. */
-				std::thread encodingThread;
+				Base::Thread encodingThread;
 				std::atomic< bool > threadRunning{false};
 				std::atomic< bool > finished{false};
 
