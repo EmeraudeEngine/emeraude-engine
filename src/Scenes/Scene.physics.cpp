@@ -1694,7 +1694,11 @@ namespace EmEn::Scenes
 			/* The impact, as a contact would give it: the approaching velocity bounces off the surface with the pair's
 			 * restitution (the maximum, as the solver combines it). The next step's contact then sees a body leaving and
 			 * adds nothing; a body the sweep stopped can no longer keep a velocity into the obstacle. Against a dynamic
-			 * body the RELATIVE velocity bounces, an impulse shared by their masses (momentum kept). */
+			 * body the RELATIVE velocity bounces, an impulse shared by their masses (momentum kept).
+			 * ⚠️ The impact is REPORTED here too (NodeCollision, the contacts' formula and threshold, step 6): the next
+			 * step's contact sees a body leaving and reports nothing, so a fast body — a projectile — met its first
+			 * obstacles silently and only "hit" once slow enough for a plain contact (canon shells exploded at the end of
+			 * their bounces, 2026-10-07). */
 			if ( dynamicTarget != 0 )
 			{
 				auto & target = bodies[dynamicTarget];
@@ -1707,6 +1711,16 @@ namespace EmEn::Scenes
 
 					body.linearVelocity += normal * (impulse * body.inverseMass);
 					target.linearVelocity -= normal * (impulse * target.inverseMass);
+
+					if ( -approach > ImpactSpeedThreshold )
+					{
+						impacts.push_back({entity, -approach * body.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
+
+						if ( target.movable != nullptr && target.dynamic )
+						{
+							impacts.push_back({bodyEntities[dynamicTarget], -approach * target.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
+						}
+					}
 				}
 			}
 			else
@@ -1716,6 +1730,11 @@ namespace EmEn::Scenes
 				if ( approach < 0.0F )
 				{
 					body.linearVelocity -= normal * ((1.0F + restitution) * approach);
+
+					if ( -approach > ImpactSpeedThreshold )
+					{
+						impacts.push_back({entity, -approach * body.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
+					}
 				}
 			}
 		}

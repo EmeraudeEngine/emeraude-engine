@@ -51,6 +51,11 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
    restitution — against a dynamic body the RELATIVE velocity, an impulse shared by the two masses (momentum kept) — so
    the next step's contact adds nothing. A body ending on the near side (sliding along a wall, or sinking less than its
    centre — up to its radius into a thin wall) is the contacts' business.
+   ⚠️ **The sweep REPORTS the impact itself** (2026-10-07): mass × approach speed / step above 0.05 m/s, for the swept
+   body and for a dynamic body it met — the contacts' formula and threshold, step 6. Since the next step's contact sees a
+   body LEAVING, nothing else reports it: until then a fast body met its first obstacles silently and only "hit" once
+   slow enough for a plain contact (projet-alpha's canon shell, 1000 m/s, exploded at the end of its bounces). Motion is
+   unchanged by this: only `NodeCollision` is added.
 5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
    the impacts (an approach above 0.05 m/s) are COLLECTED and the grounded state set from the manifolds (a contact
    within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.
