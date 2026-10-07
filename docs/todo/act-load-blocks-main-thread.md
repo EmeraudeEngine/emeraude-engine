@@ -34,3 +34,11 @@ web-view(s) to complete CEF teardown — abandoning.", then "[WebView] Web-view 
 CEF browser is still alive — forcing CloseBrowser(true)". The same shutdown at 100 s (load finished): clean. Also:
 `Stage.loadDemo(terrain)` kept the console blocked > 60 s on that machine.
 
+## A console command waits for the whole load (2026-10-07, Windows peer, RTX 3060, `terrain`)
+
+`Core.shutdown()` sent 20 s after launch was only EXECUTED when the synchronous load ended ("The application
+successfully started" at the same instant): 73-77 s from the send to the exit, the console silent for > 30 s in the
+meantime; the teardown itself took ~4 s. This was the slow-shutdown half of the closed item
+`shutdown-hangs-after-act-removal` (its other half, the scene re-created after the act removal on `relief`, is gone:
+10 / 10 shutdowns under 1 s). The console and MCP are unusable for the duration of a built-in act's load.
+

@@ -124,7 +124,7 @@ render mode 2 pixel-indistinguishable from mode 1 (inside the run-to-run noise).
   there, inside its ±2 ms run-to-run spread. A "720p makes the triangles sub-pixel" theory was checked and is
   FALSE: the cost falls with the resolution.
 - ⚠️ `f93c5a0d` (single `EmitMeshTasksEXT` with a zero count instead of an early exit) was pushed as a candidate
-  fix for a Windows white window, which turned out to be the shutdown hang (`shutdown-hangs-after-act-removal`).
+  fix for a Windows white window, which turned out to be the shutdown hang (`shutdown-hangs-after-act-removal`, closed 2026-10-07: fixed by the act-unload order, projet-alpha `docs/caution-points.md` § "Unloading an act").
   The change stands on its own merits (one terminator, same cost, same image), not as that fix.
 - **Next, not yet measured** (split the remaining cost before choosing):
   - the density — 0.004 m of quad per metre is ~5 px per quad at 1620p, and the rasteriser is inefficient

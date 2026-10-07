@@ -324,7 +324,7 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   each GPU, NVIDIA = AMD; BenchStandSlope still (y range 2.4e-7); the paladins at y ≥ 0.0100; the flying Player
   10.000 m/s, ±10 m/s, lands at V off; citadel's west flight climbed grounded at 1.4 m/s (top y 10.01); 18 demo
   launches clean. Seen there, not physics: citadel's teardown VUIDs (item `texture-destroyed-while-upload-in-flight`),
-  terrain's 60 s shutdown during its loads (`shutdown-hangs-after-act-removal`), the PerLight race twice on NVIDIA
+  terrain's 60 s shutdown during its loads (`shutdown-hangs-after-act-removal`, closed 2026-10-07: the wait is the load, item `act-load-blocks-main-thread`), the PerLight race twice on NVIDIA
   (`lighten-marbles-perlight-descriptor-race`).
 - **P4, the owner's play test (2026-10-02, citadel)**: (1) the three paladins vanished — a character met twice by the
   physics step (the octree's `expand()` kept a splitting sector's elements AND filed them in the children: ~100 statics
