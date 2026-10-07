@@ -20,7 +20,12 @@ character->controller().jump(5.0F);                               // a launch sp
 - The entity takes a capsule collision model (`controller().localCapsule()`) and is collidable whatever its mass. It is a
   KINEMATIC body for the solver: infinite mass, the velocity of its motion — dynamic bodies meet it as a moving solid.
 - The capsule model follows the controller's size: set at the link, rebuilt by the physics step when `setSize()` changed
-  it later (a crouch).
+  it later (a crouch). The rebuild's content notification is deferred past the step's lock (it deadlocked the logic
+  thread, 2026-10-07 — `caution-points.md`).
+- `setCollisionModel(nullptr)` WITHDRAWS the body: the entity leaves the physics octree, the character is no longer
+  stepped, the node no longer integrates itself (it stays where it was, no gravity), and neither the link nor the step
+  gives it a capsule back until a model is set again (`AbstractEntity::isCollisionModelWithdrawn()`). A corpse that
+  must still lie on the ground keeps a body: shrink it with `setSize()` instead (projet-alpha's paladin).
 - Events, notified after the physics step (outside its lock): `Landed` (data: the fall speed, float m/s — fall damage),
   `LeftGround`, `HitWall`. `MovableTrait::isGrounded()` / `groundedSource()` are kept up to date for existing code.
 - Console / MCP: `setCharacterVelocity(name, x, y, z)`, `characterJump(name, speed)`; `getNodePhysics()` adds a

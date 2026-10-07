@@ -25,6 +25,7 @@ those whose file is inside the module (the header filter also reports every incl
 
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
+| `src/Scenes/Scene.physics.cpp` (`PhysicsStepMark`, bodies need a model), `Scene.entities.cpp` (deferred content notification, withdrawn model leaves the physics octree), `Scene.cpp` (the queue handled after the step), `AbstractEntity.cpp` / `.hpp` (`isCollisionModelWithdrawn()`), `Scene.hpp`, `Node.cpp` (a withdrawn model is not integrated) | 2026-10-07 | clang-tidy 21.1.6: 1 on the changed lines, fixed (readability-redundant-member-init on the `std::atomic< std::thread::id >`). 0 left. | Physics-step self-deadlock |
 | `src/Graphics/Geometry/Interface.cpp` (identity RT index list for a non-indexed triangle list) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | RT NULL index address |
 | `src/Resources/ResourceTrait.cpp` / `.hpp` (`checkDependencies()` claims `onDependenciesLoaded()`) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines (the TU's 5 misc-no-recursion + 1 use-enum-class predate them). | Resource finalization race |
 | `src/Graphics/Renderable/MeshResource.cpp`, `MultiLayerMeshResource.cpp` (automatic LOD skips a mesh carrying its own levels) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | Automatic LOD |

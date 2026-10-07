@@ -221,10 +221,14 @@ namespace EmEn::Scenes
 					masslessShapeCount++;
 				}
 
-				/* NOTE: If no collision model we create a default AABB. */
+				/* NOTE: If no collision model we create a default AABB — unless the model was withdrawn
+				 * (setCollisionModel(nullptr)): a component update must not stand a corpse up again. */
 				if ( m_collisionModel == nullptr )
 				{
-					m_collisionModel = std::make_unique< BoxCollisionModel >(component->localBoundingBox());
+					if ( !this->isFlagEnabled(IsCollisionModelWithdrawn) )
+					{
+						m_collisionModel = std::make_unique< BoxCollisionModel >(component->localBoundingBox());
+					}
 				}
 				else if ( !m_collisionModel->areShapeParametersOverridden() )
 				{
@@ -290,7 +294,7 @@ namespace EmEn::Scenes
 			m_vehicle = vehicle;
 		}
 
-		if ( characterController != nullptr )
+		if ( characterController != nullptr && !this->isFlagEnabled(IsCollisionModelWithdrawn) )
 		{
 			m_collisionModel = std::make_unique< CapsuleCollisionModel >(characterController->controller().localCapsule(), true);
 		}
@@ -349,6 +353,17 @@ namespace EmEn::Scenes
 	void
 	AbstractEntity::setCollisionModel (std::unique_ptr< CollisionModelInterface > model) noexcept
 	{
+		/* Removing a model WITHDRAWS it (no body until a model is set again, isCollisionModelWithdrawn()); the scene
+		 * takes the entity out of its physics octree on the notification below. */
+		if ( model != nullptr )
+		{
+			this->setFlag(IsCollisionModelWithdrawn, false);
+		}
+		else if ( m_collisionModel != nullptr )
+		{
+			this->setFlag(IsCollisionModelWithdrawn, true);
+		}
+
 		m_collisionModel = std::move(model);
 
 		/* The scene files the entity in its physics octree NOW: until a content notification it is not in the physics

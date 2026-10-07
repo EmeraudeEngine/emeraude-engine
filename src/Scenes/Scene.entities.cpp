@@ -425,13 +425,26 @@ namespace EmEn::Scenes
 	void
 	Scene::onEntityContentModified (const std::shared_ptr< AbstractEntity > & entity) const noexcept
 	{
+		/* ⚠️ DEFERRED when the physics step raised it: the step holds m_physicsOctreeAccess, which the refiling below
+		 * takes again (not recursive). A character whose capsule the step rebuilds (setCollisionModel() notifies since
+		 * 2026-10-02) froze the logic thread on itself the first time a paladin died (2026-10-07). Only the stepping
+		 * thread compares equal: a notification from any other thread waits for the lock as before. */
+		if ( m_physicsStepThread.load(std::memory_order_relaxed) == std::this_thread::get_id() )
+		{
+			m_physicsDeferredContent.push_back(entity);
+
+			return;
+		}
+
 		/* An entity made non-collidable (AbstractEntity::setCollidable(false), or components that no
 		 * longer declare a mass) leaves the physics octree: the collision pass does not re-check the
 		 * flag per pair, so it would keep colliding. Done HERE, on the rare content notification,
 		 * and not in checkEntityLocationInOctrees(), which runs on every frame for every moving
 		 * node: erase() walks the whole tree (an expanded root holds no element to test first).
-		 * Only an entity with a collision model can have been inserted. */
-		if ( m_physicsOctree != nullptr && !entity->isCollidable() && entity->collisionModel() != nullptr )
+		 * Only an entity with a collision model can have been inserted — or one that HAD one: a withdrawn
+		 * model (setCollisionModel(nullptr), a corpse) leaves too, else it stayed filed with no shape and its
+		 * character controller stood it up again. */
+		if ( m_physicsOctree != nullptr && (entity->collisionModel() != nullptr ? !entity->isCollidable() : entity->isCollisionModelWithdrawn()) )
 		{
 			const std::scoped_lock lock{m_physicsOctreeAccess};
 

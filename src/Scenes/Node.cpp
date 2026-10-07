@@ -877,7 +877,9 @@ namespace EmEn::Scenes
 		m_lifetime += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 
 		/* NOTE: Check if the node has disabled its ability to move. */
-		if ( !this->isMovable() || !this->isCollidable() )
+		/* A withdrawn collision model (setCollisionModel(nullptr)) is NO body at all: integrated here without a model it
+		 * free-fell through the ground (a paladin's corpse, 2026-10-07). It stays where it is until a model is set. */
+		if ( !this->isMovable() || !this->isCollidable() || this->isCollisionModelWithdrawn() )
 		{
 			return false;
 		}

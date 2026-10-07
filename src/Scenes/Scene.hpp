@@ -41,6 +41,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <span>
@@ -2642,8 +2643,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Reacts to an entity's content notification (components, collision state): erases it
-			 * from the physics octree when it is no longer collidable, then checks its location.
+			 * from the physics octree when it is no longer collidable or its collision model was withdrawn,
+			 * then checks its location.
 			 * @note Not on the per-frame path: the erasure walks the whole physics octree.
+			 * @note Raised by the physics step itself (it holds the physics octree lock), the notification is
+			 * deferred to processLogics(), after the step.
 			 * @param entity A reference to an entity smart pointer.
 			 * @return void
 			 */
@@ -3214,6 +3218,12 @@ namespace EmEn::Scenes
 			std::vector< PhysicsImpact > m_physicsImpacts;
 			/** @brief The kinematic characters the last physics step moved (their events notified after it). */
 			mutable std::vector< std::shared_ptr< Component::CharacterController > > m_physicsCharacters;
+			/** @brief The thread running the physics step while it holds m_physicsOctreeAccess (a default id otherwise). A
+			 * content notification it raises (a character's capsule rebuilt) is DEFERRED: refiling the entity re-locks the
+			 * physics octree, and the mutex is not recursive (the logic thread deadlocked on itself, 2026-10-07). */
+			mutable std::atomic< std::thread::id > m_physicsStepThread;
+			/** @brief The content notifications the physics step raised, handled once its lock is released (logic thread only). */
+			mutable std::vector< std::shared_ptr< AbstractEntity > > m_physicsDeferredContent;
 			/** @brief The islands of the physics step (P5): the union-find parents, per root whether all its bodies are slow
 			 * and its key, and the sleeping islands to wake (reused storage). */
 			mutable std::vector< uint32_t > m_physicsIslandParents;

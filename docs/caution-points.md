@@ -3143,6 +3143,48 @@ notification for an entity not yet owned by a shared pointer (`weak_from_this()`
 under `-fno-exceptions`). Linux: the bench bit-identical (48 × 3), 8 demos clean. `tools/physics-bench.py --compare`
 now compares the full recorded state (orientation, velocities, pause), each quantity reported.
 
+### Fixed: the logic thread DEADLOCKED ON ITSELF when the physics step rebuilt a character's capsule (Oct 2026)
+
+> **Symptom (2026-10-07, the owner, `animation-debug`):** killing a paladin with the sword froze the engine — the
+> window stopped, the remote console still answered (it does not run on the logic thread), no thread used any CPU.
+
+`gdb -p <pid> -batch -ex "thread apply all bt"` (run it FROM the build's `Release/` directory, else gdb finds no
+symbol for `./libEmeraude.so.1`): the logic thread waited on a `pthread_mutex_t` whose `__owner` (the int at offset
+8) was ITS OWN TID. The chain: `Scene::resolveCollisions()` holds `m_physicsOctreeAccess` → the character controller
+block saw a model that was not its capsule and called `setCollisionModel()` → since the BenchSpinner fix above that
+calls `onContentModified()` → `Scene::onEntityContentModified()` → `checkEntityLocationInOctrees()` → the same
+non-recursive mutex. The paladin's model was not its capsule because `Paladin::die()` WITHDRAWS it
+(`setCollisionModel(nullptr)`: a corpse must not stay a man-high invisible wall) — and nothing respected that: the
+entity stayed filed in the physics octree with no shape (`checkEntityLocationInOctrees()` returns early on a null
+model, it never erases), and the controller block stood a capsule up again on the next step.
+
+**Fix (owner's choices, 2026-10-07):**
+- **The scene DEFERS what the step notifies.** `resolveCollisions()` marks its thread (`m_physicsStepThread`, RAII
+  `PhysicsStepMark` declared after the lock) for as long as it holds the lock; `onEntityContentModified()` called on
+  that thread queues the entity (`m_physicsDeferredContent`) and `processLogics()` handles the queue right after
+  the step. Any other thread compares unequal and waits for the lock as before. This covers every notification the
+  step can raise, not only the capsule rebuild (a resized controller still rebuilds it there). Rejected: a recursive
+  mutex (it would refile the octree in the middle of the step), a silent setter local to the step.
+- **A null model = no body.** `setCollisionModel(nullptr)` on an entity that had a model sets
+  `AbstractEntity::isCollisionModelWithdrawn()`; a non-null model clears it. While it is set, `onComponentsUpdated()`
+  creates neither the default box nor the character capsule, `onEntityContentModified()` erases the entity from the
+  physics octree (a withdrawn model is the second reason to leave, after `!isCollidable()`), the step never makes
+  a body of an entity without a model (gathering, step 1), and `Node::processLogics()` no longer integrates it: a
+  withdrawn entity stays exactly where it was. ⚠️ Before that last guard, a movable collidable node without a model
+  was integrated by the node itself (`updateSimulation(…, hasCollisionModel() == false)`: gravity, no collision) — the
+  owner's first test saw the paladin play its death THROUGH the floor.
+- **The paladin's corpse keeps a LOW body instead** (owner, 2026-10-07): `Paladin::die()` shrinks its controller to
+  a 0.15 m sphere (`setSize()`), which the step rebuilds — through the deferral above — so the body rests on the
+  ground and the player steps over it.
+
+**Rule:** a function that runs under `m_physicsOctreeAccess` (the whole step) must not reach code that takes it
+again: a notification from there goes through the deferral, never around it.
+
+Linux, Release: the cascade builds clean; clang-tidy 21.1.6 0 on the changed lines; `tools/physics-bench.py`
+3 runs of `collision-debug` identical (686 recorded quantities, 0 differing samples), before and after the
+`Node::processLogics()` guard, and identical across the two builds (343 quantities, 0 differing samples). The owner's
+sword test in `animation-debug`: no freeze any more, and the corpse stays on the ground through its death clip.
+
 
 ### Fixed: a scene's first frame read the NEVER-WRITTEN slot of the triple buffer — every entity at the origin (Sep 2026)
 

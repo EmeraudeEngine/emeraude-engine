@@ -372,6 +372,24 @@ namespace EmEn::Scenes
 				return m_collisionModel != nullptr;
 			}
 
+			/**
+			 * @brief Returns whether the entity's collision model was withdrawn [PHYSICS].
+			 *
+			 * setCollisionModel(nullptr) on an entity that had a model withdraws it: the entity is no body
+			 * any more (the scene takes it out of the physics octree), and nothing gives it one back —
+			 * neither onComponentsUpdated() (default box, character capsule) nor the physics step's character
+			 * controller — until setCollisionModel() sets a model again. A corpse that must not stay a
+			 * standing wall is the use.
+			 *
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isCollisionModelWithdrawn () const noexcept
+			{
+				return this->isFlagEnabled(IsCollisionModelWithdrawn);
+			}
+
 			/** @copydoc EmEn::Scenes::LocatableInterface::collisionModel() const */
 			[[nodiscard]]
 			const Physics::CollisionModelInterface *
@@ -1067,14 +1085,15 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Flag indices for FlagArrayTrait< 8 >.
 			 *
-			 * AbstractEntity uses 4 of the 8 available flags. Derived classes can use flags
-			 * starting from NextFlag (currently 4).
+			 * AbstractEntity uses 5 of the 8 available flags. Derived classes can use flags
+			 * starting from NextFlag (currently 5).
 			 */
 			static constexpr auto IsRenderable{0UL};				 ///< Entity has at least one renderable component.
 			static constexpr auto IsCollisionDisabled{1UL};		  ///< Collision detection disabled (derived from the mass until IsCollisionAuthored).
 			static constexpr auto IsSimulationPaused{2UL};		   ///< Physics simulation paused (no gravity/drag).
 			static constexpr auto IsCollisionAuthored{3UL};		  ///< setCollidable() decided the collision state: onComponentsUpdated() no longer derives it.
-			static constexpr auto NextFlag{4UL};					 ///< First available flag for derived classes (Node, StaticEntity).
+			static constexpr auto IsCollisionModelWithdrawn{4UL};	///< setCollisionModel(nullptr) removed the model: no body until a model is set again.
+			static constexpr auto NextFlag{5UL};					 ///< First available flag for derived classes (Node, StaticEntity).
 
 			/**
 			 * @brief Constructs an abstract entity.

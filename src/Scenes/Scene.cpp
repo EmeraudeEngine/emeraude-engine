@@ -456,6 +456,15 @@ namespace EmEn::Scenes
 		{
 			this->resolveCollisions(m_physicsMovedEntities, m_physicsImpacts);
 
+			/* The content notifications the step raised (onEntityContentModified()), now that its lock is released. The
+			 * step no longer marks this thread, so none of them is deferred again while the list is walked. */
+			for ( const auto & entity : m_physicsDeferredContent )
+			{
+				this->onEntityContentModified(entity);
+			}
+
+			m_physicsDeferredContent.clear();
+
 			/* Relocated in the octrees once the step released the physics octree lock. */
 			for ( const auto & entity : m_physicsMovedEntities )
 			{

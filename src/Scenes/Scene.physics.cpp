@@ -52,6 +52,43 @@ namespace EmEn::Scenes
 
 	namespace
 	{
+		/**
+		 * @brief Marks the calling thread as the one running the physics step, for as long as it lives (RAII): the content
+		 * notifications it raises are deferred (Scene::onEntityContentModified()), the physics octree lock is held.
+		 */
+		class PhysicsStepMark final
+		{
+			public:
+
+				/**
+				 * @brief Marks the calling thread.
+				 * @param stepThread A reference to the scene's stepping-thread slot.
+				 */
+				explicit
+				PhysicsStepMark (std::atomic< std::thread::id > & stepThread) noexcept
+					: m_stepThread{stepThread}
+				{
+					m_stepThread.store(std::this_thread::get_id(), std::memory_order_relaxed);
+				}
+
+				PhysicsStepMark (const PhysicsStepMark & copy) noexcept = delete;
+				PhysicsStepMark (PhysicsStepMark && copy) noexcept = delete;
+				PhysicsStepMark & operator= (const PhysicsStepMark & copy) noexcept = delete;
+				PhysicsStepMark & operator= (PhysicsStepMark && copy) noexcept = delete;
+
+				/**
+				 * @brief Clears the mark.
+				 */
+				~PhysicsStepMark ()
+				{
+					m_stepThread.store(std::thread::id{}, std::memory_order_relaxed);
+				}
+
+			private:
+
+				std::atomic< std::thread::id > & m_stepThread;
+		};
+
 		/** @brief Below this speed (m/s) a body counts as slow for its island's sleep (P5, decision 13). */
 		constexpr float SleepLinearSpeed{0.05F};
 
@@ -793,6 +830,9 @@ namespace EmEn::Scenes
 		 * concurrent modifications from other threads (e.g., checkEntityLocationInOctrees). */
 		const std::scoped_lock lock{m_physicsOctreeAccess};
 
+		/* Declared after the lock, so released before it: what the step notifies waits for processLogics(). */
+		const PhysicsStepMark stepMark{m_physicsStepThread};
+
 		constexpr float PhysicsStepSeconds = WorldPhysicsUpdateCycleDurationS< float >;
 		constexpr float SpeculativeContactMargin = SoftStepSolver::SpeculativeMargin;
 
@@ -812,7 +852,12 @@ namespace EmEn::Scenes
 		m_physicsOctree->forEachSector([&bodyEntities] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
 			for ( size_t index = ownedOffset; index < candidates.size(); ++index )
 			{
-				bodyEntities.push_back(candidates[index]);
+				/* No shape, no body: a model withdrawn while it was filed (setCollisionModel(nullptr), a corpse) leaves the
+				 * octree on its notification, deferred to after the step when the step itself raised it. */
+				if ( candidates[index]->hasCollisionModel() )
+				{
+					bodyEntities.push_back(candidates[index]);
+				}
 			}
 		});
 
@@ -860,7 +905,8 @@ namespace EmEn::Scenes
 				controller.setFlying(movable != nullptr && movable->isFreeFlyModeEnabled());
 			}
 
-			/* The capsule follows the controller's size (set after linking, or changed during the game). */
+			/* The capsule follows the controller's size (set after linking, or changed during the game) — never from
+			 * nothing: an entity without a model is no body (above). The rebuild notifies, deferred past the lock. */
 			{
 				const auto wanted = controller.localCapsule();
 				const auto * model = entity->collisionModel();
