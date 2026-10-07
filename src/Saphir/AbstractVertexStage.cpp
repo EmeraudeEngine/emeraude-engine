@@ -65,37 +65,19 @@ namespace EmEn::Saphir
 	{
 		std::stringstream functionCode;
 
+		/* The GPU twin of Base::Math::CartesianFrame::computeYAxis() — keep them identical.
+		 * ⚠️ Near the vertical (the camera above or below the sprite) cross(+Y, backward) shrinks to nothing and
+		 * normalize() returns noise or NaN: the sprite vanished there. The former guards could not catch it — two EXACT
+		 * equalities (backward is never exactly ±Y in float) and a test that was always false (abs(x) < 0.0). A band of
+		 * 1e-4 on |backward.y| (about 0.8 degrees off the axis) takes the pole's own frame instead. 2026-10-07. */
 		functionCode <<
-			// Special case when backward is equal to downward (0, 1, 0).
-			"\t" "if ( backward == vec3(0.0, 1.0, 0.0) )" "\n"
+			"\t" "if ( abs(backward.y) > 1.0 - 1.0e-4 )" "\n"
 			"\t" "{" "\n"
-			"\t\t" "return vec3(0.0, 0.0, 1.0);" "\n"
+			"\t\t" "return backward.y > 0.0 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 0.0, -1.0);" "\n"
 			"\t" "}" "\n\n"
 
-			// Special case when backward is equal to upward (0, -1, 0).
-			"\t" "if ( backward == vec3(0.0, -1.0, 0.0) )" "\n"
-			"\t" "{" "\n"
-			"\t\t" "return vec3(0.0, 0.0, -1.0);" "\n"
-			"\t" "}" "\n\n"
-
-			"\t" "vec3 downward;" "\n\n"
-
-			// Compute temporal downward vector based on the backward
-			// vector watch out when look up/down at 90 degree for
-			// example, backward vector is on the Y axis.
-			"\t" "if ( abs(backward.x) < 0.0 && abs(backward.z) < 0.0 )" "\n"
-			"\t" "{" "\n"
-			// If backward vector is pointing on +Y axis.
-			"\t\t" "downward = backward.y > 0.0 ? vec3(0.0, 0.0, -1.0) : vec3(0.0, 0.0, 1.0);" "\n"
-			"\t" "}" "\n"
-			"\t" "else" "\n"
-			"\t" "{" "\n"
-			// In general, downward vector is straight down.
-			"\t\t" "downward = vec3(0.0, 1.0, 0.0);" "\n"
-			"\t" "}" "\n\n"
-
-			// Re-calculate the orthonormal downward vector with right vector.
-			"\t" "const vec3 right = normalize(cross(downward, backward));" "\n\n"
+			// In general, the frame's Y column is the world up axis, made orthonormal through the right vector.
+			"\t" "const vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), backward));" "\n\n"
 
 			"\t" "return cross(backward, right);" "\n";
 

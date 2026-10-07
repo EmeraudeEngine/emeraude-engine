@@ -26,6 +26,10 @@
 
 #include "SpriteResource.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cmath>
+
 /* Project configuration. */
 #include "emeraude_base_config.hpp"
 
@@ -368,22 +372,6 @@ namespace EmEn::Graphics::Renderable
 				return geometryResource.load(shape);
 			}, flags);
 
-		/* ⚠️ Build the rotation-invariant volumes the billboard actually sweeps. The quad's own
-		 * bounds describe a shape that never exists on screen — see SpriteResource::boundingBox(). */
-		if ( m_geometry != nullptr )
-		{
-			const auto & geometryBox = m_geometry->boundingBox();
-			const auto centre = geometryBox.centroid();
-			const auto halfExtent = (geometryBox.maximum() - geometryBox.minimum()) * 0.5F;
-			const auto radius = Base::Math::Vector< 3, float >{halfExtent[Base::Math::X], halfExtent[Base::Math::Y], halfExtent[Base::Math::Z]}.length();
-
-			m_billboardBoundingSphere = Base::Math::Space3D::Sphere< float >{radius, centre};
-			m_billboardBoundingBox = Base::Math::Space3D::AACuboid< float >{
-				Base::Math::Space3D::Point< float >{centre[Base::Math::X] + radius, centre[Base::Math::Y] + radius, centre[Base::Math::Z] + radius},
-				Base::Math::Space3D::Point< float >{centre[Base::Math::X] - radius, centre[Base::Math::Y] - radius, centre[Base::Math::Z] - radius}
-			};
-		}
-
 		this->setReadyForInstantiation(false);
 
 		return this->addDependency(m_geometry);
@@ -408,6 +396,50 @@ namespace EmEn::Graphics::Renderable
 		return this->addDependency(m_material);
 	}
 
+	void
+	SpriteResource::computeBillboardVolumes () noexcept
+	{
+		/* ⚠️ Build the rotation-invariant volumes the billboard actually sweeps. The quad's own
+		 * bounds describe a shape that never exists on screen — see SpriteResource::boundingBox().
+		 * ⚠️⚠️ The billboard turns the quad around the MODEL ORIGIN (its pivot), not around the quad's centre: the
+		 * swept volume is the sphere centred on the origin through the farthest corner. A SPHERICAL sprite anchored at
+		 * its foot (CenterAtBottom, the quad spans Y 0..1) was given the sphere around its middle (0, 0.5, 0), radius
+		 * 0.707, while a rotated corner reaches 1.118 from the pivot — 1.62 from that centre (2026-10-07). An upright
+		 * sprite turns around +Y through its middle, so its old sphere was right; for a centred quad both are the same. */
+		if ( m_geometry == nullptr )
+		{
+			return;
+		}
+
+		/* ⚠️ Not AACuboid::isValid(): the quad is FLAT (Z = 0), and isValid() wants a volume on every axis — it called
+		 * every sprite's box invalid. Finite bounds in order are what this needs. */
+		const auto & geometryBox = m_geometry->boundingBox();
+		const auto & minimum = geometryBox.minimum();
+		const auto & maximum = geometryBox.maximum();
+
+		for ( const auto axis : {Base::Math::X, Base::Math::Y, Base::Math::Z} )
+		{
+			if ( !std::isfinite(minimum[axis]) || !std::isfinite(maximum[axis]) || minimum[axis] > maximum[axis] )
+			{
+				TraceError{ClassId} << "The geometry of '" << this->name() << "' has no bounding box: the sprite keeps no culling volume.";
+
+				return;
+			}
+		}
+
+		const auto radius = Base::Math::Vector< 3, float >{
+			std::max(std::abs(minimum[Base::Math::X]), std::abs(maximum[Base::Math::X])),
+			std::max(std::abs(minimum[Base::Math::Y]), std::abs(maximum[Base::Math::Y])),
+			std::max(std::abs(minimum[Base::Math::Z]), std::abs(maximum[Base::Math::Z]))
+		}.length();
+
+		m_billboardBoundingSphere = Base::Math::Space3D::Sphere< float >{radius, Base::Math::Vector< 3, float >{0.0F, 0.0F, 0.0F}};
+		m_billboardBoundingBox = Base::Math::Space3D::AACuboid< float >{
+			Base::Math::Space3D::Point< float >{radius, radius, radius},
+			Base::Math::Space3D::Point< float >{-radius, -radius, -radius}
+		};
+	}
+
 	bool
 	SpriteResource::onDependenciesLoaded () noexcept
 	{
@@ -429,6 +461,13 @@ namespace EmEn::Graphics::Renderable
 				return false;
 			}
 		}
+
+		/* ⚠️ The culling volumes are built HERE, once the geometry is loaded — not in load(), where the geometry
+		 * resource was only requested (it loads asynchronously) and its box was still empty: the volumes came out
+		 * invalid, every entity drawing the sprite got an invalid render box, and StaticEntity::isVisibleTo() fell
+		 * back to testing its position POINT. 100 000 fires vanished together whenever the entity's origin left the
+		 * frame (sprite demo), a torch's flame was missing from every angle (citadel), 2026-10-07. */
+		this->computeBillboardVolumes();
 
 		this->setReadyForInstantiation(true);
 

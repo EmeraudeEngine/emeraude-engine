@@ -133,4 +133,29 @@ key) → `AbstractVertexStage::enableUprightBillBoarding()` for the GPU instance
 matching `CartesianFrame` method. The ray-tracing TLAS was ALREADY cylindrical for every sprite
 (`SceneMetaData`), so it is untouched.
 
-⚠️ Open: a sprite vanishes from some viewing angles — `docs/todo/sprite-disappears-at-some-angles.md`.
+## Sprite culling volumes — built when the geometry is LOADED (2026-10-07)
+
+⚠️⚠️ Sprites vanished by whole groups (owner report, `sprite-disappears-at-some-angles`, open since 2026-09-28):
+the sprite demo's 100 000 fires all disappeared once the camera turned past a heading, `citadel`'s keep torch had no
+flame from any angle. NOT the billboard: measured, with the frustum test removed every fire showed at every heading;
+with only the per-entity test (`StaticEntity::isVisibleTo()`) back, they vanished again. The entity's world render box
+was INVALID (min +FLT_MAX, max -FLT_MAX), so `isVisibleTo()` fell back to its position POINT: the fires showed only
+while the entity's origin was on screen. Two faults stacked:
+
+- `SpriteResource` built its swept volumes in `load()`, right after REQUESTING its geometry — which loads
+  asynchronously, so its box was still empty. They are built in `onDependenciesLoaded()` now
+  (`computeBillboardVolumes()`).
+- A sprite's quad is FLAT (Z = 0): `AACuboid::isValid()` wants a volume on every axis and calls its box invalid. The
+  volumes check finite, ordered bounds instead. **Rule:** never gate a flat shape's box on `isValid()`.
+
+The swept sphere is centred on the billboard's PIVOT (the model origin) through the farthest corner: a spherical
+sprite anchored at its foot turns around its base, not its middle. And the GLSL `computeYAxis()` (spherical
+billboard) now matches `CartesianFrame::computeYAxis()`: its pole guards were two exact equalities and an always-false
+`abs(x) < 0.0`, so a camera nearly above or below a spherical sprite produced a NaN frame.
+
+Proof: `sprite` demo from (0, 6, -25), 12 headings: fire pixels 0 at 90°–270° before, 7 000–39 000 at every heading
+after; `citadel` keep torch flame present at the item's pose; owner checked live (visible from every angle); 0 VUID.
+
+Not fixed (owner, 2026-10-07, dropped): animated flames still smear while the camera moves. A reactive mask on the
+sprite material (TAA ignores its history where the sprite shows) did NOT remove it, nor did switching motion blur off:
+it comes from another temporal filter (the ray-tracing lane's denoisers were not tested).

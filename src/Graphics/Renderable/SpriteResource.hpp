@@ -265,6 +265,13 @@ namespace EmEn::Graphics::Renderable
 
 		private:
 
+			/**
+			 * @brief Builds the rotation-invariant culling volumes (m_billboardBoundingSphere / Box) from the loaded
+			 * geometry. Called by onDependenciesLoaded(): before it the geometry's box is empty.
+			 * @return void
+			 */
+			void computeBillboardVolumes () noexcept;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
