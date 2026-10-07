@@ -93,6 +93,20 @@ namespace EmEn::PlatformSpecific
 				return m_homePath;
 			}
 
+			/**
+			 * @brief Returns the user's preferred interface language, as a BCP 47 tag ("fr-BE", "zh-Hant-TW", "en").
+			 * @note Read once at initialization, before any window or web view: Windows GetUserPreferredUILanguages(),
+			 * macOS CFLocaleCopyPreferredLanguages(), Linux LANGUAGE / LC_ALL / LC_MESSAGES / LANG (the first set, the
+			 * encoding and modifier dropped, '_' turned into '-'). Empty when unknown ("C", "POSIX", nothing set).
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			preferredLanguage () const noexcept
+			{
+				return m_preferredLanguage;
+			}
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -112,6 +126,7 @@ namespace EmEn::PlatformSpecific
 			std::string m_username;
 			std::string m_accountName;
 			std::filesystem::path m_homePath;
+			std::string m_preferredLanguage;
 	};
 
 	/**

@@ -27,7 +27,10 @@
 #include "UserInfo.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cstdlib>
 #include <iostream>
+#include <string>
 
 /* Third-party inclusions. */
 #include <pwd.h>
@@ -53,9 +56,53 @@ namespace EmEn::PlatformSpecific
 		}
 	}
 
+	namespace
+	{
+		/**
+		 * @brief Returns the interface language from the environment, as a BCP 47 tag.
+		 * @note gettext's order: LANGUAGE (a ':' list, its first entry), LC_ALL, LC_MESSAGES, LANG. "fr_BE.UTF-8@euro"
+		 * becomes "fr-BE"; "C" and "POSIX" say nothing.
+		 * @return std::string Empty when unknown.
+		 */
+		[[nodiscard]]
+		std::string
+		languageFromEnvironment () noexcept
+		{
+			for ( const auto * name : {"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"} )
+			{
+				const auto * value = std::getenv(name);
+
+				if ( value == nullptr || *value == '\0' )
+				{
+					continue;
+				}
+
+				std::string tag{value};
+
+				if ( const auto end = tag.find_first_of(":.@"); end != std::string::npos )
+				{
+					tag.resize(end);
+				}
+
+				if ( tag.empty() || tag == "C" || tag == "POSIX" )
+				{
+					continue;
+				}
+
+				std::ranges::replace(tag, '_', '-');
+
+				return tag;
+			}
+
+			return {};
+		}
+	}
+
 	bool
 	UserInfo::onInitialize () noexcept
 	{
+		m_preferredLanguage = languageFromEnvironment();
+
 		passwd userData{};
 		std::string buffer;
 		passwd * result{nullptr};

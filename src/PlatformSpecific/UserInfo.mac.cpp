@@ -27,9 +27,12 @@
 #include "UserInfo.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <iostream>
+#include <string>
 
 /* Third-party inclusions. */
+#include <CoreFoundation/CoreFoundation.h>
 #include <pwd.h>
 #include <unistd.h>
 
@@ -53,6 +56,23 @@ namespace EmEn::PlatformSpecific
 	bool
 	UserInfo::onInitialize () noexcept
 	{
+		/* NOTE: The first of the user's preferred languages, as set in System Settings ("fr-BE"). */
+		if ( const auto languages = CFLocaleCopyPreferredLanguages(); languages != nullptr )
+		{
+			if ( CFArrayGetCount(languages) > 0 )
+			{
+				const auto firstLanguage = static_cast< CFStringRef >(CFArrayGetValueAtIndex(languages, 0));
+				std::array< char, 128 > tag{};
+
+				if ( firstLanguage != nullptr && CFStringGetCString(firstLanguage, tag.data(), static_cast< CFIndex >(tag.size()), kCFStringEncodingUTF8) )
+				{
+					m_preferredLanguage = tag.data();
+				}
+			}
+
+			CFRelease(languages);
+		}
+
 		passwd userData{};
 		std::string buffer;
 		passwd * result{nullptr};

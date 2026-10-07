@@ -51,6 +51,33 @@ namespace EmEn::PlatformSpecific
 	bool
 	UserInfo::onInitialize () noexcept
 	{
+		/* NOTE: The first of the user's interface languages ("fr-BE"), else the user's locale. A NUL-separated list
+		 * ending with two NULs: the std::wstring built from its start stops at the first entry. */
+		{
+			ULONG languageCount = 0;
+			ULONG bufferSize = 0;
+
+			if ( GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &languageCount, nullptr, &bufferSize) != 0 && bufferSize > 0 )
+			{
+				std::wstring languages(bufferSize, L'\0');
+
+				if ( GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &languageCount, languages.data(), &bufferSize) != 0 && languageCount > 0 )
+				{
+					m_preferredLanguage = convertWideToUTF8(std::wstring{languages.c_str()});
+				}
+			}
+
+			if ( m_preferredLanguage.empty() )
+			{
+				std::array< wchar_t, LOCALE_NAME_MAX_LENGTH > localeName{};
+
+				if ( GetUserDefaultLocaleName(localeName.data(), static_cast< int >(localeName.size())) > 0 )
+				{
+					m_preferredLanguage = convertWideToUTF8(std::wstring{localeName.data()});
+				}
+			}
+		}
+
 		std::array< wchar_t, UNLEN + 1 > buffer{};
 		auto size = static_cast< DWORD >(buffer.size());
 

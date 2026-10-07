@@ -46,7 +46,8 @@ namespace EmEn::PlatformSpecific
 			"User information :" "\n"
 			"Account : " << obj.accountName() << "\n"
 			"Name : " << obj.name() << "\n"
-			"Home : " << obj.homePath() << "\n";
+			"Home : " << obj.homePath() << "\n"
+			"Preferred language : " << ( obj.preferredLanguage().empty() ? std::string{"unknown"} : obj.preferredLanguage() ) << "\n";
 
 		return out;
 	}
