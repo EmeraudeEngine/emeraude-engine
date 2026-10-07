@@ -33,10 +33,12 @@
 #include <chrono>
 #include <limits>
 #include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "asio.hpp"
 #include "Network/asio_throw_exception.hpp"
+#include "Network/HappyEyeballs.hpp"
 #ifdef _WIN32
 	#ifndef NOMINMAX
 	#define NOMINMAX
@@ -288,32 +290,18 @@ namespace EmEn::Net
 			return false;
 		}
 
-		/* Async connect with a deadline. would_block is overwritten by the
-		 * completion handler whenever it eventually fires. */
-		asio::error_code connectEc = asio::error::would_block;
+		/* Happy Eyeballs (RFC 8305, base Network::connectFirstReachable()) under the deadline: a name answering
+		 * IPv6 and IPv4 must not pay the whole failure of the first family (a refused ::1 costs ~2 s on Windows). */
+		std::vector< asio::ip::tcp::endpoint > resolved;
+		resolved.reserve(results.size());
 
-		asio::async_connect(*socket, results,
-			[&connectEc] (const asio::error_code & ec, const asio::ip::tcp::endpoint &) noexcept {
-				connectEc = ec;
-			}
-		);
-
-		ioContext->restart();
-		static_cast< void >(ioContext->run_for(std::chrono::milliseconds(timeoutMs)));
-
-		if ( connectEc == asio::error::would_block )
+		for ( const auto & entry : results )
 		{
-			/* Deadline expired before any endpoint accepted — cancel the
-			 * pending op and drain. Safe here because no other I/O is in
-			 * flight on a not-yet-connected socket. */
-			asio::error_code cancelEc;
-			socket->cancel(cancelEc);
-			static_cast< void >(ioContext->run());
-
-			m_lastError = asio::error::timed_out;
-
-			return false;
+			resolved.push_back(entry.endpoint());
 		}
+
+		const auto ordered = Base::Network::interleaveAddressFamilies(resolved);
+		const auto connectEc = Base::Network::connectFirstReachable(*ioContext, ordered, *socket, std::chrono::milliseconds(timeoutMs));
 
 		if ( connectEc )
 		{
