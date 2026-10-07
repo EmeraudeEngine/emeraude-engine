@@ -267,9 +267,8 @@ namespace EmEn::Scenes::Editor
 			const auto & scaling = frame.scalingFactor();
 
 			ImGui::Text("Position  %.3f  %.3f  %.3f", static_cast< double >(position[X]), static_cast< double >(position[Y]), static_cast< double >(position[Z]));
-			/* ZYX Tait-Bryan angles (Quaternion::eulerAngles()). ⚠️ NOT CartesianFrame::getPitchAngle()/getYawAngle()/
-			 * getRollAngle(): those are the angles between the backward axis and -Z/+X/+Y (180/90/90 for an untouched
-			 * entity), whatever their names say. */
+			/* ZYX Tait-Bryan angles (Quaternion::eulerAngles()) — what CartesianFrame::getPitchAngle()/getYawAngle()/
+			 * getRollAngle() answer since base 2026-10-07, read here in one conversion instead of three. */
 			const auto euler = frame.toQuaternion().eulerAngles();
 
 			ImGui::Text("Rotation  %.1f  %.1f  %.1f deg", static_cast< double >(Degree(euler[X])), static_cast< double >(Degree(euler[Y])), static_cast< double >(Degree(euler[Z])));

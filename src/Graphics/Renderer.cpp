@@ -3551,12 +3551,10 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		std::error_code error;
-		std::filesystem::rename(temporaryPath, filepath, error);
-
-		if ( error )
+		/* Through IO::renameFile(): a cache path past MAX_PATH works on Windows (the write above already does). */
+		if ( !IO::renameFile(temporaryPath, filepath) )
 		{
-			TraceWarning{ClassId} << "Unable to commit the pipeline cache file : " << error.message() << " !";
+			TraceWarning{ClassId} << "Unable to commit the pipeline cache file !";
 
 			IO::eraseFile(temporaryPath);
 

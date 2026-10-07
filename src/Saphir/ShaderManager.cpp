@@ -470,12 +470,10 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		std::error_code error;
-		std::filesystem::rename(temporaryPath, cacheFilepath, error);
-
-		if ( error )
+		/* Through IO::renameFile(): a cache path past MAX_PATH works on Windows (the write above already does). */
+		if ( !IO::renameFile(temporaryPath, cacheFilepath) )
 		{
-			TraceError{ClassId} << "Unable to commit the shader binary cache file '" << cacheFilepath << "' : " << error.message() << " !";
+			TraceError{ClassId} << "Unable to commit the shader binary cache file '" << cacheFilepath << "' !";
 
 			IO::eraseFile(temporaryPath);
 
