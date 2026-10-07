@@ -587,6 +587,10 @@ namespace EmEn
 		 * then directly to the sub application. */
 		this->notify(ExitingMainLoop);
 
+		/* The background jobs of the resources (automatic LODs) give up now: the drains below would otherwise wait for
+		 * their whole work (Resources::AbstractServiceProvider::cancelBackgroundWork()). */
+		m_resourceManager.cancelBackgroundWork();
+
 		/* NOTE: Be sure all threads from the pool finish their work. */
 		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
 		{
@@ -607,6 +611,14 @@ namespace EmEn
 			Tracer::info(ClassId, "Waiting for core logics thread to be joined ...");
 
 			logicsThread.join();
+		}
+
+		/* ⚠️ Drain the pool AGAIN, now that no thread can enqueue any more: the logics and rendering threads (and the
+		 * loads they started) kept queueing jobs after the wait above — an automatic LOD job then ran while terminate()
+		 * unloaded the resources (sponza segfaulted at every shutdown, 2026-10-07, item lod-job-outlives-its-mesh). */
+		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
+		{
+			threadPool->wait();
 		}
 
 		return this->terminate();

@@ -438,11 +438,29 @@ namespace EmEn::Graphics::Renderable
 				{
 					TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
 
-					this->serviceProvider().primaryServices().threadPool()->enqueue([this, sourceGeometry, sourceLease, levelsToGenerate, reductionRatio] {
+					/* ⚠️ The job may outlive this resource (the scene unloaded, the application shutting down): it holds a
+					 * WEAK reference, locks it first and gives up when the resource is gone; the locked pointer keeps
+					 * `this` alive for the whole job. A raw `this` read a destroyed mesh — sponza with automatic LODs
+					 * segfaulted at every shutdown (2026-10-07, item lod-job-outlives-its-mesh). Core::run() also drains
+					 * the pool once no thread can enqueue any more, before the resources unload. */
+					this->serviceProvider().primaryServices().threadPool()->enqueue([this, weakSelf = this->weak_from_this(), sourceGeometry, sourceLease, levelsToGenerate, reductionRatio] {
+						const auto self = weakSelf.lock();
+
+						if ( self == nullptr )
+						{
+							return;
+						}
+
 						float levelRatio = reductionRatio;
 
 						for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
 						{
+							/* The application is shutting down: the remaining levels are not worth the wait. */
+							if ( this->serviceProvider().isBackgroundWorkCancelled() )
+							{
+								return;
+							}
+
 							this->generateLODLevel(sourceGeometry, level, levelRatio);
 
 							levelRatio *= reductionRatio;

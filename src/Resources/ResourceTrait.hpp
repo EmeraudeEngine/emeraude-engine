@@ -271,6 +271,31 @@ namespace EmEn::Resources
 			 */
 			virtual bool update (const Json::Value & root) noexcept = 0;
 
+			/**
+			 * @brief Asks every background job of the resources to give up (the application is shutting down).
+			 * @note Raised once by Core when the main loop is left. A job queued on the thread pool returns at once, a
+			 * running one at its next check — the automatic LOD jobs check before each level. Without it, the shutdown
+			 * drain (Core::run()) waited for the whole LOD generation: 62.8 s when quitting sponza 3 s after its load
+			 * (2026-10-07, item lod-job-outlives-its-mesh).
+			 * @return void
+			 */
+			void
+			cancelBackgroundWork () noexcept
+			{
+				m_backgroundWorkCancelled.store(true, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Returns whether the background jobs must give up.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isBackgroundWorkCancelled () const noexcept
+			{
+				return m_backgroundWorkCancelled.load(std::memory_order_acquire);
+			}
+
 		protected:
 
 			/**
@@ -344,6 +369,7 @@ namespace EmEn::Resources
 			PrimaryServices & m_primaryServices; ///< Reference to the engine primary services (ThreadPool, FileSystem, Settings, etc.).
 			Graphics::Renderer & m_graphicsRenderer; ///< Reference to the Graphics::Renderer service for GPU resource creation.
 			Audio::Manager & m_audioManager; ///< Reference to the Audio::Manager service for audio resource creation.
+			std::atomic_bool m_backgroundWorkCancelled{false}; ///< Raised by cancelBackgroundWork() at shutdown.
 	};
 
 	/**

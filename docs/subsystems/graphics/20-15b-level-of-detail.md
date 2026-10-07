@@ -96,3 +96,22 @@ lock while a LOD job appended — a data race. Measured: no frame-time gain (`ba
 Robustus), not for speed. Validated with automatic LODs on: `citadel` 94 levels and `sponza` 371 levels published
 during rendering, 0 VUID. ⚠️ `sponza` then crashes at shutdown — a pre-existing use after free of the LOD job, item
 `lod-job-outlives-its-mesh`.
+
+## An automatic LOD job never outlives its mesh, and gives up at shutdown (2026-10-08)
+
+`sponza` with `Core/Graphics/LOD/EnableAutomaticGeneration = true` segfaulted at EVERY shutdown (5/5, exit 139): gdb
+showed `MeshResource::generateLODLevel()` on a `ThreadPool` worker, reading its mesh after the resource containers
+had unloaded it — the job captured a raw `this`. Three rules now (`MeshResource`, `MultiLayerMeshResource`, `Core`):
+
+- **The job holds a weak reference** (`weak_from_this()`), locks it first and returns when the resource is gone; the
+  locked pointer keeps `this` alive for the whole job.
+- **Core drains the pool AGAIN after joining the logics and rendering threads**, before `terminate()` unloads the
+  resources: those threads (and the loads they started) kept queueing jobs after the first drain.
+- **Background work is cancelled at shutdown:** `Core::run()` raises `Resources::AbstractServiceProvider::
+  cancelBackgroundWork()` as soon as the main loop is left; a LOD job checks `isBackgroundWorkCancelled()` before each
+  level. Without it the drain waited for the whole generation.
+
+Measured on `sponza` (Linux): 5/5 clean exits, 0 VUID, 373 levels published. Shutdown time — quitting 3 s after the
+load: 62.8 s with the drain alone → **8.8 s** with the cancellation (6.25 s without automatic LODs, the load itself
+still running); at 40 s: 25.7 s → **7.7 s** (1.05 s without). The rest is the decimations already RUNNING, which
+finish their level: a cancellation inside the decimator (emeraude-base `ShapeDecimator`) would remove it.
