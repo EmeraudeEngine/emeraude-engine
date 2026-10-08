@@ -56,7 +56,7 @@ namespace EmEn::Vulkan
 		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
-		const std::scoped_lock lock{*m_device};
+		const auto deviceLock = m_device->lockAccess();
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, VK_NULL_HANDLE); result != VK_SUCCESS )
 		{
@@ -137,7 +137,7 @@ namespace EmEn::Vulkan
 		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
-		const std::scoped_lock lock{*m_device};
+		const auto deviceLock = m_device->lockAccess();
 
 		/* NOTE: The value is taken under the lock that serializes every submission, so the timeline is
 		 * signalled in increasing order on this queue. */
@@ -201,7 +201,7 @@ namespace EmEn::Vulkan
 		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
-		const std::scoped_lock lock{*m_device};
+		const auto deviceLock = m_device->lockAccess();
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
 		{
@@ -222,7 +222,7 @@ namespace EmEn::Vulkan
 	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<SwapChainStatus> & swapChainStatus) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
-		const std::scoped_lock lock{*m_device};
+		const auto deviceLock = m_device->lockAccess();
 
 		switch ( const auto result = vkQueuePresentKHR(m_handle, presentInfo) )
 		{
@@ -269,7 +269,7 @@ namespace EmEn::Vulkan
 	Queue::waitIdle () const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueueWaitIdle() */
-		const std::scoped_lock lock{*m_device};
+		const auto deviceLock = m_device->lockAccess();
 
 		if ( const auto result = vkQueueWaitIdle(m_handle); result != VK_SUCCESS )
 		{

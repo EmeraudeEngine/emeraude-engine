@@ -5085,6 +5085,17 @@ dereference what a resource accessor returns without checking it.**
 > II warning pass on macOS (AppleClang 21). **Rule: a third-party directory is never a raw `-I`; check which copy of a
 > header a TU really includes when two installations exist (`clang++ -H`, or a `static_assert` on the version macro).**
 
+### macOS only: libc++ annotates `std::mutex` for `-Wthread-safety` — a hand-made `lock()` / `unlock()` pair fails (2026-10-08)
+
+Apple's libc++ declares `std::mutex` as a thread-safety capability, so Clang's `-Wthread-safety` (paranoid set) follows
+it on macOS — not on Linux (libstdc++ carries no annotation). `Vulkan::Device::lock()` / `unlock()` (a BasicLockable
+interface over its mutex, used through `std::scoped_lock{*device}`) gave "mutex is still held at the end of function"
+and "releasing mutex that was not held" in every TU including `Device.hpp`. Replaced by
+`[[nodiscard]] std::unique_lock< std::mutex > Device::lockAccess() const` (a guard, never a manual pair — Ave Robustus
+II, CP.20); the callers write `const auto deviceLock = device->lockAccess();`. A function returning a
+`std::scoped_lock` would still warn (libc++ marks it a scoped capability that escapes the function); a returned
+`std::unique_lock` does not.
+
 ### A clang-tidy `--fix` over several TUs applies a header fix-it once PER TU (2026-10-01, triad 11)
 
 > [!CAUTION]

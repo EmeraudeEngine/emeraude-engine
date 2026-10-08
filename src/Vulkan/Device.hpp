@@ -740,23 +740,17 @@ namespace EmEn::Vulkan
 			static VkSampleCountFlagBits getSampleCountFlag (uint32_t samples) noexcept;
 
 			/**
-			 * @brief Lock the access to the device.
-			 * @note std::lock_guard friendly.
+			 * @brief Locks the access to the device (queue submissions, presentation, idle waits) for the lifetime of
+			 * the returned guard.
+			 * @note A guard, never a manual lock() / unlock() pair (Ave Robustus II, CP.20): the former BasicLockable
+			 * interface released a mutex the thread-safety analysis could not follow (libc++ annotates std::mutex).
+			 * @return std::unique_lock< std::mutex > Holds the device access until it is destroyed.
 			 */
-			void
-			lock () const
+			[[nodiscard]]
+			std::unique_lock< std::mutex >
+			lockAccess () const noexcept
 			{
-				m_logicalDeviceAccess.lock();
-			}
-
-			/**
-			 * @brief Unlock the access to the device.
-			 * @note std::lock_guard friendly.
-			 */
-			void
-			unlock () const
-			{
-				m_logicalDeviceAccess.unlock();
+				return std::unique_lock< std::mutex >{m_logicalDeviceAccess};
 			}
 
 			/**

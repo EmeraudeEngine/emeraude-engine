@@ -821,7 +821,7 @@ namespace EmEn::Overlay
 				{
 					if ( texture->Status != ImTextureStatus_OK )
 					{
-						const std::scoped_lock deviceLock{*m_ImGUIDescriptorPool->device()};
+						const auto deviceLock = m_ImGUIDescriptorPool->device()->lockAccess();
 
 						ImGui_ImplVulkan_UpdateTexture(texture);
 					}
