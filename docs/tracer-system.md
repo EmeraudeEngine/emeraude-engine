@@ -157,8 +157,9 @@ after exit would change the shell's behaviour behind the user's back.
 Besides the console, the Tracer can write every entry to a file through `TracerLogger` (a worker thread,
 flushed after each batch, so the lines written before a crash are on disk).
 
-- **When**: `Core/Tracer/EnableLogger` (engine default `false`) or the `-l/--enable-log <path>` argument, read in
-  `Tracer::lateSetup()` — i.e. inside `PrimaryServices::initialize()`, in the `Core` constructor.
+- **When**: `Core/Tracer/EnableLogger` (engine default `false`), the `-l/--enable-log <path>` argument, or the
+  application's forcing setting key (below) — all read in `Tracer::lateSetup()`, i.e. inside
+  `PrimaryServices::initialize()`, in the `Core` constructor.
 - **Where**: `<cache directory>/journal-<process name>.<log|json|html>` (`generateLogFilepath()`; the main
   process is named `main`). A child process started with `--disable-log` (a CEF helper, for instance) opens its
   own file later, under a name it chooses.
@@ -166,6 +167,15 @@ flushed after each batch, so the lines written before a crash are on disk).
   engine default for one application. It must run **before the `Core`/`PrimaryServices` constructor** (in
   `main()`): `lateSetup()` reads it while the settings are loaded. The setting still wins once it holds a value —
   a settings file that already persisted `false` keeps it.
+- **Forcing setting key** (since 1.0.0): `Tracer::getInstance().setLoggerForcingSettingKey("App/Feature/Enable", true)`
+  names an **application** setting key that requests the logger whatever `Core/Tracer/EnableLogger` holds. It exists
+  for a feature that is meaningless without the journals — a crash reporter built from them, typically: instead of
+  writing the engine key behind the user's back, the application points at the switch its user already understands.
+  While that key is true the logger is on; the moment it is false `Core/Tracer/EnableLogger` rules again, with the
+  value the user left in it. Same timing constraint as the default above (read in `lateSetup()`). Both keys are read,
+  and both persisted with their default, so `Core/Tracer/EnableLogger` stays present and meaningful in the settings
+  file while the forcing key holds the decision. One key at a time; an empty string declares none (the default).
+  ⚠️ Not retroactive and not revocable mid-run: a run's logger is decided once, in the `Core` constructor.
 - **The previous journal is kept** (since 1.0.0): `enableLogger()` never truncates an existing journal any more.
   It first renames it to `Tracer::previousLogFilepath(path)` — `journal-main.log` → `journal-main.previous.log`,
   replacing the older one — so the complete log of the previous run survives the next launch. This is what lets

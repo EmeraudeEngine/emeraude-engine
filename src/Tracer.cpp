@@ -459,7 +459,13 @@ namespace EmEn
 		/* TODO: Clarify this behavior! */
 		const auto argument = arguments.get("-l", "--enable-log");
 
-		if ( settings.getOrSetDefault< bool >(TracerEnableLoggerKey, m_loggerEnabledByDefault) || argument.has_value() )
+		/* NOTE: Both keys are read on purpose (no short-circuit): Core/Tracer/EnableLogger must exist in the settings
+		 * file, and keep the value the user left in it, even while the forcing key holds the decision — it rules again
+		 * the moment that key becomes false. See setLoggerForcingSettingKey(). */
+		const auto enabledBySetting = settings.getOrSetDefault< bool >(TracerEnableLoggerKey, m_loggerEnabledByDefault);
+		const auto forcedBySetting = !m_loggerForcingSettingKey.empty() && settings.getOrSetDefault< bool >(m_loggerForcingSettingKey, m_loggerForcingSettingKeyDefault);
+
+		if ( enabledBySetting || forcedBySetting || argument.has_value() )
 		{
 			m_loggerRequestedAtStartup = true;
 

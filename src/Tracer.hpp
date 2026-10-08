@@ -384,6 +384,44 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Declares an application setting key that requests the file logger whatever Core/Tracer/EnableLogger holds.
+			 *
+			 * An application feature may be unusable without the journals — a crash reporter made of them, for
+			 * instance. Instead of writing Core/Tracer/EnableLogger behind the user's back, the application names the
+			 * key of that feature here: while it is true, the logger is on; the moment it is false,
+			 * Core/Tracer/EnableLogger rules again, with the value the user left in it.
+			 *
+			 * Both keys are read at startup, so Core/Tracer/EnableLogger exists in the settings file (and stays
+			 * meaningful) even while the forcing key holds the decision.
+			 *
+			 * @pre Called before the primary services are initialized (i.e. before the Core or PrimaryServices
+			 * constructor): lateSetup() reads the key while the settings are loaded. A later call has no effect on the
+			 * running process.
+			 * @param settingKey The application setting key, empty to declare none (moved into the tracer).
+			 * @param defaultValue The value assumed while the settings hold none for that key, which is also persisted.
+			 * @version 1.0.0
+			 */
+			void
+			setLoggerForcingSettingKey (std::string settingKey, bool defaultValue) noexcept
+			{
+				m_loggerForcingSettingKey = std::move(settingKey);
+				m_loggerForcingSettingKeyDefault = defaultValue;
+			}
+
+			/**
+			 * @brief Returns the application setting key that requests the file logger, empty if none was declared.
+			 * @see setLoggerForcingSettingKey()
+			 * @return const std::string &
+			 * @version 1.0.0
+			 */
+			[[nodiscard]]
+			const std::string &
+			loggerForcingSettingKey () const noexcept
+			{
+				return m_loggerForcingSettingKey;
+			}
+
+			/**
 			 * @brief Returns where the journal of the previous execution is kept for a log file path.
 			 *
 			 * enableLogger() never truncates an existing journal: it first renames it with a ".previous" suffix
@@ -693,6 +731,7 @@ namespace EmEn
 			/* NOTE: Members ordered for optimal memory alignment (largest to smallest). */
 			std::filesystem::path m_cacheDirectory;
 			std::string m_processName;
+			std::string m_loggerForcingSettingKey;
 			std::vector< std::string > m_filters;
 			std::unique_ptr< TracerLogger > m_logger;
 			mutable std::mutex m_consoleAccess;
@@ -713,6 +752,7 @@ namespace EmEn
 			bool m_loggerRequestedAtStartup{false};
 			/* NOTE: Mirrors DefaultTracerEnableLogger (SettingKeys.hpp is not included by this widely used header). */
 			bool m_loggerEnabledByDefault{false};
+			bool m_loggerForcingSettingKeyDefault{false};
 	};
 
 	/* ==================================================================================================================== */
