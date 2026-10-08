@@ -751,7 +751,7 @@ namespace EmEn::Net
 
 		if ( itemIt == m_items.end() )
 		{
-			return {Base::Network::DownloadOutcome::Success, 0};
+			return {Base::Network::DownloadOutcome::Success, uint16_t{0}};
 		}
 
 		return itemIt->second.failure();

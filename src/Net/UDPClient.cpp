@@ -38,6 +38,9 @@
 #include <sstream>
 #include <utility>
 
+/* Local inclusions. */
+#include "String.hpp"
+
 /* Third-party inclusions. */
 #ifdef _WIN32
 	#ifndef NOMINMAX
@@ -359,8 +362,9 @@ namespace EmEn::Net
 						value = value.substr(valueStart);
 					}
 
-					/* Convert key to uppercase for case-insensitive matching. */
-					std::ranges::transform(key, key.begin(), ::toupper);
+					/* Convert key to uppercase for case-insensitive matching. NOTE: Base::String::toUpper(), not ::toupper on each char:
+					 * a byte >= 0x80 from the network is a negative char, undefined behaviour for ::toupper. */
+					key = Base::String::toUpper(key);
 
 					headers[key] = value;
 				}

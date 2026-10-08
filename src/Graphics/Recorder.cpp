@@ -38,6 +38,7 @@
 #include "vpx/vp8cx.h"
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "Renderer.hpp"
@@ -114,7 +115,7 @@ namespace EmEn::Graphics
 
 		const std::error_code error{errno, std::generic_category()};
 
-		TraceError{Recorder::ClassId} << "Unable to write to " << path << " (" << error.message() << ") ! The recording stops, the video is truncated.";
+		TraceError{Recorder::ClassId} << "Unable to write to " << IO::toU8String(path) << " (" << error.message() << ") ! The recording stops, the video is truncated.";
 
 		failed.store(true, std::memory_order_release);
 
@@ -139,10 +140,34 @@ namespace EmEn::Graphics
 		{
 			const std::error_code error{errno, std::generic_category()};
 
-			TraceError{Recorder::ClassId} << "Unable to close " << path << " (" << error.message() << ") ! The video is truncated.";
+			TraceError{Recorder::ClassId} << "Unable to close " << IO::toU8String(path) << " (" << error.message() << ") ! The video is truncated.";
 
 			failed.store(true, std::memory_order_release);
 		}
+	}
+
+	/**
+	 * @brief Opens a recording's output file for binary writing (truncated).
+	 * @note Windows opens through _wfopen_s() (UTF-16 path; _wfopen() is deprecated by the MSVC CRT, C4996).
+	 * @param path The file's path.
+	 * @return std::FILE * The open stream, or nullptr on failure.
+	 */
+	[[nodiscard]]
+	std::FILE *
+	openOutputFile (const std::filesystem::path & path) noexcept
+	{
+#ifdef _WIN32
+		std::FILE * file = nullptr;
+
+		if ( _wfopen_s(&file, path.c_str(), L"wb") != 0 )
+		{
+			return nullptr;
+		}
+
+		return file;
+#else
+		return std::fopen(path.c_str(), "wb");
+#endif
 	}
 	}
 
@@ -441,15 +466,11 @@ namespace EmEn::Graphics
 		m_currentSession->outputPath = outputPath;
 
 		/* Open output file. */
-#ifdef _WIN32
-		m_currentSession->outputFile.reset(_wfopen(outputPath.c_str(), L"wb"));
-#else
-		m_currentSession->outputFile.reset(std::fopen(outputPath.c_str(), "wb"));
-#endif
+		m_currentSession->outputFile.reset(openOutputFile(outputPath));
 
 		if ( m_currentSession->outputFile == nullptr )
 		{
-			TraceError{ClassId} << "Unable to open output file " << outputPath << " !";
+			TraceError{ClassId} << "Unable to open output file " << IO::toU8String(outputPath) << " !";
 
 			m_currentSession.reset();
 
@@ -587,7 +608,7 @@ namespace EmEn::Graphics
 		m_sessionOpen.store(true, std::memory_order_release);
 		m_isRecording.store(true, std::memory_order_release);
 
-		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [Studio / " << qualityPresetToString(m_qualityPreset) << "] -> " << outputPath;
+		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [Studio / " << qualityPresetToString(m_qualityPreset) << "] -> " << IO::toU8String(outputPath);
 
 		return true;
 	}
@@ -662,7 +683,7 @@ namespace EmEn::Graphics
 			m_currentSession->queueCV.notify_all();
 
 			/* Detach the session — encoding continues in background. */
-			TraceSuccess{ClassId} << "Recording stopped (encoding continues in background) -> " << m_currentSession->outputPath;
+			TraceSuccess{ClassId} << "Recording stopped (encoding continues in background) -> " << IO::toU8String(m_currentSession->outputPath);
 
 			m_finishingSessions.push_back(std::move(m_currentSession));
 		}
@@ -1335,7 +1356,7 @@ namespace EmEn::Graphics
 		/* Patch frame count in IVF header (a truncated file keeps 0: its frames are what is there). */
 		if ( !writeFailed.load(std::memory_order_acquire) && !this->patchIVFFrameCount() )
 		{
-			TraceWarning{Recorder::ClassId} << "Failed to patch the IVF frame count in " << outputPath << " !";
+			TraceWarning{Recorder::ClassId} << "Failed to patch the IVF frame count in " << IO::toU8String(outputPath) << " !";
 		}
 
 		/* Close output file. */
@@ -1355,12 +1376,12 @@ namespace EmEn::Graphics
 
 		if ( writeFailed.load(std::memory_order_acquire) )
 		{
-			TraceError{Recorder::ClassId} << "Encoding session TRUNCATED: " << writtenFrames << " frames written to " << outputPath << " before a write failed, the frames after it are lost.";
+			TraceError{Recorder::ClassId} << "Encoding session TRUNCATED: " << writtenFrames << " frames written to " << IO::toU8String(outputPath) << " before a write failed, the frames after it are lost.";
 
 			return;
 		}
 
-		TraceSuccess{Recorder::ClassId} << "Encoding session finalized: " << writtenFrames << " frames written to " << outputPath << " (" << duplicatedFrames << " CFR filler frames, " << skippedCaptures.load() << " captures skipped by backpressure).";
+		TraceSuccess{Recorder::ClassId} << "Encoding session finalized: " << writtenFrames << " frames written to " << IO::toU8String(outputPath) << " (" << duplicatedFrames << " CFR filler frames, " << skippedCaptures.load() << " captures skipped by backpressure).";
 	}
 
 	Recorder::EncodingSession::~EncodingSession () noexcept
@@ -1745,15 +1766,11 @@ namespace EmEn::Graphics
 		m_hardwareSession = std::make_unique< HardwareSession >();
 		m_hardwareSession->outputPath = outputPath;
 
-#ifdef _WIN32
-		m_hardwareSession->outputFile.reset(_wfopen(outputPath.c_str(), L"wb"));
-#else
-		m_hardwareSession->outputFile.reset(std::fopen(outputPath.c_str(), "wb"));
-#endif
+		m_hardwareSession->outputFile.reset(openOutputFile(outputPath));
 
 		if ( m_hardwareSession->outputFile == nullptr )
 		{
-			TraceError{ClassId} << "Unable to open output file " << outputPath << " !";
+			TraceError{ClassId} << "Unable to open output file " << IO::toU8String(outputPath) << " !";
 
 			m_hardwareSession.reset();
 
@@ -1791,7 +1808,7 @@ namespace EmEn::Graphics
 		m_sessionOpen.store(true, std::memory_order_release);
 		m_isRecording.store(true, std::memory_order_release);
 
-		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [Hardware H.265 / " << qualityPresetToString(m_qualityPreset) << "] -> " << outputPath;
+		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [Hardware H.265 / " << qualityPresetToString(m_qualityPreset) << "] -> " << IO::toU8String(outputPath);
 
 		return true;
 	}
@@ -1896,12 +1913,12 @@ namespace EmEn::Graphics
 
 		if ( session->writeFailed.load(std::memory_order_acquire) )
 		{
-			TraceError{ClassId} << "Hardware encoding session TRUNCATED: " << session->frameCount << " frames written to " << session->outputPath << " before a write failed.";
+			TraceError{ClassId} << "Hardware encoding session TRUNCATED: " << session->frameCount << " frames written to " << IO::toU8String(session->outputPath) << " before a write failed.";
 
 			return;
 		}
 
-		TraceSuccess{ClassId} << "Hardware encoding session finalized: " << session->frameCount << " frames written to " << session->outputPath << " (" << session->duplicatedFrames << " CFR filler frames, " << session->skippedCaptures.load() << " captures skipped).";
+		TraceSuccess{ClassId} << "Hardware encoding session finalized: " << session->frameCount << " frames written to " << IO::toU8String(session->outputPath) << " (" << session->duplicatedFrames << " CFR filler frames, " << session->skippedCaptures.load() << " captures skipped).";
 	}
 
 	void
@@ -1925,7 +1942,7 @@ namespace EmEn::Graphics
 		m_hardwareEncoder.reset();
 		m_frameConverter.reset();
 
-		TraceSuccess{ClassId} << "Recording stopped -> " << m_hardwareSession->outputPath;
+		TraceSuccess{ClassId} << "Recording stopped -> " << IO::toU8String(m_hardwareSession->outputPath);
 
 		m_hardwareSession.reset();
 	}

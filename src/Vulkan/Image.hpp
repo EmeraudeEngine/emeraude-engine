@@ -654,10 +654,14 @@ namespace EmEn::Vulkan
 								return VK_FORMAT_UNDEFINED;
 						}
 					}
+					/* NOTE: A floating point type of another size (a 16-byte long double) has no image format. */
+					else
+					{
+						return VK_FORMAT_UNDEFINED;
+					}
 				}
-
-				/* NOTE: Integer value. */
-				if constexpr ( std::is_integral_v< precision_t > )
+				/* NOTE: Integer value (std::is_arithmetic_v: floating point or integral, the chain is exhaustive). */
+				else
 				{
 					/* FIXME: Check for non 8bits format ! */
 
@@ -725,8 +729,6 @@ namespace EmEn::Vulkan
 						}
 					}
 				}
-
-				return VK_FORMAT_UNDEFINED;
 			}
 
 			/**

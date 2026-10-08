@@ -5733,6 +5733,12 @@ have no lifetime bug — but the two ufbx calls still carry **Trap 1** on Window
 filenames), so they should move to `IO::toU8String()` too. Not done yet; no non-ASCII asset path has
 hit it.
 
+**Trap 3 — never stream a `std::filesystem::path` into a trace.** `TraceError{…} << path` ends in MS-STL's
+`path::operator<<`, i.e. `std::quoted(path.string())`: the ANSI conversion **throws** on a path the code page cannot hold,
+and under `-fno-exceptions` that is a terminate — on Windows only, with a non-ASCII user profile or capture directory.
+Stream `IO::toU8String(path)`. `Graphics/Recorder.cpp` streamed 13 of them (fixed 2026-10-08, with `_wfopen()` →
+`_wfopen_s()` for the MSVC paranoid set, C4996). Grep a diff for `<< .*[Pp]ath\b` before pushing.
+
 ### Video Capture — macOS First-Frame Timing
 
 AVFoundation's `startRunning` is asynchronous. The macOS `VideoCaptureDevice::open()` waits up to 3 seconds for the first frame via `std::condition_variable`. Without this, the first `captureFrame()` call would always fail.

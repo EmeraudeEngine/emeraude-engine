@@ -996,7 +996,7 @@ namespace EmEn::Net
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
-			return {Base::Network::DownloadOutcome::Success, 0};
+			return {Base::Network::DownloadOutcome::Success, uint16_t{0}};
 		}
 
 		return m_items[static_cast< size_t >(ticket) - 1].failure();
