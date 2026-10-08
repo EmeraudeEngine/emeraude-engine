@@ -348,7 +348,7 @@ namespace EmEn::Net
 		cfsetispeed(&tty, baudConstant.value_or(B9600));
 		cfsetospeed(&tty, baudConstant.value_or(B9600));
 
-		tty.c_cflag &= ~CSIZE;
+		tty.c_cflag &= ~static_cast< tcflag_t >(CSIZE);
 
 		switch ( config.dataBits )
 		{
@@ -364,14 +364,14 @@ namespace EmEn::Net
 		}
 		else
 		{
-			tty.c_cflag &= ~CSTOPB;
+			tty.c_cflag &= ~static_cast< tcflag_t >(CSTOPB);
 		}
 
 		switch ( config.parity )
 		{
 			case 'E' : case 'e' :
 				tty.c_cflag |= PARENB;
-				tty.c_cflag &= ~PARODD;
+				tty.c_cflag &= ~static_cast< tcflag_t >(PARODD);
 				break;
 
 			case 'O' : case 'o' :
@@ -380,7 +380,7 @@ namespace EmEn::Net
 				break;
 
 			default :
-				tty.c_cflag &= ~PARENB;
+				tty.c_cflag &= ~static_cast< tcflag_t >(PARENB);
 				break;
 		}
 
@@ -390,7 +390,7 @@ namespace EmEn::Net
 		}
 		else
 		{
-			tty.c_cflag &= ~CRTSCTS;
+			tty.c_cflag &= ~static_cast< tcflag_t >(CRTSCTS);
 		}
 
 		if ( config.xon || config.xoff )
@@ -399,13 +399,13 @@ namespace EmEn::Net
 		}
 		else
 		{
-			tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+			tty.c_iflag &= ~static_cast< tcflag_t >(IXON | IXOFF | IXANY);
 		}
 
 		tty.c_cflag |= (CLOCAL | CREAD);
-		tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-		tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-		tty.c_oflag &= ~OPOST;
+		tty.c_lflag &= ~static_cast< tcflag_t >(ICANON | ECHO | ECHOE | ISIG);
+		tty.c_iflag &= ~static_cast< tcflag_t >(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+		tty.c_oflag &= ~static_cast< tcflag_t >(OPOST);
 
 		tty.c_cc[VMIN] = 0;
 		tty.c_cc[VTIME] = 0;
@@ -486,7 +486,7 @@ namespace EmEn::Net
 
 			struct timeval tv{};
 			tv.tv_sec = static_cast< long >(timeoutMs / 1000);
-			tv.tv_usec = static_cast< long >((timeoutMs % 1000) * 1000);
+			tv.tv_usec = static_cast< decltype(tv.tv_usec) >((timeoutMs % 1000) * 1000);
 
 			const auto result = select(m_fd + 1, &readFds, nullptr, nullptr, &tv);
 

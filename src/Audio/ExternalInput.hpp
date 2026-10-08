@@ -50,11 +50,6 @@
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Audio
-	{
-		class Manager;
-	}
-
 	class PrimaryServices;
 }
 
@@ -74,9 +69,8 @@ namespace EmEn::Audio
 			/**
 			 * @brief Constructs the external audio input.
 			 * @param primaryServices Reference to primary services for settings and filesystem access.
-			 * @param audioManager Reference to the audio manager.
 			 */
-			ExternalInput (PrimaryServices & primaryServices, Manager & audioManager) noexcept;
+			explicit ExternalInput (PrimaryServices & primaryServices) noexcept;
 
 			/**
 			 * @brief Returns a list a available input audio devices.
@@ -172,11 +166,9 @@ namespace EmEn::Audio
 			static inline bool s_audioCaptureAvailable{false};
 
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem access.
-			Manager & m_audioManager; ///< Audio manager owning this recorder.
 			std::vector< std::string > m_availableDevices;
 			std::string m_selectedDeviceName;
 			ALCdevice * m_device{nullptr};
-			Base::WaveFactory::Channels m_channels{Base::WaveFactory::Channels::Mono};
 			Base::WaveFactory::Frequency m_frequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			/* Memory mode. */
 			std::vector< ALshort > m_samples;

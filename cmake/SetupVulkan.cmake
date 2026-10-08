@@ -28,8 +28,13 @@ elseif ( APPLE )
 	#target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
 	#target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Vulkan::Vulkan Vulkan::MoltenVK "-framework Metal" "-framework AppKit" "-framework QuartzCore" "-framework IOSurface" "-framework Foundation")
 
-	# On some project, the clang compiler refuse to look at '/usr/local/include'
-	target_compile_options(${TARGET_BINARY_FOR_SETUP} PUBLIC "-I/usr/local/include")
+	# The Vulkan SDK installs its headers in '/usr/local/include', which some configurations do not search (a
+	# sysroot). It is added with -idirafter, NOT -I: a -I directory is searched BEFORE every -isystem one and is judged
+	# as our own code. As -I, it made '<glslang/...>' resolve to the SDK's glslang (16.4) instead of the ext-deps one the
+	# engine links (16.5): glslang::SpvOptions gained a field in between, so GlslangToSpv() read the engine's options
+	# one field off and one byte past the object. It also put the SDK's macros (VK_MAKE_VERSION) and headers under the
+	# paranoid warning set. -idirafter is a system directory searched after all the others.
+	target_compile_options(${TARGET_BINARY_FOR_SETUP} PUBLIC "-idirafter/usr/local/include")
 elseif ( MSVC )
 	set(VULKAN_SDK_PATH "C:/VulkanSDK/${VULKAN_SDK_VERSION}/")
 

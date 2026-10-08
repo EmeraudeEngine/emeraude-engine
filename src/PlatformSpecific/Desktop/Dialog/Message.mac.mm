@@ -78,8 +78,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                     [alert setAlertStyle:NSCriticalAlertStyle];
                     break;
 #endif
-                default:
-                    break;
             }
 
             switch ( m_buttonLayout )

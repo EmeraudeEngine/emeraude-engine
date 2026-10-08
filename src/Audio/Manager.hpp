@@ -500,7 +500,7 @@ namespace EmEn::Audio
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
-			ExternalInput m_externalInput{m_primaryServices, *this};
+			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};
 			TrackMixer m_trackMixer{m_primaryServices, m_resourceManager, *this};
 			std::vector< ServiceInterface * > m_subServicesEnabled;

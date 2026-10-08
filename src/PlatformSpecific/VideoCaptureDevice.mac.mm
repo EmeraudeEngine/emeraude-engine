@@ -399,7 +399,7 @@ namespace EmEn::PlatformSpecific
 
 			/* Request BGRA pixel format. */
 			NSDictionary * videoSettings = @{
-				(NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA)
+				(__bridge NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA)
 			};
 			[context->output setVideoSettings:videoSettings];
 

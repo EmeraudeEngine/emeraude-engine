@@ -52,12 +52,10 @@ namespace EmEn::Tool
 
 			/**
 			 * @brief Constructs the tool.
-			 * @param arguments A reference to the arguments.
 			 * @param vulkanInstance A reference to the vulkan instance.
 			 */
-			ShowVulkanInformation (const Arguments & arguments, const Vulkan::Instance & vulkanInstance) noexcept
-				: m_arguments{arguments},
-				m_vulkanInstance{vulkanInstance}
+			explicit ShowVulkanInformation (const Vulkan::Instance & vulkanInstance) noexcept
+				: m_vulkanInstance{vulkanInstance}
 			{
 
 			}
@@ -68,7 +66,6 @@ namespace EmEn::Tool
 
 		private:
 
-			const Arguments & m_arguments;
 			const Vulkan::Instance & m_vulkanInstance;
 	};
 }

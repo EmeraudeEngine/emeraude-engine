@@ -67,7 +67,8 @@ namespace EmEn::PlatformSpecific
 		const auto cpuInfo = cpu_features::GetAarch64Info();
 
 		m_CPUInformation.vendorName = "Apple";
-		m_CPUInformation.vendorID = cpuInfo.implementer;
+		/* cpu_features stores the MIDR fields as int; a negative value would mean "unread": it stays 0, "unknown". */
+		m_CPUInformation.vendorID = cpuInfo.implementer >= 0 ? static_cast< uint32_t >(cpuInfo.implementer) : 0U;
 		/* NOTE: cpu_features has no brand string on Apple Silicon; the OS does ("Apple M2"). The "model" below is
 		 * hw.cpufamily (e.g. 0xDA33D83D for the M2, negative once stored signed), not garbage. */
 		m_CPUInformation.deviceName = platformCPUBrandString();
@@ -76,7 +77,7 @@ namespace EmEn::PlatformSpecific
 		{
 			m_CPUInformation.deviceName = "Apple Silicon";
 		}
-		m_CPUInformation.deviceID = cpuInfo.variant;
+		m_CPUInformation.deviceID = cpuInfo.variant >= 0 ? static_cast< uint32_t >(cpuInfo.variant) : 0U;
 		m_CPUInformation.family = -1;
 		m_CPUInformation.model = cpuInfo.part;
 		m_CPUInformation.stepping = cpuInfo.revision;

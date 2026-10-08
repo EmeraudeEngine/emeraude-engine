@@ -173,7 +173,7 @@ namespace EmEn::PlatformSpecific::Desktop
 				{
 					if ( [subview isKindOfClass:[NSProgressIndicator class]] )
 					{
-						progressIndicator = (NSProgressIndicator *)subview;
+						progressIndicator = static_cast< NSProgressIndicator * >(subview);
 
 						break;
 					}

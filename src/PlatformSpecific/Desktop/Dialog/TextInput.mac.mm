@@ -91,7 +91,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 					NSTextView * textView = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 394, 200)];
 					[textView setMinSize:NSMakeSize(0, 200)];
-					[textView setMaxSize:NSMakeSize(FLT_MAX, FLT_MAX)];
+					[textView setMaxSize:NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX)];
 					[textView setVerticallyResizable:YES];
 					[textView setHorizontallyResizable:NO];
 					[textView setAutoresizingMask:NSViewWidthSizable];
@@ -118,7 +118,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 				}
 
 				case InputMode::SingleLine:
-				default:
 				{
 					NSTextField * input = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 0, 300, 24)];
 					[input setStringValue:defaultString];

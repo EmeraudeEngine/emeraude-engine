@@ -41,10 +41,9 @@ namespace EmEn::Audio
 {
 	using namespace Base;
 
-	ExternalInput::ExternalInput (PrimaryServices & primaryServices, Manager & audioManager) noexcept
+	ExternalInput::ExternalInput (PrimaryServices & primaryServices) noexcept
 		: ServiceInterface{ClassId},
-		m_primaryServices{primaryServices},
-		m_audioManager{audioManager}
+		m_primaryServices{primaryServices}
 	{
 
 	}

@@ -42,6 +42,29 @@
 
 namespace EmEn::PlatformSpecific
 {
+	namespace
+	{
+		/**
+		 * @brief Multiplies two sysconf() results into a byte count.
+		 * @note sysconf() returns -1 when a value is unavailable: the product would then wrap into a huge
+		 * size_t (or read as one page). Such a case reads as zero, "unknown" (same as SystemInfo.linux.cpp).
+		 * @param count The first sysconf() result (a page count).
+		 * @param size The second sysconf() result (a page size).
+		 * @return size_t
+		 */
+		[[nodiscard]]
+		size_t
+		sysconfProduct (long count, long size) noexcept
+		{
+			if ( count <= 0 || size <= 0 )
+			{
+				return 0;
+			}
+
+			return static_cast< size_t >(count) * static_cast< size_t >(size);
+		}
+	}
+
 	bool
 	SystemInfo::fetchOSInformation () noexcept
 	{
@@ -135,7 +158,7 @@ namespace EmEn::PlatformSpecific
 	size_t
 	SystemInfo::getTotalMemory () noexcept
 	{
-		return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE);
+		return sysconfProduct(sysconf(_SC_PHYS_PAGES), sysconf(_SC_PAGE_SIZE));
 	}
 
 	size_t
@@ -174,7 +197,7 @@ namespace EmEn::PlatformSpecific
 		mach_task_basic_info info{};
 		mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
 
-		if ( task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &infoCount) != KERN_SUCCESS )
+		if ( task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast< task_info_t >(&info), &infoCount) != KERN_SUCCESS )
 		{
 			/* Can't access? */
 			return 0;

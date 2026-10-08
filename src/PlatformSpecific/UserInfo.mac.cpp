@@ -38,19 +38,22 @@
 
 namespace EmEn::PlatformSpecific
 {
-	void
-	resizeBuffer (std::string & buffer) noexcept
+	namespace
 	{
-		auto bufferSize = sysconf(_SC_GETPW_R_SIZE_MAX);
-
-		/* Value was indeterminate */
-		if ( bufferSize < 0 )
+		void
+		resizeBuffer (std::string & buffer) noexcept
 		{
-			/* Should be more than enough */
-			bufferSize = 16384;
-		}
+			auto bufferSize = sysconf(_SC_GETPW_R_SIZE_MAX);
 
-		buffer.resize(bufferSize, '\0');
+			/* Value was indeterminate */
+			if ( bufferSize < 0 )
+			{
+				/* Should be more than enough */
+				bufferSize = 16384;
+			}
+
+			buffer.resize(static_cast< size_t >(bufferSize), '\0');
+		}
 	}
 
 	bool

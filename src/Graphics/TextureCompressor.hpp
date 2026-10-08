@@ -39,11 +39,6 @@
 /* Local inclusions for usages. */
 #include "PixelFactory/Pixmap.hpp"
 
-namespace EmEn
-{
-	class PrimaryServices;
-}
-
 namespace EmEn::Graphics
 {
 	/**
@@ -89,9 +84,8 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Constructs the texture compressor.
-			 * @param primaryServices A reference to the primary services.
 			 */
-			explicit TextureCompressor (PrimaryServices & primaryServices) noexcept;
+			TextureCompressor () noexcept;
 
 			/**
 			 * @brief Compresses an RGBA8 pixmap to BC7 with full mipchain.
@@ -137,6 +131,5 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			PrimaryServices & m_primaryServices;
 	};
 }

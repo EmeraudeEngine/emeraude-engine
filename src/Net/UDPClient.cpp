@@ -245,7 +245,7 @@ namespace EmEn::Net
 
 				struct timeval tv{};
 				tv.tv_sec = static_cast< long >(sliceMs / 1000);
-				tv.tv_usec = static_cast< long >((sliceMs % 1000) * 1000);
+				tv.tv_usec = static_cast< decltype(tv.tv_usec) >((sliceMs % 1000) * 1000);
 
 				const auto ready = select(static_cast< int >(sock) + 1, &readFds, nullptr, nullptr, &tv);
 

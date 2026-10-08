@@ -217,7 +217,6 @@ namespace EmEn::Vulkan
 			std::unique_ptr< Buffer > m_bitstreamBuffer;
 			const uint8_t * m_bitstreamMapped{nullptr};
 			VkQueryPool m_feedbackQueryPool{VK_NULL_HANDLE};
-			VkDeviceSize m_bitstreamAlignment{1};
 
 			/* Command recording. */
 			std::shared_ptr< CommandPool > m_graphicsCommandPool;

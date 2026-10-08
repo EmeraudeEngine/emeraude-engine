@@ -5070,6 +5070,21 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### ⚠️⚠️ macOS: `-I/usr/local/include` compiled the engine against the Vulkan SDK's glslang, not the one it links (2026-10-08, FIXED)
+
+> [!CAUTION]
+> `cmake/SetupVulkan.cmake` added the Vulkan SDK's header directory as a raw `-I/usr/local/include`. A `-I` directory
+> is searched BEFORE every `-isystem` one, so `<glslang/...>` resolved to the SDK's glslang **16.4** headers while the
+> engine links the ext-deps glslang **16.5** library. `glslang::SpvOptions` gained a field in between
+> (`optimizePerformance`): `Saphir::ShaderManager` built the 16.4 layout and `GlslangToSpv()` read it one field off and
+> one byte past the object (undefined behaviour; harmless today only because every shifted field is `false` and the
+> byte read past the object lands on `optimizerAllowExpandedIDBound`, which the disabled optimizer never consults). The same
+> `-I` judged the SDK's headers and macros (`VK_MAKE_VERSION`, `VK_API_VERSION_1_3`, glslang's `ShaderLang.h`) as our
+> code under the paranoid warning set. Fix: `-idirafter/usr/local/include` — still always searched (some sysroot
+> configurations do not search it by default), but a system directory, after all the others. Found by the Ave Robustus
+> II warning pass on macOS (AppleClang 21). **Rule: a third-party directory is never a raw `-I`; check which copy of a
+> header a TU really includes when two installations exist (`clang++ -H`, or a `static_assert` on the version macro).**
+
 ### A clang-tidy `--fix` over several TUs applies a header fix-it once PER TU (2026-10-01, triad 11)
 
 > [!CAUTION]

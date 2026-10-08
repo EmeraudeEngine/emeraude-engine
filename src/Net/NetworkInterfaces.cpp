@@ -29,6 +29,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstddef>
 #include <cstdio>
 #include <map>
 #include <utility>
@@ -397,7 +398,17 @@ namespace EmEn::Net::NetworkInterfaces
 			{
 				const auto * link = reinterpret_cast< const struct sockaddr_dl * >(entry->ifa_addr);
 
-				macByName[entry->ifa_name] = formatMAC(reinterpret_cast< const uint8_t * >(LLADDR(link)), link->sdl_alen);
+				/* The link-layer address follows the interface name in sdl_data (a variable-length structure of sdl_len
+				 * bytes). LLADDR() casts the const away (a C-style cast to char *), so the address is reached here without
+				 * dropping the qualifier, after checking that the name and the address both fit in the structure. */
+				if ( offsetof(struct sockaddr_dl, sdl_data) + size_t{link->sdl_nlen} + size_t{link->sdl_alen} > size_t{link->sdl_len} )
+				{
+					continue;
+				}
+
+				const auto * linkAddress = link->sdl_data + link->sdl_nlen;
+
+				macByName[entry->ifa_name] = formatMAC(reinterpret_cast< const uint8_t * >(linkAddress), link->sdl_alen);
 			}
 #endif
 		}

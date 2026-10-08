@@ -152,9 +152,8 @@ namespace EmEn::Graphics
 		}
 	}
 
-	TextureCompressor::TextureCompressor (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface{ClassId},
-		m_primaryServices{primaryServices}
+	TextureCompressor::TextureCompressor () noexcept
+		: ServiceInterface{ClassId}
 	{
 
 	}

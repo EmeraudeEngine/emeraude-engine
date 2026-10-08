@@ -86,8 +86,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					[alert setAlertStyle:NSCriticalAlertStyle];
 					break;
 #endif
-				default:
-					break;
 			}
 
 			/* Add custom buttons.

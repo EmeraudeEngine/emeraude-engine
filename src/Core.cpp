@@ -2988,7 +2988,7 @@ namespace EmEn
 
 		if ( tools == VulkanInformationToolName )
 		{
-			Tool::ShowVulkanInformation tool{m_primaryServices.arguments(), m_vulkanInstance};
+			Tool::ShowVulkanInformation tool{m_vulkanInstance};
 
 			return tool.execute() ? EXIT_SUCCESS : EXIT_FAILURE;
 		}

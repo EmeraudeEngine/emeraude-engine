@@ -1784,7 +1784,7 @@ namespace EmEn::Graphics
 			SharedUBOManager m_sharedUBOManager;
 			BindlessTextureManager m_bindlessTextureManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
-			TextureCompressor m_textureCompressor{m_primaryServices};
+			TextureCompressor m_textureCompressor;
 			/* NOTE: Declared AFTER the compressor: it binds a reference to it. */
 			TextureCache m_textureCache{m_primaryServices, m_textureCompressor};
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
