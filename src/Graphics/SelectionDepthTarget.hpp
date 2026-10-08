@@ -81,7 +81,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the view matrices to delegate to: the main camera's.
 			 * @param source A reference to the source view matrices interface.
-			 * @return void
 			 */
 			void
 			setSourceViewMatrices (ViewMatricesInterface & source) noexcept

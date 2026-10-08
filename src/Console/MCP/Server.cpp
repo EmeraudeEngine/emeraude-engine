@@ -81,7 +81,6 @@ namespace EmEn::Console::MCP
 		 * @param connection The connection.
 		 * @param status The HTTP status.
 		 * @param body The serialized JSON.
-		 * @return void
 		 */
 		void
 		respondJSON (Network::HTTPServerConnection & connection, int status, std::string_view body) noexcept
@@ -97,7 +96,6 @@ namespace EmEn::Console::MCP
 		 * @param code The JSON-RPC error code.
 		 * @param message The message.
 		 * @param data Optional error data.
-		 * @return void
 		 */
 		void
 		respondError (Network::HTTPServerConnection & connection, int status, const Json::Value & id, int code, const std::string & message, const Json::Value & data = Json::Value{Json::nullValue}) noexcept
@@ -522,10 +520,10 @@ namespace EmEn::Console::MCP
 	void
 	Server::postAnswer (const std::weak_ptr< Connection > & connection, std::string body) noexcept
 	{
-		m_http.post([connection, body = std::move(body)] () {
+		m_http.post([connection, answer = std::move(body)] () {
 			if ( auto alive = connection.lock() )
 			{
-				alive->respond(200, "application/json", body, NoStore);
+				alive->respond(200, "application/json", answer, NoStore);
 			}
 		});
 	}
@@ -641,10 +639,10 @@ namespace EmEn::Console::MCP
 
 			/* The result is built on the network thread: an image output is read and reduced there, never
 			 * on the main thread between two frames. */
-			m_http.post([connection = request.connection, id = request.id, modern = request.modern, succeeded, outputs = std::move(outputs)] () {
+			m_http.post([connection = request.connection, id = request.id, modern = request.modern, succeeded, toolOutputs = std::move(outputs)] () {
 				if ( auto alive = connection.lock() )
 				{
-					alive->respond(200, "application/json", serialize(makeResult(id, callResult(succeeded, outputs, modern), modern)), NoStore);
+					alive->respond(200, "application/json", serialize(makeResult(id, callResult(succeeded, toolOutputs, modern), modern)), NoStore);
 				}
 			});
 		}

@@ -84,7 +84,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Enables or disables this listener.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enablePointerListening (bool state) noexcept
@@ -106,7 +105,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Sets whether the listener is propagating the processed events.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			propagateProcessedEvent (bool state) noexcept
@@ -127,7 +125,6 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Sets the pointer to relative mode.
-			 * @return void
 			 */
 			void
 			enableRelativeMode () noexcept
@@ -137,7 +134,6 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Sets the pointer to relative mode.
-			 * @return void
 			 */
 			void
 			enableAbsoluteMode () noexcept
@@ -170,7 +166,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Lock this listener when holding a mouse button to send all move events to it.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			lockListenerOnMoveEvents (bool state) noexcept

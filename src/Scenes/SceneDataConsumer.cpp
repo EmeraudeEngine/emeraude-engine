@@ -294,7 +294,7 @@ namespace EmEn::Scenes
 				 * position toward the origin": that default was 7° off on Sponza's sun and is a
 				 * zero vector for a node placed at the origin. The shadow policy is the caller's
 				 * (setDirectionalLightShadows()): a runtime budget, never asset data. */
-				if ( const auto component = m_directionalLightShadows.build(entity, componentName, [&light] (auto & component) {
+				if ( const auto directionalLight = m_directionalLightShadows.build(entity, componentName, [&light] (auto & component) {
 					component.useDirectionVector(true);
 					/* ⚠️ KHR_lights_punctual (and UsdLux): the intensity is what the light would emit if it were
 					 * WHITE, and the colour multiplies it (a grey light is dimmer — PointLightIntensityTest). The
@@ -302,7 +302,7 @@ namespace EmEn::Scenes
 					 * is folded into the intensity here: the asset renders exactly as the Khronos viewer does. */
 					component.setColor(light.color);
 					component.setIlluminance(light.intensity * light.color.luminance());
-				}); component == nullptr )
+				}); directionalLight == nullptr )
 				{
 					TraceError{ClassId} << "Unable to create the directional light '" << componentName << "' (entity full) !";
 				}

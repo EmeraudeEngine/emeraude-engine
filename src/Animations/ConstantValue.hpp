@@ -111,7 +111,6 @@ namespace EmEn::Animations
 			/**
 			 * @brief Set the next value.
 			 * @param value A reference to a variant for the next value.
-			 * @return void
 			 */
 			void
 			setValue (const Base::Variant & value) noexcept

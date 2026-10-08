@@ -138,7 +138,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Destroys the device.
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -322,7 +321,6 @@ namespace EmEn::Vulkan
 			 * @note Destroying a GPU object still written by a pending upload goes through it
 			 * (destroyAfter()). The renderer unregisters it BEFORE flushing it at its termination.
 			 * @param deferredDestructor A pointer to the queue, owned by the renderer, or nullptr.
-			 * @return void
 			 */
 			void setDeferredDestructor (DeferredDestructor * deferredDestructor) noexcept;
 
@@ -334,7 +332,6 @@ namespace EmEn::Vulkan
 			 * calling thread waits for the points, then destroys.
 			 * @param points The completion points not reached yet (PendingSubmissions::takeUnreached()).
 			 * @param destruction The destruction, owning the handles it destroys.
-			 * @return void
 			 */
 			void destroyAfter (const PendingSubmissions::Points & points, std::function< void () > destruction) noexcept;
 
@@ -704,7 +701,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Waits for a device to become idle.
 			 * @param location A point to string.
-			 * @return void
 			 */
 			void waitIdle (const char * location) const noexcept;
 
@@ -720,8 +716,8 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Finds a supported format from a device.
 			 * @param formats A reference to a format vector.
-			 * @param tiling
-			 * @param featureFlags
+			 * @param tiling The image tiling the format must support.
+			 * @param featureFlags The format features required for the tiling.
 			 * @return VkFormat
 			 */
 			[[nodiscard]]
@@ -746,7 +742,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Lock the access to the device.
 			 * @note std::lock_guard friendly.
-			 * @return void
 			 */
 			void
 			lock () const
@@ -757,7 +752,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Unlock the access to the device.
 			 * @note std::lock_guard friendly.
-			 * @return void
 			 */
 			void
 			unlock () const
@@ -771,7 +765,6 @@ namespace EmEn::Vulkan
 			 * valid until a device-lost readback — always pass a string literal (static storage).
 			 * @param commandBuffer The command buffer currently being recorded.
 			 * @param marker A static string identifying the GPU command region.
-			 * @return void
 			 */
 			void setCheckpoint (VkCommandBuffer commandBuffer, const char * marker) const noexcept;
 
@@ -781,7 +774,6 @@ namespace EmEn::Vulkan
 			 * (faulting GPU addresses) and VK_NV_device_diagnostic_checkpoints (last command region reached).
 			 * Takes NO device lock — safe to call from within a locked submit/wait path.
 			 * @param context A short string naming the CPU call site that observed the loss.
-			 * @return void
 			 */
 			void dumpDeviceLostDiagnostics (const char * context) const noexcept;
 
@@ -797,7 +789,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Destroys the Vulkan memory allocator for this device.
-			 * @return void
 			 */
 			void destroyMemoryAllocator () noexcept;
 

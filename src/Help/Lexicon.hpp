@@ -62,7 +62,6 @@ namespace EmEn::Help
 			/**
 			 * @brief Adds a new argument to the help.
 			 * @param argumentDoc A reference to an ArgumentDoc instance.
-			 * @return void
 			 */
 			void
 			registerArgument (const ArgumentDoc & argumentDoc) noexcept
@@ -76,7 +75,6 @@ namespace EmEn::Help
 			 * @param longName A reference to as string for the long name.
 			 * @param shortName A char for the short name. Default none.
 			 * @param options A reference to a string vector as options for the argument. Default none.
-			 * @return void
 			 */
 			void
 			registerArgument (const std::string & description, const std::string & longName, char shortName = 0, const std::vector< std::string > & options = {}) noexcept
@@ -87,7 +85,6 @@ namespace EmEn::Help
 			/**
 			 * @brief Adds a new shortcut to the help.
 			 * @param shortcutDoc A reference to a ShortcutDoc instance.
-			 * @return void
 			 */
 			void
 			registerShortcut (const ShortcutDoc & shortcutDoc) noexcept
@@ -100,7 +97,6 @@ namespace EmEn::Help
 			 * @param description A reference to a string.
 			 * @param key The main key for the shortcut.
 			 * @param modifiers The additional modifiers. Default none.
-			 * @return void
 			 */
 			void
 			registerShortcut (const std::string & description, EmEn::Input::Key key, int modifiers = 0) noexcept

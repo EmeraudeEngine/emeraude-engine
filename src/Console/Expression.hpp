@@ -159,7 +159,6 @@ namespace EmEn::Console
 			 * @brief Extracts the command name.
 			 * @param buffer A writable reference to a string.
 			 * @param where A writable reference to a string.
-			 * @return void
 			 */
 			static void extract (std::string & buffer, std::string & where) noexcept;
 
@@ -167,7 +166,6 @@ namespace EmEn::Console
 			 * @brief Extracts the command arguments.
 			 * @param buffer A writable reference to a string.
 			 * @param where A writable reference to a vector of string.
-			 * @return void
 			 */
 			static void extract (std::string & buffer, std::vector< std::string > & where) noexcept;
 

@@ -410,7 +410,6 @@ namespace EmEn::Scenes::AVConsole
 
 			/**
 			 * @brief Clears all devices from the console.
-			 * @return void
 			 */
 			void clear () noexcept;
 

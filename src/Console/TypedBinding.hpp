@@ -343,8 +343,8 @@ namespace EmEn::Console::TypedBinding
 	{
 		using Traits = CallableTraits< Callable >;
 
-		return [callable = std::move(callable), signature] (const Arguments & arguments, Outputs & outputs) mutable {
-			return invoke< Callable, typename Traits::ArgumentTypes >(callable, signature, arguments, outputs, std::make_index_sequence< Traits::Arity >{});
+		return [ownedCallable = std::move(callable), signature] (const Arguments & arguments, Outputs & outputs) mutable {
+			return invoke< Callable, typename Traits::ArgumentTypes >(ownedCallable, signature, arguments, outputs, std::make_index_sequence< Traits::Arity >{});
 		};
 	}
 }

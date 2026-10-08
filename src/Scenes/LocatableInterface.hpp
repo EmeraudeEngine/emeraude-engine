@@ -89,7 +89,6 @@ namespace EmEn::Scenes
 			 * @brief Sets an absolute position in meters.
 			 * @param position A reference to a vector.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void setPosition (const Base::Math::Vector< 3, float > & position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -97,7 +96,6 @@ namespace EmEn::Scenes
 			 * @brief Sets an absolute X position in meters.
 			 * @param position The position on X axis.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void setXPosition (float position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -105,7 +103,6 @@ namespace EmEn::Scenes
 			 * @brief Sets an absolute Y position in meters.
 			 * @param position The position on Y axis.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void setYPosition (float position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -113,7 +110,6 @@ namespace EmEn::Scenes
 			 * @brief Sets an absolute Z position in meters.
 			 * @param position The position on Z axis.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void setZPosition (float position, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -121,7 +117,6 @@ namespace EmEn::Scenes
 			 * @brief Shifts the position in meters.
 			 * @param distance A reference to a vector.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void move (const Base::Math::Vector< 3, float > & distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -129,7 +124,6 @@ namespace EmEn::Scenes
 			 * @brief Shifts the X position in meters.
 			 * @param distance The distance on X axis.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void moveX (float distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -137,7 +131,6 @@ namespace EmEn::Scenes
 			 * @brief Shifts the Y position in meters.
 			 * @param distance The distance on Y axis.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void moveY (float distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -145,7 +138,6 @@ namespace EmEn::Scenes
 			 * @brief Shifts the Z position in meters.
 			 * @param distance The distance on Z axis.
 			 * @param transformSpace The space where occurs the move.
-			 * @return void
 			 */
 			virtual void moveZ (float distance, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -154,7 +146,6 @@ namespace EmEn::Scenes
 			 * @param radian The angle expressed in radians. You can use the function Math::Radians(degree).
 			 * @param axis A vector to define the axis.
 			 * @param transformSpace The space where occurs the rotation.
-			 * @return void
 			 */
 			virtual void rotate (float radian, const Base::Math::Vector< 3, float > & axis, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -162,7 +153,6 @@ namespace EmEn::Scenes
 			 * @brief Performs a rotation around the X axis.
 			 * @param radian The angle expressed in radians. You can use the function Math::Radians(degree).
 			 * @param transformSpace The space where occurs the rotation.
-			 * @return void
 			 */
 			virtual void pitch (float radian, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -170,7 +160,6 @@ namespace EmEn::Scenes
 			 * @brief Performs a rotation around the Y axis.
 			 * @param radian The angle expressed in radians. You can use the function Math::Radians(degree).
 			 * @param transformSpace The space where occurs the rotation.
-			 * @return void
 			 */
 			virtual void yaw (float radian, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -178,30 +167,26 @@ namespace EmEn::Scenes
 			 * @brief Performs a rotation around the Z axis.
 			 * @param radian The angle expressed in radians. You can use the function Math::Radians(degree).
 			 * @param transformSpace The space where occurs the rotation.
-			 * @return void
 			 */
 			virtual void roll (float radian, Base::Math::TransformSpace transformSpace) noexcept = 0;
+
+			/**
+			 * @brief Sets the absolute scaling factor.
+			 * @param factor A reference to a scale vector.
+			 */
+			virtual void setScalingFactor ([[maybe_unused]] const Base::Math::Vector< 3, float > & factor) noexcept { }
 
 			/**
 			 * @brief Applies a scale factor on the coordinates.
 			 * @param factor A reference to a scale vector.
 			 * @param transformSpace The space where occurs the scale.
-			 * @return void
 			 */
-			/**
-			 * @brief Sets the absolute scaling factor.
-			 * @param factor A reference to a scale vector.
-			 * @return void
-			 */
-			virtual void setScalingFactor (const Base::Math::Vector< 3, float > & /*factor*/) noexcept { }
-
 			virtual void scale (const Base::Math::Vector< 3, float > & factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
 			 * @brief Applies a scale factor on the coordinates.
 			 * @param factor an unidirectional factor value.
 			 * @param transformSpace The space where occurs the scale.
-			 * @return void
 			 */
 			virtual void scale (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -209,7 +194,6 @@ namespace EmEn::Scenes
 			 * @brief Applies a scale factor on the coordinates.
 			 * @param factor an unidirectional factor value.
 			 * @param transformSpace The space where occurs the scale.
-			 * @return void
 			 */
 			virtual void scaleX (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -217,7 +201,6 @@ namespace EmEn::Scenes
 			 * @brief Applies a scale factor on the coordinates.
 			 * @param factor an unidirectional factor value.
 			 * @param transformSpace The space where occurs the scale.
-			 * @return void
 			 */
 			virtual void scaleY (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -225,7 +208,6 @@ namespace EmEn::Scenes
 			 * @brief Applies a scale factor on the coordinates.
 			 * @param factor an unidirectional factor value.
 			 * @param transformSpace The space where occurs the scale.
-			 * @return void
 			 */
 			virtual void scaleZ (float factor, Base::Math::TransformSpace transformSpace) noexcept = 0;
 
@@ -233,13 +215,12 @@ namespace EmEn::Scenes
 			 * @brief Points the backward (Negative Z axis) of the coordinates system toward the target.
 			 * @param target A position to look at.
 			 * @param flipZAxis Flip the final Z axis. Normal behavior is false.
-			 * @return void
 			 */
 			virtual void lookAt (const Base::Math::Vector< 3, float > & target, bool flipZAxis) noexcept = 0;
 
 			/**
 			 * @brief Sets the local coordinates of this entity.
-			 * @return Base::Math::Coordinates< float > &
+			 * @param coordinates A reference to a cartesian frame.
 			 */
 			virtual void setLocalCoordinates (const Base::Math::CartesianFrame< float > & coordinates) noexcept = 0;
 

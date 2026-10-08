@@ -102,7 +102,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Closes the serial port.
-			 * @return void
 			 */
 			void close () noexcept;
 

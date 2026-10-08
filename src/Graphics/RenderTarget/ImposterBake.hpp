@@ -108,7 +108,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief LOGIC THREAD. Places the orthographic camera. Call it before the first job.
 			 * @param frame The camera frame (it looks along its -Z).
 			 * @param boxSide The side of the square the camera sees, and its depth range, in metres.
-			 * @return void
 			 */
 			void configureCamera (const Base::Math::CartesianFrame< float > & frame, float boxSide) noexcept;
 

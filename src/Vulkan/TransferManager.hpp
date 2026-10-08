@@ -112,7 +112,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Sets the device used by the transfer manager.
-			 * @return void
 			 */
 			void
 			setDevice (const std::shared_ptr< Device > & device) noexcept

@@ -68,7 +68,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 		 * character still changes, which is the whole point of declaring a format.
 		 * @param camera A reference to the camera.
 		 * @param sensorWidth The format width, in millimeters.
-		 * @return void
 		 */
 		void
 		mountFormat (Component::Camera & camera, float sensorWidth) noexcept
@@ -110,7 +109,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 		 * @param depthOfField Materializes the depth of field.
 		 * @param HDR Materializes the HDR tone mapping.
 		 * @param lensEffects The lens effect stack (replaces the current one).
-		 * @return void
 		 */
 		void
 		configureCamera (Component::Camera & camera, float aperture, float sensorWidth, float exposureCompensation, bool depthOfField, bool HDR, const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & lensEffects = {}) noexcept
@@ -270,7 +268,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 				break;
 
 			case CameraPreset::Normal :
-			default:
 				Neutral(camera);
 				break;
 		}

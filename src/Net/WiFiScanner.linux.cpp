@@ -104,13 +104,6 @@ namespace EmEn::Net::WiFiScanner
 		}
 	}
 
-	/**
-	 * @brief Parses a line from nmcli terse output into a Network struct.
-	 * @note Expected format (LANG=C): SSID:BSSID(escaped):SIGNAL:FREQ:SECURITY:MODE
-	 * BSSID colons are escaped as \: by nmcli, while field separator is unescaped :.
-	 * @param line The nmcli output line.
-	 * @return Network The parsed network.
-	 */
 	namespace
 	{
 		/**
@@ -139,6 +132,13 @@ namespace EmEn::Net::WiFiScanner
 
 	namespace
 	{
+		/**
+		 * @brief Parses a line from nmcli terse output into a Network struct.
+		 * @note Expected format (LANG=C): SSID:BSSID(escaped):SIGNAL:FREQ:SECURITY:MODE
+		 * BSSID colons are escaped as \: by nmcli, while field separator is unescaped :.
+		 * @param line The nmcli output line.
+		 * @return Network The parsed network.
+		 */
 		Network
 		parseLine (const std::string & line) noexcept
 		{

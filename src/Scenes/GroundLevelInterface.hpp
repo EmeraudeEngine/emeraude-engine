@@ -62,7 +62,6 @@ namespace EmEn::Scenes
 			 * @param triangle A reference to the triangle in world space, its winding normal pointing UP.
 			 * @param featureId An identifier of the triangle, stable while the ground does not change (its cell and half),
 			 * for the contact manifolds' feature ids.
-			 * @return void
 			 */
 			virtual void onTriangle (const Base::Math::Space3D::Triangle< float > & triangle, uint32_t featureId) noexcept = 0;
 

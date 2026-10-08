@@ -131,7 +131,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * setCustomStyle() (falls back to Neutral with a warning when none is registered).
 	 * @param camera A reference to the camera to configure.
 	 * @param preset The preset token.
-	 * @return void
 	 */
 	EMEN_API void Apply (Component::Camera & camera, CameraPreset preset) noexcept;
 
@@ -140,7 +139,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * @note Replaces the camera's whole photographic setup with the declared one.
 	 * @param camera A reference to the camera to configure.
 	 * @param style A reference to the style declaration.
-	 * @return void
 	 */
 	EMEN_API void Apply (Component::Camera & camera, const CameraStyle & style) noexcept;
 
@@ -150,7 +148,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * logic thread), then use CameraPreset::Custom anywhere a token is accepted
 	 * (Toolkit::generatePerspectiveCamera(), runtime cycles...).
 	 * @param style A reference to the style declaration (copied).
-	 * @return void
 	 */
 	EMEN_API void setCustomStyle (const CameraStyle & style) noexcept;
 
@@ -171,7 +168,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * scene without it clamps to white. This is a STYLE reset, not a scene reset: effects the
 	 * scene author enabled (DoF, bloom) stay off until re-enabled.
 	 * @param camera A reference to the camera to configure.
-	 * @return void
 	 */
 	EMEN_API void Neutral (Component::Camera & camera) noexcept;
 
@@ -180,7 +176,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * @note Clean image (no lens artifacts), f/2.8 full-frame optics (the current framing is kept), depth of field and
 	 * HDR tone mapping enabled, auto-focus and auto-exposure.
 	 * @param camera A reference to the camera to configure.
-	 * @return void
 	 */
 	EMEN_API void HighQuality (Component::Camera & camera) noexcept;
 
@@ -190,7 +185,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * depth of field is enabled but subtle. HDR with auto-exposure (the iris adapts).
 	 * A wide, very soft vignette approximates the peripheral vision falloff.
 	 * @param camera A reference to the camera to configure.
-	 * @return void
 	 */
 	EMEN_API void HumanEye (Component::Camera & camera) noexcept;
 
@@ -199,7 +193,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * @note Reuses the StylePresets::Hitchcock60s() style stack (grain, high-contrast B&W,
 	 * projector artifacts) over f/5.6 full-frame optics with depth of field and HDR.
 	 * @param camera A reference to the camera to configure.
-	 * @return void
 	 */
 	EMEN_API void VintageBlackAndWhite (Component::Camera & camera) noexcept;
 
@@ -209,7 +202,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * grain, gate jitter, projector flicker, dust and frame vignette. HDR enabled with a
 	 * slight overexposure bias (amateur metering).
 	 * @param camera A reference to the camera to configure.
-	 * @return void
 	 */
 	EMEN_API void Super8 (Component::Camera & camera) noexcept;
 

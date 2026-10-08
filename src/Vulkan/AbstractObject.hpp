@@ -56,7 +56,6 @@ namespace EmEn::Vulkan
 			 * @param classId A string pointer for the class holding the Vulkan object.
 			 * @param instanceId A reference to a string for the instance identifier.
 			 * @param vulkanObjectName A string pointer for the type of Vulkan object;
-			 * @return void
 			 */
 			void
 			set (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
@@ -181,7 +180,6 @@ namespace EmEn::Vulkan
 			 * @param classId A string pointer for the class holding the Vulkan object.
 			 * @param instanceId A reference to a string for the instance identifier.
 			 * @param vulkanObjectName A string pointer for the type of Vulkan object;
-			 * @return void
 			 */
 			void
 			setIdentifier (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
@@ -216,7 +214,6 @@ namespace EmEn::Vulkan
 			 * @param device The Vulkan device handle owning the object.
 			 * @param objectType The VkObjectType of the object.
 			 * @param objectHandle The object handle, reinterpreted as uint64_t.
-			 * @return void
 			 */
 			void
 			setVulkanObjectName (VkDevice device, VkObjectType objectType, uint64_t objectHandle) const noexcept
@@ -281,7 +278,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief For development purpose, this should be called by the child class constructor if everything is OK.
-			 * @return void
 			 */
 			void
 			setCreated () noexcept
@@ -291,7 +287,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief For development purpose, this should be called by the child class destructor if everything is OK.
-			 * @return void
 			 */
 			void
 			setDestroyed () noexcept

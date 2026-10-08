@@ -253,7 +253,6 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Sets the knobs of the CDLOD geometry, before loading.
 			 * @param parameters The parameters (patch, clip levels, detail distance, morph, ray-tracing proxy).
-			 * @return void
 			 */
 			void
 			setCDLODParameters (const Geometry::CDLODTerrainParameters & parameters) noexcept
@@ -393,7 +392,6 @@ namespace EmEn::Graphics::Renderable
 			 * @note Created early, before the material is known, so the scene sees the companion when it registers its
 			 * visuals; onDependenciesLoaded() cancels the window when the material turns out to have no relief to
 			 * displace, or a relief reaching past the window's border.
-			 * @return void
 			 */
 			void prepareDetailWindow () noexcept;
 

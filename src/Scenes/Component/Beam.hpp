@@ -209,7 +209,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the start of the beam — the first point of its curve —, in the entity's space.
 			 * @param position A reference to a vector.
-			 * @return void
 			 */
 			void setStart (const Base::Math::Vector< 3, float > & position) noexcept;
 
@@ -227,7 +226,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the end of the beam — the last point of its curve —, in the entity's space. Forgets an end target.
 			 * @param position A reference to a vector.
-			 * @return void
 			 */
 			void setEnd (const Base::Math::Vector< 3, float > & position) noexcept;
 
@@ -247,7 +245,6 @@ namespace EmEn::Scenes::Component
 			 * @param target A reference to the followed entity (held weakly: the beam keeps its last end when the target is
 			 * gone).
 			 * @param offset An offset from the target's origin, in the TARGET's space. Default none.
-			 * @return void
 			 */
 			void setEndTarget (const std::shared_ptr< const AbstractEntity > & target, const Base::Math::Vector< 3, float > & offset = {}) noexcept;
 
@@ -277,14 +274,12 @@ namespace EmEn::Scenes::Component
 			 * @brief Makes the beam follow a POLYLINE (a laser through relays), in the entity's space.
 			 * @param points The points (2 at least to draw anything).
 			 * @param closed Whether the last point joins the first.
-			 * @return void
 			 */
 			void setPolyline (std::span< const Base::Math::Vector< 3, float > > points, bool closed = false) noexcept;
 
 			/**
 			 * @brief Makes the beam follow a piecewise BÉZIER path, in the entity's space.
 			 * @param path The anchors, their handles (offsets from the anchor) and a curve type per span.
-			 * @return void
 			 */
 			void setBezierPath (const Base::Math::BSpline< 3, float > & path) noexcept;
 
@@ -292,7 +287,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Makes the beam follow a uniform cubic B-SPLINE (smooth, not through its points), in the entity's space.
 			 * @param controlPoints The control points.
 			 * @param closed Whether the curve closes on itself.
-			 * @return void
 			 */
 			void setUniformBSpline (std::span< const Base::Math::Vector< 3, float > > controlPoints, bool closed = false) noexcept;
 
@@ -301,14 +295,12 @@ namespace EmEn::Scenes::Component
 			 * @param points The points.
 			 * @param closed Whether the curve closes on itself.
 			 * @param alpha 0 uniform, 0.5 centripetal (the default: no cusp, no loop), 1 chordal.
-			 * @return void
 			 */
 			void setCatmullRom (std::span< const Base::Math::Vector< 3, float > > points, bool closed = false, float alpha = 0.5F) noexcept;
 
 			/**
 			 * @brief Sets the chord tolerance of the curve tessellation, and re-tessellates.
 			 * @param tolerance The largest distance between the curve and its polyline, in the entity's units (> 0).
-			 * @return void
 			 */
 			void setTolerance (float tolerance) noexcept;
 
@@ -372,7 +364,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Shows or hides the beam (a laser switched off, an arc between two strikes of a longer cycle).
 			 * @param state The state.
-			 * @return void
 			 */
 			void setEnabled (bool state) noexcept;
 
@@ -397,7 +388,6 @@ namespace EmEn::Scenes::Component
 			 * the tube radius is the beam's half width. A hidden beam switches the light off.
 			 * @param light The line light (held weakly), or nullptr to stop driving one.
 			 * @param scale A factor on the derived luminance (1 = physical). Default 1.
-			 * @return void
 			 */
 			void setLight (const std::shared_ptr< LineLight > & light, float scale = 1.0F) noexcept;
 
@@ -451,20 +441,17 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Tessellates and subdivides the curve into the stations (position and t, normal), sizes the geometry,
 			 * and marks them for publication.
-			 * @return void
 			 */
 			void rebuild () noexcept;
 
 			/**
 			 * @brief Copies the curve, the colour and the derived luminance into the driven light, when they changed.
-			 * @return void
 			 */
 			void updateLight () noexcept;
 
 			/**
 			 * @brief Refreshes the render bounds from the stations, the width and the arc amplitude, and notifies the entity
 			 * when they changed.
-			 * @return void
 			 */
 			void updateBounds () noexcept;
 

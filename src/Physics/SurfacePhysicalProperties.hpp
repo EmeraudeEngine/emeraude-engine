@@ -84,7 +84,6 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Resets properties to defaults.
-			 * @return void
 			 */
 			void
 			reset () noexcept

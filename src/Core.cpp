@@ -423,7 +423,7 @@ namespace EmEn
 		{
 			/* NOTE: Use the surface content scale (glfwGetWindowContentScale), i.e. the same factor the
 			 * framebuffer uses (1.5 for a 150% fractional scale) - NOT the per-monitor integer scale. */
-			m_inputManager.enablePointerScaling(m_window.state().contentXScale, m_window.state().contentYScale);
+			m_inputManager.enablePointerScaling(static_cast< double >(m_window.state().contentXScale), static_cast< double >(m_window.state().contentYScale));
 		}
 		else
 		{
@@ -1252,7 +1252,7 @@ namespace EmEn
 
 						if ( depthOfField != nullptr && depthOfField->meteredFocusDistance() > 0.0F )
 						{
-							ImGui::Text("measured: focus at %.2f m", depthOfField->meteredFocusDistance());
+							ImGui::Text("measured: focus at %.2f m", static_cast< double >(depthOfField->meteredFocusDistance()));
 						}
 						else
 						{
@@ -1313,7 +1313,7 @@ namespace EmEn
 						{
 							const auto meteredShutter = toneMapping->meteredShutterSpeed();
 
-							ImGui::Text("metered: ISO %.0f at 1/%.0f s | scene avg %.1f nits", toneMapping->meteredSensitivity(), meteredShutter > 0.0F ? 1.0F / meteredShutter : 0.0F, toneMapping->meteredLuminance());
+							ImGui::Text("metered: ISO %.0f at 1/%.0f s | scene avg %.1f nits", static_cast< double >(toneMapping->meteredSensitivity()), static_cast< double >(meteredShutter > 0.0F ? 1.0F / meteredShutter : 0.0F), static_cast< double >(toneMapping->meteredLuminance()));
 
 							/* Aperture priority: the ISO floor is no longer a bound (the shutter takes over), the
 							 * fastest shutter at that floor and the ISO ceiling are. */
@@ -1321,7 +1321,7 @@ namespace EmEn
 
 							if ( atBrightBound || toneMapping->meteredSensitivity() >= camera->maxSensitivity() )
 							{
-								ImGui::TextDisabled("(saturated at the sensor bound — ISO %.0f-%.0f, fastest shutter 1/%.0f s)", camera->minSensitivity(), camera->maxSensitivity(), 1.0F / Scenes::Component::Camera::FastestShutterSpeed);
+								ImGui::TextDisabled("(saturated at the sensor bound — ISO %.0f-%.0f, fastest shutter 1/%.0f s)", static_cast< double >(camera->minSensitivity()), static_cast< double >(camera->maxSensitivity()), static_cast< double >(1.0F / Scenes::Component::Camera::FastestShutterSpeed));
 							}
 
 							/* A GROWING count means the luminance chain is sampling implausible
@@ -1334,7 +1334,7 @@ namespace EmEn
 						}
 						else
 						{
-							ImGui::TextDisabled("metering... — range %.0f-%.0f ISO", camera->minSensitivity(), camera->maxSensitivity());
+							ImGui::TextDisabled("metering... — range %.0f-%.0f ISO", static_cast< double >(camera->minSensitivity()), static_cast< double >(camera->maxSensitivity()));
 						}
 					}
 
@@ -1410,7 +1410,7 @@ namespace EmEn
 
 				const auto exposureValue = Graphics::Photometry::exposureValue100(camera->aperture(), camera->shutterSpeed(), camera->sensitivity());
 
-				ImGui::Text("EV100 %.2f   exposure %.3e", exposureValue, Graphics::Photometry::exposureFromValue100(exposureValue));
+				ImGui::Text("EV100 %.2f   exposure %.3e", static_cast< double >(exposureValue), static_cast< double >(Graphics::Photometry::exposureFromValue100(exposureValue)));
 
 				if ( camera->isAutoExposureEnabled() )
 				{
@@ -2699,7 +2699,6 @@ namespace EmEn
 				case Console::Controller::HardExit :
 					/* NOTE: Hard cord termination of the program! */
 					std::terminate();
-					break;
 
 				default:
 					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Console::Controller::ClassId << "' ignored or unknown.";

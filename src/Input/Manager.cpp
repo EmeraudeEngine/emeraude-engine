@@ -622,7 +622,8 @@ namespace EmEn::Input
 		}
 
 		std::vector< std::filesystem::path > fsPaths;
-		fsPaths.reserve(count);
+		/* NOTE: GLFW never reports a negative count; the loop below does not run when count <= 0. */
+		fsPaths.reserve(count > 0 ? static_cast< size_t >(count) : 0);
 
 		for ( auto index = 0; index < count; index++ )
 		{

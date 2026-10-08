@@ -100,7 +100,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Destroys all GPU resources.
-			 * @return void
 			 */
 			void destroy () noexcept;
 

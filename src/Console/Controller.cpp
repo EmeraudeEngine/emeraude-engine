@@ -573,7 +573,6 @@ namespace EmEn::Console
 		 * @param controllable The root of the sub-tree.
 		 * @param path The dotted path of that root.
 		 * @param commands The JSON array.
-		 * @return void
 		 */
 		void
 		describeControllable (const ControllableTrait & controllable, const std::string & path, Json::Value & commands) noexcept

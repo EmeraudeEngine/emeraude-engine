@@ -343,7 +343,6 @@ namespace EmEn
 			 * scene setting.
 			 * @note Callable from any thread; read once per logic cycle.
 			 * @param state The state.
-			 * @return void
 			 * @see physicalSimulationEnabled()
 			 */
 			void
@@ -377,7 +376,6 @@ namespace EmEn
 			 * acts as a floor; this call only tightens the next wake-up, never delays it.
 			 * @note Callable from any thread.
 			 * @param delayMS The requested delay in milliseconds. A value <= 0 means "as soon as possible".
-			 * @return void
 			 * @see onCoreMainLoopCycle()
 			 * @see mainLoopFrequencyHz()
 			 */
@@ -1004,7 +1002,6 @@ namespace EmEn
 			 * it is a cheap no-op (the thread already renders every iteration). Call it whenever
 			 * something affecting the rendered image changed outside the engine's own triggers
 			 * (overlay repaint, window event, scene enable/disable are already wired internally).
-			 * @return void
 			 * @see setRenderingMode()
 			 */
 			void requestRedraw () noexcept;
@@ -1086,7 +1083,6 @@ namespace EmEn
 			 * (like F11 for fullscreen). Use this when your application handles all
 			 * keyboard input directly.
 			 * @warning Only enable this if your application provides complete keyboard handling.
-			 * @return void
 			 */
 			void
 			preventDefaultKeyBehaviors () noexcept
@@ -1096,7 +1092,6 @@ namespace EmEn
 
 			/**
 			 * @brief Disables the notifier creation by the Core.
-			 * @return void
 			 */
 			void
 			disableNotifier () noexcept
@@ -1107,7 +1102,6 @@ namespace EmEn
 			/**
 			 * @brief Set the main loop frequency in hertz. The default is 100Hz
 			 * @param frequency The value hertz (Hz).
-			 * @return void
 			 */
 			void
 			setMainLoopFrequency (uint32_t frequency) noexcept
@@ -1129,7 +1123,6 @@ namespace EmEn
 			 * An active 3D scene forces continuous rendering regardless. Set this before the engine
 			 * main loop starts, typically in the sub-application constructor.
 			 * @param mode The rendering mode.
-			 * @return void
 			 * @see requestRedraw()
 			 */
 			void
@@ -1258,7 +1251,6 @@ namespace EmEn
 
 			/**
 			 * @brief Declares the user application ready to quit.
-			 * @return void
 			 */
 			void
 			setAppReadyToQuit () noexcept
@@ -1269,7 +1261,6 @@ namespace EmEn
 			/**
 			 * @brief Declares the user application ready to quit.
 			 * @param userExitCode The user application exit code.
-			 * @return void
 			 */
 			void
 			setAppReadyToQuit (int userExitCode) noexcept
@@ -1368,7 +1359,6 @@ namespace EmEn
 			 * @details Single definition shared by the running and paused loops: polls the
 			 * console controller, consumes a pending scheduleMainLoopCycle() request when due,
 			 * then calls the onCoreMainLoopCycle() application hook.
-			 * @return void
 			 * @see scheduleMainLoopCycle()
 			 * @see onCoreMainLoopCycle()
 			 */
@@ -1395,7 +1385,6 @@ namespace EmEn
 			 * physical pixels, so scaling is disabled. This is called at initialization and again whenever the
 			 * surface content scale changes (Window::OSRequestsToRescaleContentBy), e.g. when the window moves
 			 * to a monitor with a different scale or a fractional-scale change occurs.
-			 * @return void
 			 */
 			void updatePointerScaling () noexcept;
 
@@ -1418,7 +1407,6 @@ namespace EmEn
 			 * @brief Wipes local data directories (cache and user data) and exits.
 			 * @details Removes cache and user data directories while preserving the config directory.
 			 * @param dryRun Safe-guard
-			 * @return void
 			 * @see StartupMode::WipeLocalData
 			 */
 			void executeWipeLocalData (bool dryRun) noexcept;
@@ -1448,7 +1436,6 @@ namespace EmEn
 			 * read back from that backup into the fresh store. An exact match or a downgrade keeps the
 			 * settings. Does nothing if no settings file exists (fresh install). On a backup failure it
 			 * leaves the settings untouched (no data loss, no reset).
-			 * @return void
 			 */
 			void resetSettingsIfOutdated () noexcept;
 
@@ -1472,7 +1459,6 @@ namespace EmEn
 			 * "address:port", then the listener starts on it — for this session only, the settings are
 			 * not written. Open: a Yes/No dialog offers to stop it. Every outcome is shown in a message
 			 * dialog and traced.
-			 * @return void
 			 */
 			void toggleRemoteConsoleFromKeyboard () noexcept;
 
@@ -1724,7 +1710,6 @@ namespace EmEn
 			 * behaviors (scene definitions, audio tracks, ...).
 			 * @param filepaths A reference to the files not yet consumed. Erase the entries handled by the application.
 			 * @see openFiles()
-			 * @return void
 			 */
 			virtual
 			void

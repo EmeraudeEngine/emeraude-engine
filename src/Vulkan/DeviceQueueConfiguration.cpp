@@ -34,7 +34,8 @@ namespace EmEn::Vulkan
 	Queue *
 	DeviceQueueConfiguration::queue (QueuePriority priority) const noexcept
 	{
-		std::array< uint8_t, 3 > searchOrder{};
+		/* NOTE: The low priority order is also the fallback for a value out of the enumeration. */
+		std::array< uint8_t, 3 > searchOrder{2, 1, 0};
 
 		switch ( priority )
 		{
@@ -50,7 +51,6 @@ namespace EmEn::Vulkan
 
 				/* NOTE: Low -> Medium -> High */
 			case QueuePriority::Low:
-			default:
 				searchOrder = {2, 1, 0};
 				break;
 		}
@@ -59,7 +59,7 @@ namespace EmEn::Vulkan
 		{
 			if ( auto & [nextQueueIndex, queueList] = m_queueByPriorities[priorityIndex]; !queueList.empty() )
 			{
-				const uint32_t index = nextQueueIndex.fetch_add(1) % queueList.size();
+				const size_t index = nextQueueIndex.fetch_add(1) % queueList.size();
 
 				return queueList[index];
 			}
@@ -99,9 +99,10 @@ namespace EmEn::Vulkan
 				return m_queueByPriorities[1].second;
 
 			case QueuePriority::High :
-			default:
 				return m_queueByPriorities[0].second;
 		}
+
+		return m_queueByPriorities[0].second;
 	}
 
 	bool

@@ -148,7 +148,6 @@ namespace EmEn::Console::MCP
 			 * @brief Runs the queued requests that need the console tree, and announces a changed tool list.
 			 * @note MAIN THREAD ONLY (Controller::poll()).
 			 * @param controller The console controller.
-			 * @return void
 			 */
 			void processPendingRequests (const Controller & controller) noexcept;
 
@@ -177,14 +176,12 @@ namespace EmEn::Console::MCP
 			/**
 			 * @brief Applies the MCP routing to a request that passed the HTTP checks (network thread).
 			 * @param connection The connection.
-			 * @return void
 			 */
 			void handleRequest (const std::shared_ptr< Connection > & connection) noexcept;
 
 			/**
 			 * @brief Handles one JSON-RPC message: validation, era, dispatch (network thread).
 			 * @param connection The connection.
-			 * @return void
 			 */
 			void handlePost (const std::shared_ptr< Connection > & connection) noexcept;
 
@@ -193,7 +190,6 @@ namespace EmEn::Console::MCP
 			 * @param connection The connection.
 			 * @param id The request id.
 			 * @param params The request parameters.
-			 * @return void
 			 */
 			static void handleInitialize (Connection & connection, const Json::Value & id, const Json::Value & params) noexcept;
 
@@ -203,7 +199,6 @@ namespace EmEn::Console::MCP
 			 * @param modern Whether it is a `subscriptions/listen` stream (acknowledged, tagged).
 			 * @param subscriptionId The subscription id (the request id), for a modern stream.
 			 * @param toolsListChanged Whether list changes are wanted.
-			 * @return void
 			 */
 			void startStream (Connection & connection, bool modern, const Json::Value & subscriptionId, bool toolsListChanged) noexcept;
 
@@ -211,7 +206,6 @@ namespace EmEn::Console::MCP
 			 * @brief Ends a notification stream at shutdown: a modern subscription gets its final response (network
 			 * thread).
 			 * @param connection The connection.
-			 * @return void
 			 */
 			void closeStreamGracefully (Connection & connection) noexcept;
 
@@ -226,7 +220,6 @@ namespace EmEn::Console::MCP
 			/**
 			 * @brief Sends `notifications/tools/list_changed` on every notification stream that asked for it
 			 * (network thread).
-			 * @return void
 			 */
 			void broadcastToolsListChanged () noexcept;
 
@@ -234,7 +227,6 @@ namespace EmEn::Console::MCP
 			 * @brief Posts a JSON answer to a connection, if it is still open (any thread).
 			 * @param connection The connection.
 			 * @param body The serialized JSON [std::move].
-			 * @return void
 			 */
 			void postAnswer (const std::weak_ptr< Connection > & connection, std::string body) noexcept;
 

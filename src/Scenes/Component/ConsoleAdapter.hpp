@@ -218,7 +218,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapters of the light components (PointLight, SpotLight, DirectionalLight).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendLightConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -226,7 +225,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapter of the Camera component.
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendCameraConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -234,7 +232,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapters of the sky and weather components (SunCourse, SkyFollowsSun, CloudVolume).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendEnvironmentConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -242,7 +239,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapters of the animated components (NodeAnimation, ParticlesEmitter).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendAnimationConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -250,7 +246,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapters of the physics components (DirectionalPushModifier, SphericalPushModifier, Weight).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendPhysicsConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -258,7 +253,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapter of the SoundEmitter component.
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendAudioConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -266,7 +260,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapters of the drawn components (Visual, MultipleVisuals).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendVisualConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -274,7 +267,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapter of the Beam component (lasers, electric arcs).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendBeamConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
@@ -282,7 +274,6 @@ namespace EmEn::Scenes::Component
 	 * @brief Creates the console adapter of the Path component (polylines and curves).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
-	 * @return void
 	 */
 	void appendPathConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 }

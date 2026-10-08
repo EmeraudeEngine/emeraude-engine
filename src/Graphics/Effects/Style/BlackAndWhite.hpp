@@ -88,7 +88,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the luminance calculation mode.
 			 * @param mode The mode.
-			 * @return void
 			 */
 			void
 			setMode (Mode mode) noexcept
@@ -110,7 +109,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets custom RGB channel weights for CustomWeights mode.
 			 * @param weights A vec3 of RGB weights.
-			 * @return void
 			 */
 			void
 			setChannelWeights (const Base::Math::Vector< 3, float > & weights) noexcept
@@ -132,7 +130,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the brightness offset.
 			 * @param brightness Value in range [-1, 1].
-			 * @return void
 			 */
 			void 
 			setBrightness (float brightness) noexcept
@@ -154,7 +151,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the contrast multiplier.
 			 * @param contrast Value >= 0.
-			 * @return void
 			 */
 			void setContrast (float contrast) noexcept;
 
@@ -172,7 +168,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the gamma correction value.
 			 * @param gamma Value > 0.
-			 * @return void
 			 */
 			void setGamma (float gamma) noexcept;
 
@@ -190,7 +185,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the tint color applied to the B&W output.
 			 * @param color A reference to a color (e.g. sepia, cyanotype, selenium).
-			 * @return void
 			 */
 			void 
 			setTint (const Base::PixelFactory::Color< float > & color) noexcept
@@ -212,7 +206,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the posterize level count.
 			 * @param levels 0 = disabled, >0 = number of discrete levels.
-			 * @return void
 			 */
 			void 
 			setLevels (uint32_t levels) noexcept

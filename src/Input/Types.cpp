@@ -159,8 +159,9 @@ namespace EmEn::Input
 			case KeyRightAlt : return KeyRightAltString;
 			case KeyRightSuper : return KeyRightSuperString;
 			case KeyMenu : return KeyMenuString;
-			default : return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	Key
@@ -315,10 +316,9 @@ namespace EmEn::Input
 
 			case ModKeyNumLock :
 				return ModKeyNumLockString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	ModKey
@@ -518,10 +518,9 @@ namespace EmEn::Input
 
 			case Button8Extra :
 				return Button8ExtraString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	const char *
@@ -546,10 +545,9 @@ namespace EmEn::Input
 
 			case ThrottleC :
 				return ThrottleCString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	const char *
@@ -583,10 +581,9 @@ namespace EmEn::Input
 
 			case DownLeft :
 				return DownLeftString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	const char *
@@ -611,10 +608,9 @@ namespace EmEn::Input
 
 			case AxisRightTrigger :
 				return AxisRightTriggerString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	const char *
@@ -666,9 +662,8 @@ namespace EmEn::Input
 
 			case ButtonDPadLeft :
 				return ButtonDPadLeftString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 }

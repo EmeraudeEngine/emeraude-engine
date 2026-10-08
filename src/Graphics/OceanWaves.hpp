@@ -150,7 +150,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Releases every GPU resource.
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -164,7 +163,6 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A recording command buffer of a queue with compute.
 			 * @param time The simulation time, in seconds.
 			 * @param deltaTime The seconds since the previous update (the foam decay); 0 on the first one.
-			 * @return void
 			 */
 			void recordUpdate (const Vulkan::CommandBuffer & commandBuffer, float time, float deltaTime) noexcept;
 
@@ -239,7 +237,6 @@ namespace EmEn::Graphics
 			 * @param parameters The sea state.
 			 * @param cascade The cascade index.
 			 * @param spectrum Receives N² complex amplitudes, row-major (index = z · N + x).
-			 * @return void
 			 */
 			static void buildInitialSpectrum (const OceanWaveParameters & parameters, uint32_t cascade, std::vector< std::complex< float > > & spectrum) noexcept;
 

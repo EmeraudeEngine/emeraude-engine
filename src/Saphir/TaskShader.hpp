@@ -76,7 +76,6 @@ namespace EmEn::Saphir
 			 * @brief Sets the task payload declaration, e.g. "taskPayloadSharedEXT struct { uint ids[32]; } payload;".
 			 * @note The mesh shader of the same program must declare the SAME text (MeshShader::setTaskPayload()).
 			 * @param declaration The GLSL declaration, emitted verbatim at global scope.
-			 * @return void
 			 */
 			void
 			setTaskPayload (std::string declaration) noexcept

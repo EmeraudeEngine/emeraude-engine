@@ -173,7 +173,6 @@ namespace EmEn::Graphics::Material::Component
 			 * @brief Sets a texture interface.
 			 * @note No resource loading behavior, useful for render-to-texture.
 			 * @param texture A reference to a texture interface smart pointer.
-			 * @return void
 			 */
 			void
 			setTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
@@ -185,7 +184,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Sets a texture resource with a loading dependency.
 			 * @param texture A reference to a texture resource smart pointer.
-			 * @return void
 			 */
 			void
 			setTextureResource (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
@@ -197,7 +195,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Changes the texture channel.
 			 * @param UVWChannel The texture channel to use on geometry.
-			 * @return void
 			 */
 			void
 			setUVWChannel (uint32_t UVWChannel) noexcept
@@ -208,7 +205,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Rotates the texture coordinates.
 			 * @param radians The rotation in radians (KHR_texture_transform's `rotation`).
-			 * @return void
 			 */
 			void
 			setUVWRotation (float radians) noexcept
@@ -232,7 +228,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Sets the UVW scale.
 			 * @param UVWScale A reference to a vector.
-			 * @return void
 			 */
 			void
 			setUVWScale (const Base::Math::Vector< 3, float > & UVWScale) noexcept
@@ -244,7 +239,6 @@ namespace EmEn::Graphics::Material::Component
 			 * @brief Offsets the texture coordinates (KHR_texture_transform 'offset').
 			 * @note Applied AFTER the scale in the shader: uv * scale + offset.
 			 * @param UVWOffset A reference to a vector to offset the texture coordinates.
-			 * @return void
 			 */
 			void
 			setUVWOffset (const Base::Math::Vector< 3, float > & UVWOffset) noexcept
@@ -316,7 +310,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Enables the alpha channel of the texture for opacity/blending.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableAlpha (bool state) noexcept
@@ -340,7 +333,6 @@ namespace EmEn::Graphics::Material::Component
 			 * @note Default is Red (grayscale/single-channel maps). Packed textures select
 			 * their channel here, e.g. glTF metallic-roughness: roughness = Green, metallic = Blue.
 			 * @param channel The source color channel.
-			 * @return void
 			 */
 			void
 			setSourceChannel (Base::PixelFactory::Channel channel) noexcept
@@ -379,9 +371,10 @@ namespace EmEn::Graphics::Material::Component
 						return "a";
 
 					case Base::PixelFactory::Channel::Red :
-					default :
 						return "r";
 				}
+
+				return "r";
 			}
 
 			/**

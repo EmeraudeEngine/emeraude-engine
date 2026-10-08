@@ -1058,8 +1058,8 @@ namespace EmEn::Saphir
 			{
 				const auto chunks = String::explode(error, ':');
 
-				int line = 0;
-				int column = 0;
+				size_t line = 0;
+				size_t column = 0;
 
 				const auto & lineStr = chunks[2];
 				const auto & colStr = chunks[1];

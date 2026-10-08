@@ -197,7 +197,6 @@ namespace EmEn::Graphics::AlphaCoverage
 	 * @param pixmap A reference to the pixel data to correct.
 	 * @param targetCoverage The coverage to reach, measured on the base level.
 	 * @param cutoff The alpha test threshold in [0,1].
-	 * @return void
 	 */
 	inline
 	void

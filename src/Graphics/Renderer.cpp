@@ -1651,8 +1651,6 @@ namespace EmEn::Graphics
 			TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << '!';
 
 			std::abort();
-
-			return false;
 		}
 
 		/* 3. Get the new frame to render to.
@@ -2108,7 +2106,8 @@ namespace EmEn::Graphics
 			m_swapChain->present(imageIndex, m_graphicsQueue, presentSemaphoreHandle);
 		}
 
-		m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
+		/* NOTE: The modulo is below the frame scope count (at most 5, a StaticVector). */
+		m_currentFrameIndex = static_cast< uint32_t >((m_currentFrameIndex + 1) % m_rendererFrameScope.size());
 
 		this->applyFrameRateLimit();
 	}

@@ -57,7 +57,6 @@ namespace EmEn::Saphir::Declaration
 			/**
 			 * @brief Sets the memory access qualifier for this buffer block.
 			 * @param accessQualifier The access qualifier to apply (ReadOnly, WriteOnly, or None).
-			 * @return void
 			 */
 			void
 			setAccessQualifier (AccessQualifier accessQualifier) noexcept

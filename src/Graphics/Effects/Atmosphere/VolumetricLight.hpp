@@ -221,7 +221,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Overrides the light color (instead of reading from LightSet).
 			 * @param color The override color.
-			 * @return void
 			 */
 			void
 			setLightColorOverride (const Base::PixelFactory::Color<> & color) noexcept
@@ -231,7 +230,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 			/**
 			 * @brief Clears the light color override (reverts to LightSet value).
-			 * @return void
 			 */
 			void
 			clearLightColorOverride () noexcept
@@ -242,7 +240,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Overrides the light intensity (instead of reading from LightSet).
 			 * @param intensity The override intensity.
-			 * @return void
 			 */
 			void
 			setLightIntensityOverride (float intensity) noexcept
@@ -252,7 +249,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 			/**
 			 * @brief Clears the light intensity override (reverts to LightSet value).
-			 * @return void
 			 */
 			void
 			clearLightIntensityOverride () noexcept
@@ -263,7 +259,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Sets the volumetric light parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

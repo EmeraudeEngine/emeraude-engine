@@ -324,7 +324,6 @@ namespace EmEn
 			/**
 			 * @brief Changes the window title.
 			 * @param title A reference to a string.
-			 * @return void
 			 */
 			void setTitle (const std::string & title) noexcept;
 
@@ -348,7 +347,6 @@ namespace EmEn
 			/**
 			 * @brief Center the windows on a specific monitor.
 			 * @param desiredMonitor The number of the monitor for multiple monitors configuration. Default initial monitor.
-			 * @return void
 			 */
 			void centerPosition (int32_t desiredMonitor = -1) noexcept;
 
@@ -356,7 +354,6 @@ namespace EmEn
 			 * @brief Sets a gamma value to a specific monitor.
 			 * @param value A gamma value.
 			 * @param desiredMonitor The number of the monitor for multiple monitors configuration. Default initial monitor.
-			 * @return void
 			 */
 			void setGamma (float value, int32_t desiredMonitor = -1) const noexcept;
 
@@ -399,13 +396,11 @@ namespace EmEn
 			 * @brief Switch the application to fullscreen mode.
 			 * @param useNativeResolution Overrides the settings and fetch the monitor resolution. Default false.
 			 * @param desiredMonitor The number of the monitor for multiple monitors configuration. Default initial monitor.
-			 * @return void
 			 */
 			void switchToFullscreenMode (bool useNativeResolution = false, int32_t desiredMonitor = -1) const noexcept;
 
 			/**
 			 * @brief Switch the application to windowed mode.
-			 * @return void
 			 */
 			void switchToWindowedMode () const noexcept;
 
@@ -437,13 +432,11 @@ namespace EmEn
 
 			/**
 			 * @brief Reduces the window to the OS toolbar or similar.
-			 * @return void
 			 */
 			void iconify () const noexcept;
 
 			/**
 			 * @brief Restores the window on the user desktop view.
-			 * @return void
 			 */
 			void getBackOnDesktop () const noexcept;
 
@@ -463,13 +456,11 @@ namespace EmEn
 
 			/**
 			 * @brief Maximizes the window size on the user desktop.
-			 * @return void
 			 */
 			void maximizeSize () const noexcept;
 
 			/**
 			 * @brief Restores the window to previous size.
-			 * @return void
 			 */
 			void restoreSize () const noexcept;
 
@@ -489,7 +480,6 @@ namespace EmEn
 
 			/**
 			 * @brief Asks the host system to focus on the window.
-			 * @return bool
 			 */
 			void focus () const noexcept;
 
@@ -509,13 +499,11 @@ namespace EmEn
 
 			/**
 			 * @brief hides the window.
-			 * @return bool
 			 */
 			void hide () const noexcept;
 
 			/**
 			 * @brief Shows the window.
-			 * @return bool
 			 */
 			void show () const noexcept;
 
@@ -528,7 +516,6 @@ namespace EmEn
 			 * the compositor's send buffer fill with one `wl_buffer.release` per present: GNOME dropped the client at
 			 * 1 MiB (`WL: Data too big for buffer`, `error in client communication`), GLFW turned the dead connection
 			 * into a silent close request and the swap-chain never got an image back (2026-09-25).
-			 * @return void
 			 */
 			void drainDisplayConnection () const noexcept;
 
@@ -754,7 +741,6 @@ namespace EmEn
 
 			/**
 			 * @brief Removes the window top bar containing the title and OS-specific buttons.
-			 * @return void
 			 */
 			void disableTitleBar () noexcept;
 
@@ -765,7 +751,6 @@ namespace EmEn
 			 * the colors themselves stay the ones the OS theme dictates.
 			 * @note Implemented on Windows (DWM). No-op on macOS, where AppKit already follows the
 			 * system appearance, and on Linux, where the compositor owns the decorations.
-			 * @return void
 			 */
 			void applyTitleBarTheme () noexcept;
 
@@ -824,7 +809,6 @@ namespace EmEn
 			 * @note Main thread only (the GLFW callbacks, create(), resize(), initializeState()).
 			 * @param width The width in pixels.
 			 * @param height The height in pixels.
-			 * @return void
 			 */
 			void
 			setFramebufferState (uint32_t width, uint32_t height) noexcept
@@ -859,14 +843,12 @@ namespace EmEn
 
 			/**
 			 * @brief Releases the native window info.
-			 * @return void
 			 */
 			void releaseNativeWindow () noexcept;
 
 			/**
 			 * @brief Saves the least minimum info on the window state at creation.
 			 * @param fakeWindow Declare a fake window
-			 * @return void
 			 */
 			void initializeState (bool fakeWindow) noexcept;
 
@@ -880,7 +862,6 @@ namespace EmEn
 
 			/**
 			 * @brief Refreshes the cached monitor list from GLFW.
-			 * @return void
 			 */
 			void refreshMonitorDevices () noexcept;
 
@@ -907,7 +888,6 @@ namespace EmEn
 
 			/**
 			 * @brief Destroys the current Vulkan surface.
-			 * @return void
 			 */
 			void destroySurface () noexcept;
 
@@ -940,14 +920,12 @@ namespace EmEn
 			 * @param window A pointer to the system window handle.
 			 * @param width The width of the framebuffer in pixel.
 			 * @param height The height of the framebuffer in pixel.
-			 * @return void
 			 */
 			static void framebufferSizeCallback (GLFWwindow * window, int width, int height) noexcept;
 
 			/**
 			 * @brief This callback for GLFW is called when the window is modified by the system. Example: a resize.
 			 * @param window A pointer to the system window handle.
-			 * @return void
 			 */
 			static void windowRefreshCallback (GLFWwindow * window) noexcept;
 
@@ -959,7 +937,6 @@ namespace EmEn
 			 * @param window A pointer to the system window handle.
 			 * @param width The new width of the window in screen coordinates.
 			 * @param height The new height of the window in screen coordinates.
-			 * @return void
 			 */
 			static void windowSizeCallback (GLFWwindow * window, int width, int height) noexcept;
 
@@ -968,7 +945,6 @@ namespace EmEn
 			 * @param window A pointer to the system window handle.
 			 * @param xPosition The new x position of the window.
 			 * @param yPosition The new y position of the window.
-			 * @return void
 			 */
 			static void windowPositionCallback (GLFWwindow * window, int xPosition, int yPosition) noexcept;
 
@@ -976,7 +952,6 @@ namespace EmEn
 			 * @brief Notifies a monitor configuration change.
 			 * @param monitor A pointer to the system monitor handle.
 			 * @param event The type of event.
-			 * @return void
 			 */
 			static void monitorConfigurationChanged (GLFWmonitor * monitor, int event) noexcept;
 
@@ -990,7 +965,6 @@ namespace EmEn
 			 * @brief Notifies the window is focused by the host system.
 			 * @param window A pointer to the system window handle.
 			 * @param focused The state from the OS.
-			 * @return void
 			 */
 			static void windowFocusCallback (GLFWwindow * window, int focused) noexcept;
 
@@ -998,7 +972,6 @@ namespace EmEn
 			 * @brief Notifies the window is hidden from the desktop in the host system.
 			 * @param window A pointer to the system window handle.
 			 * @param hidden The state from the OS.
-			 * @return void
 			 */
 			static void windowIconifyCallback (GLFWwindow * window, int hidden) noexcept;
 
@@ -1006,7 +979,6 @@ namespace EmEn
 			 * @brief Notifies whether the window is enlarged to cover the whole desktop in the host system.
 			 * @param window A pointer to the system window handle.
 			 * @param maximized The state from the OS.
-			 * @return void
 			 */
 			static void windowMaximizeCallback (GLFWwindow * window, int maximized) noexcept;
 
@@ -1015,7 +987,6 @@ namespace EmEn
 			 * @param window A pointer to the system window handle.
 			 * @param xScale The scale in X of the window content.
 			 * @param yScale The scale in Y of the window content.
-			 * @return void
 			 */
 			static void windowContentScaleCallback (GLFWwindow * window, float xScale, float yScale) noexcept;
 
@@ -1032,7 +1003,6 @@ namespace EmEn
 #if IS_WINDOWS
 			/**
 			 * @brief Sets up the Windows-specific resize handling by subclassing the window.
-			 * @return void
 			 */
 			void setupWindowsResizeHandling () noexcept;
 

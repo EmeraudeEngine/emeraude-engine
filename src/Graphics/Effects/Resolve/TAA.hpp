@@ -148,7 +148,6 @@ namespace EmEn::Graphics::Effects::Resolve
 			/**
 			 * @brief Sets the TAA parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

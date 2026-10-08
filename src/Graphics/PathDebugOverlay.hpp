@@ -105,13 +105,11 @@ namespace EmEn::Graphics
 			 * @param mainViewMatrices A reference to the main camera's view matrices.
 			 * @param readStateIndex The render state slot the frame draws (the camera of the staged points).
 			 * @param sRGBTarget Whether the composite target encodes sRGB on write (the colour is then written linear).
-			 * @return void
 			 */
 			void record (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Framebuffer & framebuffer, uint32_t width, uint32_t height, const Scenes::SceneInstanceTransforms & instanceTransforms, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex, bool sRGBTarget) noexcept;
 
 			/**
 			 * @brief Releases the GPU resources.
-			 * @return void
 			 */
 			void destroy () noexcept;
 

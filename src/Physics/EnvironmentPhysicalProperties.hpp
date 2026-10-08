@@ -110,12 +110,12 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the gravity in m/s² according to an altitude.
-			 * @brief altitude The altitude in meters.
+			 * @param altitude The altitude in meters.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
-			gravity (float /*altitude*/) const noexcept
+			gravity ([[maybe_unused]] float altitude) const noexcept
 			{
 				// FIXME: TODO ...
 
@@ -188,7 +188,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets the doppler effect factor.
-			 * @param dopplerFactor
+			 * @param dopplerFactor The doppler effect factor.
 			 */
 			void
 			setDopplerFactor (float dopplerFactor) noexcept

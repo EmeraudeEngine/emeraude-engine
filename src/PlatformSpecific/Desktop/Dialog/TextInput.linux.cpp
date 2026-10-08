@@ -57,7 +57,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					break;
 
 				case InputMode::SingleLine:
-				default:
 					command = "kdialog --inputbox ";
 					command += escapeShellArg(m_message);
 
@@ -90,7 +89,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					break;
 
 				case InputMode::SingleLine:
-				default:
 					command = "zenity --entry";
 					command += " --title ";
 					command += escapeShellArg(this->title());

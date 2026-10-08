@@ -495,7 +495,7 @@ void main ()
 				const auto amplitude = std::sqrt(density * deltaK * deltaK * 0.25);
 				const auto draw = gaussianPair(parameters.seed, cascade, static_cast< uint32_t >((z * N) + x));
 
-				spectrum[(static_cast< size_t >(z) * N) + x] = {static_cast< float >(draw.real() * amplitude), static_cast< float >(draw.imag() * amplitude)};
+				spectrum[(static_cast< size_t >(z) * static_cast< size_t >(N)) + static_cast< size_t >(x)] = {static_cast< float >(draw.real() * amplitude), static_cast< float >(draw.imag() * amplitude)};
 			}
 		}
 	}
@@ -1071,8 +1071,8 @@ void main ()
 						const auto kz = static_cast< double >(m) * deltaK;
 						const auto kl = std::sqrt((kx * kx) + (kz * kz));
 						const auto mirror = (((N - z) % N) * N) + ((N - x) % N);
-						const std::complex< double > h0{spectrum[(z * N) + x].real(), spectrum[(z * N) + x].imag()};
-						const std::complex< double > h0Mirror = std::conj(std::complex< double >{spectrum[mirror].real(), spectrum[mirror].imag()});
+						const std::complex< double > h0{static_cast< double >(spectrum[(z * N) + x].real()), static_cast< double >(spectrum[(z * N) + x].imag())};
+						const std::complex< double > h0Mirror = std::conj(std::complex< double >{static_cast< double >(spectrum[mirror].real()), static_cast< double >(spectrum[mirror].imag())});
 						const auto phase = std::sqrt(gravity * kl) * static_cast< double >(time);
 						const std::complex< double > e{std::cos(phase), std::sin(phase)};
 						const auto h = (h0 * e) + (h0Mirror * std::conj(e));
@@ -1169,7 +1169,7 @@ void main ()
 			{
 				const auto base = ((cascade * N * N) + texel) * 4;
 
-				jacobians[texel] = ((1.0 + gpuSlopes[base + 2]) * (1.0 + gpuSlopes[base + 3])) - (gpuDisplacement[base + 3] * gpuDisplacement[base + 3]);
+				jacobians[texel] = ((1.0 + static_cast< double >(gpuSlopes[base + 2])) * (1.0 + static_cast< double >(gpuSlopes[base + 3]))) - static_cast< double >(gpuDisplacement[base + 3] * gpuDisplacement[base + 3]);
 
 				if ( jacobians[texel] < static_cast< double >(m_parameters.whitecapThreshold) )
 				{

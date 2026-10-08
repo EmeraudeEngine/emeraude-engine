@@ -110,8 +110,7 @@ namespace EmEn::Saphir::Declaration
 
 			/**
 			 * @brief Sets matrix storage order.
-			 * @param matrixStorageOrder
-			 * @return void
+			 * @param matrixStorageOrder The matrix storage order.
 			 */
 			void
 			setMatrixStorageOrder (MatrixStorageOrder matrixStorageOrder) noexcept

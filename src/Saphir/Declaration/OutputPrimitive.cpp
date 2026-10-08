@@ -43,9 +43,8 @@ namespace EmEn::Saphir::Declaration
 
 			case OutputPrimitiveType::TriangleStrip :
 				return GLSL::Primitive::TriangleStrip;
-
-			default :
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 }

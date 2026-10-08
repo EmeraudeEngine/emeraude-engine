@@ -293,7 +293,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Waits for the queue to complete work.
 			 * @note Don't use this method of synchronization.
-			 * @return void
 			 */
 			[[nodiscard]]
 			bool waitIdle () const noexcept;
@@ -302,7 +301,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Destroys the timeline semaphore.
-			 * @return void
 			 */
 			void destroyTimeline () noexcept;
 

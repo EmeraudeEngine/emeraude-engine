@@ -166,7 +166,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the state of the light.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enable (bool state) noexcept;
 
@@ -196,7 +195,6 @@ namespace EmEn::Scenes::Component
 			 * emitted Y(colour) of its number (an orange (255, 140, 40) 38 % less than white). A colour no longer DIMS a
 			 * light: dim through setIntensity(). Only black (zero luminance) keeps meaning "emits nothing".
 			 * @param color A reference to a color.
-			 * @return void
 			 */
 			void setColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -211,7 +209,6 @@ namespace EmEn::Scenes::Component
 			 * @note A point or spot light falls off as a windowed inverse square (one helper for every lane,
 			 * `Graphics/Effects/Shared/LightFalloffGLSL.hpp`), so a candela is absolute: `I / d²` lux at `d`.
 			 * @param intensity The photometric intensity (lux for directional, candela otherwise).
-			 * @return void
 			 */
 			void setIntensity (float intensity) noexcept;
 
@@ -234,7 +231,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Stops driving the linked material (it keeps its last emissive strength).
-			 * @return void
 			 */
 			void unlinkEmissiveMaterial () noexcept;
 
@@ -278,17 +274,6 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Uploads the PUBLISHED uniform block to the shared UBO.
-			 * @note ⚠️ Reads the render state slot, never the logic-side block. Before Aug 2026 this
-			 * uploaded the live logic block straight from the render thread, so a light that moves
-			 * (a carried torch, a lamp on a vehicle, an animated sun, or any CSM light — refit to the
-			 * camera every tick by construction) had its SAMPLING matrix one tick ahead of the map it
-			 * addresses. On screen: a straight-edged bite out of a spot's lit pool, moving frame to
-			 * frame. See docs/shadow-mapping.md § Temporal coherence.
-			 * @param readStateIndex The render state-valid index to read data.
-			 * @return bool
-			 */
-			/**
 			 * @brief Element count of the LARGEST light uniform block (the CSM one).
 			 * @note Keep in sync with DirectionalLight::CSM_BufferSize — LightSet sizes the shared
 			 * UBO on the same maximum.
@@ -302,6 +287,18 @@ namespace EmEn::Scenes::Component
 			 */
 			static constexpr auto MaxFrameRegionCount{8UL};
 
+			/**
+			 * @brief Uploads the PUBLISHED uniform block to the shared UBO.
+			 * @note ⚠️ Reads the render state slot, never the logic-side block. Before Aug 2026 this
+			 * uploaded the live logic block straight from the render thread, so a light that moves
+			 * (a carried torch, a lamp on a vehicle, an animated sun, or any CSM light — refit to the
+			 * camera every tick by construction) had its SAMPLING matrix one tick ahead of the map it
+			 * addresses. On screen: a straight-edged bite out of a spot's lit pool, moving frame to
+			 * frame. See docs/shadow-mapping.md § Temporal coherence.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @param frameIndex The frame-in-flight region of the shared UBO to write.
+			 * @return bool
+			 */
 			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) noexcept;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering(uint32_t) */
@@ -322,7 +319,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Enables the shadow casting.
 			 * @note The shadow map must have been requested at light creation.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableShadowCasting (bool state) noexcept
@@ -364,7 +360,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Renders a shadow map rendered once again, on the next frame (a no-op on a continuous one).
-			 * @return void
 			 */
 			void refreshShadowMap () const noexcept;
 
@@ -489,7 +484,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Removes the light from the GPU.
 			 * @param scene A reference to the scene.
-			 * @return void
 			 */
 			virtual void destroyFromHardware (Scene & scene) noexcept = 0;
 
@@ -514,7 +508,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the PCF (Percentage-Closer Filtering) radius for soft shadow edges.
 			 * @param radius The filter radius in normalized texture coordinates.
-			 * @return void
 			 */
 			virtual void setPCFRadius (float radius) noexcept = 0;
 
@@ -528,7 +521,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the shadow bias to prevent shadow acne.
 			 * @param bias The shadow bias value.
-			 * @return void
 			 */
 			virtual void setShadowBias (float bias) noexcept = 0;
 
@@ -542,7 +534,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets a color projection texture for this light.
 			 * @param texture A shared pointer to the texture interface (2D for spot/directional, cubemap for point).
-			 * @return void
 			 */
 			void setColorProjectionTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept;
 
@@ -596,7 +587,6 @@ namespace EmEn::Scenes::Component
 			 *	   making bright areas of the texture amplify light intensity. When boost == 0 (default),
 			 *	   the original multiplicative behavior is preserved.
 			 * @param boost The boost factor.
-			 * @return void
 			 */
 			void
 			setColorProjectionBoost (float boost) noexcept
@@ -687,32 +677,27 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Removes the light from the shared uniform buffer.
-			 * @return void
 			 */
 			void removeFromSharedUniformBuffer () noexcept;
 
 			/**
 			 * @brief Writes the linked material's emissive strength from the current intensity and enabled state.
-			 * @return void
 			 */
 			void syncLinkedEmissiveMaterial () const noexcept;
 
 			/**
 			 * @brief Declares to update light on the GPU.
-			 * @return void
 			 */
 			void requestVideoMemoryUpdate () noexcept;
 
 			/**
 			 * @brief Registers the color projection texture in the bindless texture manager.
-			 * @return void
 			 */
 			void registerColorProjectionInBindless () noexcept;
 
 			/**
 			 * @brief Unregisters the color projection texture from the bindless texture manager and stops observing.
 			 * @param useCubemap True for cubemap textures (PointLight), false for 2D textures (Directional/Spot).
-			 * @return void
 			 */
 			void unregisterColorProjectionFromBindless (bool useCubemap) noexcept;
 
@@ -783,21 +768,18 @@ namespace EmEn::Scenes::Component
 			 * block is sized on the LARGEST light layout, so a shorter block simply leaves the tail
 			 * untouched.
 			 * @param destination Where to write the block.
-			 * @return void
 			 */
 			virtual void writeUniformBlock (float * destination) noexcept = 0;
 
 			/**
 			 * @brief Event when the light colour changes.
 			 * @param chromaticity The emitted chromaticity (unit luminance, see setColor()).
-			 * @return void
 			 */
 			virtual void onColorChange (const Base::Math::Vector< 3, float > & chromaticity) noexcept = 0;
 
 			/**
 			 * @brief Event when the color intensity changes.
 			 * @param intensity The amount.
-			 * @return void
 			 */
 			virtual void onIntensityChange (float intensity) noexcept = 0;
 
@@ -817,7 +799,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Hands the light's state to its shadow map: suspended while the light is off,
 			 * on demand when rendered once. The setters call it on every change, enableShadowCasting(true) included,
 			 * which every light calls once its map exists.
-			 * @return void
 			 */
 			void syncShadowMapRendering () const noexcept;
 

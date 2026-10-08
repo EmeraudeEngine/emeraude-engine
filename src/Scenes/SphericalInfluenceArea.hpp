@@ -97,14 +97,12 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Sets the outer radius.
 			 * @param radius The radius. Behind this radius the influence is null.
-			 * @return void
 			 */
 			void setOuterRadius (float radius) noexcept;
 
 			/**
 			 * @brief Sets the inner radius.
 			 * @param radius The radius. Below this radius the influence is 100%.
-			 * @return void
 			 */
 			void setInnerRadius (float radius) noexcept;
 

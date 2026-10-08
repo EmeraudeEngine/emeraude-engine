@@ -61,7 +61,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the aberration intensity (maximum UV offset magnitude).
 			 * @param intensity Value > 0.
-			 * @return void
 			 */
 			void setIntensity (float intensity) noexcept;
 
@@ -82,7 +81,6 @@ namespace EmEn::Graphics::Effects::Style
 			 * toward the edges, simulating real lens dispersion. Each RGB channel is
 			 * displaced along the radial direction from center with a different scale.
 			 * @param enabled True for radial, false for linear (default).
-			 * @return void
 			 */
 			void
 			enableRadial (bool enabled) noexcept
@@ -106,7 +104,6 @@ namespace EmEn::Graphics::Effects::Style
 			 * @note Barrel distortion simulates CRT glass curvature by warping UV coordinates
 			 * before RGB sampling. Combinable with both linear and radial modes.
 			 * @param enabled True to enable barrel distortion.
-			 * @return void
 			 */
 			void
 			enableBarrelDistortion (bool enabled) noexcept
@@ -128,7 +125,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the barrel distortion strength.
 			 * @param strength Curvature magnitude (0 = flat, higher = more curved). Default 0.1.
-			 * @return void
 			 */
 			void setBarrelStrength (float strength) noexcept;
 

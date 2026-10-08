@@ -102,7 +102,6 @@ namespace EmEn::Vulkan
 	 * @param elapsed The creation's duration.
 	 * @param feedback The creation feedback, nullptr when unavailable.
 	 * @param location The caller's location (the creation site, not this function).
-	 * @return void
 	 */
 	EMEN_API void reportPipelineCreation (const char * classId, const std::string & label, std::chrono::steady_clock::duration elapsed, const VkPipelineCreationFeedback * feedback, const std::source_location & location = std::source_location::current()) noexcept;
 }

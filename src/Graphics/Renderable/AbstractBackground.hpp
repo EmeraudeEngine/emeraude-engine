@@ -117,7 +117,6 @@ namespace EmEn::Graphics::Renderable
 			 * emissive strength) and when it is REFLECTED (the IBL contribution of every material
 			 * sampling the environment cubemap). An overcast sky is ~8000 nits.
 			 * @param nits The luminance, in candela per square meter.
-			 * @return void
 			 */
 			void
 			setLuminance (float nits) noexcept
@@ -143,7 +142,6 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Sets the average color to represent the background.
 			 * @param color A reference to a color.
-			 * @return void
 			 */
 			void
 			setAverageColor (const Base::PixelFactory::Color< float > & color) noexcept
@@ -157,7 +155,6 @@ namespace EmEn::Graphics::Renderable
 			 * its lighting from the background. References: open shade under a clear sky
 			 * 20000 lx, overcast 5000 lx, moonlit night ~1 lx.
 			 * @param lux The ambient illuminance, in lux.
-			 * @return void
 			 */
 			void
 			setAmbientIlluminance (float lux) noexcept
@@ -182,7 +179,6 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Adds a celestial body (a sun, a moon, ...) to the background description.
 			 * @param celestialBody A reference to a celestial body.
-			 * @return void
 			 */
 			void
 			addStar (const CelestialBody & celestialBody) noexcept
@@ -253,11 +249,10 @@ namespace EmEn::Graphics::Renderable
 			 * sky dimmed for the night kept drawing its daylight picture. A concrete background that
 			 * draws something self-illuminated overrides this and updates its emission. Default: nothing.
 			 * @param nits The new luminance, in candela per square meter (already clamped to >= 0).
-			 * @return void
 			 */
 			virtual
 			void
-			onLuminanceChanged (float /*nits*/) noexcept
+			onLuminanceChanged ([[maybe_unused]] float nits) noexcept
 			{
 
 			}
@@ -281,7 +276,6 @@ namespace EmEn::Graphics::Renderable
 			 * dome is partly dark — see CubemapResource::hemisphereIlluminanceFactor()). An
 			 * explicit "AmbientIlluminance" manifest key bypasses the derivation entirely.
 			 * @param factor The illuminance factor (pi = uniform dome).
-			 * @return void
 			 */
 			void
 			setAmbientIlluminanceFactor (float factor) noexcept

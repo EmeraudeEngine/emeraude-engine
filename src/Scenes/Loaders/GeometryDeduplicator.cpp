@@ -51,7 +51,6 @@ namespace EmEn::Scenes::Loaders
 				/**
 				 * @brief Mixes one 64-bit word.
 				 * @param word The word.
-				 * @return void
 				 */
 				void
 				add (uint64_t word) noexcept
@@ -63,7 +62,6 @@ namespace EmEn::Scenes::Loaders
 				 * @brief Mixes two floats as one word (their bit patterns: -0.0 and 0.0 differ, as they do in memory).
 				 * @param first The first float.
 				 * @param second The second float.
-				 * @return void
 				 */
 				void
 				add (float first, float second) noexcept

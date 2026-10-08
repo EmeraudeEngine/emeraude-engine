@@ -84,7 +84,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * foreground (topmost when not parented) whatever the default: an unseen box once caught a stray key press
 			 * (app_system's crash report, 2026-10-07). Linux kdialog keeps its own default.
 			 * @param answer Answer::No or Answer::Cancel for the second button; anything else keeps the first.
-			 * @return void
 			 */
 			void
 			setDefaultAnswer (Answer answer) noexcept

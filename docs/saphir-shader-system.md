@@ -477,11 +477,8 @@ ViewUB("projectionMatrix")
 // Generates: ubView.projectionMatrix
 ```
 
-**CubeViewUB()** - Access indexed uniform block members (cubemap multiview)
-```cpp
-CubeViewUB("instance", "gl_ViewIndex", "projectionMatrix")
-// Generates: ubView.instance[gl_ViewIndex].projectionMatrix
-```
+**ViewUB(name, true)** - Access the per-view member of a multiview uniform block (cubemap rendering uses the
+multiview extension; the former indexed helper `CubeViewUB()` was removed on 2026-10-08, it had no caller)
 
 **MatrixPC()** - Access push constant matrices
 ```cpp

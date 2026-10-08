@@ -158,7 +158,6 @@ namespace EmEn::Vulkan
 			 * before beginFrame() re-records the slot: the fence is what guarantees the
 			 * query results availability without a stalling wait flag.
 			 * @param frameSlot The frame-in-flight slot index.
-			 * @return void
 			 */
 			void harvest (uint32_t frameSlot) noexcept;
 
@@ -168,7 +167,6 @@ namespace EmEn::Vulkan
 			 * @warning Must be called after harvest() (the slot's fence wait) and before any command buffer of the frame
 			 * records a scope.
 			 * @param frameSlot The frame-in-flight slot index.
-			 * @return void
 			 */
 			void openFrame (uint32_t frameSlot) noexcept;
 
@@ -189,14 +187,12 @@ namespace EmEn::Vulkan
 			 * buffer recording begins.
 			 * @param commandBuffer A reference to the main frame command buffer.
 			 * @param frameSlot The frame-in-flight slot index.
-			 * @return void
 			 */
 			void beginFrame (const CommandBuffer & commandBuffer, uint32_t frameSlot) noexcept;
 
 			/**
 			 * @brief Closes the root scope. Records the frame-end timestamp.
 			 * @param commandBuffer A reference to the main frame command buffer.
-			 * @return void
 			 */
 			void endFrame (const CommandBuffer & commandBuffer) noexcept;
 
@@ -207,14 +203,12 @@ namespace EmEn::Vulkan
 			 * @param commandBuffer A reference to the main frame command buffer.
 			 * @param label The scope label (static string preferred).
 			 * @param subLabel An optional sub-label appended as "label/subLabel". Default nullptr.
-			 * @return void
 			 */
 			void beginScope (const CommandBuffer & commandBuffer, const char * label, const char * subLabel = nullptr) noexcept;
 
 			/**
 			 * @brief Closes the innermost open scope.
 			 * @param commandBuffer A reference to the main frame command buffer.
-			 * @return void
 			 */
 			void endScope (const CommandBuffer & commandBuffer) noexcept;
 
@@ -228,7 +222,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Clears the accumulated statistics (averages, maxima).
-			 * @return void
 			 */
 			void resetStatistics () noexcept;
 
@@ -320,7 +313,6 @@ namespace EmEn::Vulkan
 			 * @param label The scope label.
 			 * @param depth The scope nesting depth.
 			 * @param milliseconds The measured duration.
-			 * @return void
 			 */
 			void accumulate (const char * label, uint32_t depth, float milliseconds) noexcept;
 

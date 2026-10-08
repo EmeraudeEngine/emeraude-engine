@@ -211,7 +211,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Generates tesselation state into the graphics pipeline createInfo.
 			 * @param flags Flags value for this stage. Default 0.
-			 * @param patchControlPoints
+			 * @param patchControlPoints The number of control points per patch.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -330,7 +330,7 @@ namespace EmEn::Vulkan
 			 * @param renderPass A reference to a render pass smart pointer.
 			 * @param pipelineLayout A reference to a pipeline layout smart pointer.
 			 * @param useTesselation Declares tesselation was enabled.
-			 * @param isDynamicStateEnabled
+			 * @param isDynamicStateEnabled Declares dynamic states were enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -382,7 +382,6 @@ namespace EmEn::Vulkan
 			 * @note Used for MRT (Multiple Render Targets) when the render pass has
 			 * more than one color attachment (e.g. normals buffer).
 			 * @param state The blend attachment state to append.
-			 * @return void
 			 */
 			void
 			appendColorBlendAttachment (const VkPipelineColorBlendAttachmentState & state) noexcept
@@ -405,7 +404,6 @@ namespace EmEn::Vulkan
 			 * @brief Names the pipeline for the slow-creation report (reportPipelineCreation()): kept in Release, where the
 			 * Vulkan object identifier is compiled out.
 			 * @param label The label (the generating program's name).
-			 * @return void
 			 */
 			void
 			setLabel (std::string label) noexcept
@@ -425,7 +423,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Configures a default color blend state.
-			 * @return void
 			 */
 			void defaultColorBlendState () noexcept;
 

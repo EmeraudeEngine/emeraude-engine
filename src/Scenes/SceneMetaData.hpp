@@ -157,11 +157,8 @@ namespace EmEn::Scenes
 			 * to hit geometry outside the camera's field of view.
 			 * @param opaqueList The opaque render batch list (not frustum-culled).
 			 * @param opaqueLightedList The opaque lighted render batch list (not frustum-culled).
-			 * @param bindlessTextureManager A pointer to the bindless texture manager for RT texture registration.
+			 * @param bindlessTextureSet A pointer to the bindless texture set for RT texture registration.
 			 * @param frameIndex The current frame-in-flight index for SSBO double-buffering.
-			 * @param sceneTimeMS The current scene time in milliseconds (Scene::lifetimeMS) —
-			 *		used to compute the current frame index for animated textures so the
-			 *		RT bindless slot stays in sync with the rasterizer's animation state.
 			 * @param cameraPosition The current camera world-space position. Used to compute
 			 *		face-camera billboard rotation for sprite renderables — the BLAS quad
 			 *		is a flat XY in object space, the rasterizer billboards it via vertex
@@ -293,8 +290,6 @@ namespace EmEn::Scenes
 			std::unique_ptr< Vulkan::AccelerationStructure > m_TLAS;
 			/** @brief Pending TLAS build request (prepared by rebuild, consumed by recordTLASBuild). */
 			std::unique_ptr< Vulkan::TLASBuildRequest > m_pendingTLASBuild;
-			/** @brief Retired TLAS build requests kept alive until frames-in-flight have completed.
-			 * @note The requests own the instance/scratch buffers referenced by in-flight command buffers. */
 			/** @brief Per-frame mesh metadata SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_meshMetaDataSSBOs;
 			/** @brief Per-frame material data SSBOs (one per frame-in-flight). */

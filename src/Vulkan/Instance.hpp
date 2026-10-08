@@ -344,7 +344,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Read settings.
-			 * @return void
 			 */
 			void readSettings () noexcept;
 
@@ -366,13 +365,11 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Configures the list of required validation layers.
 			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
-			 * @return void
 			 */
 			void configureValidationLayers () noexcept;
 
 			/**
 			 * @brief Configures the list of required instance extensions.
-			 * @return void
 			 */
 			void configureInstanceExtensions () noexcept;
 
@@ -404,7 +401,6 @@ namespace EmEn::Vulkan
 			 * @brief Modulates the device score against a running strategy.
 			 * @param deviceProperties A vulkan struct for the device properties.
 			 * @param score A reference to the score.
-			 * @return void
 			 */
 			void modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, size_t & score) const noexcept;
 

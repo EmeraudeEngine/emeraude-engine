@@ -109,7 +109,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Sets the size of the area.
 			 * @param size Unidirectional size of the area.
-			 * @return void
 			 */
 			void setSize (float size) noexcept;
 
@@ -118,7 +117,6 @@ namespace EmEn::Scenes
 			 * @param xSize Size of the area in X axis.
 			 * @param ySize Size of the area in Y axis.
 			 * @param zSize Size of the area in Z axis.
-			 * @return void
 			 */
 			void setSize (float xSize, float ySize, float zSize) noexcept;
 

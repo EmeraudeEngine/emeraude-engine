@@ -244,7 +244,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			/**
 			 * @brief Sets the RTAO parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

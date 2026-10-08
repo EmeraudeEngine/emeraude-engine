@@ -133,7 +133,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys the texture from the GPU.
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -217,10 +216,9 @@ namespace EmEn::Graphics
 
 					case Role::PrefilteredCubemap :
 						return "PrefilteredCubemap";
-
-					default :
-						return "Unknown";
 				}
+
+				return "Unknown";
 			}
 
 			std::shared_ptr< Vulkan::Image > m_image;

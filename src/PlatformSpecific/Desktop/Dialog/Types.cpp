@@ -51,10 +51,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			case ButtonLayout::Quit :
 				return QuitString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	ButtonLayout
@@ -106,10 +105,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			case MessageType::Question :
 				return QuestionString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	MessageType
@@ -162,10 +160,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			case Answer::DialogFailure :
 				return DialogFailureString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	Answer

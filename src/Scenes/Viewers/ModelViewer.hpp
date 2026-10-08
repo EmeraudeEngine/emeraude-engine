@@ -133,7 +133,6 @@ namespace EmEn::Scenes::Viewers
 			 * @param scene A reference to the viewer scene.
 			 * @param clipNames A reference to the clip names collected at import time.
 			 * @param animationIndex The index to apply, 0 being the rest pose.
-			 * @return void
 			 */
 			static void applyAnimation (Scene & scene, const std::vector< std::string > & clipNames, size_t animationIndex) noexcept;
 
@@ -148,7 +147,6 @@ namespace EmEn::Scenes::Viewers
 			 * fixed and manual, and a sky-driven key light would make every sky change the
 			 * subject's exposure. The background feeds the reflections, not the key light.
 			 * @param scene A reference to the viewer scene.
-			 * @return void
 			 */
 			void installBackground (Scene & scene) noexcept;
 
@@ -161,7 +159,6 @@ namespace EmEn::Scenes::Viewers
 			 * environment. Keeping them apart is what makes the Khronos references' configuration —
 			 * a black backdrop with a bright studio reflection — expressible at all.
 			 * @param scene A reference to the scene.
-			 * @return void
 			 */
 			void installEnvironmentCubemap (Scene & scene) noexcept;
 

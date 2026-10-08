@@ -589,9 +589,10 @@ namespace EmEn::Audio
 				return m_trackB->playbackPosition();
 
 			case PlayingTrack::None :
-			default :
 				return 0.0F;
 		}
+
+		return 0.0F;
 	}
 
 	float

@@ -69,7 +69,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the number of quantization levels per RGB channel.
 			 * @param levels Value in range [2, 256].
-			 * @return void
 			 */
 			void setLevels (int levels) noexcept;
 

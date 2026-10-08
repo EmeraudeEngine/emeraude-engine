@@ -178,7 +178,6 @@ namespace EmEn::Vulkan
 			 * @param geometries The sub-geometry inputs (vertex data may point to the mirror buffer).
 			 * @param scratchAddress The device address of a scratch buffer of at least
 			 * blas.updateScratchSize() bytes (256-byte aligned).
-			 * @return void
 			 */
 			void recordBLASRefit (VkCommandBuffer cmdBuf, const AccelerationStructure & blas, const std::vector< BLASGeometryInput > & geometries, VkDeviceAddress scratchAddress) noexcept;
 

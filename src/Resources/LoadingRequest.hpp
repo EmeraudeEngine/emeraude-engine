@@ -43,7 +43,7 @@ namespace EmEn
 
 	namespace Base::Network
 	{
-		class URL;
+		class URI;
 	}
 }
 
@@ -78,7 +78,7 @@ namespace EmEn::Resources
 	 * @note This class is deliberately **not** a template: it only ever needs the polymorphic
 	 * ResourceTrait interface (ResourceTrait::load() is virtual) plus the resource type's ClassId,
 	 * which is passed as a plain string at construction. Keeping it non-template lets every heavy
-	 * method body live in the implementation file, which keeps FileSystem, Network::URL, String
+	 * method body live in the implementation file, which keeps FileSystem, Network::URI, String
 	 * and IO out of Container.hpp — a header parsed by a large part of the engine.
 	 *
 	 * @see Container For the resource container that uses this request type.
@@ -168,11 +168,11 @@ namespace EmEn::Resources
 			 * Extracts and returns the URL from the base information data field. Returns an
 			 * empty URL if this is not an external data request.
 			 *
-			 * @return URL object for the resource download, or empty URL for non-external requests.
+			 * @return URI object for the resource download, or an empty URI for non-external requests.
 			 * @version 0.8.40
 			 */
 			[[nodiscard]]
-			Base::Network::URL url () const noexcept;
+			Base::Network::URI url () const noexcept;
 
 			/**
 			 * @brief Assigns a download manager ticket to this request.

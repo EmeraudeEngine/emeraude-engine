@@ -224,7 +224,6 @@ namespace EmEn::Graphics
 			 * @note Call BEFORE create() so the à-trous targets are (not) allocated to match
 			 * atrousIterations; the sigmas alone may change at runtime.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept
@@ -248,7 +247,6 @@ namespace EmEn::Graphics
 			 * @note When disabled, create() allocates the frame UBOs only (no history VRAM,
 			 * no pipelines) and recordResolve() passes the noisy input through unchanged.
 			 * @param state The desired state.
-			 * @return void
 			 */
 			void
 			setTemporalEnabled (bool state) noexcept

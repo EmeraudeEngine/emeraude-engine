@@ -68,13 +68,6 @@ namespace EmEn::Scenes
 
 	namespace
 	{
-		/**
-		 * @brief Writes a 3D vector as a JSON array: a non-finite component is written null (JSON has no NaN nor
-		 * infinity), the others with the float round-trip precision (9 significant digits).
-		 * @param output A reference to the stream.
-		 * @param vector A reference to the vector.
-		 * @return void
-		 */
 		/** @brief A JSON number: 9 significant digits, null when not finite (JSON has no NaN nor infinity). */
 		struct JSONNumber final
 		{
@@ -100,6 +93,12 @@ namespace EmEn::Scenes
 			return JSONNumber{value};
 		}
 
+		/**
+		 * @brief Writes a 3D vector as a JSON array: a non-finite component is written null (JSON has no NaN nor
+		 * infinity), the others with the float round-trip precision (9 significant digits).
+		 * @param output A reference to the stream.
+		 * @param vector A reference to the vector.
+		 */
 		void
 		writeJSONVector (std::stringstream & output, const Math::Vector< 3, float > & vector) noexcept
 		{

@@ -79,8 +79,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Enables the print into the console of generated format. (DEBUG).
-			 * @param state
-			 * @return void
+			 * @param state The state.
 			 */
 			void
 			enablePrintGeneratedFormat (bool state) noexcept
@@ -92,8 +91,8 @@ namespace EmEn::Graphics
 			 * @brief Creates or returns an existing vertex buffer format from a vertex shader and parameters.
 			 * @warning The output vertex format can be nullptr!
 			 * @param vertexShader A reference to a vertex shader.
-			 * @param topology
-			 * @param geometryFlagBits
+			 * @param topology The primitive topology of the geometry.
+			 * @param geometryFlagBits The geometry flag bits describing the vertex attributes the geometry provides.
 			 * @return std::shared_ptr< VertexBufferFormat >
 			 */
 			[[nodiscard]]
@@ -152,7 +151,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Declares a jump over an existing vertex attribute.
 			 * @param attribute The vertex attribute type.
-			 * @return void
 			 */
 			void declareJump (VertexAttributeType attribute) noexcept;
 
@@ -167,7 +165,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Resets the members that build a new vertex buffer format.
-			 * @return void
 			 */
 			void
 			resetBuildingParameters () noexcept

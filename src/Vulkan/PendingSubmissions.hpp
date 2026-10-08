@@ -132,7 +132,6 @@ namespace EmEn::Vulkan
 			 * waited for before it is replaced.
 			 * @param queue A reference to the queue the submission went to.
 			 * @param value The timeline value received from SynchInfo::tracksCompletion(). 0 is ignored.
-			 * @return void
 			 */
 			void record (const Queue & queue, uint64_t value) noexcept;
 

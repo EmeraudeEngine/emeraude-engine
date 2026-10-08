@@ -82,6 +82,15 @@ namespace EmEn::Graphics
 			return pairIt != BlockFormatPairs.cend() ? pairIt->linear : format;
 		}
 
+		/* The base-class view of a KTX2 texture, for the libktx calls that take a ktxTexture *.
+		 * ktxTexture2 begins with the ktxTexture members (libktx's C "inheritance"); this is what
+		 * libktx's own ktxTexture() macro does, with a C-style cast. */
+		ktxTexture *
+		asBaseTexture (ktxTexture2 * texture) noexcept
+		{
+			return reinterpret_cast< ktxTexture * >(texture);
+		}
+
 		/* Opens a KTX2 blob and transcodes it, when needed, to the requested target.
 		 * Returns nullptr on failure, an owning ktxTexture2 * otherwise. */
 		ktxTexture2 *
@@ -110,7 +119,7 @@ namespace EmEn::Graphics
 			{
 				TraceError{KTX2Decoder::ClassId} << "The KTX2 container '" << label << "' declares " << texture->numLevels << " mip levels (1 to 32 expected) !";
 
-				ktxTexture_Destroy(ktxTexture(texture));
+				ktxTexture_Destroy(asBaseTexture(texture));
 
 				return nullptr;
 			}
@@ -123,7 +132,7 @@ namespace EmEn::Graphics
 				{
 					TraceError{KTX2Decoder::ClassId} << "Unable to transcode the KTX2 container '" << label << "' : " << ktxErrorString(transcodeError);
 
-					ktxTexture_Destroy(ktxTexture(texture));
+					ktxTexture_Destroy(asBaseTexture(texture));
 
 					return nullptr;
 				}
@@ -195,7 +204,7 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "The KTX2 container '" << label << "' holds uncompressed data, it cannot feed the block-compressed path !";
 
-			ktxTexture_Destroy(ktxTexture(texture));
+			ktxTexture_Destroy(asBaseTexture(texture));
 
 			return {};
 		}
@@ -206,7 +215,7 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "The KTX2 container '" << label << "' yielded an undefined Vulkan format !";
 
-			ktxTexture_Destroy(ktxTexture(texture));
+			ktxTexture_Destroy(asBaseTexture(texture));
 
 			return {};
 		}
@@ -219,24 +228,24 @@ namespace EmEn::Graphics
 		{
 			ktx_size_t offset = 0;
 
-			const auto offsetError = ktxTexture_GetImageOffset(ktxTexture(texture), level, 0, 0, &offset);
+			const auto offsetError = ktxTexture_GetImageOffset(asBaseTexture(texture), level, 0, 0, &offset);
 
 			if ( offsetError != KTX_SUCCESS )
 			{
 				TraceError{ClassId} << "Unable to locate the level " << level << " of the KTX2 container '" << label << "' : " << ktxErrorString(offsetError);
 
-				ktxTexture_Destroy(ktxTexture(texture));
+				ktxTexture_Destroy(asBaseTexture(texture));
 
 				return {};
 			}
 
-			const auto size = ktxTexture_GetImageSize(ktxTexture(texture), level);
+			const auto size = ktxTexture_GetImageSize(asBaseTexture(texture), level);
 
 			if ( size == 0 || offset + size > texture->dataSize )
 			{
 				TraceError{ClassId} << "The level " << level << " of the KTX2 container '" << label << "' overruns the payload !";
 
-				ktxTexture_Destroy(ktxTexture(texture));
+				ktxTexture_Destroy(asBaseTexture(texture));
 
 				return {};
 			}
@@ -257,7 +266,7 @@ namespace EmEn::Graphics
 				" down to " << result.mips.front().width << 'x' << result.mips.front().height << " (" << baseLevel << " top level(s) dropped).";
 		}
 
-		ktxTexture_Destroy(ktxTexture(texture));
+		ktxTexture_Destroy(asBaseTexture(texture));
 
 		return result;
 	}
@@ -276,13 +285,13 @@ namespace EmEn::Graphics
 
 		ktx_size_t offset = 0;
 
-		const auto offsetError = ktxTexture_GetImageOffset(ktxTexture(texture), baseLevel, 0, 0, &offset);
+		const auto offsetError = ktxTexture_GetImageOffset(asBaseTexture(texture), baseLevel, 0, 0, &offset);
 
 		if ( offsetError != KTX_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to locate the level " << baseLevel << " of the KTX2 container '" << label << "' : " << ktxErrorString(offsetError);
 
-			ktxTexture_Destroy(ktxTexture(texture));
+			ktxTexture_Destroy(asBaseTexture(texture));
 
 			return false;
 		}
@@ -295,14 +304,14 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "The level " << baseLevel << " of the KTX2 container '" << label << "' overruns the payload !";
 
-			ktxTexture_Destroy(ktxTexture(texture));
+			ktxTexture_Destroy(asBaseTexture(texture));
 
 			return false;
 		}
 
 		const auto success = output.initialize(width, height, ChannelMode::RGBA, {texture->pData + offset, size});
 
-		ktxTexture_Destroy(ktxTexture(texture));
+		ktxTexture_Destroy(asBaseTexture(texture));
 
 		if ( !success )
 		{

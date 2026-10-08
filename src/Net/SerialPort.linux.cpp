@@ -272,11 +272,6 @@ namespace EmEn::Net
 	 * Port Baud Rate Mapping
 	 * ======================================================================= */
 
-	/**
-	 * @brief Converts a numeric baud rate to a POSIX termios speed constant.
-	 * @param baudRate The baud rate value.
-	 * @return speed_t The termios constant, or B9600 as fallback.
-	 */
 	namespace
 	{
 		/**
@@ -350,7 +345,7 @@ namespace EmEn::Net
 				return false;
 			}
 
-			tty2.c_cflag &= ~CBAUD;
+			tty2.c_cflag &= ~static_cast< tcflag_t >(CBAUD);
 			tty2.c_cflag |= BOTHER;
 			tty2.c_ispeed = baudRate;
 			tty2.c_ospeed = baudRate;
@@ -396,7 +391,7 @@ namespace EmEn::Net
 		cfsetospeed(&tty, baudConstant.value_or(B9600));
 
 		/* Data bits. */
-		tty.c_cflag &= ~CSIZE;
+		tty.c_cflag &= ~static_cast< tcflag_t >(CSIZE);
 
 		switch ( config.dataBits )
 		{
@@ -413,7 +408,7 @@ namespace EmEn::Net
 		}
 		else
 		{
-			tty.c_cflag &= ~CSTOPB;
+			tty.c_cflag &= ~static_cast< tcflag_t >(CSTOPB);
 		}
 
 		/* Parity. */
@@ -422,7 +417,7 @@ namespace EmEn::Net
 			case 'E' :
 			case 'e' :
 				tty.c_cflag |= PARENB;
-				tty.c_cflag &= ~PARODD;
+				tty.c_cflag &= ~static_cast< tcflag_t >(PARODD);
 				break;
 
 			case 'O' :
@@ -432,7 +427,7 @@ namespace EmEn::Net
 				break;
 
 			default :
-				tty.c_cflag &= ~PARENB;
+				tty.c_cflag &= ~static_cast< tcflag_t >(PARENB);
 				break;
 		}
 
@@ -453,14 +448,14 @@ namespace EmEn::Net
 		}
 		else
 		{
-			tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+			tty.c_iflag &= ~static_cast< tcflag_t >(IXON | IXOFF | IXANY);
 		}
 
 		/* Raw mode (no canonical processing, no echo, no signals). */
 		tty.c_cflag |= (CLOCAL | CREAD);
-		tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
-		tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
-		tty.c_oflag &= ~OPOST;
+		tty.c_lflag &= ~static_cast< tcflag_t >(ICANON | ECHO | ECHOE | ISIG);
+		tty.c_iflag &= ~static_cast< tcflag_t >(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+		tty.c_oflag &= ~static_cast< tcflag_t >(OPOST);
 
 		/* Non-blocking read: return immediately with available data. */
 		tty.c_cc[VMIN] = 0;

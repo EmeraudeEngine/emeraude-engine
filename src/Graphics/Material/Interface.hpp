@@ -444,7 +444,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Enables the blending mode using json data.
 			 * @param data A reference to a JSON value.
-			 * @return void
 			 */
 			void enableBlendingFromJson (const Json::Value & data) noexcept;
 
@@ -515,7 +514,7 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			virtual
 			bool
-			samplesTexture (const Vulkan::TextureInterface * /*texture*/) const noexcept
+			samplesTexture ([[maybe_unused]] const Vulkan::TextureInterface * texture) const noexcept
 			{
 				return false;
 			}
@@ -526,7 +525,6 @@ namespace EmEn::Graphics::Material
 			 *	   GPURTMaterialData format. Only properties visible in reflections are exported.
 			 *	   The default implementation fills sensible defaults (grey dielectric).
 			 * @param outData A reference to the RT material data to fill.
-			 * @return void
 			 */
 			virtual void exportRTMaterialData (GPURTMaterialData & outData) const noexcept;
 
@@ -536,7 +534,6 @@ namespace EmEn::Graphics::Material
 			 *	   be registered in the bindless texture array for RT shader access.
 			 *	   The default implementation returns an empty list (no textures).
 			 * @param outSlots A reference to a vector to fill with texture slots.
-			 * @return void
 			 */
 			virtual void collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept;
 
@@ -699,7 +696,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Enables a blending and set the desired mode.
 			 * @param mode The blending mode.
-			 * @return void
 			 */
 			virtual void enableBlending (BlendingMode mode) noexcept = 0;
 
@@ -873,7 +869,6 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Destroys the material objects from the video memory.
-			 * @return bool
 			 */
 			virtual void destroy () noexcept = 0;
 
@@ -922,7 +917,6 @@ namespace EmEn::Graphics::Material
 			 * @note Derived classes override THIS, never onDependenciesLoaded(): that one is private
 			 * because it owns the GPU creation itself, and an override of it that forgot to chain left
 			 * every material uncreated and the whole scene black.
-			 * @return void
 			 */
 			virtual
 			void

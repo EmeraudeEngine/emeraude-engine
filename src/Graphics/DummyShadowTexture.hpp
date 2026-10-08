@@ -99,7 +99,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys the dummy shadow texture from the GPU.
-			 * @return void
 			 */
 			void destroy () noexcept;
 

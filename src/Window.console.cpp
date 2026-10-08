@@ -78,8 +78,8 @@ namespace EmEn
 			json["windowYPosition"] = state.windowYPosition;
 			json["framebufferWidth"] = state.framebufferWidth;
 			json["framebufferHeight"] = state.framebufferHeight;
-			json["contentXScale"] = std::isfinite(state.contentXScale) ? state.contentXScale : 0.0F;
-			json["contentYScale"] = std::isfinite(state.contentYScale) ? state.contentYScale : 0.0F;
+			json["contentXScale"] = static_cast< double >(std::isfinite(state.contentXScale) ? state.contentXScale : 0.0F);
+			json["contentYScale"] = static_cast< double >(std::isfinite(state.contentYScale) ? state.contentYScale : 0.0F);
 
 			return Console::CommandResult::json(Base::FastJSON::stringify(json));
 		}, Console::CommandHint::ReadOnly);

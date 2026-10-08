@@ -70,7 +70,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the phosphor grid visibility.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the phosphor triad scale.
 			 * @param scale Value > 0. 1.0 = 3 pixels per RGB triad. Default 1.0.
-			 * @return void
 			 */
 			void setScale (float scale) noexcept;
 

@@ -102,7 +102,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Stops the server and closes the acceptor.
-			 * @return void
 			 */
 			void close () noexcept;
 

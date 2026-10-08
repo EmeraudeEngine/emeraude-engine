@@ -55,7 +55,7 @@ namespace tinyusdz
 
 	namespace tydra
 	{
-		struct RenderScene;
+		class RenderScene;
 		struct XformNode;
 	}
 }
@@ -173,16 +173,6 @@ namespace EmEn::Scenes::Loaders
 			};
 
 			/**
-			 * @brief Translates the render scene's materials into engine PBR materials.
-			 * @note UsdPreviewSurface IS a metallic-roughness model, so the mapping is term for
-			 * term. Texture paths are resolved HERE, relative to the stage: tinyusdz refuses any
-			 * asset path containing "..", which every one of this asset's textures uses, so its
-			 * own image loading never runs — only the paths survive, and the engine reads them.
-			 * @param renderScene A reference to the Tydra render scene.
-			 * @param stageDirectory The directory the stage was read from.
-			 * @return std::vector< std::shared_ptr< Graphics::Material::Interface > > Indexed by RenderMaterial index.
-			 */
-			/**
 			 * @brief Retries a missing path by matching its filename WITHOUT case.
 			 * @note Assets authored on Windows or macOS carry whatever spelling the DCC recorded, on
 			 * a filesystem that does not care. On Linux the file is simply not found, and a missing
@@ -204,6 +194,16 @@ namespace EmEn::Scenes::Loaders
 			[[nodiscard]]
 			std::shared_ptr< Graphics::TextureResource::Abstract > archiveTexture (const std::string & assetIdentifier, bool sRGB) noexcept;
 
+			/**
+			 * @brief Translates the render scene's materials into engine PBR materials.
+			 * @note UsdPreviewSurface IS a metallic-roughness model, so the mapping is term for
+			 * term. Texture paths are resolved HERE, relative to the stage: tinyusdz refuses any
+			 * asset path containing "..", which every one of this asset's textures uses, so its
+			 * own image loading never runs — only the paths survive, and the engine reads them.
+			 * @param renderScene A reference to the Tydra render scene.
+			 * @param stageDirectory The directory the stage was read from.
+			 * @return std::vector< std::shared_ptr< Graphics::Material::Interface > > Indexed by RenderMaterial index.
+			 */
 			[[nodiscard]]
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
 
@@ -324,7 +324,6 @@ namespace EmEn::Scenes::Loaders
 			 *
 			 * @param root A reference to the root xform node of the walk.
 			 * @param placements A reference to the map to populate, keyed by absolute prim path.
-			 * @return void
 			 */
 			static void collectLightPlacements (const tinyusdz::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept;
 

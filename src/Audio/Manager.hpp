@@ -278,7 +278,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Generates procedural sounds for basic events.
-			 * @return void
 			 */
 			void generateBuiltinSounds () noexcept;
 
@@ -305,7 +304,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Changes the sound properties.
 			 * @param properties A reference to an environment physical property structure.
-			 * @return void
 			 */
 			void setEnvironmentSoundProperties (const Physics::EnvironmentPhysicalProperties & properties) noexcept;
 
@@ -440,13 +438,12 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Release an unused source.
-			 * @return void
 			 */
 			void releaseSource (Source * source) noexcept;
 
 			/**
 			 * @brief Sets the doppler effect factor.
-			 * @param dopplerFactor
+			 * @param dopplerFactor The doppler effect factor.
 			 */
 			void setDopplerFactor (float dopplerFactor) noexcept;
 

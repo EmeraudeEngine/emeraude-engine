@@ -129,7 +129,6 @@ namespace EmEn::Console
 			 * @note Called automatically on destruction. Call it explicitly to detach
 			 * a still-alive object from the console tree (e.g. a deactivated game act),
 			 * so another object can register under the same identifier.
-			 * @return void
 			 */
 			void unregisterFromParent () noexcept;
 
@@ -147,7 +146,6 @@ namespace EmEn::Console
 			 * @param expression An expression object from the console.
 			 * @param identifier The identifier of the controlled object.
 			 * @param suggestions List of suggestions to complete the expression.
-			 * @return void
 			 */
 			void complete (Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) const noexcept;
 
@@ -275,13 +273,11 @@ namespace EmEn::Console
 			 * @param description What the command does.
 			 * @param binding The validating binding [std::move].
 			 * @param signature The resolved signature [std::move].
-			 * @return void
 			 */
 			void bindTypedCommand (const std::string & commandNames, const std::string & description, const Binding & binding, const CommandSignature & signature) noexcept;
 
 			/**
 			 * @brief Method to override to bind commands.
-			 * @return void
 			 */
 			virtual void onRegisterToConsole () noexcept = 0;
 

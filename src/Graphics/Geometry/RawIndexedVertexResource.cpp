@@ -258,10 +258,10 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Compute stride and interleave. */
-		const uint32_t vertexElementCount = 3
-			+ (!normals.empty() ? 3 : 0)
-			+ (!textureCoordinates.empty() ? 2 : 0)
-			+ (!colors.empty() ? 4 : 0);
+		const uint32_t vertexElementCount = 3U
+			+ (!normals.empty() ? 3U : 0U)
+			+ (!textureCoordinates.empty() ? 2U : 0U)
+			+ (!colors.empty() ? 4U : 0U);
 
 		std::vector< float > interleaved(static_cast< size_t >(vertexCount) * vertexElementCount);
 

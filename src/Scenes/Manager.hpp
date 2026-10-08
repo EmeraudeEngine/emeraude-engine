@@ -366,7 +366,6 @@ namespace EmEn::Scenes
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< Scene > &)
 			 * @param processActiveScene A function to process the active scene.
 			 * @param abortOnNullScene Do not trigger the function if there is no active scene.
-			 * @return void
 			 */
 			template< typename function_t >
 			void
@@ -389,7 +388,6 @@ namespace EmEn::Scenes
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< Scene > &)
 			 * @param processActiveScene A function to process the active scene.
 			 * @param abortOnNullScene Do not trigger the function if there is no active scene.
-			 * @return void
 			 */
 			template< typename function_t >
 			void
@@ -411,7 +409,6 @@ namespace EmEn::Scenes
 			 * @brief Toggles the scene editor mode on the active scene.
 			 * @note The editor works in physical framebuffer pixels and reads the main
 			 * render target extent itself; no viewport dimensions are needed.
-			 * @return void
 			 */
 			void toggleEditorMode () noexcept;
 
@@ -480,19 +477,16 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Counts one more announced exclusive access.
-			 * @return void
 			 */
 			void announceExclusiveAccess () const noexcept;
 
 			/**
 			 * @brief Counts one announced exclusive access less, and wakes the waiting readers at zero.
-			 * @return void
 			 */
 			void withdrawExclusiveAccess () const noexcept;
 
 			/**
 			 * @brief Blocks a READER while an exclusive access is announced. Lock-free when none is.
-			 * @return void
 			 */
 			void waitForAnnouncedExclusiveAccesses () const noexcept;
 

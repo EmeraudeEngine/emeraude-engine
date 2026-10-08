@@ -124,7 +124,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Adds an attachment description.
 			 * @param attachmentDescription A reference to an attachment description.
-			 * @return void
 			 */
 			void
 			addAttachmentDescription (const VkAttachmentDescription & attachmentDescription) noexcept
@@ -135,7 +134,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Adds a render sub-pass description.
 			 * @param subPass A reference to a render subpass structure.
-			 * @return void
 			 */
 			void
 			addSubPass (const RenderSubPass & subPass) noexcept
@@ -146,7 +144,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Adds a sub-pass dependency.
 			 * @param dependency A reference to a subpass dependency.
-			 * @return void
 			 */
 			void
 			addSubPassDependency (const VkSubpassDependency & dependency) noexcept
@@ -179,7 +176,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Enables multiview rendering for cubemap (6 views).
 			 * @note This requires Vulkan 1.1+ and multiview feature enabled.
-			 * @return void
 			 */
 			void enableMultiview () noexcept;
 
@@ -187,7 +183,6 @@ namespace EmEn::Vulkan
 			 * @brief Enables multiview rendering with a custom number of views.
 			 * @note This requires Vulkan 1.1+ and multiview feature enabled.
 			 * @param viewCount The number of views (1-32, limited by implementation).
-			 * @return void
 			 */
 			void enableMultiview (uint32_t viewCount) noexcept;
 

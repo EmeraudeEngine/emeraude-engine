@@ -67,7 +67,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets the UI screen visibility.
 			 * @param state The state
-			 * @return void
 			 */
 			void
 			setVisibility (bool state) noexcept
@@ -91,7 +90,6 @@ namespace EmEn::Overlay
 			 * @note Must be called between ImGui::NewFrame() and ImGui::Render(). The
 			 * Overlay::Manager drives a single NewFrame()/Render() cycle per frame for
 			 * every visible ImGUI screen (ImGUI uses a single global context).
-			 * @return void
 			 */
 			void
 			draw () const noexcept

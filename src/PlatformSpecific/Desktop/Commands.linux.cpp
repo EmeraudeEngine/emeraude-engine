@@ -86,7 +86,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	}
 
 	void
-	flashTaskbarIcon (const Window & window, bool state) noexcept
+	flashTaskbarIcon (const Window & /*window*/, bool /*state*/) noexcept
 	{
 		/* NOTE: This OS method is only available with Unity desktop from Ubuntu. */
 	}

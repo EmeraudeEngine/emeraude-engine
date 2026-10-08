@@ -143,7 +143,6 @@ namespace EmEn::Physics
 
 		/**
 		 * @brief Fills the curves and the gear ratios with Jolt's defaults (a road car).
-		 * @return void
 		 */
 		void useDefaultCurvesAndRatios () noexcept;
 
@@ -218,14 +217,12 @@ namespace EmEn::Physics
 			 * drive and brake torques.
 			 * @param forwardSpeed The chassis' speed along its forward direction (m/s).
 			 * @param deltaTime The step (s), > 0.
-			 * @return void
 			 */
 			void prepareStep (float forwardSpeed, float deltaTime) noexcept;
 
 			/**
 			 * @brief After the solver: the wheels' rotation angles, the gearbox's timers.
 			 * @param deltaTime The step (s), > 0.
-			 * @return void
 			 */
 			void finishStep (float deltaTime) noexcept;
 

@@ -76,7 +76,6 @@ namespace EmEn::PlatformSpecific::Desktop
 		 * @param message Unused (WM_TIMER).
 		 * @param timerID The notification id, with OwnsWindowFlag when the window is the notification's own.
 		 * @param time Unused.
-		 * @return void
 		 */
 		VOID CALLBACK
 		removeNotification (HWND window, UINT /*message*/, UINT_PTR timerID, DWORD /*time*/) noexcept

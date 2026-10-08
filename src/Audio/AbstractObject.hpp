@@ -110,7 +110,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Reset the OpenAL identifier.
-			 * @return void
 			 */
 			void
 			resetIdentifier () noexcept

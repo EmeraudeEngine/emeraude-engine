@@ -26,6 +26,9 @@
 
 #include "LightGenerator.hpp"
 
+/* STL inclusions. */
+#include <optional>
+
 /* Local inclusions. */
 #include "Code.hpp"
 #include "Declaration/Function.hpp"
@@ -437,11 +440,10 @@ namespace EmEn::Saphir
 
 				return block;
 			}
-
-			default:
-				/* TODO: Fix this! */
-				return {0, 0, Declaration::MemoryLayout::Std140, nullptr, nullptr};
 		}
+
+		/* TODO: Fix this! */
+		return {0, 0, Declaration::MemoryLayout::Std140, nullptr, nullptr};
 	}
 
 	Declaration::UniformBlock
@@ -487,7 +489,8 @@ namespace EmEn::Saphir
 	{
 		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 
-		auto lightType = LightType::Directional;
+		/* NOTE: Stays empty only for a render pass value out of the enumeration (checked after the switch). */
+		std::optional< LightType > lightType;
 		bool enableShadowMap = false;
 		bool enableColorProjection = false;
 
@@ -593,10 +596,15 @@ namespace EmEn::Saphir
 
 			case RenderPassType::None :
 			case RenderPassType::SimplePass :
-			default:
-
 				Tracer::error(ClassId, "Calling the light code generation render pass set to 'None' !");
 				return false;
+		}
+
+		if ( !lightType.has_value() )
+		{
+			Tracer::error(ClassId, "Calling the light code generation with an invalid render pass type !");
+
+			return false;
 		}
 
 		/* CSM uses a specialized uniform block. */
@@ -609,7 +617,7 @@ namespace EmEn::Saphir
 				return false;
 			}
 		}
-		else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
+		else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, *lightType, enableShadowMap, enableColorProjection)) )
 		{
 			return false;
 		}
@@ -617,7 +625,7 @@ namespace EmEn::Saphir
 
 		/* One lighting model: Cook-Torrance, shaded per fragment. The vertex stage only prepares
 		 * the interpolated inputs (light direction, distance, tangent space). */
-		return this->generatePBRVertexShader(generator, vertexShader, lightType, enableShadowMap, enableColorProjection);
+		return this->generatePBRVertexShader(generator, vertexShader, *lightType, enableShadowMap, enableColorProjection);
 	}
 
 	bool
@@ -1256,57 +1264,6 @@ namespace EmEn::Saphir
 			else
 			{
 				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * 0.96 * " << this->refractionIntensity() << ";";
-			}
-		}
-		else if ( m_useReflection && m_useRefraction )
-		{
-			/* NOTE: Non-PBR Glass - legacy behavior.
-			 * The fresnelFactor variable is already declared by the material (StandardResource).
-			 * We just use it here to blend reflection and refraction in the ambient pass. */
-			Code{fragmentShader, Location::Output} <<
-				"/* Glass ambient pass - uses fresnelFactor from material. */" "\n"
-				"const vec3 ambientReflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
-				"const vec3 ambientRefractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << ";" "\n"
-				"/* Blend reflection and refraction based on Fresnel, with subtle tint from albedo. */" "\n" <<
-				m_fragmentColor << ".rgb += mix(ambientRefractedColor, ambientReflectedColor, fresnelFactor) * " << surfaceColor << ".rgb;";
-		}
-		else if ( m_useReflection )
-		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << diffuseWeight << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
-
-			/* IBL (non-PBR reflective, e.g. Standard): the same diffuse/reflection mix, lit
-			 * by the irradiance instead of the scalar — the reflection color is a prefiltered
-			 * sample in [0,1], the environment luminance turns both into nits. */
-			if ( useIBL )
-			{
-				if ( m_reflectionSourceAbsolute )
-				{
-					/* Render-target reflection: already an absolute luminance — only the
-					 * sky-derived diffuse leg takes the environment luminance. */
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ");";
-				}
-				else
-				{
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << ", " << m_surfaceReflectionColor << ".rgb, " << m_surfaceReflectionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
-				}
-			}
-		}
-		else if ( m_useRefraction )
-		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << diffuseWeight << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ")" << aoFactor << ";";
-
-			if ( useIBL )
-			{
-				if ( m_refractionSourceAbsolute )
-				{
-					/* Render-target refraction: already an absolute luminance — only the
-					 * sky-derived diffuse leg takes the environment luminance. */
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << " * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ");";
-				}
-				else
-				{
-					Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << iblDiffuseTint << ".rgb * iblDiffuseIrradiance" << aoFactor << diffuseWeight << ", " << m_surfaceRefractionColor << ".rgb, " << m_surfaceRefractionAmount << ") * " << ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) << ";";
-				}
 			}
 		}
 		else

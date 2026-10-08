@@ -184,14 +184,14 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief setGeometry
-			 * @param geometry
+			 * @param geometry A reference to a geometry smart pointer.
 			 * @return bool
 			 */
 			bool setGeometry (const std::shared_ptr< Geometry::Interface > & geometry) noexcept;
 
 			/**
 			 * @brief setMaterial
-			 * @param material
+			 * @param material A reference to a material smart pointer.
 			 * @return bool
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & material) noexcept;

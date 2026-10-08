@@ -42,6 +42,29 @@
 
 namespace EmEn::PlatformSpecific
 {
+	namespace
+	{
+		/**
+		 * @brief Multiplies two sysconf() results into a byte count.
+		 * @note sysconf() returns -1 when a value is unavailable: the product would then wrap into a huge
+		 * size_t (or read as one page). Such a case reads as zero, "unknown".
+		 * @param count The first sysconf() result (a page count).
+		 * @param size The second sysconf() result (a page size).
+		 * @return size_t
+		 */
+		[[nodiscard]]
+		size_t
+		sysconfProduct (long count, long size) noexcept
+		{
+			if ( count <= 0 || size <= 0 )
+			{
+				return 0;
+			}
+
+			return static_cast< size_t >(count) * static_cast< size_t >(size);
+		}
+	}
+
 	bool
 	SystemInfo::fetchOSInformation () noexcept
 	{
@@ -136,7 +159,7 @@ namespace EmEn::PlatformSpecific
 	size_t
 	SystemInfo::getTotalMemory () noexcept
 	{
-		return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGE_SIZE);
+		return sysconfProduct(sysconf(_SC_PHYS_PAGES), sysconf(_SC_PAGE_SIZE));
 	}
 
 	size_t
@@ -161,7 +184,7 @@ namespace EmEn::PlatformSpecific
 		}
 
 		/* Fallback (pre-3.14 kernel): truly-free pages. */
-		return sysconf(_SC_AVPHYS_PAGES) * sysconf(_SC_PAGESIZE);
+		return sysconfProduct(sysconf(_SC_AVPHYS_PAGES), sysconf(_SC_PAGESIZE));
 	}
 
 	size_t
@@ -170,7 +193,8 @@ namespace EmEn::PlatformSpecific
 		rusage rusage{};
 		getrusage( RUSAGE_SELF, &rusage);
 
-		return rusage.ru_maxrss * 1024UL;
+		/* NOTE: ru_maxrss is in kibibytes on Linux, never negative. */
+		return rusage.ru_maxrss > 0 ? static_cast< size_t >(rusage.ru_maxrss) * 1024UL : 0;
 	}
 
 	size_t
@@ -195,9 +219,9 @@ namespace EmEn::PlatformSpecific
 			return 0;
 		}
 
-		const auto bytes = std::strtol(line.c_str() + position, nullptr, 10);
+		const auto residentPages = std::strtol(line.c_str() + position, nullptr, 10);
 
-		return static_cast< size_t >(bytes * sysconf( _SC_PAGESIZE));
+		return sysconfProduct(residentPages, sysconf(_SC_PAGESIZE));
 	}
 
 	std::filesystem::path

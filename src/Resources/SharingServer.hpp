@@ -172,7 +172,6 @@ namespace EmEn::Resources
 			/**
 			 * @brief Routes a request that passed the HTTP checks (network thread).
 			 * @param connection The connection.
-			 * @return void
 			 */
 			void handleRequest (const std::shared_ptr< Connection > & connection) noexcept;
 
@@ -190,7 +189,6 @@ namespace EmEn::Resources
 			 * @param connection The connection.
 			 * @param directory The resolved directory.
 			 * @param relativeRoot The directory relative to `data-stores/` ('/' separated, may be empty).
-			 * @return void
 			 */
 			static void answerList (Connection & connection, const std::filesystem::path & directory, const std::string & relativeRoot) noexcept;
 
@@ -198,7 +196,6 @@ namespace EmEn::Resources
 			 * @brief Answers `/sha256/<path>` from the thread pool.
 			 * @param connection The connection.
 			 * @param filepath The resolved file.
-			 * @return void
 			 */
 			void answerDigest (const std::shared_ptr< Connection > & connection, const std::filesystem::path & filepath) noexcept;
 

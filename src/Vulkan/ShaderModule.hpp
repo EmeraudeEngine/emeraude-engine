@@ -164,7 +164,6 @@ namespace EmEn::Vulkan
 			 * @note Must be called before createOnHardware().
 			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
 			 * @param value The boolean value for the constant.
-			 * @return void
 			 */
 			void setSpecializationConstant (uint32_t constantId, bool value) noexcept;
 
@@ -173,7 +172,6 @@ namespace EmEn::Vulkan
 			 * @note Must be called before createOnHardware().
 			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
 			 * @param value The integer value for the constant.
-			 * @return void
 			 */
 			void setSpecializationConstant (uint32_t constantId, int32_t value) noexcept;
 
@@ -182,7 +180,6 @@ namespace EmEn::Vulkan
 			 * @note Must be called before createOnHardware().
 			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
 			 * @param value The unsigned integer value for the constant.
-			 * @return void
 			 */
 			void setSpecializationConstant (uint32_t constantId, uint32_t value) noexcept;
 
@@ -191,7 +188,6 @@ namespace EmEn::Vulkan
 			 * @note Must be called before createOnHardware().
 			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
 			 * @param value The float value for the constant.
-			 * @return void
 			 */
 			void setSpecializationConstant (uint32_t constantId, float value) noexcept;
 

@@ -83,7 +83,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Appends a line of instruction to the main() shader method at top-level.
 			 * @param code A string of code execution.
-			 * @return void
 			 */
 			virtual
 			void
@@ -95,7 +94,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Appends a line of instruction to the main() shader method.
 			 * @param code A reference to a string.
-			 * @return void
 			 */
 			virtual
 			void
@@ -107,7 +105,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Appends a line of instruction at the bottom of main() shader method.
 			 * @param code A string of code execution.
-			 * @return void
 			 */
 			virtual
 			void
@@ -123,7 +120,6 @@ namespace EmEn::Saphir
 			 * output sections.
 			 * @param comment A reference to a string.
 			 * @param depth A number for indentation level. default 1.
-			 * @return void
 			 */
 			virtual void addComment (const std::string & comment, size_t depth = 1) noexcept;
 

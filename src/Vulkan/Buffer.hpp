@@ -142,7 +142,6 @@ namespace EmEn::Vulkan
 			 * @brief Records a submission that writes this buffer (an upload), so its destruction outlives it.
 			 * @param queue A reference to the queue of the submission.
 			 * @param value The timeline value received from SynchInfo::tracksCompletion().
-			 * @return void
 			 */
 			void
 			recordPendingSubmission (const Queue & queue, uint64_t value) noexcept
@@ -180,7 +179,6 @@ namespace EmEn::Vulkan
 			 * @brief Marks this buffer for GPU-to-CPU readback with CPU-cached memory.
 			 * @note Must be called before createOnHardware(). Only meaningful for host-visible buffers.
 			 * @param readable True to use cached memory (fast CPU reads), false for write-combined (fast CPU writes).
-			 * @return void
 			 */
 			void
 			setHostReadable (bool readable) noexcept
@@ -197,7 +195,6 @@ namespace EmEn::Vulkan
 			 * MTLBuffer whose argument-buffer residency is tracked per buffer (see
 			 * RenderableInstance::Abstract::createSkinningResources()).
 			 * @param dedicated True to allocate the buffer in its own device memory.
-			 * @return void
 			 */
 			void
 			setDedicatedMemory (bool dedicated) noexcept
@@ -224,7 +221,6 @@ namespace EmEn::Vulkan
 			 * With VMA this goes through vmaCreateBufferWithAlignment(); the non-VMA path binds the buffer at the start
 			 * of its own allocation.
 			 * @param alignment A power of two, or 0 for the memory requirements alone.
-			 * @return void
 			 */
 			void
 			setMinimumAlignment (VkDeviceSize alignment) noexcept
@@ -399,7 +395,6 @@ namespace EmEn::Vulkan
 			 * @warning Only available for host buffers.
 			 * @param offset The beginning of the map. Default 0.
 			 * @param size The size of the mapping. Default whole size.
-			 * @return void
 			 */
 			void unmapMemory (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept;
 

@@ -49,9 +49,10 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					return "dialog-question";
 
 				case MessageType::Info:
-				default:
 					return "dialog-information";
 			}
+
+			return "dialog-information";
 		}
 	}
 
@@ -89,7 +90,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 					case MessageType::Question:
 					case MessageType::Info:
-					default:
 						command += " --msgbox";
 						break;
 				}

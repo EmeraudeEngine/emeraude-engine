@@ -158,16 +158,16 @@ namespace EmEn::Input
 		std::stringstream output;
 		output << "Joystick #" << m_deviceID << " mapping." "\n";
 
-		const auto & [axes, buttons, hats] = s_devicesState[m_deviceID];
+		const auto & [axes, buttons, hats] = s_devicesState[static_cast< size_t >(m_deviceID)];
 
 		for ( int32_t axe = 0; axe < JoystickMaxAxis; axe++ )
 		{
-			output << "Axe #" << axe << " : " << axes[axe] << '\n';
+			output << "Axe #" << axe << " : " << axes[static_cast< size_t >(axe)] << '\n';
 		}
 
 		for ( int32_t button = 0; button < JoystickMaxButtons; button++ )
 		{
-			if ( buttons[button] )
+			if ( buttons[static_cast< size_t >(button)] )
 			{
 				output << "Button #" << button << " : Pressed" "\n";
 			}
@@ -179,7 +179,7 @@ namespace EmEn::Input
 
 		for ( int32_t hat = 0; hat < JoystickMaxHats; hat++ )
 		{
-			output << "Hat #" << hat << " : " << static_cast< int >(hats[hat]) << '\n';
+			output << "Hat #" << hat << " : " << static_cast< int >(hats[static_cast< size_t >(hat)]) << '\n';
 		}
 
 		return output.str();
@@ -193,7 +193,7 @@ namespace EmEn::Input
 			return;
 		}
 
-		auto & [axes, buttons, hats] = s_devicesState[deviceID];
+		auto & [axes, buttons, hats] = s_devicesState[static_cast< size_t >(deviceID)];
 
 		int32_t count = 0;
 
@@ -201,21 +201,21 @@ namespace EmEn::Input
 
 		for ( int32_t index = 0; index < std::min(count, JoystickMaxAxis); index++ )
 		{
-			axes[index] = currentAxes[index];
+			axes[static_cast< size_t >(index)] = currentAxes[index];
 		}
 
 		const auto * currentButtons = glfwGetJoystickButtons(deviceID, &count);
 
 		for ( int32_t index = 0; index < std::min(count, JoystickMaxButtons); index++ )
 		{
-			buttons[index] = currentButtons[index] == GLFW_PRESS;
+			buttons[static_cast< size_t >(index)] = currentButtons[index] == GLFW_PRESS;
 		}
 
 		currentButtons = glfwGetJoystickHats(deviceID, &count);
 
 		for ( int32_t index = 0; index < std::min(count, JoystickMaxHats); index++ )
 		{
-			hats[index] = static_cast< JoystickHatDirection >(currentButtons[index]);
+			hats[static_cast< size_t >(index)] = static_cast< JoystickHatDirection >(currentButtons[index]);
 		}
 	}
 
@@ -227,7 +227,7 @@ namespace EmEn::Input
 			return;
 		}
 
-		auto & [axes, buttons, hats] = s_devicesState[deviceID];
+		auto & [axes, buttons, hats] = s_devicesState[static_cast< size_t >(deviceID)];
 
 		for ( auto & axis : axes )
 		{

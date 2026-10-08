@@ -343,11 +343,11 @@ void main()
 				GPUTriangle gt{};
 				const std::array< std::array< float, 4 > *, 3 > corners{&gt.v0, &gt.v1, &gt.v2};
 
-				for ( int i = 0; i < 3; ++i )
+				for ( uint32_t i = 0; i < 3; ++i )
 				{
 					const auto worldPos = Impl::transformPoint(verts[tri.vertexIndex(i)].position(), entry.frame);
 
-					auto & dst = *corners[static_cast< size_t >(i)];
+					auto & dst = *corners[i];
 					dst[0] = worldPos[X];
 					dst[1] = worldPos[Y];
 					dst[2] = worldPos[Z];
@@ -374,7 +374,7 @@ void main()
 		d.triangleCount = static_cast< uint32_t >(gpuTriangles.size());
 
 		/* Pad bounds. */
-		for ( int i = 0; i < 3; ++i )
+		for ( size_t i = 0; i < 3; ++i )
 		{
 			d.boundsMin[i] -= 0.01F;
 			d.boundsMax[i] += 0.01F;

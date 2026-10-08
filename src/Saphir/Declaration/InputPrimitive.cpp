@@ -49,9 +49,8 @@ namespace EmEn::Saphir::Declaration
 
 			case InputPrimitiveType::TrianglesAdjacency :
 				return GLSL::Primitive::TrianglesAdjacency;
-
-			default :
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 }

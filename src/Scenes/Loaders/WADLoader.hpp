@@ -100,7 +100,6 @@ namespace EmEn::Scenes::Loaders
 			 * @brief Selects the map to load by 1-based index, in WAD directory order.
 			 * @note Works for both ExMy (Doom) and MAPxx (Doom II) naming. Default 1.
 			 * @param index The 1-based map index.
-			 * @return void
 			 */
 			void
 			setMapIndex (uint32_t index) noexcept
@@ -113,7 +112,6 @@ namespace EmEn::Scenes::Loaders
 			 * @brief Selects the map to load by explicit marker name (e.g. "E1M1", "MAP01").
 			 * @note Overrides setMapIndex().
 			 * @param name The map marker lump name.
-			 * @return void
 			 */
 			void
 			setMapName (std::string name) noexcept

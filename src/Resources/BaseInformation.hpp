@@ -292,7 +292,7 @@ namespace EmEn::Resources
 			 *   the file exists.
 			 *
 			 * - **ExternalData**: "Data" must be a string containing a valid URL. The method
-			 *   validates the URL format using Network::URL::isURL().
+			 *   validates the URL format using Network::URI::isURL().
 			 *
 			 * - **DirectData**: "Data" must be a JSON object containing the inline resource
 			 *   definition.

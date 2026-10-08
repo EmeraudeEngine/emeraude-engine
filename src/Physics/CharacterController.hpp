@@ -91,7 +91,6 @@ namespace EmEn::Physics
 			 * @param bodyIndex The body's index, from a Hit.
 			 * @param point A reference to the world point.
 			 * @param impulse A reference to the impulse (N·s).
-			 * @return void
 			 */
 			virtual void push (uint32_t bodyIndex, const Base::Math::Vector< 3, float > & point, const Base::Math::Vector< 3, float > & impulse) noexcept = 0;
 
@@ -210,7 +209,6 @@ namespace EmEn::Physics
 			 * @brief Makes the character fly or walk (the scene follows the entity's free fly mode).
 			 * @note Flying keeps the velocity it had; back to walking, the flight's vertical speed becomes a fall or a rise.
 			 * @param state The state.
-			 * @return void
 			 */
 			void setFlying (bool state) noexcept;
 

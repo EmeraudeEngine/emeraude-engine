@@ -66,7 +66,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the corner radius.
 			 * @param radius Value in range (0, 0.5]. Default 0.04.
-			 * @return void
 			 */
 			void setCornerRadius (float radius) noexcept;
 
@@ -84,7 +83,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the edge softness of the mask transition.
 			 * @param softness Value > 0. Default 0.01.
-			 * @return void
 			 */
 			void setEdgeSoftness (float softness) noexcept;
 

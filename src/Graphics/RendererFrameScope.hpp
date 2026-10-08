@@ -114,7 +114,6 @@ namespace EmEn::Graphics
 			 * by the final frame submission. Binary semaphores can only be waited on once per signal.
 			 * @param semaphore A reference to a semaphore smart pointer.
 			 * @param primary True for shadow map semaphores (consumed by RTTs), false for RTT semaphores.
-			 * @return void
 			 */
 			void declareSemaphore (const std::shared_ptr< Vulkan::Sync::Semaphore > & semaphore, bool primary) noexcept;
 
@@ -174,7 +173,6 @@ namespace EmEn::Graphics
 			 * @brief Forwards unconsumed primary semaphores to the secondary list.
 			 * @note Call this after render-to-textures to ensure shadow map semaphores
 			 * are waited on by the final submit when no RTT consumed them.
-			 * @return void
 			 */
 			void promotePrimaryToSecondary () noexcept;
 

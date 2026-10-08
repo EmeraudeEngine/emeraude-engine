@@ -629,7 +629,6 @@ namespace EmEn::Scenes
 			 * @param direction The wind direction, normalized here if it is not.
 			 * @param strength The tip displacement in metres. 0 disables the wind.
 			 * @param gustiness How much the strength breathes, in [0, 1].
-			 * @return void
 			 */
 			void
 			setVegetationWind (const Base::Math::Vector< 3, float > & direction, float strength, float gustiness = 0.35F) noexcept
@@ -784,7 +783,6 @@ namespace EmEn::Scenes
 			 * materials sample the map in the same frame. A scene without clouds pays one test.
 			 * @param commandBuffer A reference to the frame's command buffer.
 			 * @param renderer A reference to the graphics renderer.
-			 * @return void
 			 */
 			void recordCloudShadowMap (const Vulkan::CommandBuffer & commandBuffer, Graphics::Renderer & renderer) noexcept;
 
@@ -819,7 +817,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Sets the per-scene multi-pass post-processing stack.
 			 * @param stack The post-process stack to own (moved).
-			 * @return void
 			 */
 			void setPostProcessStack (std::unique_ptr< Graphics::PostProcessStack > stack) noexcept;
 
@@ -1034,7 +1031,6 @@ namespace EmEn::Scenes
 			 * fog in every scene of the engine at once.
 			 *
 			 * @param medium A reference to the medium.
-			 * @return void
 			 *
 			 * @see ParticipatingMedium::ClearAir(), ParticipatingMedium::Fog() For presets.
 			 */
@@ -1363,7 +1359,6 @@ namespace EmEn::Scenes
 			 * render target view UBO (main view, render-to-view and render-to-texture targets).
 			 * @note The environment luminance, in nits, comes from the scene background (1.0,
 			 * neutral, without background) and scales every IBL contribution in the shaders.
-			 * @return void
 			 */
 			void refreshAmbientLightProperties () const noexcept;
 
@@ -1936,7 +1931,6 @@ namespace EmEn::Scenes
 			 * movement) by calling setRenderOutOfDate() on the target itself.
 			 *
 			 * @note A no-op on automatic (continuous) targets.
-			 * @return void
 			 */
 			void signalOnDemandRenderTargets () const noexcept;
 
@@ -2176,7 +2170,6 @@ namespace EmEn::Scenes
 			 * @note Any thread. Held weakly: an entity that dies simply stops being outlined. The editor's selection drives
 			 * the set (Scenes::Editor::Manager), so does the console (`highlightEntity`, `addHighlight`, …).
 			 * @param entity A reference to the entity smart pointer, or nullptr to clear the set.
-			 * @return void
 			 */
 			void setHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept;
 
@@ -2185,7 +2178,6 @@ namespace EmEn::Scenes
 			 * @note Any thread. Null pointers and duplicates are ignored. One style for the whole set (owner decision
 			 * 2026-09-29): touching entities share one silhouette.
 			 * @param entities A reference to the entities.
-			 * @return void
 			 */
 			void setHighlightedEntities (const std::vector< std::shared_ptr< AbstractEntity > > & entities) noexcept;
 
@@ -2208,7 +2200,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Empties the highlighted set.
 			 * @note Any thread.
-			 * @return void
 			 */
 			void clearHighlightedEntities () noexcept;
 
@@ -2443,7 +2434,6 @@ namespace EmEn::Scenes
 			 * crushes them — which is the very defect this path exists to fix.
 			 * @note Does nothing when no debug helper is enabled.
 			 * @param commandBuffer A reference to the command buffer.
-			 * @return void
 			 */
 			void renderDebugOverlay (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
@@ -2513,7 +2503,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Loops over each renderable instance of the scene
 			 * @param function A reference to a function.
-			 * @return void
 			 */
 			void forEachRenderableInstance (const std::function< void (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept;
 
@@ -2544,7 +2533,6 @@ namespace EmEn::Scenes
 			 * @brief Checks a notification from the audio video console manager.
 			 * @param notificationCode The notification code from AVConsole::Console::NotificationCode enum.
 			 * @param data A reference to the notification payload.
-			 * @return void
 			 */
 			void checkAVConsoleNotification (int notificationCode, const Base::Any & data) noexcept;
 
@@ -2582,7 +2570,6 @@ namespace EmEn::Scenes
 			 * @brief Updates Cascaded Shadow Map (CSM) matrices for all directional lights.
 			 * @note Called each frame from processLogics() to update cascade projections based on current camera frustum.
 			 * @param mainRenderTarget A reference to the main render target smart-pointer.
-			 * @return void
 			 */
 			void updateCSMCascades (const std::shared_ptr< Graphics::RenderTarget::Abstract > & mainRenderTarget) const noexcept;
 
@@ -2591,7 +2578,6 @@ namespace EmEn::Scenes
 			 * @note Called every tick right after updateCSMCascades(); the frame reaches the lit shaders
 			 * and the map's pass through the sun's published block. Every other directional light reads
 			 * no cloud shadow.
-			 * @return void
 			 */
 			void updateCloudShadows () const noexcept;
 
@@ -2604,7 +2590,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Destroys the scene octrees.
-			 * @return void
 			 */
 			void destroyOctrees () noexcept;
 
@@ -2636,7 +2621,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Checks the entity location inside all octrees.
 			 * @param entity A reference to an entity smart pointer.
-			 * @return void
 			 */
 			void checkEntityLocationInOctrees (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
@@ -2648,7 +2632,6 @@ namespace EmEn::Scenes
 			 * @note Raised by the physics step itself (it holds the physics octree lock), the notification is
 			 * deferred to processLogics(), after the step.
 			 * @param entity A reference to an entity smart pointer.
-			 * @return void
 			 */
 			void onEntityContentModified (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
@@ -2672,7 +2655,6 @@ namespace EmEn::Scenes
 			 * @tparam accept_t (const Base::Math::Space3D::AACuboid< float > &) -> bool: may the volume see this box.
 			 * @param acceptsBox Whether the volume touches a sector's box.
 			 * @param candidates The output, cleared first.
-			 * @return void
 			 */
 			template< typename accept_t >
 			void
@@ -2705,7 +2687,6 @@ namespace EmEn::Scenes
 			 * @param acceptsBox Whether the volume touches a sector's box.
 			 * @param stamp The stamp of this gather (AbstractEntity::markCollectedByRenderingGather()).
 			 * @param candidates The output.
-			 * @return void
 			 */
 			template< typename accept_t >
 			static
@@ -2759,13 +2740,11 @@ namespace EmEn::Scenes
 			 * @brief Adds a render list to a statistics record.
 			 * @param renderList A reference to the render list.
 			 * @param statistics A reference to the record.
-			 * @return void
 			 */
 			static void accumulateRenderStatistics (const RenderBatch::List & renderList, RenderListStatistics & statistics) noexcept;
 
 			/**
 			 * @brief Saves scene global visual components.
-			 * @return void
 			 */
 			void registerSceneVisualComponents () noexcept;
 
@@ -2773,7 +2752,6 @@ namespace EmEn::Scenes
 			 * @brief Applies the background lighting derivation for real — the background
 			 * resource MUST be loaded (its manifest parsed) when this runs.
 			 * @note See Scene::applyBackgroundLighting() for the deferred entry point.
-			 * @return void
 			 */
 			void applyBackgroundLightingNow () noexcept;
 
@@ -2783,7 +2761,6 @@ namespace EmEn::Scenes
 			 * bindless texture set (reserved slots 1 and 2).
 			 * @note Runs on the logic thread (processLogics poll); the bake is a blocking GPU
 			 * job of a few hundred microseconds, acceptable at the sky-change rate.
-			 * @return void
 			 */
 			void updateEnvironmentIBL () noexcept;
 
@@ -2797,7 +2774,6 @@ namespace EmEn::Scenes
 			 * pushed on a signal, because ownership follows the effects' ENABLED state, which
 			 * a demo or the console flips at any moment with no notification; the idle cost is
 			 * one virtual call per effect and a float compare.
-			 * @return void
 			 */
 			void updateIBLDiffuseOwnership () noexcept;
 
@@ -2862,7 +2838,6 @@ namespace EmEn::Scenes
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
-			 * @return void
 			 */
 			void insertIntoShadowCastingRenderList (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
@@ -2890,8 +2865,7 @@ namespace EmEn::Scenes
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
 			 * @param cameraPosition A reference to the camera world position (sprite billboard orientation).
-			 * @param advanceModelHistory
-			 * @return void
+			 * @param advanceModelHistory Whether the previous-frame model matrix advances (a view render target only, for motion vectors).
 			 */
 			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Base::Math::CartesianFrame< float > * worldCoordinates, float distance, const Base::Math::Vector< 3, float > & cameraPosition, bool advanceModelHistory) noexcept;
 
@@ -2902,12 +2876,11 @@ namespace EmEn::Scenes
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param renderBatches A reference to a render batch.
 			 * @param bindlessTexturesManager A pointer to the bindless texture manager. Can be nullptr.
-			 * @param sceneTransformsDS
+			 * @param sceneTransformsDS A pointer to the scene instance transforms descriptor set.
 			 * @param deferredLights The lights resolved deferred, sorted by address (see renderOpaque()). Empty for a
 			 * translucent list, which is drawn after the resolve.
 			 * @param invisibleLights The lights whose reach misses the target's frustum, sorted by address (see
 			 * renderOpaque()). Empty for a translucent list.
-			 * @return void
 			 */
 			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager, const Vulkan::DescriptorSet * sceneTransformsDS, std::span< const Component::AbstractLightEmitter * const > deferredLights = {}, std::span< const Component::AbstractLightEmitter * const > invisibleLights = {}) const noexcept;
 
@@ -3032,12 +3005,12 @@ namespace EmEn::Scenes
 			/** @brief Render list index for translucent objects requiring grab pass (with lighting). */
 			static constexpr auto TranslucentGBLighted{6UL};
 
-			/** @brief Cached read state slot set by prepareRender() (always m_frameReadStateIndex). */
 			/** @brief Read state index latched ONCE per rendered frame by beginRenderFrame(). Every
 			 * consumer of the frame reads this, never m_publishedSlot directly — see the note
 			 * there. The render thread OWNS this slot until its next latch: the logic thread never
 			 * writes it (triple buffer). Render thread only. */
 			uint32_t m_frameReadStateIndex{0};
+			/** @brief Cached read state slot set by prepareRender() (always m_frameReadStateIndex). */
 			uint32_t m_preparedReadStateIndex{0};
 			/** @brief Cached bindless texture manager pointer set by prepareRender(). Null if not usable. */
 			const Graphics::BindlessTextureManager * m_preparedBindlessManager{nullptr};
@@ -3156,7 +3129,6 @@ namespace EmEn::Scenes
 			mutable uint64_t m_renderingGatherStamp{0};
 			/** @brief Octree for physics broad-phase collision. @note Uses shared_ptr due to enable_shared_from_this. */
 			std::shared_ptr< OctreeSector< AbstractEntity, true > > m_physicsOctree;
-			/** @brief Visual components for background/terrain/water. @bug Should be refactored. */
 			/** @brief Slots of m_sceneVisualComponents. ⚠️ The BACKGROUND is deliberately kept
 			 * OUT of the ray-tracing lists (see prepareRender): it is a backdrop shell, and in
 			 * the TLAS it walls the scene in so no ray can ever reach the sky. */
@@ -3166,6 +3138,7 @@ namespace EmEn::Scenes
 			/** @brief The ground's detail window (GroundLevelInterface::detailRenderable()), out of the ray-tracing lists. */
 			static constexpr size_t GroundDetailVisualIndex{3};
 
+			/** @brief Visual components for background/terrain/water. @bug Should be refactored. */
 			std::array< std::unique_ptr< Component::Visual >, 4 > m_sceneVisualComponents{nullptr, nullptr, nullptr, nullptr};
 			/** @brief The orientation compass. Deliberately NOT a scene entity: it is drawn after
 			 * the post-process chain so the camera exposure cannot touch its colors. */

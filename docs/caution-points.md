@@ -7636,3 +7636,10 @@ triangle mesh (a floor, a panel) has a box of zero thickness along its normal: b
 refused — not inserted in the physics octree, never overlapping anything. `TriangleMeshCollisionModel` thickens its
 boxes by 1 mm (`BoundsPadding`), and the base `TriangleMesh` keeps its node bounds as plain min / max vectors.
 **Rule:** never build an `AACuboid` from data that may be flat (a plane, an axis-aligned triangle) without a padding.
+
+### Third-party sources compiled inside the engine target are not judged by the paranoid set (Oct 2026)
+
+Dear ImGui's `.cpp` files are compiled inside the engine target, so they received the cascade's `-Werror` paranoid
+warning set (≈ 6 000 findings in upstream code). `cmake/SetupPreSourcesImGui.cmake` gives them `-w` (`/w` on MSVC) per
+source file — the source-file counterpart of a SYSTEM include. **Rule:** any vendored source compiled into a cascade
+target gets the same per-file treatment; the cascade's own code that calls it stays fully checked.

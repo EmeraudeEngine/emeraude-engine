@@ -76,7 +76,7 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Constructs a render to 2D texture.
 			 * @param name The name of the texture for debugging.
 			 * @param width The width of the texture.
-			 * @param width The height of the texture.
+			 * @param height The height of the texture.
 			 * @param colorCount The number of color channels desired.
 			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
@@ -129,7 +129,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * Compute::ProbeConvolver (roughness k/(mips-1), the sky IBL chain semantics).
 			 * Materials then sample `textureLod(probe, R, roughness x (mips-1))`.
 			 * Ignored for non-cubemap targets.
-			 * @return void
 			 */
 			void
 			enableGGXConvolution () noexcept

@@ -232,8 +232,7 @@ namespace EmEn::Vulkan
 			 * @param framebuffer A reference to a framebuffer.
 			 * @param renderArea The render area.
 			 * @param clearValues The framebuffer clear values.
-			 * @param subpassContents
-			 * @return void
+			 * @param subpassContents How the commands of the first subpass are provided (inline or secondary command buffers).
 			 */
 			void beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, 2 > & clearValues, VkSubpassContents subpassContents) const noexcept;
 
@@ -243,8 +242,7 @@ namespace EmEn::Vulkan
 			 * @param framebuffer A reference to a framebuffer.
 			 * @param renderArea The render area.
 			 * @param clearValues The framebuffer clear values.
-			 * @param subpassContents
-			 * @return void
+			 * @param subpassContents How the commands of the first subpass are provided (inline or secondary command buffers).
 			 */
 			template< size_t array_size_t >
 			void
@@ -271,8 +269,7 @@ namespace EmEn::Vulkan
 			 * @param framebuffer A reference to a framebuffer.
 			 * @param renderArea The render area.
 			 * @param clearValues The framebuffer clear values, one per attachment.
-			 * @param subpassContents
-			 * @return void
+			 * @param subpassContents How the commands of the first subpass are provided (inline or secondary command buffers).
 			 */
 			void
 			beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, std::span< const VkClearValue > clearValues, VkSubpassContents subpassContents) const noexcept
@@ -291,7 +288,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Registers a render pass end.
-			 * @return void
 			 */
 			void endRenderPass () const noexcept;
 
@@ -301,7 +297,6 @@ namespace EmEn::Vulkan
 			 * @param dstOffset The byte offset into the buffer to execute updating, and must be a multiple of 4.
 			 * @param dataSize The number of bytes to update, and must be a multiple of 4.
 			 * @param pData A pointer to the source data for the buffer processLogics, and must be at least dataSize bytes in size.
-			 * @return void
 			 */
 			void update (const Buffer & buffer, VkDeviceSize dstOffset, VkDeviceSize dataSize, const void * pData) const noexcept;
 
@@ -311,47 +306,42 @@ namespace EmEn::Vulkan
 			 * @param dstOffset The byte offset into the buffer at which to execute filling, and must be a multiple of 4.
 			 * @param size The number of bytes to fill, and must be either a multiple of 4 or VK_WHOLE_SIZE to fill the range from offset to the end of the buffer. If VK_WHOLE_SIZE is used and the remaining size of the buffer is not a multiple of 4, then the nearest smaller multiple is used.
 			 * @param data The 4-byte word written repeatedly to the buffer to fill size bytes of data. The data word is written to memory according to the host endianness.
-			 * @return void
 			 */
 			void fill (const Buffer & buffer, VkDeviceSize dstOffset, VkDeviceSize size, uint32_t data) const noexcept;
 
 			/**
 			 * @brief Registers a buffer to buffer copy command.
-			 * @deprecated This must be done by the transfer manager!
+			 * @note A recording primitive: resource uploads go through Vulkan::TransferManager, which records with it.
 			 * @param src A reference to the buffer.
 			 * @param dst A reference to the buffer.
 			 * @param srcOffset The source buffer start for reading. Default 0.
 			 * @param dstOffset The destination buffer start for writing. Default 0.
 			 * @param size The size of a copy. Default the whole source buffer.
-			 * @return void
 			 */
 			void copy (const Buffer & src, const Buffer & dst, VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept;
 
 			/**
 			 * @brief Registers an image to image copy command.
-			 * @deprecated This must be done by the transfer manager!
+			 * @note A recording primitive: resource uploads go through Vulkan::TransferManager, which records with it.
 			 * @param src A reference to the image.
 			 * @param dst A reference to the image.
-			 * @return void
 			 */
 			void copy (const Image & src, const Image & dst) const noexcept;
 
 			/**
 			 * @brief Registers a buffer to image copy command.
-			 * @deprecated This must be done by the transfer manager!
+			 * @note A recording primitive: resource uploads go through Vulkan::TransferManager, which records with it.
 			 * @param src A reference to the buffer.
 			 * @param dst A reference to the image.
 			 * @param srcOffset The source buffer start for reading. Default 0.
-			 * @return void
 			 */
 			void copy (const Buffer & src, const Image & dst, VkDeviceSize srcOffset = 0) const noexcept;
 
 			/**
 			 * @brief Registers an image to a buffer copy command.
-			 * @deprecated This must be done by the transfer manager!
+			 * @note A recording primitive: resource uploads go through Vulkan::TransferManager, which records with it.
 			 * @param src A reference to the image.
 			 * @param dst A reference to the buffer.
-			 * @return void
 			 */
 			void copy (const Image & src, const Buffer & dst) const noexcept;
 
@@ -361,7 +351,6 @@ namespace EmEn::Vulkan
 			 * @param srcLayout The layout the image is in when the copy executes (TRANSFER_SRC_OPTIMAL or GENERAL).
 			 * @param dst A reference to the buffer, at least width × height × texel size bytes.
 			 * @param aspectMask The image aspect to copy. Default color.
-			 * @return void
 			 */
 			void copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) const noexcept;
 
@@ -373,16 +362,14 @@ namespace EmEn::Vulkan
 			 * @param srcLayout The layout the image is in when the copy executes (TRANSFER_SRC_OPTIMAL or GENERAL).
 			 * @param dst A reference to the buffer, large enough for the region.
 			 * @param region A reference to the copy region.
-			 * @return void
 			 */
 			void copyImageToBuffer (const Image & src, VkImageLayout srcLayout, const Buffer & dst, const VkBufferImageCopy & region) const noexcept;
 
 			/**
 			 * @brief Registers an image to image blit command.
-			 * @deprecated This must be done by the transfer manager!
+			 * @note A recording primitive: resource uploads go through Vulkan::TransferManager, which records with it.
 			 * @param src A reference to the image.
 			 * @param dst A reference to the buffer.
-			 * @return void
 			 */
 			void blit (const Image & src, const Image & dst) const noexcept;
 
@@ -393,7 +380,6 @@ namespace EmEn::Vulkan
 			 * @param dst A reference to the destination image.
 			 * @param dstLayout The current layout of the destination image.
 			 * @param filter The filter to apply during the blit. Default linear.
-			 * @return void
 			 */
 			void blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkFilter filter = VK_FILTER_LINEAR) const noexcept;
 
@@ -408,7 +394,6 @@ namespace EmEn::Vulkan
 			 * @param dstLayout The current layout of the destination image subresource.
 			 * @param region A reference to the blit region.
 			 * @param filter The filter to apply during the blit. Default linear.
-			 * @return void
 			 */
 			void blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, const VkImageBlit & region, VkFilter filter = VK_FILTER_LINEAR) const noexcept;
 
@@ -422,7 +407,6 @@ namespace EmEn::Vulkan
 			 * @param dst A reference to the destination image.
 			 * @param dstLayout The current layout of the destination image.
 			 * @param aspectMask The image aspect to copy (e.g. VK_IMAGE_ASPECT_DEPTH_BIT).
-			 * @return void
 			 */
 			void copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) const noexcept;
 
@@ -436,7 +420,6 @@ namespace EmEn::Vulkan
 			 * @param dst A reference to the destination image.
 			 * @param dstLayout The current layout of the destination image.
 			 * @param region A reference to the copy region.
-			 * @return void
 			 */
 			void copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, const VkImageCopy & region) const noexcept;
 
@@ -445,7 +428,6 @@ namespace EmEn::Vulkan
 			 * @param image A reference to a command buffer.
 			 * @param imageLayout Specifies the current layout of the image subresource ranges to be cleared, and must be VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR, VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
 			 * @param color A reference to a color. Default black.
-			 * @return void
 			 */
 			void clearColor (const Image & image, VkImageLayout imageLayout, const Base::PixelFactory::Color< float > & color = {}) const noexcept;
 
@@ -453,7 +435,6 @@ namespace EmEn::Vulkan
 			 * @brief Clears the depth/stencil part of the image.
 			 * @param image A reference to a command buffer.
 			 * @param imageLayout Specifies the current layout of the image subresource ranges to be cleared, and must be VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR, VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
-			 * @return void
 			 */
 			void clearDepthStencil (const Image & image, VkImageLayout imageLayout) const noexcept;
 
@@ -464,8 +445,7 @@ namespace EmEn::Vulkan
 			 * @param imageMemoryBarriers A span of image memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (std::span< const VkMemoryBarrier > memoryBarriers, std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, std::span< const VkImageMemoryBarrier > imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -474,8 +454,7 @@ namespace EmEn::Vulkan
 			 * @param memoryBarriers A span of memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (std::span< const VkMemoryBarrier > memoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -484,8 +463,7 @@ namespace EmEn::Vulkan
 			 * @param bufferMemoryBarriers A span of buffer memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -494,8 +472,7 @@ namespace EmEn::Vulkan
 			 * @param imageMemoryBarriers A span of image memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (std::span< const VkImageMemoryBarrier > imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -504,8 +481,7 @@ namespace EmEn::Vulkan
 			 * @param memoryBarrier A reference to the memory barrier.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (const Sync::MemoryBarrier & memoryBarrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -514,8 +490,7 @@ namespace EmEn::Vulkan
 			 * @param bufferMemoryBarrier A reference to a buffer memory barrier.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (const Sync::BufferMemoryBarrier & bufferMemoryBarrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -524,8 +499,7 @@ namespace EmEn::Vulkan
 			 * @param imageMemoryBarrier A reference to an image memory barrier.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
-			 * @param dependencyFlags
-			 * @return void
+			 * @param dependencyFlags The dependency flags. Default none.
 			 */
 			void pipelineBarrier (const Sync::ImageMemoryBarrier & imageMemoryBarrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
@@ -533,7 +507,6 @@ namespace EmEn::Vulkan
 			 * @brief Sets the event status in a command buffer.
 			 * @param event A reference to a command buffer smart pointer.
 			 * @param flags A pipeline stage flags.
-			 * @return void
 			 */
 			void setEvent (const Sync::Event & event, VkPipelineStageFlags flags) const noexcept;
 
@@ -541,7 +514,6 @@ namespace EmEn::Vulkan
 			 * @brief Resets the event status in a command buffer.
 			 * @param event A reference to a command buffer smart pointer.
 			 * @param flags A pipeline stage flags.
-			 * @return void
 			 */
 			void resetEvent (const Sync::Event & event, VkPipelineStageFlags flags) const noexcept;
 
@@ -553,21 +525,18 @@ namespace EmEn::Vulkan
 			 * @param memoryBarriers A span of memory barriers. Default empty.
 			 * @param bufferMemoryBarriers A span of buffer memory barriers. Default empty.
 			 * @param imageMemoryBarriers A span of image memory barriers. Default empty.
-			 * @return void
 			 */
 			void waitEvents (std::span< const VkEvent > events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, std::span< const VkMemoryBarrier > memoryBarriers = {}, std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers = {}, std::span< const VkImageMemoryBarrier > imageMemoryBarriers = {}) const noexcept;
 
 			/**
 			 * @brief Binds a graphics pipeline.
 			 * @param graphicsPipeline A reference to a graphics pipeline.
-			 * @return void
 			 */
 			void bind (const GraphicsPipeline & graphicsPipeline) const noexcept;
 
 			/**
 			 * @brief Binds a compute pipeline.
 			 * @param computePipeline A reference to a compute pipeline.
-			 * @return void
 			 */
 			void bind (const ComputePipeline & computePipeline) const noexcept;
 
@@ -576,7 +545,6 @@ namespace EmEn::Vulkan
 			 * @param groupCountX Number of workgroups in X.
 			 * @param groupCountY Number of workgroups in Y.
 			 * @param groupCountZ Number of workgroups in Z.
-			 * @return void
 			 */
 			void dispatch (uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const noexcept;
 
@@ -584,7 +552,6 @@ namespace EmEn::Vulkan
 			 * @brief Binds a single vertex buffer objects.
 			 * @param vertexBufferObject A reference to a VBO.
 			 * @param offset The starting point to read the VBO. Default 0.
-			 * @return void
 			 */
 			void bind (const VertexBufferObject & vertexBufferObject, VkDeviceSize offset = 0) const noexcept;
 
@@ -593,7 +560,6 @@ namespace EmEn::Vulkan
 			 * @param indexBufferObject A reference to an IBO.
 			 * @param offset The starting point to read the IBO. Default 0.
 			 * @param indexType The data type of index. Default unsigned int.
-			 * @return void
 			 */
 			void bind (const IndexBufferObject & indexBufferObject, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32) const noexcept;
 
@@ -603,7 +569,6 @@ namespace EmEn::Vulkan
 			 * @param pipelineLayout A reference to a pipeline layout.
 			 * @param bindPoint The target binding point in the pipeline.
 			 * @param firstSet The first set.
-			 * @return void
 			 */
 			void bind (const DescriptorSet & descriptorSet, const PipelineLayout & pipelineLayout, VkPipelineBindPoint bindPoint, uint32_t firstSet) const noexcept;
 
@@ -614,7 +579,6 @@ namespace EmEn::Vulkan
 			 * @param bindPoint The target binding point in the pipeline.
 			 * @param firstSet The first set.
 			 * @param dynamicOffset ??? TODO: Define it
-			 * @return void
 			 */
 			void bind (const DescriptorSet & descriptorSet, const PipelineLayout & pipelineLayout, VkPipelineBindPoint bindPoint, uint32_t firstSet, uint32_t dynamicOffset) const noexcept;
 
@@ -622,7 +586,6 @@ namespace EmEn::Vulkan
 			 * @brief Binds a single geometry.
 			 * @param geometry A reference to the geometry.
 			 * @param subGeometryIndex A sub geometry layer index being drawn.
-			 * @return void
 			 */
 			void bind (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex) const noexcept;
 
@@ -632,14 +595,12 @@ namespace EmEn::Vulkan
 			 * @param modelVBO A reference to a vertex buffer object.
 			 * @param subGeometryIndex A sub geometry layer index being drawn.
 			 * @param modelVBOOffset The offset in the model vertex buffer object.
-			 * @return void
 			 */
 			void bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t subGeometryIndex, VkDeviceSize modelVBOOffset) const noexcept;
 
 			/**
 			 * @brief Registers a draw command.
 			 * @param geometry A reference to the geometry.
-			 * @return void
 			 */
 			void draw (const Graphics::Geometry::Interface & geometry) const noexcept;
 
@@ -647,7 +608,6 @@ namespace EmEn::Vulkan
 			 * @brief Registers a draw command.
 			 * @param geometry A reference to the geometry.
 			 * @param instanceCount The number of instances.
-			 * @return void
 			 */
 			void draw (const Graphics::Geometry::Interface & geometry, uint32_t instanceCount) const noexcept;
 
@@ -656,7 +616,6 @@ namespace EmEn::Vulkan
 			 * @param geometry A reference to the geometry.
 			 * @param subGeometryIndex A sub geometry layer index being drawn.
 			 * @param instanceCount The number of instances.
-			 * @return void
 			 */
 			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept;
 
@@ -669,7 +628,6 @@ namespace EmEn::Vulkan
 			 * @param geometry A reference to the geometry.
 			 * @param firstInstance The firstInstance draw parameter (InstanceTransforms slot).
 			 * @param instanceCount The number of instances.
-			 * @return void
 			 */
 			void drawWithFirstInstance (const Graphics::Geometry::Interface & geometry, uint32_t firstInstance, uint32_t instanceCount) const noexcept;
 
@@ -679,7 +637,6 @@ namespace EmEn::Vulkan
 			 * @param firstInstance The firstInstance draw parameter (InstanceTransforms slot).
 			 * @param subGeometryIndex The sub-geometry index (layer or animation frame).
 			 * @param instanceCount The number of instances.
-			 * @return void
 			 */
 			void drawWithFirstInstance (const Graphics::Geometry::Interface & geometry, uint32_t firstInstance, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept;
 
@@ -688,7 +645,6 @@ namespace EmEn::Vulkan
 			 * @param indexOffset The starting index in the index buffer.
 			 * @param indexCount The number of indices to draw.
 			 * @param instanceCount The number of instances.
-			 * @return void
 			 */
 			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount, uint32_t firstInstance = 0) const noexcept;
 
@@ -699,7 +655,6 @@ namespace EmEn::Vulkan
 			 * @param instanceCount The number of instances.
 			 * @param firstVertex The index of the first vertex. Default 0.
 			 * @param firstInstance The index of the first instance. Default 0.
-			 * @return void
 			 */
 			void draw (uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) const noexcept;
 
@@ -726,7 +681,6 @@ namespace EmEn::Vulkan
 			 * @param groupCountX Workgroups on X.
 			 * @param groupCountY Workgroups on Y. Default 1.
 			 * @param groupCountZ Workgroups on Z. Default 1.
-			 * @return void
 			 */
 			void drawMeshTasks (uint32_t groupCountX, uint32_t groupCountY = 1, uint32_t groupCountZ = 1) const noexcept;
 
@@ -737,7 +691,6 @@ namespace EmEn::Vulkan
 			 * @param offset Byte offset of the first command.
 			 * @param drawCount Number of draws.
 			 * @param stride Byte stride between commands.
-			 * @return void
 			 */
 			void drawMeshTasksIndirect (VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) const noexcept;
 
@@ -751,7 +704,6 @@ namespace EmEn::Vulkan
 			 * @param countBufferOffset Byte offset of the count.
 			 * @param maxDrawCount The ceiling on the count.
 			 * @param stride Byte stride between commands.
-			 * @return void
 			 */
 			void drawMeshTasksIndirectCount (VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, uint32_t maxDrawCount, uint32_t stride) const noexcept;
 

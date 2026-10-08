@@ -99,7 +99,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Sets the retirement delay from the renderer frames-in-flight count.
 			 * @param framesInFlight The number of frames in flight.
-			 * @return void
 			 */
 			void
 			setFramesInFlight (uint32_t framesInFlight) noexcept
@@ -112,7 +111,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Retires an owning pointer; the object is destroyed after the delay.
 			 * @param object The last (or a keep-alive) reference to the object.
-			 * @return void
 			 */
 			void
 			retireObject (std::shared_ptr< void > object) noexcept
@@ -136,7 +134,6 @@ namespace EmEn::Vulkan
 			 * @brief Retires an owning unique pointer; the object is destroyed after the delay.
 			 * @tparam object_t The concrete object type.
 			 * @param object The unique pointer to retire.
-			 * @return void
 			 */
 			template< typename object_t >
 			void
@@ -152,7 +149,6 @@ namespace EmEn::Vulkan
 			 * plain destruction. The callable must be copyable: capture the
 			 * object through a std::shared_ptr.
 			 * @param action The destruction action.
-			 * @return void
 			 */
 			void
 			retireAction (std::function< void () > action) noexcept
@@ -180,7 +176,6 @@ namespace EmEn::Vulkan
 			 * flush() runs the action without asking: its caller guarantees an idle device.
 			 * @param isReady The condition, true once nothing on the GPU uses the object any more.
 			 * @param action The destruction action.
-			 * @return void
 			 */
 			void
 			retireActionWhen (std::function< bool () > isReady, std::function< void () > action) noexcept
@@ -205,7 +200,6 @@ namespace EmEn::Vulkan
 			 * @note Call once per frame from the render thread, right after the
 			 * frame fence wait: at that point, entries retired framesInFlight
 			 * ticks ago are no longer referenced by any pending command buffer.
-			 * @return void
 			 */
 			void
 			tick () noexcept
@@ -254,7 +248,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destroys every pending entry immediately.
 			 * @warning The caller must guarantee the device is idle (shutdown, resize).
-			 * @return void
 			 */
 			void
 			flush () noexcept

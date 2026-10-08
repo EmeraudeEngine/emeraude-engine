@@ -100,7 +100,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets the alpha is premultiplied for this screen.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setPremultipliedAlpha (bool state) noexcept
@@ -123,7 +122,6 @@ namespace EmEn::Overlay
 			 * @brief Sets the source format to BGRA for this screen.
 			 * @note By default, the source format is RGBA. CEF provides BGRA pixels.
 			 * @param state The state. True for BGRA, false for RGBA.
-			 * @return void
 			 */
 			void
 			useBGRAFormat (bool state) noexcept
@@ -145,7 +143,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets the UI screen visibility.
 			 * @param state The state
-			 * @return void
 			 */
 			void
 			setVisibility (bool state) noexcept
@@ -165,7 +162,6 @@ namespace EmEn::Overlay
 			 * @details Set by the Overlay::Manager; propagated to every surface created afterwards.
 			 * Used by the on-demand rendering mode to wake the rendering thread; empty in continuous mode.
 			 * @param requester A callable invoked on every visual mutation, or an empty function to detach.
-			 * @return void
 			 */
 			void
 			setRedrawRequester (std::function< void () > requester) noexcept
@@ -187,7 +183,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Enables the listening of keyboard events.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableKeyboardListening (bool state) noexcept
@@ -209,7 +204,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Enables the listening of pointer events.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enablePointerListening (bool state) noexcept
@@ -304,7 +298,6 @@ namespace EmEn::Overlay
 			 * @param commandBuffer A reference to a command buffer.
 			 * @param pipelineLayout A reference to the overlay manager pipeline layout.
 			 * @param surfaceGeometry A reference to geometry.
-			 * @return void
 			 */
 			void render (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Graphics::Geometry::IndexedVertexResource & surfaceGeometry) const noexcept;
 
@@ -317,7 +310,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Deletes all surfaces.
-			 * @return void
 			 */
 			void clearSurfaces () noexcept;
 
@@ -438,7 +430,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Disables a previous input exclusive surface.
-			 * @return void
 			 */
 			void
 			disableInputExclusiveSurface () noexcept
@@ -490,7 +481,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Disables a previous pointer-move tap surface.
-			 * @return void
 			 */
 			void
 			disablePointerMoveTapSurface () noexcept
@@ -595,7 +585,6 @@ namespace EmEn::Overlay
 			 * move above/below). Each surface receives a depth derived from its index, which
 			 * the model matrix uses for the Z translation. The user never sees these values.
 			 * @note The caller MUST hold m_surfacesMutex when invoking this method.
-			 * @return void
 			 */
 			void recomputeDepths () const noexcept;
 

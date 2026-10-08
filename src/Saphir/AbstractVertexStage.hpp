@@ -170,7 +170,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Sets the vertex shader uses instancing.
-			 * @return void
 			 */
 			void
 			enableInstancing () noexcept
@@ -191,7 +190,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Enables the need of advanced matrices (for lighting or reflection).
-			 * @return void
 			 */
 			void
 			enableAdvancedMatrices () noexcept
@@ -212,7 +210,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Enables bill boarding render.
-			 * @return void
 			 */
 			void
 			enableBillBoarding () noexcept
@@ -234,7 +231,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Makes the bill boards UPRIGHT: they turn toward the camera around the world's vertical only
 			 * (Renderable::Abstract::isUprightSprite()). Meaningful with enableBillBoarding().
-			 * @return void
 			 */
 			void
 			enableUprightBillBoarding () noexcept
@@ -255,7 +251,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Enables cubemap rendering mode (multiview with gl_ViewIndex).
-			 * @return void
 			 */
 			void
 			enableCubemapMode () noexcept
@@ -277,7 +272,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Enables CSM (Cascaded Shadow Map) rendering mode.
 			 * @note CSM mode selects the cascade view-projection matrix with the cascade index pushed by its pass (one single-view pass per cascade).
-			 * @return void
 			 */
 			void
 			enableCSMMode () noexcept
@@ -298,7 +292,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Enables Multi-Draw Indirect mode.
-			 * @return void
 			 */
 			void
 			enableMDI () noexcept
@@ -330,7 +323,6 @@ namespace EmEn::Saphir
 			 * indexed by gl_InstanceIndex (== the firstInstance draw parameter — this path
 			 * always draws with instanceCount = 1, so no shaderDrawParameters feature is
 			 * required, contrary to gl_BaseInstance).
-			 * @return void
 			 */
 			void
 			enableInstanceTransforms () noexcept
@@ -355,7 +347,6 @@ namespace EmEn::Saphir
 			 * @note The infinity view drops the camera translation. Mixing it with the regular
 			 * previous view-projection yields a velocity wrong by that translation, which does
 			 * NOT cancel on a static camera (it is a structural, not a temporal, mismatch).
-			 * @return void
 			 */
 			void
 			enableInfinityView () noexcept
@@ -402,7 +393,6 @@ namespace EmEn::Saphir
 			 * the previous model matrix (+4 vec4 attribute slots after the normal matrix).
 			 * @note Affects the vertex buffer format stride even when the shader does not
 			 * consume the attribute (jumped over).
-			 * @return void
 			 */
 			void
 			enableInstanceMotionHistory () noexcept
@@ -447,7 +437,6 @@ namespace EmEn::Saphir
 			 * header.
 			 * @warning ⚠️ It needs the instance transforms: without them the SSBO holding the wind
 			 * state is not even declared, and the request is ignored.
-			 * @return void
 			 */
 			void
 			enableVegetationWind () noexcept
@@ -470,7 +459,6 @@ namespace EmEn::Saphir
 			 * @brief Enables the leaf FLUTTER on top of the wind: this stage draws the renderable's foliage layer.
 			 * @note The flutter is weighted by the card's V (1 at the petiole, 0 at the tip: TreeSkinner's leaf cards), so
 			 * it never pulls a petiole off its twig; its phase comes from the position. Only meaningful with the wind.
-			 * @return void
 			 */
 			void
 			enableVegetationFlutter () noexcept
@@ -502,7 +490,6 @@ namespace EmEn::Saphir
 			 * neighbour reads.
 			 * @warning ⚠️ The patch's object space IS the world (a heightfield answers ground levels in
 			 * world coordinates): the node origin and the camera are pushed in world coordinates.
-			 * @return void
 			 */
 			void
 			enableHeightfieldSurface () noexcept
@@ -523,7 +510,6 @@ namespace EmEn::Saphir
 			 * @note Exclusive with skinning, the vegetation wind and a heightfield surface.
 			 * @param boundsExpression A GLSL vec4 expression: the bounding sphere (centre.xyz, radius), object space.
 			 * @param gridExpression A GLSL vec4 expression whose x is the number of views per side.
-			 * @return void
 			 */
 			void
 			enableImposterBillboarding (std::string boundsExpression, std::string gridExpression) noexcept
@@ -556,7 +542,6 @@ namespace EmEn::Saphir
 			 * ribbon; the instance-transforms SSBO path only (never instanced, MDI, cubemap nor CSM).
 			 * @param shapeExpression A GLSL vec4 expression: (half width, arc amplitude, arc frequency, octaves).
 			 * @param motionExpression A GLSL vec4 expression: (seed, re-strike rate in Hz, drift, unused).
-			 * @return void
 			 */
 			void
 			enableBeamRibbon (std::string shapeExpression, std::string motionExpression) noexcept
@@ -586,7 +571,6 @@ namespace EmEn::Saphir
 			 * @param styleExpression A GLSL vec4 expression: (half width, 1 if in pixels, 1 if round, miter limit).
 			 * @param placementExpression A GLSL vec4 expression: (depth offset toward the eye in world units, the up vector
 			 * of a flat ribbon in the entity's space — zero = facing the eye).
-			 * @return void
 			 */
 			void
 			enablePathRibbon (std::string styleExpression, std::string placementExpression) noexcept
@@ -625,7 +609,6 @@ namespace EmEn::Saphir
 			 * hfBinormal / hfTextureCoordinates, the same per-pixel frame — fed with the UNDISPLACED lattice XZ, which is
 			 * what the cascades are indexed by.
 			 * @note Implies enableHeightfieldSurface().
-			 * @return void
 			 */
 			void
 			enableOceanSurface () noexcept
@@ -652,7 +635,6 @@ namespace EmEn::Saphir
 			 * emitted, and the stage takes no heightfield push constant.
 			 * @note Exclusive with enableHeightfieldSurface(). With enableHeightfieldPixelFrame(), the per-pixel
 			 * frame outputs are written from the stage's `hfPosition`.
-			 * @return void
 			 */
 			void
 			enableHeightfieldBase () noexcept
@@ -688,7 +670,6 @@ namespace EmEn::Saphir
 			 * world, and the normal matrix, object to view).
 			 * @note Only with enableHeightfieldSurface() or enableHeightfieldBase(). The fragment side is
 			 * FragmentShader::enableHeightfieldPixelFrame().
-			 * @return void
 			 */
 			void
 			enableHeightfieldPixelFrame () noexcept
@@ -709,7 +690,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Enables skeletal skinning in this vertex shader.
-			 * @return void
 			 */
 			void
 			enableSkinning () noexcept
@@ -761,7 +741,6 @@ namespace EmEn::Saphir
 			 * @note `gl_Position` for a vertex shader (the default); a mesh shader writes a local it copies into
 			 * `gl_MeshVerticesEXT[i].gl_Position`, since a built-in of that name does not exist there.
 			 * @param variable A static string.
-			 * @return void
 			 */
 			void
 			setPositionOutput (const char * variable) noexcept
@@ -774,7 +753,6 @@ namespace EmEn::Saphir
 			 * @note `gl_InstanceIndex` for a vertex shader (the default, == firstInstance); a mesh shader has no
 			 * instance index and supplies its own (a push constant).
 			 * @param expression A static string.
-			 * @return void
 			 */
 			void
 			setInstanceIndexExpression (const char * expression) noexcept

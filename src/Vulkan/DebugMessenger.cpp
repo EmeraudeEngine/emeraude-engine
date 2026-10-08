@@ -157,7 +157,7 @@ namespace EmEn::Vulkan
 				output << "[ERROR]";
 				break;
 
-			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT :
+			/* NOTE: A Vulkan enumeration: the driver may send a value this header does not know (MAX_ENUM included). */
 			default:
 				isError = true;
 

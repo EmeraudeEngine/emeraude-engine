@@ -92,7 +92,7 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Returns the state of the pointer button.
-			 * @param button
+			 * @param button The mouse button.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -107,7 +107,7 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Returns the state of the pointer button.
-			 * @param button
+			 * @param button The mouse button.
 			 * @return bool
 			 */
 			[[nodiscard]]

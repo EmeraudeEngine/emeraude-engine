@@ -201,11 +201,10 @@ namespace EmEn::Graphics
 			 * applies a jitter; the default implementation ignores it (shadow maps, cubemaps and
 			 * render-to-texture targets must NEVER be jittered).
 			 * @param ndcOffset The jitter offset in normalized device coordinates.
-			 * @return void
 			 */
 			virtual
 			void
-			setProjectionJitter (const Base::Math::Vector< 2, float > & /*ndcOffset*/) noexcept
+			setProjectionJitter ([[maybe_unused]] const Base::Math::Vector< 2, float > & ndcOffset) noexcept
 			{
 				/* Default: this view does not support projection jitter. */
 			}
@@ -213,7 +212,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Disables the projection jitter (temporal anti-aliasing inactive).
 			 * @note Restores the clean projection path at zero per-draw cost. Default implementation is a no-op.
-			 * @return void
 			 */
 			virtual
 			void
@@ -311,7 +309,6 @@ namespace EmEn::Graphics
 			 * @param height The height of the viewport.
 			 * @param distance The maximal distance of the viewport for perspective calculation.
 			 * @param fov The field of view in degrees.
-			 * @return void
 			 */
 			virtual void updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept = 0;
 
@@ -322,7 +319,6 @@ namespace EmEn::Graphics
 			 * @param height The height of the viewport.
 			 * @param nearDistance The minimal distance of the viewport for orthographic calculation.
 			 * @param farDistance The maximal distance of the viewport for perspective calculation.
-			 * @return void
 			 */
 			virtual void updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept = 0;
 
@@ -330,7 +326,6 @@ namespace EmEn::Graphics
 			 * @brief Updates the view coordinates. This should be called everytime the point of view moves.
 			 * @param coordinates The absolute coordinates of the camera responsible for this view.
 			 * @param velocity A vector representing a velocity applied to the camera for special effect.
-			 * @return void
 			 */
 			virtual void updateViewCoordinates (const Base::Math::CartesianFrame< float > & coordinates, const Base::Math::Vector< 3, float > & velocity) noexcept = 0;
 
@@ -347,7 +342,6 @@ namespace EmEn::Graphics
 			 * counted twice on every diffuse surface. It scales the DIFFUSE leg alone: the
 			 * specular IBL (prefiltered reflections, multi-scatter compensation) and the
 			 * scene's scalar ambient are untouched. See Scene::updateIBLDiffuseOwnership().
-			 * @return void
 			 */
 			virtual void updateAmbientLightProperties (const Base::Math::Vector< 3, float > & chromaticity, float intensity, float environmentLuminance, float IBLDiffuseWeight) noexcept = 0;
 
@@ -373,7 +367,6 @@ namespace EmEn::Graphics
 			 * @brief Copies local data for a stable render.
 			 * @note This must be done at the end of the logic loop.
 			 * @param writeStateIndex The render state-free index to write data.
-			 * @return void
 			 */
 			virtual void publishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
 
@@ -386,11 +379,10 @@ namespace EmEn::Graphics
 			 * triple buffer (publishStateForRendering, RenderStateSlotCount): state indices track logic ticks,
 			 * NOT rendered frames. Default implementation keeps no history.
 			 * @param readStateIndex The render state-valid index the frame was rendered with.
-			 * @return void
 			 */
 			virtual
 			void
-			archiveStateAfterRendering (uint32_t /*readStateIndex*/) noexcept
+			archiveStateAfterRendering ([[maybe_unused]] uint32_t readStateIndex) noexcept
 			{
 				/* Default: this view keeps no frame history. */
 			}
@@ -416,7 +408,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys buffer in the video memory.
-			 * @return void
 			 */
 			virtual void destroy () noexcept = 0;
 
@@ -456,7 +447,6 @@ namespace EmEn::Graphics
 			 * least. Anything that knows its subject's scale should say so.
 			 * @note Takes effect on the next projection update.
 			 * @param distance The distance in metres. Values <= 0 are ignored.
-			 * @return void
 			 */
 			void
 			setNearestObjectDistance (float distance) noexcept

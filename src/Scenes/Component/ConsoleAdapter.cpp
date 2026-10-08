@@ -153,7 +153,6 @@ namespace EmEn::Scenes::Component
 		 * name, up to its full path. The function returns false to stop.
 		 * @param path The entity path.
 		 * @param process The function.
-		 * @return void
 		 */
 		template< typename function_t >
 		void

@@ -150,7 +150,6 @@ namespace EmEn::Graphics
 			 * @param pushConstants The dispatch description.
 			 * @param bonesDescriptorSet The instance's per-frame skinning matrices set
 			 * (from RenderableInstance::Abstract::flushSkinningMatrices()).
-			 * @return void
 			 */
 			void recordDispatch (VkCommandBuffer cmdBuf, const PushConstants & pushConstants, VkDescriptorSet bonesDescriptorSet) const noexcept;
 

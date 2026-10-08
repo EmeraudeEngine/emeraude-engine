@@ -305,7 +305,6 @@ namespace EmEn::Resources
 			 * ("Core/Resources/LocalDataReleaseDelay") and lease-free, then gives the memory back to the system when a
 			 * release burst ends (docs/subsystems/resources/03 § CPU Copies). One pass at a time.
 			 * @note Logic thread; the pass itself never runs there.
-			 * @return void
 			 */
 			void releaseIdleLocalData () noexcept;
 
@@ -322,7 +321,6 @@ namespace EmEn::Resources
 			/**
 			 * @brief One release pass (releaseIdleLocalData()'s pool worker).
 			 * @param now The time the pass was scheduled.
-			 * @return void
 			 */
 			void runLocalDataReleasePass (std::chrono::steady_clock::time_point now) noexcept;
 
@@ -330,7 +328,6 @@ namespace EmEn::Resources
 			 * @brief Gives the memory freed by a CPU-copy release back to the system where the allocator keeps it
 			 * (glibc: malloc_trim(), 1-60 ms measured, holding the arena locks). Nothing elsewhere. Never on the logic
 			 * loop.
-			 * @return void
 			 */
 			static void returnFreedMemoryToSystem () noexcept;
 
@@ -597,13 +594,11 @@ namespace EmEn::Resources
 			/**
 			 * @brief Reads the sharing and peer settings: the peer's index is merged, the server started.
 			 * @note Called by onInitialize() with m_localStoresAccess held, before the containers exist.
-			 * @return void
 			 */
 			void connectPeer () noexcept;
 
 			/**
 			 * @brief Starts the sharing server when 'Core/Resources/Sharing/Enabled' says so.
-			 * @return void
 			 */
 			void startSharingServer () noexcept;
 

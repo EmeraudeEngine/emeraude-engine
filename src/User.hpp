@@ -71,7 +71,6 @@ namespace EmEn
 			/**
 			 * @brief Sets a user identification.
 			 * @param identifier An integer like ID from external platform.
-			 * @return void
 			 */
 			void
 			setUserID (uint64_t identifier) noexcept
@@ -82,7 +81,6 @@ namespace EmEn
 			/**
 			 * @brief Sets the username.
 			 * @param username A reference to a string.
-			 * @return void
 			 */
 			void
 			setUsername (const std::string & username) noexcept

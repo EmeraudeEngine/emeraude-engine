@@ -92,7 +92,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the state of the modifier.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enable (bool state) noexcept
@@ -243,7 +242,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Removes the influence area.
-			 * @return void
 			 */
 			void
 			removeInfluenceArea () noexcept

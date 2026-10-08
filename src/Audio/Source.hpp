@@ -121,14 +121,12 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the source position.
 			 * @param position A reference to a vector.
-			 * @return void
 			 */
 			void setPosition (const Base::Math::Vector< 3, float > & position) noexcept;
 
 			/**
 			 * @brief Sets the source position.
 			 * @param position A reference to a vector.
-			 * @return void
 			 */
 			void setPosition (const Base::Math::Vector< 4, float > & position) noexcept;
 
@@ -137,7 +135,6 @@ namespace EmEn::Audio
 			 * @param x The X-axis position value.
 			 * @param y The Y-axis position value.
 			 * @param z The Z-axis position value.
-			 * @return void
 			 */
 			void setPosition (float x, float y, float z) noexcept;
 
@@ -151,14 +148,12 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the direction of the sound emission source.
 			 * @param direction A reference to a vector.
-			 * @return void
 			 */
 			void setDirection (const Base::Math::Vector< 3, float > & direction) noexcept;
 
 			/**
 			 * @brief Sets the direction of the sound emission source.
 			 * @param direction A reference to a vector.
-			 * @return void
 			 */
 			void setDirection (const  Base::Math::Vector< 4, float > & direction) noexcept;
 
@@ -167,7 +162,6 @@ namespace EmEn::Audio
 			 * @param x The X-axis direction value.
 			 * @param y The Y-axis direction value.
 			 * @param z The Z-axis direction value.
-			 * @return void
 			 */
 			void setDirection (float x, float y, float z) noexcept;
 
@@ -181,14 +175,12 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the source velocity to simulate doppler effect.
 			 * @param velocity A reference to a vector.
-			 * @return void
 			 */
 			void setVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept;
 
 			/**
 			 * @brief Sets the source velocity to simulate doppler effect.
 			 * @param velocity A reference to a vector.
-			 * @return void
 			 */
 			void setVelocity (const Base::Math::Vector< 4, float > & velocity) noexcept;
 
@@ -197,7 +189,6 @@ namespace EmEn::Audio
 			 * @param x The X-axis velocity value.
 			 * @param y The Y-axis velocity value.
 			 * @param z The Z-axis velocity value.
-			 * @return void
 			 */
 			void setVelocity (float x, float y, float z) noexcept;
 
@@ -211,7 +202,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the source gain.
 			 * @param gain A float from 0.0 to INF+.
-			 * @return void
 			 */
 			void setGain (float gain) noexcept;
 
@@ -230,7 +220,6 @@ namespace EmEn::Audio
 			 * @brief Sets a minimal and a maximal possible gain for this source.
 			 * @param minGain A minimum value.
 			 * @param maxGain A maximum value.
-			 * @return void
 			 */
 			void boundsGain (float minGain, float maxGain) noexcept;
 
@@ -259,7 +248,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets how far the sound will execute to drop.
 			 * @param distance A distance in the world units.
-			 * @return void
 			 */
 			void setReferenceDistance (float distance) noexcept;
 
@@ -277,7 +265,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets how quickly (higher number) the sound will lower or not.
 			 * @param factor A value bigger than 0.0. The initial value is 1.0.
-			 * @return void
 			 */
 			void setRolloffFactor (float factor) noexcept;
 
@@ -295,7 +282,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the maximum distance after which the sound will no longer be heard.
 			 * @param distance A distance in the world units.
-			 * @return void
 			 */
 			void setMaxDistance (float distance) noexcept;
 
@@ -315,7 +301,6 @@ namespace EmEn::Audio
 			 * @param rolloffFactor Set how quickly (higher number) the sound will lower or not. The default is 1.0F.
 			 * @param referenceDistance Set from what distance the sound will execute to be lowered.
 			 * @param maxDistance Set the distance after which the sound will no longer be heard.
-			 * @return void
 			 */
 			void
 			setAttenuationParameters (float rolloffFactor, float referenceDistance, float maxDistance) noexcept
@@ -334,7 +319,6 @@ namespace EmEn::Audio
 			 * @param outerAngle The outer angle of the cone where the sound is fading.
 			 * @param outerGain The attenuation gain outside the gain.
 			 * @param gainFacingAway The attenuation gain when facing away the cone.
-			 * @return void
 			 */
 			void setCone (float innerAngle, float outerAngle, float outerGain, float gainFacingAway) noexcept;
 
@@ -385,7 +369,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the sound pitch.
 			 * @param pitch The value of the pitch to apply to the sound.
-			 * @return void
 			 */
 			void setPitch (float pitch) noexcept;
 
@@ -404,7 +387,6 @@ namespace EmEn::Audio
 			 * @brief Sets the air absorption property.
 			 * @warning This method only works with the EFX extension.
 			 * @param factor The attenuation factor from air absorption.
-			 * @return void
 			 */
 			void setAirAbsorption (int factor) noexcept;
 
@@ -426,7 +408,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the mute state.
 			 * @param state The state.
-			 * @return void
 			 */
 			void setMuteState (bool state) noexcept;
 
@@ -452,7 +433,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the relative state to the listener.
 			 * @param state The state.
-			 * @return void
 			 */
 			void setRelativeState (bool state) noexcept;
 
@@ -515,7 +495,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the loop mode.
 			 * @param state True to enable looping, false to disable.
-			 * @return void
 			 */
 			void
 			setLooping (bool state) noexcept
@@ -537,7 +516,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the playback position in seconds.
 			 * @param position The position in seconds.
-			 * @return void
 			 */
 			void
 			setPlaybackPosition (float position) noexcept
@@ -546,8 +524,8 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief isRelative
-			 * @return
+			 * @brief Returns whether the source position is relative to the listener.
+			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
@@ -588,7 +566,6 @@ namespace EmEn::Audio
 			 * @brief Enables an effect/filter slot.
 			 * @warning This method only works with the EFX extension.
 			 * @param channel The channel number.
-			 * @return void
 			 */
 			void enableEffectSlot (int channel) const noexcept;
 
@@ -596,7 +573,6 @@ namespace EmEn::Audio
 			 * @brief Disables an effect/filter slot.
 			 * @warning This method only works with the EFX extension.
 			 * @param channel The channel number.
-			 * @return void
 			 */
 			void disableEffectSlot (int channel) const noexcept;
 
@@ -611,7 +587,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Disables the direct filter.
 			 * @warning This method only works with the EFX extension.
-			 * @return void
 			 */
 			void disableDirectFilter () noexcept;
 
@@ -626,31 +601,26 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Pauses the source only if it's playing.
-			 * @return void
 			 */
 			void pause () noexcept;
 
 			/**
 			 * @brief Resumes a previously paused source.
-			 * @return void
 			 */
 			void resume () noexcept;
 
 			/**
 			 * @brief Gets the playback cursor at the beginning.
-			 * @return void
 			 */
 			void rewind () noexcept;
 
 			/**
 			 * @brief Stops the audio source.
-			 * @return void
 			 */
 			void stop () noexcept;
 
 			/**
 			 * @brief Releases the playable interface.
-			 * @return void
 			 */
 			void removeSound () noexcept;
 
@@ -668,7 +638,6 @@ namespace EmEn::Audio
 			 * @brief Sets a float audio parameter to the audio source.
 			 * @param pName The audio source attribute.
 			 * @param value The float value.
-			 * @return void
 			 */
 			void setFloatValue (ALenum pName, ALfloat value) noexcept;
 
@@ -685,7 +654,6 @@ namespace EmEn::Audio
 			 * @brief Sets an integer audio parameter to the audio source.
 			 * @param pName The audio source attribute.
 			 * @param value The float value.
-			 * @return void
 			 */
 			void setIntValue (ALenum pName, ALint value) noexcept;
 
@@ -700,7 +668,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Clears streaming queue.
-			 * @return void
 			 */
 			void clearStream () const noexcept;
 

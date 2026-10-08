@@ -275,7 +275,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Changes the look [LOGIC THREAD].
 			 * @param look A reference to the look.
-			 * @return void
 			 */
 			void
 			setLook (const Look & look) noexcept
@@ -309,14 +308,12 @@ namespace EmEn::Scenes::Component
 			 * @brief Joins a scene: registers the shape in its bindless 3D array, now or once loaded.
 			 * @note Called by Scenes::CloudSet::add().
 			 * @param scene A reference to the scene.
-			 * @return void
 			 */
 			void createOnHardware (Scene & scene) noexcept;
 
 			/**
 			 * @brief Leaves the scene: frees the bindless slot.
 			 * @note Called by Scenes::CloudSet::remove() and by the destructor.
-			 * @return void
 			 */
 			void destroyFromHardware () noexcept;
 
@@ -337,7 +334,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Registers the shape in the scene's bindless 3D array.
-			 * @return void
 			 */
 			void registerShape () noexcept;
 

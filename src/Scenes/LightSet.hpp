@@ -196,7 +196,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Enables the lighting for the scene.
-			 * @return void
 			 */
 			void
 			enable () noexcept
@@ -282,7 +281,6 @@ namespace EmEn::Scenes
 			 * delivered illuminance whatever the hue. A colour no longer DIMS the ambient — the hand-lit demos that
 			 * used a DarkBlue at 5000 lx as a ~120 lx ambient were migrated to the intensity they really delivered.
 			 * @param color The color of the global basis ambient light.
-			 * @return void
 			 */
 			void
 			setAmbientLightColor (const Base::PixelFactory::Color< float > & color) noexcept
@@ -301,7 +299,6 @@ namespace EmEn::Scenes
 			 * surface under a clear sky receives 10-20% of the direct sun, i.e. 10000-20000 lx;
 			 * an overcast day gives ~5000; a lit interior ~100; a moonlit night ~1.
 			 * @param intensity The ambient illuminance, in lux.
-			 * @return void
 			 */
 			void
 			setAmbientLightIntensity (float intensity) noexcept
@@ -352,7 +349,6 @@ namespace EmEn::Scenes
 			 * FIXME: Re-enable this features !
 			 * @param state Enable or disable the computation.
 			 * @param factor The percentage of each color light. Default 10%.
-			 * @return void
 			 */
 			void
 			enableAmbientGenerationFromLights (bool state, float factor = DefaultLightPercentToAmbient) noexcept
@@ -364,7 +360,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Enables the light distance for ambient generation.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableLightDistanceForAmbientGeneration (bool state) noexcept
@@ -376,7 +371,6 @@ namespace EmEn::Scenes
 			 * @brief Adds a directional light to the light set for the scene.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene directional light.
-			 * @return void
 			 */
 			void add (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
 
@@ -384,7 +378,6 @@ namespace EmEn::Scenes
 			 * @brief Adds a point light to the light set for the scene.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene point light.
-			 * @return void
 			 */
 			void add (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept;
 
@@ -392,7 +385,6 @@ namespace EmEn::Scenes
 			 * @brief Adds a spotlight to the light set for the scene.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene spotlight.
-			 * @return void
 			 */
 			void add (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept;
 
@@ -400,7 +392,6 @@ namespace EmEn::Scenes
 			 * @brief Adds a line light to the light set for the scene.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene line light.
-			 * @return void
 			 */
 			void add (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept;
 
@@ -410,7 +401,6 @@ namespace EmEn::Scenes
 			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene directional light.
-			 * @return void
 			 */
 			void remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
 
@@ -420,7 +410,6 @@ namespace EmEn::Scenes
 			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene point light.
-			 * @return void
 			 */
 			void remove (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept;
 
@@ -430,7 +419,6 @@ namespace EmEn::Scenes
 			 * set, so its hardware is released by destroyRetiredLights() behind the in-flight fence.
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene spotlight.
-			 * @return void
 			 */
 			void remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept;
 
@@ -439,7 +427,6 @@ namespace EmEn::Scenes
 			 * @note ⚠️ Retired, not destroyed (see remove(PointLight)).
 			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene line light.
-			 * @return void
 			 */
 			void remove (Scene & scene, const std::shared_ptr< Component::LineLight > & light) noexcept;
 
@@ -476,7 +463,6 @@ namespace EmEn::Scenes
 			 * must not call anything that would.
 			 * @tparam function_t Callable with signature: void(const std::shared_ptr< Component::DirectionalLight > &)
 			 * @param process Callback receiving each directional light.
-			 * @return void
 			 */
 			template< typename function_t >
 			void
@@ -585,7 +571,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Removes all lights.
-			 * @return void
 			 */
 			void removeAllLights () noexcept;
 
@@ -605,7 +590,6 @@ namespace EmEn::Scenes
 			 *
 			 * @param scene A reference to the scene, for the hardware teardown.
 			 * @param framesInFlight The renderer's frames-in-flight count.
-			 * @return void
 			 */
 			void destroyRetiredLights (Scene & scene, uint32_t framesInFlight) noexcept;
 
@@ -705,7 +689,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Retires a light removed from the sets until destroyRetiredLights() proves it unreferenced.
 			 * @param light A smart pointer to the light.
-			 * @return void
 			 */
 			void retireLight (const std::shared_ptr< Component::AbstractLightEmitter > & light) noexcept;
 

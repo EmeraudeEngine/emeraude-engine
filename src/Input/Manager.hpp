@@ -217,7 +217,6 @@ namespace EmEn::Input
 			 * @brief Controls whether the keyboard events are sent to listeners.
 			 * @note This is a global switch but doesn't affect the keyboard controller direct state reading.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enableKeyboardListening (bool state) noexcept;
 
@@ -233,10 +232,9 @@ namespace EmEn::Input
 			}
 
 			/**
-			 * @brief @brief Controls whether the pointer events are sent to listeners.
+			 * @brief Controls whether the pointer events are sent to listeners.
 			 * @note This is a global switch but doesn't affect the pointer controller direct state reading.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enablePointerListening (bool state) noexcept;
 
@@ -266,7 +264,6 @@ namespace EmEn::Input
 			 * @brief Enables the pointer scaling to meet HDPI screen coordinates.
 			 * @param xScale The X scale factor.
 			 * @param yScale The Y scale factor.
-			 * @return void
 			 */
 			void
 			enablePointerScaling (double xScale, double yScale) noexcept
@@ -279,7 +276,6 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Disables the pointer scaling.
-			 * @return void
 			 */
 			void
 			disablePointerScaling () noexcept
@@ -305,7 +301,6 @@ namespace EmEn::Input
 			 * @brief Enables the copy of the keyboard state.
 			 * @note Direct query of the keyboard state must be done on the main-thread.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableCopyKeyboardState (bool state) noexcept
@@ -328,7 +323,6 @@ namespace EmEn::Input
 			 * @brief Enables the copy of the pointer state.
 			 * @note Direct query of the pointer state must be done on the main-thread.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableCopyPointerState (bool state) noexcept
@@ -351,7 +345,6 @@ namespace EmEn::Input
 			 * @brief Enables the copy of joystick state.
 			 * @note Direct query of the joystick state must be done on the main-thread.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableCopyJoysticksState (bool state) noexcept
@@ -374,7 +367,6 @@ namespace EmEn::Input
 			 * @brief Enables the copy of gamepad state.
 			 * @note Direct query of the gamepad state must be done on the main-thread.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableCopyGamepadsState (bool state) noexcept
@@ -396,48 +388,41 @@ namespace EmEn::Input
 			/**
 			 * @brief Hides the mouse cursor, and the manager will only serve listeners in relative mode.
 			 * @note The mouse move event will give the difference on the X and Y axis.
-			 * @return void
 			 */
 			void lockPointer () noexcept;
 
 			/**
 			 * @brief Shows the mouse cursor, and the manager will only serve listeners in absolute mode.
 			 * @note The mouse move event will give the absolute pointer XY coordinates on the screen.
-			 * @return void
 			 */
 			void unlockPointer () noexcept;
 
 			/**
 			 * @brief Waits for a system event.
 			 * @param until Sets a duration until the cancellation of the waiting in seconds.
-			 * @return void
 			 */
 			void waitSystemEvents (double until = 0.0) const noexcept;
 
 			/**
 			 * @brief Wakes up the thread blocked in waitSystemEvents() by posting an empty event.
 			 * @note Thread-safe, this method can be called from any thread (glfwPostEmptyEvent() contract).
-			 * @return void
 			 */
 			static void wakeUpEventsLoop () noexcept;
 
 			/**
 			 * @brief Adds an object the keyboard can control, like a player.
 			 * @param listener A pointer to a keyboard listener interfaced object.
-			 * @return void
 			 */
 			void addKeyboardListener (KeyboardListenerInterface * listener) noexcept;
 
 			/**
 			 * @brief Removes an object of keyboard listeners.
 			 * @param listener A pointer to a keyboard listener interfaced object.
-			 * @return void
 			 */
 			void removeKeyboardListener (KeyboardListenerInterface * listener) noexcept;
 
 			/**
 			 * @brief Clears all keyboard listeners.
-			 * @return void
 			 */
 			void removeAllKeyboardListeners () noexcept;
 
@@ -458,20 +443,17 @@ namespace EmEn::Input
 			 *
 			 * @param listener A pointer to a pointer listener interfaced object.
 			 * @param priority Serve this listener BEFORE every other one. Default false.
-			 * @return void
 			 */
 			void addPointerListener (PointerListenerInterface * listener, bool priority = false) noexcept;
 
 			/**
 			 * @brief Removes an object of pointer listeners.
 			 * @param listener A pointer to a pointer listener interfaced object.
-			 * @return void
 			 */
 			void removePointerListener (PointerListenerInterface * listener) noexcept;
 
 			/**
 			 * @brief Clears all pointer listeners.
-			 * @return void
 			 */
 			void removeAllPointerListeners () noexcept;
 
@@ -479,13 +461,11 @@ namespace EmEn::Input
 			/**
 			 * @brief Installs macOS-specific gesture handlers (pinch-to-zoom, etc.).
 			 * @param window The GLFW window to monitor
-			 * @return void
 			 */
 			void installMacOSGestureHandlers (GLFWwindow * window) noexcept;
 
 			/**
 			 * @brief Removes macOS gesture handlers.
-			 * @return void
 			 */
 			void removeMacOSGestureHandlers () noexcept;
 #endif
@@ -495,7 +475,6 @@ namespace EmEn::Input
 			 * @param key The key code (see Input::Key enum).
 			 * @param modifiers The modifier keys mask (see Input::ModKey enum).
 			 * @param action GLFW action: 1 = press, 0 = release, 2 = repeat.
-			 * @return void
 			 */
 			static void injectKeyEvent (int32_t key, int32_t modifiers, int32_t action = 1) noexcept;
 
@@ -506,7 +485,6 @@ namespace EmEn::Input
 			 * @param button The mouse button number (0 = left, 1 = right, 2 = middle).
 			 * @param modifiers The modifier keys mask.
 			 * @param action GLFW action: 1 = press, 0 = release.
-			 * @return void
 			 */
 			static void injectMouseClickEvent (float positionX, float positionY, int32_t button = 0, int32_t modifiers = 0, int32_t action = 1) noexcept;
 
@@ -514,7 +492,6 @@ namespace EmEn::Input
 			 * @brief Injects a synthetic pointer move event.
 			 * @param positionX The X coordinate in screen pixels (absolute mode).
 			 * @param positionY The Y coordinate in screen pixels (absolute mode).
-			 * @return void
 			 */
 			static void injectPointerMoveEvent (float positionX, float positionY) noexcept;
 
@@ -533,13 +510,11 @@ namespace EmEn::Input
 			 * @brief Main method to attach all events callbacks from a glfw handle.
 			 * @param enableKeyboard Enables listeners relative to the keyboard.
 			 * @param enablePointer Enables listeners relative to the pointer.
-			 * @return void
 			 */
 			void linkWindowCallbacks (bool enableKeyboard, bool enablePointer) noexcept;
 
 			/**
 			 * @brief Removes all callback functions set to the window.
-			 * @return void
 			 */
 			void unlinkWindowCallbacks () noexcept;
 
@@ -558,7 +533,6 @@ namespace EmEn::Input
 			 * @param scancode The OS dependent scancode.
 			 * @param action The key event.
 			 * @param modifiers The modifier keys mask.
-			 * @return void
 			 */
 			static void keyCallback (GLFWwindow * window, int key, int scancode, int action, int modifiers) noexcept;
 
@@ -566,7 +540,6 @@ namespace EmEn::Input
 			 * @brief The callback for the glfw API to handle character inputs.
 			 * @param window The glfw handle.
 			 * @param codepoint The Unicode value of the character.
-			 * @return void
 			 */
 			static void charCallback (GLFWwindow * window, unsigned int codepoint) noexcept;
 
@@ -575,7 +548,6 @@ namespace EmEn::Input
 			 * @param window The glfw window handle.
 			 * @param codepoint The Unicode value of the character.
 			 * @param modifiers The modifier keys mask.
-			 * @return void
 			 */
 			static void charModsCallback (GLFWwindow * window, unsigned int codepoint, int modifiers) noexcept;
 
@@ -583,7 +555,6 @@ namespace EmEn::Input
 			 * @brief Separate method for a relative mode pointer called by the main Manager::cursorPositionCallback() method.
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
-			 * @return void
 			 */
 			static void dispatchRelativePointerPosition (double xPosition, double yPosition) noexcept;
 
@@ -591,7 +562,6 @@ namespace EmEn::Input
 			 * @brief Separate method for an absolute mode pointer called by the main Manager::cursorPositionCallback() method.
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
-			 * @return void
 			 */
 			static void dispatchAbsolutePointerPosition (double xPosition, double yPosition) noexcept;
 
@@ -600,7 +570,6 @@ namespace EmEn::Input
 			 * @param window The glfw handle.
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
-			 * @return void
 			 */
 			static void cursorPositionCallback (GLFWwindow * window, double xPosition, double yPosition) noexcept;
 
@@ -608,7 +577,6 @@ namespace EmEn::Input
 			 * @brief The callback for the glfw API to handle cursor enter the handle.
 			 * @param window The glfw handle.
 			 * @param entered The state of the cursor.
-			 * @return void
 			 */
 			static void cursorEnterCallback (GLFWwindow * window, int entered) noexcept;
 
@@ -618,7 +586,6 @@ namespace EmEn::Input
 			 * @param button Which pointer button.
 			 * @param action Pressed or released.
 			 * @param modifiers The modifier keys mask.
-			 * @return void
 			 */
 			static void mouseButtonCallback (GLFWwindow * window, int button, int action, int modifiers) noexcept;
 
@@ -627,7 +594,6 @@ namespace EmEn::Input
 			 * @param window The glfw handle.
 			 * @param xOffset The distance in X.
 			 * @param yOffset The distance in Y.
-			 * @return void
 			 */
 			static void scrollCallback (GLFWwindow * window, double xOffset, double yOffset) noexcept;
 
@@ -636,7 +602,6 @@ namespace EmEn::Input
 			 * @param window The glfw handle.
 			 * @param count The number of files.
 			 * @param paths A C-array for the file paths.
-			 * @return void
 			 */
 			static void dropCallback (GLFWwindow * window, int count, const char * * paths) noexcept;
 
@@ -644,7 +609,6 @@ namespace EmEn::Input
 			 * @brief The callback for the glfw API to handle joystick inputs.
 			 * @param jid The joystick id.
 			 * @param event The type of joystick event.
-			 * @return void
 			 */
 			static void joystickCallback (int jid, int event) noexcept;
 

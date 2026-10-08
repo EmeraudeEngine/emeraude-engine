@@ -441,7 +441,6 @@ namespace EmEn::Graphics::Geometry
 			 * @note Logic thread, once per cycle. The proxy is generated on the thread pool and published by
 			 * the render thread (updateVideoMemory()), which then declares the BLAS stale.
 			 * @param worldPosition The camera position in world coordinates.
-			 * @return void
 			 */
 			void updateRayTracingProxy (const Base::Math::Vector< 3, float > & worldPosition) noexcept;
 
@@ -516,7 +515,6 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Builds the per-node height ranges of every level of detail from the source grid.
-			 * @return void
 			 */
 			void buildNodeHeightRanges () noexcept;
 
@@ -544,14 +542,12 @@ namespace EmEn::Graphics::Geometry
 			 * @param stagingData Receives the heights (the byte offset of each copy region points into it).
 			 * @param copies Receives the copy regions.
 			 * @param bakes Receives the bake regions {texel x, texel z, width, height, layer}.
-			 * @return void
 			 */
 			void stageLevelRects (uint32_t level, const std::vector< LatticeRect > & rects, std::vector< uint16_t > & stagingData, std::vector< VkBufferImageCopy > & copies, std::vector< std::array< int32_t, 5 > > & bakes) const noexcept;
 
 			/**
 			 * @brief Writes the frame's uniform section.
 			 * @param frameIndex The frame-in-flight index.
-			 * @return void
 			 */
 			void writeUniforms (uint32_t frameIndex) const noexcept;
 

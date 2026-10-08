@@ -54,8 +54,8 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs an image view.
 			 * @param image A reference to an image smart pointer.
-			 * @param viewType
-			 * @param subresourceRange
+			 * @param viewType The image view type.
+			 * @param subresourceRange The subresource range of the image visible through the view.
 			 * @param components Default unchanged.
 			 * @param createFlags The createInfo flags. Default none.
 			 */

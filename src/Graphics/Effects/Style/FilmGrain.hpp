@@ -66,7 +66,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the grain intensity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -88,7 +87,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the grain size multiplier.
 			 * @param size Value > 0. 1.0 = pixel-level grain, >1 = coarser grain.
-			 * @return void
 			 */
 			void setSize (float size) noexcept;
 

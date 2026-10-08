@@ -168,7 +168,6 @@ namespace EmEn::Scenes::Component
 			 * is only complete at that depth — which is what `Toolkit::generateNode()` produces.
 			 * @param pivot A reference to the node whose position the course writes.
 			 * @param light A reference to the directional light whose photometry the course writes.
-			 * @return void
 			 */
 			void bind (const std::shared_ptr< Node > & pivot, const std::shared_ptr< DirectionalLight > & light) noexcept;
 
@@ -178,7 +177,6 @@ namespace EmEn::Scenes::Component
 			 * non-positive duration, an elevation outside (0, 90]). Reconfiguring a running course
 			 * keeps its current phase.
 			 * @param options A reference to the options.
-			 * @return void
 			 */
 			void configure (const Options & options) noexcept;
 
@@ -186,7 +184,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Starts (or resumes) the course from its current phase.
-			 * @return void
 			 */
 			void
 			start () noexcept
@@ -196,7 +193,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Pauses the course. The sun stays where it is, lit as it is.
-			 * @return void
 			 */
 			void
 			stop () noexcept
@@ -218,7 +214,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Jumps to a phase of the revolution and applies it.
 			 * @param phase The phase, wrapped into [0, 1): 0 sunrise, 0.25 noon, 0.5 sunset, 0.75 midnight.
-			 * @return void
 			 */
 			void setPhase (float phase) noexcept;
 
@@ -364,7 +359,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Writes the state of the current phase to the pivot and the light.
-			 * @return void
 			 */
 			void apply () noexcept;
 

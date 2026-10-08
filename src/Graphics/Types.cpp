@@ -1374,10 +1374,9 @@ namespace EmEn::Graphics
 
 			case LightType::Line :
 				return LineLightString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	const char *
@@ -1402,9 +1401,8 @@ namespace EmEn::Graphics
 
 			case AntiAliasingType::TAA :
 				return TAAString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 }

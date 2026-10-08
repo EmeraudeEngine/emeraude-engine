@@ -124,7 +124,6 @@ namespace EmEn::Scenes
 			 * @param bindlessTextureSet A reference to the scene's bindless set.
 			 * @param sun A reference to the scene's main directional light.
 			 * @param readStateIndex The render state slot latched by the frame.
-			 * @return void
 			 */
 			void recordShadowMap (const Vulkan::CommandBuffer & commandBuffer, Graphics::Renderer & renderer, BindlessTextureSet & bindlessTextureSet, const Component::DirectionalLight & sun, uint32_t readStateIndex) noexcept;
 
@@ -165,20 +164,17 @@ namespace EmEn::Scenes
 			 * @brief Adds a cloud and joins it to the scene (bindless shape registration).
 			 * @param scene A reference to the scene.
 			 * @param cloud A reference to the cloud smart pointer.
-			 * @return void
 			 */
 			void add (Scene & scene, const std::shared_ptr< Component::CloudVolume > & cloud) noexcept;
 
 			/**
 			 * @brief Removes a cloud and frees its bindless slot.
 			 * @param cloud A reference to the cloud smart pointer.
-			 * @return void
 			 */
 			void remove (const std::shared_ptr< Component::CloudVolume > & cloud) noexcept;
 
 			/**
 			 * @brief Removes every cloud.
-			 * @return void
 			 */
 			void clear () noexcept;
 
@@ -208,7 +204,6 @@ namespace EmEn::Scenes
 			 * @brief Calls a function on every cloud, under the set mutex.
 			 * @tparam function_t The type of the callable, `void (const Component::CloudVolume &)`.
 			 * @param function The callable.
-			 * @return void
 			 */
 			template< typename function_t >
 			void

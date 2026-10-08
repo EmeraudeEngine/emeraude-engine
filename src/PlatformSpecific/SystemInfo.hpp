@@ -73,7 +73,6 @@ namespace EmEn::PlatformSpecific
 			/**
 			 * @brief Declares a GPU device.
 			 * @param device A reference to a device struct.
-			 * @return void
 			 */
 			void
 			declareGPUDevice (const GPUDevice & device) noexcept
@@ -85,7 +84,6 @@ namespace EmEn::PlatformSpecific
 			 * @brief Sets a list of devices.
 			 * @note This will replace the existing devices.
 			 * @param devices A reference to a GPU device list.
-			 * @return void
 			 */
 			void
 			setGPUDevices (const Base::StaticVector< GPUDevice, 8 > & devices) noexcept

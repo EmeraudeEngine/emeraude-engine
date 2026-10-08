@@ -99,7 +99,6 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the linear velocity in a direction.
 			 * @param velocity A reference to a vector.
-			 * @return void
 			 */
 			void
 			setLinearVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept
@@ -113,7 +112,6 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the angular velocity around a vector.
 			 * @param velocity A reference to a vector.
-			 * @return void
 			 */
 			void
 			setAngularVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept
@@ -127,14 +125,12 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets a minimal velocity in a direction.
 			 * @param velocity A reference to a vector.
-			 * @return void
 			 */
 			void setMinimalVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept;
 
 			/**
 			 * @brief Adds an acceleration to the velocity to the current velocity without any checking.
 			 * @param acceleration A reference to vector.
-			 * @return void
 			 */
 			void
 			addAcceleration (const Base::Math::Vector< 3, float > & acceleration) noexcept
@@ -148,7 +144,6 @@ namespace EmEn::Physics
 			/**
 			 * @brief Adds a raw angular acceleration vector to the current angular velocity without any checking.
 			 * @param acceleration A reference to vector.
-			 * @return void
 			 */
 			void
 			addAngularAcceleration (const Base::Math::Vector< 3, float > & acceleration) noexcept
@@ -229,7 +224,6 @@ namespace EmEn::Physics
 			 * @brief [PHYSICS-NEW-SYSTEM] Applies a linear impulse directly to the velocity.
 			 * @note Impulse = instant change in momentum (J = m*Δv). Used by constraint solver.
 			 * @param impulse The impulse vector in N·s.
-			 * @return void
 			 */
 			void
 			applyLinearImpulse (const Base::Math::Vector< 3, float > & impulse) noexcept
@@ -249,13 +243,11 @@ namespace EmEn::Physics
 			 * @brief Adds a physical force to the object acceleration.
 			 * @note Using this formula: F = m * a
 			 * @param force A reference to a vector representing the force. The magnitude (length) will represent the acceleration in m/s².
-			 * @return void
 			 */
 			void addForce (const Base::Math::Vector< 3, float > & force) noexcept;
 
 			/**
 			 * @brief Sets the object into inertia.
-			 * @return void
 			 */
 			void stopMovement () noexcept;
 
@@ -274,7 +266,6 @@ namespace EmEn::Physics
 			 * @brief Sets whether this is affected by all physical interactions.
 			 * @note If false, the method stopMovement() will be called.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setMovingAbility (bool state) noexcept
@@ -303,7 +294,6 @@ namespace EmEn::Physics
 			 * @note When disabled, torque will not be applied and collisions won't induce rotation.
 			 *	   Disabling rotation will also reset angular velocity to zero.
 			 * @param state True to enable rotation, false to disable.
-			 * @return void
 			 */
 			void
 			enableRotationPhysics (bool state) noexcept
@@ -352,7 +342,6 @@ namespace EmEn::Physics
 			/**
 			 * @brief Counts the consecutive physics steps the body was slow (the scene's islands decide the sleep, P5).
 			 * @param slow Whether the body was slow this step.
-			 * @return void
 			 */
 			void
 			accountSlowness (bool slow) noexcept
@@ -379,7 +368,6 @@ namespace EmEn::Physics
 			 * @brief Sets the island the body fell asleep with (0: awake). The scene wakes the whole island when one of its
 			 * bodies wakes.
 			 * @param key The island's key (the lowest creation number of its bodies), or 0.
-			 * @return void
 			 */
 			void
 			setSleepIsland (uint64_t key) noexcept
@@ -443,13 +431,11 @@ namespace EmEn::Physics
 			 *	   - Moderate impact: ~1000 N
 			 *	   - Heavy collision: ~10000 N
 			 * @param impactForce The collision force in Newtons (N).
-			 * @return void
 			 */
 			virtual void onCollision (float impactForce) noexcept = 0;
 
 			/**
 			 * @brief Events when this movable got a new impulse or a force.
-			 * @return void
 			 */
 			virtual void onImpulse () noexcept = 0;
 
@@ -457,7 +443,6 @@ namespace EmEn::Physics
 			 * @brief Moves the entity in the scene from physics simulation.
 			 * @note This should make a call to LocatableInterface::move() final object method.
 			 * @param positionDelta A reference to a delta vector to add to current position.
-			 * @return void
 			 */
 			virtual void moveFromPhysics (const Base::Math::Vector< 3, float > & positionDelta) noexcept = 0;
 
@@ -466,7 +451,6 @@ namespace EmEn::Physics
 			 * @note This should make a call to LocatableInterface::rotate() final object method.
 			 * @param radianAngle An angle in radian.
 			 * @param worldDirection A reference to a vector.
-			 * @return Base::Math::Vector< 3, float >
 			 */
 			virtual void rotateFromPhysics (float radianAngle, const Base::Math::Vector< 3, float > & worldDirection) noexcept = 0;
 
@@ -474,20 +458,17 @@ namespace EmEn::Physics
 			 * @brief Marks that this entity is grounded on a specific source.
 			 * @param source The type of surface (Ground, Boundary, or Entity).
 			 * @param groundedOn Pointer to the entity we're grounded on (only for Entity source).
-			 * @return void
 			 */
 			void setGrounded (GroundedSource source, const MovableTrait * groundedOn = nullptr) noexcept;
 
 			/**
 			 * @brief Clears the grounded state immediately.
-			 * @return void
 			 */
 			void clearGrounded () noexcept;
 
 			/**
 			 * @brief Decrements the grounded grace period.
 			 * @note Called each frame. Grounded state persists for a few frames after losing contact.
-			 * @return void
 			 */
 			void updateGroundedState () noexcept;
 

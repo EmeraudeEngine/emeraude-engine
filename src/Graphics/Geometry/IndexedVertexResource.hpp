@@ -350,7 +350,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Copies the local data's bounding volumes, the per-frame readers' metadata (culling, LOD): they
 			 * must outlive a release of the local data.
-			 * @return void
 			 */
 			void
 			cacheBoundingVolumes () noexcept

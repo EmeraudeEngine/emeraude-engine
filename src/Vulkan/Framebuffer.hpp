@@ -140,7 +140,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Adds an image view to the framebuffer.
-			 * @return void
 			 */
 			void
 			addAttachment (VkImageView imageViewHandle) noexcept

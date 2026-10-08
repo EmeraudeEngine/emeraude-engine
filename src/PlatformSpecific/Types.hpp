@@ -115,10 +115,9 @@ namespace EmEn::PlatformSpecific
 
 			case GPUDeviceType::CPU :
 				return CPUString;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	/**

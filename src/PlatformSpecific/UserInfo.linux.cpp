@@ -52,7 +52,7 @@ namespace EmEn::PlatformSpecific
 				bufferSize = 16384;
 			}
 
-			buffer.resize(bufferSize, '\0');
+			buffer.resize(static_cast< size_t >(bufferSize), '\0');
 		}
 	}
 

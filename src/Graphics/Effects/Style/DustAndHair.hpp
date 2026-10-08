@@ -70,7 +70,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the overall intensity (density/opacity).
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the number of dust particles.
 			 * @param count Number of particles (default 8.0).
-			 * @return void
 			 */
 			void setDustCount (float count) noexcept;
 
@@ -110,7 +108,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the number of hair fibers.
 			 * @param count Number of fibers (default 2.0).
-			 * @return void
 			 */
 			void setHairCount (float count) noexcept;
 

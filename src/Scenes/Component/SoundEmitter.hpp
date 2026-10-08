@@ -145,7 +145,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Enables/Disables the sound distortion with entity velocity.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableVelocityDistortion (bool state) noexcept
@@ -167,7 +166,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Changes the gain of the source emitter.
 			 * @param gain An positive value.
-			 * @return void
 			 */
 			void
 			setGain (float gain) noexcept
@@ -235,7 +233,6 @@ namespace EmEn::Scenes::Component
 			 * @param sound A reference to an audio buffer.
 			 * @param gain Set the gain for playing the sound. Default 1.0.
 			 * @param loop The loop play mode state. Default false.
-			 * @return void
 			 */
 			void attachSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false) noexcept;
 
@@ -246,26 +243,22 @@ namespace EmEn::Scenes::Component
 			 * @param gain Set the gain for playing the sound. Default 1.0.
 			 * @param loop The loop play mode state. Default false.
 			 * @param replaceSound Replace sound if the source is playing. Default true.
-			 * @return void
 			 */
 			void play (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false, bool replaceSound = true) noexcept;
 
 			/**
 			 * @brief Replays the previous sound if exists.
 			 * @note The sound will be rewound if a source is playing.
-			 * @return void
 			 */
 			void replay () noexcept;
 
 			/**
 			 * @brief Stops the playing.
-			 * @return void
 			 */
 			void stop () noexcept;
 
 			/**
 			 * @brief Pauses the playing.
-			 * @return void
 			 */
 			void
 			pause () const noexcept
@@ -278,7 +271,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Resumes a paused sound.
-			 * @return void
 			 */
 			void
 			resume () const noexcept
@@ -291,7 +283,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Rewinds the sound.
-			 * @return void
 			 */
 			void
 			rewind () const noexcept
@@ -320,7 +311,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Removes attached sound.
-			 * @return void
 			 */
 			void clear () noexcept;
 
@@ -342,19 +332,16 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Updates the source properties with the entity.
 			 * @param worldCoordinates A reference to a coordinate.
-			 * @return void
 			 */
 			void updateSource (const Base::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
 
 			/**
 			 * @brief Plays the attached sound resource.
-			 * @return void
 			 */
 			void playAttachedSound () noexcept;
 
 			/**
 			 * @brief Releases the attached sound resource.
-			 * @return void
 			 */
 			void
 			releaseAttachedSound () noexcept

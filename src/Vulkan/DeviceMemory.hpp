@@ -131,7 +131,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Unmaps the video memory.
-			 * @return void
 			 */
 			void unmapMemory () const noexcept;
 

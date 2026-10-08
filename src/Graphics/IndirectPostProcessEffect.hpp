@@ -272,7 +272,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys GPU resources for this effect.
-			 * @return void
 			 */
 			virtual void destroy () noexcept = 0;
 
@@ -342,7 +341,6 @@ namespace EmEn::Graphics
 			 * object that drives the whole lifecycle (createAll, resizeAll, destroyAll, and the
 			 * photographic effects it materializes itself).
 			 * @param state The new state.
-			 * @return void
 			 */
 			void
 			setCreatedFlag (bool state) noexcept
@@ -374,7 +372,6 @@ namespace EmEn::Graphics
 			 * @warning ⚠️ INTERNAL — PostProcessStack only, like setCreatedFlag().
 			 * @note Cleared by clearCreationFailure() alone: a resize must give a failed effect a
 			 * fresh chance, since the failure may have been about the size it was asked for.
-			 * @return void
 			 */
 			void
 			setCreationFailedFlag () noexcept
@@ -385,7 +382,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Clears the creation-failure latch.
 			 * @warning ⚠️ INTERNAL — PostProcessStack only.
-			 * @return void
 			 */
 			void
 			clearCreationFailure () noexcept
@@ -400,7 +396,6 @@ namespace EmEn::Graphics
 			 * effect may outlive its stack (a demo keeps shared_ptr copies to toggle it), so it
 			 * must never be left pointing at a dead one.
 			 * @param stack A pointer to the owning stack, nullptr on removal.
-			 * @return void
 			 */
 			void setOwnerStack (PostProcessStack * stack) noexcept;
 
@@ -519,7 +514,7 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			virtual
 			bool
-			readsChainColorUpstream (const FrameContext & /*context*/) const noexcept
+			readsChainColorUpstream ([[maybe_unused]] const FrameContext & context) const noexcept
 			{
 				return false;
 			}
@@ -531,11 +526,10 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param inputColor The group input color texture.
 			 * @param context The per-frame chain context.
-			 * @return void
 			 */
 			virtual
 			void
-			recordOverlayPasses (const Vulkan::CommandBuffer & /*commandBuffer*/, const Vulkan::TextureInterface & /*inputColor*/, const FrameContext & /*context*/) noexcept
+			recordOverlayPasses ([[maybe_unused]] const Vulkan::CommandBuffer & commandBuffer, [[maybe_unused]] const Vulkan::TextureInterface & inputColor, [[maybe_unused]] const FrameContext & context) noexcept
 			{
 
 			}
@@ -582,7 +576,7 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			virtual
 			CombineContribution
-			combineContribution (const FrameContext & /*context*/) const noexcept
+			combineContribution ([[maybe_unused]] const FrameContext & context) const noexcept
 			{
 				return {};
 			}
@@ -629,11 +623,10 @@ namespace EmEn::Graphics
 			 * @brief Arms or disarms the occlusion lane, and sets the distance of its reduction.
 			 * @param enabled Whether the lane must be written at all.
 			 * @param maxDistance The consumer's occlusion range, in world units.
-			 * @return void
 			 */
 			virtual
 			void
-			setOcclusionLaneEnabled (bool /*enabled*/, float /*maxDistance*/) noexcept
+			setOcclusionLaneEnabled ([[maybe_unused]] bool enabled, [[maybe_unused]] float maxDistance) noexcept
 			{
 
 			}
@@ -678,11 +671,10 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Hands the consumer the producer's lane texture, or nullptr to fall back to its own trace.
 			 * @param laneTexture The producer's lane texture, valid for this frame only.
-			 * @return void
 			 */
 			virtual
 			void
-			setOcclusionLaneSource (const Vulkan::TextureInterface * /*laneTexture*/) noexcept
+			setOcclusionLaneSource ([[maybe_unused]] const Vulkan::TextureInterface * laneTexture) noexcept
 			{
 
 			}
@@ -733,11 +725,10 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Hands the consumer the clouds' transmittance, or nullptr when there is none.
 			 * @param texture The producer's texture, valid for this frame only.
-			 * @return void
 			 */
 			virtual
 			void
-			setCloudTransmittanceSource (const Vulkan::TextureInterface * /*texture*/) noexcept
+			setCloudTransmittanceSource ([[maybe_unused]] const Vulkan::TextureInterface * texture) noexcept
 			{
 
 			}
@@ -803,11 +794,10 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param inputColor The group input color texture.
 			 * @param context The per-frame chain context.
-			 * @return void
 			 */
 			virtual
 			void
-			recordPreDenoisePasses (const Vulkan::CommandBuffer & /*commandBuffer*/, const Vulkan::TextureInterface & /*inputColor*/, const FrameContext & /*context*/) noexcept
+			recordPreDenoisePasses ([[maybe_unused]] const Vulkan::CommandBuffer & commandBuffer, [[maybe_unused]] const Vulkan::TextureInterface & inputColor, [[maybe_unused]] const FrameContext & context) noexcept
 			{
 
 			}
@@ -851,7 +841,7 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			virtual
 			DenoiseContribution
-			denoiseContribution (const FrameContext & /*context*/) noexcept
+			denoiseContribution ([[maybe_unused]] const FrameContext & context) noexcept
 			{
 				return {};
 			}
@@ -860,11 +850,10 @@ namespace EmEn::Graphics
 			 * @brief Records the passes FOLLOWING the shared blur (temporal resolve, history copies...).
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param context The per-frame chain context.
-			 * @return void
 			 */
 			virtual
 			void
-			recordPostDenoisePasses (const Vulkan::CommandBuffer & /*commandBuffer*/, const FrameContext & /*context*/) noexcept
+			recordPostDenoisePasses ([[maybe_unused]] const Vulkan::CommandBuffer & commandBuffer, [[maybe_unused]] const FrameContext & context) noexcept
 			{
 
 			}
@@ -987,7 +976,6 @@ void main()
 			 * @param pushConstantsSize Size of the push constants data in bytes.
 			 * @param bindlessSet The global bindless descriptor set, bound at set 1 when the
 			 * pass reads the reserved IBL/environment slots. Default none.
-			 * @return void
 			 */
 			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const IntermediateRenderTarget & target, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const Vulkan::DescriptorSet * bindlessSet = nullptr) noexcept;
 
@@ -1004,7 +992,6 @@ void main()
 			 * @param pushConstants Pointer to the push constants data.
 			 * @param pushConstantsSize Size of the push constants data in bytes.
 			 * @param bindlessSet The global bindless descriptor set, bound at set 1 when not null.
-			 * @return void
 			 */
 			static void recordFullscreenPass (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Framebuffer & framebuffer, std::span< const IntermediateRenderTarget * const > targets, const Vulkan::GraphicsPipeline & pipeline, const Vulkan::PipelineLayout & pipelineLayout, const Vulkan::DescriptorSet & descriptorSet, const void * pushConstants, uint32_t pushConstantsSize, const Vulkan::DescriptorSet * bindlessSet = nullptr) noexcept;
 

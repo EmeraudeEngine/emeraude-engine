@@ -98,7 +98,6 @@ namespace EmEn::Graphics
 		 * @brief Appends the "Metering:" line of a frame's diagnostics.
 		 * @param metering The tone mapper metering of the frame.
 		 * @param outputs The console outputs.
-		 * @return void
 		 */
 		void
 		appendMetering (const MeteringReport & metering, Console::Outputs & outputs) noexcept
@@ -163,7 +162,6 @@ namespace EmEn::Graphics
 		 * @brief Appends the "Overflow census:" block of a frame's diagnostics.
 		 * @param diagnostics The frame's diagnostics.
 		 * @param outputs The console outputs.
-		 * @return void
 		 */
 		void
 		appendOverflowCensus (const FrameDiagnostics & diagnostics, Console::Outputs & outputs) noexcept

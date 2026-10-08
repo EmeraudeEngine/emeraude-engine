@@ -219,7 +219,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Releases every GPU resource (while the device still exists).
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -308,7 +307,6 @@ namespace EmEn::Graphics
 			 * @param rtDescriptorSet The renderer's RT set of the frame (TLAS, mesh, material and light SSBOs).
 			 * @param bindlessDescriptorSet The bindless texture set (alpha test, albedo, environment cubemap).
 			 * @param inputs The scene inputs of the frame.
-			 * @return void
 			 */
 			void recordUpdate (const Vulkan::CommandBuffer & commandBuffer, uint32_t frameIndex, const Vulkan::DescriptorSet & rtDescriptorSet, const Vulkan::DescriptorSet & bindlessDescriptorSet, const FrameInputs & inputs) noexcept;
 

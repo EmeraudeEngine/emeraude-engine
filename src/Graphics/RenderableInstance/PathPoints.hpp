@@ -85,7 +85,6 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param writeStateIndex The slot to write.
 			 * @param points The points in the entity's space, w = the arc length from the first point.
 			 * @param debug The debug look: enabled, the path leaves the scene pass for the debug overlay.
-			 * @return void
 			 */
 			void
 			publish (uint32_t writeStateIndex, const std::vector< Base::Math::Vector< 4, float > > & points, const DebugLook & debug) noexcept
@@ -130,7 +129,6 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param advanceHistory Whether this is the primary view staging (it moves the history forward, and stages the
 			 * debug overlay's copy).
 			 * @param modelMatrix The instance's model matrix of the frame (the debug copy is staged in world space).
-			 * @return void
 			 */
 			void stage (Scenes::SceneInstanceTransforms & instanceTransforms, uint32_t entrySlot, uint32_t readStateIndex, bool advanceHistory, const Base::Math::Matrix< 4, float > & modelMatrix) noexcept;
 

@@ -90,7 +90,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Stops the recording; the cycles recorded so far stay available to write().
-			 * @return void
 			 */
 			void stop () noexcept;
 
@@ -98,7 +97,6 @@ namespace EmEn::Scenes
 			 * @brief Records one cycle of the scene when it falls in the range. Called by Scene::processLogics() after the
 			 * collisions are resolved.
 			 * @param scene A reference to the scene.
-			 * @return void
 			 */
 			void sample (const Scene & scene) noexcept;
 

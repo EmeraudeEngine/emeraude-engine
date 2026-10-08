@@ -171,7 +171,6 @@ namespace EmEn::Audio
 			 * @brief Enables the cross-fader.
 			 * @note When disabling, stops any ongoing fade and ensures only the current track plays.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enableCrossFader (bool state) noexcept;
 
@@ -190,7 +189,6 @@ namespace EmEn::Audio
 			 * @brief Sets the play mode (Once or Loop).
 			 * @note Also updates the currently playing source if any.
 			 * @param mode The play mode.
-			 * @return void
 			 */
 			void setPlayMode (PlayMode mode) noexcept;
 
@@ -211,7 +209,6 @@ namespace EmEn::Audio
 			 *	   (loadedPlaylist() will return nullptr after this call). Use loadPlaylist() to
 			 *	   rebuild a playlist that is still backed by a named manifest.
 			 * @param track A reference to a music resource.
-			 * @return void
 			 */
 			void
 			addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept
@@ -237,7 +234,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Removes all soundtracks from the playlist.
 			 * @note Also drops the loaded playlist manifest reference — there is no manifest backing an empty playlist.
-			 * @return void
 			 */
 			void
 			clearPlaylist ()
@@ -381,14 +377,12 @@ namespace EmEn::Audio
 			/**
 			 * @brief Seeks to a position in the current track.
 			 * @param position The position in seconds.
-			 * @return void
 			 */
 			void seek (float position) const noexcept;
 
 			/**
 			 * @brief Enables or disables shuffle mode.
 			 * @param state True to enable shuffle, false to disable.
-			 * @return void
 			 */
 			void enableShuffle (bool state) noexcept;
 
@@ -405,19 +399,16 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Pauses the music.
-			 * @return void
 			 */
 			void pause () noexcept;
 
 			/**
 			 * @brief Resumes the music.
-			 * @return void
 			 */
 			void resume () noexcept;
 
 			/**
 			 * @brief Stops the music.
-			 * @return void
 			 */
 			void stop () noexcept;
 
@@ -452,7 +443,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Process for fading.
-			 * @return void
 			 */
 			void eventLoop ();
 
@@ -468,7 +458,6 @@ namespace EmEn::Audio
 			 * @brief Fades out a track.
 			 * @param track A pointer to the track.
 			 * @param step The step of raising or lowering the volume.
-			 * @return void
 			 */
 			static void fadeOut (Source * track, float step) noexcept;
 
@@ -482,19 +471,17 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief OpenAL source event callback.
-			 * @param eventType
-			 * @param object
-			 * @param param
-			 * @param length
-			 * @param message
-			 * @param userParam
-			 * @return void
+			 * @param eventType The OpenAL event type.
+			 * @param object The OpenAL object name the event is about.
+			 * @param param The event parameter.
+			 * @param length The length of the message.
+			 * @param message The event message.
+			 * @param userParam The user pointer given at registration.
 			 */
 			static void eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei length, const ALchar * message, void * userParam) noexcept;
 
 			/**
 			 * @brief Generates a shuffled order for the playlist.
-			 * @return void
 			 */
 			void generateShuffleOrder () noexcept;
 

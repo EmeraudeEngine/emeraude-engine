@@ -69,7 +69,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the flicker intensity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -91,7 +90,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the film frame rate for discrete frame snapping.
 			 * @param fps Film cadence (default 24.0).
-			 * @return void
 			 */
 			void setSpeed (float fps = 24.0F) noexcept;
 

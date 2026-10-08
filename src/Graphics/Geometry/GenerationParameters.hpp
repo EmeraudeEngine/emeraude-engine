@@ -81,7 +81,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets the way the vertex color will be generated.
 			 * @param vertexColorGenMode The mode.
-			 * @return void
 			 */
 			void
 			setVertexColorGenMode (VertexColorGenMode vertexColorGenMode) noexcept
@@ -104,7 +103,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Sets the global vertex color for mesh generation.
 			 * @note Vertex color attribute must be enabled, this method only changes the color.
 			 * @param globalVertexColor A reference to a PixelFactory color.
-			 * @return void
 			 */
 			void
 			setGlobalVertexColor (const Base::PixelFactory::Color< float > & globalVertexColor) noexcept
@@ -129,7 +127,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Applies a transform matrix on the generated resource.
 			 * @param transformMatrix A reference to a 4x4 matrix.
-			 * @return void
 			 */
 			void
 			setTransformMatrix (const Base::Math::Matrix< 4, float > & transformMatrix) noexcept
@@ -151,7 +148,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets a texture coordinates uniform multiplier.
 			 * @param multiplier The multiplication factor on each axis.
-			 * @return void
 			 */
 			void
 			setTextureCoordinatesMultiplier (float multiplier) noexcept
@@ -167,7 +163,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Sets 2D texture coordinates multipliers.
 			 * @param xMultiplier The multiplication factor on the X axis.
 			 * @param yMultiplier The multiplication factor on the Y axis.
-			 * @return void
 			 */
 			void
 			setTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier) noexcept
@@ -184,7 +179,6 @@ namespace EmEn::Graphics::Geometry
 			 * @param xMultiplier The multiplication factor on the X axis.
 			 * @param yMultiplier The multiplication factor on the Y axis.
 			 * @param zMultiplier The multiplication factor on the Z axis.
-			 * @return void
 			 */
 			void
 			setTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier, float zMultiplier) noexcept
@@ -210,7 +204,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets a cap texture coordinates uniform multiplier.
 			 * @param multiplier The multiplication factor on each axis.
-			 * @return void
 			 */
 			void
 			setCapTextureCoordinatesMultiplier (float multiplier) noexcept
@@ -226,7 +219,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Sets 2D cap texture coordinates multipliers.
 			 * @param xMultiplier The multiplication factor on the X axis.
 			 * @param yMultiplier The multiplication factor on the Y axis.
-			 * @return void
 			 */
 			void
 			setCapTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier) noexcept
@@ -243,7 +235,6 @@ namespace EmEn::Graphics::Geometry
 			 * @param xMultiplier The multiplication factor on the X axis.
 			 * @param yMultiplier The multiplication factor on the Y axis.
 			 * @param zMultiplier The multiplication factor on the Z axis.
-			 * @return void
 			 */
 			void
 			setCapTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier, float zMultiplier) noexcept
@@ -269,7 +260,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets the geometry flags.
 			 * @param geometryFlags Flags value from geometry.
-			 * @return void
 			 */
 			void
 			setGeometryFlags (uint32_t geometryFlags) noexcept
@@ -280,7 +270,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets the center of the geometry at bottom.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setCenterAtBottom (bool state) noexcept
@@ -301,7 +290,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets the geometry surface flipping state.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setFlipGeometry (bool state) noexcept

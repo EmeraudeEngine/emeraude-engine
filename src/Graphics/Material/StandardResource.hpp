@@ -385,7 +385,6 @@ namespace EmEn::Graphics::Material
 			 * neutral White albedo factor and no texture, i.e. the default state.
 			 * @warning The geometry MUST carry the colour attribute (Geometry::EnableVertexColor);
 			 * shader generation fails hard otherwise. This function is available before creation time.
-			 * @return void
 			 */
 			void enableVertexColor () noexcept;
 
@@ -398,7 +397,6 @@ namespace EmEn::Graphics::Material
 			 * an AutoIllumination component to carry the luminance (without one the surface
 			 * writes its raw [0,1] colour and reads black under photometric exposure).
 			 * @warning This function is available before creation time.
-			 * @return void
 			 */
 			void enableUnlit () noexcept;
 
@@ -494,7 +492,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the height scale for parallax occlusion mapping.
 			 * @note This is a dynamic property.
 			 * @param value The height scale value.
-			 * @return void
 			 */
 			void setHeightScale (float value) noexcept;
 
@@ -505,7 +502,6 @@ namespace EmEn::Graphics::Material
 			 * material: the height map is then ignored and the surface is plain normal mapping.
 			 * @note Without a call, the material takes 'Core/Graphics/Texture/POMIterations' at creation.
 			 * @param iterations The layer count, clamped to [0, MaxParallaxIterations].
-			 * @return void
 			 */
 			void setParallaxIterations (int iterations) noexcept;
 
@@ -515,7 +511,6 @@ namespace EmEn::Graphics::Material
 			 * distance the ray march is skipped entirely, which is what keeps a large surface affordable.
 			 * @param start The distance where the fade begins, in metres.
 			 * @param end The distance where the parallax is gone, in metres. Raised to @p start if lower.
-			 * @return void
 			 */
 			void setParallaxFadeDistances (float start, float end) noexcept;
 
@@ -527,7 +522,6 @@ namespace EmEn::Graphics::Material
 			 * without a band the surface is geometry only. Owner decision 5, 2026-09-22.
 			 * @param start The distance where the parallax starts to take over, in metres.
 			 * @param end The distance where the relief is parallax only, in metres. Raised to @p start if lower.
-			 * @return void
 			 */
 			void setParallaxHandover (float start, float end) noexcept;
 
@@ -675,7 +669,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Updates the global opacity amount (dynamic property).
 			 * @param value The opacity [0,1].
-			 * @return void
 			 */
 			void setOpacity (float value) noexcept;
 
@@ -698,14 +691,12 @@ namespace EmEn::Graphics::Material
 			 * channel otherwise. The threshold lives in the material UBO (never a shader literal,
 			 * per the program-cache contract), so it is configurable per material and at runtime.
 			 * @param threshold The alpha cutoff [0,1]. Default 0.5 (glTF alphaCutoff default).
-			 * @return void
 			 */
 			void enableAlphaTest (float threshold = DefaultAlphaThreshold) noexcept;
 
 			/**
 			 * @brief Updates the alpha-test threshold (dynamic property).
 			 * @param threshold The alpha cutoff [0,1].
-			 * @return void
 			 */
 			void setAlphaThresholdToDiscard (float threshold) noexcept;
 
@@ -718,7 +709,6 @@ namespace EmEn::Graphics::Material
 			 * a box filter keeps. Opaque render list, depth write kept, like enableAlphaTest(). The threshold stored
 			 * by enableAlphaTest() still drives the ray-traced alpha test, which does not hash.
 			 * @see MaterialFlagBits::AlphaHashedEnabled for the anchor of the hash.
-			 * @return void
 			 */
 			void enableHashedAlphaTest () noexcept;
 
@@ -743,7 +733,6 @@ namespace EmEn::Graphics::Material
 			 * @note Applies to the artistic texture/probe reflection modes only; the neutral 1.0
 			 * leaves the mix BRDF-controlled. The environment IBL path keeps IBLIntensity as its knob.
 			 * @param value The mix amount [0,1].
-			 * @return void
 			 */
 			void setReflectionAmount (float value) noexcept;
 
@@ -752,7 +741,6 @@ namespace EmEn::Graphics::Material
 			 * @note Applies to the artistic texture refraction mode only; the neutral 1.0 leaves
 			 * the blend Fresnel-controlled.
 			 * @param value The mix amount [0,1].
-			 * @return void
 			 */
 			void setRefractionAmount (float value) noexcept;
 
@@ -835,7 +823,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the clear coat normal map scale factor.
 			 * @note This is a dynamic property.
 			 * @param value The scale value.
-			 * @return void
 			 */
 			void setClearCoatNormalScale (float value) noexcept;
 
@@ -853,7 +840,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the albedo color.
 			 * @note This is a dynamic property.
 			 * @param color A reference to a color.
-			 * @return void
 			 */
 			void setAlbedoColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -861,7 +847,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the roughness value.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setRoughness (float value) noexcept;
 
@@ -869,7 +854,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the metalness value.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setMetalness (float value) noexcept;
 
@@ -877,7 +861,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the normal mapping scale factor.
 			 * @note This is a dynamic property.
 			 * @param value A scale value.
-			 * @return void
 			 */
 			void setNormalScale (float value) noexcept;
 
@@ -885,7 +868,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the index of refraction.
 			 * @note This is a dynamic property. Only effective if refraction component is present.
 			 * @param value The IOR value (1.0 to 3.0).
-			 * @return void
 			 */
 			void setIOR (float value) noexcept;
 
@@ -893,7 +875,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the IBL (Image-Based Lighting) intensity.
 			 * @note This is a dynamic property. Controls the contribution of environment cubemaps.
 			 * @param value The IBL intensity (0.0 = none, 1.0 = full). Default 1.0.
-			 * @return void
 			 */
 			void setIBLIntensity (float value) noexcept;
 
@@ -901,7 +882,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the auto-illumination color.
 			 * @note This is a dynamic property.
 			 * @param color A reference to the emissive color.
-			 * @return void
 			 */
 			void setAutoIlluminationColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -909,7 +889,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the auto-illumination intensity multiplier.
 			 * @note This is a dynamic property.
 			 * @param value The intensity multiplier.
-			 * @return void
 			 */
 			void setAutoIlluminationAmount (float value) noexcept;
 
@@ -917,7 +896,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the ambient occlusion intensity.
 			 * @note This is a dynamic property.
 			 * @param value The AO intensity (0.0 = no AO, 1.0 = full AO).
-			 * @return void
 			 */
 			void setAOIntensity (float value) noexcept;
 
@@ -927,7 +905,6 @@ namespace EmEn::Graphics::Material
 			 * (A channel, high nibble) and read by AtmosphericFog.
 			 * @param value 1.0 = fully fogged (the default), 0.0 = immune — HUD overlays,
 			 * in-world icons and decals that must stay readable through the haze.
-			 * @return void
 			 */
 			void setFogResponse (float value) noexcept;
 
@@ -937,7 +914,6 @@ namespace EmEn::Graphics::Material
 			 * (A channel, low nibble) and read by DepthOfField.
 			 * @param value 1.0 = fully defocused (the default), 0.0 = stays crisp whatever the
 			 * focus distance.
-			 * @return void
 			 */
 			void setDoFMask (float value) noexcept;
 
@@ -945,7 +921,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the clear coat factor.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setClearCoatFactor (float value) noexcept;
 
@@ -953,7 +928,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the clear coat roughness.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setClearCoatRoughness (float value) noexcept;
 
@@ -1042,7 +1016,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the subsurface scattering intensity.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setSubsurfaceIntensity (float value) noexcept;
 
@@ -1050,7 +1023,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the subsurface scattering radius.
 			 * @note This is a dynamic property.
 			 * @param value The scatter radius.
-			 * @return void
 			 */
 			void setSubsurfaceRadius (float value) noexcept;
 
@@ -1058,7 +1030,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the subsurface scattering color.
 			 * @note This is a dynamic property.
 			 * @param color A reference to the SSS color tint.
-			 * @return void
 			 */
 			void setSubsurfaceColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -1068,7 +1039,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the sheen color.
 			 * @note This is a dynamic property.
 			 * @param color A reference to the sheen color tint.
-			 * @return void
 			 */
 			void setSheenColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -1076,7 +1046,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the sheen roughness.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setSheenRoughness (float value) noexcept;
 
@@ -1086,7 +1055,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the anisotropy strength.
 			 * @note This is a dynamic property.
 			 * @param value A value between -1.0 and 1.0.
-			 * @return void
 			 */
 			void setAnisotropy (float value) noexcept;
 
@@ -1094,7 +1062,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the anisotropy rotation.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setAnisotropyRotation (float value) noexcept;
 
@@ -1206,7 +1173,6 @@ namespace EmEn::Graphics::Material
 			 * column depth per-pixel and uses it as the thickness in Beer's law attenuation.
 			 * Requires grab pass transmission to be active.
 			 * @param state True to enable depth-based opacity, false to disable.
-			 * @return void
 			 */
 			void enableDepthBasedOpacity (bool state) noexcept;
 
@@ -1230,7 +1196,6 @@ namespace EmEn::Graphics::Material
 			 * @param coverage The foam amount at the water line (0-1). Default 1.
 			 * @param patternScale The noise cells per metre (larger = finer foam patches). Default 1.
 			 * @param roughness The foam roughness. Default 0.9.
-			 * @return void
 			 */
 			void enableShoreFoam (const Base::PixelFactory::Color< float > & color, float width = 1.5F, float coverage = 1.0F, float patternScale = 1.0F, float roughness = 0.9F) noexcept;
 
@@ -1288,7 +1253,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the iridescence factor.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setIridescenceFactor (float value) noexcept;
 
@@ -1296,7 +1260,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the iridescence thin film IOR.
 			 * @note This is a dynamic property.
 			 * @param value A value between 1.0 and 2.333.
-			 * @return void
 			 */
 			void setIridescenceIOR (float value) noexcept;
 
@@ -1304,7 +1267,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the iridescence minimum film thickness.
 			 * @note This is a dynamic property.
 			 * @param value The minimum thickness in nanometers.
-			 * @return void
 			 */
 			void setIridescenceThicknessMin (float value) noexcept;
 
@@ -1312,7 +1274,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the iridescence maximum film thickness.
 			 * @note This is a dynamic property.
 			 * @param value The maximum thickness in nanometers.
-			 * @return void
 			 */
 			void setIridescenceThicknessMax (float value) noexcept;
 
@@ -1322,7 +1283,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the chromatic dispersion value.
 			 * @note This is a dynamic property.
 			 * @param value The dispersion value (0.0 = off).
-			 * @return void
 			 */
 			void setDispersion (float value) noexcept;
 
@@ -1376,7 +1336,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the specular factor (KHR_materials_specular).
 			 * @note This is a dynamic property.
 			 * @param value The specular factor (0.0 = no specular highlight, 1.0 = default).
-			 * @return void
 			 */
 			void setSpecularFactor (float value) noexcept;
 
@@ -1384,7 +1343,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the specular color (KHR_materials_specular).
 			 * @note This is a dynamic property.
 			 * @param color A reference to the specular color tint.
-			 * @return void
 			 */
 			void setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -1399,7 +1357,6 @@ namespace EmEn::Graphics::Material
 			 * @note Energy conservation is unaffected: the shader already clamps the RESULT
 			 * (`F0 = min(dielectricF0 * specularColor * specularFactor, 1)`).
 			 * @param factor The linear specular colour factor. Components may exceed 1.
-			 * @return void
 			 */
 			void setSpecularColor (const Base::Math::Vector< 3, float > & factor) noexcept;
 
@@ -1417,7 +1374,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the emissive strength HDR multiplier (KHR_materials_emissive_strength).
 			 * @note This is a dynamic property.
 			 * @param value The emissive strength multiplier (>= 0.0).
-			 * @return void
 			 */
 			void setEmissiveStrengthValue (float value) noexcept;
 
@@ -1427,7 +1383,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the transmission factor.
 			 * @note This is a dynamic property.
 			 * @param value A value between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setTransmissionFactor (float value) noexcept;
 
@@ -1435,7 +1390,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the attenuation color for Beer's law.
 			 * @note This is a dynamic property.
 			 * @param color A reference to the attenuation color.
-			 * @return void
 			 */
 			void setAttenuationColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -1443,7 +1397,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the attenuation distance for Beer's law.
 			 * @note This is a dynamic property.
 			 * @param value The distance in meters.
-			 * @return void
 			 */
 			void setAttenuationDistance (float value) noexcept;
 
@@ -1451,7 +1404,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Changes the material thickness factor.
 			 * @note This is a dynamic property.
 			 * @param value The thickness value.
-			 * @return void
 			 */
 			void setThicknessFactor (float value) noexcept;
 
@@ -1475,7 +1427,6 @@ namespace EmEn::Graphics::Material
 			 * @note It is decided on the PIXELS, never on the declaration: only an alpha channel that is
 			 * actually binary is promoted (TextureResource::Abstract::isBinaryAlphaMask()). Graded alpha
 			 * is left blended — promoting a decal at a uniform opacity of 0.35 would erase it.
-			 * @return void
 			 */
 			void promoteBinaryCoverageToCutout () noexcept;
 
@@ -1694,7 +1645,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Flags the material properties as changed and registers the material for the
 			 * renderer's per-frame flush (after creation) — the single path every dynamic setter takes.
-			 * @return void
 			 */
 			void markVideoMemoryDirty () noexcept;
 
@@ -1723,7 +1673,6 @@ namespace EmEn::Graphics::Material
 			 * VIEWER on a back face).
 			 * @note One definition for every environment consumer; call it once per fragment shader.
 			 * @param fragmentShader A reference to the fragment shader.
-			 * @return void
 			 */
 			void declareEnvironmentFrame (Saphir::FragmentShader & fragmentShader) const noexcept;
 
@@ -1806,7 +1755,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Copies each texture component's UV transform into its material UBO slot.
 			 * @note Called at creation time, before the first video memory update — the
 			 * components are the single source of truth (loader and JSON paths both land there).
-			 * @return void
 			 */
 			void syncComponentUVWTransforms () noexcept;
 

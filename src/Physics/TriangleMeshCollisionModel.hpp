@@ -196,7 +196,6 @@ namespace EmEn::Physics
 			 * @param worldFrame The entity's world frame.
 			 * @param worldRegion The world box.
 			 * @param function The callable.
-			 * @return void
 			 */
 			template< typename function_t >
 			void

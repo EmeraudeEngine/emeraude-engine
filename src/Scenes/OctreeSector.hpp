@@ -1045,9 +1045,7 @@ namespace EmEn::Scenes
 			 *	   same level are automatically skipped.
 			 * @note This is useful for broad-phase collision detection: find elements in neighboring
 			 *	   sectors that might collide with elements in this sector.
-			 * @note Prefer this over getSurroundingSectors() to avoid vector allocation.
 			 *
-			 * @see getSurroundingSectors()
 			 * @see getNeighbor()
 			 */
 			template< typename function_t >
@@ -1079,62 +1077,6 @@ namespace EmEn::Scenes
 						}
 					}
 				}
-			}
-
-			/**
-			 * @brief Returns a vector of surrounding leaf sectors (Moore neighborhood).
-			 *
-			 * Collects up to 26 neighboring leaf sectors surrounding this sector, plus optionally
-			 * this sector itself, and returns them in a vector. The Moore neighborhood includes
-			 * all sectors that share a face, edge, or corner with this sector.
-			 *
-			 * @param includeThisSector If true, this sector is included as the first element of
-			 *						  the returned vector.
-			 *
-			 * @return Vector of shared pointers to neighboring const sectors. May contain fewer
-			 *		 than 26 neighbors if some don't exist or aren't subdivided to the same level.
-			 *
-			 * @deprecated Prefer forSurroundingSectors() to avoid vector allocation overhead.
-			 *			 This method allocates a vector on each call, while forSurroundingSectors()
-			 *			 uses zero-overhead callbacks.
-			 *
-			 * @see forSurroundingSectors()
-			 */
-			[[nodiscard]]
-			std::vector< std::shared_ptr< const OctreeSector > >
-			getSurroundingSectors (bool includeThisSector) const noexcept
-			{
-				std::vector< std::shared_ptr< const OctreeSector > > sectors;
-				/* Reserve space for 26 neighbors and itself */
-				sectors.reserve(27);
-
-				if ( includeThisSector )
-				{
-					sectors.emplace_back(this->shared_from_this());
-				}
-
-				/* Iterate through the 26 directions of the Moore neighborhood. */
-				for ( int x = -1; x <= 1; ++x )
-				{
-					for ( int y = -1; y <= 1; ++y )
-					{
-						for ( int z = -1; z <= 1; ++z )
-						{
-							/* Skip the center (0, 0, 0), which is the current sector itself. */
-							if ( x == 0 && y == 0 && z == 0 )
-							{
-								continue;
-							}
-
-							if ( auto neighbor = this->getNeighbor(x, y, z) )
-							{
-								sectors.emplace_back(std::move(neighbor));
-							}
-						}
-					}
-				}
-
-				return sectors;
 			}
 
 			/**

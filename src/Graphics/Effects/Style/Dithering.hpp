@@ -69,7 +69,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the dithering intensity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -91,7 +90,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the Bayer matrix size.
 			 * @param size Accepted values: 2, 4, 8. Default 4.
-			 * @return void
 			 */
 			void setMatrixSize (int size) noexcept;
 

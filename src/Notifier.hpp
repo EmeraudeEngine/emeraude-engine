@@ -81,7 +81,6 @@ namespace EmEn
 			/**
 			 * @brief Sets the background color of the notifier display.
 			 * @param color A reference to a color.
-			 * @return void
 			 */
 			void
 			setClearColor (const Base::PixelFactory::Color< float > & color) noexcept
@@ -104,7 +103,6 @@ namespace EmEn
 			 * @brief Notifies a message.
 			 * @param message A reference to a string.
 			 * @param duration The delay of the message staying on screen. Default 3 seconds.
-			 * @return void
 			 */
 			void
 			push (const std::string & message, uint32_t duration = DefaultDuration) noexcept
@@ -121,7 +119,6 @@ namespace EmEn
 			 * @brief Notifies a message.
 			 * @param message A reference to a blob.
 			 * @param duration The delay of the message staying on screen. Default 3 seconds.
-			 * @return void
 			 */
 			void
 			push (const Base::BlobTrait & message, uint32_t duration = DefaultDuration) noexcept
@@ -136,7 +133,6 @@ namespace EmEn
 
 			/**
 			 * @brief Clears the notification display.
-			 * @return void
 			 */
 			void clear () noexcept;
 
@@ -154,14 +150,12 @@ namespace EmEn
 
 			/**
 			 * @brief Renders the notification on the pixmap.
-			 * @return void
 			 */
 			void renderNotifications () noexcept;
 
 			/**
 			 * @brief Clears the pixmap.
 			 * @param bgColor A reference to a background color.
-			 * @return void
 			 */
 			void clearDisplay (const Base::PixelFactory::Color< float > & bgColor) const noexcept;
 

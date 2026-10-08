@@ -78,7 +78,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			/**
 			 * @brief Sets file extension filters.
 			 * @param filters A reference to a vector.
-			 * @return void
 			 */
 			void
 			setExtensionFilters (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters)
@@ -90,7 +89,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @brief Sets file extension filters.
 			 * @param filterName A reference to a string.
 			 * @param extensions A reference to a vector.
-			 * @return void
 			 */
 			void
 			setExtensionFilters (const std::string & filterName, const std::vector< std::string > & extensions)
@@ -112,7 +110,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			/**
 			 * @brief Sets the default directory for the open dialog.
 			 * @param directory A reference to a filesystem path.
-			 * @return void
 			 */
 			void
 			setDefaultDirectory (const std::filesystem::path & directory)

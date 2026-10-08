@@ -348,6 +348,20 @@ VkApplicationInfo appInfo{
 
 ---
 
+## Ownership and Lifetime — Ave Robustus II (owner decision, 2026-10-08)
+
+Every new addition follows the C++ Core Guidelines' ownership model scrupulously, at a mission-critical bar. The
+nine rules are written once, in emeraude-base `docs/error-handling.md` § "Ownership and lifetime — Ave Robustus II";
+they apply to the engine unchanged. The engine's consequences:
+
+- An object that starts an asynchronous job (thread pool task, loader, LOD generation, capture, network request) owns
+  that job and its destructor stops and waits for it. `Core`, the service providers and the shutdown sequence never
+  compensate for a job they do not own.
+- A `ServiceInterface` releases in its destructor what it acquired, even when `terminate()` was never called (an
+  initialization failure path); native handles (Vulkan, OpenAL, GLFW, FreeType, platform) live in RAII holders.
+- Reuse the engine's lifetime mechanisms before adding one: `Vulkan::DeferredDestructor`, `ResourceTrait`
+  dependencies, `LocalDataLease`, `Container::DeferredSyncLoad`, Observer auto-detach.
+
 ## Template Patterns
 
 ### CRTP (Curiously Recurring Template Pattern)

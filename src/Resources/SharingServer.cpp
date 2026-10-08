@@ -424,7 +424,7 @@ namespace EmEn::Resources
 			std::error_code errorCode;
 			const auto size = std::filesystem::file_size(filepath, errorCode);
 
-			m_http->post([weakConnection, digest = std::move(digest), size = errorCode ? 0 : size] () {
+			m_http->post([weakConnection, fileDigest = std::move(digest), fileSize = errorCode ? 0 : size] () {
 				const auto alive = weakConnection.lock();
 
 				if ( alive == nullptr )
@@ -432,7 +432,7 @@ namespace EmEn::Resources
 					return;
 				}
 
-				if ( !digest )
+				if ( !fileDigest )
 				{
 					alive->respondEmpty(500);
 
@@ -440,8 +440,8 @@ namespace EmEn::Resources
 				}
 
 				Json::Value answer{Json::objectValue};
-				answer["sha256"] = *digest;
-				answer["size"] = static_cast< Json::UInt64 >(size);
+				answer["sha256"] = *fileDigest;
+				answer["size"] = static_cast< Json::UInt64 >(fileSize);
 
 				alive->respond(200, "application/json", FastJSON::stringify(answer), NoStore);
 			});

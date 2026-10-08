@@ -179,7 +179,6 @@ namespace EmEn::Scenes::Loaders
 			 * apart ("/animation/" for the skeletal half, "/node-animation/" for the node half).
 			 * @param channels The channels, consumed.
 			 * @param output A reference to the list to append to.
-			 * @return void
 			 */
 			void registerClip (const std::string & clipName, const std::string & keySpace, std::vector< Base::Animation::AnimationChannel< float > > channels, std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output) const noexcept;
 

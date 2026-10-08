@@ -110,7 +110,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Erases every cache entry from disk.
 			 * @note Called on startup when --clear-renderer-cache is present.
-			 * @return void
 			 */
 			void clearCache () const noexcept;
 

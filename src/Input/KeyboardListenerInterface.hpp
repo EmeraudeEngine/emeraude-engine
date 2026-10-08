@@ -83,7 +83,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Enables or disables this listener.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableKeyboardListening (bool state) noexcept
@@ -105,7 +104,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Sets whether the listener is propagating the processed events.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			propagateProcessedEvent (bool state) noexcept

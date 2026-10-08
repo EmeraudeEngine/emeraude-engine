@@ -244,7 +244,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Sets the scattering parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

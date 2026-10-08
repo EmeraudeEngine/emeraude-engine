@@ -185,7 +185,6 @@ namespace EmEn::Overlay
 			 * @brief Changes the master control state of overlaying.
 			 * @param inputManager A reference to the input manager.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enable (Input::Manager & inputManager, bool state) noexcept;
 
@@ -208,7 +207,6 @@ namespace EmEn::Overlay
 			 * to screens and surfaces) and screen lifecycle/visibility. Harmless in continuous
 			 * rendering (observers simply ignore it). May also be called by application code that
 			 * changes the overlay in a way not covered by the built-in triggers.
-			 * @return void
 			 */
 			void
 			requestRedraw () noexcept
@@ -246,7 +244,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Deletes all screens.
-			 * @return void
 			 */
 			void clearScreens () noexcept;
 
@@ -273,7 +270,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Disables all active screens.
-			 * @return void
 			 */
 			void disableAllScreens () noexcept;
 
@@ -317,7 +313,6 @@ namespace EmEn::Overlay
 			 * @brief Draws active screens over the 3D render.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @param commandBuffer A reference to a command buffer.
-			 * @return void
 			 */
 			void render (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
@@ -353,7 +348,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Disables a previous input exclusive screen.
-			 * @return void
 			 */
 			void
 			disableInputExclusiveScreen () noexcept
@@ -459,7 +453,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Fetches framebuffer properties.
-			 * @return void
 			 */
 			void updateFramebufferProperties () noexcept;
 
@@ -469,7 +462,6 @@ namespace EmEn::Overlay
 			 * copy: iterating m_screens itself raced with createScreen() / destroyScreen() on the main thread (a rehash or
 			 * an erase during the iteration), and holding m_screensAccess during the updates would deadlock an observer
 			 * that touches the screen list. The caller holds m_physicalRepresentationUpdateMutex.
-			 * @return void
 			 */
 			void snapshotScreens () noexcept;
 
@@ -479,7 +471,7 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Generates the overlay shader program.
 			 * @param premultipliedAlpha Whether to use premultiplied alpha blending.
-			 * @param bgraSource Whether the source pixels are in BGRA format.
+			 * @param isBGRASurface Whether the source pixels are in BGRA format.
 			 * @return std::shared_ptr< Saphir::Program >
 			 */
 			[[nodiscard]]
@@ -496,7 +488,6 @@ namespace EmEn::Overlay
 
 			/**
 			* @brief Releases the ImGUI library.
-			* @return void
 			*/
 			void releaseImGUI () noexcept;
 
@@ -543,7 +534,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Dumps and clears the per-surface GPU upload statistics, at most once per second.
 			 * @note Render thread only, called at the end of updateVideoMemory().
-			 * @return void
 			 */
 			void dumpUploadStatistics () noexcept;
 	};

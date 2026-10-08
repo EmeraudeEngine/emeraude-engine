@@ -160,13 +160,11 @@ namespace EmEn::Scenes::Editor
 			 * viewport dimensions are captured here and window resizes are followed.
 			 * @param scene A reference to the scene to edit.
 			 * @param viewMatrices A reference to the view matrices for the main camera.
-			 * @return void
 			 */
 			void activate (Scene & scene, const Graphics::ViewMatricesInterface & viewMatrices) noexcept;
 
 			/**
 			 * @brief Deactivates the editor mode, clears selection and destroys gizmos.
-			 * @return void
 			 */
 			void deactivate () noexcept;
 
@@ -183,14 +181,12 @@ namespace EmEn::Scenes::Editor
 
 			/**
 			 * @brief Updates editor logic each frame (gizmo screen scale, hover).
-			 * @return void
 			 */
 			void processLogics () noexcept;
 
 			/**
 			 * @brief Records the gizmo draw commands into the command buffer.
 			 * @param commandBuffer The active command buffer.
-			 * @return void
 			 */
 			void render (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
@@ -204,7 +200,6 @@ namespace EmEn::Scenes::Editor
 			 * @warning Call it at setup (before the editor is first activated) or from the render thread: the overlay pass
 			 * calls the function without a lock.
 			 * @param drawFunction The function emitting the panel's ImGUI widgets, or nullptr for no panel.
-			 * @return void
 			 */
 			void setPanel (std::function< void () > drawFunction) noexcept;
 
@@ -222,7 +217,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Draws the panel, if any.
 			 * @note Render thread, inside the overlay's ImGUI frame.
-			 * @return void
 			 */
 			void
 			drawPanel () const noexcept
@@ -236,7 +230,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Sets the editor state: selecting, or transforming the selection with the gizmo.
 			 * @param state The state.
-			 * @return void
 			 */
 			void setState (EditorState state) noexcept;
 
@@ -254,7 +247,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Sets the gizmo editing mode.
 			 * @param mode The gizmo mode.
-			 * @return void
 			 */
 			void setGizmoMode (GizmoMode mode) noexcept;
 
@@ -272,7 +264,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Sets the transform space for gizmo operations.
 			 * @param space The transform space.
-			 * @return void
 			 */
 			void
 			setTransformSpace (TransformSpace space) noexcept
@@ -308,7 +299,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Sets the gizmo screen size ratio (fraction of viewport height).
 			 * @param ratio The ratio. Default is Gizmo::Abstract::DefaultScreenRatio (0.3).
-			 * @return void
 			 */
 			void
 			setGizmoScreenRatio (float ratio) noexcept
@@ -330,7 +320,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Sets the movement ratio for free move mode. Default 1.0.
 			 * @param ratio The ratio multiplier.
-			 * @return void
 			 */
 			void
 			setMoveRatio (float ratio) noexcept
@@ -341,7 +330,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Sets the movement step. 0 = free move, >0 = snap to grid.
 			 * @param step The step size (e.g. 0.1, 1.0, 5.0). 0 disables snapping.
-			 * @return void
 			 */
 			void
 			setMoveStep (float step) noexcept
@@ -372,33 +360,28 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Replaces the selection by one entity.
 			 * @param entity A pointer to the entity to select.
-			 * @return void
 			 */
 			void setSelection (AbstractEntity * entity) noexcept;
 
 			/**
 			 * @brief Adds an entity to the selection, or removes it when it is already selected (Shift+click).
 			 * @param entity A pointer to the entity.
-			 * @return void
 			 */
 			void toggleSelection (AbstractEntity * entity) noexcept;
 
 			/**
 			 * @brief Clears the selection.
-			 * @return void
 			 */
 			void clearSelection () noexcept;
 
 			/**
 			 * @brief The engine's default panel (ImGUI): the four tools, the transform space, the selection and the active
 			 * entity's transform, read-only.
-			 * @return void
 			 */
 			void drawDefaultPanel () noexcept;
 
 			/**
 			 * @brief Hands the selection to the scene, which outlines it.
-			 * @return void
 			 */
 			void publishSelection () noexcept;
 
@@ -413,7 +396,6 @@ namespace EmEn::Scenes::Editor
 			/**
 			 * @brief Starts a gizmo drag: captures the pivot and the initial state of every entity it moves.
 			 * @note An entity whose ancestor is also selected is left out: it follows its parent, it must not move twice.
-			 * @return void
 			 */
 			void beginDrag () noexcept;
 

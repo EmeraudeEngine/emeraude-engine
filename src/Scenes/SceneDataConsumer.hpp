@@ -135,7 +135,6 @@ namespace EmEn::Scenes
 			 * @note The CALLER's policy (owner, 2026-10-04): a loader does not know what is vegetation. The defaults of
 			 * InstanceClusterOptions are finite on purpose. `lightingEnabled` is ignored: each mesh decides it.
 			 * @param options The options.
-			 * @return void
 			 */
 			void
 			setInstanceClusterOptions (const InstanceClusterOptions & options) noexcept
@@ -194,14 +193,12 @@ namespace EmEn::Scenes
 			 * drives many nodes — see Component::NodeAnimation.
 			 * @param sceneData A reference to the loaded data.
 			 * @param parentNode A reference to the hierarchy root.
-			 * @return void
 			 */
 			void attachNodeAnimations (const Scenes::Loaders::SceneData & sceneData, const std::shared_ptr< Node > & parentNode) noexcept;
 
 			/**
 			 * @brief Collects every node index the node-animation clips address.
 			 * @param sceneData A reference to the loaded data.
-			 * @return void
 			 */
 			void collectAnimatedNodeIndices (const Scenes::Loaders::SceneData & sceneData) noexcept;
 

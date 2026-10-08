@@ -304,7 +304,6 @@ namespace EmEn::Scenes::Component
 			 * next component add or remove recomputes it.
 			 *
 			 * @param state The state.
-			 * @return void
 			 * @see contributesToEntityExtents()
 			 */
 			void
@@ -392,7 +391,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief This method is called when the entity is updated by the core logic every cycle.
 			 * @param scene A reference to the scene.
-			 * @return void
 			 */
 			virtual void processLogics (const Scene & scene) noexcept = 0;
 
@@ -400,7 +398,6 @@ namespace EmEn::Scenes::Component
 			 * @brief This method is called from the entity holding this component.
 			 * @note This can be called by the Abstract::processLogics() method.
 			 * @param worldCoordinates A reference to the world coordinates.
-			 * @return void
 			 */
 			virtual void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept = 0;
 
@@ -422,11 +419,10 @@ namespace EmEn::Scenes::Component
 			 * Dispatched by AbstractEntity::publishStateForRendering(), on the logic thread, inside
 			 * Scene::publishStateForRendering(). The default does nothing.
 			 * @param writeStateIndex The render state-free index to write to.
-			 * @return void
 			 */
 			virtual
 			void
-			publishStateForRendering (uint32_t /*writeStateIndex*/) noexcept
+			publishStateForRendering ([[maybe_unused]] uint32_t writeStateIndex) noexcept
 			{
 
 			}
@@ -549,7 +545,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Logs the refusal of acceptsFinite().
 			 * @param setter The name of the setter.
-			 * @return void
 			 */
 			void traceNonFiniteValue (const char * setter) const noexcept;
 

@@ -342,7 +342,6 @@ namespace EmEn::Graphics::Material
 			 * @note LINEAR, like every uniform colour of a material (StandardResource's albedo colour included): it is
 			 * multiplied by the luminance as it is. Its brightness is the luminance's job — a pure hue is the intent.
 			 * @param color A reference to a colour.
-			 * @return void
 			 */
 			void setColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -362,7 +361,6 @@ namespace EmEn::Graphics::Material
 			 * @note References: a monitor 200-300 nits, a fluorescent tube ~10 000, a welding arc 10⁶ and more. The
 			 * scene is pre-exposed: pick it against the exposure of the scene the beam lives in.
 			 * @param nits The luminance. Clamped to 0 or above.
-			 * @return void
 			 */
 			void setLuminance (float nits) noexcept;
 
@@ -381,7 +379,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Sets the half width of the beam, in the entity's units (metres for an unscaled entity).
 			 * @note Below one pixel the ribbon keeps one pixel and its light is scaled down by the ratio (BeamGLSL).
 			 * @param halfWidth The half width. Clamped to 0 or above.
-			 * @return void
 			 */
 			void setHalfWidth (float halfWidth) noexcept;
 
@@ -399,7 +396,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Sets the cross-section profile: the light falls as (1 - side²)^exponent across the ribbon.
 			 * @param exponent 1 is a soft glow, 4 a hard core. Clamped to at least 0.1.
-			 * @return void
 			 */
 			void setCoreExponent (float exponent) noexcept;
 
@@ -410,7 +406,6 @@ namespace EmEn::Graphics::Material
 			 * exceeds it and its mean offset is half of it (Saphir::BeamGLSL::ArcGain). Clamped to 0 or above.
 			 * @param frequency The number of noise cycles along the whole beam (its coarsest bends). Clamped to 0 or above.
 			 * @param octaves The number of noise octaves (the detail of the discharge), 1 to Saphir::BeamGLSL::MaxOctaves (8).
-			 * @return void
 			 */
 			void setArc (float amplitude, float frequency, uint32_t octaves) noexcept;
 
@@ -419,7 +414,6 @@ namespace EmEn::Graphics::Material
 			 * @param seed The seed: two beams of the same seed draw the same arc.
 			 * @param restrikeRate How many new arcs per second (the seed changes, the arc jumps); 0 = never.
 			 * @param drift How fast the noise scrolls along the beam between re-strikes, in noise cycles per second.
-			 * @return void
 			 */
 			void setArcMotion (uint32_t seed, float restrikeRate, float drift) noexcept;
 
@@ -531,13 +525,11 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Writes the radiance (linear colour × luminance) into the UBO copy.
-			 * @return void
 			 */
 			void updateRadiance () noexcept;
 
 			/**
 			 * @brief Requests an upload of the UBO copy, once per frame at most, when the material is on the GPU.
-			 * @return void
 			 */
 			void markVideoMemoryDirty () noexcept;
 

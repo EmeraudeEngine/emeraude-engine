@@ -220,7 +220,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the number of cascades.
 			 * @param count The cascade count (1-4).
-			 * @return void
 			 */
 			void setCascadeCount (uint32_t count) noexcept;
 
@@ -253,7 +252,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the lambda value for cascade split calculation.
 			 * @param value The lambda value (0 = linear, 1 = logarithmic).
-			 * @return void
 			 */
 			void setLambda (float value) noexcept;
 
@@ -313,7 +311,6 @@ namespace EmEn::Graphics
 			 * @param cameraFrustumCorners Array of 8 corners of the camera frustum in world space.
 			 * @param nearPlane The camera near plane distance.
 			 * @param farPlane The camera far plane distance.
-			 * @return void
 			 */
 			void updateFromMainCameraFrustum (const Base::Math::Vector< 3, float > & lightDirection, const std::array< Base::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
 
@@ -322,7 +319,6 @@ namespace EmEn::Graphics
 			 * @note Uses a blend of logarithmic and linear split based on lambda value.
 			 * @param nearPlane The camera near plane distance.
 			 * @param farPlane The camera far plane distance.
-			 * @return void
 			 */
 			void computeSplitDistances (float nearPlane, float farPlane) noexcept;
 
@@ -373,7 +369,6 @@ namespace EmEn::Graphics
 
 			/** @brief Offset of the cascade split distances in the buffer. */
 			static constexpr auto CascadeSplitDistancesOffset{CascadeMatricesJumpOffset + 0UL};
-			/** @brief Offset of the cascade count in the buffer. */
 			/**
 			 * @brief Cascade count, lane .x of the cascadeProperties vec4.
 			 * @note ⚠️ Lane .y used to be a shadowBias, removed Aug 2026: written by nobody, read by
@@ -386,7 +381,6 @@ namespace EmEn::Graphics
 			 * Saphir::Generator::Abstract, which is exactly how a silent truncation once shipped.
 			 */
 			static constexpr auto CascadeCountOffset{CascadeMatricesJumpOffset + 4UL};
-			/** @brief Offset of the shadow bias in the buffer. */
 			/** @brief Offset of the world position in the buffer. */
 			static constexpr auto WorldPositionOffset{CascadeMatricesJumpOffset + 8UL};
 			/** @brief Offset of the velocity vector in the buffer. */

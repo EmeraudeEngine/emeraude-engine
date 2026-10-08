@@ -121,7 +121,6 @@ namespace EmEn::Animations
 			 * @brief Sets the condition of the lamp.
 			 * @note Continuous on purpose: a lamp can degrade during play by walking this down.
 			 * @param health 1 = new, 0 = dead, clamped (NaN: refused with a warning).
-			 * @return void
 			 */
 			void setHealth (float health) noexcept;
 

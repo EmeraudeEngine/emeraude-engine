@@ -172,7 +172,6 @@ namespace EmEn::Console
 			/**
 			 * @brief Records the text this argument was parsed from.
 			 * @param source The unquoted token [std::move].
-			 * @return void
 			 */
 			void
 			setSource (std::string source) noexcept

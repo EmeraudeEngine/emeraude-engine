@@ -120,7 +120,6 @@ namespace EmEn::Scenes
 			 * @param worldCoordinates A pointer to the cartesian frame.
 			 * @param subGeometryIndex The layer index of the renderable.
 			 * @param LODLevel The geometry LOD level for this batch.
-			 * @return void
 			 */
 			static
 			void

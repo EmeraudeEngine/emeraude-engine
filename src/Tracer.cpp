@@ -718,29 +718,30 @@ namespace EmEn
 		{
 			case Severity::Debug :
 				stream << " \033[1;36m" << message << "\033[0m ";
-				break;
+				return;
 
 			case Severity::Success :
 				stream << " \033[1;92m" << message << "\033[0m ";
-				break;
+				return;
 
 			case Severity::Warning :
 				stream << " \033[1;35m" << message << "\033[0m ";
-				break;
+				return;
 
 			case Severity::Error :
 				stream << " \033[1;91m" << message << "\033[0m ";
-				break;
+				return;
 
 			case Severity::Fatal :
 				stream << " \033[1;41m" << message << "\033[0m ";
-				break;
+				return;
 
 			case Severity::Info :
-			default :
-				stream << ' ' << message << ' ';
 				break;
 		}
+
+		/* Info, or an out-of-range severity: the message without colour. */
+		stream << ' ' << message << ' ';
 	}
 
 	void

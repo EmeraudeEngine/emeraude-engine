@@ -119,10 +119,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Debug callback signature method for Vulkan messenger.
-			 * @param messageSeverity
-			 * @param messageType
-			 * @param pCallbackData
-			 * @param pUserData
+			 * @param messageSeverity The severity of the message.
+			 * @param messageType The type flags of the message.
+			 * @param pCallbackData A pointer to the message data.
+			 * @param pUserData The user data pointer given at the messenger creation.
 			 * @return VkBool32
 			 */
 			static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback (VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void * pUserData) noexcept;

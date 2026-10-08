@@ -72,7 +72,6 @@ namespace EmEn::Overlay
 			 * @note This must be called when the monitor or the OS window is resized.
 			 * @param width The framebuffer width in pixel.
 			 * @param height The framebuffer height in pixel.
-			 * @return void
 			 */
 			void
 			updateProperties (uint32_t width, uint32_t height) noexcept
@@ -90,7 +89,6 @@ namespace EmEn::Overlay
 			 * @param height The framebuffer height in pixel.
 			 * @param scaleX The screen scale in X. Default 1.0.
 			 * @param scaleY The screen scale in Y. Default 1.0.
-			 * @return void
 			 */
 			void
 			updateProperties (uint32_t width, uint32_t height, float scaleX, float scaleY) noexcept
@@ -116,7 +114,6 @@ namespace EmEn::Overlay
 			 * @brief Sets the framebuffer scaling factor for HDPI screen.
 			 * @param scaleX The scale in X.
 			 * @param scaleY The scale in Y.
-			 * @return void
 			 */
 			void
 			setScreenScale (float scaleX, float scaleY) noexcept
@@ -130,7 +127,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets the framebuffer scaling factor for HDPI screen.
 			 * @param scale The scale uniform on both axes.
-			 * @return void
 			 */
 			void
 			setScreenScale (float scale) noexcept
@@ -328,7 +324,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Resets the framebuffer properties.
-			 * @return void
 			 */
 			void reset () noexcept;
 
@@ -371,7 +366,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Updates the scaled resolution with factors.
-			 * @return void
 			 */
 			void updateScaledResolution () noexcept;
 

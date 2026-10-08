@@ -139,7 +139,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Removes an element from the uniform buffer object.
 			 * @param element A raw pointer from the linked element.
-			 * @return void
 			 */
 			void removeElement (const void * element) noexcept;
 
@@ -172,13 +171,6 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the byte offset for an element within its UBO.
-			 * @note This is the LOCAL offset within the specific UBO that holds the element.
-			 *	   Use this for descriptor set binding or direct buffer access.
-			 * @param elementIndex The global element index.
-			 * @return VkDeviceSize The byte offset within the UBO.
-			 */
-			/**
 			 * @brief Returns how many frame-in-flight regions each bank is split into.
 			 * @note ⚠️ Consumers MUST bound their region index with this, not with a compile-time
 			 * maximum: addressing a region beyond it lands past the end of the buffer.
@@ -191,6 +183,14 @@ namespace EmEn::Graphics
 				return m_frameCount;
 			}
 
+			/**
+			 * @brief Returns the byte offset for an element within its UBO.
+			 * @note This is the LOCAL offset within the specific UBO that holds the element.
+			 *	   Use this for descriptor set binding or direct buffer access.
+			 * @param elementIndex The global element index.
+			 * @param frameIndex The frame-in-flight region, below frameCount(). Default 0.
+			 * @return VkDeviceSize The byte offset within the UBO.
+			 */
 			[[nodiscard]]
 			VkDeviceSize
 			getByteOffsetForElement (uint32_t elementIndex, uint32_t frameIndex = 0) const noexcept

@@ -1192,11 +1192,11 @@ namespace EmEn::Scenes::Loaders
 			const auto & vertex1 = vertices[linedef.v1];
 			const auto & vertex2 = vertices[linedef.v2];
 
-			const auto * rightSide = linedef.rightSide >= 0 && static_cast< size_t >(linedef.rightSide) < sidedefs.size() ? &sidedefs[linedef.rightSide] : nullptr;
-			const auto * leftSide = linedef.leftSide >= 0 && static_cast< size_t >(linedef.leftSide) < sidedefs.size() ? &sidedefs[linedef.leftSide] : nullptr;
+			const auto * rightSide = linedef.rightSide >= 0 && static_cast< size_t >(linedef.rightSide) < sidedefs.size() ? &sidedefs[static_cast< size_t >(linedef.rightSide)] : nullptr;
+			const auto * leftSide = linedef.leftSide >= 0 && static_cast< size_t >(linedef.leftSide) < sidedefs.size() ? &sidedefs[static_cast< size_t >(linedef.leftSide)] : nullptr;
 
-			const auto * rightSector = rightSide != nullptr && rightSide->sector >= 0 && static_cast< size_t >(rightSide->sector) < sectors.size() ? &sectors[rightSide->sector] : nullptr;
-			const auto * leftSector = leftSide != nullptr && leftSide->sector >= 0 && static_cast< size_t >(leftSide->sector) < sectors.size() ? &sectors[leftSide->sector] : nullptr;
+			const auto * rightSector = rightSide != nullptr && rightSide->sector >= 0 && static_cast< size_t >(rightSide->sector) < sectors.size() ? &sectors[static_cast< size_t >(rightSide->sector)] : nullptr;
+			const auto * leftSector = leftSide != nullptr && leftSide->sector >= 0 && static_cast< size_t >(leftSide->sector) < sectors.size() ? &sectors[static_cast< size_t >(leftSide->sector)] : nullptr;
 
 			const auto sizeOf = [&textureSizes, &resolveTexture] (const std::string & name) -> std::pair< float, float > {
 				if ( name.empty() || name == "-" )
@@ -1355,7 +1355,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( sideIndex >= 0 && static_cast< size_t >(sideIndex) < sidedefs.size() )
 				{
-					return sidedefs[sideIndex].sector;
+					return sidedefs[static_cast< size_t >(sideIndex)].sector;
 				}
 			}
 
@@ -1551,7 +1551,7 @@ namespace EmEn::Scenes::Loaders
 				continue;
 			}
 
-			const auto & sector = sectors[sectorIndex];
+			const auto & sector = sectors[static_cast< size_t >(sectorIndex)];
 
 			static_cast< void >(resolveTexture(sector.floorFlat));
 			emitFlat(sector.floorFlat, subSectorPolygons[subIdx], sector.floorHeight, false, sector.lightLevel);
@@ -1627,7 +1627,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( (side1 >= 0 && side2 >= 0 && side3 >= 0) || (side1 <= 0 && side2 <= 0 && side3 <= 0) )
 						{
-							floorHeight = sectors[subSectorSectors[subIdx]].floorHeight;
+							floorHeight = sectors[static_cast< size_t >(subSectorSectors[subIdx])].floorHeight;
 							found = true;
 
 							break;

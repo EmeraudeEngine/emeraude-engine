@@ -194,7 +194,6 @@ namespace EmEn::Graphics::Effects::Camera
 			/**
 			 * @brief Sets the tone mapping parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept
@@ -210,7 +209,6 @@ namespace EmEn::Graphics::Effects::Camera
 			 * rebuilds the tone mapping whenever the bloom (de)materializes — this is what
 			 * removed the bloom's own full-resolution composite pass.
 			 * @param bloom A shared pointer to the bloom effect, or nullptr.
-			 * @return void
 			 */
 			void
 			setGlareSource (std::shared_ptr< VeilingGlare > bloom) noexcept

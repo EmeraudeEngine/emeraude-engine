@@ -117,7 +117,6 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @brief Makes the taskbar icon of the application flashing to alert the user.
 	 * @param window A reference to the window.
 	 * @param state The flashing state.
-	 * @return void
 	 */
 	EMEN_LEAN_API void flashTaskbarIcon (const Window & window, bool state) noexcept;
 
@@ -126,7 +125,6 @@ namespace EmEn::PlatformSpecific::Desktop
 	 * @param window A reference to the window.
 	 * @param progress The progression value. Negative number disables the progression.
 	 * @param mode The progression mode. Only for Windows.
-	 * @return void
 	 */
 	EMEN_LEAN_API void setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept;
 }

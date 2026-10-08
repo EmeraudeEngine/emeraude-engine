@@ -206,7 +206,6 @@ namespace EmEn::Net
 			 * @brief Emits the pending lifecycle notifications and persists the cache index.
 			 * @note Called by Core at the top of every main-loop cycle: this is what makes the
 			 * observers run on the main thread, whatever thread finished the transfer.
-			 * @return void
 			 */
 			void dispatchCompleted () noexcept;
 
@@ -316,10 +315,6 @@ namespace EmEn::Net
 			bool loadCacheIndex () noexcept;
 
 			/**
-			 * @brief Writes the cache index. Caller holds m_itemsAccess.
-			 * @return bool
-			 */
-			/**
 			 * @brief Serialises the cache index. Caller holds m_itemsAccess.
 			 * @return std::string
 			 */
@@ -337,7 +332,6 @@ namespace EmEn::Net
 			/**
 			 * @brief Worker body: fetches one ticket and records the outcome.
 			 * @param ticket The ticket.
-			 * @return void
 			 */
 			void performDownload (int ticket) noexcept;
 
@@ -345,14 +339,12 @@ namespace EmEn::Net
 			 * @brief Drops the least recently used cached files until the budget is met.
 			 * @note Caller holds m_itemsAccess. A file a live Done ticket still points at is kept,
 			 * whatever its age.
-			 * @return void
 			 */
 			void enforceCacheBudget () noexcept;
 
 			/**
 			 * @brief Removes partial files left by a crash or a kill.
 			 * @note They are invisible to the index, so nothing else would ever reclaim them.
-			 * @return void
 			 */
 			void sweepPartialFiles () const noexcept;
 

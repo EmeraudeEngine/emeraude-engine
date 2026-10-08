@@ -790,7 +790,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Records the world frame the scene has just filed the entity with [LOGIC THREAD].
 			 * @param worldCoordinates The entity's world coordinates at that filing.
-			 * @return void
 			 */
 			void
 			recordFiledFrame (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept
@@ -1073,7 +1072,6 @@ namespace EmEn::Scenes
 			 * @note The per-class half of publishStateForRendering(), which is non-virtual so the
 			 * component dispatch can never be dropped by an override.
 			 * @param writeStateIndex The render state-free index to write to.
-			 * @return void
 			 */
 			virtual void onPublishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
 
@@ -1392,7 +1390,6 @@ namespace EmEn::Scenes
 			 *
 			 * @param renderableInstance A reference to the helper's renderable instance.
 			 * @param renderBoundingBox A reference to the entity's local render bounding box.
-			 * @return void
 			 */
 			static void applyRenderBoundingBoxTransform (Graphics::RenderableInstance::Abstract & renderableInstance, const Base::Math::Space3D::AACuboid< float > & renderBoundingBox) noexcept;
 

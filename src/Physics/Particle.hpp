@@ -234,7 +234,6 @@ namespace EmEn::Physics
 			 * @brief Sets the lifetime of the particle in milliseconds.
 			 * @note If you set zero, the particle will be considered as dead.
 			 * @param life The new life of the particle.
-			 * @return void
 			 */
 			void
 			setLifetime (uint32_t life) noexcept
@@ -256,7 +255,6 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the size of the particle.
 			 * @param size The new size of the particle.
-			 * @return void
 			 */
 			void
 			setSize (float size) noexcept
@@ -301,7 +299,6 @@ namespace EmEn::Physics
 			 * @param velocity A reference to a velocity vector.
 			 * @param sizeDelta A value to add to the current size of the particle.
 			 * @param chaos A chaos value to apply.
-			 * @return void
 			 */
 			void update (const Base::Math::Vector< 3, float > & velocity, float sizeDelta, float chaos) noexcept;
 

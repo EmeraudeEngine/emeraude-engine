@@ -65,7 +65,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Sets a node to control.
 			 * @param node The scene node.
-			 * @return void
 			 */
 			void
 			controlNode (const std::shared_ptr< Node > & node) noexcept
@@ -75,7 +74,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Releases the node.
-			 * @return void
 			 */
 			void
 			releaseNode () noexcept
@@ -110,7 +108,6 @@ namespace EmEn::Scenes
 			 * @param deviceId The ID of the device. The first is 0.
 			 * @param moveStep Set a step value to move the node. Default 6.0.
 			 * @param rotationAngleStep Set the rate of speed to rotate the node. Default 1.0.
-			 * @return void
 			 */
 			void
 			connectDevice (int deviceId, float moveStep = DefaultMoveStep, float rotationAngleStep = DefaultRotationAngleStep) noexcept
@@ -123,7 +120,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Disconnects the gamepad device from this node controller.
-			 * @return void
 			 */
 			void
 			disconnectDevice () noexcept
@@ -144,7 +140,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Checks the controller buttons. This should be called in logic process loop.
-			 * @return void
 			 */
 			void update () const noexcept;
 
@@ -161,13 +156,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief switchTransformSpace
-			 * @return void
 			 */
 			void switchTransformSpace () noexcept;
 
 			/**
 			 * @brief switchControlMode
-			 * @return void
 			 */
 			void switchControlMode () noexcept;
 

@@ -78,7 +78,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Releases the GPU objects.
-			 * @return void
 			 */
 			void destroy () noexcept;
 

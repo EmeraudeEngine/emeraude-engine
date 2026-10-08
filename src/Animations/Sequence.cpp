@@ -90,28 +90,28 @@ namespace EmEn::Animations
 				return Variant{static_cast< int32_t >(linearInterpolation< double >(
 					itStart->second.value().asInteger32(),
 					itEnd->second.value().asInteger32(),
-					factor
+					static_cast< double >(factor)
 				))};
 
 			case Variant::Type::UnsignedInteger32 :
 				return Variant{static_cast< uint32_t >(linearInterpolation< double >(
 					itStart->second.value().asUnsignedInteger32(),
 					itEnd->second.value().asUnsignedInteger32(),
-					factor
+					static_cast< double >(factor)
 				))};
 
 			case Variant::Type::Integer64 :
 				return Variant{static_cast< int64_t >(linearInterpolation< long double >(
 					static_cast< long double >(itStart->second.value().asInteger64()),
 					static_cast< long double >(itEnd->second.value().asInteger64()),
-					factor
+					static_cast< long double >(factor)
 				))};
 
 			case Variant::Type::UnsignedInteger64 :
 				return Variant{static_cast< uint64_t >(linearInterpolation< long double >(
 					static_cast< long double >(itStart->second.value().asUnsignedInteger64()),
 					static_cast< long double >(itEnd->second.value().asUnsignedInteger64()),
-					factor
+					static_cast< long double >(factor)
 				))};
 
 			case Variant::Type::Float :
@@ -125,14 +125,14 @@ namespace EmEn::Animations
 				return Variant{linearInterpolation(
 					itStart->second.value().asDouble(),
 					itEnd->second.value().asDouble(),
-					factor
+					static_cast< double >(factor)
 				)};
 
 			case Variant::Type::LongDouble :
 				return Variant{linearInterpolation(
 					itStart->second.value().asLongDouble(),
 					itEnd->second.value().asLongDouble(),
-					factor
+					static_cast< long double >(factor)
 				)};
 
 			case Variant::Type::Boolean :
@@ -257,28 +257,28 @@ namespace EmEn::Animations
 				return Variant{static_cast< int32_t >(cosineInterpolation< double > (
 					itStart->second.value().asInteger32(),
 					itEnd->second.value().asInteger32(),
-					factor
+					static_cast< double >(factor)
 				))};
 
 			case Variant::Type::UnsignedInteger32 :
 				return Variant{static_cast< uint32_t >(cosineInterpolation< double >(
 					itStart->second.value().asUnsignedInteger32(),
 					itEnd->second.value().asUnsignedInteger32(),
-					factor
+					static_cast< double >(factor)
 				))};
 
 			case Variant::Type::Integer64 :
 				return Variant{static_cast< int64_t >(cosineInterpolation< long double >(
 					static_cast< long double >(itStart->second.value().asInteger64()),
 					static_cast< long double >(itEnd->second.value().asInteger64()),
-					factor
+					static_cast< long double >(factor)
 				))};
 
 			case Variant::Type::UnsignedInteger64 :
 				return Variant{static_cast< uint64_t >(cosineInterpolation< long double >(
 					static_cast< long double >(itStart->second.value().asUnsignedInteger64()),
 					static_cast< long double >(itEnd->second.value().asUnsignedInteger64()),
-					factor
+					static_cast< long double >(factor)
 				))};
 
 			case Variant::Type::Float :
@@ -292,14 +292,14 @@ namespace EmEn::Animations
 				return Variant{cosineInterpolation(
 					itStart->second.value().asDouble(),
 					itEnd->second.value().asDouble(),
-					  factor
+					  static_cast< double >(factor)
 				  )};
 
 			case Variant::Type::LongDouble :
 				return Variant{cosineInterpolation(
 					itStart->second.value().asLongDouble(),
 					itEnd->second.value().asLongDouble(),
-					factor
+					static_cast< long double >(factor)
 				)};
 
 			case Variant::Type::Boolean :

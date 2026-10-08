@@ -71,7 +71,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Enables a set type.
 			 * @param setType The type of set.
-			 * @return void
 			 */
 			void
 			enableSet (SetType setType) noexcept

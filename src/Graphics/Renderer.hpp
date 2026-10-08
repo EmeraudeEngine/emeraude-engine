@@ -220,7 +220,6 @@ namespace EmEn::Graphics
 			 * @note Thread-safe: called from the logic or loading threads (StandardResource::markVideoMemoryDirty()),
 			 * drained by flushMaterialVideoMemoryUpdates() on the render thread before the scene's own uploads.
 			 * @param material A weak pointer to the material.
-			 * @return void
 			 */
 			void requestMaterialVideoMemoryUpdate (std::weak_ptr< Material::Interface > material) noexcept;
 
@@ -231,7 +230,6 @@ namespace EmEn::Graphics
 			 * flushGeometryVideoMemoryUpdates(), behind the frame fence and before the scene's own uploads —
 			 * the ONE place a buffer that draw calls read may be swapped. The same shape as the materials'.
 			 * @param geometry A weak pointer to the geometry.
-			 * @return void
 			 */
 			void requestGeometryVideoMemoryUpdate (std::weak_ptr< Geometry::Interface > geometry) noexcept;
 
@@ -243,7 +241,6 @@ namespace EmEn::Graphics
 			 * next frame. The render thread calls Geometry::Interface::updateSurfaceVideoMemory() on each
 			 * one from updateSurfaceGeometries(), before the shadow maps.
 			 * @param geometry A weak pointer to the geometry.
-			 * @return void
 			 */
 			void registerSurfaceGeometry (std::weak_ptr< Geometry::Interface > geometry) noexcept;
 
@@ -660,7 +657,6 @@ namespace EmEn::Graphics
 			 * @brief Switches the deferred resolve of the unshadowed punctual lights on or off (the forward passes come back).
 			 * @note Takes effect on the next recorded frame: the snapshot is taken per frame.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableDeferredPunctualLights (bool state) noexcept
@@ -715,7 +711,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Controls the state of shadow maps rendering.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableShadowMaps (bool state) noexcept
@@ -799,7 +794,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Controls the state of rendering to textures.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableRenderToTextures (bool state) noexcept
@@ -820,7 +814,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Toggles offscreen-rendering.
-			 * @return void
 			 */
 			void
 			toggleOffscreenRendering () noexcept
@@ -833,7 +826,6 @@ namespace EmEn::Graphics
 			 * @brief Controls the state of the TBN space rendering.
 			 * @note Visual debug functionality, this needs a geometry shader stage support from the GPU.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableTBNSpaceRendering (bool state) noexcept
@@ -856,7 +848,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Controls the state of the grab pass.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableGrabPass (bool state) noexcept
@@ -892,7 +883,6 @@ namespace EmEn::Graphics
 			 * @param green A scalar value.
 			 * @param blue A scalar value.
 			 * @param alpha A scalar value. Default 1.
-			 * @return void
 			 */
 			template< typename data_t = float >
 			void
@@ -908,7 +898,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the clear value for the color buffer for the next rendering.
 			 * @param clearColor A reference to a color.
-			 * @return void
 			 */
 			void
 			setClearColor (const Base::PixelFactory::Color< float > & clearColor) noexcept
@@ -924,7 +913,6 @@ namespace EmEn::Graphics
 			 * @brief Sets the clear values for the depth/stencil buffers for the next rendering.
 			 * @param depth The depth value.
 			 * @param stencil The stencil value.
-			 * @return void
 			 */
 			void
 			setClearDepthStencilValues (float depth, uint32_t stencil) noexcept
@@ -1256,7 +1244,6 @@ namespace EmEn::Graphics
 			 * No-op without a usable volume or a ready TLAS.
 			 * @param commandBuffer The frame's command buffer.
 			 * @param scene The active scene (its camera, light set and sky feed the update).
-			 * @return void
 			 */
 			void recordIrradianceProbeUpdate (const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer, Scenes::Scene * scene) const noexcept;
 
@@ -1292,7 +1279,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Creates graphics resources for default or fall-back behavior.
 			 * @param resources A reference to the resource manager.
-			 * @return void
 			 */
 			void createDefaultResources (Resources::Manager & resources) noexcept;
 
@@ -1300,7 +1286,6 @@ namespace EmEn::Graphics
 			 * @brief Clears default graphics resources before shutdown.
 			 * @note This must be called before Vulkan resources are destroyed
 			 * because these textures have VMA allocations.
-			 * @return void
 			 */
 			void clearDefaultResources () noexcept;
 
@@ -1449,7 +1434,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Notifies that a cached program was reused.
 			 * @note This increments the reuse counter for statistics.
-			 * @return void
 			 */
 			void
 			notifyProgramReused () noexcept
@@ -1483,7 +1467,6 @@ namespace EmEn::Graphics
 			 * Halton (2,3) NDC offset to the main view when the active scene's post-process stack
 			 * requires jitter; disables it otherwise. No-op without a main render target.
 			 * @param scene A pointer to the active scene, or nullptr.
-			 * @return void
 			 */
 			void prepareFrameJitter (const Scenes::Scene * scene) noexcept;
 
@@ -1494,7 +1477,6 @@ namespace EmEn::Graphics
 			 * @note Over budget, the driver pages allocations to system memory: a frame can stall for seconds and an
 			 * NVIDIA GPU loses the device (Xid 109, CTX SWITCH TIMEOUT) — JungleRuins, 28.7 GB on 8 GB, 2026-10-04.
 			 * Before this check, such a run looked like a GPU hang with nothing in the log.
-			 * @return void
 			 */
 			void checkMemoryBudget () noexcept;
 
@@ -1524,7 +1506,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Gives back the image beginFrame() acquired when no frame will record it (shutdown requested).
-			 * @return void
 			 */
 			void abandonFrame () noexcept;
 
@@ -1533,8 +1514,7 @@ namespace EmEn::Graphics
 			 * @note Inside the active scene lock. Without an acquired image it only recreates a degraded swap-chain.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
-			 * @param editorManager
-			 * @return void
+			 * @param editorManager A pointer to the editor manager, or nullptr when no editor is active. Default nullptr.
 			 */
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager = nullptr) noexcept;
 
@@ -1565,7 +1545,6 @@ namespace EmEn::Graphics
 			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
 			 * @note Defined out-of-line to keep 'Vulkan/SwapChain.hpp' (and the whole
 			 * Window/Framebuffer/CommandBuffer/ViewMatrices chain it drags in) out of this header.
-			 * @return void
 			 */
 			void setSwapChainDegraded () const noexcept;
 
@@ -1582,7 +1561,6 @@ namespace EmEn::Graphics
 			 * @brief Requests a graceful shutdown of the renderer.
 			 * @note This will signal the renderer to stop producing new frames
 			 * and allow any frames in-flight to complete before destruction.
-			 * @return void
 			 */
 			void requestShutdown () noexcept;
 
@@ -1651,7 +1629,6 @@ namespace EmEn::Graphics
 			 * BEHAVIOUR; drivers are known to crash inside vkCreatePipelineCache on such input,
 			 * and one such corruption originated INSIDE vkGetPipelineCacheData, which is why a
 			 * load marker guards against a blob that killed the previous run.
-			 * @return void
 			 */
 			void loadPipelineCache () const noexcept;
 
@@ -1659,7 +1636,6 @@ namespace EmEn::Graphics
 			 * @brief Writes the driver pipeline cache to disk.
 			 * @note Written to a temporary file then renamed, so a hard kill cannot leave a
 			 * truncated blob behind to poison the next launch.
-			 * @return void
 			 */
 			void savePipelineCache () const noexcept;
 
@@ -1685,7 +1661,6 @@ namespace EmEn::Graphics
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
 			 * @param queue A pointer to the graphics queue to use for submissions.
-			 * @return void
 			 */
 			void renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
 
@@ -1694,7 +1669,6 @@ namespace EmEn::Graphics
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
 			 * @param queue A pointer to the graphics queue to use for submissions.
-			 * @return void
 			 */
 			void renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
 
@@ -1703,10 +1677,9 @@ namespace EmEn::Graphics
 			 * @note Used when no post-processing and no MSAA is active.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
-			 * @param editorManager
+			 * @param editorManager A pointer to the editor manager, or nullptr when no editor is active.
 			 * @param currentFrameScope A reference to the current frame scope.
 			 * @param commandBuffer A reference to the command buffer smart pointer.
-			 * @return void
 			 */
 			void renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
 
@@ -1717,10 +1690,9 @@ namespace EmEn::Graphics
 			 * then draws final quad + overlay to swap-chain.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
-			 * @param editorManager
+			 * @param editorManager A pointer to the editor manager, or nullptr when no editor is active.
 			 * @param currentFrameScope A reference to the current frame scope.
 			 * @param commandBuffer A reference to the command buffer smart pointer.
-			 * @return void
 			 */
 			void renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
 
@@ -1728,7 +1700,6 @@ namespace EmEn::Graphics
 			 * @brief Applies software frame rate limiting if enabled.
 			 * @note Uses sleep for the bulk of the wait and busy-wait for the final
 			 * microseconds to achieve precise timing.
-			 * @return void
 			 */
 			void applyFrameRateLimit () const noexcept;
 
@@ -1768,7 +1739,6 @@ namespace EmEn::Graphics
 			 * @param currentFrameScope A reference to the frame scope being abandoned.
 			 * @param signalFence Set to true when the in-flight fence was reset and therefore
 			 * needs the empty batch to signal it back.
-			 * @return void
 			 */
 			void discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) const noexcept;
 
@@ -1782,7 +1752,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys command pools and buffers.
-			 * @return void
 			 */
 			void destroyRenderingSystem () noexcept;
 
@@ -1945,14 +1914,12 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Uploads every material registered by requestMaterialVideoMemoryUpdate() since the last frame.
 			 * @note Render thread, once per frame, right before the scene uploads its own buffers.
-			 * @return void
 			 */
 			void flushMaterialVideoMemoryUpdates () noexcept;
 
 			/**
 			 * @brief Publishes the vertex data every geometry registered by requestGeometryVideoMemoryUpdate() has staged since the last frame.
 			 * @note Render thread, same region as flushMaterialVideoMemoryUpdates().
-			 * @return void
 			 */
 			void flushGeometryVideoMemoryUpdates () noexcept;
 
@@ -1962,7 +1929,6 @@ namespace EmEn::Graphics
 			 * @note Render thread, right after flushGeometryVideoMemoryUpdates() and before the scene's
 			 * uploads and the shadow maps — every pass of the frame then reads the updated surface.
 			 * @param readStateIndex The render state index the frame latched (Scenes::Scene::frameReadStateIndex()).
-			 * @return void
 			 */
 			void updateSurfaceGeometries (uint32_t readStateIndex) noexcept;
 
@@ -1972,7 +1938,6 @@ namespace EmEn::Graphics
 			 * @note Once per rendered frame, after the frame's recording and inside the frame scope: the tone mapper's
 			 * metering is render-thread state (Effects::Camera::ToneMapping, meteredLuminance()).
 			 * @param scene The scene of the frame, or null.
-			 * @return void
 			 */
 			void publishFrameDiagnostics (Scenes::Scene * scene) noexcept;
 

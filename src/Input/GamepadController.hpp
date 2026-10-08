@@ -109,7 +109,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Attaches a device ID to this controller.
 			 * @param deviceID The device ID coming from GLFW.
-			 * @return void
 			 */
 			void
 			attachDeviceID (int32_t deviceID) noexcept
@@ -126,7 +125,6 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Detaches a previous attached device.
-			 * @return void
 			 */
 			void
 			detachDevice () noexcept
@@ -137,7 +135,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Sets the axis threshold to trigger a movement.
 			 * @param value The threshold value.
-			 * @return void
 			 */
 			void
 			setAxisThreshold (float value) noexcept
@@ -148,7 +145,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Sets the axis sensitivity.
 			 * @param multiplier A positive multiplier.
-			 * @return void
 			 */
 			void
 			setAxisSensitivity (float multiplier) noexcept
@@ -242,14 +238,12 @@ namespace EmEn::Input
 			 * @brief This function is called by the input manager to update device state.
 			 * @note This must be called by the main thread.
 			 * @param deviceID The gamepad ID.
-			 * @return void.
 			 */
 			static void readDeviceState (int32_t deviceID) noexcept;
 
 			/**
 			 * @brief Clears the device state.
 			 * @param deviceID The gamepad ID.
-			 * @return void.
 			 */
 			static void clearDeviceState (int32_t deviceID) noexcept;
 

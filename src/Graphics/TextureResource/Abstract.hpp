@@ -267,7 +267,6 @@ namespace EmEn::Graphics::TextureResource
 			 * on both axes, which is both the Vulkan and the glTF default.
 			 * @param wrapU Horizontal (S) wrap mode.
 			 * @param wrapV Vertical (T) wrap mode.
-			 * @return void
 			 */
 			void
 			setWrapModes (WrapMode wrapU, WrapMode wrapV) noexcept

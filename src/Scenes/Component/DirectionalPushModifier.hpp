@@ -99,7 +99,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the push magnitude.
 			 * @param magnitude A arbitrary value.
-			 * @return void
 			 */
 			void
 			setMagnitude (float magnitude) noexcept
@@ -126,13 +125,11 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets a custom push direction, which no longer follows the entity.
 			 * @param direction A reference to a unit vector, in world space.
-			 * @return void
 			 */
 			void setCustomDirection (const Base::Math::Vector< 3, float > & direction) noexcept;
 
 			/**
 			 * @brief Disables the custom push direction: the push follows the entity's backward vector again.
-			 * @return void
 			 */
 			void disableCustomDirection () noexcept;
 

@@ -267,7 +267,7 @@ namespace EmEn::Scenes::Loaders
 		 * so no axis/unit post-processing is needed downstream. */
 		ufbx_load_opts opts{};
 		opts.target_axes = ufbx_axes_right_handed_y_up;
-		opts.target_unit_meters = 1.0F;
+		opts.target_unit_meters = 1.0;
 		/* MODIFY_GEOMETRY bakes the axis conversion into vertex positions and
 		 * into `cluster->geometry_to_bone`. Static meshes and bind-pose skinning
 		 * are correct. Animated skinning currently exhibits a residual
@@ -417,7 +417,7 @@ namespace EmEn::Scenes::Loaders
 				auto source = EncodedSource::embedded(filepath, static_cast< uint32_t >(textureIndex), tex.content.size, format, &FBXLoader::readEmbeddedTexture);
 
 				image = m_resources.container< ImageResource >()
-					->getOrCreateResource(name, [bytes, format, source = std::move(source)] (auto & imageResource) {
+					->getOrCreateResource(name, [bytes, format, encodedSource = std::move(source)] (auto & imageResource) {
 						Pixmap< uint8_t > pixmap;
 
 						constexpr ReadOptions options{
@@ -429,7 +429,7 @@ namespace EmEn::Scenes::Loaders
 							return false;
 						}
 
-						imageResource.setEncodedSource(source);
+						imageResource.setEncodedSource(encodedSource);
 
 						return imageResource.load(std::move(pixmap));
 					});
@@ -578,7 +578,7 @@ namespace EmEn::Scenes::Loaders
 				static_cast< float >(pbr.base_color.value_vec4.x),
 				static_cast< float >(pbr.base_color.value_vec4.y),
 				static_cast< float >(pbr.base_color.value_vec4.z),
-				static_cast< float >(pbr.base_color.value_vec4.w > 0.0F ? pbr.base_color.value_vec4.w : 1.0F)
+				static_cast< float >(pbr.base_color.value_vec4.w > 0.0 ? pbr.base_color.value_vec4.w : 1.0)
 			};
 
 			if ( !pbr.base_color.has_value )
@@ -617,9 +617,9 @@ namespace EmEn::Scenes::Loaders
 				? static_cast< float >(pbr.emission_factor.value_real) : 0.0F;
 
 			const bool hasEmissiveColor = pbr.emission_color.has_value
-				&& (pbr.emission_color.value_vec3.x > 0.0F
-					|| pbr.emission_color.value_vec3.y > 0.0F
-					|| pbr.emission_color.value_vec3.z > 0.0F);
+				&& (pbr.emission_color.value_vec3.x > 0.0
+					|| pbr.emission_color.value_vec3.y > 0.0
+					|| pbr.emission_color.value_vec3.z > 0.0);
 
 			/* Specular (KHR_materials_specular semantics) — read ONLY on a PBR shading model.
 			 *
@@ -686,22 +686,22 @@ namespace EmEn::Scenes::Loaders
 				? static_cast< float >(pbr.opacity.value_real) : 1.0F;
 
 			auto configure = [
-				albedoTex = std::move(albedoTex), albedoColor,
-				roughnessTex = std::move(roughnessTex), roughnessFactor,
-				metalnessTex = std::move(metalnessTex), metalnessFactor,
-				normalTex = std::move(normalTex),
-				aoTex = std::move(aoTex),
-				emissiveTex = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
-				opacityTex = std::move(opacityTex), opacityValue,
+				albedoTexture = std::move(albedoTex), albedoColor,
+				roughnessTexture = std::move(roughnessTex), roughnessFactor,
+				metalnessTexture = std::move(metalnessTex), metalnessFactor,
+				normalTexture = std::move(normalTex),
+				ambientOcclusionTexture = std::move(aoTex),
+				emissiveTexture = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
+				opacityTexture = std::move(opacityTex), opacityValue,
 				specularIsDielectricF0, specularFactor, specularColor
 			] (auto & materialResource) {
 				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
 				 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
 				 * the texture and dropping the factor tints nothing and silently loses the
 				 * factor's alpha; the colour goes to the material's tint slot instead. */
-				if ( albedoTex != nullptr )
+				if ( albedoTexture != nullptr )
 				{
-					materialResource.setAlbedoComponent(albedoTex);
+					materialResource.setAlbedoComponent(albedoTexture);
 					materialResource.setAlbedoColor(albedoColor);
 				}
 				else
@@ -714,37 +714,37 @@ namespace EmEn::Scenes::Loaders
 				 * translation is: texture present ⇒ neutral factor (the setter default, 1.0);
 				 * passing the authored scalar here would wrongly scale the map (a metalness
 				 * scalar of 0 — the FBX default — would ZERO the metalness map out). */
-				if ( roughnessTex != nullptr )
+				if ( roughnessTexture != nullptr )
 				{
-					materialResource.setRoughnessComponent(roughnessTex);
+					materialResource.setRoughnessComponent(roughnessTexture);
 				}
 				else
 				{
 					materialResource.setRoughnessComponent(roughnessFactor);
 				}
 
-				if ( metalnessTex != nullptr )
+				if ( metalnessTexture != nullptr )
 				{
-					materialResource.setMetalnessComponent(metalnessTex);
+					materialResource.setMetalnessComponent(metalnessTexture);
 				}
 				else
 				{
 					materialResource.setMetalnessComponent(metalnessFactor);
 				}
 
-				if ( normalTex != nullptr )
+				if ( normalTexture != nullptr )
 				{
-					materialResource.setNormalComponent(normalTex);
+					materialResource.setNormalComponent(normalTexture);
 				}
 
-				if ( aoTex != nullptr )
+				if ( ambientOcclusionTexture != nullptr )
 				{
-					materialResource.setAmbientOcclusionComponent(aoTex);
+					materialResource.setAmbientOcclusionComponent(ambientOcclusionTexture);
 				}
 
-				if ( emissiveTex != nullptr )
+				if ( emissiveTexture != nullptr )
 				{
-					materialResource.setAutoIlluminationComponent(emissiveTex, emissiveStrength);
+					materialResource.setAutoIlluminationComponent(emissiveTexture, emissiveStrength);
 				}
 				else if ( hasEmissiveColor )
 				{
@@ -754,9 +754,9 @@ namespace EmEn::Scenes::Loaders
 				/* Opacity: the component carries the alpha (map or global value); the explicit
 				 * enableBlending() keeps the legacy StandardResource-mode behaviour identical
 				 * (its component setter does not raise the blending flag itself). */
-				if ( opacityTex != nullptr )
+				if ( opacityTexture != nullptr )
 				{
-					materialResource.setOpacityComponent(opacityTex, opacityValue);
+					materialResource.setOpacityComponent(opacityTexture, opacityValue);
 					materialResource.enableBlending(BlendingMode::Normal);
 				}
 				else if ( opacityValue < 0.999F )
@@ -1201,8 +1201,8 @@ namespace EmEn::Scenes::Loaders
 				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
 				renderable = m_resources.container< Renderable::MeshResource >()
-					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
-						return meshResource.load(geometry, singleMaterial, singleRasterization);
+					->getOrCreateResource(meshName, [geometry, material = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
+						return meshResource.load(geometry, material, singleRasterization);
 					});
 			}
 			else
@@ -1603,7 +1603,7 @@ namespace EmEn::Scenes::Loaders
 		 * coord space as the bind pose baked into the target skeleton. */
 		ufbx_load_opts opts{};
 		opts.target_axes = ufbx_axes_right_handed_y_up;
-		opts.target_unit_meters = 1.0F;
+		opts.target_unit_meters = 1.0;
 		opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
 		opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
 		opts.load_external_files = false;

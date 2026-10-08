@@ -448,7 +448,6 @@ namespace EmEn::Graphics
 			 * @note Afterwards width(), height(), isGrayScale(), averageColor() and isBinaryAlphaMask() answer the
 			 * kept values. Idempotent.
 			 * @pre The image is loaded, and no other thread reads it meanwhile (the release's own contract).
-			 * @return void
 			 */
 			void extractMetadata () noexcept;
 
@@ -467,7 +466,6 @@ namespace EmEn::Graphics
 			 * @brief Records where a scene loader read the image from, so its released CPU copy can come back
 			 * (EncodedSource). Set it before load().
 			 * @param source The encoded source.
-			 * @return void
 			 */
 			void
 			setEncodedSource (EncodedSource source) noexcept

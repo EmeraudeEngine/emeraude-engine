@@ -119,9 +119,10 @@ namespace EmEn::Vulkan
 					return ioSurface != nullptr;
 
 				case HandleType::None :
-				default :
 					return false;
 			}
+
+			return false;
 		}
 	};
 }

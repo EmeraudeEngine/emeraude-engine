@@ -68,7 +68,6 @@ namespace EmEn::Vulkan
 			 * @brief Adds an input attachment to the subpass.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
-			 * @return void
 			 */
 			void
 			addInputAttachment (uint32_t attachment, VkImageLayout layout) noexcept
@@ -83,7 +82,6 @@ namespace EmEn::Vulkan
 			 * @brief Adds a color attachment to the subpass.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
-			 * @return void
 			 */
 			void
 			addColorAttachment (uint32_t attachment, VkImageLayout layout) noexcept
@@ -99,7 +97,6 @@ namespace EmEn::Vulkan
 			 * @warning If there is a resolve attachment, it must be the same count as color attachments.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
-			 * @return void
 			 */
 			void
 			addResolveAttachment (uint32_t attachment, VkImageLayout layout) noexcept
@@ -114,7 +111,6 @@ namespace EmEn::Vulkan
 			 * @brief Sets the only possible attachment depth/stencil reference.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
-			 * @return void
 			 */
 			void
 			setDepthStencilAttachment (uint32_t attachment, VkImageLayout layout) noexcept
@@ -127,7 +123,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Adds a preserved attachment between subpasses.
 			 * @param index An index to the attachment.
-			 * @return void
 			 */
 			void
 			addPreserveAttachment (uint32_t index) noexcept
@@ -144,7 +139,6 @@ namespace EmEn::Vulkan
 			 * @param layout The image layout for the resolve attachment.
 			 * @param depthResolveMode The resolve mode for depth (e.g. VK_RESOLVE_MODE_SAMPLE_ZERO_BIT).
 			 * @param stencilResolveMode The resolve mode for stencil. Default VK_RESOLVE_MODE_NONE.
-			 * @return void
 			 */
 			void
 			setDepthStencilResolveAttachment (uint32_t attachment, VkImageLayout layout, VkResolveModeFlagBits depthResolveMode, VkResolveModeFlagBits stencilResolveMode = VK_RESOLVE_MODE_NONE) noexcept

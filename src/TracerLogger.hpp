@@ -293,7 +293,6 @@ namespace EmEn
 			/**
 			 * @brief Writes the file start of the log format.
 			 * @param file The log file.
-			 * @return void
 			 */
 			void writeHeader (std::ostream & file) const noexcept;
 
@@ -301,14 +300,12 @@ namespace EmEn
 			 * @brief Writes one entry in the log format.
 			 * @param file The log file.
 			 * @param entry The entry.
-			 * @return void
 			 */
 			void writeEntry (std::ostream & file, const TracerEntry & entry) const noexcept;
 
 			/**
 			 * @brief Writes the file end of the log format.
 			 * @param file The log file.
-			 * @return void
 			 */
 			void writeFooter (std::ostream & file) const noexcept;
 

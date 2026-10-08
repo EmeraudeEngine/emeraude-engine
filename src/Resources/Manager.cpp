@@ -35,10 +35,11 @@
 #endif
 
 /* STL inclusions. */
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ranges>
-#include <regex>
+#include <string_view>
 #include <thread>
 
 /* Local inclusions. */
@@ -94,6 +95,36 @@
 namespace EmEn::Resources
 {
 	using namespace Base;
+
+	namespace
+	{
+		/**
+		 * @brief Returns whether a file name is a resource index: "ResourcesIndex.NNN.json", N a decimal digit.
+		 * @note Matched by hand, no std::regex: it throws (an abort under -fno-exceptions) and trips a libstdc++
+		 * -Wmaybe-uninitialized false positive in the sanitizer build — the same reason as base URI.cpp.
+		 * @param fileName The file name, without its directory.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isResourcesIndexFileName (std::string_view fileName) noexcept
+		{
+			constexpr std::string_view Prefix{"ResourcesIndex."};
+			constexpr std::string_view Suffix{".json"};
+			constexpr size_t DigitCount{3};
+
+			if ( fileName.size() != Prefix.size() + DigitCount + Suffix.size() || !fileName.starts_with(Prefix) || !fileName.ends_with(Suffix) )
+			{
+				return false;
+			}
+
+			const auto digits = fileName.substr(Prefix.size(), DigitCount);
+
+			return std::ranges::all_of(digits, [] (char character) {
+				return character >= '0' && character <= '9';
+			});
+		}
+	}
 
 	ContainerInterface *
 	Manager::getContainerInternal (const std::type_index & typeIndex) noexcept
@@ -888,8 +919,6 @@ namespace EmEn::Resources
 	{
 		std::vector< std::string > indexes{};
 
-		const std::regex indexMatchRule("ResourcesIndex.([0-9]{3}).json",std::regex_constants::ECMAScript);
-
 		/* NOTE: For each data directory pointed by the file system, we will look for resource index files. */
 		for ( auto dataStoreDirectory : fileSystem.dataDirectories() )
 		{
@@ -902,7 +931,7 @@ namespace EmEn::Resources
 			}
 
 			/* NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
-			const auto walked = IO::forEachDirectoryEntry(dataStoreDirectory, false, [&indexes, &indexMatchRule] (const std::filesystem::directory_entry & entry) {
+			const auto walked = IO::forEachDirectoryEntry(dataStoreDirectory, false, [&indexes] (const std::filesystem::directory_entry & entry) {
 				std::error_code entryError;
 
 				if ( !entry.is_regular_file(entryError) )
@@ -911,17 +940,15 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				const auto filepath = entry.path().string();
-
-				if ( !std::regex_search(filepath, indexMatchRule) )
+				if ( !isResourcesIndexFileName(entry.path().filename().string()) )
 				{
-					/* No resource index file in this "data-stores/" directory. */
-					TraceWarning{ClassId} << "Directory '" << entry.path() << "' do not contains any resource index file !";
+					/* Not a resource index file: ignored. */
+					TraceWarning{ClassId} << "The file " << entry.path() << " in a data-stores directory is not a resource index file (ResourcesIndex.NNN.json), ignored.";
 
 					return true;
 				}
 
-				indexes.emplace_back(filepath);
+				indexes.emplace_back(entry.path().string());
 
 				return true;
 			});

@@ -70,7 +70,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the ghost opacity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the horizontal UV offset of the ghost image.
 			 * @param offset Value > 0. Default 0.015.
-			 * @return void
 			 */
 			void setOffset (float offset) noexcept;
 
@@ -110,7 +108,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Enables or disables a second, fainter ghost.
 			 * @param enabled True to enable the second ghost (further offset, lower opacity).
-			 * @return void
 			 */
 			void
 			enableSecondGhost (bool enabled) noexcept

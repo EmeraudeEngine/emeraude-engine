@@ -181,7 +181,6 @@ namespace EmEn::Vulkan
 			 * @brief Records a submission that writes this image (an upload), so its destruction outlives it.
 			 * @param queue A reference to the queue of the submission.
 			 * @param value The timeline value received from SynchInfo::tracksCompletion().
-			 * @return void
 			 */
 			void
 			recordPendingSubmission (const Queue & queue, uint64_t value) noexcept
@@ -215,7 +214,6 @@ namespace EmEn::Vulkan
 			 * @brief Sets the current image layout.
 			 * @warning This should be called after image manipulation on GPU.
 			 * @param imageLayout The Vulkan image layout.
-			 * @return void
 			 */
 			void
 			setCurrentImageLayout (VkImageLayout imageLayout) noexcept
@@ -526,7 +524,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Unmaps the image memory.
-			 * @return void
 			 */
 			void unmapMemory () const noexcept;
 

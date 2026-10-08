@@ -224,7 +224,6 @@ main ()
 	 * @brief Copies a channel name, truncated and zero-terminated.
 	 * @param destination The name to write.
 	 * @param source The source string.
-	 * @return void
 	 */
 	void
 	copyName (Graphics::OverflowCensusChannelName & destination, std::string_view source) noexcept

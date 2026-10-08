@@ -65,7 +65,6 @@ namespace EmEn::Graphics
 			 * @brief Sets how triangles will be rasterized on screen.
 			 * @note This affect only triangle primitive.
 			 * @param polygonMode Mode of drawing the triangles.
-			 * @return void
 			 */
 			void
 			setPolygonMode (PolygonMode polygonMode) noexcept
@@ -88,7 +87,6 @@ namespace EmEn::Graphics
 			/**
 			* @brief Sets the discard mode for triangles from rasterization.
 			* @param cullingMode The culling mode.
-			* @return void
 			*/
 			void
 			setCullingMode (CullingMode cullingMode) noexcept
@@ -111,7 +109,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the triangle winding to use clockwise policy.
 			 * @param state The state
-			 * @return void
 			 */
 			void
 			setTriangleClockwise (bool state) noexcept
@@ -137,7 +134,6 @@ namespace EmEn::Graphics
 			 * @param factor The slope factor (depthBiasSlopeFactor).
 			 * @param units The constant factor (depthBiasConstantFactor).
 			 * @param clamp The maximum depth bias (depthBiasClamp). Default 0.0f.
-			 * @return void
 			 */
 			void
 			setDepthBias (float factor, float units, float clamp = 0.0F) noexcept

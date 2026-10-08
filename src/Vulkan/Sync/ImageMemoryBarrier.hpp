@@ -144,7 +144,6 @@ namespace EmEn::Vulkan::Sync
 			 * @brief Target a specific mipMap level.
 			 * @param offset The mip level offset.
 			 * @param count The number of mip levels. Default 1.
-			 * @return void
 			 */
 			void
 			targetMipLevel (uint32_t offset, uint32_t count = 1) noexcept
@@ -157,7 +156,6 @@ namespace EmEn::Vulkan::Sync
 			 * @brief Target a specific array layer.
 			 * @param offset The array layer offset.
 			 * @param count The number of array layers. Default 1.
-			 * @return void
 			 */
 			void
 			targetLayer (uint32_t offset, uint32_t count = 1) noexcept

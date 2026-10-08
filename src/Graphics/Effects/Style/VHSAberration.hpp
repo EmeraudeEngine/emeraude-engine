@@ -70,7 +70,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the overall effect intensity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the height of the tracking error band as a fraction of screen height.
 			 * @param height Value in range (0, 1]. Default 0.08.
-			 * @return void
 			 */
 			void setBandHeight (float height) noexcept;
 
@@ -110,7 +108,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the horizontal displacement magnitude in UV space.
 			 * @param displacement Value >= 0. Default 0.02.
-			 * @return void
 			 */
 			void setDisplacement (float displacement) noexcept;
 
@@ -128,7 +125,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the vertical scroll speed of the tracking band.
 			 * @param speed Scroll speed multiplier. Default 0.15.
-			 * @return void
 			 */
 			void
 			setScrollSpeed (float speed) noexcept
@@ -151,7 +147,6 @@ namespace EmEn::Graphics::Effects::Style
 			 * @brief Enables or disables the head switching noise bar at the bottom of the frame.
 			 * @note Simulates the bright distorted horizontal bar caused by VCR head drum switching.
 			 * @param enabled True to enable, false to disable. Default disabled.
-			 * @return void
 			 */
 			void
 			enableHeadSwitching (bool enabled) noexcept
@@ -173,7 +168,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the height of the head switching bar as a fraction of screen height.
 			 * @param height Value in range (0, 1]. Default 0.025.
-			 * @return void
 			 */
 			void setHeadSwitchHeight (float height) noexcept;
 
@@ -191,7 +185,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the brightness intensity of the head switching bar.
 			 * @param brightness Value in range [0, 1]. Default 0.7.
-			 * @return void
 			 */
 			void
 			setHeadSwitchBrightness (float brightness) noexcept

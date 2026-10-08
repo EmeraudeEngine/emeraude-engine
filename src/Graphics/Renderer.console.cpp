@@ -146,7 +146,6 @@ namespace EmEn::Graphics
 		 * @param device The device (memory type → heap).
 		 * @param groups The groups [in/out].
 		 * @param depth The recursion depth (bounded).
-		 * @return void
 		 */
 		void
 		collectAllocations (const Json::Value & node, std::optional< uint32_t > memoryType, const Vulkan::Device & device, std::map< std::tuple< uint32_t, std::string, std::string >, AllocationGroup > & groups, int depth) noexcept

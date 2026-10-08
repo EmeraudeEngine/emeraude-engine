@@ -172,7 +172,6 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Stops the remote listener, if any. Clients are disconnected.
-			 * @return void
 			 */
 			void stopRemoteListener () noexcept;
 
@@ -223,7 +222,6 @@ namespace EmEn::Console
 			 * endpoint, the switch happens one cycle later.
 			 * @param address The bind address.
 			 * @param port The TCP port.
-			 * @return void
 			 */
 			void requestRemoteListenerRestart (const std::string & address, uint16_t port) noexcept;
 
@@ -262,14 +260,12 @@ namespace EmEn::Console
 			/**
 			 * @brief Tries to guess the next term in the console input.
 			 * @param input A writable reference to a string.
-			 * @return void
 			 */
 			void complete (std::string & input) const noexcept;
 
 			/**
 			 * @brief Executes a command.
 			 * @param fullCommand A reference to a string holding the raw command.
-			 * @return void
 			 */
 			void executeCommand (const std::string & fullCommand) noexcept;
 
@@ -300,11 +296,6 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Returns the instance of the console controller.
-			 * @todo This method must be removed!
-			 * @return Controller *
-			 */
-			/**
 			 * @brief Returns the MCP endpoint URL, or an empty string when the MCP server is not running.
 			 * @return std::string
 			 */
@@ -332,7 +323,6 @@ namespace EmEn::Console
 			 * @note Called by ControllableTrait and by add()/remove(), on the main thread. A machine client
 			 * (MCP) compares consoleTreeRevision() between two frames to announce `tools/list_changed`
 			 * (the active scene's `PostProcess` node comes and goes with the scene).
-			 * @return void
 			 */
 			static
 			void

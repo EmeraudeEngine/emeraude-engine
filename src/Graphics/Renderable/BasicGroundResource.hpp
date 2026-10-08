@@ -230,7 +230,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Scenes::GroundLevelInterface::updateVisibility() */
 			void
-			updateVisibility (const Base::Math::Vector< 3, float > & worldPosition) noexcept override
+			updateVisibility ([[maybe_unused]] const Base::Math::Vector< 3, float > & worldPosition) noexcept override
 			{
 				/* NOTE: Nothing to do ... */
 			}

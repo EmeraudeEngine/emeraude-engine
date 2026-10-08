@@ -216,7 +216,6 @@ namespace EmEn::Graphics
 					/**
 					 * @brief Sets the frame duration in milliseconds.
 					 * @param duration The duration.
-					 * @return void
 					 */
 					void
 					setDuration (uint32_t duration) noexcept
@@ -339,7 +338,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Declares the store images the frames show releasable: an upload consumed their pixels.
-			 * @return void
 			 */
 			void markFrameImagesReleasable () const noexcept;
 
@@ -443,7 +441,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets whether the animation is looping.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setLoopState (bool state) noexcept
@@ -484,7 +481,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Updates the full duration of the movie.
-			 * @return void
 			 */
 			void updateDuration () noexcept;
 
@@ -499,8 +495,8 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief extractCountWidth
-			 * @param basename
-			 * @param replaceKey
+			 * @param basename A reference to the frame filename pattern, holding the frame number width as a tag (e.g. "frame_{4}.png").
+			 * @param replaceKey A reference to a string receiving the tag to substitute with the frame number (e.g. "{4}").
 			 * @return uint32_t
 			 */
 			static uint32_t extractCountWidth (const std::string & basename, std::string & replaceKey) noexcept;

@@ -179,7 +179,6 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Sets whether the first clip starts playing by itself.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableAutoPlayFirstClip (bool state) noexcept
@@ -207,7 +206,6 @@ namespace EmEn::Graphics::Renderable
 			 * building the scene has nothing to call play() on yet. Stating the intent on the
 			 * content is what survives that gap.
 			 * @param clipName The clip's own name — the same key play() takes.
-			 * @return void
 			 */
 			void
 			setAutoPlayClipName (std::string clipName) noexcept

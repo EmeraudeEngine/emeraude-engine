@@ -56,7 +56,6 @@ namespace EmEn::Graphics
 		 * @brief Writes a float array as a JSON array.
 		 * @param output The stream.
 		 * @param values The values.
-		 * @return void
 		 */
 		template< size_t count_t >
 		void

@@ -150,7 +150,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the side of the map, in metres (the automatic coverage follows the clouds).
 			 * @param coverage The side of the map, in metres.
-			 * @return void
 			 */
 			void
 			setCoverage (float coverage) noexcept

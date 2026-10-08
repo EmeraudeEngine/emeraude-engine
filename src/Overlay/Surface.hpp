@@ -218,7 +218,6 @@ namespace EmEn::Overlay
 			 * layout, mapping disabled).
 			 * @warning Must be called BEFORE createOnHardware(). The CPU-side alpha-test event blocking
 			 * (isEventBlocked) degrades: without a pixmap, per-pixel alpha reads return transparent.
-			 * @return void
 			 */
 			void
 			enableAcceleratedSource () noexcept
@@ -272,7 +271,6 @@ namespace EmEn::Overlay
 			 * @details On hide, the popup cache is released — the next view frame (a full copy)
 			 * naturally erases the popup from the surface.
 			 * @param visible The popup visibility state.
-			 * @return void
 			 */
 			void setAcceleratedPopupVisible (bool visible) noexcept;
 
@@ -280,7 +278,6 @@ namespace EmEn::Overlay
 			 * @brief Sets the accelerated popup position on the surface (view coordinates, pixels).
 			 * @param positionX The popup X position (may be negative — clamped at composite time).
 			 * @param positionY The popup Y position (may be negative — clamped at composite time).
-			 * @return void
 			 */
 			void
 			setAcceleratedPopupPosition (int32_t positionX, int32_t positionY) noexcept
@@ -420,7 +417,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Redefines the surface position and size in the screen.
 			 * @param rectangle A reference to a rectangle.
-			 * @return void
 			 */
 			void
 			setGeometry (const Base::Math::Space2D::AARectangle< float > & rectangle) noexcept
@@ -435,7 +431,6 @@ namespace EmEn::Overlay
 			 * @brief Sets the surface position in the screen.
 			 * @param xPosition The absolute X position.
 			 * @param yPosition The absolute Y position.
-			 * @return void
 			 */
 			void
 			setPosition (float xPosition, float yPosition) noexcept
@@ -452,7 +447,6 @@ namespace EmEn::Overlay
 			 * @brief Sets the surface size in the screen.
 			 * @param width A scalar value.
 			 * @param height A scalar value.
-			 * @return void
 			 */
 			void
 			setSize (float width, float height) noexcept
@@ -468,7 +462,6 @@ namespace EmEn::Overlay
 			 * @brief Moves the surface from a distance in the screen.
 			 * @param deltaX The distance to move in X axis.
 			 * @param deltaY The distance to move in Y axis.
-			 * @return void
 			 */
 			void
 			move (float deltaX, float deltaY) noexcept
@@ -482,7 +475,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Shows the web view.
-			 * @return void
 			 */
 			void
 			show () noexcept
@@ -494,7 +486,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Hides the web view.
-			 * @return void
 			 */
 			void
 			hide () noexcept
@@ -539,7 +530,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Declares the surface to be recreated on video memory.
-			 * @return void
 			 */
 			void
 			invalidate () noexcept
@@ -552,7 +542,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Declares the video memory content outdated to re-upload it.
-			 * @return void
 			 */
 			void
 			setVideoMemoryOutdated () noexcept
@@ -568,7 +557,6 @@ namespace EmEn::Overlay
 			 * @details Used by the on-demand rendering mode to wake the rendering thread. The
 			 * UIScreen owning the surface installs it; in continuous rendering it stays empty.
 			 * @param requester A callable invoked on every visual mutation, or an empty function to detach.
-			 * @return void
 			 */
 			void
 			setRedrawRequester (std::function< void () > requester) noexcept
@@ -583,7 +571,6 @@ namespace EmEn::Overlay
 			 * The canonical case is a memory-mapped CEF paint that writes pixels straight into device
 			 * memory (directPaint): it needs the on-demand rendering thread woken, but must NOT trigger
 			 * the CPU->GPU upload path that setVideoMemoryOutdated() would. No-op in continuous rendering.
-			 * @return void
 			 * @see setVideoMemoryOutdated(), setRedrawRequester()
 			 */
 			void
@@ -680,7 +667,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Enables the listening of keyboard events.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableKeyboardListening (bool state) noexcept
@@ -702,7 +688,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Enables the listening of pointer events.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enablePointerListening (bool state) noexcept
@@ -724,7 +709,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Lock this listener when holding a mouse button to send all move events to it.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			lockPointerMoveEvents (bool state) noexcept
@@ -746,7 +730,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets the surface "pointer-over" state.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setPointerOverState (bool state) noexcept
@@ -768,7 +751,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets the surface "focus" state.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setFocusedState (bool state) noexcept
@@ -791,7 +773,6 @@ namespace EmEn::Overlay
 			 * @brief Enables the event blocking system.
 			 * @note This enables only the surface area. See enableAlphaTest().
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableEventBlocking (bool state) noexcept
@@ -813,7 +794,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Enables the event blocking system using alpha test.
 			 * @note The alpha value threshold is set to 10% by default.
-			 * @return void
 			 */
 			void
 			enableEventBlockingAlphaTest (bool state) noexcept
@@ -835,7 +815,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Sets a threshold below where the alpha test won't block the event.
 			 * @param threshold A value between 0.0 to 1.0
-			 * @return void
 			 */
 			void
 			setAlphaThreshold (float threshold) noexcept
@@ -978,19 +957,6 @@ namespace EmEn::Overlay
 			bool destroyFromHardware () noexcept;
 
 			/**
-			 * @brief Processes pending updates for this surface.
-			 * @details This method handles two types of updates:
-			 * 1. Size changes: If the surface was invalidated (via invalidate() or window resize),
-			 *	the back buffer is recreated at the new pixel dimensions. The front buffer
-			 *	continues to be used for rendering until swapFramebuffers() is called.
-			 * 2. Content changes: If setVideoMemoryOutdated() was called, the front buffer
-			 *	content is uploaded to GPU memory.
-			 * @note For asynchronous renderers (e.g., CEF), the back buffer preparation and
-			 * front buffer swap are decoupled to allow content to be ready before switching.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool True if update succeeded, false on failure.
-			 */
-			/**
 			 * @brief Returns the GPU upload statistics accumulated since the last reset.
 			 * @note Render thread only. @see UploadStatistics
 			 * @return const UploadStatistics &
@@ -1005,7 +971,6 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Clears the GPU upload statistics, starting a new measurement window.
 			 * @note Render thread only.
-			 * @return void
 			 */
 			void
 			resetUploadStatistics () noexcept
@@ -1013,6 +978,19 @@ namespace EmEn::Overlay
 				m_uploadStatistics = {};
 			}
 
+			/**
+			 * @brief Processes pending updates for this surface.
+			 * @details This method handles two types of updates:
+			 * 1. Size changes: If the surface was invalidated (via invalidate() or window resize),
+			 *	the back buffer is recreated at the new pixel dimensions. The front buffer
+			 *	continues to be used for rendering until swapFramebuffers() is called.
+			 * 2. Content changes: If setVideoMemoryOutdated() was called, the front buffer
+			 *	content is uploaded to GPU memory.
+			 * @note For asynchronous renderers (e.g., CEF), the back buffer preparation and
+			 * front buffer swap are decoupled to allow content to be ready before switching.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool True if update succeeded, false on failure.
+			 */
 			[[nodiscard]]
 			bool processUpdates (Graphics::Renderer & renderer) noexcept;
 
@@ -1041,7 +1019,6 @@ namespace EmEn::Overlay
 			 * no GPU work. The actual recreation happens on the render thread.
 			 * @param width The painted frame width in pixels.
 			 * @param height The painted frame height in pixels.
-			 * @return void
 			 */
 			void requestTransitionBufferResize (uint32_t width, uint32_t height) noexcept;
 
@@ -1123,7 +1100,6 @@ namespace EmEn::Overlay
 			 * @note Override this method to react on the input event.
 			 * @param positionX The pointer X position.
 			 * @param positionY The pointer Y position.
-			 * @return bool
 			 */
 			virtual
 			void
@@ -1144,7 +1120,6 @@ namespace EmEn::Overlay
 			 * @note Override this method to react on the input event.
 			 * @param positionX The pointer X position.
 			 * @param positionY The pointer Y position.
-			 * @return bool
 			 */
 			virtual
 			void
@@ -1274,7 +1249,6 @@ namespace EmEn::Overlay
 			 * move to a new (scale, size) — typically together with the buffer transition the provider drives
 			 * and its own resize/scale notification — so every provider-facing read observes a coherent
 			 * snapshot rather than a scale that changed mid-flight.
-			 * @return void
 			 */
 			void
 			syncPropertiesLatch () noexcept
@@ -1292,7 +1266,6 @@ namespace EmEn::Overlay
 			 * @note Render thread only, called from processUpdates() under m_framebufferAccess.
 			 * @param touchedRegion The pixmap region actually written since the previous upload.
 			 * @param writeDuration The duration of the Image::writeData() call.
-			 * @return void
 			 */
 			void accountUpload (const Base::Math::Space2D::AARectangle< uint32_t > & touchedRegion, uint64_t uploadedBytes, bool partial, std::chrono::steady_clock::duration writeDuration) noexcept;
 
@@ -1320,7 +1293,6 @@ namespace EmEn::Overlay
 			 * @details Invoked by every visual mutation (content, geometry, visibility, stack order)
 			 * so the on-demand rendering mode can wake the rendering thread. No-op when no requester
 			 * is installed (continuous rendering). @see setRedrawRequester()
-			 * @return void
 			 */
 			void
 			notifyRedrawRequired () const noexcept
@@ -1339,7 +1311,6 @@ namespace EmEn::Overlay
 			 * the GPU pipeline consistent without exposing depth as a public concept.
 			 * @param stackIndex The 0-based index of this surface in the UIScreen stack
 			 * (0 = bottom, N-1 = top).
-			 * @return void
 			 */
 			void
 			setStackIndex (size_t stackIndex) noexcept
@@ -1380,7 +1351,6 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Updates the model matrix to place the surface on screen.
-			 * @return void
 			 */
 			void updateModelMatrix () noexcept;
 
@@ -1477,7 +1447,6 @@ namespace EmEn::Overlay
 			 * @note No-op when the popup is hidden or the cache is absent. The copy region is clamped
 			 * to the target boundaries (negative positions and overflow handled).
 			 * @param targetImage A reference to the target image.
-			 * @return void
 			 */
 			void recordAcceleratedPopupComposite (Vulkan::Image & targetImage) noexcept;
 

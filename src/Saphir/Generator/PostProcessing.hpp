@@ -71,7 +71,6 @@ namespace EmEn::Saphir::Generator
 			/**
 			 * @brief Sets the list of framebuffer effects for shader generation.
 			 * @param effectsList The list of effects.
-			 * @return void
 			 */
 			void
 			setEffectsList (const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & effectsList) noexcept

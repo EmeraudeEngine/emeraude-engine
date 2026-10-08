@@ -357,7 +357,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Sets the swap-chain degraded.
-			 * @return void
 			 */
 			void
 			setDegraded () noexcept
@@ -437,7 +436,6 @@ namespace EmEn::Vulkan
 			 * it was presented with. A semaphore indexed by frame in flight instead gets
 			 * re-signaled while a present still waits on it, because acquireNextImage() returns
 			 * indices in an arbitrary order: VUID-vkQueueSubmit-pSignalSemaphores-00067.
-			 * @return void
 			 */
 			void present (const uint32_t & imageIndex, const Queue * queue, VkSemaphore presentSemaphore) noexcept;
 
@@ -481,7 +479,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the minimum image count desired in the swap-chain.
-			 * @param capabilities
+			 * @param capabilities A reference to the surface capabilities.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -498,14 +496,12 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Destroys the base swap-chain object.
-			 * @return void
 			 */
 			void destroyBaseSwapChain () noexcept;
 
 			/**
 			 * @brief Updates the view aspect ratio of the swap-chain.
 			 * @note This version can be used alone to refresh the aspect ratio when a window resize occurs.
-			 * @return void
 			 */
 			void updateViewProperties () noexcept;
 
@@ -627,13 +623,11 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Resets the swap-chain framebuffer.
-			 * @return void
 			 */
 			void resetFramebuffer () noexcept;
 
 			/**
 			 * @brief Destroys the swap-chain framebuffer.
-			 * @return void
 			 */
 			void destroyFramebuffer () noexcept;
 

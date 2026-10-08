@@ -1347,9 +1347,9 @@ namespace EmEn::Scenes
 			 * degrees vertical on full frame). This used to be an angle in degrees: forwarding one
 			 * here now mounts a telephoto (85 "degrees" = an 85 mm lens, ~16 degrees).
 			 * @param lookAt A position where the camera should initially look at.
-			 * @param precision
-			 * @param distance
-			 * @param showModel
+			 * @param precision The render target size in pixels. Default, 512.
+			 * @param distance The view distance of the render target. Default, 5000.
+			 * @param showModel Display a model to visualize the camera. Default, 'false'.
 			 * @return std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -1390,9 +1390,9 @@ namespace EmEn::Scenes
 			 * @brief Generates a camera and a cubemap offscreen-rendering connected to it.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param name A reference to a string.
-			 * @param precision
-			 * @param distance
-			 * @param showModel
+			 * @param precision The render target size in pixels. Default, 512.
+			 * @param distance The view distance of the render target. Default, 5000.
+			 * @param showModel Display a model to visualize the camera. Default, 'false'.
 			 * @return std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > >
 			 */
 			template< typename entity_t = StaticEntity >

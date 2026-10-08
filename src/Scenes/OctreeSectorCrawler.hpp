@@ -92,7 +92,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Populates the stacks with sub sectors.
 			 * @param currentSector A reference to the smart pointer of the current sector.
-			 * @return void
 			 */
 			void
 			populateStack (const std::shared_ptr< octree_t > & currentSector) noexcept

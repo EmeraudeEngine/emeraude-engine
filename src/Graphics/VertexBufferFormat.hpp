@@ -133,7 +133,6 @@ namespace EmEn::Graphics
 			 * @param binding The binding point.
 			 * @param format The attribute format.
 			 * @param offset The offset inside the vertex buffer object.
-			 * @return void
 			 */
 			void
 			setInputAttribute (uint32_t location, uint32_t binding, VkFormat format, uint32_t offset) noexcept
@@ -151,7 +150,6 @@ namespace EmEn::Graphics
 			 * @param binding The binding point.
 			 * @param stride The stride inside the vertex buffer object.
 			 * @param inputRate The type of passing vertex.
-			 * @return void
 			 */
 			void
 			setBinding (uint32_t binding, uint32_t stride, VkVertexInputRate inputRate) noexcept

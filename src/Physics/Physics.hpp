@@ -1999,7 +1999,7 @@ namespace EmEn::Physics
 
 	/**
 	 * @brief Modulates a scalar according to a factor. If the factor is 0, the return value will be 1.
-	 * @tparam precision_t
+	 * @tparam precision_t The precision of floating point number.
 	 * @param value A normalized value to modulate.
 	 * @param factor A scalar number like a dot product between two vectors.
 	 * @return precision_t

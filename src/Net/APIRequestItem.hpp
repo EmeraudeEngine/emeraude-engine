@@ -212,7 +212,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Marks the item as being performed by a worker.
-			 * @return void
 			 */
 			void
 			setInFlight () noexcept
@@ -222,7 +221,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Marks the caller as no longer interested in the result.
-			 * @return void
 			 */
 			void
 			setCancelled () noexcept
@@ -246,7 +244,6 @@ namespace EmEn::Net
 			 * @brief Turns an abandoned ticket terminal, dropping everything it held.
 			 * @note Called by the worker when it picks up a ticket already cancelled, and by
 			 * setCancelled() when the response had already landed.
-			 * @return void
 			 */
 			void
 			finishAsCancelled () noexcept
@@ -268,7 +265,6 @@ namespace EmEn::Net
 			 * @param body The response body [std::move].
 			 * @param outcome Success, or HTTPStatus for a non-2xx.
 			 * @param statusCode The HTTP status.
-			 * @return void
 			 */
 			void
 			setDone (Base::Network::HTTPResponse response, std::string body, Base::Network::DownloadOutcome outcome, uint16_t statusCode) noexcept
@@ -285,7 +281,6 @@ namespace EmEn::Net
 			/**
 			 * @brief Attaches the JSON parsed from the body by the worker.
 			 * @param json The parsed document [std::move].
-			 * @return void
 			 */
 			void
 			setJSON (Json::Value json) noexcept
@@ -298,7 +293,6 @@ namespace EmEn::Net
 			 * @brief Marks the call as failed; there is no response to read.
 			 * @param outcome Why it failed.
 			 * @param statusCode The HTTP status when the exchange completed, 0 otherwise.
-			 * @return void
 			 */
 			void
 			setError (Base::Network::DownloadOutcome outcome, uint16_t statusCode) noexcept
@@ -318,7 +312,6 @@ namespace EmEn::Net
 			 * for the rest of the process: a ticket is kept for its RESPONSE. This also means a
 			 * terminal ticket can never be replayed — deliberate, because silently re-sending a
 			 * POST is how a payment gets charged twice.
-			 * @return void
 			 */
 			void
 			releaseRequestPayload () noexcept

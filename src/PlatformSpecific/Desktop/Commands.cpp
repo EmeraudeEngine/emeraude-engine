@@ -33,7 +33,7 @@
 
 /* Local inclusions. */
 #include "IO/IO.hpp"
-#include "Network/URL.hpp"
+#include "Network/URI.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "Tracer.hpp"
@@ -78,7 +78,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool
 	openURL (const std::string & url) noexcept
 	{
-		if ( !URL::isURL(url) )
+		if ( !URI::isURL(url) )
 		{
 			TraceWarning{TracerTag} << "The URL '" << url << "' is invalid !";
 

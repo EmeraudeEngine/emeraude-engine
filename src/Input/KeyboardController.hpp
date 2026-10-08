@@ -118,7 +118,6 @@ namespace EmEn::Input
 			 * @brief Changes a key state. This is useful for special key.
 			 * @param key The keycode.
 			 * @param pressed The new key state.
-			 * @return bool
 			 */
 			static void changeKeyState (int32_t key, bool pressed) noexcept;
 
@@ -127,7 +126,6 @@ namespace EmEn::Input
 			 * per-frame copy of the hardware state (readDeviceState()), until released.
 			 * @param key The GLFW key code (an out-of-range code is ignored).
 			 * @param held Whether the key is held.
-			 * @return void
 			 */
 			static void injectKeyState (int32_t key, bool held) noexcept;
 

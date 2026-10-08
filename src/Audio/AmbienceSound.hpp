@@ -65,7 +65,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the channel gain for the sound effect.
 			 * @param gain The gain.
-			 * @return void
 			 */
 			void
 			setChannelGain (float gain) noexcept
@@ -91,7 +90,6 @@ namespace EmEn::Audio
 			 * @brief Sets the random pitch range values.
 			 * @param pitchA A pitch value.
 			 * @param pitchB Another pitch value.
-			 * @return void
 			 */
 			void
 			setRandomPitchRange (float pitchA, float pitchB) noexcept
@@ -141,7 +139,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets a radial velocity from which a vector will be created randomly.
 			 * @param velocity The velocity value.
-			 * @return void
 			 */
 			void
 			setRadialVelocity (float velocity) noexcept
@@ -179,7 +176,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets whether the sound is relative or not to the listener.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setRelativeState (bool state) noexcept

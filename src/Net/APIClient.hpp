@@ -290,7 +290,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Removes every default header [Thread-safe].
-			 * @return void
 			 */
 			void clearDefaultHeaders () noexcept;
 
@@ -305,7 +304,6 @@ namespace EmEn::Net
 			 * @brief Emits the pending lifecycle notifications.
 			 * @note Called by Core at the top of every main-loop cycle: this is what makes the
 			 * observers run on the main thread, whatever thread finished the exchange.
-			 * @return void
 			 */
 			void dispatchCompleted () noexcept;
 
@@ -387,7 +385,6 @@ namespace EmEn::Net
 			/**
 			 * @brief Worker body: performs one exchange and records the outcome.
 			 * @param ticket The ticket.
-			 * @return void
 			 */
 			void performRequest (int ticket) noexcept;
 
@@ -399,7 +396,6 @@ namespace EmEn::Net
 			 * @note ⚠️ Call it ONLY from request(): that is the only place the map grows, and the
 			 * only moment the newest ticket is guaranteed non-terminal. Running it after a
 			 * completion could erase the very ticket that just completed.
-			 * @return void
 			 */
 			void enforceRetentionCeiling () noexcept;
 
@@ -409,7 +405,6 @@ namespace EmEn::Net
 			 * this class is always items -> events, never the reverse.
 			 * @param ticket The ticket.
 			 * @param cancelled Whether the caller abandoned it.
-			 * @return void
 			 */
 			void queueTerminalEvent (int ticket, bool cancelled) noexcept;
 

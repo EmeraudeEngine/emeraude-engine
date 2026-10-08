@@ -228,7 +228,6 @@ namespace EmEn::Graphics::Effects::Camera
 			 * @note The optical block only applies without an active camera in the frame
 			 * context; the effect-quality knobs apply at the next (re)creation.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

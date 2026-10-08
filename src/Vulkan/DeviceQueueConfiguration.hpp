@@ -62,7 +62,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Set the family queue index for this job from the logical device analysis.
 			 * @param queueFamilyIndex An unsigned integer.
-			 * @return void
 			 */
 			void
 			setQueueFamilyIndex (uint32_t queueFamilyIndex) noexcept
@@ -85,7 +84,6 @@ namespace EmEn::Vulkan
 			 * @brief Registers a queue to the configuration.
 			 * @param queue A pointer to a queue.
 			 * @param priority The priority of the queue.
-			 * @return void
 			 */
 			void registerQueue (Queue * queue, QueuePriority priority) const noexcept;
 
@@ -113,7 +111,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Clears data and links.
-			 * @return void
 			 */
 			void clear () noexcept;
 

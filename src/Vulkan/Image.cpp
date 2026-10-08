@@ -668,7 +668,7 @@ namespace EmEn::Vulkan
 		const auto & pixmaps = cubemapResource->faces();
 
 		/* Get the total bytes requested for the 6 faces. */
-		const size_t totalBytes = std::accumulate(pixmaps.cbegin(), pixmaps.cend(), 0, [] (auto sum, const auto & pixmap) {
+		const size_t totalBytes = std::accumulate(pixmaps.cbegin(), pixmaps.cend(), size_t{0}, [] (size_t sum, const auto & pixmap) {
 			return sum + pixmap.bytes();
 		});
 
@@ -702,7 +702,7 @@ namespace EmEn::Vulkan
 
 		const auto & frames = movieResource->frames();
 
-		const size_t totalBytes = std::accumulate(frames.cbegin(), frames.cend(), 0, [] (auto sum, const auto & frame) {
+		const size_t totalBytes = std::accumulate(frames.cbegin(), frames.cend(), size_t{0}, [] (size_t sum, const auto & frame) {
 			return sum + frame.pixmap().bytes();
 		});
 

@@ -132,7 +132,6 @@ namespace EmEn::Net
 			 * @brief Records a progress update from the transfer thread.
 			 * @param received Body bytes received so far.
 			 * @param total Expected total, 0 when unknown.
-			 * @return void
 			 */
 			void
 			setProgress (uint64_t received, uint64_t total) noexcept
@@ -144,7 +143,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Clears the pending-progress flag once the Progress notification went out.
-			 * @return void
 			 */
 			void
 			clearPendingProgress () noexcept
@@ -165,7 +163,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Marks the item as being fetched by a worker.
-			 * @return void
 			 */
 			void
 			setTransferring () noexcept
@@ -176,7 +173,6 @@ namespace EmEn::Net
 			/**
 			 * @brief Marks the item as complete, the file being at filepath().
 			 * @param bytes The file size.
-			 * @return void
 			 */
 			void
 			setDone (uint64_t bytes) noexcept
@@ -203,7 +199,6 @@ namespace EmEn::Net
 			 * @brief Puts the item back in the queue for another attempt.
 			 * @note A URL that failed used to keep its terminal ticket forever: the same request
 			 * after the network came back replayed the old Error instead of retrying.
-			 * @return void
 			 */
 			void
 			resetForRetry () noexcept
@@ -221,7 +216,6 @@ namespace EmEn::Net
 			 * @brief Marks the item as failed; no file is left behind.
 			 * @param outcome Why it failed.
 			 * @param statusCode The HTTP status when the exchange completed, 0 otherwise.
-			 * @return void
 			 */
 			void
 			setError (Base::Network::DownloadOutcome outcome, uint16_t statusCode) noexcept
@@ -234,7 +228,6 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Marks the item as failed; no file is left behind.
-			 * @return void
 			 */
 			void
 			setError () noexcept

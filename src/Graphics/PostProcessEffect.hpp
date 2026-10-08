@@ -79,7 +79,6 @@ namespace EmEn::Graphics
 			 * and the stack is the only object that knows them. Overridden by
 			 * IndirectPostProcessEffect; the base behaviour is the plain flag.
 			 * @param state The desired enabled state.
-			 * @return void
 			 */
 			virtual
 			void
@@ -93,7 +92,6 @@ namespace EmEn::Graphics
 			 * @note For the stack itself, when it disables the siblings of the effect being
 			 * enabled: going through enable() there would recurse.
 			 * @param state The desired enabled state.
-			 * @return void
 			 */
 			void
 			setEnabledFlag (bool state) noexcept

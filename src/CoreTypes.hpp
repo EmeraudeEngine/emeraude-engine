@@ -60,9 +60,9 @@ namespace EmEn
 		Graphics::Renderer & graphicsRenderer;
 		Audio::Manager & audioManager;
 
-		EngineContext (Graphics::Renderer & renderer, Audio::Manager & audioManager) noexcept
+		EngineContext (Graphics::Renderer & renderer, Audio::Manager & audio) noexcept
 			: graphicsRenderer{renderer},
-			audioManager{audioManager}
+			audioManager{audio}
 		{
 
 		}
@@ -149,10 +149,9 @@ namespace EmEn
 
 			case LogFormat::HTML :
 				return HTMLString;
-
-			default:
-				return "Text";
 		}
+
+		return TextString;
 	}
 
 	/**

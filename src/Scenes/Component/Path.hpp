@@ -208,7 +208,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets the points of a POLYLINE, in the entity's space.
 			 * @param points The points (2 at least to draw anything).
 			 * @param closed Whether the last point joins the first.
-			 * @return void
 			 */
 			void setPolyline (std::span< const Base::Math::Vector< 3, float > > points, bool closed = false) noexcept;
 
@@ -216,7 +215,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets a piecewise BÉZIER path, in the entity's space.
 			 * @param path The anchors, their handles (offsets from the anchor) and a curve type per span; its segment
 			 * counts are ignored (the tessellation is adaptive).
-			 * @return void
 			 */
 			void setBezierPath (const Base::Math::BSpline< 3, float > & path) noexcept;
 
@@ -225,7 +223,6 @@ namespace EmEn::Scenes::Component
 			 * entity's space. An open one starts and ends on its end points.
 			 * @param controlPoints The control points.
 			 * @param closed Whether the curve closes on itself.
-			 * @return void
 			 */
 			void setUniformBSpline (std::span< const Base::Math::Vector< 3, float > > controlPoints, bool closed = false) noexcept;
 
@@ -234,14 +231,12 @@ namespace EmEn::Scenes::Component
 			 * @param points The points.
 			 * @param closed Whether the curve closes on itself.
 			 * @param alpha 0 uniform, 0.5 centripetal (the default: no cusp, no loop), 1 chordal.
-			 * @return void
 			 */
 			void setCatmullRom (std::span< const Base::Math::Vector< 3, float > > points, bool closed = false, float alpha = 0.5F) noexcept;
 
 			/**
 			 * @brief Sets the chord tolerance of the curve tessellation, and re-tessellates.
 			 * @param tolerance The largest distance between the curve and its polyline, in the entity's units (> 0).
-			 * @return void
 			 */
 			void setTolerance (float tolerance) noexcept;
 
@@ -314,7 +309,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Shows or hides the path.
 			 * @param state The state.
-			 * @return void
 			 */
 			void setEnabled (bool state) noexcept;
 
@@ -334,7 +328,6 @@ namespace EmEn::Scenes::Component
 			 * mapping (Graphics::PathDebugOverlay) — a display colour, translucent if its opacity says so, neither
 			 * exposed nor smeared by the TAA. Its width and joins stay the material's.
 			 * @param state The state.
-			 * @return void
 			 */
 			void setDebugMode (bool state) noexcept;
 
@@ -352,7 +345,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the colour of the debug mode, AS DISPLAYED (sRGB), with its opacity.
 			 * @param color A reference to a colour.
-			 * @return void
 			 */
 			void setDebugColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -370,7 +362,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Tells the path its material's look changed (width, joins): the bounds follow the width, and the debug
 			 * mode, which draws with the material's style, republishes. The material setters cannot tell the path.
-			 * @return void
 			 */
 			void
 			markLookChanged () noexcept
@@ -407,13 +398,11 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Tessellates the source into the drawn polyline (with arc lengths), sizes the geometry, refreshes the
 			 * bounds and marks the points for publication.
-			 * @return void
 			 */
 			void rebuild () noexcept;
 
 			/**
 			 * @brief Refreshes the render bounds from the polyline and the width, and notifies the entity when they changed.
-			 * @return void
 			 */
 			void updateBounds () noexcept;
 

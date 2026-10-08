@@ -184,7 +184,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the polyline the light emits along, in the entity's space.
 			 * @param points The points (2 at least to emit; more than MaxPoints are resampled by arc length, the ends kept).
-			 * @return void
 			 */
 			void setPolyline (std::span< const Base::Math::Vector< 3, float > > points) noexcept;
 
@@ -202,7 +201,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the luminance of the tube, in nits (cd/m²) — the light's intensity.
 			 * @param nits The luminance, 0 or more.
-			 * @return void
 			 */
 			void
 			setLuminance (float nits) noexcept
@@ -218,7 +216,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the luminance from the luminous flux a metre of the tube emits (π × L × 2πR lumens per metre).
 			 * @param lumensPerMetre The flux per metre, 0 or more.
-			 * @return void
 			 */
 			void setLuminousFluxPerMetre (float lumensPerMetre) noexcept;
 
@@ -232,7 +229,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the radius of the emitting tube.
 			 * @param radius The radius in metres, above 0.
-			 * @return void
 			 */
 			void setTubeRadius (float radius) noexcept;
 
@@ -250,7 +246,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the reach: the distance from the polyline beyond which the light is windowed to 0 (0 = unbounded).
 			 * @param radius The reach in metres, 0 or more.
-			 * @return void
 			 */
 			void setRadius (float radius) noexcept;
 
@@ -333,7 +328,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Writes the polyline in world space into the block, from the entity's frame.
 			 * @param worldCoordinates The entity's world frame.
-			 * @return void
 			 */
 			void updateWorldPoints (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 

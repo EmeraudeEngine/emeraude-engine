@@ -76,9 +76,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			}
 
 			/**
-			 * @brief User-facing atmospheric fog parameters.
-			 */
-			/**
 			 * @brief The TECHNIQUE knobs of the fog effect.
 			 * @note ⚠️ The MEDIUM is no longer here. Density, height falloff, base height, max
 			 * distance, chromaticity and luminance moved to Scenes::ParticipatingMedium, owned by
@@ -218,7 +215,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Overrides the inscattering color (instead of reading from LightSet).
 			 * @param color The override color.
-			 * @return void
 			 */
 			void
 			setInscatterColorOverride (const Base::PixelFactory::Color<> & color) noexcept
@@ -228,7 +224,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 			/**
 			 * @brief Clears the inscatter color override (reverts to LightSet value).
-			 * @return void
 			 */
 			void
 			clearInscatterColorOverride () noexcept
@@ -239,7 +234,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Sets the atmospheric fog parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

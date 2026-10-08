@@ -60,7 +60,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the saturation level.
 			 * @param saturation 0 = grayscale, 1 = normal, >1 = over-saturated.
-			 * @return void
 			 */
 			void setSaturation (float saturation) noexcept;
 
@@ -88,7 +87,6 @@ namespace EmEn::Graphics::Effects::Style
 			 * @param kelvin The colour temperature, clamped to [1667, 25000] K.
 			 * @param tint The green-magenta axis, Lightroom convention: positive = magenta, negative = green, 0 = none
 			 * (the green gain is scaled by 2^-tint, then the luminance is normalized).
-			 * @return void
 			 */
 			void setWhiteBalance (float kelvin, float tint = 0.0F) noexcept;
 
@@ -119,7 +117,6 @@ namespace EmEn::Graphics::Effects::Style
 			 * @note A ROTATION of every hue — a creative colour shift (a VHS drift). ⚠️ Not a warm/cool control:
 			 * use setWhiteBalance() for that.
 			 * @param hue Rotation in radians (YIQ color space).
-			 * @return void
 			 */
 			void
 			setHue (float hue) noexcept
@@ -141,7 +138,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the brightness offset.
 			 * @param brightness Value in range [-1, 1].
-			 * @return void
 			 */
 			void
 			setBrightness (float brightness) noexcept
@@ -163,7 +159,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the contrast multiplier.
 			 * @param contrast Value >= 0.
-			 * @return void
 			 */
 			void setContrast (float contrast) noexcept;
 
@@ -181,7 +176,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the gamma correction value.
 			 * @param gamma Value > 0.
-			 * @return void
 			 */
 			void setGamma (float gamma) noexcept;
 

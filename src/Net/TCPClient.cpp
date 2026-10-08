@@ -190,7 +190,11 @@ namespace
 #ifdef _WIN32
 		return code == WSAETIMEDOUT || code == WSAEWOULDBLOCK;
 #else
-		return code == EAGAIN || code == EWOULDBLOCK
+		/* NOTE: EWOULDBLOCK is the same value as EAGAIN on Linux, a different one on other systems. */
+		return code == EAGAIN
+		#if EWOULDBLOCK != EAGAIN
+			|| code == EWOULDBLOCK
+		#endif
 		#ifdef ETIMEDOUT
 			|| code == ETIMEDOUT
 		#endif

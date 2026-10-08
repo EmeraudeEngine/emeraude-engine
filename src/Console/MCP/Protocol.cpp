@@ -54,7 +54,6 @@ namespace EmEn::Console::MCP
 		 * @param controllable The root of the sub-tree.
 		 * @param path The dotted path of that root.
 		 * @param tools The tool list.
-		 * @return void
 		 */
 		void
 		appendTools (const ControllableTrait & controllable, const std::string & path, std::vector< Tool > & tools) noexcept

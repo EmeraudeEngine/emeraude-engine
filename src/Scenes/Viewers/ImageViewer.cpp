@@ -101,8 +101,8 @@ namespace EmEn::Scenes::Viewers
 
 		/* NOTE: The light set stays disabled and the material is unlit without any
 		 * emissive scaling : with the camera out of HDR, texels reach the screen unmodified. */
-		const auto image = m_resourceManager.container< ImageResource >()->getOrCreateResource("+ImageViewerImage" + suffix, [pixmap = std::move(pixmap)] (ImageResource & imageResource) mutable {
-			return imageResource.load(std::move(pixmap));
+		const auto image = m_resourceManager.container< ImageResource >()->getOrCreateResource("+ImageViewerImage" + suffix, [ownedPixmap = std::move(pixmap)] (ImageResource & imageResource) mutable {
+			return imageResource.load(std::move(ownedPixmap));
 		});
 
 		const auto texture = m_resourceManager.container< TextureResource::Texture2D >()->getOrCreateResource("+ImageViewerTexture" + suffix, [image] (TextureResource::Texture2D & textureResource) {

@@ -147,7 +147,6 @@ namespace EmEn::Scenes::Component
 			 * Reference values: direct sunlight 100 000 lx, overcast daylight 10 000 lx, full moon
 			 * 0.25 lx (see Graphics::Photometry).
 			 * @param lux The illuminance, in lux.
-			 * @return void
 			 */
 			void
 			setIlluminance (float lux) noexcept
@@ -266,7 +265,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the light direction from the coordinate direction instead of the position to origin.
 			 * @param state The state.
-			 * @brief void
 			 */
 			void
 			useDirectionVector (bool state) noexcept
@@ -363,7 +361,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets the coverage size for classic shadow mapping.
 			 * @note This has no effect when using CSM (coverage is derived from camera frustum).
 			 * @param size The coverage size in world units.
-			 * @return void
 			 */
 			void
 			setCoverageSize (float size) noexcept
@@ -379,7 +376,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the cascade count (only effective when using CSM).
 			 * @param count The number of cascades (1-4).
-			 * @return void
 			 */
 			void
 			setCascadeCount (uint32_t count) noexcept
@@ -390,7 +386,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the cascade lambda value (only effective when using CSM).
 			 * @param lambda The lambda value (0 = linear, 1 = logarithmic).
-			 * @return void
 			 */
 			void
 			setCascadeLambda (float lambda) noexcept
@@ -409,7 +404,6 @@ namespace EmEn::Scenes::Component
 			 * @param cameraFrustumCorners Array of 8 corners of the camera frustum in world space.
 			 * @param nearPlane The camera near plane distance.
 			 * @param farPlane The camera far plane distance.
-			 * @return void
 			 */
 			void updateCascades (const std::array< Base::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
 
@@ -425,13 +419,11 @@ namespace EmEn::Scenes::Component
 			 * @param cameraPosition The camera world position.
 			 * @param coverage The side of the map, in metres.
 			 * @param resolution The side of the map, in texels.
-			 * @return void
 			 */
 			void updateCloudShadow (uint32_t bindlessIndex, const Base::Math::Vector< 3, float > & cameraPosition, float coverage, uint32_t resolution) noexcept;
 
 			/**
 			 * @brief Stops this light from reading a cloud shadow map [LOGIC THREAD].
-			 * @return void
 			 */
 			void disableCloudShadow () noexcept;
 
@@ -475,7 +467,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Computes and writes the light space matrix into the UBO buffer.
-			 * @return void
 			 */
 			void updateLightSpaceMatrix () noexcept;
 
@@ -522,8 +513,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Sets the light direction into the buffer.
-			 * @brief A reference to a cartesian frame for the light location.
-			 * @return void
+			 * @param worldCoordinates A reference to a cartesian frame for the light location.
 			 */
 			void setDirection (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 

@@ -111,7 +111,6 @@ namespace EmEn::Net
 			 * for those threads to release the kernel handle before calling
 			 * `::closesocket()`/`::close()`. This eliminates the
 			 * close-during-receive race on Windows.
-			 * @return void
 			 */
 			void close () noexcept;
 

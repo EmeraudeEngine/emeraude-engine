@@ -102,7 +102,6 @@ namespace EmEn::Animations
 			/**
 			 * @brief Sets noise parameter.
 			 * @param noise A value noise to add to interpolation value.
-			 * @return void
 			 */
 			void
 			setNoise (float noise) noexcept
@@ -116,7 +115,6 @@ namespace EmEn::Animations
 			* @param timeCode A value in milliseconds.
 			* @param value The value at this time point.
 			* @param interpolation The type of interpolation. Default linear.
-			* @return void
 			*/
 			void addKeyFrame (uint32_t timeCode, const Base::Variant & value, Base::Math::InterpolationType interpolation = Base::Math::InterpolationType::Linear) noexcept;
 
@@ -125,7 +123,6 @@ namespace EmEn::Animations
 			 * @param position A value between 0.0 to 1.0 to set a frame.
 			 * @param value The value at this time point.
 			 * @param interpolation The type of interpolation. Default linear.
-			 * @return void
 			 */
 			void addKeyFrame (float position, const Base::Variant & value, Base::Math::InterpolationType interpolation = Base::Math::InterpolationType::Linear) noexcept;
 
@@ -133,14 +130,12 @@ namespace EmEn::Animations
 			 * @brief Sets the current animation range time.
 			 * @note A value out of the timeline will be ignored.
 			 * @param timeCode A value in milliseconds.
-			 * @return void
 			 */
 			void setCurrentTime (uint32_t timeCode) noexcept;
 
 			/**
 			 * @brief Sets the current animation range time.
 			 * @param position The current animation time between 0.0 and 1.0.
-			 * @return void
 			 */
 			void setCurrentTime (float position) noexcept;
 
@@ -148,7 +143,6 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Advances the animation sequence time.
-			 * @return void
 			 */
 			void advanceTime () noexcept;
 

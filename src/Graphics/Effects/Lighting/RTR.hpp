@@ -310,7 +310,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			/**
 			 * @brief Sets the RTR parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept
@@ -419,7 +418,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param sourceLayout The layout the source is sampled in.
 			 * @param sourceSampler The sampler handle.
 			 * @param destView A reference to the destination mip view.
-			 * @return void
 			 */
 			void writePyramidSet (const Vulkan::DescriptorSet & descriptorSet, VkImageView sourceView, VkImageLayout sourceLayout, VkSampler sourceSampler, const Vulkan::ImageView & destView) const noexcept;
 

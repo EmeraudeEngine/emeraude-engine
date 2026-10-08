@@ -471,7 +471,6 @@ void main()
 		 * @param block The light's published uniform block (render state slot of the frame).
 		 * @param viewMatrix The frame's view matrix.
 		 * @param output A reference to the GPU entry.
-		 * @return void
 		 */
 		template< size_t positionOffset, size_t colorOffset, size_t intensityOffset, size_t radiusOffset >
 		void

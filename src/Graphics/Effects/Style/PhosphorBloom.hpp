@@ -69,7 +69,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the bloom intensity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -91,7 +90,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the luminosity threshold above which bloom activates.
 			 * @param threshold Value in range [0, 1]. Default 0.6.
-			 * @return void
 			 */
 			void
 			setThreshold (float threshold) noexcept
@@ -113,7 +111,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the bloom diffusion radius in pixels.
 			 * @param spread Value > 0. Default 2.0.
-			 * @return void
 			 */
 			void setSpread (float spread) noexcept;
 

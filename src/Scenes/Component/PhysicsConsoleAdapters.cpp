@@ -183,7 +183,6 @@ namespace EmEn::Scenes::Component
 		 * @param entity The entity parameter.
 		 * @param component The component parameter.
 		 * @param forceDescription What the magnitude pushes, for the descriptions.
-		 * @return void
 		 */
 		template< typename modifier_t, typename adapter_t >
 		void

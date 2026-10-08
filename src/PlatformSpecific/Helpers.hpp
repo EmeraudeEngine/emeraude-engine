@@ -121,7 +121,6 @@ namespace EmEn::PlatformSpecific
 	 * @brief Displays a console.
 	 * @warning Used only for Windows OS since the logs are displayed in their own process.
 	 * @param title A reference to a string.
-	 * @return void
 	 */
 	EMEN_API bool createConsole (const std::string & title);
 
@@ -135,14 +134,12 @@ namespace EmEn::PlatformSpecific
 	/**
 	 * @brief Enables ANSI escape sequence processing on stdout and stderr.
 	 * @warning Used only for Windows OS. Requires an already attached console.
-	 * @return void
 	 */
 	EMEN_LEAN_API void enableConsoleANSI ();
 
 	/**
 	 * @brief Waits for a key press before closing the console.
 	 * @note Displays "Press any key to close this window..." and waits.
-	 * @return void
 	 */
 	EMEN_API void waitBeforeConsoleClose ();
 

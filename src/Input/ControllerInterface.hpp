@@ -76,7 +76,6 @@ namespace EmEn::Input
 			/**
 			 * @brief Disables the device.
 			 * @param state The state.
-			 * @return void
 			 */
 			virtual void disable (bool state) noexcept = 0;
 

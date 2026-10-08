@@ -362,7 +362,6 @@ namespace EmEn::Graphics::Renderable
 			 * @param sourceGeometry The LOD 0 indexed geometry with local data.
 			 * @param LODLevel The target LOD level (1-3).
 			 * @param ratio The decimation ratio (0.0 = max reduction, 1.0 = no reduction).
-			 * @return void
 			 */
 			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
 
@@ -377,7 +376,6 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Appends a level of detail and publishes it to the lock-free readers.
 			 * @pre m_geometryMutex is held and the array is not full.
 			 * @param geometryResource The level's geometry.
-			 * @return void
 			 */
 			void publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept;
 

@@ -843,7 +843,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Directly removes all sub nodes below this node.
-			 * @return void
 			 */
 			void destroyTree () noexcept;
 

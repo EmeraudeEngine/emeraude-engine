@@ -147,7 +147,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Binds the sun course whose elevation drives the sky.
 			 * @param course A reference to the sun course.
-			 * @return void
 			 */
 			void bind (const std::shared_ptr< SunCourse > & course) noexcept;
 
@@ -156,7 +155,6 @@ namespace EmEn::Scenes::Component
 			 * @note An inverted or degenerate pair of elevations is corrected and traced; the night
 			 * factor is clamped to [0, 1].
 			 * @param options A reference to the options.
-			 * @return void
 			 */
 			void configure (const Options & options) noexcept;
 

@@ -141,7 +141,6 @@ namespace EmEn::Graphics::Compute
 			 * mip. Every touched subresource is left in SHADER_READ_ONLY_OPTIMAL, matching
 			 * the image layout the render pass and the materials expect.
 			 * @param commandBuffer The probe's frame command buffer (recording state).
-			 * @return void
 			 */
 			void record (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 

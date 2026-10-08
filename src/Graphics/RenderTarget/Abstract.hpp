@@ -176,7 +176,6 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Sets the automatic rendering state.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setAutomaticRenderingState (bool state) noexcept
@@ -192,7 +191,6 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Discard the render.
 			 * @note Ineffective with automatic rendering ON.
-			 * @return void
 			 */
 			void
 			setRenderOutOfDate () noexcept
@@ -208,7 +206,6 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Sets the render is finished.
 			 * @note Ineffective with automatic rendering ON.
-			 * @return void
 			 */
 			void
 			setRenderFinished () noexcept
@@ -228,7 +225,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * every frame (2026-10-05, basic-scenery: about 3 ms per point light cubemap). Set from the logic thread,
 			 * read by the render thread. The content of a suspended target is kept as it was.
 			 * @param state True to suspend.
-			 * @return void
 			 */
 			void
 			suspendRendering (bool state) noexcept
@@ -267,7 +263,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Sets whether this target is suspended while a scene-reflection
 			 * post-process effect is enabled.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setSuspendableByPostProcessReflections (bool state) noexcept
@@ -291,7 +286,6 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Marks this target as rendered at least once (Renderer bookkeeping).
-			 * @return void
 			 */
 			void
 			markRendered () noexcept
@@ -308,7 +302,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @warning The caller owns the lifetime coherence: exclusions are not cleaned when
 			 * an instance dies — clear and re-register on scene content changes if needed.
 			 * @param renderableInstance The renderable instance address.
-			 * @return void
 			 */
 			void
 			excludeFromRendering (const void * renderableInstance) noexcept
@@ -338,7 +331,6 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Clears the rendering exclusion list.
-			 * @return void
 			 */
 			void
 			clearRenderingExclusions () noexcept
@@ -360,7 +352,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * RenderableInstance address) to keep the render target free of any scene dependency, and
 			 * nothing clears it when the instance dies. Clear it when the bake is done.
 			 * @param renderableInstance The renderable instance address, nullptr to render the whole scene.
-			 * @return void
 			 */
 			void
 			setBakeSubject (const void * renderableInstance) noexcept
@@ -388,7 +379,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @note Set by the renderer right after the scene prepared this target, read by recordPostRenderCompute():
 			 * a bake must not copy an empty render.
 			 * @param hasContent True when the render lists were not empty.
-			 * @return void
 			 */
 			void
 			setLastRenderHasContent (bool hasContent) noexcept
@@ -425,7 +415,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @note Without it, the offscreen pass clears with the RENDERER's colour, which is opaque.
 			 * A bake destined to be composited needs alpha 0 behind its subject.
 			 * @param color The clear colour.
-			 * @return void
 			 */
 			void
 			setClearColorOverride (const VkClearColorValue & color) noexcept
@@ -436,7 +425,6 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Drops the clear value override, returning this target to the renderer's colour.
-			 * @return void
 			 */
 			void
 			clearClearColorOverride () noexcept
@@ -524,7 +512,6 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Sets the render target maximum viewable distance in meters.
 			 * @param meters The distance in meters.
-			 * @return void
 			 */
 			virtual void setViewDistance (float meters) noexcept = 0;
 
@@ -538,7 +525,6 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Changes the projection type.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setOrthographicProjection (bool state) noexcept
@@ -561,7 +547,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Sets the viewport to a command buffer.
 			 * @note This is used when the dynamic viewport is used with graphics pipelines.
 			 * @param commandBuffer A reference to the command buffer.
-			 * @return void
 			 */
 			void setViewport (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
@@ -570,7 +555,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @note This version doesn't change the projection type.
 			 * @param fovOrNear The field of view if the render target uses a perspective projection or near value for orthographic projection.
 			 * @param distanceOrFar The distance if the render target uses a perspective projection or far value for orthographic projection.
-			 * @return void
 			 */
 			virtual void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept = 0;
 
@@ -631,7 +615,7 @@ namespace EmEn::Graphics::RenderTarget
 			[[nodiscard]]
 			virtual
 			const Vulkan::Framebuffer *
-			layerFramebuffer (uint32_t /*layerPass*/) const noexcept
+			layerFramebuffer ([[maybe_unused]] uint32_t layerPass) const noexcept
 			{
 				return this->framebuffer();
 			}
@@ -676,11 +660,10 @@ namespace EmEn::Graphics::RenderTarget
 			 * @note Used by GGX-convolved cubemap probes to refresh their prefiltered mip
 			 * chain from the fresh mip 0 render (Compute::ProbeConvolver).
 			 * @param commandBuffer The target's frame command buffer (recording state).
-			 * @return void
 			 */
 			virtual
 			void
-			recordPostRenderCompute (const Vulkan::CommandBuffer & /*commandBuffer*/) noexcept
+			recordPostRenderCompute ([[maybe_unused]] const Vulkan::CommandBuffer & commandBuffer) noexcept
 			{
 
 			}
@@ -751,13 +734,14 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param deviceName A reference to a string for the name of the video device.
 			 * @param precisions The framebuffer precisions.
 			 * @param extent The framebuffer dimensions.
-			 * @param viewDistance The max viewable distance in meters.
+			 * @param viewDistance The max viewable distance in meters. NOTE: currently ignored — the view distance lives in the
+			 * derived class's view matrices (far plane) since the base member was removed; it is set through setViewDistance().
 			 * @param renderType The type of render.
 			 * @param allowedConnexionType The type of connexion this virtual device allows.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 * @param enableSyncPrimitives Enable the creation of global sync primitive for this render target.
 			 */
-			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, float viewDistance, RenderTargetType renderType, Scenes::AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
+			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, [[maybe_unused]] float viewDistance, RenderTargetType renderType, Scenes::AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
 				: AbstractVirtualDevice{deviceName, Scenes::AVConsole::DeviceType::Video, allowedConnexionType},
 				m_precisions{precisions},
 				m_extent{extent},
@@ -776,7 +760,6 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Sets extents of the render target.
 			 * @param width The width
 			 * @param height The height
-			 * @return void
 			 */
 			void
 			setExtent (uint32_t width, uint32_t height) noexcept
@@ -791,7 +774,6 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Sets extents of the render target.
 			 * @param extent A reference to the extent.
-			 * @return void
 			 */
 			void
 			setExtent (const VkExtent3D & extent) noexcept
@@ -803,7 +785,6 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Resets the render area on the whole render target.
-			 * @return void
 			 */
 			void
 			resetRenderArea () noexcept
@@ -866,7 +847,6 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Methods to destroy on child class.
-			 * @return void
 			 */
 			virtual void onDestroy () noexcept = 0;
 

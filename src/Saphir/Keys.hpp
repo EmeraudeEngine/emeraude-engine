@@ -1125,26 +1125,6 @@ namespace EmEn::Saphir
 	}
 
 	/**
-	 * @brief Returns the full variable name from an indexed view uniform block.
-	 * @param memberName The uniform block component name. See Keys::UniformBlock::Component.
-	 * @param indexVariableName The index in the array.
-	 * @param componentName The uniform block component name. See Keys::UniformBlock::Component.
-	 * @deprecated Use ViewUB("xxx", true) instead. The engine use the multiview extension now.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	inline
-	std::string
-	CubeViewUB (const char * memberName, const char * indexVariableName, const char * componentName) noexcept
-	{
-		std::stringstream output;
-
-		output << Keys::UniformBlock::View << '.' << memberName << '[' << indexVariableName << ']' << '.' << componentName;
-
-		return output.str();
-	}
-
-	/**
 	 * @brief Returns the full variable name from a material uniform block.
 	 * @param componentName The uniform block component name. See Keys::UniformBlock::Component.
 	 * @return std::string

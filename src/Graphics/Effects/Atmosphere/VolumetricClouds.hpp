@@ -261,7 +261,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief Sets the technique parameters.
 			 * @param parameters A reference to the parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

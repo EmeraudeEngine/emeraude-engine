@@ -156,7 +156,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Notifies the events of the last physics step. Called by the scene after its step, outside its lock.
-			 * @return void
 			 */
 			void notifyEvents () noexcept;
 

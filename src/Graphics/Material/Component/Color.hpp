@@ -125,7 +125,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Sets a new color.
 			 * @param color A reference to a color.
-			 * @return void
 			 */
 			void
 			setColor (const Base::PixelFactory::Color< float > & color) noexcept
@@ -158,7 +157,6 @@ namespace EmEn::Graphics::Material::Component
 			/**
 			 * @brief Changes the opacity value of the color.
 			 * @param value An opacity value between 0.0 and 1.0
-			 * @return void
 			 */
 			void
 			setOpacity (float value) noexcept

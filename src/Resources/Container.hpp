@@ -1876,7 +1876,6 @@ namespace EmEn::Resources
 			 * @note The fail-safe contract: observers receive LoadFailed and consumers get the
 			 * default resource, exactly as for a local file that fails to parse.
 			 * @param request The loading request whose resource fails.
-			 * @return void
 			 */
 			void
 			failResource (const LoadingRequest & request) noexcept
@@ -1956,7 +1955,6 @@ namespace EmEn::Resources
 
 					/* This should never happen! Undefined is a bug. */
 					case SourceType::Undefined :
-					default:
 						TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' information are invalid. Unable to load it ! [CONTAINER]";
 						break;
 				}

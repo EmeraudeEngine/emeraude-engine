@@ -67,7 +67,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Changes the extinction coefficient at the base height.
 			 * @param density The coefficient in 1/m. 0 means vacuum.
-			 * @return void
 			 */
 			void
 			setDensity (float density) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Scenes
 			 * the medium grow denser with altitude, which is exactly the defect the Y-up migration
 			 * left in AtmosphericFog for months. Same contract as the effect it replaces.
 			 * @param falloff The decay rate in 1/m.
-			 * @return void
 			 */
 			void
 			setHeightFalloff (float falloff) noexcept
@@ -114,7 +112,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Changes the altitude the density is expressed at.
 			 * @param height The world-space Y, in m.
-			 * @return void
 			 */
 			void
 			setBaseHeight (float height) noexcept
@@ -136,7 +133,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Changes the integration clamp.
 			 * @param distance The distance in m.
-			 * @return void
 			 */
 			void
 			setMaxDistance (float distance) noexcept
@@ -163,7 +159,6 @@ namespace EmEn::Scenes
 			 * exposure. That mistake shipped for months, and it is invisible in review precisely
 			 * because the numbers look like a colour.
 			 * @param albedo A reference to a color.
-			 * @return void
 			 */
 			void
 			setScatteringAlbedo (const Base::PixelFactory::Color< float > & albedo) noexcept
@@ -185,7 +180,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Changes the Henyey-Greenstein anisotropy.
 			 * @param anisotropy The g parameter, in ]-1,1[. 0 is isotropic, positive is forward.
-			 * @return void
 			 */
 			void
 			setPhaseAnisotropy (float anisotropy) noexcept
@@ -208,7 +202,6 @@ namespace EmEn::Scenes
 			 * @brief Changes the absolute luminance of the medium.
 			 * @param luminance The luminance in NITS, or a negative value to derive it from the
 			 * scene's main directional light.
-			 * @return void
 			 */
 			void
 			setLuminance (float luminance) noexcept
@@ -263,7 +256,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Changes whether the medium takes part in rendering.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setEnabled (bool state) noexcept

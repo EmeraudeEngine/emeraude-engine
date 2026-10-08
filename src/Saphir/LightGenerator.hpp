@@ -164,7 +164,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface ambient color.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the surface ambient color.
-			 * @return void
 			 */
 			void
 			declareSurfaceAmbient (const std::string & colorVariableName) noexcept
@@ -175,7 +174,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface diffuse color.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the surface diffuse color.
-			 * @return void
 			 */
 			void
 			declareSurfaceDiffuse (const std::string & colorVariableName) noexcept
@@ -191,7 +189,6 @@ namespace EmEn::Saphir
 			 * Beckmann-style shininess-to-roughness fallback for a material that never declares roughness.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the surface specular color.
 			 * @param shininessAmountVariableName A reference to a string for GLSL variable holding the surface shininess factor. Default, 200.0.
-			 * @return void
 			 */
 			void
 			declareSurfaceSpecular (const std::string & colorVariableName, const std::string & shininessAmountVariableName = {}) noexcept
@@ -211,7 +208,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface opacity.
 			 * @param amountVariableName A reference to a string for the GLSL variable holding the surface opacity amount.
-			 * @return void
 			 */
 			void
 			declareSurfaceOpacity (const std::string & amountVariableName) noexcept
@@ -228,7 +224,6 @@ namespace EmEn::Saphir
 			 * materialPropertiesExpression() will not publish an emissive mask for it. No current caller
 			 * uses this overload (StandardResource always goes through the two-argument, PBR-tinted one).
 			 * @param amountVariableName A reference to a string for GLSL variable holding the surface auto-illumination amount.
-			 * @return void
 			 */
 			void
 			declareSurfaceAutoIllumination (const std::string & amountVariableName) noexcept
@@ -240,7 +235,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the variable used by the fragment shader to get the surface auto-illumination (PBR mode).
 			 * @param colorVariableName A reference to a string for GLSL variable holding the surface auto-illumination color.
 			 * @param amountVariableName A reference to a string for GLSL variable holding the surface auto-illumination amount.
-			 * @return void
 			 */
 			void
 			declareSurfaceAutoIllumination (const std::string & colorVariableName, const std::string & amountVariableName) noexcept
@@ -254,7 +248,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the variable used by the fragment shader to get the baked ambient occlusion.
 			 * @param valueVariableName A reference to a string for GLSL variable holding the AO value (0.0-1.0).
 			 * @param intensityVariableName A reference to a string for GLSL variable holding the AO intensity multiplier.
-			 * @return void
 			 */
 			void
 			declareSurfaceAmbientOcclusion (const std::string & valueVariableName, const std::string & intensityVariableName) noexcept
@@ -273,7 +266,6 @@ namespace EmEn::Saphir
 			 * photometric quantity. See emeraude-base `src/VertexFactory/AGENTS.md` § Vegetation.
 			 * @param vertexColorVariableName A reference to a string for the GLSL variable holding the
 			 * interstage vertex color. The NAME, never an expression.
-			 * @return void
 			 */
 			void
 			declareVegetationBakedOcclusion (const std::string & vertexColorVariableName) noexcept
@@ -297,7 +289,6 @@ namespace EmEn::Saphir
 			 * @note Packed into the material-properties G-buffer A channel, high nibble, and read
 			 * by AtmosphericFog. Undeclared means 1.0 — fully fogged.
 			 * @param valueVariableName A reference to a string for the GLSL variable.
-			 * @return void
 			 */
 			void
 			declareSurfaceFogResponse (const std::string & valueVariableName) noexcept
@@ -310,7 +301,6 @@ namespace EmEn::Saphir
 			 * @note Packed into the material-properties G-buffer A channel, low nibble, and read
 			 * by DepthOfField. Undeclared means 1.0 — fully defocused.
 			 * @param valueVariableName A reference to a string for the GLSL variable.
-			 * @return void
 			 */
 			void
 			declareSurfaceDoFMask (const std::string & valueVariableName) noexcept
@@ -327,7 +317,6 @@ namespace EmEn::Saphir
 			 * Material::Interface::deferredLightingEligible(): the two disagreeing means a lamp counted twice
 			 * or not at all. Undeclared means never.
 			 * @param condition A GLSL boolean expression (material uniform reads, no varying).
-			 * @return void
 			 */
 			void
 			declareDeferredLightingCondition (const std::string & condition) noexcept
@@ -338,7 +327,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares a per-pixel reflectivity map for the G-buffer material properties output.
 			 * @param valueVariableName The GLSL variable name of the sampled reflectivity map (luminance).
-			 * @return void
 			 */
 			void
 			declareSurfaceReflectivityMap (const std::string & valueVariableName) noexcept
@@ -361,7 +349,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the current sample from the normal map.
 			 * @param vectorVariableName A reference to string for GLSL variable holding the surface normal.
-			 * @return void
 			 */
 			void
 			declareSurfaceNormal (const std::string & vectorVariableName) noexcept
@@ -376,7 +363,6 @@ namespace EmEn::Saphir
 			 * @param normalMap A reference to string for GLSL variable holding the surface normal map.
 			 * @param textureCoordinates A reference to the used texture coordinates. Default, the first one.
 			 * @param scale A reference to string for the GLSL variable holding the normal map scale. Default 1.0.
-			 * @return void
 			 */
 			void
 			declareSurfaceNormalMapSampler (const std::string & normalMap, const std::string & textureCoordinates = {}, const std::string & scale = {}) noexcept
@@ -400,7 +386,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the variable used by the fragment shader to get the surface reflection map sampler and amount.
 			 * @param colorVariableName A reference to string for the GLSL variable holding the surface reflection sample.
 			 * @param amountVariableName A reference to string for the GLSL variable holding the reflection amount. Default 0.5.
-			 * @return void
 			 */
 			void
 			declareSurfaceReflection (const std::string & colorVariableName, const std::string & amountVariableName = {}) noexcept
@@ -427,7 +412,6 @@ namespace EmEn::Saphir
 			 * render-target probe) stay overridable — see docs/reflection-pipeline.md
 			 * ("reflection cost ladder"). An explicit ReflectivityMap keeps priority over
 			 * this flag: an artist asking for per-pixel post-process control is obeyed.
-			 * @return void
 			 */
 			void
 			declareReflectionArtistic () noexcept
@@ -441,7 +425,6 @@ namespace EmEn::Saphir
 			 * @note The environment luminance scale then NEVER applies to the reflected
 			 * color: only what comes out of the normalized SKY cubemap gets it. Measured
 			 * before this: a probe reflection burned to 8000 nits under a clear-sky manifest.
-			 * @return void
 			 */
 			void
 			declareReflectionSourceAbsolute () noexcept
@@ -452,7 +435,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the surface refraction source as an ABSOLUTE luminance (render target).
 			 * @copydetails declareReflectionSourceAbsolute()
-			 * @return void
 			 */
 			void
 			declareRefractionSourceAbsolute () noexcept
@@ -465,7 +447,6 @@ namespace EmEn::Saphir
 			 * @param colorVariableName A reference to string for the GLSL variable holding the surface refraction sample.
 			 * @param amountVariableName A reference to string for the GLSL variable holding the refraction amount. Default 0.5.
 			 * @param iorVariableName A reference to string for the GLSL variable holding the refraction IOR. Default 1.0.
-			 * @return void
 			 */
 			void
 			declareSurfaceRefraction (const std::string & colorVariableName, const std::string & amountVariableName = {}, const std::string & iorVariableName = {}) noexcept
@@ -496,7 +477,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface albedo (base color).
 			 * @param colorVariableName A reference to a string for GLSL variable holding the surface albedo.
-			 * @return void
 			 */
 			void
 			declareSurfaceAlbedo (const std::string & colorVariableName) noexcept
@@ -507,7 +487,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface roughness.
 			 * @param valueVariableName A reference to a string for GLSL variable holding the surface roughness (0.0 = mirror, 1.0 = diffuse).
-			 * @return void
 			 */
 			void
 			declareSurfaceRoughness (const std::string & valueVariableName) noexcept
@@ -518,7 +497,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface metalness.
 			 * @param valueVariableName A reference to a string for GLSL variable holding the surface metalness (0.0 = dielectric, 1.0 = metal).
-			 * @return void
 			 */
 			void
 			declareSurfaceMetalness (const std::string & valueVariableName) noexcept
@@ -530,7 +508,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the variable used by the fragment shader to get the IBL (Image-Based Lighting) intensity.
 			 * @note This controls the contribution of environment cubemaps (reflection/refraction) in PBR mode.
 			 * @param valueVariableName A reference to a string for GLSL variable holding the IBL intensity (0.0 = none, 1.0 = full).
-			 * @return void
 			 */
 			void
 			declareSurfaceIBLIntensity (const std::string & valueVariableName) noexcept
@@ -542,7 +519,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the variables used by the fragment shader for the clear coat layer.
 			 * @param factorVariableName A reference to a string for GLSL variable holding the clear coat factor (0.0 = none, 1.0 = full coat).
 			 * @param roughnessVariableName A reference to a string for GLSL variable holding the clear coat roughness (0.0 = mirror, 1.0 = diffuse).
-			 * @return void
 			 */
 			void
 			declareSurfaceClearCoat (const std::string & factorVariableName, const std::string & roughnessVariableName) noexcept
@@ -555,7 +531,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader for the clear coat normal map.
 			 * @param normalVariableName A reference to a string for GLSL variable holding the clear coat normal (tangent space).
-			 * @return void
 			 */
 			void
 			declareSurfaceClearCoatNormal (const std::string & normalVariableName) noexcept
@@ -574,7 +549,6 @@ namespace EmEn::Saphir
 			 * makes declaring there both possible and correct.
 			 * @param normalVariableName The coat normal in WORLD space.
 			 * @param colorVariableName The prefiltered environment sampled along it, at the COAT's roughness.
-			 * @return void
 			 */
 			void
 			declareSurfaceClearCoatReflection (const std::string & normalVariableName, const std::string & colorVariableName) noexcept
@@ -588,7 +562,6 @@ namespace EmEn::Saphir
 			 * @param intensityVariableName A reference to a string for GLSL variable holding the SSS intensity.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the SSS color.
 			 * @param radiusVariableName A reference to a string for GLSL variable holding the SSS scatter radius.
-			 * @return void
 			 */
 			void
 			declareSurfaceSubsurface (const std::string & intensityVariableName, const std::string & colorVariableName, const std::string & radiusVariableName) noexcept
@@ -602,7 +575,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares the variable used by the fragment shader for the subsurface thickness map.
 			 * @param thicknessVariableName A reference to a string for GLSL variable holding per-pixel thickness.
-			 * @return void
 			 */
 			void
 			declareSurfaceSubsurfaceThickness (const std::string & thicknessVariableName) noexcept
@@ -615,7 +587,6 @@ namespace EmEn::Saphir
 			 * @brief Declares the variables used by the fragment shader for the sheen layer.
 			 * @param colorVariableName A reference to a string for GLSL variable holding the sheen color.
 			 * @param roughnessVariableName A reference to a string for GLSL variable holding the sheen roughness.
-			 * @return void
 			 */
 			void
 			declareSurfaceSheen (const std::string & colorVariableName, const std::string & roughnessVariableName) noexcept
@@ -629,7 +600,6 @@ namespace EmEn::Saphir
 			 * @brief Declares surface anisotropy for anisotropic specular highlights.
 			 * @param anisotropyVariableName A reference to a string for GLSL variable holding the anisotropy value (-1..1).
 			 * @param rotationVariableName A reference to a string for GLSL variable holding the anisotropy rotation (0..1).
-			 * @return void
 			 */
 			void
 			declareSurfaceAnisotropy (const std::string & anisotropyVariableName, const std::string & rotationVariableName) noexcept
@@ -642,7 +612,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Declares per-pixel anisotropy direction from a texture (KHR_materials_anisotropy).
 			 * @param directionVariableName A reference to a string for GLSL vec2 variable holding the tangent-space direction.
-			 * @return void
 			 */
 			void
 			declareSurfaceAnisotropyDirection (const std::string & directionVariableName) noexcept
@@ -661,7 +630,6 @@ namespace EmEn::Saphir
 			 * GRAB PASS rather than from the environment cubemap. It changes the UNIT of the source and
 			 * therefore whether it must be scaled by the environment luminance — see
 			 * transmissionIsSceneRadiance(). Default false (cubemap).
-			 * @return void
 			 */
 			void
 			declareSurfaceTransmission (const std::string & factorVariableName, const std::string & transmissionColorVariableName, const std::string & attenuationColorVariableName, const std::string & attenuationDistanceVariableName, const std::string & thicknessVariableName, bool transmissionIsSceneRadiance = false) noexcept
@@ -702,7 +670,6 @@ namespace EmEn::Saphir
 			 * thickness map's G channel, already resolved to [0,1]. Leave EMPTY when the material
 			 * declares no thickness map: the spec's fallback is then the MAXIMUM thickness, which is
 			 * what iridescenceThicknessExpression() returns.
-			 * @return void
 			 */
 			void
 			declareSurfaceIridescence (const std::string & factorVariableName, const std::string & iorVariableName, const std::string & thicknessMinVariableName, const std::string & thicknessMaxVariableName, const std::string & thicknessMapVariableName = {}) noexcept
@@ -715,13 +682,6 @@ namespace EmEn::Saphir
 				m_useIridescence = true;
 			}
 
-			/**
-			 * @brief Returns the GLSL expression giving the thin film thickness in nanometres.
-			 * @note ⚠️ Both the ambient pass and the light passes MUST use this — they used to
-			 * disagree, `mix(min, max, 0.5)` in the ambient against `mix(min, max, 1.0)` in the
-			 * light passes, which gave the same surface two different films depending on the pass.
-			 * @return std::string
-			 */
 			/**
 			 * @brief Returns the GLSL expression for the DIELECTRIC F0, as a scalar.
 			 * @note Derived from KHR_materials_ior when the material carries one, and further
@@ -788,6 +748,13 @@ namespace EmEn::Saphir
 					m_surfaceIridescenceFactor + ");\n";
 			}
 
+			/**
+			 * @brief Returns the GLSL expression giving the thin film thickness in nanometres.
+			 * @note ⚠️ Both the ambient pass and the light passes MUST use this — they used to
+			 * disagree, `mix(min, max, 0.5)` in the ambient against `mix(min, max, 1.0)` in the
+			 * light passes, which gave the same surface two different films depending on the pass.
+			 * @return std::string
+			 */
 			[[nodiscard]]
 			std::string
 			iridescenceThicknessExpression () const noexcept
@@ -979,7 +946,6 @@ namespace EmEn::Saphir
 			 * formulation): `evalIridescence(outsideIOR, filmIOR, cosTheta1, thicknessNm, baseF0)` and its spectral
 			 * helper. ONE definition for the direct light and the ambient pass.
 			 * @param fragmentShader A reference to the fragment shader.
-			 * @return void
 			 */
 			static void declareIridescenceFunctions (FragmentShader & fragmentShader) noexcept;
 
@@ -1000,7 +966,6 @@ namespace EmEn::Saphir
 			 * reserved 2D slot 3) with the Fdez-Agüera multi-scatter compensation.
 			 * @param generator A reference to the shader generator (bindless set access).
 			 * @param fragmentShader A reference to the fragment shader.
-			 * @return void
 			 */
 			void generateAmbientFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept;
 
@@ -1053,7 +1018,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Generates the PBR BRDF helper functions (Fresnel, NDF, Geometry).
 			 * @param fragmentShader A reference to the fragment shader.
-			 * @return void
 			 */
 			void generatePBRBRDFFunctions (FragmentShader & fragmentShader) const noexcept;
 

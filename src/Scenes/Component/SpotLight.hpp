@@ -211,7 +211,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Set the radius of the light area.
-			 * @param radius
+			 * @param radius The radius of the light area.
 			 */
 			void setRadius (float radius) noexcept;
 
@@ -233,7 +233,6 @@ namespace EmEn::Scenes::Component
 			 * does not gain power when you narrow its reflector, but its beam does get brighter,
 			 * and only the author can say which of the two they meant.
 			 * @param lumens The luminous power, in lumens.
-			 * @return void
 			 */
 			void
 			setLuminousPower (float lumens) noexcept
@@ -304,7 +303,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Computes and writes the light space matrix into the UBO buffer.
-			 * @return void
 			 */
 			void updateLightSpaceMatrix () noexcept;
 

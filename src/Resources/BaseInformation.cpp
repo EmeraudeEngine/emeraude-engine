@@ -33,7 +33,7 @@
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
-#include "Network/URL.hpp"
+#include "Network/URI.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 
@@ -161,7 +161,7 @@ namespace EmEn::Resources
 				{
 					const auto & url = *dataString;
 
-					if ( Network::URL::isURL(url) )
+					if ( Network::URI::isURL(url) )
 					{
 						m_data = data;
 					}

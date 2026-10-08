@@ -228,7 +228,6 @@ namespace EmEn::Graphics::Effects::Camera
 			/**
 			 * @brief Sets the motion blur parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept

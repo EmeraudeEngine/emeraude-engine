@@ -31,7 +31,7 @@
 
 /* Local inclusions. */
 #include "FileSystem.hpp"
-#include "Network/URL.hpp"
+#include "Network/URI.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 #include "Types.hpp"
@@ -56,9 +56,9 @@ namespace EmEn::Resources
 			case SourceType::ExternalData :
 			{
 				/* NOTE: An empty string (data that is not one) is an invalid URL, refused below. */
-				const Network::URL resourceUrl{m_baseInformation.dataString().value_or(std::string{})};
+				const Network::URI resourceUrl{m_baseInformation.dataString().value_or(std::string{})};
 
-				if ( resourceUrl.isValid() )
+				if ( !resourceUrl.empty() )
 				{
 					m_downloadTicket = DownloadPending;
 				}
@@ -89,7 +89,7 @@ namespace EmEn::Resources
 		return m_downloadTicket == DownloadPending;
 	}
 
-	Network::URL
+	Network::URI
 	LoadingRequest::url () const noexcept
 	{
 		if ( m_baseInformation.sourceType() != SourceType::ExternalData )
@@ -97,7 +97,7 @@ namespace EmEn::Resources
 			return {};
 		}
 
-		return Network::URL{m_baseInformation.dataString().value_or(std::string{})};
+		return Network::URI{m_baseInformation.dataString().value_or(std::string{})};
 	}
 
 	void

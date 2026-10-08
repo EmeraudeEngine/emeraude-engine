@@ -101,7 +101,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the constant push magnitude.
 			 * @param magnitude The value
-			 * @return void
 			 */
 			void
 			setMagnitude (float magnitude) noexcept

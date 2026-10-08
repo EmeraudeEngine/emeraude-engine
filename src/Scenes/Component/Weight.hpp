@@ -139,7 +139,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Set the bounding sphere radius.
 			 * @param radius The radius.
-			 * @return void
 			 */
 			void
 			setRadius (float radius) noexcept
@@ -157,7 +156,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Set the bounding box size.
 			 * @param size The unilateral size.
-			 * @return void
 			 */
 			void
 			setBoxSize (float size) noexcept
@@ -177,7 +175,6 @@ namespace EmEn::Scenes::Component
 			 * @param xSize The X-axis size.
 			 * @param ySize The Y-axis size.
 			 * @param zSize The Z-axis size.
-			 * @return void
 			 */
 			void
 			setBoxSize (float xSize, float ySize, float zSize) noexcept

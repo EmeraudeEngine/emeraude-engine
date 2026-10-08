@@ -33,7 +33,7 @@ namespace EmEn::Saphir::Generator
 {
 	/**
 	 * @brief The generator helps to display the Tangent/Bi-normal/Normal space display over geometries.
-	 * @extends@extends EmEn::Saphir::Generator::Abstract This a generator.
+	 * @extends EmEn::Saphir::Generator::Abstract This a generator.
 	 */
 	class TBNSpaceRendering final : public Abstract
 	{

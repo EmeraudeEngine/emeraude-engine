@@ -138,9 +138,10 @@ namespace EmEn::Vulkan
 				return "Intel";
 
 			case Vendor::Unknown :
-			default :
 				return "Unknown";
 		}
+
+		return "Unknown";
 	}
 
 	/**

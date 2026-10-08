@@ -154,7 +154,6 @@ namespace EmEn::Scenes::Component
 			 * @param angularDrag The angular drag coefficient.
 			 * @param bounciness A bounciness scalar of the object when hitting something. Default 50%.
 			 * @param stickiness A stickiness scalar of the object when hitting something. Default 50%.
-			 * @return void
 			 */
 			void
 			setParticlePhysicalProperties (float mass, float surface, float dragCoefficient, float angularDrag, float bounciness = 0.5F, float stickiness = 0.5F) noexcept
@@ -181,7 +180,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets how many particles will be generated par logics cycle.
 			 * @param count The particles count if the limit is not reached.
-			 * @return void
 			 */
 			void
 			setParticleGeneratedPerCycle (uint32_t count) noexcept
@@ -193,7 +191,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets the particle rate generation per engine logics update.
 			 * @note This is the ratio of the max particles. 1 means the whole limit at once.
 			 * @param rate A value between 0 and 1.
-			 * @return void
 			 */
 			void
 			setParticleGenerationRate (float rate) noexcept
@@ -220,7 +217,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the initial particle lifetime in engine cycles.
 			 * @param lifetime The initial lifetime of a new particle.
-			 * @return void
 			 */
 			void setParticleLifetime (uint32_t lifetime) noexcept;
 
@@ -228,7 +224,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets the initial particle randomized lifetime in engine cycles.
 			 * @param minimumLifetime The initial minimum lifetime of a new particle.
 			 * @param maximumLifetime The initial maximum lifetime of a new particle.
-			 * @return void
 			 */
 			void setParticleLifetime (uint32_t minimumLifetime, uint32_t maximumLifetime) noexcept;
 
@@ -257,7 +252,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the initial particle size.
 			 * @param size The initial size of a new particle.
-			 * @return void
 			 */
 			void
 			setParticleSize (float size) noexcept
@@ -275,7 +269,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets the initial particle randomized lifetime in engine cycles.
 			 * @param minimumSize The initial minimum size of a new particle.
 			 * @param maximumSize The initial maximum size of a new particle.
-			 * @return void
 			 */
 			void
 			setParticleSize (float minimumSize, float maximumSize) noexcept
@@ -322,7 +315,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Updates the particle size per cycle update.
 			 * @param delta A positive or negative value to vary the size.
-			 * @return void
 			 */
 			void
 			setParticleSizeDeltaPerCycle (float delta) noexcept
@@ -349,7 +341,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets a spreading radius for particle generation.
 			 * @param radius The size of the radius.
-			 * @return void
 			 */
 			void
 			setSpreadingRadius (float radius) noexcept
@@ -376,7 +367,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets a chaos parameter.
 			 * @param magnitude The chaos magnitude.
-			 * @return void
 			 */
 			void
 			setChaos (float magnitude) noexcept
@@ -402,7 +392,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Enables particles to move with the emitter.
-			 * @return void
 			 */
 			void
 			constraintParticlesToEmitterSpace () noexcept
@@ -413,7 +402,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Overrides the default physics behavior for particles.
 			 * @param function A reference to a function.
-			 * @return void
 			 */
 			void
 			setCustomPhysicsSimulationFunction (const std::function< bool (Physics::Particle &) > & function) noexcept
@@ -426,7 +414,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Overrides the default physics behavior for particles.
 			 * @param function A reference to a function.
-			 * @return void
 			 */
 			void
 			setCustomPhysicsSimulationFunction (const std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Base::Math::CartesianFrame< float > &, Physics::Particle &) > & function) noexcept

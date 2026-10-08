@@ -93,7 +93,7 @@ namespace EmEn::Input
 			return;
 		}
 
-		if ( glfwGetGamepadState(deviceID, &s_devicesState[deviceID]) == GLFW_FALSE )
+		if ( glfwGetGamepadState(deviceID, &s_devicesState[static_cast< size_t >(deviceID)]) == GLFW_FALSE )
 		{
 			TraceError{ClassId} << "Gamepad device #" << deviceID << " is not connected !";
 		}
@@ -107,7 +107,7 @@ namespace EmEn::Input
 			return;
 		}
 
-		auto & [buttons, axes] = s_devicesState[deviceID];
+		auto & [buttons, axes] = s_devicesState[static_cast< size_t >(deviceID)];
 
 		for ( auto & button : buttons )
 		{

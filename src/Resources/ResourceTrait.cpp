@@ -123,7 +123,6 @@ namespace EmEn::Resources
 				break;
 
 			case Status::Failed :
-			default:
 				break;
 		}
 	}
@@ -156,11 +155,13 @@ namespace EmEn::Resources
 				return false;
 
 			case Status::Failed :
-			default:
 				TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has previously tried to be loaded, but failed !";
 
 				return false;
 		}
+
+		/* An out-of-range status. */
+		return false;
 	}
 
 	bool
@@ -228,7 +229,6 @@ namespace EmEn::Resources
 					break;
 
 				case Status::Failed :
-				default:
 					TraceError{TracerTag} <<
 						"The resource '" << this->name() << "' (" << this->classLabel() << ") is failed !"
 						"This resource should be removed.";
@@ -482,7 +482,6 @@ namespace EmEn::Resources
 					break;
 
 				case Status::Failed :
-				default:
 					TraceError{TracerTag} <<
 						"The resource '" << this->name() << "' (" << this->classLabel() << ") status is failed ! "
 						"This resource should be removed !";

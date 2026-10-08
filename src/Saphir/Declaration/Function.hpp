@@ -142,7 +142,7 @@ namespace EmEn::Saphir::Declaration
 
 			/**
 			 * @brief Generates the call code.
-			 * @param parameters
+			 * @param parameters A reference to the call arguments, already joined (e.g. "a, b").
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -150,7 +150,7 @@ namespace EmEn::Saphir::Declaration
 
 			/**
 			 * @brief Generates the call code.
-			 * @param parameters
+			 * @param parameters A reference to a list of call arguments, joined with ", ".
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -158,7 +158,7 @@ namespace EmEn::Saphir::Declaration
 
 			/**
 			 * @brief Generates the call code.
-			 * @param parameters
+			 * @param parameters A reference to a blob holding the call arguments, already joined.
 			 * @return std::string
 			 */
 			[[nodiscard]]

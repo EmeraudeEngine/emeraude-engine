@@ -130,7 +130,6 @@ namespace EmEn::Scenes::Debug
 
 			/**
 			 * @brief Destroys the compass GPU resources.
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -141,7 +140,6 @@ namespace EmEn::Scenes::Debug
 			 * would put the spheres back under the exposure multiply this class exists to escape.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param viewMatrices A reference to the view matrices of the camera being rendered.
-			 * @return void
 			 */
 			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept;
 

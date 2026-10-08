@@ -289,14 +289,12 @@ namespace EmEn::Saphir
 			 * @note Binaries ONLY. The generated-source dump is never indexed: nothing reads it
 			 * back, and since this runs only when the binary cache is on while the dump is off by
 			 * default, scanning it meant walking an EMPTY path on every startup.
-			 * @return void
 			 */
 			void readBinaryCache () noexcept;
 
 			/**
 			 * @brief Erases every dumped source and every cached binary from disk.
 			 * @note Each loop is guarded: a disabled facility leaves its directory path empty.
-			 * @return void
 			 */
 			void clearCache () noexcept;
 
@@ -347,7 +345,6 @@ namespace EmEn::Saphir
 			 * @param shaderIdentifier A reference to a string.
 			 * @param sourceCode A reference to a string.
 			 * @param log A pointer to a C-string.
-			 * @return void
 			 */
 			void printCompilationErrors (const std::string & shaderIdentifier, const std::string & sourceCode, const char * log) noexcept;
 

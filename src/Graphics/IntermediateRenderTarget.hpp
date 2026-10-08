@@ -122,7 +122,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys the render target from the GPU.
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -155,14 +154,12 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Records a render pass begin command into the command buffer.
 			 * @param commandBuffer A reference to the active command buffer.
-			 * @return void
 			 */
 			void beginRenderPass (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Records a render pass end command into the command buffer.
 			 * @param commandBuffer A reference to the active command buffer.
-			 * @return void
 			 */
 			void endRenderPass (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 

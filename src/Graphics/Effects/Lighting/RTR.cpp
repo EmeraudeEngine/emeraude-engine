@@ -1950,7 +1950,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 				commandBuffer.bind(mip == 0 ? *m_pyramidBaseSets[baseSlot] : *m_pyramidSets[mip - 1], *m_pyramidPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 				vkCmdPushConstants(commandBuffer.handle(), m_pyramidPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PyramidPushConstants), &pc);
-				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
+				commandBuffer.dispatch(static_cast< uint32_t >((destWidth + 7) / 8), static_cast< uint32_t >((destHeight + 7) / 8), 1);
 			}
 
 			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the composite fragment shader. */

@@ -46,10 +46,9 @@ namespace EmEn::Vulkan::Sync
 
 			case FenceStatus::Error :
 				return ErrorString;
-
-			default:
-				return "Unknown";
 		}
+
+		return "Unknown";
 	}
 	
 	bool

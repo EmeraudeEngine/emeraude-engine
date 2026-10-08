@@ -215,7 +215,6 @@ namespace EmEn::Graphics
 			 * @brief RENDER THREAD. Tells the capture whether the frame whose copy was recorded reached the queue.
 			 * @param submitted False when the frame was abandoned: the capture then fails, a temporal capture cannot have
 			 * a hole.
-			 * @return void
 			 */
 			void confirmSubmit (bool submitted) noexcept;
 
@@ -223,7 +222,6 @@ namespace EmEn::Graphics
 			 * @brief RENDER THREAD. Called right after a frame slot's fence wait: every copy submitted with that slot is
 			 * complete. Once the last frame's copy is, the read-back is handed to the thread pool.
 			 * @param frameSlot The frame-in-flight slot whose fence just passed.
-			 * @return void
 			 */
 			void onFrameSlotRetired (uint32_t frameSlot) noexcept;
 
@@ -231,7 +229,6 @@ namespace EmEn::Graphics
 			 * @brief Abandons an armed or running capture (the swap-chain is being recreated, or the renderer stops).
 			 * @warning The GPU must be idle, or the frames of the capture retired.
 			 * @param reason Why.
-			 * @return void
 			 */
 			void abandon (const std::string & reason) noexcept;
 
@@ -264,14 +261,12 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Reads every frame back, writes the PNG files and the JSON, then publishes the result. Runs on the
 			 * thread pool.
-			 * @return void
 			 */
 			void writeFiles () noexcept;
 
 			/**
 			 * @brief Publishes the result and wakes the waiter. The lock must be held.
 			 * @param result The result.
-			 * @return void
 			 */
 			void publish (Result && result) noexcept;
 

@@ -61,7 +61,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Updates the frustum geometry when the camera moves.
-			 * @param viewProjectionMatrix
+			 * @param viewProjectionMatrix A reference to the view-projection matrix the frustum planes are extracted from.
 			 */
 			void update (const Base::Math::Matrix< 4, float > & viewProjectionMatrix) noexcept;
 

@@ -157,7 +157,7 @@ namespace EmEn::Graphics::Material::Component
 		{
 			if ( const auto & jsonNode = data[JKUVWScale]; jsonNode.isArray() )
 			{
-				for ( auto index = 0; index < 3; index++ )
+				for ( uint32_t index = 0; index < 3; index++ )
 				{
 					const auto value = FastJSON::asValue< float >(jsonNode[index]);
 
@@ -182,7 +182,7 @@ namespace EmEn::Graphics::Material::Component
 		{
 			if ( const auto & jsonNode = data[JKUVWOffset]; jsonNode.isArray() )
 			{
-				for ( auto index = 0; index < 3; index++ )
+				for ( uint32_t index = 0; index < 3; index++ )
 				{
 					const auto value = FastJSON::asValue< float >(jsonNode[index]);
 

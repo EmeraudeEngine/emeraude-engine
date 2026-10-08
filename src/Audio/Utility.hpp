@@ -38,44 +38,42 @@
 namespace EmEn::Audio
 {
 	/**
-	 * brief
-	 * @param key
+	 * @brief Returns a readable label for an ALC attribute key.
+	 * @param key The ALC attribute key.
 	 * @return std::string
 	 */
 	[[nodiscard]]
 	EMEN_API std::string alcKeyToLabel (ALCint key) noexcept;
 
 	/**
-	 * brief
-	 * @param lastFunctionCalled
-	 * @param filename
-	 * @param line
+	 * @brief Checks and reports the pending OpenAL errors.
+	 * @param lastFunctionCalled The name of the last OpenAL function called.
+	 * @param filename The source file of the call.
+	 * @param line The source line of the call.
 	 * @return bool
 	 */
 	[[nodiscard]]
 	EMEN_API bool alGetErrors (const std::string & lastFunctionCalled = {"NO_AC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
 
 	/**
-	 * @brief
-	 * @return void
+	 * @brief Discards the pending OpenAL errors.
 	 */
 	EMEN_API void alFlushErrors () noexcept;
 
 	/**
-	 * brief
-	 * @param device
-	 * @param lastFunctionCalled
-	 * @param filename
-	 * @param line
+	 * @brief Checks and reports the pending ALC errors of a device.
+	 * @param device A pointer to the ALC device.
+	 * @param lastFunctionCalled The name of the last ALC function called.
+	 * @param filename The source file of the call.
+	 * @param line The source line of the call.
 	 * @return bool
 	 */
 	[[nodiscard]]
 	EMEN_API bool alcGetErrors (ALCdevice * device, const std::string & lastFunctionCalled = {"NO_ALC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
 
 	/**
-	 * brief
-	 * @param device
-	 * @return void
+	 * @brief Discards the pending ALC errors of a device.
+	 * @param device A pointer to the ALC device.
 	 */
 	EMEN_API void alcFlushErrors (ALCdevice * device) noexcept;
 }

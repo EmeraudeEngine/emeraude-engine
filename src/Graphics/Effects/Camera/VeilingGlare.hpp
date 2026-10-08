@@ -173,7 +173,6 @@ namespace EmEn::Graphics::Effects::Camera
 			/**
 			 * @brief Sets the bloom parameters.
 			 * @param parameters The new parameters.
-			 * @return void
 			 */
 			void
 			setParameters (const Parameters & parameters) noexcept
@@ -199,7 +198,6 @@ namespace EmEn::Graphics::Effects::Camera
 			 * chain color then passes through this effect untouched and the composite pass
 			 * is not paid. A standalone VeilingGlare (no tone mapping downstream) keeps compositing.
 			 * @param state The bypass state.
-			 * @return void
 			 */
 			void
 			setCompositeBypassed (bool state) noexcept

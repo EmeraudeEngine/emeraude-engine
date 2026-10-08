@@ -115,7 +115,6 @@ namespace EmEn::Scenes
 			 * @param firstDynamicSlot The first slot available for dynamic textures in the 2D, cube and
 			 * cube array arrays. ⚠️ Not in the 3D one: it carries no reserved slot, so its cursor starts
 			 * at 0 (see Graphics::BindlessTextureManager::MinimalMaxTextures3D).
-			 * @return void
 			 */
 			void setCapacities (uint32_t maxTextures2D, uint32_t maxTexturesCube, uint32_t maxTexturesCubeArray, uint32_t maxTextures3D, uint32_t firstDynamicSlot) noexcept;
 
@@ -152,35 +151,30 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Unregisters a 2D texture by instance.
 			 * @param texture A raw pointer to the texture instance.
-			 * @return void
 			 */
 			void unregisterTexture2D (const Vulkan::TextureInterface * texture) noexcept;
 
 			/**
 			 * @brief Unregisters a cube texture by instance.
 			 * @param texture A raw pointer to the texture instance.
-			 * @return void
 			 */
 			void unregisterTextureCube (const Vulkan::TextureInterface * texture) noexcept;
 
 			/**
 			 * @brief Unregisters a cube array texture by instance.
 			 * @param texture A raw pointer to the texture instance.
-			 * @return void
 			 */
 			void unregisterTextureCubeArray (const Vulkan::TextureInterface * texture) noexcept;
 
 			/**
 			 * @brief Unregisters a 3D texture by instance.
 			 * @param texture A raw pointer to the texture instance.
-			 * @return void
 			 */
 			void unregisterTexture3D (const Vulkan::TextureInterface * texture) noexcept;
 
 			/**
 			 * @brief Sets the scene environment cubemap (written to the reserved env slot by the manager).
 			 * @param cubemap A reference to the cubemap smart pointer (may be null to clear).
-			 * @return void
 			 */
 			void setEnvironmentCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
 
@@ -194,14 +188,12 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Sets the baked IBL irradiance cubemap (reserved slot 1, written by the manager).
 			 * @param cubemap A reference to the cubemap smart pointer (may be null to clear).
-			 * @return void
 			 */
 			void setIrradianceCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
 
 			/**
 			 * @brief Sets the baked IBL prefiltered cubemap (reserved slot 2, written by the manager).
 			 * @param cubemap A reference to the cubemap smart pointer (may be null to clear).
-			 * @return void
 			 */
 			void setPrefilteredCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
 
@@ -214,7 +206,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Removes every registration from the set.
-			 * @return void
 			 */
 			void clear () noexcept;
 

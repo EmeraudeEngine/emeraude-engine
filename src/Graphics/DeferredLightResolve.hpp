@@ -222,7 +222,6 @@ namespace EmEn::Graphics
 			 * which is the per-pixel loop of before; the two frames must be bit-identical).
 			 * @note Thread-safe, read when the next frame is recorded.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableTileCulling (bool state) noexcept
@@ -281,7 +280,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Releases every GPU resource (renderer termination, scene target recreation).
-			 * @return void
 			 */
 			void destroy () noexcept;
 

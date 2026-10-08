@@ -162,7 +162,6 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Asks a fetch in flight to stop (at the next read).
-			 * @return void
 			 */
 			void cancel () noexcept;
 
@@ -203,21 +202,18 @@ namespace EmEn::Resources
 			 * @brief Copies one file and verifies it (worker).
 			 * @param root The local `data-stores/`.
 			 * @param file The remote file.
-			 * @return void
 			 */
 			void fetchFile (const std::filesystem::path & root, const RemoteFile & file) noexcept;
 
 			/**
 			 * @brief Runs a fetch (worker).
 			 * @param relativePath The path.
-			 * @return void
 			 */
 			void runFetch (const std::string & relativePath) noexcept;
 
 			/**
 			 * @brief Records an error in the status (and the log).
 			 * @param message The message.
-			 * @return void
 			 */
 			void reportError (const std::string & message) noexcept;
 

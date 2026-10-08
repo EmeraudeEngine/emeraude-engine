@@ -143,8 +143,7 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Executes a function over each input.
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< AbstractVirtualDevice > &)
-			 * @param processInput
-			 * @return void
+			 * @param processInput The function to execute [std::forward].
 			 */
 			template< typename function_t >
 			void
@@ -162,8 +161,7 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Executes a function over each output.
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< AbstractVirtualDevice > &)
-			 * @param processOutput
-			 * @return void
+			 * @param processOutput The function to execute [std::forward].
 			 */
 			template< typename function_t >
 			void
@@ -251,7 +249,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @brief Disconnects the device from everything.
 			 * @param engineContext A reference to the audio video managers.
 			 * @param fireEvents Set to fire or not events on disconnection.
-			 * @return void
 			 */
 			void disconnectFromAll (EngineContext & engineContext, bool fireEvents) noexcept;
 
@@ -285,7 +282,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @param fovOrNear The field of view if the render target uses a perspective projection or near value for orthographic projection.
 			 * @param distanceOrFar The distance if the render target uses a perspective projection or far value for orthographic projection.
 			 * @param isOrthographicProjection Orthographic projection instead of perspective.
-			 * @return void
 			 */
 			virtual
 			void
@@ -312,7 +308,6 @@ namespace EmEn::Scenes::AVConsole
 			 * 0.1 m cost — a millimetric subject rendering nothing at all, and a kilometric scene
 			 * spending its depth precision in the first ten centimetres.
 			 * @param distance The distance in metres.
-			 * @return void
 			 */
 			virtual
 			void
@@ -332,7 +327,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @brief Updates the device from object coordinates in world space holding it.
 			 * @param worldCoordinates A reference to the coordinates of the device.
 			 * @param worldVelocity A reference to the velocity vector of the device.
-			 * @return void
 			 */
 			virtual void updateDeviceFromCoordinates (const Base::Math::CartesianFrame< float > & worldCoordinates, const Base::Math::Vector< 3, float > & worldVelocity) noexcept = 0;
 
@@ -358,7 +352,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param engineContext A reference to the audio video managers.
 			 * @param inputDevice A reference to the virtual device.
-			 * @return void
 			 */
 			virtual
 			void
@@ -372,7 +365,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param engineContext A reference to the audio video managers.
 			 * @param outputDevice A reference to the virtual device.
-			 * @return void
 			 */
 			virtual
 			void
@@ -386,7 +378,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param engineContext A reference to the audio video managers.
 			 * @param inputDevice A reference to the virtual device.
-			 * @return void
 			 */
 			virtual
 			void
@@ -400,7 +391,6 @@ namespace EmEn::Scenes::AVConsole
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param engineContext A reference to the audio video managers.
 			 * @param outputDevice A reference to the virtual device.
-			 * @return void
 			 */
 			virtual
 			void

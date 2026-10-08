@@ -111,14 +111,12 @@ namespace EmEn::Scenes::Component
 			 * and scale at that value, and stop() restores it.
 			 * @param targetIndex The index the clip channels address.
 			 * @param node A reference to the node to drive.
-			 * @return void
 			 */
 			void bindTarget (int32_t targetIndex, const std::shared_ptr< Node > & node) noexcept;
 
 			/**
 			 * @brief Adds an animation clip, indexed on the clip's own name.
 			 * @param clip A reference to the clip resource.
-			 * @return void
 			 */
 			void addClip (const std::shared_ptr< Animations::AnimationClipResource > & clip) noexcept;
 
@@ -136,14 +134,12 @@ namespace EmEn::Scenes::Component
 			 * @brief Stops playback and puts every target back on its rest frame.
 			 * @note ⚠️ RESTORES, never merely stops writing: a node keeps whatever frame was last
 			 * written to it, so dropping the clip would leave the hierarchy frozen mid-animation.
-			 * @return void
 			 */
 			void stop () noexcept;
 
 			/**
 			 * @brief Sets the playback speed multiplier.
 			 * @param speed The speed (1.0 = normal, 0.5 = half, 2.0 = double).
-			 * @return void
 			 */
 			void
 			setSpeed (float speed) noexcept
@@ -280,7 +276,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Samples the active clip at the given time and writes every target's frame.
 			 * @param timeSeconds The time to evaluate at.
-			 * @return void
 			 */
 			void evaluateAtTime (float timeSeconds) noexcept;
 

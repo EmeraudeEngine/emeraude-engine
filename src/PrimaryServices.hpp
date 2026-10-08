@@ -150,7 +150,6 @@ namespace EmEn
 
 			/**
 			 * @brief Main termination method for primary services.
-			 * @return void
 			 */
 			void terminate () noexcept;
 

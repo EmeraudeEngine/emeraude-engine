@@ -1476,7 +1476,7 @@ namespace EmEn::Graphics::Effects::Lighting
 				};
 
 				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
-				commandBuffer.dispatch((mip0Width + 7) / 8, (mip0Height + 7) / 8, 1);
+				commandBuffer.dispatch(static_cast< uint32_t >((mip0Width + 7) / 8), static_cast< uint32_t >((mip0Height + 7) / 8), 1);
 			}
 
 			commandBuffer.bind(*m_hiZReducePipeline);
@@ -1508,7 +1508,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 				commandBuffer.bind(*m_hiZReduceSets[mip - 1], *m_hiZPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
-				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
+				commandBuffer.dispatch(static_cast< uint32_t >((destWidth + 7) / 8), static_cast< uint32_t >((destHeight + 7) / 8), 1);
 			}
 
 			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the trace fragment shader
@@ -1561,7 +1561,7 @@ namespace EmEn::Graphics::Effects::Lighting
 				};
 
 				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
-				commandBuffer.dispatch((baseWidth + 7) / 8, (baseHeight + 7) / 8, 1);
+				commandBuffer.dispatch(static_cast< uint32_t >((baseWidth + 7) / 8), static_cast< uint32_t >((baseHeight + 7) / 8), 1);
 			}
 
 			for ( uint32_t mip = 1; mip < m_colorPyramidMipCount; mip++ )
@@ -1591,7 +1591,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 				commandBuffer.bind(*m_colorReduceSets[mip - 1], *m_hiZPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
 				vkCmdPushConstants(commandBuffer.handle(), m_hiZPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(HiZPushConstants), &pc);
-				commandBuffer.dispatch((destWidth + 7) / 8, (destHeight + 7) / 8, 1);
+				commandBuffer.dispatch(static_cast< uint32_t >((destWidth + 7) / 8), static_cast< uint32_t >((destHeight + 7) / 8), 1);
 			}
 
 			/* Pyramid complete: GENERAL -> SHADER_READ_ONLY for the resolve fragment shader. */

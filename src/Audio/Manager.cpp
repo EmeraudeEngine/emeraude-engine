@@ -1020,7 +1020,7 @@ namespace EmEn::Audio
 
 		if ( size > 0 )
 		{
-			attributes.resize(size);
+			attributes.resize(static_cast< size_t >(size));
 
 			alcGetIntegerv(m_device, ALC_ALL_ATTRIBUTES, size, attributes.data());
 		}

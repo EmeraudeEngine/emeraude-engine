@@ -31,7 +31,7 @@
 
 /* Local inclusions. */
 #include "Net/Manager.hpp"
-#include "Network/URL.hpp"
+#include "Network/URI.hpp"
 #include "PrimaryServices.hpp"
 #include "ThreadPool.hpp"
 

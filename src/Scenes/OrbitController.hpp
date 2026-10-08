@@ -81,7 +81,6 @@ namespace EmEn::Scenes
 			 * @brief Sets the camera node to move around the target.
 			 * @note The node must be a direct child of the scene root.
 			 * @param node A reference to a node smart pointer.
-			 * @return void
 			 */
 			void
 			controlNode (const std::shared_ptr< Node > & node) noexcept
@@ -93,7 +92,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Releases the controlled node.
-			 * @return void
 			 */
 			void
 			releaseNode () noexcept
@@ -128,7 +126,6 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Sets the world point the node orbits around and looks at.
 			 * @param target A reference to a vector.
-			 * @return void
 			 */
 			void setTarget (const Base::Math::Vector< 3, float > & target) noexcept;
 
@@ -148,7 +145,6 @@ namespace EmEn::Scenes
 			 * @note This re-anchors the dolly : the value becomes the new reference
 			 * distance and the wheel step index restarts from zero.
 			 * @param distance The distance to the target.
-			 * @return void
 			 */
 			void setDistance (float distance) noexcept;
 
@@ -163,7 +159,6 @@ namespace EmEn::Scenes
 			 * @brief Sets the dolly distance limits.
 			 * @param minimum The closest allowed distance.
 			 * @param maximum The furthest allowed distance.
-			 * @return void
 			 */
 			void setDistanceLimits (float minimum, float maximum) noexcept;
 
@@ -172,7 +167,6 @@ namespace EmEn::Scenes
 			 * @param azimuth The angle around the world Y axis, in radians.
 			 * @param elevation The angle above the target horizontal plane, in radians.
 			 * Positive looks from above. Clamped near the poles to keep the view stable.
-			 * @return void
 			 */
 			void setOrientation (float azimuth, float elevation) noexcept;
 
@@ -214,7 +208,6 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Recomputes the node position and aim from the canonical state.
-			 * @return void
 			 */
 			void applyToNode () noexcept;
 

@@ -277,7 +277,6 @@ namespace EmEn::Scenes
 			 * @param time The wind time of this frame, in seconds.
 			 * @param previousTime The wind time of the previous frame, in seconds.
 			 * @param gust The gust envelope, in [0, 1].
-			 * @return void
 			 */
 			void
 			setWindState (const Base::Math::Vector< 3, float > & direction, float strength, float time, float previousTime, float gust) noexcept
@@ -316,14 +315,6 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Uploads the staged header and entries to the current frame-in-flight SSBO.
-			 * @note Called at the end of every Scene::prepareRender(). The upload always covers
-			 * the whole staged range from the frame start, so successive calls within one frame
-			 * are cumulative and idempotent. Grows the buffer when the staged range exceeds its
-			 * capacity, retiring the previous buffer through the deferred destructor.
-			 * @return bool
-			 */
-			/**
 			 * @brief Stages the points of a path drawn through the entry `slot` (the one stageEntry() just returned).
 			 * @note Render thread, inside prepareRender(), like stageEntry(). The vertex stage finds them through
 			 * pathDirectory[gl_InstanceIndex] (Saphir, the path ribbon).
@@ -332,7 +323,6 @@ namespace EmEn::Scenes
 			 * @param current The points of the frame (xyz in the entity's space, w the arc length); may be empty.
 			 * @param previous The same points at the previous rendered frame, or an empty span for none (previous =
 			 * current: no velocity). Otherwise as many as `current`.
-			 * @return void
 			 */
 			void stagePath (uint32_t slot, std::span< const Base::Math::Vector< 4, float > > current, std::span< const Base::Math::Vector< 4, float > > previous) noexcept;
 
@@ -343,7 +333,6 @@ namespace EmEn::Scenes
 			 * @param points Its points in its entity's space (w the arc length).
 			 * @param color The colour as displayed (sRGB) and the opacity.
 			 * @param style (half width, 1 if in pixels, 1 if round, miter limit).
-			 * @return void
 			 */
 			void stageDebugPath (const Base::Math::Matrix< 4, float > & modelMatrix, std::span< const Base::Math::Vector< 4, float > > points, const Base::Math::Vector< 4, float > & color, const Base::Math::Vector< 4, float > & style) noexcept;
 
@@ -369,6 +358,14 @@ namespace EmEn::Scenes
 				return m_stagedDebugPoints;
 			}
 
+			/**
+			 * @brief Uploads the staged header and entries to the current frame-in-flight SSBO.
+			 * @note Called at the end of every Scene::prepareRender(). The upload always covers
+			 * the whole staged range from the frame start, so successive calls within one frame
+			 * are cumulative and idempotent. Grows the buffer when the staged range exceeds its
+			 * capacity, retiring the previous buffer through the deferred destructor.
+			 * @return bool
+			 */
 			[[nodiscard]]
 			bool updateVideoMemory () noexcept;
 

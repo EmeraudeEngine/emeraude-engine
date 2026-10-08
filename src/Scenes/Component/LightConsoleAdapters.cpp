@@ -216,7 +216,6 @@ namespace EmEn::Scenes::Component
 		 * @brief The commands every light type shares: enable, colour, shadow filtering, colour projection.
 		 * @tparam light_t The light type.
 		 * @param adapter The adapter binding them.
-		 * @return void
 		 */
 		template< typename light_t, typename adapter_t >
 		void

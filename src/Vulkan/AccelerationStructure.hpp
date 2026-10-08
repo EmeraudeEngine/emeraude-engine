@@ -170,7 +170,6 @@ namespace EmEn::Vulkan
 			 * @brief Sets the scratch size required for an UPDATE-mode rebuild (refit).
 			 * @note Recorded by the builder when the structure is built with ALLOW_UPDATE.
 			 * @param size The update scratch size in bytes.
-			 * @return void
 			 */
 			void
 			setUpdateScratchSize (VkDeviceSize size) noexcept

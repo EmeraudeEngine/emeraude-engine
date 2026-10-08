@@ -113,7 +113,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Sets the task payload declaration read by this stage (same text as TaskShader::setTaskPayload()).
 			 * @param declaration The GLSL declaration, emitted verbatim at global scope.
-			 * @return void
 			 */
 			void
 			setTaskPayload (std::string declaration) noexcept
@@ -128,7 +127,6 @@ namespace EmEn::Saphir
 			 * attribute of @p providedAttributes as a local of its attribute name.
 			 * @param providedAttributes The vertex attributes the prologue defines. Generation fails, naming the
 			 * attribute, when the synthesis needs one that is not in this set.
-			 * @return void
 			 */
 			void setVertexSource (std::string countExpression, std::string prologue, std::set< Graphics::VertexAttributeType > providedAttributes) noexcept;
 
@@ -137,7 +135,6 @@ namespace EmEn::Saphir
 			 * @param countExpression A GLSL expression, uniform across the workgroup: the primitive count.
 			 * @param code GLSL run once per primitive (PrimitiveIndex is defined), writing the primitive indices
 			 * (`gl_PrimitiveTriangleIndicesEXT[msPrimitiveIndex]` for triangles).
-			 * @return void
 			 */
 			void setPrimitiveSource (std::string countExpression, std::string code) noexcept;
 

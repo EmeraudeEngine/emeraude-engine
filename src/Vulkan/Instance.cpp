@@ -1415,7 +1415,7 @@ namespace EmEn::Vulkan
 	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, VkQueueFlagBits type, size_t & /*score*/) const noexcept
 	{
 		return std::ranges::any_of(physicalDevice->queueFamilyPropertiesVK11(), [type] (const auto & queueFamilyProperty) {
-			return (queueFamilyProperty.queueFamilyProperties.queueFlags & type) != 0;
+			return (queueFamilyProperty.queueFamilyProperties.queueFlags & static_cast< VkQueueFlags >(type)) != 0;
 		});
 	}
 

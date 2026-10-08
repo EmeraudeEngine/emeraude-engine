@@ -159,9 +159,6 @@ namespace EmEn::Physics
 			};
 
 			/**
-			 * @brief Constructs a solver with an empty contact cache.
-			 */
-			/**
 			 * @brief A vehicle's wheel (decision 15): a soft suspension along the contact normal and a tyre's longitudinal
 			 * and lateral friction, solved with the contacts every sub-step; its spin is a degree of freedom of its own
 			 * (an inertia about its axle). A wheel off the ground only spins (its torques, its damping, its brake).
@@ -218,6 +215,9 @@ namespace EmEn::Physics
 				bool contact{false};
 			};
 
+			/**
+			 * @brief Constructs a solver with an empty contact cache.
+			 */
 			SoftStepSolver () noexcept = default;
 
 			/**
@@ -228,13 +228,11 @@ namespace EmEn::Physics
 			 * @param manifolds The manifolds; their impulses are written back (for the caller's events and grounded state).
 			 * @param gravity A reference to the gravity acceleration (m/s²).
 			 * @param deltaTime The step (s), > 0.
-			 * @return void
 			 */
 			void step (std::vector< Body > & bodies, std::vector< Manifold > & manifolds, std::vector< Wheel > & wheels, const Base::Math::Vector< 3, float > & gravity, float deltaTime) noexcept;
 
 			/**
 			 * @brief Forgets every cached impulse (a scene change).
-			 * @return void
 			 */
 			void
 			clearCache () noexcept

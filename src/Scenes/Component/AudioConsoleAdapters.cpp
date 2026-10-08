@@ -107,7 +107,6 @@ namespace EmEn::Scenes::Component
 				 * @param description The command description.
 				 * @param action The transport action.
 				 * @param done The confirmation suffix.
-				 * @return void
 				 */
 				void
 				bindTransport (const std::string & name, const std::string & description, void (SoundEmitter::* action)() const noexcept, const std::string & done) noexcept

@@ -202,12 +202,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the device that will be used with this manager.
 			 * @param device A reference to a device smart pointer.
-			 * @return void
-			 */
-			/**
-			 * @brief Sets the device that will be used with this manager.
-			 * @param device A reference to a device smart pointer.
-			 * @return void
 			 */
 			void setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept;
 
@@ -295,7 +289,6 @@ namespace EmEn::Graphics
 			 * they are never sampled because materials/lights only reference occupied slots.
 			 * @param set A reference to the active scene's bindless texture set.
 			 * @param sceneTimeMS The active scene lifetime in milliseconds (for animated textures).
-			 * @return void
 			 */
 			void syncTextureSet (const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept;
 
@@ -311,7 +304,6 @@ namespace EmEn::Graphics
 			 * stay alive while dormant). The drain that protects destruction is in
 			 * Scenes::Manager::deleteScene, before the scene is erased.
 			 * @param set A reference to the leaving scene's bindless texture set.
-			 * @return void
 			 */
 			void clearTextureSet (const Scenes::BindlessTextureSet & set) const noexcept;
 

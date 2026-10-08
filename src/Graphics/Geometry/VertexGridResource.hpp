@@ -273,7 +273,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Enables vertex color from a global color.
 			 * @note Should be called before the load() function.
 			 * @param color A reference to a color.
-			 * @return void.
 			 */
 			void enableVertexColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -281,7 +280,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Enables vertex color from a color map.
 			 * @note Should be called before the load() function.
 			 * @param colorMap A reference to an image resource.
-			 * @return void.
 			 */
 			void enableVertexColor (const std::shared_ptr< ImageResource > & colorMap) noexcept;
 
@@ -289,7 +287,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Enables vertex color using randomization.
 			 * @note Should be called before the load() function.
 			 * @todo Set parameters to clamp color.
-			 * @return void.
 			 */
 			void enableVertexColorRandom () noexcept;
 
@@ -297,7 +294,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Enables vertex color using coordinates.
 			 * @note Should be called before the load() function.
 			 * @todo Set parameters for color generation.
-			 * @return void.
 			 */
 			void enableVertexColorFromCoords () noexcept;
 
@@ -346,7 +342,6 @@ namespace EmEn::Graphics::Geometry
 			 * @param vertexAttributes A writable reference to a vector of vertex attributes.
 			 * @param vertexElementCount The number of elements which compose one vertex.
 			 * @param indices A writable reference to a vector of indices.
-			 * @return void
 			 */
 			[[nodiscard]]
 			bool generateGPUBuffers (std::vector< float > & vertexAttributes, uint32_t vertexElementCount, std::vector< uint32_t > & indices) const noexcept;

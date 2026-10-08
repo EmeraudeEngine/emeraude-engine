@@ -168,6 +168,13 @@ namespace EmEn::Net
 	using MulticastOptionValue = int;
 #endif
 
+	/* The length argument of sendto() / recvfrom(): an int on Winsock, a size_t on POSIX. */
+#ifdef _WIN32
+	using SocketLengthType = int;
+#else
+	using SocketLengthType = size_t;
+#endif
+
 	namespace
 	{
 		std::string
@@ -727,7 +734,7 @@ namespace EmEn::Net
 		const auto bytesRead = recvfrom(
 			sock,
 			static_cast< char * >(buffer),
-			static_cast< int >(maxLength),
+			static_cast< SocketLengthType >(maxLength),
 			0,
 			reinterpret_cast< struct sockaddr * >(&sender),
 			&senderLen
@@ -1255,7 +1262,7 @@ namespace EmEn::Net
 		dest.sin_port = htons(SSDPMulticastPort);
 		inet_pton(AF_INET, SSDPMulticastAddress, &dest.sin_addr);
 
-		sendto(sock, packet.c_str(), static_cast< int >(packet.size()), 0, reinterpret_cast< const struct sockaddr * >(&dest), sizeof(dest));
+		sendto(sock, packet.c_str(), static_cast< SocketLengthType >(packet.size()), 0, reinterpret_cast< const struct sockaddr * >(&dest), sizeof(dest));
 
 		/* Collect responses until timeout. */
 		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);

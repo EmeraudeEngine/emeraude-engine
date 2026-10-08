@@ -221,7 +221,6 @@ namespace EmEn::Graphics
 					/**
 					 * @brief Sets the frame duration in milliseconds.
 					 * @param duration The duration.
-					 * @return void
 					 */
 					void
 					setDuration (uint32_t duration) noexcept
@@ -345,7 +344,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Declares the store cubemaps the frames show releasable: an upload consumed their faces.
-			 * @return void
 			 */
 			void markFrameCubemapsReleasable () const noexcept;
 
@@ -440,7 +438,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets whether the animation is looping.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setLoopState (bool state) noexcept
@@ -481,7 +478,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Updates the full duration of the cubemap movie.
-			 * @return void
 			 */
 			void updateDuration () noexcept;
 

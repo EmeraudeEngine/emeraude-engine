@@ -53,10 +53,9 @@ namespace EmEn::PlatformSpecific::Desktop
 
 				case NotificationIcon::Error:
 					return "dialog-error";
-
-				default:
-					return "dialog-information";
 			}
+
+			return "dialog-information";
 		}
 	}
 

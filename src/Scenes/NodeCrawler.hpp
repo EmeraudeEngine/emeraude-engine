@@ -116,7 +116,6 @@ namespace EmEn::Scenes
 			 * @brief Populates the stacks with children of a node.
 			 * @note Discardable nodes are not taken in account.
 			 * @param currentNode A reference to the smart pointer of the current node.
-			 * @return void
 			 */
 			void
 			populateStack (const std::shared_ptr< node_t > & currentNode) noexcept

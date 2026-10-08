@@ -118,7 +118,6 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 			/**
 			 * @brief Destroys the gizmo GPU resources.
-			 * @return void
 			 */
 			virtual void destroy () noexcept;
 
@@ -134,7 +133,6 @@ namespace EmEn::Scenes::Editor::Gizmo
 			 * @brief Records the gizmo draw commands into the command buffer.
 			 * @param commandBuffer The active command buffer.
 			 * @param viewMatrices The current view matrices for MVP computation.
-			 * @return void
 			 */
 			virtual void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept = 0;
 
@@ -142,14 +140,12 @@ namespace EmEn::Scenes::Editor::Gizmo
 			 * @brief Updates the gizmo scale factor to maintain constant screen size.
 			 * @param cameraPosition The camera world position.
 			 * @param fieldOfView The camera vertical field of view in radians.
-			 * @return void
 			 */
 			void updateScreenScale (const Base::Math::Vector< 3, float > & cameraPosition, float fieldOfView, float screenRatio = DefaultScreenRatio) noexcept;
 
 			/**
 			 * @brief Sets the world position and orientation of the gizmo.
 			 * @param frame The CartesianFrame of the entity the gizmo is attached to.
-			 * @return void
 			 */
 			void
 			setWorldFrame (const Base::Math::CartesianFrame< float > & frame) noexcept
@@ -171,7 +167,6 @@ namespace EmEn::Scenes::Editor::Gizmo
 			/**
 			 * @brief Sets the highlighted axis (for hover feedback).
 			 * @param axis The axis to highlight.
-			 * @return void
 			 */
 			void
 			setHighlightedAxis (AxisID axis) noexcept

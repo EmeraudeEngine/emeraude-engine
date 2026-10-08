@@ -345,6 +345,11 @@ namespace EmEn
 			{
 				return static_cast< Json::UInt64 >(v);
 			}
+			else if constexpr ( std::is_same_v< T, float > )
+			{
+				/* NOTE: JSON numbers are doubles. */
+				return static_cast< double >(v);
+			}
 			else
 			{
 				return v;

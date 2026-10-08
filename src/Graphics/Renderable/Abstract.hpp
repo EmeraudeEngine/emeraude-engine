@@ -138,7 +138,7 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Sets the uniform scale of the renderable.
-			 * @param value
+			 * @param value The uniform scale factor.
 			 */
 			void
 			setUniformScale (float value) noexcept
@@ -188,7 +188,6 @@ namespace EmEn::Graphics::Renderable
 			 * A baked occlusion. Setting this on a mesh whose colours mean anything else displaces it
 			 * by nonsense.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableVegetationWind (bool state) noexcept
@@ -218,7 +217,6 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Declares which layer holds the leaf cards: that layer's programs add the flutter (weighted by the
 			 * card V). A tree's is Base::VertexFactory::TreeMesh::LeafGroup.
 			 * @param layerIndex The layer index, or NoFoliageLayer.
-			 * @return void
 			 */
 			void
 			setVegetationFoliageLayer (uint32_t layerIndex) noexcept
@@ -278,20 +276,17 @@ namespace EmEn::Graphics::Renderable
 			 * @param renderTarget A reference to the render target.
 			 * @param key The program cache key.
 			 * @param program The program to cache.
-			 * @return void
 			 */
 			void cacheProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key, const std::shared_ptr< Saphir::Program > & program) const noexcept;
 
 			/**
 			 * @brief Clears all cached programs for a specific render target.
 			 * @param renderTarget A reference to the render target.
-			 * @return void
 			 */
 			void clearProgramCache (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept;
 
 			/**
 			 * @brief Clears all cached programs for all render targets.
-			 * @return void
 			 */
 			void clearAllProgramCaches () const noexcept;
 
@@ -422,7 +417,6 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Sets the renderable ready to prepare an instance on GPU.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setReadyForInstantiation (bool state) noexcept

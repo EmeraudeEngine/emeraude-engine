@@ -837,10 +837,9 @@ namespace EmEn::Graphics
 			case VertexAttributeType::Primary2DTextureCoordinates :
 			case VertexAttributeType::Secondary2DTextureCoordinates :
 				return 2;
-
-			default:
-				return 0;
 		}
+
+		return 0;
 	}
 
 	/** @brief Defines cubemap faces. */

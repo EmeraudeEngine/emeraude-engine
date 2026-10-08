@@ -160,7 +160,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Releases every GPU resource (while the device still exists).
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -171,7 +170,6 @@ namespace EmEn::Graphics
 			 * @note Idempotent per serial: both halves of a cut frame call it, and the radiance targets the
 			 * pre-translucency half noted survive until the closing batch.
 			 * @param frameSerial The rendered-frame serial (Renderer::renderedFrameSerial()).
-			 * @return void
 			 */
 			void prepareFrame (uint64_t frameSerial) noexcept;
 
@@ -189,7 +187,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Notes the radiance targets of an effect the chain is about to record.
 			 * @param targets The effect's radiance targets.
-			 * @return void
 			 */
 			void noteRadianceTargets (std::span< const IndirectPostProcessEffect::RadianceTarget > targets) noexcept;
 
@@ -204,14 +201,12 @@ namespace EmEn::Graphics
 			 * @param toneMapped Whether @a toneMapInput is the tone mapper's input (false: the chain output, no tone mapper runs).
 			 * @param volume The irradiance probe volume, or nullptr.
 			 * @param profiler The GPU profiler, or nullptr.
-			 * @return void
 			 */
 			void recordBatch (const Vulkan::CommandBuffer & commandBuffer, uint32_t frameIndex, const Vulkan::TextureInterface & sceneColour, const Vulkan::TextureInterface & toneMapInput, bool toneMapped, const IrradianceProbeVolume * volume, Vulkan::GPUProfiler * profiler) noexcept;
 
 			/**
 			 * @brief Reads back the batch a frame slot recorded, once its fence has passed.
 			 * @param frameIndex The frame in flight index whose fence was just waited.
-			 * @return void
 			 */
 			void harvest (uint32_t frameIndex) noexcept;
 
@@ -220,7 +215,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Arms or disarms the census, from the next rendered frame.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setArmed (bool state) noexcept
@@ -354,7 +348,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Folds a counted frame into the statistics window. The statistics lock must be held.
 			 * @param report The frame's report.
-			 * @return void
 			 */
 			void accumulateWindow (const OverflowCensusReport & report) noexcept;
 

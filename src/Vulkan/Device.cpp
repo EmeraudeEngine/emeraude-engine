@@ -793,7 +793,7 @@ namespace EmEn::Vulkan
 			}
 
 			/* ... and only the transfer-only capabilities. */
-			if ( (properties.queueFlags & ~(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT)) != 0U )
+			if ( (properties.queueFlags & ~static_cast< VkQueueFlags >(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT)) != 0U )
 			{
 				continue;
 			}
@@ -1088,7 +1088,7 @@ namespace EmEn::Vulkan
 					}
 					break;
 
-				case VK_IMAGE_TILING_MAX_ENUM :
+				/* NOTE: A Vulkan enumeration: a value from an extension this code does not handle (MAX_ENUM included). */
 				default:
 					break;
 			}

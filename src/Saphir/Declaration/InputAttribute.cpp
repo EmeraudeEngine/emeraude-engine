@@ -76,10 +76,9 @@ namespace EmEn::Saphir::Declaration
 			case VertexAttributeType::BoneInfluence :
 			case VertexAttributeType::BoneWeight :
 				return GLSL::FloatVector4;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	Key
@@ -142,10 +141,9 @@ namespace EmEn::Saphir::Declaration
 
 			case VertexAttributeType::BoneWeight :
 				return Attribute::BoneWeight;
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	std::string

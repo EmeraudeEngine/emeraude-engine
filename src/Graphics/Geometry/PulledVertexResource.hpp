@@ -266,7 +266,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Grows the vertex capacity to at least this many vertices (never shrinks: see the class note).
 			 * @note Any thread.
 			 * @param vertexCount The number of vertices the next data will need.
-			 * @return void
 			 */
 			void
 			setVertexCapacity (uint32_t vertexCount) noexcept
@@ -283,7 +282,6 @@ namespace EmEn::Graphics::Geometry
 			 * @brief Sets the local bounds (the renderable's culling volume; the component keeps them up to date).
 			 * @param boundingBox A reference to the box.
 			 * @param boundingSphere A reference to the sphere.
-			 * @return void
 			 */
 			void
 			setBounds (const Base::Math::Space3D::AACuboid< float > & boundingBox, const Base::Math::Space3D::Sphere< float > & boundingSphere) noexcept

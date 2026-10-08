@@ -196,7 +196,6 @@ namespace EmEn::Scenes::Component
 			 * far the camera sees; switching back from an orthographic projection therefore
 			 * restores the lens that was already mounted.
 			 * @param distance The distance of view, in metres. A value <= 0 is ignored (with a warning).
-			 * @return void
 			 */
 			void setPerspectiveProjection (float distance) noexcept;
 
@@ -213,7 +212,6 @@ namespace EmEn::Scenes::Component
 			 * 12 mm; the tan/atan round trip costs about 1e-5 degree, four orders of magnitude
 			 * below one pixel on a cube face.
 			 * @param degrees The required field of view, in degrees.
-			 * @return void
 			 */
 			void setTechnicalFieldOfView (float degrees) noexcept;
 
@@ -245,7 +243,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the maximal distance of the view.
 			 * @param distance The maximal distance of the view, in metres. A value <= 0 is ignored (with a warning).
-			 * @return void
 			 */
 			void setDistance (float distance) noexcept;
 
@@ -260,7 +257,6 @@ namespace EmEn::Scenes::Component
 			 * is looking at should say so; anything that does not keeps the default and behaves
 			 * exactly as before.
 			 * @param distance The distance in metres. Values <= 0 are ignored.
-			 * @return void
 			 */
 			void setNearestObjectDistance (float distance) noexcept;
 
@@ -290,14 +286,12 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets an orthographic projection.
 			 * @param near The near distance.
 			 * @param far The far distance, in metres. A value <= 0 is ignored (with a warning).
-			 * @return void
 			 */
 			void setOrthographicProjection (float near, float far) noexcept;
 
 			/**
 			 * @brief Sets the near parameter for an orthographic projection camera.
 			 * @param distance A distance.
-			 * @return void
 			 */
 			void setNear (float distance) noexcept;
 
@@ -315,7 +309,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets the far parameter for an orthographic projection camera.
 			 * @param distance A distance, in metres. A value <= 0 is ignored (with a warning).
-			 * @return void
 			 */
 			void setFar (float distance) noexcept;
 
@@ -345,7 +338,6 @@ namespace EmEn::Scenes::Component
 			 * @note Materializes the DepthOfField effect in the scene post-process chain.
 			 * Auto-focus is enabled by default (see setFocusDistance() to go manual).
 			 * @param state The state.
-			 * @return void
 			 */
 			void enableDepthOfField (bool state) noexcept;
 
@@ -365,7 +357,6 @@ namespace EmEn::Scenes::Component
 			 * @note Materializes the ToneMapping effect in the scene post-process chain.
 			 * Auto-exposure is enabled by default (see setExposureCompensation() to bias it).
 			 * @param state The state.
-			 * @return void
 			 */
 			void enableHDR (bool state) noexcept;
 
@@ -377,7 +368,6 @@ namespace EmEn::Scenes::Component
 			 * defocus and the motion smear and before the sensor — which is exactly what that
 			 * position gives, and what a bloom sitting early in the scene stack does not.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enableBloom (bool state) noexcept;
 
@@ -389,7 +379,6 @@ namespace EmEn::Scenes::Component
 			 * cinematic 180-degree rule. This only decides whether the effect EXISTS; the exposure
 			 * time decides how long the smear is, which is why the result is framerate-independent.
 			 * @param state The state.
-			 * @return void
 			 */
 			void enableMotionBlur (bool state) noexcept;
 
@@ -421,7 +410,6 @@ namespace EmEn::Scenes::Component
 			 * wall in a lit interior sits around 15-30 nits, an overcast sky 8000, a bare lamp far
 			 * above. A night scene glows from a 20-nit torch-lit wall; a daylight one must not.
 			 * @param nits The threshold, in candela per square meter.
-			 * @return void
 			 */
 			void
 			setBloomThreshold (float nits) noexcept
@@ -453,7 +441,6 @@ namespace EmEn::Scenes::Component
 			 * scatters 2-5 percent; 1.0 would mean the lens diffuses ALL of it and sets any
 			 * daylight scene ablaze.
 			 * @param intensity The scattered fraction (0.03 = 3 percent, the default).
-			 * @return void
 			 */
 			void
 			setBloomIntensity (float intensity) noexcept
@@ -517,7 +504,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Sets the lens aperture (f-stop).
 			 * @note Lower f-stop = shallower depth of field (stronger blur). Typical range f/1.4 - f/22.
 			 * @param fStop The aperture as an f-number.
-			 * @return void
 			 */
 			void
 			setAperture (float fStop) noexcept
@@ -547,7 +533,6 @@ namespace EmEn::Scenes::Component
 			 * field of view AND thinner in-focus plane. This REFRAMES the shot, the field of view
 			 * being derived from it (`fieldOfView()`).
 			 * @param millimeters The focal length.
-			 * @return void
 			 */
 			void setFocalLength (float millimeters) noexcept;
 
@@ -577,7 +562,6 @@ namespace EmEn::Scenes::Component
 			 * reaches its floor, the aperture-priority metering shortens it (down to FastestShutterSpeed) rather than
 			 * overexpose, and the motion blur follows the METERED speed (FrameContext::shutterSpeed, 2026-09-26).
 			 * @param seconds The exposure time (e.g. 1.0F / 60.0F).
-			 * @return void
 			 */
 			void
 			setShutterSpeed (float seconds) noexcept
@@ -616,7 +600,6 @@ namespace EmEn::Scenes::Component
 			 * geometric constraint: a cubemap face must stay at 90 degrees, and the format is what
 			 * would silently break it.
 			 * @param millimeters The sensor width (36 = full frame, 23.6 = APS-C).
-			 * @return void
 			 */
 			void setSensorWidth (float millimeters) noexcept;
 
@@ -655,7 +638,6 @@ namespace EmEn::Scenes::Component
 			 * makes auto mode honest: a slow shutter blurs more WITHOUT over-exposing, because the
 			 * ISO drops to compensate, exactly as in live-action shooting.
 			 * @param iso The sensitivity (100 = the ISO 100 reference).
-			 * @return void
 			 */
 			void
 			setSensitivity (float iso) noexcept
@@ -686,7 +668,6 @@ namespace EmEn::Scenes::Component
 			 * sensor, and expressing the limit in ISO makes it mean something.
 			 * @param minimum The lowest usable sensitivity.
 			 * @param maximum The highest usable sensitivity.
-			 * @return void
 			 */
 			void
 			setSensitivityRange (float minimum, float maximum) noexcept
@@ -728,7 +709,6 @@ namespace EmEn::Scenes::Component
 			 * @note Like tapping to focus on a real camera: this DISABLES the auto-focus.
 			 * Re-enable it with setAutoFocus(true).
 			 * @param meters The distance of the focus plane.
-			 * @return void
 			 */
 			void
 			setFocusDistance (float meters) noexcept
@@ -757,7 +737,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Enables or disables the auto-focus (enabled by default).
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setAutoFocus (bool state) noexcept
@@ -783,7 +762,6 @@ namespace EmEn::Scenes::Component
 			 * ISO bounds, exactly as on a real auto-ISO body — it does not post-amplify past
 			 * the sensor. In manual mode it is a straight EV bias on the APEX exposure.
 			 * @param exposureValue The bias in EV.
-			 * @return void
 			 */
 			void
 			setExposureCompensation (float exposureValue) noexcept
@@ -810,7 +788,6 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Enables or disables the auto-exposure (enabled by default).
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setAutoExposure (bool state) noexcept
@@ -880,20 +857,17 @@ namespace EmEn::Scenes::Component
 			 * @brief Adds a shader lens effect to the camera.
 			 * @note This won't add the same effect twice.
 			 * @param effect The effect to add.
-			 * @return void
 			 */
 			void addLensEffect (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) noexcept;
 
 			/**
 			 * @brief Removes a shader lens effect from the camera.
 			 * @param effect The effect to remove.
-			 * @return void
 			 */
 			void removeLensEffect (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) noexcept;
 
 			/**
 			 * @brief Clears all shader lens effect of the camera.
-			 * @return void
 			 */
 			void clearLensEffects () noexcept;
 
@@ -923,7 +897,6 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Updates render targets connected to this camera.
-			 * @return void
 			 */
 			void updateAllVideoDeviceProperties () const noexcept;
 

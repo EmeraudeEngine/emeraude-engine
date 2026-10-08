@@ -144,7 +144,6 @@ namespace EmEn::Graphics
 			 * pass that is replaced while frames are in flight is RETIRED through the renderer's
 			 * DeferredDestructor (Renderer::refreshGrabPass()) — there is no in-place recreate on
 			 * purpose, it was a GPU use-after-free (2026-09-24).
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -153,7 +152,6 @@ namespace EmEn::Graphics
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param srcColorImage A reference to the source swapchain color image.
 			 * @param srcDepthImage A pointer to the source depth image. Null to skip depth copy.
-			 * @return void
 			 */
 			void recordBlit (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & srcColorImage, const Vulkan::Image * srcDepthImage = nullptr, const Vulkan::Image * srcNormalsImage = nullptr, const Vulkan::Image * srcMaterialPropertiesImage = nullptr) const noexcept;
 

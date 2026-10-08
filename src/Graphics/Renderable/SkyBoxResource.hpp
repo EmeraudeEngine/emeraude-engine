@@ -63,12 +63,6 @@ namespace EmEn::Graphics::Renderable
 		public:
 
 			/**
-			 * @brief Default sky luminance, in nits (cd/m²).
-			 * @note An overcast sky sits around 8000 nits and a clear blue sky away from the sun
-			 * in the same range, which is what makes a sky readable next to a 100000 lx sun. The
-			 * cubemap is a normalized LDR gradient; this is the physical scale applied to it.
-			 */
-			/**
 			 * @brief Reference sky LUMINANCES, in nits (cd/m²) — what a sky actually measures.
 			 * @note A sky is an emitter, so it is described by a luminance, and its value spans
 			 * SEVEN orders of magnitude between noon and midnight: that range is precisely what a

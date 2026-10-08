@@ -107,7 +107,6 @@ namespace EmEn::Scenes::Editor::Gizmo
 			 * @param subElementIndex The sub-element index.
 			 * @param axisRotation The rotation matrix to orient the arrow along its axis.
 			 * @param isHighlighted Whether this sub-element is currently hovered.
-			 * @return void
 			 */
 			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Base::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
 

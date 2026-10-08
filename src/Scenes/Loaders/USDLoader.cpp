@@ -1406,7 +1406,7 @@ namespace EmEn::Scenes::Loaders
 		}
 
 		auto image = m_resources.container< ImageResource >()
-			->getOrCreateResource(m_resourcePrefix + "/image/" + entryName, [archive = m_archive, entryName, format, source = std::move(source)] (auto & imageResource) {
+			->getOrCreateResource(m_resourcePrefix + "/image/" + entryName, [archive = m_archive, entryName, format, encodedSource = std::move(source)] (auto & imageResource) {
 				size_t size = 0;
 				const auto * data = archive->bytes(entryName, size);
 
@@ -1427,9 +1427,9 @@ namespace EmEn::Scenes::Loaders
 					return false;
 				}
 
-				if ( source.has_value() )
+				if ( encodedSource.has_value() )
 				{
-					imageResource.setEncodedSource(*source);
+					imageResource.setEncodedSource(*encodedSource);
 				}
 
 				return imageResource.load(std::move(pixmap));
@@ -2418,8 +2418,8 @@ namespace EmEn::Scenes::Loaders
 			 * unresolved; so does this one, bounded (an asset that cannot be found keeps its arc forever). */
 			constexpr uint32_t MaxCompositionPasses{16};
 
-			const auto hasUnresolvedArcs = [] (const tinyusdz::Layer & layer) {
-				return layer.check_unresolved_references() || layer.check_unresolved_payload() || layer.check_unresolved_inherits() || layer.check_unresolved_variant() || layer.check_unresolved_specializes();
+			const auto hasUnresolvedArcs = [] (const tinyusdz::Layer & candidate) {
+				return candidate.check_unresolved_references() || candidate.check_unresolved_payload() || candidate.check_unresolved_inherits() || candidate.check_unresolved_variant() || candidate.check_unresolved_specializes();
 			};
 
 			auto current = std::move(sublayered);

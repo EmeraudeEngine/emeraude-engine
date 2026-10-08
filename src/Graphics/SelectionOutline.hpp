@@ -115,7 +115,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the outline colour, as DISPLAYED (sRGB).
 			 * @param color A reference to a colour.
-			 * @return void
 			 */
 			void
 			setColor (const Base::PixelFactory::Color< float > & color) noexcept
@@ -126,14 +125,12 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the outline width, in pixels.
 			 * @param pixels The width, clamped to [1, MaxWidth].
-			 * @return void
 			 */
 			void setWidth (float pixels) noexcept;
 
 			/**
 			 * @brief Sets the opacity of the outline where the entity is HIDDEN behind other geometry.
 			 * @param opacity In [0, 1]: 0 shows the visible parts only, 1 draws the hidden ones full (x-ray).
-			 * @return void
 			 */
 			void setHiddenOpacity (float opacity) noexcept;
 
@@ -161,13 +158,11 @@ namespace EmEn::Graphics
 			 * @param grabPass A pointer to the post-process grab pass (the scene depth), nullptr for none.
 			 * @param mainViewMatrices A reference to the main camera's view matrices (the clip planes).
 			 * @param sRGBTarget Whether the composite target encodes sRGB on write (the colour is then written linear).
-			 * @return void
 			 */
 			void recordComposite (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Framebuffer & framebuffer, uint32_t width, uint32_t height, const GrabPass * grabPass, const ViewMatricesInterface & mainViewMatrices, bool sRGBTarget) noexcept;
 
 			/**
 			 * @brief Releases every GPU resource (while the device still exists).
-			 * @return void
 			 */
 			void destroy () noexcept;
 
@@ -197,7 +192,6 @@ namespace EmEn::Graphics
 			 * @param worldBoundingBoxes The published world render boxes (an invalid one = unknown).
 			 * @param mainViewMatrices A reference to the main camera's view matrices.
 			 * @param readStateIndex The render state slot the frame draws.
-			 * @return void
 			 */
 			void updateScreenArea (const std::vector< Base::Math::Space3D::AACuboid< float > > & worldBoundingBoxes, const ViewMatricesInterface & mainViewMatrices, uint32_t readStateIndex) noexcept;
 

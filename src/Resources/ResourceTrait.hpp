@@ -277,7 +277,6 @@ namespace EmEn::Resources
 			 * running one at its next check — the automatic LOD jobs check before each level. Without it, the shutdown
 			 * drain (Core::run()) waited for the whole LOD generation: 62.8 s when quitting sponza 3 s after its load
 			 * (2026-10-07, item lod-job-outlives-its-mesh).
-			 * @return void
 			 */
 			void
 			cancelBackgroundWork () noexcept
@@ -934,14 +933,12 @@ namespace EmEn::Resources
 			 * @brief Records where the resource was loaded from (the store entry): a released CPU copy is reloaded
 			 * from it. Set by the resource container before a store load.
 			 * @param source A reference to the store entry.
-			 * @return void
 			 */
 			void setLocalDataSource (const BaseInformation & source) noexcept;
 
 			/**
 			 * @brief Forbids the CALLING thread to reload a released copy by blocking (acquireLocalData() refuses):
 			 * the render thread calls it once at its start.
-			 * @return void
 			 */
 			static void forbidBlockingLocalDataReload () noexcept;
 
@@ -949,7 +946,6 @@ namespace EmEn::Resources
 			 * @brief Declares that the CPU copy must stay resident for the resource's whole life ("CPU too"): code that
 			 * reads it at any time (a cursor image, a queried shape) says so. One way.
 			 * @note Thread-safe.
-			 * @return void
 			 */
 			void retainLocalData () noexcept;
 
@@ -972,7 +968,6 @@ namespace EmEn::Resources
 			 * upload from an image). The release happens later, after the grace delay and with no lease held.
 			 * @note Thread-safe; the first call starts the grace delay, the next ones do nothing. Ignored by a type
 			 * that never releases its copy.
-			 * @return void
 			 */
 			void markLocalDataReleasable () const noexcept;
 
@@ -1013,7 +1008,6 @@ namespace EmEn::Resources
 			/**
 			 * @brief Extracts what the readers keep needing (the metadata), then frees the CPU copy.
 			 * @note Called under the local-data lock, with no lease held: no reader can be inside the copy.
-			 * @return void
 			 */
 			virtual
 			void
@@ -1032,7 +1026,7 @@ namespace EmEn::Resources
 			[[nodiscard]]
 			virtual
 			bool
-			reloadLocalDataFromSource (const BaseInformation & /*source*/) noexcept
+			reloadLocalDataFromSource ([[maybe_unused]] const BaseInformation & source) noexcept
 			{
 				return false;
 			}
@@ -1248,7 +1242,6 @@ namespace EmEn::Resources
 			 * @note Removes it from the waited list, asks onDependencyFailed(), then goes on (checkDependencies()) or fails
 			 * in turn (releaseLinksAfterFailure(), which propagates up).
 			 * @param dependency Shared pointer to the dependency that failed.
-			 * @return void
 			 */
 			void dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
 
@@ -1256,7 +1249,6 @@ namespace EmEn::Resources
 			 * @brief Releases every dependency link of a resource that just failed, and tells its parents.
 			 * @note Called on every failure path (setLoadSuccess(false), a failed onDependenciesLoaded(), a failed file
 			 * parse, a failed dependency): the waited children are dropped and each parent gets dependencyFailed().
-			 * @return void
 			 */
 			void releaseLinksAfterFailure () noexcept;
 
@@ -1319,13 +1311,11 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Raises the lease counter of a resident copy (LocalDataLease's copy).
-			 * @return void
 			 */
 			void raiseLocalDataLeases () const noexcept;
 
 			/**
 			 * @brief Lowers the lease counter (LocalDataLease's destruction).
-			 * @return void
 			 */
 			void lowerLocalDataLeases () const noexcept;
 

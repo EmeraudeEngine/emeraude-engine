@@ -531,14 +531,14 @@ namespace EmEn::Graphics
 
 			for ( uint32_t col = 0; col < width; ++col )
 			{
-				rowSum[0] += rowData[(col * colorCount) + 0];
-				rowSum[1] += rowData[(col * colorCount) + 1];
-				rowSum[2] += rowData[(col * colorCount) + 2];
+				rowSum[0] += static_cast< double >(rowData[(col * colorCount) + 0]);
+				rowSum[1] += static_cast< double >(rowData[(col * colorCount) + 1]);
+				rowSum[2] += static_cast< double >(rowData[(col * colorCount) + 2]);
 			}
 
 			for ( size_t channel = 0; channel < 3; ++channel )
 			{
-				sphereWeightedLuma[channel] += rowSum[channel] * texelSolidAngle;
+				sphereWeightedLuma[channel] += rowSum[channel] * static_cast< double >(texelSolidAngle);
 			}
 
 			sphereSolidAngle += static_cast< double >(texelSolidAngle) * width;
@@ -548,7 +548,7 @@ namespace EmEn::Graphics
 			{
 				const auto rowLuma = (0.2126 * rowSum[0]) + (0.7152 * rowSum[1]) + (0.0722 * rowSum[2]);
 
-				hemisphereIlluminance += rowLuma * texelSolidAngle * groundCosine;
+				hemisphereIlluminance += rowLuma * static_cast< double >(texelSolidAngle) * static_cast< double >(groundCosine);
 			}
 		}
 

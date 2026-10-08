@@ -66,7 +66,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the darkening intensity at the edges.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -88,7 +87,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the vignette inner radius (where darkening begins).
 			 * @param radius Value in range [0, 1], as a fraction of the half-diagonal. Default 0.4.
-			 * @return void
 			 */
 			void
 			setRadius (float radius) noexcept
@@ -110,7 +108,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the softness of the transition from clear to dark.
 			 * @param softness Value > 0. Higher = smoother transition. Default 0.5.
-			 * @return void
 			 */
 			void setSoftness (float softness) noexcept;
 
@@ -128,7 +125,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the roundness of the vignette shape.
 			 * @param roundness 1.0 = circular, 2.0 = more rectangular. Default 1.0.
-			 * @return void
 			 */
 			void setRoundness (float roundness) noexcept;
 

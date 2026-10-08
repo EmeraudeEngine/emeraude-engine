@@ -260,7 +260,6 @@ namespace EmEn::Graphics
 			 * @note Afterwards cubeSize(), isGrayScale(), averageColor() and hemisphereIlluminanceFactor() answer the
 			 * kept values. Idempotent.
 			 * @pre The cubemap is loaded, and no other thread reads it meanwhile (the release's own contract).
-			 * @return void
 			 */
 			void extractMetadata () noexcept;
 

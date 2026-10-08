@@ -100,7 +100,6 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Destroys the staging buffer and synchronization primitives from the device.
-			 * @return void
 			 */
 			void destroyFromHardware () noexcept;
 

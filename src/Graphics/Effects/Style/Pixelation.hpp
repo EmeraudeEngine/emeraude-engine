@@ -66,7 +66,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the pixel block size in screen pixels.
 			 * @param pixelSize Value > 0.
-			 * @return void
 			 */
 			void setPixelSize (float pixelSize) noexcept;
 

@@ -289,7 +289,7 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			virtual
 			std::optional< MeshShadingSurface >
-			meshShadingSurfaceFor (const Base::Math::Vector< 3, float > & /*cameraPosition*/) const noexcept
+			meshShadingSurfaceFor ([[maybe_unused]] const Base::Math::Vector< 3, float > & cameraPosition) const noexcept
 			{
 				if ( const auto * surface = this->meshShadingSurface(); surface != nullptr )
 				{
@@ -378,7 +378,6 @@ namespace EmEn::Graphics::Geometry
 			 * inactive scene costs nothing (owner decision 2026-09-30). A geometry whose surface is another's (a detail
 			 * surface on a terrain) forwards the mark to that one.
 			 * @param frameCursor The rendered-frame cursor (RenderableInstance::Abstract's skinning frame cursor).
-			 * @return void
 			 */
 			virtual
 			void
@@ -403,7 +402,6 @@ namespace EmEn::Graphics::Geometry
 			 * @note Render thread (Renderer::updateSurfaceGeometries()). A draw that finds no surface set in a frame that
 			 * did NOT update it is the expected first-frame skip; in a frame that did, a contract violation.
 			 * @param frameCursor The rendered-frame cursor.
-			 * @return void
 			 */
 			void
 			markSurfaceUpdated (uint64_t frameCursor) noexcept
@@ -578,7 +576,6 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Destroys resource from the video memory.
 			 * @param clearLocalData Erase local data too.
-			 * @return void
 			 */
 			virtual void destroyFromHardware (bool clearLocalData) noexcept = 0;
 
@@ -632,7 +629,6 @@ namespace EmEn::Graphics::Geometry
 			 * @note Builds for any triangle-based topology (TriangleList, TriangleStrip).
 			 * For TriangleStrip, calls generateTriangleListIndicesForRT() to convert indices.
 			 * Can be called on-demand when the RT builder becomes available after initial loading.
-			 * @return void
 			 */
 			void buildAccelerationStructure () noexcept;
 
@@ -665,7 +661,6 @@ namespace EmEn::Graphics::Geometry
 			 * @param lodViewPosition World-space position of the camera the levels are picked for.
 			 * @param cullingFrustum The pass's frustum, or nullptr to draw every part (a multi-view target: one draw covers every view).
 			 * @param worldCoordinates The instance's world frame, or nullptr for the world origin.
-			 * @return void
 			 */
 			virtual
 			void
@@ -885,7 +880,6 @@ namespace EmEn::Graphics::Geometry
 			 * @note Call it as the LAST statement of the update that replaced the vertex data: the
 			 * flag is what publishes that data to the frame path, so everything it must see has to
 			 * be written before. @see isAccelerationStructureStale()
-			 * @return void
 			 */
 			void
 			markAccelerationStructureStale () noexcept

@@ -104,13 +104,11 @@ namespace EmEn::Animations
 			/**
 			 * @brief This method is called within the logic loop to update every registered animation.
 			 * @param cycle The current engine cycle.
-			 * @return void
 			 */
 			void updateAnimations (size_t cycle) noexcept;
 
 			/**
 			 * @brief Clears every animation.
-			 * @return void
 			 */
 			void clearAnimations () noexcept;
 

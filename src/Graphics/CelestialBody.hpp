@@ -75,7 +75,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the kind of celestial body.
 			 * @param type The type.
-			 * @return void
 			 */
 			void
 			setType (Type type) noexcept
@@ -97,7 +96,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the direction pointing TOWARD the body, in the engine frame (UP = +Y).
 			 * @param direction A reference to a vector. It is normalized on store.
-			 * @return void
 			 */
 			void
 			setDirection (const Base::Math::Vector< 3, float > & direction) noexcept
@@ -120,7 +118,6 @@ namespace EmEn::Graphics
 			 * @brief Sets the illuminance produced on a surface facing the body, in lux.
 			 * @note References: direct sun 100000 lx, overcast daylight 10000 lx, full moon 0.25 lx.
 			 * @param lux The illuminance, in lux.
-			 * @return void
 			 */
 			void
 			setIlluminance (float lux) noexcept
@@ -143,7 +140,6 @@ namespace EmEn::Graphics
 			 * @brief Sets the color temperature, in kelvins, and resolves the sRGB color from it.
 			 * @note References: noon sun ~5500 K, golden hour 2500-3500 K, moonlight ~4100 K.
 			 * @param kelvin The color temperature, in kelvins (clamped to [1667, 25000]).
-			 * @return void
 			 */
 			void
 			setTemperature (float kelvin) noexcept
@@ -167,7 +163,6 @@ namespace EmEn::Graphics
 			 * @brief Sets the color directly, in sRGB, bypassing the color temperature.
 			 * @note When a manifest declares both, the temperature wins (owner decision).
 			 * @param color A reference to a color.
-			 * @return void
 			 */
 			void
 			setColor (const Base::PixelFactory::Color< float > & color) noexcept
@@ -189,7 +184,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the apparent angular diameter of the body disc, in degrees.
 			 * @param degrees The angular diameter, in degrees.
-			 * @return void
 			 */
 			void
 			setAngularDiameter (float degrees) noexcept
@@ -215,7 +209,6 @@ namespace EmEn::Graphics
 			 * the disc from the IBL. With the current LDR sources the clamped disc is a
 			 * negligible IBL contributor, so the flag is informative.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			setInTexture (bool state) noexcept
@@ -253,9 +246,10 @@ namespace EmEn::Graphics
 						return "Star";
 
 					case Type::Sun :
-					default:
 						return "Sun";
 				}
+
+				return "Sun";
 			}
 
 			/**

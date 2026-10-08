@@ -141,7 +141,6 @@ namespace EmEn::Audio
 			 * @brief Sets the number of sounds that can be played simultaneously.
 			 * @note This will change after a call to start().
 			 * @param count The number of channels.
-			 * @return void
 			 */
 			void
 			setChannelCount (size_t count) noexcept
@@ -163,7 +162,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets a distance around the listener where sound will be played randomly.
 			 * @param radius A value in engine metric units.
-			 * @return void
 			 */
 			void setRadius (float radius) noexcept;
 
@@ -182,7 +180,6 @@ namespace EmEn::Audio
 			 * @brief Sets a random delay range.
 			 * @param delayA A delay in milliseconds.
 			 * @param delayB Another delay.
-			 * @return void
 			 */
 			void
 			setRandomDelayRange (uint32_t delayA, uint32_t delayB) noexcept
@@ -229,19 +226,16 @@ namespace EmEn::Audio
 			/**
 			 * @brief Disables the direct filter.
 			 * @warning This method only works with the EFX extension.
-			 * @return void
 			 */
 			void disableDirectFilter () noexcept;
 
 			/**
 			 * @brief Starts the ambience.
-			 * @return void
 			 */
 			void start () noexcept;
 
 			/**
 			 * @brief Stops all sound from the ambience.
-			 * @return void
 			 */
 			void stop () noexcept;
 
@@ -334,7 +328,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Updates the logics.
-			 * @return void
 			 */
 			void update () noexcept;
 
@@ -349,7 +342,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Reset the current sound set.
-			 * @return void
 			 */
 			void resetSoundSet () noexcept;
 
@@ -400,7 +392,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Releases all sources.
-			 * @return void
 			 */
 			void releaseSources () noexcept;
 

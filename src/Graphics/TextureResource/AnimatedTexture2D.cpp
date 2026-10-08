@@ -174,12 +174,12 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		/* Get a Vulkan sampler. */
-		m_sampler = renderer.getSampler("AnimatedTexture2D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
-			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
-			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
-			const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
+		m_sampler = renderer.getSampler("AnimatedTexture2D", [] (Settings & samplerSettings, VkSamplerCreateInfo & createInfo) {
+			const auto magFilter = samplerSettings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto minFilter = samplerSettings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipmapMode = samplerSettings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto maxLodLevels = samplerSettings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+			const auto anisotropyLevels = samplerSettings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
 
 			//createInfo.flags = 0;
 			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -194,7 +194,7 @@ namespace EmEn::Graphics::TextureResource
 			//createInfo.compareEnable = VK_FALSE;
 			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
 			//createInfo.minLod = 0.0F;
-			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+			createInfo.maxLod = maxLodLevels > 0.0F ? maxLodLevels : VK_LOD_CLAMP_NONE;
 			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 			//createInfo.unnormalizedCoordinates = VK_FALSE;
 		});

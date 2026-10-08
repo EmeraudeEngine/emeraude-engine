@@ -520,10 +520,9 @@ namespace EmEn::Saphir::Declaration
 
 			case VariableType::Structure :
 				return "Structure";
-
-			default:
-				return nullptr;
 		}
+
+		return nullptr;
 	}
 
 	uint32_t

@@ -70,7 +70,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the scanline gap darkness intensity.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the width of the bright scanline in pixels.
 			 * @param width Value > 0. Default 1.0.
-			 * @return void
 			 */
 			void setLineWidth (float width) noexcept;
 
@@ -110,7 +108,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the width of the dark gap between scanlines in pixels.
 			 * @param width Value > 0. Default 1.0.
-			 * @return void
 			 */
 			void setGapWidth (float width) noexcept;
 

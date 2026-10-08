@@ -182,7 +182,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Refreshes the animated bounding box from the animator's joints box and
 			 * notifies the entity (ComponentBoundariesModified) so the collision model —
 			 * hence the frustum culling — follows the pose.
-			 * @return void
 			 */
 			void updateAnimatedBoundingBox () noexcept;
 
@@ -190,7 +189,6 @@ namespace EmEn::Scenes::Component
 			 * @brief Scales the renderable's bounds by the MESH's uniform scale (the unit of its definition, drawn by
 			 * RenderableInstance::Abstract::applyLocalTransformation()), so the collision model and the culling
 			 * follow what is drawn. Leaves them invalid for a unit scale, a sprite, or a renderable not loaded yet.
-			 * @return void
 			 */
 			void refreshScaledBounds () noexcept;
 

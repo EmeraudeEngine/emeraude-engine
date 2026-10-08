@@ -69,7 +69,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Sets the device that will be used with this manager.
 			 * @param device A reference to a device smart pointer.
-			 * @return void
 			 */
 			void
 			setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept

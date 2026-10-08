@@ -564,7 +564,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device format properties.
-			 * @param format
+			 * @param format The image format.
 			 * @return VkFormatProperties
 			 */
 			[[nodiscard]]
@@ -582,11 +582,11 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device image format properties.
-			 * @param format
-			 * @param type
-			 * @param tiling
-			 * @param usage
-			 * @param flags
+			 * @param format The image format.
+			 * @param type The image type.
+			 * @param tiling The image tiling.
+			 * @param usage The image usage flags.
+			 * @param flags The image create flags.
 			 * @return VkImageFormatProperties
 			 */
 			[[nodiscard]]
@@ -594,11 +594,11 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device sparse image format properties.
-			 * @param format
-			 * @param type
-			 * @param tiling
-			 * @param usage
-			 * @param samples
+			 * @param format The image format.
+			 * @param type The image type.
+			 * @param tiling The image tiling.
+			 * @param usage The image usage flags.
+			 * @param samples The sample count.
 			 * @return std::vector< VkSparseImageFormatProperties >
 			 */
 			[[nodiscard]]
@@ -606,12 +606,12 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device external image format properties.
-			 * @param format
-			 * @param type
-			 * @param tiling
-			 * @param usage
-			 * @param flags
-			 * @param externalHandleType
+			 * @param format The image format.
+			 * @param type The image type.
+			 * @param tiling The image tiling.
+			 * @param usage The image usage flags.
+			 * @param flags The image create flags.
+			 * @param externalHandleType The external memory handle type.
 			 * @return VkExternalImageFormatPropertiesNV
 			 */
 			[[nodiscard]]
@@ -632,7 +632,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device external buffer properties.
-			 * @param pExternalBufferInfo
+			 * @param pExternalBufferInfo A pointer to the external buffer description.
 			 * @return VkExternalBufferProperties
 			 */
 			[[nodiscard]]
@@ -640,7 +640,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device external fence properties.
-			 * @param pExternalFenceInfo
+			 * @param pExternalFenceInfo A pointer to the external fence description.
 			 * @return VkExternalFenceProperties
 			 */
 			[[nodiscard]]
@@ -648,7 +648,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device external semaphore properties.
-			 * @param pExternalSemaphoreInfo
+			 * @param pExternalSemaphoreInfo A pointer to the external semaphore description.
 			 * @return VkExternalSemaphoreProperties
 			 */
 			[[nodiscard]]
@@ -656,8 +656,8 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device surface support.
-			 * @param surface
-			 * @param queueFamilyIndex
+			 * @param surface The surface handle.
+			 * @param queueFamilyIndex The queue family index.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -665,7 +665,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device surface capabilities.
-			 * @param surface
+			 * @param surface The surface handle.
 			 * @return VkSurfaceCapabilitiesKHR
 			 */
 			[[nodiscard]]
@@ -673,7 +673,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device surface formats.
-			 * @param surface
+			 * @param surface The surface handle.
 			 * @return std::vector< VkSurfaceFormatKHR >
 			 */
 			[[nodiscard]]
@@ -681,7 +681,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device surface present modes.
-			 * @param surface
+			 * @param surface The surface handle.
 			 * @return std::vector< VkPresentModeKHR >
 			 */
 			[[nodiscard]]
@@ -689,7 +689,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device presents rectangles.
-			 * @param surface
+			 * @param surface The surface handle.
 			 * @return std::vector< VkRect2D >
 			 */
 			[[nodiscard]]
@@ -697,7 +697,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device queue family performance query passes.
-			 * @param pPerformanceQueryCreateInfos
+			 * @param pPerformanceQueryCreateInfos A pointer to the performance query pool create info.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -705,7 +705,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the physical device multisample properties.
-			 * @param samples
+			 * @param samples The sample count.
 			 * @return VkMultisamplePropertiesEXT
 			 */
 			[[nodiscard]]

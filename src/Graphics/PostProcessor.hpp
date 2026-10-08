@@ -224,7 +224,6 @@ namespace EmEn::Graphics
 			 * luminance clipped to white. For that A/B use PostProcessStack::bypassSceneEffects(),
 			 * which keeps the sensor (projet-alpha's KeyPad4 since 2026-09-26).
 			 * @param state The desired enabled state.
-			 * @return void
 			 */
 			void
 			enable (bool state) noexcept
@@ -338,7 +337,6 @@ namespace EmEn::Graphics
 			 * @param requiresNormals Whether the scene effects require normals.
 			 * @param requiresMaterialProperties Whether the scene effects require material properties.
 			 * @param requiresAlbedo Whether the scene effects require albedo.
-			 * @return void
 			 */
 			void
 			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals, bool requiresMaterialProperties, bool requiresAlbedo, bool requiresVelocity) noexcept
@@ -355,7 +353,6 @@ namespace EmEn::Graphics
 			 * @brief Updates the near and far plane values for depth-based effects.
 			 * @param nearPlane The camera near plane distance.
 			 * @param farPlane The camera far plane distance.
-			 * @return void
 			 */
 			void
 			setClipPlanes (float nearPlane, float farPlane) noexcept
@@ -370,7 +367,6 @@ namespace EmEn::Graphics
 			 * @brief Records the blit from the swap chain color image into the post-processor's own grab pass.
 			 * @note Must be called between render pass 1 and render pass 2, outside any active render pass.
 			 * @param commandBuffer A reference to the active command buffer.
-			 * @return void
 			 */
 			void recordBlit (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
@@ -378,7 +374,6 @@ namespace EmEn::Graphics
 			 * @brief Sets the frame's in-texture celestial body mask (Scenes::Scene::environmentStarMask()): the traced
 			 * sky lookups of the chain (RTGI) read the sky at the rim of that cone, never the body (StarMaskGLSL.hpp).
 			 * @param mask Direction toward the body (xyz), cone half-angle in radians (w; 0 = none).
-			 * @return void
 			 */
 			void
 			setSkyStarMask (const std::array< float, 4 > & mask) noexcept
@@ -414,7 +409,6 @@ namespace EmEn::Graphics
 			 * left in COLOR_ATTACHMENT_OPTIMAL, the chain target back in SHADER_READ_ONLY.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param chainOutput The texture holding the composited chain colour.
-			 * @return void
 			 */
 			void recordWriteBack (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::TextureInterface & chainOutput) const noexcept;
 
@@ -436,7 +430,6 @@ namespace EmEn::Graphics
 			 * @note RENDER THREAD, from Renderer::beginFrame(), right after the fence wait of @a frameIndex,
 			 * whether or not the chain runs in the frame about to start.
 			 * @param frameIndex The frame in flight index whose fence was just waited.
-			 * @return void
 			 */
 			void onFrameSlotRetired (uint32_t frameIndex) noexcept;
 

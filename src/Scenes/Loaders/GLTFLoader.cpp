@@ -2266,7 +2266,7 @@ namespace EmEn::Scenes::Loaders
 
 				/* Ordinary encoded image (PNG, JPEG). */
 				auto image = m_resources.container< ImageResource >()
-					->getOrCreateResource(name, [blob, format = mimeToPixmapFormat(mime), source = std::move(source)] (auto & resource) {
+					->getOrCreateResource(name, [blob, format = mimeToPixmapFormat(mime), encodedSource = std::move(source)] (auto & resource) {
 						Pixmap< uint8_t > pixmap;
 
 						constexpr ReadOptions options{
@@ -2279,9 +2279,9 @@ namespace EmEn::Scenes::Loaders
 						}
 
 						/* NOTE: Where the encoded bytes lie, so a released CPU copy can come back. */
-						if ( source.has_value() )
+						if ( encodedSource.has_value() )
 						{
-							resource.setEncodedSource(*source);
+							resource.setEncodedSource(*encodedSource);
 						}
 
 						return resource.load(std::move(pixmap));
@@ -3004,28 +3004,28 @@ namespace EmEn::Scenes::Loaders
 			 * loader produces a StandardResource or a StandardResource (cross-material aliases
 			 * convert PBR factors to Phong/Blinn parameters when targeting Standard). */
 			auto configure = [
-					albedoTex = std::move(albedoTex), albedoColor,
-					metallicRoughnessTex = std::move(metallicRoughnessTex), roughnessFactor, metallicFactor,
-					normalTex = std::move(normalTex), normalScale,
-					aoTex = std::move(aoTex), aoStrength,
+					albedoTexture = std::move(albedoTex), albedoColor,
+					metallicRoughnessTexture = std::move(metallicRoughnessTex), roughnessFactor, metallicFactor,
+					normalTexture = std::move(normalTex), normalScale,
+					aoTexture = std::move(aoTex), aoStrength,
 					albedoUVTransform, metallicRoughnessUVTransform, normalUVTransform, aoUVTransform, emissiveUVTransform,
-					emissiveTex = std::move(emissiveTex), emissiveStrength, emissiveColor, hasEmissiveColor,
+					emissiveTexture = std::move(emissiveTex), emissiveStrength, emissiveColor, hasEmissiveColor,
 					clearcoatFactor, clearcoatRoughness, clearcoatNormalScale,
-					clearcoatTex = std::move(clearcoatTex), clearcoatUVTransform, clearcoatRoughnessUVTransform, clearcoatNormalUVTransform,
-					clearcoatRoughnessTex = std::move(clearcoatRoughnessTex),
-					clearcoatNormalTex = std::move(clearcoatNormalTex),
+					clearcoatTexture = std::move(clearcoatTex), clearcoatUVTransform, clearcoatRoughnessUVTransform, clearcoatNormalUVTransform,
+					clearcoatRoughnessTexture = std::move(clearcoatRoughnessTex),
+					clearcoatNormalTexture = std::move(clearcoatNormalTex),
 					sheenColor, sheenRoughness,
-					sheenColorTex = std::move(sheenColorTex), sheenColorUVTransform, sheenRoughnessUVTransform,
-					sheenRoughnessTex = std::move(sheenRoughnessTex),
+					sheenColorTexture = std::move(sheenColorTex), sheenColorUVTransform, sheenRoughnessUVTransform,
+					sheenRoughnessTexture = std::move(sheenRoughnessTex),
 					transmissionFactor,
 					iridescenceFactor, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax,
-					iridescenceTex = std::move(iridescenceTex),
-					iridescenceThicknessTex = std::move(iridescenceThicknessTex),
-					anisotropyStrength, anisotropyRotationTurns, anisotropyTex = std::move(anisotropyTex),
+					iridescenceTexture = std::move(iridescenceTex),
+					iridescenceThicknessTexture = std::move(iridescenceThicknessTex),
+					anisotropyStrength, anisotropyRotationTurns, anisotropyTexture = std::move(anisotropyTex),
 					specularFactor, specularColor, materialIOR,
 					volumeThicknessFactor, volumeAttenuationDistance, volumeAttenuationColor,
-					volumeThicknessTex = std::move(volumeThicknessTex),
-					specularTex = std::move(specularTex), specularColorTex = std::move(specularColorTex), specularUVTransform, specularColorUVTransform,
+					volumeThicknessTexture = std::move(volumeThicknessTex),
+					specularTexture = std::move(specularTex), specularColorTexture = std::move(specularColorTex), specularUVTransform, specularColorUVTransform,
 					environmentReflectionIntensity = m_options.environmentReflectionIntensity,
 					isAlphaBlend, isAlphaMask, alphaCutoff
 				] (auto & materialResource, bool primarySetOnly = false) {
@@ -3034,9 +3034,9 @@ namespace EmEn::Scenes::Loaders
 					 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
 					 * the texture and dropping the factor tints nothing and silently loses the
 					 * factor's alpha; the colour goes to the material's tint slot instead. */
-					if ( albedoTex != nullptr )
+					if ( albedoTexture != nullptr )
 					{
-						materialResource.setAlbedoComponent(albedoTex);
+						materialResource.setAlbedoComponent(albedoTexture);
 						materialResource.setAlbedoColor(albedoColor);
 
 						if ( albedoUVTransform.present )
@@ -3055,10 +3055,10 @@ namespace EmEn::Scenes::Loaders
 					 * reference: Khronos glTF-Sample-Renderer, material_info.glsl, getMetallicRoughnessInfo()).
 					 * ⚠️ Omitting the source channel reads RED — empty in most assets (measured ~0 on
 					 * DamagedHelmet) — which flattens both properties to 0 over the whole surface. */
-					if ( metallicRoughnessTex != nullptr )
+					if ( metallicRoughnessTexture != nullptr )
 					{
-						materialResource.setRoughnessComponent(metallicRoughnessTex, roughnessFactor, false, Base::PixelFactory::Channel::Green);
-						materialResource.setMetalnessComponent(metallicRoughnessTex, metallicFactor, Base::PixelFactory::Channel::Blue);
+						materialResource.setRoughnessComponent(metallicRoughnessTexture, roughnessFactor, false, Base::PixelFactory::Channel::Green);
+						materialResource.setMetalnessComponent(metallicRoughnessTexture, metallicFactor, Base::PixelFactory::Channel::Blue);
 
 						/* ONE glTF texture info, TWO engine components: same transform on both. */
 						if ( metallicRoughnessUVTransform.present )
@@ -3088,9 +3088,9 @@ namespace EmEn::Scenes::Loaders
 					}
 
 					/* Normal map. */
-					if ( normalTex != nullptr )
+					if ( normalTexture != nullptr )
 					{
-						materialResource.setNormalComponent(normalTex, normalScale);
+						materialResource.setNormalComponent(normalTexture, normalScale);
 
 						if ( normalUVTransform.present )
 						{
@@ -3099,9 +3099,9 @@ namespace EmEn::Scenes::Loaders
 					}
 
 					/* Ambient occlusion. */
-					if ( aoTex != nullptr )
+					if ( aoTexture != nullptr )
 					{
-						materialResource.setAmbientOcclusionComponent(aoTex, aoStrength);
+						materialResource.setAmbientOcclusionComponent(aoTexture, aoStrength);
 
 						if ( aoUVTransform.present )
 						{
@@ -3111,9 +3111,9 @@ namespace EmEn::Scenes::Loaders
 
 					/* Emissive: the texture × emissiveFactor (glTF 2.0 § material.emissiveFactor), the factor in the
 					 * material's emissive colour, which the shader multiplies with the texel — the albedo's way. */
-					if ( emissiveTex != nullptr )
+					if ( emissiveTexture != nullptr )
 					{
-						materialResource.setAutoIlluminationComponent(emissiveTex, emissiveStrength);
+						materialResource.setAutoIlluminationComponent(emissiveTexture, emissiveStrength);
 						materialResource.setAutoIlluminationColor(emissiveColor);
 
 						if ( emissiveUVTransform.present )
@@ -3132,18 +3132,18 @@ namespace EmEn::Scenes::Loaders
 					 * is read from GREEN, per the extension. */
 					if ( clearcoatFactor > 0.0F )
 					{
-						if ( clearcoatTex != nullptr )
+						if ( clearcoatTexture != nullptr )
 						{
-							materialResource.setClearCoatComponent(clearcoatTex, clearcoatRoughness, clearcoatFactor, Base::PixelFactory::Channel::Red);
+							materialResource.setClearCoatComponent(clearcoatTexture, clearcoatRoughness, clearcoatFactor, Base::PixelFactory::Channel::Red);
 						}
 						else
 						{
 							materialResource.setClearCoatComponent(clearcoatFactor, clearcoatRoughness);
 						}
 
-						if ( clearcoatRoughnessTex != nullptr )
+						if ( clearcoatRoughnessTexture != nullptr )
 						{
-							materialResource.setClearCoatRoughnessComponent(clearcoatRoughnessTex, clearcoatFactor, clearcoatRoughness, Base::PixelFactory::Channel::Green);
+							materialResource.setClearCoatRoughnessComponent(clearcoatRoughnessTexture, clearcoatFactor, clearcoatRoughness, Base::PixelFactory::Channel::Green);
 						}
 
 						if ( clearcoatUVTransform.present )
@@ -3151,14 +3151,14 @@ namespace EmEn::Scenes::Loaders
 							applyTextureCoordinates(materialResource, ComponentType::ClearCoat, clearcoatUVTransform);
 						}
 
-						if ( clearcoatRoughnessTex != nullptr && clearcoatRoughnessUVTransform.present )
+						if ( clearcoatRoughnessTexture != nullptr && clearcoatRoughnessUVTransform.present )
 						{
 							applyTextureCoordinates(materialResource, ComponentType::ClearCoatRoughness, clearcoatRoughnessUVTransform);
 						}
 
-						if ( clearcoatNormalTex != nullptr )
+						if ( clearcoatNormalTexture != nullptr )
 						{
-							materialResource.setClearCoatNormalComponent(clearcoatNormalTex, clearcoatNormalScale);
+							materialResource.setClearCoatNormalComponent(clearcoatNormalTexture, clearcoatNormalScale);
 
 							if ( clearcoatNormalUVTransform.present )
 							{
@@ -3174,9 +3174,9 @@ namespace EmEn::Scenes::Loaders
 					 * it may be the only map — comes after it. */
 					if ( sheenRoughness > 0.0F || sheenColor.red() > 0.0F || sheenColor.green() > 0.0F || sheenColor.blue() > 0.0F )
 					{
-						if ( sheenColorTex != nullptr )
+						if ( sheenColorTexture != nullptr )
 						{
-							materialResource.setSheenComponent(sheenColorTex, sheenRoughness);
+							materialResource.setSheenComponent(sheenColorTexture, sheenRoughness);
 						}
 						else
 						{
@@ -3188,9 +3188,9 @@ namespace EmEn::Scenes::Loaders
 							applyTextureCoordinates(materialResource, ComponentType::Sheen, sheenColorUVTransform);
 						}
 
-						if ( sheenRoughnessTex != nullptr )
+						if ( sheenRoughnessTexture != nullptr )
 						{
-							materialResource.setSheenRoughnessComponent(sheenRoughnessTex, sheenColor, sheenRoughness, Base::PixelFactory::Channel::Alpha);
+							materialResource.setSheenRoughnessComponent(sheenRoughnessTexture, sheenColor, sheenRoughness, Base::PixelFactory::Channel::Alpha);
 
 							if ( sheenRoughnessUVTransform.present )
 							{
@@ -3223,18 +3223,18 @@ namespace EmEn::Scenes::Loaders
 
 					/* ⚠️ The thickness MAP multiplies the factor set just above, so it goes after
 					 * it for the same reason the factor goes after setTransmissionComponent*(). */
-					if ( volumeThicknessTex != nullptr )
+					if ( volumeThicknessTexture != nullptr )
 					{
-						materialResource.setVolumeThicknessComponent(volumeThicknessTex);
+						materialResource.setVolumeThicknessComponent(volumeThicknessTexture);
 					}
 
 					/* Iridescence (KHR_materials_iridescence). Gated on the factor, which is what the
 					 * extension itself uses to mean "no iridescence" (default 0). */
 					if ( iridescenceFactor > 0.0F )
 					{
-						if ( iridescenceTex != nullptr )
+						if ( iridescenceTexture != nullptr )
 						{
-							materialResource.setIridescenceComponent(iridescenceTex, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax);
+							materialResource.setIridescenceComponent(iridescenceTexture, iridescenceIOR, iridescenceThicknessMin, iridescenceThicknessMax);
 						}
 						else
 						{
@@ -3246,9 +3246,9 @@ namespace EmEn::Scenes::Loaders
 						 * is what turns a uniform film colour into the reference's varying one —
 						 * IridescentDishWithOlives.glb sweeps a 50 nm band (500..550) entirely
 						 * through this texture. */
-						if ( iridescenceThicknessTex != nullptr )
+						if ( iridescenceThicknessTexture != nullptr )
 						{
-							materialResource.setIridescenceThicknessComponent(iridescenceThicknessTex, iridescenceThicknessMin, iridescenceThicknessMax);
+							materialResource.setIridescenceThicknessComponent(iridescenceThicknessTexture, iridescenceThicknessMin, iridescenceThicknessMax);
 						}
 					}
 
@@ -3257,9 +3257,9 @@ namespace EmEn::Scenes::Loaders
 					 * the absence of this one. */
 					if ( anisotropyStrength > 0.0F )
 					{
-						if ( anisotropyTex != nullptr )
+						if ( anisotropyTexture != nullptr )
 						{
-							materialResource.setAnisotropyComponent(anisotropyTex, anisotropyStrength, anisotropyRotationTurns);
+							materialResource.setAnisotropyComponent(anisotropyTexture, anisotropyStrength, anisotropyRotationTurns);
 						}
 						else
 						{
@@ -3273,23 +3273,23 @@ namespace EmEn::Scenes::Loaders
 					 * the identity (factor 1, white, IOR 1.5 == glTF's own default). Gating them
 					 * would leave a material that deliberately declares the default carrying
 					 * whatever the resource was constructed with. */
-					if ( specularTex != nullptr )
+					if ( specularTexture != nullptr )
 					{
-						materialResource.setSpecularComponent(specularTex, specularFactor);
+						materialResource.setSpecularComponent(specularTexture, specularFactor);
 					}
 					else
 					{
 						materialResource.setSpecularFactor(specularFactor);
 					}
 
-					if ( specularTex != nullptr && specularUVTransform.present )
+					if ( specularTexture != nullptr && specularUVTransform.present )
 					{
 						applyTextureCoordinates(materialResource, ComponentType::Specular, specularUVTransform);
 					}
 
-					if ( specularColorTex != nullptr )
+					if ( specularColorTexture != nullptr )
 					{
-						materialResource.setSpecularColorComponent(specularColorTex, specularColor);
+						materialResource.setSpecularColorComponent(specularColorTexture, specularColor);
 
 						if ( specularColorUVTransform.present )
 						{
@@ -4005,8 +4005,8 @@ namespace EmEn::Scenes::Loaders
 				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
 				mesh = m_resources.container< Renderable::MeshResource >()
-					->getOrCreateResource(meshName, [geometry, singleMaterial = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
-						return meshResource.load(geometry, singleMaterial, singleRasterization);
+					->getOrCreateResource(meshName, [geometry, material = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
+						return meshResource.load(geometry, material, singleRasterization);
 					});
 			}
 			else
@@ -4014,8 +4014,8 @@ namespace EmEn::Scenes::Loaders
 				mesh = m_resources.container< Renderable::MultiLayerMeshResource >()
 					/* NOTE: materialList is COPIED (shared pointers): the scene-data descriptor below needs it too. Moved
 					 * here, it left every multi-material mesh with the DEFAULT material in its descriptor (triad 2026-09-30). */
-					->getOrCreateResource(meshName, [geometry, materialList, rasterizationList = std::move(rasterizationList)] (auto & meshResource) {
-						return meshResource.load(geometry, materialList, rasterizationList);
+					->getOrCreateResource(meshName, [geometry, materialList, rasterizations = std::move(rasterizationList)] (auto & meshResource) {
+						return meshResource.load(geometry, materialList, rasterizations);
 					});
 			}
 

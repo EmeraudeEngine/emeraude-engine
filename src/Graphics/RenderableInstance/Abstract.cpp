@@ -93,18 +93,6 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/**
-		 * @brief Records the draws of an adaptive geometry for one pass: its parts at the level the LOD
-		 * camera dictates, culled by the pass's own frustum, then the stitching between levels.
-		 * @note ⚠️ The LOD camera is not always the pass's camera. For a shadow map it is the MAIN
-		 * camera — the receiver's — so the caster is the same mesh as the surface it shadows, while
-		 * the light's frustum still decides what the map contains. A multi-view target (cubemap,
-		 * cascades) draws every part: one draw covers every view, so no single frustum applies.
-		 * @note ⚠️ Never the whole index buffer for such a geometry: it holds every level of every part,
-		 * one strip range per level over the SAME quads plus the stitching, so a plain draw stacked
-		 * eight surfaces into the shadow map — 45 974 784 indices per pass on a 4096-division terrain
-		 * (2026-09-22).
-		 */
-		/**
 		 * @brief Draws a MESH-SHADING surface (Geometry::MeshShadingSurface): pushes its tiling and the camera its
 		 * tiles are subdivided for, then launches one task workgroup per tile.
 		 * @note The camera is world-space and the surface's object space is taken as the world (the ground sits at
@@ -132,6 +120,18 @@ namespace EmEn::Graphics::RenderableInstance
 			commandBuffer.drawMeshTasks(surface->tileCountX, surface->tileCountZ, 1);
 		}
 
+		/**
+		 * @brief Records the draws of an adaptive geometry for one pass: its parts at the level the LOD
+		 * camera dictates, culled by the pass's own frustum, then the stitching between levels.
+		 * @note ⚠️ The LOD camera is not always the pass's camera. For a shadow map it is the MAIN
+		 * camera — the receiver's — so the caster is the same mesh as the surface it shadows, while
+		 * the light's frustum still decides what the map contains. A multi-view target (cubemap,
+		 * cascades) draws every part: one draw covers every view, so no single frustum applies.
+		 * @note ⚠️ Never the whole index buffer for such a geometry: it holds every level of every part,
+		 * one strip range per level over the SAME quads plus the stitching, so a plain draw stacked
+		 * eight surfaces into the shadow map — 45 974 784 indices per pass on a 4096-division terrain
+		 * (2026-09-22).
+		 */
 		void
 		drawAdaptiveGeometry (const Geometry::Interface & geometry, const Frustum * cullingVolume, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t instanceCount, uint32_t firstInstance, const PushConstantContext & pushContext, const Saphir::Program & program) noexcept
 		{

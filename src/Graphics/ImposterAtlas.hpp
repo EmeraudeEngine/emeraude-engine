@@ -229,7 +229,6 @@ namespace EmEn::Graphics
 			 * @param commandBuffer The bake target's command buffer, outside any render pass.
 			 * @param albedoSource The bake's albedo attachment (AlbedoFormat, size() × size()).
 			 * @param normalSource The bake's normals attachment (NormalFormat, size() × size()).
-			 * @return void
 			 */
 			void recordBake (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & albedoSource, const Vulkan::Image & normalSource) noexcept;
 
@@ -249,7 +248,6 @@ namespace EmEn::Graphics
 			 * @param commandBuffer The command buffer.
 			 * @param source The bake attachment.
 			 * @param destination The atlas image.
-			 * @return void
 			 */
 			void recordCopyAndMips (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & source, Vulkan::Image & destination) const noexcept;
 

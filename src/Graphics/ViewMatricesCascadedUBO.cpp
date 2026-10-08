@@ -209,7 +209,7 @@ namespace EmEn::Graphics
 	void
 	ViewMatricesCascadedUBO::updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept
 	{
-		if ( width * height <= 0.0 )
+		if ( width * height <= 0.0F )
 		{
 			TraceError{ClassId} << "The view size (" << width << " X " << height << ") is invalid!";
 
@@ -233,7 +233,7 @@ namespace EmEn::Graphics
 	void
 	ViewMatricesCascadedUBO::updateOrthographicViewProperties (float width, float height, float /*nearDistance*/, float /*farDistance*/) noexcept
 	{
-		if ( width * height <= 0.0 )
+		if ( width * height <= 0.0F )
 		{
 			TraceError{ClassId} << "The view size (" << width << " X " << height << ") is invalid!";
 

@@ -60,7 +60,6 @@ namespace EmEn::Audio
 			 * @brief Sets time before the next sound play from this channel.
 			 * @note This will reset the current time to 0.
 			 * @param time The delay in milliseconds.
-			 * @return void
 			 */
 			void
 			setTimeBeforeNextPlay (unsigned int time) noexcept
@@ -81,7 +80,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Stops the source.
 			 * @param removeSound Remove the sound associated.
-			 * @return void
 			 */
 			void
 			stop (bool removeSound) const noexcept
@@ -99,7 +97,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Pauses the source using direct OpenAL control.
-			 * @return void
 			 * @version 0.8.35
 			 */
 			void
@@ -113,7 +110,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Resumes the source using direct OpenAL control.
-			 * @return void
 			 * @version 0.8.35
 			 */
 			void
@@ -171,7 +167,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Updates the current time.
 			 * @param time The new current time in milliseconds.
-			 * @return void
 			 */
 			void update (unsigned int time) noexcept;
 
@@ -189,7 +184,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the position.
 			 * @param position A reference to a vector.
-			 * @return void
 			 */
 			void
 			setPosition (const Base::Math::Vector< 3, float > & position) noexcept
@@ -200,7 +194,6 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets a velocity vector to fake a movement.
 			 * @param velocity A reference to a vector.
-			 * @return void
 			 */
 			void
 			setVelocity (const Base::Math::Vector< 3, float > & velocity) noexcept
@@ -210,7 +203,6 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Disable the channel velocity.
-			 * @return void
 			 */
 			void
 			disableVelocity () noexcept

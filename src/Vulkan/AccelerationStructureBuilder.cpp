@@ -502,9 +502,10 @@ namespace EmEn::Vulkan
 			VkAccelerationStructureInstanceKHR instance{};
 			instance.transform = input.transform;
 			instance.instanceCustomIndex = input.instanceCustomIndex & 0x00FFFFFF;
-			instance.mask = input.mask;
+			/* NOTE: The Vulkan fields are bit-fields (24-bit index and offset, 8-bit mask and flags): every value is kept to its width. */
+			instance.mask = input.mask & 0xFFU;
 			instance.instanceShaderBindingTableRecordOffset = input.shaderBindingTableRecordOffset & 0x00FFFFFF;
-			instance.flags = input.flags;
+			instance.flags = input.flags & 0xFFU;
 			instance.accelerationStructureReference = input.blasDeviceAddress;
 
 			vkInstances.emplace_back(instance);

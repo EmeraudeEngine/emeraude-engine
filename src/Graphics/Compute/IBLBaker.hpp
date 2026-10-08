@@ -226,7 +226,6 @@ namespace EmEn::Graphics::Compute
 			 * PNG faces to /tmp (same pattern as EMERAUDE_DEBUG_HDR_FACES).
 			 * @param texture A reference to the baked texture.
 			 * @param label The file name label.
-			 * @return void
 			 */
 			void dumpTextureFaces (const IBLTexture & texture, const char * label) const noexcept;
 #endif

@@ -278,7 +278,6 @@ namespace EmEn::Console
 						break;
 
 					case ArgumentType::Undefined :
-					default:
 						out << num++ << " : undefined" "\n";
 						break;
 				}

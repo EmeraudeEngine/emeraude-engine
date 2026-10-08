@@ -78,7 +78,7 @@ namespace EmEn
 				/* NOTE: Create a copy of main() arguments. */
 				if ( argc > 0 && argv != nullptr )
 				{
-					m_rawArguments.reserve(argc);
+					m_rawArguments.reserve(static_cast< size_t >(argc));
 
 					for ( int argIndex = 0; argIndex < argc; argIndex++ )
 					{
@@ -113,7 +113,7 @@ namespace EmEn
 				/* NOTE: Create a copy of main() arguments. */
 				if ( argc > 0 && wargv != nullptr )
 				{
-					m_rawArguments.reserve(argc);
+					m_rawArguments.reserve(static_cast< size_t >(argc));
 
 					for ( int argIndex = 0; argIndex < argc; argIndex++ )
 					{
@@ -176,7 +176,6 @@ namespace EmEn
 			 * @brief Adds a switch.
 			 * @param name A string view.
 			 * @param completeRawArguments Set the switch to the raw arguments. Default true.
-			 * @return void
 			 */
 			void addSwitch (std::string_view name, bool completeRawArguments = true) noexcept;
 
@@ -185,7 +184,6 @@ namespace EmEn
 			 * @param name A string view.
 			 * @param value A string view.
 			 * @param completeRawArguments Set the switch to the raw arguments. Default true.
-			 * @return void
 			 */
 			void addArgument (std::string_view name, std::string_view value, bool completeRawArguments = true) noexcept;
 
@@ -233,7 +231,6 @@ namespace EmEn
 			/**
 			 * @brief For each switch present.
 			 * @param lambda A reference to a function using the signature "bool method (const std::string &, const std::string &)".
-			 * @return void
 			 */
 			void
 			forEachSwitch (const std::function< bool (const std::string & name) > & lambda) const noexcept
@@ -250,7 +247,6 @@ namespace EmEn
 			/**
 			 * @brief For each argument present.
 			 * @param lambda A reference to a function using the signature "bool method (const std::string &, const std::string &)".
-			 * @return void
 			 */
 			void
 			forEachArgument (const std::function< bool (const std::string & name, const std::string & value) > & lambda) const noexcept

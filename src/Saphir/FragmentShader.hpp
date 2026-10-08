@@ -152,8 +152,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Sets the number of samples used by the frame buffer for a pixel.
-			 * @param samples
-			 * @return void
+			 * @param samples The number of samples.
 			 */
 			void
 			setSamples (uint32_t samples) noexcept
@@ -184,7 +183,6 @@ namespace EmEn::Saphir
 			 * distant ridge is lit by its filtered normal, not by the 1 m one of the vertex that happens to
 			 * be there. Requires VertexShader::enableHeightfieldPixelFrame() and the surface set declared
 			 * in this stage (Generator::declareHeightfieldSurface()).
-			 * @return void
 			 */
 			void
 			enableHeightfieldPixelFrame () noexcept

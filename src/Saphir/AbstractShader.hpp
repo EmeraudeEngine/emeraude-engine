@@ -101,7 +101,6 @@ namespace EmEn::Saphir
 			 * @param extension The target extension name (e.g. "GL_EXT_buffer_reference").
 			 * @param behavior The behavior keyword ("enable", "require", "warn" or "disable", see Keys::GLSL::Extension).
 			 * @warning The default value of `behavior` is a trap: it is appended unconditionally to the generated line, and a null pointer passed to std::string::operator+= is undefined behavior. Every call site must supply `behavior` explicitly.
-			 * @return void
 			 */
 			void setExtensionBehavior (const char * extension, const char * behavior = nullptr) noexcept;
 
@@ -272,7 +271,6 @@ namespace EmEn::Saphir
 			 * @brief Sets the source code for this shader.
 			 * @note Alternative to generateSourceCode(): assigns raw GLSL directly (e.g. hand-written or externally produced), bypassing the declaration/generator pipeline entirely, and refreshes hash().
 			 * @param sourceCode The source code.
-			 * @return void
 			 */
 			void
 			setSourceCode (const std::string & sourceCode) noexcept
@@ -342,7 +340,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Display with the tracer a successful shader generation.
 			 * @note Does not check isGenerated(): calling this before generateSourceCode()/setSourceCode()/loadSourceCode() traces an empty GLSL body. Dumps the full generated GLSL source (via SourceCodeParser) followed by getDeclarationStats(), at Info level; intended to be called right after a successful generateSourceCode().
-			 * @return void
 			 */
 			void traceSuccessfulGeneration () const noexcept;
 
@@ -373,7 +370,6 @@ namespace EmEn::Saphir
 			 * @brief Generates the shader file header.
 			 * @note Called once by generateSourceCode(), before onSourceCodeGeneration(); writes the "#version"/profile line (which must stay the very first line of the GLSL source), then one preprocessor line per extension registered via setExtensionBehavior(), then a comment naming the shader type and name. Not meant to be invoked directly by subclasses.
 			 * @param code A reference to a stream.
-			 * @return void
 			 */
 			void generateHeaders (std::stringstream & code) const noexcept;
 
@@ -383,7 +379,6 @@ namespace EmEn::Saphir
 			 * @param code A reference to a stream.
 			 * @param declarations A reference to a list of declaration.
 			 * @param comment A section comment. Default none.
-			 * @return void
 			 */
 			template< typename declaration_t >
 			static
@@ -414,7 +409,6 @@ namespace EmEn::Saphir
 			 * @param code A reference to a stream.
 			 * @param declarations A reference to a list of declaration.
 			 * @param comment A section comment. Default none.
-			 * @return void
 			 */
 			template< typename declaration_t >
 			static
@@ -455,7 +449,6 @@ namespace EmEn::Saphir
 			 * @brief Hook implemented by each concrete shader stage to append its stage-specific declaration counts.
 			 * @note Invoked once by getDeclarationStats(), after the common declaration counts have already been written to `output`; the override only needs to append its own stage-specific counts (e.g. stage inputs/outputs) to the same stream.
 			 * @param output A reference to the string stream the stage-specific stats must be appended to.
-			 * @return void
 			 */
 			virtual void onGetDeclarationStats (std::stringstream & output) const noexcept = 0;
 
@@ -464,7 +457,6 @@ namespace EmEn::Saphir
 			 * @note For a stage whose main() is a frame around the collected instructions (the mesh shader closes
 			 * its per-vertex loop and emits its primitives here). Set it from onSourceCodeGeneration().
 			 * @param code The GLSL code [std::move].
-			 * @return void
 			 */
 			void
 			setMainEpilogue (std::string code) noexcept
@@ -476,7 +468,6 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Generates a hash from the source code.
-			 * @return void
 			 */
 			virtual void generateHash () noexcept;
 

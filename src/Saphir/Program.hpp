@@ -168,7 +168,6 @@ namespace EmEn::Saphir
 			 * @note Written by the generator while it lays the block out (std430: aligned on 16 bytes after
 			 * the matrices), read by the draw that pushes each node.
 			 * @param offset The byte offset of the node vec4 (the camera vec4 follows it).
-			 * @return void
 			 */
 			void
 			setHeightfieldPushConstantOffset (uint32_t offset) noexcept
@@ -181,7 +180,6 @@ namespace EmEn::Saphir
 			 * @note Cascaded shadow map programs only, written by the generator while it lays the block out, read by
 			 * the draw that pushes it (Graphics::RenderableInstance::Abstract::castShadows()).
 			 * @param offset The byte offset of the cascade index.
-			 * @return void
 			 */
 			void
 			setCascadeIndexPushConstantOffset (uint32_t offset) noexcept
@@ -214,7 +212,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Records where, in the matrices push-constant block, the mesh-shading surface's two vec4 start.
 			 * @param offset The byte offset of the grid vec4 (the view vec4 follows it).
-			 * @return void
 			 */
 			void
 			setMeshSurfacePushConstantOffset (uint32_t offset) noexcept
@@ -632,7 +629,6 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Sets the pipeline layout.
 			 * @param pipelineLayout A reference to a pipeline layout smart pointer.
-			 * @return void
 			 */
 			void
 			setPipelineLayout (const std::shared_ptr< Vulkan::PipelineLayout > & pipelineLayout) noexcept
@@ -656,7 +652,6 @@ namespace EmEn::Saphir
 			 * @brief Sets the graphics pipeline.
 			 * @note Assigning a non-null pipeline here is what makes isCompiled() return true.
 			 * @param graphicsPipeline A reference to a graphics pipeline smart pointer.
-			 * @return void
 			 */
 			void
 			setGraphicsPipeline (const std::shared_ptr< Vulkan::GraphicsPipeline > & graphicsPipeline) noexcept
@@ -681,7 +676,6 @@ namespace EmEn::Saphir
 			 * @note Must be called before shader compilation (createGraphicsPipeline).
 			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
 			 * @param value The boolean value for the constant.
-			 * @return void
 			 */
 			void
 			setFragmentSpecializationConstant (uint32_t constantId, bool value) noexcept

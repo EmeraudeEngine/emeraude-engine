@@ -173,8 +173,8 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Allocates one command buffer from this pool.
-			 * @param primaryLevel
-			 * @return bool
+			 * @param primaryLevel True to allocate a primary command buffer, false for a secondary one.
+			 * @return VkCommandBuffer
 			 */
 			[[nodiscard]]
 			VkCommandBuffer allocateCommandBuffer (bool primaryLevel) const noexcept;
@@ -182,7 +182,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Frees one command buffer.
 			 * @param commandBufferHandle A command buffer handle.
-			 * @return void
 			 */
 			void freeCommandBuffer (VkCommandBuffer commandBufferHandle) const noexcept;
 

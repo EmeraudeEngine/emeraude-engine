@@ -848,14 +848,15 @@ namespace EmEn
 			auto width = settings.getOrSetDefault< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
 			auto height = settings.getOrSetDefault< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
 
-			if ( width == 0 || height == 0 )
+			/* NOTE: A negative size from the settings file is as unusable as a zero one. */
+			if ( width <= 0 || height <= 0 )
 			{
 				width = DefaultVideoFullscreenWidth;
 				height = DefaultVideoFullscreenHeight;
 
 				/* Save fullscreen settings. */
-				settings.set< uint32_t >(VideoFullscreenWidthKey, width);
-				settings.set< uint32_t >(VideoFullscreenHeightKey, height);
+				settings.set< uint32_t >(VideoFullscreenWidthKey, static_cast< uint32_t >(width));
+				settings.set< uint32_t >(VideoFullscreenHeightKey, static_cast< uint32_t >(height));
 			}
 
 			glfwSetWindowMonitor(m_handle.get(), monitor, 0, 0, width, height, refreshRate);
@@ -1543,7 +1544,7 @@ namespace EmEn
 
 		if ( count > 0 && monitors != nullptr )
 		{
-			list.reserve(count);
+			list.reserve(static_cast< size_t >(count));
 
 			for ( int index = 0; index < count; index++ )
 			{
@@ -1593,7 +1594,7 @@ namespace EmEn
 
 		if ( count > 0 && modes != nullptr )
 		{
-			list.reserve(count);
+			list.reserve(static_cast< size_t >(count));
 
 			for ( int index = 0; index < count; index++ )
 			{

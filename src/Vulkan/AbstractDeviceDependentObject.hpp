@@ -117,7 +117,6 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Sets the device for move operation.
 			 * @param device A reference to the device smart pointer.
-			 * @return void
 			 */
 			void
 			setDeviceForMove (const std::shared_ptr< Device > & device) noexcept

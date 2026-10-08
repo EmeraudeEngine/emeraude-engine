@@ -107,7 +107,6 @@ namespace EmEn::Graphics::RenderableInstance
 			/**
 			 * @brief Sets the active instance count to draw.
 			 * @param count The number of instances.
-			 * @return void
 			 */
 			void
 			setActiveInstanceCount (uint32_t count) noexcept
@@ -141,7 +140,6 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Reset the local data.
-			 * @return void
 			 */
 			void
 			resetModelMatrices () noexcept
@@ -225,7 +223,6 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Resets local data to identity matrices.
-			 * @return void
 			 */
 			void resetLocalData () noexcept;
 

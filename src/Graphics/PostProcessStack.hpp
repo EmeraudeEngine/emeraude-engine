@@ -191,7 +191,6 @@ namespace EmEn::Graphics
 			 * @warning A camera slot (DepthOfField, MotionBlur, Glare, ToneMapping) is REFUSED
 			 * with a trace error: those belong to syncCameraEffects(), which owns their lifetime.
 			 * @param effect A shared pointer to the effect.
-			 * @return void
 			 */
 			void addEffect (const std::shared_ptr< IndirectPostProcessEffect >& effect) noexcept;
 
@@ -201,7 +200,6 @@ namespace EmEn::Graphics
 			 * exclusivity of a concept mechanical. Never call it directly: enable the effect you
 			 * want and the siblings follow.
 			 * @param effect A reference to the effect being enabled.
-			 * @return void
 			 */
 			void disableSlotSiblings (const IndirectPostProcessEffect & effect) const noexcept;
 
@@ -254,7 +252,6 @@ namespace EmEn::Graphics
 			 * therefore changes what the frame MEANS, not merely how fast it was obtained — see
 			 * `Graphics/AGENTS.md` § "Indirect-diffuse OWNERSHIP".
 			 * @param renderer A reference to the graphics renderer.
-			 * @return void
 			 */
 			void installLightingFamily (Renderer & renderer) noexcept;
 
@@ -280,7 +277,6 @@ namespace EmEn::Graphics
 			 * back. To switch the whole FAMILY off while keeping the concepts, call
 			 * @ref selectNoLightingLane() instead.
 			 * @param slot The slot.
-			 * @return void
 			 */
 			void selectNoOccupant (EffectSlot slot) noexcept;
 
@@ -321,7 +317,6 @@ namespace EmEn::Graphics
 			 * `LightingLane = "None"` does at launch, what `setLightingMode("None")` does live, and
 			 * what a "family off" step of a lane cycle must call — a loop of @ref selectNoOccupant()
 			 * would switch every concept off for the rest of the session.
-			 * @return void
 			 */
 			void selectNoLightingLane () noexcept;
 
@@ -358,7 +353,6 @@ namespace EmEn::Graphics
 			 * @warning This is NOT PostProcessor::enable(false): that master switch forces the DIRECT path,
 			 * with no scene target and no camera, and is a renderer diagnostic.
 			 * @param state True to bypass the scene effects, false to run them again.
-			 * @return void
 			 */
 			void
 			bypassSceneEffects (bool state) noexcept
@@ -464,7 +458,6 @@ namespace EmEn::Graphics
 			 * @param renderer A reference to the graphics renderer.
 			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
 			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
-			 * @return void
 			 */
 			void syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept;
 
@@ -491,7 +484,6 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Removes an effect from the chain.
 			 * @param effect A shared pointer to the effect.
-			 * @return void
 			 */
 			void removeEffect (const std::shared_ptr< IndirectPostProcessEffect > & effect) noexcept;
 
@@ -533,7 +525,6 @@ namespace EmEn::Graphics
 			 * scene holds clouds — the very condition under which the executor runs the producer,
 			 * so a consumer never reads a transmittance nobody wrote this frame.
 			 * @param clouds The scene's clouds, or nullptr.
-			 * @return void
 			 */
 			void syncSlotPairings (const Scenes::CloudSet * clouds) const noexcept;
 
@@ -564,7 +555,6 @@ namespace EmEn::Graphics
 			 * lens effects (film grain or scanlines must not be sharpened). At most ONE
 			 * fetch-overriding effect (FXAA, FXAASharpen) per stack.
 			 * @param effect A shared pointer to the display effect.
-			 * @return void
 			 */
 			void
 			addDisplayEffect (std::shared_ptr< DirectPostProcessEffect > effect) noexcept
@@ -614,7 +604,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Clears the entire effect chain.
-			 * @return void
 			 */
 			void clearEffects () noexcept;
 
@@ -680,7 +669,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys GPU resources for all effects.
-			 * @return void
 			 */
 			void destroyAll () const noexcept;
 
@@ -759,7 +747,6 @@ namespace EmEn::Graphics
 			 * @note RENDER THREAD, once per rendered frame (Renderer::publishFrameDiagnostics()). A copy, behind a mutex:
 			 * the console reads it from the main thread without touching any render-thread state.
 			 * @param diagnostics The frame's diagnostics.
-			 * @return void
 			 */
 			void publishFrameDiagnostics (const FrameDiagnostics & diagnostics) noexcept;
 
@@ -790,7 +777,6 @@ namespace EmEn::Graphics
 			 * @brief Disables every occupant of a slot — the concept is switched off.
 			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only.
 			 * @param slot The slot.
-			 * @return void
 			 */
 			void disableSlotOccupants (EffectSlot slot) const noexcept;
 
@@ -802,7 +788,6 @@ namespace EmEn::Graphics
 			 * application had switched off itself stays off.
 			 * @param slot The slot.
 			 * @param bypassed Whether the scene effects are bypassed this frame.
-			 * @return void
 			 */
 			void syncMultiOccupantBypass (EffectSlot slot, bool bypassed) noexcept;
 
@@ -810,7 +795,6 @@ namespace EmEn::Graphics
 			 * @brief Rebuilds the flat, slot-ordered view the chain executor walks.
 			 * @note Rebuilt on every mutation rather than assembled on demand: it is read once
 			 * per frame and mutated a handful of times per scene.
-			 * @return void
 			 */
 			void rebuildOrderedEffects () noexcept;
 

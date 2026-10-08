@@ -317,7 +317,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Sets the colour of the path (LINEAR, a hue: its brightness is the luminance).
 			 * @param color A reference to a colour.
-			 * @return void
 			 */
 			void setColor (const Base::PixelFactory::Color< float > & color) noexcept;
 
@@ -335,7 +334,6 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Sets the luminance of the path, in nits (cd/m²): a monitor 200-300, a fluorescent tube ~10 000.
 			 * @param nits The luminance. Clamped to 0 or above.
-			 * @return void
 			 */
 			void setLuminance (float nits) noexcept;
 
@@ -355,7 +353,6 @@ namespace EmEn::Graphics::Material
 			 * @param halfWidth The half width: in the entity's units (metres for an unscaled entity), or in pixels.
 			 * Clamped to 0 or above.
 			 * @param inPixels Whether the half width is in pixels (constant on screen) rather than in entity units.
-			 * @return void
 			 */
 			void setWidth (float halfWidth, bool inPixels) noexcept;
 
@@ -385,7 +382,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Sets the joins: mitered (bevelled past the miter limit, butt caps), or round (round caps too).
 			 * @param round Whether the joins and the caps are round.
 			 * @param miterLimit The miter limit (the SVG stroke-miterlimit), at least 1.
-			 * @return void
 			 */
 			void setJoins (bool round, float miterLimit = DefaultMiterLimit) noexcept;
 
@@ -419,7 +415,6 @@ namespace EmEn::Graphics::Material
 			 * offset stops hiding it: keep it small (a few centimetres). Applied alike by the scene pass, the velocity and
 			 * the selection outline's depth; the debug mode draws on top anyway.
 			 * @param offset The offset, 0 (none, the default) or more; a non-finite value is 0.
-			 * @return void
 			 */
 			void setDepthOffset (float offset) noexcept;
 
@@ -432,7 +427,6 @@ namespace EmEn::Graphics::Material
 			 * (the depth test between two coplanar surfaces is a draw).
 			 * @param state Whether the ribbon lies flat.
 			 * @param up The surface's normal in the ENTITY's space (normalized here). Default +Y; a zero one leaves it facing.
-			 * @return void
 			 */
 			void setFlat (bool state, const Base::Math::Vector< 3, float > & up = Base::Math::Vector< 3, float >::positiveY()) noexcept;
 
@@ -500,13 +494,11 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Writes the radiance (linear colour × luminance) into the UBO copy.
-			 * @return void
 			 */
 			void updateRadiance () noexcept;
 
 			/**
 			 * @brief Requests an upload of the UBO copy, once per frame at most, when the material is on the GPU.
-			 * @return void
 			 */
 			void markVideoMemoryDirty () noexcept;
 

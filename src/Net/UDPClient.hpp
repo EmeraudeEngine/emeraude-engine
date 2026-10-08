@@ -129,7 +129,6 @@ namespace EmEn::Net
 			 * return before invalidating the handle. The wait is bounded by one poll slice
 			 * (50 ms), NOT by the timeout that receive() was given.
 			 * @note Safe on a moved-from instance, where there is nothing left to close.
-			 * @return void
 			 */
 			void close () noexcept;
 

@@ -216,7 +216,6 @@ namespace EmEn::Scenes::Component
 			 * luminous intensity the GPU needs by spreading the power over the whole sphere
 			 * (`lm / 4pi`): an 800 lm household bulb is 63.7 cd in every direction.
 			 * @param lumens The luminous power, in lumens.
-			 * @return void
 			 */
 			void
 			setLuminousPower (float lumens) noexcept
@@ -231,7 +230,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Set the radius of light area.
-			 * @param radius
+			 * @param radius The radius of the light area.
 			 */
 			void setRadius (float radius) noexcept;
 

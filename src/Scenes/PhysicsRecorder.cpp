@@ -49,7 +49,6 @@ namespace EmEn::Scenes
 		 * @brief Writes a vector as a JSON array (a non-finite component as null, the others with 9 digits).
 		 * @param output A reference to the stream.
 		 * @param vector A reference to the vector.
-		 * @return void
 		 */
 		void
 		writeVector (std::ostream & output, const Vector< 3, float > & vector) noexcept

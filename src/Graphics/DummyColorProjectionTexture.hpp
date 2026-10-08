@@ -100,7 +100,6 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Destroys the dummy color projection texture from the GPU.
-			 * @return void
 			 */
 			void destroy () noexcept;
 

@@ -70,7 +70,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the bleeding strength.
 			 * @param intensity Value in range [0, 1].
-			 * @return void
 			 */
 			void
 			setIntensity (float intensity) noexcept
@@ -92,7 +91,6 @@ namespace EmEn::Graphics::Effects::Style
 			/**
 			 * @brief Sets the horizontal spreading distance in pixels.
 			 * @param spread Value > 0. Default 3.0.
-			 * @return void
 			 */
 			void setSpread (float spread) noexcept;
 

@@ -337,7 +337,7 @@ namespace EmEn::Vulkan
 		{
 			const auto index = static_cast< uint32_t >(std::distance(m_queueFamilyProperties.cbegin(), it));
 
-			if ( (m_queueFamilyProperties[index].queueFamilyProperties.queueFlags & type) != 0 )
+			if ( (m_queueFamilyProperties[index].queueFamilyProperties.queueFlags & static_cast< VkQueueFlags >(type)) != 0 )
 			{
 				return index;
 			}
@@ -824,7 +824,7 @@ namespace EmEn::Vulkan
 
 		for ( const auto sample : samples )
 		{
-			if ( (supportedSampleCount & sample) != 0U )
+			if ( (supportedSampleCount & static_cast< VkSampleCountFlags >(sample)) != 0U )
 			{
 				return sample;
 			}

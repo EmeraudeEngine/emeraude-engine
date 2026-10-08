@@ -159,7 +159,6 @@ namespace EmEn::Saphir::Generator
 			/**
 			 * @brief Enables debugging. This will print stats of the generated source code.
 			 * @param state The state
-			 * @return void
 			 */
 			void
 			enableDebugging (bool state) noexcept
@@ -204,7 +203,6 @@ namespace EmEn::Saphir::Generator
 			 * @brief Displays one packed lane of the material-properties G-buffer as the frame colour.
 			 * @note 0 = off, 1 = reflectivity, 2 = AO response. See GraphicsDebugMaterialPropertiesLaneKey.
 			 * @param lane The lane index.
-			 * @return void
 			 */
 			void
 			setDebugMaterialPropertiesLane (uint32_t lane) noexcept
@@ -285,7 +283,6 @@ namespace EmEn::Saphir::Generator
 			 * @note When enabled, materials with automatic reflection will use the global
 			 * bindless texture arrays instead of per-material descriptor sets.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableBindlessTextures (bool state) noexcept
@@ -305,7 +302,6 @@ namespace EmEn::Saphir::Generator
 			 * @note When enabled, model matrices are read from an SSBO via BDA + gl_DrawID
 			 * instead of push constants. Requires GL_EXT_buffer_reference.
 			 * @param state The state.
-			 * @return void
 			 */
 			void
 			enableMultiDrawIndirect (bool state) noexcept
@@ -622,7 +618,6 @@ namespace EmEn::Saphir::Generator
 			 * for the post-process pass. The generator would then simply receive the correct
 			 * render target, eliminating the need for conditional branching in createGraphicsPipeline().
 			 * @param framebuffer A pointer to the override framebuffer (nullptr to disable).
-			 * @return void
 			 */
 			void
 			setPipelineFramebuffer (const Vulkan::Framebuffer * framebuffer) noexcept
@@ -795,7 +790,6 @@ namespace EmEn::Saphir::Generator
 			 * constructed and before onGenerateShadersCode(): declareViewUniformBlock() and
 			 * declareMaterialUniformBlock() rely on the set indexes this call fills in.
 			 * @param setIndexes A reference to the set indexes structure.
-			 * @return void
 			 */
 			virtual void prepareUniformSets (SetIndexes & setIndexes) noexcept = 0;
 
@@ -841,7 +835,6 @@ namespace EmEn::Saphir::Generator
 			 * @param pushConstantBlocks A reference to a vector of push constant blocks.
 			 * @param pushConstantRanges A reference to a vector of push constant ranges.
 			 * @param stageFlags The Vulkan shader stage(s) the produced ranges apply to.
-			 * @return void
 			 */
 			static void generatePushConstantRanges (const Base::StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, Base::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept;
 

@@ -126,7 +126,6 @@ namespace EmEn::Vulkan
 			 * @brief Sets the compute shader module for this pipeline.
 			 * @param shaderModule The compiled compute shader module handle.
 			 * @param entryPoint The shader entry point name. Default "main".
-			 * @return void
 			 */
 			void
 			setShaderModule (VkShaderModule shaderModule, const char * entryPoint = "main") noexcept
