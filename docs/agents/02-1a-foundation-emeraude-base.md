@@ -53,7 +53,7 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > into two **mutually exclusive** options (both On is a `FATAL_ERROR`):
 > **`EMERAUDE_USE_FULL_EXPORTS`** (default On on MSVC — exports both `EMEN_LEAN_API` and `EMEN_API`)
 > and **`EMERAUDE_USE_LEAN_EXPORTS`** (default Off — exports `EMEN_LEAN_API` **only**, keeping the
-> ordinal count down to what an embedding application actually references; this is what `app_system`
+> ordinal count down to what an embedding application actually references; this is what a downstream application
 > forces). On non-MSVC platforms both are inert (no `.def`; export via symbol visibility), hence Off.
 >
 > **Consequence of LEAN, and the trap it sets: `EMEN_API` is a no-op there.** A public symbol a
@@ -62,7 +62,7 @@ pulled in by `cmake/InstallEmeraudeBase.cmake` (clone-if-absent + `add_subdirect
 > MSVC only**, so Linux and macOS keep building green. Let the linker name what is missing, then
 > promote the class in the engine; never widen a consumer to `FULL` to silence it. Reference case:
 > `Graphics::Material::StandardResource` stayed `EMEN_API` when it replaced `BasicResource` while all
-> its consumed neighbours were `EMEN_LEAN_API` → 38 unresolved externals in `app_system`. The
+> its consumed neighbours were `EMEN_LEAN_API` → 38 unresolved externals in a downstream application. The
 > export-all/PCH guard stays at the `emeraude_base_target_enable_pch()` call site in `CMakeLists.txt`
 > for anyone forcing both options `Off` locally (which no longer links on MSVC). **macOS Objective-C++ is handled (2026-07):** the
 > base helper auto-sets `SKIP_PRECOMPILE_HEADERS` on the engine's `.mm` sources (SerialPort,

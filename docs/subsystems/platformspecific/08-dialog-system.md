@@ -12,7 +12,7 @@
 ### The default button of a `Message` (`setDefaultAnswer()`, since 2026-10-08)
 
 The first button (Yes / OK) is the default one on Windows and macOS: Enter, Space (and on Windows the first button's
-accelerator) answer it. On 2026-10-07 app_system's crash report question, unparented and unseen behind a terminal on
+accelerator) answer it. On 2026-10-07 a downstream application's crash report question, unparented and unseen behind a terminal on
 Windows, caught a stray key press and sent a report: every Windows box is now brought to the foreground (topmost when
 not parented). A caller that wants the second button as the default calls `setDefaultAnswer(No)` (or `Cancel`):
 
@@ -23,7 +23,7 @@ not parented). A caller that wants the second button as the default calls `setDe
 | Linux zenity | `--question --ok-label=Yes --cancel-label=No --default-cancel`; the answer is the exit code (0 = Yes only) | 2026-10-08, Enter → No |
 | Linux kdialog | unchanged (kdialog's own default) | — |
 
-⚠️ Owner decision (2026-10-08): Enter keeps meaning **Yes** by default, app_system's crash report question included —
+⚠️ Owner decision (2026-10-08): Enter keeps meaning **Yes** by default, a downstream application's crash report question included —
 it does not call `setDefaultAnswer()`. What protects it from an unseen box is the Windows foreground / topmost flags.
 
 The answer stays safe whatever the default: only the Yes / OK button (exit code 0, `IDYES`, `NSAlertFirstButtonReturn`)

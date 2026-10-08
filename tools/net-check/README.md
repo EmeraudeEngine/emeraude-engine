@@ -52,7 +52,7 @@ What each section is really testing:
 | 1-2 | `NetworkInterfaces` — the platform leg (`AF_LINK` / `AF_PACKET` / `GetAdaptersAddresses`) is wrong. Watch the MAC: **empty** on loopback, repeated identically across one interface's addresses, never `00:00:…`. |
 | 3 | The kernel refuses the option width `MulticastOptionValue` picks for this platform. A silent TTL of 1 — discovery finds only the local link. |
 | 4 | `receive(0)` parks instead of polling, or a timeout is not honoured. |
-| 5 | ⚠️ `close()` does not return a parked `receive()`. This is the macOS bug of 2026-08-28; `UDP.close()` is a *synchronous* WebModule binding in app_system, so this stalls the renderer's main thread. |
+| 5 | ⚠️ `close()` does not return a parked `receive()`. This is the macOS bug of 2026-08-28; `UDP.close()` is a *synchronous* WebModule binding in a downstream application, so this stalls the renderer's main thread. |
 | 5b | A moved-from instance crashes or is unusable. |
 | 6 | The mDNS round trip: sharing port 5353 with the system responder, joining on each interface, and — the subtle one — a **non-zero interface index on every datagram**, which only holds because the ancillary option is armed in `open()` and never lazily. |
 | 7 | SSDP discovery. Depends on what is on the LAN. |

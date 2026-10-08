@@ -13,7 +13,7 @@ before touching anything here.
 | `SerialPort` against real hardware | ✅ | ❌ no adapter available | ❌ no adapter, but see below |
 
 ⚠️ Depth is **not** uniform, and the table flattens that. macOS was exercised through an
-out-of-tree harness on this directory's sources; Windows through app_system's own JS path
+out-of-tree harness on this directory's sources; Windows through a downstream application's own JS path
 (`--mode=test`, dev-check fixtures over CDP), which is the layer macOS has never run. Neither
 substitutes for the other.
 
@@ -25,7 +25,7 @@ latent everywhere and only macOS made them visible:
 1. ⚠️⚠️ **`shutdown()` does not wake a reader on an unconnected datagram socket.** POSIX makes it
    fail with `ENOTCONN`; **Linux is the lenient outlier** that wakes the reader anyway. Measured:
    `close()` waited out the receive() timeout **in full** (10 s) instead of returning. Since
-   app_system binds `UDP.close()` as a *synchronous* WebModule method, that stall lands on the
+   a downstream application binds `UDP.close()` as a *synchronous* WebModule method, that stall lands on the
    renderer's main thread. `UDPClient` no longer trusts the kernel for the wake-up — `close()`
    raises a flag and `receive()` polls in 50 ms slices (`PollSliceMs`). **Confirmed on Windows the
    same day, by measurement rather than inference**: the pre-fix symptom was visible there
@@ -47,7 +47,7 @@ latent everywhere and only macOS made them visible:
    `tcsetattr` or it is undone), and `open()` returns **false** when the adapter refuses the rate.
    The macOS switch also gained `B7200`/`B14400`/`B28800`/`B76800`, which it simply lacked.
 
-### What Windows added (2026-08-28, same day, app_system's JS path)
+### What Windows added (2026-08-28, same day, a downstream application's JS path)
 
 Windows was validated through `--mode=test` and the dev-check fixtures, i.e. the layer **macOS has
 never run**. What it contributed to this directory:
@@ -77,11 +77,11 @@ never run**. What it contributed to this directory:
   hunts the symptom again.
 
 > [!NOTE]
-> The bug the Windows run actually surfaced first was **not in this directory**: app_system's
+> The bug the Windows run actually surfaced first was **not in this directory**: a downstream application's
 > `SharedDataManager::createJob<>()` locked a non-recursive mutex twice, which MS-STL turns into a
 > `std::system_error` inside a `noexcept` binding — instant renderer death on every
 > `JobInterface` module. glibc self-deadlocks instead of throwing, so Linux would have hung rather
-> than crashed. Fixed in app_system; recorded here only because it is why the Windows network run
+> than crashed. Fixed in a downstream application; recorded here only because it is why the Windows network run
 > could not start.
 
 ### What the Linux replay closed (2026-08-28)

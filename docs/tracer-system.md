@@ -169,7 +169,7 @@ flushed after each batch, so the lines written before a crash are on disk).
 - **The previous journal is kept** (since 1.0.0): `enableLogger()` never truncates an existing journal any more.
   It first renames it to `Tracer::previousLogFilepath(path)` — `journal-main.log` → `journal-main.previous.log`,
   replacing the older one — so the complete log of the previous run survives the next launch. This is what lets
-  an application report a crash at the next startup (app_system: `docs/crash-report.md`).
+  an application report a crash at the next startup (as a downstream application does).
 
 - **Closing** (since 1.0.0): `~PrimaryServices()` calls `disableLogger()` once its services are destroyed, which
   writes the pending entries and the `====== Log file closed properly ======` footer while `main()` still runs. Left to

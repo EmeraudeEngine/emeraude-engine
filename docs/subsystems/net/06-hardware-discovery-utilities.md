@@ -104,7 +104,7 @@ the per-platform width is kept because the leniency is undocumented, not because
 ⚠️⚠️ **A return of 0 from `receive()` is AMBIGUOUS, and `timedOut` is the only thing that
 disambiguates it (since 2026-08-28).** A zero-length datagram is legal in UDP and returns 0 exactly
 like an expired wait. Before the flag existed the two were **byte-for-byte identical** through
-app_system's JS path — same empty payload, same empty sender address, same port 0 — so a polling
+a downstream application's JS path — same empty payload, same empty sender address, same port 0 — so a polling
 consumer could not tell "nothing came" from "someone sent me an empty datagram". Two fixes:
 
 - the plain overload takes an optional `bool * timedOut`, set true only when the wait ended with no

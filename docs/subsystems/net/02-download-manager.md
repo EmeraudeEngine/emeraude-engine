@@ -149,13 +149,13 @@ Console check of the whole chain: drop a store JSON with an `ExternalData` entry
 `Core.ResourcesManagerService.resourceStatus(ImageResource, MyPicture)` until `Loaded`.
 
 ⚠️ Do not improvise that check — use the replayable fixture,
-`app_system/tools/external-data-check/`, which pins one store, three resources (nominal, expired
+a downstream application's replayable external-data fixture, which pins one store, three resources (nominal, expired
 certificate, cleartext) and the same command sequence on the three OSes. Improvising it is how the
 two defects below stayed hidden:
 
 - **`Core.openFiles` on a store whose store name did not exist at boot registered resources no
   container could ever see** (`Resources::Manager::getLocalStore()` returned null, and a container
-  binds its store once). On a host with no store directories — app_system — *every* container was
+  binds its store once). On a host with no store directories — a downstream application — *every* container was
   sterile, so this whole chain was unreachable while reporting success. Fixed engine-side; see
   [`Resources/AGENTS.md`](../../../src/Resources/AGENTS.md) § *A container binds to its store ONCE*.
 - **`TLSFailure` was reported as `Unreachable`** (above), which made the fixture's own

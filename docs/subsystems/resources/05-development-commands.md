@@ -60,9 +60,9 @@ and the consequence was silent and total:
   natural conclusion is that the loader or the network is broken.
 
 **This is not an edge case for an embedding application.** It bites any host whose data directories
-contain no store sub-directory — app_system has none, so on it **all 34 containers were sterile and
+contain no store sub-directory — a downstream application has none, so on it **all 34 containers were sterile and
 the whole runtime `update()` path was dead**. Found while running the `ExternalData` fixture on
-macOS (`app_system/tools/external-data-check/`), where it is platform-independent: Linux and Windows
+macOS (a downstream application's replayable external-data fixture), where it is platform-independent: Linux and Windows
 were equally affected and simply had not run that path yet.
 
 `getLocalStore()` now creates the store when absent and is documented as never returning null. The

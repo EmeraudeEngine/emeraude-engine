@@ -18,7 +18,7 @@ to fall back on `vulkaninfo`. Every cross-platform comparison needs it: `VkPhysi
 differently from the Vulkan version macro).
 
 Since 2026-10-05 `PhysicalDevice::DriverVersionString()` decodes the vendor packing (NVIDIA 10.8.8.6 bits, Intel on
-Windows 18.14 — measured: NVIDIA Linux 615.71.09, Windows 616.92); app_system's crash-report token uses it. The startup
+Windows 18.14 — measured: NVIDIA Linux 615.71.09, Windows 616.92); a downstream application's crash-report token uses it. The startup
 log line is still missing.
 
 ## What remains

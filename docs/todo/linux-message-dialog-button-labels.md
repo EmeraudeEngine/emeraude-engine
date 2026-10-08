@@ -14,7 +14,7 @@ tags: [dialog, i18n, linux]
 
 `Message.linux.cpp` builds the zenity YesNo dialog with `--ok-label=Yes --cancel-label=No` (since 2026-10-08; before,
 `--switch --extra-button=No --extra-button=Yes`), and `Message.mac.mm` adds `@"Yes"` / `@"No"` NSAlert buttons. The
-buttons are therefore always English on Linux AND macOS: app_system's crash report question, translated since
+buttons are therefore always English on Linux AND macOS: a downstream application's crash report question, translated since
 2026-10-07, shows a French text with "No" / "Yes" buttons; only Windows `MessageBox` follows the OS language ("Oui" /
 "Non"). The answer is read from the button identity (zenity's exit code, NSAlert's return code) — it must stay so: a
 localized label must never be what the answer is compared with.
@@ -28,4 +28,4 @@ localized label must never be what the answer is compared with.
 
 ## References
 
-- app_system `docs/crash-report.md` § The question; `src/CrashReportTexts.cpp`.
+- The crash-report question of a downstream application.

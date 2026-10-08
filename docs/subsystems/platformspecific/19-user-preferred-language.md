@@ -4,7 +4,7 @@
 
 The language of the user's interface, as a **BCP 47 tag** (`fr-BE`, `zh-Hant-TW`, `en`), read once when the
 `UserInfoService` initializes — a primary service, so it is known before any window, web view or CEF. Empty when
-unknown. First consumer: app_system's crash report question, asked before the JavaScript i18n exists.
+unknown. First consumer: a downstream application's crash report question, asked before the JavaScript i18n exists.
 
 | OS | Source | Example |
 |---|---|---|

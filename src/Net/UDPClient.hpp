@@ -167,7 +167,7 @@ namespace EmEn::Net
 			 * @param timeoutMs Receive timeout in milliseconds. 0 = NON-BLOCKING: the call returns 0 at once when no datagram is queued (it never parks the thread).
 			 * @param timedOut [out] Optional. Set to true when the wait ended with NO datagram.
 			 * ⚠️ Without it, a return of 0 is AMBIGUOUS: a zero-length datagram is legal in UDP and
-			 * also returns 0. Measured through app_system's JS path, a timeout and a received 0-byte
+			 * also returns 0. Measured through a downstream application's JS path, a timeout and a received 0-byte
 			 * datagram were byte-for-byte indistinguishable. It does NOT separate a timeout from a
 			 * concurrent close() - both mean "nothing arrived"; a closed socket is observable through
 			 * isOpen(), and the next call returns -1.

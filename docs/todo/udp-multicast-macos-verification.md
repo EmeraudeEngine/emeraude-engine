@@ -84,7 +84,7 @@ implementation detail and each platform keeps the type its own manual specifies.
 1. ⚠️⚠️ **`close()` did not wake a parked `receive()`.** `shutdown()` fails with `ENOTCONN` on an
    unconnected datagram socket — that is plain POSIX, and **Linux is the lenient outlier** that
    wakes the reader anyway. Measured: `close()` waited out the full 10 s receive timeout. Because
-   app_system binds `UDP.close()` as a **synchronous** WebModule method, that stall lands on the
+   a downstream application binds `UDP.close()` as a **synchronous** WebModule method, that stall lands on the
    renderer's main thread (~100 ms through the `dgram` shim, up to the caller's timeout — 1000 ms
    by default — through `udp.Socket.receive()`). `UDPClient` now signals the wake-up itself
    (`m_closing` + 50 ms poll slices in `waitReadable()`) instead of trusting the kernel.
@@ -139,7 +139,7 @@ implementation detail and each platform keeps the type its own manual specifies.
   applied by the machine's owner. So the first-run experience of a real user is unverified, and two
   product consequences follow either way:
   1. The app must behave sanely **while denied**. Today printer discovery would simply find nothing,
-     with joins reporting success — see the failure shape above. app_system's `UDPModule` at least
+     with joins reporting success — see the failure shape above. A downstream application's UDP binding at least
      no longer reports the refused send as a success (fixed the same day).
   2. If macOS does *not* prompt by itself, the app has to bring the user to
      *System Settings → Privacy & Security → Local Network* deliberately, which is UI work, not
@@ -189,15 +189,15 @@ implementation detail and each platform keeps the type its own manual specifies.
   harmless. Keeping that fix Linux-scoped is therefore right, and for the stated reason: the
   exemption exists because Linux lies about the flag, and Windows does not.
   **The multicast subject is closed on the data side.**
-- [x] **Windows — done 2026-08-28**, through app_system's JS path (`--mode=test`, dev-check mDNS
+- [x] **Windows — done 2026-08-28**, through a downstream application's JS path (`--mode=test`, dev-check mDNS
   fixture over CDP): bind `0.0.0.0:5353`, TTL 255 + loopback, join on the real NIC, DNS-SD
   enumeration answered by **6 LAN hosts**, idempotent re-join, tolerant drop, `close(cb)` +
   `"close"` event. The `DWORD` branch of `MulticastOptionValue` is therefore exercised. It also
   **measured the `close()` fix** (62 ms with a `receive()` parked on 3000 ms, and the same 62 ms at
   1000 ms) and the deadline-based timeout accounting (+0.4% at worst) — both of which this item had
   only inferred for Winsock.
-  ⚠️ Two Windows-specific lessons, recorded in `app_system/src/WebModules/UDPModule/AGENTS.md`: a
-  double-locked mutex in app_system's job registry had to be fixed before anything could run, and
+  ⚠️ Two Windows-specific lessons, recorded in the downstream application's notes: a
+  double-locked mutex in a downstream application's job registry had to be fixed before anything could run, and
   **an APIPA interface makes `addMembership` fail** — a consumer joining all interfaces inside one
   `try` block loses every interface after the first dead one, and Windows always has dead ones.
 

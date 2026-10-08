@@ -82,7 +82,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @brief Sets the answer of the default button — the one Enter / Space / Return press (YesNo, OKCancel).
 			 * @note Without it, the first button (Yes / OK) is the default. Every Windows box is brought to the
 			 * foreground (topmost when not parented) whatever the default: an unseen box once caught a stray key press
-			 * (app_system's crash report, 2026-10-07). Linux kdialog keeps its own default.
+			 * (a downstream application's crash report, 2026-10-07). Linux kdialog keeps its own default.
 			 * @param answer Answer::No or Answer::Cancel for the second button; anything else keeps the first.
 			 */
 			void

@@ -7,7 +7,7 @@
 > **The single `EMERAUDE_USE_EXPLICIT_EXPORTS` option was split in two (2026-08):**
 > `EMERAUDE_USE_FULL_EXPORTS` (whole annotated API — the MSVC default) and
 > `EMERAUDE_USE_LEAN_EXPORTS` (only the scopes an embedding application consumes, marked
-> `EMEN_LEAN_API` — what `app_system` forces). **Read § 2 before annotating anything**: in lean mode
+> `EMEN_LEAN_API` — what a downstream application forces). **Read § 2 before annotating anything**: in lean mode
 > `EMEN_API` is inert, and picking the wrong macro breaks the *consumer's* link on MSVC while every
 > other platform stays green.
 >
@@ -102,12 +102,12 @@ annotated API.
 > designates. Do not push the consumer to `EMERAUDE_USE_FULL_EXPORTS` to make the error go away —
 > that trades a two-word annotation for the symbol-count problem LEAN was created to solve.
 >
-> **Reference case (2026-08).** `app_system` forces LEAN
+> **Reference case (2026-08).** A downstream application forces LEAN
 > (`cmake/InstallEmeraudeEngine.cmake`). When `Graphics::Material::BasicResource` was replaced by
 > `Graphics::Material::StandardResource`, the new class was annotated `EMEN_API` while every one of
 > its neighbours on the same consumed path (`Renderable::BasicGroundResource`,
 > `Renderable::MeshResource`, `Material::Interface`, `TextureResource::Texture2D`) was
-> `EMEN_LEAN_API`. `app_system/src/Application.Native3D.cpp` instantiates
+> `EMEN_LEAN_API`. One of its translation units instantiates
 > `Resources::Container< StandardResource >` and calls `setAlbedoComponent()` /
 > `setRoughnessComponent()` / `setMetalnessComponent()` directly → **38 unresolved externals** on
 > MSVC (the full virtual table plus the private static `neutralMaterialProperties()`), nothing at
@@ -121,7 +121,7 @@ annotated API.
 ## 3. What to annotate
 
 Both macros mark the boundary of what crosses the DLL edge and is referenced **out-of-line** by a
-consumer (`app_system`, `projet-alpha`, tests, tools). **Which one** you reach for is the whole
+consumer (a downstream application, `projet-alpha`, tests, tools). **Which one** you reach for is the whole
 question — see § 2: `EMEN_LEAN_API` for a scope an embedding application actually references,
 `EMEN_API` for the rest of the public API. When in doubt, prefer `EMEN_LEAN_API`: an over-inclusive
 lean set costs a few ordinals, an under-inclusive one costs a broken consumer link on MSVC only.

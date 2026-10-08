@@ -128,12 +128,12 @@ i.e. a build dependency on the OpenGL development headers that this Vulkan-only 
 (no source references a single GL symbol). Both defines together is the canonical GLFW+Vulkan
 setup — the same pair `dependencies/imgui/examples/example_glfw_vulkan/main.cpp` uses.
 
-**How it surfaced** (2026-09-07, app_system Linux CI): the runner's apt list was trimmed to the real
+**How it surfaced** (2026-09-07, a downstream application's Linux CI): the runner's apt list was trimmed to the real
 build requirements, dropping the `libgtk-3-dev` umbrella — which had been pulling `libgl-dev`
 transitively. Every TU reaching `Window.hpp` then died on
 `glfw3.h:241: fatal error: GL/gl.h: No such file or directory`, while every developer machine kept
 building (GL headers are always installed there). The `#define GLFW_INCLUDE_NONE` scattered in
-`Input/*`, `Vulkan/Instance.cpp` and app_system's `UI/WebView.cpp` protected only *those* files.
+`Input/*`, `Vulkan/Instance.cpp` and a downstream application's `UI/WebView.cpp` protected only *those* files.
 
 ⚠️ **Do not re-add a local `#define GLFW_INCLUDE_NONE` before an `#include "GLFW/glfw3.h"`.** Now
 that the define comes from the command line (`-DGLFW_INCLUDE_NONE`, value `1`), a source-level

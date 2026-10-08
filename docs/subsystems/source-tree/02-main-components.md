@@ -100,7 +100,7 @@ never touches the other.
   closed-by-default door the user opened on purpose), `Core/Video/Window/Width`,
   `Core/Video/Window/Height`. The application adds its own on top,
   `forget(path)` withdraws an engine entry a product does not want, `SettingsKeyRestoration::blank()`
-  starts without the base. A consumer that passes only the flag (app_system) therefore gets the engine
+  starts without the base. A consumer that passes only the flag (a downstream application) therefore gets the engine
   base restored **without any code change**.
 - **Two granularities.** `keep("A/B/Key")` = one variable **or one array** (an array is restored
   whole: the target array is cleared first). `keepStore("A/B")` = the whole sub-tree below the path

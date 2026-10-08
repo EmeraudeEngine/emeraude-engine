@@ -26,14 +26,14 @@
   Side effect worth knowing: `operator<<` supplied its own quotes, so those messages used to be
   doubly quoted; they now carry only the ones the format string writes.
 - ⚠️⚠️ **A URL is traced through `URI::redacted()`, never streamed whole** (2026-10-07). A presigned URL carries its
-  credentials in the query — app_system's crash report PUTs to an S3 URL holding `X-Amz-Security-Token` and
+  credentials in the query — a downstream application's crash report PUTs to an S3 URL holding `X-Amz-Security-Token` and
   `X-Amz-Signature` — and a userinfo its password; `Net::APIClient` traced them all ("Calling PUT '<url>'", "answered
   HTTP …"), into the journals the next crash report uploads. Every trace of `APIClient.cpp` and `Manager.cpp`, and the
   `list` console command, now print `scheme://host:port/path?<redacted>`. `operator<<` / `to_string()` stay for what
   goes on the wire and for the download cache key (the `listCache` console command still shows full URLs: a presigned
   GET would expose its query there), and the console echoes a typed command verbatim (`Executing command: …`) — that
-  one is the operator's own text. Measured 2026-10-07 (Linux): `get(https://stub.mango3d.net/?probe=secret)` traced
-  `Calling GET 'https://stub.mango3d.net/?<redacted>'` and `… answered HTTP 503`, `list()` showed the same.
+  one is the operator's own text. Measured 2026-10-07 (Linux): `get(https://stub.example.net/?probe=secret)` traced
+  `Calling GET 'https://stub.example.net/?<redacted>'` and `… answered HTTP 503`, `list()` showed the same.
 - ⚠️ **A green compile proves nothing about a socket.** The multicast surface and the
   IPv4/IPv6/MAC enumeration were validated by out-of-tree binaries compiled straight from
   `UDPClient.cpp` / `NetworkInterfaces.cpp` (they depend on nothing but `emeraude_export.hpp`),
