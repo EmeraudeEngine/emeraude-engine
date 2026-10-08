@@ -213,6 +213,16 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
+	Instance::~Instance ()
+	{
+		/* NOTE: onTerminate() is idempotent (every handle is reset after its release); it is only needed when it did
+		 * not run. */
+		if ( m_instance != VK_NULL_HANDLE || m_graphicsDevice != nullptr || m_computeDevice != nullptr )
+		{
+			static_cast< void >(this->onTerminate());
+		}
+	}
+
 	bool
 	Instance::onTerminate () noexcept
 	{
@@ -225,6 +235,8 @@ namespace EmEn::Vulkan
 			{
 				TraceError{ClassId} << "The Vulkan selected compute device '" << m_computeDevice->identifier() << "' smart pointer still have " << m_computeDevice.use_count() << " uses !";
 			}
+
+			m_computeDevice.reset();
 		}
 
 		if ( m_graphicsDevice != nullptr )
@@ -235,6 +247,8 @@ namespace EmEn::Vulkan
 			{
 				TraceError{ClassId} << "The Vulkan selected graphics device '" << m_graphicsDevice->identifier() << "' smart pointer still have " << m_graphicsDevice.use_count() << " uses !";
 			}
+
+			m_graphicsDevice.reset();
 		}
 
 		m_physicalDevices.clear();

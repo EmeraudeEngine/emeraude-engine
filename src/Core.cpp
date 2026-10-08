@@ -128,6 +128,14 @@ namespace EmEn
 
 	Core::~Core ()
 	{
+		/* NOTE: A safety net (Ave Robustus II, decision D3-a): a path that left user or secondary services registered
+		 * releases them here, before the primary services they depend on. terminate() empties both lists, so a normal
+		 * run does nothing here. */
+		if ( !m_userServiceEnabled.empty() || !m_secondaryServicesEnabled.empty() )
+		{
+			static_cast< void >(this->terminate());
+		}
+
 		/* Terminate primary services. */
 		for ( auto * service : std::ranges::reverse_view(m_primaryServicesEnabled) )
 		{
@@ -454,6 +462,11 @@ namespace EmEn
 				/* NOTE: Finish the core initialization with secondary services. */
 				if ( !this->initializeCoreLevel() )
 				{
+					/* NOTE: The secondary services that started before the failing one are registered in
+					 * m_secondaryServicesEnabled: terminate() releases them in reverse order (the destructor only knew
+					 * the primary ones — Ave Robustus II, H1). */
+					static_cast< void >(this->terminate());
+
 					return EXIT_FAILURE;
 				}
 

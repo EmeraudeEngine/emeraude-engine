@@ -90,6 +90,24 @@ namespace EmEn::Audio
 			Recorder (PrimaryServices & primaryServices, Manager & audioManager) noexcept;
 
 			/**
+			 * @brief Destructs the recorder: when onTerminate() was skipped (an initialization failure path), the render
+			 * thread is stopped and joined and the OpenAL contexts / devices are released here.
+			 */
+			~Recorder () override;
+
+			/** @brief Copy constructor (deleted: the render thread and the OpenAL handles are owned). */
+			Recorder (const Recorder & copy) noexcept = delete;
+
+			/** @brief Move constructor (deleted: the render thread captures this). */
+			Recorder (Recorder && copy) noexcept = delete;
+
+			/** @brief Copy assignment (deleted). */
+			Recorder & operator= (const Recorder & copy) noexcept = delete;
+
+			/** @brief Move assignment (deleted). */
+			Recorder & operator= (Recorder && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the loopback device pointer (used by Manager as the output device).
 			 *
 			 * @return Pointer to the loopback device, or nullptr if not active.
@@ -223,7 +241,6 @@ namespace EmEn::Audio
 			ALCcontext * m_gameContext{nullptr}; ///< Game audio context on the loopback device (set as global current).
 			ALCcontext * m_playbackContext{nullptr}; ///< Playback context on the real output device (thread-local on render thread).
 			ALCcontext * m_previousGlobalContext{nullptr}; ///< Saved previous global context to restore on terminate.
-			Base::Thread m_renderThread; ///< Dedicated render thread that pulls loopback samples and forwards to speakers.
 			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz}; ///< Playback frequency (typically 48kHz).
 			uint16_t m_channelCount{2}; ///< Number of audio channels (2 = stereo, 6 = 5.1 surround).
 			std::atomic< bool > m_recording{false}; ///< True when actively recording audio to WAV.
@@ -233,5 +250,8 @@ namespace EmEn::Audio
 			std::ofstream m_outputFileStream; ///< Output file stream for writing WAV data.
 			std::streampos m_dataSizePos; ///< Position in the file where the data chunk size is written.
 			uint32_t m_streamByteCount{0}; ///< Total bytes written to the data chunk.
+			/* NOTE: LAST on purpose (Ave Robustus II, member order): the render thread uses the members above, so it is
+			 * destroyed — joined — first. The destructor also stops it explicitly. */
+			Base::Thread m_renderThread; ///< Dedicated render thread that pulls loopback samples and forwards to speakers.
 	};
 }

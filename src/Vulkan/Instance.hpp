@@ -120,6 +120,25 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Destructs the Vulkan instance: when onTerminate() was skipped (an initialization failure path), the
+			 * devices, the debug messenger and the VkInstance are released here (vkDestroyInstance() used to run only
+			 * from onTerminate()).
+			 */
+			~Instance () override;
+
+			/** @brief Copy constructor (deleted: the VkInstance is owned). */
+			Instance (const Instance & copy) noexcept = delete;
+
+			/** @brief Move constructor (deleted). */
+			Instance (Instance && copy) noexcept = delete;
+
+			/** @brief Copy assignment (deleted). */
+			Instance & operator= (const Instance & copy) noexcept = delete;
+
+			/** @brief Move assignment (deleted). */
+			Instance & operator= (Instance && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the Vulkan instance handle wrapped in a smart pointer.
 			 * @return VkInstance
 			 */

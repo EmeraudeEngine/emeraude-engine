@@ -87,16 +87,37 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
+		/* NOTE: The creation function below runs LATER, on a worker thread, possibly after this sprite is gone
+		 * (Container::getOrCreateResource(), ⚠️ LIFETIME): it must not reach `this`. The textures it needs are resolved
+		 * HERE, on the calling thread (getResource() returns immediately), and captured by value with the data. */
+		std::shared_ptr< TextureResource::Texture2D > texture2D;
+		std::shared_ptr< TextureResource::AnimatedTexture2D > animatedTexture2D;
+
+		if ( data.isMember(Material::JKData) && data[Material::JKData].isObject() )
+		{
+			if ( const auto fillingType = Material::getFillingTypeFromJSON(data) )
+			{
+				const auto textureName = FastJSON::getValue< std::string >(data[Material::JKData], Material::JKName).value_or(Resources::Default);
+
+				if ( fillingType.value() == FillingType::Texture )
+				{
+					texture2D = this->serviceProvider().container< TextureResource::Texture2D >()->getResource(textureName);
+				}
+				else if ( fillingType.value() == FillingType::AnimatedTexture )
+				{
+					animatedTexture2D = this->serviceProvider().container< TextureResource::AnimatedTexture2D >()->getResource(textureName);
+				}
+			}
+		}
+
 		const auto material = this->serviceProvider().container< Material::StandardResource >()
-			->getOrCreateResource("SpriteMaterial" + this->name(), [&, data] (auto & materialResource) {
+			->getOrCreateResource("SpriteMaterial" + this->name(), [data, texture2D, animatedTexture2D] (auto & materialResource) {
 				if ( !data.isMember(Material::JKData) || !data[Material::JKData].isObject() )
 				{
 					TraceError{ClassId} << "The key '" << Material::JKData << "' JSON structure is not present or not an object !";
 
 					return materialResource.setManualLoadSuccess(false);
 				}
-
-				const auto & componentData = data[Material::JKData];
 
 				/* Check the texture resource type. */
 				if ( const auto fillingType = Material::getFillingTypeFromJSON(data) )
@@ -105,11 +126,7 @@ namespace EmEn::Graphics::Renderable
 					{
 						case FillingType::Texture :
 						{
-							const auto textureResource = this->serviceProvider().container< TextureResource::Texture2D >()
-								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
-								.value_or(Resources::Default));
-
-							if ( !materialResource.setAlbedoComponent(textureResource, true) )
+							if ( !materialResource.setAlbedoComponent(texture2D, true) )
 							{
 								return materialResource.setManualLoadSuccess(false);
 							}
@@ -118,11 +135,7 @@ namespace EmEn::Graphics::Renderable
 
 						case FillingType::AnimatedTexture :
 						{
-							const auto textureResource = this->serviceProvider().container< TextureResource::AnimatedTexture2D >()
-								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
-								.value_or(Resources::Default));
-
-							if ( !materialResource.setAlbedoComponent(textureResource, true) )
+							if ( !materialResource.setAlbedoComponent(animatedTexture2D, true) )
 							{
 								return materialResource.setManualLoadSuccess(false);
 							}

@@ -178,12 +178,12 @@ namespace EmEn::Resources
 		const auto enqueued = m_threadPool->enqueue([this, relativePath] () {
 			this->runFetch(relativePath);
 
-			{
-				const std::scoped_lock lock{m_stateAccess};
+			/* NOTE: notified UNDER the lock: ~PeerStore() waits for running == false on this condition variable; notified
+			 * after the unlock, the destructor could see the flag, return and destroy m_jobDone before this notify. */
+			const std::scoped_lock lock{m_stateAccess};
 
-				m_state.running = false;
-				m_state.currentFile.clear();
-			}
+			m_state.running = false;
+			m_state.currentFile.clear();
 
 			m_jobDone.notify_all();
 		});
@@ -193,6 +193,9 @@ namespace EmEn::Resources
 			const std::scoped_lock lock{m_stateAccess};
 
 			m_state.running = false;
+
+			/* NOTE: Same contract as the job's end: a waiting destructor must be woken. */
+			m_jobDone.notify_all();
 		}
 
 		return enqueued;

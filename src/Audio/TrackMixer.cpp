@@ -142,13 +142,32 @@ namespace EmEn::Audio
 		return true;
 	}
 
+	TrackMixer::~TrackMixer ()
+	{
+		this->stopEventThread();
+	}
+
+	void
+	TrackMixer::stopEventThread () noexcept
+	{
+		{
+			const std::scoped_lock lock{m_stateAccess};
+
+			m_stopThread = true;
+		}
+
+		m_fadeCv.notify_one();
+
+		if ( m_eventThread.joinable() )
+		{
+			m_eventThread.join();
+		}
+	}
+
 	bool
 	TrackMixer::onTerminate () noexcept
 	{
-		m_stopThread = true;
-		m_fadeCv.notify_one();
-
-		m_eventThread.join();
+		this->stopEventThread();
 
 		if ( m_trackA != nullptr )
 		{
@@ -1004,69 +1023,94 @@ namespace EmEn::Audio
 	}
 
 	void
+	TrackMixer::fadeStep () noexcept
+	{
+		constexpr auto stepValue = 0.01F;
+
+		switch ( m_playingTrack )
+		{
+			/* NOTE: We are playing on the track A, so we fade out the track B. */
+			case PlayingTrack::TrackA :
+				if ( !m_trackB->isMuted() )
+				{
+					TrackMixer::fadeOut(m_trackB.get(), stepValue);
+				}
+
+				if ( this->fadeIn(m_trackA.get(), stepValue) )
+				{
+					m_isFading = false;
+				}
+				return;
+
+			case PlayingTrack::TrackB :
+				if ( !m_trackA->isMuted() )
+				{
+					TrackMixer::fadeOut(m_trackA.get(), stepValue);
+				}
+
+				if ( this->fadeIn(m_trackB.get(), stepValue) )
+				{
+					m_isFading = false;
+				}
+				return;
+
+			case PlayingTrack::None :
+				break;
+		}
+
+		/* NOTE: No playing track, or a value outside the enumeration: nothing to fade (the loop would otherwise spin
+		 * every 16 ms until the shutdown). */
+		m_isFading = false;
+	}
+
+	void
 	TrackMixer::eventLoop ()
 	{
 		using namespace std::chrono_literals;
 
-		while ( !m_stopThread )
+		/* NOTE: Every read and write of the shared state (the flags, the user state, the playing track) happens under
+		 * m_stateAccess; only the 16 ms sleep between two fade steps is outside it. The loop used to read m_isFading,
+		 * m_userState and m_playingTrack without the lock while the main thread wrote them under it (a data race). */
+		while ( true )
 		{
-			{
-				std::unique_lock< std::mutex > lock {m_stateAccess};
+			bool playNext = false;
 
-				m_fadeCv.wait(lock, [&] {
+			{
+				std::unique_lock< std::mutex > lock{m_stateAccess};
+
+				m_fadeCv.wait(lock, [this] {
 					return m_isFading || m_requestNextTrack || m_stopThread;
 				});
-			}
 
-			if ( m_stopThread )
-			{
-				return;
-			}
-
-			if ( m_requestNextTrack )
-			{
-				m_requestNextTrack = false;
-
-				if ( m_userState != UserState::Stopped )
+				if ( m_stopThread )
 				{
-					this->next();
+					return;
+				}
+
+				if ( m_requestNextTrack )
+				{
+					m_requestNextTrack = false;
+					playNext = m_userState != UserState::Stopped;
 				}
 			}
 
-			while ( m_isFading && !m_stopThread )
+			/* NOTE: next() takes m_stateAccess itself. */
+			if ( playNext )
 			{
-				constexpr auto stepValue = 0.01F;
+				this->next();
+			}
 
-				switch ( m_playingTrack )
+			while ( true )
+			{
 				{
-					/* NOTE: We are playing on the track A, so we fade out the track B. */
-					case PlayingTrack::TrackA :
-						if ( !m_trackB->isMuted() )
-						{
-							TrackMixer::fadeOut(m_trackB.get(), stepValue);
-						}
+					const std::scoped_lock lock{m_stateAccess};
 
-						if ( this->fadeIn(m_trackA.get(), stepValue) )
-						{
-							m_isFading = false;
-						}
+					if ( !m_isFading || m_stopThread )
+					{
 						break;
+					}
 
-					case PlayingTrack::TrackB :
-						if ( !m_trackA->isMuted() )
-						{
-							TrackMixer::fadeOut(m_trackA.get(), stepValue);
-						}
-
-						if ( this->fadeIn(m_trackB.get(), stepValue) )
-						{
-							m_isFading = false;
-						}
-						break;
-
-					case PlayingTrack::None :
-						m_isFading = false;
-						break;
+					this->fadeStep();
 				}
 
 				std::this_thread::sleep_for(16ms);

@@ -124,6 +124,24 @@ namespace EmEn::Audio
 			}
 
 			/**
+			 * @brief Destructs the track mixer: the event thread is stopped and joined BEFORE any member it uses is
+			 * destroyed, whether onTerminate() ran or not (an initialization failure path skips it).
+			 */
+			~TrackMixer () override;
+
+			/** @brief Copy constructor (deleted: the event thread and the OpenAL sources are owned). */
+			TrackMixer (const TrackMixer & copy) noexcept = delete;
+
+			/** @brief Move constructor (deleted: the event thread captures this). */
+			TrackMixer (TrackMixer && copy) noexcept = delete;
+
+			/** @brief Copy assignment (deleted). */
+			TrackMixer & operator= (const TrackMixer & copy) noexcept = delete;
+
+			/** @brief Move assignment (deleted). */
+			TrackMixer & operator= (TrackMixer && copy) noexcept = delete;
+
+			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
 			 * @return size_t
 			 */
@@ -485,6 +503,19 @@ namespace EmEn::Audio
 			 */
 			void generateShuffleOrder () noexcept;
 
+			/**
+			 * @brief Requests the event thread to stop and joins it. Idempotent.
+			 * @note The stop flag is raised UNDER m_stateAccess, so the waiter cannot miss the notification between its
+			 * predicate check and its wait.
+			 */
+			void stopEventThread () noexcept;
+
+			/**
+			 * @brief Advances the cross-fade by one step.
+			 * @pre m_stateAccess is held by the caller.
+			 */
+			void fadeStep () noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			Manager & m_audioManager;
@@ -498,7 +529,6 @@ namespace EmEn::Audio
 			std::vector< std::shared_ptr< MusicResource > > m_playlist;
 			std::shared_ptr< PlaylistResource > m_loadedPlaylist;
 			std::shared_ptr< MusicResource > m_loadingTrack;
-			Base::Thread m_eventThread;
 			mutable std::mutex m_stateAccess;
 			std::condition_variable m_fadeCv;
 			std::atomic_bool m_stopThread{false};
@@ -508,5 +538,8 @@ namespace EmEn::Audio
 			bool m_shuffleEnabled{false};
 			std::vector< size_t > m_shuffleOrder;
 			size_t m_shuffleIndex{0};
+			/* NOTE: LAST on purpose (Ave Robustus II, member order): the event thread uses every member above, so it is
+			 * destroyed — joined — first. The destructor also stops it explicitly before any member goes. */
+			Base::Thread m_eventThread;
 	};
 }

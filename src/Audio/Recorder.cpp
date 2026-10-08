@@ -215,6 +215,15 @@ namespace EmEn::Audio
 		return true;
 	}
 
+	Recorder::~Recorder ()
+	{
+		/* NOTE: Only when something is still held: a second onTerminate() would make a null context current. */
+		if ( m_renderThread.joinable() || m_loopbackDevice != nullptr || m_playbackDevice != nullptr || m_gameContext != nullptr || m_playbackContext != nullptr )
+		{
+			static_cast< void >(this->onTerminate());
+		}
+	}
+
 	bool
 	Recorder::onTerminate () noexcept
 	{
@@ -227,7 +236,10 @@ namespace EmEn::Audio
 		/* Stop the render thread. */
 		m_renderRunning = false;
 
-		m_renderThread.join();
+		if ( m_renderThread.joinable() )
+		{
+			m_renderThread.join();
+		}
 
 		/* Restore the previous global context before destroying loopback resources. */
 		alcMakeContextCurrent(m_previousGlobalContext);

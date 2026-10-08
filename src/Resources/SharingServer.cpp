@@ -446,11 +446,11 @@ namespace EmEn::Resources
 				alive->respond(200, "application/json", FastJSON::stringify(answer), NoStore);
 			});
 
-			{
-				const std::scoped_lock lock{m_jobsAccess};
+			/* NOTE: notified UNDER the lock: the destructor waits for m_jobsInFlight == 0 on this condition variable;
+			 * notified after the unlock, it could see the count, return and destroy m_jobsDone before this notify. */
+			const std::scoped_lock lock{m_jobsAccess};
 
-				--m_jobsInFlight;
-			}
+			--m_jobsInFlight;
 
 			m_jobsDone.notify_all();
 		});
@@ -461,6 +461,9 @@ namespace EmEn::Resources
 				const std::scoped_lock lock{m_jobsAccess};
 
 				--m_jobsInFlight;
+
+				/* NOTE: The destructor may already wait (a refused enqueue happens when the pool stops): wake it. */
+				m_jobsDone.notify_all();
 			}
 
 			connection->respondEmpty(503, "Retry-After: 5\r\n");

@@ -16,10 +16,18 @@ path calls `return this->terminate();`. The secondary services already started a
 the primary ones only): VkInstance, OpenAL, GLFW leak, and the audio threads may hang at exit (see
 `audio-thread-member-order`).
 
+## Done (2026-10-08, P0)
+- `Core::run()` calls `terminate()` when `initializeCoreLevel()` fails; `~Core()` terminates whatever user / secondary
+  service is still registered (safety net, decision D3-a); `Vulkan::Instance`, `Audio::TrackMixer` and
+  `Audio::Recorder` release in their destructors when `onTerminate()` did not run.
+- Proof of one real failure: no Vulkan driver (`VK_ICD_FILENAMES=/nonexistent.json VK_DRIVER_FILES=…`) — the
+  VulkanInstanceService fails, `PlatformManagerService secondary service terminated gracefully!` follows, the
+  process exits in 0.29 s with code 1, CEF's subprocess ends cleanly.
+
 ## What remains
-- The immediate fix: every failure path terminates what was initialized (and the destructor safety net of decision D3).
-- **Fault injection** (Ave Robustus II § 1.1): a test build that forces each `initialize*()` step to fail in turn —
-  each exits cleanly, LSan 0 leak, no hang, 0 VUID.
+- **Fault injection** (Ave Robustus II § 1.1, phase P3): a test build that forces EACH `initialize*()` step to fail in
+  turn (window, input, renderer, physics, audio, notification, overlay) — each exits cleanly, LSan 0 leak, no hang,
+  0 VUID. Only the Vulkan-instance step is proven so far.
 
 ## References
 - projet-alpha `docs/plans/ave-robustus-ii.md` § 3.1 H1, P0 + P3.
