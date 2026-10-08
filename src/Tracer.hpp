@@ -601,24 +601,25 @@ namespace EmEn
 			 * @version 0.8.38
 			 */
 			static void traceGLFW (int error, const char * description) noexcept;
+
 		private:
 
 			struct PrivateToken {};
 
 		public:
 
-			using Sink = std::function<void(Severity, const char*, std::string_view)>;
+			using Sink = std::function< void (Severity, const char *, std::string_view) >;
 
 			/**
 			 * @brief Adds a custom sink to receive all logs.
 			 * @param sink The callback receiving logs.
 			 */
-			void addSink(Sink sink) noexcept;
+			void addSink (Sink sink) noexcept;
 
 			/**
 			 * @brief Clears all registered sinks.
 			 */
-			void removeAllSinks() noexcept;
+			void removeAllSinks () noexcept;
 
 			/**
 			 * @brief Private constructor accessible only through PrivateToken.
