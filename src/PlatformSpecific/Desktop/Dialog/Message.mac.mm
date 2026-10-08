@@ -114,8 +114,19 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                 [[alert.buttons objectAtIndex:1] setKeyEquivalent:@"\r"];
             }
 
+            /* NOTE: An NSAlert has no window title: the bold message text is its headline and the informative text its
+             * body. The title used to be dropped, which left the whole message in bold and the question unnamed. */
             NSString * messageString = toNSString(m_message);
-            [alert setMessageText:messageString];
+
+            if ( this->title().empty() )
+            {
+                [alert setMessageText:messageString];
+            }
+            else
+            {
+                [alert setMessageText:toNSString(this->title())];
+                [alert setInformativeText:messageString];
+            }
 
             [alert.window setLevel:CGShieldingWindowLevel()];
             NSInteger button = [alert runModal];

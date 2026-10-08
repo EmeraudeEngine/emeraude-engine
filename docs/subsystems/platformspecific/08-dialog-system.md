@@ -145,6 +145,10 @@ Linux dialogs use native desktop tools via shell commands.
 | `OpenFile` | `NSOpenPanel` |
 | `SaveFile` | `NSSavePanel` |
 
+**NSAlert has no window title**: `Message` shows its title as the bold message text and the message as the informative
+text below it (a message alone when the title is empty). Until 2026-10-08 the title was dropped and the whole message was
+bold. `CustomMessage` still shows the message in bold and the title below it as informative text.
+
 **NSAlert Button Mapping**: Returns 1000, 1001, 1002... for buttons in order added. Convert to 0-based: `index = button - 1000`.
 
 **File Type Filtering**: Use `UTType` with `allowedContentTypes` (macOS 12.0+).
