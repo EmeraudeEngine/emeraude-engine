@@ -1,22 +1,23 @@
 ---
 id: linux-message-dialog-button-labels
-title: The Linux message dialog shows "Yes" / "No" in English whatever the language of its text
+title: The Linux and macOS message dialogs show "Yes" / "No" in English whatever the language of their text
 status: open
 priority: unranked
-scope: PlatformSpecific/Desktop/Dialog/Message.linux.cpp
+scope: PlatformSpecific/Desktop/Dialog/Message.linux.cpp, Message.mac.mm
 opened: 2026-10-07
 tags: [dialog, i18n, linux]
 ---
 
-# The Linux message dialog shows "Yes" / "No" in English whatever the language of its text
+# The Linux and macOS message dialogs show "Yes" / "No" in English whatever the language of their text
 
 ## Why
 
-`Message.linux.cpp` builds the zenity YesNo dialog with `--switch --extra-button=No --extra-button=Yes` and reads the
-answer by comparing zenity's output with the literal `"Yes"`. The buttons are therefore always English: app_system's
-crash report question, translated since 2026-10-07, shows a French text with "No" / "Yes" buttons (Windows `MessageBox`
-and macOS `NSAlert` follow the OS language). The answer parsing is safe — anything but `"Yes"` (No, Escape, the close
-button, a failing zenity) is No — and must stay so.
+`Message.linux.cpp` builds the zenity YesNo dialog with `--ok-label=Yes --cancel-label=No` (since 2026-10-08; before,
+`--switch --extra-button=No --extra-button=Yes`), and `Message.mac.mm` adds `@"Yes"` / `@"No"` NSAlert buttons. The
+buttons are therefore always English on Linux AND macOS: app_system's crash report question, translated since
+2026-10-07, shows a French text with "No" / "Yes" buttons; only Windows `MessageBox` follows the OS language ("Oui" /
+"Non"). The answer is read from the button identity (zenity's exit code, NSAlert's return code) — it must stay so: a
+localized label must never be what the answer is compared with.
 
 ## What remains
 

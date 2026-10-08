@@ -155,10 +155,22 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 				case ButtonLayout::OKCancel:
 					command += " --question --cancel-label=Cancel --ok-label=OK";
+
+					if ( m_defaultAnswer == Answer::Cancel )
+					{
+						command += " --default-cancel";
+					}
 					break;
 
 				case ButtonLayout::YesNo:
-					command += " --question --switch --extra-button=No --extra-button=Yes";
+					/* NOTE: The answer is the exit code (0 = Yes only: No, Escape, the close button and a failing
+					 * zenity are No). --default-cancel gives No the focus: Enter no longer answers Yes by accident. */
+					command += " --question --ok-label=Yes --cancel-label=No";
+
+					if ( m_defaultAnswer == Answer::No )
+					{
+						command += " --default-cancel";
+					}
 					break;
 			}
 
@@ -180,7 +192,8 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* Execute the command and get the result. */
 		int exitCode = 0;
-		const std::string output = executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
+		/* NOTE: Every answer is read from the exit code (the standard output is not needed). */
+		(void)executeCommandPumpingEvents(command, exitCode, [&window] () { window.pumpEvents(); });
 
 		/* Parse the result based on the tool and button layout. */
 		if ( useKdialog )
@@ -205,18 +218,10 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		}
 		else
 		{
-			/* Zenity: parse output for switch mode, exit code otherwise. */
+			/* Zenity: the exit code (0 = the OK / Yes button). */
 			if ( m_buttonLayout == ButtonLayout::YesNo )
 			{
-				/* Switch mode: output contains the button text. */
-				if ( output == "Yes" )
-				{
-					m_userAnswer = Answer::Yes;
-				}
-				else
-				{
-					m_userAnswer = Answer::No;
-				}
+				m_userAnswer = (exitCode == 0) ? Answer::Yes : Answer::No;
 			}
 			else if ( m_buttonLayout == ButtonLayout::OKCancel )
 			{

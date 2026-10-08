@@ -4,10 +4,30 @@
 
 | Class | Purpose | Buttons |
 |-------|---------|---------|
-| `Message` | Standard message dialogs | Preset layouts (`OK`, `OKCancel`, `YesNo`, `Quit`) |
+| `Message` | Standard message dialogs | Preset layouts (`OK`, `OKCancel`, `YesNo`, `Quit`); `setDefaultAnswer()` |
 | `CustomMessage` | Custom button dialogs | 1-6 custom labels |
 | `OpenFile` | File/folder selection | N/A (system buttons) |
 | `SaveFile` | Save location selection | N/A (system buttons) |
+
+### The default button of a `Message` (`setDefaultAnswer()`, since 2026-10-08)
+
+The first button (Yes / OK) is the default one on Windows and macOS: Enter, Space (and on Windows the first button's
+accelerator) answer it. On 2026-10-07 app_system's crash report question, unparented and unseen behind a terminal on
+Windows, caught a stray key press and sent a report: every Windows box is now brought to the foreground (topmost when
+not parented). A caller that wants the second button as the default calls `setDefaultAnswer(No)` (or `Cancel`):
+
+| OS | How | Measured |
+|---|---|---|
+| Windows | `MB_DEFBUTTON2`; every box also gets `MB_SETFOREGROUND`, and `MB_TOPMOST` when it has no parent | not yet |
+| macOS | Return moved to the second button (`setKeyEquivalent:`); the alert is already at `CGShieldingWindowLevel` | not yet |
+| Linux zenity | `--question --ok-label=Yes --cancel-label=No --default-cancel`; the answer is the exit code (0 = Yes only) | 2026-10-08, Enter → No |
+| Linux kdialog | unchanged (kdialog's own default) | — |
+
+⚠️ Owner decision (2026-10-08): Enter keeps meaning **Yes** by default, app_system's crash report question included —
+it does not call `setDefaultAnswer()`. What protects it from an unseen box is the Windows foreground / topmost flags.
+
+The answer stays safe whatever the default: only the Yes / OK button (exit code 0, `IDYES`, `NSAlertFirstButtonReturn`)
+is a Yes; Escape, the close button and a failing tool are No / Cancel.
 
 ### File Path Handling
 
@@ -67,7 +87,7 @@ Linux dialogs use native desktop tools via shell commands.
 | Icon parameter | Use `--icon=` not `--icon-name=` (deprecated) |
 | Confirm overwrite | `--confirm-overwrite` deprecated (now default) |
 | Multi-select separator | Use `--separator='\n'` for newline separation |
-| Custom buttons | Use `--question --switch --extra-button=Label` |
+| Custom buttons | Use `--question --switch --extra-button=Label` (`CustomMessage`; `Message` YesNo uses `--ok-label` / `--cancel-label` since 2026-10-08) |
 
 **kdialog Limitations**:
 - Maximum 3 buttons for question dialogs (`--yesnocancel`)
@@ -76,7 +96,8 @@ Linux dialogs use native desktop tools via shell commands.
 **Button Index Mapping**:
 | Tool | Method | Index Extraction |
 |------|--------|------------------|
-| zenity (switch mode) | Outputs clicked button text | Match against button labels |
+| zenity (switch mode, `CustomMessage`) | Outputs clicked button text | Match against button labels |
+| zenity (`Message`) | Exit code: 0 = OK / Yes, anything else = Cancel / No | Direct mapping |
 | kdialog | Exit codes: 0=Yes, 1=No, 2=Cancel | Direct mapping |
 
 > [!IMPORTANT]

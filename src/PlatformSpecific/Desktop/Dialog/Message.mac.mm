@@ -106,6 +106,14 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                     break;
             }
 
+            /* NOTE: The second button (No / Cancel) answers Return: the first one is NSAlert's default otherwise, and a
+             * stray key press answered Yes. The button order (and so the 1000 / 1001 answers) is unchanged. */
+            if ( (m_buttonLayout == ButtonLayout::YesNo || m_buttonLayout == ButtonLayout::OKCancel) && (m_defaultAnswer == Answer::No || m_defaultAnswer == Answer::Cancel) && alert.buttons.count == 2 )
+            {
+                [[alert.buttons objectAtIndex:0] setKeyEquivalent:@""];
+                [[alert.buttons objectAtIndex:1] setKeyEquivalent:@"\r"];
+            }
+
             NSString * messageString = toNSString(m_message);
             [alert setMessageText:messageString];
 

@@ -85,7 +85,22 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		HWND parentWindow = parentToWindow ? window.getWin32Window() : nullptr;
 
-		switch ( MessageBoxW(parentWindow, wsMessage.data(), wsTitle.data(), messageType | layout) )
+		/* NOTE: The second button (No / Cancel) as the default one: Enter, Space or the first button's accelerator no
+		 * longer answer Yes by accident. The box is brought to the foreground, and kept on top when it has no parent
+		 * (e.g. asked before the window exists): an unseen box with the focus caught a stray key press. */
+		UINT behavior = MB_SETFOREGROUND;
+
+		if ( (m_buttonLayout == ButtonLayout::YesNo || m_buttonLayout == ButtonLayout::OKCancel) && (m_defaultAnswer == Answer::No || m_defaultAnswer == Answer::Cancel) )
+		{
+			behavior |= MB_DEFBUTTON2;
+		}
+
+		if ( parentWindow == nullptr )
+		{
+			behavior |= MB_TOPMOST;
+		}
+
+		switch ( MessageBoxW(parentWindow, wsMessage.data(), wsTitle.data(), messageType | layout | behavior) )
 		{
 			case IDOK :
 				m_userAnswer = Answer::OK;
