@@ -18,7 +18,7 @@ not parented). A caller that wants the second button as the default calls `setDe
 
 | OS | How | Measured |
 |---|---|---|
-| Windows | `MB_DEFBUTTON2`; every box also gets `MB_SETFOREGROUND`, and `MB_TOPMOST` when it has no parent | not yet |
+| Windows | `MB_DEFBUTTON2`; every box also gets `MB_SETFOREGROUND`, and `MB_TOPMOST` when it has no parent | 2026-10-08, Windows 11: the unparented crash report question appeared in front of the terminal (owner); `MB_DEFBUTTON2` not exercised |
 | macOS | Return moved to the second button (`setKeyEquivalent:`); the alert is already at `CGShieldingWindowLevel` | not yet |
 | Linux zenity | `--question --ok-label=Yes --cancel-label=No --default-cancel`; the answer is the exit code (0 = Yes only) | 2026-10-08, Enter → No |
 | Linux kdialog | unchanged (kdialog's own default) | — |
