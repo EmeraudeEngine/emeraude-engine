@@ -5782,6 +5782,18 @@ BEFORE it clears `m_isRenderingLoopRunning`, so the scene is torn down under a l
 ⚠️ A re-entrant `withSharedActiveScene()` on the same thread is now a deadlock on every OS once a
 writer is announced (it was undefined behaviour already).
 
+## Vector::normalize() at any scale (2026-10-09, base `83878a5`)
+
+Base fix: `Vector::normalize()` / `normalized()` refused every vector under ~3.5e-4 (an absolute epsilon); any non-zero
+finite vector normalizes now, and `Vector::normal()` answers exactly zero for a flat triangle (base caution-points
+§ Math, item `vector-normalized-absolute-epsilon`). Engine sites that leaned on "short → zero": the wheel's rolling
+direction (`Scene.physics.cpp`, the projection of a UNIT vector: `lengthSquared() > 1e-6F`, not `> 0`). Judged safe on
+purpose: `SphericalPushModifier` (a body near the centre is now pushed out instead of stuck; exactly at the centre:
+no force, as before) and `CartesianFrame::lookAt` with target ≈ position (a distinct target gives an exact direction;
+an identical one still gives zero). Runtime check (Linux, RTX 3070 Ti, window-less, validation ON, settings copy, port
+7780): `geometry-generator` and `collision-debug` load, render and settle with 0 VUID; the only errors are the two
+`No default page found` of `--disable-cef`.
+
 ## Vulkan Validation
 
 ### ⚠️⚠️ A DEVICE_LOST with 0 VUID and `READ_INVALID addr=0x0` = a shader read through a NULL buffer address (2026-10-07, FIXED)

@@ -1209,7 +1209,10 @@ namespace EmEn::Scenes
 					wheel.suspensionLength = hit.startedInside() ? 0.0F : wheelSettings.suspensionMaxLength * hit.fraction();
 					wheel.contactPoint = hit.startedInside() ? attachment + (down * wheelSettings.radius) : hit.point();
 					wheel.normal = normal;
-					wheel.forward = rolling.lengthSquared() > 0.0F ? rolling.normalized() : steered;
+					/* NOTE: rolling projects the UNIT steered direction on the ground plane: when the two are nearly parallel
+					 * to the normal its remainder is rounding noise, and steered stays the forward. A threshold relative to a
+					 * unit vector (Vector::normalized() refused every vector under ~3.5e-4 until 2026-10-09, which hid this). */
+					wheel.forward = rolling.lengthSquared() > 1e-6F ? rolling.normalized() : steered;
 					wheel.side = Vector< 3, float >::crossProduct(normal, wheel.forward);
 				}
 				else
