@@ -869,7 +869,7 @@ inverse square, and the rendered floor got far more than this figure; it holds a
 > loader had faithfully read fields nobody wrote.
 >
 > The placement now comes from `collectLightPlacements()`, which walks the tree built by
-> `tinyusdz::tydra::BuildXformNodeFromStage()` (the library's own equivalent of pxrUSD's
+> `lightusd::tydra::BuildXformNodeFromStage()` (the library's own equivalent of pxrUSD's
 > `GetLocalToWorldMatrix`). Joined on **`abs_path`**, which the converter DOES fill and which is
 > unique by construction — **the element name is NOT usable, all 25 ceiling fixtures of this asset
 > are named `LightBloomDisc`**. A light with no entry is **dropped and reported**, never silently
@@ -940,8 +940,9 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
 2. **THE FLOOR ALBEDO HAS NEVER BEEN MEASURED** — 0.7 is an assumption, and it is one of the two
    unpinned terms in the photometric chain (§ 11.6). Closing it means sampling the floor's baked
    base-colour texture; 0.86 would account for the whole `+0.30 EV` residual on its own.
-3. **⚠️⚠️ THE STAGE IS INCOMPLETE AND NO TEXTURE IS TRANSLATED — a tinyusdz v1.0.0-rc3 regression,
-   ATTRIBUTED (2026-09-14).** Two separate deltas against the patched v0.9.4 figures of § 11.2,
+3. **✅ RESOLVED (2026-10-10) — the stage was incomplete and no texture was translated.** Kept for its
+   lessons; the resolution is (b) below. Originally filed as a tinyusdz v1.0.0-rc3 regression,
+   ATTRIBUTED (2026-09-14): Two separate deltas against the patched v0.9.4 figures of § 11.2,
    both measured with the same instrument (the loader's own `stage composed:` line, option 1):
 
    | | Patched v0.9.4 (2026-08-11) | v1.0.0-rc3 (2026-09-14) |
@@ -988,20 +989,28 @@ Not read yet, deliberately: **`ior`**. Refraction and its Fresnel belong to the 
    dangled. **Two defects were stacked on one symptom**, and each looked like the whole story from
    where the other one stood.
 
-   **(b) The 818 missing prims are STILL NOT attributed, and the fix above did not move them.**
-   Re-measured after the hunk: 1988 prims, 741 meshes, 31 materials — **identical**, as expected,
-   since a dangling connection cannot delete a prim. 201 meshes, 124 material prims and all four
-   `SphereLight` remain absent, and the 85 textures are what 31 materials carry where 155 carried
-   348 (≈ 2.7 vs ≈ 2.2 per material — the same order, so the shortfall is the missing MATERIALS,
-   not a second texture defect). ⚠️ **Do not fold this into (a)** — it is a THIRD mechanism, and
-   (a) being proven does not make it the same one.
+   **(b) The 818 missing prims were NOT a library defect — they were the loader's single
+   `CompositeAllArcs()` pass, fixed on 2026-10-04 (§ 11.8 item 1).** A dangling connection could not
+   delete a prim, and indeed (a) did not move them; what did is the fixed-point composition loop. The
+   attribution was made by measurement on 2026-10-10 (ext-deps-generator, `libraries/tinyusdz.yaml`
+   header): a standalone probe mirroring `USDLoader::load()` reproduces 1988 / 741 / 31 / 85 / 0
+   **exactly** when limited to one pass, and 2806 / 942 / 155 / 348 / 4 with the loop — on rc3 AND on
+   v1.0.0-rc4. Confirmed in the engine the same day, rc4, option 1:
+   `stage composed: 2806 prims total, depth 9, 942 meshes, 155 materials`, then `942 source meshes,
+   141 materials, 348 textures, 167 images, 30 lights` and `4 x SphereLight` — parity with the patched
+   v0.9.4. ⚠️ The lesson stands: a composition the CALLER stops early reads exactly like a library
+   that drops prims. Only a count is evidence, and the instrument must be the same on both sides.
+
+   **The library is LightUSD since v1.0.0-rc4** (upstream rebrand, archive v018): header
+   `lightusd.hh`, namespace `lightusd` (no `tinyusdz` alias), package `lightusd`. The (a) hunk is
+   still carried and still load-bearing there (348 → 0 textures without it).
 
    ⚠️ Three of the seven v0.9.4 patch fixes were verified present upstream while attributing this:
    the `is_connection()` → `has_connections()` texture defect (22 sites in
    `tydra/render-data-material.cc`, the 5 remaining `is_connection()` are comments), and the
    default-prim arc prefix, absorbed verbatim as `GetReferencedPrimPath()`
    (`src/composition.cc:351`). The claim that all seven were absorbed does not hold for the one in
-   (a). Upstream tracking item: `ext-deps-generator/docs/todo/remeasure-tinyusdz-composition.md`.
+   (a). That generator item is closed (2026-10-10); the account lives in `libraries/tinyusdz.yaml`.
 4. **28 meshes have no `st` UV set** (`ConvertMesh: Failed to get texture coordinate`).
 5. **The DomeLight carries no image** (`intensity 1000, image '<none>'`), so there is nothing to
    install as an environment.

@@ -10,7 +10,7 @@ meshes, materials, dome lights and **point instancers**. **`capabilities()` stil
 [`../../docs/scene-loaders-usd.md`](../../../scene-loaders-usd.md).
 
 > [!CAUTION]
-> **`tinyusdz::LoadUSDFromFile()` composes NOTHING.** It reads the root layer, parses the
+> **`lightusd::LoadUSDFromFile()` composes NOTHING.** It reads the root layer, parses the
 > `subLayers` metadata, and returns success — a 19-sublayer stage comes back holding 2 prims.
 > Composition is an explicit, separate pipeline and the loader uses it:
 >

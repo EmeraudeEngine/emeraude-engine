@@ -48,7 +48,7 @@
 #include "Interface.hpp"
 
 /* Forward declarations. */
-namespace tinyusdz
+namespace lightusd
 {
 	class Stage;
 	class Prim;
@@ -112,7 +112,7 @@ namespace EmEn::Scenes::Loaders
 	};
 
 	/**
-	 * @brief OpenUSD scene loader, backed by tinyusdz (USDA, USDC crate, USDZ).
+	 * @brief OpenUSD scene loader, backed by tinyusdz — LightUSD since v1.0.0-rc4 (USDA, USDC crate, USDZ).
 	 * @note Composition is resolved at load time and NOTHING of USD survives it: the stage is
 	 * translated into native engine scene logic and dropped. Where the scene layer cannot
 	 * express a USD concept, the capability is added to Scenes — never a USD construct kept
@@ -205,7 +205,7 @@ namespace EmEn::Scenes::Loaders
 			 * @return std::vector< std::shared_ptr< Graphics::Material::Interface > > Indexed by RenderMaterial index.
 			 */
 			[[nodiscard]]
-			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
+			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const lightusd::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
 
 			/**
 			 * @brief Builds the coarser levels of a heavy mesh (LoaderOptions::generateLevelsOfDetail).
@@ -231,7 +231,7 @@ namespace EmEn::Scenes::Loaders
 			 * @return size_t The number of meshes actually built.
 			 */
 			[[nodiscard]]
-			size_t buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept;
+			size_t buildMeshes (const lightusd::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept;
 
 			/**
 			 * @brief Describes one PointInstancer read straight from the stage.
@@ -259,7 +259,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param metersPerUnit The stage's linear unit.
 			 * @param instancers The list being filled.
 			 */
-			static void collectInstancers (const tinyusdz::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
+			static void collectInstancers (const lightusd::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
 
 			/**
 			 * @brief Turns the collected instancers into instance sets referencing built meshes.
@@ -305,12 +305,12 @@ namespace EmEn::Scenes::Loaders
 			 * @return size_t The number of lights translated.
 			 */
 			[[nodiscard]]
-			static size_t buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept;
+			static size_t buildLights (const lightusd::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept;
 
 			/**
 			 * @brief Walks a stage's xform hierarchy and records every prim's world placement.
 			 *
-			 * @note Built from `tinyusdz::tydra::BuildXformNodeFromStage()`, which is the library's own
+			 * @note Built from `lightusd::tydra::BuildXformNodeFromStage()`, which is the library's own
 			 * equivalent of pxrUSD's GetLocalToWorldMatrix: the parent chain is composed by tinyusdz,
 			 * not by hand here.
 			 *
@@ -325,7 +325,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param root A reference to the root xform node of the walk.
 			 * @param placements A reference to the map to populate, keyed by absolute prim path.
 			 */
-			static void collectLightPlacements (const tinyusdz::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept;
+			static void collectLightPlacements (const lightusd::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept;
 
 			/**
 			 * @brief Walks a prim subtree and collects environment (dome) lights.
@@ -335,7 +335,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param stageDirectory The directory the stage was read from.
 			 * @param output A reference to the scene data to populate.
 			 */
-			static void collectEnvironmentLights (const tinyusdz::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept;
+			static void collectEnvironmentLights (const lightusd::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept;
 
 			/**
 			 * @brief Walks a prim subtree and accumulates the inventory.
@@ -343,7 +343,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param rootDepth The depth of the root in the hierarchy.
 			 * @param inventory A reference to the inventory being filled.
 			 */
-			static void collectInventory (const tinyusdz::Prim & root, size_t rootDepth, Inventory & inventory) noexcept;
+			static void collectInventory (const lightusd::Prim & root, size_t rootDepth, Inventory & inventory) noexcept;
 
 			/**
 			 * @brief Reports what the composed stage actually contains.
@@ -354,7 +354,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param filepath The file the stage came from.
 			 * @param stage A reference to the composed stage.
 			 */
-			static void reportInventory (const std::filesystem::path & filepath, const tinyusdz::Stage & stage) noexcept;
+			static void reportInventory (const std::filesystem::path & filepath, const lightusd::Stage & stage) noexcept;
 
 			/**
 			 * @brief Prints the prim tree, path and type, bounded.
@@ -365,7 +365,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param rootDepth The depth of the root.
 			 * @param remaining Lines left in the budget, decremented as they are printed.
 			 */
-			static void reportPrimTree (const tinyusdz::Prim & root, size_t rootDepth, size_t & remaining) noexcept;
+			static void reportPrimTree (const lightusd::Prim & root, size_t rootDepth, size_t & remaining) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

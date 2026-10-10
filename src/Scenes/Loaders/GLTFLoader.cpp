@@ -691,6 +691,11 @@ namespace EmEn::Scenes::Loaders
 					case fastgltf::MeshoptCompressionFilter::Exponential :
 						meshopt_decodeFilterExp(output.data(), compression.count, compression.byteStride);
 						break;
+
+					/* fastgltf 0.9.1 (KHR_meshopt_compression): RGBA colours packed as YCoCg + alpha. */
+					case fastgltf::MeshoptCompressionFilter::Color :
+						meshopt_decodeFilterColor(output.data(), compression.count, compression.byteStride);
+						break;
 				}
 
 				return true;

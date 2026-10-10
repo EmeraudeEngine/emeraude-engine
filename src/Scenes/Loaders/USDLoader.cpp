@@ -45,7 +45,7 @@
 #include <cstring>
 
 /* Third-party inclusions. */
-#include "tinyusdz.hh"
+#include "lightusd.hh"
 #include "usdGeom.hh"
 #include "usdLux.hh"
 #include "composition.hh"
@@ -113,7 +113,7 @@ namespace EmEn::Scenes::Loaders
 				{
 					std::string error;
 
-					tinyusdz::io::UnmapFile(m_handle, &error);
+					lightusd::io::UnmapFile(m_handle, &error);
 				}
 			}
 
@@ -128,7 +128,7 @@ namespace EmEn::Scenes::Loaders
 			{
 				std::string error;
 
-				if ( tinyusdz::io::MMapFile(filepath.string(), &m_handle, false, &error) )
+				if ( lightusd::io::MMapFile(filepath.string(), &m_handle, false, &error) )
 				{
 					m_mapped = true;
 					m_base = m_handle.addr;
@@ -159,7 +159,7 @@ namespace EmEn::Scenes::Loaders
 				/* ⚠️ `assetOnMemory` = true: the table keeps a POINTER into our mapping instead of
 				 * copying the whole archive into `USDZAsset::data`. That is the difference between
 				 * 21 MB and 1.6 GB resident before a single prim is read. */
-				if ( !tinyusdz::ReadUSDZAssetInfoFromMemory(m_base, m_size, true, &m_asset, &warning, &error) )
+				if ( !lightusd::ReadUSDZAssetInfoFromMemory(m_base, m_size, true, &m_asset, &warning, &error) )
 				{
 					TraceError{USDLoader::ClassId} << "Unable to read the asset table of '" << filepath.filename().string() << "' : " << error;
 
@@ -231,11 +231,11 @@ namespace EmEn::Scenes::Loaders
 			 * @param resolver A reference to the resolver to equip.
 			 */
 			void
-			equip (tinyusdz::AssetResolutionResolver & resolver) noexcept
+			equip (lightusd::AssetResolutionResolver & resolver) noexcept
 			{
 				m_resolver = &resolver;
 
-				tinyusdz::AssetResolutionHandler handler;
+				lightusd::AssetResolutionHandler handler;
 				handler.resolve_fun = &USDZArchive::resolveHandler;
 				handler.size_fun = &USDZArchive::sizeHandler;
 				handler.read_fun = &USDZArchive::readHandler;
@@ -605,15 +605,15 @@ namespace EmEn::Scenes::Loaders
 				return 0;
 			}
 
-			tinyusdz::io::MMapFileHandle m_handle{};
+			lightusd::io::MMapFileHandle m_handle{};
 			std::vector< uint8_t > m_memory;
 			const uint8_t * m_base{nullptr};
 			size_t m_size{0};
-			tinyusdz::USDZAsset m_asset;
+			lightusd::USDZAsset m_asset;
 			std::string m_rootAssetName;
 			std::string m_baseDirectory;
 			std::filesystem::path m_filepath;
-			const tinyusdz::AssetResolutionResolver * m_resolver{nullptr};
+			const lightusd::AssetResolutionResolver * m_resolver{nullptr};
 			bool m_mapped{false};
 	};
 
@@ -624,11 +624,11 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectInventory (const tinyusdz::Prim & root, size_t rootDepth, Inventory & inventory) noexcept
+	USDLoader::collectInventory (const lightusd::Prim & root, size_t rootDepth, Inventory & inventory) noexcept
 	{
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
 		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
-		std::vector< std::pair< const tinyusdz::Prim *, size_t > > pending{{&root, rootDepth}};
+		std::vector< std::pair< const lightusd::Prim *, size_t > > pending{{&root, rootDepth}};
 
 		while ( !pending.empty() )
 		{
@@ -677,11 +677,11 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::reportPrimTree (const tinyusdz::Prim & root, size_t rootDepth, size_t & remaining) noexcept
+	USDLoader::reportPrimTree (const lightusd::Prim & root, size_t rootDepth, size_t & remaining) noexcept
 	{
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
 		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
-		std::vector< std::pair< const tinyusdz::Prim *, size_t > > pending{{&root, rootDepth}};
+		std::vector< std::pair< const lightusd::Prim *, size_t > > pending{{&root, rootDepth}};
 
 		while ( !pending.empty() )
 		{
@@ -714,7 +714,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::reportInventory (const std::filesystem::path & filepath, const tinyusdz::Stage & stage) noexcept
+	USDLoader::reportInventory (const std::filesystem::path & filepath, const lightusd::Stage & stage) noexcept
 	{
 		Inventory inventory;
 
@@ -737,16 +737,16 @@ namespace EmEn::Scenes::Loaders
 		/* upAxis and metersPerUnit decide the whole conversion; endTimeCode says whether there
 		 * is any animation at all. Reporting them removes three assumptions from every later
 		 * diagnosis. */
-		const auto upAxisName = [] (tinyusdz::Axis axis) -> const char * {
+		const auto upAxisName = [] (lightusd::Axis axis) -> const char * {
 			switch ( axis )
 			{
-				case tinyusdz::Axis::X :
+				case lightusd::Axis::X :
 					return "X";
 
-				case tinyusdz::Axis::Y :
+				case lightusd::Axis::Y :
 					return "Y";
 
-				case tinyusdz::Axis::Z :
+				case lightusd::Axis::Z :
 					return "Z";
 
 				default:
@@ -778,11 +778,11 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectEnvironmentLights (const tinyusdz::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept
+	USDLoader::collectEnvironmentLights (const lightusd::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept
 	{
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
 		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
-		std::vector< const tinyusdz::Prim * > pending{&root};
+		std::vector< const lightusd::Prim * > pending{&root};
 
 		while ( !pending.empty() )
 		{
@@ -793,7 +793,7 @@ namespace EmEn::Scenes::Loaders
 			 * path, so the DomeLight prim is read directly. Without this the asset's own sky — the
 			 * 8K HDR that produces every reference render Intel ships — is silently dropped, and the
 			 * scene ends up lit by whatever generic sky the demo installed instead. */
-			if ( const auto * domeLight = prim.as< tinyusdz::DomeLight >(); domeLight != nullptr )
+			if ( const auto * domeLight = prim.as< lightusd::DomeLight >(); domeLight != nullptr )
 			{
 				LightDescriptor descriptor;
 				descriptor.name = prim.element_name();
@@ -827,7 +827,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( const auto value = domeLight->file.get_value(); value.has_value() )
 				{
-					tinyusdz::value::AssetPath assetPath;
+					lightusd::value::AssetPath assetPath;
 
 					if ( value.value().get_scalar(&assetPath) )
 					{
@@ -865,11 +865,11 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectInstancers (const tinyusdz::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept
+	USDLoader::collectInstancers (const lightusd::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept
 	{
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
 		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
-		std::vector< std::pair< const tinyusdz::Prim *, std::string > > pending{{&root, rootPath}};
+		std::vector< std::pair< const lightusd::Prim *, std::string > > pending{{&root, rootPath}};
 
 		while ( !pending.empty() )
 		{
@@ -881,7 +881,7 @@ namespace EmEn::Scenes::Loaders
 
 			using namespace Base::Math;
 
-			if ( const auto * pointInstancer = prim.as< tinyusdz::GeomPointInstancer >(); pointInstancer != nullptr )
+			if ( const auto * pointInstancer = prim.as< lightusd::GeomPointInstancer >(); pointInstancer != nullptr )
 			{
 				Instancer instancer;
 				instancer.path = primPath;
@@ -916,9 +916,9 @@ namespace EmEn::Scenes::Loaders
 				const Quaternion< float > axisChange{std::numbers::sqrt2_v< float > / 2.0F, 0.0F, 0.0F, std::numbers::sqrt2_v< float > / 2.0F};
 				const auto axisChangeInverse = axisChange.conjugated();
 
-				std::vector< tinyusdz::value::point3f > positions;
-				std::vector< tinyusdz::value::quath > orientations;
-				std::vector< tinyusdz::value::float3 > scales;
+				std::vector< lightusd::value::point3f > positions;
+				std::vector< lightusd::value::quath > orientations;
+				std::vector< lightusd::value::float3 > scales;
 
 				if ( const auto value = pointInstancer->positions.get_value(); value.has_value() )
 				{
@@ -980,10 +980,10 @@ namespace EmEn::Scenes::Loaders
 						const auto & source = orientations[index];
 
 						const Quaternion< float > sourceRotation{
-							tinyusdz::value::half_to_float(source.imag[0]),
-							tinyusdz::value::half_to_float(source.imag[1]),
-							tinyusdz::value::half_to_float(source.imag[2]),
-							tinyusdz::value::half_to_float(source.real)
+							lightusd::value::half_to_float(source.imag[0]),
+							lightusd::value::half_to_float(source.imag[1]),
+							lightusd::value::half_to_float(source.imag[2]),
+							lightusd::value::half_to_float(source.real)
 						};
 
 						rotation = axisChange * sourceRotation * axisChangeInverse;
@@ -1133,11 +1133,11 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	void
-	USDLoader::collectLightPlacements (const tinyusdz::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept
+	USDLoader::collectLightPlacements (const lightusd::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept
 	{
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
 		 * the depth of a prim tree comes from the FILE, a recursion overflows the stack on a deep one (triad 2026-09-30). */
-		std::vector< const tinyusdz::tydra::XformNode * > pending{&root};
+		std::vector< const lightusd::tydra::XformNode * > pending{&root};
 
 		while ( !pending.empty() )
 		{
@@ -1179,14 +1179,14 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	size_t
-	USDLoader::buildLights (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept
+	USDLoader::buildLights (const lightusd::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept
 	{
 		using namespace Base::Math;
 
 		/* ⚠️ THE ANCHOR. See the header for what was measured and why this factor and not another.
 		 * `intensity` is read as a luminance in cd/m², scaled by the emitter's area because
 		 * `normalize = false` is what every light of this asset declares, then normalized by 4*pi. */
-		const auto toCandela = [] (const tinyusdz::tydra::RenderLight & light, float area) {
+		const auto toCandela = [] (const lightusd::tydra::RenderLight & light, float area) {
 			return light.intensity * std::pow(2.0F, light.exposure) * area / (4.0F * std::numbers::pi_v< float >);
 		};
 
@@ -1235,30 +1235,30 @@ namespace EmEn::Scenes::Loaders
 			{
 				/* A dome has an image and no position. It is collected as an Environment by
 				 * collectEnvironmentLights(), which also reads the image path Tydra drops. */
-				case tinyusdz::tydra::RenderLight::Type::Dome :
-				case tinyusdz::tydra::RenderLight::Type::Portal :
+				case lightusd::tydra::RenderLight::Type::Dome :
+				case lightusd::tydra::RenderLight::Type::Portal :
 					continue;
 
-				case tinyusdz::tydra::RenderLight::Type::Distant :
+				case lightusd::tydra::RenderLight::Type::Distant :
 					descriptor.type = LightType::Directional;
 					/* A directional light carries an ILLUMINANCE in lux and has no area — the
 					 * 4*pi normalisation of a punctual emitter does not apply to a parallel beam. */
 					descriptor.intensity = renderLight.intensity * std::pow(2.0F, renderLight.exposure);
 					break;
 
-				case tinyusdz::tydra::RenderLight::Type::Point :
-				case tinyusdz::tydra::RenderLight::Type::Sphere :
+				case lightusd::tydra::RenderLight::Type::Point :
+				case lightusd::tydra::RenderLight::Type::Sphere :
 					descriptor.type = LightType::Point;
 					/* Sphere: the full 4*pi*r^2. */
 					descriptor.intensity = toCandela(renderLight, 4.0F * std::numbers::pi_v< float > * radius * radius);
 					break;
 
-				case tinyusdz::tydra::RenderLight::Type::Disk :
-				case tinyusdz::tydra::RenderLight::Type::Rect :
-				case tinyusdz::tydra::RenderLight::Type::Cylinder :
-				case tinyusdz::tydra::RenderLight::Type::Geometry :
+				case lightusd::tydra::RenderLight::Type::Disk :
+				case lightusd::tydra::RenderLight::Type::Rect :
+				case lightusd::tydra::RenderLight::Type::Cylinder :
+				case lightusd::tydra::RenderLight::Type::Geometry :
 				{
-					const auto area = renderLight.type == tinyusdz::tydra::RenderLight::Type::Rect
+					const auto area = renderLight.type == lightusd::tydra::RenderLight::Type::Rect
 						? renderLight.width * metersPerUnit * renderLight.height * metersPerUnit
 						: std::numbers::pi_v< float > * radius * radius;
 
@@ -1450,7 +1450,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	std::vector< std::shared_ptr< Graphics::Material::Interface > >
-	USDLoader::buildMaterials (const tinyusdz::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept
+	USDLoader::buildMaterials (const lightusd::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept
 	{
 		using namespace Graphics;
 		using namespace Base::PixelFactory;
@@ -1759,7 +1759,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	size_t
-	USDLoader::buildMeshes (const tinyusdz::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept
+	USDLoader::buildMeshes (const lightusd::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept
 	{
 		using namespace Graphics;
 		using namespace Base::Math;
@@ -1818,7 +1818,7 @@ namespace EmEn::Scenes::Loaders
 		 *
 		 * Whether a class ends up drawn is not a matter of taste: `_class_` is USD's own marker
 		 * for "not renderable", and honouring it is part of reading the format. */
-		std::vector< std::tuple< size_t, tinyusdz::value::matrix4d, std::string > > drawList;
+		std::vector< std::tuple< size_t, lightusd::value::matrix4d, std::string > > drawList;
 
 		size_t skippedClassCount = 0;
 
@@ -1832,11 +1832,11 @@ namespace EmEn::Scenes::Loaders
 		std::map< const void *, std::pair< std::vector< std::shared_ptr< Geometry::Interface > >, size_t > > levelOfDetailChains;
 		size_t levelOfDetailMeshCount = 0;
 
-		std::map< std::string, tinyusdz::value::matrix4d > prototypeRootMatrices;
+		std::map< std::string, lightusd::value::matrix4d > prototypeRootMatrices;
 
 		/* NOTE: an ITERATIVE walk (explicit stack, children pushed in reverse: the same order as the former recursion):
 		 * the depth of the node tree comes from the FILE (triad 2026-09-30). */
-		std::vector< const tinyusdz::tydra::Node * > pending;
+		std::vector< const lightusd::tydra::Node * > pending;
 
 		for ( const auto & rootNode : std::views::reverse(renderScene.nodes) )
 		{
@@ -1860,7 +1860,7 @@ namespace EmEn::Scenes::Loaders
 				prototypeRootMatrices.emplace(node.abs_path, node.global_matrix);
 			}
 
-			if ( node.nodeType == tinyusdz::tydra::NodeType::Mesh && node.id >= 0 )
+			if ( node.nodeType == lightusd::tydra::NodeType::Mesh && node.id >= 0 )
 			{
 				drawList.emplace_back(static_cast< size_t >(node.id), node.global_matrix, node.abs_path);
 			}
@@ -2279,7 +2279,7 @@ namespace EmEn::Scenes::Loaders
 		 * second patch to the library: whatever relative name a nested layer asks for, the
 		 * directory holding it is already declared. Measured on Jungle Ruins, this is what turns
 		 * eleven silently missing `*_classes.usda` prototype layers into resolved ones. */
-		tinyusdz::AssetResolutionResolver resolver;
+		lightusd::AssetResolutionResolver resolver;
 
 		/* ⚠️ Parent-relative ('..') asset paths must be ALLOWED explicitly. tinyusdz refuses them by
 		 * default as a path-traversal guard (`security_policy::ValidateAndNormalizeAssetPath`), which
@@ -2336,7 +2336,7 @@ namespace EmEn::Scenes::Loaders
 			resolver.set_search_paths(searchPaths);
 		}
 
-		tinyusdz::Layer layer;
+		lightusd::Layer layer;
 
 		if ( m_archive != nullptr )
 		{
@@ -2344,14 +2344,14 @@ namespace EmEn::Scenes::Loaders
 			 * archive's leading bytes and hand back the first USD it finds with an empty working
 			 * directory, so every nested layer would then be looked up against the process working
 			 * directory instead of the archive. */
-			if ( !tinyusdz::LoadLayerFromAsset(resolver, m_archive->rootAssetName(), &layer, &warning, &error) )
+			if ( !lightusd::LoadLayerFromAsset(resolver, m_archive->rootAssetName(), &layer, &warning, &error) )
 			{
 				TraceError{ClassId} << "Unable to read the root layer of '" << filepath.filename().string() << "' : " << error;
 
 				return false;
 			}
 		}
-		else if ( !tinyusdz::LoadLayerFromFile(absoluteFilepath.string(), &layer, &warning, &error) )
+		else if ( !lightusd::LoadLayerFromFile(absoluteFilepath.string(), &layer, &warning, &error) )
 		{
 			TraceError{ClassId} << "Unable to read layer '" << filepath.string() << "' : " << error;
 
@@ -2364,12 +2364,12 @@ namespace EmEn::Scenes::Loaders
 			warning.clear();
 		}
 
-		tinyusdz::Layer sublayered;
+		lightusd::Layer sublayered;
 
-		tinyusdz::SublayersCompositionOptions sublayerOptions;
+		lightusd::SublayersCompositionOptions sublayerOptions;
 		sublayerOptions.allow_parent_relative_paths = true;
 
-		if ( !tinyusdz::CompositeSublayers(resolver, layer, &sublayered, &warning, &error, sublayerOptions) )
+		if ( !lightusd::CompositeSublayers(resolver, layer, &sublayered, &warning, &error, sublayerOptions) )
 		{
 			TraceError{ClassId} << "Unable to composite sublayers of '" << filepath.filename().string() << "' : " << error;
 
@@ -2395,11 +2395,11 @@ namespace EmEn::Scenes::Loaders
 		 *
 		 * Consequence to keep in mind: `inherits` and `variants` are NOT applied on this path.
 		 * Variant selection through LoaderOptions lands with the on-demand resolver, not before. */
-		auto composited = std::make_unique< tinyusdz::Layer >();
+		auto composited = std::make_unique< lightusd::Layer >();
 
 		if ( m_options.resolveReferences )
 		{
-			tinyusdz::AllArcsCompositionOptions arcOptions;
+			lightusd::AllArcsCompositionOptions arcOptions;
 			arcOptions.references.allow_parent_relative_paths = true;
 			arcOptions.payload.allow_parent_relative_paths = true;
 
@@ -2408,7 +2408,7 @@ namespace EmEn::Scenes::Loaders
 			 * QueenForest read its 248 MB `queenforest_classes.usda` about 190 times — 46 GB in 145 s, 87 % of the
 			 * scene's load with RiverForest (measured 2026-10-04 from /proc/<pid>/io). Copy-on-write values also
 			 * make every referencing prim SHARE the parsed arrays. */
-			std::map< std::string, tinyusdz::Layer > layerCache;
+			std::map< std::string, lightusd::Layer > layerCache;
 			arcOptions.references.layer_cache = &layerCache;
 			arcOptions.payload.layer_cache = &layerCache;
 
@@ -2418,7 +2418,7 @@ namespace EmEn::Scenes::Loaders
 			 * unresolved; so does this one, bounded (an asset that cannot be found keeps its arc forever). */
 			constexpr uint32_t MaxCompositionPasses{16};
 
-			const auto hasUnresolvedArcs = [] (const tinyusdz::Layer & candidate) {
+			const auto hasUnresolvedArcs = [] (const lightusd::Layer & candidate) {
 				return candidate.check_unresolved_references() || candidate.check_unresolved_payload() || candidate.check_unresolved_inherits() || candidate.check_unresolved_variant() || candidate.check_unresolved_specializes();
 			};
 
@@ -2427,9 +2427,9 @@ namespace EmEn::Scenes::Loaders
 
 			while ( pass < MaxCompositionPasses && hasUnresolvedArcs(current) )
 			{
-				tinyusdz::Layer next;
+				lightusd::Layer next;
 
-				if ( !tinyusdz::CompositeAllArcs(resolver, current, &next, &warning, &error, arcOptions) )
+				if ( !lightusd::CompositeAllArcs(resolver, current, &next, &warning, &error, arcOptions) )
 				{
 					TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' (pass " << pass + 1 << ") : " << error;
 
@@ -2468,7 +2468,7 @@ namespace EmEn::Scenes::Loaders
 		const auto startTimeCode = metas.startTimeCode.get_value();
 		const auto endTimeCode = metas.endTimeCode.get_value();
 
-		if ( upAxis != tinyusdz::Axis::Z )
+		if ( upAxis != lightusd::Axis::Z )
 		{
 			TraceWarning{ClassId} << "'" << filepath.filename().string() << "' declares a non-Z up axis; the bake below assumes Z-up and will be wrong.";
 		}
@@ -2481,9 +2481,9 @@ namespace EmEn::Scenes::Loaders
 		 *
 		 * So the layer is turned into a Stage first, with the in-place variant that frees each
 		 * PrimSpec as it converts. */
-		tinyusdz::Stage stage;
+		lightusd::Stage stage;
 
-		if ( !tinyusdz::LayerToStageInPlace(std::move(composited), &stage, &warning, &error) )
+		if ( !lightusd::LayerToStageInPlace(std::move(composited), &stage, &warning, &error) )
 		{
 			TraceError{ClassId} << "Unable to build a stage from '" << filepath.filename().string() << "' : " << error;
 
@@ -2531,7 +2531,7 @@ namespace EmEn::Scenes::Loaders
 		/* Tydra hands back renderer-ready data: triangulated faces, indexed vertices, resolved
 		 * material bindings. Re-deriving that from raw prims would be duplicated work — the
 		 * engine's own job starts at the translation into native scene logic. */
-		tinyusdz::tydra::RenderSceneConverterEnv env{stage};
+		lightusd::tydra::RenderSceneConverterEnv env{stage};
 		env.usd_filename = m_archive != nullptr ? m_archive->rootAssetName() : absoluteFilepath.string();
 
 		/* ⚠️ Tydra carries its OWN resolver, and it is NOT the one composition used. Left as a
@@ -2550,8 +2550,8 @@ namespace EmEn::Scenes::Loaders
 		 * (2026-10-04). */
 		env.scene_config.load_texture_assets = false;
 
-		tinyusdz::tydra::RenderSceneConverter converter;
-		tinyusdz::tydra::RenderScene renderScene;
+		lightusd::tydra::RenderSceneConverter converter;
+		lightusd::tydra::RenderScene renderScene;
 
 		if ( !converter.ConvertToRenderScene(env, &renderScene) )
 		{
@@ -2583,9 +2583,9 @@ namespace EmEn::Scenes::Loaders
 		std::map< std::string, LightPlacement > lightPlacements;
 
 		{
-			tinyusdz::tydra::XformNode xformRoot;
+			lightusd::tydra::XformNode xformRoot;
 
-			if ( tinyusdz::tydra::BuildXformNodeFromStage(stage, &xformRoot) )
+			if ( lightusd::tydra::BuildXformNodeFromStage(stage, &xformRoot) )
 			{
 				USDLoader::collectLightPlacements(xformRoot, lightPlacements);
 			}
@@ -2617,7 +2617,7 @@ namespace EmEn::Scenes::Loaders
 			renderScene.instances.size() << " instances.";
 
 		TraceInfo{ClassId} <<
-			"Stage metrics: upAxis " << ( upAxis == tinyusdz::Axis::Z ? "Z" : "non-Z" ) <<
+			"Stage metrics: upAxis " << ( upAxis == lightusd::Axis::Z ? "Z" : "non-Z" ) <<
 			", metersPerUnit " << metersPerUnit <<
 			", timeCodes " << startTimeCode << " to " << endTimeCode << ".";
 
