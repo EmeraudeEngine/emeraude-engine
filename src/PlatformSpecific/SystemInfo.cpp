@@ -26,6 +26,9 @@
 
 #include "SystemInfo.hpp"
 
+/* STL inclusions. */
+#include <memory>
+
 /* Local inclusions. */
 #if IS_ARM_ARCH
 	#include "cpu_features/cpuinfo_aarch64.h"
@@ -35,6 +38,7 @@
 #include "hwloc.h"
 #include "SettingKeys.hpp"
 #include "String.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific
 {
@@ -103,53 +107,73 @@ namespace EmEn::PlatformSpecific
 			setenv("HWLOC_HIDE_ERRORS", verbosity.c_str(), 1);
 #endif
 
-			hwloc_topology_t topology = nullptr;
+			/* NOTE: The topology and the bitmap below are owned by RAII: every exit path releases them. */
+			hwloc_topology_t rawTopology = nullptr;
 
-			hwloc_topology_init(&topology);
-			hwloc_topology_load(topology);
+			if ( hwloc_topology_init(&rawTopology) != 0 || rawTopology == nullptr )
+			{
+				TraceError{ClassId} << "Unable to initialize the hwloc topology!";
+
+				return false;
+			}
+
+			const std::unique_ptr< hwloc_topology, decltype(&hwloc_topology_destroy) > topology{rawTopology, &hwloc_topology_destroy};
+
+			if ( hwloc_topology_load(topology.get()) != 0 )
+			{
+				TraceError{ClassId} << "Unable to load the hwloc topology!";
+
+				return false;
+			}
 
 			/* Get the number of logical cores (PU) */
 			{
-				const auto depth = hwloc_get_type_depth(topology, HWLOC_OBJ_PU);
+				const auto depth = hwloc_get_type_depth(topology.get(), HWLOC_OBJ_PU);
 
 				if ( depth != HWLOC_TYPE_DEPTH_UNKNOWN )
 				{
-					m_CPUInformation.logicalCores = hwloc_get_nbobjs_by_depth(topology, depth);
+					m_CPUInformation.logicalCores = hwloc_get_nbobjs_by_depth(topology.get(), depth);
 				}
 			}
 
 			/* Get the number of physical cores (CORE) */
 			{
-				const auto depth = hwloc_get_type_depth(topology, HWLOC_OBJ_CORE);
+				const auto depth = hwloc_get_type_depth(topology.get(), HWLOC_OBJ_CORE);
 
 				if ( depth != HWLOC_TYPE_DEPTH_UNKNOWN )
 				{
-					m_CPUInformation.physicalCores = hwloc_get_nbobjs_by_depth(topology, depth);
+					m_CPUInformation.physicalCores = hwloc_get_nbobjs_by_depth(topology.get(), depth);
 				}
 			}
 
-			/* Detect hybrid CPU core types (P-cores / E-cores) using cpukinds API (hwloc >= 2.4).
+			/* Detect hybrid CPU core types (P-cores / E-cores) using the cpukinds API (hwloc 3.0 signature:
+			 * the info attributes come as one struct hwloc_infos_s, not needed here).
 			 * hwloc ranks kinds by ascending performance:
 			 *   kind 0	 = lowest performance, highest energy-efficiency (E-cores)
 			 *   kind N-1   = highest performance, lowest energy-efficiency (P-cores)
 			 * On non-hybrid CPUs, numKinds is 0 or 1, and we leave both fields at 0. */
 			{
-				const auto numKinds = hwloc_cpukinds_get_nr(topology, 0);
+				const auto numKinds = hwloc_cpukinds_get_nr(topology.get(), 0);
 
-				if ( numKinds >= 2 )
+				const std::unique_ptr< hwloc_bitmap_s, decltype(&hwloc_bitmap_free) > CPUSet{numKinds >= 2 ? hwloc_bitmap_alloc() : nullptr, &hwloc_bitmap_free};
+
+				if ( numKinds >= 2 && CPUSet == nullptr )
+				{
+					TraceError{ClassId} << "Unable to allocate a hwloc bitmap, the hybrid core detection is skipped!";
+				}
+				else if ( numKinds >= 2 )
 				{
 					for ( int kindIndex = 0; kindIndex < numKinds; kindIndex++ )
 					{
-						hwloc_bitmap_t CPUSet = hwloc_bitmap_alloc();
 						int efficiency = -1;
 
-						if ( hwloc_cpukinds_get_info(topology, static_cast< unsigned >(kindIndex), CPUSet, &efficiency, nullptr, nullptr, 0) == 0 )
+						if ( hwloc_cpukinds_get_info(topology.get(), static_cast< unsigned >(kindIndex), CPUSet.get(), &efficiency, nullptr, 0) == 0 )
 						{
 							/* Count physical cores in this kind's CPUSet. */
 							uint32_t coreCount = 0;
 							hwloc_obj_t obj = nullptr;
 
-							while ( (obj = hwloc_get_next_obj_inside_cpuset_by_type(topology, CPUSet, HWLOC_OBJ_CORE, obj)) != nullptr )
+							while ( (obj = hwloc_get_next_obj_inside_cpuset_by_type(topology.get(), CPUSet.get(), HWLOC_OBJ_CORE, obj)) != nullptr )
 							{
 								coreCount++;
 							}
@@ -163,13 +187,9 @@ namespace EmEn::PlatformSpecific
 								m_CPUInformation.efficiencyCores += coreCount;
 							}
 						}
-
-						hwloc_bitmap_free(CPUSet);
 					}
 				}
 			}
-
-			hwloc_topology_destroy(topology);
 		}
 
 		return m_CPUInformation.physicalCores > 0;
