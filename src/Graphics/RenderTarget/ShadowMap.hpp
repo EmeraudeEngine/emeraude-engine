@@ -1043,41 +1043,46 @@ namespace EmEn::Graphics::RenderTarget
 
 					return true;
 				}
-
-				/* Prepare the framebuffer.
-				 * NOTE: When using multiview (a cubemap), framebuffer layers = 1.
-				 * The render pass multiview extension handles rendering to multiple array layers. */
-				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
-				{
-					const VkExtent2D extent2D{this->extent().width, this->extent().height};
-					m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, extent2D, 1);
-				}
 				else
 				{
-					m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
+					/* NOTE: An 'else', not a fall-through after the cascade branch: in a cascaded instantiation the
+					 * code below would be unreachable (MSVC C4702). */
+
+					/* Prepare the framebuffer.
+					 * NOTE: When using multiview (a cubemap), framebuffer layers = 1.
+					 * The render pass multiview extension handles rendering to multiple array layers. */
+					if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
+					{
+						const VkExtent2D extent2D{this->extent().width, this->extent().height};
+						m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, extent2D, 1);
+					}
+					else
+					{
+						m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
+					}
+					m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
+
+					/* Attach the depth buffer. */
+					if ( m_depthImageView != nullptr )
+					{
+						m_framebuffer->addAttachment(m_depthImageView->handle());
+					}
+					else
+					{
+						TraceError{ClassId} << "The depth image view is not created for shadow map '" << this->id() << "' !";
+
+						return false;
+					}
+
+					if ( !m_framebuffer->createOnHardware() )
+					{
+						TraceError{ClassId} << "Unable to create the framebuffer for shadow map '" << this->id() << "' !";
+
+						return false;
+					}
+
+					return true;
 				}
-				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
-
-				/* Attach the depth buffer. */
-				if ( m_depthImageView != nullptr )
-				{
-					m_framebuffer->addAttachment(m_depthImageView->handle());
-				}
-				else
-				{
-					TraceError{ClassId} << "The depth image view is not created for shadow map '" << this->id() << "' !";
-
-					return false;
-				}
-
-				if ( !m_framebuffer->createOnHardware() )
-				{
-					TraceError{ClassId} << "Unable to create the framebuffer for shadow map '" << this->id() << "' !";
-
-					return false;
-				}
-
-				return true;
 			}
 
 			std::shared_ptr< Vulkan::Image > m_depthImage;

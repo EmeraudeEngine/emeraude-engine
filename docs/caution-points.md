@@ -5070,6 +5070,20 @@ dereference what a resource accessor returns without checking it.**
 
 ## Build / Compiler
 
+### ⚠️ MSVC Debug: `if constexpr ( IsDebug ) { return …; } return …;` is unreachable code — C4702 under `/WX` (2026-10-10, FIXED)
+
+> [!CAUTION]
+> The paranoid MSVC set (`/W4 /WX`, no `/wd4702` any more) was validated in Release only (2026-10-08): the **Debug**
+> build then failed on C4702 in every TU including `IndexedVertexResource.hpp`, `RawIndexedVertexResource.hpp`,
+> `VertexGridResource.hpp` (`useIndexBuffer()`: the trailing `return true;` is dead when `IsDebug` is true),
+> `Scenes/Toolkit.hpp` (`generateEntity()`: `if constexpr (Node) return …; if constexpr (StaticEntity) return …;
+> return nullptr;`) and `ShadowMap.hpp` (`createFramebuffer()`: the non-cascaded code after the cascaded branch's
+> `return true;`), plus base headers (base `caution-points.md` § the paranoid MSVC set). **Rule:** a compile-time
+> branch that returns is followed by `else` (`else if constexpr …`, the former fallback in the final `else`), never by
+> more code. GCC and clang say nothing, and MSVC only reports what a TU instantiates: **scan the source** for an
+> `if constexpr` block ending in `return` followed by more code, and **build Debug AND Release on Windows**, tests
+> included, before calling the MSVC set clean — `IsDebug` / `NDEBUG` code differs per configuration.
+
 ### ⚠️⚠️ macOS: `-I/usr/local/include` compiled the engine against the Vulkan SDK's glslang, not the one it links (2026-10-08, FIXED)
 
 > [!CAUTION]

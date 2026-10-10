@@ -397,13 +397,14 @@ namespace EmEn::Scenes
 				{
 					return this->generateNode(entityName, genPolicy);
 				}
-
-				if constexpr ( std::is_same_v< entity_t, StaticEntity > )
+				else if constexpr ( std::is_same_v< entity_t, StaticEntity > )
 				{
 					return this->generateStaticEntity(entityName, genPolicy);
 				}
-
-				return nullptr;
+				else
+				{
+					return nullptr;
+				}
 			}
 
 			/**
@@ -425,13 +426,14 @@ namespace EmEn::Scenes
 				{
 					return this->generateNode(lookAt, entityName, genPolicy);
 				}
-
-				if constexpr ( std::is_same_v< entity_t, StaticEntity > )
+				else if constexpr ( std::is_same_v< entity_t, StaticEntity > )
 				{
 					return this->generateStaticEntity(lookAt, entityName, genPolicy);
 				}
-
-				return nullptr;
+				else
+				{
+					return nullptr;
+				}
 			}
 
 			/**

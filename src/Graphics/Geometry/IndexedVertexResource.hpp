@@ -236,8 +236,10 @@ namespace EmEn::Graphics::Geometry
 				{
 					return m_indexBufferObject != nullptr;
 				}
-
-				return true;
+				else
+				{
+					return true;
+				}
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::createOnHardware() noexcept */
