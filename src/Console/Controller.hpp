@@ -70,6 +70,21 @@ namespace EmEn::Console
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"ConsoleControllerService"};
 
+			/**
+			 * @brief Opens the remote console FOR ONE RUN on this port (`--enable-remote-console=PORT`), on 127.0.0.1,
+			 * whatever Core/Console/EnableRemoteListener and its port say; the settings are not written.
+			 */
+			static constexpr auto EnableRemoteConsoleArgument{"--enable-remote-console"};
+
+			/**
+			 * @brief Starts the MCP server FOR ONE RUN on this port (`--enable-mcp=PORT`), on 127.0.0.1, whatever
+			 * Core/MCP/Enabled and its port say; the settings are not written. The bearer token still comes from the settings.
+			 */
+			static constexpr auto EnableMCPArgument{"--enable-mcp"};
+
+			/** @brief The address a control opened by an argument listens on: never the network. */
+			static constexpr auto ArgumentListenAddress{"127.0.0.1"};
+
 			/** @brief Observable notification codes. */
 			enum NotificationCode : std::uint8_t
 			{

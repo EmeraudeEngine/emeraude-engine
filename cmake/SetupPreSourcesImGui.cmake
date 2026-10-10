@@ -15,12 +15,3 @@ set(IMGUI_SOURCE_FILES
 	${IMGUI_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
 	${IMGUI_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
-
-# Dear ImGui is third-party code compiled from source inside the engine target: like a SYSTEM header, it is not judged
-# by the cascade's paranoid warning set (Ave Robustus II, projet-alpha docs/plans/ave-robustus-ii.md § 6.2) — its
-# warnings are upstream's to fix. The cascade's own code that CALLS ImGui is still fully checked.
-if ( MSVC )
-	set_source_files_properties(${IMGUI_SOURCE_FILES} PROPERTIES COMPILE_OPTIONS "/w")
-else ()
-	set_source_files_properties(${IMGUI_SOURCE_FILES} PROPERTIES COMPILE_OPTIONS "-w")
-endif ()

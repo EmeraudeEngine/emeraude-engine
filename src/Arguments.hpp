@@ -32,6 +32,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -63,6 +64,9 @@ namespace EmEn
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"ArgumentsService"};
+
+			/** @brief The lowest port an argument may open (the privileged ports are refused). */
+			static constexpr uint16_t MinimumArgumentPort{1024};
 
 			/**
 			 * @brief Constructs the argument service.
@@ -220,6 +224,16 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			std::optional< std::string > get (std::string_view argument, std::string_view alternateArgument) const noexcept;
+
+			/**
+			 * @brief Returns the TCP port given to an argument (`--name=PORT` or `--name PORT`).
+			 * @note The command line is a trust boundary, checked in every build: a value that is not a whole number in
+			 * [MinimumArgumentPort, 65535], or the argument given without a value, is refused with a trace naming it.
+			 * @param argument The argument name, e.g. "--enable-mcp".
+			 * @return std::optional< uint16_t > The port, or nothing when the argument is absent or refused.
+			 */
+			[[nodiscard]]
+			std::optional< uint16_t > getPort (std::string_view argument) const noexcept;
 
 			/**
 			 * @brief Packs arguments to use in a command line.

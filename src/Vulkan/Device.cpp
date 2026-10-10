@@ -222,7 +222,7 @@ namespace EmEn::Vulkan
 				return false;
 			}
 
-			const auto & queue = m_queues.emplace_back(std::make_unique< Queue >(this->shared_from_this(), queueHandle, queueFamilyIndex));
+			const auto & queue = m_queues.emplace_back(std::make_unique< Queue >(*this, queueHandle, queueFamilyIndex));
 			queue->setIdentifier(ClassId, (std::stringstream{} << queueFamilyIndex << '.' << queueIndex).str(), "Queue");
 
 			/* NOTE: The timeline numbers the tracked submissions (uploads) whose completion a destruction waits for. */

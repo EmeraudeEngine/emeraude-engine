@@ -54,7 +54,6 @@
 #endif
 
 /* Third-party libraries enabled at compile-time (engine-only). */
-
 #cmakedefine IMGUI_ENABLED
 #cmakedefine RENDERDOC_ENABLED
 

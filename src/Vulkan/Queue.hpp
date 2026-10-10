@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <atomic>
-#include <memory>
 #include <span>
 
 /* Local inclusions for inheritances. */
@@ -136,11 +135,14 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a device queue.
-			 * @param device A reference to a device smart pointer.
+			 * @note The device OWNS its queues (Device::m_queues) and destroys them before its handle, so the queue
+			 * keeps a non-owning reference: a shared pointer back to the owner was an ownership cycle that kept a
+			 * device whose creation failed alive forever, its VkDevice never destroyed (Ave Robustus II).
+			 * @param device A reference to the owning device, which outlives the queue.
 			 * @param queue The handle of the queue.
 			 * @param familyQueueIndex Set which family queue is used to create this queue.
 			 */
-			Queue (const std::shared_ptr< Device > & device, VkQueue queue, uint32_t familyQueueIndex) noexcept
+			Queue (Device & device, VkQueue queue, uint32_t familyQueueIndex) noexcept
 				: m_device{device},
 				m_handle{queue},
 				m_familyQueueIndex{familyQueueIndex}
@@ -182,8 +184,6 @@ namespace EmEn::Vulkan
 			~Queue () override
 			{
 				this->destroyTimeline();
-
-				m_device.reset();
 
 				this->setDestroyed();
 			}
@@ -304,7 +304,7 @@ namespace EmEn::Vulkan
 			 */
 			void destroyTimeline () noexcept;
 
-			std::shared_ptr< Device > m_device;
+			Device & m_device;
 			VkQueue m_handle;
 			VkSemaphore m_timeline{VK_NULL_HANDLE};
 			/* NOTE: Written under the device lock that also serializes vkQueueSubmit(), so the values reach

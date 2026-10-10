@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <utility>
@@ -50,6 +51,7 @@
 #include "PortabilitySubset.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "String.hpp"
 #include "Utility.hpp"
 #include "Window.hpp"
 
@@ -68,9 +70,39 @@ namespace EmEn::Vulkan
 			arguments.isSwitchPresent("--show-all-infos") ||
 			arguments.isSwitchPresent("--show-video-infos");
 
-		m_debugMode =
-			arguments.isSwitchPresent("--debug-vulkan") ||
-			settings.getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
+		/* NOTE: --set-vk-layers overrides the validation settings for this run only: they are neither read nor written. */
+		m_requestedValidationLayers.clear();
+		m_validationLayersFromArgument = false;
+
+		if ( const auto layersArgument = arguments.get(SetValidationLayersArgument) )
+		{
+			if ( auto layers = Instance::parseValidationLayersArgument(layersArgument.value()) )
+			{
+				m_requestedValidationLayers = std::move(layers.value());
+				m_validationLayersFromArgument = true;
+
+				TraceInfo{ClassId} <<
+					SetValidationLayersArgument << " : " << m_requestedValidationLayers.size() << " validation layer(s) for this run, "
+					"the validation settings are neither read nor written.";
+			}
+		}
+		else if ( arguments.isSwitchPresent(SetValidationLayersArgument) )
+		{
+			TraceError{ClassId} <<
+				SetValidationLayersArgument << " needs a value: " << SetValidationLayersArgument << "=LAYER_A,LAYER_B "
+				"(an empty value runs without any layer). The settings apply.";
+		}
+
+		if ( m_validationLayersFromArgument )
+		{
+			m_debugMode = !m_requestedValidationLayers.empty() || arguments.isSwitchPresent("--debug-vulkan");
+		}
+		else
+		{
+			m_debugMode =
+				arguments.isSwitchPresent("--debug-vulkan") ||
+				settings.getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
+		}
 
 		/* NOTE: The debug messenger create-info must be ready before vkCreateInstance (instance pNext).
 		 * It is only actually wired when validation layers are requested (see isUsingDebugMessenger()). */
@@ -96,7 +128,8 @@ namespace EmEn::Vulkan
 
 		/* NOTE: Debug mode only. EnableDebug is the master switch: when on, this exposes the
 		 * available validation layers in the settings file (to help edit RequestedValidationLayers)
-		 * and selects the requested ones. When off, nothing debug-related touches the settings. */
+		 * and selects the requested ones. When off, nothing debug-related touches the settings.
+		 * With --set-vk-layers, the argument decides alone and the settings are not touched at all. */
 		if ( this->isDebugModeEnabled() )
 		{
 			this->configureValidationLayers();
@@ -263,6 +296,7 @@ namespace EmEn::Vulkan
 		}
 
 		m_requiredValidationLayers.clear();
+		m_requestedValidationLayers.clear();
 		m_requiredInstanceExtensions.clear();
 		m_requiredGraphicsDeviceExtensions.clear();
 
@@ -415,8 +449,9 @@ namespace EmEn::Vulkan
 
 		const auto availableValidationLayers = Instance::getAvailableValidationLayers();
 
-		/* NOTE: Save a copy of validation layers in settings for an easy settings edition. */
-		if ( settings.isArrayEmpty(VkInstanceAvailableValidationLayersKey) )
+		/* NOTE: Save a copy of validation layers in settings for an easy settings edition (not for a run that
+		 * overrides them from the command line: such a run leaves the settings untouched). */
+		if ( !m_validationLayersFromArgument && settings.isArrayEmpty(VkInstanceAvailableValidationLayersKey) )
 		{
 			settings.clearArray(VkInstanceAvailableValidationLayersKey);
 
@@ -432,33 +467,44 @@ namespace EmEn::Vulkan
 			TraceInfo{ClassId} << getItemListAsString(availableValidationLayers);
 		}
 
-		/* NOTE: Read the settings to get the desired validation layers. */
-		static const auto desiredValidationLayers = m_primaryServices.settings().getArrayAs< std::string >(VkInstanceRequestedValidationLayersKey);
-
-		if ( settings.isArrayEmpty(VkInstanceRequestedValidationLayersKey) )
+		if ( !m_validationLayersFromArgument )
 		{
-			TraceInfo{ClassId} <<
-				"No validation layer is requested from settings !" "\n"
-				"NOTE: You can change the validation layers selected in settings at the array key : '" << VkInstanceRequestedValidationLayersKey << "'.";
+			/* NOTE: Read the settings to get the desired validation layers. */
+			m_requestedValidationLayers = settings.getArrayAs< std::string >(VkInstanceRequestedValidationLayersKey);
+
+			if ( m_requestedValidationLayers.empty() )
+			{
+				TraceInfo{ClassId} <<
+					"No validation layer is requested from settings !" "\n"
+					"NOTE: You can change the validation layers selected in settings at the array key : '" << VkInstanceRequestedValidationLayersKey << "', "
+					"or for one run with " << SetValidationLayersArgument << "=LAYER_A,LAYER_B.";
+
+				return;
+			}
+		}
+		else if ( m_requestedValidationLayers.empty() )
+		{
+			TraceInfo{ClassId} << "No validation layer for this run (" << SetValidationLayersArgument << " is empty) : the settings are ignored.";
 
 			return;
 		}
 
-		/* NOTE: Show desired validation layers from the settings. */
+		/* NOTE: Show desired validation layers. */
 		if ( m_showInformation )
 		{
 			TraceInfo trace{ClassId};
 
-			trace << "Desired Vulkan validation layers from settings :" "\n";
+			trace << "Desired Vulkan validation layers from " << ( m_validationLayersFromArgument ? "the command line" : "settings" ) << " :" "\n";
 
-			for ( const auto & requestedValidationLayer : desiredValidationLayers )
+			for ( const auto & requestedValidationLayer : m_requestedValidationLayers )
 			{
 				trace << "\t" << requestedValidationLayer << "\n";
 			}
 		}
 
-		/* NOTE: Here we check if the desired validations layers are available and create the vector for the instance createInfo.  */
-		m_requiredValidationLayers = Instance::getSupportedValidationLayers(desiredValidationLayers, availableValidationLayers);
+		/* NOTE: Here we check if the desired validations layers are available and create the vector for the instance createInfo.
+		 * The pointers point into m_requestedValidationLayers, which is not modified again while the instance lives. */
+		m_requiredValidationLayers = Instance::getSupportedValidationLayers(m_requestedValidationLayers, availableValidationLayers);
 
 		if ( m_requiredValidationLayers.empty() )
 		{
@@ -1329,7 +1375,11 @@ namespace EmEn::Vulkan
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, m_showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
-		const DeviceRequirements requirements{false, nullptr, true};
+		DeviceRequirements requirements{false, nullptr, true};
+
+		/* NOTE: Required, as on the graphics device: each queue numbers its tracked submissions with a timeline.
+		 * Without it, the first queue fails to install and the compute device is refused. */
+		requirements.featuresVK12().timelineSemaphore = VK_TRUE;
 
 		if ( !logicalDevice->create(requirements, requiredExtensions, useVMA) )
 		{
@@ -1339,6 +1389,55 @@ namespace EmEn::Vulkan
 		m_computeDevice = logicalDevice;
 
 		return logicalDevice;
+	}
+
+	std::optional< std::vector< std::string > >
+	Instance::parseValidationLayersArgument (const std::string & value) noexcept
+	{
+		/* NOTE: Locale-independent on purpose (std::isalnum follows the C locale). */
+		const auto isLayerNameCharacter = [] (char character) noexcept {
+			return ( character >= 'a' && character <= 'z' ) || ( character >= 'A' && character <= 'Z' ) || ( character >= '0' && character <= '9' ) || character == '_';
+		};
+
+		/* NOTE: What is echoed of a refused item is bounded: the value comes from the command line. */
+		constexpr size_t EchoedCharacters{64};
+
+		std::vector< std::string > layers;
+
+		for ( const auto & item : String::explode(value, ',', false) )
+		{
+			auto name = String::trim(item);
+
+			if ( name.empty() )
+			{
+				continue;
+			}
+
+			if ( name.size() >= VK_MAX_EXTENSION_NAME_SIZE || !std::ranges::all_of(name, isLayerNameCharacter) )
+			{
+				TraceError{ClassId} <<
+					"'" << name.substr(0, EchoedCharacters) << "' is not a Vulkan layer name ([A-Za-z0-9_], fewer than " << VK_MAX_EXTENSION_NAME_SIZE << " characters) : " <<
+					SetValidationLayersArgument << " is refused, the settings apply.";
+
+				return std::nullopt;
+			}
+
+			if ( std::ranges::find(layers, name) != layers.cend() )
+			{
+				continue;
+			}
+
+			if ( layers.size() >= MaxValidationLayersFromArgument )
+			{
+				TraceError{ClassId} << SetValidationLayersArgument << " lists more than " << MaxValidationLayersFromArgument << " layers : it is refused, the settings apply.";
+
+				return std::nullopt;
+			}
+
+			layers.emplace_back(std::move(name));
+		}
+
+		return layers;
 	}
 
 	std::vector< const char * >
@@ -1911,10 +2010,16 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & /*physicalDevice*/, size_t & /*score*/) noexcept
+	Instance::checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & /*score*/) noexcept
 	{
-		//const auto & properties = physicalDevice->properties();
-		//const auto & features = physicalDevice->features();
+		/* NOTE: Every queue of a device numbers its tracked submissions with a timeline semaphore (Queue::createTimeline()),
+		 * the compute device's queues included. Core and mandatory in Vulkan 1.2, checked like any required feature. */
+		if ( physicalDevice->featuresVK12().timelineSemaphore == 0 )
+		{
+			TraceError{ClassId} << "The physical device '" << physicalDevice->propertiesVK10().deviceName << "' is missing 'timelineSemaphore' feature !";
+
+			return false;
+		}
 
 		return true;
 	}

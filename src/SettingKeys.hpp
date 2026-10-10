@@ -37,19 +37,23 @@ namespace EmEn
 	/* Core */
 	/* Log detailed core startup/service information. Also enabled by the "--show-core-infos" argument. */
 	constexpr auto CoreShowInformationKey{"Core/ShowInformation"};
+	#ifdef EMERAUDE_INFOS_DEFAULTS
+	constexpr auto DefaultCoreShowInformation{true};
+	#else
 	constexpr auto DefaultCoreShowInformation{false};
+	#endif
 	/* Collect and expose runtime engine statistics (timings, counters). */
 	constexpr auto CoreEnableStatisticsKey{"Core/EnableStatistics"};
 	constexpr auto DefaultCoreEnableStatistics{false};
 	/* External text editor used to open generated files (e.g. shader sources). Default is platform-dependent. */
 	constexpr auto TextEditorKey{"Core/TextEditor"};
-#if IS_LINUX
+	#if IS_LINUX
 	constexpr auto DefaultTextEditor{"gedit"};
-#elif IS_WINDOWS
+	#elif IS_WINDOWS
 	constexpr auto DefaultTextEditor{"notepad"};
-#elif IS_MACOS
+	#elif IS_MACOS
 	constexpr auto DefaultTextEditor{"TextEdit"};
-#endif
+	#endif
 	/* System notification permission policy. Values: "allow", "deny", "ask" (default). */
 	constexpr auto CorePermissionsNotificationsKey{"Core/Permissions/Notifications"};
 	constexpr auto DefaultCorePermissionsNotifications{"ask"};
@@ -143,12 +147,20 @@ namespace EmEn
 		/* Input manager */
 		/* Log input-device (keyboard/mouse/gamepad) detection details. Also "--show-input-infos". */
 		constexpr auto InputShowInformationKey{"Core/Input/ShowInformation"};
+		#ifdef EMERAUDE_INFOS_DEFAULTS
+		constexpr auto DefaultInputShowInformation{true};
+		#else
 		constexpr auto DefaultInputShowInformation{false};
+		#endif
 
 		/* Resource manager */
 		/* Log resource manager activity. Also "--show-resources-infos". */
 		constexpr auto ResourcesShowInformationKey{"Core/Resources/ShowInformation"};
+		#ifdef EMERAUDE_INFOS_DEFAULTS
+		constexpr auto DefaultResourcesShowInformation{true};
+		#else
 		constexpr auto DefaultResourcesShowInformation{false};
+		#endif
 		/* Allow downloading missing resources from remote stores. */
 		/* Suppress per-resource conversion log spam. */
 		constexpr auto ResourcesQuietConversionKey{"Core/Resources/QuietConversion"};
@@ -215,7 +227,12 @@ namespace EmEn
 		constexpr auto DefaultAudioEnablePrebuiltSounds{false};
 		/* Log audio subsystem details. Also "--show-audio-infos". */
 		constexpr auto AudioShowInformationKey{"Core/Audio/ShowInformation"};
+		#ifdef EMERAUDE_INFOS_DEFAULTS
+		constexpr auto DefaultAudioShowInformation{true};
+		#else
 		constexpr auto DefaultAudioShowInformation{false};
+		#endif
+
 		/* Speaker layout. Values: "Auto", "Stereo", "Surround51". */
 		constexpr auto AudioOutputModeKey{"Core/Audio/OutputMode"};
 		constexpr auto DefaultAudioOutputMode{"Auto"};
@@ -248,7 +265,11 @@ namespace EmEn
 			/* Audio Capture (Audio::ExternalInput) */
 			/* Enable audio input capture (microphone / line-in). */
 			constexpr auto AudioCaptureEnableKey{"Core/Audio/Capture/Enable"};
+			#ifdef EMERAUDE_CAPTURE_DEFAULTS
+			constexpr auto DefaultAudioCaptureEnable{true};
+			#else
 			constexpr auto DefaultAudioCaptureEnable{false};
+			#endif
 			/* Capture device name. "AutoDetect" picks the system default. */
 			constexpr auto AudioCaptureDeviceNameKey{"Core/Audio/Capture/DeviceName"};
 			constexpr auto DefaultAudioCaptureDeviceName{"AutoDetect"};
@@ -282,17 +303,25 @@ namespace EmEn
 		/* Frame-rate cap in FPS. 0 = uncapped. */
 		constexpr auto VideoFrameRateLimitKey{"Core/Video/FrameRateLimit"};
 		constexpr auto DefaultVideoFrameRateLimit{0U};
-		/* Present in an sRGB swapchain format. */
+		/* Present in an sRGB swap-chain format. */
 		constexpr auto VideoEnableSRGBKey{"Core/Video/EnableSRGB"};
 		constexpr auto DefaultEnableSRGB{false};
 		/* Log video/Vulkan setup details. Also "--show-video-infos". */
 		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"};
+		#ifdef EMERAUDE_INFOS_DEFAULTS
+		constexpr auto DefaultVideoShowInformation{true};
+		#else
 		constexpr auto DefaultVideoShowInformation{false};
+		#endif
 
 		/* Video Capture (Graphics::ExternalInput) */
 		/* Enable video capture input (webcam). NOTE: the key path below points to "Core/Audio/Capture/Enable" and collides with AudioCaptureEnableKey - likely a typo, should be "Core/Video/Capture/Enable". */
 		constexpr auto VideoCaptureEnableKey{"Core/Video/Capture/Enable"};
+		#ifdef EMERAUDE_CAPTURE_DEFAULTS
+		constexpr auto DefaultVideoCaptureEnable{true};
+		#else
 		constexpr auto DefaultVideoCaptureEnable{false};
+		#endif
 		/* Capture device index. -1 = auto (first available). */
 		constexpr auto VideoCaptureDeviceIndexKey{"Core/Video/Capture/DeviceIndex"};
 		constexpr auto DefaultVideoCaptureDeviceIndex{-1};
@@ -307,6 +336,7 @@ namespace EmEn
 			/* Enable Vulkan debug utils and the validation messenger. */
 			constexpr auto VkInstanceEnableDebugKey{"Core/Video/VulkanInstance/EnableDebug"};
 			constexpr auto DefaultVkInstanceEnableDebug{false};
+
 			/* Validation layers to request at instance creation (no default). */
 			constexpr auto VkInstanceRequestedValidationLayersKey{"Core/Video/VulkanInstance/RequestedValidationLayers"};
 			/* Runtime-populated list of validation layers available on this system (read-only). */
@@ -443,10 +473,18 @@ namespace EmEn
 			constexpr auto GraphicsTextureMagFilteringKey{"Core/Graphics/Texture/MagFilter"};
 			constexpr auto GraphicsTextureMinFilteringKey{"Core/Graphics/Texture/MinFilter"};
 			constexpr auto GraphicsTextureMipFilteringKey{"Core/Graphics/Texture/MipFilter"};
-			constexpr auto DefaultGraphicsTextureFiltering{"nearest"};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsTextureFiltering{"linear"};
+			#else
+				constexpr auto DefaultGraphicsTextureFiltering{"nearest"};
+			#endif
 			/* Number of mipmap levels to generate. */
 			constexpr auto GraphicsTextureMipMappingLevelsKey{"Core/Graphics/Texture/MipMappingLevels"};
-			constexpr auto DefaultGraphicsTextureMipMappingLevels{1};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsTextureMipMappingLevels{1024};
+			#else
+				constexpr auto DefaultGraphicsTextureMipMappingLevels{1};
+			#endif
 			/* Largest accepted texture dimension, in pixels (0 = no clamping).
 			 * NOTE: Only honored by sources that ship a ready-made mip chain (KTX2), where dropping the
 			 * top levels is free. It divides the VRAM footprint by four every time it is halved. */
@@ -454,7 +492,11 @@ namespace EmEn
 			constexpr auto DefaultGraphicsTextureMaxDimension{4096};
 			/* Anisotropic filtering level (0 = off). */
 			constexpr auto GraphicsTextureAnisotropyLevelsKey{"Core/Graphics/Texture/AnisotropyLevels"};
-			constexpr auto DefaultGraphicsTextureAnisotropy{0};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsTextureAnisotropy{8.0F};
+			#else
+				constexpr auto DefaultGraphicsTextureAnisotropy{0.0F};
+			#endif
 			/* Distance up to which full-resolution textures are used (default ~5 km). */
 			constexpr auto GraphicsTextureViewDistanceKey{"Core/Graphics/Texture/ViewDistance"};
 			constexpr auto DefaultGraphicsTextureViewDistance{5000.0F}; /* NOTE: 5km */
@@ -463,7 +505,11 @@ namespace EmEn
 			 * (StandardResource::setParallaxIterations()). Resolved when the material is created and
 			 * written to its UBO; 0 = the height map is ignored (plain normal mapping). */
 			constexpr auto GraphicsTexturePOMIterationsKey{"Core/Graphics/Texture/POMIterations"};
-			constexpr auto DefaultGraphicsTexturePOMIterations{0};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsTexturePOMIterations{4};
+			#else
+				constexpr auto DefaultGraphicsTexturePOMIterations{0};
+			#endif
 			/** @brief Displays one packed lane of the material-properties G-buffer as the frame
 			 * colour, in grey. 0 = off, 1 = reflectivity, 2 = AO response. ⚠️ It is the cheapest
 			 * instrument this engine has for a "why is that surface reflecting" question — it
@@ -755,13 +801,19 @@ namespace EmEn
 			 * ⚠️ Naming a lane EXPLICITLY is therefore a REQUEST, and an unhonoured request is
 			 * traced as a warning at startup — "Auto" is not a request and stays silent.
 			 * ⚠️ Named after what it SELECTS rather than after a mechanism: a boolean called
-			 * "EnableRayTracing" would read like a hardware switch, which this is not. */
+			 * "EnableRayTracing" would read like a hardware switch, which this is not.
+			 * ⚠️ Without EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS the default is "ScreenSpace": a lane every
+			 * machine can honour (so it never contradicts itself either), and no ray-tracing structure is built. */
 			constexpr auto GraphicsPPLightingLaneKey{"Core/Graphics/PostProcessing/LightingLane"};
 			/* The two values that are NOT a LightingLane: "Auto" is a resolution policy, "None"
 			 * switches the whole family off. The two real lanes come from to_cstring(LightingLane). */
 			constexpr auto GraphicsPPLightingLaneAuto{"Auto"};
 			constexpr auto GraphicsPPLightingLaneNone{"None"};
-			constexpr auto DefaultGraphicsPPLightingLane{GraphicsPPLightingLaneAuto};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPLightingLane{GraphicsPPLightingLaneAuto};
+			#else
+				constexpr auto DefaultGraphicsPPLightingLane{"ScreenSpace"};
+			#endif
 
 			/* Post-processing > per-CONCEPT switch of the lighting family. Turning one off selects
 			 * NO occupant for that slot, whichever lane is active — it is the concept that is
@@ -769,9 +821,17 @@ namespace EmEn
 			constexpr auto GraphicsPPContactShadowsEnabledKey{"Core/Graphics/PostProcessing/ContactShadows/Enabled"};
 			constexpr auto DefaultGraphicsPPContactShadowsEnabled{true};
 			constexpr auto GraphicsPPIndirectDiffuseEnabledKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Enabled"};
-			constexpr auto DefaultGraphicsPPIndirectDiffuseEnabled{true};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPIndirectDiffuseEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPIndirectDiffuseEnabled{false};
+			#endif
 			constexpr auto GraphicsPPReflectionsEnabledKey{"Core/Graphics/PostProcessing/Reflections/Enabled"};
-			constexpr auto DefaultGraphicsPPReflectionsEnabled{true};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPReflectionsEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPReflectionsEnabled{false};
+			#endif
 			constexpr auto GraphicsPPAmbientOcclusionEnabledKey{"Core/Graphics/PostProcessing/AmbientOcclusion/Enabled"};
 			constexpr auto DefaultGraphicsPPAmbientOcclusionEnabled{true};
 
@@ -956,16 +1016,28 @@ namespace EmEn
 			constexpr auto MaxGraphicsPPContactShadowsSSStepCount{128U};
 
 			constexpr auto GraphicsPPDepthOfFieldEnabledKey{"Core/Graphics/PostProcessing/DepthOfField/Enabled"};
-			constexpr auto DefaultGraphicsPPDepthOfFieldEnabled{true};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPDepthOfFieldEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPDepthOfFieldEnabled{false};
+			#endif
 			constexpr auto GraphicsPPMotionBlurEnabledKey{"Core/Graphics/PostProcessing/MotionBlur/Enabled"};
-			constexpr auto DefaultGraphicsPPMotionBlurEnabled{true};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPMotionBlurEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPMotionBlurEnabled{false};
+			#endif
 
 			/* Anti-Aliasing > Temporal (TAA). HDR resolve BEFORE DoF/tone mapping (the only
 			 * AA effect not bound by the runsAfterToneMapping contract — the Karis luminance
 			 * weighting below is what makes HDR accumulation safe). Requires the velocity
 			 * G-buffer and drives the Halton (2,3) projection jitter (requiresJitter). */
 			constexpr auto GraphicsPPTemporalAAEnabledKey{"Core/Graphics/PostProcessing/TemporalAA/Enabled"};
-			constexpr auto DefaultGraphicsPPTemporalAAEnabled{false};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPTemporalAAEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPTemporalAAEnabled{false};
+			#endif
 			/* Blend weight of the CURRENT frame (0.1 = 90% history: strong AA, slower response). */
 			constexpr auto GraphicsPPTemporalAAAlphaKey{"Core/Graphics/PostProcessing/TemporalAA/Alpha"};
 			constexpr auto DefaultGraphicsPPTemporalAAAlpha{0.1F};
@@ -1029,7 +1101,11 @@ namespace EmEn
 			 * application never adds it. 'Enabled' = false declines that filing for the session. The look
 			 * of a cloud belongs to its component; these are the integrator's cost/quality knobs. */
 			constexpr auto GraphicsPPCloudsEnabledKey{"Core/Graphics/PostProcessing/Clouds/Enabled"};
-			constexpr auto DefaultGraphicsPPCloudsEnabled{true};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPCloudsEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPCloudsEnabled{false};
+			#endif
 			/* View-ray steps across the DIAGONAL of a cloud box (linear cost). Near the camera the step
 			 * shrinks with the distance, down to an eighth of that. */
 			constexpr auto GraphicsPPCloudsStepCountKey{"Core/Graphics/PostProcessing/Clouds/StepCount"};
@@ -1049,7 +1125,11 @@ namespace EmEn
 			 * sun, square, centred on the camera and read by the sun term of every lit material
 			 * (Graphics::CloudShadowMap). 'ShadowsEnabled' = false: the clouds cast nothing. */
 			constexpr auto GraphicsPPCloudsShadowsEnabledKey{"Core/Graphics/PostProcessing/Clouds/ShadowsEnabled"};
-			constexpr auto DefaultGraphicsPPCloudsShadowsEnabled{true};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsPPCloudsShadowsEnabled{true};
+			#else
+				constexpr auto DefaultGraphicsPPCloudsShadowsEnabled{false};
+			#endif
 			/* Side of the map, in texels. */
 			constexpr auto GraphicsPPCloudsShadowResolutionKey{"Core/Graphics/PostProcessing/Clouds/ShadowResolution"};
 			constexpr auto DefaultGraphicsPPCloudsShadowResolution{1024U};
@@ -1198,7 +1278,11 @@ namespace EmEn
 			constexpr auto DefaultGraphicsShadowMappingEnabled{true};
 			/* Apply percentage-closer filtering (PCF) to soften shadow edges. */
 			constexpr auto GraphicsShadowMappingEnablePCFKey{"Core/Graphics/ShadowMapping/EnablePCF"};
-			constexpr auto DefaultGraphicsShadowMappingEnablePCF{false};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+				constexpr auto DefaultGraphicsShadowMappingEnablePCF{true};
+			#else
+				constexpr auto DefaultGraphicsShadowMappingEnablePCF{false};
+			#endif
 			/* Width of the cross-fade band between two cascades, as a FRACTION of the cascade's own
 			 * depth range. 0 disables the blend and compiles the branch away entirely.
 			 * Without it a cascade boundary is a hard plane locked to the camera, between two texel
@@ -1228,7 +1312,11 @@ namespace EmEn
 			constexpr auto DefaultGraphicsShadowMappingNormalOffsetScale{0.0F};
 			/* PCF sample count. */
 			constexpr auto GraphicsShadowMappingPCFSamplesKey{"Core/Graphics/ShadowMapping/PCFSamples"};
+			#ifdef EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS
+			constexpr auto DefaultGraphicsShadowMappingPCFSamples{4U};
+			#else
 			constexpr auto DefaultGraphicsShadowMappingPCFSamples{2U};
+			#endif
 			/* PCF filtering method. Values: "Performance" (Grid, max FPS), "Balanced" (VogelDisk, recommended), "Quality" (PoissonDisk), "Ultra" (OptimizedGather, best). */
 			constexpr auto GraphicsShadowMappingPCFMethodKey{"Core/Graphics/ShadowMapping/PCFMethod"};
 			constexpr auto DefaultGraphicsShadowMappingPCFMethod{"Balanced"};
@@ -1259,7 +1347,11 @@ namespace EmEn
 		/* Enable video / audio capture in RushMaker (shared default). */
 		constexpr auto RushMakerEnableVideoKey{"Core/RushMaker/EnableVideo"};
 		constexpr auto RushMakerEnableAudioKey{"Core/RushMaker/EnableAudio"};
+		#ifdef EMERAUDE_CAPTURE_DEFAULTS
+		constexpr auto DefaultRushMakerEnabled{true};
+		#else
 		constexpr auto DefaultRushMakerEnabled{false};
+		#endif
 		/* RushMaker capture frame rate in FPS. */
 		constexpr auto RushMakerVideoFramerateKey{"Core/RushMaker/VideoFramerate"};
 		constexpr auto DefaultRushMakerVideoFramerate{30U};
@@ -1271,7 +1363,11 @@ namespace EmEn
 		constexpr auto DefaultRushMakerQualityPreset{"Medium"};
 		/* Log RushMaker activity. */
 		constexpr auto RushMakerShowInformationKey{"Core/RushMaker/ShowInformation"};
+		#ifdef EMERAUDE_INFOS_DEFAULTS
+		constexpr auto DefaultRushMakerShowInformation{true};
+		#else
 		constexpr auto DefaultRushMakerShowInformation{false};
+		#endif
 		/* Force the software VP9 encoder even when the device supports hardware
 		 * H.265 (Vulkan Video). For A/B comparison of the two paths, and to produce
 		 * royalty-free WebM/VP9 on demand. */

@@ -56,7 +56,7 @@ namespace EmEn::Vulkan
 		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
-		const auto deviceLock = m_device->lockAccess();
+		const auto deviceLock = m_device.lockAccess();
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, VK_NULL_HANDLE); result != VK_SUCCESS )
 		{
@@ -64,7 +64,7 @@ namespace EmEn::Vulkan
 
 			if ( result == VK_ERROR_DEVICE_LOST )
 			{
-				m_device->dumpDeviceLostDiagnostics("Queue::submit");
+				m_device.dumpDeviceLostDiagnostics("Queue::submit");
 			}
 
 			return false;
@@ -137,7 +137,7 @@ namespace EmEn::Vulkan
 		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
-		const auto deviceLock = m_device->lockAccess();
+		const auto deviceLock = m_device.lockAccess();
 
 		/* NOTE: The value is taken under the lock that serializes every submission, so the timeline is
 		 * signalled in increasing order on this queue. */
@@ -162,7 +162,7 @@ namespace EmEn::Vulkan
 
 			if ( result == VK_ERROR_DEVICE_LOST )
 			{
-				m_device->dumpDeviceLostDiagnostics("Queue::submit");
+				m_device.dumpDeviceLostDiagnostics("Queue::submit");
 			}
 
 			return false;
@@ -201,7 +201,7 @@ namespace EmEn::Vulkan
 		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
-		const auto deviceLock = m_device->lockAccess();
+		const auto deviceLock = m_device.lockAccess();
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
 		{
@@ -209,7 +209,7 @@ namespace EmEn::Vulkan
 
 			if ( result == VK_ERROR_DEVICE_LOST )
 			{
-				m_device->dumpDeviceLostDiagnostics("Queue::submit");
+				m_device.dumpDeviceLostDiagnostics("Queue::submit");
 			}
 
 			return false;
@@ -222,7 +222,7 @@ namespace EmEn::Vulkan
 	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<SwapChainStatus> & swapChainStatus) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
-		const auto deviceLock = m_device->lockAccess();
+		const auto deviceLock = m_device.lockAccess();
 
 		switch ( const auto result = vkQueuePresentKHR(m_handle, presentInfo) )
 		{
@@ -256,7 +256,7 @@ namespace EmEn::Vulkan
 
 				if ( result == VK_ERROR_DEVICE_LOST )
 				{
-					m_device->dumpDeviceLostDiagnostics("Queue::present");
+					m_device.dumpDeviceLostDiagnostics("Queue::present");
 				}
 
 				swapChainStatus = SwapChainStatus::Failure;
@@ -269,7 +269,7 @@ namespace EmEn::Vulkan
 	Queue::waitIdle () const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueueWaitIdle() */
-		const auto deviceLock = m_device->lockAccess();
+		const auto deviceLock = m_device.lockAccess();
 
 		if ( const auto result = vkQueueWaitIdle(m_handle); result != VK_SUCCESS )
 		{
@@ -297,7 +297,7 @@ namespace EmEn::Vulkan
 		createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		createInfo.pNext = &typeCreateInfo;
 
-		if ( const auto result = vkCreateSemaphore(m_device->handle(), &createInfo, nullptr, &m_timeline); result != VK_SUCCESS )
+		if ( const auto result = vkCreateSemaphore(m_device.handle(), &createInfo, nullptr, &m_timeline); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create the timeline semaphore of the queue '" << this->identifier() << "' : " << vkResultToCString(result) << " !";
 
@@ -312,12 +312,12 @@ namespace EmEn::Vulkan
 	void
 	Queue::destroyTimeline () noexcept
 	{
-		if ( m_timeline == VK_NULL_HANDLE || m_device == nullptr )
+		if ( m_timeline == VK_NULL_HANDLE )
 		{
 			return;
 		}
 
-		vkDestroySemaphore(m_device->handle(), m_timeline, nullptr);
+		vkDestroySemaphore(m_device.handle(), m_timeline, nullptr);
 
 		m_timeline = VK_NULL_HANDLE;
 	}
@@ -337,7 +337,7 @@ namespace EmEn::Vulkan
 
 		uint64_t completedValue = 0;
 
-		if ( const auto result = vkGetSemaphoreCounterValue(m_device->handle(), m_timeline, &completedValue); result != VK_SUCCESS )
+		if ( const auto result = vkGetSemaphoreCounterValue(m_device.handle(), m_timeline, &completedValue); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to read the timeline of the queue '" << this->identifier() << "' : " << vkResultToCString(result) << " !";
 
@@ -367,7 +367,7 @@ namespace EmEn::Vulkan
 		waitInfo.pValues = &value;
 
 		/* [VULKAN-CPU-SYNC] vkWaitSemaphores() */
-		if ( const auto result = vkWaitSemaphores(m_device->handle(), &waitInfo, timeoutNanoseconds); result != VK_SUCCESS )
+		if ( const auto result = vkWaitSemaphores(m_device.handle(), &waitInfo, timeoutNanoseconds); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Waiting the timeline value " << value << " of the queue '" << this->identifier() << "' failed : " << vkResultToCString(result) << " !";
 

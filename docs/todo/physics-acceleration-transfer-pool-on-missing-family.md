@@ -27,6 +27,21 @@ which is not among the device's queue families:
 The engine keeps running without acceleration. The defect is pre-existing: triad 9a changed neither the compute
 device's queue families nor the transfer manager. It reproduces with `ForceGPU` set or unset.
 
+## 2026-10-10/11 — two more layers in front of it, both fixed (engine, not committed yet)
+
+- Engine `3c4986549` (queue timelines) made every queue create a timeline semaphore but requested `timelineSemaphore`
+  on the graphics device only: the compute device's first queue failed
+  (`VUID-VkSemaphoreTypeCreateInfo-timelineSemaphore-03252`, "Unable to find a suitable compute device"). Fixed:
+  `getComputeDevice()` requests it, `checkDevicesFeaturesForCompute()` requires it.
+- The half-created compute device then leaked through the `Device ↔ Queue` `shared_ptr` cycle and the process
+  crashed in the NVIDIA driver at exit (SIGSEGV, every demo). Fixed: `Queue` holds a `Device &`
+  (`docs/subsystems/vulkan/19-critical-device-owns-its-queues.md`), proved by fault injection (exit 0).
+- With both fixes the startup reaches THIS item again, unchanged: `VUID-vkCreateCommandPool-queueFamilyIndex-01937`,
+  the 4 remaining uses, `VUID-vkDestroyDevice-device-05137`, exit 0. Cause confirmed by reading:
+  `TransferManager::onInitialize()` takes the "specific" pool on `getGraphicsFamilyIndex()` when
+  `!hasBasicSupport()`, and a compute-only device has no graphics family. The transfer manager is written for a
+  graphics device; giving it a compute-device role is a design choice (owner).
+
 ## What remains
 
 - [ ] Find where the physics transfer manager picks family 0: probably a graphics-family index used on a compute-only

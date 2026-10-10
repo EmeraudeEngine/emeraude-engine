@@ -33,6 +33,7 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include "Arguments.hpp"
 #include "FastJSON.hpp"
 #include "RemoteProtocol.hpp"
 #include "String.hpp"
@@ -52,14 +53,25 @@ namespace EmEn::Console
 	Controller::onInitialize () noexcept
 	{
 		auto & settings = m_primaryServices.settings();
+		const auto & arguments = m_primaryServices.arguments();
 
 		/* NOTE: all three keys are read (and written on first run) even when the listener stays
 		 * off, so an operator finds them in settings.json without reading the source. */
 		/* NOTE: like the console keys, the MCP keys are written on first run even when the server stays off. */
-		const auto MCPEnabled = settings.getOrSetDefault< bool >(MCPEnabledKey, DefaultMCPEnabled);
-		const auto MCPAddress = settings.getOrSetDefault< std::string >(MCPAddressKey, DefaultMCPAddress);
-		const auto MCPPort = settings.getOrSetDefault< uint16_t >(MCPPortKey, DefaultMCPPort);
+		auto MCPEnabled = settings.getOrSetDefault< bool >(MCPEnabledKey, DefaultMCPEnabled);
+		auto MCPAddress = settings.getOrSetDefault< std::string >(MCPAddressKey, DefaultMCPAddress);
+		auto MCPPort = settings.getOrSetDefault< uint16_t >(MCPPortKey, DefaultMCPPort);
 		auto MCPBearerToken = settings.getOrSetDefault< std::string >(MCPBearerTokenKey, DefaultMCPBearerToken);
+
+		/* NOTE: --enable-mcp=PORT opens the server for this run only, on the loopback, in memory. */
+		if ( const auto port = arguments.getPort(EnableMCPArgument) )
+		{
+			MCPEnabled = true;
+			MCPAddress = ArgumentListenAddress;
+			MCPPort = port.value();
+
+			TraceInfo{ClassId} << EnableMCPArgument << " : the MCP server opens on " << MCPAddress << ':' << MCPPort << " for this run (settings untouched).";
+		}
 
 		if ( MCPEnabled )
 		{
@@ -79,9 +91,19 @@ namespace EmEn::Console
 			TraceInfo{ClassId} << "MCP server disabled (" << MCPEnabledKey << " = false).";
 		}
 
-		const auto remoteListenerEnabled = settings.getOrSetDefault< bool >(ConsoleEnableRemoteListenerKey, DefaultConsoleEnableRemoteListener);
+		auto remoteListenerEnabled = settings.getOrSetDefault< bool >(ConsoleEnableRemoteListenerKey, DefaultConsoleEnableRemoteListener);
 		m_remoteListenerAddress = settings.getOrSetDefault< std::string >(ConsoleRemoteListenerAddressKey, DefaultConsoleRemoteListenerAddress);
 		m_remoteListenerPort = settings.getOrSetDefault< uint16_t >(ConsoleRemoteListenerPortKey, DefaultConsoleRemoteListenerPort);
+
+		/* NOTE: --enable-remote-console=PORT opens the listener for this run only, on the loopback, in memory. */
+		if ( const auto port = arguments.getPort(EnableRemoteConsoleArgument) )
+		{
+			remoteListenerEnabled = true;
+			m_remoteListenerAddress = ArgumentListenAddress;
+			m_remoteListenerPort = port.value();
+
+			TraceInfo{ClassId} << EnableRemoteConsoleArgument << " : the remote console opens on " << m_remoteListenerAddress << ':' << m_remoteListenerPort << " for this run (settings untouched).";
+		}
 
 		if ( !remoteListenerEnabled )
 		{

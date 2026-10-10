@@ -797,6 +797,9 @@ namespace EmEn
 			m_coreHelp.registerArgument("Show information about all systems in terminal.", "show-all-infos");
 			m_coreHelp.registerArgument("Disable the window for server version.", "window-less", 'W');
 			m_coreHelp.registerArgument("Disable audio layer.", "disable-audio");
+			m_coreHelp.registerArgument("Open the remote console for this run only, on 127.0.0.1:PORT; the settings are not written.", "enable-remote-console", 0, {"PORT"});
+			m_coreHelp.registerArgument("Start the MCP server for this run only, on 127.0.0.1:PORT; the settings are not written.", "enable-mcp", 0, {"PORT"});
+			m_coreHelp.registerArgument("Override the Vulkan validation layers for this run only; the settings are neither read nor written. LAYERS is a comma-separated list, an empty value runs without any layer.", "set-vk-layers", 0, {"LAYERS"});
 			m_coreHelp.registerArgument("Display only logs which tags appears. TAG is a list of words separated by comma.", "filter-tag", 't', {"TAG"});
 			m_coreHelp.registerArgument("Set a custom core settings file. FILE_PATH is where to get the settings file and should be writable.", "settings-filepath", 0, {"FILE_PATH"});
 			m_coreHelp.registerArgument("Set a custom core settings filename. FILE_NAME is an alternate name of the 'settings.json' file.", "settings-filepath", 0, {"FILE_NAME"});

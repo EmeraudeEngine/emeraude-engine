@@ -29,6 +29,11 @@ console commands, on `--load-demo coordinates-debug`, which enables the TBN-spac
   while a worker thread is still inside `vkCreateShaderModule` (one of those retries). The failing
   retries make a device-destruction race visible; the race itself is not TBN-specific.
 
+Re-seen on the Mac mini M6 (MoltenVK 1.4.1, 2026-10-10, macOS-PA): 100 VUIDs in the sweep window, 5 kinds × 20 —
+`VUID-VkShaderModuleCreateInfo-pCode-08740`, `VUID-RuntimeSpirv-Location-06272`,
+`VUID-VkPipelineShaderStageCreateInfo-stage-00704`, `-stage-00714`, `-stage-00715` — "Unable to generate the TBN space
+program !", the demo still renders, exit 0. The M6 has no geometry stage either.
+
 ## What remains
 
 1. Gate the TBN-space program on the device feature (one place, before any generation attempt): no

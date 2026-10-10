@@ -186,7 +186,17 @@ namespace EmEn::Vulkan
 			{
 				if ( count > 0 )
 				{
-					m_toolProperties.resize(count);
+					/* NOTE: Every output structure carries its sType before the query (VUID-VkPhysicalDeviceToolProperties-sType-sType).
+					 * On Windows the validation layer reports itself as a tool, so a validation run takes this branch. */
+					m_toolProperties.resize(count, {
+						.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TOOL_PROPERTIES,
+						.pNext = nullptr,
+						.name{},
+						.version{},
+						.purposes = 0,
+						.description{},
+						.layer{}
+					});
 
 					result = vkGetPhysicalDeviceToolProperties(m_physicalDevice, &count, m_toolProperties.data());
 

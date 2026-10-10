@@ -44,6 +44,15 @@ against that instance** — nothing will open the port while it runs, except a h
 `Core.remoteConsoleStatus()` shows the endpoint and `Core.restartRemoteConsole(port | address:port)`
 moves the console (the current connection closes; reconnect on the new endpoint).
 
+**For one run, without touching the settings (2026-10-11):** `--enable-remote-console=PORT` opens the console and
+`--enable-mcp=PORT` starts the MCP server, both on `127.0.0.1` (an argument never opens the network), whatever the
+`Enabled` keys and ports say; nothing is written to `settings.json` (a consumer adds its own, e.g. projet-alpha's
+`--enable-cef-devtools=PORT`). A port outside 1024-65535, or the argument without a value, is refused with a trace
+(`Arguments::getPort()`) and the settings apply. This is the way to drive a TEST instance on other ports
+(`--enable-remote-console=7780 --enable-mcp=17779`) with no settings copy. The MCP bearer token still comes from the
+settings. Verified on Linux 2026-10-11: the three ports listen on loopback, `mcp-conformance.py` 1881/1881, the
+settings file keeps `Enabled = false`.
+
 **The client — `tools/remote-console.py` (Python 3, every OS):**
 ```bash
 # Send a single command: prints the text of the response; exit status 1 when it failed

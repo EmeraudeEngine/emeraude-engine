@@ -28,6 +28,10 @@ shader stage (the landscape detail window, a mesh-shading surface). The engine n
 `maxMeshMultiviewViewCount` (grep: 0 hits in `src/`): that limit is separate from `maxMultiviewViewCount`, and a
 device may report 4.
 
+Re-seen 2026-10-10/11 on Windows (RTX 3500 Ada Laptop, driver 596.58: `maxMeshMultiviewViewCount` = 4, citadel's
+6-view cubemap shadow pipeline, `VUID-VkGraphicsPipelineCreateInfo-renderPass-12325`) and, for the first time, on Linux
+(RTX 3070 Ti) once the LunarG validation layer 1.4.363 replaced Debian's 1.4.309, which never reported it.
+
 ## What remains
 
 - Read `VkPhysicalDeviceMeshShaderPropertiesEXT::maxMeshMultiviewViewCount` with the mesh-shader features.

@@ -65,6 +65,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
 # Emeraude libraries project variables and options.
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
+option(EMERAUDE_INFOS_DEFAULTS "Declare every settings keys defaults to produce logs (Default Off)." Off)
+option(EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS "Declare every settings keys defaults for a high quality rendering (Default Off)." Off)
+option(EMERAUDE_CAPTURE_DEFAULTS "Declare every settings keys defaults for capturing and recording features (Default Off)." Off)
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 
 option(EMERAUDE_USE_FULL_EXPORTS "Export the whole annotated public API (EMEN_API + EMEN_LEAN_API) (Windows only)." "${MSVC}")
@@ -187,15 +190,18 @@ endif ()
 ## Project header and source files.
 include(PrepareEngineSourceFiles)
 
-# ImGui library source files
-if ( EMERAUDE_ENABLE_IMGUI )
-	list(APPEND EMERAUDE_SOURCE_FILES ${IMGUI_SOURCE_FILES})
-endif ()
-
 #######################################################################
 ## Declare the library target and configure it per platform.
 # NOTE: As the library is published through LGPLv3 licence, the binary must be a shared library.
 add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
+
+# Settings defaults profiles: compile definitions, not a generated header — SettingKeys.hpp must see the same value in
+# EVERY translation unit, the consumers' included, whatever their include order.
+foreach ( _defaultsProfile IN ITEMS EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS EMERAUDE_INFOS_DEFAULTS EMERAUDE_CAPTURE_DEFAULTS )
+	if ( ${_defaultsProfile} )
+		target_compile_definitions(${PROJECT_NAME} PUBLIC ${_defaultsProfile})
+	endif ()
+endforeach ()
 
 if ( MSVC )
 	if ( EMERAUDE_USE_FULL_EXPORTS OR EMERAUDE_USE_LEAN_EXPORTS )

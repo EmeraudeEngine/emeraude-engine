@@ -111,6 +111,12 @@ namespace EmEn::Vulkan
 
 		const auto * surface = window.surface();
 		const auto surfaceFormat = this->chooseSurfaceFormat();
+
+		if ( !surfaceFormat )
+		{
+			return false;
+		}
+
 		const auto & capabilities = surface->capabilities();
 
 		m_createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -118,8 +124,8 @@ namespace EmEn::Vulkan
 		m_createInfo.flags = 0;
 		m_createInfo.surface = surface->handle();
 		m_createInfo.minImageCount = this->selectImageCount(capabilities);
-		m_createInfo.imageFormat = surfaceFormat.format;
-		m_createInfo.imageColorSpace = surfaceFormat.colorSpace;
+		m_createInfo.imageFormat = surfaceFormat->format;
+		m_createInfo.imageColorSpace = surfaceFormat->colorSpace;
 		m_createInfo.imageExtent = this->chooseSwapExtent(capabilities);
 		m_createInfo.imageArrayLayers = 1;
 		m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; /* USAGE_TRANSFER_SRC enable the screenshot capabilities. FIXME: check for performances. */
@@ -467,10 +473,19 @@ namespace EmEn::Vulkan
 		};
 	}
 
-	VkSurfaceFormatKHR
+	std::optional< VkSurfaceFormatKHR >
 	SwapChain::chooseSurfaceFormat () const noexcept
 	{
 		const auto & formats = m_renderer.window().surface()->formats();
+
+		/* NOTE: An empty list is a surface the device could not query (VK_ERROR_SURFACE_LOST_KHR — e.g. a GPU that
+		 * cannot present to this compositor's surface): there is no format to fall back to. */
+		if ( formats.empty() )
+		{
+			Tracer::error(ClassId, "The surface reports no format (lost or not presentable by this device) ! Unable to create the swap-chain.");
+
+			return std::nullopt;
+		}
 
 		/* NOTE: Two modes are available:
 		 * - SRGB (m_sRGBEnabled = true): For native 3D rendering with linear lighting.
@@ -486,7 +501,7 @@ namespace EmEn::Vulkan
 
 		if ( formatIt == formats.cend() )
 		{
-			const auto & fallback = formats.at(0);
+			const auto & fallback = formats.front();
 
 			TraceWarning{ClassId} <<
 				"The " << formatName << " surface format (VK_FORMAT_B8G8R8A8_" << formatName << ") is not available! "

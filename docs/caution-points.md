@@ -7697,7 +7697,45 @@ boxes by 1 mm (`BoundsPadding`), and the base `TriangleMesh` keeps its node boun
 
 ### Third-party sources compiled inside the engine target are not judged by the paranoid set (Oct 2026)
 
-Dear ImGui's `.cpp` files are compiled inside the engine target, so they received the cascade's `-Werror` paranoid
-warning set (≈ 6 000 findings in upstream code). `cmake/SetupPreSourcesImGui.cmake` gives them `-w` (`/w` on MSVC) per
-source file — the source-file counterpart of a SYSTEM include. **Rule:** any vendored source compiled into a cascade
-target gets the same per-file treatment; the cascade's own code that calls it stays fully checked.
+Dear ImGui's `.cpp` files were compiled inside the engine target, so they received the cascade's `-Werror` paranoid
+warning set (≈ 6 000 findings in upstream code). A per-source `-w` / `/w` silenced them, but on MSVC a per-source `/w`
+on top of the target's `/W4` prints `cl : Command line warning D9025: overriding '/W4' with '/w'` for every such file
+(7 lines per configuration, Windows-PA, 2026-10-10). Since 2026-10-11 ImGui is its own OBJECT library
+`EmeraudeImGui` (`cmake/SetupPostSourcesImGui.cmake`), compiled with emeraude-base's
+`EMERAUDE_THIRD_PARTY_COMPILE_OPTIONS` (the cascade's code generation options without the warning set, plus `-w` /
+`/w`), and its objects are linked into the engine through `$<TARGET_OBJECTS:EmeraudeImGui>`. **Rule:** a vendored
+source compiled into a cascade target goes into its own object library with `EMERAUDE_THIRD_PARTY_COMPILE_OPTIONS`;
+never a per-source flag that contradicts the target's; the cascade's own code that calls it stays fully checked.
+
+### Two profiles of rendering defaults: `EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS` (Oct 2026)
+
+Two sibling options follow the same mechanism (owner, 2026-10-11): `EMERAUDE_INFOS_DEFAULTS` (every `ShowInformation`
+and `Core/Video/VulkanInstance/EnableDebug` true) and `EMERAUDE_CAPTURE_DEFAULTS` (audio / video capture and RushMaker
+on). The three are applied by one `foreach` in the engine's `CMakeLists.txt` as PUBLIC compile definitions.
+
+`SettingKeys.hpp` declares two sets of defaults for the rendering keys, selected by the CMake option
+`EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS` (Off by default; projet-alpha sets it On). A default only applies to a key
+absent from the settings file, so a machine moves to the other profile by deleting those keys.
+
+| Key | Off ("zero problem") | On (correct rendering) |
+|---|---|---|
+| `Texture/MinFilter`, `MagFilter`, `MipFilter` | `nearest` | `linear` |
+| `Texture/MipMappingLevels` | 1 | 1024 (the whole chain, bounded by the image) |
+| `Texture/AnisotropyLevels` | 0 | 8 |
+| `Texture/POMIterations` | 0 | 4 |
+| `ShadowMapping/EnablePCF`, `PCFSamples` | false, 2 | true, 4 |
+| `PostProcessing/TemporalAA/Enabled` | false | true |
+| `PostProcessing/IndirectDiffuse/Enabled`, `Reflections/Enabled` | false | true |
+| `PostProcessing/DepthOfField/Enabled`, `MotionBlur/Enabled` | false | true |
+| `PostProcessing/Clouds/Enabled`, `Clouds/ShadowsEnabled` | false | true |
+| `PostProcessing/LightingLane` | `ScreenSpace` (no RT structure built) | `Auto` |
+
+The "On" column is the owner's hand-tuned Linux file of 2026-10-10, measured key by key against the defaults
+(an empty settings file written back by the engine). **Trap (measured 2026-10-11):** the option is a PUBLIC compile
+definition on the engine target, never a `#cmakedefine` in a generated header. `SettingKeys.hpp` does not include
+`emeraude_config.hpp` (the May 2026 include policy), so with the header the `#ifdef` depended on each translation
+unit's include order: the same binary wrote the textures / PCF / TAA keys from the high profile and the
+post-processing keys from the low one. **Rule:** a macro read by `SettingKeys.hpp` (or any widely included header)
+reaches it through `target_compile_definitions(... PUBLIC ...)`. A consumer that wants the high profile sets the normal
+variable before adding the engine (`set(EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS ON)`; CMP0077 makes it win over the
+engine's `option()`, even in an already configured build directory).

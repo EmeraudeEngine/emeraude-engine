@@ -31,3 +31,5 @@ Context for developing the Emeraude Engine Vulkan abstraction layer.
 | Critical Points | [`docs/subsystems/vulkan/16-critical-points.md`](../../docs/subsystems/vulkan/16-critical-points.md) | 2 KB |
 | Detailed Documentation | [`docs/subsystems/vulkan/17-detailed-documentation.md`](../../docs/subsystems/vulkan/17-detailed-documentation.md) | 1 KB |
 | VkPipelineCache — the driver cache the engine now owns (Aug 2026) | [`docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md`](../../docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md) | 6 KB |
+| Critical: a device owns its queues (`Queue` holds `Device &`), every device states its own requirements, output structures carry their `sType` (Oct 2026) | [`docs/subsystems/vulkan/19-critical-device-owns-its-queues.md`](../../docs/subsystems/vulkan/19-critical-device-owns-its-queues.md) | 3 KB |
+| Validation layers for one run: `--set-vk-layers` (Oct 2026) | [`docs/subsystems/vulkan/20-validation-layers-for-one-run.md`](../../docs/subsystems/vulkan/20-validation-layers-for-one-run.md) | 2 KB |

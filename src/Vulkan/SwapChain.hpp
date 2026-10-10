@@ -507,10 +507,11 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the best surface format.
-			 * @return VkSurfaceFormatKHR
+			 * @return std::optional< VkSurfaceFormatKHR > Empty when the surface reports no format at all (lost, or not
+			 * presentable by this device): the swap-chain cannot be created.
 			 */
 			[[nodiscard]]
-			VkSurfaceFormatKHR chooseSurfaceFormat () const noexcept;
+			std::optional< VkSurfaceFormatKHR > chooseSurfaceFormat () const noexcept;
 
 			/**
 			 * @brief Returns the best present mode.

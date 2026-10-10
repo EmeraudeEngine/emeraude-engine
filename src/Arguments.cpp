@@ -29,6 +29,11 @@
 /* Project configuration. */
 #include "emeraude_platform.hpp"
 
+/* STL inclusions. */
+#include <charconv>
+#include <limits>
+#include <system_error>
+
 /* Local inclusions. */
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
@@ -179,6 +184,38 @@ namespace EmEn
 		}
 
 		return std::nullopt;
+	}
+
+	std::optional< uint16_t >
+	Arguments::getPort (std::string_view argument) const noexcept
+	{
+		const auto value = this->get(argument);
+
+		if ( !value )
+		{
+			if ( this->isSwitchPresent(argument) )
+			{
+				TraceError{ClassId} << argument << " needs a port: " << argument << "=PORT (" << MinimumArgumentPort << "-65535). Ignored.";
+			}
+
+			return std::nullopt;
+		}
+
+		const auto & text = value.value();
+		unsigned int port = 0;
+		const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), port);
+
+		if ( error != std::errc{} || end != text.data() + text.size() || port < MinimumArgumentPort || port > std::numeric_limits< uint16_t >::max() )
+		{
+			/* NOTE: What is echoed of the refused value is bounded: it comes from the command line. */
+			constexpr size_t EchoedCharacters{32};
+
+			TraceError{ClassId} << argument << " : '" << text.substr(0, EchoedCharacters) << "' is not a port (" << MinimumArgumentPort << "-65535). Ignored.";
+
+			return std::nullopt;
+		}
+
+		return static_cast< uint16_t >(port);
 	}
 
 	std::string

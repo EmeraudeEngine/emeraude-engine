@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,17 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanInstanceService"};
+
+			/**
+			 * @brief Command-line argument overriding the validation layers FOR ONE RUN:
+			 * `--set-vk-layers=LAYER_A,LAYER_B` (or `--set-vk-layers LAYER_A,LAYER_B`). When present, it replaces
+			 * Core/Video/VulkanInstance/EnableDebug and RequestedValidationLayers, and the run neither reads nor writes
+			 * any validation setting. An empty value (`--set-vk-layers=`) runs without any layer.
+			 */
+			static constexpr auto SetValidationLayersArgument{"--set-vk-layers"};
+
+			/** @brief The most layers --set-vk-layers accepts (a longer list is refused as a whole). */
+			static constexpr size_t MaxValidationLayersFromArgument{32};
 
 			/**
 			 * @brief Constructs a Vulkan instance.
@@ -367,6 +379,17 @@ namespace EmEn::Vulkan
 			void readSettings () noexcept;
 
 			/**
+			 * @brief Parses the value of --set-vk-layers (command line: a trust boundary, checked in every build).
+			 * @note Items are trimmed, empty items and duplicates dropped (first occurrence kept). An item that is not a
+			 * layer name ([A-Za-z0-9_], shorter than VK_MAX_EXTENSION_NAME_SIZE) or a list longer than
+			 * MaxValidationLayersFromArgument refuses the WHOLE value, with a trace.
+			 * @param value The raw argument value, possibly empty.
+			 * @return std::optional< std::vector< std::string > > The layer names (empty = no layer), or nothing when refused.
+			 */
+			[[nodiscard]]
+			static std::optional< std::vector< std::string > > parseValidationLayersArgument (const std::string & value) noexcept;
+
+			/**
 			 * @brief Prepares a list of a physical device available on the computer.
 			 * @return bool
 			 */
@@ -482,12 +505,16 @@ namespace EmEn::Vulkan
 			std::vector< std::shared_ptr< PhysicalDevice > > m_physicalDevices;
 			std::shared_ptr< Device > m_graphicsDevice;
 			std::shared_ptr< Device > m_computeDevice;
+			/* NOTE: Owns the requested layer names: m_requiredValidationLayers points into it, so it is filled once,
+			 * before the selection, and never modified while the instance lives. */
+			std::vector< std::string > m_requestedValidationLayers;
 			std::vector< const char * > m_requiredValidationLayers;
 			std::vector< const char * > m_requiredInstanceExtensions;
 			std::vector< const char * > m_requiredGraphicsDeviceExtensions;
 			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};
+			bool m_validationLayersFromArgument{false};
 			bool m_dynamicStateExtensionEnabled{false};
 			bool m_standardTextureCheckEnabled{false};
 			bool m_enableFailSafe{false};
