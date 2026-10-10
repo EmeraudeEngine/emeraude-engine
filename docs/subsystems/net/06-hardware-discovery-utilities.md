@@ -173,12 +173,27 @@ used to be a loud failure is now silent packet loss.
 **Verified on Linux 6.x** (2026-08-26): binding 5353 next to a running `avahi-daemon`,
 joining `224.0.0.251` on two NICs, and reading real DNS-SD answers from four LAN devices —
 each datagram carrying a resolved interface index.
-⚠️ **macOS is NOT verified.** It compiles (BSD path: `IP_RECVDSTADDR` + `IP_RECVIF`) but no
-run was made. Two distinct risks, in order: sharing 5353 with the system `mDNSResponder`, and
-**since macOS 15 (Sequoia) the Local Network privacy permission** — an app doing Bonjour or
-multicast needs `NSLocalNetworkUsageDescription` and an entry under Privacy & Security, and
-field reports show multicast working from a terminal but not from a double-clicked bundle.
-Any macOS spike must therefore test a **signed, packaged binary**, never a console test.
+**Verified on macOS 26.5 / arm64 and Windows** (2026-08-28, `tools/net-check` + a downstream
+application's JS path): `bind(5353)` beside the system `mDNSResponder` (`SO_REUSEPORT` does its
+job), joins on every real NIC, real DNS-SD answers, and the BSD `IP_RECVDSTADDR` + `IP_RECVIF`
+path delivered destination and a non-zero interface index on 14/14 datagrams.
+⚠️ **Windows: an APIPA interface makes `addMembership` fail** — a consumer joining all
+interfaces inside one `try` block loses every interface after the first dead one, and Windows
+always has dead ones. Join per interface, tolerate failures.
+
+⚠️⚠️ **macOS *Local Network* privacy gate (macOS 15+), measured on a Developer-ID-signed,
+hardened-runtime bundle**: while denied, `bind()`, TTL, loopback and **joins all report
+success** and **inbound multicast works**, but **every outbound send is refused** (`sendto()`
+→ -1), multicast *and* LAN unicast alike. Nothing in the socket API says "permission" — learn
+that failure shape. Once the owner granted *Local Network*, the same bundle completed the full
+round trip. `NSLocalNetworkUsageDescription` in the **main** plist is what makes the app
+eligible; adding it to the helper plists or running from `/Applications` changes nothing, and
+there is no multicast entitlement to chase.
+- ⚠️ **A terminal run proves nothing**: a terminal-launched process inherits Terminal's grant
+  and works while the app itself is denied. Test a signed bundle launched through LaunchServices.
+- **Not established**: whether macOS prompts spontaneously on first use (no prompt was ever
+  observed; the grant was applied by hand). So an app must behave sanely while denied, and may
+  have to send the user to *System Settings → Privacy & Security → Local Network* itself.
 
 ---
 
@@ -245,8 +260,11 @@ sub-branch for the hardware-address family.
 straight from `NetworkInterfaces.cpp`: 3 interfaces × 2 families, `/8` `/24` `/64` `/128`
 prefixes, IPv6 scope ids equal to the interface index, MACs on both NICs, empty MAC on `lo`,
 `enumerateMulticastCapable()` returning the two NICs **and `lo`** since the loopback fix below.
-⚠️ **macOS and Windows: compile-only** for the IPv6 and MAC paths (`AF_LINK`, `AF_UNSPEC`),
-same standing as the multicast surface — see `docs/todo/udp-multicast-macos-verification.md`.
+**Verified on macOS 26.5 / arm64** (2026-08-28): 18 addresses on a multi-homed host, MAC
+identical across an interface's addresses and empty on loopback, non-zero index everywhere,
+`scopeId` set on link-local IPv6. **Windows** (2026-08-28, `net_check.exe` 47/0/2):
+`enumerateMulticastCapable()` returns the NIC **and** `Loopback Pseudo-Interface 1` — Windows
+sets the multicast flag on its own loopback, so the Linux exemption below is not needed there.
 
 **Traps**:
 - ⚠️ On Linux, **loopback carries no `IFF_MULTICAST` flag** (`lo` is `<LOOPBACK,UP,LOWER_UP>`

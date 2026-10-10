@@ -128,13 +128,13 @@ Two findings that are **not** bugs but invalidate a written assumption:
 
 ### The remaining handover
 
-Two todo items carry the checklist, and they are meant to be run in one sitting on those machines:
+One todo item carries the remaining checklist, meant to be run in one sitting on those machines:
 
 - [`emeraude-base/docs/todo/tls-stack-windows-macos-validation.md`](../../../dependencies/emeraude-base/docs/todo/tls-stack-windows-macos-validation.md)
   — the trust store per platform, the hermetic and live suites, the downloader from the console, the
   `ExternalData` chain, and the traps (MS-STL's throwing `path::string()` under `-fno-exceptions`,
   the MSVC-only `#pragma comment(lib, …)`, the `IOKit` link that arrives through hwloc, the
   `v6_only` default on Windows).
-- [`docs/todo/udp-multicast-macos-verification.md`](../../todo/udp-multicast-macos-verification.md)
-  — multicast/mDNS, the IPv6+MAC enumeration, the non-blocking receive and the SSDP TTL type, plus
-  the macOS 15 *Local Network* permission (test a **signed, packaged** binary, never a console run).
+- Multicast/mDNS, the IPv6+MAC enumeration, the non-blocking receive and the SSDP TTL type are
+  **closed on all three OSes** (2026-08-28); the results and the macOS *Local Network* failure
+  shape live in [`06-hardware-discovery-utilities.md`](06-hardware-discovery-utilities.md).
