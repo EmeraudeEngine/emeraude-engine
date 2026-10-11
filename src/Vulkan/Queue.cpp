@@ -58,6 +58,12 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
 		const auto deviceLock = m_device.lockAccess();
 
+		/* NOTE: Nothing is submitted to a lost device: it would fail anyway, and resubmitting reset fences is invalid. */
+		if ( m_device.isLost() )
+		{
+			return false;
+		}
+
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, VK_NULL_HANDLE); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
@@ -139,6 +145,12 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
 		const auto deviceLock = m_device.lockAccess();
 
+		/* NOTE: Nothing is submitted to a lost device: it would fail anyway, and resubmitting reset fences is invalid. */
+		if ( m_device.isLost() )
+		{
+			return false;
+		}
+
 		/* NOTE: The value is taken under the lock that serializes every submission, so the timeline is
 		 * signalled in increasing order on this queue. */
 		const auto value = m_lastTimelineValue + 1;
@@ -203,6 +215,12 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
 		const auto deviceLock = m_device.lockAccess();
 
+		/* NOTE: Nothing is submitted to a lost device: it would fail anyway, and resubmitting reset fences is invalid. */
+		if ( m_device.isLost() )
+		{
+			return false;
+		}
+
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to submit synchronization into the queue : " << vkResultToCString(result) << " !";
@@ -223,6 +241,14 @@ namespace EmEn::Vulkan
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
 		const auto deviceLock = m_device.lockAccess();
+
+		/* NOTE: Nothing is presented by a lost device. */
+		if ( m_device.isLost() )
+		{
+			swapChainStatus = SwapChainStatus::Failure;
+
+			return false;
+		}
 
 		switch ( const auto result = vkQueuePresentKHR(m_handle, presentInfo) )
 		{
@@ -271,9 +297,20 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkQueueWaitIdle() */
 		const auto deviceLock = m_device.lockAccess();
 
+		/* NOTE: Nothing is submitted to a lost device: it would fail anyway, and resubmitting reset fences is invalid. */
+		if ( m_device.isLost() )
+		{
+			return false;
+		}
+
 		if ( const auto result = vkQueueWaitIdle(m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the queue to complete : " << vkResultToCString(result) << " !";
+
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				m_device.dumpDeviceLostDiagnostics("Queue::waitIdle");
+			}
 
 			return false;
 		}
@@ -330,6 +367,12 @@ namespace EmEn::Vulkan
 			return true;
 		}
 
+		/* NOTE: After a loss nothing is pending any more: what waited for this value may be destroyed. */
+		if ( m_device.isLost() )
+		{
+			return true;
+		}
+
 		if ( m_timeline == VK_NULL_HANDLE )
 		{
 			return false;
@@ -355,6 +398,11 @@ namespace EmEn::Vulkan
 			return true;
 		}
 
+		if ( m_device.isLost() )
+		{
+			return false;
+		}
+
 		if ( m_timeline == VK_NULL_HANDLE )
 		{
 			return false;
@@ -370,6 +418,11 @@ namespace EmEn::Vulkan
 		if ( const auto result = vkWaitSemaphores(m_device.handle(), &waitInfo, timeoutNanoseconds); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Waiting the timeline value " << value << " of the queue '" << this->identifier() << "' failed : " << vkResultToCString(result) << " !";
+
+			if ( result == VK_ERROR_DEVICE_LOST )
+			{
+				m_device.dumpDeviceLostDiagnostics("Queue::waitUntilReached");
+			}
 
 			return false;
 		}

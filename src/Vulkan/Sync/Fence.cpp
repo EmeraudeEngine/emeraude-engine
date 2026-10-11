@@ -105,6 +105,13 @@ namespace EmEn::Vulkan::Sync
 			return false;
 		}
 
+		/* NOTE: A lost device signals no fence any more: no wait (it would fail or time out), no reset (a reset of a
+		 * pending fence is invalid). */
+		if ( this->device()->isLost() )
+		{
+			return false;
+		}
+
 		if ( const auto result = vkResetFences(this->device()->handle(), 1, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to reset the fence : " << vkResultToCString(result) << " !";
@@ -134,6 +141,10 @@ namespace EmEn::Vulkan::Sync
 				return FenceStatus::Busy;
 
 			case VK_ERROR_DEVICE_LOST :
+				this->device()->dumpDeviceLostDiagnostics("Fence::getStatus");
+
+				return FenceStatus::Error;
+
 			default :
 				return FenceStatus::Error;
 		}
@@ -146,6 +157,13 @@ namespace EmEn::Vulkan::Sync
 		{
 			Tracer::error(ClassId, "No device to use this fence !");
 
+			return false;
+		}
+
+		/* NOTE: A lost device signals no fence any more: no wait (it would fail or time out), no reset (a reset of a
+		 * pending fence is invalid). */
+		if ( this->device()->isLost() )
+		{
 			return false;
 		}
 
@@ -172,6 +190,13 @@ namespace EmEn::Vulkan::Sync
 		{
 			Tracer::error(ClassId, "No device to use this fence !");
 
+			return false;
+		}
+
+		/* NOTE: A lost device signals no fence any more: no wait (it would fail or time out), no reset (a reset of a
+		 * pending fence is invalid). */
+		if ( this->device()->isLost() )
+		{
 			return false;
 		}
 

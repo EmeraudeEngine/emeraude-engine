@@ -269,6 +269,15 @@ namespace EmEn
 				continue;
 			}
 
+			/* NOTE: A lost device draws and uploads nothing any more (the overlay uploads included): the main loop stops
+			 * the engine (stopOnDeviceLoss()), this thread idles until then. */
+			if ( m_graphicsRenderer.isDeviceLost() )
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds{33});
+
+				continue;
+			}
+
 			/* NOTE: On-demand rendering gate. When enabled and there is no active 3D scene, the
 			 * rendering thread sleeps until a redraw is requested (overlay/WebView repaint, window
 			 * event, scene enable/disable, or an explicit requestRedraw()) instead of rendering every
@@ -523,6 +532,11 @@ namespace EmEn
 
 		auto lastTop = std::chrono::steady_clock::now();
 
+		/* NOTE: Installed here, after CefInitialize() in an application embedding CEF (whose own handlers ended the process
+		 * at once on SIGTERM): a termination signal becomes a clean system stop (requestSystemStop()). Restored after the
+		 * main loop. */
+		m_terminationSignals.emplace();
+
 		/* NOTE: This is the engine main loop. */
 		while ( m_isMainLoopRunning )
 		{
@@ -532,7 +546,7 @@ namespace EmEn
 			m_inputManager.waitSystemEvents(this->mainLoopWaitTimeout(m_mainLoopEventTimeoutSeconds));
 
 			/* NOTE: Check if the graphics render do not have a problem. */
-			if ( m_graphicsRenderer.usable() )
+			if ( m_graphicsRenderer.usable() && !m_graphicsRenderer.isDeviceLost() )
 			{
 				/* NOTE: Must be done on the main thread. */
 				if ( m_windowChanged.exchange(false) )
@@ -542,11 +556,20 @@ namespace EmEn
 			}
 			else
 			{
-				/* ... If so, we stop nicely here, letting the chance to the user application to save data. */
-				Tracer::warning(ClassId, "Stop requested: the graphics renderer is no longer usable.");
-
-				this->stop();
+				/* ... If so, we stop at once (one-shot), letting the user application save its data. */
+				this->stopOnDeviceLoss();
 			}
+
+			/* NOTE: A termination signal (SIGTERM, SIGHUP, SIGINT) caught since the last cycle: a system stop. */
+			if ( m_terminationSignals.has_value() )
+			{
+				if ( const auto * signalName = PlatformSpecific::TerminationSignalCatcher::takePendingSignalName(); signalName != nullptr )
+				{
+					this->requestSystemStop(signalName);
+				}
+			}
+
+			this->checkSystemStopDeadline();
 
 			this->executeMainLoopCycle();
 
@@ -600,6 +623,9 @@ namespace EmEn
 				}
 			}
 		}
+
+		/* NOTE: The previous handlers come back for the teardown (CefShutdown() included). */
+		m_terminationSignals.reset();
 
 		/* Dispatch the exiting the main loop event,
 		 * first by sending the event,
@@ -1598,6 +1624,13 @@ namespace EmEn
 		/* Ask the user-application if it agrees to stop. */
 		if ( !this->onBeforeCoreStop() )
 		{
+			/* NOTE: A stop requested by the system is not a user's close: no veto counting, no force-quit dialog — the
+			 * deadline of requestSystemStop() decides (checkSystemStopDeadline()). */
+			if ( m_systemStopDeadline.has_value() )
+			{
+				return;
+			}
+
 			m_stopVetoCount++;
 
 			/* Below the threshold: just defer. */
@@ -1638,9 +1671,15 @@ namespace EmEn
 			(void) this->onBeforeCoreStop();
 		}
 
+		this->proceedStop();
+	}
+
+	void
+	Core::proceedStop () noexcept
+	{
 		std::cout << "\n"
 			"**************************************************************" "\n"
-			"   Engine is about to stop (User exit code: " << userExitCode << ") !   " "\n"
+			"   Engine is about to stop (User exit code: " << m_userExitCode << ") !   " "\n"
 			"**************************************************************" "\n\n";
 
 		/* Dispatch the stop event,
@@ -1668,6 +1707,61 @@ namespace EmEn
 		 * first by sending the event,
 		 * then directly to the sub application. */
 		this->notify(ExecutionStopped);
+	}
+
+	void
+	Core::requestSystemStop (const char * reason) noexcept
+	{
+		if ( m_systemStopDeadline.has_value() || !m_isMainLoopRunning )
+		{
+			return;
+		}
+
+		m_systemStopDeadline = std::chrono::steady_clock::now() + SystemStopGracePeriod;
+
+		TraceInfo{ClassId} << "The system requests the stop (" << reason << ") : the application has " << SystemStopGracePeriod.count() << " ms to acknowledge it.";
+
+		/* NOTE: The application is asked as for a normal stop; its veto only lasts until the deadline. */
+		this->stop(EXIT_SUCCESS);
+	}
+
+	void
+	Core::checkSystemStopDeadline () noexcept
+	{
+		if ( !m_systemStopDeadline.has_value() || !m_isMainLoopRunning || std::chrono::steady_clock::now() < m_systemStopDeadline.value() )
+		{
+			return;
+		}
+
+		TraceWarning{ClassId} << "The application did not acknowledge the system stop within " << SystemStopGracePeriod.count() << " ms : the stop proceeds.";
+
+		/* NOTE: A normal end of the run (exit code 0): the system ended it, it did not crash. */
+		this->setAppReadyToQuit(EXIT_SUCCESS);
+
+		/* NOTE: Its answer no longer matters: it is told the stop is happening, then the stop proceeds. */
+		static_cast< void >(this->onBeforeCoreStop());
+
+		this->proceedStop();
+	}
+
+	void
+	Core::stopOnDeviceLoss () noexcept
+	{
+		if ( m_deviceLossStopIssued )
+		{
+			return;
+		}
+
+		m_deviceLossStopIssued = true;
+
+		TraceError{ClassId} << "The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code " << DeviceLostExitCode << ").";
+
+		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn any more. */
+		this->setAppReadyToQuit(DeviceLostExitCode);
+
+		static_cast< void >(this->onBeforeCoreStop());
+
+		this->proceedStop();
 	}
 
 	int
@@ -2807,6 +2901,17 @@ namespace EmEn
 					Tracer::info(ClassId, "Stop requested by the window system (close request).");
 
 					this->stop();
+					break;
+
+				case Window::OSRequestsToEndSession :
+					this->requestSystemStop("the Windows session ends");
+					break;
+
+				case Window::OSEndsSession :
+					/* NOTE: The process may be killed as soon as this returns: the application records what must survive. */
+					this->requestSystemStop("the Windows session ends");
+
+					this->onCoreSessionEnding();
 					break;
 
 				default:

@@ -1558,6 +1558,19 @@ namespace EmEn::Graphics
 			bool isSwapChainDegraded () const noexcept;
 
 			/**
+			 * @brief Returns whether the graphics device was lost (Vulkan::Device::isLost()): no frame is rendered any more,
+			 * and Core stops the engine (Core::stopOnDeviceLoss()).
+			 * @note Thread-safe.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDeviceLost () const noexcept
+			{
+				return m_device != nullptr && m_device->isLost();
+			}
+
+			/**
 			 * @brief Requests a graceful shutdown of the renderer.
 			 * @note This will signal the renderer to stop producing new frames
 			 * and allow any frames in-flight to complete before destruction.

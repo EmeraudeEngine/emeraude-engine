@@ -194,8 +194,10 @@ namespace EmEn
 	}
 
 	void
-	Window::setupWindowsResizeHandling () noexcept
+	Window::setupWindowsResizeHandling (bool enableResizePause) noexcept
 	{
+		m_resizePauseEnabled = enableResizePause;
+
 		HWND hwnd = glfwGetWin32Window(m_handle.get());
 
 		if ( hwnd == nullptr )
@@ -213,12 +215,29 @@ namespace EmEn
 
 		if ( m_originalWndProc == nullptr )
 		{
-			Tracer::warning(ClassId, "Unable to subclass Win32 window for resize handling.");
+			Tracer::warning(ClassId, "Unable to subclass the Win32 window : the end of the user session will not stop the engine cleanly.");
 		}
-		else
+		else if ( m_resizePauseEnabled )
 		{
 			Tracer::info(ClassId, "Windows resize pause handling enabled.");
 		}
+	}
+
+	void
+	Window::restoreWindowProcedure () noexcept
+	{
+		if ( m_handle == nullptr || m_originalWndProc == nullptr )
+		{
+			return;
+		}
+
+		if ( HWND hwnd = glfwGetWin32Window(m_handle.get()); hwnd != nullptr )
+		{
+			SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast< LONG_PTR >(m_originalWndProc));
+			SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
+		}
+
+		m_originalWndProc = nullptr;
 	}
 
 	LRESULT CALLBACK
@@ -232,16 +251,41 @@ namespace EmEn
 			{
 				case WM_ENTERSIZEMOVE :
 					/* User started dragging/resizing the window - pause rendering. */
-					window->m_isUserResizing = true;
+					if ( window->m_resizePauseEnabled )
+					{
+						window->m_isUserResizing = true;
+					}
 					break;
 
 				case WM_EXITSIZEMOVE :
+					if ( !window->m_resizePauseEnabled )
+					{
+						break;
+					}
+
 					/* User finished dragging/resizing the window - resume rendering. */
 					window->m_isUserResizing = false;
 
 					/* Notify that the framebuffer needs to be resized now that the user finished resizing. */
 					window->notify(OSNotifiesFramebufferResized);
 					break;
+
+				case WM_QUERYENDSESSION :
+					/* NOTE: The session is about to end (shutdown, logoff): the engine starts a system stop and agrees
+					 * at once — refusing would show the user Windows' "an application is preventing shutdown" screen. */
+					window->notify(OSRequestsToEndSession);
+
+					return TRUE;
+
+				case WM_ENDSESSION :
+					/* NOTE: wParam TRUE: the session ends, and the process may be killed as soon as this returns. The
+					 * observers run synchronously here (the application records a normal end of its run). */
+					if ( wParam != FALSE )
+					{
+						window->notify(OSEndsSession);
+					}
+
+					return 0;
 
 				default :
 					break;

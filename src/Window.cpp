@@ -393,6 +393,11 @@ namespace EmEn
 
 		m_surface.reset();
 
+#if IS_WINDOWS
+		/* NOTE: The window procedure must not reach this object while GLFW destroys the window. */
+		this->restoreWindowProcedure();
+#endif
+
 		/* Reset the window pointer.
 		 * NOTE: It will automatically remove all callbacks. */
 		m_handle.reset();
@@ -1441,8 +1446,10 @@ namespace EmEn
 		glfwSetWindowContentScaleCallback(m_handle.get(), windowContentScaleCallback);
 
 #if IS_WINDOWS
-		// TODO: Make this feature global on all system an optional. For now disabled.
-		//this->setupWindowsResizeHandling();
+		/* NOTE: Always subclassed for the end of the user session (a clean stop instead of a killed process, owner
+		 * decision 2026-10-11). The resize pause stays disabled.
+		 * TODO: Make the resize pause global on all systems and optional. */
+		this->setupWindowsResizeHandling(false);
 #endif
 
 		return true;

@@ -897,7 +897,8 @@ namespace EmEn::Graphics
 
 		m_shutdownRequested = true;
 
-		/* Wait for all frames in-flight to complete their GPU work. */
+		/* Wait for all frames in-flight to complete their GPU work (nothing completes on a lost device: Fence::wait()
+		 * returns at once there). */
 		for ( auto & frameScope : m_rendererFrameScope )
 		{
 			if ( frameScope.inFlightFence() != nullptr )
@@ -1628,6 +1629,12 @@ namespace EmEn::Graphics
 	{
 		m_acquiredImageIndex.reset();
 
+		/* NOTE: A lost device renders nothing any more: Core stops the engine. */
+		if ( this->isDeviceLost() )
+		{
+			return false;
+		}
+
 		/* NOTE: Record frame start time for the optional frame limiter. */
 		if ( this->isSoftwareFrameLimiterEnabled() )
 		{
@@ -1668,9 +1675,17 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << '!';
+			/* NOTE: No abort (engine items renderer-fail-fast-on-device-loss / device-lost-shutdown-fail-fast): a lost
+			 * device was latched by the wait itself; a fence that never signals within m_timeout is treated as a lost
+			 * device too — teardown must not wait on it for ever. Core then stops the engine cleanly. */
+			if ( !this->isDeviceLost() )
+			{
+				TraceError{ClassId} << "The fence of the frame #" << m_currentFrameIndex << " did not signal within " << m_timeout / 1000000U << " ms : the device is considered lost.";
 
-			std::abort();
+				m_device->dumpDeviceLostDiagnostics("Renderer::beginFrame (fence timeout)");
+			}
+
+			return false;
 		}
 
 		/* 3. Get the new frame to render to.
@@ -1759,6 +1774,12 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
 	{
+		/* NOTE: A lost device: no recreation, no submit (Core stops the engine). */
+		if ( this->isDeviceLost() )
+		{
+			return;
+		}
+
 		/* Without an image, the frame drops: beginFrame() found the swap-chain degraded, or its acquisition timed out. */
 		if ( !m_acquiredImageIndex.has_value() )
 		{

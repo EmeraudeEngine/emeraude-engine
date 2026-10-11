@@ -646,4 +646,16 @@ namespace EmEn::PlatformSpecific
 
 		return convertWideToUTF8(value);
 	}
+
+	/* NOTE: No POSIX termination signal reaches a Windows GUI application: the end of the session arrives as window
+	 * messages (Window: WM_QUERYENDSESSION / WM_ENDSESSION). Nothing to install. */
+	TerminationSignalCatcher::TerminationSignalCatcher () noexcept = default;
+
+	TerminationSignalCatcher::~TerminationSignalCatcher () = default;
+
+	const char *
+	TerminationSignalCatcher::takePendingSignalName () noexcept
+	{
+		return nullptr;
+	}
 }

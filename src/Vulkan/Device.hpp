@@ -818,9 +818,24 @@ namespace EmEn::Vulkan
 			 * @note Best-effort and self-guarded: reports only once per device. Combines VK_EXT_device_fault
 			 * (faulting GPU addresses) and VK_NV_device_diagnostic_checkpoints (last command region reached).
 			 * Takes NO device lock — safe to call from within a locked submit/wait path.
+			 * @note It also LATCHES the device as lost (isLost()): every observation of VK_ERROR_DEVICE_LOST calls it.
 			 * @param context A short string naming the CPU call site that observed the loss.
 			 */
 			void dumpDeviceLostDiagnostics (const char * context) const noexcept;
+
+			/**
+			 * @brief Returns whether the device was lost (a VK_ERROR_DEVICE_LOST was observed, latched for good).
+			 * @details Once lost, the queues refuse every submit, the fences every wait and reset (they return false at
+			 * once, without a Vulkan call): nothing pending can complete, destroying stays legal (Vulkan spec, "Lost
+			 * Device"), and the engine stops (Core::stopOnDeviceLoss()). Thread-safe.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isLost () const noexcept
+			{
+				return m_deviceLostReported.load(std::memory_order_acquire);
+			}
 
 		private:
 

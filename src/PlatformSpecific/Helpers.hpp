@@ -36,8 +36,13 @@
 	#include <map>
 	#include <optional>
 #endif
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#if IS_LINUX || IS_MACOS
+	#include <csignal>
+#endif
 #include <functional>
 #include <string>
 #include <vector>
@@ -443,4 +448,60 @@ namespace EmEn::PlatformSpecific
 			bool m_active{false};
 	};
 #endif
+
+	/**
+	 * @brief Catches the termination signals (SIGTERM, SIGHUP, SIGINT) while it exists, so the engine stops cleanly
+	 * instead of dying with the user session (owner decision 2026-10-11).
+	 * @details Linux / macOS: the handlers are installed by the constructor and the previous ones (Chromium's, when
+	 * CEF is used: they ended the process at once on SIGTERM and ignored SIGHUP / SIGINT, measured) restored by the
+	 * destructor. A handler only stores the signal number in a lock-free atomic — the one async-signal-safe
+	 * operation; the main loop takes it with takePendingSignalName(). That atomic is a process-wide static: a signal
+	 * handler cannot reach an object (the sanctioned exception to the no-global-state rule, like the libjpeg error
+	 * callback). Windows: no POSIX termination signal reaches a GUI application; the end of the session arrives as
+	 * window messages (Window: WM_QUERYENDSESSION / WM_ENDSESSION) — this object does nothing there.
+	 * @note Construct it on the main thread after CefInitialize() (whose handlers it overrides), once.
+	 */
+	class TerminationSignalCatcher final
+	{
+		public:
+
+			/** @brief Installs the handlers. */
+			TerminationSignalCatcher () noexcept;
+
+			/** @brief Deleted copy constructor. */
+			TerminationSignalCatcher (const TerminationSignalCatcher &) = delete;
+
+			/** @brief Deleted move constructor. */
+			TerminationSignalCatcher (TerminationSignalCatcher &&) = delete;
+
+			/** @brief Deleted copy assignment. @return TerminationSignalCatcher & */
+			TerminationSignalCatcher & operator= (const TerminationSignalCatcher &) = delete;
+
+			/** @brief Deleted move assignment. @return TerminationSignalCatcher & */
+			TerminationSignalCatcher & operator= (TerminationSignalCatcher &&) = delete;
+
+			/** @brief Restores the previous handlers. */
+			~TerminationSignalCatcher ();
+
+			/**
+			 * @brief Takes the termination signal caught since the last call, if any.
+			 * @return const char * The signal name ("SIGTERM", "SIGHUP", "SIGINT"), nullptr when none.
+			 */
+			[[nodiscard]]
+			static const char * takePendingSignalName () noexcept;
+
+		private:
+
+#if IS_LINUX || IS_MACOS
+			/** @brief One caught signal: its number, whether the handler is installed, the previous action to restore. */
+			struct CaughtSignal
+			{
+				int number{0};
+				struct sigaction previousAction{};
+				bool installed{false};
+			};
+
+			std::array< CaughtSignal, 3 > m_signals{{{SIGTERM}, {SIGHUP}, {SIGINT}}};
+#endif
+	};
 }

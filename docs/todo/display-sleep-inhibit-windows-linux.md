@@ -13,7 +13,7 @@ tags: [window, power, cross-platform]
 ## Why
 
 Owner decision 2026-10-11: the display stays awake while the engine window exists (setting
-`Core/Video/Window/PreventDisplaySleep`, default true), as SDL does by default. macOS has it
+`Core/Video/Window/PreventDisplaySleep`, default false since 2026-10-11 — an application opts in), as SDL does by default. macOS has it
 (`PlatformSpecific::DisplaySleepInhibitor`, an IOKit `PreventUserIdleDisplaySleep` assertion held by `Window`). The
 other two platforms still let the display sleep during a run.
 

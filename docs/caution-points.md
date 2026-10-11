@@ -3573,6 +3573,49 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > after the loss). On the NVIDIA proprietary driver, `VK_EXT_device_fault` is **absent**, so
 > checkpoints carry the diagnosis. See `src/Vulkan/AGENTS.md` → *GPU device-lost diagnostics*.
 
+### A lost device stops the engine at once and cleanly — the device-lost latch (2026-10-11)
+
+> [!CRITICAL]
+> **`Vulkan::Device::isLost()` is latched by the first `VK_ERROR_DEVICE_LOST` observed anywhere**
+> (`dumpDeviceLostDiagnostics()`: `Queue` submit / present / waitIdle / timeline waits, `Fence` wait / status,
+> `Device::waitIdle()`). From then on `Queue` refuses every submit and present, `Fence` every wait and reset (return
+> `false` at once, no Vulkan call: a reset of a pending fence is `VUID-vkResetFences-pFences-01123`), a timeline is
+> "reached" (what waited for it may be destroyed), the renderer draws nothing (`beginFrame()` / `renderFrame()` return,
+> the rendering thread idles), and the main loop calls `Core::stopOnDeviceLoss()` ONCE: the application is told
+> (`onBeforeCoreStop()`, it may save) but cannot veto, exit code `Core::DeviceLostExitCode` (98, non-zero so a crash
+> reporter keeps the incident). `vkDeviceWaitIdle()` is kept on the teardown (finite on a lost device, Vulkan spec
+> "Lost Device"), destroying stays legal. Owner decision 2026-10-11 (fail fast, no recovery).
+> Before: `beginFrame()` called `std::abort()` on any failed fence wait (immediate on a lost device; 60 s on a fence
+> reset and never resubmitted), and `Core`'s "renderer unusable → stop()" never fired (`ServiceInterface::usable()`
+> stays true after a loss) — and would have re-called `stop()` every cycle, popping the force-quit dialog after three
+> vetoes. A fence that does not signal within `m_timeout` (60 s) is now treated as a loss too.
+> Measured (Linux, fault injection at frame 300 of `default`, temporary code never committed): "The graphics device is
+> lost …: the engine stops now (exit code 98)", exit 98, no abort, no hang; 42 finite load refusals from the scene
+> still loading, no flood. Open: the Windows `0xc0000409` at the end of a lost-device shutdown (item
+> device-lost-shutdown-fail-fast) needs its minidump.
+
+### The system's stop: termination signals and the Windows end of session (2026-10-11)
+
+> [!CRITICAL]
+> **`Core::requestSystemStop(reason)`**: the application is asked as for a normal stop (`onBeforeCoreStop()`, its own
+> handshake may run), its veto only lasts `Core::SystemStopGracePeriod` (3 s, owner decision), then the stop proceeds
+> with exit code 0 — the system ended the run, it did not crash (a downstream crash reporter must not report it). No
+> veto counting, no force-quit dialog during a system stop.
+> - **Linux / macOS**: `PlatformSpecific::TerminationSignalCatcher` (RAII, built in `Core::run()` AFTER
+>   `CefInitialize()`, reset after the main loop) catches SIGTERM / SIGHUP / SIGINT; the handler stores the signal in a
+>   lock-free atomic, the main loop takes it each cycle. Measured before: CEF's own handlers ended the process at once
+>   on SIGTERM (no shutdown, the session left "abnormal") and ignored SIGHUP / SIGINT. After: projet-alpha SIGTERM /
+>   SIGHUP / SIGINT → clean stop in 0.77 s, exit 0; a downstream CEF application: its JavaScript acknowledged within
+>   0.8 s, "Session closed normally".
+> - **Windows**: no POSIX signal reaches a GUI process; `Window::windowProc()` (the GLFW procedure, now always
+>   subclassed — the resize pause it also carries stays OFF) handles `WM_QUERYENDSESSION` (→ `OSRequestsToEndSession`
+>   → `requestSystemStop()`, answers TRUE: refusing shows Windows' "preventing shutdown" screen) and `WM_ENDSESSION`
+>   (→ `OSEndsSession` → `Core::onCoreSessionEnding()`, synchronous: the process may be killed as soon as it returns,
+>   so the application records there what must survive). The original procedure is restored before the window is
+>   destroyed.
+> - A paused engine (`Core::pause()`) waits on the system events without a timeout: a signal is then taken at the next
+>   event.
+
 ### Fixed: BLAS builds raced buffer uploads across transfer queues → DEVICE_LOST at load (Jul 2026)
 
 > [!CRITICAL]
@@ -5555,7 +5598,8 @@ Owner decisions 2026-10-11: `PlatformManager::onInitialize()` calls `PlatformSpe
 `glfwInit()` (when EVERY online display sleeps: `IOPMAssertionDeclareUserActivity(kIOPMUserActiveLocal)`, polled every
 50 ms up to 5 s, then released); and `Window` holds a `PlatformSpecific::DisplaySleepInhibitor` (an IOKit
 `PreventUserIdleDisplaySleep` assertion, RAII) while it exists, setting `Core/Video/Window/PreventDisplaySleep`
-(default true). Proof on the M6 (macOS peer, engine fed169e5): `pmset displaysleepnow`, then an unattended launch →
+(default **false** since 2026-10-11, owner decision: an application opts in by setting its own default before the
+window exists — a downstream application left open must not keep the user's display awake). Proof on the M6 (macOS peer, engine fed169e5): `pmset displaysleepnow`, then an unattended launch →
 "Every display was asleep : woken to create the window." 0.30 s after the launch, scene loaded at 1.74 s, exit 0;
 `pmset -g assertions` lists "Emeraude engine: a window is open" during the run and nothing after; with the setting
 false, no assertion. A 38-demo sweep ran with the display left to the engine. Windows and Linux: item
@@ -6772,10 +6816,9 @@ meter a black scene and pin the exposure to the ISO ceiling.
 >   manual `excludeFromRendering()` list remains for other cases. Cost is confined to probe
 >   renders by a `renderType()` test.
 >
-> **Post-device-loss robustness remains an open item**
-> ([`docs/todo/post-device-loss-robustness.md`](todo/post-device-loss-robustness.md)): the engine does not
-> yet recover or fail-stop cleanly after `VK_ERROR_DEVICE_LOST` — it must not be reachable through
-> scene content in the first place.
+> **After a `VK_ERROR_DEVICE_LOST` the engine fail-stops cleanly** (2026-10-11, § A lost device stops the engine
+> at once and cleanly — no recovery, owner decision); a loss must still not be reachable through scene content in
+> the first place.
 >
 > **Files:** `Scenes/Scene.rendering.cpp`, `Graphics/Material/Interface.hpp`,
 > `Graphics/Material/{Basic,Standard}Resource.{hpp,cpp}`. See also

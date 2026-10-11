@@ -169,6 +169,8 @@ namespace EmEn
 				OSRequestsToRefreshContent,
 				OSRequestsToTerminate,
 				OSMonitorConfigurationChanged,
+				OSRequestsToEndSession, /* Windows WM_QUERYENDSESSION: the user session is about to end (shutdown, logoff). */
+				OSEndsSession, /* Windows WM_ENDSESSION: the session ends; the process may be killed once the observers return (synchronous). */
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -1005,9 +1007,16 @@ namespace EmEn
 
 #if IS_WINDOWS
 			/**
-			 * @brief Sets up the Windows-specific resize handling by subclassing the window.
+			 * @brief Subclasses the GLFW window procedure: the end of the user session (WM_QUERYENDSESSION, WM_ENDSESSION,
+			 * always) and the resize pause (WM_ENTERSIZEMOVE / WM_EXITSIZEMOVE, only when enabled — off for now).
+			 * @param enableResizePause Whether the resize pause is handled.
 			 */
-			void setupWindowsResizeHandling () noexcept;
+			void setupWindowsResizeHandling (bool enableResizePause) noexcept;
+
+			/**
+			 * @brief Gives the original GLFW window procedure back. Called before the window is destroyed.
+			 */
+			void restoreWindowProcedure () noexcept;
 
 			/**
 			 * @brief Custom Windows procedure to intercept WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE.
@@ -1041,6 +1050,8 @@ namespace EmEn
 #if IS_WINDOWS
 			/* Whether initializeNativeWindow() initialised COM, so that releaseNativeWindow() uninitialises it only then. */
 			bool m_COMInitialized{false};
+			/* Whether windowProc() pauses the rendering while the user drags or resizes the window (off for now). */
+			bool m_resizePauseEnabled{false};
 #endif
 			Base::StaticVector< MonitorDevice, 16 > m_monitorDevices;
 

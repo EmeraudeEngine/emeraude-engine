@@ -1,7 +1,7 @@
 ---
 id: device-lost-shutdown-fail-fast
 title: After a DEVICE_LOST, the Windows shutdown ends in a 0xc0000409 fail-fast instead of a clean exit
-status: open
+status: in-progress
 priority: high
 scope: Vulkan device-loss handling, Core shutdown (Windows; the other OS not checked)
 opened: 2026-10-01
@@ -29,13 +29,13 @@ destruction must stay legal after a device loss, and the exit should be the clea
 
 ## What remains
 
-- [ ] Reproduce on demand: force a device loss (a shader with an infinite loop, or a debug console command that triggers
-  one), on the Windows AMD peer first, then on Linux and macOS.
-- [ ] Capture the stack of the fail-fast (a minidump, WinDbg `!analyze -v`, or a Debug build), and name the guard that
-  aborts.
-- [ ] Once the loss is detected, stop every fence reset / submit (the `m_deviceLost` latch of
-  `AccelerationStructureBuilder` is the model), skip the post-process resizes, and make the teardown legal.
-- [ ] Re-test: after a forced loss, `Core.shutdown()` exits 0, with no new VUID after the first loss report.
+The latch of 2026-10-11 (caution-points § A lost device stops the engine at once and cleanly) stops every fence reset
+and submit after the loss and skips the swap-chain recreation, so the post-process resizes on the lost device do not
+happen any more.
+
+- [ ] Re-test on Windows: a forced loss (the Linux fault injection, or a real one), `Core.shutdown()` or the automatic
+  stop: exit 98 without `0xc0000409`. If the fail-fast persists, capture its minidump (WER `LocalDumps`) and name
+  the guard (a `StaticVector` overflow is a candidate: its `std::abort()` ends in `__fastfail` with the static CRT).
 
 ## References
 

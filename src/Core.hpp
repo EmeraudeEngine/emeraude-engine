@@ -121,9 +121,11 @@
 #include <cstdint>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <limits>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -146,6 +148,7 @@
 #include "Overlay/Manager.hpp"
 #include "Physics/Manager.hpp"
 #include "PlatformManager.hpp"
+#include "PlatformSpecific/Helpers.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Manager.hpp"
@@ -194,6 +197,19 @@ namespace EmEn
 			 * @see stop()
 			 */
 			static constexpr int ForceQuitExitCode{99};
+
+			/** @brief Exit code of a run stopped because the graphics device was lost (VK_ERROR_DEVICE_LOST).
+			 * @details Non-zero on purpose: a downstream crash reporter keeps the run as an incident.
+			 * @see stopOnDeviceLoss()
+			 */
+			static constexpr int DeviceLostExitCode{98};
+
+			/** @brief How long the application may take to acknowledge a stop requested by the system (end of the user
+			 * session, SIGTERM / SIGHUP / SIGINT, Windows shutdown) before the stop proceeds anyway (owner decision
+			 * 2026-10-11).
+			 * @see requestSystemStop()
+			 */
+			static constexpr std::chrono::milliseconds SystemStopGracePeriod{3000};
 
 			/** @name Available Tool Names
 			 * @brief Names of built-in tools accessible via tools mode.
@@ -395,6 +411,16 @@ namespace EmEn
 			 * @see NotificationCode::ExecutionStopped
 			 */
 			void stop (int userExitCode = 0) noexcept;
+
+			/**
+			 * @brief Stops the engine at the system's request (end of the user session, a termination signal).
+			 * @details The application is asked as for a normal stop (onBeforeCoreStop(), its own handshake may run), but
+			 * its veto only buys SystemStopGracePeriod: past it the stop proceeds anyway, with the exit code 0 — the run
+			 * ended normally, it was not a crash. No force-quit dialog. One-shot: a second request is ignored.
+			 * @note Main thread.
+			 * @param reason A short text for the trace (e.g. "SIGTERM").
+			 */
+			void requestSystemStop (const char * reason) noexcept;
 
 			/**
 			 * @brief Handles files dropped onto the application window.
@@ -1369,6 +1395,27 @@ namespace EmEn
 			void onWindowChanged () noexcept;
 
 			/**
+			 * @brief The tail of a stop, once the application accepted it (or may no longer refuse it): notifies the
+			 * stop, lowers the loop flags and wakes the rendering thread.
+			 * @note Main thread. Called by stop(), requestSystemStop() past its deadline, stopOnDeviceLoss().
+			 */
+			void proceedStop () noexcept;
+
+			/**
+			 * @brief Stops the engine once, at once, after the graphics device was lost (VK_ERROR_DEVICE_LOST).
+			 * @details The application is told (onBeforeCoreStop(): it may save its data) but cannot refuse: nothing can
+			 * be drawn any more. Exit code DeviceLostExitCode. No force-quit dialog, no 60 s wait, no abort.
+			 * @note Main thread. One-shot.
+			 */
+			void stopOnDeviceLoss () noexcept;
+
+			/**
+			 * @brief Main-loop check of a system stop: past its deadline, the stop proceeds whatever the application said.
+			 * @note Main thread.
+			 */
+			void checkSystemStopDeadline () noexcept;
+
+			/**
 			 * @brief Executes the body of one main-loop cycle.
 			 * @details Single definition shared by the running and paused loops: polls the
 			 * console controller, consumes a pending scheduleMainLoopCycle() request when due,
@@ -1655,6 +1702,19 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Called when the user session ends and the process may be killed at any moment after this returns
+			 * (Windows WM_ENDSESSION). Record what must survive (e.g. a normal end of the run for a crash reporter); a
+			 * system stop is already in progress (requestSystemStop()).
+			 * @note Main thread, synchronous, inside the window message handling: keep it short, no CEF pumping.
+			 */
+			virtual
+			void
+			onCoreSessionEnding () noexcept
+			{
+				/* Nothing to do by default. */
+			}
+
+			/**
 			 * @brief Application-level key press handler.
 			 * @details Called after Core processes its reserved keys (F11 fullscreen, etc.).
 			 * Implement to handle application-specific keyboard shortcuts.
@@ -1785,6 +1845,9 @@ namespace EmEn
 			std::filesystem::path m_rushVoiceOverPath;
 			int m_userExitCode{0};
 			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
+			std::optional< std::chrono::steady_clock::time_point > m_systemStopDeadline; ///< Set by requestSystemStop(): past it, the stop proceeds whatever the application answers. Main thread only.
+			bool m_deviceLossStopIssued{false}; ///< stopOnDeviceLoss() ran (one-shot). Main thread only.
+			std::optional< PlatformSpecific::TerminationSignalCatcher > m_terminationSignals; ///< Catches SIGTERM / SIGHUP / SIGINT during the main loop (run()). Main thread only.
 			uint32_t m_mainLoopFrequency{DefaultMainLoopFrequencyHz< uint32_t >}; ///< Main event-loop tick ceiling (Hz), set at construction. @see mainLoopFrequencyHz()
 			double m_mainLoopEventTimeoutSeconds{1.0 / DefaultMainLoopFrequencyHz< double >}; ///< Precomputed 1/Hz wait timeout passed to waitSystemEvents().
 			/* External main-loop cycle scheduling. @see scheduleMainLoopCycle() */

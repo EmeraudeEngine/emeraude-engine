@@ -1,7 +1,7 @@
 ---
 id: renderer-fail-fast-on-device-loss
 title: A lost device waits 60 s on a fence and aborts — fail fast, dump, shut down cleanly
-status: open
+status: in-progress
 priority: high
 scope: Graphics/Renderer (beginFrame, renderFrame, discardAcquiredImage), Vulkan/Queue
 opened: 2026-09-25
@@ -48,7 +48,11 @@ fence"): exit 134. The loss itself is the driver's (an NVK / nouveau kernel faul
 
 ## What remains
 
-- On `VK_ERROR_DEVICE_LOST` from any submit or wait: mark the renderer lost, report once with the dump, stop
-  recording, and request a clean shutdown (the user application may save its data) instead of resetting fences
-  and waiting on them.
-- Keep the 60 s timeout for a frame that is merely slow, but say which command buffers were in flight.
+Done 2026-10-11 (caution-points § A lost device stops the engine at once and cleanly): the `Device::isLost()` latch,
+every submit / wait / reset refused after a loss, no `std::abort()` in `beginFrame()`, `Core::stopOnDeviceLoss()`
+(one-shot, exit 98), the rendering thread idle. Linux fault injection: exit 98, no abort, no hang.
+
+- On a genuine fence timeout (`m_timeout`, 60 s), name the command buffers that were in flight before treating the
+  device as lost (today only the frame slot is traced).
+- Peer validation (macOS, Windows): the same fault injection (temporary `dumpDeviceLostDiagnostics()` call after N
+  frames), exit 98, no abort; then delete this item.

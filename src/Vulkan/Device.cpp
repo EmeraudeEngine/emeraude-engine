@@ -906,14 +906,21 @@ namespace EmEn::Vulkan
 
 		const std::scoped_lock lock{m_logicalDeviceAccess};
 
+		/* NOTE: Kept on a lost device: vkDeviceWaitIdle() returns in finite time there (Vulkan spec, "Lost Device"), and it
+		 * is the legal step before the destructions. */
 		if ( const auto result = vkDeviceWaitIdle(m_deviceHandle); result != VK_SUCCESS )
 		{
-			TraceError{ClassId} << "Unable to wait the device " << m_deviceHandle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
-
 			if ( result == VK_ERROR_DEVICE_LOST )
 			{
+				if ( this->isLost() )
+				{
+					return;
+				}
+
 				this->dumpDeviceLostDiagnostics("Device::waitIdle");
 			}
+
+			TraceError{ClassId} << "Unable to wait the device " << m_deviceHandle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
 		}
 	}
 
