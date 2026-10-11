@@ -2904,7 +2904,7 @@ namespace EmEn
 					break;
 
 				case Window::OSRequestsToEndSession :
-					this->requestSystemStop("the Windows session ends");
+					this->requestSystemStop("the system asks the application to quit");
 					break;
 
 				case Window::OSEndsSession :

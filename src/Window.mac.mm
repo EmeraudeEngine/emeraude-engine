@@ -33,7 +33,12 @@
 #error "This file must be compiled with ARC (-fobjc-arc)."
 #endif
 
+/* STL inclusions. */
+#include <functional>
+#include <utility>
+
 /* Third-party inclusions. */
+#import <AppKit/AppKit.h>
 #define GLFW_EXPOSE_NATIVE_COCOA
 #include "GLFW/glfw3native.h"
 
@@ -42,9 +47,105 @@
 #include "Vulkan/Instance.hpp"
 #include "Tracer.hpp"
 
+/**
+ * @brief Receives the "quit" Apple Event in place of AppKit's default handler.
+ * @details The default one called [NSApp terminate:], GLFW's delegate answered NSTerminateCancel and the engine then
+ * stopped on its own: the sender got "User canceled" (-128: an AppleScript `quit`, and the end of the user session,
+ * which macOS may take for a refusal — macOS peer, 2026-10-11). Here the event is SUSPENDED, the engine starts a
+ * system stop (its JavaScript handshake included), and the reply ("done") is sent when the window is released at
+ * shutdown.
+ */
+@interface EmEnQuitAppleEventReceiver : NSObject
+
+- (void) handleQuitEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply;
+
+@end
+
+@implementation EmEnQuitAppleEventReceiver
+{
+	/* NOTE: Read and written by QuitAppleEventHandler (this file only), on the main thread. */
+	@public
+	std::function< void () > onQuit;
+	NSAppleEventManagerSuspensionID suspensionID;
+	BOOL suspended;
+}
+
+- (void) handleQuitEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply
+{
+	(void) event;
+	(void) reply;
+
+	/* NOTE: A second quit while the first one waits gets its reply at once: the stop is already under way. */
+	if ( suspended )
+	{
+		return;
+	}
+
+	suspensionID = [[NSAppleEventManager sharedAppleEventManager] suspendCurrentAppleEvent];
+	suspended = YES;
+
+	if ( onQuit )
+	{
+		onQuit();
+	}
+}
+
+@end
+
 namespace EmEn
 {
 	using namespace Vulkan;
+
+	/** @brief Owns the receiver of the "quit" Apple Event; restores the default handling and answers on destruction. */
+	class QuitAppleEventHandler final
+	{
+		public:
+
+			explicit
+			QuitAppleEventHandler (std::function< void () > onQuit) noexcept
+				: m_receiver{[[EmEnQuitAppleEventReceiver alloc] init]}
+			{
+				m_receiver->onQuit = std::move(onQuit);
+				m_receiver->suspended = NO;
+
+				[[NSAppleEventManager sharedAppleEventManager]
+					setEventHandler:m_receiver
+					andSelector:@selector(handleQuitEvent:withReplyEvent:)
+					forEventClass:kCoreEventClass
+					andEventID:kAEQuitApplication];
+			}
+
+			QuitAppleEventHandler (const QuitAppleEventHandler &) = delete;
+			QuitAppleEventHandler (QuitAppleEventHandler &&) = delete;
+			QuitAppleEventHandler & operator= (const QuitAppleEventHandler &) = delete;
+			QuitAppleEventHandler & operator= (QuitAppleEventHandler &&) = delete;
+
+			~QuitAppleEventHandler ()
+			{
+				/* NOTE: No callback after this point: the owner (Window) is being released. */
+				m_receiver->onQuit = nullptr;
+
+				[[NSAppleEventManager sharedAppleEventManager] removeEventHandlerForEventClass:kCoreEventClass andEventID:kAEQuitApplication];
+
+				/* NOTE: The engine is stopping: the sender (AppleScript, the session end) is told the quit is done. */
+				if ( m_receiver->suspended )
+				{
+					[[NSAppleEventManager sharedAppleEventManager] resumeWithSuspensionID:m_receiver->suspensionID];
+
+					m_receiver->suspended = NO;
+				}
+			}
+
+		private:
+
+			EmEnQuitAppleEventReceiver * m_receiver;
+	};
+
+	void
+	QuitAppleEventHandlerDeleter::operator() (QuitAppleEventHandler * handler) const noexcept
+	{
+		delete handler;
+	}
 
 	void
 	Window::disableTitleBar () noexcept
@@ -61,13 +162,21 @@ namespace EmEn
 	bool
 	Window::initializeNativeWindow () noexcept
 	{
+		/* NOTE: The callback captures this window, which owns the handler: releaseNativeWindow() destroys it first. */
+		m_quitAppleEventHandler.reset(new QuitAppleEventHandler{[this] () {
+			Tracer::info(ClassId, "macOS asks the application to quit (Apple Event).");
+
+			this->notify(OSRequestsToEndSession);
+		}});
+
 		return true;
 	}
 
 	void
 	Window::releaseNativeWindow () noexcept
 	{
-
+		/* NOTE: Answers a suspended "quit" Apple Event (the engine is stopping) and restores the default handling. */
+		m_quitAppleEventHandler.reset();
 	}
 
 	void

@@ -3615,6 +3615,18 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 >   destroyed.
 > - A paused engine (`Core::pause()`) waits on the system events without a timeout: a signal is then taken at the next
 >   event.
+> - **macOS "quit" Apple Event** (AppleScript `quit`, the end of the user session): AppKit's default handler called
+>   `[NSApp terminate:]`, GLFW's delegate answered `NSTerminateCancel` and the engine then stopped on its own — the
+>   sender got "User canceled" (-128) (macOS peer, packaged build, 2026-10-11). `Window` (macOS) installs its own
+>   handler (`QuitAppleEventHandler`, `Window.mac.mm`, no GLFW change): the event is SUSPENDED, `OSRequestsToEndSession`
+>   starts the system stop, and the reply ("done") is sent when the window is released at shutdown
+>   (`releaseNativeWindow()`). Cmd+Q (the menu, `[NSApp terminate:]`) is unchanged.
+> - **A child process is waited for EINTR-safely**: the desktop commands (`runDesktopApplication()`,
+>   `runDefaultDesktopApplication()`, Linux / macOS) use `PlatformSpecific::runProcessAndWait()` (`posix_spawnp()` +
+>   `waitpid()` resumed on EINTR, bounded) instead of `reproc::run()`, which resumed neither its `poll()` nor its
+>   `waitpid()`: "Failed to run a subprocess : Interrupted system call" on macOS for an `open` that had run (a handled
+>   signal during the wait; `poll()` is never restarted, `SA_RESTART` or not). Proof (Linux bench, SIGALRM every 2 ms
+>   without SA_RESTART): the plain wait fails at the first interruption, the resumed one ends normally after 150.
 
 ### Fixed: BLAS builds raced buffer uploads across transfer queues → DEVICE_LOST at load (Jul 2026)
 

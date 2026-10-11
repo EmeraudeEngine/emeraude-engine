@@ -71,6 +71,18 @@ namespace EmEn
 
 using id = struct objc_object *;
 
+namespace EmEn
+{
+	/* The handler of the macOS "quit" Apple Event (defined in Window.mac.mm, Objective-C under ARC). */
+	class QuitAppleEventHandler;
+
+	/** @brief Destroys a QuitAppleEventHandler where its type is complete (Window.mac.mm). */
+	struct QuitAppleEventHandlerDeleter
+	{
+		void operator() (QuitAppleEventHandler * handler) const noexcept;
+	};
+}
+
 #elif IS_WINDOWS
 	#ifndef NOMINMAX
 	#define NOMINMAX
@@ -169,7 +181,7 @@ namespace EmEn
 				OSRequestsToRefreshContent,
 				OSRequestsToTerminate,
 				OSMonitorConfigurationChanged,
-				OSRequestsToEndSession, /* Windows WM_QUERYENDSESSION: the user session is about to end (shutdown, logoff). */
+				OSRequestsToEndSession, /* The system asks the application to quit: Windows WM_QUERYENDSESSION (shutdown, logoff), the macOS "quit" Apple Event (AppleScript, logout). */
 				OSEndsSession, /* Windows WM_ENDSESSION: the session ends; the process may be killed once the observers return (synchronous). */
 				/* Enumeration boundary. */
 				MaxEnum
@@ -1041,6 +1053,9 @@ namespace EmEn
 #if IS_MACOS
 			/* Held while the window exists when Core/Video/Window/PreventDisplaySleep is true (owner decision 2026-10-11). */
 			PlatformSpecific::DisplaySleepInhibitor m_displaySleepInhibitor;
+			/* The "quit" Apple Event (AppleScript, the end of the user session) as a system stop, answered when the window is
+			 * released (initializeNativeWindow() / releaseNativeWindow()). */
+			std::unique_ptr< QuitAppleEventHandler, QuitAppleEventHandlerDeleter > m_quitAppleEventHandler;
 #endif
 			/* The framebuffer size for the render thread (publishedFramebufferSize()): width in the high 32 bits. */
 			std::atomic< uint64_t > m_publishedFramebufferSize{0};
