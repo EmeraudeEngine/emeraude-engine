@@ -1620,6 +1620,16 @@ namespace EmEn::Graphics
 			bool onInitialize () noexcept override;
 
 			/**
+			 * @brief The initialisation steps of onInitialize().
+			 * @note On failure, onInitialize() releases everything created so far (onTerminate()) before returning:
+			 * a service whose initialisation failed is never terminated by Core, and its Vulkan objects would
+			 * otherwise outlive the device (Ave Robustus II, every initialisation step exits cleanly).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool initializeRenderingStack () noexcept;
+
+			/**
 			 * @brief Loads the driver pipeline cache from disk into the device.
 			 * @note The blob is wrapped in an application header (magic, format version, size,
 			 * content hash, vendor ID, device ID, driver version, pointer ABI and the device's

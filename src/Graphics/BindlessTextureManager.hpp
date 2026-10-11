@@ -412,6 +412,27 @@ namespace EmEn::Graphics
 			bool computeCapacities () noexcept;
 
 			/**
+			 * @brief Picks the desired, reduced or minimal profile for a descriptor budget.
+			 * @param deviceBudget The budget, in descriptors, before the headroom reserved for other sets.
+			 * @param limitName The name of the device limit that sets it (traced).
+			 * @return bool False if the budget cannot host even the absolute floor.
+			 */
+			[[nodiscard]]
+			bool applyBudget (uint32_t deviceBudget, const char * limitName) noexcept;
+
+			/**
+			 * @brief Asks the device whether the layout of the current capacities can be created
+			 * (vkGetDescriptorSetLayoutSupport, with the same bindings, binding flags and layout flags as
+			 * createDescriptorSetLayout()).
+			 * @note A layout of more than maxPerSetDescriptors descriptors must be confirmed this way
+			 * (VUID-vkCreateDescriptorSetLayout-support-09582): MoltenVK on an Apple M6 reports 1212 and
+			 * refuses the desired 4928, while it accepts the update-after-bind budget of 500000.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isLayoutSupported () const noexcept;
+
+			/**
 			 * @brief Creates the descriptor set layout with UPDATE_AFTER_BIND support.
 			 * @return bool
 			 */

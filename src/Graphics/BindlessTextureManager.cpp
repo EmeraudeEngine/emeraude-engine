@@ -120,9 +120,13 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* NOTE: A failed step releases what the previous ones created (onTerminate()): a sub-service whose
+		 * initialisation failed is never terminated by its owner. */
 		if ( !this->createDescriptorSetLayout() )
 		{
 			Tracer::error(ClassId, "Failed to create the bindless descriptor set layout !");
+
+			[[maybe_unused]] const auto terminated = this->onTerminate();
 
 			return false;
 		}
@@ -131,12 +135,16 @@ namespace EmEn::Graphics
 		{
 			Tracer::error(ClassId, "Failed to create the bindless descriptor pool !");
 
+			[[maybe_unused]] const auto terminated = this->onTerminate();
+
 			return false;
 		}
 
 		if ( !this->createDescriptorSet() )
 		{
 			Tracer::error(ClassId, "Failed to create the bindless descriptor set !");
+
+			[[maybe_unused]] const auto terminated = this->onTerminate();
 
 			return false;
 		}
@@ -170,6 +178,45 @@ namespace EmEn::Graphics
 			"setSampledImages[" << properties.maxDescriptorSetUpdateAfterBindSampledImages << "], "
 			"perStageResources[" << properties.maxPerStageUpdateAfterBindResources << "].";
 
+		if ( !this->applyBudget(deviceBudget, limitName) )
+		{
+			return false;
+		}
+
+		if ( this->isLayoutSupported() )
+		{
+			return true;
+		}
+
+		/* NOTE: The update-after-bind limits allow the table, but the device refuses the layout as a whole: a set of more
+		 * than maxPerSetDescriptors descriptors is only guaranteed when vkGetDescriptorSetLayoutSupport agrees. The
+		 * profile is chosen again with that limit as the budget. */
+		const auto perSetLimit = m_device->physicalDevice()->propertiesVK11().maxPerSetDescriptors;
+
+		TraceWarning{ClassId} <<
+			"The device refuses a bindless layout of " << ( m_maxTextures1D + m_maxTextures2D + m_maxTextures3D + m_maxTexturesCube + m_maxTexturesCubeArray ) <<
+			" descriptors (maxPerSetDescriptors " << perSetLimit << ") : the table is sized on that limit.";
+
+		m_firstDynamicSlot = FirstDynamicSlot;
+
+		if ( !this->applyBudget(std::min(deviceBudget, perSetLimit), "maxPerSetDescriptors") )
+		{
+			return false;
+		}
+
+		if ( !this->isLayoutSupported() )
+		{
+			TraceError{ClassId} << "The device refuses the bindless layout even within maxPerSetDescriptors (" << perSetLimit << ") !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	BindlessTextureManager::applyBudget (uint32_t deviceBudget, const char * limitName) noexcept
+	{
 		/* The table can never claim the whole device budget — see OtherSetsSamplerHeadroom. */
 		constexpr uint32_t minimalTotal =
 			MinimalMaxTextures1D + MinimalMaxTextures3D + (3 * MinimalTexturesPerDynamicArray);
@@ -259,6 +306,48 @@ namespace EmEn::Graphics
 			"size will fail to register textures.";
 
 		return true;
+	}
+
+	bool
+	BindlessTextureManager::isLayoutSupported () const noexcept
+	{
+		/* NOTE: The same bindings and flags as createDescriptorSetLayout(). */
+		constexpr VkDescriptorBindingFlags bindingFlags =
+			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+		constexpr VkShaderStageFlags stages = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+
+		const std::array< VkDescriptorSetLayoutBinding, 5 > bindings{{
+			{.binding = Texture1DBinding, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_maxTextures1D, .stageFlags = stages, .pImmutableSamplers = nullptr},
+			{.binding = Texture2DBinding, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_maxTextures2D, .stageFlags = stages, .pImmutableSamplers = nullptr},
+			{.binding = Texture3DBinding, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_maxTextures3D, .stageFlags = stages, .pImmutableSamplers = nullptr},
+			{.binding = TextureCubeBinding, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_maxTexturesCube, .stageFlags = stages, .pImmutableSamplers = nullptr},
+			{.binding = TextureCubeArrayBinding, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_maxTexturesCubeArray, .stageFlags = stages, .pImmutableSamplers = nullptr}
+		}};
+
+		const std::array< VkDescriptorBindingFlags, 5 > flags{bindingFlags, bindingFlags, bindingFlags, bindingFlags, bindingFlags};
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo flagsCreateInfo{};
+		flagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		flagsCreateInfo.pNext = nullptr;
+		flagsCreateInfo.bindingCount = static_cast< uint32_t >(flags.size());
+		flagsCreateInfo.pBindingFlags = flags.data();
+
+		VkDescriptorSetLayoutCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		createInfo.pNext = &flagsCreateInfo;
+		createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+		createInfo.bindingCount = static_cast< uint32_t >(bindings.size());
+		createInfo.pBindings = bindings.data();
+
+		VkDescriptorSetLayoutSupport support{};
+		support.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_SUPPORT;
+		support.pNext = nullptr;
+		support.supported = VK_FALSE;
+
+		vkGetDescriptorSetLayoutSupport(m_device->handle(), &createInfo, &support);
+
+		return support.supported == VK_TRUE;
 	}
 
 	bool

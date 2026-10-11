@@ -544,6 +544,26 @@ namespace EmEn::Graphics
 	bool
 	Renderer::onInitialize () noexcept
 	{
+		if ( this->initializeRenderingStack() )
+		{
+			return true;
+		}
+
+		/* NOTE: Core never terminates a service whose initialisation failed: what was created so far (sub-services,
+		 * pools, swap-chain, command buffers) is released here, while the device still exists. Measured on macOS
+		 * (2026-10-11): the TransferManager's command buffer, pools and fence outlived the device and aborted in
+		 * ~TransferManager(). onTerminate() needs the device; without one, nothing Vulkan was created. */
+		if ( m_device != nullptr )
+		{
+			[[maybe_unused]] const auto terminated = this->onTerminate();
+		}
+
+		return false;
+	}
+
+	bool
+	Renderer::initializeRenderingStack () noexcept
+	{
 		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
 
 		/* NOTE: Reserve capacity for cache maps to avoid rehashing during initialization.
