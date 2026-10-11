@@ -481,6 +481,26 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 		)
 	endif ()
 
+	# The engine's Vulkan loader (Vulkan::Loader opens <binary>/vulkan/<loader> by explicit path; on macOS the
+	# consumer's bundle carries it in Contents/Frameworks).
+	if ( NOT APPLE )
+		if ( WIN32 )
+			set(_emeraudeLoaderSource "${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/lib/vulkan-1.dll")
+			set(_emeraudeLoaderName "vulkan-1.dll")
+		else ()
+			set(_emeraudeLoaderSource "${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/lib/libvulkan.so.1")
+			set(_emeraudeLoaderName "libvulkan.so.1")
+		endif ()
+
+		if ( NOT EXISTS "${_emeraudeLoaderSource}" )
+			message(FATAL_ERROR "[EmeraudeEngine] The external dependencies' Vulkan SDK carries no loader ('${_emeraudeLoaderSource}').")
+		endif ()
+
+		file(REAL_PATH "${_emeraudeLoaderSource}" _emeraudeLoaderReal)
+		file(MAKE_DIRECTORY "${EMERAUDE_COMPILATION_DIR}/vulkan")
+		file(COPY_FILE "${_emeraudeLoaderReal}" "${EMERAUDE_COMPILATION_DIR}/vulkan/${_emeraudeLoaderName}" ONLY_IF_DIFFERENT)
+	endif ()
+
 	# The validation layer of the external dependencies' Vulkan SDK, found at run time through VK_ADD_LAYER_PATH
 	# (PlatformManager prepends this directory).
 	if ( EXISTS "${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/layers" )

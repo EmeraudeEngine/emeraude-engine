@@ -30,7 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 /* Local inclusions for usages. */
 #include "StaticVector.hpp"

@@ -32,6 +32,9 @@
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
+/* Local inclusions for usages. */
+#include "Vulkan/Loader.hpp"
+
 namespace EmEn
 {
 	class PrimaryServices;
@@ -60,6 +63,17 @@ namespace EmEn
 				m_primaryServices{primaryServices}
 			{
 
+			}
+
+			/**
+			 * @brief Returns the Vulkan loader the engine uses (the external dependencies' one, opened by explicit path).
+			 * @return const Vulkan::Loader &
+			 */
+			[[nodiscard]]
+			const Vulkan::Loader &
+			vulkanLoader () const noexcept
+			{
+				return m_vulkanLoader;
 			}
 
 			/**
@@ -106,6 +120,9 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			PrimaryServices & m_primaryServices;
+			/* NOTE: Opened before glfwInit(), closed after glfwTerminate(); this service is initialized before the Vulkan
+			 * instance and terminated after it, so every Vulkan object is gone before the loader closes. */
+			Vulkan::Loader m_vulkanLoader;
 			bool m_showInformation{false};
 	};
 }

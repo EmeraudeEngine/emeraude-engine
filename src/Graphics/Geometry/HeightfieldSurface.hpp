@@ -31,7 +31,7 @@
 #include <cstdint>
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 /**
  * @brief The contract between a heightfield geometry (C++) and the shader generator (GLSL).

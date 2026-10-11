@@ -45,7 +45,7 @@
 #include <vector>
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"

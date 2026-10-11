@@ -45,6 +45,10 @@
 		} \
 	} while (false)
 
+/* NOTE: No Vulkan prototype exists (volk): VMA fetches every function through the loader's vkGetInstanceProcAddr /
+ * vkGetDeviceProcAddr handed in VmaVulkanFunctions (Device::createMemoryAllocator()). */
+#define VMA_STATIC_VULKAN_FUNCTIONS 0
+#define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #define VMA_IMPLEMENTATION
 
 /* NOTE: The defines above (VMA_ASSERT override, VMA_IMPLEMENTATION) must precede
@@ -243,6 +247,10 @@ namespace EmEn::Vulkan
 	bool
 	Device::createMemoryAllocator () noexcept
 	{
+		VmaVulkanFunctions vulkanFunctions{};
+		vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+		vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 		allocatorCreateInfo.physicalDevice = m_physicalDevice->handle();
@@ -251,7 +259,7 @@ namespace EmEn::Vulkan
 		allocatorCreateInfo.pAllocationCallbacks = VK_NULL_HANDLE;
 		allocatorCreateInfo.pDeviceMemoryCallbacks = VK_NULL_HANDLE;
 		allocatorCreateInfo.pHeapSizeLimit = VK_NULL_HANDLE;
-		allocatorCreateInfo.pVulkanFunctions = VK_NULL_HANDLE;
+		allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
 		allocatorCreateInfo.instance = m_instance.handle();
 		allocatorCreateInfo.vulkanApiVersion = m_instance.info().pApplicationInfo->apiVersion;
 		allocatorCreateInfo.pTypeExternalMemoryHandleTypes = VK_NULL_HANDLE;

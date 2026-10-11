@@ -7742,20 +7742,27 @@ engine's `option()`, even in an already configured build directory).
 
 ### The Vulkan SDK comes from the external dependencies, never from an installed SDK (Oct 2026)
 
-Since 2026-10-11 `cmake/SetupVulkan.cmake` takes the Vulkan headers and link library ONLY from
-`${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/` (extracted from the LunarG SDK by ext-deps-generator's
-`extract_vulkan_sdk.py`, which owns the version; configuration stops if it is missing). The validation layer of that
-subtree is copied to `<build>/vulkan/explicit_layer.d/` (macOS: `Contents/Resources/vulkan/explicit_layer.d/`) and
-`PlatformManager` puts that directory first in `VK_ADD_LAYER_PATH` before `glfwInit()` (an explicit `VK_LAYER_PATH`
-wins). macOS bundles the subtree's loader, MoltenVK and ICD (projet-alpha `cmake/ConfigureCEFMac.cmake`). On Linux
-and Windows the Vulkan loader at run time is the one CEF ships next to the binary (Linux: `libvulkan.so.1` 1.4.361,
-measured 2026-10-11; `RUNPATH $ORIGIN` wins over the system's 1.4.309).
+Since 2026-10-11 `cmake/SetupVulkan.cmake` takes the Vulkan headers ONLY from `${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/`
+(extracted from the LunarG SDK by ext-deps-generator's `extract_vulkan_sdk.py`, which owns the version; configuration
+stops if it is missing), and the engine **links no Vulkan library at all** (owner decision 2026-10-11, option A):
+- `Vulkan::Loader` (owned by `PlatformManager`, opened before `glfwInit()`, closed after `glfwTerminate()`) opens the
+  subtree's loader by EXPLICIT path — `<build>/vulkan/libvulkan.so.1`, `<build>\vulkan\vulkan-1.dll`, macOS
+  `Contents/Frameworks/libvulkan.1.dylib` — and hands its `vkGetInstanceProcAddr` to volk (`volkInitializeCustom()`,
+  pinned to the SDK's tag, `VK_NO_PROTOTYPES` PUBLIC), to GLFW (`glfwInitVulkanLoader()`) and to VMA
+  (`VMA_DYNAMIC_VULKAN_FUNCTIONS`). ImGui uses `IMGUI_IMPL_VULKAN_USE_VOLK`.
+- `Instance` calls `volkLoadInstance()` after `vkCreateInstance()`; device functions go through the instance dispatch
+  (no `volkLoadDevice()`), which serves the graphics AND the compute device.
+- CEF keeps its own `libvulkan.so.1` / `vulkan-1.dll` (1.4.361) next to the application for its GPU process: an explicit
+  path (Linux `RTLD_LOCAL | RTLD_DEEPBIND`, Windows `LoadLibraryExW`) never shares it.
+- The validation layer is copied to `<build>/vulkan/explicit_layer.d/` (macOS `Contents/Resources/vulkan/
+  explicit_layer.d/`) and `PlatformManager` puts that directory first in `VK_ADD_LAYER_PATH` before the loader opens.
 
 **Why no installed SDK path at all:** the macOS SDK installs its headers in `/usr/local/include`, together with its
 own glslang. As `-I`, that directory made `<glslang/...>` resolve to the SDK's glslang 16.4 instead of the ext-deps
 16.5 the engine links: `glslang::SpvOptions` had gained a field, so `GlslangToSpv()` read the engine's options one field
 off and one byte past the object (it was later added with `-idirafter`, searched after everything else). The
 `vulkan-sdk/include` subtree carries only `vulkan/*.h` and `vk_video/*.h`: no other library's header can leak in.
-Proof on Linux (2026-10-11): `VK_LOADER_DEBUG=layer` shows `Insert instance layer "VK_LAYER_KHRONOS_validation"
-(<build>/vulkan/explicit_layer.d/libVkLayer_khronos_validation.so)` with Debian's layer still installed and no
-environment variable set by hand.
+Proof on Linux (2026-10-11): neither `libEmeraude.so` nor the binary has a `NEEDED libvulkan`; the log says `Vulkan
+loader '<build>/vulkan/libvulkan.so.1' opened (instance version 1.4.363)` and `Insert instance layer
+"VK_LAYER_KHRONOS_validation" (<build>/vulkan/explicit_layer.d/libVkLayer_khronos_validation.so)` with Debian's layer
+still installed and no variable set by hand; sponza 0 VUID, MCP 1881/1881, exit 0; ImGui initialised through volk.

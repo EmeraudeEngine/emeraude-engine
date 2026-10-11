@@ -34,7 +34,7 @@
 #include <memory>
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 /* Local inclusions for usages. */
 #include "Vulkan/ComputePipeline.hpp"

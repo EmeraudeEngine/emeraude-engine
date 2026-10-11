@@ -33,7 +33,7 @@
 #include <string>
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 /* Local inclusions. */
 #include "PortabilitySubset.hpp"

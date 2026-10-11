@@ -39,7 +39,7 @@
 #include <vector>
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 /* Forward declarations. */
 namespace EmEn

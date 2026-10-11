@@ -220,6 +220,11 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* NOTE: Every instance- and device-level function now comes from the engine's loader through volk. Device
+		 * functions are NOT loaded per device (volkLoadDevice()): the instance dispatch serves the graphics AND the
+		 * compute device alike. */
+		volkLoadInstance(m_instance);
+
 		/* Register the Vulkan instance handle with RenderDoc for capture operations. */
 		m_renderDocCapture.setDevice(m_instance);
 

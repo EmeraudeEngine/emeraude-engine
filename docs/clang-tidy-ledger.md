@@ -437,6 +437,11 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 
 - **pro-type-union-access ×10, pro-bounds-array-to-pointer-decay ×10, pro-type-vararg ×10** — the V4L2 API
   (`v4l2_format::fmt.pix`, `v4l2_buffer::m.offset`, `ioctl()`), `FD_SET`, `fgets` into a `std::array`.
+- **Vulkan::Loader + VMA through volk (2026-10-11), ON PURPOSE ×4** — `Loader.cpp`: `reinterpret_cast` of `dlsym()` /
+  `GetProcAddress()` to `PFN_vkGetInstanceProcAddr` (the only way to fetch a symbol; POSIX guarantees the
+  conversion), `dlerror()` (`concurrency-mt-unsafe`: main thread, during initialisation, and glibc keeps it per
+  thread); `Device.cpp`: `VMA_STATIC_VULKAN_FUNCTIONS` / `VMA_DYNAMIC_VULKAN_FUNCTIONS` (`macro-usage`: VMA's own
+  configuration contract, defined before its implementation like `VMA_IMPLEMENTATION`).
 - **concurrency-mt-unsafe ×3 (2026-10-11, NOT on purpose: a defect with its item)** — `getenv()` / `setenv()` in `PlatformSpecific::prependVulkanLayerDirectory()` (`Helpers.linux.cpp`): the environment is written after CEF's threads exist. Item `environment-written-after-cef-threads-start`; the macOS `pinVulkanLoaderToBundledDriver()` shares the cause.
 - **concurrency-mt-unsafe ×7** — `system()`, `getenv()`, `strerror()` on the calling thread of a dialog / notification /
   capture (no concurrent caller).

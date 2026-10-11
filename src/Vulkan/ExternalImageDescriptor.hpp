@@ -34,7 +34,7 @@
 #include <array>
 
 /* Third-party inclusions. */
-#include <vulkan/vulkan.h>
+#include "volk.h"
 
 namespace EmEn::Vulkan
 {

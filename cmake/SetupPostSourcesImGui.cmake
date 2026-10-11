@@ -17,8 +17,9 @@ set_target_properties(EmeraudeImGui PROPERTIES
 	POSITION_INDEPENDENT_CODE On
 )
 
-target_include_directories(EmeraudeImGui SYSTEM PRIVATE ${IMGUI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw/include ${Vulkan_INCLUDE_DIRS})
-target_compile_definitions(EmeraudeImGui PRIVATE ${EMERAUDE_COMPILE_DEFINITIONS} GLFW_INCLUDE_VULKAN GLFW_INCLUDE_NONE)
+target_include_directories(EmeraudeImGui SYSTEM PRIVATE ${IMGUI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw/include "${EMERAUDE_VULKAN_SDK_DIR}/include" ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/volk)
+target_compile_definitions(EmeraudeImGui PRIVATE ${EMERAUDE_COMPILE_DEFINITIONS} GLFW_INCLUDE_VULKAN GLFW_INCLUDE_NONE VK_NO_PROTOTYPES IMGUI_IMPL_VULKAN_USE_VOLK)
+target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK)
 target_compile_options(EmeraudeImGui PRIVATE ${EMERAUDE_THIRD_PARTY_COMPILE_OPTIONS})
 
 if ( APPLE )

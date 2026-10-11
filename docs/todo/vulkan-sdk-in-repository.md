@@ -41,9 +41,12 @@ campaign clones were deleted) must delete both, or it keeps the old content sile
 
 - ext-deps-generator `extract_vulkan_sdk.py` (headers, link library, stripped validation layer + relative manifest,
   macOS loader / MoltenVK / ICD, licences, `VERSION`) — run on Linux: 38 MiB per configuration.
-- Engine: `SetupVulkan.cmake` requires `vulkan-sdk/` (no version, no system path), the layer is copied next to the
-  binary, `PlatformManager` prepends it to `VK_ADD_LAYER_PATH`. projet-alpha macOS bundle takes MoltenVK / loader / ICD
-  from it. Linux proved (caution-points § The Vulkan SDK comes from the external dependencies).
+- Engine: `SetupVulkan.cmake` requires `vulkan-sdk/` (no version, no system path) and links no Vulkan library: the
+  engine opens the subtree's loader by explicit path (`Vulkan::Loader` + volk, owner option A), CEF keeps its own. The
+  layer is copied next to the binary and prepended to `VK_ADD_LAYER_PATH`. projet-alpha's macOS bundle takes MoltenVK /
+  loader / ICD from it. Linux proved (caution-points § The Vulkan SDK comes from the external dependencies).
+- Licences: `LICENSES/` holds only the SDK's pointer file; the per-component Apache-2.0 texts (Vulkan-Headers,
+  Vulkan-Loader, Vulkan-ValidationLayers, MoltenVK) are still to add.
 
 ## What remains
 

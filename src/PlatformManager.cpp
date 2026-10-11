@@ -76,8 +76,6 @@ namespace EmEn
 			/* GLFW_COCOA_MENUBAR specifies whether to create a basic menu bar, either from a nib or manually,
 			 * when the first window is created, which is when AppKit is initialized. */
 			glfwInitHint(GLFW_COCOA_MENUBAR, GLFW_TRUE);
-
-			glfwInitVulkanLoader(nullptr);
 		}
 
 		/* NOTE: Before glfwInit() (the first loader call): the layers shipped with the application — the external
@@ -149,6 +147,16 @@ namespace EmEn
 			glfwInitHint(GLFW_X11_XCB_VULKAN_SURFACE, useX11XCB ? GLFW_TRUE : GLFW_FALSE);
 		}
 
+		/* NOTE: The engine's own Vulkan loader (the external dependencies' one, by explicit path), opened before the
+		 * first loader call and handed to GLFW, so GLFW never loads another one (CEF ships its own libvulkan /
+		 * vulkan-1.dll next to the application, for its GPU process). */
+		if ( !m_vulkanLoader.open(m_primaryServices.fileSystem().binaryDirectory()) )
+		{
+			return false;
+		}
+
+		glfwInitVulkanLoader(m_vulkanLoader.getInstanceProcAddr());
+
 		if ( glfwInit() == GLFW_FALSE )
 		{
 			Tracer::fatal(ClassId, "Unable to initialize GLFW. Aborting ...");
@@ -185,6 +193,9 @@ namespace EmEn
 
 		/* Removing callback. */
 		glfwSetErrorCallback(nullptr);
+
+		/* NOTE: Last: GLFW and the Vulkan instance (terminated before this service) no longer use the loader. */
+		m_vulkanLoader.close();
 
 		return true;
 	}
