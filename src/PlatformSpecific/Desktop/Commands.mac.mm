@@ -32,14 +32,14 @@
 #endif
 
 /* STL inclusions. */
-#include <array>
+#include <string>
 #include <vector>
 
 /* Third-party inclusions. */
 #import <AppKit/AppKit.h>
-#include "reproc++/run.hpp"
 
 /* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop
@@ -56,22 +56,18 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		std::vector< const char * > args;
-		args.reserve(5);
-		args.push_back("open");
-		args.push_back("-a");
-		args.push_back(executable.data());
+		std::vector< std::string > args{"open", "-a", executable};
+
 		if ( !argument.empty() )
 		{
-			args.push_back(argument.data());
+			args.push_back(argument);
 		}
-		args.push_back(nullptr);
 
-		const auto [exitCode, errorCode] = reproc::run(args.data());
-
-		if ( exitCode != 0 )
+		/* NOTE: posix_spawnp() + an EINTR-safe wait (PlatformSpecific::runProcessAndWait(); reproc did not resume an
+		 * interrupted wait: "Interrupted system call", macOS peer 2026-10-11). */
+		if ( const auto exitCode = runProcessAndWait(args); exitCode != 0 )
 		{
-			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+			TraceError{TracerTag} << "Failed to run '" << executable << "' (" << ( exitCode.has_value() ? "exit code " + std::to_string(exitCode.value()) : std::string{"not run"} ) << ") !";
 
 			return false;
 		}
@@ -91,12 +87,9 @@ namespace EmEn::PlatformSpecific::Desktop
 
 		/* NOTE: An argv, no shell (as on Linux): the former system("open \"" + argument + "\"") ran whatever a quote,
 		 * a $(…) or a backtick in the argument (a path, a URL) carried, and its result was ignored. */
-		const std::array< const char *, 3 > args{"open", argument.data(), nullptr};
-		const auto [exitCode, errorCode] = reproc::run(args.data());
-
-		if ( exitCode != 0 )
+		if ( const auto exitCode = runProcessAndWait({"open", argument}); exitCode != 0 )
 		{
-			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+			TraceError{TracerTag} << "Failed to open '" << argument << "' with open (" << ( exitCode.has_value() ? "exit code " + std::to_string(exitCode.value()) : std::string{"not run"} ) << ") !";
 
 			return false;
 		}

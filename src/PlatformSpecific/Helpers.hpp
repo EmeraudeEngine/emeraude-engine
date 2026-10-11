@@ -40,6 +40,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #if IS_LINUX || IS_MACOS
 	#include <csignal>
 #endif
@@ -504,4 +505,18 @@ namespace EmEn::PlatformSpecific
 			std::array< CaughtSignal, 3 > m_signals{{{SIGTERM}, {SIGHUP}, {SIGINT}}};
 #endif
 	};
+
+#if IS_LINUX || IS_MACOS
+	/**
+	 * @brief Runs a program (looked up in PATH) with its arguments and waits for its end.
+	 * @details posix_spawnp() then waitpid(), resumed when a signal interrupts it (EINTR) — the child inherits the
+	 * environment and the standard streams. Replaces reproc::run() for the desktop commands: reproc resumed neither
+	 * its poll() nor its waitpid() on EINTR, and reported "Interrupted system call" for a command that had run.
+	 * @param arguments The program then its arguments.
+	 * @return std::optional< int > The exit code, std::nullopt when the program could not be started or did not end
+	 * normally (logged).
+	 */
+	[[nodiscard]]
+	std::optional< int > runProcessAndWait (const std::vector< std::string > & arguments) noexcept;
+#endif
 }

@@ -28,9 +28,10 @@
 
 /* STL inclusions. */
 #include <cstdlib>
+#include <string>
 
 /* Local inclusions. */
-#include "reproc++/run.hpp"
+#include "PlatformSpecific/Helpers.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop
@@ -47,13 +48,11 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		const std::array< const char *, 3 > args{executable.data(), argument.data(), nullptr};
-
-		const auto [exitCode, errorCode] = reproc::run(args.data());
-
-		if ( exitCode != 0 )
+		/* NOTE: posix_spawnp() + an EINTR-safe wait (PlatformSpecific::runProcessAndWait(); reproc did not resume an
+		 * interrupted wait). */
+		if ( const auto exitCode = runProcessAndWait({executable, argument}); exitCode != 0 )
 		{
-			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+			TraceError{TracerTag} << "Failed to run '" << executable << "' (" << ( exitCode.has_value() ? "exit code " + std::to_string(exitCode.value()) : std::string{"not run"} ) << ") !";
 
 			return false;
 		}
@@ -71,13 +70,9 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		const std::array< const char *, 3 > args{"xdg-open", argument.data(), nullptr};
-
-		const auto [exitCode, errorCode] = reproc::run(args.data());
-
-		if ( exitCode != 0 )
+		if ( const auto exitCode = runProcessAndWait({"xdg-open", argument}); exitCode != 0 )
 		{
-			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+			TraceError{TracerTag} << "Failed to open '" << argument << "' with xdg-open (" << ( exitCode.has_value() ? "exit code " + std::to_string(exitCode.value()) : std::string{"not run"} ) << ") !";
 
 			return false;
 		}

@@ -74,6 +74,7 @@ if ( UNIX AND NOT APPLE )
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/StorageInfo.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Process.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/TerminationSignals.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.linux.cpp
@@ -92,6 +93,7 @@ if ( APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/StorageInfo.mac.mm
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/AppKitDefaults.mac.mm
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.mac.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Process.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/TerminationSignals.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.mac.cpp
