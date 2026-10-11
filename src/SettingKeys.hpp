@@ -345,7 +345,7 @@ namespace EmEn
 			/* Vulkan device */
 			/* Runtime-populated list of detected GPUs (read-only, no default). */
 			constexpr auto VkDeviceAvailableGPUsKey{"Core/Video/VulkanDevice/AvailableGPUs"};
-			/* GPU auto-selection strategy. Values: "DontCare", "Performance", "PowerSaving". */
+			/* GPU auto-selection strategy. Values: "DontCare", "Performance" (power + features), "RawPerformance" (type then VRAM), "PowerSaving". */
 			constexpr auto VkDeviceAutoSelectModeKey{"Core/Video/VulkanDevice/AutoSelectMode"};
 			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"};
 			/* Fall back to a minimal/safe device configuration on init failure. */

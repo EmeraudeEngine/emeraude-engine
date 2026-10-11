@@ -33,10 +33,14 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <sstream>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
@@ -760,15 +764,81 @@ namespace EmEn::Vulkan
 		);
 	}
 
-	std::map< size_t, std::shared_ptr< PhysicalDevice > >
+	Instance::ScoredPhysicalDevice
+	Instance::makeScoredDevice (const std::shared_ptr< PhysicalDevice > & device, size_t score, size_t enumerationIndex) noexcept
+	{
+		ScoredPhysicalDevice scored{};
+		scored.device = device;
+		scored.score = score;
+		scored.enumerationIndex = enumerationIndex;
+
+		switch ( device->propertiesVK10().deviceType )
+		{
+			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU :
+				scored.typeRank = 4;
+				break;
+
+			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
+				scored.typeRank = 3;
+				break;
+
+			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU :
+				scored.typeRank = 2;
+				break;
+
+			case VK_PHYSICAL_DEVICE_TYPE_CPU :
+				scored.typeRank = 1;
+				break;
+
+			default :
+				scored.typeRank = 0;
+				break;
+		}
+
+		const auto & memory = device->memoryPropertiesVK11().memoryProperties;
+
+		for ( const auto & heap : std::span{memory.memoryHeaps}.first(std::min< size_t >(memory.memoryHeapCount, VK_MAX_MEMORY_HEAPS)) )
+		{
+			if ( (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0 )
+			{
+				scored.deviceLocalMemory = std::max< uint64_t >(scored.deviceLocalMemory, heap.size);
+			}
+		}
+
+		return scored;
+	}
+
+	void
+	Instance::rankDevices (std::vector< ScoredPhysicalDevice > & devices) const noexcept
+	{
+		/* NOTE: The enumeration index is inverted so that, at equal keys, the device Vulkan listed FIRST ranks higher. */
+		const auto keys = [this] (const ScoredPhysicalDevice & scored) {
+			const auto order = std::numeric_limits< size_t >::max() - scored.enumerationIndex;
+
+			if ( m_autoSelectMode == DeviceAutoSelectMode::RawPerformance )
+			{
+				return std::tuple< uint64_t, uint64_t, uint64_t, uint64_t >{scored.typeRank, scored.deviceLocalMemory, scored.score, order};
+			}
+
+			return std::tuple< uint64_t, uint64_t, uint64_t, uint64_t >{scored.score, scored.typeRank, scored.deviceLocalMemory, order};
+		};
+
+		std::ranges::sort(devices, [&keys] (const ScoredPhysicalDevice & left, const ScoredPhysicalDevice & right) {
+			return keys(left) < keys(right);
+		});
+	}
+
+	std::vector< Instance::ScoredPhysicalDevice >
 	Instance::getScoredGraphicsDevices (Window * window) const noexcept
 	{
 		const auto hybridConfig = this->detectHybridGPUConfiguration();
 
-		std::map< size_t, std::shared_ptr< PhysicalDevice > > graphicsDevices{};
+		std::vector< ScoredPhysicalDevice > graphicsDevices;
+		graphicsDevices.reserve(m_physicalDevices.size());
 
-		for ( const auto & physicalDevice : m_physicalDevices )
+		for ( size_t enumerationIndex = 0; enumerationIndex < m_physicalDevices.size(); ++enumerationIndex )
 		{
+			const auto & physicalDevice = m_physicalDevices[enumerationIndex];
 			size_t score = 1;
 
 			if ( m_showInformation )
@@ -826,13 +896,17 @@ namespace EmEn::Vulkan
 
 			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), score);
 
+			auto scored = Instance::makeScoredDevice(physicalDevice, score, enumerationIndex);
+
 			if ( m_showInformation )
 			{
-				TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached a score of " << score << " !";
+				TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached a score of " << score << " (type rank " << scored.typeRank << ", " << scored.deviceLocalMemory / (1024ULL * 1024ULL) << " MiB device-local) !";
 			}
 
-			graphicsDevices.emplace(score, physicalDevice);
+			graphicsDevices.emplace_back(std::move(scored));
 		}
+
+		this->rankDevices(graphicsDevices);
 
 		if ( m_showInformation )
 		{
@@ -894,8 +968,10 @@ namespace EmEn::Vulkan
 		{
 			TraceDebug{ClassId} << "Trying to force the physical device (Graphics) named '" << forceGPUName << "' ...";
 
-			for ( const auto & physicalDevice: scoredDevices | std::views::values )
+			for ( const auto & scored : scoredDevices )
 			{
+				const auto & physicalDevice = scored.device;
+
 				if ( physicalDevice->deviceName() == forceGPUName )
 				{
 					selectedPhysicalDevice = physicalDevice;
@@ -905,14 +981,42 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: If no GPU was forced or not found, pick the best one. */
-		if ( selectedPhysicalDevice != nullptr )
+		/* NOTE: The device the application prefers (Instance::preferGraphicsDevice()), only among the compatible ones. */
+		bool preferred = false;
+
+		if ( selectedPhysicalDevice == nullptr && m_preferredGraphicsDevice.has_value() )
+		{
+			for ( const auto & scored : scoredDevices )
+			{
+				const auto & physicalDevice = scored.device;
+
+				if ( physicalDevice->identity().matches(m_preferredGraphicsDevice.value()) )
+				{
+					selectedPhysicalDevice = physicalDevice;
+					preferred = true;
+
+					break;
+				}
+			}
+
+			if ( !preferred )
+			{
+				Tracer::warning(ClassId, "The physical device preferred by the application is absent or not compatible : the score decides.");
+			}
+		}
+
+		/* NOTE: If no GPU was forced or preferred (or not found), pick the best one. */
+		if ( preferred )
+		{
+			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (PREFERRED by the application)";
+		}
+		else if ( selectedPhysicalDevice != nullptr )
 		{
 			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (FORCED)";
 		}
 		else
 		{
-			selectedPhysicalDevice = scoredDevices.rbegin()->second;
+			selectedPhysicalDevice = scoredDevices.back().device;
 
 			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << magic_enum::enum_name(m_autoSelectMode) << " mode)";
 		}
@@ -1322,10 +1426,12 @@ namespace EmEn::Vulkan
 
 		const std::vector< const char * > requiredExtensions;
 
-		std::map< size_t, std::shared_ptr< PhysicalDevice > > scoredDevices;
+		std::vector< ScoredPhysicalDevice > scoredDevices;
+		scoredDevices.reserve(m_physicalDevices.size());
 
-		for ( const auto & physicalDevice : m_physicalDevices )
+		for ( size_t enumerationIndex = 0; enumerationIndex < m_physicalDevices.size(); ++enumerationIndex )
 		{
+			const auto & physicalDevice = m_physicalDevices[enumerationIndex];
 			size_t score = 1;
 
 			if ( !this->checkDeviceCompatibility(physicalDevice, VK_QUEUE_COMPUTE_BIT, score) )
@@ -1358,10 +1464,12 @@ namespace EmEn::Vulkan
 
 			TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached score of " << score;
 
-			scoredDevices.emplace(score, physicalDevice);
+			scoredDevices.emplace_back(Instance::makeScoredDevice(physicalDevice, score, enumerationIndex));
 		}
 
-		/* NOTE: Returns the device with the highest score. */
+		this->rankDevices(scoredDevices);
+
+		/* NOTE: Returns the best ranked device (the last). */
 		if ( scoredDevices.empty() )
 		{
 			Tracer::fatal(ClassId, "There is no physical device (Compute) compatible with Vulkan.");
@@ -1375,11 +1483,11 @@ namespace EmEn::Vulkan
 
 		if ( !forceGPUName.empty() )
 		{
-			for ( const auto & physicalDevice : scoredDevices | std::views::values )
+			for ( const auto & scored : scoredDevices )
 			{
-				if ( physicalDevice->deviceName() == forceGPUName )
+				if ( scored.device->deviceName() == forceGPUName )
 				{
-					selectedPhysicalDevice = physicalDevice;
+					selectedPhysicalDevice = scored.device;
 
 					break;
 				}
@@ -1397,7 +1505,7 @@ namespace EmEn::Vulkan
 		}
 		else
 		{
-			selectedPhysicalDevice = scoredDevices.rbegin()->second;
+			selectedPhysicalDevice = scoredDevices.back().device;
 
 			TraceSuccess{ClassId} << "Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected (" << autoSelectModeString << " mode)";
 		}
@@ -1550,7 +1658,10 @@ namespace EmEn::Vulkan
 				}
 				break;
 
-			default :
+			/* NOTE: RawPerformance ranks by type and VRAM (rankDevices()), the score only breaks ties; DontCare keeps the
+			 * plain score. */
+			case DeviceAutoSelectMode::DontCare :
+			case DeviceAutoSelectMode::RawPerformance :
 				break;
 		}
 	}

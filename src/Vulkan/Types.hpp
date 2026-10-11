@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <string>
 
@@ -51,7 +52,53 @@ namespace EmEn::Vulkan
 		/** @brief Performance mode: Select the best GPU. */
 		Performance = 1,
 		/** @brief PowerSaving mode: Select the economic GPU. */
-		PowerSaving = 2
+		PowerSaving = 2,
+		/**
+		 * @brief RawPerformance mode: the most powerful GPU, whatever its optional features: the device type first
+		 * (discrete > integrated > virtual > CPU), then the largest device-local memory heap (VRAM). The required
+		 * features and extensions still filter. 'Performance' (the default) also rewards the advertised extensions
+		 * and the queue count, and can prefer a feature-rich iGPU over a modest discrete card (owner request,
+		 * 2026-10-11: an iGPU won over a Quadro P600).
+		 */
+		RawPerformance = 3
+	};
+
+	/**
+	 * @brief Identifies a physical device across APIs and processes: the adapter LUID (Windows: the DXGI adapter LUID,
+	 * the same value as VkPhysicalDeviceIDProperties::deviceLUID) and the device UUID (VkPhysicalDeviceIDProperties::
+	 * deviceUUID, stable across Vulkan instances and processes on the same machine and driver).
+	 * @note Used by an application to make the engine pick the GPU another component already uses (e.g. the adapter a
+	 * Chromium GPU process was pinned to): Instance::preferGraphicsDevice().
+	 */
+	struct EMEN_API DeviceIdentity final
+	{
+		std::array< uint8_t, 8 > LUID{};  /**< VK_LUID_SIZE bytes, meaningful when hasLUID. */
+		std::array< uint8_t, 16 > UUID{}; /**< VK_UUID_SIZE bytes, meaningful when hasUUID. */
+		bool hasLUID{false};
+		bool hasUUID{false};
+
+		/**
+		 * @brief Returns whether two identities name the same device: equal LUIDs when both carry one, else equal UUIDs
+		 * when both carry one.
+		 * @param other A reference to the other identity.
+		 * @return bool False when they share no identifier.
+		 */
+		[[nodiscard]]
+		bool
+		matches (const DeviceIdentity & other) const noexcept
+		{
+			if ( hasLUID && other.hasLUID )
+			{
+				return LUID == other.LUID;
+			}
+
+			if ( hasUUID && other.hasUUID )
+			{
+				return UUID == other.UUID;
+			}
+
+			return false;
+		}
 	};
 
 	/** @brief Known GPU vendor IDs. */

@@ -265,6 +265,23 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Asks the graphics device selection to prefer a given physical device (optional).
+			 * @note For an application whose other components already sit on a GPU (e.g. a Chromium GPU process pinned
+			 * to an adapter LUID, whose shared textures can only be imported on that same adapter). Called BEFORE the
+			 * first getGraphicsDevice(), on the main thread. The preferred device is taken only if it passes every
+			 * compatibility check (queues, presentation, required features and extensions); otherwise the score decides
+			 * and a warning names it. Priority: Core/Video/VulkanDevice/ForceGPU > the preferred device > the score.
+			 * Without a call, the selection is unchanged. Compare the result with
+			 * getGraphicsDevice()->physicalDevice()->identity().
+			 * @param identity The identity of the device to prefer (LUID and/or UUID).
+			 */
+			void
+			preferGraphicsDevice (const DeviceIdentity & identity) noexcept
+			{
+				m_preferredGraphicsDevice = identity;
+			}
+
+			/**
 			 * @brief Returns a logical device with graphics capabilities.
 			 * @param window A reference to a Window to check the device with presentation. Default Off-screen rendering.
 			 * @return std::shared_ptr< Device >
@@ -385,13 +402,42 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool preparePhysicalDevices () noexcept;
 
+			/** @brief A compatible physical device and the keys that rank it (see rankDevices()). */
+			struct ScoredPhysicalDevice
+			{
+				std::shared_ptr< PhysicalDevice > device;
+				size_t score{0};             /**< The mode's score (extensions, queues, type multiplier). */
+				uint64_t deviceLocalMemory{0}; /**< The largest DEVICE_LOCAL heap, in bytes (VRAM). */
+				size_t enumerationIndex{0};  /**< The order Vulkan listed it (the last tie-break: lower first). */
+				uint32_t typeRank{0};        /**< Discrete 4, integrated 3, virtual 2, CPU 1, other 0. */
+			};
+
 			/**
-			 * @brief Returns a list of a scored graphics-capable device.
+			 * @brief Returns the compatible graphics-capable devices, ranked: the BEST is the LAST (see rankDevices()).
 			 * @param window A pointer to the current Window. This can be nullptr.
-			 * @return std::map< size_t, std::shared_ptr< PhysicalDevice > >
+			 * @return std::vector< ScoredPhysicalDevice >
 			 */
 			[[nodiscard]]
-			std::map< size_t, std::shared_ptr< PhysicalDevice > > getScoredGraphicsDevices (Window * window) const noexcept;
+			std::vector< ScoredPhysicalDevice > getScoredGraphicsDevices (Window * window) const noexcept;
+
+			/**
+			 * @brief Builds the ranking keys of a compatible device.
+			 * @param device A reference to the device smart pointer.
+			 * @param score The mode's score.
+			 * @param enumerationIndex The device's index in m_physicalDevices.
+			 * @return ScoredPhysicalDevice
+			 */
+			[[nodiscard]]
+			static ScoredPhysicalDevice makeScoredDevice (const std::shared_ptr< PhysicalDevice > & device, size_t score, size_t enumerationIndex) noexcept;
+
+			/**
+			 * @brief Sorts the devices from the worst to the BEST (the last). RawPerformance: type rank, then VRAM, then
+			 * score; the other modes: score, then type rank, then VRAM. The enumeration order breaks the last tie, so no
+			 * two devices ever compare equal (the former std::map keyed by score silently dropped a device with the same
+			 * score as another).
+			 * @param devices A reference to the devices to sort.
+			 */
+			void rankDevices (std::vector< ScoredPhysicalDevice > & devices) const noexcept;
 
 			/**
 			 * @brief Configures the list of required validation layers.
@@ -500,6 +546,7 @@ namespace EmEn::Vulkan
 			std::vector< const char * > m_requiredValidationLayers;
 			std::vector< const char * > m_requiredInstanceExtensions;
 			std::vector< const char * > m_requiredGraphicsDeviceExtensions;
+			std::optional< DeviceIdentity > m_preferredGraphicsDevice;
 			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};

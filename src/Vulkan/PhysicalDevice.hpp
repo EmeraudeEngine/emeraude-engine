@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -157,6 +158,27 @@ namespace EmEn::Vulkan
 			propertiesVK10 () const noexcept
 			{
 				return m_properties.properties;
+			}
+
+			/**
+			 * @brief Returns the identity of the device (LUID when the driver reports one, UUID) to compare it with an
+			 * adapter used elsewhere (DXGI, another process). See Instance::preferGraphicsDevice().
+			 * @return DeviceIdentity
+			 */
+			[[nodiscard]]
+			DeviceIdentity
+			identity () const noexcept
+			{
+				DeviceIdentity identity{};
+
+				static_assert(sizeof(identity.LUID) == VK_LUID_SIZE && sizeof(identity.UUID) == VK_UUID_SIZE);
+
+				std::ranges::copy(m_propertiesVK11.deviceLUID, identity.LUID.begin());
+				std::ranges::copy(m_propertiesVK11.deviceUUID, identity.UUID.begin());
+				identity.hasLUID = m_propertiesVK11.deviceLUIDValid == VK_TRUE;
+				identity.hasUUID = true;
+
+				return identity;
 			}
 
 			/**

@@ -28,3 +28,11 @@ A device that cannot present to the surface is set aside and the next one by sco
 - Decide what a lost / unpresentable surface at startup means: refuse the device and fall back to the next one by
   score, or stop with a clear Fatal — owner decision.
 - Find the SIGSEGV after the Wayland protocol error (GLFW's connection is dead), and make the failure path exit cleanly.
+
+## Observed 2026-10-11: the failed instance does not stop
+
+`AutoSelectMode = PowerSaving` on Linux (RTX 3070 Ti + Intel RPL-S, NVIDIA Wayland) selects the iGPU; the swap-chain then
+fails (`VK_ERROR_SURFACE_LOST_KHR` → "Unable to refresh the swap-chain!" Fatal) while the scene still loads, and the
+instance ignores `Core.shutdown()` (the console accepts the connection, nothing happens) and SIGTERM; it needed SIGKILL.
+The main thread was in `wl_display_dispatch_queue_pending()` (gdb, Release). Same root as this item; the unanswered
+shutdown is a second defect to check once the fallback exists.
