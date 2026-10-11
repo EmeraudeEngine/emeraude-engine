@@ -42,8 +42,7 @@ namespace EmEn::Vulkan
 		: m_instance{instance},
 		m_createInfo{DebugMessenger::getCreateInfo()}
 	{
-		auto vkCreateDebugUtilsMessengerEXT = reinterpret_cast< PFN_vkCreateDebugUtilsMessengerEXT >(vkGetInstanceProcAddr(m_instance.handle(), "vkCreateDebugUtilsMessengerEXT"));
-
+		/* NOTE: volk's global pointer, filled by volkLoadInstance() (Instance) when VK_EXT_debug_utils is enabled. */
 		if ( vkCreateDebugUtilsMessengerEXT == nullptr )
 		{
 			Tracer::error(ClassId, "VK_EXT_debug_utils extension unavailable ! Unable to get vkCreateDebugUtilsMessengerEXT() function.");
@@ -74,8 +73,6 @@ namespace EmEn::Vulkan
 		/* NOTE: An instance must exist to clean a debug messenger properly ! */
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			auto vkDestroyDebugUtilsMessengerEXT = reinterpret_cast< PFN_vkDestroyDebugUtilsMessengerEXT >(vkGetInstanceProcAddr(m_instance.handle(), "vkDestroyDebugUtilsMessengerEXT"));
-
 			if ( vkDestroyDebugUtilsMessengerEXT != nullptr )
 			{
 				vkDestroyDebugUtilsMessengerEXT(m_instance.handle(), m_handle, nullptr);
