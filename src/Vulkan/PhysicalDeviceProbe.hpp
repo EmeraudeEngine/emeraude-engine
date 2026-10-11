@@ -62,9 +62,10 @@ namespace EmEn::Vulkan
 	 * selected later (resolve the ForceGPU NAME, a Vulkan name, to its LUID: DXGI names some adapters differently).
 	 * Never touches volk's global pointers (Loader::VolkBinding::None), so it is safe whether or not the engine's
 	 * loader is already open. Main thread. Cost: one instance creation (driver enumeration).
+	 * @note EMEN_LEAN_API: a downstream application built with the lean exports calls it (EMEN_API is inert there).
 	 * @param binaryDirectory The directory of the running executable (where the loader is shipped).
 	 * @return std::vector< PhysicalDeviceSummary > Empty when the loader or the instance is unavailable.
 	 */
 	[[nodiscard]]
-	EMEN_API std::vector< PhysicalDeviceSummary > probePhysicalDevices (const std::filesystem::path & binaryDirectory) noexcept;
+	EMEN_LEAN_API std::vector< PhysicalDeviceSummary > probePhysicalDevices (const std::filesystem::path & binaryDirectory) noexcept;
 }
