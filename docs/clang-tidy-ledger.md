@@ -442,7 +442,8 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   conversion), `dlerror()` (`concurrency-mt-unsafe`: main thread, during initialisation, and glibc keeps it per
   thread); `Device.cpp`: `VMA_STATIC_VULKAN_FUNCTIONS` / `VMA_DYNAMIC_VULKAN_FUNCTIONS` (`macro-usage`: VMA's own
   configuration contract, defined before its implementation like `VMA_IMPLEMENTATION`).
-- **concurrency-mt-unsafe ×3 (2026-10-11, NOT on purpose: a defect with its item)** — `getenv()` / `setenv()` in `PlatformSpecific::prependVulkanLayerDirectory()` (`Helpers.linux.cpp`): the environment is written after CEF's threads exist. Item `environment-written-after-cef-threads-start`; the macOS `pinVulkanLoaderToBundledDriver()` shares the cause.
+- **concurrency-mt-unsafe ×3 (2026-10-11), ON PURPOSE since the fix** — `getenv()` / `setenv()` in `PlatformSpecific::prependVulkanLayerDirectory()` (`Helpers.linux.cpp`): called only by `PlatformManager::prepareVulkanLoaderEnvironment()`, which the consumer's `main()` runs before CEF and before any engine thread (owner decision 2026-10-11); `PlatformManager::onInitialize()` only reads the environment.
+- **concurrency-mt-unsafe ×1 (2026-10-11), ON PURPOSE** — `getenv()` in `PlatformManager::onInitialize()`: a READ of the loader environment written single-threaded by `prepareVulkanLoaderEnvironment()`; concurrent reads do not race, only a write does, and none happens after `main()`'s call.
 - **concurrency-mt-unsafe ×7** — `system()`, `getenv()`, `strerror()` on the calling thread of a dialog / notification /
   capture (no concurrent caller).
 - **non-private-member-variables ×4** — `Desktop::Notification`'s protected members, shared with its platform bodies.

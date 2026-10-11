@@ -32,6 +32,8 @@
 /* STL inclusions. */
 #include <array>
 #include <filesystem>
+#include <string_view>
+#include <cstdlib>
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
@@ -41,6 +43,7 @@
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "PlatformSpecific/Helpers.hpp"
+#include "PlatformSpecific/SystemInfo.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
@@ -78,44 +81,34 @@ namespace EmEn
 			glfwInitHint(GLFW_COCOA_MENUBAR, GLFW_TRUE);
 		}
 
-		/* NOTE: Before glfwInit() (the first loader call): the layers shipped with the application — the external
-		 * dependencies' validation layer, copied by CMake — are found before any installed one. Nothing is enabled here:
-		 * the layers stay what the settings or --set-vk-layers request. */
+		/* NOTE: The loader's environment (shipped layers, macOS bundled driver) was written by
+		 * prepareVulkanLoaderEnvironment(), called by the consumer's main() before any thread: only READ here. */
 		{
-			const auto & binaryDirectory = m_primaryServices.fileSystem().binaryDirectory();
-			const std::array< std::filesystem::path, 2 > layerDirectories{
-				binaryDirectory / "vulkan" / "explicit_layer.d",
-				/* NOTE: A macOS bundle: Contents/MacOS/<binary> -> Contents/Resources/vulkan/explicit_layer.d. */
-				binaryDirectory.parent_path() / "Resources" / "vulkan" / "explicit_layer.d"
-			};
+			const char * layerPath = std::getenv("VK_ADD_LAYER_PATH");
 
-			for ( const auto & layerDirectory : layerDirectories )
+			if ( layerPath != nullptr && std::string_view{layerPath}.find("explicit_layer.d") != std::string_view::npos )
 			{
-				if ( !IO::directoryExists(layerDirectory) )
-				{
-					continue;
-				}
-
-				if ( PlatformSpecific::prependVulkanLayerDirectory(layerDirectory) )
-				{
-					TraceInfo{ClassId} << "Vulkan layers shipped with the application : '" << layerDirectory.string() << "' (first in VK_ADD_LAYER_PATH).";
-				}
-
-				break;
+				TraceInfo{ClassId} << "Vulkan layer search path : '" << layerPath << "'.";
 			}
+			else
+			{
+				TraceWarning{ClassId} <<
+					"The Vulkan loader environment was not prepared (PlatformManager::prepareVulkanLoaderEnvironment() must be "
+					"called by main() before any thread) : the validation layer shipped with the application may not be found.";
+			}
+
+#if IS_MACOS
+			if ( const char * driverFiles = std::getenv("VK_DRIVER_FILES"); driverFiles != nullptr )
+			{
+				TraceInfo{ClassId} << "Vulkan loader restricted to the driver manifest '" << driverFiles << "'.";
+			}
+#endif
 		}
 
 #if IS_MACOS
 		/* NOTE: Before glfwInit() (NSApplication starts there): a crash must never make the next launch wait on AppKit's
-		 * "reopen the windows?" modal. */
+		 * "reopen the windows?" modal. NSUserDefaults is thread-safe. */
 		PlatformSpecific::disableWindowStateRestoration();
-
-		/* NOTE: Before glfwInit(): the first loader call scans every driver manifest, and a MoltenVK loaded
-		 * from a second manifest (the LunarG SDK one) can never be unloaded. See pinVulkanLoaderToBundledDriver(). */
-		if ( const auto manifest = PlatformSpecific::pinVulkanLoaderToBundledDriver(); !manifest.empty() )
-		{
-			TraceInfo{ClassId} << "Vulkan loader restricted to the bundled driver manifest '" << manifest << "'.";
-		}
 #endif
 
 		if constexpr ( IsLinux )
@@ -188,6 +181,46 @@ namespace EmEn
 		}
 
 		return true;
+	}
+
+	bool
+	PlatformManager::prepareVulkanLoaderEnvironment () noexcept
+	{
+		const auto binaryDirectory = PlatformSpecific::SystemInfo::getRealApplicationDir();
+
+		if ( binaryDirectory.empty() )
+		{
+			return false;
+		}
+
+		/* NOTE: The layers shipped with the application (the external dependencies' validation layer, copied by CMake)
+		 * are found before any installed one. Nothing is enabled here: the layers stay what the settings or
+		 * --set-vk-layers request. */
+		const std::array< std::filesystem::path, 2 > layerDirectories{
+			binaryDirectory / "vulkan" / "explicit_layer.d",
+			/* NOTE: A macOS bundle: Contents/MacOS/<binary> -> Contents/Resources/vulkan/explicit_layer.d. */
+			binaryDirectory.parent_path() / "Resources" / "vulkan" / "explicit_layer.d"
+		};
+
+		bool prepared = false;
+
+		for ( const auto & layerDirectory : layerDirectories )
+		{
+			if ( IO::directoryExists(layerDirectory) )
+			{
+				prepared = PlatformSpecific::prependVulkanLayerDirectory(layerDirectory);
+
+				break;
+			}
+		}
+
+#if IS_MACOS
+		/* NOTE: The first loader call scans every driver manifest, and a MoltenVK loaded from a second manifest (the
+		 * LunarG SDK one) can never be unloaded. See pinVulkanLoaderToBundledDriver(). */
+		static_cast< void >(PlatformSpecific::pinVulkanLoaderToBundledDriver());
+#endif
+
+		return prepared;
 	}
 
 	bool

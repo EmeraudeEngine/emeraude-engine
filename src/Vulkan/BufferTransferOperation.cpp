@@ -57,7 +57,7 @@ namespace EmEn::Vulkan
 		 * belongs to the GRAPHICS family, period.
 		 * NOTE: On a single-queue-family device (Device::hasBasicSupport()) there is no graphics
 		 * command pool AND no ownership transfer to perform — both conditions travel together. */
-		if ( graphicsCommandPool != nullptr && device->getGraphicsTransferFamilyIndex() != device->getGraphicsFamilyIndex() )
+		if ( graphicsCommandPool != nullptr && device->getPrimaryTransferFamilyIndex() != device->getPrimaryFamilyIndex() )
 		{
 			m_graphicsCommandBuffer = std::make_unique< CommandBuffer >(graphicsCommandPool, true);
 			m_graphicsCommandBuffer->setIdentifier(ClassId, "BufferOwnershipAcquire", "CommandBuffer");
@@ -138,7 +138,7 @@ namespace EmEn::Vulkan
 			}
 
 			/* NOTE: Get a pure transfer queue or the transfer queue for graphics. */
-			const auto * transferQueue = device->getGraphicsTransferQueue(QueuePriority::High);
+			const auto * transferQueue = device->getPrimaryTransferQueue(QueuePriority::High);
 
 			uint64_t transferValue = 0;
 
@@ -156,8 +156,8 @@ namespace EmEn::Vulkan
 		 * queue, both HERE. Same two-step shape as ImageTransferOperation (transfer submission
 		 * signals the semaphore, graphics submission waits on it and signals the operation
 		 * fence — so the operation is only reusable once BOTH command buffers are idle). */
-		const auto srcFamily = device->getGraphicsTransferFamilyIndex();
-		const auto dstFamily = device->getGraphicsFamilyIndex();
+		const auto srcFamily = device->getPrimaryTransferFamilyIndex();
+		const auto dstFamily = device->getPrimaryFamilyIndex();
 
 		VkBufferMemoryBarrier ownershipBarrier{};
 		ownershipBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -219,7 +219,7 @@ namespace EmEn::Vulkan
 
 		{
 			/* NOTE: Get a pure transfer queue or the transfer queue for graphics. */
-			const auto * transferQueue = device->getGraphicsTransferQueue(QueuePriority::High);
+			const auto * transferQueue = device->getPrimaryTransferQueue(QueuePriority::High);
 
 			uint64_t transferValue = 0;
 
@@ -235,7 +235,7 @@ namespace EmEn::Vulkan
 
 		VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-		const auto * graphicsQueue = device->getGraphicsQueue(QueuePriority::High);
+		const auto * graphicsQueue = device->getPrimaryQueue(QueuePriority::High);
 
 		uint64_t graphicsValue = 0;
 

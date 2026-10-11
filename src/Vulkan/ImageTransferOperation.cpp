@@ -200,7 +200,7 @@ namespace EmEn::Vulkan
 
 		if ( m_transferCommandBuffer->end() )
 		{
-			const auto * queue = device->getGraphicsTransferQueue(QueuePriority::High);
+			const auto * queue = device->getPrimaryTransferQueue(QueuePriority::High);
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
@@ -350,7 +350,7 @@ namespace EmEn::Vulkan
 
 		if ( m_graphicsCommandBuffer->end() )
 		{
-			auto * queue = device->getGraphicsQueue(QueuePriority::High);
+			auto * queue = device->getPrimaryQueue(QueuePriority::High);
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -419,7 +419,7 @@ namespace EmEn::Vulkan
 
 		if ( m_transferCommandBuffer->end() )
 		{
-			const auto * queue = device->getGraphicsTransferQueue(QueuePriority::High);
+			const auto * queue = device->getPrimaryTransferQueue(QueuePriority::High);
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
@@ -461,7 +461,7 @@ namespace EmEn::Vulkan
 
 		if ( m_graphicsCommandBuffer->end() )
 		{
-			auto * queue = device->getGraphicsQueue(QueuePriority::High);
+			auto * queue = device->getPrimaryQueue(QueuePriority::High);
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -539,7 +539,7 @@ namespace EmEn::Vulkan
 
 		if ( m_transferCommandBuffer->end() )
 		{
-			const auto * queue = device->getGraphicsTransferQueue(QueuePriority::High);
+			const auto * queue = device->getPrimaryTransferQueue(QueuePriority::High);
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
@@ -581,7 +581,7 @@ namespace EmEn::Vulkan
 
 		if ( m_graphicsCommandBuffer->end() )
 		{
-			auto * queue = device->getGraphicsQueue(QueuePriority::High);
+			auto * queue = device->getPrimaryQueue(QueuePriority::High);
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;

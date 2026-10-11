@@ -54,7 +54,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		m_transferCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsTransferFamilyIndex(), true, true, false);
+		m_transferCommandPool = std::make_shared< CommandPool >(m_device, m_device->getPrimaryTransferFamilyIndex(), true, true, false);
 		m_transferCommandPool->setIdentifier(ClassId, "Transfer", "CommandPool");
 
 		if ( !m_transferCommandPool->createOnHardware() )
@@ -74,7 +74,7 @@ namespace EmEn::Vulkan
 		}
 		else
 		{
-			m_graphicsCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, true, false);
+			m_graphicsCommandPool = std::make_shared< CommandPool >(m_device, m_device->getPrimaryFamilyIndex(), true, true, false);
 			m_graphicsCommandPool->setIdentifier(ClassId, "Specific", "CommandPool");
 
 			if ( !m_graphicsCommandPool->createOnHardware() )
@@ -218,7 +218,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
 		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
 		{
@@ -311,7 +311,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
 		if ( !queue->submit(*commandBuffer, SynchInfo{}.withFence(downloadFence->handle())) || !downloadFence->wait() )
 		{
@@ -549,7 +549,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Submit and wait. */
-		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
 		if ( !queue->submit(*commandBuffer, SynchInfo{}.withFence(downloadFence->handle())) )
 		{
@@ -787,7 +787,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
 		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
 		{
@@ -850,7 +850,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
 		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
 		{

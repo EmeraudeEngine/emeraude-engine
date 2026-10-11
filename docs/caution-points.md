@@ -7755,7 +7755,12 @@ stops if it is missing), and the engine **links no Vulkan library at all** (owne
 - CEF keeps its own `libvulkan.so.1` / `vulkan-1.dll` (1.4.361) next to the application for its GPU process: an explicit
   path (Linux `RTLD_LOCAL | RTLD_DEEPBIND`, Windows `LoadLibraryExW`) never shares it.
 - The validation layer is copied to `<build>/vulkan/explicit_layer.d/` (macOS `Contents/Resources/vulkan/
-  explicit_layer.d/`) and `PlatformManager` puts that directory first in `VK_ADD_LAYER_PATH` before the loader opens.
+  explicit_layer.d/`). `PlatformManager::prepareVulkanLoaderEnvironment()` puts that directory first in
+  `VK_ADD_LAYER_PATH` (and pins the macOS bundled driver, `VK_DRIVER_FILES`); **the consumer's `main()` calls it first,
+  before CEF and any thread** (projet-alpha: the three `Boot/*/main.*`, right after `current_path()`), because POSIX
+  `setenv()` races any concurrent `getenv()` and CEF's threads exist once `CefInitialize()` ran. `PlatformManager::
+  onInitialize()` only reads the result and warns "The Vulkan loader environment was not prepared" when it was not
+  called (owner decision 2026-10-11; item environment-written-after-cef-threads-start closed).
 
 **Why no installed SDK path at all:** the macOS SDK installs its headers in `/usr/local/include`, together with its
 own glslang. As `-I`, that directory made `<glslang/...>` resolve to the SDK's glslang 16.4 instead of the ext-deps
@@ -7800,3 +7805,12 @@ Vulkan 1.0 core supports such images on every device: on the Intel UHD 770 (Mesa
 1536 × 1536 ground textures were refused and the demo crashed on a null ground. Removed on 2026-10-11 (owner
 decision); the real limits (`maxImageDimension2D`, format features) stay checked when the image is created. Proof:
 `basic-scenery` on the Intel iGPU (`--window-less`), scene loaded, 0 VUID, exit 0.
+
+### macOS: AppKit's window state restoration is off (Oct 2026)
+
+After a crash, AppKit asks "reopen the windows?" in a modal shown from `[NSApplication run]` inside `glfwInit()`: every
+unattended launch (sweeps, peers, CI) waited for a human (macOS peer, 2026-10-11). `PlatformManager::onInitialize()`
+calls `PlatformSpecific::disableWindowStateRestoration()` (`AppKitDefaults.mac.mm`) before `glfwInit()`: it registers
+`ApplePersistenceIgnoreState = YES` in the REGISTRATION domain of the user defaults (volatile, nothing written; a user or
+argument value still wins). Proof on the M6: two crashes in a row, then an unattended launch loads its scene in 2 s, AppKit
+logs "ApplePersistenceIgnoreState: Existing state will not be touched", `defaults read` finds nothing persisted.

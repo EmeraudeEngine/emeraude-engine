@@ -1,7 +1,7 @@
 ---
 id: physics-acceleration-transfer-pool-on-missing-family
 title: Physics acceleration fails at startup: its transfer manager uses a queue family the compute device does not have
-status: open
+status: in-progress
 priority: high
 scope: Physics/Manager, Vulkan/TransferManager, Vulkan/Instance (getComputeDevice)
 opened: 2026-10-01
@@ -45,6 +45,15 @@ device's queue families nor the transfer manager. It reproduces with `ForceGPU` 
 ## Owner decision (2026-10-11)
 
 The TransferManager takes the ROLE of its device: on a compute device its pools go on the compute (or transfer) family and the image layout transitions on the compute queue.
+
+## Fix (2026-10-11, waiting for the Windows proof)
+
+`Device` gained PRIMARY-role accessors (`getPrimaryFamilyIndex()`, `getPrimaryQueue()`, `getPrimaryTransferFamilyIndex()`,
+`getPrimaryTransferQueue()`): the graphics ones when the device has graphics queues, the compute ones otherwise.
+`TransferManager`, `BufferTransferOperation` and `ImageTransferOperation` use them (20 call sites), so the physics
+device's transfer manager works on its compute family. Linux (RTX 3070 Ti, layer 1.4.363, EnableAcceleration true):
+balls-of-steel and sponza — the physics TransferManager up and terminated gracefully, 0 VUID (no more 01937 / 05137),
+exit 0. To close: Windows NVIDIA + Intel the same; macOS stops earlier on compute-device-missing-portability-subset.
 
 ## What remains
 

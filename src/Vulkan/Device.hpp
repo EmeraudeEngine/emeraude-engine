@@ -699,6 +699,57 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the family index of the device's PRIMARY role: graphics when the device has graphics queues,
+			 * compute otherwise (the physics device).
+			 * @note What the transfer manager and the transfer operations work on, so one code path serves a graphics and
+			 * a compute-only device alike (owner decision 2026-10-11: a TransferManager takes the role of its device).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			getPrimaryFamilyIndex () const noexcept
+			{
+				return m_graphicsQueueConfiguration.enabled() ? m_graphicsQueueConfiguration.queueFamilyIndex() : m_computeQueueConfiguration.queueFamilyIndex();
+			}
+
+			/**
+			 * @brief Returns a queue of the device's primary role (see getPrimaryFamilyIndex()).
+			 * @warning This may return a nullptr!
+			 * @param priority The queue priority.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getPrimaryQueue (QueuePriority priority) const noexcept
+			{
+				return m_graphicsQueueConfiguration.enabled() ? this->getGraphicsQueue(priority) : this->getComputeQueue(priority);
+			}
+
+			/**
+			 * @brief Returns the transfer family index of the device's primary role (the transfer-only family if any).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			getPrimaryTransferFamilyIndex () const noexcept
+			{
+				return m_graphicsQueueConfiguration.enabled() ? this->getGraphicsTransferFamilyIndex() : this->getComputeTransferFamilyIndex();
+			}
+
+			/**
+			 * @brief Returns a transfer queue of the device's primary role (the transfer-only family if any).
+			 * @warning This may return a nullptr!
+			 * @param priority The queue priority.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getPrimaryTransferQueue (QueuePriority priority) const noexcept
+			{
+				return m_graphicsQueueConfiguration.enabled() ? this->getGraphicsTransferQueue(priority) : this->getComputeTransferQueue(priority);
+			}
+
+			/**
 			 * @brief Waits for a device to become idle.
 			 * @param location A point to string.
 			 */

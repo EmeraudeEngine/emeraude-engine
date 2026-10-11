@@ -66,6 +66,17 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Writes the Vulkan loader's environment ONCE, before any thread exists: the layers shipped with the
+			 * application first in VK_ADD_LAYER_PATH, and on macOS the bundled MoltenVK driver (VK_DRIVER_FILES).
+			 * @note The consumer's main() calls it before anything else (before CEF and before the Core): POSIX setenv()
+			 * races any concurrent getenv(), and CEF's threads exist once CefInitialize() ran (owner decision 2026-10-11).
+			 * PlatformManager::onInitialize() only reads the result and warns when it was not called. An explicit
+			 * VK_LAYER_PATH / VK_DRIVER_FILES from the user still wins.
+			 * @return bool True when the shipped layer directory was put first.
+			 */
+			static bool prepareVulkanLoaderEnvironment () noexcept;
+
+			/**
 			 * @brief Returns the Vulkan loader the engine uses (the external dependencies' one, opened by explicit path).
 			 * @return const Vulkan::Loader &
 			 */
