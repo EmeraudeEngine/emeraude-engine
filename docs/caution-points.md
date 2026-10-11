@@ -7739,3 +7739,23 @@ post-processing keys from the low one. **Rule:** a macro read by `SettingKeys.hp
 reaches it through `target_compile_definitions(... PUBLIC ...)`. A consumer that wants the high profile sets the normal
 variable before adding the engine (`set(EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS ON)`; CMP0077 makes it win over the
 engine's `option()`, even in an already configured build directory).
+
+### The Vulkan SDK comes from the external dependencies, never from an installed SDK (Oct 2026)
+
+Since 2026-10-11 `cmake/SetupVulkan.cmake` takes the Vulkan headers and link library ONLY from
+`${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/` (extracted from the LunarG SDK by ext-deps-generator's
+`extract_vulkan_sdk.py`, which owns the version; configuration stops if it is missing). The validation layer of that
+subtree is copied to `<build>/vulkan/explicit_layer.d/` (macOS: `Contents/Resources/vulkan/explicit_layer.d/`) and
+`PlatformManager` puts that directory first in `VK_ADD_LAYER_PATH` before `glfwInit()` (an explicit `VK_LAYER_PATH`
+wins). macOS bundles the subtree's loader, MoltenVK and ICD (projet-alpha `cmake/ConfigureCEFMac.cmake`). On Linux
+and Windows the Vulkan loader at run time is the one CEF ships next to the binary (Linux: `libvulkan.so.1` 1.4.361,
+measured 2026-10-11; `RUNPATH $ORIGIN` wins over the system's 1.4.309).
+
+**Why no installed SDK path at all:** the macOS SDK installs its headers in `/usr/local/include`, together with its
+own glslang. As `-I`, that directory made `<glslang/...>` resolve to the SDK's glslang 16.4 instead of the ext-deps
+16.5 the engine links: `glslang::SpvOptions` had gained a field, so `GlslangToSpv()` read the engine's options one field
+off and one byte past the object (it was later added with `-idirafter`, searched after everything else). The
+`vulkan-sdk/include` subtree carries only `vulkan/*.h` and `vk_video/*.h`: no other library's header can leak in.
+Proof on Linux (2026-10-11): `VK_LOADER_DEBUG=layer` shows `Insert instance layer "VK_LAYER_KHRONOS_validation"
+(<build>/vulkan/explicit_layer.d/libVkLayer_khronos_validation.so)` with Debian's layer still installed and no
+environment variable set by hand.

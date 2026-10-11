@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <array>
 #include <cstdlib>
+#include <string>
 #include <filesystem>
 
 /* Third-party inclusions. */
@@ -91,5 +92,25 @@ namespace EmEn::PlatformSpecific
 		}
 
 		return manifest.string();
+	}
+
+	bool
+	prependVulkanLayerDirectory (const std::filesystem::path & directory) noexcept
+	{
+		/* NOTE: VK_LAYER_PATH replaces every layer search path: an explicit developer choice, left alone. */
+		if ( std::getenv("VK_LAYER_PATH") != nullptr )
+		{
+			return false;
+		}
+
+		std::string value = directory.string();
+
+		if ( const char * current = std::getenv("VK_ADD_LAYER_PATH"); current != nullptr && *current != '\0' )
+		{
+			value += ':';
+			value += current;
+		}
+
+		return setenv("VK_ADD_LAYER_PATH", value.c_str(), 1) == 0;
 	}
 }

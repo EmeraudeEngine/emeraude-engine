@@ -34,6 +34,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -585,5 +586,32 @@ namespace EmEn::PlatformSpecific
 		CloseHandle(workerHandle);
 
 		return result;
+	}
+
+	bool
+	prependVulkanLayerDirectory (const std::filesystem::path & directory) noexcept
+	{
+		/* NOTE: VK_LAYER_PATH replaces every layer search path: an explicit developer choice, left alone. The loader
+		 * reads the process environment block (GetEnvironmentVariable), hence the Win32 calls, in UTF-16. */
+		if ( GetEnvironmentVariableW(L"VK_LAYER_PATH", nullptr, 0) != 0 )
+		{
+			return false;
+		}
+
+		std::wstring value = directory.wstring();
+
+		if ( const auto length = GetEnvironmentVariableW(L"VK_ADD_LAYER_PATH", nullptr, 0); length > 1 )
+		{
+			std::wstring current(length, L'\0');
+
+			if ( const auto written = GetEnvironmentVariableW(L"VK_ADD_LAYER_PATH", current.data(), length); written > 0 && written < length )
+			{
+				current.resize(written);
+				value += L';';
+				value += current;
+			}
+		}
+
+		return SetEnvironmentVariableW(L"VK_ADD_LAYER_PATH", value.c_str()) != FALSE;
 	}
 }

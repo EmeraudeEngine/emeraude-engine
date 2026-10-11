@@ -474,6 +474,18 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 		)
 	endif ()
 
+	# The validation layer of the external dependencies' Vulkan SDK, found at run time through VK_ADD_LAYER_PATH
+	# (PlatformManager prepends this directory).
+	if ( EXISTS "${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/layers" )
+		if ( APPLE )
+			set(_emeraudeLayerDirectory "${EMERAUDE_COMPILATION_DIR}/Contents/Resources/vulkan/explicit_layer.d")
+		else ()
+			set(_emeraudeLayerDirectory "${EMERAUDE_COMPILATION_DIR}/vulkan/explicit_layer.d")
+		endif ()
+
+		file(COPY "${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk/layers/" DESTINATION "${_emeraudeLayerDirectory}")
+	endif ()
+
 	# Copy 'gamecontrollerdb.txt' in the compilation directory.
 	if ( APPLE )
 		file(

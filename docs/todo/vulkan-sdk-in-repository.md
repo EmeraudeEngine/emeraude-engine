@@ -25,7 +25,31 @@ Linux machine also has LunarG 1.4.363 in `~/VulkanSDK/1.4.363.0` (user space, lo
    three OS that the repository copy is the one in use (loader / layer / MoltenVK paths in the logs).
 4. Only then the owner removes the system Vulkan SDK from each machine — the final proof that nothing reaches it.
 
+## Owner decision (2026-10-11): in the ext-deps archive, v018 upgraded in place
+
+The Vulkan SDK minimum goes into the ext-deps-generator archives — not as binaries committed to this repository —
+and the published **v018 is upgraded in place** (nobody consumes it yet apart from the campaign tests). Reasons: one
+source of truth for every native dependency (glslang already comes from ext-deps; a `-I` to the SDK once mixed
+glslang 16.4 headers with the 16.5 library, `cmake/SetupVulkan.cmake`), no binaries in the public history, the
+per-OS / per-configuration download already proven on the three OS (2026-10-10).
+
+⚠️ Re-publishing the same tag: `InstallDependencies.cmake` does not download when `dependencies/<dir>` or the
+`<dir>.v018.zip` already exists. Every machine that extracted v018 (none today: the developers use symlinks, the
+campaign clones were deleted) must delete both, or it keeps the old content silently.
+
+## State (2026-10-11)
+
+- ext-deps-generator `extract_vulkan_sdk.py` (headers, link library, stripped validation layer + relative manifest,
+  macOS loader / MoltenVK / ICD, licences, `VERSION`) — run on Linux: 38 MiB per configuration.
+- Engine: `SetupVulkan.cmake` requires `vulkan-sdk/` (no version, no system path), the layer is copied next to the
+  binary, `PlatformManager` prepends it to `VK_ADD_LAYER_PATH`. projet-alpha macOS bundle takes MoltenVK / loader / ICD
+  from it. Linux proved (caution-points § The Vulkan SDK comes from the external dependencies).
+
 ## What remains
+
+- Run the extraction on macOS and Windows (SDK 1.4.363), check the layouts the script assumes, then the three-OS proof
+  with `VK_LOADER_DEBUG=layer,driver`, then the owner removes the system SDKs, then re-publish v018 (owner decision:
+  upgraded in place) — every machine that extracted v018 deletes its folder and zip first.
 
 - A proposal to the owner: per OS, the strict minimum (headers, loader, MoltenVK on macOS, the Khronos validation
   layer + its manifest, glslang tools if needed), licences (Apache-2.0 / MIT: LGPLv3-compatible, to confirm per

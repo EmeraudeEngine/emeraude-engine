@@ -29,11 +29,17 @@
 /* Project configuration. */
 #include "emeraude_platform.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <filesystem>
+
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "FileSystem.hpp"
+#include "IO/IO.hpp"
 #include "PlatformSpecific/Helpers.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
@@ -72,6 +78,33 @@ namespace EmEn
 			glfwInitHint(GLFW_COCOA_MENUBAR, GLFW_TRUE);
 
 			glfwInitVulkanLoader(nullptr);
+		}
+
+		/* NOTE: Before glfwInit() (the first loader call): the layers shipped with the application — the external
+		 * dependencies' validation layer, copied by CMake — are found before any installed one. Nothing is enabled here:
+		 * the layers stay what the settings or --set-vk-layers request. */
+		{
+			const auto & binaryDirectory = m_primaryServices.fileSystem().binaryDirectory();
+			const std::array< std::filesystem::path, 2 > layerDirectories{
+				binaryDirectory / "vulkan" / "explicit_layer.d",
+				/* NOTE: A macOS bundle: Contents/MacOS/<binary> -> Contents/Resources/vulkan/explicit_layer.d. */
+				binaryDirectory.parent_path() / "Resources" / "vulkan" / "explicit_layer.d"
+			};
+
+			for ( const auto & layerDirectory : layerDirectories )
+			{
+				if ( !IO::directoryExists(layerDirectory) )
+				{
+					continue;
+				}
+
+				if ( PlatformSpecific::prependVulkanLayerDirectory(layerDirectory) )
+				{
+					TraceInfo{ClassId} << "Vulkan layers shipped with the application : '" << layerDirectory.string() << "' (first in VK_ADD_LAYER_PATH).";
+				}
+
+				break;
+			}
 		}
 
 #if IS_MACOS

@@ -2,56 +2,36 @@ if ( NOT TARGET_BINARY_FOR_SETUP )
 	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
 endif ()
 
-set(VULKAN_SDK_VERSION "1.4.363.0")
+# The Vulkan SDK comes from the external dependencies, like every other native dependency: the strict minimum of the
+# LunarG SDK (headers, link library, validation layer, MoltenVK and the loader on macOS), extracted by ext-deps-generator
+# (extract_vulkan_sdk.py), which owns its version. No installed SDK is used, so none is needed.
+set(EMERAUDE_VULKAN_SDK_DIR "${EMERAUDE_EXT_LIBS_PATH}/vulkan-sdk")
 
-if ( UNIX AND NOT APPLE )
-	find_package(Vulkan REQUIRED)
-
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
-
-	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Vulkan::Vulkan)
-elseif ( APPLE )
-	set(VULKAN_SDK_PATH "$ENV{HOME}/VulkanSDK/${VULKAN_SDK_VERSION}/")
-
-	if ( NOT EXISTS ${VULKAN_SDK_PATH} )
-		message(FATAL_ERROR "The Vulkan SDK is not found in '${VULKAN_SDK_PATH}' ! You can download it from: https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_SDK_VERSION}.zip")
-	endif ()
-
-	find_package(Vulkan REQUIRED)
-
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
-
-	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Vulkan::Vulkan)
-
-	# Fails on M4, because it integrate MoltenVK inside the binary.
-	#find_package(Vulkan REQUIRED COMPONENTS MoltenVK)
-	#target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
-	#target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Vulkan::Vulkan Vulkan::MoltenVK "-framework Metal" "-framework AppKit" "-framework QuartzCore" "-framework IOSurface" "-framework Foundation")
-
-	# The Vulkan SDK installs its headers in '/usr/local/include', which some configurations do not search (a
-	# sysroot). It is added with -idirafter, NOT -I: a -I directory is searched BEFORE every -isystem one and is judged
-	# as our own code. As -I, it made '<glslang/...>' resolve to the SDK's glslang (16.4) instead of the ext-deps one the
-	# engine links (16.5): glslang::SpvOptions gained a field in between, so GlslangToSpv() read the engine's options
-	# one field off and one byte past the object. It also put the SDK's macros (VK_MAKE_VERSION) and headers under the
-	# paranoid warning set. -idirafter is a system directory searched after all the others.
-	target_compile_options(${TARGET_BINARY_FOR_SETUP} PUBLIC "-idirafter/usr/local/include")
-elseif ( MSVC )
-	set(VULKAN_SDK_PATH "C:/VulkanSDK/${VULKAN_SDK_VERSION}/")
-
-	if ( NOT EXISTS ${VULKAN_SDK_PATH} )
-		message(FATAL_ERROR "The Vulkan SDK is not found in '${VULKAN_SDK_PATH}' ! You can download it from: https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/windows/VulkanSDK-${VULKAN_SDK_VERSION}-Installer.exe")
-	endif ()
-
-	set(ENV{VULKAN_SDK} ${VULKAN_SDK_PATH})
-
-	find_package(Vulkan REQUIRED)
-
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
-
-	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Vulkan::Vulkan)
+if ( NOT EXISTS "${EMERAUDE_VULKAN_SDK_DIR}/VERSION" )
+	message(FATAL_ERROR "The external dependencies carry no Vulkan SDK ('${EMERAUDE_VULKAN_SDK_DIR}'). Use an archive that has it, or run ext-deps-generator's extract_vulkan_sdk.py for a local output.")
 endif ()
 
-message("Vulkan ${Vulkan_VERSION} SDK enabled !")
+file(STRINGS "${EMERAUDE_VULKAN_SDK_DIR}/VERSION" _emeraudeVulkanSDKVersion LIMIT_COUNT 1)
+
+if ( MSVC )
+	set(_emeraudeVulkanLibrary "${EMERAUDE_VULKAN_SDK_DIR}/lib/vulkan-1.lib")
+elseif ( APPLE )
+	set(_emeraudeVulkanLibrary "${EMERAUDE_VULKAN_SDK_DIR}/lib/libvulkan.1.dylib")
+else ()
+	set(_emeraudeVulkanLibrary "${EMERAUDE_VULKAN_SDK_DIR}/lib/libvulkan.so")
+endif ()
+
+# NOTE: FindVulkan keeps these cached paths instead of searching the system.
+set(Vulkan_INCLUDE_DIR "${EMERAUDE_VULKAN_SDK_DIR}/include" CACHE PATH "Vulkan headers (external dependencies)." FORCE)
+set(Vulkan_LIBRARY "${_emeraudeVulkanLibrary}" CACHE FILEPATH "Vulkan link library (external dependencies)." FORCE)
+
+find_package(Vulkan REQUIRED)
+
+target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${Vulkan_INCLUDE_DIRS})
+
+target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Vulkan::Vulkan)
+
+message("Vulkan SDK ${_emeraudeVulkanSDKVersion} enabled from the external dependencies !")
 message(" - Headers : ${Vulkan_INCLUDE_DIRS}")
 message(" - Binary : ${Vulkan_LIBRARIES}")
 

@@ -36,6 +36,7 @@
 	#include <map>
 	#include <optional>
 #endif
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -304,6 +305,18 @@ namespace EmEn::PlatformSpecific
 	[[nodiscard]]
 	EMEN_API std::string buildKdialogFilters (const ExtensionFilters & filters) noexcept;
 #endif
+
+	/**
+	 * @brief Puts a directory FIRST in the VK_ADD_LAYER_PATH environment variable, so the Vulkan loader finds the layers
+	 * shipped with the application (the external dependencies' validation layer) before any installed one.
+	 * @note Must run before the first loader call (glfwInit() already scans the layers). The other entries of
+	 * VK_ADD_LAYER_PATH are kept, after this one. No-op when VK_LAYER_PATH is set: it replaces every search path, an
+	 * explicit choice that wins. Inherited by child processes (the CEF helpers create no Vulkan instance).
+	 * @param directory The layer manifest directory (an absolute path).
+	 * @return bool True when the variable now starts with the directory.
+	 */
+	[[nodiscard]]
+	bool prependVulkanLayerDirectory (const std::filesystem::path & directory) noexcept;
 
 #if IS_MACOS
 	/**
