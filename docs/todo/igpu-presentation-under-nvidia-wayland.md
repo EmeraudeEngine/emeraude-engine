@@ -19,6 +19,10 @@ CoglTexture2D`), the surface queries return `VK_ERROR_SURFACE_LOST_KHR`, and the
 throwing `.at()` in `SwapChain::chooseSurfaceFormat()` (fixed 2026-10-11), then a SIGSEGV. `--window-less` on the same
 device works (labyrinth, sponza: 0 VUID).
 
+## Owner decision (2026-10-11)
+
+A device that cannot present to the surface is set aside and the next one by score is taken, with a warning; a FORCED device (ForceGPU) stops cleanly with an explicit Fatal instead (an explicit request is never worked around).
+
 ## What remains
 
 - Decide what a lost / unpresentable surface at startup means: refuse the device and fall back to the next one by

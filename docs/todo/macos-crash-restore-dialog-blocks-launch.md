@@ -17,6 +17,10 @@ macOS-PA (M6, 2026-10-11): after two crashes, the next launches hung for 240 s. 
 promptToIgnorePersistentStateWithCrashHistory → [NSAlert runModal]` — AppKit's state-restoration prompt waits for a
 human. Any unattended run (sweeps, CI, a peer session) blocks.
 
+## Owner decision (2026-10-11)
+
+Disable AppKit state restoration: the engine registers ApplePersistenceIgnoreState = YES in the application's user defaults before glfwInit().
+
 ## What remains
 
 - Opt the application out of window state restoration (e.g. register `ApplePersistenceIgnoreState = YES` in the

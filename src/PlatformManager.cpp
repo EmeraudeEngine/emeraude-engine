@@ -106,6 +106,10 @@ namespace EmEn
 		}
 
 #if IS_MACOS
+		/* NOTE: Before glfwInit() (NSApplication starts there): a crash must never make the next launch wait on AppKit's
+		 * "reopen the windows?" modal. */
+		PlatformSpecific::disableWindowStateRestoration();
+
 		/* NOTE: Before glfwInit(): the first loader call scans every driver manifest, and a MoltenVK loaded
 		 * from a second manifest (the LunarG SDK one) can never be unloaded. See pinVulkanLoaderToBundledDriver(). */
 		if ( const auto manifest = PlatformSpecific::pinVulkanLoaderToBundledDriver(); !manifest.empty() )

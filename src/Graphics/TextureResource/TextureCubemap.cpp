@@ -81,7 +81,7 @@ namespace EmEn::Graphics::TextureResource
 		{
 			for ( const auto & pixmap: m_localData->faces() )
 			{
-				if ( !this->validateTexture(pixmap, !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+				if ( !this->validateTexture(pixmap) )
 				{
 					return false;
 				}

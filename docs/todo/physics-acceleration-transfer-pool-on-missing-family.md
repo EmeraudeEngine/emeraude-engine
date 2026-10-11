@@ -42,6 +42,10 @@ device's queue families nor the transfer manager. It reproduces with `ForceGPU` 
   `!hasBasicSupport()`, and a compute-only device has no graphics family. The transfer manager is written for a
   graphics device; giving it a compute-device role is a design choice (owner).
 
+## Owner decision (2026-10-11)
+
+The TransferManager takes the ROLE of its device: on a compute device its pools go on the compute (or transfer) family and the image layout transitions on the compute queue.
+
 ## What remains
 
 - [ ] Find where the physics transfer manager picks family 0: probably a graphics-family index used on a compute-only

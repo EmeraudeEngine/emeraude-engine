@@ -327,12 +327,13 @@ namespace EmEn::Graphics::TextureResource
 			/**
 			 * @brief Validates a texture for Vulkan requirements.
 			 * @note This method is called just before sending the texture to the GPU.
+			 * @note No power-of-two requirement: Vulkan 1.0 core supports non-power-of-two images on every device (the
+			 * former check refused valid data on single-queue-family GPUs, owner decision 2026-10-11).
 			 * @param pixmap A reference to a pixmap.
-			 * @param disablePowerOfTwoCheck Disable the check for size pixmap check.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool validateTexture (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept;
+			bool validateTexture (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
 
 			/**
 			 * @brief Applies the normal map Y flip if enabled.

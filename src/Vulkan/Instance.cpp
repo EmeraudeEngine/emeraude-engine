@@ -1304,9 +1304,6 @@ namespace EmEn::Vulkan
 
 		m_graphicsDevice = logicalDevice;
 
-		/* NOTE: Basic GPU do not support flexible textures. */
-		m_standardTextureCheckEnabled = m_graphicsDevice->hasBasicSupport();
-
 		return logicalDevice;
 	}
 

@@ -340,5 +340,14 @@ namespace EmEn::PlatformSpecific
 	 */
 	[[nodiscard]]
 	std::string pinVulkanLoaderToBundledDriver () noexcept;
+
+	/**
+	 * @brief Opts the application out of AppKit's window state restoration (ApplePersistenceIgnoreState = YES in the
+	 * registration domain of the user defaults).
+	 * @note Must run before glfwInit() (NSApplication starts there). After a crash, AppKit otherwise asks "reopen the
+	 * windows?" in a modal that blocks the next launch until a human answers — every unattended run hung on it
+	 * (macOS peer, 2026-10-11). Owner decision 2026-10-11.
+	 */
+	void disableWindowStateRestoration () noexcept;
 #endif
 }

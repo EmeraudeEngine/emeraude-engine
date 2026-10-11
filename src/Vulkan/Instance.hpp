@@ -254,17 +254,6 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns whether textures must be checked for standard requirements like sizes being power of two.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isStandardTextureCheckEnabled () const noexcept
-			{
-				return m_standardTextureCheckEnabled;
-			}
-
-			/**
 			 * @brief Returns a reference to the RenderDoc capture wrapper.
 			 * @return Graphics::RenderDocCapture &
 			 */
@@ -516,7 +505,6 @@ namespace EmEn::Vulkan
 			bool m_debugMode{false};
 			bool m_validationLayersFromArgument{false};
 			bool m_dynamicStateExtensionEnabled{false};
-			bool m_standardTextureCheckEnabled{false};
 			bool m_enableFailSafe{false};
 			bool m_fullscreenExclusiveEnabled{false};
 			bool m_useVulkanMemoryAllocator{false};

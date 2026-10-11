@@ -93,18 +93,11 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Abstract::validateTexture (const Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept
+	Abstract::validateTexture (const Pixmap< uint8_t > & pixmap) const noexcept
 	{
 		if ( !pixmap.isValid() )
 		{
 			TraceError{TracerTag} << "The pixmap for resource '" << this->name() << "' is invalid !";
-
-			return false;
-		}
-
-		if ( !disablePowerOfTwoCheck && !pixmap.isPowerOfTwo() )
-		{
-			TraceError{TracerTag} << "The pixmap size for resource '" << this->name() << "' are not power of two (" << pixmap.width() << "X" << pixmap.height() << ") !";
 
 			return false;
 		}

@@ -2622,7 +2622,9 @@ namespace EmEn::Scenes::Loaders
 			", timeCodes " << startTimeCode << " to " << endTimeCode << ".";
 
 		/* An element made entirely of instances builds no drawable node at all, and is still a
-		 * complete success. Judging on meshes alone would call the vegetation a failure. */
-		return builtCount > 0 || !output.instanceSets.empty();
+		 * complete success. Judging on meshes alone would call the vegetation a failure.
+		 * Without reference resolution (an inventory of the root layer only, owner decision 2026-10-11), an empty
+		 * result is the expected answer, not a failure: the stage was read and reported above. */
+		return builtCount > 0 || !output.instanceSets.empty() || !m_options.resolveReferences;
 	}
 }

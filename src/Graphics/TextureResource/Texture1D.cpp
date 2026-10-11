@@ -73,7 +73,7 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		if ( !this->validateTexture(m_localData->data(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+		if ( !this->validateTexture(m_localData->data()) )
 		{
 			return false;
 		}

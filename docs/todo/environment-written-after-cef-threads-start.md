@@ -20,6 +20,10 @@ reallocate `environ` while another thread's `getenv()` walks it: undefined behav
 `concurrency-mt-unsafe`, 3 findings in `Helpers.linux.cpp`, 2026-10-11). Windows' `SetEnvironmentVariableW` is
 serialised by the system, the POSIX path is the exposed one.
 
+## Owner decision (2026-10-11)
+
+An engine entry point called by the consumer's main() BEFORE CefInitialize and any thread writes the loader environment once, single-threaded; projet-alpha calls it in its three Boot mains.
+
 ## What remains
 
 - Write the loader environment before any thread exists: an engine entry point called by the consumer's `main()` before

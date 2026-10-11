@@ -7791,3 +7791,12 @@ then a SIGSEGV on a null `vkFreeCommandBuffers` once volk was finalized. `Render
 does the same for its steps. Proved by fault injection on Linux (the bindless layout creation forced to fail): exit 1,
 0 VUID, no leaked object, no abort. **Rule:** an `onInitialize()` that fails after creating anything releases it
 before returning `false` (Ave Robustus II, every initialisation step exits cleanly).
+
+### No power-of-two requirement on textures (Oct 2026)
+
+`Instance` used to enable a "standard texture check" on devices with a single queue family ("Basic GPU do not support
+flexible textures"), and `TextureResource::Abstract::validateTexture()` then refused every non-power-of-two image.
+Vulkan 1.0 core supports such images on every device: on the Intel UHD 770 (Mesa ANV, one family) `basic-scenery`'s
+1536 × 1536 ground textures were refused and the demo crashed on a null ground. Removed on 2026-10-11 (owner
+decision); the real limits (`maxImageDimension2D`, format features) stay checked when the image is created. Proof:
+`basic-scenery` on the Intel iGPU (`--window-less`), scene loaded, 0 VUID, exit 0.
