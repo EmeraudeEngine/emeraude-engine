@@ -7766,3 +7766,28 @@ Proof on Linux (2026-10-11): neither `libEmeraude.so` nor the binary has a `NEED
 loader '<build>/vulkan/libvulkan.so.1' opened (instance version 1.4.363)` and `Insert instance layer
 "VK_LAYER_KHRONOS_validation" (<build>/vulkan/explicit_layer.d/libVkLayer_khronos_validation.so)` with Debian's layer
 still installed and no variable set by hand; sponza 0 VUID, MCP 1881/1881, exit 0; ImGui initialised through volk.
+
+### A descriptor set larger than maxPerSetDescriptors must be confirmed by vkGetDescriptorSetLayoutSupport (Oct 2026)
+
+The update-after-bind limits are not the only ceiling of a set: `VkPhysicalDeviceMaintenance3Properties::
+maxPerSetDescriptors` is, and a layout above it is valid only when `vkGetDescriptorSetLayoutSupport` says so
+(`VUID-vkCreateDescriptorSetLayout-support-09582`, checked by the validation layer since 1.4.363). MoltenVK on an
+Apple M6 (1.4.2) reports 1212 while its update-after-bind budget is 500000: the desired bindless table (4928) was
+refused, the renderer did not start under validation (and MoltenVK tolerated it without the layer — a spec violation
+that "works"). `BindlessTextureManager::computeCapacities()` now picks the profile on the update-after-bind budget,
+asks `isLayoutSupported()` (the exact bindings and flags), and picks again on `min(budget, maxPerSetDescriptors)` if
+refused. Proved on the M6 (2026-10-11): reduced profile 1D 32 / 2D 956 / 3D 32 / Cube 128 / CubeArray 32, 0 VUID on
+the 34 demos that have their data, sponza and citadel textures identical to the full table. NVIDIA keeps the desired
+profile (`maxPerSetDescriptors` 4294967295). **Rule:** every descriptor set layout sized from device limits is checked
+with `vkGetDescriptorSetLayoutSupport` before it is created.
+
+### A service whose initialisation failed is never terminated by Core: it releases its partial state itself (Oct 2026)
+
+`ServiceInterface::initialize()` marks a service usable only when `onInitialize()` succeeds, and Core terminates only
+the usable ones. A failure in the middle of `onInitialize()` therefore left the Renderer's TransferManager (a command
+buffer, two pools, a fence) alive until `~Renderer()`, after the device: SIGABRT in the loader (macOS, 2026-10-11),
+then a SIGSEGV on a null `vkFreeCommandBuffers` once volk was finalized. `Renderer::onInitialize()` now runs
+`initializeRenderingStack()` and calls `onTerminate()` on failure once the device exists; `BindlessTextureManager`
+does the same for its steps. Proved by fault injection on Linux (the bindless layout creation forced to fail): exit 1,
+0 VUID, no leaked object, no abort. **Rule:** an `onInitialize()` that fails after creating anything releases it
+before returning `false` (Ave Robustus II, every initialisation step exits cleanly).

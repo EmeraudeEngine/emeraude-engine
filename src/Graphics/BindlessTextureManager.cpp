@@ -193,10 +193,7 @@ namespace EmEn::Graphics
 		 * profile is chosen again with that limit as the budget. */
 		const auto perSetLimit = m_device->physicalDevice()->propertiesVK11().maxPerSetDescriptors;
 
-		TraceWarning{ClassId} <<
-			"The device refuses a bindless layout of " << ( m_maxTextures1D + m_maxTextures2D + m_maxTextures3D + m_maxTexturesCube + m_maxTexturesCubeArray ) <<
-			" descriptors (maxPerSetDescriptors " << perSetLimit << ") : the table is sized on that limit.";
-
+		/* NOTE: applyBudget() traces the profile it picks and the limit that set it. */
 		m_firstDynamicSlot = FirstDynamicSlot;
 
 		if ( !this->applyBudget(std::min(deviceBudget, perSetLimit), "maxPerSetDescriptors") )
@@ -224,7 +221,7 @@ namespace EmEn::Graphics
 		if ( deviceBudget < OtherSetsSamplerHeadroom + minimalTotal )
 		{
 			TraceError{ClassId} <<
-				"The device update-after-bind budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
+				"The device descriptor budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
 				"cannot host the minimal bindless descriptor table (" << minimalTotal << " minimum, plus "
 				<< OtherSetsSamplerHeadroom << " reserved for other sets) !";
 
@@ -262,7 +259,7 @@ namespace EmEn::Graphics
 			m_maxTextures2D = std::min(budget - reducedSecondaryTotal, DesiredMaxTextures2D);
 
 			TraceWarning{ClassId} <<
-				"The device update-after-bind budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
+				"The device descriptor budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
 				"cannot host the desired bindless table (" << desiredTotal << " descriptors). Reduced to "
 				"1D[" << m_maxTextures1D << "], "
 				"2D[" << m_maxTextures2D << "], "
@@ -294,7 +291,7 @@ namespace EmEn::Graphics
 		m_maxTextures2D = std::min(budget - (minimalTotal - MinimalTexturesPerDynamicArray), DesiredMaxTextures2D);
 
 		TraceWarning{ClassId} <<
-			"The device update-after-bind budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
+			"The device descriptor budget (" << deviceBudget << " descriptors, set by '" << limitName << "') "
 			"cannot host the reduced bindless table. Minimal profile: "
 			"1D[" << m_maxTextures1D << "], "
 			"2D[" << m_maxTextures2D << "], "
