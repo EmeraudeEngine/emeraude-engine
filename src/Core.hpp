@@ -489,6 +489,20 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns whether the engine failed to start in its constructor (base level: primary services,
+			 * console, …).
+			 * @note The consumer's main() checks it FIRST and returns a failure code (EXIT_FAILURE) without calling
+			 * run(): the core never ends the process itself (owner decision 2026-10-11). run() also refuses to start.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			startupFailed () const noexcept
+			{
+				return m_startupMode == StartupMode::Error;
+			}
+
+			/**
 			 * @brief Prevents application from running.
 			 * @note No reading this variable won't avoid the core to continue.
 			 * @return bool

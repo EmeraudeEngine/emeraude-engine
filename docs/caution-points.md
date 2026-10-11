@@ -5534,6 +5534,19 @@ misleading.
 
 ## Platform-Specific
 
+### The engine never ends the process: a failed start is RECORDED, `main()` exits (2026-10-11)
+
+Until 2026-10-11 `Core::Core()` called `std::quick_exit(2)` (`std::terminate()` on macOS, an abort and a crash report)
+when `initializeBaseLevel()` failed: no destructor ran, the consumer's `main()` never got control back, and stdout was
+lost. `--help` took that path too, so the help was never printed (exit 2, empty output). Owner decision 2026-10-11:
+"a failure should exit the application correctly". Now the constructor sets `StartupMode::Error`; a consumer's
+`main()` checks **`Core::startupFailed()` first** and returns `EXIT_FAILURE` (projet-alpha: the three `Boot/*/main.*`,
+before CEF), and `~Core()` releases the primary services started so far. A consumer that does not check it is still
+safe: `run()` refuses to start in `Error` mode and returns `EXIT_FAILURE`. `--help` is a successful start
+(`showHelp()`). Proof (fault injection on Linux, the console service forced to fail): the Fatal trace, every primary
+service "terminated gracefully", "Core level terminated", exit 1. The only remaining `std::terminate()` in `Core` is
+the console's deliberate `HardExit` command.
+
 ### ⚠️⚠️ Threads start through base `Base::Thread` — a refused thread is a value, not an abort (2026-10-07)
 
 `std::thread`'s constructor throws when the system cannot start a thread; under `-fno-exceptions` the process

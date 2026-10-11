@@ -100,13 +100,14 @@ namespace EmEn
 		m_settingsKeyRestoration{std::move(settingsKeyRestoration)},
 		m_resetSettingsOnNewVersion{resetSettingsOnNewVersion}
 	{
+		/* NOTE: A failed base level is RECORDED (StartupMode::Error, startupFailed()), never an exit from here: the
+		 * consumer's main() checks startupFailed() and returns a failure code, and every destructor runs (the primary
+		 * services started so far are released by ~Core()). Owner decision 2026-10-11. */
 		if ( !this->initializeBaseLevel() )
 		{
-#if IS_MACOS // clang 15 failure (try to use __apple_build_version__)
-			std::terminate();
-#else
-			std::quick_exit(2);
-#endif
+			m_startupMode = StartupMode::Error;
+
+			Tracer::fatal(ClassId, "The engine could not start (base level) : the application must exit.");
 		}
 	}
 
@@ -119,9 +120,14 @@ namespace EmEn
 		m_settingsKeyRestoration{std::move(settingsKeyRestoration)},
 		m_resetSettingsOnNewVersion{resetSettingsOnNewVersion}
 	{
+		/* NOTE: A failed base level is RECORDED (StartupMode::Error, startupFailed()), never an exit from here: the
+		 * consumer's main() checks startupFailed() and returns a failure code, and every destructor runs (the primary
+		 * services started so far are released by ~Core()). Owner decision 2026-10-11. */
 		if ( !this->initializeBaseLevel() )
 		{
-			std::quick_exit(2);
+			m_startupMode = StartupMode::Error;
+
+			Tracer::fatal(ClassId, "The engine could not start (base level) : the application must exit.");
 		}
 	}
 #endif
