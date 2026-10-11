@@ -32,7 +32,10 @@ endif ()
 # NOTE: An explicit macOS SDK, set before project(). Without -isysroot (CMake 4 no longer sets one), Apple clang adds a
 # USER -I/usr/local/include, searched before every -isystem: an installed Vulkan SDK's or Homebrew's headers there won
 # over the external dependencies' (measured 2026-10-11: glslang and vulkan headers of a 1.4.357 SDK in /usr/local).
-if ( CMAKE_HOST_APPLE AND NOT CMAKE_OSX_SYSROOT )
+# Only as the TOP-LEVEL project: it must precede the first project(), which resolves it. A consumer that adds this
+# project after its own project() sets it itself before that call (an unresolved "macosx" reached clang verbatim:
+# "no such sysroot directory", every standard header missing — macOS peer, 2026-10-11).
+if ( CMAKE_HOST_APPLE AND NOT CMAKE_OSX_SYSROOT AND CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
 	set(CMAKE_OSX_SYSROOT "macosx" CACHE STRING "The macOS SDK (resolved by xcrun)." FORCE)
 endif ()
 

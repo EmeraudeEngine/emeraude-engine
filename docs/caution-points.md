@@ -5099,6 +5099,19 @@ dereference what a resource accessor returns without checking it.**
 > II warning pass on macOS (AppleClang 21). **Rule: a third-party directory is never a raw `-I`; check which copy of a
 > header a TU really includes when two installations exist (`clang++ -H`, or a `static_assert` on the version macro).**
 
+### macOS: an explicit SDK sysroot, set by the TOP-LEVEL project before its first project() (2026-10-11)
+
+With CMake 4 no `-isysroot` is passed by default, and Apple clang then adds a USER `-I/usr/local/include`, searched
+before every `-isystem`: an installed Vulkan SDK's or Homebrew's headers there won over the external dependencies'
+(measured: glslang and vulkan headers of a 1.4.357 SDK). So `CMAKE_OSX_SYSROOT` is set to `"macosx"` (resolved by
+`xcrun`) BEFORE `project()` — in emeraude-base, emeraude-engine and every consumer. ⚠️ It is resolved only by the FIRST
+`project()` of the build: set later (base/engine added after a consumer's own `project()`), the unresolved `"macosx"`
+reached clang verbatim — "no such sysroot directory: 'macosx'", every standard header missing (macOS peer, a downstream
+application, 2026-10-11). base and engine therefore set it only when they are the top-level project
+(`CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR`); a consumer sets it itself before its first `project()`
+(projet-alpha does). An IDE build directory configured before this rule keeps an empty sysroot and old `Vulkan_*`
+entries pointing at `/usr/local`: reset its cache.
+
 ### macOS only: libc++ annotates `std::mutex` for `-Wthread-safety` — a hand-made `lock()` / `unlock()` pair fails (2026-10-08)
 
 Apple's libc++ declares `std::mutex` as a thread-safety capability, so Clang's `-Wthread-safety` (paranoid set) follows
