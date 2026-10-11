@@ -35,3 +35,20 @@ every validation run on Windows, where the validation layer reports itself as a 
 Found by Windows-PA (VVL 1.4.363, NVIDIA + Intel, 2026-10-10). Linux never reports it, with Debian's VVL 1.4.309
 or LunarG's 1.4.363 (checked 2026-10-11 on the unfixed binary): the tool list is most likely empty there
 (unverified) — a Linux-only validation run does not cover this path.
+
+### A TransferManager takes the role of its device (2026-10-11)
+
+The physics compute device is created with the compute family and the transfer-only family, never a graphics one. Its
+`TransferManager` used to take its "specific" command pool on `getGraphicsFamilyIndex()` (family 0 on NVIDIA):
+`VUID-vkCreateCommandPool-queueFamilyIndex-01937`, "No physics acceleration available!", then a leaked pool at
+`vkDestroyDevice` (`VUID-vkDestroyDevice-device-05137`). Owner decision 2026-10-11: a transfer manager works in the
+ROLE of its device. `Device` exposes the PRIMARY-role accessors `getPrimaryFamilyIndex()`, `getPrimaryQueue()`,
+`getPrimaryTransferFamilyIndex()`, `getPrimaryTransferQueue()` (the graphics ones when the device has graphics
+queues, the compute ones otherwise); `TransferManager`, `BufferTransferOperation` and `ImageTransferOperation` use
+only those (20 call sites). Any new code in these three files must do the same: a graphics accessor there breaks the
+compute device again.
+
+Measured with `Core/Physics/EnableAcceleration = true`, validation ON, `balls-of-steel` and `sponza`: Linux RTX 3070 Ti
+and Windows RTX 3500 Ada + Intel RaptorLake-S (forced) — the physics TransferManager comes up and terminates
+gracefully, 0 VUID (no 01937 / 05137), exit 0. macOS (MoltenVK) stops earlier, at the compute device's missing
+`VK_KHR_portability_subset` (item compute-device-missing-portability-subset), and exits 0.

@@ -27,8 +27,9 @@ The engine keeps running and exits cleanly.
 portability-subset handling (enable the extension when advertised, plus its features) exists only on the graphics
 device path. The defect is pre-existing: 9a only made that vector `const`.
 
-On Linux and Windows the same option hits a different failure first: engine item
-`physics-acceleration-transfer-pool-on-missing-family`.
+On Linux and Windows the same option now works (0 VUID, 2026-10-11): once this extension is enabled, macOS goes on
+to the transfer manager, which takes the compute role of its device
+(`docs/subsystems/vulkan/19-critical-device-owns-its-queues.md` § A TransferManager takes the role of its device).
 
 ## What remains
 
