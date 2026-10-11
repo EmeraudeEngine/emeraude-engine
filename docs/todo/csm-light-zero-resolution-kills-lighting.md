@@ -35,6 +35,8 @@ with `Core/Graphics/ShadowMapping/Enabled = false`, the CSM sun lights NOTHING a
 fell from 112 to 8.6 / 255. So the non-shadow `DirectionalLightPass` of a CSM-built light contributes nothing,
 with no warning and no VUID. That is very likely the same mechanism as resolution 0 (a CSM light with no usable
 map), unverified. Found by the foliage diagnosis workflow of that day.
+That second route is tracked on its own, with its pinned-exposure captures, in
+[`sun-unlit-without-shadow-mapping.md`](sun-unlit-without-shadow-mapping.md). Fixing either one must re-test the other.
 
 ## What remains
 

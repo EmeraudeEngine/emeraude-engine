@@ -61,7 +61,7 @@ namespace EmEn::Graphics
 	/**
 	 * @brief The two textures of an octahedral imposter: the ALBEDO (+ coverage) and the NORMAL of an object, seen from
 	 * gridSize² directions of the upper hemisphere (emeraude-base `Math/OctahedralMapping.hpp`, hemi variant).
-	 * @note Owner decisions 2026-09-23 (engine `docs/todo/vegetation-octahedral-imposter-atlas.md`): the atlas carries
+	 * @note Owner decisions 2026-09-23 (engine graphics § 15e, `docs/subsystems/graphics/24-15e-octahedral-imposters-the-last-rung-of-a-tree.md`): the atlas carries
 	 * albedo and normal, lit AT RUNTIME, never a baked lit colour; 8 × 8 views of 128 px.
 	 * @note It lives on the GPU only. RenderTarget::ImposterBake renders the views into its G-buffer and recordBake()
 	 * copies them here and builds the mip chain in the same submission: no read-back, no CPU pass.

@@ -19,6 +19,13 @@ the specular lobe. Without TAA (the jitter off) that aliasing is spatial and sta
 accumulation has to average. Filtering it at the source lowers what the TAA must hide, and helps every path
 without TAA (FXAA, window-less captures, reflections).
 
+## Already in the engine (found by the board audit, 2026-10-11)
+
+Tokuyoshi & Kaplanyan's geometric specular AA (σ² 0.25, κ 0.18) has been in `SceneRendering.cpp` (~804-840) since
+`30a66b88f` (2026-09-14). It applies only to the roughness WRITTEN TO THE G-BUFFER, which RTR and SSR read. The
+lighting code (`LightGenerator`: forward direct specular and IBL) still uses the unfiltered roughness. So the first
+candidate below exists, but not where this item needs it. Reuse that code: do not write a second copy.
+
 ## What remains
 
 - Measure first: the far band of `relief` with the TAA OFF, specular term alone vs diffuse alone (the part of the

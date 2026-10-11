@@ -1,10 +1,11 @@
 ---
 id: jobs-owned-by-their-starter
 title: Every asynchronous job owned by the object that starts it; remove the ad-hoc cancellation
-status: open
+status: blocked
 priority: high
 scope: src/Graphics/Renderable/MeshResource.cpp, MultiLayerMeshResource.cpp, src/Resources/ResourceTrait.hpp, src/Core.cpp, + the class C sites
 opened: 2026-10-08
+blocked-by: [task-handle-and-stop-token]
 tags: [ave-robustus-ii, concurrency, lifetime]
 ---
 
@@ -21,6 +22,11 @@ exit — 32 `CloudShapeResource` growth jobs and the CDLOD clipmap upload ran to
 finishing after `Core.shutdown()`). `sponza` with automatic LODs: 6.5 s.
 
 ## What remains
+
+⚠️ **Blocked on emeraude-base** `task-handle-and-stop-token` (another repository): `Base::Thread` must follow the
+`std::jthread` model first. The base `TaskHandle` + `ThreadPool::submit()` already exist (base 73a319a), but the
+engine does not use them yet: `cancelBackgroundWork()` is still in `ResourceTrait.hpp` (~282-305), `Core.cpp` (~637)
+and `MeshResource.cpp` (~459, 483).
 - After base `task-handle-and-stop-token`: `MeshResource` / `MultiLayerMeshResource` hold their LOD `TaskHandle`s; then
   `FrameCapture`, `Net::Manager`, `APIClient`, the `Resources::Manager` release pass, `Container` loading tasks.
 - **Remove** `cancelBackgroundWork()`, `isBackgroundWorkCancelled()`, `backgroundWorkCancellation()`, the second drain.

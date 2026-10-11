@@ -1,22 +1,22 @@
 ---
 id: core-init-failure-skips-terminate
-title: Core exits without terminate() when initializeCoreLevel() fails
+title: Prove every Core initialize step fails cleanly — fault injection (the missing terminate() is fixed)
 status: open
 priority: high
-scope: src/Core.cpp
+scope: src/Core.cpp, every service initialize*()
 opened: 2026-10-08
-tags: [ave-robustus-ii, raii, defect]
+tags: [ave-robustus-ii, raii, defect, fault-injection]
 ---
 
-# Core exits without terminate() when initializeCoreLevel() fails
+# Prove every Core initialize step fails cleanly — fault injection
 
 ## Why
-`Core.cpp:455-458`: `if ( !this->initializeCoreLevel() ) { return EXIT_FAILURE; }` — no `terminate()`, while the veto
-path calls `return this->terminate();`. The secondary services already started are never terminated (`~Core` handles
-the primary ones only): VkInstance, OpenAL, GLFW leak, and the audio threads may hang at exit (see
-`audio-thread-member-order`).
+The defect in this item's id is fixed. `Core.cpp` used to `return EXIT_FAILURE` when `initializeCoreLevel()` failed,
+without `terminate()`: VkInstance, OpenAL and GLFW leaked, and the audio threads could hang at exit. Since c6c237755
+("Ave Robustus II P0: every lifetime ends in its owner, failure paths included", `Core.cpp:478`) it terminates.
+Ave Robustus II requires every failure path to be PROVEN clean, and only one step is so far.
 
-## Done (2026-10-08, P0)
+## Done (2026-10-08, P0, c6c237755)
 - `Core::run()` calls `terminate()` when `initializeCoreLevel()` fails; `~Core()` terminates whatever user / secondary
   service is still registered (safety net, decision D3-a); `Vulkan::Instance`, `Audio::TrackMixer` and
   `Audio::Recorder` release in their destructors when `onTerminate()` did not run.

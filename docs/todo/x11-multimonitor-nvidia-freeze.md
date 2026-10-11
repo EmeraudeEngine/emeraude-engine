@@ -18,7 +18,8 @@ https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedica
 
 ## Status
 
-Third-party driver behaviour, not an engine defect. Kept so nobody re-investigates it as ours.
+Third-party driver behaviour, not an engine defect (recorded in `docs/caution-points.md` § Platform-Specific, so
+nobody re-investigates it as ours). Parked: nobody works on it until a current driver is checked.
 
 ## What remains
 

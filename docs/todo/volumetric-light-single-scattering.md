@@ -1,6 +1,6 @@
 ---
 id: volumetric-light-single-scattering
-title: Volumetric light — replace the screen-space god rays with a real single-scattering pass
+title: Volumetric light — migrate the demos to the single-scattering march and retire the screen-space god rays
 status: open
 priority: high
 scope: Graphics/PostProcessing
@@ -137,21 +137,19 @@ too: a bright band near the ground, a dark sky above, as `densityAt()` predicts.
   that takes the march should drop the god rays (the eight-demo migration this item planned), or
   the two slots need a mechanical exclusion the table does not express today.
 
-## What remains — Lot 1, the pass itself, on ONE scene
+## What remains
 
-- [ ] **A NEW effect beside `VolumetricLight`, not a replacement.** Keeps the A/B alive and lets
-  the eight demos migrate one at a time instead of switching together. Target
-  `light-and-shadow-debug`, the only scene that declares a medium today.
-- [ ] Reconstruct the world-space view ray from depth; march it with a per-pixel **STATIC** dither
-  of the march origin (`docs/caution-points.md` — never ship uniform steps).
-- [ ] Per step: density from the medium's height profile (`ParticipatingMedium::densityAt()`),
-  shadow-map sample with **cascade selection per step** (a single ray crosses cascade boundaries —
-  seams if done naively; the screen-space effect never faced this), Henyey-Greenstein phase driven
-  by `phaseAnisotropy()`, accumulate in-scattering and transmittance.
-- [ ] The 4 cascade matrices are 256 bytes, past the 128-byte push-constant floor: they go in a
-  per-frame UBO via `getInputLayout(samplerCount, uniformBufferCount)` +
-  `createPerFrameUniformBuffers()`.
-- [ ] Half-res + bilateral upsample if the cost demands it (per pixel × steps × cascade PCF).
+Lot 1 is DONE: the pass is built (011bf0002, f66185567) and accepted on `light-and-shadow-debug` (above). It is a new
+effect beside `VolumetricLight`, it takes `EffectSlot::Fog`, it reconstructs the view ray from depth with a static
+dither, and it selects the cascade per step with a per-frame UBO. What the title asks for is still open:
+
+- [ ] **Owner decision: the double count.** A demo that takes the march either drops the legacy god rays, or the two
+      slots get a mechanical exclusion (see the trap above).
+- [ ] **Migrate the eight demos** one at a time. Seven declare no medium and render nothing until they do; the
+      exposure calibration of each is redone with the march.
+- [ ] **Retire the screen-space `VolumetricLight`** once no demo uses it (the "replace" of the title).
+- [ ] Half-res + bilateral upsample, if the cost on the migrated demos demands it.
+- [ ] Lot 2 (froxels) stays deferred (below).
 
 ## The test, defined BEFORE building
 
@@ -196,4 +194,5 @@ industry reached froxels after per-pixel marching, and so should this.
   touches the CLASSIC map's light-space recipe, not the cascade matrices this pass consumes, so it
   does not gate the march. ⚠️ It does own the *"outside the map = lit"* convention, so agree on that
   convention with it rather than open-coding a fifth copy here.
-- [ ] New effect in the engine from the start, or prototyped first to judge the cost?
+- [x] New effect in the engine from the start, or prototyped first to judge the cost? ANSWERED 2026-09-08: in the
+  engine from the start (see "Built 2026-09-08").

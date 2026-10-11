@@ -1145,7 +1145,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Bakes the octahedral IMPOSTER of a tree and returns the renderable that draws it (owner decisions
 			 * 2026-09-23: albedo + normal lit at runtime, hemi-octahedral, 8 × 8 views of 128 px, the variants over
-			 * consecutive frames; engine `docs/todo/vegetation-octahedral-imposter-atlas.md`).
+			 * consecutive frames; engine graphics § 15e).
 			 * @note The bake: a BAKE-ONLY entity (RenderableInstance::setBakeOnly()) holding 64 copies of the tree, one
 			 * per view, each rotated so its view direction faces the scene's imposter bake camera and scaled to a unit
 			 * sphere, laid on the 8 × 8 grid the camera sees (Scene::imposterBakeTarget()); the target renders it with

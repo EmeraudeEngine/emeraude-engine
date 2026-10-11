@@ -25,8 +25,8 @@ A device that cannot present to the surface is set aside and the next one by sco
 
 ## What remains
 
-- Decide what a lost / unpresentable surface at startup means: refuse the device and fall back to the next one by
-  score, or stop with a clear Fatal — owner decision.
+- Implement the owner decision above (2026-10-11): at startup, an unpresentable device is set aside with a warning and
+  the next one by score is taken; a FORCED device stops cleanly with an explicit Fatal.
 - Find the SIGSEGV after the Wayland protocol error (GLFW's connection is dead), and make the failure path exit cleanly.
 
 ## Observed 2026-10-11: the failed instance does not stop

@@ -31,5 +31,5 @@ with `setAutomaticRenderingState(false)` renders only while `setRenderOutOfDate(
 is the working camera-to-target rig, and `CommandBuffer::blitImage()`/`copyImage()` assemble
 several views into one atlas image (`GrabPass`, `PostProcessor` already use them).
 
-Consumer in progress: `docs/todo/vegetation-octahedral-imposter-atlas.md`. The parametrisation the
+Consumer: the octahedral imposters (§ 15e). The parametrisation the
 baker and the shader must share is `EmEn::Base::Math::OctahedralMapping` in emeraude-base.

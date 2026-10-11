@@ -20,8 +20,8 @@ effects still carry their own copy of the same expression:
 | Site | Shape |
 |---|---|
 | `MotionBlur.cpp:283` | already a named `interleavedGradientNoise(vec2)` function |
-| `VolumetricLight.cpp:165` | inline, on `gl_FragCoord.xy` |
-| `RTR.cpp:1701` | inline, wrapped in `6.2831853 * …` for an angle |
+| `VolumetricLight.cpp:175` | inline, on `gl_FragCoord.xy` |
+| `RTR.cpp:2095` | inline, wrapped in `6.2831853 * …` for an angle |
 | `SSR.cpp:264` | already a named function, on a `pixel` parameter |
 
 All four are **bit-identical** to the shared helper: same constants (`52.9829189`, `0.06711056`,

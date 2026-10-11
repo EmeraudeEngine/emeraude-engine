@@ -51,3 +51,29 @@ where the fade merely dims.
 
 ⚠️ The direct-lighting Fresnel uses the half-vector `dot(H,V)` and keeps plain Schlick — bounding
 that one would break the specular highlight of every light in the scene.
+
+### What is left on the foliage, and what this hunt cost (from the closed item, 2026-10-11)
+
+- **The residual.** The foliage rim is the share of foliage pixels that are bright and desaturated (lum > 55,
+  sat < 18 %). Its floor is 0.9 %: the needle tips the sun really lights. The two lanes now sit at 2.2 % (RT) and 3.0 % (SS).
+  - The SS/RT luminance gap that remains (55.95 against 32.17 on the foliage, 69.60 against 34.39 on the stone) is the
+    documented screen-space sky-visibility over-estimate in enclosed spaces.
+  - The edge albedo is still only 48 % of the true colour for want of alpha dilation: engine item
+    `alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain`.
+- **The amplifier is authored.** `Cypress_LF01_Spring_Normal.png` encodes the rolled edge of each needle. The mean
+  normal Z is +0.676 on the needle body, +0.980 under the transparent texels, and **+0.272 at the alpha edge**, close
+  to tangent. So `NdotV -> 0` on every silhouette.
+- ⚠️⚠️ **An instrument must be PROVEN on before anything is read from it.** A "reflectivity nibble 0.195 vs 0.205"
+  reading closed a lead, but it was the ORDINARY frame (47.98/255): the debug lane was missing from the program-cache
+  key, so the cached program was served.
+- ⚠️⚠️ **Three physically-founded fixes in a row moved the number and missed the cause.** Lagarde, specular AA and
+  traced occlusion took the rim 71 % -> 51 % -> 40 % -> 28 %, while the defect was a MISSING term. The raster IBL
+  (`IBLTexture::Role::BRDFLut`) already computed it correctly. **When a value looks wrong, first check whether another
+  path in the engine already computes it correctly.**
+- **A global lever versus a correct term.** The stone tells them apart: a lever dims the stone too, while the correct
+  term leaves it reflecting.
+- **Measure, never look.** The first three observations on this frame were made on a downscaled view, and none
+  survived measurement: "white speckles on the stone", "blown-out leaves", "the asset is pale".
+- **Exposure.** At sunny-16 both frames of the A/B sit near black: pin a usable exposure (f/5.6, 1/125, ISO 100).
+- **The application SAVES its settings on exit.** A debug key set for a session is written back by
+  `Core.shutdown()`: restore it after the process is gone.

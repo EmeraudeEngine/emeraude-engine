@@ -37,7 +37,7 @@ tags: [participating-medium, shaders, procedural, voxels]
 
 The owner wants to fly among clouds in `forest`, some of them just above the trees.
 
-## Stage 1 — DELIVERED 2026-09-24 (not committed)
+## Stage 1 — DELIVERED 2026-09-24 (committed in 59f94bbc7)
 
 The whole of it is described in `src/Graphics/AGENTS.md` § VolumetricClouds and
 `src/Scenes/AGENTS.md` § Available Components; the traps met are in `docs/caution-points.md`
@@ -55,7 +55,7 @@ The whole of it is described in `src/Graphics/AGENTS.md` § VolumetricClouds and
 - Verified at runtime: the editor (Shift+F3) selects a cloud and draws its gizmo; the cloud stays
   traversable.
 
-## Stage 2 lot 1 — the lit materials — DELIVERED 2026-09-24 (not committed)
+## Stage 2 lot 1 — the lit materials — DELIVERED 2026-09-24 (committed in 59f94bbc7)
 
 Described in `src/Graphics/AGENTS.md` § *The clouds' shadow on the world*, `src/Saphir/AGENTS.md`
 § *The volumetric clouds' shadow is a BRANCH*, `src/Scenes/AGENTS.md` (CloudVolume paragraph).

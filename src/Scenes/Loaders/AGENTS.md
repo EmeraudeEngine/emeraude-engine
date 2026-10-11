@@ -23,3 +23,4 @@ Context for developing composite asset format loaders in the Emeraude Engine.
 | Consumers | [`docs/subsystems/scenes-loaders/04-consumers.md`](../../../docs/subsystems/scenes-loaders/04-consumers.md) | 1 KB |
 | Important Files | [`docs/subsystems/scenes-loaders/05-important-files.md`](../../../docs/subsystems/scenes-loaders/05-important-files.md) | 1 KB |
 | Critical Rules | [`docs/subsystems/scenes-loaders/06-critical-rules.md`](../../../docs/subsystems/scenes-loaders/06-critical-rules.md) | 1 KB |
+| The glTF conformance bench — results, method and traps | [`docs/subsystems/scenes-loaders/07-gltf-conformance-bench-results.md`](../../../docs/subsystems/scenes-loaders/07-gltf-conformance-bench-results.md) | 15 KB |

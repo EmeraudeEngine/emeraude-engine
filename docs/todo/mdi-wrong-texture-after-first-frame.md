@@ -24,7 +24,11 @@ the bindless-texture integration for MDI objects is incomplete — MDI bypasses 
 
 ## What remains
 
-- [ ] RenderDoc or targeted instrumentation to pinpoint it. ⚠️ Code speculation already produced
+- [ ] **Re-test on the ORIGINAL scene first.** The 2026-10-10/11 three-OS campaign ran MDI on sponza and citadel
+  (Linux and the M6) and did NOT reproduce the defect: 0 VUID, correct textures. Those are not the scene of the report.
+  Run `basic-scenery` (the palm trunks) with MDI on and validation on. If it is clean, delete this item and record the
+  non-reproduction in `docs/subsystems/graphics/` (MDI).
+- [ ] If it reproduces: RenderDoc or targeted instrumentation to pinpoint it. ⚠️ Code speculation already produced
   one wrong hypothesis here.
 
 ## Context

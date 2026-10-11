@@ -95,7 +95,7 @@ near-black border.
 - ⚠️⚠️ **The cutout promotion is NOT the near-field defect.** Up close the mask is sampled near
   mip 0, the coverage is already correct, the silhouettes are crisp — and the canopy still washes
   out. That half is the grazing-normal Fresnel spike:
-  [`foliage-takes-most-of-its-light-from-the-reflection.md`](foliage-takes-most-of-its-light-from-the-reflection.md).
+  `docs/subsystems/graphics/32-the-reflection-effects-owed-the-environment-brdf-not-a-fresn.md`.
   Do not credit this work with that symptom.
 - ⚠️⚠️ **The measured histogram came from a PNG in a DIFFERENT package** (`pkg_c_trees`), not from
   the KTX2 actually loaded. Same dimensions and same source art, but that identity was never proven.

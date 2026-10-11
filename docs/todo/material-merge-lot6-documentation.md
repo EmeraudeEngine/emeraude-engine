@@ -22,19 +22,20 @@ update ships in the same session as the code — this one is late.
 **last** open piece of the material merge and enlarges its surface: the docs now describe a class
 that no longer exists in any form.
 
-### Measured stale surface (2026-09-08)
+### Measured stale surface (re-counted 2026-10-11)
 
-**47 `BasicResource` mentions across 13 Markdown files.** Ranked, so the pass can be ordered:
+**About 48 `BasicResource` mentions.** The `AGENTS.md` files are routers since 2026-09-27, so the content has moved to
+`docs/subsystems/`. Ranked, so the pass can be ordered:
 
 | File | Mentions |
 |---|---|
 | `docs/caution-points.md` | 17 |
-| `src/Graphics/AGENTS.md` | 7 |
-| `src/Scenes/Loaders/AGENTS.md` | 5 |
-| `src/Saphir/AGENTS.md` | 5 |
+| `docs/subsystems/scenes-loaders/03-implemented-loaders/04-wadloader.md` | 5 |
+| `docs/subsystems/graphics/08-8-material-component-system.md` | 4 |
+| `docs/subsystems/saphir/12-legacy-specular-energy-normalisation.md` (history, kept on purpose) | 3 |
 | `docs/saphir-v2-proposal.md` | 3 |
-| `src/Vulkan/AGENTS.md`, `docs/ai-runtime-control.md` | 2 each |
-| `AGENTS.md`, `docs/graphics-system.md`, `docs/pipeline-caching-system.md`, `docs/reflection-pipeline.md`, `docs/shadow-mapping.md`, `docs/windows-export-api.md` | 1 each |
+| `docs/subsystems/vulkan/04-critical-layoutmanager-thread-safety.md`, `docs/subsystems/graphics/05-5-material-ubo-system.md`, `docs/ai-runtime-control.md` | 2 each |
+| `docs/windows-export-api.md`, `docs/shadow-mapping.md`, `docs/reflection-pipeline.md`, `docs/pipeline-caching-system.md`, `docs/subsystems/saphir/10-ibl-ambient-pass.md`, `docs/subsystems/saphir/11-…`, `docs/subsystems/graphics/13-12-…/23-…` | 1 each |
 
 ⚠️ **Not every mention is a deletion.** Three kinds, and they must be told apart:
 
@@ -49,14 +50,16 @@ that no longer exists in any form.
 
 ## What remains
 
-- [ ] `AGENTS.md` network: Graphics, Scenes, Console (`Console/AGENTS.md:204` finally becomes
-  exact — it describes the named-material resolution that used to be Standard-then-PBR).
-- [ ] Material JSON schema documentation (single lit ClassId; `"Standard"` and `"PBR"` are
-  synonyms in `DefinitionResource`).
-- [ ] projet-alpha `.claude/rules/` mirror.
-- [ ] `generate_materials.py` header.
-- [ ] Optional: regenerate the 3,918 dual-schema material JSONs to single-schema — nothing
-  requires the dual layout after the merge.
+- [ ] The `docs/subsystems/` files listed above (Graphics, Scenes loaders, Saphir, Vulkan) and `docs/caution-points.md`,
+  told apart by the three kinds above. The Console's named-material resolution (formerly `Console/AGENTS.md:204`,
+  now in `docs/subsystems/console/`) finally becomes exact: it describes what used to be Standard-then-PBR.
+- [ ] Material JSON schema documentation: a single lit ClassId; `"Standard"` and `"PBR"` are synonyms in
+  `DefinitionResource`.
+- [ ] Optional: regenerate the 3,918 dual-schema material JSONs to single-schema. Nothing requires the dual layout
+  after the merge.
+
+No longer open (2026-10-11): the projet-alpha `.claude/rules/` mirror has 0 mentions, and `generate_materials.py` no
+longer exists in the tree.
 
 ## Already recorded, do not redo
 

@@ -52,5 +52,10 @@ second launch. Mean luminance of the lower half of the frame (/255), validation 
 
 ## References
 
+- The same silence by another route: a CSM light with `shadowMapResolution` 0,
+  [`csm-light-zero-resolution-kills-lighting.md`](csm-light-zero-resolution-kills-lighting.md). The audit of 2026-10-11
+  found the pass selection itself correct (`Scene.rendering.cpp` ~2293-2318 falls back to `DirectionalLightPass`), so
+  the cause is elsewhere, probably the light block layout or binding. Fixing either item must re-test the other.
+
 - Captures of 2026-09-28: `1790549338`/`1790549343` (terrain, shadows on, sun on/off), `1790549359`/`1790549364`
   (terrain, shadows off, sun on/off), all at the pinned sunny-16 exposure.

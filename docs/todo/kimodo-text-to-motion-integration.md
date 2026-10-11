@@ -1,6 +1,6 @@
 ---
 id: kimodo-text-to-motion-integration
-title: Generate character animation from a text prompt (Kimodo, dev-time)
+title: Generate character animation from a text prompt (Kimodo, runtime from pre-computed embeddings)
 status: blocked
 priority: low
 scope: Animations
@@ -9,7 +9,7 @@ blocked-by: [skeletal-animation-retargeting]
 tags: [animation, ai, tooling]
 ---
 
-# Generate character animation from a text prompt (Kimodo, dev-time)
+# Generate character animation from a text prompt (Kimodo, runtime from pre-computed embeddings)
 
 ## Why
 

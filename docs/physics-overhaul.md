@@ -419,11 +419,11 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 
 | Phase | Repository | Items (`docs/todo/<id>.md`) |
 |---|---|---|
-| P0 bench | projet-alpha | `physics-collision-debug-bench` |
+| P0 bench | projet-alpha | `physics-collision-debug-bench` — CLOSED 2026-10-11 (the peers' baselines and per-cycle runs are recorded in § 6) |
 | P1 foundation | emeraude-base | `contact-manifold-generation`, `shape-casts-with-hit-normal`, `collision-pair-test-defects`, `rigid-body-math-helpers` |
 | P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
-| P4 walking | engine, then projet-alpha | `kinematic-character-controller` (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
+| P4 walking | engine, then projet-alpha | `kinematic-character-controller` — CLOSED 2026-10-11, engine side done 2026-10-02 (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
 | P5 | engine (+ base for the mesh and GJK) | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` — all CLOSED 2026-10-02 (§ 1b) |
 | Bonus: vehicle | engine (+ base for the curves) | `physics-wheeled-vehicle` — in progress (§ 1b) |
 
@@ -466,6 +466,9 @@ client reads ~7 samples per second per station (15 stations), enough for a bounc
   component update, including asynchronously when the geometry finishes loading. Set them on the component
   (`docs/caution-points.md` § Physics). `DynTopCube` still sets them on the entity: its declared bounciness,
   stickiness and inertia are therefore NOT the ones simulated (kept as is for comparison with the earlier readings).
+- A station measured by wall-clock frames is useless: the physics ticks at a fixed 60 Hz, so sample by physics cycle
+  (`sceneCycle`) or scene time, never by rendered frame.
+- Two stations close together interact through the octree and their contacts: keep the stations far apart.
 
 ### The per-cycle recorder (2026-10-01)
 

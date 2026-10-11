@@ -43,13 +43,20 @@ where the cost is to be won back, never by unlighting anything.
 
 ## What remains
 
-1. Re-measure the table with the deduplicated gathers.
-2. Record the lit selection PASS-MAJOR (every batch's ambient pass, then every batch's light pass, per light)
-   instead of batch-major: the additive light pass only needs the depth the ambient pass wrote (`LESS_OR_EQUAL`, no
-   depth write), so the order is free, and the pipeline alternation and the descriptor re-binds disappear.
-3. Profile what remains: draw count versus fragment cost (the PCF loop), imposter versus mesh batches.
-4. Only then consider indirect draws for the lit lists — which first needs MDI to support instanced batches and
-   LODs at all.
+State on 2026-10-11 (board audit): `renderLightedSelection()` is still batch-major (`Scene.rendering.cpp` ~2241-2244).
+But two things changed around this item:
+- The unshadowed point and spot lights moved to the deferred resolve (8c461d12, item `mrt-single-pass-deferred`).
+- The owner weighed the former step 2 on 2026-10-04 (record the lit selection PASS-MAJOR, ambient first) and dropped
+  it: it only touches the fragment share (`mrt-single-pass-deferred` § What remains).
+
+What is left of the forest's cost is the sun's CSM pass. That is `mrt-single-pass-deferred`'s "the SUN in the
+resolve" step, plus `csm-light-pass-pcf-beyond-cascades`. Left here:
+
+1. Re-measure the table with the deduplicated gathers and the deferred resolve. If the lit lists are no longer the
+   cost, close this item into those two.
+2. Profile what remains: draw count against fragment cost (the PCF loop), imposter batches against mesh batches.
+3. Only then consider indirect draws for the lit lists. That first needs MDI to support instanced batches and LODs
+   at all (`mdi-draws-instanced-batches-wrong`).
 
 ## References
 

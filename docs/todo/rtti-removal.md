@@ -5,7 +5,6 @@ status: open
 priority: low
 scope: cascade-wide (Resources, Scenes, Graphics/Renderable, Vulkan/TextureInterface, Observer payload)
 opened: 2026-09-08
-blocked-by: [rtti-free-observer-payload]
 tags: [architecture, cpp, rtti, cross-platform]
 ---
 
@@ -138,7 +137,9 @@ a `const Base::Any &`; the reads already went through `Base::anyValue< T >()` (n
 
 ## References
 
-- Base item (blocker): `emeraude-base/docs/todo/rtti-free-observer-payload.md`.
+- Base item `emeraude-base/docs/todo/rtti-free-observer-payload.md`: it no longer blocks this one (its payload part,
+  group E here, is done since 2026-10-07). The dependency now runs the other way: the base flips `EMERAUDE_DISABLE_RTTI`
+  to `On` only after this item and projet-alpha's `actor-trait-queries-without-rtti` are closed.
 - projet-alpha item: `projet-alpha/docs/todo/actor-trait-queries-without-rtti.md`.
 - Existing type-identity contracts: `Base::ObservableTrait::classUID()/is()`
   (`emeraude-base/src/ObservableTrait.hpp:117,126`), `Component::Abstract::getComponentType()/

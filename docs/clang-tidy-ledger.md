@@ -308,7 +308,7 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **convert-member-functions-to-static ×1** — `IntermediateRenderTarget::endRenderPass()` (the pair of
   `beginRenderPass()`, an instance API).
 - **misc-unused-parameters ×1** — `RenderTarget::Abstract`'s `viewDistance`: dead across every render-target
-  constructor, engine item `render-target-dead-view-distance-parameter`.
+  constructor, engine item `render-target-view-distance-ignored` (the merged one, 2026-10-11).
 
 ### `src/Graphics` 7f — post-process (2026-10-01)
 

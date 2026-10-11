@@ -1,10 +1,15 @@
 ## 15e. Octahedral imposters — the last rung of a tree (Sept 2026)
 
-Owner decisions 2026-09-23 (`docs/todo/vegetation-octahedral-imposter-atlas.md`): ALBEDO + NORMAL atlases lit at
+Owner decisions 2026-09-22: the atlas is baked ONCE AT LOAD TIME (a visible hitch accepted, never stored in the data
+store), and the tree is isolated by a PER-TARGET bake filter (§ 15d), not a throwaway scene nor a layer mask.
+Owner decisions 2026-09-23: ALBEDO + NORMAL atlases lit at
 RUNTIME (the `terrain` sun is animated), HEMI-octahedral views, 8 × 8 views of 128 px, the 64 views of a variant in
 ONE render, the 12 variants over consecutive frames, a SIBLING visual gated by distance rather than a fifth LOD slot
-(every LOD shares its layer's material), a hard switch today (the hashed cross-fade band is still open), and the
-imposter out of shadows and ray tracing.
+(every LOD shares its layer's material), a switch at a distance in metres with a HASHED cross-fade band (a hard cut
+today: item `imposter-hashed-cross-fade-band`), and the imposter out of shadows and ray tracing (beyond the switch the
+mesh leaves the TLAS; the imposter never enters it). Open refinements: items `imposter-hashed-cross-fade-band`,
+`imposter-lighting-validation-against-mesh`, `imposter-per-view-parallax`, `imposter-atlas-block-compression`,
+`imposter-bake-wind-frozen`.
 
 The pieces, and the one-line reason for each:
 
@@ -49,3 +54,23 @@ forest 117 186 instances for **234 372 triangles** (1.09 billion at LOD 3 withou
 ⚠️⚠️ **The mip chain of every BC7 texture was a bilinear resample, not a mip filter** — found through the bare pines
 of the conifer atlas, fixed in emeraude-base (`Processor::downsample()`, `TextureCompressor` `generateMip()`,
 `TextureCache::Version` 3). See `docs/caution-points.md` § *The BC7 mip chain lost the mean*.
+
+### Traps of the imposter bake
+
+- ⚠️⚠️ **The octahedral map is 2-to-1 on the BORDER.** Two border cells legitimately hold the same view — on an 8x8
+  grid, `(3, 7)` and `(4, 7)` both decode to `(0, -0.143, 0.857)`. The baker may skip a duplicate; it must never try to
+  make the border cells distinct, and never "fix" the blend to force a cell onto itself. Assert on the DIRECTION an
+  imposter shows, never on the cell INDEX. emeraude-base `docs/caution-points.md` § *The octahedral map is 2-to-1 on the
+  BORDER*.
+- ⚠️ The offscreen pass clears with `m_swapChainClearColors`, an OPAQUE colour. An imposter needs alpha 0 behind the
+  tree, or every card shows a rectangle of sky.
+- ⚠️ Bake at a **pinned exposure** (`Core.SceneManagerService.Camera.setExposure()`): baking through the auto-exposure
+  burns whatever the camera was metering into the atlas, and the imposter never matches its mesh.
+- ⚠️ The atlas normals are in the view space of the baking direction: state the frame, or the far LOD's lighting
+  silently disagrees with the near one.
+- ⚠️ **Freeze the wind before comparing two bakes** (`Scene::setVegetationWind(dir, 0, 0)`): two runs at different wind
+  phases are two different trees (an impossible "13 % brighter under a floor" reading on the `tree-generator` bench).
+
+References: Cigolle, Donow, Evangelakos, Mara, McGuire & Meyer, *A Survey of Efficient Representations for Independent
+Unit Vectors*, JCGT 3(2), 2014, § 3.3 (the parametrisation); R. Brucks, *Octahedral Impostors* (Unreal), the runtime-lit
+albedo + normal approach.

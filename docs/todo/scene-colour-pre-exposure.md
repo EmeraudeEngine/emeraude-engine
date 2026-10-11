@@ -425,7 +425,7 @@ Plumbing:
 ## References
 
 **Engine:** all file:line citations above. Related items: `blended-lit-sprite-writes-nan` (a NaN
-producer writing into the same buffer), `cubemap-peak-luminance-nits` (the absolute sky level),
+producer writing into the same buffer), the sky's absolute level (anchored by its mean dome, `docs/subsystems/graphics/13-12-post-processing-effects/23-background-photometric-contract-the-sky-is-a-light-source-au.md`),
 `program-cache-key-codegen-inputs-audit` (touched by D2(b)).
 
 **External** (licences: UE and HDRP code gives **ideas only**; Filament and FSR2 are

@@ -1,60 +1,47 @@
 ---
 id: renderer-fail-fast-on-device-loss
-title: A lost device waits 60 s on a fence and aborts — fail fast, dump, shut down cleanly
+title: On a genuine 60 s fence timeout, name the command buffers in flight (the device-loss fail-fast is done)
 status: open
 priority: high
-scope: Graphics/Renderer (beginFrame, renderFrame, discardAcquiredImage), Vulkan/Queue
+scope: Graphics/Renderer (beginFrame), Vulkan/Queue, Vulkan/Device (dumpDeviceLostDiagnostics)
 opened: 2026-09-25
 tags: [vulkan, device-lost, robustness, diagnostics]
 ---
 
-# A lost device waits 60 s on a fence and aborts — fail fast, dump, shut down cleanly
+# On a genuine 60 s fence timeout, name the command buffers in flight
 
 ## Why
 
-By reading (2026-09-25, the terrain hang diagnosis, confirmed by an adversarial check): a failed submit logs
-`Unable to submit work into the queue` and dumps the device-lost diagnostics (`Queue.cpp` ~103-110), but the
-renderer then resets the in-flight fence, submits a drain carrying it (`discardAcquiredImage(..., true)`,
-`Renderer.cpp` ~1945, ~2723-2731) — which fails too on a lost device — and the next `beginFrame()` waits that fence
-for `m_timeout` = 60 s (`Renderer.hpp` ~1776) before `std::abort()` (`Renderer.cpp` ~1547, ~1564-1568). On the AMD
-iGPU the process survived the loss and kept failing every submit.
-⚠️ Not every 60 s timeout is a loss: by the spec, `vkWaitForFences` on a lost device returns in finite time, and the
-NVIDIA-Windows `VK_TIMEOUT` of the same day meant a frame still executing (or paging), not a killed GPU.
+A fence that does not signal within `m_timeout` (60 s) is treated as a device loss: the engine stops with exit code 98.
+That stop gives the diagnosis nothing to work with. Only the frame slot is traced, plus `dumpDeviceLostDiagnostics()`,
+which on many drivers has no `VK_EXT_device_fault` to report.
 
+⚠️ Not every 60 s timeout is a loss. By the spec, `vkWaitForFences` on a lost device returns in finite time. The
+NVIDIA-Windows `VK_TIMEOUT` of 2026-09-25 meant a frame still executing (or paging), not a killed GPU. When the engine
+gives up on such a timeout, the log should say what the GPU was busy with.
 
-**A second path, measured 2026-10-01** (macOS M2, engine `734de41d`, triad 13 peer validation): `Core.WindowService.resize(17000,
-1200)` gives a 34000×1870 framebuffer. The overlay refuses its surfaces past 16384 px (triad 13), and the scene target
-is clamped to 16384×1870 RGBA16F. But the post-process targets at that size exhaust the GPU memory:
-`VK_ERROR_OUT_OF_DEVICE_MEMORY` (MoltenVK "Insufficient Memory"), then `VK_ERROR_DEVICE_LOST` on a fence wait. The
-next resize cascades on the lost device:
-- every post-process target fails;
-- 9 × `VUID-vkResetFences-pFences-01123` (resetting a fence still pending on the lost device);
-- then a **SIGSEGV** in `vkQueueSubmit` on the render thread, from
-  `Overlay::Manager::updateVideoMemory → UIScreen::processSurfaceUpdates → Surface::uploadActiveBuffer →
-  Image::writeData → ImageTransferOperation::transferToGPU → Queue::submit`.
+## Done (2026-10-11)
 
-The overlay upload, like the rest, keeps submitting after the device is lost. The unbounded `Window.resize` console
-command is the trigger: triad section 15 (`Window.cpp`).
-
-**A third path, the owner's log 2026-10-02** (the RTX 3500 Ada laptop, Linux, `cmake-build-release`, engine 0.9.82):
-the GPU came up on Mesa's NVK (`libvulkan_nouveau.so`, "NVK AD104"; the loader dropped `libGLX_nvidia.so.0` for
-having no device — the proprietary module was not loaded; no ray tracing, no mesh shaders). `citadel` loaded, then
-the first frame's shadow-map submits died in the kernel: `DRM_NOUVEAU_EXEC failed: No such device
-(VK_ERROR_DEVICE_LOST)`, no `VK_EXT_device_fault`. The engine went on: the IBL bake, texture uploads, the
-post-process targets and the overlay all kept submitting (`VUID-vkResetFences-pFences-01123`,
-`VUID-vkQueueSubmit-fence-00064`, `VUID-vkBeginCommandBuffer-commandBuffer-00049`), a window resize re-created the
-targets, and `beginFrame()` ended in its `std::abort()` (`Renderer.cpp`, "Something wrong happens while waiting the
-fence"): exit 134. The loss itself is the driver's (an NVK / nouveau kernel fault); the abort after it is this item.
+- The fail-fast this item was opened for is in place: the `Device::isLost()` latch, and every submit / wait / reset
+  refused after a loss. `beginFrame()` no longer calls `std::abort()`. `Core::stopOnDeviceLoss()` stops the engine
+  once, with exit code 98.
+  - Commits: df1b8158, plus the three-OS proof in 6669299f and 995d465f.
+  - Contract and measurements: `docs/caution-points.md` § "A lost device stops the engine at once and cleanly".
+- The three paths that led here are now covered by that stop:
+  - a failed submit followed by a 60 s wait (terrain, 2026-09-25);
+  - `VK_ERROR_OUT_OF_DEVICE_MEMORY` then `DEVICE_LOST` after `Window.resize(17000, 1200)` (M2, 2026-10-01). The resize
+    itself is bounded by triad section 15;
+  - an NVK / nouveau kernel fault on the first shadow-map submit (the owner's laptop, 2026-10-02), which ended in
+    exit 134.
 
 ## What remains
 
-Done 2026-10-11 (caution-points § A lost device stops the engine at once and cleanly): the `Device::isLost()` latch,
-every submit / wait / reset refused after a loss, no `std::abort()` in `beginFrame()`, `Core::stopOnDeviceLoss()`
-(one-shot, exit 98), the rendering thread idle. Linux fault injection: exit 98, no abort, no hang.
+- When a fence wait times out (60 s), trace the command buffers recorded into the frame that timed out, BEFORE the
+  device is treated as lost. Give each one's owner (render target / pass / transfer) and its queue.
+- Make the timeout path distinguish "still executing" from "lost" in the log, so a slow frame is never reported as a
+  dead GPU.
 
-- On a genuine fence timeout (`m_timeout`, 60 s), name the command buffers that were in flight before treating the
-  device as lost (today only the frame slot is traced).
+## References
 
-Validated on the three OS (2026-10-11, the same fault injection at frame 300, temporary code never committed): Linux,
-macOS (M6, no VK_EXT_device_fault there) and Windows (projet-alpha and the downstream CEF application): exit 98 within
-5-7 s, no abort, no hang.
+- `src/Graphics/Renderer.cpp` (`beginFrame()`, ~1676-1688), `src/Vulkan/Queue.cpp`, `src/Vulkan/Device.cpp`.
+- `jungle-ruins-fence-timeout-abort.md`: the workload that hit the 60 s timeout.

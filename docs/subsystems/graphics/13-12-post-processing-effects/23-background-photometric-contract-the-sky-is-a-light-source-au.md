@@ -404,3 +404,15 @@ invisible under photometric exposure. Reference values and the full failure mode
 Applied by `Material::Interface::emissionMultiplier()` — see `src/Saphir/AGENTS.md` § "Emission on
 the UNLIT path", including why it multiplies here and adds on the lit path, and why it must never
 reach the albedo attachment.
+
+### No peak-luminance anchor for a cubemap (owner, 2026-10-11)
+
+Since July 2026 a cubemap's absolute level is anchored by its MEAN dome: the sky manifest declares `"Luminance"` in nits
+(`436cbd9fc`), every cubemap is normalised to a unit-luminance dome (`8a9db2287`, `7bbf736e5`,
+`CubemapResource.cpp`), and that luminance feeds `environmentLuminance`, which scales the IBL. A former item asked
+for a PEAK-luminance anchor (`peakLuminanceNits`) on top of it. The owner closed it on 2026-10-11: the mean anchor is
+enough. Two traps it carried still hold for any change to the sky's level:
+- RTGI owns the sky's share of the indirect diffuse (`iblDiffuseWeight`): scaling the sky without reading that
+  contract counts it twice.
+- `PixelFactory` reads HDR (`FileFormatHDR.hpp`, RGBE / Radiance `.hdr`): check what the format supports rather than
+  inheriting an old claim that it cannot.

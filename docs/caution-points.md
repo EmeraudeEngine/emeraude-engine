@@ -2438,7 +2438,7 @@ renamed `glTF:Fox/Mesh/fox1-0`, both Paladins through the FBX path.
 
 Details: [`src/Scenes/Loaders/AGENTS.md`](../src/Scenes/Loaders/AGENTS.md) § *The resource key —
 an asset name is not an identity*, and the numbers per model in
-[`docs/todo/gltf-conformance-loader-gaps.md`](todo/gltf-conformance-loader-gaps.md).
+[`docs/subsystems/scenes-loaders/07-gltf-conformance-bench-results.md`](subsystems/scenes-loaders/07-gltf-conformance-bench-results.md).
 
 ### An IDENTITY default makes an unwired feature indistinguishable from a disabled one (Aug 2026)
 
@@ -5605,6 +5605,14 @@ misleading.
 
 ## Platform-Specific
 
+### Linux/X11: an external monitor freezes with the NVIDIA proprietary driver — not an engine defect
+
+On Linux/X11 with the NVIDIA proprietary driver, an external monitor freezes while the dedicated GPU is in use. This is
+the driver's behaviour (upstream report:
+https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406), and it is not
+investigated as an engine defect. The item `x11-multimonitor-nvidia-freeze` stays parked until someone checks a
+current driver.
+
 ### macOS: a sleeping display is woken to start, and kept awake while the window is open (2026-10-11)
 
 GLFW skips a sleeping display when it lists the monitors (`dependencies/glfw/src/cocoa_monitor.m`,
@@ -7588,8 +7596,8 @@ layout.
 
 ⚠⚠ **This is why the validation layers stay on.** With them off, 240 trees are simply absent and
 every plausible explanation — culling, level of detail, the camera, a material — costs an hour
-each. See `docs/todo/vegetation-octahedral-imposter-atlas.md` for the demo that found it
-(projet-alpha `forest`).
+each. Graphics § 15e (`docs/subsystems/graphics/24-15e-octahedral-imposters-the-last-rung-of-a-tree.md`) has the imposter work; the demo that found it is
+projet-alpha `forest`.
 
 Fix: `src/Vulkan/CommandBuffer.cpp`, the instanced overload binds the geometry VBO at 0 and now
 ignores its `subGeometryIndex`, like its non-instanced sibling.
@@ -7849,6 +7857,10 @@ post-processing keys from the low one. **Rule:** a macro read by `SettingKeys.hp
 reaches it through `target_compile_definitions(... PUBLIC ...)`. A consumer that wants the high profile sets the normal
 variable before adding the engine (`set(EMERAUDE_RENDERING_HIGH_QUALITY_DEFAULTS ON)`; CMP0077 makes it win over the
 engine's `option()`, even in an already configured build directory).
+This profile is the owner's answer (2026-10-11) to the former "default texture filtering is nearest" item: neither
+moving the engine's defaults nor restoring the quality keys after a settings reset, but a per-application profile.
+⚠️ A quality profile never raises `Core/Graphics/ShadowMapping/NormalOffsetScale`: it ships at 0 on measurement (at
+1.0 the contact shadows of `reflexion-debug` disappear, `docs/shadow-mapping.md` § Normal-offset).
 
 ### The Vulkan SDK comes from the external dependencies, never from an installed SDK (Oct 2026)
 
@@ -7885,6 +7897,20 @@ Proof on Linux (2026-10-11): neither `libEmeraude.so` nor the binary has a `NEED
 loader '<build>/vulkan/libvulkan.so.1' opened (instance version 1.4.363)` and `Insert instance layer
 "VK_LAYER_KHRONOS_validation" (<build>/vulkan/explicit_layer.d/libVkLayer_khronos_validation.so)` with Debian's layer
 still installed and no variable set by hand; sponza 0 VUID, MCP 1881/1881, exit 0; ImGui initialised through volk.
+
+**Where the SDK minimum lives, and the re-publication trap (owner, 2026-10-11).** It lives in the ext-deps-generator
+archives, and never as binaries in this repository, which a first plan had proposed (`dependencies/VulkanSDK/<OS>/`).
+That gives one source of truth for every native dependency (glslang already came from there) and keeps binaries out of
+the public history. Each redistributed component ships its own licence in the subtree's `LICENSES/` (ext-deps-generator
+6bf023f: Vulkan-Headers, Vulkan-Loader, Vulkan-ValidationLayers, SPIRV-Headers, SPIRV-Tools, MoltenVK); LunarG's
+notice says the SDK has no licence of its own.
+
+The published v018 was **upgraded in place**: it was re-published with `vulkan-sdk/`, and the system SDKs were then
+removed from the three machines (2026-10-11 validation campaign, rounds 7-8: projet-alpha builds and runs from the v018
+downloads on Linux, macOS and Windows).
+
+⚠️ `InstallDependencies.cmake` does not download when `dependencies/<dir>` or `<dir>.v018.zip` already exists. A
+machine that extracted a tag before it was re-published silently keeps the old content: delete both to fetch it again.
 
 ### A descriptor set larger than maxPerSetDescriptors must be confirmed by vkGetDescriptorSetLayoutSupport (Oct 2026)
 

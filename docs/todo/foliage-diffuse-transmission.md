@@ -85,11 +85,9 @@ owner-chosen proxy; D deferred.**
 
 ## What remains
 
-1. Owner decisions still open (the four above are settled):
-   - Lambertian KHR BTDF vs an artistic forward lobe (or KHR with an optional forward-scatter parameter at 0).
-   - Home: a new component (B) vs a Subsurface thin mode (A).
-   - Scope: B / B+C / later D.
-   - The C screen-space proxy.
+1. Owner decisions still open. The model, the home and the scope are SETTLED (§ Owner decisions above: KHR plus an
+   optional forward lobe at 0, a new `DiffuseTransmission` component, B first). Open:
+   - The C screen-space proxy, when C comes.
    - The transmission colour in the lanes' indirect: the albedo hue in 4 bits vs a new RGBA8 G-buffer attachment.
    - Toolkit leaf values:
      - base colour compensated by `1/(1-t)` or KHR darkening;
@@ -100,7 +98,8 @@ owner-chosen proxy; D deferred.**
    - The imposter policy: glow evenly, density attenuation, or fade toward 250 m.
    - The RTContactShadows fix.
    - Approval of the RT normal-orientation change, which CHANGES today's traced foliage.
-2. Prerequisites — each its own item when approved:
+2. Prerequisites — each already its own item, listed in `blocked-by` (`tlas-one-instance-per-multiple-visuals`,
+   `rt-thin-two-sided-hit-normal`, `rtcontactshadows-backlit-self-hit`, `subsurface-component-defects`):
    - (a) VERIFY the reading that the TLAS holds ONE instance per `MultipleVisuals` component (a grove traced as
      one tree). Unmeasured.
    - (b) RT hit-normal orientation for two-sided thin materials, and the probe back-face rule

@@ -5,7 +5,6 @@ status: open
 priority: medium
 scope: src/Resources, emeraude-base src/Network
 opened: 2026-10-04
-blocked-by: [resource-sharing-server]
 tags: [network, tls, security]
 ---
 
@@ -14,7 +13,7 @@ tags: [network, tls, security]
 ## Why
 
 The owner chose cleartext HTTP restricted to private addresses for the first version of resource
-sharing (`resource-sharing-server`, decision 4, 2026-10-04). The bearer token and the assets therefore
+sharing (decision 4 of the former `resource-sharing-server`, 2026-10-04). The bearer token and the assets therefore
 cross the LAN in clear: acceptable on a home network for a development tool, not beyond.
 
 ## What remains
@@ -29,5 +28,6 @@ cross the LAN in clear: acceptable on a home network for a development tool, not
 
 ## References
 
-- `docs/todo/resource-sharing-server.md` — the decisions.
+- `docs/subsystems/resources/12-resource-sharing.md` — the decisions of the former item `resource-sharing-server`
+  (closed with the three-OS acceptance, b130e4e8f).
 - emeraude-base `src/Network/TLSConnection.hpp` — the client side.

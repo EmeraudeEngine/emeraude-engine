@@ -1,6 +1,6 @@
 ---
 id: terrain-cdlod-heightmap-clipmap
-title: CDLOD terrain over a height clipmap — replace AdaptiveVertexGridResource
+title: CDLOD terrain over a height clipmap — owner review in motion, re-centre cost, cones, R16 quantum (delivered 2026-09-22)
 status: in-progress
 priority: medium
 scope: Graphics/Geometry, Graphics/Renderable/TerrainResource, Saphir
@@ -51,9 +51,9 @@ the dark streaks on distant ridges. Owner, 2026-09-22: "Go option B".
 
 ## What remains
 
-Delivered 2026-09-22 (base `Grid::halvedTent()`, engine `CDLODTerrainResource` + Saphir heightfield
-surface, `AdaptiveVertexGridResource` deleted; knowledge in `src/Graphics/AGENTS.md` § "Adaptive
-geometries", `src/Saphir/AGENTS.md` § "Heightfield surface", `docs/caution-points.md` § CDLOD terrain).
+Delivered 2026-09-22 in 512e6d1b1 (base `Grid::halvedTent()`, engine `CDLODTerrainResource` + Saphir heightfield
+surface, `AdaptiveVertexGridResource` deleted; knowledge in `docs/subsystems/graphics/` § "Adaptive
+geometries", `docs/subsystems/saphir/` § "Heightfield surface" (the `AGENTS.md` files are routers now), `docs/caution-points.md` § CDLOD terrain).
 Measured at the pushed adaptive grid's pose: ScenePass 3.27 ms (SS lane) / 2.32 ms (RT lane) against
 2-3.4 ms, process VRAM 1821 MiB against 2791 MiB, 0 VUID. Left open:
 

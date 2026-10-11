@@ -1,6 +1,6 @@
 ---
 id: rt-blended-materials-in-tlas
-title: Blended (alphaMode BLEND) materials enter the TLAS as opaque instances
+title: Measure the BLEND-as-cutout rule for rays on RTGI, RTAO and decals (the cutout landed 2026-09-15)
 status: open
 priority: high
 scope: Scenes/SceneMetaData, Graphics/Effects/Lighting (RTGI, RTAO, RTR, ContactShadows)
@@ -8,7 +8,7 @@ opened: 2026-08-30
 tags: [ray-tracing, transparency, measurement]
 ---
 
-# Blended (alphaMode BLEND) materials enter the TLAS as opaque instances
+# Measure the BLEND-as-cutout rule for rays on RTGI, RTAO and decals
 
 ## Why
 
@@ -43,7 +43,7 @@ courtyard at 12/255 and settles nothing. f/5.6 · 1/125 · ISO 100 is the readab
 "the tree is simply pale, do not open it as a defect" — from looking, not measuring. One A/B
 reversed it.
 
-## Implemented 2026-09-15 — BLEND is a cutout for rays, at 0.5
+## Implemented 2026-09-15 (c84c071a9) — BLEND is a cutout for rays, at 0.5
 
 Option 2 of the decision below, taken: `GPURTMaterialData::IsBlended` (bit 10) is exported for any
 material with `BlendingEnabled`, `SceneMetaData` flags such an instance `FORCE_NO_OPAQUE` (the local
@@ -65,17 +65,17 @@ quads that were opaque to every ray. Zero VUID, and the frame is otherwise uncha
 ⚠️⚠️ **It does NOT fix the look of the tree, and that was the hypothesis it was built on.** The
 foliage barely moves (47.98 → 49.58). This item is about blended geometry BLOCKING rays; the tree's
 problem is blended geometry RECEIVING reflection, which is a different half and is now tracked
-separately — see [`foliage-takes-most-of-its-light-from-the-reflection.md`](foliage-takes-most-of-its-light-from-the-reflection.md).
+separately — see `docs/subsystems/graphics/32-the-reflection-effects-owed-the-environment-brdf-not-a-fresn.md`.
 
 ## What remains
 
-1. ~~Measure on Sponza how much the blended quads cost.~~ **Done.** Still unmeasured: the RTGI and
-   RTAO halves — the A/B above moved the Reflections slot only, and the implementation changed the
-   rule for every ray.
-2. ⚠️ A 35 %-opaque decal is now INVISIBLE to rays (0.35 < 0.5) where it used to be fully opaque.
-   That is the sanctioned trade of a cutout rule, and it is UNMEASURED on the decals themselves.
-2. Decide: treat BLEND as a cutout for rays (`FORCE_NO_OPAQUE` + the shared alpha-test rule at 0.5,
-   the industry default), or exclude blended renderables from the TLAS.
+The owner's choice is made and implemented (option 2: BLEND is a cutout for rays, at 0.5, the industry default). It
+is measured on the Reflections slot only:
+
+1. Measure the RTGI and RTAO halves on Sponza at a pinned exposure. The rule changed for every ray, but the A/B above
+   moved the Reflections slot only.
+2. Measure the decals. A 35 %-opaque decal is now INVISIBLE to rays (0.35 < 0.5), where it used to be fully opaque.
+   That is the sanctioned trade of a cutout rule, but its effect on the decals themselves is unmeasured.
 
 ## ⚠️ Traps
 

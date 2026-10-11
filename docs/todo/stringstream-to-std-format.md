@@ -17,8 +17,9 @@ tags: [cpp, c++20]
 
 ## ⚠️ Traps
 
-- **This does NOT work on macOS when targeting older SDKs** — `std::format` landed late in libc++.
-  The cascade is strict cross-platform, so any conversion must keep the macOS floor buildable.
+- The old trap "`std::format` does not work on macOS with older SDKs" is OBSOLETE. Shared engine code has used
+  `std::format` since 2025-09 (`SwapChain.cpp` ~592, `RendererFrameScope.cpp` ~68) at the macOS 12.0 deployment
+  target, and it builds on the three OS. Any conversion must still keep that floor buildable.
 
 ## Origin
 

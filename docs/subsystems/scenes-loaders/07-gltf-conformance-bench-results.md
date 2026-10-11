@@ -1,15 +1,10 @@
----
-id: gltf-conformance-loader-gaps
-title: glTF conformance — 20/20 on the bench (re-judged cell by cell 2026-09-15), and what that does not cover
-status: open
-priority: high
-scope: Scenes/Loaders/GLTF
-opened: 2026-08-25
-blocked-by: []
-tags: [gltf, material, measured]
----
+# The glTF conformance bench — results, method and traps (2026-08 → 2026-09)
 
-# glTF conformance — the loader gaps that remain
+> Moved here on 2026-10-11 from the former item `gltf-conformance-loader-gaps`. Its open points became one item each
+> in `docs/todo/`: `gltf-transmission-texture`, `gltf-clearcoat-without-normal-map-base-roughness`,
+> `gltf-hierarchy-import-duplicate-names`, `fbx-pbr-specular-branch-unexercised`, `modelviewer-extents-fallback-framing`.
+> Relative links below were written from `docs/todo/`; the ones to `../../src/` and `../../tools/` are corrected for
+> this folder.
 
 > ⚠️ **Asset location** (owner decision, 2026-08-31): `glTF-Sample-Assets` is a **submodule of
 > projet-alpha** (`projet-alpha/dependencies/glTF-Sample-Assets`), not of the engine. Test data
@@ -85,7 +80,7 @@ reflection from a sharp transmission. Unresolvable with this metric, not a defec
 100 % of what this bench drives: **nineteen Khronos models chosen because each isolates one
 defect**, plus one probe of ours. Not a percentage of glTF 2.0 — the corpus holds 148 models, and
 the gaps the bench does not exercise at all are unchanged and
-listed in [`src/Scenes/Loaders/AGENTS.md`](../../src/Scenes/Loaders/AGENTS.md) § *Known gaps*: no
+listed in [`src/Scenes/Loaders/AGENTS.md`](../../../src/Scenes/Loaders/AGENTS.md) § *Known gaps*: no
 `TEXCOORD_2+` (sets 0 and 1 are read since 2026-10-03), four skin influences, no morph targets, `TRIANGLES` only, no rigid-node animation, no GPU
 instancing — plus `KHR_materials_transmission`'s texture, the last extension reading only its
 scalar factor.
@@ -95,7 +90,7 @@ scalar factor.
 - **The shared-UBO ceiling** — 197 of 344 materials per iridescence grid had no seat and their
   spheres were absent. `bankSize()` now caps the device limit instead of ignoring it, and
   `addElement()` grows a bank instead of failing. Item deleted (done); the knowledge and the
-  concurrency constraint are in [`docs/caution-points.md`](../caution-points.md)
+  concurrency constraint are in [`docs/caution-points.md`](../../caution-points.md)
   § *A shared-UBO bank that fills up…*.
 - **Clearcoat's three maps** — read, with the roughness map on **GREEN** as the extension requires.
   `Simple coating`, the row declaring no texture, is **bit-exact**: the control this needed.
@@ -145,30 +140,6 @@ row that vanishes looks like nothing at all.**
 fourth decimal, largest drift **0.062**/255 — against 28.39 before. 34 rows compared, 0 entity
 mismatch, 0 load error, 0 degenerate box, 0 VUID.
 
-## What remains
-
-Nothing on the bench itself. What is left is everything the bench does not exercise, and one
-half-fix taken deliberately:
-
-- [ ] **`KHR_materials_transmission`'s texture** — the last extension reading only its scalar
-      factor. No model in the bench fails on it.
-- [ ] **A clear coat WITHOUT a normal map still samples the environment at the BASE roughness.**
-      Wrong for the same reason the normal was — a coat is smoother than what it covers — and scoped
-      out of the 2026-09-14 fix on purpose, to keep the rows without a coat normal map bit-exact as
-      the control. Fixing it moves `Simple coating` and `Roughness variations`, so it needs its own
-      before/after.
-- [ ] ⚠️ **The node-HIERARCHY import path is not covered by the entity-name fix.**
-      `SceneDataConsumer` also builds children with `createChild(nodeDesc.name)` (the `+ModelViewer`
-      file path, `AssetRoot`); whether that registry tolerates a duplicate is UNVERIFIED. Measure it
-      the same way — entity count against node count — before assuming either answer.
-- [ ] ⚠️ **The FBX specular's PBR branch is unexercised.** `FBXLoader` reads
-      `pbr.specular_factor`/`specular_color` gated on `ufbx_material::shader_type`; the only FBX
-      assets here are the Paladin's, which are legacy Phong. The gate is proven CLOSED where it must
-      be and untested where it opens.
-- [ ] ⚠️ **`ModelViewer` misses the extents on `TextureTransformTest`** — *"published no extents in
-      time, using the fallback framing"*, on every attempt. The capture stays usable but its framing
-      is not the computed one, and the warning appears only in the engine log.
-
 ## Closed since the previous revision of this file (2026-08-28 → 2026-08-29)
 
 - `KHR_materials_iridescence`'s **thickness texture** (`cb4ad679`) — `ComponentType::IridescenceThickness`.
@@ -194,7 +165,7 @@ half-fix taken deliberately:
   iridescence grids, paid twice.
 
 The harness and its older traps live with the tool, in
-[`tools/gltf-conformance-bench/README.md`](../../tools/gltf-conformance-bench/README.md). What the
+[`tools/gltf-conformance-bench/README.md`](../../../tools/gltf-conformance-bench/README.md). What the
 2026-09-14 run added:
 
 - ⚠️⚠️ **A missing sphere shows you the sphere BEHIND it.** The first probe of the iridescence

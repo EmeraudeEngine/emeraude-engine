@@ -30,8 +30,8 @@ sphere-cast wheels, slip-curve tyres, a complete drive train, the wheels in the 
 - [x] `collision-debug` ROW 9: idle, straight + brake, turn (measured: `docs/subsystems/physics/19-wheeled-vehicle.md`).
 - [x] The peers' validation of `9360d863` (+ `1ab2bbb9`): macOS and Windows accepted (19-wheeled-vehicle.md § Validated).
 - [x] Driving one in projet-alpha: citadel's plain, E to board, a chase camera (owner, 2026-10-02).
-- [ ] The peers' validation of the brake fix (the locked wheel, the 1 mm/s slip floor): the cars' new values.
-- [ ] Stations still to add (owner: after): a ramp, a bump, an overturn, a car meeting a dynamic body.
+- [x] The peers' validation of the brake fix (the locked wheel, the 1 mm/s slip floor; engine `dac34dc0`, alpha `2402cd78`): accepted on macOS and Windows the same day, and the slope limit (`dccc0329`) on the three OS (`f4e9a52b`), 19-wheeled-vehicle.md § Validated.
+- [ ] Stations still to add (owner: after): a ramp, a bump, a car meeting a dynamic body. The overturn case exists (`BenchCarFlipped`).
 
 ## References
 

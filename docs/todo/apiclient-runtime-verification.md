@@ -34,15 +34,13 @@ nothing.
 
 ## What remains
 
-Blocked on two things only a human can do:
+**Nothing blocks it any more (2026-10-11).** The two former blockers are gone:
+- The remote console no longer needs the owner's `settings.json`. A test instance opens it for one run with
+  `--enable-remote-console=PORT` (and `--enable-mcp=PORT`), and the settings are never written (a3d828953).
+- Launching projet-alpha is allowed: say which demo is being launched (owner, 2026-09-07).
 
-1. `Core/Console/EnableRemoteListener` is **absent** from the owner's
-   `~/.config/LNIsle/projet-alpha/settings.json` — it therefore defaults to `false` and the remote
-   console does not open. The owner adds the key (or presses **Shift+F10** in the window to open it
-   for the session). ⚠️ The AI does not edit that file.
-2. ~~Launching the application on the owner's screen needs the owner's go-ahead.~~ **Lifted 2026-09-07** (owner decision): launching projet-alpha is allowed, just say which demo is being launched. Only blocker 1 remains.
-
-Then, from the console:
+Launch a test instance on other ports (`--enable-remote-console=7780 --enable-mcp=17779`,
+`.claude/rules/build-and-run.md`), then run from the console:
 
 ```
 Core.NetAPIClientService.isEnabled()

@@ -23,9 +23,11 @@ parsing the text fails. `getFrameDiagnostics()` already writes `null` for a non-
 - ✅ 2026-09-30 (triad 6c): `getNode()` / `getNodePhysics()` write their vectors through `writeJSONVector()`
   (`Scenes/Manager.console.cpp`: `null` for a non-finite component, 9 significant digits — the float round trip),
   the same rule as `getFrameDiagnostics()`' local `number` lambda.
-- The other hand-streamed answers (`CommandResult::json(<stream>.str())`), census 2026-09-30:
-  `Graphics/Renderer.console.cpp` ×3 (lines ~487, 558, 577), `Net/APIClient.console.cpp` ×4 (~211, 249, 327, 343),
-  `Window.console.cpp` ×1 (~68). Check each for a float; apply the rule.
+- The other hand-streamed answers (`CommandResult::json(<stream>.str())`), census re-done 2026-10-11 (the
+  `Window.console.cpp` site is gone):
+  `Graphics/Renderer.console.cpp` ×3 (~686, 820, 839), `Net/APIClient.console.cpp` ×4 (~211, 249, 327, 343),
+  `Scenes/Manager.console.cpp` ×3 (~740, 1195, 1393). Check each for a float; apply the rule. Recount with
+  `/usr/bin/grep -rn "CommandResult::json(.*\.str()" src`.
 - Then consolidate: ONE console helper for "a float as a JSON number" instead of the two local copies.
 
 ## References
