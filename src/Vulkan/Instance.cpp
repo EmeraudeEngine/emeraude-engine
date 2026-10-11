@@ -171,7 +171,36 @@ namespace EmEn::Vulkan
 
 			/* At this point, we create the vulkan instance.
 			 * Beyond this point, Vulkan is in the pipe and usable. */
-			if ( const auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance); result != VK_SUCCESS )
+			auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance);
+
+			/* NOTE: A debug layer never decides whether the application starts (owner decision 2026-10-11): a creation
+			 * that fails with layers requested is retried without any, loudly. Measured on Windows: a layer library the
+			 * loader cannot open made vkCreateInstance() answer VK_ERROR_OUT_OF_HOST_MEMORY and stopped the launch. */
+			if ( result != VK_SUCCESS && !m_requiredValidationLayers.empty() )
+			{
+				{
+					TraceWarning trace{ClassId};
+
+					trace << "Unable to create the Vulkan instance with the validation layer(s)";
+
+					for ( const auto * layer : m_requiredValidationLayers )
+					{
+						trace << " '" << layer << "'";
+					}
+
+					trace << " (" << vkResultToCString(result) << ") : created again WITHOUT any layer. This run is NOT validated !";
+				}
+
+				m_requiredValidationLayers.clear();
+				m_createInfo.pNext = nullptr;
+				m_createInfo.enabledLayerCount = 0;
+				m_createInfo.ppEnabledLayerNames = nullptr;
+				m_instance = VK_NULL_HANDLE;
+
+				result = vkCreateInstance(&m_createInfo, nullptr, &m_instance);
+			}
+
+			if ( result != VK_SUCCESS )
 			{
 				switch ( result )
 				{

@@ -20,3 +20,13 @@ Implementation: `Instance::readSettings()` / `Instance::parseValidationLayersArg
 checked in every build). The requested names are owned by `Instance::m_requestedValidationLayers`, into which
 `m_requiredValidationLayers` points — before 2026-10-11 they lived in a function-local `static`, read once per
 process.
+
+### A layer that cannot be loaded never stops the launch (owner decision, 2026-10-11)
+
+If `vkCreateInstance()` fails while layers are requested (settings or `--set-vk-layers`), the `Instance` traces a
+warning naming them — "Unable to create the Vulkan instance with the validation layer(s) '…' (<result>) : created
+again WITHOUT any layer. This run is NOT validated !" — and creates the instance again without any layer (no debug
+messenger either). The loader's answer differs per OS for the same cause: `VK_ERROR_LAYER_NOT_PRESENT` on Linux (a
+manifest whose library is missing, 2026-10-11), `VK_ERROR_OUT_OF_HOST_MEMORY` on Windows (a library_path written with
+`/`, which the Windows loader resolves through PATH instead of next to the manifest — ext-deps-generator now writes
+`.\` there), which the engine used to report as "The host system is out of memory !" before stopping.
