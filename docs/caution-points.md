@@ -5534,6 +5534,20 @@ misleading.
 
 ## Platform-Specific
 
+### macOS: a sleeping display is woken to start, and kept awake while the window is open (2026-10-11)
+
+GLFW skips a sleeping display when it lists the monitors (`dependencies/glfw/src/cocoa_monitor.m`,
+`CGDisplayIsAsleep()`): a launch while the display slept failed with "There is no monitor on the system !", exit 1.
+Owner decisions 2026-10-11: `PlatformManager::onInitialize()` calls `PlatformSpecific::wakeDisplays()` before
+`glfwInit()` (when EVERY online display sleeps: `IOPMAssertionDeclareUserActivity(kIOPMUserActiveLocal)`, polled every
+50 ms up to 5 s, then released); and `Window` holds a `PlatformSpecific::DisplaySleepInhibitor` (an IOKit
+`PreventUserIdleDisplaySleep` assertion, RAII) while it exists, setting `Core/Video/Window/PreventDisplaySleep`
+(default true). Proof on the M6 (macOS peer, engine fed169e5): `pmset displaysleepnow`, then an unattended launch →
+"Every display was asleep : woken to create the window." 0.30 s after the launch, scene loaded at 1.74 s, exit 0;
+`pmset -g assertions` lists "Emeraude engine: a window is open" during the run and nothing after; with the setting
+false, no assertion. A 38-demo sweep ran with the display left to the engine. Windows and Linux: item
+display-sleep-inhibit-windows-linux.
+
 ### The engine never ends the process: a failed start is RECORDED, `main()` exits (2026-10-11)
 
 Until 2026-10-11 `Core::Core()` called `std::quick_exit(2)` (`std::terminate()` on macOS, an abort and a crash report)
