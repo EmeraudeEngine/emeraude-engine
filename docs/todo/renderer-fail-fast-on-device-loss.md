@@ -1,7 +1,7 @@
 ---
 id: renderer-fail-fast-on-device-loss
 title: A lost device waits 60 s on a fence and aborts — fail fast, dump, shut down cleanly
-status: in-progress
+status: open
 priority: high
 scope: Graphics/Renderer (beginFrame, renderFrame, discardAcquiredImage), Vulkan/Queue
 opened: 2026-09-25
@@ -54,5 +54,7 @@ every submit / wait / reset refused after a loss, no `std::abort()` in `beginFra
 
 - On a genuine fence timeout (`m_timeout`, 60 s), name the command buffers that were in flight before treating the
   device as lost (today only the frame slot is traced).
-- Peer validation (macOS, Windows): the same fault injection (temporary `dumpDeviceLostDiagnostics()` call after N
-  frames), exit 98, no abort; then delete this item.
+
+Validated on the three OS (2026-10-11, the same fault injection at frame 300, temporary code never committed): Linux,
+macOS (M6, no VK_EXT_device_fault there) and Windows (projet-alpha and the downstream CEF application): exit 98 within
+5-7 s, no abort, no hang.

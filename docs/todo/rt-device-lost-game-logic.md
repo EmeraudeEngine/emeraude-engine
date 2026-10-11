@@ -28,7 +28,7 @@ race `e8d63525`).
 (`vmaCreateBuffer()` applies only the memory-requirement alignment). On AMD the Windows peer measured a 4-byte-aligned
 instance address (`VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03715`), and the device was lost with the same
 `READ_INVALID` signature. Not proven to be THIS loss: the 2026-07-26 runs were on NVIDIA. The shutdown after a loss is
-item `device-lost-shutdown-fail-fast`.
+the device-lost latch (caution-points § A lost device stops the engine at once and cleanly, 2026-10-11).
 
 ⚠️ **0/8 is NOT proof of a fix.** At the original 25 % rate, eight clean runs happen by chance
 about 10 % of the time. Left open deliberately.

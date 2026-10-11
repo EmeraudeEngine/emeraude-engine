@@ -3591,8 +3591,11 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > vetoes. A fence that does not signal within `m_timeout` (60 s) is now treated as a loss too.
 > Measured (Linux, fault injection at frame 300 of `default`, temporary code never committed): "The graphics device is
 > lost …: the engine stops now (exit code 98)", exit 98, no abort, no hang; 42 finite load refusals from the scene
-> still loading, no flood. Open: the Windows `0xc0000409` at the end of a lost-device shutdown (item
-> device-lost-shutdown-fail-fast) needs its minidump.
+> still loading, no flood. Same injection on macOS (M6) and Windows (projet-alpha and a downstream CEF application):
+> exit 98 in 5-7 s, no abort, no hang — and on Windows no `0xc0000409` any more at the end of the lost-device shutdown
+> (the fail-fast measured on 2026-10-01 after a real AMD loss, when fences were still reset and resubmitted on the lost
+> device; former item device-lost-shutdown-fail-fast, closed on this proof). A REAL loss on Windows was not reproduced
+> on demand: if a `0xc0000409` ever comes back after one, capture its minidump (WER `LocalDumps`).
 
 ### The system's stop: termination signals and the Windows end of session (2026-10-11)
 

@@ -1675,7 +1675,7 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			/* NOTE: No abort (engine items renderer-fail-fast-on-device-loss / device-lost-shutdown-fail-fast): a lost
+			/* NOTE: No abort (caution-points § A lost device stops the engine at once and cleanly): a lost
 			 * device was latched by the wait itself; a fence that never signals within m_timeout is treated as a lost
 			 * device too — teardown must not wait on it for ever. Core then stops the engine cleanly. */
 			if ( !this->isDeviceLost() )
