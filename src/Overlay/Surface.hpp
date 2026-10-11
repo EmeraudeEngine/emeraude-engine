@@ -31,7 +31,10 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <concepts>
@@ -299,15 +302,54 @@ namespace EmEn::Overlay
 			void setAcceleratedPopupVisible (bool visible) noexcept;
 
 			/**
-			 * @brief Sets the accelerated popup position on the surface (view coordinates, pixels).
-			 * @param positionX The popup X position (may be negative — clamped at composite time).
-			 * @param positionY The popup Y position (may be negative — clamped at composite time).
+			 * @brief Sets the accelerated popup position on the surface, in surface image pixels.
+			 * @note An embedder whose web engine reports the popup rectangle in DIP (CEF's OnPopupSize()) converts it
+			 * by its device scale factor first: the popup frame itself is already in pixels.
+			 * @param positionX The popup X position (may be negative — placed inside the surface at composite time).
+			 * @param positionY The popup Y position (may be negative — placed inside the surface at composite time).
 			 */
 			void
 			setAcceleratedPopupPosition (int32_t positionX, int32_t positionY) noexcept
 			{
 				m_acceleratedPopupX = positionX;
 				m_acceleratedPopupY = positionY;
+			}
+
+			/**
+			 * @brief Places a popup inside its surface: the origin to composite it at.
+			 * @details A popup that overflows the surface is shifted back inside it (a <select> list opened near the
+			 * bottom edge moves up instead of being clipped), a negative origin goes to 0; a popup larger than the
+			 * surface stays at 0 and is clipped by the caller. Same rule as CEF's reference off-screen renderers,
+			 * UpdatePopupRect(): x = max(0, min(x, view_width - popup_width)), recomputed against the current view size
+			 * (CEF, BSD-3-Clause, https://github.com/chromiumembedded/cef/blob/master/tests/shared/browser/osr_renderer_gl_linux.cc
+			 * and osr_renderer_d3d11_win.cc).
+			 * @param positionX The popup X position, in surface pixels.
+			 * @param positionY The popup Y position, in surface pixels.
+			 * @param popupWidth The popup width, in pixels.
+			 * @param popupHeight The popup height, in pixels.
+			 * @param surfaceWidth The surface (composite target) width, in pixels.
+			 * @param surfaceHeight The surface (composite target) height, in pixels.
+			 * @return std::array< uint32_t, 2 > The origin {x, y}, each within [0, surface size].
+			 */
+			[[nodiscard]]
+			static
+			constexpr
+			std::array< uint32_t, 2 >
+			fitPopupOrigin (int32_t positionX, int32_t positionY, uint32_t popupWidth, uint32_t popupHeight, uint32_t surfaceWidth, uint32_t surfaceHeight) noexcept
+			{
+				const auto fitAxis = [] (int32_t position, uint32_t popupSize, uint32_t surfaceSize) noexcept {
+					/* NOTE: 64-bit signed arithmetic: no overflow for any 32-bit input. */
+					auto origin = std::max< int64_t >(0, position);
+
+					if ( origin + static_cast< int64_t >(popupSize) > static_cast< int64_t >(surfaceSize) )
+					{
+						origin = static_cast< int64_t >(surfaceSize) - static_cast< int64_t >(popupSize);
+					}
+
+					return static_cast< uint32_t >(std::clamp< int64_t >(origin, 0, static_cast< int64_t >(surfaceSize)));
+				};
+
+				return {fitAxis(positionX, popupWidth, surfaceWidth), fitAxis(positionY, popupHeight, surfaceHeight)};
 			}
 
 			/**

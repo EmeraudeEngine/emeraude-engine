@@ -59,6 +59,14 @@ namespace EmEn::Overlay
 	using namespace Graphics;
 	using namespace Vulkan;
 
+	/* NOTE: Compile-time proof of fitPopupOrigin() (surface 1000x800, popup 200x300). */
+	static_assert(Surface::fitPopupOrigin(10, 20, 200, 300, 1000, 800) == std::array< uint32_t, 2 >{10, 20}, "Inside: unchanged.");
+	static_assert(Surface::fitPopupOrigin(900, 700, 200, 300, 1000, 800) == std::array< uint32_t, 2 >{800, 500}, "Overflow: shifted back inside.");
+	static_assert(Surface::fitPopupOrigin(-50, -1, 200, 300, 1000, 800) == std::array< uint32_t, 2 >{0, 0}, "Negative: to 0.");
+	static_assert(Surface::fitPopupOrigin(100, 100, 1200, 900, 1000, 800) == std::array< uint32_t, 2 >{0, 0}, "Larger than the surface: at 0, clipped by the caller.");
+	static_assert(Surface::fitPopupOrigin(2147483647, 2147483647, 4294967295U, 4294967295U, 4294967295U, 4294967295U) == std::array< uint32_t, 2 >{0, 0}, "Extremes: no overflow.");
+	static_assert(Surface::fitPopupOrigin(5, 5, 0, 0, 0, 0) == std::array< uint32_t, 2 >{0, 0}, "Empty surface: at 0.");
+
 	bool
 	Surface::isBelowPoint (float positionX, float positionY) const noexcept
 	{
@@ -1445,9 +1453,8 @@ namespace EmEn::Overlay
 		const auto targetWidth = targetImage.width();
 		const auto targetHeight = targetImage.height();
 
-		/* NOTE: Clamp the popup area to the target boundaries (negative positions and overflow). */
-		const auto popupX = static_cast< uint32_t >(std::max(0, m_acceleratedPopupX));
-		const auto popupY = static_cast< uint32_t >(std::max(0, m_acceleratedPopupY));
+		/* NOTE: Place the popup inside the target (shifted back when it overflows), clipped only when larger. */
+		const auto [popupX, popupY] = fitPopupOrigin(m_acceleratedPopupX, m_acceleratedPopupY, m_acceleratedPopupImage->width(), m_acceleratedPopupImage->height(), targetWidth, targetHeight);
 
 		if ( popupX >= targetWidth || popupY >= targetHeight )
 		{

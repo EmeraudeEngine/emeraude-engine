@@ -197,7 +197,13 @@ external popup frames (e.g. CEF `<select>` dropdowns) are copied into a persiste
 GPU cache image and composited at the popup position on the active buffer. Because every
 accelerated view frame is a FULL copy (erasing the popup), the view path re-composites the cache
 after each frame while visible. On hide the cache is released — the next view frame erases the
-popup on screen. Uses the region overload of `CommandBuffer::copyImage` (explicit dst offset).
+popup on screen. Uses the region overload of `CommandBuffer::copyImage` (explicit dst offset). The position is in **surface
+pixels** (an embedder whose web engine reports the popup rectangle in DIP converts it by its device scale factor
+first), and the composite places the popup inside the target with `Surface::fitPopupOrigin()` (2026-10-11): an
+overflowing popup moves back inside instead of being clipped, a negative origin goes to 0, one larger than the target
+stays at 0 and is clipped — the rule of CEF's reference off-screen renderers (`UpdatePopupRect()`). The function is
+`static constexpr`, its edge cases `static_assert`ed in `Surface.cpp`; embedders compositing a popup on the CPU use it
+too.
 
 **Limitations:**
 - **Alpha-test event blocking degrades**: `isEventBlocked()` reads the CPU pixmap, which does not
