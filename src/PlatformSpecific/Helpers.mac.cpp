@@ -27,13 +27,20 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdlib>
 #include <string>
 #include <filesystem>
+#include <span>
+#include <thread>
+#include <type_traits>
 
 /* Third-party inclusions. */
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include <IOKit/pwr_mgt/IOPMLib.h>
 #include <sys/syslimits.h>
 
 /* Local inclusions. */
@@ -120,5 +127,122 @@ namespace EmEn::PlatformSpecific
 		const char * value = std::getenv(name);
 
 		return value != nullptr ? std::string{value} : std::string{};
+	}
+
+	namespace
+	{
+		/** @brief Upper bound of the online display list (CoreGraphics' own limit is far beyond any real desk). */
+		constexpr uint32_t MaxOnlineDisplays{32};
+
+		/**
+		 * @brief Returns whether at least one online display is awake.
+		 * @param awake Set to the answer when the list was obtained.
+		 * @return bool False when the display list could not be obtained.
+		 */
+		[[nodiscard]]
+		bool
+		anyDisplayAwake (bool & awake) noexcept
+		{
+			std::array< CGDirectDisplayID, MaxOnlineDisplays > displays{};
+			uint32_t count = 0;
+
+			if ( CGGetOnlineDisplayList(MaxOnlineDisplays, displays.data(), &count) != kCGErrorSuccess )
+			{
+				return false;
+			}
+
+			awake = std::ranges::any_of(std::span{displays}.first(std::min(count, MaxOnlineDisplays)), [] (CGDirectDisplayID display) {
+				return CGDisplayIsAsleep(display) == 0;
+			});
+
+			return true;
+		}
+	}
+
+	DisplayWakeResult
+	wakeDisplays (uint32_t timeoutMilliseconds) noexcept
+	{
+		bool awake = false;
+
+		if ( !anyDisplayAwake(awake) )
+		{
+			return DisplayWakeResult::Failed;
+		}
+
+		if ( awake )
+		{
+			return DisplayWakeResult::AlreadyAwake;
+		}
+
+		IOPMAssertionID assertion = kIOPMNullAssertionID;
+
+		if ( IOPMAssertionDeclareUserActivity(CFSTR("Emeraude engine startup: wake the display to create the window"), kIOPMUserActiveLocal, &assertion) != kIOReturnSuccess )
+		{
+			return DisplayWakeResult::Failed;
+		}
+
+		constexpr uint32_t PollIntervalMilliseconds{50};
+		const uint32_t maxPolls = timeoutMilliseconds / PollIntervalMilliseconds + 1;
+
+		auto result = DisplayWakeResult::StillAsleep;
+
+		for ( uint32_t poll = 0; poll < maxPolls; ++poll )
+		{
+			if ( anyDisplayAwake(awake) && awake )
+			{
+				result = DisplayWakeResult::Woken;
+
+				break;
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds{PollIntervalMilliseconds});
+		}
+
+		/* NOTE: The activity was declared; releasing the assertion hands the display back to the user's idle timer. */
+		static_cast< void >(IOPMAssertionRelease(assertion));
+
+		return result;
+	}
+
+	static_assert(std::is_same_v< IOPMAssertionID, uint32_t >, "DisplaySleepInhibitor stores an IOPMAssertionID as uint32_t.");
+
+	DisplaySleepInhibitor::~DisplaySleepInhibitor ()
+	{
+		this->release();
+	}
+
+	bool
+	DisplaySleepInhibitor::acquire () noexcept
+	{
+		if ( m_active )
+		{
+			return true;
+		}
+
+		IOPMAssertionID assertion = kIOPMNullAssertionID;
+
+		if ( IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep, kIOPMAssertionLevelOn, CFSTR("Emeraude engine: a window is open"), &assertion) != kIOReturnSuccess )
+		{
+			return false;
+		}
+
+		m_assertion = assertion;
+		m_active = true;
+
+		return true;
+	}
+
+	void
+	DisplaySleepInhibitor::release () noexcept
+	{
+		if ( !m_active )
+		{
+			return;
+		}
+
+		static_cast< void >(IOPMAssertionRelease(m_assertion));
+
+		m_assertion = kIOPMNullAssertionID;
+		m_active = false;
 	}
 }

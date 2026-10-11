@@ -53,6 +53,9 @@
 #include "Identification.hpp"
 #include "StaticVector.hpp"
 #include "Vulkan/Surface.hpp"
+#if IS_MACOS
+	#include "PlatformSpecific/Helpers.hpp"
+#endif
 
 namespace EmEn
 {
@@ -1025,6 +1028,10 @@ namespace EmEn
 			std::unique_ptr< Vulkan::Surface > m_surface;
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
+#endif
+#if IS_MACOS
+			/* Held while the window exists when Core/Video/Window/PreventDisplaySleep is true (owner decision 2026-10-11). */
+			PlatformSpecific::DisplaySleepInhibitor m_displaySleepInhibitor;
 #endif
 			/* The framebuffer size for the render thread (publishedFramebufferSize()): width in the high 32 bits. */
 			std::atomic< uint64_t > m_publishedFramebufferSize{0};

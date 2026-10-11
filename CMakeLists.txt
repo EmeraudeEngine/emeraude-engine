@@ -301,6 +301,9 @@ elseif ( APPLE )
 
 	# Link CoreFoundation framework for the bundle lookup (PlatformSpecific::pinVulkanLoaderToBundledDriver()).
 	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreFoundation")
+
+	# Link CoreGraphics and IOKit for the display wake before the window (PlatformSpecific::wakeDisplays()).
+	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreGraphics" "-framework IOKit")
 elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 

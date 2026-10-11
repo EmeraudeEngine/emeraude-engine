@@ -36,6 +36,7 @@
 	#include <map>
 	#include <optional>
 #endif
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -360,5 +361,86 @@ namespace EmEn::PlatformSpecific
 	 * (macOS peer, 2026-10-11). Owner decision 2026-10-11.
 	 */
 	void disableWindowStateRestoration () noexcept;
+
+	/** @brief The outcome of wakeDisplays(). */
+	enum class DisplayWakeResult : uint8_t
+	{
+		AlreadyAwake, /**< At least one online display was awake: nothing was done. */
+		Woken,        /**< Every display was asleep; one woke up within the time limit. */
+		StillAsleep,  /**< Every display was asleep and none woke up within the time limit. */
+		Failed        /**< The display list or the user-activity assertion could not be obtained. */
+	};
+
+	/**
+	 * @brief Wakes the displays when every online display is asleep, and waits (bounded) until one is awake.
+	 * @details GLFW skips a sleeping display when it lists the monitors (cocoa_monitor.m, CGDisplayIsAsleep()), so a
+	 * launch while the display sleeps found "no monitor" and the window service failed (macOS peer, 2026-10-11). A
+	 * local user-activity assertion (IOPMAssertionDeclareUserActivity(kIOPMUserActiveLocal), what `caffeinate -u` does)
+	 * wakes the display like a key press; it is released before returning, the display then follows the user's idle
+	 * timer again. Owner decision 2026-10-11: the engine wakes the display to start.
+	 * @note Must run before glfwInit() (the monitors are listed there). Polls every 50 ms up to the time limit.
+	 * @param timeoutMilliseconds The longest wait for a display to wake, in milliseconds.
+	 * @return DisplayWakeResult
+	 */
+	[[nodiscard]]
+	DisplayWakeResult wakeDisplays (uint32_t timeoutMilliseconds) noexcept;
+
+	/**
+	 * @brief Keeps the display awake while held: an IOKit power assertion PreventUserIdleDisplaySleep (what SDL does by
+	 * default while a window is open). Owner decision 2026-10-11: the display stays awake while the engine window
+	 * exists (setting Core/Video/Window/PreventDisplaySleep); a sleeping display made GLFW lose its monitor.
+	 * @note Two-phase: acquire() takes the assertion, release() or the destructor gives it back. Not copyable nor
+	 * movable. Main thread (the window's).
+	 */
+	class DisplaySleepInhibitor final
+	{
+		public:
+
+			/** @brief Constructs an inactive inhibitor. */
+			DisplaySleepInhibitor () noexcept = default;
+
+			/** @brief Copy constructor. */
+			DisplaySleepInhibitor (const DisplaySleepInhibitor & copy) noexcept = delete;
+
+			/** @brief Move constructor. */
+			DisplaySleepInhibitor (DisplaySleepInhibitor && copy) noexcept = delete;
+
+			/** @brief Copy assignment. @return DisplaySleepInhibitor & */
+			DisplaySleepInhibitor & operator= (const DisplaySleepInhibitor & copy) noexcept = delete;
+
+			/** @brief Move assignment. @return DisplaySleepInhibitor & */
+			DisplaySleepInhibitor & operator= (DisplaySleepInhibitor && copy) noexcept = delete;
+
+			/** @brief Destructs the inhibitor, releasing the assertion if held. */
+			~DisplaySleepInhibitor ();
+
+			/**
+			 * @brief Takes the assertion. Idempotent.
+			 * @return bool False when IOKit refused it.
+			 */
+			[[nodiscard]]
+			bool acquire () noexcept;
+
+			/**
+			 * @brief Gives the assertion back. Idempotent.
+			 */
+			void release () noexcept;
+
+			/**
+			 * @brief Returns whether the assertion is held.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isActive () const noexcept
+			{
+				return m_active;
+			}
+
+		private:
+
+			uint32_t m_assertion{0}; /**< The IOPMAssertionID (an uint32_t, checked in Helpers.mac.cpp). */
+			bool m_active{false};
+	};
 #endif
 }

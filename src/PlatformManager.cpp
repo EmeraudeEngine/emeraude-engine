@@ -107,6 +107,30 @@ namespace EmEn
 		/* NOTE: Before glfwInit() (NSApplication starts there): a crash must never make the next launch wait on AppKit's
 		 * "reopen the windows?" modal. NSUserDefaults is thread-safe. */
 		PlatformSpecific::disableWindowStateRestoration();
+
+		/* NOTE: Before glfwInit() (the monitors are listed there, and GLFW skips a sleeping display): a launch while the
+		 * display sleeps must still find a monitor (owner decision 2026-10-11). */
+		{
+			constexpr uint32_t DisplayWakeTimeoutMilliseconds{5000};
+
+			switch ( PlatformSpecific::wakeDisplays(DisplayWakeTimeoutMilliseconds) )
+			{
+				case PlatformSpecific::DisplayWakeResult::AlreadyAwake :
+					break;
+
+				case PlatformSpecific::DisplayWakeResult::Woken :
+					TraceInfo{ClassId} << "Every display was asleep : woken to create the window.";
+					break;
+
+				case PlatformSpecific::DisplayWakeResult::StillAsleep :
+					TraceWarning{ClassId} << "Every display is asleep and none woke up within " << DisplayWakeTimeoutMilliseconds << " ms : the window may find no monitor.";
+					break;
+
+				case PlatformSpecific::DisplayWakeResult::Failed :
+					TraceWarning{ClassId} << "Unable to check or wake the displays (CoreGraphics / IOKit power management).";
+					break;
+			}
+		}
 #endif
 
 		if constexpr ( IsLinux )

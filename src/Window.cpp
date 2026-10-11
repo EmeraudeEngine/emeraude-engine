@@ -320,6 +320,22 @@ namespace EmEn
 		/* NOTE: The window starts non-visible. */
 		glfwShowWindow(m_handle.get());
 
+#if IS_MACOS
+		/* NOTE: A sleeping display makes GLFW lose its monitor: the display stays awake while the window exists
+		 * (owner decision 2026-10-11). */
+		if ( settings.getOrSetDefault< bool >(WindowPreventDisplaySleepKey, DefaultWindowPreventDisplaySleep) )
+		{
+			if ( m_displaySleepInhibitor.acquire() )
+			{
+				Tracer::info(ClassId, "The display is kept awake while the window is open.");
+			}
+			else
+			{
+				Tracer::warning(ClassId, "Unable to keep the display awake (IOKit power assertion refused).");
+			}
+		}
+#endif
+
 		if ( showInformation )
 		{
 			TraceInfo{ClassId} <<
@@ -370,6 +386,10 @@ namespace EmEn
 				m_primaryServices.settings().set(WindowHeightKey, m_state.windowHeight);
 			}
 		}
+
+#if IS_MACOS
+		m_displaySleepInhibitor.release();
+#endif
 
 		m_surface.reset();
 

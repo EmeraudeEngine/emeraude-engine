@@ -382,6 +382,9 @@ namespace EmEn
 			/* Gamma correction applied in windowed mode. */
 			constexpr auto WindowGammaKey{"Core/Video/Window/Gamma"};
 			constexpr auto DefaultWindowGamma{1.0F};
+			/* Keep the display awake while the window is open (macOS; Windows and Linux: item display-sleep-inhibit-windows-linux). */
+			constexpr auto WindowPreventDisplaySleepKey{"Core/Video/Window/PreventDisplaySleep"};
+			constexpr auto DefaultWindowPreventDisplaySleep{true};
 
 				/* GLFW */
 				/* Force a GLFW windowing backend, or "Auto" to let GLFW decide. */

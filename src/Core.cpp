@@ -847,11 +847,14 @@ namespace EmEn
 			return false;
 		}
 
+		/* NOTE: Showing the help is a successful start: the core is valid and the consumer's main() prints
+		 * coreHelp() + its own help, then returns without run(). Returning false here made the constructor
+		 * quick_exit(2) (std::terminate() on macOS) before anything was printed. */
 		if ( m_primaryServices.arguments().isSwitchPresent("-h", "--help") )
 		{
 			m_showHelp = true;
 
-			return false;
+			return true;
 		}
 
 		if ( m_primaryServices.arguments().isSwitchPresent(WipeLocalDataConfirmArg) )
