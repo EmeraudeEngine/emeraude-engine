@@ -614,4 +614,36 @@ namespace EmEn::PlatformSpecific
 
 		return SetEnvironmentVariableW(L"VK_ADD_LAYER_PATH", value.c_str()) != FALSE;
 	}
+
+	std::string
+	readEnvironmentVariable (const char * name) noexcept
+	{
+		/* NOTE: The process environment block, which SetEnvironmentVariableW() updates and the Vulkan loader reads. */
+		std::wstring wideName;
+
+		for ( const char * character = name; *character != '\0'; ++character )
+		{
+			wideName.push_back(static_cast< wchar_t >(static_cast< unsigned char >(*character)));
+		}
+
+		const auto length = GetEnvironmentVariableW(wideName.c_str(), nullptr, 0);
+
+		if ( length <= 1 )
+		{
+			return {};
+		}
+
+		std::wstring value(length, L'\0');
+
+		const auto written = GetEnvironmentVariableW(wideName.c_str(), value.data(), length);
+
+		if ( written == 0 || written >= length )
+		{
+			return {};
+		}
+
+		value.resize(written);
+
+		return convertWideToUTF8(value);
+	}
 }

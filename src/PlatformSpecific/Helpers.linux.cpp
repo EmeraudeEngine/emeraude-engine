@@ -277,4 +277,12 @@ namespace EmEn::PlatformSpecific
 
 		return setenv("VK_ADD_LAYER_PATH", value.c_str(), 1) == 0;
 	}
+
+	std::string
+	readEnvironmentVariable (const char * name) noexcept
+	{
+		const char * value = std::getenv(name);
+
+		return value != nullptr ? std::string{value} : std::string{};
+	}
 }

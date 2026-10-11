@@ -318,6 +318,17 @@ namespace EmEn::PlatformSpecific
 	[[nodiscard]]
 	bool prependVulkanLayerDirectory (const std::filesystem::path & directory) noexcept;
 
+	/**
+	 * @brief Reads an environment variable from the PROCESS environment, the one the Vulkan loader reads.
+	 * @note Windows: GetEnvironmentVariableW, never getenv()/_dupenv_s(): those read the C runtime's copy taken at
+	 * startup, which never sees a SetEnvironmentVariableW() (prependVulkanLayerDirectory()). POSIX: getenv(), a READ;
+	 * the cascade writes the environment only before any thread (PlatformManager::prepareVulkanLoaderEnvironment()).
+	 * @param name The variable name (ASCII).
+	 * @return std::string The value in UTF-8, empty when the variable is unset or empty.
+	 */
+	[[nodiscard]]
+	std::string readEnvironmentVariable (const char * name) noexcept;
+
 #if IS_MACOS
 	/**
 	 * @brief Restricts the Vulkan loader to the driver manifest shipped inside the application bundle.

@@ -32,8 +32,6 @@
 /* STL inclusions. */
 #include <array>
 #include <filesystem>
-#include <string_view>
-#include <cstdlib>
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
@@ -84,9 +82,9 @@ namespace EmEn
 		/* NOTE: The loader's environment (shipped layers, macOS bundled driver) was written by
 		 * prepareVulkanLoaderEnvironment(), called by the consumer's main() before any thread: only READ here. */
 		{
-			const char * layerPath = std::getenv("VK_ADD_LAYER_PATH");
+			const auto layerPath = PlatformSpecific::readEnvironmentVariable("VK_ADD_LAYER_PATH");
 
-			if ( layerPath != nullptr && std::string_view{layerPath}.find("explicit_layer.d") != std::string_view::npos )
+			if ( layerPath.find("explicit_layer.d") != std::string::npos )
 			{
 				TraceInfo{ClassId} << "Vulkan layer search path : '" << layerPath << "'.";
 			}
@@ -98,7 +96,7 @@ namespace EmEn
 			}
 
 #if IS_MACOS
-			if ( const char * driverFiles = std::getenv("VK_DRIVER_FILES"); driverFiles != nullptr )
+			if ( const auto driverFiles = PlatformSpecific::readEnvironmentVariable("VK_DRIVER_FILES"); !driverFiles.empty() )
 			{
 				TraceInfo{ClassId} << "Vulkan loader restricted to the driver manifest '" << driverFiles << "'.";
 			}

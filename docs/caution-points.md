@@ -7761,6 +7761,10 @@ stops if it is missing), and the engine **links no Vulkan library at all** (owne
   `setenv()` races any concurrent `getenv()` and CEF's threads exist once `CefInitialize()` ran. `PlatformManager::
   onInitialize()` only reads the result and warns "The Vulkan loader environment was not prepared" when it was not
   called (owner decision 2026-10-11; item environment-written-after-cef-threads-start closed).
+  The check reads through `PlatformSpecific::readEnvironmentVariable()`: on Windows `getenv()` / `_dupenv_s()` read the
+  C runtime's copy of the environment, taken at startup, which never sees `SetEnvironmentVariableW()` (Windows-PA,
+  2026-10-11: `_dupenv_s` null while `GetEnvironmentVariableW` returned the value), and MSVC refuses `getenv` (C4996
+  under `/WX`) — Windows reads the process block, the one the loader reads.
 
 **Why no installed SDK path at all:** the macOS SDK installs its headers in `/usr/local/include`, together with its
 own glslang. As `-I`, that directory made `<glslang/...>` resolve to the SDK's glslang 16.4 instead of the ext-deps
