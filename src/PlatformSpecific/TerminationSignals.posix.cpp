@@ -33,27 +33,36 @@
 /* Local inclusions. */
 #include "Tracer.hpp"
 
+namespace
+{
+	/* NOTE: The only state a signal handler may touch: a lock-free atomic (async-signal-safe). 0 = none pending. */
+	std::atomic< int > s_pendingSignal{0};
+
+	static_assert(std::atomic< int >::is_always_lock_free, "A signal handler may only store into a lock-free atomic.");
+}
+
+/* NOTE: C language linkage (a sigaction handler is a C function) with INTERNAL linkage (static): no exported symbol,
+ * and no -Wmissing-prototypes under clang (an extern "C" function in an anonymous namespace still has an external C
+ * name — Apple clang -Werror, macOS peer 2026-10-11). */
+extern "C"
+{
+	/**
+	 * @brief The signal handler: records the signal, nothing else.
+	 * @param signalNumber The caught signal.
+	 */
+	static
+	void
+	onTerminationSignal (int signalNumber) noexcept
+	{
+		s_pendingSignal.store(signalNumber, std::memory_order_relaxed);
+	}
+}
+
 namespace EmEn::PlatformSpecific
 {
 	namespace
 	{
 		constexpr auto ClassId{"TerminationSignalCatcher"};
-
-		/* NOTE: The only state a signal handler may touch: a lock-free atomic (async-signal-safe). 0 = none pending. */
-		std::atomic< int > s_pendingSignal{0};
-
-		static_assert(std::atomic< int >::is_always_lock_free, "A signal handler may only store into a lock-free atomic.");
-
-		/**
-		 * @brief The signal handler: records the signal, nothing else.
-		 * @param signalNumber The caught signal.
-		 */
-		extern "C"
-		void
-		onTerminationSignal (int signalNumber) noexcept
-		{
-			s_pendingSignal.store(signalNumber, std::memory_order_relaxed);
-		}
 	}
 
 	TerminationSignalCatcher::TerminationSignalCatcher () noexcept
