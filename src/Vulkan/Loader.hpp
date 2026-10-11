@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
 
 /* Third-party inclusions. */
@@ -71,16 +72,25 @@ namespace EmEn::Vulkan
 				this->close();
 			}
 
+			/** @brief Whether open() binds volk's global function pointers to this loader. */
+			enum class VolkBinding : uint8_t
+			{
+				Initialize, /**< volkInitializeCustom() on open, volkFinalize() on close: the engine's loader. */
+				None        /**< The library only: the caller fetches its own pointers (probePhysicalDevices()). */
+			};
+
 			/**
 			 * @brief Opens the loader shipped with the application and initializes volk with it.
 			 * @note Looked for in `<binary>/vulkan/` (Linux libvulkan.so.1, Windows vulkan-1.dll), and on macOS in the
 			 * bundle's `Contents/Frameworks/libvulkan.1.dylib` first. No other location is tried: a missing loader is a
 			 * packaging error, refused with a trace.
 			 * @param binaryDirectory The directory of the running executable.
+			 * @param volkBinding Whether volk's global pointers are bound to this loader (default) or left alone — a
+			 * second, short-lived loader must never reset the pointers the engine's own loader set.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool open (const std::filesystem::path & binaryDirectory) noexcept;
+			bool open (const std::filesystem::path & binaryDirectory, VolkBinding volkBinding = VolkBinding::Initialize) noexcept;
 
 			/**
 			 * @brief Finalizes volk and closes the library. Idempotent.
@@ -125,5 +135,6 @@ namespace EmEn::Vulkan
 			std::filesystem::path m_path;
 			void * m_handle{nullptr};
 			PFN_vkGetInstanceProcAddr m_getInstanceProcAddr{nullptr};
+			bool m_volkBound{false};
 	};
 }

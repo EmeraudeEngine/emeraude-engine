@@ -44,3 +44,15 @@ imported image and every GPU read of it must be complete (fence) before the call
 CEF 126 creates the texture **without a keyed mutex**: synchronization relies on that
 copy-during-callback contract, not `VK_KHR_win32_keyed_mutex`. Layout starts `UNDEFINED` — record
 an acquire barrier (`VK_QUEUE_FAMILY_EXTERNAL` → graphics queue family) before the copy.
+
+### The CPU fallback: `Overlay::Surface::uploadAcceleratedFrameFromCPU(pixels, width, height)` (2026-10-11)
+
+A shared texture can only be imported on the adapter that produced it. When a consumer meets a frame from another
+adapter (a Chromium GPU process on another GPU), it reads the texture back on the producer's adapter and hands the
+pixels to this method: same contract as `importAcceleratedFrame()` (synchronous: a surface-owned host-visible staging
+buffer, `vkCmdCopyBufferToImage` toward the active or transition image with the same barriers, the accelerated popup
+cache re-composited, SHADER_READ_ONLY restored, the fence waited), the same size routing; a frame whose size matches
+neither buffer is dropped while a transition resize is requested (the pixels have the producer's row length).
+Platform-independent. Proven on Linux by routing projet-alpha's OnPaint frames through it (test injection, reverted):
+the menu renders identically to the normal path, 0 VUID. Consumer: a downstream application's cross-adapter readback (Windows).
+

@@ -73,7 +73,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Loader::open (const std::filesystem::path & binaryDirectory) noexcept
+	Loader::open (const std::filesystem::path & binaryDirectory, VolkBinding volkBinding) noexcept
 	{
 		if ( this->isOpen() )
 		{
@@ -151,7 +151,13 @@ namespace EmEn::Vulkan
 			m_getInstanceProcAddr = entry;
 			m_path = candidate;
 
+			if ( volkBinding == VolkBinding::None )
+			{
+				return true;
+			}
+
 			volkInitializeCustom(m_getInstanceProcAddr);
+			m_volkBound = true;
 
 			TraceInfo{ClassId} << "Vulkan loader '" << m_path.string() << "' opened (instance version " <<
 				VK_API_VERSION_MAJOR(volkGetInstanceVersion()) << '.' << VK_API_VERSION_MINOR(volkGetInstanceVersion()) << '.' << VK_API_VERSION_PATCH(volkGetInstanceVersion()) << ").";
@@ -172,7 +178,12 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		volkFinalize();
+		if ( m_volkBound )
+		{
+			volkFinalize();
+
+			m_volkBound = false;
+		}
 
 #if IS_WINDOWS
 		FreeLibrary(static_cast< HMODULE >(m_handle));

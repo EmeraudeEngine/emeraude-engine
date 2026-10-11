@@ -31,6 +31,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <span>
 #include <string>
 #include <concepts>
 #include <functional>
@@ -47,6 +49,7 @@
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
+	class Buffer;
 	class Sampler;
 	class CommandPool;
 	class CommandBuffer;
@@ -252,6 +255,27 @@ namespace EmEn::Overlay
 			 */
 			[[nodiscard]]
 			bool importAcceleratedFrame (const Vulkan::ExternalImageDescriptor & descriptor) noexcept;
+
+			/**
+			 * @brief Uploads a frame from CPU memory into an accelerated-source surface (the fallback of
+			 * importAcceleratedFrame()).
+			 * @details For a producer whose GPU texture cannot be imported on this device (e.g. a CEF shared
+			 * texture rendered on another adapter: the consumer reads it back on the producer's adapter, then hands
+			 * the pixels here). Same contract as importAcceleratedFrame(): synchronous (copy into a surface-owned
+			 * host-visible staging buffer, vkCmdCopyBufferToImage toward the active or transition image, restore
+			 * SHADER_READ_ONLY, submit on the renderer's frame queue and WAIT the fence), the same size routing
+			 * through the transition machinery. A frame whose size matches neither buffer is dropped (a transition
+			 * resize is requested for convergence): the pixels have the producer's row length, no clamp is possible
+			 * without a copy. The accelerated popup cache is re-composited on top while visible.
+			 * @pre pixels holds width × height tightly packed 4-byte texels in the surface format (BGRA, premultiplied
+			 * alpha for CEF). Platform-independent.
+			 * @param pixels The frame texels (row pitch = width × 4).
+			 * @param width The frame width in pixels.
+			 * @param height The frame height in pixels.
+			 * @return bool True when the frame was copied, false on failure or a dropped frame.
+			 */
+			[[nodiscard]]
+			bool uploadAcceleratedFrameFromCPU (std::span< const std::byte > pixels, uint32_t width, uint32_t height) noexcept;
 
 			/**
 			 * @brief Imports an external GPU popup frame (e.g. a CEF <select> dropdown) into the popup cache.
@@ -1464,6 +1488,8 @@ namespace EmEn::Overlay
 			std::shared_ptr< Vulkan::CommandPool > m_acceleratedCommandPool;
 			std::shared_ptr< Vulkan::CommandBuffer > m_acceleratedCommandBuffer;
 			std::shared_ptr< Vulkan::Sync::Fence > m_acceleratedFence;
+			/* NOTE: Host-visible staging buffer of uploadAcceleratedFrameFromCPU() (lazily created, grown on demand). */
+			std::shared_ptr< Vulkan::Buffer > m_acceleratedStagingBuffer;
 			/* NOTE: Persistent GPU cache of the popup content (accelerated mode). Re-composited after
 			 * every view frame while visible; released on hide. Content-provider thread only. */
 			std::shared_ptr< Vulkan::Image > m_acceleratedPopupImage;

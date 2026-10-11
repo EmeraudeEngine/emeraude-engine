@@ -5837,6 +5837,18 @@ an identical one still gives zero). Runtime check (Linux, RTX 3070 Ti, window-le
 
 ## Vulkan Validation
 
+### A partial image update ran on the transfer-only family: FRAGMENT_SHADER barrier + a race with the frames (fixed 2026-10-11)
+
+`ImageTransferOperation::transferRegion()` (the partial update of an already-sampled image: the staging overlay upload
+of dirty-rectangle bands, `Image::writeDataRegion()`) recorded its `SHADER_READ_ONLY → TRANSFER_DST` barrier with
+`srcStage = FRAGMENT_SHADER` on the TRANSFER command buffer and copied there while the graphics queue sampled the image:
+`VUID-vkCmdPipelineBarrier-srcStageMask-06461` and `VUID-vkCmdDraw-None-09600`, on every GPU with a transfer-only
+family (NVIDIA), never on a single-family one (Intel). Found by the Windows peer on a downstream application (69 VUIDs),
+reproduced in projet-alpha on Linux (RTX 3070 Ti, `App/CEF/TextureUploadStrategy = staging`, 40 hovers over the menu:
+20 + 20 VUIDs). Now the whole partial update runs on the PRIMARY (graphics) family in one command buffer: barrier,
+copy, barrier, fence — 0 VUID on the same scenario. A transfer that touches an image the frames sample must stay on
+the family that samples it; only a fresh image (no reader yet) may be uploaded on the transfer family.
+
 ### ⚠️⚠️ A DEVICE_LOST with 0 VUID and `READ_INVALID addr=0x0` = a shader read through a NULL buffer address (2026-10-07, FIXED)
 
 > [!CAUTION]

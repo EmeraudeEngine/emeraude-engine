@@ -36,6 +36,7 @@
 #include "PixelFactory/Processor.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Device.hpp"
@@ -254,6 +255,7 @@ namespace EmEn::Overlay
 		m_acceleratedCommandBuffer = nullptr;
 		m_acceleratedCommandPool.reset();
 		m_acceleratedFence = nullptr;
+		m_acceleratedStagingBuffer.reset();
 
 		/* NOTE: The sampler comes from the renderer's shared sampler cache (Renderer::getSampler,
 		 * id "OverlaySurface") and is shared by every overlay surface. Only release our reference —
@@ -1062,6 +1064,169 @@ namespace EmEn::Overlay
 #endif
 	}
 #endif
+
+	bool
+	Surface::uploadAcceleratedFrameFromCPU (std::span< const std::byte > pixels, uint32_t width, uint32_t height) noexcept
+	{
+		if ( !m_acceleratedSourceEnabled )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' is not in accelerated source mode ! Call enableAcceleratedSource() before createOnHardware().";
+
+			return false;
+		}
+
+		if ( m_renderer == nullptr )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' is not created on the GPU yet ! Unable to upload an accelerated frame.";
+
+			return false;
+		}
+
+		constexpr VkDeviceSize TexelBytes{4};
+		const auto frameBytes = static_cast< VkDeviceSize >(width) * static_cast< VkDeviceSize >(height) * TexelBytes;
+
+		if ( width == 0 || height == 0 || pixels.size() < frameBytes )
+		{
+			TraceError{ClassId} << "Invalid CPU frame for the surface '" << this->name() << "' (" << width << "x" << height << ", " << pixels.size() << " bytes) !";
+
+			return false;
+		}
+
+		auto & renderer = *m_renderer;
+
+		const std::scoped_lock lock{m_framebufferAccess};
+
+		const auto target = this->determineTargetBuffer(width, height);
+
+		if ( target == TargetBuffer::None )
+		{
+			/* NOTE: The producer's painted size is authoritative: ask for a transition buffer at that size. This frame
+			 * is dropped (see the declaration). */
+			if ( m_transitionBufferEnabled )
+			{
+				this->requestTransitionBufferResize(width, height);
+			}
+
+			return false;
+		}
+
+		auto & targetBuffer = ( target == TargetBuffer::Transition ) ? m_transitionBuffer : m_activeBuffer;
+
+		if ( targetBuffer.image == nullptr || !targetBuffer.image->isCreated() )
+		{
+			TraceError{ClassId} << "The surface '" << this->name() << "' has no valid target image for the CPU frame !";
+
+			return false;
+		}
+
+		if ( !this->prepareAcceleratedCopyResources(renderer) )
+		{
+			return false;
+		}
+
+		auto * queue = renderer.graphicsQueue();
+
+		if ( queue == nullptr )
+		{
+			TraceError{ClassId} << "The renderer has no graphics queue yet ! Unable to upload the CPU frame for the surface '" << this->name() << "'.";
+
+			return false;
+		}
+
+		/* NOTE: The staging buffer only grows: the previous copy completed (fence waited below) before any reuse. */
+		if ( m_acceleratedStagingBuffer == nullptr || m_acceleratedStagingBuffer->bytes() < frameBytes )
+		{
+			m_acceleratedStagingBuffer = std::make_shared< Buffer >(renderer.device(), 0, frameBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true);
+			m_acceleratedStagingBuffer->setIdentifier(ClassId, this->name(), "AcceleratedStagingBuffer");
+
+			if ( !m_acceleratedStagingBuffer->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the staging buffer of the surface '" << this->name() << "' !";
+
+				m_acceleratedStagingBuffer = nullptr;
+
+				return false;
+			}
+		}
+
+		if ( !m_acceleratedStagingBuffer->writeData(MemoryRegion{pixels.data(), static_cast< size_t >(frameBytes)}) )
+		{
+			TraceError{ClassId} << "Unable to write the CPU frame into the staging buffer of the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* NOTE: The fence's own reset() (not the smart pointer's). */
+		if ( !(*m_acceleratedFence).reset() || !m_acceleratedCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		{
+			TraceError{ClassId} << "Unable to prepare the CPU-frame copy of the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* NOTE: The surface image leaves the sampled state (same ordering as importAcceleratedFrame()). */
+		const Sync::ImageMemoryBarrier toTransferDstBarrier{
+			*targetBuffer.image,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			targetBuffer.image->currentImageLayout(),
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(toTransferDstBarrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+		/* NOTE: The frame size equals the target image size (determineTargetBuffer()): a whole-image copy. */
+		m_acceleratedCommandBuffer->copy(*m_acceleratedStagingBuffer, *targetBuffer.image);
+
+		this->recordAcceleratedPopupComposite(*targetBuffer.image);
+
+		const Sync::ImageMemoryBarrier toSampledBarrier{
+			*targetBuffer.image,
+			VK_ACCESS_TRANSFER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		m_acceleratedCommandBuffer->pipelineBarrier(toSampledBarrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+		if ( !m_acceleratedCommandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the CPU-frame copy command buffer of the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !queue->submit(*m_acceleratedCommandBuffer, SynchInfo{}.withFence(m_acceleratedFence->handle())) )
+		{
+			TraceError{ClassId} << "Unable to submit the CPU-frame copy of the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !m_acceleratedFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to wait the CPU-frame copy fence of the surface '" << this->name() << "' !";
+
+			return false;
+		}
+
+		targetBuffer.image->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		/* NOTE: A frame at the transition size completes a resize (same inline commit as importAcceleratedFrame()). */
+		if ( target == TargetBuffer::Transition )
+		{
+			std::swap(m_transitionBuffer, m_activeBuffer);
+
+			m_transitionBufferStatus = TransitionBufferStatus::Ready;
+
+			TraceSuccess{ClassId} << "Surface '" << this->name() << "' transition buffer committed by a CPU frame (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px).";
+		}
+
+		this->notifyRedrawRequired();
+
+		return true;
+	}
 
 	bool
 	Surface::importAcceleratedFrame (const Vulkan::ExternalImageDescriptor & descriptor) noexcept

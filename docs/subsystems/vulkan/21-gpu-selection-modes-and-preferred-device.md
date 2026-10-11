@@ -32,6 +32,23 @@ The preferred device is selected only among the compatible ones ("… (PREFERRED
 compatible → "The physical device preferred by the application is absent or not compatible : the score decides."
 Without a call, nothing changes.
 
+⚠️ An integrated GPU reports SYSTEM memory as its `DEVICE_LOCAL` heap (measured: Intel RPL-S 64 GiB, llvmpipe 128 GiB,
+RTX 3070 Ti 8 GiB): VRAM only compares devices of the same type, which is why `RawPerformance` ranks the type first.
+
+### Listing the devices before the engine exists: `Vulkan::probePhysicalDevices(binaryDirectory)`
+
+`Vulkan/PhysicalDeviceProbe.hpp`: a minimal temporary instance (no layer, no surface extension;
+`VK_KHR_portability_enumeration` when the loader offers it) on the loader shipped with the application, destroyed before
+returning; per device: name (the `ForceGPU` spelling), `DeviceIdentity`, vendor/device ID, type, largest `DEVICE_LOCAL`
+heap. For a decision taken before the core starts — the Chromium GPU process is launched at `CefInitialize()`, BEFORE
+the engine selects its device (measured: three Chromium subprocesses started before "Graphics capable physical device
+selected"). Case that motivated it: `ForceGPU` holds a VULKAN name, which DXGI may spell differently (Windows peer:
+Vulkan "Intel(R) RaptorLake-S Mobile Graphics Controller", DXGI "Intel(R) UHD Graphics"), so a DXGI name match could
+never pin Chromium to the forced iGPU; the probe resolves the name to its LUID.
+It opens the loader with `Loader::VolkBinding::None` and fetches its own entry points: volk's global pointers are never
+touched, so it is safe whether or not the engine's loader is already open (measured: a probe after the engine started,
+then the scene renders, 0 VUID, exit 0).
+
 ### Measured (Linux, RTX 3070 Ti + Intel RPL-S + llvmpipe, 2026-10-11)
 
 - `Performance` and `RawPerformance`: the RTX 3070 Ti; `PowerSaving`: the Intel iGPU (which cannot present under

@@ -470,4 +470,4 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   `return v;`.
 - **avoid-non-const-global-variables ×1** — `Window.linux.cpp` `s_waylandReader`: the libwayland functions resolved once
   for the process, used on the main thread only.
-
+- **cppcoreguidelines-pro-type-reinterpret-cast ×1 (2026-10-11), ON PURPOSE** — `entryPoint()` in `Vulkan/PhysicalDeviceProbe.cpp`: `vkGetInstanceProcAddr` answers a generic `PFN_vkVoidFunction` that the Vulkan binary interface requires to be cast to the entry point's real signature. The probe fetches its own entry points on purpose (it must never touch volk's global pointers, `Loader::VolkBinding::None`).

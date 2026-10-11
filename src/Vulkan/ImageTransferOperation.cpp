@@ -512,8 +512,12 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Step 1: Copy the region into the image, keeping everything else. */
-		if ( !m_transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		/* NOTE: The whole partial update runs on the PRIMARY (graphics) family, in one command buffer. The image is
+		 * sampled by the frames in flight, so it leaves FRAGMENT_SHADER reads and comes back to them: a FRAGMENT_SHADER
+		 * stage is illegal on a transfer-only family (VUID-vkCmdPipelineBarrier-srcStageMask-06461), and writing it on
+		 * another queue while the graphics queue samples it raced the frames (VUID-vkCmdDraw-None-09600) — measured
+		 * on NVIDIA (a transfer-only family) with the staging overlay upload, 2026-10-11. */
+		if ( !m_graphicsCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 		{
 			return false;
 		}
@@ -527,45 +531,15 @@ namespace EmEn::Vulkan
 			};
 			barrier.setIdentifier(ClassId, "PartialPreTransfer", "ImageMemoryBarrier");
 
-			m_transferCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+			m_graphicsCommandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
 		vkCmdCopyBufferToImage(
-			m_transferCommandBuffer->handle(),
+			m_graphicsCommandBuffer->handle(),
 			m_stagingBuffer->handle(),
 			dstImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &region
 		);
-
-		if ( m_transferCommandBuffer->end() )
-		{
-			const auto * queue = device->getPrimaryTransferQueue(QueuePriority::High);
-
-			VkSemaphore semaphoreHandle = m_semaphore->handle();
-
-			uint64_t transferValue = 0;
-
-			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
-			{
-				Tracer::error(ClassId, "Unable to transfer an image region (1/2) !");
-
-				return false;
-			}
-
-			dstImage.recordPendingSubmission(*queue, transferValue);
-		}
-		else
-		{
-			Tracer::error(ClassId, "Unable to finish the command buffer for a partial image transfer !");
-
-			return false;
-		}
-
-		/* Step 2: Give the image back to the fragment shader. */
-		if ( !m_graphicsCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-		{
-			return false;
-		}
 
 		{
 			Sync::ImageMemoryBarrier barrier{
@@ -583,14 +557,11 @@ namespace EmEn::Vulkan
 		{
 			auto * queue = device->getPrimaryQueue(QueuePriority::High);
 
-			VkSemaphore semaphoreHandle = m_semaphore->handle();
-			VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
 			uint64_t graphicsValue = 0;
 
-			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
 			{
-				Tracer::error(ClassId, "Unable to transfer an image region (2/2) !");
+				Tracer::error(ClassId, "Unable to transfer an image region !");
 
 				return false;
 			}
