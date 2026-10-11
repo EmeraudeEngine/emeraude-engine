@@ -51,4 +51,5 @@ compute device again.
 Measured with `Core/Physics/EnableAcceleration = true`, validation ON, `balls-of-steel` and `sponza`: Linux RTX 3070 Ti
 and Windows RTX 3500 Ada + Intel RaptorLake-S (forced) — the physics TransferManager comes up and terminates
 gracefully, 0 VUID (no 01937 / 05137), exit 0. macOS (MoltenVK) stops earlier, at the compute device's missing
-`VK_KHR_portability_subset` (item compute-device-missing-portability-subset), and exits 0.
+`VK_KHR_portability_subset`, and exits 0 — fixed 2026-10-12 (`Instance::requestPortabilitySubset()`, caution-points
+§ Every logical device enables VK_KHR_portability_subset).

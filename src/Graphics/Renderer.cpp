@@ -242,6 +242,25 @@ namespace EmEn::Graphics
 		}
 	}
 
+	void
+	Renderer::enableTBNSpaceRendering (bool state) noexcept
+	{
+		if ( state && !this->isTBNSpaceRenderingAvailable() )
+		{
+			Tracer::warning(ClassId, "The TBN space rendering needs the geometry shader stage, which the device does not enable: request refused.");
+
+			return;
+		}
+
+		m_TBNSpaceRenderingEnabled = state;
+	}
+
+	bool
+	Renderer::isTBNSpaceRenderingAvailable () const noexcept
+	{
+		return m_device != nullptr && m_device->geometryShaderEnabled();
+	}
+
 	bool
 	Renderer::initializeSubServices () noexcept
 	{

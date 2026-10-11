@@ -520,6 +520,20 @@ namespace EmEn::Vulkan
 			static bool checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & score) noexcept;
 
 			/**
+			 * @brief Enables VK_KHR_portability_subset for a logical device when its physical device advertises it, with
+			 * every portability feature the physical device supports. Shared by every logical device creation.
+			 * @note The specification makes the extension mandatory when advertised (VUID-VkDeviceCreateInfo-pProperties-04451:
+			 * MoltenVK, some Windows drivers and software renderers), and every portability feature disabled unless the
+			 * feature structure requests it: requesting exactly what the device reports is maximal and safe.
+			 * @param physicalDevice A reference to the physical device the logical device is created on.
+			 * @param extensions A writable reference to the device extensions the logical device will enable.
+			 * @param requirements A writable reference to the device requirements (its feature chain).
+			 * @return bool True when the extension was advertised and is now requested.
+			 */
+			[[nodiscard]]
+			static bool requestPortabilitySubset (const PhysicalDevice & physicalDevice, std::vector< const char * > & extensions, DeviceRequirements & requirements) noexcept;
+
+			/**
 			 * @brief Checks the device extensions presence for a specialized device selector.
 			 * @param physicalDevice A reference to the physical device smart pointer.
 			 * @param requiredExtensions A reference to a list of required extensions.

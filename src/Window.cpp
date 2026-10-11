@@ -320,7 +320,7 @@ namespace EmEn
 		/* NOTE: The window starts non-visible. */
 		glfwShowWindow(m_handle.get());
 
-#if IS_MACOS
+#if IS_MACOS || IS_WINDOWS
 		/* NOTE: A sleeping display makes GLFW lose its monitor: the display stays awake while the window exists
 		 * (owner decision 2026-10-11). */
 		if ( settings.getOrSetDefault< bool >(WindowPreventDisplaySleepKey, DefaultWindowPreventDisplaySleep) )
@@ -331,7 +331,7 @@ namespace EmEn
 			}
 			else
 			{
-				Tracer::warning(ClassId, "Unable to keep the display awake (IOKit power assertion refused).");
+				Tracer::warning(ClassId, "Unable to keep the display awake (the system refused the power assertion).");
 			}
 		}
 #endif
@@ -387,7 +387,7 @@ namespace EmEn
 			}
 		}
 
-#if IS_MACOS
+#if IS_MACOS || IS_WINDOWS
 		m_displaySleepInhibitor.release();
 #endif
 

@@ -37,6 +37,7 @@
 	#include <optional>
 #endif
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -390,11 +391,16 @@ namespace EmEn::PlatformSpecific
 	 */
 	[[nodiscard]]
 	DisplayWakeResult wakeDisplays (uint32_t timeoutMilliseconds) noexcept;
+#endif
 
+#if IS_MACOS || IS_WINDOWS
 	/**
-	 * @brief Keeps the display awake while held: an IOKit power assertion PreventUserIdleDisplaySleep (what SDL does by
-	 * default while a window is open). Owner decision 2026-10-11: the display stays awake while the engine window
-	 * exists (setting Core/Video/Window/PreventDisplaySleep); a sleeping display made GLFW lose its monitor.
+	 * @brief Keeps the display awake while held (what SDL does by default while a window is open). Owner decision
+	 * 2026-10-11: the display stays awake while the engine window exists (setting Core/Video/Window/PreventDisplaySleep);
+	 * a sleeping display made GLFW lose its monitor.
+	 * @details macOS: an IOKit power assertion PreventUserIdleDisplaySleep. Windows: a power request object
+	 * (PowerCreateRequest() + PowerSetRequest(PowerRequestDisplayRequired)), owned by this object rather than by the
+	 * calling thread as SetThreadExecutionState() would be, so it does not depend on which thread releases it.
 	 * @note Two-phase: acquire() takes the assertion, release() or the destructor gives it back. Not copyable nor
 	 * movable. Main thread (the window's).
 	 */
@@ -422,7 +428,7 @@ namespace EmEn::PlatformSpecific
 
 			/**
 			 * @brief Takes the assertion. Idempotent.
-			 * @return bool False when IOKit refused it.
+			 * @return bool False when the system refused it (IOKit, or the Windows power request API).
 			 */
 			[[nodiscard]]
 			bool acquire () noexcept;
@@ -445,9 +451,30 @@ namespace EmEn::PlatformSpecific
 
 		private:
 
+#if IS_MACOS
 			uint32_t m_assertion{0}; /**< The IOPMAssertionID (an uint32_t, checked in Helpers.mac.cpp). */
+#else
+			HANDLE m_powerRequest{nullptr}; /**< The power request object, owned while active. */
+#endif
 			bool m_active{false};
 	};
+#endif
+
+#if IS_MACOS
+	/**
+	 * @brief Puts the CALLING thread under the Mach time-constraint (real-time) policy, so that its timed waits wake on
+	 * time.
+	 * @note Every other wait of a macOS thread (nanosleep, std::this_thread::sleep_until, mach_wait_until), whatever its
+	 * QoS class, is coalesced: measured on an Apple M6 (macOS 27), a 16.7 ms wait overshoots by 5 to 8 ms; under this
+	 * policy, by 0.012 ms. The kernel demotes a thread that keeps running longer than its computation budget
+	 * (fail-safe), so a mis-declared budget costs precision, never the system.
+	 * Reference: Apple, "Mach Scheduling and Thread Interfaces" (Kernel Programming Guide) and <mach/thread_policy.h>.
+	 * @param period The interval between the starts of two computations. Strictly positive, at most one second.
+	 * @param computation The CPU time needed in each period. Strictly positive, not above period.
+	 * @return bool False when the arguments are refused (period above one second included) or the kernel refused the policy.
+	 */
+	[[nodiscard]]
+	EMEN_API bool setCurrentThreadTimeConstraint (std::chrono::nanoseconds period, std::chrono::nanoseconds computation) noexcept;
 #endif
 
 	/**

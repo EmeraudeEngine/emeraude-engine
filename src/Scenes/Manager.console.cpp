@@ -1626,6 +1626,11 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("No active scene !");
 				}
 
+				if ( state && !m_resourceManager.graphicsRenderer().isTBNSpaceRenderingAvailable() )
+				{
+					return Console::CommandResult::error("The TBN space rendering is unavailable: the device has no geometry shader stage !");
+				}
+
 				m_resourceManager.graphicsRenderer().enableTBNSpaceRendering(state);
 
 				size_t toggled = 0;

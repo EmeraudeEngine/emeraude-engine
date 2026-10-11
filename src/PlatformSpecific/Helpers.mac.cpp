@@ -29,10 +29,13 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cstdlib>
 #include <string>
 #include <filesystem>
+#include <limits>
+#include <optional>
 #include <span>
 #include <thread>
 #include <type_traits>
@@ -41,6 +44,10 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <IOKit/pwr_mgt/IOPMLib.h>
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <mach/thread_policy.h>
+#include <pthread.h>
 #include <sys/syslimits.h>
 
 /* Local inclusions. */
@@ -244,5 +251,57 @@ namespace EmEn::PlatformSpecific
 
 		m_assertion = kIOPMNullAssertionID;
 		m_active = false;
+	}
+
+	bool
+	setCurrentThreadTimeConstraint (std::chrono::nanoseconds period, std::chrono::nanoseconds computation) noexcept
+	{
+		/* NOTE: One second bounds the conversion below (no overflow) and is far above any real-time period. */
+		constexpr std::chrono::nanoseconds MaximumPeriod{std::chrono::seconds{1}};
+
+		if ( period.count() <= 0 || period > MaximumPeriod || computation.count() <= 0 || computation > period )
+		{
+			return false;
+		}
+
+		mach_timebase_info_data_t timebase{};
+
+		if ( mach_timebase_info(&timebase) != KERN_SUCCESS || timebase.numer == 0 || timebase.denom == 0 )
+		{
+			return false;
+		}
+
+		/* NOTE: The policy speaks in Mach absolute time units (ticks = ns × denom / numer), in 32 bits. */
+		const auto toTicks = [&timebase] (std::chrono::nanoseconds duration) noexcept -> std::optional< uint32_t > {
+			const auto ticks = static_cast< uint64_t >(duration.count()) * timebase.denom / timebase.numer;
+
+			if ( ticks == 0 || ticks > std::numeric_limits< uint32_t >::max() )
+			{
+				return std::nullopt;
+			}
+
+			return static_cast< uint32_t >(ticks);
+		};
+
+		const auto periodTicks = toTicks(period);
+		const auto computationTicks = toTicks(computation);
+
+		if ( !periodTicks || !computationTicks )
+		{
+			return false;
+		}
+
+		thread_time_constraint_policy_data_t policy{};
+		policy.period = *periodTicks;
+		policy.computation = *computationTicks;
+		/* NOTE: The computation may end anywhere in its period. */
+		policy.constraint = *periodTicks;
+		policy.preemptible = 1;
+
+		/* NOTE: thread_policy_t is an integer_t array: the policy is handed over as its words (std::bit_cast checks
+		 * the size at compile time). */
+		auto words = std::bit_cast< std::array< integer_t, THREAD_TIME_CONSTRAINT_POLICY_COUNT > >(policy);
+
+		return thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_TIME_CONSTRAINT_POLICY, words.data(), THREAD_TIME_CONSTRAINT_POLICY_COUNT) == KERN_SUCCESS;
 	}
 }

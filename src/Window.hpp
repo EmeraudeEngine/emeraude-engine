@@ -53,7 +53,7 @@
 #include "Identification.hpp"
 #include "StaticVector.hpp"
 #include "Vulkan/Surface.hpp"
-#if IS_MACOS
+#if IS_MACOS || IS_WINDOWS
 	#include "PlatformSpecific/Helpers.hpp"
 #endif
 
@@ -1050,9 +1050,11 @@ namespace EmEn
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
 #endif
-#if IS_MACOS
+#if IS_MACOS || IS_WINDOWS
 			/* Held while the window exists when Core/Video/Window/PreventDisplaySleep is true (owner decision 2026-10-11). */
 			PlatformSpecific::DisplaySleepInhibitor m_displaySleepInhibitor;
+#endif
+#if IS_MACOS
 			/* The "quit" Apple Event (AppleScript, the end of the user session) as a system stop, answered when the window is
 			 * released (initializeNativeWindow() / releaseNativeWindow()). */
 			std::unique_ptr< QuitAppleEventHandler, QuitAppleEventHandlerDeleter > m_quitAppleEventHandler;

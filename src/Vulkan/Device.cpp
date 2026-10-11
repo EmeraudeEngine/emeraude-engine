@@ -376,6 +376,7 @@ namespace EmEn::Vulkan
 		});
 
 		m_hostQueryResetEnabled = requirements.featuresVK12().hostQueryReset == VK_TRUE;
+		m_geometryShaderEnabled = requirements.featuresVK10().geometryShader == VK_TRUE;
 
 		/* NOTE: Detect if the mesh shader extension was enabled on this device (optional stages). */
 		m_meshShadersEnabled = std::ranges::any_of(extensions, [] (const char * ext) {

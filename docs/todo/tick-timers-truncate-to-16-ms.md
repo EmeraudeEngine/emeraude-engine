@@ -30,4 +30,5 @@ a `Sequence(30000)` 31.25 s, as measured for basic-scenery's flying lights), `Au
 
 - Do not "fix" it with a float accumulator (project rule: no floating-point accumulation — the error grows with time).
 - The measured macOS smoke period (20.8 s for a 15 s sequence) is only partly this (15.6 s): the rest points at the logic
-  running below 60 ticks per second under load — item `logic-tick-rate-under-render-load`.
+  running below 60 ticks per second (the macOS sleep overshoot, fixed 2026-10-12 by an absolute deadline: caution-points
+  § macOS coalesces every non-real-time timed wait) — re-measure the smoke period on top of it.

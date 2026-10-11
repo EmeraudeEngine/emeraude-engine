@@ -3630,6 +3630,10 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 >   `waitpid()`: "Failed to run a subprocess : Interrupted system call" on macOS for an `open` that had run (a handled
 >   signal during the wait; `poll()` is never restarted, `SA_RESTART` or not). Proof (Linux bench, SIGALRM every 2 ms
 >   without SA_RESTART): the plain wait fails at the first interruption, the resumed one ends normally after 150.
+>   The ONLY engine path that runs `open` / `xdg-open` is the Shift+F5…F8 key release in `Core::onKeyRelease()` (settings
+>   file, config, cache and user-data folders → `openTextFile()` / `openFolder()`); an unexplained `open` during a demo
+>   load is such a key, typed or injected through the console (`keyPress` / `keyUp` carry modifiers) — macOS peer,
+>   M6, 2026-10-11: a full `terrain` load with no input runs none, `keyPress(296, 1)` spawns one and it succeeds.
 
 ### Fixed: BLAS builds raced buffer uploads across transfer queues → DEVICE_LOST at load (Jul 2026)
 
@@ -4452,6 +4456,15 @@ entity; GPU resources die behind the fence, on the render thread. Full contract:
 >   already expressing the intent. ⚠️ That makes the lane a **launch** decision: a BLAS is built
 >   when a geometry loads and cannot be added later, so a runtime switch to the traced lane is
 >   refused rather than silently rendering nothing.
+
+### The GPU profiler lists its scopes in command-stream order, whatever frame a scope first appeared in (Oct 2026)
+
+`GPUProfiler::accumulate()` appended a label seen for the first time at the END of its flat list, each entry carrying
+only its own depth: a scope absent from the first harvested frames (`DeferredLights` before a light is resolved,
+everything after a `getGPUTimings("reset")`) was printed after `FinalComposite`, and its depth read as a child of it
+(macOS peer, M2, `labyrinth`; reproduced on the M6 by `setDeferredPunctualLights(0)`, `getGPUTimings("reset")`,
+`setDeferredPunctualLights(1)`). **Fix:** a new label is inserted after the furthest entry of the same frame's previous
+records. A lower sample count on such a scope is normal: it exists only in the frames that recorded it.
 
 ## Shader/GLSL Pitfalls
 
@@ -5613,7 +5626,7 @@ https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedica
 investigated as an engine defect. The item `x11-multimonitor-nvidia-freeze` stays parked until someone checks a
 current driver.
 
-### macOS: a sleeping display is woken to start, and kept awake while the window is open (2026-10-11)
+### macOS: a sleeping display is woken to start, and kept awake while the window is open (Windows too) (2026-10-11)
 
 GLFW skips a sleeping display when it lists the monitors (`dependencies/glfw/src/cocoa_monitor.m`,
 `CGDisplayIsAsleep()`): a launch while the display slept failed with "There is no monitor on the system !", exit 1.
@@ -5625,8 +5638,15 @@ Owner decisions 2026-10-11: `PlatformManager::onInitialize()` calls `PlatformSpe
 window exists — a downstream application left open must not keep the user's display awake). Proof on the M6 (macOS peer, engine fed169e5): `pmset displaysleepnow`, then an unattended launch →
 "Every display was asleep : woken to create the window." 0.30 s after the launch, scene loaded at 1.74 s, exit 0;
 `pmset -g assertions` lists "Emeraude engine: a window is open" during the run and nothing after; with the setting
-false, no assertion. A 38-demo sweep ran with the display left to the engine. Windows and Linux: item
-display-sleep-inhibit-windows-linux.
+false, no assertion. A 38-demo sweep ran with the display left to the engine.
+Windows (2026-10-11): the same `DisplaySleepInhibitor` holds a power request object (`PowerCreateRequest()` +
+`PowerSetRequest(PowerRequestDisplayRequired)`, cleared and closed by `release()` / the destructor), chosen over
+`SetThreadExecutionState()` because it belongs to the object, not to the calling thread. `powercfg /requests` needs an
+administrator; `CallNtPowerInformation(SystemExecutionState)` does not, and reads `ES_DISPLAY_REQUIRED` (0x2) while a
+request is held. Proof (Windows peer, RTX 3500 Ada, validation on, `default` demo): setting true, 0x0 before the launch,
+0x2 during, 0x0 after the exit, "The display is kept awake while the window is open." in the log; setting false, 0x0
+throughout; the unpatched engine read 0x0 with the setting true. Exit 0, 0 VUID in both runs. Linux: item
+display-sleep-inhibit-linux.
 
 ### The engine never ends the process: a failed start is RECORDED, `main()` exits (2026-10-11)
 
@@ -5902,6 +5922,21 @@ a runtime scene switch from the menu completes in 2.8 s, load included; Linux 0.
 BEFORE it clears `m_isRenderingLoopRunning`, so the scene is torn down under a live render loop.
 ⚠️ A re-entrant `withSharedActiveScene()` on the same thread is now a deadlock on every OS once a
 writer is announced (it was undefined behaviour already).
+
+### macOS coalesces every non-real-time timed wait by 5 to 8 ms: the logic loop ran at 44 cycles/s (Oct 2026)
+
+`Core::logicsTask()` slept `sleep_for(period - work)`: every overshoot added to the cycle. On the Mac mini M6 (macOS 27),
+a 16.7 ms wait overshoots by 5 to 8 ms whatever the call (`nanosleep`, `sleep_until`, `mach_wait_until`) and whatever the
+QoS class (`USER_INTERACTIVE` included) — `forest` ran 44.1-44.2 scene cycles/s (M2: 43.5-45), the simulation at 73 % of
+the wall clock. Only the Mach time-constraint policy removes it (standalone bench: overshoot median 0.012 ms).
+**Fix:** an ABSOLUTE deadline (`sleep_until(nextCycle)`, a late wake-up shortens the next wait; a debt over 4 cycles is
+given up instead of a burst; the paused time is not owed) plus, on macOS,
+`PlatformSpecific::setCurrentThreadTimeConstraint(period, period / 2)` called by the logic thread on itself (a refusal is
+a warning: the deadline alone still keeps the rate). Measured: 604 cycles per 10 s × 3 = 60.00 cycles/s, the thread at
+priority 97R in `ps -M`. ⚠️ A relative `sleep_for(period - work)` is wrong on every OS (Windows ran 56.3 cycles/s).
+Linux (RTX 3070 Ti, `forest`, 2026-10-12, the deadline only): 600 / 600 / 601 cycles in 3 × 10 s = 59.96-60.08 cycles/s.
+⚠️ Measure a tick rate with a COUNTER (`getNodePhysics().sceneCycle` over wall-clock seconds), never by eye; the physics
+bench compares BY CYCLE (`physics-bench.py --compare`), so the rate changes its wall-clock pace, never its results.
 
 ## Vector::normalize() at any scale (2026-10-09, base `83878a5`)
 
@@ -7725,6 +7760,26 @@ Two faults of the first bake, both silent: the atlas was 100 % covered (the rend
 `ImposterBake` now overrides it with transparent black), and the aspen and pine views were nearly empty (baked at
 LOD 0, whose cards fall under a pixel of a 128 px view; the camera now stands at 280 m so `selectLODLevel()` picks the
 coarsest level — the one the imposter replaces). Graphics `AGENTS.md` § 15e.
+
+### Every logical device enables VK_KHR_portability_subset when advertised — the compute device too (Oct 2026)
+
+The physics compute device (`Instance::getComputeDevice()`) was created with an empty extension list: on MoltenVK
+`VUID-VkDeviceCreateInfo-pProperties-04451`, "Unable to find a suitable compute device", no physics acceleration.
+`Instance::requestPortabilitySubset()` is now the ONE place that enables the extension AND requests every portability
+feature the physical device reports; the graphics and the compute device creations both call it. Proof on the M6
+(`Core/Physics/EnableAcceleration = true`, validation ON): `balls-of-steel` and `sponza`, 0 VUID, the
+`PhysicsManagerService` and its `VulkanTransferManagerService` up. A new logical device creation must call it too.
+
+### The TBN space display is gated on the device's geometry stage (Oct 2026)
+
+On a device without `geometryShader` (MoltenVK) `coordinates-debug` still generated the TBN space program per instance and
+per attempt: 417 "Unable to generate the TBN space program", 100 VUIDs (5 kinds × 20, the layer's duplicate cap), and a
+`UNASSIGNED-Threading-MultipleThreads-Write` at `vkDestroyDevice`. **Fix:** `Device::geometryShaderEnabled()`;
+`Renderer::isTBNSpaceRenderingAvailable()` is THE gate — `enableTBNSpaceRendering(true)` is refused with one warning,
+`RenderableInstance::Abstract` never generates the program, the `enableTBN` console command answers an error. Proof on
+the M6: 0 generation attempt, 0 VUID, 0 UNASSIGNED. The threading report was not a live race: Core drains the pool twice
+and joins the rendering and logic threads before the device is destroyed, the last failing compilation was long before;
+it vanished with the failing `vkCreateShaderModule` calls.
 
 ## Related Documentation
 

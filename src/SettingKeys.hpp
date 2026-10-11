@@ -382,7 +382,7 @@ namespace EmEn
 			/* Gamma correction applied in windowed mode. */
 			constexpr auto WindowGammaKey{"Core/Video/Window/Gamma"};
 			constexpr auto DefaultWindowGamma{1.0F};
-			/* Keep the display awake while the window is open (macOS; Windows and Linux: item display-sleep-inhibit-windows-linux).
+			/* Keep the display awake while the window is open (macOS and Windows; Linux: item display-sleep-inhibit-linux).
 			 * Off by default (owner decision 2026-10-11): an engine application left open must not keep the user's display
 			 * awake unless it asks for it (an application sets its own default before the window exists). */
 			constexpr auto WindowPreventDisplaySleepKey{"Core/Video/Window/PreventDisplaySleep"};

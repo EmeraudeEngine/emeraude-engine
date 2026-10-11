@@ -658,4 +658,64 @@ namespace EmEn::PlatformSpecific
 	{
 		return nullptr;
 	}
+
+	DisplaySleepInhibitor::~DisplaySleepInhibitor ()
+	{
+		this->release();
+	}
+
+	bool
+	DisplaySleepInhibitor::acquire () noexcept
+	{
+		if ( m_active )
+		{
+			return true;
+		}
+
+		/* NOTE: REASON_CONTEXT takes a non-const LPWSTR; the string is copied by PowerCreateRequest(). */
+		wchar_t reason[] = L"Emeraude engine: a window is open";
+
+		REASON_CONTEXT context{};
+		context.Version = POWER_REQUEST_CONTEXT_VERSION;
+		context.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
+		context.Reason.SimpleReasonString = reason;
+
+		const HANDLE request = PowerCreateRequest(&context);
+
+		if ( request == INVALID_HANDLE_VALUE )
+		{
+			TraceError{TracerTag} << "PowerCreateRequest() failed (error " << GetLastError() << ") !";
+
+			return false;
+		}
+
+		if ( PowerSetRequest(request, PowerRequestDisplayRequired) == FALSE )
+		{
+			TraceError{TracerTag} << "PowerSetRequest(PowerRequestDisplayRequired) failed (error " << GetLastError() << ") !";
+
+			static_cast< void >(CloseHandle(request));
+
+			return false;
+		}
+
+		m_powerRequest = request;
+		m_active = true;
+
+		return true;
+	}
+
+	void
+	DisplaySleepInhibitor::release () noexcept
+	{
+		if ( !m_active )
+		{
+			return;
+		}
+
+		static_cast< void >(PowerClearRequest(m_powerRequest, PowerRequestDisplayRequired));
+		static_cast< void >(CloseHandle(m_powerRequest));
+
+		m_powerRequest = nullptr;
+		m_active = false;
+	}
 }

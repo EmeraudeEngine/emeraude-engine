@@ -1064,7 +1064,8 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
-		if ( this->isDisplayTBNSpaceEnabled() )
+		/* NOTE: A device without the geometry stage (MoltenVK) cannot build the TBN space program: never attempted. */
+		if ( this->isDisplayTBNSpaceEnabled() && renderer.isTBNSpaceRenderingAvailable() )
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
@@ -1097,7 +1098,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::getReadyForTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept
 	{
-		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
+		if ( !renderer.isTBNSpaceRenderingAvailable() || m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
 		{
 			return false;
 		}

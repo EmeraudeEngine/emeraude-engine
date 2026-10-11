@@ -824,14 +824,20 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Controls the state of the TBN space rendering.
-			 * @note Visual debug functionality, this needs a geometry shader stage support from the GPU.
+			 * @note Visual debug functionality, this needs a geometry shader stage support from the GPU: on a device
+			 * without it (MoltenVK), enabling is refused with a warning and the state stays disabled.
+			 * @see isTBNSpaceRenderingAvailable()
 			 * @param state The state.
 			 */
-			void
-			enableTBNSpaceRendering (bool state) noexcept
-			{
-				m_TBNSpaceRenderingEnabled = state;
-			}
+			void enableTBNSpaceRendering (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the TBN space rendering can run: the device enabled the geometry stage it needs.
+			 * @note THE gate of the TBN space display: no TBN space program is generated when this is false.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isTBNSpaceRenderingAvailable () const noexcept;
 
 			/**
 			 * @brief Returns whether the TBN space rendering is enabled.

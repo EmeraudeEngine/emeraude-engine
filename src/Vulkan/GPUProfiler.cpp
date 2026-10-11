@@ -27,7 +27,9 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdio>
+#include <iterator>
 #include <limits>
 
 /* Local inclusions. */
@@ -208,6 +210,10 @@ namespace EmEn::Vulkan
 
 		const std::scoped_lock lock{m_accumulatedAccess};
 
+		/* NOTE: The records are in command-stream order: each new label is placed after the entries of this frame's
+		 * previous records, so the display order follows the stream whatever frame a scope first appeared in. */
+		std::size_t insertPosition = 0;
+
 		for ( const auto & record : frame.records )
 		{
 			const auto begin = results[record.beginQuery];
@@ -218,7 +224,7 @@ namespace EmEn::Vulkan
 			const auto ticks = (end - begin) & m_timestampMask;
 			const auto milliseconds = static_cast< float >(static_cast< double >(ticks) * m_timestampPeriodNS * 1e-6);
 
-			this->accumulate(record.label.data(), record.depth, milliseconds);
+			insertPosition = std::max(insertPosition, this->accumulate(record.label.data(), record.depth, milliseconds, insertPosition) + 1);
 		}
 	}
 
@@ -387,18 +393,19 @@ namespace EmEn::Vulkan
 		m_accumulated.clear();
 	}
 
-	void
-	GPUProfiler::accumulate (const char * label, uint32_t depth, float milliseconds) noexcept
+	std::size_t
+	GPUProfiler::accumulate (const char * label, uint32_t depth, float milliseconds, std::size_t insertPosition) noexcept
 	{
-		/* Linear scan: the accumulator holds at most MaxScopesPerFrame entries and the
-		 * first-seen order IS the display order (matches the command stream). */
+		/* Linear scan: the accumulator holds at most MaxScopesPerFrame entries. */
 		const auto entry = std::ranges::find_if(m_accumulated, [label] (const auto & item) {
 			return item.first == label;
 		});
 
 		if ( entry == m_accumulated.end() )
 		{
-			m_accumulated.emplace_back(label, Accumulated{
+			const auto position = std::min(insertPosition, m_accumulated.size());
+
+			m_accumulated.emplace(m_accumulated.begin() + static_cast< std::ptrdiff_t >(position), label, Accumulated{
 				.lastMS = milliseconds,
 				.averageMS = milliseconds,
 				.maximumMS = milliseconds,
@@ -406,7 +413,7 @@ namespace EmEn::Vulkan
 				.depth = depth
 			});
 
-			return;
+			return position;
 		}
 
 		auto & stats = entry->second;
@@ -415,5 +422,7 @@ namespace EmEn::Vulkan
 		stats.maximumMS = std::max(stats.maximumMS, milliseconds);
 		stats.sampleCount++;
 		stats.depth = depth;
+
+		return static_cast< std::size_t >(std::distance(m_accumulated.begin(), entry));
 	}
 }

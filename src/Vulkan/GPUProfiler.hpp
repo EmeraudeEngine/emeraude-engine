@@ -297,7 +297,7 @@ namespace EmEn::Vulkan
 			};
 
 			/**
-			 * @brief Rolling statistics of one label (display order = first-seen order).
+			 * @brief Rolling statistics of one label (display order = command-stream order, see accumulate()).
 			 */
 			struct Accumulated
 			{
@@ -310,11 +310,17 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Folds one harvested duration into the accumulator.
+			 * @note A label seen for the first time is inserted at insertPosition, right after the entries of the scopes
+			 * recorded before it in the same frame — never at the end: a scope that appears only in later frames
+			 * (DeferredLights once a light is resolved) would otherwise be listed after the last scope, and its depth
+			 * would read as a child of that one.
 			 * @param label The scope label.
 			 * @param depth The scope nesting depth.
 			 * @param milliseconds The measured duration.
+			 * @param insertPosition Where a new label goes: one past the furthest entry of this frame's previous records.
+			 * @return std::size_t The entry index of the label.
 			 */
-			void accumulate (const char * label, uint32_t depth, float milliseconds) noexcept;
+			std::size_t accumulate (const char * label, uint32_t depth, float milliseconds, std::size_t insertPosition) noexcept;
 
 			std::vector< FrameData > m_frames;
 			std::vector< uint32_t > m_openScopes;

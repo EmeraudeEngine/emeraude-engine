@@ -166,6 +166,22 @@ namespace EmEn
 	Core::logicsTask () noexcept
 	{
 		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{WorldPhysicsUpdateCycleDurationUS< uint64_t >};
+		/* NOTE: The logic may fall behind (a long cycle, a stalled system) and then runs its missed cycles back to back to
+		 * stay on the wall clock; past this debt it gives the missed time up instead of a long burst. */
+		constexpr auto maximumCatchUp = logicsUpdateFrequency * 4;
+
+#if IS_MACOS
+		/* NOTE: A non-real-time wait of a macOS thread is coalesced (a 16.7 ms wait overshoots by 5 to 8 ms on an M6):
+		 * the time-constraint policy makes every cycle start on time. The budget is half a cycle (fail-safe: the kernel
+		 * demotes a thread that keeps running longer). See docs/caution-points.md (Platform-Specific). */
+		if ( !PlatformSpecific::setCurrentThreadTimeConstraint(logicsUpdateFrequency, logicsUpdateFrequency / 2) )
+		{
+			Tracer::warning(ClassId, "[THREAD] The logics thread runs without the time-constraint policy: its cycles may start late (the cycle rate stays on the wall clock).");
+		}
+#endif
+
+		/* NOTE: An ABSOLUTE deadline: a late wake-up shortens the next wait instead of adding to every cycle. */
+		auto nextCycle = std::chrono::steady_clock::now();
 
 		while ( m_isLogicsLoopRunning )
 		{
@@ -174,10 +190,11 @@ namespace EmEn
 				/* NOTE: Fake an engine cycle update based on 30Hz. */
 				std::this_thread::sleep_for(std::chrono::milliseconds{33});
 
+				/* NOTE: The paused time is not owed to the logic. */
+				nextCycle = std::chrono::steady_clock::now();
+
 				continue;
 			}
-
-			const auto top = std::chrono::steady_clock::now();
 
 			{
 				/* NOTE: Print a warning if this loop takes more than 16.66 ms, which means we are below 60Hz. */
@@ -208,9 +225,15 @@ namespace EmEn
 			}
 
 			/* NOTE: Let sleep the thread until the next update. */
-			if ( const auto duration = std::chrono::steady_clock::now() - top; duration < logicsUpdateFrequency )
+			nextCycle += logicsUpdateFrequency;
+
+			if ( const auto now = std::chrono::steady_clock::now(); now < nextCycle )
 			{
-				std::this_thread::sleep_for(logicsUpdateFrequency - duration);
+				std::this_thread::sleep_until(nextCycle);
+			}
+			else if ( now - nextCycle > maximumCatchUp )
+			{
+				nextCycle = now;
 			}
 		}
 

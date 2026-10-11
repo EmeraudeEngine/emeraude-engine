@@ -317,6 +317,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the Vulkan 1.0 `geometryShader` feature is enabled (the geometry stage).
+			 * @note OPTIONAL: requested when the device advertises it (never on MoltenVK). The TBN space display needs it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			geometryShaderEnabled () const noexcept
+			{
+				return m_geometryShaderEnabled;
+			}
+
+			/**
 			 * @brief Registers the renderer's deferred-destruction queue (nullptr unregisters it).
 			 * @note Destroying a GPU object still written by a pending upload goes through it
 			 * (destroyAfter()). The renderer unregisters it BEFORE flushing it at its termination.
@@ -958,6 +970,7 @@ namespace EmEn::Vulkan
 			bool m_rayTracingEnabled{false};
 			bool m_meshShadersEnabled{false};
 			bool m_hostQueryResetEnabled{false};
+			bool m_geometryShaderEnabled{false};
 			bool m_externalMemoryWin32Enabled{false};
 			bool m_metalObjectsEnabled{false};
 	};
