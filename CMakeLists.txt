@@ -29,6 +29,13 @@ else ()
 	set(BINARY_NAME Emeraude)
 endif ()
 
+# NOTE: An explicit macOS SDK, set before project(). Without -isysroot (CMake 4 no longer sets one), Apple clang adds a
+# USER -I/usr/local/include, searched before every -isystem: an installed Vulkan SDK's or Homebrew's headers there won
+# over the external dependencies' (measured 2026-10-11: glslang and vulkan headers of a 1.4.357 SDK in /usr/local).
+if ( CMAKE_HOST_APPLE AND NOT CMAKE_OSX_SYSROOT )
+	set(CMAKE_OSX_SYSROOT "macosx" CACHE STRING "The macOS SDK (resolved by xcrun)." FORCE)
+endif ()
+
 project(
 	${BINARY_NAME}
 	VERSION 1.0.0
