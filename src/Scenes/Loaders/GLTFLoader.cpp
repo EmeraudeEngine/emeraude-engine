@@ -80,6 +80,8 @@
 #include "VertexFactory/Shape.hpp"
 #include "FastJSON.hpp"
 #include "IO/IO.hpp"
+#include "Network/PercentEncoding.hpp"
+#include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
@@ -114,11 +116,17 @@ namespace
 		return std::to_integer< uint32_t >(bytes[offset]) | (std::to_integer< uint32_t >(bytes[offset + 1]) << 8U) | (std::to_integer< uint32_t >(bytes[offset + 2]) << 16U) | (std::to_integer< uint32_t >(bytes[offset + 3]) << 24U);
 	}
 
-	/* Locates every buffer of a glTF in a file, from the model's OWN JSON (fastgltf keeps either a copy or a view of
-	 * the bytes, depending on its version): the BIN chunk of a .glb (the buffer without "uri"), or an external .bin.
-	 * A data: URI buffer, or anything unreadable, gets no location. */
-	std::vector< std::optional< BufferLocation > >
-	locateBuffers (const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept
+	/* The model's OWN JSON (fastgltf keeps either a copy or a view of the bytes, depending on its version): the whole
+	 * file of a .gltf, the JSON chunk of a .glb, with the offset of its BIN chunk. */
+	struct ModelJSON final
+	{
+		Json::Value root;
+		std::optional< uint64_t > binDataOffset;
+	};
+
+	/* Reads the model's JSON. nullopt when the file is unreadable or holds no JSON object: fastgltf then reports it. */
+	std::optional< ModelJSON >
+	readModelJSON (const std::filesystem::path & filepath) noexcept
 	{
 		constexpr uint32_t GLBMagic{0x46546C67}; /* "glTF" */
 		constexpr uint32_t JSONChunk{0x4E4F534A}; /* "JSON" */
@@ -126,7 +134,6 @@ namespace
 		constexpr uint64_t GLBHeaderBytes{12};
 		constexpr uint64_t ChunkHeaderBytes{8};
 
-		std::vector< std::optional< BufferLocation > > locations;
 		std::string json;
 		std::optional< uint64_t > binDataOffset;
 		std::vector< std::byte > header;
@@ -138,7 +145,7 @@ namespace
 
 			if ( readLE32(header, 16) != JSONChunk || !Base::IO::fileGetRange(filepath, GLBHeaderBytes + ChunkHeaderBytes, jsonLength, jsonBytes) )
 			{
-				return locations;
+				return std::nullopt;
 			}
 
 			json.resize(jsonBytes.size());
@@ -156,17 +163,72 @@ namespace
 		}
 		else if ( !Base::IO::fileGetContents(filepath, json) )
 		{
-			return locations;
+			return std::nullopt;
 		}
 
-		const auto root = Base::FastJSON::getRootFromString(json, 64, true);
+		auto root = Base::FastJSON::getRootFromString(json, 64, true);
 
 		if ( !root.has_value() || !root->isObject() )
+		{
+			return std::nullopt;
+		}
+
+		return ModelJSON{.root = std::move(*root), .binDataOffset = binDataOffset};
+	}
+
+	/* Returns the first buffers[] or images[] uri that is not strict UTF-8 once percent-decoded, nullopt when all are.
+	 * NOTE: A trust-boundary check BEFORE fastgltf (owner decision 2026-10-12, rule C): fastgltf 0.9.1 percent-decodes
+	 * a uri and hands it to std::filesystem::u8path(), which THROWS on invalid UTF-8 with MSVC (an abort: "%FF.bin"
+	 * killed the engine), while POSIX would only answer "file not found". The JSON itself is valid UTF-8 (the parser
+	 * checks it): only a percent-escape can smuggle an invalid byte in. A data: URI is not a path. */
+	std::optional< std::string >
+	findNonUTF8URI (const Json::Value & root) noexcept
+	{
+		constexpr std::array< const char *, 2 > Keys{"buffers", "images"};
+
+		for ( const auto * const key : Keys )
+		{
+			const auto entries = Base::FastJSON::getArray(root, key);
+
+			if ( !entries.has_value() )
+			{
+				continue;
+			}
+
+			for ( const auto & entry : *entries )
+			{
+				const auto uri = entry.isObject() ? Base::FastJSON::getValue< std::string >(entry, "uri") : std::nullopt;
+
+				if ( !uri.has_value() || uri->starts_with("data:") )
+				{
+					continue;
+				}
+
+				if ( !Base::String::isValidUTF8(Base::Network::PercentEncoding::decode(*uri)) )
+				{
+					return uri;
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	/* Locates every buffer of a glTF in a file, from the model's OWN JSON: the BIN chunk of a .glb (the buffer without
+	 * "uri"), or an external .bin. A data: URI buffer, or anything unreadable, gets no location. */
+	std::vector< std::optional< BufferLocation > >
+	locateBuffers (const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept
+	{
+		std::vector< std::optional< BufferLocation > > locations;
+
+		const auto model = readModelJSON(filepath);
+
+		if ( !model.has_value() )
 		{
 			return locations;
 		}
 
-		const auto buffers = Base::FastJSON::getArray(*root, "buffers");
+		const auto buffers = Base::FastJSON::getArray(model->root, "buffers");
 
 		if ( !buffers.has_value() )
 		{
@@ -180,9 +242,9 @@ namespace
 			if ( !uri.has_value() )
 			{
 				/* NOTE: Only the FIRST buffer of a .glb may omit its uri: it is the BIN chunk. */
-				if ( buffer.isObject() && binDataOffset.has_value() && locations.empty() )
+				if ( buffer.isObject() && model->binDataOffset.has_value() && locations.empty() )
 				{
-					locations.emplace_back(BufferLocation{.filepath = filepath, .offset = *binDataOffset});
+					locations.emplace_back(BufferLocation{.filepath = filepath, .offset = *model->binDataOffset});
 				}
 				else
 				{
@@ -202,7 +264,9 @@ namespace
 			/* NOTE: The same resolution as an image's uri (fastgltf decodes the percent-escapes). */
 			const fastgltf::URI parsedURI{std::string_view{*uri}};
 
-			locations.emplace_back(BufferLocation{.filepath = basePath / std::filesystem::path{std::string{parsedURI.path()}}, .offset = 0});
+			/* NOTE: A glTF URI is UTF-8 (glTF 2.0 § 3.1): IO::u8path(), never the narrow path constructor (the ANSI code
+			 * page on Windows). */
+			locations.emplace_back(BufferLocation{.filepath = basePath / Base::IO::u8path(std::string{parsedURI.path()}), .offset = 0});
 		}
 
 		return locations;
@@ -1903,15 +1967,16 @@ namespace EmEn::Scenes::Loaders
 		 * MEASUREMENT, which is the worst failure mode. Same lesson as buildResourceKey() one
 		 * level down: a NAME IS NOT AN IDENTITY, and here the file name is the name.
 		 *
-		 * `lexically_normal()` folds `.` and `..` away and `generic_string()` forces forward
-		 * slashes, so one file yields one key on every platform.
+		 * `lexically_normal()` folds `.` and `..` away and `IO::toGenericU8String()` forces forward
+		 * slashes, so one file yields one key on every platform. UTF-8, never `generic_string()`:
+		 * on Windows that is the ANSI code page, which THROWS (an abort) on a character outside it.
 		 *
 		 * ⚠️ The key is derived from the path AS GIVEN, deliberately: a caller must be able to
 		 * predict it without loading anything — projet-alpha's Fox does exactly that, to skip a
 		 * reload it has already done. Canonicalising to an absolute path would make the key
 		 * machine-dependent and unwritable by hand. The price is that two SPELLINGS of one file
 		 * (a relative and an absolute path) are two keys: pass an asset's path consistently. */
-		m_resourcePrefix = "glTF:" + std::filesystem::path{filepath}.replace_extension().lexically_normal().generic_string() + "/";
+		m_resourcePrefix = "glTF:" + Base::IO::toGenericU8String(std::filesystem::path{filepath}.replace_extension().lexically_normal()) + "/";
 
 		/* stripRootMotion only ever acted on loadAnimationClipsOnly(), which this loader
 		 * does not implement (glTF carries its clips inside the asset, so the split-animation
@@ -1922,12 +1987,24 @@ namespace EmEn::Scenes::Loaders
 			Tracer::warning(ClassId, "LoaderOptions::stripRootMotion has no effect on glTF: the option only applies to loadAnimationClipsOnly(), which this loader does not implement.");
 		}
 
+		/* NOTE: Trust boundary, BEFORE fastgltf: a uri that is not UTF-8 once percent-decoded would make fastgltf abort
+		 * the process on Windows (findNonUTF8URI()). An unreadable model is left to fastgltf, which reports it. */
+		if ( const auto model = readModelJSON(filepath); model.has_value() )
+		{
+			if ( const auto badURI = findNonUTF8URI(model->root); badURI.has_value() )
+			{
+				TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' has a uri that is not UTF-8 once percent-decoded ('" << *badURI << "'), refused !";
+
+				return false;
+			}
+		}
+
 		/* Parse the glTF/glb asset. */
 		auto gltfFile = fastgltf::GltfDataBuffer::FromPath(filepath);
 
 		if ( gltfFile.error() != fastgltf::Error::None )
 		{
-			TraceError{ClassId} << "Failed to open '" << filepath << "' !";
+			TraceError{ClassId} << "Failed to open '" << Base::IO::toU8String(filepath) << "' !";
 
 			return false;
 		}
@@ -1994,7 +2071,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( result.error() != fastgltf::Error::None )
 		{
-			TraceError{ClassId} << "Failed to parse '" << filepath << "' : " << fastgltf::getErrorMessage(result.error());
+			TraceError{ClassId} << "Failed to parse '" << Base::IO::toU8String(filepath) << "' : " << fastgltf::getErrorMessage(result.error());
 
 			/* ⚠️ fastgltf's own message for this case is "One or more extensions are required by the
 			 * glTF but not enabled in the Parser" — it never says WHICH, and the asset is refused
@@ -2017,14 +2094,14 @@ namespace EmEn::Scenes::Loaders
 		/* NOTE: validate() itself indexes a few arrays without a range check: those indices first. */
 		if ( std::string indexError; !hasValidatableIndices(asset, indexError) )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath.string() << "' is invalid, refused : " << indexError << '.';
+			TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' is invalid, refused : " << indexError << '.';
 
 			return false;
 		}
 
 		if ( const auto validation = fastgltf::validate(asset); validation != fastgltf::Error::None )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath.string() << "' is invalid, refused : " << fastgltf::getErrorMessage(validation);
+			TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' is invalid, refused : " << fastgltf::getErrorMessage(validation);
 
 			return false;
 		}
@@ -2032,7 +2109,7 @@ namespace EmEn::Scenes::Loaders
 		/* NOTE: validate() does not check the node hierarchy; the node walks rely on a strict forest. */
 		if ( std::string hierarchyError; !isStrictNodeForest(asset, hierarchyError) )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has an invalid node hierarchy, refused : " << hierarchyError << '.';
+			TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' has an invalid node hierarchy, refused : " << hierarchyError << '.';
 
 			return false;
 		}
@@ -2040,7 +2117,7 @@ namespace EmEn::Scenes::Loaders
 		/* NOTE: validate() does not check the extents either; every accessor read below relies on them. */
 		if ( std::string extentError; !hasConsistentExtents(asset, extentError) )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has inconsistent data extents, refused : " << extentError << '.';
+			TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' has inconsistent data extents, refused : " << extentError << '.';
 
 			return false;
 		}
@@ -2089,7 +2166,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( skinIdx < m_skins.size() && maxJoint != m_meshMaxJointIndex.end() && maxJoint->second >= m_skins[skinIdx].jointCount() )
 				{
-					TraceError{ClassId} << "The glTF '" << filepath.string() << "' has a mesh #" << meshIdx << " whose JOINTS_0 references joint " << maxJoint->second << " of a skin of " << m_skins[skinIdx].jointCount() << " joints, refused !";
+					TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' has a mesh #" << meshIdx << " whose JOINTS_0 references joint " << maxJoint->second << " of a skin of " << m_skins[skinIdx].jointCount() << " joints, refused !";
 
 					m_bufferCache.reset();
 
@@ -2141,7 +2218,7 @@ namespace EmEn::Scenes::Loaders
 		/* NOTE: A view that failed to decode served zeros to its accessors: the data is not the file's. */
 		if ( m_bufferCache->decodeFailed() )
 		{
-			TraceError{ClassId} << "The glTF '" << filepath.string() << "' has a meshopt-compressed buffer view that failed to decode, refused !";
+			TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' has a meshopt-compressed buffer view that failed to decode, refused !";
 
 			m_bufferCache.reset();
 
@@ -2177,7 +2254,7 @@ namespace EmEn::Scenes::Loaders
 		 * indistinguishable from "the asset declares no light", and every diagnosis starts blind
 		 * — the Sponza glTF, for one, declares 24 lights whose intensity is all zero. */
 		TraceDebug{ClassId} <<
-			filepath.filename().string() << " loaded: " <<
+			Base::IO::toU8String(filepath.filename()) << " loaded: " <<
 			output.nodes.size() << " nodes, " <<
 			output.meshes.size() << " meshes, " <<
 			output.skeletons.size() << " skeletons, " <<
@@ -2309,7 +2386,7 @@ namespace EmEn::Scenes::Loaders
 				/* File-based image (external .gltf). */
 				[&] (const fastgltf::sources::URI & uri) -> bool {
 					/* Copy path immediately to avoid string_view lifetime issues. */
-					const std::filesystem::path fullPath = basePath / std::filesystem::path{std::string{uri.uri.path()}};
+					const std::filesystem::path fullPath = basePath / Base::IO::u8path(std::string{uri.uri.path()});
 
 					/* A sidecar .ktx2 is read whole and handed to the KTX2 path ; every other
 					 * format keeps going through PixelFactory, which picks its decoder from the
@@ -2320,7 +2397,7 @@ namespace EmEn::Scenes::Loaders
 
 						if ( !Base::IO::fileGetContents(fullPath, content) )
 						{
-							TraceError{ClassId} << "Unable to read the KTX2 file '" << fullPath << "' !";
+							TraceError{ClassId} << "Unable to read the KTX2 file '" << Base::IO::toU8String(fullPath) << "' !";
 
 							return false;
 						}

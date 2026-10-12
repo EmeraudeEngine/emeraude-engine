@@ -42,6 +42,7 @@
 /* Local inclusions. */
 #include "emeraude_base_config.hpp"
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 #include "Network/HTTPSClient.hpp"
 #include "Network/TrustStore.hpp"
 #include "Settings.hpp"
@@ -148,7 +149,8 @@ namespace EmEn::Net
 		 * not of one service. */
 		const auto bundleFile = m_settings.getOrSetDefault< std::string >(NetCABundleFileKey, DefaultNetCABundleFile);
 
-		if ( !bundleFile.empty() && !Network::TrustStore::applyCABundleFile(m_impl->tlsContext, bundleFile) )
+		/* NOTE: A setting is UTF-8: IO::u8path(), never the implicit narrow path conversion (ANSI on Windows). */
+		if ( !bundleFile.empty() && !Network::TrustStore::applyCABundleFile(m_impl->tlsContext, IO::u8path(bundleFile)) )
 		{
 			TraceWarning{ClassId} << "Unable to load the CA bundle '" << bundleFile << "' (" << NetCABundleFileKey << "), continuing with the system trust store alone.";
 		}

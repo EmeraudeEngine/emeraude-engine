@@ -3200,7 +3200,7 @@ namespace EmEn::Graphics
 
 		if ( !IO::writable(captureDirectory) )
 		{
-			return {.files = {}, .error = "Unable to write in the captures directory " + captureDirectory.string() + ".", .success = false};
+			return {.files = {}, .error = "Unable to write in the captures directory " + Base::IO::toU8String(captureDirectory) + ".", .success = false};
 		}
 
 		const auto & extent = m_swapChain->extent();

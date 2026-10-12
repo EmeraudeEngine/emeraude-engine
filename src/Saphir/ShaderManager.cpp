@@ -813,7 +813,7 @@ namespace EmEn::Saphir
 		 * being one flat pile. Created lazily: a generator that never runs leaves no directory. */
 		if ( generatorClassId != nullptr )
 		{
-			filepath.append(generatorClassId);
+			filepath /= IO::u8path(generatorClassId);
 
 			if ( !IO::createDirectory(filepath) )
 			{
@@ -823,7 +823,7 @@ namespace EmEn::Saphir
 			}
 		}
 
-		filepath.append(filename);
+		filepath /= IO::u8path(filename);
 
 		return filepath;
 	}
@@ -842,7 +842,7 @@ namespace EmEn::Saphir
 		filename += ".bin";
 
 		auto filepath = m_shadersBinariesDirectory;
-		filepath.append(filename);
+		filepath /= IO::u8path(filename);
 
 		return filepath;
 	}
@@ -853,7 +853,7 @@ namespace EmEn::Saphir
 		/* NOTE: Equivalent to String::explode(filename, '_').size() == 2, i.e. the filename
 		 * must contain exactly one '_' (separating the shader name from "<hash>.<ext>"),
 		 * done here without allocating the intermediate std::vector< std::string >. */
-		const auto filename = filepath.filename().string();
+		const auto filename = Base::IO::toU8String(filepath.filename());
 
 		const auto underscorePos = filename.find('_');
 

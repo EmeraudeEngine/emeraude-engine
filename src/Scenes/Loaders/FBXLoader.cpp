@@ -52,6 +52,7 @@
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "IO/IO.hpp"
 #include "Animation/AnimationChannel.hpp"
 #include "Animation/AnimationClip.hpp"
 #include "Animation/Joint.hpp"
@@ -246,7 +247,7 @@ namespace EmEn::Scenes::Loaders
 	bool
 	FBXLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
-		m_resourcePrefix = "FBX:" + filepath.stem().string() + "/";
+		m_resourcePrefix = "FBX:" + Base::IO::toU8String(filepath.stem()) + "/";
 
 		/* Reset the per-asset state: a loader instance is reusable across files, and every
 		 * one of these collections is indexed against the CURRENT scene. Carrying them over
@@ -287,14 +288,14 @@ namespace EmEn::Scenes::Loaders
 		opts.generate_missing_normals = true;
 
 		ufbx_error error{};
-		ufbx_scene * scene = ufbx_load_file(filepath.string().c_str(), &opts, &error);
+		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
 
 		if ( scene == nullptr )
 		{
 			std::array< char, 512 > buffer{};
 			ufbx_format_error(buffer.data(), sizeof(buffer), &error);
 
-			TraceError{ClassId} << "Failed to parse '" << filepath << "' :\n" << buffer.data();
+			TraceError{ClassId} << "Failed to parse '" << Base::IO::toU8String(filepath) << "' :\n" << buffer.data();
 
 			return false;
 		}
@@ -439,20 +440,22 @@ namespace EmEn::Scenes::Loaders
 				/* External file. ufbx exposes the path relative to the loaded FBX
 				 * in `filename`; that is what the engine should resolve first.
 				 * If the FBX referenced a far-away drive, ufbx may have filled
-				 * `absolute_filename` instead — use it as a fallback. */
+				 * `absolute_filename` instead — use it as a fallback.
+				 * NOTE: ufbx strings are UTF-8: IO::u8path(), never the narrow path constructor (the ANSI
+				 * code page on Windows). */
 				std::filesystem::path fullPath;
 
 				if ( tex.filename.length > 0 )
 				{
-					fullPath = basePath / std::filesystem::path{std::string{tex.filename.data, tex.filename.length}};
+					fullPath = basePath / Base::IO::u8path(std::string{tex.filename.data, tex.filename.length});
 				}
 				else if ( tex.absolute_filename.length > 0 )
 				{
-					fullPath = std::filesystem::path{std::string{tex.absolute_filename.data, tex.absolute_filename.length}};
+					fullPath = Base::IO::u8path(std::string{tex.absolute_filename.data, tex.absolute_filename.length});
 				}
 				else if ( tex.relative_filename.length > 0 )
 				{
-					fullPath = basePath / std::filesystem::path{std::string{tex.relative_filename.data, tex.relative_filename.length}};
+					fullPath = basePath / Base::IO::u8path(std::string{tex.relative_filename.data, tex.relative_filename.length});
 				}
 
 				if ( fullPath.empty() )
@@ -1610,14 +1613,14 @@ namespace EmEn::Scenes::Loaders
 		opts.generate_missing_normals = false;
 
 		ufbx_error error{};
-		ufbx_scene * scene = ufbx_load_file(filepath.string().c_str(), &opts, &error);
+		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
 
 		if ( scene == nullptr )
 		{
 			std::array< char, 512 > buffer{};
 			ufbx_format_error(buffer.data(), sizeof(buffer), &error);
 
-			TraceError{ClassId} << "Failed to parse animation file '" << filepath << "' :\n" << buffer.data();
+			TraceError{ClassId} << "Failed to parse animation file '" << Base::IO::toU8String(filepath) << "' :\n" << buffer.data();
 
 			return false;
 		}
@@ -1626,7 +1629,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( scene->anim_stacks.count == 0 )
 		{
-			TraceWarning{ClassId} << "No animation stacks in '" << filepath << "'.";
+			TraceWarning{ClassId} << "No animation stacks in '" << Base::IO::toU8String(filepath) << "'.";
 
 			return false;
 		}
@@ -1668,10 +1671,10 @@ namespace EmEn::Scenes::Loaders
 		if ( resolvedJoints < jointCount )
 		{
 			TraceInfo{ClassId} << "Resolved " << resolvedJoints << " / " << jointCount
-				<< " joints by name in '" << filepath << "'. Missing joints will hold their bind-pose value.";
+				<< " joints by name in '" << Base::IO::toU8String(filepath) << "'. Missing joints will hold their bind-pose value.";
 		}
 
-		const std::string fileStem = filepath.stem().string();
+		const std::string fileStem = Base::IO::toU8String(filepath.stem());
 		/* ⚠️ The flip is part of the cache key: a clip mirrored one way must never be served to a
 		 * rig loaded with a different flip. */
 		const std::string resourcePrefix = "FBX:" + fileStem + "/Animation/";
@@ -1764,7 +1767,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( output.size() - producedBefore == 0 )
 		{
-			TraceWarning{ClassId} << "Animation file '" << filepath << "' produced no clips.";
+			TraceWarning{ClassId} << "Animation file '" << Base::IO::toU8String(filepath) << "' produced no clips.";
 
 			return false;
 		}
@@ -1918,11 +1921,11 @@ namespace EmEn::Scenes::Loaders
 		opts.load_external_files = false;
 
 		ufbx_error error{};
-		ufbx_scene * scene = ufbx_load_file(filepath.string().c_str(), &opts, &error);
+		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
 
 		if ( scene == nullptr )
 		{
-			TraceError{ClassId} << "Unable to re-read the FBX '" << filepath << "' for its embedded texture #" << index << " !";
+			TraceError{ClassId} << "Unable to re-read the FBX '" << Base::IO::toU8String(filepath) << "' for its embedded texture #" << index << " !";
 
 			return false;
 		}

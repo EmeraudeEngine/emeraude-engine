@@ -698,11 +698,13 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("No active scene !");
 				}
 
-				const std::filesystem::path filepath{filePath};
+				/* NOTE: The console argument is UTF-8: IO::u8path(), never the narrow path constructor (the ANSI code
+				 * page on Windows, where a non-ASCII path "did not exist"). */
+				const auto filepath = Base::IO::u8path(filePath);
 
 				if ( !EmEn::Base::IO::exists(filepath) )
 				{
-					return Console::CommandResult::error("File '" + filepath.string() + "' does not exist !");
+					return Console::CommandResult::error("File '" + filePath + "' does not exist !");
 				}
 
 				/* NOTE: the second argument used to be swapZ, the per-asset chirality workaround. That
@@ -721,7 +723,7 @@ namespace EmEn::Scenes
 				 * killing the surface (see the blocking-load caution) — do not feed it scenes. */
 				if ( !loader.load(filepath, sceneData) )
 				{
-					return Console::CommandResult::error("Failed to load glTF file '" + filepath.string() + "' !");
+					return Console::CommandResult::error("Failed to load glTF file '" + filePath + "' !");
 				}
 
 				SceneDataConsumer consumer;
@@ -729,10 +731,10 @@ namespace EmEn::Scenes
 
 				if ( !consumer.build(sceneData, *m_activeScene) )
 				{
-					return Console::CommandResult::error("Failed to build the scene from '" + filepath.string() + "' !");
+					return Console::CommandResult::error("Failed to build the scene from '" + filePath + "' !");
 				}
 
-				return Console::CommandResult::success("glTF file '" + filepath.string() + "' loaded into scene '" + m_activeScene->name() + "'.");
+				return Console::CommandResult::success("glTF file '" + filePath + "' loaded into scene '" + m_activeScene->name() + "'.");
 			});
 
 		this->bindCommand("addMesh", "Places a mesh resource in the active scene as a lit static entity.",
@@ -1093,11 +1095,12 @@ namespace EmEn::Scenes
 
 				std::ranges::replace(fileName, '/', '-');
 
-				const auto filepath = captureDirectory / (fileName + "-albedo.png");
+				/* NOTE: A resource name is UTF-8: IO::u8path() in, IO::toU8String() out (this report is a console reply). */
+				const auto filepath = captureDirectory / Base::IO::u8path(fileName + "-albedo.png");
 
 				if ( atlas->writeAlbedo(renderer.transferManager(), filepath) )
 				{
-					report << filepath.string() << "\n";
+					report << Base::IO::toU8String(filepath) << "\n";
 
 					++written;
 				}
@@ -1514,14 +1517,14 @@ namespace EmEn::Scenes
 				const auto captureDirectory = m_activeScene->AVConsoleManager().graphicsRenderer().primaryServices().fileSystem().userDataDirectory("captures");
 				const auto seconds = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
 
-				auto filepath = captureDirectory / ("physics-recording-" + std::to_string(seconds) + ".json");
+				auto filepath = captureDirectory / Base::IO::u8path("physics-recording-" + std::to_string(seconds) + ".json");
 
 				/* A unique name: two saves in one second must not overwrite each other. */
 				std::error_code existsError;
 
 				for ( int suffix = 1; std::filesystem::exists(filepath, existsError) && suffix < 1000; ++suffix )
 				{
-					filepath = captureDirectory / ("physics-recording-" + std::to_string(seconds) + "-" + std::to_string(suffix) + ".json");
+					filepath = captureDirectory / Base::IO::u8path("physics-recording-" + std::to_string(seconds) + "-" + std::to_string(suffix) + ".json");
 				}
 
 				std::string error;
@@ -1531,7 +1534,7 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error(error);
 				}
 
-				return Console::CommandResult::info(filepath.string());
+				return Console::CommandResult::info(Base::IO::toU8String(filepath));
 			});
 
 		this->bindCommand("setNodePosition", "Moves a root-level node of the active scene to world coordinates.",
@@ -1701,16 +1704,16 @@ namespace EmEn::Scenes
 						std::stringstream filename;
 						filename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
 
-						const auto filepath = captureDirectory.append(filename.str());
+						const auto filepath = captureDirectory /= Base::IO::u8path(filename.str());
 
 						if ( !PixelFactory::FileIO::write(pixmap, filepath) )
 						{
-							outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << filepath);
+							outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << Base::IO::toU8String(filepath));
 
 							return;
 						}
 
-						outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << renderTarget->id() << "' dumped: " << filepath);
+						outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << renderTarget->id() << "' dumped: " << Base::IO::toU8String(filepath));
 
 						dumped = true;
 					});

@@ -2617,7 +2617,7 @@ namespace EmEn
 
 		if ( m_graphicsRenderer.recorder().usable() )
 		{
-			if ( m_graphicsRenderer.recorder().startRecording(captureDirectory / (filename + "." + m_graphicsRenderer.recorder().videoFileExtension())) )
+			if ( m_graphicsRenderer.recorder().startRecording(captureDirectory / IO::u8path(filename + "." + m_graphicsRenderer.recorder().videoFileExtension())) )
 			{
 				this->notifyUser("Video recording started...");
 			}
@@ -2625,7 +2625,7 @@ namespace EmEn
 
 		if ( m_audioManager.recorder().usable() )
 		{
-			if ( m_audioManager.recorder().startRecording(captureDirectory / (filename + ".wav")) )
+			if ( m_audioManager.recorder().startRecording(captureDirectory / IO::u8path(filename + ".wav")) )
 			{
 				this->notifyUser("Audio recording started...");
 			}
@@ -2638,7 +2638,7 @@ namespace EmEn
 		{
 			if ( m_audioManager.externalInput().usable() )
 			{
-				m_rushVoiceOverPath = captureDirectory / (filename + "-voice.wav");
+				m_rushVoiceOverPath = captureDirectory / IO::u8path(filename + "-voice.wav");
 
 				if ( m_audioManager.externalInput().start(m_rushVoiceOverPath) )
 				{
@@ -2677,14 +2677,17 @@ namespace EmEn
 			const std::string containerExtension = hardware ? ".mp4" : ".webm";
 
 #if IS_WINDOWS
-			const auto scriptPath = captureDirectory / (filename + "_assemble.ps1");
+			const auto scriptPath = captureDirectory / IO::u8path(filename + "_assemble.ps1");
 			std::ofstream script{scriptPath};
 
 			if ( script.is_open() )
 			{
+				/* NOTE: A UTF-8 BOM first: Windows PowerShell 5.1 reads a script without one in the ANSI code page, and the
+				 * paths below are UTF-8. */
+				script << "\xEF\xBB\xBF";
 				script << "# RushMaker - Auto-generated script to assemble the recording.\n";
 				script << "# Run this script after stopping the recording.\n";
-				script << "Set-Location \"" << captureDirectory.string() << "\"\n";
+				script << "Set-Location \"" << Base::IO::toU8String(captureDirectory) << "\"\n";
 				script << "ffmpeg.exe " << videoInputOptions << "-i \"" << filename << "." << videoExtension << "\"";
 
 				if ( hasGameAudio && hasVoiceOver )
@@ -2714,7 +2717,7 @@ namespace EmEn
 				TraceSuccess{ClassId} << "RushMaker assemble script written to " << scriptPath;
 			}
 #else
-			const auto scriptPath = captureDirectory / (filename + "_assemble.sh");
+			const auto scriptPath = captureDirectory / IO::u8path(filename + "_assemble.sh");
 			std::ofstream script{scriptPath};
 
 			if ( script.is_open() )
@@ -2722,7 +2725,7 @@ namespace EmEn
 				script << "#!/bin/bash\n";
 				script << "# RushMaker - Auto-generated script to assemble the recording.\n";
 				script << "# Run this script after stopping the recording.\n";
-				script << "cd \"" << captureDirectory.string() << "\"\n";
+				script << "cd \"" << Base::IO::toU8String(captureDirectory) << "\"\n";
 				script << "ffmpeg " << videoInputOptions << "-i \"" << filename << "." << videoExtension << "\"";
 
 				if ( hasGameAudio && hasVoiceOver )
@@ -3224,14 +3227,14 @@ namespace EmEn
 					const auto fileSize = entry.file_size(errorCode);
 					const auto countedSize = errorCode ? uintmax_t{0} : fileSize;
 
-					trace << "	" << entry.path().string() << " (" << countedSize << " bytes)" "\n";
+					trace << "	" << Base::IO::toU8String(entry.path()) << " (" << countedSize << " bytes)" "\n";
 
 					fileCount++;
 					totalSize += countedSize;
 				}
 				else if ( entry.is_directory(errorCode) )
 				{
-					trace << "	" << entry.path().string() << "/" "\n";
+					trace << "	" << Base::IO::toU8String(entry.path()) << "/" "\n";
 				}
 
 				return true;
@@ -3242,7 +3245,7 @@ namespace EmEn
 
 		if ( IO::directoryExists(cacheDir) )
 		{
-			trace << "[WIPE TARGET] Cache: " << cacheDir.string() << "\n";
+			trace << "[WIPE TARGET] Cache: " << Base::IO::toU8String(cacheDir) << "\n";
 
 			const auto [fileCount, dirSize] = scanDirectory(cacheDir);
 
@@ -3266,7 +3269,7 @@ namespace EmEn
 
 		if ( IO::directoryExists(userDataDir) )
 		{
-			trace << "[WIPE TARGET] User data: " << userDataDir.string() << "\n";
+			trace << "[WIPE TARGET] User data: " << Base::IO::toU8String(userDataDir) << "\n";
 
 			const auto [fileCount, dirSize] = scanDirectory(userDataDir);
 
@@ -3290,7 +3293,7 @@ namespace EmEn
 
 		trace <<
 			"----------------------------------------------------------------------" "\n"
-			"[PRESERVED] Settings: " << fileSystem.configDirectory().string() <<
+			"[PRESERVED] Settings: " << Base::IO::toU8String(fileSystem.configDirectory()) <<
 			"\n"
 			"Total: " << totalFiles << " files, " << formatSize(totalBytes) <<
 			"\n"
@@ -3330,7 +3333,7 @@ namespace EmEn
 		}
 
 		const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
-		const auto backupPath = std::filesystem::path{settingsPath.string() + "." + std::to_string(timestamp) + "-bck"};
+		const auto backupPath = IO::u8path(IO::toU8String(settingsPath) + "." + std::to_string(timestamp) + "-bck");
 
 		std::error_code errorCode;
 		std::filesystem::rename(settingsPath, backupPath, errorCode);
@@ -3383,7 +3386,7 @@ namespace EmEn
 			"  SETTINGS RESET" "\n"
 			"======================================================================" "\n"
 			"Settings file backed up to:" "\n"
-			"  " << backupPath.string() <<
+			"  " << Base::IO::toU8String(backupPath) <<
 			"\n"
 			"----------------------------------------------------------------------" "\n" <<
 			restorationOutcome <<
@@ -3452,7 +3455,7 @@ namespace EmEn
 		}
 
 		const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
-		const auto backupPath = std::filesystem::path{settingsPath.string() + "." + std::to_string(timestamp) + "-bck"};
+		const auto backupPath = IO::u8path(IO::toU8String(settingsPath) + "." + std::to_string(timestamp) + "-bck");
 
 		std::error_code errorCode;
 		std::filesystem::rename(settingsPath, backupPath, errorCode);
@@ -3461,7 +3464,7 @@ namespace EmEn
 		{
 			/* Backup failed: leave the settings untouched — better an outdated file than clearing the
 			 * store and overwriting the user's settings with empties at save-at-exit (data loss). */
-			TraceError{ClassId} << "Settings version guard: failed to back up '" << settingsPath.string() << "': " << errorCode.message() << " - keeping the current settings.";
+			TraceError{ClassId} << "Settings version guard: failed to back up '" << Base::IO::toU8String(settingsPath) << "': " << errorCode.message() << " - keeping the current settings.";
 
 			return;
 		}
@@ -3488,7 +3491,7 @@ namespace EmEn
 			"======================================================================" "\n"
 			"Reset reason: " << reason << "." "\n"
 			"The settings file has been backed up to:" "\n"
-			"  " << backupPath.string() << "\n"
+			"  " << Base::IO::toU8String(backupPath) << "\n"
 			"The application starts on fresh settings, except the entries kept from the backup:" "\n" <<
 			Core::formatRestorationReport(report) <<
 			"======================================================================";

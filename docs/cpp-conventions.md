@@ -378,6 +378,40 @@ they apply to the engine unchanged. The engine's consequences:
 - Reuse the engine's lifetime mechanisms before adding one: `Vulkan::DeferredDestructor`, `ResourceTrait`
   dependencies, `LocalDataLease`, `Container::DeferredSyncLoad`, Observer auto-detach.
 
+## Paths and Text Encoding — rule C (owner decision, 2026-10-12)
+
+Every `std::string` of the cascade is UTF-8: JSON, settings, the command line, console / MCP arguments and replies, logs,
+resource names, URIs. On Windows a `std::filesystem::path` is UTF-16, and its NARROW conversions go through the ANSI code
+page: `path::string()` THROWS on a character outside it (an abort, exceptions are off) and writes invalid UTF-8 for the
+others; a path built from a narrow string decodes that string as ANSI. So:
+
+- **Into a path**: `Base::IO::u8path(text)` — never `std::filesystem::path{text}`, `dir / text`, `p = text`,
+  `p.append(text)` or a function taking a `const path &` handed a `std::string` (all implicit narrow conversions). A
+  string literal or a `constexpr` constant is ASCII text the author controls: it may stay as is.
+- **Out of a path**: `Base::IO::toU8String(p)` / `toGenericU8String(p)` — never `.string()`, `.generic_string()`,
+  `.u8string()`, nor `std::ostream << p` (std's `operator<<` writes `string()` quoted). A `Trace*` / `BlobTrait` line takes
+  the path as is: emeraude-base's `BlobTrait` overload writes it UTF-8, quoted.
+- **To a Windows or CEF API**: the native / wide string (`p.native()`, `p.c_str()`), never a narrow conversion. A C
+  library that documents UTF-8 file names (ufbx, tinyusdz, RenderDoc) gets `toU8String()`; one that opens a narrow name
+  with `fopen()` gets the CONTENT instead (`IO::fileGetContents()`, then a memory API).
+- **Untrusted text bound for a third-party path API** is checked with `Base::String::isValidUTF8()` first: MSVC's
+  `char8_t` path conversion throws on invalid UTF-8 (the glTF uri pre-check, `GLTFLoader::load()`).
+- The application declares `<activeCodePage>UTF-8</activeCodePage>` as a second line of defence only: a DLL cannot impose
+  it, it hides defects (a per-site fix is verified WITHOUT it), and only third-party code relies on it.
+
+**The guard — `tools/check-path-encoding.py`**, a pre-push step for every change to C++ (like `tools/mcp-conformance.py`
+for the console):
+
+```bash
+python3 tools/check-path-encoding.py --build-dir <release build> --build-dir <debug build> [--root <application src>]
+```
+
+clang-query over each `compile_commands.json` is the authority (implicit conversions included, Release and Debug
+`#if` branches both); a grep gate covers the sources no database compiles (POSIX-only files are skipped: their native
+string IS UTF-8) and refuses a non-ASCII narrow literal on a path line. `--grep-only` is a coarse quick net. A legitimate
+site goes in `tools/path-encoding-allowlist.txt` with a one-line reason. clang-query traps: `docs/caution-points.md`
+§ "On MSVC, `std::filesystem::path::string()` is ANSI".
+
 ## Template Patterns
 
 ### CRTP (Curiously Recurring Template Pattern)

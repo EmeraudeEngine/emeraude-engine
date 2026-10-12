@@ -27,6 +27,7 @@
 #include "MultiLayerMeshResource.hpp"
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "Scenes/Loaders/SceneData.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
@@ -157,7 +158,7 @@ namespace EmEn::Graphics::Renderable
 	bool
 	MultiLayerMeshResource::load (const std::filesystem::path & filepath) noexcept
 	{
-		const auto ext = filepath.extension().string();
+		const auto ext = Base::IO::toU8String(filepath.extension());
 
 		/* Only handle glTF/glb. Fall back to base class (JSON) for other formats. */
 		if ( ext != ".gltf" && ext != ".glb" )

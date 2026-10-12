@@ -436,6 +436,13 @@ namespace EmEn::Console
 					succeeded = this->executeCommand(pending.command, outputs);
 				}
 
+				/* NOTE: The reply is JSON, hence UTF-8: an invalid sequence becomes U+FFFD, and the command is named so
+				 * that its source defect stays visible (owner decision 2026-10-12). */
+				if ( replaceInvalidUTF8(outputs) )
+				{
+					TraceWarning{ClassId} << "The command '" << pending.command << "' answered invalid UTF-8 : each invalid sequence was replaced with U+FFFD. Fix its source.";
+				}
+
 				/* ⚠️ ALWAYS answer, even with no output: a client waits for exactly one line per request,
 				 * and a silent command used to leave it hanging until its timeout. */
 				if ( pending.client != nullptr )

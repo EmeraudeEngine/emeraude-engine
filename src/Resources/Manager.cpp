@@ -412,7 +412,7 @@ namespace EmEn::Resources
 
 			for ( auto directory : fileSystem.dataDirectories() )
 			{
-				message << directory.append(DataStores).string() << "\n";
+				message << Base::IO::toU8String(directory.append(DataStores)) << "\n";
 			}
 
 			TraceWarning{ClassId} << message;
@@ -425,7 +425,7 @@ namespace EmEn::Resources
 			TraceInfo{ClassId} << "Loading resource index from file '" << filepath << "' ...";
 
 			/* 1. Get raw JSON data from a file. */
-			const auto rootCheck = FastJSON::getRootFromFile(filepath);
+			const auto rootCheck = FastJSON::getRootFromFile(IO::u8path(filepath));
 
 			if ( !rootCheck )
 			{
@@ -466,7 +466,7 @@ namespace EmEn::Resources
 	Manager::determineStoreForFile (const std::filesystem::path & filepath, const std::filesystem::path & dataStoreDirectory) noexcept
 	{
 		/* Extract file extension for type detection. */
-		const auto extension = filepath.extension().string();
+		const auto extension = Base::IO::toU8String(filepath.extension());
 
 		/* For JSON files, we need to inspect the parent directory name
 		 * as they usually contain configuration data for different resource types. */
@@ -480,7 +480,7 @@ namespace EmEn::Resources
 			if ( !relativeError && !relativePath.empty() )
 			{
 				/* Return the first component of the relative path as the store name. */
-				return relativePath.begin()->string();
+				return Base::IO::toU8String(*relativePath.begin());
 			}
 
 			return {};
@@ -526,7 +526,7 @@ namespace EmEn::Resources
 
 		if ( !relativeError && !relativePath.empty() )
 		{
-			return relativePath.begin()->string();
+			return Base::IO::toU8String(*relativePath.begin());
 		}
 
 		return {};
@@ -565,7 +565,7 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				const auto storeName = storeEntry.path().filename().string();
+				const auto storeName = Base::IO::toU8String(storeEntry.path().filename());
 
 				/* Skip hidden directories (starting with dot). */
 				if ( storeName.starts_with('.') )
@@ -603,7 +603,7 @@ namespace EmEn::Resources
 					}
 
 					const auto & filepath = fileEntry.path();
-					const auto filename = filepath.filename().string();
+					const auto filename = Base::IO::toU8String(filepath.filename());
 
 					/* Skip hidden files (starting with dot). */
 					if ( filename.starts_with('.') )
@@ -620,7 +620,7 @@ namespace EmEn::Resources
 					 * paths, so the result is the same without canonicalizing both paths (system calls) per file. */
 					const auto relativePathFromStore = filepath.lexically_relative(storeDirectory);
 					const auto resourceName = relativePathFromStore.parent_path() / relativePathFromStore.stem();
-					const auto resourceNameStr = resourceName.generic_string();
+					const auto resourceNameStr = Base::IO::toGenericU8String(resourceName);
 
 					/* Calculate relative path from data-stores directory for the "Data" field. */
 					const auto relativePath = filepath.lexically_relative(dataStoreDirectory);
@@ -636,7 +636,7 @@ namespace EmEn::Resources
 					Json::Value resourceDefinition;
 					resourceDefinition["Name"] = resourceNameStr;
 					resourceDefinition["Source"] = "LocalData";
-					resourceDefinition["Data"] = relativePath.string();
+					resourceDefinition["Data"] = Base::IO::toU8String(relativePath);
 
 					/* Parse and add to store. */
 					BaseInformation baseInformation;
@@ -940,7 +940,7 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				if ( !isResourcesIndexFileName(entry.path().filename().string()) )
+				if ( !isResourcesIndexFileName(Base::IO::toU8String(entry.path().filename())) )
 				{
 					/* Not a resource index file: ignored. */
 					TraceWarning{ClassId} << "The file " << entry.path() << " in a data-stores directory is not a resource index file (ResourcesIndex.NNN.json), ignored.";
@@ -948,7 +948,7 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				indexes.emplace_back(entry.path().string());
+				indexes.emplace_back(Base::IO::toU8String(entry.path()));
 
 				return true;
 			});

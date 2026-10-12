@@ -647,7 +647,7 @@ namespace EmEn
 			}, value);
 		};
 
-		out << "Settings (" << obj.m_filepath << ") :" "\n";
+		out << "Settings (" << Base::IO::toU8String(obj.m_filepath) << ") :" "\n";
 
 		/* Crawling inside all stores. */
 		for ( const auto & [key, store] : obj.m_stores )

@@ -36,6 +36,7 @@
 
 /* Local inclusions. */
 #include "Buffer.hpp"
+#include "IO/IO.hpp"
 #include "WaveFactory/FileIO.hpp"
 #include "WaveFactory/Processor.hpp"
 #include "WaveFactory/SFXScript.hpp"
@@ -355,7 +356,7 @@ namespace EmEn::Audio
 		}
 
 		/* Check if this is a MIDI file that might need a soundfont. */
-		const auto extension = filepath.extension().string();
+		const auto extension = Base::IO::toU8String(filepath.extension());
 
 		if ( extension == ".mid" || extension == ".midi" )
 		{

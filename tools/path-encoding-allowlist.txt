@@ -1,0 +1,6 @@
+# tools/check-path-encoding.py allowlist: <path suffix> | <text of the source line> | <one-line reason>
+# A site goes here only when its narrow conversion is correct on every OS; the reason says why.
+emeraude-base/src/io/io.hpp | return {UTF8String}; | IO::u8path's POSIX branch (native = UTF-8); parsed on Windows as a discarded if-constexpr branch of a non-template function
+emeraude-base/src/io/io.hpp | return path.string(); | IO::toU8String's POSIX branch (native = UTF-8); parsed on Windows as a discarded if-constexpr branch
+emeraude-base/src/io/io.hpp | return path.generic_string(); | IO::toGenericU8String's POSIX branch (native = UTF-8); parsed on Windows as a discarded if-constexpr branch
+emeraude-engine/src/scenes/component/lightconsoleadapters.cpp | cone set to | a console message ("°" in a sentence holding " / "), not a path

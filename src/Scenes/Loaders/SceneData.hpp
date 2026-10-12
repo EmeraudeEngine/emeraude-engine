@@ -135,6 +135,8 @@ namespace EmEn::Scenes::Loaders
 		 * @brief Absolute path to the environment image (Environment type only).
 		 * @note Resolved by the loader against the asset, so the consumer never has to know
 		 * where the source file lived.
+		 * @note UTF-8: turned back into a path with IO::u8path(), never with the narrow
+		 * std::filesystem::path constructor (the ANSI code page on Windows).
 		 */
 		std::string textureAssetPath;
 		LightType type{LightType::Point};

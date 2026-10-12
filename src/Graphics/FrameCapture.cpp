@@ -34,6 +34,7 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Processor.hpp"
 #include "ThreadPool.hpp"
@@ -85,7 +86,7 @@ namespace EmEn::Graphics
 
 			for ( const auto * suffix : {".png", "-0.png", ".json"} )
 			{
-				if ( std::filesystem::exists(directory / (std::to_string(stem) + suffix), error) )
+				if ( std::filesystem::exists(directory / IO::u8path(std::to_string(stem) + suffix), error) )
 				{
 					return true;
 				}
@@ -474,7 +475,7 @@ namespace EmEn::Graphics
 
 			filename << ".png";
 
-			files[index] = m_directory / filename.str();
+			files[index] = m_directory / IO::u8path(filename.str());
 
 			const auto * pointer = frame.stagingBuffer->mapMemoryAs< uint8_t >();
 
@@ -511,7 +512,7 @@ namespace EmEn::Graphics
 		{
 			if ( written[index] == 0 )
 			{
-				result.error = "Unable to write " + files[index].string() + " (does it already exist?).";
+				result.error = "Unable to write " + Base::IO::toU8String(files[index]) + " (does it already exist?).";
 
 				break;
 			}
@@ -520,12 +521,12 @@ namespace EmEn::Graphics
 		/* The metadata of a temporal capture: everything that moves a pixel from one frame to the next. */
 		if ( result.error.empty() && m_temporal )
 		{
-			const auto jsonPath = m_directory / (std::to_string(m_stem) + ".json");
+			const auto jsonPath = m_directory / IO::u8path(std::to_string(m_stem) + ".json");
 			std::ofstream json{jsonPath};
 
 			if ( !json.is_open() )
 			{
-				result.error = "Unable to write " + jsonPath.string() + ".";
+				result.error = "Unable to write " + Base::IO::toU8String(jsonPath) + ".";
 			}
 			else
 			{
@@ -551,7 +552,7 @@ namespace EmEn::Graphics
 
 					json << "\t\t{\n";
 					json << "\t\t\t\"index\": " << index << ",\n";
-					json << "\t\t\t\"file\": \"" << files[index].filename().string() << "\",\n";
+					json << "\t\t\t\"file\": \"" << Base::IO::toU8String(files[index].filename()) << "\",\n";
 					json << "\t\t\t\"rendererFrame\": " << meta.rendererFrame << ",\n";
 					json << "\t\t\t\"recordTimeMS\": " << timeMS << ",\n";
 					json << "\t\t\t\"deltaMS\": " << deltaMS << ",\n";

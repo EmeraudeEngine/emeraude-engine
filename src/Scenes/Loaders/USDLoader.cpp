@@ -128,7 +128,7 @@ namespace EmEn::Scenes::Loaders
 			{
 				std::string error;
 
-				if ( lightusd::io::MMapFile(filepath.string(), &m_handle, false, &error) )
+				if ( lightusd::io::MMapFile(Base::IO::toU8String(filepath), &m_handle, false, &error) )
 				{
 					m_mapped = true;
 					m_base = m_handle.addr;
@@ -139,11 +139,11 @@ namespace EmEn::Scenes::Loaders
 					/* NOTE: A platform without tinyusdz's mmap (macOS took the "non posix" branch until the
 					 * ext-deps-generator patch of 2026-10-04: TARGET_OS_IPHONE is defined there, as 0) fails here
 					 * without a reason: the archive is read into memory instead. */
-					TraceWarning{USDLoader::ClassId} << "Unable to map the archive '" << filepath.string() << "' (" << (error.empty() ? std::string{"no reason given: mmap not available in tinyusdz"} : error) << "), reading it into memory.";
+					TraceWarning{USDLoader::ClassId} << "Unable to map the archive '" << Base::IO::toU8String(filepath) << "' (" << (error.empty() ? std::string{"no reason given: mmap not available in tinyusdz"} : error) << "), reading it into memory.";
 
 					if ( !Base::IO::fileGetContents(filepath, m_memory) || m_memory.empty() )
 					{
-						TraceError{USDLoader::ClassId} << "Unable to read the archive '" << filepath.string() << "' !";
+						TraceError{USDLoader::ClassId} << "Unable to read the archive '" << Base::IO::toU8String(filepath) << "' !";
 
 						return false;
 					}
@@ -161,14 +161,14 @@ namespace EmEn::Scenes::Loaders
 				 * 21 MB and 1.6 GB resident before a single prim is read. */
 				if ( !lightusd::ReadUSDZAssetInfoFromMemory(m_base, m_size, true, &m_asset, &warning, &error) )
 				{
-					TraceError{USDLoader::ClassId} << "Unable to read the asset table of '" << filepath.filename().string() << "' : " << error;
+					TraceError{USDLoader::ClassId} << "Unable to read the asset table of '" << Base::IO::toU8String(filepath.filename()) << "' : " << error;
 
 					return false;
 				}
 
 				if ( !warning.empty() )
 				{
-					TraceWarning{USDLoader::ClassId} << "While reading the asset table of '" << filepath.filename().string() << "' : " << warning;
+					TraceWarning{USDLoader::ClassId} << "While reading the asset table of '" << Base::IO::toU8String(filepath.filename()) << "' : " << warning;
 				}
 
 				/* The first USD entry in ARCHIVE ORDER is the root layer — that is what the USDZ
@@ -191,7 +191,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( m_rootAssetName.empty() )
 				{
-					TraceError{USDLoader::ClassId} << "'" << filepath.filename().string() << "' holds no USD layer at all.";
+					TraceError{USDLoader::ClassId} << "'" << Base::IO::toU8String(filepath.filename()) << "' holds no USD layer at all.";
 
 					return false;
 				}
@@ -202,7 +202,7 @@ namespace EmEn::Scenes::Loaders
 				}
 
 				TraceInfo{USDLoader::ClassId} <<
-					"Archive '" << filepath.filename().string() << "' " << (m_mapped ? "mapped" : "read into memory") << ": " << m_asset.asset_map.size() <<
+					"Archive '" << Base::IO::toU8String(filepath.filename()) << "' " << (m_mapped ? "mapped" : "read into memory") << ": " << m_asset.asset_map.size() <<
 					" entries, root layer '" << m_rootAssetName << "'.";
 
 				return true;
@@ -726,7 +726,7 @@ namespace EmEn::Scenes::Loaders
 		const auto & metas = stage.metas();
 
 		TraceInfo{ClassId} <<
-			filepath.filename().string() << " stage composed: " <<
+			Base::IO::toU8String(filepath.filename()) << " stage composed: " <<
 			stage.root_prims().size() << " root prims, " <<
 			inventory.primCount << " prims total, depth " << inventory.maxDepth << ", " <<
 			inventory.meshCount << " meshes, " <<
@@ -836,11 +836,13 @@ namespace EmEn::Scenes::Loaders
 						if ( !rawPath.empty() )
 						{
 							std::error_code pathError;
-							const auto fullPath = std::filesystem::weakly_canonical(stageDirectory / rawPath, pathError);
+							/* NOTE: A USD asset path is UTF-8: IO::u8path(), never the narrow path constructor (the
+							 * ANSI code page on Windows). textureAssetPath is UTF-8 too. */
+							const auto fullPath = std::filesystem::weakly_canonical(stageDirectory / Base::IO::u8path(rawPath), pathError);
 
 							if ( !pathError && EmEn::Base::IO::exists(fullPath) )
 							{
-								descriptor.textureAssetPath = fullPath.string();
+								descriptor.textureAssetPath = Base::IO::toU8String(fullPath);
 							}
 							else
 							{
@@ -1117,13 +1119,13 @@ namespace EmEn::Scenes::Loaders
 			return text;
 		};
 
-		const auto target = lowered(wanted.filename().string());
+		const auto target = lowered(Base::IO::toU8String(wanted.filename()));
 
 		const std::filesystem::directory_iterator end;
 
 		for ( auto it = std::filesystem::directory_iterator{directory, std::filesystem::directory_options::skip_permission_denied, pathError}; !pathError && it != end; it.increment(pathError) )
 		{
-			if ( lowered(it->path().filename().string()) == target )
+			if ( lowered(Base::IO::toU8String(it->path().filename())) == target )
 			{
 				return it->path();
 			}
@@ -1489,7 +1491,9 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			std::error_code pathError;
-			auto fullPath = std::filesystem::weakly_canonical(stageDirectory / assetIdentifier, pathError);
+			/* NOTE: A USD asset identifier is UTF-8: IO::u8path() (the narrow path constructor is the ANSI code page on
+			 * Windows). */
+			auto fullPath = std::filesystem::weakly_canonical(stageDirectory / Base::IO::u8path(assetIdentifier), pathError);
 
 			if ( pathError || !EmEn::Base::IO::exists(fullPath) )
 			{
@@ -1515,7 +1519,7 @@ namespace EmEn::Scenes::Loaders
 					return nullptr;
 				}
 
-				TraceWarning{ClassId} << "Texture '" << assetIdentifier << "' only matched by IGNORING CASE: '" << fullPath.filename().string() << "'. The asset's spelling is wrong for a case-sensitive filesystem.";
+				TraceWarning{ClassId} << "Texture '" << assetIdentifier << "' only matched by IGNORING CASE: '" << Base::IO::toU8String(fullPath.filename()) << "'. The asset's spelling is wrong for a case-sensitive filesystem.";
 			}
 
 			/* ⚠️⚠️ A FORMAT WE CANNOT DECODE MUST NOT REACH THE RESOURCE MANAGER. `PixelFactory`
@@ -1534,18 +1538,18 @@ namespace EmEn::Scenes::Loaders
 				});
 
 				return text;
-			}(fullPath.extension().string());
+			}(Base::IO::toU8String(fullPath.extension()));
 
 			if ( extension != ".jpg" && extension != ".jpeg" && extension != ".png" && extension != ".tga" && extension != ".hdr" && extension != ".tif" && extension != ".tiff" )
 			{
 				TraceWarning{ClassId} <<
-					"Texture '" << fullPath.filename().string() << "' uses the unsupported '" << extension <<
+					"Texture '" << Base::IO::toU8String(fullPath.filename()) << "' uses the unsupported '" << extension <<
 					"' format; the material keeps its flat colour. PixelFactory reads JPEG, PNG, Targa, TIFF and HDR.";
 
 				return nullptr;
 			}
 
-			const auto imageName = m_resourcePrefix + "/image/" + fullPath.filename().string();
+			const auto imageName = m_resourcePrefix + "/image/" + Base::IO::toU8String(fullPath.filename());
 
 			auto image = m_resources.container< ImageResource >()
 				->getOrCreateResource(imageName, [fullPath] (auto & imageResource) {
@@ -1572,7 +1576,7 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			return m_resources.container< TextureResource::Texture2D >()
-				->getOrCreateResource(m_resourcePrefix + "/texture/" + fullPath.filename().string() + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
+				->getOrCreateResource(m_resourcePrefix + "/texture/" + Base::IO::toU8String(fullPath.filename()) + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
 					/* Set sRGB BEFORE load(): the flag must be in place when the VkImage is created. */
 					textureResource.enableSRGB(sRGB);
 
@@ -2208,7 +2212,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( !EmEn::Base::IO::exists(filepath) )
 		{
-			TraceError{ClassId} << "File '" << filepath.string() << "' does not exist !";
+			TraceError{ClassId} << "File '" << Base::IO::toU8String(filepath) << "' does not exist !";
 
 			return false;
 		}
@@ -2225,7 +2229,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( pathError )
 		{
-			TraceError{ClassId} << "Unable to resolve an absolute path for '" << filepath.string() << "' : " << pathError.message();
+			TraceError{ClassId} << "Unable to resolve an absolute path for '" << Base::IO::toU8String(filepath) << "' : " << pathError.message();
 
 			return false;
 		}
@@ -2242,7 +2246,7 @@ namespace EmEn::Scenes::Loaders
 			});
 
 			return text;
-		}(absoluteFilepath.extension().string());
+		}(Base::IO::toU8String(absoluteFilepath.extension()));
 
 		if ( extension == ".usdz" )
 		{
@@ -2315,7 +2319,7 @@ namespace EmEn::Scenes::Loaders
 		}
 		else
 		{
-			searchPaths.emplace_back(absoluteFilepath.parent_path().string());
+			searchPaths.emplace_back(Base::IO::toU8String(absoluteFilepath.parent_path()));
 
 			std::error_code walkError;
 			const std::filesystem::recursive_directory_iterator end;
@@ -2324,13 +2328,13 @@ namespace EmEn::Scenes::Loaders
 			{
 				if ( it->is_directory(walkError) )
 				{
-					searchPaths.emplace_back(it->path().string());
+					searchPaths.emplace_back(Base::IO::toU8String(it->path()));
 				}
 			}
 
 			if ( walkError )
 			{
-				TraceWarning{ClassId} << "Partial stage directory scan for '" << filepath.filename().string() << "' : " << walkError.message();
+				TraceWarning{ClassId} << "Partial stage directory scan for '" << Base::IO::toU8String(filepath.filename()) << "' : " << walkError.message();
 			}
 
 			resolver.set_search_paths(searchPaths);
@@ -2346,21 +2350,21 @@ namespace EmEn::Scenes::Loaders
 			 * directory instead of the archive. */
 			if ( !lightusd::LoadLayerFromAsset(resolver, m_archive->rootAssetName(), &layer, &warning, &error) )
 			{
-				TraceError{ClassId} << "Unable to read the root layer of '" << filepath.filename().string() << "' : " << error;
+				TraceError{ClassId} << "Unable to read the root layer of '" << Base::IO::toU8String(filepath.filename()) << "' : " << error;
 
 				return false;
 			}
 		}
-		else if ( !lightusd::LoadLayerFromFile(absoluteFilepath.string(), &layer, &warning, &error) )
+		else if ( !lightusd::LoadLayerFromFile(Base::IO::toU8String(absoluteFilepath), &layer, &warning, &error) )
 		{
-			TraceError{ClassId} << "Unable to read layer '" << filepath.string() << "' : " << error;
+			TraceError{ClassId} << "Unable to read layer '" << Base::IO::toU8String(filepath) << "' : " << error;
 
 			return false;
 		}
 
 		if ( !warning.empty() )
 		{
-			TraceWarning{ClassId} << "While reading '" << filepath.filename().string() << "' : " << warning;
+			TraceWarning{ClassId} << "While reading '" << Base::IO::toU8String(filepath.filename()) << "' : " << warning;
 			warning.clear();
 		}
 
@@ -2371,14 +2375,14 @@ namespace EmEn::Scenes::Loaders
 
 		if ( !lightusd::CompositeSublayers(resolver, layer, &sublayered, &warning, &error, sublayerOptions) )
 		{
-			TraceError{ClassId} << "Unable to composite sublayers of '" << filepath.filename().string() << "' : " << error;
+			TraceError{ClassId} << "Unable to composite sublayers of '" << Base::IO::toU8String(filepath.filename()) << "' : " << error;
 
 			return false;
 		}
 
 		if ( !warning.empty() )
 		{
-			TraceWarning{ClassId} << "While compositing the sublayers of '" << filepath.filename().string() << "' : " << warning;
+			TraceWarning{ClassId} << "While compositing the sublayers of '" << Base::IO::toU8String(filepath.filename()) << "' : " << warning;
 			warning.clear();
 		}
 
@@ -2431,14 +2435,14 @@ namespace EmEn::Scenes::Loaders
 
 				if ( !lightusd::CompositeAllArcs(resolver, current, &next, &warning, &error, arcOptions) )
 				{
-					TraceError{ClassId} << "Unable to composite the arcs of '" << filepath.filename().string() << "' (pass " << pass + 1 << ") : " << error;
+					TraceError{ClassId} << "Unable to composite the arcs of '" << Base::IO::toU8String(filepath.filename()) << "' (pass " << pass + 1 << ") : " << error;
 
 					return false;
 				}
 
 				if ( !warning.empty() )
 				{
-					TraceWarning{ClassId} << "While compositing the arcs of '" << filepath.filename().string() << "' (pass " << pass + 1 << ") : " << warning;
+					TraceWarning{ClassId} << "While compositing the arcs of '" << Base::IO::toU8String(filepath.filename()) << "' (pass " << pass + 1 << ") : " << warning;
 					warning.clear();
 				}
 
@@ -2449,7 +2453,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( hasUnresolvedArcs(current) )
 			{
-				TraceWarning{ClassId} << "'" << filepath.filename().string() << "' still has unresolved arcs after " << pass << " composition passes (a missing asset, or a deeper nesting).";
+				TraceWarning{ClassId} << "'" << Base::IO::toU8String(filepath.filename()) << "' still has unresolved arcs after " << pass << " composition passes (a missing asset, or a deeper nesting).";
 			}
 
 			*composited = std::move(current);
@@ -2470,7 +2474,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( upAxis != lightusd::Axis::Z )
 		{
-			TraceWarning{ClassId} << "'" << filepath.filename().string() << "' declares a non-Z up axis; the bake below assumes Z-up and will be wrong.";
+			TraceWarning{ClassId} << "'" << Base::IO::toU8String(filepath.filename()) << "' declares a non-Z up axis; the bake below assumes Z-up and will be wrong.";
 		}
 
 		/* ⚠️ Two Tydra front-ends exist and they are NOT equivalent:
@@ -2485,7 +2489,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( !lightusd::LayerToStageInPlace(std::move(composited), &stage, &warning, &error) )
 		{
-			TraceError{ClassId} << "Unable to build a stage from '" << filepath.filename().string() << "' : " << error;
+			TraceError{ClassId} << "Unable to build a stage from '" << Base::IO::toU8String(filepath.filename()) << "' : " << error;
 
 			return false;
 		}
@@ -2498,7 +2502,7 @@ namespace EmEn::Scenes::Loaders
 		 * warning is not a missing detail, it is a missing half of the scene. */
 		if ( !warning.empty() )
 		{
-			TraceWarning{ClassId} << "While building the stage of '" << filepath.filename().string() << "' : " << warning;
+			TraceWarning{ClassId} << "While building the stage of '" << Base::IO::toU8String(filepath.filename()) << "' : " << warning;
 			warning.clear();
 		}
 
@@ -2532,7 +2536,7 @@ namespace EmEn::Scenes::Loaders
 		 * material bindings. Re-deriving that from raw prims would be duplicated work — the
 		 * engine's own job starts at the translation into native scene logic. */
 		lightusd::tydra::RenderSceneConverterEnv env{stage};
-		env.usd_filename = m_archive != nullptr ? m_archive->rootAssetName() : absoluteFilepath.string();
+		env.usd_filename = m_archive != nullptr ? m_archive->rootAssetName() : Base::IO::toU8String(absoluteFilepath);
 
 		/* ⚠️ Tydra carries its OWN resolver, and it is NOT the one composition used. Left as a
 		 * filesystem resolver on an archive, a texture is not merely "unresolved": Tydra drops the
@@ -2555,17 +2559,17 @@ namespace EmEn::Scenes::Loaders
 
 		if ( !converter.ConvertToRenderScene(env, &renderScene) )
 		{
-			TraceError{ClassId} << "Unable to convert '" << filepath.filename().string() << "' to a render scene : " << converter.GetError();
+			TraceError{ClassId} << "Unable to convert '" << Base::IO::toU8String(filepath.filename()) << "' to a render scene : " << converter.GetError();
 
 			return false;
 		}
 
 		if ( !converter.GetWarning().empty() )
 		{
-			TraceWarning{ClassId} << "While converting '" << filepath.filename().string() << "' : " << converter.GetWarning();
+			TraceWarning{ClassId} << "While converting '" << Base::IO::toU8String(filepath.filename()) << "' : " << converter.GetWarning();
 		}
 
-		m_resourcePrefix = "usd:" + filepath.stem().string();
+		m_resourcePrefix = "usd:" + Base::IO::toU8String(filepath.stem());
 
 		std::map< std::string, size_t > builtMeshesByPath;
 
@@ -2594,7 +2598,7 @@ namespace EmEn::Scenes::Loaders
 				/* Not fatal, and deliberately loud: the geometry carries its own transforms from
 				 * Tydra, so the stage still renders — lit by nothing. Silence here would reproduce
 				 * exactly the black-frame-without-an-error the placement pass was written to end. */
-				TraceError{ClassId} << "Unable to build the xform hierarchy of '" << filepath.filename().string() << "'; every punctual light will be dropped.";
+				TraceError{ClassId} << "Unable to build the xform hierarchy of '" << Base::IO::toU8String(filepath.filename()) << "'; every punctual light will be dropped.";
 			}
 		}
 
@@ -2606,7 +2610,7 @@ namespace EmEn::Scenes::Loaders
 			lightCount << " punctual lights.";
 
 		TraceInfo{ClassId} <<
-			filepath.filename().string() << " converted: " <<
+			Base::IO::toU8String(filepath.filename()) << " converted: " <<
 			renderScene.meshes.size() << " source meshes (" << builtCount << " built), " <<
 			renderScene.materials.size() << " materials, " <<
 			renderScene.textures.size() << " textures, " <<

@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 
 namespace EmEn
 {
@@ -43,7 +44,7 @@ namespace EmEn
 
 		this->bindCommand("getJson", "Returns all arguments as JSON.", [this] () {
 			Json::Value root{Json::objectValue};
-			root["binaryFilepath"] = m_binaryFilepath.string();
+			root["binaryFilepath"] = Base::IO::toU8String(m_binaryFilepath);
 			root["isChildProcess"] = m_childProcess;
 
 			Json::Value rawArguments{Json::arrayValue};

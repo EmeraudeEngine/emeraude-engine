@@ -42,11 +42,15 @@ UTF-8 active code page (engine `docs/caution-points.md` § "On MSVC, `std::files
 - [x] Step 2, the manifest (Windows peer, 2026-10-12): compatibility + `longPathAware` + `<activeCodePage>UTF-8</activeCodePage>`
   in projet-alpha.exe and projet-alpha-helper.exe (which had none), and the `PlatformManager` startup warning when
   `PlatformSpecific::getActiveCodePage() != CP_UTF8`.
-- [ ] Step 3, the per-site pass, verified with an executable WITHOUT the manifest, in groups: inbound paths at trust
-  boundaries (`loadGLTF`, glTF / FBX URIs); data keys and C APIs; logs and console (including the `<<` of a path, which
-  streams `string()` quoted); extension compares. Every `path.string()` whose result leaves the process goes through
-  `Base::IO::toU8String()` (or `toGenericU8String()`); a Windows API takes the wide string. Same in projet-alpha
-  (`/usr/bin/grep -rn '\.string()' src`). Then a guard tool, proposed to the owner before it is written.
+- [x] Step 3, the per-site pass (Windows peer, 2026-10-12), verified on executables WITHOUT the UTF-8 code page: every
+  site of base, engine and projet-alpha (inbound paths at trust boundaries, data keys and C APIs, logs and console,
+  extension compares), the glTF uri pre-check (fastgltf aborted on `%FF.bin`), the console / MCP U+FFFD reply guard,
+  emeraude-base `BlobTrait`'s path overload and `String::isValidUTF8()`. The convention: `docs/cpp-conventions.md`
+  § "Paths and Text Encoding".
+- [x] The guard: `tools/check-path-encoding.py` (owner decision 2026-10-12: clang-query authority, grep quick net,
+  allowlist with reasons, a documented pre-push step).
+- [ ] Linux and macOS build the pass (GCC, clang, Apple clang) and run the guard on their own databases.
+- [ ] Offer the fastgltf patch upstream (the owner's act; the patch and the issue text exist).
 - [ ] Re-test on Windows from a non-ASCII install directory (as the triad 14 peer test did): the menu loads, every
   console JSON is valid UTF-8, the logs read correctly.
 

@@ -41,6 +41,7 @@
 #include <utility>
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "VertexFactory/Shape.hpp"
 #include "SceneData.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
@@ -774,7 +775,7 @@ namespace EmEn::Scenes::Loaders
 		}
 
 		/* ---- Texture creation helpers (indexed pixels → RGBA → engine resources). ---- */
-		const auto wadStem = filepath.stem().string();
+		const auto wadStem = Base::IO::toU8String(filepath.stem());
 
 		std::unordered_map< std::string, std::shared_ptr< TextureResource::Texture2D > > textureCache;
 		std::unordered_map< std::string, std::pair< float, float > > textureSizes;

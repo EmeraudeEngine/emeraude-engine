@@ -331,7 +331,7 @@ namespace EmEn::Scenes
 		/* The file is written outside the lock: the logic thread never waits on the disk. */
 		if ( !IO::filePutContents(filepath, output.str(), false, true) )
 		{
-			error = "Unable to write '" + filepath.string() + "'.";
+			error = "Unable to write '" + Base::IO::toU8String(filepath) + "'.";
 
 			return false;
 		}

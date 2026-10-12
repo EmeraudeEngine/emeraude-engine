@@ -32,6 +32,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 
 namespace EmEn::Net
 {
@@ -69,7 +70,7 @@ namespace EmEn::Net
 
 				if ( status == DownloadStatus::Done )
 				{
-					json["filepath"] = this->downloadedFilepath(ticket).string();
+					json["filepath"] = Base::IO::toU8String(this->downloadedFilepath(ticket));
 				}
 
 				const auto [received, total] = this->downloadProgress(ticket);
@@ -100,7 +101,7 @@ namespace EmEn::Net
 			{
 				Json::Value entry{Json::objectValue};
 				entry["url"] = url;
-				entry["filepath"] = filepath.string();
+				entry["filepath"] = Base::IO::toU8String(filepath);
 				entry["bytes"] = static_cast< Json::UInt64 >(bytes);
 
 				json.append(std::move(entry));

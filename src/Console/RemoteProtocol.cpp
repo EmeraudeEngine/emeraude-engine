@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 #include "String.hpp"
 
 namespace EmEn::Console::RemoteProtocol
@@ -94,7 +95,9 @@ namespace EmEn::Console::RemoteProtocol
 				{
 					/* NOTE: the path only — a text channel never pays for reading the image. */
 					entry["mimeType"] = output.mimeType();
-					entry["path"] = output.filePath().string();
+					/* NOTE: UTF-8 (IO::toU8String), never path::string() (the ANSI code page on Windows: it throws on a
+					 * character outside it, an abort, and writes invalid UTF-8 for the others). */
+					entry["path"] = IO::toU8String(output.filePath());
 				}
 
 				list.append(std::move(entry));

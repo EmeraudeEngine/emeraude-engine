@@ -472,7 +472,7 @@ namespace EmEn
 			 * we test, and if the permission is revoked, we skip it. */
 			if ( writableRequested && !IO::writable(directory) )
 			{
-				TraceError{ClassId} << "The directory '" << directory.string() << "' exists, but it's not writable !";
+				TraceError{ClassId} << "The directory '" << Base::IO::toU8String(directory) << "' exists, but it's not writable !";
 
 				return false;
 			}
@@ -485,7 +485,7 @@ namespace EmEn
 				/* If we can't write the directory, we set an error! */
 				if ( !IO::createDirectory(directory) )
 				{
-					TraceError{ClassId} << "Unable to create the directory '" << directory.string() << "' !";
+					TraceError{ClassId} << "Unable to create the directory '" << Base::IO::toU8String(directory) << "' !";
 
 					return false;
 				}
@@ -494,7 +494,7 @@ namespace EmEn
 			{
 				if ( m_showInformation )
 				{
-					TraceInfo{ClassId} << "Trying to use directory '" << directory.string() << "', but doesn't exists ...";
+					TraceInfo{ClassId} << "Trying to use directory '" << Base::IO::toU8String(directory) << "', but doesn't exists ...";
 				}
 
 				return false;
@@ -503,7 +503,7 @@ namespace EmEn
 
 		if ( m_showInformation )
 		{
-			TraceSuccess{ClassId} << "The directory '" << directory.string() << "' is valid !";
+			TraceSuccess{ClassId} << "The directory '" << Base::IO::toU8String(directory) << "' is valid !";
 		}
 
 		return true;
@@ -570,7 +570,7 @@ namespace EmEn
 		/* NOTE: the filename comes from DATA (a resource definition, a resource name): an absolute one would REPLACE the
 		 * data directory in path::append(), and "../" would walk out of the store. It must stay under <data dir>/<path>
 		 * (owner decision 2026-09-30, plan Ave Robustus). The check does not depend on the data directory. */
-		const auto confined = IO::confinedPath(std::filesystem::path{}, std::filesystem::path{filename});
+		const auto confined = IO::confinedPath(std::filesystem::path{}, IO::u8path(filename));
 
 		if ( !confined ) [[unlikely]]
 		{
@@ -581,7 +581,7 @@ namespace EmEn
 
 		for ( auto filepath : m_dataDirectories )
 		{
-			filepath.append(path);
+			filepath /= IO::u8path(path);
 			filepath /= *confined;
 
 			if ( IO::fileExists(filepath) )

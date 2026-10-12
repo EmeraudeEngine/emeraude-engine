@@ -85,11 +85,11 @@ namespace EmEn
 		{
 			if ( m_isUsable )
 			{
-				std::cout << "TracerLogger::TracerLogger() : Log file " << m_filepath << " opened !" "\n";
+				std::cout << "TracerLogger::TracerLogger() : Log file " << Base::IO::toU8String(m_filepath) << " opened !" "\n";
 			}
 			else
 			{
-				std::cerr << "TracerLogger::TracerLogger() : Unable to open the log file " << m_filepath << " !" "\n";
+				std::cerr << "TracerLogger::TracerLogger() : Unable to open the log file " << Base::IO::toU8String(m_filepath) << " !" "\n";
 			}
 		}
 	}
@@ -515,7 +515,7 @@ namespace EmEn
 
 		auto cacheDirectory = m_cacheDirectory;
 
-		return cacheDirectory.append(filename.str());
+		return cacheDirectory /= Base::IO::u8path(filename.str());
 	}
 
 	std::filesystem::path

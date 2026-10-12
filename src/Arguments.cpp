@@ -35,6 +35,7 @@
 #include <system_error>
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
 #endif
@@ -56,7 +57,7 @@ namespace EmEn
 
 		auto argIt = m_rawArguments.cbegin();
 
-		m_binaryFilepath = *argIt;
+		m_binaryFilepath = IO::u8path(*argIt); // An argument is UTF-8 (the wide command line on Windows).
 
 		for ( ++argIt; argIt != m_rawArguments.cend(); ++argIt )
 		{

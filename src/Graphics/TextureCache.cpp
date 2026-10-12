@@ -169,7 +169,7 @@ namespace EmEn::Graphics
 
 		filename += CacheFileExtension;
 
-		return m_cacheDirectory / filename;
+		return m_cacheDirectory / Base::IO::u8path(filename);
 	}
 
 	std::vector< CompressedMipLevel >

@@ -235,13 +235,13 @@ namespace EmEn::Graphics
 		switch ( m_kind )
 		{
 			case Kind::File :
-				return "file " + m_filepath.string();
+				return "file " + Base::IO::toU8String(m_filepath);
 
 			case Kind::FileRange :
-				return "bytes [" + std::to_string(m_offset) + ", +" + std::to_string(m_length) + ") of " + m_filepath.string();
+				return "bytes [" + std::to_string(m_offset) + ", +" + std::to_string(m_length) + ") of " + Base::IO::toU8String(m_filepath);
 
 			case Kind::Embedded :
-				return "embedded image #" + std::to_string(m_offset) + " of " + m_filepath.string();
+				return "embedded image #" + std::to_string(m_offset) + " of " + Base::IO::toU8String(m_filepath);
 		}
 
 		return {};

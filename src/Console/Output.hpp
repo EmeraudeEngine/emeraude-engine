@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp" // Global types
+#include "String.hpp"
 
 namespace EmEn::Console
 {
@@ -214,6 +215,26 @@ namespace EmEn::Console
 				return m_message;
 			}
 
+			/**
+			 * @brief Replaces every invalid UTF-8 sequence of the message with U+FFFD (the base's strict decoder).
+			 * @note The console and MCP protocols promise JSON, which is UTF-8: a command that writes other bytes (a
+			 * path through the ANSI code page, raw binary in a text) is a defect to fix at its source, and this keeps
+			 * the reply valid meanwhile (owner decision 2026-10-12, rule C).
+			 * @return bool Whether something was replaced.
+			 */
+			bool
+			replaceInvalidUTF8 () noexcept
+			{
+				if ( Base::String::isValidUTF8(m_message) )
+				{
+					return false;
+				}
+
+				m_message = Base::String::utf16ToUTF8(Base::String::utf8ToUTF16(m_message));
+
+				return true;
+			}
+
 		private:
 
 			std::string m_message;
@@ -225,4 +246,23 @@ namespace EmEn::Console
 	};
 
 	using Outputs = std::vector< Output >;
+
+	/**
+	 * @brief Replaces every invalid UTF-8 sequence of the outputs' messages with U+FFFD (Output::replaceInvalidUTF8()).
+	 * @param outputs A writable reference to the outputs.
+	 * @return bool Whether something was replaced: the caller names the command in a warning, so the defect stays visible.
+	 */
+	inline
+	bool
+	replaceInvalidUTF8 (Outputs & outputs) noexcept
+	{
+		bool replaced = false;
+
+		for ( auto & output : outputs )
+		{
+			replaced = output.replaceInvalidUTF8() || replaced;
+		}
+
+		return replaced;
+	}
 }

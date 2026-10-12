@@ -148,7 +148,8 @@ namespace EmEn::Net
 			return true;
 		}
 
-		if ( !bundleFile.empty() && !Network::TrustStore::applyCABundleFile(m_impl->tlsContext, bundleFile) )
+		/* NOTE: A setting is UTF-8: IO::u8path(), never the implicit narrow path conversion (ANSI on Windows). */
+		if ( !bundleFile.empty() && !Network::TrustStore::applyCABundleFile(m_impl->tlsContext, IO::u8path(bundleFile)) )
 		{
 			TraceWarning{ClassId} << "Unable to load the CA bundle '" << bundleFile << "' (" << NetCABundleFileKey << "), continuing with the system trust store alone.";
 		}
@@ -223,7 +224,7 @@ namespace EmEn::Net
 		std::stringstream name;
 		name << std::hex << std::setw(16) << std::setfill('0') << Hash::FNV1a(to_string(url));
 
-		auto extension = std::filesystem::path{url.path()}.extension().string();
+		auto extension = Base::IO::toU8String(url.path().extension());
 
 		if ( extension.size() > 1 && extension.size() <= 16 && std::ranges::all_of(extension.begin() + 1, extension.end(), [] (char character) {
 			return std::isalnum(static_cast< unsigned char >(character)) != 0;
@@ -276,7 +277,7 @@ namespace EmEn::Net
 
 			/* NOTE: the index is a file on disk: a tampered name ("../../x", an absolute path) would make an EVICTION
 			 * remove a file anywhere. Confined to the cache directory, or dropped (triad 2026-09-30, plan Ave Robustus). */
-			if ( !IO::confinedPath(m_cacheDirectory, std::filesystem::path{entry.filename}) )
+			if ( !IO::confinedPath(m_cacheDirectory, IO::u8path(entry.filename)) )
 			{
 				TraceWarning{ClassId} << "Cached file name '" << entry.filename << "' leaves the cache directory, entry dropped.";
 
@@ -285,7 +286,7 @@ namespace EmEn::Net
 				continue;
 			}
 
-			if ( !IO::fileExists(m_cacheDirectory / entry.filename) )
+			if ( !IO::fileExists(m_cacheDirectory / IO::u8path(entry.filename)) )
 			{
 				TraceWarning{ClassId} << "Cached file '" << entry.filename << "' vanished, entry dropped.";
 
@@ -438,7 +439,7 @@ namespace EmEn::Net
 
 			std::error_code error;
 
-			std::filesystem::remove(m_cacheDirectory / entryIt->second.filename, error);
+			std::filesystem::remove(m_cacheDirectory / IO::u8path(entryIt->second.filename), error);
 
 			total -= std::min(total, entryIt->second.bytes);
 			m_cache.erase(entryIt);
@@ -462,7 +463,7 @@ namespace EmEn::Net
 
 		for ( const auto & [url, entry] : m_cache )
 		{
-			files.emplace_back(url, m_cacheDirectory / entry.filename, entry.bytes);
+			files.emplace_back(url, m_cacheDirectory / IO::u8path(entry.filename), entry.bytes);
 		}
 
 		return files;
@@ -627,7 +628,7 @@ namespace EmEn::Net
 				const auto cacheIt = m_cache.find(urlString);
 				const auto filename = cacheIt != m_cache.end() ? cacheIt->second.filename : cacheFilenameFor(url);
 
-				m_items.emplace_back(url, m_cacheDirectory / filename);
+				m_items.emplace_back(url, m_cacheDirectory / IO::u8path(filename));
 				ticket = static_cast< int >(m_items.size());
 				m_ticketByURL.emplace(urlString, ticket);
 
@@ -817,7 +818,7 @@ namespace EmEn::Net
 			{
 				item.setDone(bytes);
 
-				m_cache[to_string(url)] = CacheEntry{.filename = filepath.filename().string(), .bytes = bytes, .lastUse = ++m_useCounter};
+				m_cache[to_string(url)] = CacheEntry{.filename = Base::IO::toU8String(filepath.filename()), .bytes = bytes, .lastUse = ++m_useCounter};
 				m_indexDirty = true;
 
 				this->enforceCacheBudget();

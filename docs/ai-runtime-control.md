@@ -202,6 +202,11 @@ act, 127 → 108 tools).
 headers refused (request smuggling); 16 connections, 64 requests waiting for the main thread, 120 s
 idle, 30 s per request. Malformed JSON of any shape answers a JSON-RPC error and never stops the engine.
 
+**Replies are always valid UTF-8** (owner decision, 2026-10-12): the TCP console and the MCP server replace every invalid
+UTF-8 sequence of a command's outputs with U+FFFD before serializing (`Console::replaceInvalidUTF8()`), and log one
+warning naming the command or tool ("answered invalid UTF-8 … Fix its source"). Measured on Windows: a raw `0xFF` byte
+over TCP and a lone-surrogate escape over MCP, echoed by `FileSystem.get()`, used to produce an invalid JSON line.
+
 **The conformance bench — `tools/mcp-conformance.py`** (no SDK needed, plain HTTP): run it after any
 change to `src/Console/` or to a command, with `--trigger-list-change` to press F4 and check the
 notifications. 885 checks pass on `coordinates-debug` (2026-09-27); it has been shown to fail against

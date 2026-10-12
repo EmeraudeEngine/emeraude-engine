@@ -160,7 +160,7 @@ namespace EmEn::Scenes
 	Manager::loadScene (const std::filesystem::path & filepath) noexcept
 	{
 		/* Creates a new resource for the scene definition. */
-		auto sceneDefinition = m_resourceManager.container< DefinitionResource >()->createResource(filepath.stem().string());
+		auto sceneDefinition = m_resourceManager.container< DefinitionResource >()->createResource(Base::IO::toU8String(filepath.stem()));
 
 		if ( sceneDefinition == nullptr )
 		{

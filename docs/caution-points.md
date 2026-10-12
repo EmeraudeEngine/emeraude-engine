@@ -5775,6 +5775,30 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > page is 1252, not UTF-8 (65001)"). ⚠️ The manifest HIDES per-site defects: with it, a `loadGLTF()` of a Ω path and
 > a glTF whose texture name is accented both load, while they fail without it. Verify every per-site fix with an
 > executable WITHOUT the manifest.
+>
+> Step 3 (2026-10-12), every remaining site of base, engine and projet-alpha (the convention: `docs/cpp-conventions.md`
+> § "Paths and Text Encoding"), verified on copies whose `activeCodePage` was removed:
+> - a `loadGLTF()` of a Ω path and a glTF with accented `.bin` / texture names load (they answered "does not exist" /
+>   2 `[Error]`); an FBX under `…\Ωmega\` opens (ufbx takes UTF-8 names);
+> - ⚠️ **fastgltf 0.9.1 aborted the process** on a glTF whose buffer uri percent-decodes to invalid UTF-8 (`%FF.bin`):
+>   `Parser::loadFileFromUri()` hands it to `std::filesystem::u8path()`, which THROWS with MSVC (POSIX only answers
+>   "file not found"). `GLTFLoader::load()` now refuses such an asset BEFORE fastgltf (buffers[] and images[] uris,
+>   percent-decoded, `String::isValidUTF8()`), with a TraceError naming the uri (owner decision: this check, plus a patch
+>   offered upstream);
+> - ⚠️ base `TrustStore::applyCABundleFile()` ABORTED on a bundle under a non-ASCII directory (`path::string()` handed to
+>   `load_verify_file()`): it reads the file through `IO::` and calls `add_certificate_authority()`;
+> - the console and MCP replies are always valid UTF-8 (`docs/ai-runtime-control.md`).
+>
+> **clang-query traps (`tools/check-path-encoding.py`, clang-query 23):**
+> - `anyOf()` INSIDE `hasCanonicalType()` silently drops the pointer / array branches: `Car.cpp`'s `path{ModelPath}`
+>   vanished. Write one `hasType(hasCanonicalType(...))` per branch under an expression-level `anyOf()`.
+> - std's `operator<<` (ostream, path) is a hidden friend in `std::filesystem`: `isInStdNamespace()` does not match a
+>   nested namespace. Match every `<<` of a path except emeraude-base's `BlobTrait` overload.
+> - A narrow string reaches a path without any constructor too: `p = text`, `p /= text`, `p += text`, `assign`,
+>   `append`, `concat`, `replace_filename`, `replace_extension` (member templates): a separate matcher.
+> - Every match is printed twice (`"<name>" binds here` and `"root" binds here`); a discarded `if constexpr` branch of a
+>   NON-template function is still in the AST (IO's own POSIX branches: allowlisted); `--extra-arg=-Wno-everything` is
+>   needed (clang-cl inherits `/WX`). A Release database does not see `#ifdef DEBUG` code: pass the Debug one too.
 
 ### ⚠️ A narrow `main()` gets an ANSI argv on Windows — `Arguments` reads the wide command line (2026-10-01, triad 15)
 

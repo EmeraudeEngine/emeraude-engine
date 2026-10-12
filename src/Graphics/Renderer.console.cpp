@@ -224,7 +224,7 @@ namespace EmEn::Graphics
 			}
 
 			std::stringstream message;
-			message << "Screenshot saved: " << result.files.front();
+			message << "Screenshot saved: " << Base::IO::toU8String(result.files.front());
 
 			/* An IMAGE result: the MCP channel shows it (reduced), the text console prints this message. */
 			return Console::CommandResult::image(result.files.front(), "image/png", message.str());
@@ -258,7 +258,7 @@ namespace EmEn::Graphics
 
 				for ( const auto & file : result.files )
 				{
-					message << "\n  " << file.string();
+					message << "\n  " << Base::IO::toU8String(file);
 				}
 
 				return Console::CommandResult::success(message.str());
@@ -350,7 +350,7 @@ namespace EmEn::Graphics
 			if ( !stream.is_open() )
 			{
 				std::stringstream message;
-				message << "Unable to open " << filepath << " !";
+				message << "Unable to open " << Base::IO::toU8String(filepath) << " !";
 
 				return Console::CommandResult::error(message.str());
 			}
@@ -382,7 +382,7 @@ namespace EmEn::Graphics
 			}
 
 			std::stringstream message;
-			message << "90 frames hardware-encoded (" << totalBytes << " bytes, " << idrCount << " IDR) -> " << filepath;
+			message << "90 frames hardware-encoded (" << totalBytes << " bytes, " << idrCount << " IDR) -> " << Base::IO::toU8String(filepath);
 
 			return Console::CommandResult::success(message.str());
 		});
@@ -706,7 +706,7 @@ namespace EmEn::Graphics
 
 				if ( IO::writable(captureDirectory) )
 				{
-					renderDoc.setCaptureFilePath(captureDirectory.append("capture").string());
+					renderDoc.setCaptureFilePath(Base::IO::toU8String(captureDirectory.append("capture")));
 				}
 
 				const auto frameCount = static_cast< uint32_t >(requestedFrameCount);
@@ -791,7 +791,7 @@ namespace EmEn::Graphics
 			}
 
 			const auto seconds = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
-			const auto filepath = m_primaryServices.fileSystem().userDataDirectory("captures") / ("gpu-memory-" + std::to_string(seconds) + ".json");
+			const auto filepath = m_primaryServices.fileSystem().userDataDirectory("captures") / Base::IO::u8path("gpu-memory-" + std::to_string(seconds) + ".json");
 
 			if ( !IO::filePutContents(filepath, json, false, true) )
 			{

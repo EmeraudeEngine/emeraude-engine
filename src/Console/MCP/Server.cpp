@@ -637,6 +637,13 @@ namespace EmEn::Console::MCP
 				outputs.emplace_back(Severity::Error, error);
 			}
 
+			/* NOTE: The result is JSON, hence UTF-8: an invalid sequence becomes U+FFFD, and the tool is named so that
+			 * its source defect stays visible (owner decision 2026-10-12). */
+			if ( replaceInvalidUTF8(outputs) )
+			{
+				TraceWarning{ClassId} << "The tool '" << name << "' answered invalid UTF-8 : each invalid sequence was replaced with U+FFFD. Fix its source.";
+			}
+
 			/* The result is built on the network thread: an image output is read and reduced there, never
 			 * on the main thread between two frames. */
 			m_http.post([connection = request.connection, id = request.id, modern = request.modern, succeeded, toolOutputs = std::move(outputs)] () {
