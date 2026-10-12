@@ -60,6 +60,8 @@
 /* STL inclusions. */
 #include <array>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <ranges>
 #include <span>
 #include <sstream>
@@ -524,11 +526,23 @@ namespace EmEn::Vulkan
 			m_memoryAllocatorHandle = VK_NULL_HANDLE;
 		}
 
-		if ( m_pipelineCache != VK_NULL_HANDLE )
+		/* NOTE: A restore still inside vkCreatePipelineCache would race this destruction: its owner joins it
+		 * first (Graphics::Renderer::onTerminate()). Reaching here during one is a contract fault. */
+		if ( m_pipelineCacheRestoreInFlight.load(std::memory_order_acquire) )
 		{
-			vkDestroyPipelineCache(m_deviceHandle, m_pipelineCache, nullptr);
+			Tracer::fatal(ClassId, "Device::destroy(), contract violation: a pipeline cache restore is still running (its owner must join it first) ! Aborting.");
 
-			m_pipelineCache = VK_NULL_HANDLE;
+			std::abort();
+		}
+
+		m_pipelineCache.store(VK_NULL_HANDLE, std::memory_order_release);
+
+		for ( auto * cache : {&m_restoredPipelineCache, &m_livePipelineCache} )
+		{
+			if ( const auto handle = cache->exchange(VK_NULL_HANDLE, std::memory_order_acq_rel); handle != VK_NULL_HANDLE )
+			{
+				vkDestroyPipelineCache(m_deviceHandle, handle, nullptr);
+			}
 		}
 
 		if ( m_deviceHandle != VK_NULL_HANDLE )
@@ -1151,9 +1165,9 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::createPipelineCache (const void * initialData, size_t initialSize) noexcept
+	Device::createPipelineCache () noexcept
 	{
-		if ( m_pipelineCache != VK_NULL_HANDLE )
+		if ( m_livePipelineCache.load(std::memory_order_acquire) != VK_NULL_HANDLE )
 		{
 			Tracer::warning(ClassId, "The pipeline cache already exists !");
 
@@ -1164,19 +1178,123 @@ namespace EmEn::Vulkan
 		createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 		createInfo.pNext = nullptr;
 		createInfo.flags = 0;
-		createInfo.initialDataSize = initialData != nullptr ? initialSize : 0;
-		createInfo.pInitialData = initialData;
+		createInfo.initialDataSize = 0;
+		createInfo.pInitialData = nullptr;
 
-		if ( const auto result = vkCreatePipelineCache(m_deviceHandle, &createInfo, nullptr, &m_pipelineCache); result != VK_SUCCESS )
+		VkPipelineCache handle{VK_NULL_HANDLE};
+
+		if ( const auto result = vkCreatePipelineCache(m_deviceHandle, &createInfo, nullptr, &handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create the pipeline cache : " << vkResultToCString(result) << " !";
-
-			m_pipelineCache = VK_NULL_HANDLE;
 
 			return false;
 		}
 
+		m_livePipelineCache.store(handle, std::memory_order_release);
+		m_pipelineCache.store(handle, std::memory_order_release);
+
 		return true;
+	}
+
+	bool
+	Device::restorePipelineCache (std::span< const uint8_t > blob) noexcept
+	{
+		if ( blob.empty() )
+		{
+			Tracer::error(ClassId, "No pipeline cache data to restore !");
+
+			return false;
+		}
+
+		if ( m_pipelineCacheRestoreInFlight.exchange(true, std::memory_order_acq_rel) )
+		{
+			Tracer::error(ClassId, "A pipeline cache restore is already running !");
+
+			return false;
+		}
+
+		if ( m_restoredPipelineCache.load(std::memory_order_acquire) != VK_NULL_HANDLE )
+		{
+			Tracer::warning(ClassId, "The pipeline cache was already restored !");
+
+			m_pipelineCacheRestoreInFlight.store(false, std::memory_order_release);
+
+			return false;
+		}
+
+		VkPipelineCacheCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		createInfo.pNext = nullptr;
+		createInfo.flags = 0;
+		createInfo.initialDataSize = blob.size();
+		createInfo.pInitialData = blob.data();
+
+		VkPipelineCache handle{VK_NULL_HANDLE};
+
+		if ( const auto result = vkCreatePipelineCache(m_deviceHandle, &createInfo, nullptr, &handle); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to restore the pipeline cache : " << vkResultToCString(result) << " !";
+
+			m_pipelineCacheRestoreInFlight.store(false, std::memory_order_release);
+
+			return false;
+		}
+
+		/* NOTE: Published: every vkCreate*Pipelines from now on reads it (pipelineCache()). The live cache keeps
+		 * what was compiled before, merged back at save time (getPipelineCacheData()). */
+		m_restoredPipelineCache.store(handle, std::memory_order_release);
+		m_pipelineCache.store(handle, std::memory_order_release);
+		m_pipelineCacheRestoreInFlight.store(false, std::memory_order_release);
+
+		return true;
+	}
+
+	namespace
+	{
+		/**
+		 * @brief Reads the content of one pipeline cache (the two-call idiom).
+		 * @param device The logical device.
+		 * @param cache The pipeline cache.
+		 * @param data A reference to the destination byte vector, cleared on a failure.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		readPipelineCacheData (VkDevice device, VkPipelineCache cache, std::vector< uint8_t > & data) noexcept
+		{
+			size_t size = 0;
+
+			if ( const auto result = vkGetPipelineCacheData(device, cache, &size, nullptr); result != VK_SUCCESS )
+			{
+				TraceError{Device::ClassId} << "Unable to query the pipeline cache size : " << vkResultToCString(result) << " !";
+
+				return false;
+			}
+
+			if ( size == 0 )
+			{
+				return false;
+			}
+
+			/* ⚠️ Zero-initialised on purpose: drivers are known to leave the blob padding
+			 * uninitialised, which makes the content hash unstable from one call to the next AND
+			 * writes uninitialised process memory into a file on disk. */
+			data.assign(size, 0);
+
+			if ( const auto result = vkGetPipelineCacheData(device, cache, &size, data.data()); result != VK_SUCCESS )
+			{
+				TraceError{Device::ClassId} << "Unable to read the pipeline cache data : " << vkResultToCString(result) << " !";
+
+				data.clear();
+
+				return false;
+			}
+
+			/* NOTE: The second call can report a smaller size than the first one. */
+			data.resize(size);
+
+			return true;
+		}
 	}
 
 	bool
@@ -1184,43 +1302,63 @@ namespace EmEn::Vulkan
 	{
 		data.clear();
 
-		if ( m_pipelineCache == VK_NULL_HANDLE )
+		if ( m_pipelineCacheRestoreInFlight.load(std::memory_order_acquire) )
 		{
-			return false;
-		}
-
-		size_t size = 0;
-
-		if ( const auto result = vkGetPipelineCacheData(m_deviceHandle, m_pipelineCache, &size, nullptr); result != VK_SUCCESS )
-		{
-			TraceError{ClassId} << "Unable to query the pipeline cache size : " << vkResultToCString(result) << " !";
+			Tracer::error(ClassId, "The pipeline cache data cannot be read while a restore runs !");
 
 			return false;
 		}
 
-		if ( size == 0 )
+		const auto liveCache = m_livePipelineCache.load(std::memory_order_acquire);
+		const auto restoredCache = m_restoredPipelineCache.load(std::memory_order_acquire);
+
+		if ( restoredCache == VK_NULL_HANDLE || liveCache == VK_NULL_HANDLE )
 		{
+			const auto cache = restoredCache != VK_NULL_HANDLE ? restoredCache : liveCache;
+
+			return cache != VK_NULL_HANDLE && readPipelineCacheData(m_deviceHandle, cache, data);
+		}
+
+		/* NOTE: Both caches hold pipelines: merged into a temporary cache only this call knows, the
+		 * destination vkMergePipelineCaches wants externally synchronized. */
+		VkPipelineCacheCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		createInfo.pNext = nullptr;
+		createInfo.flags = 0;
+		createInfo.initialDataSize = 0;
+		createInfo.pInitialData = nullptr;
+
+		VkPipelineCache mergedCache{VK_NULL_HANDLE};
+
+		if ( const auto result = vkCreatePipelineCache(m_deviceHandle, &createInfo, nullptr, &mergedCache); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create the pipeline cache to merge into : " << vkResultToCString(result) << " !";
+
 			return false;
 		}
 
-		/* ⚠️ Zero-initialised on purpose: drivers are known to leave the blob padding
-		 * uninitialised, which makes the content hash unstable from one call to the next AND
-		 * writes uninitialised process memory into a file on disk. */
-		data.assign(size, 0);
+		const std::array< VkPipelineCache, 2 > sources{restoredCache, liveCache};
 
-		if ( const auto result = vkGetPipelineCacheData(m_deviceHandle, m_pipelineCache, &size, data.data()); result != VK_SUCCESS )
+		const auto mergeStart = std::chrono::steady_clock::now();
+
+		auto success = false;
+
+		if ( const auto result = vkMergePipelineCaches(m_deviceHandle, mergedCache, static_cast< uint32_t >(sources.size()), sources.data()); result != VK_SUCCESS )
 		{
-			TraceError{ClassId} << "Unable to read the pipeline cache data : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to merge the pipeline caches : " << vkResultToCString(result) << " !";
+		}
+		else
+		{
+			const auto mergeTime = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - mergeStart);
 
-			data.clear();
+			TraceInfo{ClassId} << "The restored and live pipeline caches merged in " << mergeTime.count() << " ms.";
 
-			return false;
+			success = readPipelineCacheData(m_deviceHandle, mergedCache, data);
 		}
 
-		/* NOTE: The second call can report a smaller size than the first one. */
-		data.resize(size);
+		vkDestroyPipelineCache(m_deviceHandle, mergedCache, nullptr);
 
-		return true;
+		return success;
 	}
 
 	void

@@ -190,9 +190,13 @@ The three caches above live for **one run**. Three caches survive across runs, a
 | Generated-GLSL dump (NOT a cache) | `Core/Graphics/Shader/EnableSourceCodeDump` | `false` | `Saphir::ShaderManager` | a DUMP — nothing ever reads it back; renamed Aug 2026, the old `EnableSourceCodeCache` key is silently ignored (no migration) |
 
 **The part that lives here.** `Renderer::loadPipelineCache()` runs right after the device is
-acquired — the cache **must exist BEFORE any pipeline is created**, so do not move that call —
-and `Renderer::savePipelineCache()` runs in `onTerminate()` after `waitIdle()`, when every
-pipeline the run compiled is in it. Measured on `material-debug` (294 graphics pipelines,
+acquired — a cache **must exist BEFORE any pipeline is created**, so do not move that call; it
+creates the empty live cache at once and restores the stored blob on a worker
+(`m_pipelineCacheRestore`, Oct 2026: a driver may compile the whole blob there, 114 s on MoltenVK
+with a cold Metal cache) — and `Renderer::savePipelineCache()` runs in `onTerminate()` after
+`waitIdle()` and after joining that worker, when every pipeline the run compiled is in one of the two
+caches (merged for the save). Design: [`../vulkan/18-…`](../vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md)
+§ "The asynchronous restore". Measured on `material-debug` (294 graphics pipelines,
 RTX 3070 Ti): driver disk cache OFF = **5 702 ms**, driver disk cache OFF but the engine cache
 restored from disk = **31 ms** (182×, 7.4 MB blob); with the driver cache active, 33 ms. The blob
 is never handed to the driver raw — the application header, the load marker and the

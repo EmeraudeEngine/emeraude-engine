@@ -5015,6 +5015,17 @@ says nothing.
 Contracts: [`src/Saphir/AGENTS.md`](../src/Saphir/AGENTS.md),
 [`src/Vulkan/AGENTS.md`](../src/Vulkan/AGENTS.md).
 
+**MoltenVK compiles the WHOLE restored blob inside `vkCreatePipelineCache`** (Oct 2026). With a cold Metal shader
+cache (a macOS or driver update, a purge of `$(getconf DARWIN_USER_CACHE_DIR)<bundle id>`), restoring the 40.7 MB
+all-demo cache took 113.6–114 s on an M6 (153 s on an M2) — on the MAIN thread until the restore moved to a worker
+(`Renderer::m_pipelineCacheRestore`, two caches and one published handle:
+[`subsystems/vulkan/18-…`](subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md)). Three
+consequences to keep in mind: a SHUTDOWN during that restore waits for the driver (it cannot be interrupted; owner
+decision), never abandon it; a pipeline created meanwhile compiles cold on its own thread; and the restore cost
+grows with the blob, not with the scene (sponza alone saves 4.8 MB) — the pruning item. `vkMergePipelineCaches`
+does NOT recompile on MoltenVK (4–8 ms for the 40.7 MB cache), and its destination must be externally
+synchronized: merge into a temporary cache, never into the published one.
+
 ### `disableOptimizer` is a SILENT NO-OP — glslang is built with `ENABLE_OPT=OFF` (Aug 2026)
 
 > [!CAUTION]

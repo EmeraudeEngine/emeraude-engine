@@ -948,6 +948,18 @@ namespace EmEn::Graphics
 
 		m_frameCapture.abandon("The renderer is shutting down.");
 
+		/* NOTE: The restore must have returned before its caches are read (or the device destroyed). It cannot
+		 * be interrupted inside the driver: a shutdown during it waits for it (owner decision 2026-10-12). */
+		if ( m_pipelineCacheRestore.joinable() )
+		{
+			if ( m_device->pipelineCacheRestoreInFlight() )
+			{
+				TraceInfo{ClassId} << "Waiting for the pipeline cache restore to finish (the driver cannot be interrupted)...";
+			}
+
+			m_pipelineCacheRestore.join();
+		}
+
 		/* NOTE: The Vulkan instance owns the device and outlives this service, so the cache is
 		 * still alive here — and every pipeline this run compiled is now in it. */
 		this->savePipelineCache();
@@ -3444,7 +3456,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::loadPipelineCache () const noexcept
+	Renderer::loadPipelineCache () noexcept
 	{
 		if ( !m_primaryServices.settings().getOrSetDefault< bool >(PipelineCacheEnabledKey, DefaultPipelineCacheEnabled) )
 		{
@@ -3457,7 +3469,7 @@ namespace EmEn::Graphics
 		{
 			TraceWarning{ClassId} << "Unable to create '" << directory << "' ! The pipeline cache will not persist.";
 
-			m_device->createPipelineCache(nullptr, 0);
+			static_cast< void >(m_device->createPipelineCache());
 
 			return;
 		}
@@ -3483,7 +3495,7 @@ namespace EmEn::Graphics
 				IO::eraseFile(markerPath);
 			}
 
-			m_device->createPipelineCache(nullptr, 0);
+			static_cast< void >(m_device->createPipelineCache());
 
 			return;
 		}
@@ -3502,7 +3514,7 @@ namespace EmEn::Graphics
 
 			IO::eraseFile(markerPath);
 
-			m_device->createPipelineCache(nullptr, 0);
+			static_cast< void >(m_device->createPipelineCache());
 
 			return;
 		}
@@ -3512,7 +3524,7 @@ namespace EmEn::Graphics
 		 * launch print an IO error. Check first, and start with an empty cache silently. */
 		if ( !IO::exists(filepath) )
 		{
-			m_device->createPipelineCache(nullptr, 0);
+			static_cast< void >(m_device->createPipelineCache());
 
 			return;
 		}
@@ -3521,7 +3533,7 @@ namespace EmEn::Graphics
 
 		if ( !IO::fileGetContents(filepath, fileContent) || fileContent.size() <= sizeof(PipelineCacheFileHeader) )
 		{
-			m_device->createPipelineCache(nullptr, 0);
+			static_cast< void >(m_device->createPipelineCache());
 
 			return;
 		}
@@ -3529,38 +3541,70 @@ namespace EmEn::Graphics
 		PipelineCacheFileHeader header{};
 		std::memcpy(&header, fileContent.data(), sizeof(header));
 
-		const std::vector< uint8_t > blob{fileContent.cbegin() + sizeof(header), fileContent.cend()};
+		/* NOTE: Shared, not moved into the job: a refused thread start destroys the job, and the synchronous
+		 * fallback below still needs the blob. */
+		const auto blob = std::make_shared< const std::vector< uint8_t > >(fileContent.cbegin() + static_cast< std::ptrdiff_t >(sizeof(header)), fileContent.cend());
+
+		fileContent = {};
 
 		const auto & properties = m_device->physicalDevice()->propertiesVK10();
 
 		const auto rejected =
 			header.magic != PipelineCacheMagic ||
 			header.formatVersion != PipelineCacheFormatVersion ||
-			header.dataSize != blob.size() ||
+			header.dataSize != blob->size() ||
 			header.vendorID != properties.vendorID ||
 			header.deviceID != properties.deviceID ||
 			header.driverVersion != properties.driverVersion ||
 			header.pointerABI != static_cast< uint32_t >(sizeof(void *)) ||
 			std::memcmp(header.cacheUUID.data(), static_cast< const void * >(properties.pipelineCacheUUID), VK_UUID_SIZE) != 0 ||
-			header.dataHash != hashBlob(blob);
+			header.dataHash != hashBlob(*blob);
+
+		/* NOTE: The live cache first, empty (no compile): every pipeline has a cache from the first frame on,
+		 * whether the stored one is rejected, restored later, or never restored. */
+		static_cast< void >(m_device->createPipelineCache());
 
 		if ( rejected )
 		{
 			TraceInfo{ClassId} << "The stored pipeline cache does not match this device or driver, starting empty.";
 
-			m_device->createPipelineCache(nullptr, 0);
-
 			return;
 		}
 
-		/* Drop the marker, hand the blob over, remove the marker on the other side. */
+		/* NOTE: The restore runs on a worker (owner decision 2026-10-12, engine docs/todo/
+		 * logic-stalls-on-runtime-pipeline-compile.md): the driver may compile the whole blob inside
+		 * vkCreatePipelineCache (MoltenVK on a cold Metal cache: 114 s for 40.7 MB, the main thread frozen
+		 * before). The job captures values only (no `this`); this renderer owns its thread and joins it in
+		 * onTerminate() and its destructor. The load marker spans the worker's call (owner: a crash of the
+		 * process during it, related or not, discards the cache on the next launch). */
 		IO::filePutContents(markerPath, std::string{"1"});
 
-		m_device->createPipelineCache(blob.data(), blob.size());
+		auto restore = [device = m_device, blob, markerPath] () noexcept {
+			const auto start = std::chrono::steady_clock::now();
+			const auto restored = device->restorePipelineCache(*blob);
+			const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - start);
 
-		IO::eraseFile(markerPath);
+			/* NOTE: The driver returned (a refusal is no crash): the marker goes either way. */
+			IO::eraseFile(markerPath);
 
-		TraceSuccess{ClassId} << "Pipeline cache restored (" << blob.size() << " bytes).";
+			if ( restored )
+			{
+				TraceSuccess{ClassId} << "Pipeline cache restored (" << blob->size() << " bytes) in " << elapsed.count() << " ms.";
+			}
+			else
+			{
+				TraceWarning{ClassId} << "The pipeline cache restore failed after " << elapsed.count() << " ms: the live cache stays in use.";
+			}
+		};
+
+		if ( !m_pipelineCacheRestore.start(restore) )
+		{
+			/* NOTE: The system refused a thread (traced by Base::Thread): restored here, synchronously, as
+			 * before the worker existed. */
+			TraceWarning{ClassId} << "No thread for the pipeline cache restore: restoring it on this thread.";
+
+			restore();
+		}
 	}
 
 	void

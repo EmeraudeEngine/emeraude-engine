@@ -76,13 +76,47 @@ shader binaries removed, validation on). The miss workload was the same as the c
 "on thread" IDs match `sample`'s exactly: 422 creations on the render thread, 22 on the main thread at start-up,
 and 2 on the LOGIC thread (below).
 
+## The M6 diagnosis (2026-10-12)
+
+Mac mini M6, MoltenVK 1.4.2, engine after the lock fix, timings without validation (one fully cold run with it:
+the same numbers, 0 `VUID-`). 11 runs over the cache states:
+- The LOGIC thread stays clean: max 258 ms, 0 cycle over 500 ms. The lock fix holds.
+- Fully cold (Metal cache and engine pipeline cache removed): the RENDER thread takes the compiles, one missed frame
+  each (50–311 ms): sponza 132 misses / 14.1 s, citadel 264 / 37.1 s (mostly the forward light-pass permutations,
+  one set per material, 17 materials there).
+- Metal cache cold, engine pipeline cache warm: a 113.6–114 s MAIN-thread freeze inside `vkCreatePipelineCache`
+  (MoltenVK compiles every Metal library of the 40.7 MB blob, which holds EVERY demo's pipelines: sponza pays for
+  citadel's).
+- Engine cache cold alone is harmless: with a warm Metal cache no compile reaches 50 ms.
+- `MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION` changes nothing: the compiles run one at a time on the
+  calling thread.
+- Two compute pipelines (the IBL baker's, most likely) compile on the LOGIC thread: 88–97 ms on a cold miss.
+
+Proposals: P1 a parallel pipeline warm-up at load (an asynchronous build at first use as the fallback); P2 restore
+the pipeline cache on a worker, then prune it; P3 create the IBL compute pipelines at renderer init or on a worker;
+P4 label the effect and compute pipelines. **The owner chose P2 first.**
+
+## P2 step 1 — the asynchronous restore (done, 2026-10-12)
+
+Design and measurements: engine `docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md`
+§ "The asynchronous restore". Owner decisions: D1 two caches (live, restored) and one published handle; D2 a scene
+loaded during the restore compiles cold on render, no coupling; D3 a shutdown during the restore waits for it,
+traced; D4 the load marker spans the worker's call. On the M6, Metal cache cold and engine cache warm: the scene
+is loaded at 4.0 s instead of after the 114 s freeze; the restore takes 105.6 s on the worker; MoltenVK's merge at
+save costs 4–8 ms (no recompilation).
+
 ## What remains
 
-- The RENDER thread still stalls on a runtime compile: a missed frame per slow pipeline, seconds in all on a cold
-  Metal cache. Cure, with the owner: compile asynchronously (a background queue, the instance skipped or drawn with
-  a fallback until ready), and/or warm the pipelines at load.
-- The cold-start compile of the restored pipeline cache on macOS (above).
-- Two COMPUTE pipelines are created on the LOGIC thread itself (macOS, 124 and 144 ms, unlabelled, right after
-  "Scene will use environment cubemap …": most likely the IBL baker's). A cold miss there lands on the logic.
-  Move that creation off the logic thread, or pre-create the baker's pipelines at start-up.
-- Label the effects' and compute pipelines too (46 "an unlabelled pipeline" lines on macOS).
+- **P2 step 2, pruning** — back to the owner with the step-1 numbers. The blob is opaque: one `VkPipelineCache`
+  cannot be trimmed by entry, so pruning needs several caches keyed by what the engine knows: (a) a size / age cap
+  at save; (b) one cache per scene, restored behind its loading screen (shared pipelines duplicated) — the macOS
+  peer's leaning; (c) one blob per pipeline keyed by the engine's hash, LRU (on MoltenVK a per-pipeline restore on a
+  cold Metal cache costs about a cold compile anyway). Data point: sponza alone saves a 4.8 MB cache, the all-demo
+  cache is 40.7 MB.
+- The RENDER thread still stalls on a runtime compile (P1): a missed frame per slow pipeline, seconds in all on a
+  cold Metal cache, and during a cold restore (D2). Cure, with the owner: warm the scene's pipelines in parallel at
+  load, with an asynchronous build at first use as the fallback (the instance skipped until ready).
+- Two COMPUTE pipelines are created on the LOGIC thread itself (P3; M2: 124 and 144 ms, M6: 88–97 ms, unlabelled,
+  right after "Scene will use environment cubemap …": most likely the IBL baker's). Move that creation off the logic
+  thread, or pre-create the baker's pipelines at start-up.
+- Label the effects' and compute pipelines too (P4; 46 "an unlabelled pipeline" lines on macOS).

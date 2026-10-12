@@ -59,6 +59,7 @@
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "StaticVector.hpp"
+#include "Thread.hpp"
 #include "Time/Statistics/RealTime.hpp"
 #include "PostProcessor.hpp"
 #include "PathDebugOverlay.hpp"
@@ -1659,8 +1660,12 @@ namespace EmEn::Graphics
 			 * BEHAVIOUR; drivers are known to crash inside vkCreatePipelineCache on such input,
 			 * and one such corruption originated INSIDE vkGetPipelineCacheData, which is why a
 			 * load marker guards against a blob that killed the previous run.
+			 * @note MAIN thread, at initialization: creates the live (empty) cache at once, then hands a
+			 * valid blob to m_pipelineCacheRestore (Vulkan::Device::restorePipelineCache()), so the main
+			 * thread never waits for the driver to compile the blob. A refused thread start restores it
+			 * synchronously.
 			 */
-			void loadPipelineCache () const noexcept;
+			void loadPipelineCache () noexcept;
 
 			/**
 			 * @brief Writes the driver pipeline cache to disk.
@@ -1935,6 +1940,11 @@ namespace EmEn::Graphics
 			FrameDiagnostics m_frameDiagnostics;
 			/** @brief Frames recorded by renderFrame() since the start: the frame serial of a capture's metadata. */
 			uint64_t m_renderedFrameSerial{0};
+			/** @brief The asynchronous restore of the stored pipeline cache (loadPipelineCache()). Its job captures
+			 * values only (the device, the blob, the marker path): no member of this renderer is read by it. Joined
+			 * by onTerminate() before the save, and by its own destructor (an initialization that failed after the
+			 * start). Not interruptible: vkCreatePipelineCache has no cancellation, a shutdown waits for it. */
+			Base::Thread m_pipelineCacheRestore;
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			/** @brief Settings: cut the frame around the translucent pass so a glass transmits the indirect diffuse (see EffectSlot::isPreTranslucencySlot). An A/B switch, default true. */

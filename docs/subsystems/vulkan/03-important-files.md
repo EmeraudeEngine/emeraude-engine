@@ -1,6 +1,6 @@
 ## Important Files
 
-- `Device.cpp/.hpp` - Vulkan logical device abstraction; **owns the `VkPipelineCache`** (`pipelineCache()`, `createPipelineCache()`, `getPipelineCacheData()` — see the dedicated section at the end of this file)
+- `Device.cpp/.hpp` - Vulkan logical device abstraction; **owns the `VkPipelineCache` objects** — the live one and the restored one, one of them published (`pipelineCache()`, `createPipelineCache()`, `restorePipelineCache()`, `getPipelineCacheData()` — see [`18-vkpipelinecache-…`](18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md))
 - `Buffer.cpp/.hpp` - Buffer management with VMA
 - `Image.cpp/.hpp` - Texture and image management
 - `GraphicsPipeline.cpp/.hpp` - Render pipelines

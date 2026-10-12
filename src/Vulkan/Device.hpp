@@ -30,11 +30,14 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -156,6 +159,11 @@ namespace EmEn::Vulkan
 			 * @brief Returns the pipeline cache the driver may reuse across pipeline creations.
 			 * @note VK_NULL_HANDLE when the feature is disabled or the cache failed to be created,
 			 * which every vkCreate*Pipelines call accepts as "no cache".
+			 * @note The PUBLISHED cache: the live (empty at start) cache until a restore published the
+			 * restored one (restorePipelineCache(), possibly from another thread). An acquire load,
+			 * paired with the release store of the publication. A caller reads it ONCE per
+			 * vkCreate*Pipelines call and never keeps it across calls; a handle read just before a
+			 * publication stays valid: both caches live until destroy().
 			 * @warning The returned object is INTERNALLY synchronized by the specification: it may
 			 * be handed to concurrent vkCreate*Pipelines calls without external locking.
 			 * @return VkPipelineCache
@@ -164,26 +172,56 @@ namespace EmEn::Vulkan
 			VkPipelineCache
 			pipelineCache () const noexcept
 			{
-				return m_pipelineCache;
+				return m_pipelineCache.load(std::memory_order_acquire);
 			}
 
 			/**
-			 * @brief Creates the pipeline cache, optionally primed with a previously saved blob.
+			 * @brief Creates the LIVE pipeline cache, empty, and publishes it.
+			 * @note Cheap (no driver compile): the cache every pipeline uses until a restore publishes its
+			 * own. Called once, before any pipeline is created.
+			 * @return bool False when the driver refused it (traced): pipelines are then created without a cache.
+			 */
+			[[nodiscard]]
+			bool createPipelineCache () noexcept;
+
+			/**
+			 * @brief Creates the RESTORED pipeline cache from a saved blob and publishes it.
+			 * @note Any thread, once: the driver may compile the whole blob inside this call (MoltenVK on a
+			 * cold Metal cache: 114 s for 40.7 MB on an M6), which is why Graphics::Renderer runs it on a
+			 * worker. Pipelines created meanwhile use the live cache; getPipelineCacheData() merges both.
 			 * @warning The caller MUST have validated the blob first (see Graphics::Renderer): the
 			 * specification's "incompatible data is ignored" promise is gated by valid-usage rules
 			 * that make corrupt, truncated or foreign bytes UNDEFINED BEHAVIOUR — real drivers
 			 * crash inside vkCreatePipelineCache on such input.
-			 * @param initialData A pointer to a validated blob, or nullptr for an empty cache.
-			 * @param initialSize The blob size in bytes.
+			 * @pre The call has returned before destroy() (the caller joins its thread first): a
+			 * destruction during the call is a contract fault, traced and aborted.
+			 * @param blob The validated blob.
+			 * @return bool False when the driver refused it or a restore already ran (traced): the live cache stays published.
+			 */
+			[[nodiscard]]
+			bool restorePipelineCache (std::span< const uint8_t > blob) noexcept;
+
+			/**
+			 * @brief Returns whether restorePipelineCache() is running (on any thread).
 			 * @return bool
 			 */
-			bool createPipelineCache (const void * initialData, size_t initialSize) noexcept;
+			[[nodiscard]]
+			bool
+			pipelineCacheRestoreInFlight () const noexcept
+			{
+				return m_pipelineCacheRestoreInFlight.load(std::memory_order_acquire);
+			}
 
 			/**
 			 * @brief Retrieves the driver-side pipeline cache content, ready to be persisted.
+			 * @note With a restored cache, its content and the live cache's (the pipelines compiled
+			 * before the restore ended) are MERGED into a temporary cache this call creates and
+			 * destroys: vkMergePipelineCaches needs its destination externally synchronized, and only
+			 * this call knows it, so a pipeline created meanwhile on another thread is no hazard.
 			 * @note Uses the two-call idiom and zeroes the destination first: drivers are known to
 			 * leave the padding uninitialized, which both breaks hash stability and leaks process
 			 * memory into the file.
+			 * @pre No restore in flight (the caller joined it).
 			 * @param data A reference to the destination byte vector.
 			 * @return bool
 			 */
@@ -948,7 +986,14 @@ namespace EmEn::Vulkan
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
 			VkDevice m_deviceHandle{VK_NULL_HANDLE};
 			VmaAllocator m_memoryAllocatorHandle{VK_NULL_HANDLE};
-			VkPipelineCache m_pipelineCache{VK_NULL_HANDLE};
+			/* NOTE: The pipeline caches use atomics only, no mutex: the live one is written once before any
+			 * pipeline exists, the restored one once by the restore (any thread), and m_pipelineCache publishes
+			 * one of them (release store, acquire load in pipelineCache()). Both are destroyed by destroy() only,
+			 * after the restore returned (m_pipelineCacheRestoreInFlight). */
+			static_assert(std::atomic< VkPipelineCache >::is_always_lock_free);
+			std::atomic< VkPipelineCache > m_livePipelineCache{VK_NULL_HANDLE};
+			std::atomic< VkPipelineCache > m_restoredPipelineCache{VK_NULL_HANDLE};
+			std::atomic< VkPipelineCache > m_pipelineCache{VK_NULL_HANDLE};
 			PFN_vkGetDeviceFaultInfoEXT m_fpGetDeviceFaultInfo{nullptr};
 			PFN_vkGetQueueCheckpointDataNV m_fpGetQueueCheckpointData{nullptr};
 			PFN_vkCmdSetCheckpointNV m_fpCmdSetCheckpoint{nullptr};
@@ -964,6 +1009,8 @@ namespace EmEn::Vulkan
 			DeferredDestructor * m_deferredDestructor{nullptr};
 			std::mutex m_deferredDestructorAccess;
 			mutable std::atomic_bool m_deviceLostReported{false};
+			/** @brief Set for the duration of restorePipelineCache(): destroy() during it is a contract fault. */
+			std::atomic_bool m_pipelineCacheRestoreInFlight{false};
 			bool m_showInformation{false};
 			bool m_basicSupport{false};
 			bool m_videoEncodeH265Enabled{false};
