@@ -403,6 +403,9 @@ namespace EmEn::Overlay
 			 * with the new size, but the front buffer continues rendering until the application
 			 * explicitly calls swapFramebuffers(). This allows asynchronous renderers (e.g., CEF)
 			 * to prepare new content at the correct size before swapping.
+			 * @note Main thread only (Core::onWindowChanged()). OverlayResized (the framebuffer size) and, on an overlay
+			 * scale transition, OverlayScaleChanged (the overlay scale, the forced one included) are emitted AFTER
+			 * m_physicalRepresentationUpdateMutex is released: an observer may call back into the overlay manager.
 			 * @return bool True if resize succeeded, false on critical failure.
 			 */
 			[[nodiscard]]

@@ -1550,8 +1550,11 @@ namespace EmEn::Overlay
 			std::function< void () > m_redrawRequester; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
 			bool m_transitionResizeRequested{false};
 			bool m_acceleratedSourceEnabled{false};
-			bool m_videoMemorySizeValid{false};
-			bool m_videoMemoryUpToDate{false};
+			/* NOTE: Atomic: the main thread invalidates (a resize, setSize(), setGeometry()), the render thread validates after
+			 * an upload, a content thread (the notifier's timer, a web view) reads them (a data race found by the overlay resize
+			 * TSan stress, 2026-10-12). */
+			std::atomic_bool m_videoMemorySizeValid{false};
+			std::atomic_bool m_videoMemoryUpToDate{false};
 			bool m_transitionBufferEnabled{false};
 			bool m_disablePixmapCopyInTransitionBuffer{false};
 			bool m_memoryMappingEnabled{false};

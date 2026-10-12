@@ -4,6 +4,8 @@ race:libnvidia*
 race:libvulkan*
 race:libglib-2.0*
 race:libgio-2.0*
+# The GTK file dialogs start pango's fontconfig thread at the window service start (a windowed run only).
+race:libfontconfig*
 race:libLLVM*
 race:libgallium*
 # OpenAL Soft is a prebuilt static library inside libEmeraude: its mixer synchronization is invisible to TSan.

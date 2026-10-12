@@ -629,69 +629,79 @@ namespace EmEn::Overlay
 	bool
 	Manager::onWindowResized () noexcept
 	{
-		/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
-		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
+		/* NOTE: Called on the main thread only (Core::onWindowChanged()). The observers are notified AFTER the
+		 * representation lock is released (Ave Robustus II, CP.31/32): an observer that calls back into the overlay
+		 * (a render request ending in render() or updateVideoMemory(), a surface update) would otherwise self-deadlock on
+		 * the non-recursive mutex, or wait on the render thread. The payloads are copies taken under the lock. */
+		std::array< uint32_t, 2 > framebufferSize{0, 0};
+		std::array< float, 2 > contentScale{1.0F, 1.0F};
+		bool scaleChanged = false;
 
-		/* Step 1: Update shared framebuffer properties with new window dimensions.
-		 * Capture the previous content scale first so we can emit OverlayScaleChanged only on a real
-		 * HiDPI-scale transition (cross-monitor move / fractional-scale change), separately from the
-		 * always-emitted OverlayResized (which fires on any size change). */
-		const auto previousScaleX = m_framebufferProperties.screenScaleX();
-		const auto previousScaleY = m_framebufferProperties.screenScaleY();
-
-		this->updateFramebufferProperties();
-
-		/* Step 2: Force ALL screens (visible or not) to recalculate their pixel dimensions.
-		 * The 'true' parameter triggers invalidate() on all surfaces, causing them to
-		 * recreate their transition buffers at the new size.
-		 * NOTE: Surfaces are NOT automatically committed. The active buffer continues to render
-		 * with the old content/size until the application explicitly calls commitTransitionBuffer().
-		 * This allows asynchronous renderers (e.g., CEF) to prepare new content before committing. */
-		this->snapshotScreens();
-
-		for ( const auto & screen : m_screenSnapshot )
 		{
-			if ( screen->empty() )
+			/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
+			const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
+
+			/* Step 1: Update shared framebuffer properties with new window dimensions.
+			 * Capture the previous content scale first so we can emit OverlayScaleChanged only on a real
+			 * HiDPI-scale transition (cross-monitor move / fractional-scale change), separately from the
+			 * always-emitted OverlayResized (which fires on any size change). */
+			const auto previousScaleX = m_framebufferProperties.screenScaleX();
+			const auto previousScaleY = m_framebufferProperties.screenScaleY();
+
+			this->updateFramebufferProperties();
+
+			/* Step 2: Force ALL screens (visible or not) to recalculate their pixel dimensions.
+			 * The 'true' parameter triggers invalidate() on all surfaces, causing them to
+			 * recreate their transition buffers at the new size.
+			 * NOTE: Surfaces are NOT automatically committed. The active buffer continues to render
+			 * with the old content/size until the application explicitly calls commitTransitionBuffer().
+			 * This allows asynchronous renderers (e.g., CEF) to prepare new content before committing. */
+			this->snapshotScreens();
+
+			for ( const auto & screen : m_screenSnapshot )
 			{
-				continue;
+				if ( screen->empty() )
+				{
+					continue;
+				}
+
+				if ( !screen->processSurfaceUpdates(true) )
+				{
+					TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
+				}
+
+				TraceDebug{ClassId} << "The screen '" << screen->name() << "' resized.";
 			}
 
-			if ( !screen->processSurfaceUpdates(true) )
-			{
-				TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
-			}
+			m_screenSnapshot.clear();
 
-			TraceDebug{ClassId} << "The screen '" << screen->name() << "' resized.";
+			/* Step 3: Copy the notification payloads. The scale transition is the overlay's own one: with a forced
+			 * scale (OverlayForceScaleKey) the window content scale differs from the overlay scale on every resize, and
+			 * comparing against it emitted OverlayScaleChanged each time. */
+			const auto & windowState = m_resourceManager.graphicsRenderer().window().state();
+
+			framebufferSize = {windowState.framebufferWidth, windowState.framebufferHeight};
+			contentScale = {m_framebufferProperties.screenScaleX(), m_framebufferProperties.screenScaleY()};
+			scaleChanged = std::abs(contentScale[0] - previousScaleX) > 0.001F || std::abs(contentScale[1] - previousScaleY) > 0.001F;
 		}
 
-		m_screenSnapshot.clear();
+		/* Step 4: Notify observers of the resize completion, the lock released. */
+		this->notify(OverlayResized, framebufferSize);
 
-		/* Step 3: Notify observers of the resize completion. */
-		const auto & windowState = m_resourceManager.graphicsRenderer().window().state();
-
-		this->notify(OverlayResized, std::array< uint32_t, 2 >{
-		   windowState.framebufferWidth,
-		   windowState.framebufferHeight
-		});
-
-		/* Step 4: On a real HiDPI content-scale transition, emit OverlayScaleChanged in addition to
+		/* Step 5: On a real HiDPI content-scale transition, emit OverlayScaleChanged in addition to
 		 * OverlayResized. Observers that must react to scale specifically (e.g. an OSR web-view latch)
 		 * can key on this single signal instead of caching and diffing the scale themselves. */
-		if ( std::abs(windowState.contentXScale - previousScaleX) > 0.001F ||
-			 std::abs(windowState.contentYScale - previousScaleY) > 0.001F )
+		if ( scaleChanged )
 		{
-			this->notify(OverlayScaleChanged, std::array< float, 2 >{
-			   windowState.contentXScale,
-			   windowState.contentYScale
-			});
+			this->notify(OverlayScaleChanged, contentScale);
 		}
 
 		TraceDebug{ClassId} <<
 			"The overlay manager received last windows properties. " "\n"
-			"Width: " << windowState.framebufferWidth << "\n"
-			"Height: " << windowState.framebufferHeight << "\n"
-			"ScaleX: " << windowState.contentXScale << "\n"
-			"ScaleY: " << windowState.contentYScale << "\n";
+			"Width: " << framebufferSize[0] << "\n"
+			"Height: " << framebufferSize[1] << "\n"
+			"ScaleX: " << contentScale[0] << "\n"
+			"ScaleY: " << contentScale[1] << "\n";
 
 		return true;
 	}

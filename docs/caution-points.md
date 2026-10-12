@@ -8207,14 +8207,26 @@ the network) locks what it shares, or defers to its own thread.
 `Overlay::Manager::onWindowResized()` (the window's thread) and `updateVideoMemory()` take the representation lock,
 then the screens lock (`snapshotScreens()`); `render()` (the render thread) took the screens lock first and the
 representation lock further down — a resize during a frame could deadlock (TSan lock-order-inversion). `render()` now
-takes both in one `std::scoped_lock`. ⚠️ `onWindowResized()` still notifies its observers with the representation lock
-held (todo `overlay-resize-notifies-under-lock`).
+takes both in one `std::scoped_lock`.
+
+`onWindowResized()` (main thread only, `Core::onWindowChanged()`) emits `OverlayResized` / `OverlayScaleChanged` AFTER
+releasing the representation lock (2026-10-12): an observer that called back into the manager (`updateVideoMemory()`)
+locked the mutex its own thread held — reproduced by `EmeraudeOverlayResizeStress` (main thread parked in
+`updateVideoMemory()` under `onWindowResized()`, the process deaf to SIGTERM). The payloads are copies taken under the
+lock. `OverlayScaleChanged` now compares the OVERLAY scale before and after (with `OverlayForceScaleKey` the window
+content scale differs from it, and the old comparison fired the signal on every resize); its payload is that scale.
+⚠️ Still under the lock: `RedrawRequested` (a surface's redraw requester, from `invalidate()` / `processUpdates()`) and
+the surface hooks run by `processUpdates()` — todo `overlay-redraw-requested-under-lock`.
 
 ### ⚠️ Overlay::Surface visibility is atomic (2026-10-12)
 
 `show()` / `hide()` are called from any thread (the notifier's timer, a web view), `isVisible()` by the render thread:
-`m_isVisible` is a `std::atomic_bool` (it was a plain `bool`, a race reported by TSan). The other `Surface` flags are
-written under the surface's own protocol; a new cross-thread flag must be atomic or locked too.
+`m_isVisible` is a `std::atomic_bool` (it was a plain `bool`, a race reported by TSan). So are `m_videoMemorySizeValid`
+and `m_videoMemoryUpToDate` (2026-10-12, the overlay resize stress: `invalidate()` on the main thread under the
+representation lock, `isVideoMemorySizeValid()` read by the notifier's timer under the surface's buffer lock — two
+different locks). A new cross-thread flag must be atomic or locked too. ⚠️ Atomics remove the data race, not the
+lost update: `setGeometry()` / `setSize()` write `m_rectangle` and invalidate without any lock while the render thread
+recreates the buffer from it — todo `overlay-surface-geometry-setters-unsynchronized`.
 
 ### ⚠️ A resource's data is published by isLoaded() — read it only then (2026-10-12)
 
