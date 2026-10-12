@@ -765,12 +765,55 @@ namespace EmEn::Vulkan
 			size_t getTotalQueueCount () const noexcept;
 
 			/**
-			 * @brief Gets the maximum sample the GPU can handle for multisample rendering.
-			 * @note This method checks the smallest support between the color buffer and the depth buffer.
+			 * @brief Returns the sample counts a framebuffer supports for BOTH its colour and its depth attachments.
+			 * @note The intersection (bitwise AND) of the two masks: a count is usable only when each attachment
+			 * supports it. The masks may have gaps, so their numeric minimum is not their intersection.
+			 * @return VkSampleCountFlags
+			 */
+			[[nodiscard]]
+			VkSampleCountFlags
+			supportedFramebufferSampleCounts () const noexcept
+			{
+				return m_properties.properties.limits.framebufferColorSampleCounts & m_properties.properties.limits.framebufferDepthSampleCounts;
+			}
+
+			/**
+			 * @brief Gets the maximum sample count the GPU can handle for multisample rendering (colour and depth).
+			 * @see supportedFramebufferSampleCounts()
 			 * @return VkSampleCountFlagBits
 			 */
 			[[nodiscard]]
-			VkSampleCountFlagBits getMaxAvailableSampleCount () const noexcept;
+			VkSampleCountFlagBits
+			getMaxAvailableSampleCount () const noexcept
+			{
+				return PhysicalDevice::highestSampleCountAtMost(this->supportedFramebufferSampleCounts(), 64);
+			}
+
+			/**
+			 * @brief Returns the highest sample count of a support mask that does not exceed a requested count.
+			 * @note A Vulkan sample-count bit is its own count (VK_SAMPLE_COUNT_4_BIT == 4). When no bit of the mask is at
+			 * or below the request (a request of 0 or 1 included), the answer is VK_SAMPLE_COUNT_1_BIT, which every
+			 * framebuffer supports.
+			 * @param supported A mask of supported sample counts.
+			 * @param requested The highest acceptable count (any value, not only a power of two).
+			 * @return VkSampleCountFlagBits
+			 */
+			[[nodiscard]]
+			static
+			constexpr
+			VkSampleCountFlagBits
+			highestSampleCountAtMost (VkSampleCountFlags supported, uint32_t requested) noexcept
+			{
+				for ( uint32_t count = VK_SAMPLE_COUNT_64_BIT; count > VK_SAMPLE_COUNT_1_BIT; count >>= 1U )
+				{
+					if ( count <= requested && (supported & count) != 0U )
+					{
+						return static_cast< VkSampleCountFlagBits >(count);
+					}
+				}
+
+				return VK_SAMPLE_COUNT_1_BIT;
+			}
 
 			/**
 			 * @brief Converts UUID from vulkan to a printable string.

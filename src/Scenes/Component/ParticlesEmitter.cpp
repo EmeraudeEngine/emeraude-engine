@@ -56,6 +56,16 @@ namespace EmEn::Scenes::Component
 		const auto emitterLocation = this->getWorldCoordinates();
 		const auto emitterMatrix = emitterLocation.getModelMatrix();
 
+		/* NOTE: A timed emission ends after its last cycle. The compare-exchange keeps a start() or a stop() made meanwhile
+		 * from another thread: only the value read is decremented. */
+		if ( auto cyclesLeft = m_emissionCyclesLeft.load(); cyclesLeft > 0 && this->isEmitting() )
+		{
+			if ( m_emissionCyclesLeft.compare_exchange_strong(cyclesLeft, cyclesLeft - 1) && cyclesLeft == 1 )
+			{
+				this->disableFlag(IsEmitting);
+			}
+		}
+
 		/* Particle parameters. */
 		uint32_t activeInstanceCount = 0;
 		uint32_t newParticles = this->isEmitting() ? m_particleGeneratedPerCycle : 0;
@@ -250,29 +260,8 @@ namespace EmEn::Scenes::Component
 	void
 	ParticlesEmitter::start (uint32_t duration) noexcept
 	{
+		m_emissionCyclesLeft.store(millisecondsToLogicCycles(duration));
+
 		this->enableFlag(IsEmitting);
-
-		if ( duration > 0 )
-		{
-			m_timedEvent = std::make_unique< Time::TimedEvent< uint64_t, std::micro > >(
-				[&] (Time::TimerID /*timerID*/) {
-					this->stop();
-
-					return true;
-				},
-				duration,
-				true
-			);
-
-			/* A duration that cannot be timed is refused, not left emitting forever (Base::Thread traced the refusal). */
-			if ( !m_timedEvent->start() )
-			{
-				TraceError{ClassId} << "The emission timer could not start: the timed emission is refused !";
-
-				m_timedEvent = nullptr;
-
-				this->disableFlag(IsEmitting);
-			}
-		}
 	}
 }

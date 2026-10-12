@@ -265,6 +265,22 @@ of our frames does not unwind, it terminates the process. Therefore:
   Linux helper validates `joinable()` after construction). Same family: `.at()`, `std::stoi`,
   `std::stoul`, `std::regex` — validate first, then use the non-throwing form (`operator[]` after a
   bounds check, `std::from_chars`).
+- **`.at()` is never a checked access here**: out of range it throws `std::out_of_range`, i.e. the
+  process aborts. Since 2026-10-12 the engine's `src/` and projet-alpha's `src/` hold zero `.at()`
+  call (`/usr/bin/grep -rn -E '(\.|->)at ?\(' src`; plain `grep` is ugrep and skips the engine — the
+  one match left is a history comment in `JoystickController.cpp`). The
+  replacements, by case: an index proven by a loop bound, a size check just before or a modulo of
+  the size → `operator[]` on a `std::vector` (a one-line comment when the proof is not on the
+  screen); on a `std::array` (clang-tidy `pro-bounds-constant-array-index`) a range-for — with a
+  C++20 init-statement `for ( std::size_t index = 0; const auto & item : items )` when the index is
+  needed, parallel arrays merged into one array of structs — or, for a computed pick,
+  `*std::next(array.cbegin(), static_cast< std::ptrdiff_t >(index))`; a constant
+  index into a `std::array` → `std::get< N >()` (checked at compile time); a `std::map` /
+  `std::unordered_map` key → `find()` and an explicit `end()` branch (reuse the iterator of a
+  `find()` already made, never look the key up twice); an index from data, the console, a page or
+  a public API → an explicit `size()` check and a refusal that follows the function's contract
+  (`nullptr` in `MusicResource::buffer()`, an error + face #0 in `CubemapResource::hdrFaceData()`
+  like its sibling `data()`, `false` + `TraceError`).
 - MSVC warning **C4530** ("exception handler used, but unwind semantics are not enabled") is the
   compiler telling you a `try` slipped into a `/EHs-` build. It is a defect report, not noise.
 

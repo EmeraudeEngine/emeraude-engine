@@ -30,10 +30,12 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <memory>
 
 /* Local inclusions for usages. */
 #include "AmbienceSound.hpp"
+#include "Constants.hpp"
 #include "Source.hpp"
 
 namespace EmEn::Audio
@@ -65,7 +67,7 @@ namespace EmEn::Audio
 			setTimeBeforeNextPlay (unsigned int time) noexcept
 			{
 				m_timeBeforeNextPlay = time;
-				m_time = 0;
+				m_elapsedCycles = 0;
 			}
 
 			/**
@@ -165,10 +167,9 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Updates the current time.
-			 * @param time The new current time in milliseconds.
+			 * @brief Advances the channel by one logic cycle (the clock is a cycle count, its time derived exactly).
 			 */
-			void update (unsigned int time) noexcept;
+			void update () noexcept;
 
 			/**
 			 * @brief Returns whether is time to play the channel or not.
@@ -178,7 +179,7 @@ namespace EmEn::Audio
 			bool
 			isTimeToPlay () const noexcept
 			{
-				return m_time > m_timeBeforeNextPlay;
+				return logicCyclesToMilliseconds(m_elapsedCycles) > m_timeBeforeNextPlay;
 			}
 
 			/**
@@ -215,7 +216,7 @@ namespace EmEn::Audio
 			SourceRequest m_source;
 			Base::Math::Vector< 3, float > m_position;
 			Base::Math::Vector< 3, float > m_velocity;
+			uint64_t m_elapsedCycles{0}; /**< Logic cycles since the last play: the clock (never 16 ms added per cycle, 4.2 % slow). */
 			unsigned int m_timeBeforeNextPlay{0U};
-			unsigned int m_time{0U};
 	};
 }

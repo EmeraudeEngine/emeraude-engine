@@ -1954,11 +1954,14 @@ namespace EmEn::Scenes::Loaders
 			 * declared here — there is no partial support to fall back on.
 			 *  - KHR_texture_basisu    : images are KTX2 containers, see loadImages().
 			 *  - EXT_meshopt_compression : buffer views are meshopt-encoded, see MeshoptBufferCache.
+			 *    KHR_meshopt_compression, its ratified successor, is the same bitstream plus the Color
+			 *    filter: fastgltf fills the same `BufferView::meshoptCompression` for both.
 			 *  - KHR_mesh_quantization : attributes are normalised integers. Nothing to do — fastgltf
 			 *    dequantises them on read, and the compensating scale is carried by the node
 			 *    transforms extractFrameFromNode() already reads. */
 			fastgltf::Extensions::KHR_texture_basisu |
 			fastgltf::Extensions::EXT_meshopt_compression |
+			fastgltf::Extensions::KHR_meshopt_compression |
 			fastgltf::Extensions::KHR_mesh_quantization |
 			/* NOTE: The second compression family, independent from the meshopt one above.
 			 * fastgltf only PARSES the extension — it fills `Primitive::dracoCompression` with

@@ -368,13 +368,15 @@ namespace EmEn::Scenes
 	void
 	Scene::processLogics (size_t engineCycle, bool enablePhysicalSimulation) noexcept
 	{
-		m_lifetimeUS += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
-		/* ⚠️ DERIVED from the microsecond clock, never accumulated on its own.
+		/* ⚠️ The clock is a CYCLE COUNT; both times are DERIVED from it, never accumulated.
 		 * WorldPhysicsUpdateCycleDurationMS is 1000/60 in INTEGER arithmetic = 16, so accumulating
 		 * it gained only 960 ms per real second: every consumer of lifetimeMS ran 4.2% SLOW, which
 		 * on a flipbook is an audible-scale error (a 228 ms Doom animation frame drifts a full
-		 * frame behind every ~24 cycles). The microsecond cycle is exact (16666), so millisecond
-		 * time is a projection of it. Still monotonic, still cheap. */
+		 * frame behind every ~24 cycles). The microsecond step is not exact either (16666 for
+		 * 16666.67: 40 µs lost per second), hence the cycle count (Constants.hpp,
+		 * logicCyclesToMicroseconds()). Still monotonic, still cheap. */
+		++m_lifetimeCycles;
+		m_lifetimeUS = logicCyclesToMicroseconds(m_lifetimeCycles);
 		m_lifetimeMS = static_cast< uint32_t >(m_lifetimeUS / 1000ULL);
 
 		/* Deferred background photometry: requests come from ANY thread (console, input

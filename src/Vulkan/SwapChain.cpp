@@ -465,7 +465,7 @@ namespace EmEn::Vulkan
 			"Vulkan minimum extent detected : " << capabilities.minImageExtent.width << 'X' << capabilities.minImageExtent.height << "\n"
 			"Vulkan maximum extent detected : " << capabilities.maxImageExtent.width << 'X' << capabilities.maxImageExtent.height << "\n"
 			"Vulkan current extent detected : " << capabilities.currentExtent.width << 'X' << capabilities.currentExtent.height << "\n"
-			"GLFW framebuffer : " << framebufferSize.at(0) << 'X' << framebufferSize.at(1);*/
+			"GLFW framebuffer : " << framebufferSize[0] << 'X' << framebufferSize[1];*/
 
 		return {
 			std::clamp(framebufferSize[0], capabilities.minImageExtent.width, capabilities.maxImageExtent.width),

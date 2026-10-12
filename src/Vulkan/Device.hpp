@@ -787,9 +787,10 @@ namespace EmEn::Vulkan
 			VkFormat findSupportedFormat (const std::vector< VkFormat > & formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags) const noexcept;
 
 			/**
-			 * @brief Returns the available samples against the desired for multisampling rendering.
-			 * @param samples The number of samples desired.
-			 * @return VkSampleCountFlagBits
+			 * @brief Returns the sample count to use for a desired one: the highest count that the colour AND the depth
+			 * attachments support, at most the desired one (1 when none is).
+			 * @param samples The number of samples desired (any value, typically from the settings).
+			 * @return uint32_t A sample count, also a valid VkSampleCountFlagBits value.
 			 */
 			[[nodiscard]]
 			uint32_t checkMultisampleCount (uint32_t samples) const noexcept;

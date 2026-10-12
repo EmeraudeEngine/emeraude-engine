@@ -143,6 +143,7 @@ namespace EmEn::Scenes::Component
 			state["entity"] = emitter.parentEntity().name();
 			state["type"] = ParticlesEmitter::ClassId;
 			state["emitting"] = emitter.isEmitting();
+			state["emissionCyclesLeft"] = static_cast< Json::UInt64 >(emitter.emissionCyclesLeft());
 			state["logicCyclesPerSecond"] = WorldPhysicsUpdateFrequency< int >;
 			state["particleLimit"] = static_cast< Json::UInt64 >(emitter.particleLimit());
 			state["particlesPerCycle"] = emitter.particleGeneratedPerCycle();
@@ -286,7 +287,7 @@ namespace EmEn::Scenes::Component
 					const Console::Parameter entity{entityParameter("the particles emitter")};
 					const Console::Parameter component{componentParameter(ParticlesEmitter::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a particles emitter as JSON: emitting, particle limit, particles per logic cycle, lifetime (logic cycles), size range, size delta per cycle, spreading radius, chaos and the physical properties of one particle.",
+					this->bindCommand("getState", "Returns the state of a particles emitter as JSON: emitting, logic cycles left of a timed emission (0: not timed), particle limit, particles per logic cycle, lifetime (logic cycles), size range, size delta per cycle, spreading radius, chaos and the physical properties of one particle.",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
 							return this->act(entityName, componentName, [] (ParticlesEmitter & emitter) {
@@ -294,15 +295,24 @@ namespace EmEn::Scenes::Component
 							});
 						}, Console::CommandHint::ReadOnly);
 
-					/* NOTE: ParticlesEmitter::start(duration) is not exposed with its timeout: the timer is armed in
-					 * microseconds where the declaration documents milliseconds (engine item particles-emitter-timeout-unit). */
-					this->bindCommand("start", "Starts the emission of a particles emitter.",
-						{entity, component},
-						[this] (const std::string & entityName, const std::string & componentName) {
-							return this->act(entityName, componentName, [] (ParticlesEmitter & emitter) {
-								emitter.start();
+					this->bindCommand("start", "Starts the emission of a particles emitter, for a duration or until stopped.",
+						{
+							entity,
+							component,
+							{"durationMS", "Stops the emission after this many milliseconds (counted in logic cycles, 60 per second, rounded up); none or 0 = until stopped."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, std::optional< int32_t > durationMS) {
+							if ( durationMS.has_value() && *durationMS < 0 )
+							{
+								return Console::CommandResult::error("The emission duration must be 0 or more milliseconds.");
+							}
 
-								return changed(emitter, "Particles emitter '" + emitter.name() + "' emitting.");
+							return this->act(entityName, componentName, [durationMS] (ParticlesEmitter & emitter) {
+								const auto duration = static_cast< uint32_t >(durationMS.value_or(0));
+
+								emitter.start(duration);
+
+								return changed(emitter, "Particles emitter '" + emitter.name() + "' emitting" + (duration > 0 ? " for " + std::to_string(millisecondsToLogicCycles(duration)) + " logic cycle(s)." : "."));
 							});
 						}, Console::CommandHint::Idempotent);
 

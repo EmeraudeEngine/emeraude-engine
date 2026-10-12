@@ -42,6 +42,7 @@
 #include <string_view>
 
 /* Local inclusions. */
+#include "Console/JSONNumber.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
@@ -575,17 +576,9 @@ namespace EmEn::Graphics
 		this->bindCommand("getFrameDiagnostics", "Returns the diagnostics of the last rendered frame as JSON: the tone mapper metering and the overflow census (last counted frame, statistics window, self-test).", [this] () {
 			const auto diagnostics = this->frameDiagnostics();
 
-			/* JSON has no NaN nor infinity: a non-finite float is written as null. */
+			/* JSON has no NaN nor infinity: a non-finite float is written as null (Console/JSONNumber.hpp). */
 			const auto number = [] (float value) {
-				if ( !std::isfinite(value) )
-				{
-					return std::string{"null"};
-				}
-
-				std::stringstream text;
-				text << std::setprecision(9) << value;
-
-				return text.str();
+				return Console::jsonNumber(value);
 			};
 
 			/* The names are engine identifiers; escape what JSON requires anyway. */

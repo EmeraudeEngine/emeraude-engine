@@ -3222,7 +3222,9 @@ namespace EmEn::Scenes
 			Base::Randomizer< int > m_integerRandomizer;
 			/** @brief Half-size of cubic scene boundary in meters. */
 			float m_boundary{0};
-			/** @brief Accumulated scene runtime in microseconds. */
+			/** @brief Logic cycles processed: the clock m_lifetimeUS and m_lifetimeMS are derived from. */
+			uint64_t m_lifetimeCycles{0};
+			/** @brief Scene runtime in microseconds, derived from m_lifetimeCycles. */
 			uint64_t m_lifetimeUS{0};
 			Base::Math::Vector< 3, float > m_windDirection{1.0F, 0.0F, 0.0F};
 			float m_windStrength{0.0F};
@@ -3231,7 +3233,7 @@ namespace EmEn::Scenes
 			 * it to build the previous vertex position; feeding it the current time reports zero
 			 * velocity for a moving vertex and the foliage smears under TAA. */
 			float m_previousWindTime{0.0F};
-			/** @brief Accumulated scene runtime in milliseconds. */
+			/** @brief Scene runtime in milliseconds, derived from m_lifetimeCycles. */
 			uint32_t m_lifetimeMS{0};
 			/** @brief Number of logic cycles executed. */
 			size_t m_cycle{0};

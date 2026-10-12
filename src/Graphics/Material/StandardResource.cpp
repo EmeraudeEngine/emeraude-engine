@@ -4151,8 +4151,9 @@ namespace EmEn::Graphics::Material
 		 * the raw albedo while shading the modulated one is exactly how the two diverge. */
 		if ( this->usingVertexColors() )
 		{
-			const auto rawAlbedo = this->isComponentPresent(ComponentType::Albedo)
-				? std::string{m_components.at(ComponentType::Albedo)->variableName()}
+			const auto albedoIt = m_components.find(ComponentType::Albedo);
+			const auto rawAlbedo = albedoIt != m_components.cend()
+				? std::string{albedoIt->second->variableName()}
 				: MaterialUB(UniformBlock::Component::AlbedoColor);
 
 			Code{fragmentShader, Location::Top} << "const vec4 " << SurfaceAlbedoFinal << " = " << rawAlbedo << " * " << ShaderVariable::PrimaryVertexColor << ";";

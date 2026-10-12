@@ -329,6 +329,19 @@ namespace EmEn
 			bool registerDirectory (const std::filesystem::path & directoryPath, bool createDirectory, bool writableRequested, std::filesystem::path & finalDirectoryPath) const noexcept;
 
 			/**
+			 * @brief Registers a directory forced by a command-line argument (--config-directory, --cache-directory).
+			 * @note Owner decision 2026-10-12: a missing forced directory is CREATED, like the default locations, but only
+			 * when its parent exists (a mistyped parent path is never built silently). A file at that path, a missing
+			 * parent, a refused creation or a read-only directory stop the start with an error naming the path.
+			 * @param argumentName The command-line argument, for the error message.
+			 * @param directoryPath A reference to the forced path (UTF-8 decoded already, IO::u8path()).
+			 * @param finalDirectoryPath A reference to the registered path, written on success.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool registerForcedDirectory (const char * argumentName, const std::filesystem::path & directoryPath, std::filesystem::path & finalDirectoryPath) const noexcept;
+
+			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
 			 * @param obj A reference to the object to print.

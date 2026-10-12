@@ -61,69 +61,15 @@
 #include "Resources/Manager.hpp"
 #include "json/json.h"
 #include "FastJSON.hpp"
+#include "Console/JSONNumber.hpp"
 
 namespace EmEn::Scenes
 {
 	using namespace Base;
 
-	namespace
-	{
-		/** @brief A JSON number: 9 significant digits, null when not finite (JSON has no NaN nor infinity). */
-		struct JSONNumber final
-		{
-			float value;
-
-			friend
-			std::ostream &
-			operator<< (std::ostream & output, const JSONNumber & number) noexcept
-			{
-				if ( std::isfinite(number.value) )
-				{
-					return output << std::setprecision(9) << number.value;
-				}
-
-				return output << "null";
-			}
-		};
-
-		[[nodiscard]]
-		JSONNumber
-		jsonNumber (float value) noexcept
-		{
-			return JSONNumber{value};
-		}
-
-		/**
-		 * @brief Writes a 3D vector as a JSON array: a non-finite component is written null (JSON has no NaN nor
-		 * infinity), the others with the float round-trip precision (9 significant digits).
-		 * @param output A reference to the stream.
-		 * @param vector A reference to the vector.
-		 */
-		void
-		writeJSONVector (std::stringstream & output, const Math::Vector< 3, float > & vector) noexcept
-		{
-			output << '[';
-
-			for ( size_t index = 0; index < 3; ++index )
-			{
-				if ( index > 0 )
-				{
-					output << ',';
-				}
-
-				if ( std::isfinite(vector[index]) )
-				{
-					output << std::setprecision(9) << vector[index];
-				}
-				else
-				{
-					output << "null";
-				}
-			}
-
-			output << ']';
-		}
-	}
+	/* NOTE: The hand-streamed JSON answers write their floats through the console's ONE rule (Console/JSONNumber.hpp). */
+	using Console::jsonNumber;
+	using Console::writeJSONVector;
 
 	void
 	Manager::onRegisterToConsole () noexcept
@@ -1634,17 +1580,36 @@ namespace EmEn::Scenes
 				m_resourceManager.graphicsRenderer().enableTBNSpaceRendering(state);
 
 				size_t toggled = 0;
+				size_t skipped = 0;
 
-				m_activeScene->forEachRenderableInstance([state, &toggled] (const auto & renderableInstance) {
-					if ( renderableInstance != nullptr )
+				m_activeScene->forEachRenderableInstance([state, &toggled, &skipped] (const auto & renderableInstance) {
+					if ( renderableInstance == nullptr )
 					{
-						renderableInstance->enableDisplayTBNSpace(state);
-						++toggled;
+						return;
 					}
+
+					/* NOTE: A geometry without a vertex tangent space cannot show it: never enabled (a geometry still
+					 * loading is decided by the instance itself, once). */
+					if ( state && renderableInstance->geometryLacksTangentSpace() )
+					{
+						++skipped;
+
+						return;
+					}
+
+					renderableInstance->enableDisplayTBNSpace(state);
+					++toggled;
 				});
 
 				std::stringstream message;
-				message << "TBN space rendering " << (state ? "enabled" : "disabled") << " on " << toggled << " renderable instance(s) of scene '" << m_activeScene->name() << "'.";
+				message << "TBN space rendering " << (state ? "enabled" : "disabled") << " on " << toggled << " renderable instance(s) of scene '" << m_activeScene->name() << "'";
+
+				if ( skipped > 0 )
+				{
+					message << ", skipped " << skipped << " whose geometry has no tangent space";
+				}
+
+				message << '.';
 
 				return Console::CommandResult::success(message.str());
 			}, Console::CommandHint::Idempotent);

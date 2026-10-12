@@ -121,7 +121,14 @@ namespace EmEn::Audio
 			std::shared_ptr< const Buffer >
 			buffer (size_t bufferIndex = 0) const noexcept override
 			{
-				return m_buffers.at(bufferIndex);
+				/* The interface contract is a null buffer when none is available: an unloaded music
+				 * has no chunk, and Source::play() asks for #0 when streamable() is 0. */
+				if ( bufferIndex >= m_buffers.size() )
+				{
+					return nullptr;
+				}
+
+				return m_buffers[bufferIndex];
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */

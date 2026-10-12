@@ -63,7 +63,9 @@ bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
 ```
 
 ### Dependency Management
-- Use `addDependency()` to declare dependencies
+- Use `addDependency()` to declare dependencies — ONLY while the resource is enqueuing (`Enqueuing` /
+  `ManualEnqueuing`). Since 2026-10-12 a `Loading` or `Loaded` resource REFUSES it (error + `false`): it used to log the
+  refusal and add the dependency anyway, which the resource then never waited for.
 - `onDependenciesLoaded()` for finalization (GPU upload, etc.)
 - Automatic parent-child event propagation
 - Reference counting with `std::shared_ptr`

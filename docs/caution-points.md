@@ -1421,6 +1421,9 @@ sat on one).
 > behind the uniform lane and the shadow camera) falls back to the frame's forward axis for a light
 > AT the origin in position-to-origin mode: normalising a null position wrote NaN into the light
 > buffer, which the vertex shader normalises again.
+> Since 2026-10-12 it is the ONLY expression: the five sites that open-coded `-position.normalized()`
+> (shadow matrices, CSM, the light-space matrix, the RT light SSBO in `LightSet`) call it too — a light at the origin
+> got a ZERO direction there. Never re-open-code the rule.
 >
 > **Rules:** anything a component triggers from `processLogics()` that reaches back into its
 > entity (a move, a notification, a boundaries change) goes through a DEFERRED path consumed
@@ -7823,6 +7826,29 @@ feature the physical device reports; the graphics and the compute device creatio
 (`Core/Physics/EnableAcceleration = true`, validation ON): `balls-of-steel` and `sponza`, 0 VUID, the
 `PhysicsManagerService` and its `VulkanTransferManagerService` up. A new logical device creation must call it too.
 
+### Logic time is a CYCLE COUNT; milliseconds and microseconds are derived from it (Oct 2026)
+
+`WorldPhysicsUpdateCycleDurationMS< uint32_t >` is `1000 / 60` in integer arithmetic: **16**, not 16.67. Every timer that
+added it once per logic cycle ran **4.2 % slow** (a `Sequence(15000)` lasted 15.6 s; ambience channels, particle
+lifetimes, projet-alpha's explosion / fire / smoke lifetimes and grenade fuses likewise), and the microsecond step
+(16666 for 16666.67) lost 40 µs per second in the scene, node and Core clocks and in the logic loop's deadline
+(60.0024 cycles/s). Since 2026-10-12 every one of them COUNTS cycles and derives its time with `Constants.hpp`
+`logicCyclesToMilliseconds()` / `logicCyclesToMicroseconds()` (exact, 64-bit, rounded down) and
+`millisecondsToLogicCycles()` (rounded up), all `static_assert`ed (900 cycles = 15 000 ms). The logic loop recomputes
+its deadline as `origin + N × 1/60 s`. ⚠️ Never add a truncated step, never a float accumulator (it drifts): count, then
+derive. A grep for `CycleDurationMS< uint32_t >` / `< int32_t >` / `CycleDurationUS< uint64_t >` used as a step must
+find nothing outside a definition.
+
+### Sample counts are masks: intersect them, never take their minimum (Oct 2026)
+
+`PhysicalDevice::getMaxAvailableSampleCount()` took `std::min(framebufferColorSampleCounts, framebufferDepthSampleCounts)`:
+the numeric minimum of two BITMASKS. Colour {1, 2, 8} (0b1011) and depth {1, 2, 4} (0b0111) gave 0b0111 and its 4
+samples, which the colour attachment refuses. `Device::checkMultisampleCount()` also passed any request at or below that
+maximum through unchanged, even a count missing from a mask with gaps. Now `supportedFramebufferSampleCounts()` is the
+AND of the two masks and `PhysicalDevice::highestSampleCountAtMost(mask, requested)` (constexpr, `static_assert`ed on
+synthetic masks in `PhysicalDevice.cpp`) picks the highest supported count at most the request — the settings value
+`Core/Video/Framebuffer/Samples` included.
+
 ### The TBN space display is gated on the device's geometry stage (Oct 2026)
 
 On a device without `geometryShader` (MoltenVK) `coordinates-debug` still generated the TBN space program per instance and
@@ -7833,6 +7859,18 @@ per attempt: 417 "Unable to generate the TBN space program", 100 VUIDs (5 kinds 
 the M6: 0 generation attempt, 0 VUID, 0 UNASSIGNED. The threading report was not a live race: Core drains the pool twice
 and joins the rendering and logic threads before the device is destroyed, the last failing compilation was long before;
 it vanished with the failing `vkCreateShaderModule` calls.
+
+**A geometry without a vertex tangent space is never retried either (2026-10-12).** On a device WITH the geometry stage
+(NVIDIA, Linux), `enableTBN(true)` on `coordinates-debug` flagged all 13 instances, 11 of them on geometries without a
+tangent space in their vertex buffer (sky box, boundary planes, bounding boxes, axes); each failure only logged, so every
+frame tried again: 24 805 "Unable to generate the TBN space program" and ~99 000 `[Error]` lines in 20 s. Owner decision
+(refusal a + b): the console command skips such an instance ("enabled on 2, skipped 11 whose geometry has no tangent
+space"), and `RenderableInstance::Abstract::refuseTBNSpace()` turns a late discovery (a geometry still loading when the
+flag was set: a warning) or a failed generation (an error) into ONE message, then `isDisplayTBNSpaceEnabled()` answers
+false until `enableDisplayTBNSpace(true)` re-arms it. ⚠️ The refusal is its own `std::atomic_bool`, never a bit of the
+flags: the render thread sets it while the main thread writes the (non-atomic) `FlagTrait` bits. Ask
+`Geometry::Interface::tangentSpaceEnabled()` (the vertex buffer), not `surfaceProvidesTangentSpace()`. Proof (Linux,
+validation ON): 0 TBN error, 0 VUID; the TBN lines drawn (TBN on vs off: 75 770 pixels differ, off vs off: 260).
 
 ## Related Documentation
 

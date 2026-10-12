@@ -1128,14 +1128,15 @@ namespace EmEn::Resources
 			 *
 			 * @param dependency Shared pointer to the dependent resource (must not be null)
 			 * @return true if dependency was added or already satisfied, false on error
-			 * @pre Resource must be in Enqueuing or ManualEnqueuing state
+			 * @pre Resource must be in Enqueuing or ManualEnqueuing state: in any other state the dependency is refused with
+			 * an error and false (a loading or loaded resource would never wait for it)
 			 * @pre dependency pointer must not be null
 			 * @post Dependency added to m_dependenciesToWaitFor if not already loaded
 			 * @post This resource added to dependency's m_parentsToNotify list
 			 * @note Already-loaded dependencies are skipped (returns true immediately)
 			 * @note Duplicate dependencies are detected and skipped
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
-			 * @warning Circular dependencies are not detected and will cause deadlock
+			 * @note A dependency that would close a cycle is refused and FAILS this resource (checked under the graph lock)
 			 * @see beginLoading(), setLoadSuccess(), m_dependenciesToWaitFor
 			 */
 			[[nodiscard]]

@@ -419,7 +419,13 @@ no channel is negated anywhere.
 - A map baked for the other convention (+Y down — 3ds Max, Unreal, Substance's "DirectX" preset)
   renders every relief **lit from below**. It is fixed in the **data**: invert the green channel at
   authoring, or set `"FlipNormalMapY": true` on the material's normal component for a store image
-  (`Material::Component::Texture`, a pixel flip at load). A block-compressed KTX2 cannot be flipped
+  (`Material::Component::Texture`, a pixel flip at load). The flip is applied to a COPY of the pixels for that
+  texture's upload (since 2026-10-12): the store image stays as authored, since several textures share it — flipping
+  it in place made two flagged textures cancel each other and an unflagged one created later read flipped pixels.
+  Proof (`normal-map-debug` option 4, one launch: flipped → unflipped → unflipped → flipped): the unflipped quad
+  created AFTER the flipped one differs from it (27 193 pixels) and matches the next unflipped one to 0 pixel.
+  ⚠️ The flag is still a property of the shared TEXTURE resource (item
+  `normal-map-flip-flag-set-by-a-material-on-a-shared-texture`). A block-compressed KTX2 cannot be flipped
   at load: re-encode it. **Never** add a sign to a shader or a loader for one asset.
 - Verified: the Khronos `NormalTangentMirrorTest` (highlight angles within a few degrees of the
   geometry column, mirrored islands included) and projet-alpha's `normal-map-debug` (the texture on

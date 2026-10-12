@@ -209,7 +209,7 @@ namespace EmEn
 		 * runs. Measured on Windows 2026-08-28: with argv already fixed to be UTF-8 at the
 		 * entry point, '--cache-directory=...\Кэш-漢字' was still refused on an existing
 		 * directory, because the value died here instead. */
-			return registerDirectory(IO::u8path(forcedPath.value()), false, true, m_configDirectory);
+			return this->registerForcedDirectory("--config-directory", IO::u8path(forcedPath.value()), m_configDirectory);
 		}
 
 		/* Check next to binary. */
@@ -276,7 +276,7 @@ namespace EmEn
 		if ( const auto forcedPath = m_arguments.get("--cache-directory") )
 		{
 			/* Same ANSI-at-the-parameter trap as --config-directory above. */
-			return registerDirectory(IO::u8path(forcedPath.value()), false, true, m_cacheDirectory);
+			return this->registerForcedDirectory("--cache-directory", IO::u8path(forcedPath.value()), m_cacheDirectory);
 		}
 
 		/* Check next to binary. */
@@ -518,6 +518,48 @@ namespace EmEn
 		}
 
 		finalDirectoryPath = directoryPath;
+
+		return true;
+	}
+
+	bool
+	FileSystem::registerForcedDirectory (const char * argumentName, const std::filesystem::path & directoryPath, std::filesystem::path & finalDirectoryPath) const noexcept
+	{
+		if ( directoryPath.empty() )
+		{
+			TraceError{ClassId} << "The argument " << argumentName << " gives an empty path !";
+
+			return false;
+		}
+
+		if ( !IO::directoryExists(directoryPath) )
+		{
+			if ( IO::fileExists(directoryPath) )
+			{
+				TraceError{ClassId} << "The argument " << argumentName << " names '" << IO::toU8String(directoryPath) << "', which is a file, not a directory !";
+
+				return false;
+			}
+
+			/* NOTE: "a/b/" has no file name: its directory is "a/b", whose parent is "a". */
+			const auto directory = directoryPath.has_filename() ? directoryPath : directoryPath.parent_path();
+
+			if ( const auto parent = directory.parent_path(); !parent.empty() && !IO::directoryExists(parent) )
+			{
+				TraceError{ClassId} <<
+					"The argument " << argumentName << " names '" << IO::toU8String(directoryPath) << "', "
+					"whose parent directory '" << IO::toU8String(parent) << "' does not exist : create it, or fix the argument !";
+
+				return false;
+			}
+		}
+
+		if ( !this->registerDirectory(directoryPath, true, true, finalDirectoryPath) )
+		{
+			TraceError{ClassId} << "The directory '" << IO::toU8String(directoryPath) << "' given by " << argumentName << " is unusable (see above) !";
+
+			return false;
+		}
 
 		return true;
 	}

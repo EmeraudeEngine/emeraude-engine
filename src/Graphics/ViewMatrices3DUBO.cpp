@@ -32,7 +32,9 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <cstddef>
 #include <cstring>
+#include <iterator>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -300,14 +302,19 @@ namespace EmEn::Graphics
 
 		for ( auto face : CubemapFaceIndexes )
 		{
-			const auto faceIndex = static_cast< size_t >(face);
+			/* CubemapFaceIndexes holds the six enumerators 0-5: every index is < CubemapFaceCount. */
+			const auto faceIndex = static_cast< std::ptrdiff_t >(face);
+			const auto & orientation = *std::next(CubemapOrientation.cbegin(), faceIndex);
+			auto & view = *std::next(m_logicState.views.begin(), faceIndex);
 
-			m_logicState.views.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
-			m_logicState.infinityViews.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
-			m_logicState.frustums.at(faceIndex).update(m_logicState.projection * m_logicState.views.at(faceIndex));
+			view = orientation * Matrix< 4, float >::translation(-m_logicState.position);
+			*std::next(m_logicState.infinityViews.begin(), faceIndex) = orientation * Matrix< 4, float >::translation(-m_logicState.position);
+			std::next(m_logicState.frustums.begin(), faceIndex)->update(m_logicState.projection * view);
 
 			/* Copy view matrix to buffer data for GPU upload. */
-			std::memcpy(&m_logicState.bufferData[faceIndex * Matrix4Alignment], m_logicState.views.at(faceIndex).data(), Matrix4Alignment * sizeof(float));
+			constexpr auto MatrixElementCount = static_cast< std::ptrdiff_t >(Matrix4Alignment);
+
+			std::ranges::copy_n(view.data(), MatrixElementCount, std::next(m_logicState.bufferData.begin(), faceIndex * MatrixElementCount));
 		}
 
 		m_logicState.bufferData[WorldPositionOffset + 0] = m_logicState.position.x();

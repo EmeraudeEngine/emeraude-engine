@@ -307,7 +307,7 @@ namespace EmEn::Scenes::Component
 			if ( !m_usesCSM )
 			{
 				const auto worldCoordinates = this->getWorldCoordinates();
-				const auto lightDirection = m_useDirectionVector ? worldCoordinates.forwardVector() : -worldCoordinates.position().normalized();
+				const auto lightDirection = this->resolveDirection(worldCoordinates);
 
 				CartesianFrame< float > shadowMapFrame;
 				const auto coverage = m_coverageSize > 0.0F ? m_coverageSize : this->getDistanceOrFar() * 0.5F;
@@ -436,7 +436,7 @@ namespace EmEn::Scenes::Component
 
 		/* Get the light direction. */
 		const auto worldCoordinates = this->getWorldCoordinates();
-		const auto lightDirection = m_useDirectionVector ? worldCoordinates.forwardVector() : -worldCoordinates.position().normalized();
+		const auto lightDirection = this->resolveDirection(worldCoordinates);
 
 		/* Scale CSM coverage based on m_csmScale.
 		 * csmScale 1.0 = full frustum, 2.0 = zoom x2, 4.0 = zoom x4, etc.
@@ -511,9 +511,7 @@ namespace EmEn::Scenes::Component
 	{
 		const auto worldCoordinates = this->getWorldCoordinates();
 
-		const auto lightDirection = m_useDirectionVector ?
-			worldCoordinates.forwardVector() :
-			-worldCoordinates.position().normalized();
+		const auto lightDirection = this->resolveDirection(worldCoordinates);
 
 		/* Build a view frame: camera positioned opposite to the light direction,
 		 * at coverageSize distance from the origin, looking toward the scene. */
@@ -564,7 +562,7 @@ namespace EmEn::Scenes::Component
 		const auto worldCoordinates = this->getWorldCoordinates();
 
 		/* The direction the light PROPAGATES along — the same rule as the cascades. */
-		const auto lightDirection = (m_useDirectionVector ? worldCoordinates.forwardVector() : -worldCoordinates.position().normalized()).normalized();
+		const auto lightDirection = this->resolveDirection(worldCoordinates).normalized();
 
 		/* An orthonormal frame around the light direction; a sun at the zenith takes X as its reference. */
 		const auto reference = std::abs(lightDirection[Y]) < 0.99F ? Vector< 3, float >{0.0F, 1.0F, 0.0F} : Vector< 3, float >{1.0F, 0.0F, 0.0F};

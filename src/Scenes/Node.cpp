@@ -874,7 +874,9 @@ namespace EmEn::Scenes
 	{
 		this->updateAnimations(scene.cycle());
 
-		m_lifetime += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
+		/* NOTE: Counted in cycles, the microseconds derived (the integer 16666 µs step lost 40 µs per second). */
+		++m_lifetimeCycles;
+		m_lifetime = logicCyclesToMicroseconds(m_lifetimeCycles);
 
 		/* NOTE: Check if the node has disabled its ability to move. */
 		/* A withdrawn collision model (setCollisionModel(nullptr)) is NO body at all: integrated here without a model it

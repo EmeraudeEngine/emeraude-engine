@@ -172,6 +172,11 @@ declared signature (types, integer range, defaults, descriptions with units, `re
 is fine (named arguments). A wrong or unknown argument answers a tool result with `isError: true`
 naming it — the model can correct itself — and the command never runs. A `json` output is also given
 as `structuredContent`.
+A `json` output must BE JSON: a float written by hand in one goes through `Console/JSONNumber.hpp` (`jsonNumber()`,
+`writeJSONVector()`: 9 significant digits, `null` when not finite, the stream's precision restored) — a streamed `nan`
+made the whole answer invalid and the server dropped its `structuredContent` (2026-10-12: the two local copies in
+`Scenes/Manager.console.cpp` and `Graphics/Renderer.console.cpp` replaced; the other hand-streamed answers carry no
+float, census `/usr/bin/grep -rn "CommandResult::json(.*\.str()" src`).
 
 **`Renderer_screenshot`** returns the next presented frame as an inline PNG **reduced to 1568 px** on
 its long edge (area filter), plus the path of the full-resolution file for pixel measurement (owner
@@ -670,7 +675,7 @@ camera's `address` and component `name`, ready to pass. A static entity's addres
 | `SkyFollowsSun` | `getState` only (factor, day luminance, twilight curve) |
 | `CloudVolume` | `getState`, `setLook(opticalThickness?, erosion?, detailFrequency?, boilingSpeed?, skyTint?, albedoRed?, albedoGreen?, albedoBlue?)` (the albedo: three together) |
 | `NodeAnimation` | `getState` (clips, active, wrap, speed), `play(clip, wrap = "Loop")` (`Once`/`Loop`/`PingPong`), `stop` (rest frame restored), `setSpeed(≥ 0)` |
-| `ParticlesEmitter` | `getState`, `start`, `stop`, `setSpawnRate(perCycle ≤ limit)`, `setLifetime(minCycles, maxCycles?)`, `setSize(min, max?)`, `setSizeDelta(perCycle)`, `setSpreadingRadius(m)`, `setChaos(k)` — cycles are logic cycles, 60 per second |
+| `ParticlesEmitter` | `getState` (+ `emissionCyclesLeft`), `start(durationMS?)` (a timed emission, counted in logic cycles, rounded up), `stop`, `setSpawnRate(perCycle ≤ limit)`, `setLifetime(minCycles, maxCycles?)`, `setSize(min, max?)`, `setSizeDelta(perCycle)`, `setSpreadingRadius(m)`, `setChaos(k)` — cycles are logic cycles, 60 per second |
 | `DirectionalPushModifier` | `getState`, `setEnabled`, `setMagnitude`, `setDirection(x?, y?, z?)` (three = a custom world direction; none = follow the entity again) |
 | `SphericalPushModifier` | `getState`, `setEnabled`, `setMagnitude` |
 | `Weight` | `getState` (mass, drag…, bounds — `null` when unset), `setRadius(m)`, `setBoxSize(x, y?, z?)` |
@@ -700,8 +705,7 @@ reason, never applied halfway:
   `setSensitivityRange` first); `setSpawnRate` refuses more than the particle limit; `setShadowLODBias`
   refuses more levels than the renderable holds.
 - **Loading a sound** by resource name (owner decision 2026-09-27: the emitter's ATTACHED sound only);
-  `ParticlesEmitter.start` takes no timeout (engine item `particles-emitter-timeout-unit`); `Microphone`
-  has nothing to drive or read and has no adapter.
+  `Microphone` has nothing to drive or read and has no adapter.
 
 ⚠️ **An optional parameter in the MIDDLE is reachable by NAME only (MCP arguments).** The console's
 positional syntax has no hole: `setLook(Cloud044, Cloud0, , , , , , 1, 0.5)` set the optical thickness

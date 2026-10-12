@@ -30,6 +30,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
 #include <numbers>
 
 /* STL inclusions. */
@@ -776,6 +778,19 @@ namespace EmEn::Graphics
 		}
 
 		return m_faces[faceIndex];
+	}
+
+	const std::vector< uint16_t > &
+	CubemapResource::hdrFaceData (size_t faceIndex) const noexcept
+	{
+		if ( faceIndex >= CubemapFaceCount )
+		{
+			Tracer::error(ClassId, "HDR face index overflow !");
+
+			faceIndex = 0;
+		}
+
+		return *std::next(m_facesHDR.cbegin(), static_cast< std::ptrdiff_t >(faceIndex));
 	}
 
 	bool

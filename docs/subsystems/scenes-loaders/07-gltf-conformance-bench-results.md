@@ -196,3 +196,13 @@ The harness and its older traps live with the tool, in
 - The owner's gallery verdict on the pre-merge bench run
   (`captures/bench-gltf-20260812/galerie-banc-gltf.html`) was the D5 gate of the material merge;
   it is still pending.
+
+## KHR_meshopt_compression (2026-10-12)
+
+The three `glTF-Meshopt` samples require `KHR_meshopt_compression` and were refused until the parser declared it
+(`GLTFLoader.cpp`, the extension mask). Measured on Linux (validation ON, `+ModelViewer`, rest pose):
+`DragonAttenuation` KHR against its `glTF-Meshopt-EXT` twin 0 pixel differs; `BrainStem` 466 pixels over 16/255,
+mean 0.015/255 (frame noise); `MeshoptCubeTest` (no EXT twin) builds its 35 visuals and every compressed row (v0
+attributes + indices, + triangles, + filters, v1 + filters) matches the uncompressed one. 0 VUID, 0 `[Error]`.
+⚠️ A node-animated model is built as movable `node`s, not `staticEntity`s: `bench.py wait_for_viewer()` counts both
+since that day (it timed MeshoptCubeTest out as "never came up").

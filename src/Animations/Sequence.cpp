@@ -27,6 +27,7 @@
 #include "Sequence.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
 #include <ostream>
 #include <tuple>
@@ -427,6 +428,8 @@ namespace EmEn::Animations
 			return;
 		}
 
+		/* NOTE: The first cycle at or past the time code: the clock stays a cycle count. */
+		m_elapsedCycles = millisecondsToLogicCycles(timeCode);
 		m_elapsedTime = timeCode;
 	}
 
@@ -548,7 +551,10 @@ namespace EmEn::Animations
 	void
 	Sequence::advanceTime () noexcept
 	{
-		m_elapsedTime += WorldPhysicsUpdateCycleDurationMS< uint32_t >;
+		/* NOTE: Count the cycle, derive the milliseconds: adding the integer 16 ms per cycle ran every sequence 4.2 % slow
+		 * (a Sequence(15000) lasted 15.6 s). Exactly 900 cycles for 15 000 ms now. */
+		++m_elapsedCycles;
+		m_elapsedTime = static_cast< uint32_t >(std::min< uint64_t >(logicCyclesToMilliseconds(m_elapsedCycles), m_durationMS));
 
 		/* Checks for the end of the cycle. */
 		if ( m_elapsedTime < m_durationMS )
@@ -559,6 +565,7 @@ namespace EmEn::Animations
 		if ( m_repeat < 0 )
 		{
 			/* NOTE: A loop animation just restarts the time. */
+			m_elapsedCycles = 0;
 			m_elapsedTime = 0;
 		}
 		else
@@ -568,6 +575,7 @@ namespace EmEn::Animations
 				/* NOTE: Restart the time for a new repetition. */
 				m_repeat--;
 
+				m_elapsedCycles = 0;
 				m_elapsedTime = 0;
 			}
 			else

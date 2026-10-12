@@ -158,7 +158,11 @@ refused and why): `docs/ai-runtime-control.md` § "Driving an entity's component
 - Engine fixes found while writing them: `DirectionalPushModifier::setCustomDirection()` /
   `disableCustomDirection()` had their flag calls INVERTED (a custom direction was overwritten by the
   next `move()`), fixed 2026-09-27; runtime shadow toggle → item `light-shadow-runtime-toggle`;
-  `ParticlesEmitter::start(duration)` unit → item `particles-emitter-timeout-unit`. Entity positions in
+  `ParticlesEmitter::start(duration)` armed a MICROSECOND timer documented in milliseconds, on its own thread with a raw
+  `this` capture: since 2026-10-12 the duration is milliseconds counted down in LOGIC CYCLES by `processLogics()`
+  (an atomic, compare-exchanged against a concurrent start()/stop(); `millisecondsToLogicCycles()` (Constants.hpp) rounds up, 1000 ms = 60
+  cycles, `static_assert`ed), exposed as `start(durationMS?)` and `getState().emissionCyclesLeft`; measured on
+  `particles`: 1000 ms → stopped after 0.98 s of client wall clock, 0 VUID. Entity positions in
   `listEntities()` → item `list-entities-positions`.
 
 ### Creating a New Component

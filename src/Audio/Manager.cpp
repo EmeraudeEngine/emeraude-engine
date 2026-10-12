@@ -695,7 +695,7 @@ namespace EmEn::Audio
 			}
 			else
 			{
-				major = m_contextAttributes.at(ALC_MAJOR_VERSION);
+				major = it->second;
 			}
 
 			if ( const auto it = m_contextAttributes.find(ALC_MINOR_VERSION); it == m_contextAttributes.end() )
@@ -704,7 +704,7 @@ namespace EmEn::Audio
 			}
 			else
 			{
-				minor = m_contextAttributes.at(ALC_MINOR_VERSION);
+				minor = it->second;
 			}
 		}
 		else
@@ -729,7 +729,7 @@ namespace EmEn::Audio
 			}
 			else
 			{
-				major = m_contextAttributes.at(ALC_EFX_MAJOR_VERSION);
+				major = it->second;
 			}
 
 			if ( const auto it = m_contextAttributes.find(ALC_EFX_MINOR_VERSION); it == m_contextAttributes.end() )
@@ -738,7 +738,7 @@ namespace EmEn::Audio
 			}
 			else
 			{
-				minor = m_contextAttributes.at(ALC_EFX_MINOR_VERSION);
+				minor = it->second;
 			}
 		}
 		else

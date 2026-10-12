@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -37,12 +38,12 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "Constants.hpp"
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderableInstance/Multiple.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Time/TimedEvent.hpp"
 #include "Physics/Particle.hpp"
 
 namespace EmEn::Scenes::Component
@@ -425,15 +426,30 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Starts the particle emission.
-			 * @param duration A timeout in milliseconds to stop the emission automatically. Default none.
+			 * @note The duration is counted in LOGIC CYCLES (processLogics(), 60 per second), rounded up: exact and
+			 * deterministic, no timer thread (owner decision 2026-10-12). A new start() replaces a running countdown.
+			 * @param duration A timeout in milliseconds to stop the emission automatically. Default 0, none.
 			 */
 			void start (uint32_t duration = 0) noexcept;
 
-			/** @brief Stops the particle emission. */
+			/** @brief Stops the particle emission (and its countdown, if any). */
 			void
 			stop () noexcept
 			{
+				m_emissionCyclesLeft.store(0);
+
 				this->disableFlag(IsEmitting);
+			}
+
+			/**
+			 * @brief Returns how many logic cycles the timed emission still lasts, 0 when it is not timed.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			emissionCyclesLeft () const noexcept
+			{
+				return m_emissionCyclesLeft.load();
 			}
 
 			/**
@@ -521,7 +537,6 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
 			Physics::BodyPhysicalProperties m_particlePhysicalProperties;
 			std::vector< Physics::Particle > m_particles;
-			std::unique_ptr< Base::Time::TimedEvent< uint64_t, std::micro > > m_timedEvent;
 			std::function< bool (Physics::Particle &) > m_customPhysicsSimulationSimpleFunction;
 			std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Base::Math::CartesianFrame< float > &, Physics::Particle & particle) > m_customPhysicsSimulationFullFunction;
 			uint32_t m_particleLimit;
@@ -533,6 +548,9 @@ namespace EmEn::Scenes::Component
 			float m_particleSizeDeltaPerCycle{0.0F};
 			float m_spreadingRadius{1.0F};
 			float m_chaosMagnitude{0.0F};
+			/** @brief Logic cycles the timed emission still lasts (0: not timed). Written by start()/stop() (any thread), counted
+			 * down by processLogics() (the logic thread) with a compare-exchange, so a concurrent start() is never lost. */
+			std::atomic< uint64_t > m_emissionCyclesLeft{0};
 			PhysicsSimulationFunction m_physicsSimulationFunction{PhysicsSimulationFunction::Default};
 	};
 

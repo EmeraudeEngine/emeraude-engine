@@ -83,5 +83,6 @@ State of the art the design follows: Unity (`Mesh.UploadMeshData(markNoLongerRea
 ## Follow-ups (items)
 
 `memory-outside-the-census` (terrain: 8.1 GB private for a 497 MiB census), `decoded-music-stays-resident`,
-`movie-frames-stay-resident` (the residency of decoded frames), `automatic-lod-buffers-destroyed-in-use`,
-`normal-map-flip-mutates-shared-image`.
+`movie-frames-stay-resident` (the residency of decoded frames), `automatic-lod-buffers-destroyed-in-use`.
+The normal-map flip no longer interacts with a release: since 2026-10-12 it flips a copy for the upload, never the
+store image, so a released image reloaded from its file is what every texture expects (`docs/coordinate-system.md`).

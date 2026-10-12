@@ -106,6 +106,59 @@ namespace EmEn
 	constexpr number_t WorldPhysicsUpdateCycleDurationUS{static_cast< number_t >(1000000) / WorldPhysicsUpdateFrequency< number_t >};
 
 	/**
+	 * @brief Returns the time of a number of logic cycles in milliseconds, exact (rounded down).
+	 * @note COUNT the cycles and derive the time from them. Adding WorldPhysicsUpdateCycleDurationMS< uint32_t > (16,
+	 * not 16.67) once per cycle runs 4.2 % slow; a float accumulator drifts (engine docs/caution-points.md, tick timers).
+	 * 64-bit: no overflow below 3 × 10^14 years of cycles.
+	 * @param cycles The number of logic cycles.
+	 * @return uint64_t
+	 */
+	[[nodiscard]]
+	constexpr
+	uint64_t
+	logicCyclesToMilliseconds (uint64_t cycles) noexcept
+	{
+		return cycles * 1000U / WorldPhysicsUpdateFrequency< uint64_t >;
+	}
+
+	/**
+	 * @brief Returns the time of a number of logic cycles in microseconds, exact (rounded down).
+	 * @note See logicCyclesToMilliseconds(): 1,000,000 / 60 is 16666.67, never accumulate the truncated 16666.
+	 * @param cycles The number of logic cycles.
+	 * @return uint64_t
+	 */
+	[[nodiscard]]
+	constexpr
+	uint64_t
+	logicCyclesToMicroseconds (uint64_t cycles) noexcept
+	{
+		return cycles * 1000000U / WorldPhysicsUpdateFrequency< uint64_t >;
+	}
+
+	/**
+	 * @brief Returns how many logic cycles a duration in milliseconds lasts, rounded UP (a non-zero duration lasts at
+	 * least one cycle, and logicCyclesToMilliseconds() of the result is never below the duration).
+	 * @param milliseconds The duration in milliseconds.
+	 * @return uint64_t
+	 */
+	[[nodiscard]]
+	constexpr
+	uint64_t
+	millisecondsToLogicCycles (uint64_t milliseconds) noexcept
+	{
+		return (milliseconds * WorldPhysicsUpdateFrequency< uint64_t > + 999U) / 1000U;
+	}
+
+	static_assert(logicCyclesToMilliseconds(900) == 15000);
+	static_assert(logicCyclesToMilliseconds(899) == 14983);
+	static_assert(logicCyclesToMicroseconds(3) == 50000);
+	static_assert(millisecondsToLogicCycles(0) == 0);
+	static_assert(millisecondsToLogicCycles(1) == 1);
+	static_assert(millisecondsToLogicCycles(1000) == 60);
+	static_assert(millisecondsToLogicCycles(15000) == 900);
+	static_assert(millisecondsToLogicCycles(17) == 2);
+
+	/**
 	 * @brief Constant for scaling to 0.
 	 * @tparam number_t The type of float point number. Default float.
 	 */

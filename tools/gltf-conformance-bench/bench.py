@@ -557,6 +557,10 @@ def wait_for_viewer(console: Console, model: str, budget: float = VIEWER_BUDGET_
     ⚠️ `getSceneInfo()` is gone (engine 22aa687f, 2026-09): the bench polled it for ever and captured
     nothing, reporting every model as "never came up". The viewer's own key and fill lights are static
     entities too, so an entity counts only when it carries a Visual or MultipleVisuals component.
+
+    ⚠️ A glTF node driven by a node animation is built as a movable `node`, not a `staticEntity`
+    (MeshoptCubeTest: 35 visuals on 37 nodes and 2 static entities). Counting static entities alone
+    timed such a model out as "never came up" while it was on screen (2026-10-12).
     """
     deadline = time.monotonic() + budget
 
@@ -569,7 +573,7 @@ def wait_for_viewer(console: Console, model: str, budget: float = VIEWER_BUDGET_
 
             visuals = sum(
                 1 for entity in entities
-                if entity.get("kind") == "staticEntity"
+                if entity.get("kind") in ("staticEntity", "node")
                 and any(component.get("type") in ("Visual", "MultipleVisuals") for component in entity.get("components", []))
             )
 

@@ -69,9 +69,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	AmbienceChannel::update (unsigned int time) noexcept
+	AmbienceChannel::update () noexcept
 	{
-		m_time += time;
+		++m_elapsedCycles;
 
 		/* Update the position if there is a fake velocity enabled. */
 		if ( !m_velocity.isZero() )

@@ -27,6 +27,7 @@
 #include "Texture2D.hpp"
 
 /* STL inclusions. */
+#include <optional>
 #include <string>
 
 /* Local inclusions. */
@@ -232,13 +233,20 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		/* Apply normal map Y flip if requested (id Tech â engine convention). */
+		/* NOTE: FlipNormalMapY (a Direct3D-style map, +Y down, into the Khronos convention) flips a COPY for this
+		 * upload: the store image is shared by every texture made from it, and flipping it in place made two flagged
+		 * textures cancel each other and an unflagged one read flipped pixels (owner decision 2026-10-12). */
+		std::optional< Base::PixelFactory::Pixmap< uint8_t > > flippedPixels;
+
 		if ( this->isFlipNormalMapYEnabled() )
 		{
-			m_localData->mutableData().flipNormalMapY();
+			flippedPixels.emplace(m_localData->data());
+			flippedPixels->flipNormalMapY();
 		}
 
-		if ( !this->validateTexture(m_localData->data()) )
+		const auto & pixels = flippedPixels.has_value() ? *flippedPixels : m_localData->data();
+
+		if ( !this->validateTexture(pixels) )
 		{
 			return false;
 		}
@@ -258,7 +266,7 @@ namespace EmEn::Graphics::TextureResource
 		{
 			/* BC7 compressed path: the texture cache service owns it end to end -- disk lookup,
 			 * compression on a miss, and storing the result. */
-			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), m_localData->data(), mipLevels);
+			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, mipLevels);
 
 			if ( !compressedMips.empty() )
 			{
@@ -307,7 +315,7 @@ namespace EmEn::Graphics::TextureResource
 			m_image = std::make_shared< Vulkan::Image >(
 				renderer.device(),
 				VK_IMAGE_TYPE_2D,
-				Image::getFormat< uint8_t >(m_localData->data().colorCount(), this->isSRGB()),
+				Image::getFormat< uint8_t >(pixels.colorCount(), this->isSRGB()),
 				VkExtent3D{m_localData->width(), m_localData->height(), 1U},
 				VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 				0,
@@ -315,7 +323,7 @@ namespace EmEn::Graphics::TextureResource
 			);
 			m_image->setIdentifier(ClassId, this->name(), "Image");
 
-			if ( !m_image->create(renderer.transferManager(), m_localData) )
+			if ( !m_image->create(renderer.transferManager(), pixels) )
 			{
 				Tracer::error(ClassId, "Unable to create an image !");
 

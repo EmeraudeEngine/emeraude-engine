@@ -817,31 +817,14 @@ namespace EmEn::Vulkan
 		return queueCount;
 	}
 
-	VkSampleCountFlagBits
-	PhysicalDevice::getMaxAvailableSampleCount () const noexcept
-	{
-		/* NOTE: We are using the smallest support between a color buffer and the depth buffer. */
-		const VkSampleCountFlags supportedSampleCount = std::min(m_properties.properties.limits.framebufferColorSampleCounts, m_properties.properties.limits.framebufferDepthSampleCounts);
-
-		constexpr std::array< VkSampleCountFlagBits, 6 > samples {
-			VK_SAMPLE_COUNT_64_BIT,
-			VK_SAMPLE_COUNT_32_BIT,
-			VK_SAMPLE_COUNT_16_BIT,
-			VK_SAMPLE_COUNT_8_BIT,
-			VK_SAMPLE_COUNT_4_BIT,
-			VK_SAMPLE_COUNT_2_BIT
-		};
-
-		for ( const auto sample : samples )
-		{
-			if ( (supportedSampleCount & static_cast< VkSampleCountFlags >(sample)) != 0U )
-			{
-				return sample;
-			}
-		}
-
-		return VK_SAMPLE_COUNT_1_BIT;
-	}
+	/* NOTE: The masks of the colour and the depth attachments are intersected, never compared: colour {1, 2, 8}
+	 * (0b1011) and depth {1, 2, 4} (0b0111) share {1, 2}, where std::min gave 0b0111 and its 4 samples, which the colour
+	 * attachment refuses. A request between two supported counts takes the lower one. */
+	static_assert(PhysicalDevice::highestSampleCountAtMost(0b1011U & 0b0111U, 64) == VK_SAMPLE_COUNT_2_BIT);
+	static_assert(PhysicalDevice::highestSampleCountAtMost(0b10101U, 8) == VK_SAMPLE_COUNT_4_BIT);
+	static_assert(PhysicalDevice::highestSampleCountAtMost(0b1111111U, 64) == VK_SAMPLE_COUNT_64_BIT);
+	static_assert(PhysicalDevice::highestSampleCountAtMost(0b1111111U, 0) == VK_SAMPLE_COUNT_1_BIT);
+	static_assert(PhysicalDevice::highestSampleCountAtMost(0U, 64) == VK_SAMPLE_COUNT_1_BIT);
 
 	std::string
 	PhysicalDevice::UUIDToString (std::span< const uint8_t, VK_UUID_SIZE > uuid) noexcept

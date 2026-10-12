@@ -205,15 +205,12 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the RGBA16F texel data of a face (HDR cubemaps only).
+			 * @note An index out of [0-5] is refused with an error and returns face #0, like data().
 			 * @param faceIndex The face index [0-5].
 			 * @return const std::vector< uint16_t > &
 			 */
 			[[nodiscard]]
-			const std::vector< uint16_t > &
-			hdrFaceData (size_t faceIndex) const noexcept
-			{
-				return m_facesHDR.at(faceIndex);
-			}
+			const std::vector< uint16_t > & hdrFaceData (size_t faceIndex) const noexcept;
 
 			/**
 			 * @brief Returns the size of the cubemap.

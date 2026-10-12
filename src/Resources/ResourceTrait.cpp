@@ -216,17 +216,22 @@ namespace EmEn::Resources
 					/* The status is in the right condition to add dependency. */
 					break;
 
+				/* NOTE: Past the enqueuing stage a dependency is refused (owner decision 2026-10-12): it was added anyway
+				 * before, and a resource already loading or loaded never waits for it (onDependenciesLoaded() does not
+				 * run again). */
 				case Status::Loading :
 					TraceError{TracerTag} <<
-						"The resource '" << this->name() << "' (" << this->classLabel() << ") is loading !"
-						"No more dependency can be added !";
-					break;
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") is loading ! "
+						"No more dependency can be added : '" << dependency->name() << "' refused.";
+
+					return false;
 
 				case Status::Loaded :
-					TraceWarning{TracerTag} <<
-						"The resource '" << this->name() << "' (" << this->classLabel() << ") is loaded !"
-						"No more dependency can be added !";
-					break;
+					TraceError{TracerTag} <<
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") is loaded ! "
+						"No more dependency can be added : '" << dependency->name() << "' refused.";
+
+					return false;
 
 				case Status::Failed :
 					TraceError{TracerTag} <<

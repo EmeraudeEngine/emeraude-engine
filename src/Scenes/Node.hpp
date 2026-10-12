@@ -973,7 +973,8 @@ namespace EmEn::Scenes
 			std::map< std::string, std::shared_ptr< Node >, std::less<> > m_children;
 			Base::Math::CartesianFrame< float > m_logicStateCoordinates;
 			std::array< Base::Math::CartesianFrame< float >, RenderStateSlotCount > m_renderStateCoordinates{};
-			uint64_t m_lifetime{0};
+			uint64_t m_lifetimeCycles{0}; /**< Logic cycles since creation: the clock of m_lifetime. */
+			uint64_t m_lifetime{0}; /**< Microseconds since creation, DERIVED from m_lifetimeCycles. */
 			/** @brief The level under the root (the root is 0), fixed at construction: a node is never re-parented. */
 			uint32_t m_depth{0};
 	};

@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/RenderableInstance/PathPoints.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
@@ -1067,6 +1068,13 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: A device without the geometry stage (MoltenVK) cannot build the TBN space program: never attempted. */
 		if ( this->isDisplayTBNSpaceEnabled() && renderer.isTBNSpaceRenderingAvailable() )
 		{
+			if ( this->geometryLacksTangentSpace() )
+			{
+				this->refuseTBNSpace("its geometry has no tangent space in its vertex buffer", false);
+
+				return true;
+			}
+
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
 				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, mainRenderPassHandle, layerIndex);
@@ -1082,9 +1090,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 				if ( !generator.generateShaderProgram(renderer) )
 				{
-					Tracer::error(TracerTag, "Unable to generate the TBN space program !");
+					this->refuseTBNSpace("the TBN space program generation failed", true);
 
-					continue;
+					break;
 				}
 
 				/* Cache the program on the Renderable for future instances. */
@@ -1100,6 +1108,13 @@ namespace EmEn::Graphics::RenderableInstance
 	{
 		if ( !renderer.isTBNSpaceRenderingAvailable() || m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
 		{
+			return false;
+		}
+
+		if ( this->geometryLacksTangentSpace() )
+		{
+			this->refuseTBNSpace("its geometry has no tangent space in its vertex buffer", false);
+
 			return false;
 		}
 
@@ -1121,7 +1136,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 			if ( !generator.generateShaderProgram(renderer) )
 			{
-				Tracer::error(TracerTag, "Unable to generate the TBN space program !");
+				this->refuseTBNSpace("the TBN space program generation failed", true);
 
 				return false;
 			}
@@ -1188,6 +1203,40 @@ namespace EmEn::Graphics::RenderableInstance
 		this->enableFlag(BrokenState);
 
 		Tracer::error(TracerTag, errorMessage, location);
+	}
+
+	bool
+	Abstract::geometryLacksTangentSpace () const noexcept
+	{
+		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
+		{
+			return false;
+		}
+
+		const auto * geometry = m_renderable->geometry(0);
+
+		return geometry != nullptr && !geometry->tangentSpaceEnabled();
+	}
+
+	void
+	Abstract::refuseTBNSpace (const char * reason, bool isFailure) noexcept
+	{
+		/* NOTE: Reported once per refusal; enableDisplayTBNSpace(true) re-arms the instance. */
+		if ( m_TBNSpaceRefused.exchange(true) )
+		{
+			return;
+		}
+
+		const auto & name = m_renderable != nullptr ? m_renderable->name() : std::string{"(none)"};
+
+		if ( isFailure )
+		{
+			TraceError{TracerTag} << "The TBN space display of renderable '" << name << "' is refused: " << reason << ". It is not retried until it is enabled again.";
+		}
+		else
+		{
+			TraceWarning{TracerTag} << "The TBN space display of renderable '" << name << "' is refused: " << reason << ". It is not retried until it is enabled again.";
+		}
 	}
 
 	std::shared_ptr< Saphir::Program >

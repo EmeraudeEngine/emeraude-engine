@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -671,6 +672,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Enables the display of TBN space.
+			 * @note Enabling re-arms an instance whose TBN space program was refused (a geometry without a vertex tangent
+			 * space, a failed generation): the next frame tries once more. Main thread (the console, the scene setup).
+			 * @see geometryLacksTangentSpace()
 			 * @param state The state.
 			 * @return Abstract *
 			 */
@@ -679,6 +683,8 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				if ( state )
 				{
+					m_TBNSpaceRefused.store(false);
+
 					this->enableFlag(DisplayTBNSpaceEnabled);
 				}
 				else
@@ -691,14 +697,25 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Returns whether the display of TBN space is enabled.
+			 * @note False once its program was refused (see enableDisplayTBNSpace()): a refused instance is never retried
+			 * frame after frame.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isDisplayTBNSpaceEnabled () const noexcept
 			{
-				return this->isFlagEnabled(DisplayTBNSpaceEnabled);
+				return this->isFlagEnabled(DisplayTBNSpaceEnabled) && !m_TBNSpaceRefused.load();
 			}
+
+			/**
+			 * @brief Returns whether the renderable is loaded and its geometry has NO tangent space in its vertex buffer,
+			 * which the TBN space display needs.
+			 * @note False while the renderable is still loading (unknown yet): getReadyForTBNSpace() decides then.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool geometryLacksTangentSpace () const noexcept;
 
 			/**
 			 * @brief Disables the light distance check.
@@ -1449,6 +1466,16 @@ namespace EmEn::Graphics::RenderableInstance
 		private:
 
 			/**
+			 * @brief Refuses the TBN space display of this instance until it is enabled again, with ONE error.
+			 * @note Render thread (getReadyForRender(), getReadyForTBNSpace()). The refusal is its own atomic, never a bit
+			 * of the flags, which the main thread writes.
+			 * @param reason Why the program cannot exist.
+			 * @param isFailure True for a failed generation (an error), false for a geometry without a tangent space (a
+			 * warning).
+			 */
+			void refuseTBNSpace (const char * reason, bool isFailure) noexcept;
+
+			/**
 			 * @brief Reports ONCE that the sealed pipeline layout declares a descriptor set the
 			 * instance cannot provide, which means the generation-time condition and the
 			 * binding-time condition of that set have diverged.
@@ -1597,5 +1624,8 @@ namespace EmEn::Graphics::RenderableInstance
 			bool m_hasModelHistory{false};
 			/** @brief Whether the descriptor set contract violation was already reported (render thread only, anti-spam). */
 			mutable bool m_missingDescriptorSetReported{false};
+			/** @brief Whether the TBN space program was refused: written by the render thread (refuseTBNSpace()), cleared
+			 * by enableDisplayTBNSpace(true) on the main thread. */
+			std::atomic_bool m_TBNSpaceRefused{false};
 	};
 }

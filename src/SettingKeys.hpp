@@ -315,7 +315,7 @@ namespace EmEn
 		#endif
 
 		/* Video Capture (Graphics::ExternalInput) */
-		/* Enable video capture input (webcam). NOTE: the key path below points to "Core/Audio/Capture/Enable" and collides with AudioCaptureEnableKey - likely a typo, should be "Core/Video/Capture/Enable". */
+		/* Enable video capture input (webcam). Its own key since 2026-10-05: it shared "Core/Audio/Capture/Enable" with the microphone before. */
 		constexpr auto VideoCaptureEnableKey{"Core/Video/Capture/Enable"};
 		#ifdef EMERAUDE_CAPTURE_DEFAULTS
 		constexpr auto DefaultVideoCaptureEnable{true};

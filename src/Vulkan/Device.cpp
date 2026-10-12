@@ -1116,12 +1116,9 @@ namespace EmEn::Vulkan
 	uint32_t
 	Device::checkMultisampleCount (uint32_t samples) const noexcept
 	{
-		if ( const auto maxSamples = m_physicalDevice->getMaxAvailableSampleCount(); samples > static_cast< uint32_t >(maxSamples) )
-		{
-			return maxSamples;
-		}
-
-		return Device::getSampleCountFlag(samples);
+		/* NOTE: The highest count both framebuffer attachments support, at most the request (a settings value: any
+		 * number). A count between two supported ones takes the lower one, never an unsupported one. */
+		return static_cast< uint32_t >(PhysicalDevice::highestSampleCountAtMost(m_physicalDevice->supportedFramebufferSampleCounts(), samples));
 	}
 
 	VkSampleCountFlagBits

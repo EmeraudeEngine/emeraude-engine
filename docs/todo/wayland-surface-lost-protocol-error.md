@@ -46,6 +46,18 @@ that reading next to the error through `vkResultDiagnosticHint()`.
 
 ## What remains — in order
 
+**New data, 2026-10-12 (Linux, engine 9054be48 + uncommitted lot 2, Release, no validation layer):** reproduced at the
+main menu (no demo) with a FRESH config directory (`--config-directory=<new empty dir>`, so every setting at its
+default), `wp_linux_drm_syncobj_surface_v1#94: error 3: Release or Acquire point set but no buffer attached`, then
+`VK_ERROR_SURFACE_LOST_KHR`. ⚠️ **After it the process HUNG instead of stopping**: the main thread spun at 100 % CPU in
+`libdecor-gtk.so` → `wl_display_prepare_read_queue()` (three gdb samples, the same loop), a second thread at 100 % in
+`system_clock::now()` under libwayland-client, the remote console accepted the connection but never executed
+`Core.shutdown()`, SIGTERM was ignored (the termination catcher's flag is read by the stuck main loop): only SIGKILL
+ended it. So a dead Wayland display also takes the main loop with it — the clean stop on a lost surface does not run.
+Next to (1)-(3) below: (4) make the window service detect a dead display connection (`wl_display_get_error()` through
+GLFW, or a GLFW error callback) and stop cleanly instead of entering libdecor's loop.
+
+
 - [ ] **(1) Capture the protocol trace on the owner's session** (only a real compositor will do —
   X11/Xvfb has no libdecor and no explicit sync):
   `python3 tools/wayland-protocol-trace.py --capture -- ./projet-alpha --load-demo game-logic --disable-cef`

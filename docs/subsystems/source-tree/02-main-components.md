@@ -540,6 +540,12 @@ Arguments > Settings > Default values
 
 **Integration**: Used by Settings and Resources to locate files
 
+**Forced directories (owner decision 2026-10-12)**: `--config-directory` / `--cache-directory` go through
+`FileSystem::registerForcedDirectory()`. A missing directory is CREATED when its parent exists (a mistyped parent is
+never built); a missing parent, a file at that path, a refused creation or a read-only directory stop the start with an
+error naming the path (exit 1). `--data-directory` stays a read-only root that must exist. Measured on Linux: missing
+→ created (ASCII and `Ωmega-é`), missing parent / file / read-only → refused, each with its own message.
+
 > [!CAUTION]
 > ⚠️⚠️ **A directory forced from the command line is external UTF-8 — build it with
 > `IO::u8path()`, never by conversion.** `Arguments::get()` hands back a `std::string`, and

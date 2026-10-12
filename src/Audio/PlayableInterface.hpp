@@ -85,7 +85,7 @@ namespace EmEn::Audio
 			/**
 			 * @brief Returns the buffer smart pointer.
 			 * @param bufferIndex The index of buffer if it's streamable. Default 0.
-			 * @return std::shared_ptr< const Buffer >
+			 * @return std::shared_ptr< const Buffer > A null pointer when the index is out of range or the resource is not loaded.
 			 */
 			[[nodiscard]]
 			virtual std::shared_ptr< const Buffer > buffer (size_t bufferIndex = 0) const noexcept = 0;

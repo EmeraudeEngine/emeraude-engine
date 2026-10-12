@@ -49,7 +49,7 @@ namespace EmEn::Physics
 		m_linearVelocity.reset();
 
 		/* Reset basic properties. */
-		m_lifetime = initialLife;
+		m_lifetimeCycles = millisecondsToLogicCycles(initialLife);
 		m_size = std::abs(initialSize);
 
 		/* Reset the particles coordinates. */
@@ -369,13 +369,9 @@ namespace EmEn::Physics
 	void
 	Particle::update (const Vector< 3, float > & velocity, float sizeDelta, float chaos) noexcept
 	{
-		if ( m_lifetime >= WorldPhysicsUpdateCycleDurationMS< uint32_t > )
+		if ( m_lifetimeCycles > 0 )
 		{
-			m_lifetime -= WorldPhysicsUpdateCycleDurationMS< uint32_t >;
-		}
-		else
-		{
-			m_lifetime = 0;
+			--m_lifetimeCycles;
 		}
 
 		/* Checks the new size if requested. */
@@ -387,7 +383,7 @@ namespace EmEn::Physics
 			/* NOTE: Kill the particle if below 0.0F. */
 			if ( m_size < 0.0F )
 			{
-				m_lifetime = 0;
+				m_lifetimeCycles = 0;
 
 				return;
 			}

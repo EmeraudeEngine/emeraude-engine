@@ -20,7 +20,7 @@ closed 2026-09-27); worth doing when a use needs it.
 ## What remains
 
 1. Add the world position of each node and static entity to `listEntities()` (full precision, `null`
-   for a non-finite value — item `console-json-non-finite-numbers`).
+   for a non-finite value — `Console/JSONNumber.hpp`, `writeJSONVector()`).
 2. Mind the size: `forest` lists ~150 entities, `terrain` far more — consider an optional filter
    (component type, name prefix) before adding fields to every entry.
 

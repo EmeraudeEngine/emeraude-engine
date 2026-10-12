@@ -180,8 +180,11 @@ namespace EmEn
 		}
 #endif
 
-		/* NOTE: An ABSOLUTE deadline: a late wake-up shortens the next wait instead of adding to every cycle. */
-		auto nextCycle = std::chrono::steady_clock::now();
+		/* NOTE: An ABSOLUTE deadline: a late wake-up shortens the next wait instead of adding to every cycle. The deadline
+		 * of cycle N is RECOMPUTED from an origin (origin + N × 1/60 s, exact in microseconds), never accumulated: the
+		 * integer 16666 µs step alone would run 60.0024 cycles per second. */
+		auto origin = std::chrono::steady_clock::now();
+		uint64_t cyclesSinceOrigin = 0;
 
 		while ( m_isLogicsLoopRunning )
 		{
@@ -191,7 +194,8 @@ namespace EmEn
 				std::this_thread::sleep_for(std::chrono::milliseconds{33});
 
 				/* NOTE: The paused time is not owed to the logic. */
-				nextCycle = std::chrono::steady_clock::now();
+				origin = std::chrono::steady_clock::now();
+				cyclesSinceOrigin = 0;
 
 				continue;
 			}
@@ -220,12 +224,15 @@ namespace EmEn
 				/* The release pass of the uploaded resources' CPU copies (about once a second, when enabled). */
 				m_resourceManager.releaseIdleLocalData();
 
-				m_lifetime += WorldPhysicsUpdateCycleDurationUS< uint64_t >;
 				m_cycle++;
+				/* NOTE: Derived from the cycle count, never accumulated (Constants.hpp, logicCyclesToMicroseconds()). */
+				m_lifetime = logicCyclesToMicroseconds(m_cycle);
 			}
 
 			/* NOTE: Let sleep the thread until the next update. */
-			nextCycle += logicsUpdateFrequency;
+			++cyclesSinceOrigin;
+
+			const auto nextCycle = origin + std::chrono::microseconds{logicCyclesToMicroseconds(cyclesSinceOrigin)};
 
 			if ( const auto now = std::chrono::steady_clock::now(); now < nextCycle )
 			{
@@ -233,7 +240,8 @@ namespace EmEn
 			}
 			else if ( now - nextCycle > maximumCatchUp )
 			{
-				nextCycle = now;
+				origin = now;
+				cyclesSinceOrigin = 0;
 			}
 		}
 
@@ -861,8 +869,8 @@ namespace EmEn
 			m_coreHelp.registerArgument("Disable the generation or the saving of settings files.", "disable-settings-autosave");
 			m_coreHelp.registerArgument("Enable log writing.", "enable-log", 'l', {"FILE_PATH"});
 			m_coreHelp.registerArgument("Add a custom data directory.", "add-data-directory", 0, {"DIRECTORY_PATH"});
-			m_coreHelp.registerArgument("Force the use of a cache directory overriding every others.", "cache-directory", 0, {"DIRECTORY_PATH"});
-			m_coreHelp.registerArgument("Force the use of a config directory overriding every others.", "config-directory", 0, {"DIRECTORY_PATH"});
+			m_coreHelp.registerArgument("Force the use of a cache directory overriding every others (created if missing; its parent must exist).", "cache-directory", 0, {"DIRECTORY_PATH"});
+			m_coreHelp.registerArgument("Force the use of a config directory overriding every others (created if missing; its parent must exist).", "config-directory", 0, {"DIRECTORY_PATH"});
 			m_coreHelp.registerArgument("Force the use of a data directory overriding every others.", "data-directory", 0, {"DIRECTORY_PATH"});
 			m_coreHelp.registerArgument("Execute a specific tool.", "tools-mode", 't');
 			m_coreHelp.registerArgument("List local data that would be wiped (dry run). Settings are preserved.", "wipe-local-data");

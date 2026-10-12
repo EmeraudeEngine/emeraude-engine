@@ -34,6 +34,7 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
+#include "Constants.hpp"
 #include "Scenes/LocatableInterface.hpp"
 
 /* Local inclusions for usages. */
@@ -60,7 +61,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Initializes the particle.
-			 * @param initialLife The initial life of the particle.
+			 * @param initialLife The initial life of the particle, in milliseconds.
 			 * @param initialSize The initial size of the particle.
 			 * @param spreadingRadius The spreading parameters. Default 0.0.
 			 * @param initialLocation A reference to a cartesian frame. Default origin.
@@ -232,24 +233,26 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets the lifetime of the particle in milliseconds.
-			 * @note If you set zero, the particle will be considered as dead.
+			 * @note If you set zero, the particle will be considered as dead. The lifetime is kept as logic cycles
+			 * (rounded up), one consumed per update(): exact, where subtracting the integer 16 ms per cycle lived 4.2 %
+			 * too long.
 			 * @param life The new life of the particle.
 			 */
 			void
 			setLifetime (uint32_t life) noexcept
 			{
-				m_lifetime = life;
+				m_lifetimeCycles = millisecondsToLogicCycles(life);
 			}
 
 			/**
 			 * @brief Returns the remaining lifetime of the particle in milliseconds.
-			 * @return uint32_t
+			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			uint32_t
+			uint64_t
 			remainingLifetime () const noexcept
 			{
-				return m_lifetime;
+				return logicCyclesToMilliseconds(m_lifetimeCycles);
 			}
 
 			/**
@@ -281,7 +284,7 @@ namespace EmEn::Physics
 			bool
 			isDead () const noexcept
 			{
-				return m_lifetime == 0;
+				return m_lifetimeCycles == 0;
 			}
 
 			/**
@@ -312,7 +315,7 @@ namespace EmEn::Physics
 
 			Base::Math::CartesianFrame< float > m_cartesianFrame;
 			Base::Math::Vector< 3, float > m_linearVelocity;
-			uint32_t m_lifetime{0};
+			uint64_t m_lifetimeCycles{0}; /**< The remaining lifetime, in logic cycles. */
 			float m_size{1.0F};
 	};
 }

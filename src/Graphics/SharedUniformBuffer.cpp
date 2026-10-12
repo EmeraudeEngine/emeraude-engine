@@ -135,7 +135,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		return m_uniformBufferObjects.at(bufferIndex).get();
+		return m_uniformBufferObjects[bufferIndex].get();
 	}
 
 	UniformBufferObject *
@@ -150,7 +150,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		return m_uniformBufferObjects.at(bufferIndex).get();
+		return m_uniformBufferObjects[bufferIndex].get();
 	}
 
 	DescriptorSet *
@@ -172,7 +172,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		return m_descriptorSets.at(bufferIndex).get();
+		return m_descriptorSets[bufferIndex].get();
 	}
 
 	uint32_t
@@ -298,7 +298,7 @@ namespace EmEn::Graphics
 		 * The byte offset is 44 * blockAlignedSize, not 300 * blockAlignedSize! */
 		const auto byteOffset = static_cast< uint32_t >(this->getByteOffsetForElement(index, frameIndex));
 
-		return m_uniformBufferObjects.at(bufferIndex)->writeData({data, m_uniformBlockSize, byteOffset});
+		return m_uniformBufferObjects[bufferIndex]->writeData({data, m_uniformBlockSize, byteOffset});
 	}
 
 	VkDescriptorBufferInfo

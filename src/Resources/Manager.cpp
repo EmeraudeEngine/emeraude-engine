@@ -1038,7 +1038,16 @@ namespace EmEn::Resources
 
 			for ( const auto & storeName : storeNames )
 			{
-				const auto & store = *m_localStores.at(storeName);
+				/* The names were read from m_localStores under the same lock: the lookup cannot miss.
+				 * A null store is skipped rather than dereferenced. */
+				const auto storeIt = m_localStores.find(storeName);
+
+				if ( storeIt == m_localStores.cend() || storeIt->second == nullptr )
+				{
+					continue;
+				}
+
+				const auto & store = *storeIt->second;
 
 				std::vector< const BaseInformation * > entries;
 				entries.reserve(store.size());

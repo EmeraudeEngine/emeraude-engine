@@ -727,10 +727,9 @@ namespace EmEn::Scenes
 					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
 					const auto & lightColor = light->emissionChromaticity();
 
-					/* Directional light direction: same logic as DirectionalLight::setDirection(). */
-					const auto direction = light->isUsingDirectionVector() ?
-						worldCoords.forwardVector() :
-						-worldCoords.position().normalized();
+					/* Directional light direction: THE rule of DirectionalLight (a light at the origin falls back to its
+					 * forward axis instead of a zero vector). */
+					const auto direction = light->resolveDirection(worldCoords);
 
 					auto & entry = gpuData[lightIndex];
 					entry.colorR = lightColor[Math::X];

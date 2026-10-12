@@ -360,8 +360,9 @@ namespace EmEn::Graphics
 			 * @brief Returns mutable access to the underlying pixmap.
 			 * @warning Modifications to this pixmap affect ALL texture resources sharing this
 			 * ImageResource. Only use for format normalization operations that make the data
-			 * consistent for the engine (e.g., normal map Y flip). Never use for per-instance
-			 * or per-material transformations — those must go through a separate copy.
+			 * consistent for every consumer. Never use for per-instance or per-material
+			 * transformations — those go through a separate copy, like the normal map Y flip of
+			 * Texture2D (FlipNormalMapY, a copy for the upload since 2026-10-12).
 			 * @return Mutable reference to the pixmap.
 			 */
 			[[nodiscard]]

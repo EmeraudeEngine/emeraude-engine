@@ -186,7 +186,8 @@ namespace EmEn::Animations
 
 			uint32_t m_durationMS;
 			int32_t m_repeat;
-			uint32_t m_elapsedTime{0};
+			uint64_t m_elapsedCycles{0}; /**< The logic cycles played since the start (or the last repetition): the clock. */
+			uint32_t m_elapsedTime{0}; /**< Milliseconds, DERIVED from m_elapsedCycles (logicCyclesToMilliseconds()), never accumulated. */
 			float m_noise{0.0F};
 			KeyFrames m_keyFrames;
 			bool m_isPlaying{false};
