@@ -64,6 +64,19 @@ namespace EmEn
 
 		glfwSetErrorCallback(Tracer::traceGLFW);
 
+#if IS_WINDOWS
+		/* NOTE: Owner rule C (2026-10-12): the engine converts every path explicitly, and the application manifest declares
+		 * the UTF-8 code page for the third-party code that uses the ANSI APIs. Without it, the Vulkan loader lists no
+		 * layer under a non-ASCII install directory (docs/caution-points.md). */
+		if ( const auto codePage = PlatformSpecific::getActiveCodePage(); codePage != CP_UTF8 )
+		{
+			TraceWarning{ClassId} <<
+				"The process code page is " << codePage << ", not UTF-8 (" << CP_UTF8 << ") : the application manifest lacks "
+				"<activeCodePage>UTF-8</activeCodePage>. Third-party code using the ANSI file APIs (the Vulkan loader) cannot "
+				"open a path outside that code page.";
+		}
+#endif
+
 		/* GLFW_JOYSTICK_HAT_BUTTONS specifies whether to also expose joystick hats as buttons,
 		 * for compatibility with earlier versions of GLFW that did not have glfwGetJoystickHats.
 		 * Possible values are GLFW_TRUE and GLFW_FALSE. */

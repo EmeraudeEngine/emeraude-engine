@@ -127,6 +127,17 @@ namespace EmEn::PlatformSpecific
 	EMEN_API std::optional< std::vector< std::string > > getUTF8CommandLineArguments () noexcept;
 
 	/**
+	 * @brief Returns the ANSI code page of the process (GetACP()): CP_UTF8 (65001) when the application manifest declares
+	 * <activeCodePage>UTF-8</activeCodePage> (Windows 10 1903+), the system code page otherwise.
+	 * @note The engine converts every path explicitly either way (owner rule C, 2026-10-12); the UTF-8 code page is the
+	 * second line of defence, for third-party code that uses the ANSI APIs. Only the executable's manifest sets it: a DLL
+	 * cannot.
+	 * @return uint32_t
+	 */
+	[[nodiscard]]
+	EMEN_API uint32_t getActiveCodePage () noexcept;
+
+	/**
 	 * @brief Displays a console.
 	 * @warning Used only for Windows OS since the logs are displayed in their own process.
 	 * @param title A reference to a string.

@@ -39,8 +39,9 @@ UTF-8 active code page (engine `docs/caution-points.md` § "On MSVC, `std::files
 - [x] Step 1, the hard aborts (Windows peer, 2026-10-12): `BaseInformation.cpp` and its `dataString()` consumers,
   `Vulkan/Loader.cpp`, `ResourceTrait::getResourceNameFromFilepath()`, `FileSystem`'s `operator<<`; projet-alpha
   `UI/WebView.cpp` and `Boot/windows/main.cpp`.
-- [ ] Step 2, the manifest: `<activeCodePage>UTF-8</activeCodePage>` in projet-alpha.exe, a manifest for
-  projet-alpha-helper.exe (which has none), and an engine startup warning when `GetACP() != CP_UTF8`.
+- [x] Step 2, the manifest (Windows peer, 2026-10-12): compatibility + `longPathAware` + `<activeCodePage>UTF-8</activeCodePage>`
+  in projet-alpha.exe and projet-alpha-helper.exe (which had none), and the `PlatformManager` startup warning when
+  `PlatformSpecific::getActiveCodePage() != CP_UTF8`.
 - [ ] Step 3, the per-site pass, verified with an executable WITHOUT the manifest, in groups: inbound paths at trust
   boundaries (`loadGLTF`, glTF / FBX URIs); data keys and C APIs; logs and console (including the `<<` of a path, which
   streams `string()` quoted); extension compares. Every `path.string()` whose result leaves the process goes through

@@ -246,6 +246,12 @@ namespace EmEn::PlatformSpecific
 		return arguments;
 	}
 
+	uint32_t
+	getActiveCodePage () noexcept
+	{
+		return GetACP();
+	}
+
 	bool
 	createConsole (const std::string & title)
 	{

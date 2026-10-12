@@ -5736,6 +5736,14 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > right directory, then "Found no files", and `VK_LAYER_KHRONOS_validation` is "unavailable". The path reaches it
 > intact; the loader most likely opens the directory with an ANSI API. Without the UTF-8 code page, a validation run
 > from a non-ASCII install directory runs without its layer: check the `Insert instance layer` line.
+>
+> Step 2 (2026-10-12): projet-alpha.exe and its helper declare `<activeCodePage>UTF-8</activeCodePage>` (projet-alpha
+> `docs/cef-integration.md`), and `PlatformManager` warns once at startup when `PlatformSpecific::getActiveCodePage()` is
+> not `CP_UTF8`. Measured from `…\Ωmega-日本\` and `…\Jérôme\`: with the manifest, the layer loads again (0 VUID) and no
+> warning; the same executables with `activeCodePage` removed (mt.exe) lose the layer and warn once ("The process code
+> page is 1252, not UTF-8 (65001)"). ⚠️ The manifest HIDES per-site defects: with it, a `loadGLTF()` of a Ω path and
+> a glTF whose texture name is accented both load, while they fail without it. Verify every per-site fix with an
+> executable WITHOUT the manifest.
 
 ### ⚠️ A narrow `main()` gets an ANSI argv on Windows — `Arguments` reads the wide command line (2026-10-01, triad 15)
 
