@@ -6060,6 +6060,26 @@ atlas pixel-identical. **A download (GPU → CPU) uses a temporary host-readable
 buffer of its own** — `downloadImage()` and `downloadBuffer()` both — never a reusable upload operation. And unmap
 before any early return: the staging buffer is destroyed right after.
 
+### Fixed: the upload staging buffers were never released — 417 to 457 MiB kept after sponza (2026-10-12)
+
+`TransferManager` keeps two pools of reusable transfer operations (buffer, image), each owning a host-visible staging
+buffer. They only grew: an upload reuses an operation whose fence has signalled, otherwise it enlarges one or creates
+one, and uploads are asynchronous — a load with many uploads in flight creates many operations, each enlarged to the
+largest upload it served. Nothing released them before `onTerminate()`: 385 MiB after WorldLobby (macOS, 2026-10-04),
+417 to 457 MiB after sponza on an Apple M6 (unified memory: RAM taken from the system), a single 480 MiB one after
+citadel. **Fix** (owner decision 2026-10-12, `TransferManager::releaseIdleStagingBuffers()`, called by the renderer
+after each frame fence): an idle operation larger than `StagingLargeBytes` (16 MiB) is released at the first frame
+after its fence signalled, and every operation no upload reserved for `StagingIdleDelay` (5 s) is released; the
+idle rule runs at most every `StagingReleaseInterval` (1 s). Sponza: peak during the load 418-457 → 280-290 MiB (the
+bytes really in flight are 270 MiB), 0 MiB of staging 15 s after the load, upload time unchanged (4.2 s).
+⚠️ Release only an operation whose fence has signalled (it covers both submissions of the two-family path), and only
+under `m_transferOperationsAccess`: every use of the transfer command pools holds it. The pass takes it with
+`try_to_lock` — it never makes the render thread wait for an upload.
+⚠️ A failed `createOnHardware()` left its half-built operation in the pool: no fence, so never available, never
+reused, never released, and its `bytes()` reported the size it failed to allocate (fault injection: 6 dead operations
+"holding" 412 GB). It is now removed at once. Doc:
+[`subsystems/graphics/37-gpu-memory-budget-and-report.md`](subsystems/graphics/37-gpu-memory-budget-and-report.md) § Staging buffers.
+
 ### Fixed: a 3D image uploaded ONE slice, and its mips filtered one slice (Sep 2026)
 
 **Symptom:** the volumetric clouds' shapes (`Graphics::CloudShapeResource`, `VK_IMAGE_TYPE_3D`)

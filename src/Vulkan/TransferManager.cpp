@@ -28,8 +28,11 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
+#include <mutex>
 #include <span>
+#include <vector>
 
 /* Local inclusions. */
 #include "Buffer.hpp"
@@ -645,6 +648,9 @@ namespace EmEn::Vulkan
 			{
 				TraceError{ClassId} << "Unable to create a new staging buffer of " << requiredBytes << " bytes !";
 
+				/* NOTE: A half-built operation has no fence: it would never be available, never reused nor released. */
+				m_bufferTransferOperations.pop_back();
+
 				return nullptr;
 			}
 
@@ -657,6 +663,8 @@ namespace EmEn::Vulkan
 
 			return nullptr;
 		}
+
+		operation->setLastUse(std::chrono::steady_clock::now());
 
 		return operation;
 	}
@@ -725,6 +733,9 @@ namespace EmEn::Vulkan
 			{
 				TraceError{ClassId} << "Unable to create a new staging buffer of " << requiredBytes << " bytes !";
 
+				/* NOTE: A half-built operation has no fence: it would never be available, never reused nor released. */
+				m_imageTransferOperations.pop_back();
+
 				return nullptr;
 			}
 
@@ -738,7 +749,62 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
+		operation->setLastUse(std::chrono::steady_clock::now());
+
 		return operation;
+	}
+
+	void
+	TransferManager::releaseIdleStagingBuffers () noexcept
+	{
+		const std::unique_lock lock{m_transferOperationsAccess, std::try_to_lock};
+
+		if ( !lock.owns_lock() )
+		{
+			return;
+		}
+
+		const auto now = std::chrono::steady_clock::now();
+		const auto intervalElapsed = now - m_lastStagingRelease >= StagingReleaseInterval;
+
+		/* NOTE: std::erase_if applies the predicate exactly once per element, so the counters are exact. */
+		const auto isReleasable = [this, now, intervalElapsed] (const auto & operation) noexcept {
+			if ( !operation.isAvailable() )
+			{
+				return false;
+			}
+
+			if ( operation.bytes() <= StagingLargeBytes && ( !intervalElapsed || now - operation.lastUse() < StagingIdleDelay ) )
+			{
+				return false;
+			}
+
+			m_releasedStagingCount++;
+			m_releasedStagingBytes += operation.bytes();
+
+			return true;
+		};
+
+		std::erase_if(m_bufferTransferOperations, isReleasable);
+		std::erase_if(m_imageTransferOperations, isReleasable);
+
+		if ( !intervalElapsed )
+		{
+			return;
+		}
+
+		m_lastStagingRelease = now;
+
+		/* NOTE: One line per interval at most: the large-buffer rule may release on every frame of a load. */
+		if ( m_releasedStagingCount > 0 )
+		{
+			TraceInfo{ClassId} <<
+				m_releasedStagingCount << " staging buffer" << ( m_releasedStagingCount > 1 ? "s" : "" ) << " released (" << ( static_cast< double >(m_releasedStagingBytes) / 1048576.0 ) << " MiB), " <<
+				m_bufferTransferOperations.size() << " buffer and " << m_imageTransferOperations.size() << " image transfer operations kept.";
+
+			m_releasedStagingCount = 0;
+			m_releasedStagingBytes = 0;
+		}
 	}
 
 	bool

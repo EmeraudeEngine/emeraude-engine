@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <cstddef>
 #include <memory>
 #include <span>
@@ -69,6 +70,16 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanTransferManagerService"};
+
+			/** @brief An idle staging buffer larger than this is released at the first frame after its fence signalled
+			 * (releaseIdleStagingBuffers(), owner decision 2026-10-12). */
+			static constexpr size_t StagingLargeBytes{16UL * 1024UL * 1024UL};
+
+			/** @brief A staging buffer no upload reserved for this long is released, whatever its size (releaseIdleStagingBuffers()). */
+			static constexpr std::chrono::seconds StagingIdleDelay{5};
+
+			/** @brief The minimum time between two idle-delay passes of releaseIdleStagingBuffers(), and between two log lines. */
+			static constexpr std::chrono::seconds StagingReleaseInterval{1};
 
 			/**
 			 * @brief Constructs the transfer manager.
@@ -380,6 +391,21 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool clearColorImage (Image & image, VkClearColorValue clearColor) const noexcept;
 
+			/**
+			 * @brief Releases the idle staging buffers (owner decision 2026-10-12): the pools only grow during a load (one
+			 * operation per upload still in flight, each enlarged to the largest upload it served), and without this pass
+			 * they kept that memory until the service terminated — host-visible memory, RAM taken from the system on
+			 * unified memory (385 MiB after WorldLobby on macOS, 417 to 457 MiB after sponza on an Apple M6).
+			 * Two rules: an operation larger than StagingLargeBytes is released as soon as its fence has signalled (the
+			 * peak during a load stays near the bytes really in flight), and every operation no upload reserved for
+			 * StagingIdleDelay is released (nothing stays after a load).
+			 * @note Called once per frame by the renderer after its frame fence; the idle-delay rule runs at most every
+			 * StagingReleaseInterval. Never waits: while an upload holds the lock, the pass is skipped. Only an operation
+			 * whose fence has signalled is released, so no command buffer or staging buffer in use by the GPU is freed.
+			 * See docs/subsystems/graphics/37-gpu-memory-budget-and-report.md § Staging buffers.
+			 */
+			void releaseIdleStagingBuffers () noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -411,6 +437,9 @@ namespace EmEn::Vulkan
 			std::vector< ImageTransferOperation > m_imageTransferOperations;
 			std::unique_ptr< CommandBuffer > m_imageLayoutTransitionCommandBuffer;
 			std::unique_ptr< Sync::Fence > m_imageLayoutTransitionFence;
+			std::chrono::steady_clock::time_point m_lastStagingRelease;
+			size_t m_releasedStagingCount{0};
+			size_t m_releasedStagingBytes{0};
 			mutable std::mutex m_transferOperationsAccess;
 	};
 }

@@ -1691,6 +1691,9 @@ namespace EmEn::Graphics
 			currentFrameScope.prepareForNewFrame();
 
 			this->checkMemoryBudget();
+
+			/* The idle staging buffers go back: the large ones at once, all of them after a short idle delay (never waits on an upload). */
+			m_transferManager.releaseIdleStagingBuffers();
 		}
 		else
 		{

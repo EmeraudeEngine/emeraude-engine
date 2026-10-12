@@ -31,6 +31,42 @@ evidence. Many allocations of the SAME size are copies — that is how JungleRui
 The console answers after the frame: a scene that loses its device right after loading cannot be asked. A demo can
 write the report itself at the end of its load (`device()->memoryDetailedStatisticsJSON()`).
 
+## Staging buffers — released after the upload (2026-10-12)
+
+Item `staging-buffers-retained-after-load`. Every upload goes through a `Vulkan::TransferManager` transfer operation:
+a host-visible staging buffer (`BUFFER TRANSFER_SRC` for buffers, `BUFFER TRANSFER_SRC|TRANSFER_DST` for images in
+the report), a command buffer and a fence. An operation is reusable once its fence has signalled. Uploads are
+asynchronous, so a load with many uploads in flight creates many operations, and an operation is enlarged to the
+largest upload it serves. Before this change nothing released them until the service terminated.
+
+**The policy (owner decision 2026-10-12)** — `TransferManager::releaseIdleStagingBuffers()`, called by
+`Renderer::beginFrame()` after the frame fence, next to `checkMemoryBudget()`:
+
+| Constant | Value | Rule |
+|---|---|---|
+| `StagingLargeBytes` | 16 MiB | an idle operation larger than this is released at the first frame after its fence signalled |
+| `StagingIdleDelay` | 5 s | an operation no upload reserved for this long is released, whatever its size |
+| `StagingReleaseInterval` | 1 s | the idle rule runs at most this often; one log line per interval at most |
+
+The pass never waits (`try_to_lock`: skipped while an upload holds the lock) and releases only an operation whose
+fence has signalled. Log: `N staging buffers released (X MiB), B buffer and I image transfer operations kept.`
+
+**Measured** (Apple M6, MoltenVK, sponza, 416-417 staging reservations per load, 3 runs each; a temporary probe traced
+the pools at each reservation; "in flight" = bytes of operations whose fence had not signalled, the floor of any
+policy; "after" = `getGPUMemory()` 15 s after the load):
+
+| Policy | Peak during the load | In flight (floor) | Staging after the load | Upload span |
+|---|---|---|---|---|
+| none (before) | 418 / 457 / 453 MiB | 269-317 MiB | 418 / 457 / 453 MiB | 4.2 s |
+| (a) idle 5 s only | 419-479 MiB | 269-317 MiB | 0 | 4.1-4.3 s |
+| (b) 64 MiB cap, largest idle first | 303-322 MiB | 290 MiB | 21.3 MiB | 4.2 s |
+| (c) > 16 MiB at once only | 279-281 MiB | 270 MiB | 9.8-11.7 MiB | 4.2 s |
+| **(c) + (a), adopted** | **280 / 281 / 290 MiB** | 270 MiB | **0** | 4.2 s |
+
+(b) was rejected: an arbitrary cap held for ever. (a) alone leaves the peak as it was; (c) alone keeps every small
+operation for ever. Proof: citadel → sponza → citadel → sponza in one run, validation on, 0 `VUID-`, 0 `UNASSIGNED`,
+the pools empty at the end (citadel alone uploads through one 480 MiB staging buffer).
+
 ## To verify
 
 - MoltenVK and the Windows drivers: does `VK_EXT_memory_budget` report a real budget, and does VMA spill the same way?

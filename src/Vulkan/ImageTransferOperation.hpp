@@ -29,6 +29,10 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <chrono>
+#include <memory>
+
 /* Local inclusions for usages. */
 #include "Buffer.hpp"
 #include "CommandBuffer.hpp"
@@ -260,6 +264,28 @@ namespace EmEn::Vulkan
 				return m_stagingBuffer->recreateOnHardware(bytes);
 			}
 
+			/**
+			 * @brief Records the moment this operation was last reserved for a transfer.
+			 * @note Called under the transfer manager's lock, like every use of an operation.
+			 * @param now The reservation time.
+			 */
+			void
+			setLastUse (std::chrono::steady_clock::time_point now) noexcept
+			{
+				m_lastUse = now;
+			}
+
+			/**
+			 * @brief Returns the moment this operation was last reserved for a transfer.
+			 * @return std::chrono::steady_clock::time_point
+			 */
+			[[nodiscard]]
+			std::chrono::steady_clock::time_point
+			lastUse () const noexcept
+			{
+				return m_lastUse;
+			}
+
 		private:
 
 			/**
@@ -286,5 +312,6 @@ namespace EmEn::Vulkan
 			std::unique_ptr< CommandBuffer > m_graphicsCommandBuffer;
 			std::unique_ptr< Sync::Fence > m_operationFence;
 			std::unique_ptr< Sync::Semaphore > m_semaphore;
+			std::chrono::steady_clock::time_point m_lastUse;
 	};
 }
