@@ -35,6 +35,8 @@ namespace EmEn::Graphics::Renderable
 	using namespace Base::Math;
 	using namespace Resources;
 
+	Abstract::~Abstract () = default;
+
 	std::shared_ptr< Saphir::Program >
 	Abstract::findCachedProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key) const noexcept
 	{

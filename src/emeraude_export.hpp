@@ -34,6 +34,14 @@
  *  | EMERAUDE_USE_FULL_EXPORTS | exported      | exported | whole annotated API                |
  *  | EMERAUDE_USE_LEAN_EXPORTS | exported      | inert    | consumed scopes only               |
  *  | neither                   | inert         | inert    | WINDOWS_EXPORT_ALL_SYMBOLS         |
+ *
+ * macOS: both macros ALWAYS expand to default visibility, whatever the option. A consumer built with
+ * -fvisibility=hidden (CEF's flags, projet-alpha) otherwise holds HIDDEN copies of the typeinfo of every annotated
+ * class it uses that has no key function in the engine (inline-only virtuals, non-polymorphic types), while the
+ * engine's own copies are visible: libc++ (arm64) then compares the two by address, and typeid(), std::any_cast and
+ * (without the system libc++abi's fallback) dynamic_cast fail across the engine/application boundary. Explicit
+ * default visibility makes both images agree. See docs/caution-points.md, "macOS: typeid, std::any and
+ * dynamic_cast across the engine boundary".
  */
 
 // Shared expansion. Never annotate with it directly.
@@ -47,13 +55,13 @@
 	#define EMEN_API_IMPL __attribute__((visibility("default")))
 #endif
 
-#if defined(EMERAUDE_USE_FULL_EXPORTS) || defined(EMERAUDE_USE_LEAN_EXPORTS)
+#if defined(EMERAUDE_USE_FULL_EXPORTS) || defined(EMERAUDE_USE_LEAN_EXPORTS) || defined(__APPLE__)
 	#define EMEN_LEAN_API EMEN_API_IMPL
 #else
 	#define EMEN_LEAN_API
 #endif
 
-#ifdef EMERAUDE_USE_FULL_EXPORTS
+#if defined(EMERAUDE_USE_FULL_EXPORTS) || defined(__APPLE__)
 	#define EMEN_API EMEN_API_IMPL
 #else
 	#define EMEN_API

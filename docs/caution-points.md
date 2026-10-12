@@ -5273,6 +5273,34 @@ II, CP.20); the callers write `const auto deviceLock = device->lockAccess();`. A
 > - Rule: an EMEN_API polymorphic class must have ONE out-of-line virtual function (the destructor, `= default` in its
 >   .cpp is enough). The audit of the existing ones: engine item `rtti-key-function-audit`.
 > - A tag check (`isComponent(ClassId)`) does not save a dynamic_cast that follows it.
+> - ⚠️ The root cause is wider than key functions (2026-10-12): the next entry.
+
+### macOS: typeid, std::any and dynamic_cast across the engine boundary — EMEN_API is default visibility on macOS (2026-10-12)
+
+> [!CAUTION]
+> The engine compiles with DEFAULT visibility; projet-alpha with `-fvisibility=hidden -fvisibility-inlines-hidden`
+> (inherited from CEF's cmake, `cef_variables.cmake`). `EMEN_API` used to expand to nothing outside MSVC
+> (`EMERAUDE_USE_FULL_EXPORTS` defaults to `${MSVC}`). So for every engine type whose typeinfo is emitted where it is
+> used — a polymorphic class with no key function, and EVERY non-polymorphic type (a struct in a `std::any`, a trait
+> such as `Renderable::SkeletalDataTrait`) — the application held a HIDDEN copy and the engine a visible one. On arm64
+> clang marks the visible copy "non-unique" (bit 63 of the type_info name pointer) and leaves the hidden one "unique";
+> libc++ compares by name only when BOTH copies carry the mark, otherwise by address — two copies, two addresses.
+> Read on the real headers with the application's flags: bit 0 before the fix, 1 after (`SkeletalDataTrait`,
+> `Geometry::GenerationParameters`, `Overlay::Surface`). Measured on an Apple M6 (macOS 27) with a dylib + executable built with exactly
+> those flags and the real `emeraude_export.hpp`: cross-image `typeid(*p) == typeid(T)` and `std::any_cast< T >` FAILED
+> in both directions; `dynamic_cast` (down-cast and cross-cast) worked only through the system libc++abi's name
+> fallback, which depends on the macOS version (deployment target 12). `std::string`, `float`, `bool` pass: libc++
+> exports their typeinfo. Linux (libstdc++ compares names) and MSVC are not affected.
+> - **Fix (owner decision 2026-10-12)**: on `__APPLE__`, `EMEN_API` and `EMEN_LEAN_API` always expand to
+>   `__attribute__((visibility("default")))` — the application's copies are then visible too and both images agree.
+>   The same reproduction answers 1 everywhere. Linux and Windows expansions are unchanged.
+> - `Renderable::Abstract` (a `dynamic_pointer_cast` target in `Scene`) got its key function (out-of-line destructor).
+> - Still exposed: an UNANNOTATED type crossing the boundary in a typeid / `std::any` / dynamic_cast — emeraude-base
+>   types above all (no base API by design, a static copy in each image). Annotate it, or keep the payload inside one
+>   image. A payload mismatch logs "A notification payload is not of the expected type" (`Base::anyValue`).
+> - Census tool: `nm -m <app> | grep __ZTIN4EmEn` lists the engine typeinfos the application defines itself.
+>   ⚠️ `nm` shows the same "non-external (was a private external)" before and after the fix: the mark is in the data,
+>   not in the symbol. Read it at run time: the second pointer-sized word of a `std::type_info`, bit 63.
 
 ### Physics: a triangle ground is a SURFACE — a body that crosses it in one step is pushed THROUGH it (fixed 2026-10-02)
 

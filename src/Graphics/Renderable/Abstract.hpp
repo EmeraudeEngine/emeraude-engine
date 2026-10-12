@@ -133,8 +133,10 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Destructs the renderable object.
+			 * @note Defined out of line on purpose: it is the class's key function, so its vtable and typeinfo live in
+			 * the engine only (one typeinfo for the dynamic casts to Renderable::Abstract, docs/caution-points.md).
 			 */
-			~Abstract () override = default;
+			~Abstract () override;
 
 			/**
 			 * @brief Sets the uniform scale of the renderable.
